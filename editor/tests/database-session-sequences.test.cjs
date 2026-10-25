@@ -152,7 +152,7 @@ for(const kind of ['common','troop']) test(`${kind} command dialog cannot write 
 test('Effekseer texture callbacks cannot touch a released effect or WebGL context',()=>{
     let updates=0,loads=0,errors=0,cleared=0;
     const loader=vm.runInNewContext(source('database/DatabaseAnimationEditor.js')+'\nRR_loadEffekseerEffectFromFile',{
-        require:name=>name==='fs'?{readFileSync:()=>Buffer.from([1])}:require(name),Buffer,
+        require:name=>name==='fs'?{readFileSync:()=>Buffer.from([1]),existsSync:()=>false}:require(name),Buffer,
         setTimeout:()=>1,clearTimeout:()=>cleared++,console:{warn(){}}});
     let onLoad,onError;
     const context={nativeptr:1,loadEffect(bytes,scale,load,error){onLoad=load;onError=error;return {nativeptr:2,_update(){updates++;}};}};

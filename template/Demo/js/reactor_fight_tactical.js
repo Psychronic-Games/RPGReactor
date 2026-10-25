@@ -336,12 +336,131 @@
     };
 
     //-------------------------------------------------------------------------
+    // Grapple: an accessory (an armor's `rrGrapple`) that pulls its wearer up
+    // to a roof's edge or a ledge within its range, where it climbs onto the
+    // top. Its edges show in the move range in their own color; taking one is
+    // a step of the way like any other (ReactorPhysics.startGrapple plays it).
+
+    /** A grapple's settings when nothing says otherwise: tiles across, tiles up, uses a battle (0: no limit), turns between uses, and its cost. */
+    F.GRAPPLE_DEFAULTS = { range: 6, height: 10, uses: 0, cooldown: 2, cost: "move", moveCost: 2 };
+    F.GRAPPLE_COSTS = ["move", "action"];
+
+    /** A record's grapple (its `rrGrapple`) with every setting in range, or null when it has none. */
+    F.grappleSpec = function(record) {
+        const own = record && record.rrGrapple;
+        if (!own || typeof own !== "object" || own.enabled === false) return null;
+        const D = F.GRAPPLE_DEFAULTS, num = (value, fallback, low, high) => {
+            const n = value === null || value === "" || typeof value === "boolean" ? NaN : Number(value);
+            return Number.isFinite(n) ? clamp(n, low, high) : fallback;
+        };
+        return {
+            range: num(own.range, D.range, 1, 30),
+            height: num(own.height, D.height, 1, 50),
+            uses: Math.floor(num(own.uses, D.uses, 0, 99)),
+            cooldown: Math.floor(num(own.cooldown, D.cooldown, 0, 99)),
+            cost: F.GRAPPLE_COSTS.includes(own.cost) ? own.cost : D.cost,
+            moveCost: num(own.moveCost, D.moveCost, 0, 30)
+        };
+    };
+
+    /** The grapple a unit wears (the furthest reaching of its equipment's), whether or not it may use it now; null without one or on a vehicle. */
+    F.grappleOf = function(fight, unit) {
+        const battler = fight && unit ? fight.battler(unit) : null;
+        if (!battler || !(battler.isActor && battler.isActor()) || (typeof F.mountOf === "function" && F.mountOf(unit))) return null;
+        let best = null;
+        for (const item of battler.equips()) {
+            const spec = item ? F.grappleSpec(item) : null;
+            if (spec && (!best || spec.range * spec.height > best.range * best.height)) best = spec;
+        }
+        return best;
+    };
+
+    /** The grapple a unit may use this turn: worn, uses left, and its cooldown over. Null otherwise. */
+    F.grappleFor = function(fight, unit) {
+        const spec = F.grappleOf(fight, unit);
+        if (!spec) return null;
+        const used = fight.tac().grapples ? fight.tac().grapples[unit.id] : null;
+        if (used && spec.uses > 0 && used.count >= spec.uses) return null;
+        if (used && fight._turn - used.turn <= spec.cooldown) return null;
+        return spec;
+    };
+
+    /** A grapple was taken on a unit's way: counted against its uses and cooldown. Returns whether it took the unit's action. */
+    Game_Fight.prototype.noteGrapple = function(unit, steps) {
+        if (!unit || !steps || !steps.some(step => step.kind === "grapple")) return false;
+        const spec = F.grappleOf(this, unit), tac = this.tac(), grapples = tac.grapples || (tac.grapples = {});
+        const used = grapples[unit.id];
+        grapples[unit.id] = { count: (used ? used.count : 0) + 1, turn: this._turn };
+        if (F.feed()) ReactorEvents.emit("fightGrapple", { unitId: unit.id });
+        return !!spec && spec.cost === "action";
+    };
+
+    /** How far short of the edge the line may be stopped and still take hold, in tiles: the edge itself is what it meets. */
+    F.GRAPPLE_SLACK = 0.6;
+
+    /**
+     * Whether a line from the eye of a unit on cell (x, y) at `from` reaches a grapple edge (ReactorPhysics.grappleTargets):
+     * no tile that hides what is behind it on the way, and nothing of the world or a model in front of the edge.
+     */
+    F.grappleSight = function(x, y, from, target) {
+        const dx = target.x - x, dy = target.y - y, steps = Math.ceil(Math.hypot(dx, dy) * 4);
+        for (let i = 1; i < steps; i++) {
+            const cx = Math.floor(x + 0.5 + dx * i / steps), cy = Math.floor(y + 0.5 + dy * i / steps);
+            if ((cx !== x || cy !== y) && (cx !== target.x || cy !== target.y) && G.blocksSight(cx, cy)) return false;
+        }
+        if (!Reactor3D.worldRay) return true;
+        const tall = G.sightBody(), eye = from + (tall > 1.6 ? tall * F.EYE_SHARE : F.EYE);
+        const dir = { 2: [0, 1], 4: [-1, 0], 6: [1, 0], 8: [0, -1] }[target.d];
+        const hx = target.x + 0.5 - dir[0] * 0.49, hz = target.y + 0.5 - dir[1] * 0.49, hy = target.lip + 0.05;
+        const ox = x + 0.5, oz = y + 0.5, far = Math.hypot(hx - ox, hy - eye, hz - oz);
+        if (!(far > 0.01)) return true;
+        const ux = (hx - ox) / far, uy = (hy - eye) / far, uz = (hz - oz) / far;
+        let reach = Reactor3D.worldRay($dataMap, ox, eye, oz, ux, uy, uz, far, false);
+        const action = F.Action;
+        if (reach >= far - F.GRAPPLE_SLACK && action && action.rayProps) reach = action.rayProps(ox, eye, oz, ux, uy, uz, reach);
+        return reach >= far - F.GRAPPLE_SLACK;
+    };
+
+    // The edges a unit's grapple takes hold of from where it stands, kept while the battle's turn lasts.
+    const grappleMemo = new Map();
+    let grappleMemoKey = "";
+    /**
+     * The edges a unit wearing `grapple` takes hold of from its cell at `from`: ReactorPhysics.grappleTargets, on
+     * tiles that let it onto the top from that side, onto a top a body stops on, and with a clear line from its eye
+     * to the edge (F.grappleSight: the hook flies there).
+     */
+    F.grappleTargets = function(fight, unit, character, from, grapple) {
+        const P = root.ReactorPhysics;
+        if (!P || !P.grappleTargets || !G.is3D()) return EMPTY;
+        const key = fight._serial + ":" + fight._turn + ":" + $gameMap.mapId();
+        if (key !== grappleMemoKey) { grappleMemo.clear(); grappleMemoKey = key; }
+        const id = character.x + "," + character.y + "," + Math.round(from * 4) + ":" + grapple.range + ":" + grapple.height;
+        let list = grappleMemo.get(id);
+        if (list) return list;
+        list = [];
+        for (const target of P.grappleTargets($dataMap, character.x, character.y, from, grapple.range, grapple.height)) {
+            if (!$gameMap.isValid(target.x, target.y) || !$gameMap.isPassable(target.x, target.y, 10 - target.d)) continue;
+            if (!G.stands(target.x, target.y, target.to)) continue;
+            if (!F.grappleSight(character.x, character.y, from, target)) continue;
+            list.push(target);
+        }
+        grappleMemo.set(id, list);
+        return list;
+    };
+
+    //-------------------------------------------------------------------------
     // The grid: what a cell costs, how high it stands, what it hides.
 
     const G = F.Grid = {};
     let gw = 0, gh = 0, gCost = null, gPrev = null, gHeight = null, gHop = null, gOcc = null, gHeapCell = null, gHeapCost = null, gHeapSize = 0, gMark = null;
-    let stepHeight = 0, stepHop = false, stepKind = "walk", stepExtra = 0, gKind = null;
-    const KINDS = ["walk", "hop", "mantle", "ladder", "drop"];
+    let stepHeight = 0, stepHop = false, stepKind = "walk", stepExtra = 0, stepHarm = 0, gKind = null;
+    const KINDS = ["walk", "hop", "mantle", "ladder", "drop", "climb", "grapple"];
+    const GRAPPLE = KINDS.indexOf("grapple");
+    // Per node of the flood: the HP the way there costs in falls (`gLoss`), and whether a grapple that takes the
+    // unit's action is on the way (`gSpent`).
+    let gLoss = null, gSpent = null;
+    // Per node: a place passed over and never stopped on (an eave or a verge on the way off a roof: `G.crosses`).
+    let gPass = null;
     // A cell holds more than one place to stand where the map does (the ground under an eave and the eave, a room and
     // its roof, a path and the bridge over it): the flood's nodes are a cell's levels, LEVELS of them at most, told
     // apart by their height (LEVEL_GAP: nearer than this is the same place). On a flat or 2D map only the first is used.
@@ -359,10 +478,11 @@
     let gFace = null;
     // The ways on from a cell in one direction, as the flood reads them: the height each lands at, its kind and its extra cost.
     let landCount = 0;
-    const landHeight = new Float32Array(8), landKind = new Uint8Array(8), landExtra = new Float32Array(8);
+    const landHeight = new Float32Array(8), landKind = new Uint8Array(8), landExtra = new Float32Array(8), landHarm = new Float32Array(8);
     /**
      * Seams for the world's vertical movement (assigned by whoever owns it; null plays the built-in rise test and hop):
-     * `G.edge(x, y, d, height, jump)` -> `{ kind: "walk" | "hop" | "mantle" | "ladder" | "drop" | "blocked", cost, height }`
+     * `G.edge(x, y, d, height, jump)` -> `{ kind: "walk" | "hop" | "mantle" | "climb" | "ladder" | "drop" | "blocked", cost, height, harm }`
+     * (`harm`: the share of max HP a drop takes)
      * or null for "ask the tiles"; `G.playStep(character, step)` starts a step of kind other than "walk" through the
      * character's real movement and returns true (the walk waits while `G.isStepping(character)`).
      */
@@ -378,8 +498,20 @@
     G.edges = null;
     G.LEVELS = LEVELS;
     G.LEVEL_GAP = LEVEL_GAP;
-    // A unit pulls itself up onto what stands no more than this many levels over its jump; higher takes a ladder.
+    // A unit pulls itself up onto what stands no more than this many levels over its jump; higher takes a ladder, or a
+    // climb up the wall where the project lets units climb (`climbAbove`).
     G.CLIMB_OVER = 1;
+
+    /**
+     * What a pull too high for a mantle costs as a climb up the wall: the move points, or -1 where the project's
+     * physics do not let units climb that high (`battleClimb`, `climbHeight`).
+     */
+    function climbAbove(rise) {
+        const P = root.ReactorPhysics;
+        if (!P || !P.settings || !P.climbCostFor) return -1;
+        const settings = P.settings();
+        return settings.battleClimb && rise <= settings.climbHeight + 1e-6 ? P.climbCostFor(rise, settings) : -1;
+    }
 
     function ensureGrid() {
         const w = $gameMap.width(), h = $gameMap.height();
@@ -391,6 +523,9 @@
         gHeight = new Float32Array(nodes);
         gHop = new Uint8Array(nodes);
         gKind = new Uint8Array(nodes);
+        gLoss = new Float32Array(nodes);
+        gSpent = new Uint8Array(nodes);
+        gPass = new Uint8Array(nodes);
         gOcc = new Uint8Array(size);
         gOccH = new Float32Array(size);
         sOcc = new Uint8Array(size);
@@ -416,7 +551,7 @@
         return -1;
     }
 
-    /** After a flood: the node reached at a cell, the level nearest `h`, or the cheapest when `h` is not given; -1 when none. */
+    /** After a flood: the node reached at a cell, the level nearest `h`, or the cheapest when `h` is not given; -1 when none. A place only passed over is none. */
     function nodeAt(x, y, h) {
         if (!(x >= 0 && y >= 0 && x < gw && y < gh)) return -1;
         const base = (y * gw + x) * LEVELS;
@@ -424,6 +559,7 @@
         for (let s = 0; s < LEVELS; s++) {
             const node = base + s;
             if (gCost[node] === Infinity) break;
+            if (gPass[node]) continue;
             if (h === undefined || h === null || !gDeep) { if (best < 0 || gCost[node] < gCost[best]) best = node; }
             else if (Math.abs(gHeight[node] - h) < LEVEL_GAP && (best < 0 || Math.abs(gHeight[node] - h) < Math.abs(gHeight[best] - h))) best = node;
         }
@@ -491,6 +627,22 @@
         if (known === undefined) { known = standsNow(P, x, y, height); standMemo.set(id, known); }
         return known;
     };
+    /**
+     * Whether a place the grid does not stop on is one a unit goes over on its way off a roof: what the physics calls
+     * a place to stand (an eave, a verge: a slab laid at a tilt) at least G.CROSS_HIGH over the cell's ground. A
+     * bench, a rim or a post nearer the ground is not.
+     */
+    G.CROSS_HIGH = 2;
+    G.crosses = function(x, y, height) {
+        const P = root.ReactorPhysics;
+        if (!P || !P.levelsAt || !G.is3D()) return false;
+        let level = null, gap = 0.5 + 1e-6;
+        for (const each of P.levelsAt($dataMap, x, y)) { const off = Math.abs(each.top - height); if (off < gap) { gap = off; level = each; } }
+        if (!level || !level.stand) return false;
+        const base = Reactor3D.pieceBaseAt ? Reactor3D.pieceBaseAt($dataMap, x, y) : Reactor3D.groundHeightAt($dataMap, x + 0.5, y + 0.5) || 0;
+        return level.top - base >= G.CROSS_HIGH;
+    };
+
     function standsNow(P, x, y, height) {
         let level = null, gap = 0.5 + 1e-6;
         for (const each of P.levelsAt($dataMap, x, y)) { const off = Math.abs(each.top - height); if (off < gap) { gap = off; level = each; } }
@@ -573,21 +725,29 @@
             for (const way of waysOn(x, y, d, height, jump)) {
                 if (!way || way.kind === "blocked" || landCount >= landHeight.length) continue;
                 const to = Number.isFinite(way.height) ? way.height : height;
-                if (way.kind === "mantle" && to - height > jump + G.CLIMB_OVER + 0.01) continue;
-                const kind = Math.max(0, KINDS.indexOf(way.kind || "walk"));
+                let wayKind = way.kind || "walk", wayCost = way.cost;
+                if (wayKind === "mantle" && to - height > jump + G.CLIMB_OVER + 0.01) {
+                    const climb = climbAbove(to - height);
+                    if (climb < 0) continue;
+                    wayKind = "climb"; wayCost = climb;
+                }
+                const kind = Math.max(0, KINDS.indexOf(wayKind));
                 // A plain walk onto the ground the step naturally lands on still answers to the slope between the two cells.
                 if (kind === 0 && Math.abs(to - natural) < 0.5 && Reactor3D.terrainBlocks($dataMap, x, y, x2, y2, height)) continue;
-                const extra = Math.max(0, (Number(way.cost) || 1) - 1);
+                const extra = Math.max(0, (Number(wayCost) || 1) - 1), harm = Number(way.harm) > 0 ? Number(way.harm) : 0;
                 let known = -1;
                 for (let i = 0; i < landCount; i++) if (Math.abs(landHeight[i] - to) < LEVEL_GAP) known = i;
-                if (known >= 0) { if (extra < landExtra[known]) { landHeight[known] = to; landKind[known] = kind; landExtra[known] = extra; } continue; }
-                landHeight[landCount] = to; landKind[landCount] = kind; landExtra[landCount] = extra;
+                if (known >= 0) {
+                    if (extra < landExtra[known] || (extra === landExtra[known] && harm < landHarm[known])) { landHeight[known] = to; landKind[known] = kind; landExtra[known] = extra; landHarm[known] = harm; }
+                    continue;
+                }
+                landHeight[landCount] = to; landKind[landCount] = kind; landExtra[landCount] = extra; landHarm[landCount] = harm;
                 landCount++;
             }
             return landCount;
         }
         if (!canStep(x, y, d, height, jump, deep)) return 0;
-        landHeight[0] = stepHeight; landKind[0] = stepHop ? Math.max(0, KINDS.indexOf(stepKind)) : 0; landExtra[0] = stepExtra;
+        landHeight[0] = stepHeight; landKind[0] = stepHop ? Math.max(0, KINDS.indexOf(stepKind)) : 0; landExtra[0] = stepExtra; landHarm[0] = stepHarm;
         landCount = 1;
         return 1;
     }
@@ -632,7 +792,7 @@
     function canStep(x, y, d, height, jump, deep) {
         const x2 = x + DX[d], y2 = y + DY[d];
         if (!$gameMap.isValid(x2, y2)) return false;
-        stepKind = "walk"; stepExtra = 0; stepHop = false; stepHeight = 0;
+        stepKind = "walk"; stepExtra = 0; stepHop = false; stepHeight = 0; stepHarm = 0;
         const open = $gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, 10 - d);
         if (!deep) return open;
         const to = Reactor3D.groundHeightAt($dataMap, x2 + 0.5, y2 + 0.5, height) || 0;
@@ -647,9 +807,15 @@
                 if (edge.kind === "blocked") return false;
                 stepHeight = Number.isFinite(edge.height) ? edge.height : height;
                 stepKind = edge.kind || "walk";
-                if (stepKind === "mantle" && stepHeight - height > jump + G.CLIMB_OVER + 0.01) return false;
+                let cost = edge.cost;
+                if (stepKind === "mantle" && stepHeight - height > jump + G.CLIMB_OVER + 0.01) {
+                    cost = climbAbove(stepHeight - height);
+                    if (cost < 0) return false;
+                    stepKind = "climb";
+                }
                 stepHop = stepKind !== "walk";
-                stepExtra = Math.max(0, (Number(edge.cost) || 1) - 1);
+                stepExtra = Math.max(0, (Number(cost) || 1) - 1);
+                stepHarm = Number(edge.harm) > 0 ? Number(edge.harm) : 0;
                 return true;
             }
         }
@@ -1740,7 +1906,18 @@
     };
 
     // A flood under way: what `floodRun` needs to go on with it. One at a time; the grid's buffers are its state.
-    const flooding = { open: false, budget: 0, deep: false, jump: 0, big: false, turns: false, rects: null, facing: 0, reached: 0, tall: 0, hulls: null, same: null };
+    const flooding = { open: false, budget: 0, deep: false, jump: 0, big: false, turns: false, rects: null, facing: 0, reached: 0, tall: 0, hulls: null, same: null, hp: 0, mhp: 0, lethal: false };
+
+    /**
+     * Whether a unit's way may end in a fall that leaves it with no HP: only the player's own unit on its own turn,
+     * where the project allows it (Database › System 2 › Physics › Lethal jumps: Ask first, or Allowed without
+     * asking). A unit that decides for itself never takes one.
+     */
+    F.lethalAllowed = function(fight, unit) {
+        const P = root.ReactorPhysics, settings = P && P.settings ? P.settings() : null, act = fight._act;
+        return !!settings && settings.battleFall === "hurt" && settings.lethalFall !== "never" && !!act && act.player && act.unitId === unit.id
+            && !!fight.isPlayerUnit && fight.isPlayerUnit(unit);
+    };
     /** How many cells a flood takes in before it looks at the clock (a cell with levels to ask the world about is a tenth of a millisecond). */
     G.FLOOD_SLICE = 16;
 
@@ -1765,10 +1942,43 @@
         gHeapSize = 0;
         const start = (character.y * gw + character.x) * LEVELS;
         gCost[start] = 0; gPrev[start] = -1; gHeight[start] = G.heightOf(character); gHop[start] = 0; gFace[start] = flooding.facing;
+        gLoss[start] = 0; gSpent[start] = 0; gKind[start] = 0; gPass[start] = 0;
+        // What a fall may take: never all a unit has left.
+        const battler = fight.battler(unit);
+        flooding.hp = battler ? battler.hp : 0; flooding.mhp = battler ? battler.mhp : 0;
+        flooding.lethal = deep && F.lethalAllowed(fight, unit);
         heapPush(start, 0);
+        if (deep && !flooding.big) seedGrapples(fight, unit, character, start, budget);
+        else grappleAt.clear();
         flooding.open = true;
         return true;
     };
+
+    /**
+     * A unit wearing a grapple it may use now (F.grappleFor): every edge it takes hold of goes into the flood as
+     * a step from the unit's own cell, at the grapple's move cost (none when it takes the action instead), and the
+     * flood walks on from there.
+     */
+    // The edge each grapple node of the flood under way holds (where the body hangs and the hook catches), by node.
+    const grappleAt = new Map();
+    function seedGrapples(fight, unit, character, start, budget) {
+        grappleAt.clear();
+        const grapple = F.grappleFor(fight, unit);
+        if (!grapple) return;
+        const cost = grapple.cost === "action" ? 0 : grapple.moveCost;
+        if (cost > budget) return;
+        const from = gHeight[start];
+        for (const target of F.grappleTargets(fight, unit, character, from, grapple)) {
+            const cell = target.y * gw + target.x;
+            if (occAt(cell, target.to) !== 0) continue;
+            const node = nodeFor(cell, target.to);
+            if (node < 0 || cost >= gCost[node]) continue;
+            gCost[node] = cost; gPrev[node] = start; gHeight[node] = target.to; gHop[node] = 1; gKind[node] = GRAPPLE;
+            gFace[node] = facingIndex(target.d); gLoss[node] = 0; gSpent[node] = grapple.cost === "action" ? 1 : 0; gPass[node] = 0;
+            grappleAt.set(node, target);
+            heapPush(node, cost);
+        }
+    }
 
     /**
      * Go on with the flood begun by `floodStart` until it is done or the clock passes `deadline` (a slice of cells is
@@ -1784,8 +1994,11 @@
         while (gHeapSize > 0) {
             if (timed && reached > 0 && reached % G.FLOOD_SLICE === 0 && now() > deadline) { flooding.reached += reached; return false; }
             const cost = gHeapCost[0], node = heapPop();
-            if (cost > gCost[node]) continue;
+            // (A cost that is not the node's own is an older way there: a way that kills, given up for one that does not.)
+            if (cost !== gCost[node]) continue;
             reached++;
+            // A fall that leaves the unit with no HP ends its way.
+            if (gLoss[node] > 0 && gLoss[node] >= flooding.hp) continue;
             const cell = (node - node % LEVELS) / LEVELS;
             const x = cell % gw, y = (cell - x) / gw, height = gHeight[node];
             const facedAs = turns ? gFace[node] : 0, faced = facedAs * 4;
@@ -1813,6 +2026,7 @@
                     const total = cost + price, next = nextCell * LEVELS;
                     if (total > budget || total >= gCost[next]) continue;
                     gCost[next] = total; gPrev[next] = node; gHeight[next] = 0; gHop[next] = 0; gKind[next] = 0; gFace[next] = face;
+                    gLoss[next] = gLoss[node]; gSpent[next] = gSpent[node]; gPass[next] = 0;
                     heapPush(next, total);
                     continue;
                 }
@@ -1821,10 +2035,12 @@
                     const landing = landHeight[w], kind = landKind[w], extra = landExtra[w], hop = kind !== 0;
                     if (occAt(nextCell, landing) === 2) continue;
                     // No way onto what is no place to stand: a fountain's water and its rim, a seat, a post. One who is
-                    // on such ground already (the battle found it in the basin) goes on over it, and so gets out.
+                    // on such ground already (the battle found it in the basin) goes on over it, and so gets out. An
+                    // eave or a verge high over the ground is gone over to jump off it, never stopped on.
+                    let pass = 0;
                     if (!G.stands(nx, ny, landing)) {
                         if (grounded < 0) grounded = G.stands(x, y, height) ? 1 : 0;
-                        if (grounded) continue;
+                        if (grounded) { if (!G.crosses(nx, ny, landing)) continue; pass = 1; }
                     }
                     // Every cell it would cover is free and open, the ground running on under it; a big body does not hop or climb.
                     if (big && (hop || !fits(fight, nx, ny, rects, at, landing, deep))) continue;
@@ -1832,9 +2048,18 @@
                     if (price <= 0) continue;
                     const total = cost + price + extra;
                     if (total > budget) continue;
+                    // A fall that hurts costs HP. One that would leave the unit with nothing is taken only where the
+                    // player may choose it (F.lethalAllowed), and never over a way there that does not.
+                    const loss = gLoss[node] + (landHarm[w] > 0 && root.ReactorPhysics ? root.ReactorPhysics.fallHp(flooding.mhp, landHarm[w]) : 0);
+                    const kills = loss > 0 && loss >= flooding.hp;
+                    if (kills && !flooding.lethal) continue;
                     const next = nodeFor(nextCell, landing);
-                    if (next < 0 || total >= gCost[next]) continue;
+                    if (next < 0) continue;
+                    const killed = gCost[next] !== Infinity && gLoss[next] > 0 && gLoss[next] >= flooding.hp;
+                    if (kills && gCost[next] !== Infinity && !killed) continue;
+                    if (!(killed && !kills) && (total > gCost[next] || (total === gCost[next] && loss >= gLoss[next]))) continue;
                     gCost[next] = total; gPrev[next] = node; gHeight[next] = landing; gHop[next] = hop ? 1 : 0; gKind[next] = kind; gFace[next] = face;
+                    gLoss[next] = loss; gSpent[next] = gSpent[node]; gPass[next] = pass;
                     heapPush(next, total);
                 }
             }
@@ -1852,19 +2077,28 @@
     G.costAt = (x, y, h) => { const node = nodeAt(x, y, h); return node < 0 ? Infinity : gCost[node]; };
     G.canStopAt = (x, y, h) => { const node = nodeAt(x, y, h); return node >= 0 && occAt(y * gw + x, gHeight[node]) === 0; };
     G.heightAt = (x, y, h) => { const node = nodeAt(x, y, h); return node < 0 ? 0 : gHeight[node]; };
+    /** After a flood: the HP the way to a cell costs in falls (0 where none hurts, or it was not reached). */
+    G.lossAt = (x, y, h) => { const node = nodeAt(x, y, h); return node < 0 ? 0 : gLoss[node]; };
+    /** After a flood: whether the way to a cell ends in a fall that leaves the unit with no HP. */
+    G.lethalAt = (x, y, h) => { const node = nodeAt(x, y, h); return node >= 0 && gLoss[node] > 0 && gLoss[node] >= flooding.hp; };
+    /** After a flood: whether a cell is reached by a grapple's pull (the edge itself, not a step walked on from it). */
+    G.grappledAt = (x, y, h) => { const node = nodeAt(x, y, h); return node >= 0 && gKind[node] === GRAPPLE; };
+    /** After a flood: whether the way to a cell takes the unit's action (a grapple that costs it). */
+    G.spentAt = (x, y, h) => { const node = nodeAt(x, y, h); return node >= 0 && gSpent[node] === 1; };
     /**
      * After a flood: the way the unit faces when it arrives on a cell (2, 4, 6, 8: its last step's direction, or the
      * facing it kept while it backed up there), 0 on its own cell or one it did not reach.
      */
     G.facingAt = (x, y, h) => { const node = nodeAt(x, y, h); return node < 0 || gPrev[node] < 0 ? 0 : DIRS[gFace[node]]; };
 
-    /** After a flood: every level reached on a cell, as `out` = [height, cost, height, cost, ...]; returns how many. */
+    /** After a flood: every level reached on a cell, as `out` = [height, cost, height, cost, ...]; returns how many. One only passed over is not. */
     G.reachedAt = function(x, y, out) {
         out.length = 0;
         if (!(x >= 0 && y >= 0 && x < gw && y < gh)) return 0;
         const base = (y * gw + x) * LEVELS;
         for (let s = 0; s < LEVELS; s++) {
             if (gCost[base + s] === Infinity) break;
+            if (gPass[base + s]) continue;
             out.push(gHeight[base + s], gCost[base + s]);
         }
         return out.length / 2;
@@ -1872,8 +2106,9 @@
 
     /**
      * After a flood: the steps from the unit to a cell it reached (the level `h` of it), `[{ x, y, d, hop, kind,
-     * height, face }]`; null if it did not. `face` is the way it faces on the step: `d`, or the other way round where
-     * a long body backs up.
+     * height, face, loss }]`; null if it did not. `face` is the way it faces on the step: `d`, or the other way round
+     * where a long body backs up. `loss` is the HP a fall on that step takes; a grapple's step also says where the
+     * body hangs and the hook holds (`bx`, `by`, `hx`, `hy`, `lip`).
      */
     G.pathTo = function(x, y, h) {
         let node = nodeAt(x, y, h);
@@ -1883,8 +2118,15 @@
             const from = gPrev[node];
             const cell = (node - node % LEVELS) / LEVELS, fromCell = (from - from % LEVELS) / LEVELS;
             const cx = cell % gw, cy = (cell - cx) / gw, fx = fromCell % gw, fy = (fromCell - fx) / gw;
-            const d = cx > fx ? 6 : cx < fx ? 4 : cy > fy ? 2 : 8;
-            steps.push({ x: cx, y: cy, d, hop: gHop[node] === 1, kind: KINDS[gKind[node]], height: gHeight[node], face: flooding.turns ? DIRS[gFace[node]] : d });
+            const grapple = gKind[node] === GRAPPLE;
+            // A grapple's step is no step to the next cell: its way is the side it climbs the edge from.
+            const d = grapple ? DIRS[gFace[node]] : cx > fx ? 6 : cx < fx ? 4 : cy > fy ? 2 : 8;
+            const step = { x: cx, y: cy, d, hop: gHop[node] === 1, kind: KINDS[gKind[node]], height: gHeight[node], face: flooding.turns && !grapple ? DIRS[gFace[node]] : d,
+                loss: Math.max(0, gLoss[node] - gLoss[from]) };
+            // Where the body hangs and the hook catches (ReactorPhysics.startGrapple).
+            const hold = grapple ? grappleAt.get(node) : null;
+            if (hold) { step.bx = hold.bx; step.by = hold.by; step.hx = hold.hx; step.hy = hold.hy; step.lip = hold.lip; }
+            steps.push(step);
             node = from;
         }
         return steps.reverse();
@@ -2595,6 +2837,8 @@
     Game_Fight.prototype.startWalk = function(unit, character, steps) {
         const act = this._act;
         act.path = steps;
+        // A grapple on the way is counted now; one that takes the action leaves nothing to do on arriving.
+        act.spent = this.noteGrapple(unit, steps);
         act.through = character.isThrough();
         act.speed = character.moveSpeed();
         act.stage = "walk";
@@ -2610,6 +2854,8 @@
     };
 
     Game_Fight.prototype.takeStep = function(character, step) {
+        // A drop is landed before the next step: the HP it costs is taken then (`landDrop`).
+        if (step.kind === "drop") character._rrDrop = step.loss > 0 ? step.loss : 0;
         if (step.hop) {
             character.setDirection(step.d);
             // The world's own climb where it plays one (a ladder, a mantle); else a hop.
@@ -2969,6 +3215,8 @@
     /** A unit starts walking on its own and its turn passes: with the others (`tac.movers`), or `aside` at the normal pace. */
     Game_Fight.prototype.detachWalk = function(unit, character, steps, watch, plan, aside) {
         const tac = this.tac();
+        // A grapple that takes the action leaves no watch and no action at the end of the way.
+        if (this.noteGrapple(unit, steps)) { watch = false; plan = null; }
         (aside ? tac.aside || (tac.aside = []) : tac.movers || (tac.movers = []))
             .push({ unitId: unit.id, path: steps, through: character.isThrough(), speed: character.moveSpeed(), watch: !!watch, plan: plan || null });
         character.setThrough(true);
@@ -3011,6 +3259,7 @@
             const mover = movers[i], unit = this.unit(mover.unitId), character = this.character(unit);
             if (!unit || !character || !this.isAlive(unit)) { this.endMover(mover, false); movers.splice(i, 1); continue; }
             if (character.isMoving() || character.isJumping() || (G.isStepping && G.isStepping(character))) continue;
+            if (this.landDrop(unit, character)) continue;
             this.checkEnterHooks(unit, character);
             const step = mover.path.shift();
             if (step) { this.takeStep(character, step); continue; }
@@ -3022,6 +3271,9 @@
 
     Game_Fight.prototype.updateWalk = function(unit, character) {
         if (character.isMoving() || character.isJumping() || (G.isStepping && G.isStepping(character))) return;
+        if (this.landDrop(unit, character)) return;
+        // The fall may have been the last of it.
+        if (!this.isAlive(unit)) return;
         const act = this._act;
         const hooks = this._hooks.length;
         this.checkEnterHooks(unit, character);
@@ -3043,9 +3295,25 @@
         act.path = null;
         act.moved = true;
         if (F.feed()) ReactorEvents.emit("fightMoveEnd", { unitId: unit.id, x: character.x, y: character.y });
-        if (act.player) act.stage = "command";
+        // A grapple that took the action: the turn ends where it arrived.
+        if (act.spent) { act.plan = null; this.faceNearest(unit); act.stage = "done"; }
+        else if (act.player) act.stage = "command";
         else this.actOnPlan(unit);
         this.touch();
+    };
+
+    /**
+     * A unit that dropped off an edge comes down before its next step; on landing it loses what the way said the
+     * fall would cost (G.lossAt, the number the move preview shows). True while it is still in the air.
+     */
+    Game_Fight.prototype.landDrop = function(unit, character) {
+        const loss = character._rrDrop;
+        if (loss === undefined || loss === null) return false;
+        const P = root.ReactorPhysics;
+        if (P && P.isAirborne && P.isAirborne(character)) return true;
+        character._rrDrop = undefined;
+        if (loss > 0) this.hurtByFall(unit, loss);
+        return false;
     };
 
     /** An AI unit does what it planned from where it now stands: its action, a watch, or nothing; then it turns to the fight. */
@@ -3201,14 +3469,15 @@
     Game_Fight.prototype.ensureFlood = function(unit, budget, deadline) {
         const hash = this.positionsHash();
         const sliced = deadline !== undefined && deadline !== null;
-        const mine = cache.floodUnit === unit.id && cache.floodBudget === budget && cache.serial === this._serial;
+        const lethal = F.lethalAllowed(this, unit);
+        const mine = cache.floodUnit === unit.id && cache.floodBudget === budget && cache.serial === this._serial && cache.floodLethal === lethal;
         const same = mine && cache.floodHash === hash;
         if (same && !cache.floodOpen) return true;
         // A sliced flood under way goes on though others have moved since it began (in an army someone always has):
         // it is the field as it stood a few frames ago, and whoever asked for it checks where it ends against the
         // field as it stands (AI.approach). Asked for whole, or by anyone else, it starts over.
         if (!(sliced && mine && cache.floodOpen)) {
-            cache.floodUnit = unit.id; cache.floodBudget = budget; cache.floodHash = hash; cache.serial = this._serial;
+            cache.floodUnit = unit.id; cache.floodBudget = budget; cache.floodHash = hash; cache.serial = this._serial; cache.floodLethal = lethal;
             cache.floodOpen = G.floodStart(this, unit, budget);
             if (!cache.floodOpen) return true;
         }
@@ -3236,7 +3505,7 @@
                 const levels = G.reachedAt(x, y, reachedOut);
                 for (let i = 0; i < levels; i++) {
                     const h = reachedOut[i * 2], cost = reachedOut[i * 2 + 1];
-                    if (cost <= act.steps && G.canStopAt(x, y, h)) cells.push({ x, y, cost, h });
+                    if (cost <= act.steps && G.canStopAt(x, y, h)) cells.push(G.grappledAt(x, y, h) ? { x, y, cost, h, grapple: true } : { x, y, cost, h });
                 }
             }
         }
@@ -3362,7 +3631,7 @@
         const tac = this.tac();
         if (cache.rev === tac.rev && cache.serial === this._serial) return;
         cache.rev = tac.rev; cache.serial = this._serial;
-        cache.area = EMPTY; cache.path = EMPTY; cache.targets = EMPTY;
+        cache.area = EMPTY; cache.path = EMPTY; cache.targets = EMPTY; cache.pathLoss = 0; cache.pathLethal = false;
         const act = this._act, cursor = tac.cursor;
         if (!act || !act.unitId || !cursor.on || !act.player) return;
         const unit = this.unit(act.unitId), character = this.character(unit);
@@ -3374,6 +3643,8 @@
             const steps = G.pathTo(cursor.x, cursor.y, cursor.h);
             cache.path = [{ x: character.x, y: character.y, kind: "walk", h: G.heightOf(character) }].concat(steps.map(step => ({ x: step.x, y: step.y, kind: step.kind, h: step.height })));
             cache.pathCost = G.costAt(cursor.x, cursor.y, cursor.h);
+            cache.pathLoss = G.lossAt(cursor.x, cursor.y, cursor.h);
+            cache.pathLethal = G.lethalAt(cursor.x, cursor.y, cursor.h);
         } else if (act.stage === "target") {
             const action = this.pendingAction();
             if (!action || !this.inRange(cursor.x, cursor.y)) return;
@@ -3397,6 +3668,20 @@
         if (!this.playerStage("move")) return EMPTY;
         this.refreshAim();
         return cache.path;
+    };
+
+    /** The HP the way to the cursor costs in falls (0 with no way shown, or none that hurts). */
+    Game_Fight.prototype.pathLoss = function() {
+        if (!this.playerStage("move")) return 0;
+        this.refreshAim();
+        return cache.path.length > 1 && cache.pathLoss > 0 ? cache.pathLoss : 0;
+    };
+
+    /** Whether the way to the cursor ends in a fall that leaves the unit with no HP. */
+    Game_Fight.prototype.pathLethal = function() {
+        if (!this.playerStage("move")) return false;
+        this.refreshAim();
+        return cache.path.length > 1 && !!cache.pathLethal;
     };
 
     /** What the way to the cursor costs of the unit's move (0 with no way shown). */
@@ -3889,7 +4174,7 @@
         return true;
     };
 
-    Game_Fight.prototype.commandMoveTo = function(x, y, h) {
+    Game_Fight.prototype.commandMoveTo = function(x, y, h, sure) {
         if (!this.playerStage("move") || !this.awaitsPlayer()) return false;
         const act = this._act, unit = this.unit(act.unitId), character = this.character(unit);
         // Without a level the cursor's is meant when it is on that cell, else the cheapest the unit can stop on.
@@ -3910,9 +4195,28 @@
             for (let i = 0; i < levels; i++) if (reachedOut[i * 2 + 1] <= act.steps && G.canStopAt(x, y, reachedOut[i * 2])) { h = reachedOut[i * 2]; break; }
         }
         if (!G.canStopAt(x, y, h) || !(G.costAt(x, y, h) <= act.steps)) return false;
+        // A way that ends in a fall leaving the unit with no HP is asked about first where the project says so
+        // (Lethal jumps: Ask first): `commandFallAnswer` takes the answer.
+        if (!sure && G.lethalAt(x, y, h) && root.ReactorPhysics && root.ReactorPhysics.settings().lethalFall === "ask") {
+            this.tac().fallAsk = { unitId: unit.id, x, y, h: G.heightAt(x, y, h) };
+            const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+            if (W.askFall) W.askFall(scene);
+            F.Input.used();
+            this.touch();
+            return true;
+        }
         this.startWalk(unit, character, G.pathTo(x, y, h));
         F.Input.used();
         return true;
+    };
+
+    /** The question before a fatal fall is answered: yes takes the way asked about, no leaves the unit where it is to move. */
+    Game_Fight.prototype.commandFallAnswer = function(yes) {
+        const tac = this.tac(), ask = tac.fallAsk, act = this._act;
+        tac.fallAsk = null;
+        this.touch();
+        if (!ask || !yes || !act || act.unitId !== ask.unitId) return !yes;
+        return this.commandMoveTo(ask.x, ask.y, ask.h, true);
     };
 
     Game_Fight.prototype.commandUndoMove = function() {
@@ -4282,9 +4586,12 @@
      * made and by a HUD's hint line for the highlighted row; the answer is kept until a unit moves.
      */
     Game_Fight.prototype.commandReason = function(symbol) {
+        // The unit's menu stands open behind its skill and item lists, and is listed again when a target is
+        // cancelled back to a list: it answers the same there.
+        const listed = this.playerStage("command") || this.playerStage("skill") || this.playerStage("item");
         // Getting on and getting off answer for themselves (reactor_vehicles_mount.js).
-        if ((symbol === "mount" || symbol === "dismount") && typeof this.mountReason === "function") return this.playerStage("command") ? this.mountReason(symbol) : "";
-        if (symbol !== "attack" || !this.playerStage("command")) return "";
+        if ((symbol === "mount" || symbol === "dismount") && typeof this.mountReason === "function") return listed ? this.mountReason(symbol) : "";
+        if (symbol !== "attack" || !listed) return "";
         const unit = this.unit(this._act.unitId), battler = this.battler(unit);
         // (One who rides a vehicle that can attack has its attack too: either in reach will do.)
         const vehicle = typeof this.vehicleAttacker === "function" ? this.vehicleAttacker(unit) : null;
@@ -4313,6 +4620,7 @@
     const ai = {
         serial: -1, unitId: 0, turn: -1, ready: false, preset: "aggressive", move: 0, count: 0, index: 0,
         x: new Int16Array(AI_CELLS), y: new Int16Array(AI_CELLS), cost: new Float32Array(AI_CELLS), height: new Float32Array(AI_CELLS),
+        loss: new Float32Array(AI_CELLS), spent: new Uint8Array(AI_CELLS), mhp: 1,
         actions: [], foes: [], friends: [], threat: [], front: [], shoots: false,
         bestScore: -Infinity, bestX: 0, bestY: 0, bestKind: "", bestId: 0, bestCx: 0, bestCy: 0
     };
@@ -4320,6 +4628,8 @@
     AI.EXPOSURE = { aggressive: 2, ranged: 5, support: 7 };
     // An action is worth taking over only moving when it is worth this much (a tenth of a target's life is 10).
     AI.WORTH = 5;
+    // What a fall on the way to a cell costs the unit's liking of it, per share of its own life (a tenth: 6).
+    AI.FALL_WEIGHT = 60;
     // How many of each side a unit weighs as targets from each cell (the nearest ones).
     AI.POOL = 10;
 
@@ -4380,6 +4690,7 @@
         ai.preset = F.aiOf(unit);
         ai.big = F.isBig(unit); ai.turns = F.turnsBody(unit);
         ai.move = fight._act.steps;
+        ai.mhp = Math.max(1, battler.mhp);
         aiActions(battler, ai.actions, unit.team === "ally" && ai.preset === "support");
         ai.foes.length = 0; ai.friends.length = 0; ai.threat.length = 0;
         // Someone the battle's own events may bring over to this unit's side is left alone while anyone else is there to fight.
@@ -4430,6 +4741,7 @@
                     const h = reachedOut[i * 2], cost = reachedOut[i * 2 + 1];
                     if (!(cost <= ai.move) || !G.canStopAt(x, y, h)) continue;
                     ai.x[ai.count] = x; ai.y[ai.count] = y; ai.cost[ai.count] = cost; ai.height[ai.count] = h;
+                    ai.loss[ai.count] = G.lossAt(x, y, h); ai.spent[ai.count] = G.spentAt(x, y, h) ? 1 : 0;
                     ai.count++;
                 }
             }
@@ -4548,12 +4860,13 @@
         const from = ai.entryCell === index ? ai.entryAt : 0;
         if (from === 0) {
             ai.entryCell = index;
-            ai.place = positionScore(fight, x, y, height) - ai.cost[index] * 0.05;
+            ai.place = positionScore(fight, x, y, height) - ai.cost[index] * 0.05 - ai.loss[index] / ai.mhp * AI.FALL_WEIGHT;
             // Staying put, or only moving, is the fallback every action must beat.
             if (ai.place - 1000 > ai.bestScore) { ai.bestScore = ai.place - 1000; ai.bestX = x; ai.bestY = y; ai.bestH = height; ai.bestKind = ""; }
         }
         const place = ai.place, actions = ai.actions;
-        for (let at = from; at < actions.length; at++) {
+        // Reached by a grapple that takes the action: nothing more is done from there this turn.
+        for (let at = ai.spent[index] ? actions.length : from; at < actions.length; at++) {
             if (at > from && deadline !== undefined && now() > deadline) { ai.entryAt = at; return false; }
             const entry = actions[at];
             const tactics = entry.tactics, shape = tactics.area.shape;
@@ -4633,8 +4946,10 @@
                 for (let x = x0; x <= x1; x++) {
                     const base = (y * gw + x) * LEVELS;
                     for (let slot = 0; slot < LEVELS; slot++) {
-                        const cost = gCost[base + slot];
+                        // A fall on the way counts as further to go; an eave only passed over is no goal.
+                        const cost = gCost[base + slot] + gLoss[base + slot] / ai.mhp * 10;
                         if (!(cost < Infinity)) break;
+                        if (gPass[base + slot]) continue;
                         let gap = Math.max(0, F.stepsTo(goal, c.x, c.y, x, y) - keep);
                         // Under a roof is not beside the one who stands on it.
                         if (blade && Math.abs(gHeight[base + slot] - goalHeight) > F.MELEE_HEIGHT) gap += 2;
@@ -4694,6 +5009,8 @@
     };
 
     AI.think = function(fight, unit, character) {
+        // Heights of models still out on the worker (Action.hullsPending): it thinks once they are in, seeing what it would have seen with them worked out at once.
+        if (F.Action && F.Action.hullsPending && F.Action.hullsPending()) return null;
         if (!ai.ready || ai.serial !== fight._serial || ai.unitId !== unit.id || ai.turn !== fight._turn) { ai.waits = 0; ai.entryCell = -1; ai.entryAt = 0; AI.begin(fight, unit, character, fight.battler(unit)); }
         // Someone left the field mid-think: the cells are weighed again from the first.
         else {
@@ -5057,7 +5374,8 @@
 
     View.end = function(fight) {
         const view = fight._tac && fight._tac.view, C = camera3D();
-        if (view && view.own && C) {
+        // The map's own camera comes back on the battle's map; a battle ended away from it leaves the camera there.
+        if (view && view.own && C && fight.isHere()) {
             C.change(view.saved, 30, false);
             if (view.kept && typeof $gameSystem !== "undefined" && $gameSystem) $gameSystem._reactorCamera3d = view.kept;
         }
@@ -6654,19 +6972,21 @@
 
     const M = F.Marks = { CAPACITY: 4096, rev: -1, serial: -1, over: false, deep: null, count: 0, layer: null, sprites: [], bitmaps: null, mesh: null, scene: null, spriteset: null };
     // `tread`: where an enemy can stand after its next move; `threat`: what it can strike from there.
-    M.KINDS = { move: 1, range: 2, friend: 3, path: 4, area: 5, cursor: 6, tread: 7, threat: 8 };
+    // `grapple`: a roof's edge or a ledge the unit's grapple pulls it up to.
+    M.KINDS = { move: 1, range: 2, friend: 3, path: 4, area: 5, cursor: 6, tread: 7, threat: 8, grapple: 9 };
     // Which mark shows where two fall on one cell: the higher; what the other side might do lies under everything of the player's own.
-    M.STRENGTH = [0, 3, 4, 5, 6, 7, 8, 2, 1];
-    M.COLORS = [0, 0x3c8cff, 0xff5548, 0x46d27a, 0xd8ecff, 0xffc840, 0xffffff, 0xc86bff, 0xff9a3c];
+    M.STRENGTH = [0, 3, 4, 5, 6, 7, 8, 2, 1, 3.5];
+    M.COLORS = [0, 0x3c8cff, 0xff5548, 0x46d27a, 0xd8ecff, 0xffc840, 0xffffff, 0xc86bff, 0xff9a3c, 0x2fe0d0];
     M.CSS = ["", "rgba(60,140,255,0.5)", "rgba(255,70,60,0.5)", "rgba(70,210,122,0.5)", "rgba(216,236,255,0.72)", "rgba(255,200,64,0.75)", "rgba(255,255,255,0.0)",
-        "rgba(200,107,255,0.42)", "rgba(255,154,60,0.34)"];
-    M.RIM = ["", "rgba(150,200,255,0.95)", "rgba(255,150,140,0.95)", "rgba(160,255,190,0.95)", "rgba(255,255,255,0.95)", "rgba(255,235,150,1)", "", "rgba(228,180,255,0.9)", "rgba(255,200,140,0.8)"];
+        "rgba(200,107,255,0.42)", "rgba(255,154,60,0.34)", "rgba(47,224,208,0.55)"];
+    M.RIM = ["", "rgba(150,200,255,0.95)", "rgba(255,150,140,0.95)", "rgba(160,255,190,0.95)", "rgba(255,255,255,0.95)", "rgba(255,235,150,1)", "", "rgba(228,180,255,0.9)", "rgba(255,200,140,0.8)",
+        "rgba(170,255,245,0.95)"];
     const markX = M.x = new Int16Array(M.CAPACITY), markY = M.y = new Int16Array(M.CAPACITY), markKind = M.kind = new Uint8Array(M.CAPACITY);
     // The height a mark lies at (NaN: the ground the map finds there).
     const markH = M.h = new Float32Array(M.CAPACITY);
     // The way to the cursor, tile by tile from the unit's own, for the squares laid along it; and what the move costs.
     M.WAY_MAX = 64;
-    M.wayCount = 0; M.wayCost = 0;
+    M.wayCount = 0; M.wayCost = 0; M.wayLoss = 0; M.wayLethal = false;
     const wayX = M.wayX = new Int16Array(M.WAY_MAX), wayY = M.wayY = new Int16Array(M.WAY_MAX), wayH = M.wayH = new Float32Array(M.WAY_MAX);
 
     /** A mark's place in the grid: its cell, and the level of it its height names (the first without one). */
@@ -6706,11 +7026,11 @@
     /** Every cell to mark and its kind, the strongest winning where two overlap; the cursor last. */
     M.collect = function(fight) {
         M.count = 0;
-        M.wayCount = 0; M.wayCost = 0;
+        M.wayCount = 0; M.wayCost = 0; M.wayLoss = 0; M.wayLethal = false;
         if (!fight || !fight.isTactical() || !fight.isHere() || fight._ending || !fight._act || !fight._act.player) return;
         ensureGrid();
         const act = fight._act, K = M.KINDS;
-        let move = EMPTY, path = EMPTY, range = EMPTY, area = EMPTY, rangeKind = K.range, tread = EMPTY, danger = EMPTY;
+        let move = EMPTY, path = EMPTY, range = EMPTY, area = EMPTY, rangeKind = K.range, tread = EMPTY, danger = EMPTY, grapple = EMPTY;
         // Where the other side can come and strike: the enemy under the cursor, or all of them when asked (their floods
         // are made first: the acting unit's own is made again below).
         if (act.stage === "pick" || act.stage === "move") {
@@ -6719,7 +7039,7 @@
             else if (pointed && pointed.team === "enemy" && fight.isAlive(pointed)) { const known = fight.threatOf(pointed); tread = known.tread; danger = known.reach; }
         } else if (fight.tac().threatAll && (act.stage === "command" || act.stage === "skill" || act.stage === "item")) danger = fight.threatOfAll();
         if (act.stage === "pick") { const pending = fight.pendingUnits(); move = fight.withFootprints(pending.map(unit => fight.character(unit)), pending); }
-        else if (act.stage === "move") { move = fight.moveCells(); path = fight.pathCells(); }
+        else if (act.stage === "move") { move = fight.moveCells(); path = fight.pathCells(); grapple = move.filter(cell => cell.grapple); }
         else if (act.stage === "target") {
             range = fight.rangeCells(); area = fight.areaCells();
             const action = fight.pendingAction();
@@ -6735,11 +7055,13 @@
             }
         }
         markCells(danger, K.threat); markCells(tread, K.tread);
-        markCells(move, K.move); markCells(range, rangeKind); markCells(area, K.area);
+        markCells(move, K.move); markCells(grapple, K.grapple); markCells(range, rangeKind); markCells(area, K.area);
         takeCells(move); takeCells(range); takeCells(area); takeCells(tread); takeCells(danger);
         // The way to the cursor as a line of steps (M.wayX, M.wayY, M.wayH), and what it costs.
         if (path.length > 1) {
             M.wayCost = fight.pathCost();
+            M.wayLoss = fight.pathLoss();
+            M.wayLethal = fight.pathLethal();
             for (const step of path) {
                 if (M.wayCount >= M.WAY_MAX) break;
                 wayX[M.wayCount] = step.x; wayY[M.wayCount] = step.y; wayH[M.wayCount] = Number.isFinite(step.h) ? step.h : NaN;
@@ -7106,18 +7428,35 @@
         pulseWay2D(frame);
     };
 
-    /** The number beside the destination: what the move costs. A picture per number, made the first time it shows. */
-    function costBitmap(cost) {
+    /**
+     * The number beside the destination: what the move costs, and under it in red the HP a fall on the way takes
+     * (`loss`, the same number taken on landing); a fall that leaves the unit with no HP says so under that
+     * (`lethal`: the battle word `fallLethal`). A picture per label, made the first time it shows.
+     */
+    function costBitmap(cost, loss, lethal) {
         if (!way.labels) way.labels = new Map();
-        const text = String(Math.round(cost * 10) / 10);
-        let bitmap = way.labels.get(text);
+        const text = String(Math.round(cost * 10) / 10), hurt = loss > 0 ? "-" + Math.round(loss) + " " + (typeof TextManager !== "undefined" && TextManager.hpA ? TextManager.hpA : "HP") : "";
+        const fatal = hurt && lethal ? F.term("fallLethal") : "";
+        const key = text + "|" + hurt + "|" + fatal;
+        let bitmap = way.labels.get(key);
         if (bitmap) return bitmap;
-        bitmap = new Bitmap(56, 34);
+        const wide = fatal ? 200 : hurt ? 132 : 56;
+        bitmap = new Bitmap(wide, fatal ? 90 : hurt ? 62 : 34);
         if (typeof $gameSystem !== "undefined" && $gameSystem && $gameSystem.mainFontFace) bitmap.fontFace = $gameSystem.mainFontFace();
         bitmap.fontSize = 24; bitmap.fontBold = true;
         bitmap.textColor = "#ffffff"; bitmap.outlineColor = "rgba(6,14,32,0.95)"; bitmap.outlineWidth = 5;
-        bitmap.drawText(text, 0, 0, 56, 34, "center");
-        way.labels.set(text, bitmap);
+        bitmap.drawText(text, 0, 0, wide, 34, "center");
+        if (hurt) {
+            bitmap.fontSize = 22;
+            bitmap.textColor = "#ff6a5c";
+            bitmap.drawText(hurt, 0, 30, wide, 30, "center");
+        }
+        if (fatal) {
+            bitmap.fontSize = 22;
+            bitmap.textColor = "#ff2a1e"; bitmap.outlineColor = "rgba(40,0,0,0.95)"; bitmap.outlineWidth = 6;
+            bitmap.drawText(fatal, 0, 58, wide, 30, "center");
+        }
+        way.labels.set(key, bitmap);
         return bitmap;
     }
 
@@ -7134,9 +7473,15 @@
             spriteset.addChild(way.label);
         }
         const label = way.label, last = M.wayCount - 1;
-        if (way.shown !== M.wayCost) { way.shown = M.wayCost; label.bitmap = costBitmap(M.wayCost); }
-        // Past the destination, the way the unit arrives: never over the square before it.
-        const ox = wayX[last] - wayX[last - 1], oy = wayY[last] - wayY[last - 1];
+        const shownKey = M.wayCost + "|" + M.wayLoss + "|" + M.wayLethal;
+        // (The cost stands where it always does; the HP lost hangs under it.)
+        if (way.shown !== shownKey) {
+            way.shown = shownKey;
+            label.bitmap = costBitmap(M.wayCost, M.wayLoss, M.wayLethal);
+            label.anchor.y = M.wayLoss > 0 ? 34 / label.bitmap.height : 1;
+        }
+        // Past the destination, the way the unit arrives: never over the square before it (a grapple's way comes from afar).
+        const ox = Math.sign(wayX[last] - wayX[last - 1]), oy = Math.sign(wayY[last] - wayY[last - 1]);
         if (live && live.camera && Reactor3D.projectToScreen) {
             const at = Reactor3D.projectToScreen(live.camera, wayX[last] + 0.5 + ox * 0.9, wayG[last] + 0.3, wayY[last] + 0.5 + oy * 0.9, way.out);
             if (!at) { label.visible = false; return; }
@@ -7242,6 +7587,35 @@
         }
         U.hash = U.count ? hash + (U.count + (U.extra || 0)) * 977 : 0;
         return U.hash;
+    };
+
+    /**
+     * Whether a marked unit (its feet, middle or head) or the cursor's cell is drawn inside a rectangle of the
+     * screen (`x`, `y`, `w`, `h` in game pixels): a HUD panel there would cover it.
+     */
+    U.covers = function(fight, x, y, w, h) {
+        if (typeof $gameMap === "undefined" || !$gameMap) return false;
+        const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null, spriteset = scene && scene._spriteset;
+        const live = spriteset && spriteset._reactor3d, camera = live && live.camera && typeof Reactor3D !== "undefined" && Reactor3D.projectToScreen ? live.camera : null;
+        const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight(), out = U.coverOut || (U.coverOut = { x: 0, y: 0 });
+        // (wx, wy): a point of the map in tiles; up: tiles over the ground (a flat map draws them up the screen).
+        const inside = (wx, wy, ground, up) => {
+            let point = out;
+            if (camera) point = Reactor3D.projectToScreen(camera, wx, ground + up, wy, out);
+            else { out.x = $gameMap.adjustX(wx) * tw; out.y = ($gameMap.adjustY(wy) - up) * th; }
+            return !!point && point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+        };
+        for (let i = 0; i < U.count; i++) {
+            // On a flat map the arrays hold the body's middle; its feet are half a tile lower on the screen.
+            const fy = camera ? uy[i] : uy[i] + 0.5;
+            if (inside(ux[i], fy, ug[i], 0) || inside(ux[i], fy, ug[i], ut[i] / 2) || inside(ux[i], fy, ug[i], ut[i])) return true;
+        }
+        const cursor = fight && fight._tac ? fight._tac.cursor : null;
+        if (cursor && cursor.on) {
+            const level = Number.isFinite(cursor.h) && camera ? cursor.h : 0;
+            if (inside(cursor.x + 0.5, cursor.y + (camera ? 0.5 : 1), level, 0) || inside(cursor.x + 0.5, cursor.y + 0.5, level, 0)) return true;
+        }
+        return false;
     };
 
     U.FRAME_MAX = 512;
@@ -7615,6 +7989,68 @@
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     };
 
+    //-------------------------------------------------------------------------
+    // A grapple's line: from the hand of whoever is on one to the edge it took
+    // hold of (ReactorPhysics.grappleHook), flying out and then pulled taut.
+    // A thin bright cylinder in the map's scene; nothing is made per frame.
+
+    const Rope = F.Rope = { lines: [], scene: null, hook: { x: 0, y: 0, z: 0, out: 0 } };
+    // As thick as a cord close up, and never thinner on the screen than a line of a pixel or two from far off.
+    Rope.WIDTH = 0.045;
+    Rope.THIN = 0.0024;
+    Rope.COLOR = 0xd8dee6;
+
+    Rope.update = function(spriteset) {
+        const live = spriteset._reactor3d || null, scene = live && live.scene;
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null, P = root.ReactorPhysics;
+        let used = 0;
+        if (scene && scene.modelsGroup && typeof THREE !== "undefined" && fight && fight.isActive() && P && P.grappleHook) {
+            if (Rope.scene !== scene) { Rope.lines.length = 0; Rope.scene = scene; }
+            for (const unit of fight._units) {
+                const character = unit.gone ? null : fight.character(unit), hook = character ? P.grappleHook(character, Rope.hook) : null;
+                if (!hook) continue;
+                const line = Rope.lines[used] || (Rope.lines[used] = Rope.make(scene));
+                if (!line.parent) scene.modelsGroup().add(line);
+                Rope.place(line, character, hook);
+                used++;
+            }
+        }
+        for (let i = used; i < Rope.lines.length; i++) Rope.lines[i].visible = false;
+    };
+
+    Rope.make = function(scene) {
+        const T = THREE, shared = Rope.shared || (Rope.shared = { geometry: new T.CylinderGeometry(0.5, 0.5, 1, 6).rotateX(Math.PI / 2), material: null });
+        if (!shared.material) { shared.material = new T.MeshBasicMaterial({ color: Rope.COLOR, fog: false }); shared.material.toneMapped = false; }
+        const mesh = new T.Mesh(shared.geometry, shared.material);
+        mesh.frustumCulled = false;
+        mesh.visible = false;
+        scene.modelsGroup().add(mesh);
+        return mesh;
+    };
+
+    /** From the right hand (the chest without a rigged model) to the hook, as much of the line as is out. */
+    Rope.place = function(line, character, hook) {
+        const S = F.Stage, View = root.ReactorBattleRoomView, holder = S && S.holderOf ? S.holderOf(character) : null;
+        let hand = null;
+        try { hand = holder && View && View.attachmentWorld ? View.attachmentWorld(holder, "rightHand") : null; } catch (error) { hand = null; }
+        const from = Rope.from || (Rope.from = new THREE.Vector3()), to = Rope.to || (Rope.to = new THREE.Vector3());
+        if (hand) from.set(hand.x, hand.y, hand.z);
+        else {
+            const tall = S && S.heightOf ? S.heightOf(character) : 3, ground = S && S.groundOf ? S.groundOf(character) : 0;
+            from.set(character._realX + 0.5, ground + tall * 0.75, character._realY + 0.5);
+        }
+        to.set(hook.x, hook.z, hook.y);
+        if (hook.out < 1) to.lerpVectors(from, to, hook.out);
+        const length = from.distanceTo(to);
+        if (!(length > 0.05)) { line.visible = false; return; }
+        line.position.lerpVectors(from, to, 0.5);
+        line.lookAt(to);
+        const R = Reactor3D, camera = R.viewport && R.viewport() && R.viewport().camera ? R.viewport().camera() : null;
+        const width = camera ? Math.max(Rope.WIDTH, camera.position.distanceTo(line.position) * Rope.THIN) : Rope.WIDTH;
+        line.scale.set(width, width, length);
+        line.visible = true;
+    };
+
     if (typeof Spriteset_Map !== "undefined") {
         const updateSpriteset = Spriteset_Map.prototype.update;
         Spriteset_Map.prototype.update = function() {
@@ -7622,6 +8058,7 @@
             M.update(this);
             M.placeCost(this);
             U.update(this);
+            Rope.update(this);
         };
     }
 

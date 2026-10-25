@@ -156,6 +156,12 @@ class ProjectManager {
     }
 
     /**
+     * A game's GPU switches: the discrete GPU on a dual-GPU Windows laptop, and
+     * hardware WebGL on a GPU Chromium's blocklist would leave without it.
+     */
+    static GPU_CHROMIUM_ARGS = Object.freeze(['--force-high-performance-gpu', '--ignore-gpu-blocklist']);
+
+    /**
      * What a new project leaves behind when it copies the template: the template's own
      * editor lock (held while the template is open), its saves, backups, screenshots and
      * battle-test copies of the database.
@@ -166,6 +172,58 @@ class ProjectManager {
             return ['.rpgreactor.lock', 'save', 'Backup', 'BACKUP', 'backup', 'Screenshots'].includes(parts[0]);
         }
         return parts.length === 2 && parts[0] === 'data' && /^Test_.*\.json$/.test(parts[1]);
+    }
+
+    /**
+     * Save As: copy the project at `sourcePath` to `targetPath`, a folder that
+     * is not there yet and not inside the project, and give the copy
+     * `projectName`. The copy is made under a temporary name beside the target
+     * and renamed once whole, so a failed copy leaves nothing at the target.
+     * The project's editor lock stays behind. Throws with a reason on failure.
+     */
+    async copyProjectTo(sourcePath, targetPath, projectName) {
+        if (!this.fs || !this.path) throw new Error('File system not available');
+        if (!this.isSafeProjectName(projectName)) throw new Error(this._t('Project name must be a safe single folder name.'));
+        const source = this.path.resolve(sourcePath);
+        const target = this.path.resolve(targetPath);
+        const inside = this.path.relative(source, target);
+        if (!inside || (!inside.startsWith('..') && !this.path.isAbsolute(inside))) {
+            throw new Error(this._t('The copy cannot go inside the project it copies.'));
+        }
+        if (this.fs.existsSync(target)) throw new Error(this._t('Project target already exists and is not empty.'));
+        const partial = `${target}.partial-${Date.now()}`;
+        const fsp = this.fs.promises;
+        // File by file, awaiting each, so the editor keeps drawing through a large project.
+        const copy = async (from, to, rel) => {
+            await fsp.mkdir(to, { recursive: true });
+            for (const name of await fsp.readdir(from)) {
+                const relPath = rel ? `${rel}/${name}` : name;
+                if (relPath === '.rpgreactor.lock') continue;
+                const fromPath = this.path.join(from, name);
+                const toPath = this.path.join(to, name);
+                const stat = await fsp.stat(fromPath);
+                if (stat.isDirectory()) await copy(fromPath, toPath, relPath);
+                else await fsp.copyFile(fromPath, toPath);
+            }
+        };
+        try {
+            await copy(source, partial, '');
+            const projectFile = this.path.join(partial, 'project.rpgreactor');
+            if (this.fs.existsSync(projectFile)) {
+                const data = RRJson.parse(this.fs.readFileSync(projectFile));
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
+                    data.name = projectName;
+                    data.modified = new Date().toISOString();
+                    this.writeJson(projectFile, data);
+                }
+            }
+            if (this.fs.existsSync(target)) throw new Error(this._t('Project target already exists and is not empty.'));
+            await fsp.rename(partial, target);
+        } catch (error) {
+            try { await fsp.rm(partial, { recursive: true, force: true }); } catch (cleanup) { /* left for the author */ }
+            throw error;
+        }
+        return target;
     }
 
     async copyDirectory(source, target, exclude = null, relBase = '') {
@@ -301,6 +359,18 @@ class ProjectManager {
         if (!this.fs.readdirSync(dir).length) this.fs.rmdirSync(dir);
     }
 
+    /**
+     * Whether a project was made in RPG Maker MV: its Game.rpgproject marker, or, in a
+     * deployed game that ships without one, MV's corescript (js/rpg_core.js; MZ's is
+     * rmmz_core.js). The corescript wins over an MZ marker someone dropped in to open it.
+     */
+    isRpgMakerMvProject(projectPath) {
+        const has = name => this.fs.existsSync(this.path.join(projectPath, name));
+        if (has(this.path.join('js', 'rpg_core.js'))) return true;
+        if (has(this.path.join('js', 'rmmz_core.js'))) return false;
+        return has('Game.rpgproject') || has('game.rpgproject');
+    }
+
     async installReactorRuntime(projectPath, projectName, options = {}) {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (!this.fs || !this.path) {
@@ -322,6 +392,10 @@ class ProjectManager {
             if (this.fs.existsSync(indexPath)) {
                 indexUsesReactor = /js\/reactor_main\.js/.test(this.fs.readFileSync(indexPath, 'utf8'));
             }
+
+            // Read before the corescript is archived: a deployed MV game has
+            // no project marker, but its corescript says which engine it is.
+            const isMvProject = this.isRpgMakerMvProject(projectPath);
 
             // Quarantine the RPG Maker corescript into a zip in the project
             // root so the two runtimes never share js/. Deploy staging
@@ -363,8 +437,6 @@ class ProjectManager {
             }
 
             if (!indexUsesReactor) {
-                const isMvProject = this.fs.existsSync(this.path.join(projectPath, 'Game.rpgproject'))
-                    || this.fs.existsSync(this.path.join(projectPath, 'game.rpgproject'));
                 this.writeText(indexPath, this.getStarterIndexHtml(displayName, { mvCompat: isMvProject }));
             }
 
@@ -393,6 +465,27 @@ class ProjectManager {
         return null;
     }
 
+    /**
+     * A deployed MV game converted before its corescript was read for the engine was
+     * marked as MZ (`$reactorMvCompat = false`), which turns off every MV game rule. The
+     * conversion's backup still holds the corescript it replaced: MV's means MV.
+     */
+    repairMvCompatFlag(projectPath) {
+        try {
+            const indexPath = this.path.join(projectPath, 'index.html');
+            const html = this.fs.readFileSync(indexPath, 'utf8');
+            const flag = /window\.\$reactorMvCompat\s*=\s*false\s*;/;
+            if (!flag.test(html)) return { ok: true, repaired: false };
+            const backups = this.fs.readdirSync(projectPath).filter(name => /^rpgmaker-runtime-backup(-\d+)?\.zip$/.test(name));
+            const mv = backups.some(name => this.fs.readFileSync(this.path.join(projectPath, name)).includes('js/rpg_core.js'));
+            if (!mv) return { ok: true, repaired: false };
+            this.writeText(indexPath, html.replace(flag, 'window.$reactorMvCompat = true;'));
+            return { ok: true, repaired: true };
+        } catch (error) {
+            return { ok: false, error: error.message };
+        }
+    }
+
     async refreshReactorRuntime(projectPath, projectData) {
         if (!this.fs || !this.path || !projectPath || !projectData) {
             return { ok: true, updated: false };
@@ -411,6 +504,10 @@ class ProjectManager {
             !/js\/reactor_main\.js/.test(this.fs.readFileSync(indexPath, 'utf8'))) {
             return { ok: true, updated: false };
         }
+        const gpuArgs = this.ensureGpuChromiumArgs(projectPath);
+        if (!gpuArgs.ok) console.warn('Could not add the GPU switches to package.json:', gpuArgs.error);
+        const mvMode = this.repairMvCompatFlag(projectPath);
+        if (!mvMode.ok) console.warn('Could not correct the MV compatibility flag in index.html:', mvMode.error);
 
         const runtimePath = this.getRuntimePath();
         if (!runtimePath) {
@@ -488,6 +585,7 @@ class ProjectManager {
             packageData.version = engineVersion;
             packageData.window = packageData.window || {};
             packageData.window.title = projectName;
+            this.applyGpuChromiumArgs(packageData);
             this.writeJson(packagePath, packageData);
         }
 
@@ -497,6 +595,8 @@ class ProjectManager {
             systemData.gameTitle = projectName;
             // A new project shows the speaker's face in messages, unless its template says otherwise.
             if (systemData.reactorSpeakerFace === undefined) systemData.reactorSpeakerFace = true;
+            // And walks diagonally with two arrow keys held.
+            if (systemData.reactorDiagonalMove === undefined) systemData.reactorDiagonalMove = true;
             this.writeJson(systemPath, systemData);
         }
     }
@@ -548,7 +648,7 @@ class ProjectManager {
             }
         }
 
-        this.writeSolidPng(this.path.join(targetPath, 'img', 'system', 'Window.png'), 192, 192, [32, 32, 40, 255]);
+        this.writeStarterWindowSkin(this.path.join(targetPath, 'img', 'system', 'Window.png'));
         this.writeSolidPng(this.path.join(targetPath, 'img', 'system', 'IconSet.png'), 512, 512, [0, 0, 0, 0]);
         this.writeStarterSystemImages(this.path.join(targetPath, 'img', 'system'));
         this.copyEditorIcon(targetPath);
@@ -621,6 +721,77 @@ class ProjectManager {
             // A dark rim one pixel round each block keeps the digits readable over any map.
             for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (x + ox >= 0 && x + ox < 320 && y + oy >= 0 && y + oy < 200 && lit(x + ox, y + oy)) return [0, 0, 0, 200];
             return clear;
+        });
+    }
+
+    /** The words menus and battles show: Options rows, save slots, battle messages. */
+    static STARTER_MESSAGES = Object.freeze({
+        alwaysDash: 'Always Dash', commandRemember: 'Command Remember', touchUI: 'Touch UI', bgmVolume: 'BGM Volume',
+        bgsVolume: 'BGS Volume', meVolume: 'ME Volume', seVolume: 'SE Volume', possession: 'Possession',
+        expTotal: 'Current %1', expNext: 'To Next %1', saveMessage: 'Which file would you like to save to?',
+        loadMessage: 'Which file would you like to load?', file: 'File', autosave: 'Autosave',
+        partyName: '%1’s Party', emerge: '%1 emerged!', preemptive: '%1 got the upper hand!',
+        surprise: '%1 was surprised!', escapeStart: '%1 has started to escape!',
+        escapeFailure: 'However, it was unable to escape!', victory: '%1 was victorious!', defeat: '%1 was defeated.',
+        obtainExp: '%1 %2 received!', obtainGold: '%1\\G found!', obtainItem: '%1 found!',
+        levelUp: '%1 is now %2 %3!', obtainSkill: '%1 learned!', useItem: '%1 uses %2!',
+        criticalToEnemy: 'An excellent hit!!', criticalToActor: 'A painful blow!!', actorDamage: '%1 took %2 damage!',
+        actorRecovery: '%1 recovered %2 %3!', actorGain: '%1 gained %2 %3!', actorLoss: '%1 lost %2 %3!',
+        actorDrain: '%1 was drained of %2 %3!', actorNoDamage: '%1 took no damage!',
+        actorNoHit: 'Miss! %1 took no damage!', enemyDamage: '%1 took %2 damage!',
+        enemyRecovery: '%1 recovered %2 %3!', enemyGain: '%1 gained %2 %3!', enemyLoss: '%1 lost %2 %3!',
+        enemyDrain: '%1 was drained of %2 %3!', enemyNoDamage: '%1 took no damage!',
+        enemyNoHit: 'Miss! %1 took no damage!', evasion: '%1 evaded the attack!',
+        magicEvasion: '%1 nullified the magic!', magicReflection: '%1 reflected the magic!',
+        counterAttack: '%1 made a counterattack!', substitute: '%1 protected %2!', buffAdd: '%1’s %2 went up!',
+        debuffAdd: '%1’s %2 went down!', buffRemove: '%1’s %2 returned to normal!',
+        actionFailure: 'There was no effect on %1!'
+    });
+
+    /** Text colors 0-31 of a window skin, read by the engine from 12 px cells at (96, 144). */
+    static STARTER_TEXT_COLORS = Object.freeze([
+        '#ffffff', '#20a0d6', '#ff784c', '#66cc40', '#99ccff', '#ccc0ff', '#ffffa0', '#808080',
+        '#c0c0c0', '#2080cc', '#ff3810', '#00a010', '#3e9ade', '#a098ff', '#ffcc20', '#000000',
+        '#84aaff', '#ffff40', '#ff2020', '#202040', '#e08040', '#f0c040', '#4080c0', '#40c0f0',
+        '#80ff80', '#c08080', '#8080ff', '#ff80ff', '#00a040', '#00e060', '#a060e0', '#c080ff'
+    ]);
+
+    /**
+     * A plain 192 x 192 window skin laid out as the engine cuts it: background (0, 0), clear
+     * pattern (0, 96), frame with scroll arrows (96, 0), cursor (96, 96), pause sign (144, 96)
+     * and the text colors (96, 144). Menus drawn with it are readable and show their cursor.
+     */
+    writeStarterWindowSkin(filePath) {
+        const clear = [0, 0, 0, 0];
+        const colors = ProjectManager.STARTER_TEXT_COLORS.map(hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)));
+        const line = [210, 214, 230, 255];
+        // A triangle 16 px wide and 8 px tall in a w x h cell, pointing down or up.
+        const triangle = (lx, ly, w, h, down) => {
+            const row = down ? ly - (h - 8) / 2 : (h + 8) / 2 - 1 - ly;
+            const half = 8 - row;
+            return row >= 0 && row < 8 && Math.abs(lx + 0.5 - w / 2) <= half;
+        };
+        this.writePng(filePath, 192, 192, (x, y) => {
+            if (x < 96) {
+                if (y >= 96) return clear;
+                const t = y / 95;
+                return [Math.round(36 - 14 * t), Math.round(42 - 16 * t), Math.round(64 - 24 * t), 255];
+            }
+            const lx = x - 96;
+            if (y < 96) {
+                if (lx < 2 || lx >= 94 || y < 2 || y >= 94) return line;
+                if (lx >= 36 && lx < 60 && y >= 24 && y < 36) return triangle(lx - 36, y - 24, 24, 12, false) ? line : clear;
+                if (lx >= 36 && lx < 60 && y >= 60 && y < 72) return triangle(lx - 36, y - 60, 24, 12, true) ? line : clear;
+                return clear;
+            }
+            if (y < 144) {
+                if (lx < 48) {
+                    const cx = lx, cy = y - 96;
+                    return cx < 2 || cx >= 46 || cy < 2 || cy >= 46 ? [220, 226, 255, 200] : [200, 210, 255, 64];
+                }
+                return triangle((x - 144) % 24, (y - 96) % 24, 24, 24, true) ? line : clear;
+            }
+            return colors[Math.floor((y - 144) / 12) * 8 + Math.floor(lx / 12)].concat(255);
         });
     }
 
@@ -699,7 +870,7 @@ class ProjectManager {
             name: this.getProjectPackageName(projectName),
             version: engineVersion,
             main: 'index.html',
-            'chromium-args': '--force-color-profile=srgb --window-size=1280,720',
+            'chromium-args': ['--force-color-profile=srgb', '--window-size=1280,720', ...ProjectManager.GPU_CHROMIUM_ARGS].join(' '),
             window: {
                 title: projectName,
                 width: 1280,
@@ -723,10 +894,10 @@ class ProjectManager {
         const sequences=[null];if(typeof ReactorBattleData!=='undefined')ReactorBattleData.addStarters(sequences);
 
         return {
-            'Actors.json': [null],
+            'Actors.json': [null, this.getStarterActor()],
             'Animations.json': [null],
             'Armors.json': [null],
-            'Classes.json': [null],
+            'Classes.json': [null, this.getStarterClass()],
             'CommonEvents.json': [null],
             'Enemies.json': [null],
             'Items.json': [null],
@@ -747,7 +918,6 @@ class ProjectManager {
                 scrollX: 0,
                 scrollY: 0
             }],
-            'Map001.r3d.json': { version: 1, lighting: { ambient: 1, ambientColour: '#ffffff' } },
             'Map001.json': {
                 autoplayBgm: false,
                 autoplayBgs: false,
@@ -791,11 +961,42 @@ class ProjectManager {
         };
     }
 
+    /** The one party member a blank project starts with. */
+    getStarterActor() {
+        return {
+            id: 1, name: 'Hero', nickname: '', classId: 1, initialLevel: 1, maxLevel: 99, profile: '',
+            characterName: '', characterIndex: 0, faceName: '', faceIndex: 0, battlerName: '',
+            equips: [0, 0, 0, 0, 0], traits: [], note: ''
+        };
+    }
+
+    /**
+     * The starter actor's class: a value for every level 0-99 of each of the eight parameters, and the
+     * hit, evasion and critical rates without which every attack misses.
+     */
+    getStarterClass() {
+        const curve = (base, perLevel, max) => Array.from({ length: 100 }, (_, level) =>
+            Math.min(max, base + perLevel * Math.max(1, level)));
+        return {
+            id: 1, name: 'Hero', expParams: [30, 20, 30, 30],
+            params: [curve(400, 50, 9999), curve(80, 10, 9999), curve(16, 4, 999), curve(16, 4, 999),
+                curve(16, 4, 999), curve(16, 4, 999), curve(30, 2, 999), curve(30, 2, 999)],
+            learnings: [],
+            traits: [
+                { code: 22, dataId: 0, value: 0.95 }, { code: 22, dataId: 1, value: 0.05 },
+                { code: 22, dataId: 2, value: 0.04 }, { code: 31, dataId: 1, value: 0 },
+                { code: 51, dataId: 1, value: 0 }, { code: 52, dataId: 1, value: 0 }
+            ],
+            note: ''
+        };
+    }
+
     getStarterTileset() {
-        // Tile 0 (nothing drawn) is a star (0x10): an empty upper layer never decides passage,
-        // so the tile below it does.
-        const flags = new Array(8192).fill(0);
-        flags[0] = 0x10;
+        // Every tile starts with RPG Maker's flag for its sheet (utils/TilesetSheets.js). Tile 0
+        // (nothing drawn) is a star (0x10): an empty upper layer never decides passage, so the tile
+        // below it does.
+        const flags = typeof RRTilesetSheets !== 'undefined' ? RRTilesetSheets.defaultFlags()
+            : Object.assign(new Array(8192).fill(0), { 0: 0x10 });
         return {
             id: 1,
             mode: 1,
@@ -846,7 +1047,9 @@ class ProjectManager {
             optTransparent: false,
             // A Show Text with no face picture shows its speaker's face (runtime/reactor_speaker_face.js).
             reactorSpeakerFace: true,
-            partyMembers: [],
+            // Two arrow keys held together walk diagonally (Game_Player.getInputDirection).
+            reactorDiagonalMove: true,
+            partyMembers: [1],
             currencyUnit: 'G',
             elements: ['', 'Physical'],
             equipTypes: ['', 'Weapon', 'Shield', 'Head', 'Body', 'Accessory'],
@@ -863,14 +1066,14 @@ class ProjectManager {
                 basic: ['Level', 'Lv', 'HP', 'HP', 'MP', 'MP', 'TP', 'TP', 'Experience', 'EXP'],
                 commands: ['Fight', 'Escape', 'Attack', 'Guard', 'Item', 'Skill', 'Equip', 'Status', 'Formation', 'Save', 'Game End', 'Options', 'Weapon', 'Armor', 'Key Item', 'Equip', 'Optimize', 'Clear', 'New Game', 'Continue', null, 'To Title', 'Cancel', null, 'Buy', 'Sell'],
                 params: ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Hit Rate', 'Evasion Rate'],
-                messages: {}
+                messages: { ...ProjectManager.STARTER_MESSAGES }
             },
             // 24, not 26, on purpose: MP Recovery (24) and TP Recovery (25)
             // fall back to Recovery while they are absent, and seeding them
             // blank would mean silence instead -- a new project would then
             // differ from every existing one.
             sounds: new Array(24).fill(null).map(() => ({ ...emptyAudio })),
-            testBattlers: [],
+            testBattlers: [{ actorId: 1, level: 1, equips: [0, 0, 0, 0, 0] }],
             testTroopId: 1,
             battleback1Name: '',
             battleback2Name: '',
@@ -919,6 +1122,54 @@ class ProjectManager {
         return name === 'rmmz-game' ? 'rpg-reactor-game' : name;
     }
 
+    /**
+     * Put the GPU switches in a game manifest's chromium-args, after the
+     * project's own arguments; `"reactorHighPerformanceGpu": false` in the
+     * manifest takes them out instead. Returns true when the manifest changed.
+     */
+    applyGpuChromiumArgs(packageData) {
+        if (!packageData || typeof packageData !== 'object') return false;
+        const current = typeof packageData['chromium-args'] === 'string' ? packageData['chromium-args'] : '';
+        const args = current.split(/\s+/).filter(Boolean);
+        const wanted = ProjectManager.GPU_CHROMIUM_ARGS;
+        const next = packageData.reactorHighPerformanceGpu === false
+            ? args.filter(arg => !wanted.includes(arg))
+            : args.concat(wanted.filter(arg => !args.includes(arg)));
+        if (next.length === args.length) return false;
+        packageData['chromium-args'] = next.join(' ');
+        return true;
+    }
+
+    /** The GPU switches in an existing project's package.json; its other text is kept as written. */
+    ensureGpuChromiumArgs(projectPath) {
+        if (!this.fs || !this.path || !projectPath) return { ok: true, updated: false };
+        const packagePath = this.path.join(projectPath, 'package.json');
+        try {
+            if (!this.fs.existsSync(packagePath)) return { ok: true, updated: false };
+            const text = this.fs.readFileSync(packagePath, 'utf8');
+            const packageData = RRJson.parse(text);
+            if (!packageData || typeof packageData !== 'object' || Array.isArray(packageData)) {
+                return { ok: true, updated: false };
+            }
+            const before = packageData['chromium-args'];
+            if (!this.applyGpuChromiumArgs(packageData)) return { ok: true, updated: false };
+            const after = packageData['chromium-args'];
+            const pattern = /("chromium-args"\s*:\s*)("(?:[^"\\]|\\.)*")/;
+            const match = typeof before === 'string' ? text.match(pattern) : null;
+            let output;
+            if (match && JSON.parse(match[2]) === before) {
+                output = text.replace(pattern, (_, key) => key + JSON.stringify(after));
+            } else {
+                const indent = text.match(/\n([ \t]+)"/)?.[1] || 2;
+                output = JSON.stringify(packageData, null, indent) + (text.endsWith('\n') ? '\n' : '');
+            }
+            this._writeFileAtomic(this.fs, packagePath, output, 'utf8');
+            return { ok: true, updated: true, chromiumArgs: after };
+        } catch (error) {
+            return { ok: false, updated: false, error: error.message || String(error) };
+        }
+    }
+
     ensureProjectPackageMetadata(projectPath, displayName = null) {
         if (!this.fs || !this.path) {
             return { ok: false, error: 'File system not available.' };
@@ -957,6 +1208,7 @@ class ProjectManager {
             if (created || repaired.length > 0) {
                 this._writeFileAtomic(this.fs, packagePath, JSON.stringify(packageData, null, 2), 'utf8');
             }
+            this.ensureGpuChromiumArgs(projectPath);
             return {
                 ok: true,
                 path: packagePath,
@@ -1021,7 +1273,7 @@ class ProjectManager {
                         engine: 'RPG Reactor',
                         engineVersion: engineVersion,
                         imported: true,
-                        importedFrom: this.fs.existsSync(rmmzFile) ? 'RPG Maker MZ' : 'RPG Maker MV',
+                        importedFrom: this.isRpgMakerMvProject(projectPath) || !this.fs.existsSync(rmmzFile) ? 'RPG Maker MV' : 'RPG Maker MZ',
                         path: projectPath
                     };
                 } else {

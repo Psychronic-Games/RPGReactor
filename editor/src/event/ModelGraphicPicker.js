@@ -150,15 +150,19 @@ class ModelGraphicPicker {
                             <canvas class="model-gizmo-canvas" width="84" height="84"
                                 style="width:84px;height:84px;background:rgba(0,0,0,0.35);border:1px solid var(--color-border);border-radius:4px;pointer-events:auto;"></canvas>
                             <div class="model-preview-controls" style="display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.35);padding:6px 8px;border-radius:4px;pointer-events:auto;">
-                                <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text);">
-                                    ${this._t('This side is')}
-                                    <button type="button" class="rr-btn-secondary model-face-btn" data-face="front">${this._t('Front')}</button>
-                                    <button type="button" class="rr-btn-secondary model-face-btn" data-face="back">${this._t('Back')}</button>
-                                    <button type="button" class="rr-btn-secondary model-face-btn" data-face="left">${this._t('Left')}</button>
-                                    <button type="button" class="rr-btn-secondary model-face-btn" data-face="right">${this._t('Right')}</button>
-                                    <button type="button" class="rr-btn-secondary model-face-clear">${this._t('Clear marks')}</button>
-                                </div>
-                                <div class="model-face-status" style="font-size:11px;color:var(--color-text-muted);"></div>
+                                <!-- Marking which side is the front: needed only for a model the engine turns wrong, so under Advanced. -->
+                                <details class="model-face-advanced"${Object.keys(this.selectedFaces).length ? ' open' : ''} style="font-size:12px;color:var(--color-text);">
+                                    <summary style="cursor:pointer;color:var(--color-text-muted);">${this._t('Advanced')}</summary>
+                                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+                                        ${this._t('This side is')}
+                                        <button type="button" class="rr-btn-secondary model-face-btn" data-face="front">${this._t('Front')}</button>
+                                        <button type="button" class="rr-btn-secondary model-face-btn" data-face="back">${this._t('Back')}</button>
+                                        <button type="button" class="rr-btn-secondary model-face-btn" data-face="left">${this._t('Left')}</button>
+                                        <button type="button" class="rr-btn-secondary model-face-btn" data-face="right">${this._t('Right')}</button>
+                                        <button type="button" class="rr-btn-secondary model-face-clear">${this._t('Clear marks')}</button>
+                                    </div>
+                                    <div class="model-face-status" style="font-size:11px;color:var(--color-text-muted);margin-top:4px;"></div>
+                                </details>
                                 <div class="model-variant-row" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--color-text);"></div>
                                 <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text);">
                                     X <input type="number" class="model-angle-x" step="1" value="${Math.round(this.selectedPitch)}"
@@ -1133,7 +1137,8 @@ class ModelGraphicPicker {
             this._applyModelRotation();
             this._rebuildFaceMarkers();
             this._scene.add(this._object);
-            if (this.selectedVariant) this._wearVariant();
+            // The surface and look the game gives this use: the chosen variant's, or the model's own.
+            this._wearVariant();
             // A GLB's images decode after the first draw; their version
             // numbers tell the idle loop when one has landed.
             this._previewTextures = ModelPreview3D.collectTextures(template, this._object);

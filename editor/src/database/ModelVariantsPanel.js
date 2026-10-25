@@ -214,20 +214,44 @@ class ModelVariantsPanel {
         return `<select class="${escape(cls)}" ${attrs}><option value="">${escape(ownLabel)}</option>${list.map(name => `<option value="${escape(name)}"${name === current ? ' selected' : ''} data-rr-i18n-skip="1">${escape(name)}</option>`).join('')}</select>`;
     }
 
-    /** Put a variant's color and texture on a preview's model; the model's own when no variant is named. */
-    static wear(object, projectPath, modelName, variant) {
-        if (!object || typeof Reactor3D === 'undefined' || !Reactor3D.applyModelLook || !Reactor3D.modelLook) return;
-        let look = null;
-        if (variant && projectPath && modelName && typeof require === 'function') {
-            try {
-                const fs = require('fs'), path = require('path');
-                const json = JSON.parse(fs.readFileSync(path.join(projectPath, '3d', modelName, 'model.json'), 'utf8'));
-                look = Reactor3D.modelLook(json, { name: modelName, variant });
-            } catch (error) {
-                look = null;
-            }
+    /**
+     * What a use of a model wears, as the game reads it from model.json: the
+     * surface and the look (color, texture) of its variant, or the model's own
+     * when no variant is named. Both null when the file says nothing.
+     */
+    static lookOf(projectPath, modelName, variant) {
+        const none = { surface: null, look: null };
+        if (!projectPath || !modelName || typeof require !== 'function' || typeof Reactor3D === 'undefined'
+            || !Reactor3D.variantSurface || !Reactor3D.modelLook) return none;
+        let json;
+        try {
+            const fs = require('fs'), path = require('path');
+            json = JSON.parse(fs.readFileSync(path.join(projectPath, '3d', modelName, 'model.json'), 'utf8'));
+        } catch (error) {
+            return none;
         }
-        Reactor3D.applyModelLook(object, look);
+        const spec = variant ? { name: modelName, variant } : { name: modelName };
+        return { surface: Reactor3D.variantSurface(json, spec) || null, look: Reactor3D.modelLook(json, spec) || null };
+    }
+
+    /** Text that differs for every different thing worn; '' when nothing is. */
+    static lookStamp(worn) {
+        return worn && (worn.surface || worn.look) ? JSON.stringify({ surface: worn.surface || null, look: worn.look || null }) : '';
+    }
+
+    /** Put what `lookOf` read on a model: its surface, color adjustment and texture. */
+    static applyWorn(object, worn) {
+        if (!object || typeof Reactor3D === 'undefined') return;
+        if (Reactor3D.applyModelSurface) Reactor3D.applyModelSurface(object, (worn && worn.surface) || null);
+        if (Reactor3D.applyModelLook) Reactor3D.applyModelLook(object, (worn && worn.look) || null);
+    }
+
+    /** Put a variant's surface, color and texture on a preview's model; the model's own when no variant is named. */
+    static wear(object, projectPath, modelName, variant) {
+        if (!object) return null;
+        const worn = ModelVariantsPanel.lookOf(projectPath, modelName, variant);
+        ModelVariantsPanel.applyWorn(object, worn);
+        return worn;
     }
 
     // ---- The page -----------------------------------------------------------

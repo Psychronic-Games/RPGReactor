@@ -404,7 +404,7 @@
     };
 
     /**
-     * Why the map does not start a battle of `mode` now, or "" when nothing holds it: a battle runs, the scene is
+     * Why the map does not start a battle of `mode` now, or "" when nothing holds it: a battle runs here, the scene is
      * changing or still fading in (the player sees the map before a battle begins on it), an event runs or is
      * about to, a message is open, a transfer, the party in a vehicle, in the air, swimming or moved by a route,
      * encounters switched off, the tester walking through walls; and, for an Action or First Person battle, a
@@ -412,7 +412,7 @@
      */
     F.startHeld = function(mode) {
         const fight = $gameFight, player = $gamePlayer, C = F.Classic, P = root.ReactorPhysics;
-        if (fight.isActive() || $gameParty.inBattle() || (C && C.isRunning && C.isRunning())) return "battle";
+        if (fight.isHere() || $gameParty.inBattle() || (C && C.isRunning && C.isRunning())) return "battle";
         const scenes = typeof SceneManager !== "undefined" ? SceneManager : null, scene = scenes ? scenes._scene : null;
         if (scenes && ((scenes.isSceneChanging && scenes.isSceneChanging()) || (scene && typeof scene.isFading === "function" && scene.isFading()))) return "scene";
         if ($gameMap.isEventRunning() || ($gameTemp.isCommonEventReserved && $gameTemp.isCommonEventReserved())) return "event";

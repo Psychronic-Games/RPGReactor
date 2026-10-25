@@ -492,6 +492,18 @@ function reactorAnchorY(sprite) {
  * The sprite's anchor is its feet, so the projected point is the base of the
  * cell rather than its centre in Y.
  */
+/** Where the character's feet are on the screen through `camera`, into `out`; null when nothing can be projected. */
+Sprite_Character.prototype.reactor3DScreenPoint = function(camera, out) {
+    const character = this._character;
+    // Where this character is standing, which is not always its own cell:
+    // a cell whose art was stood into a wall has moved onto that wall, and
+    // a sign hanging on it has to move with it.
+    // Records this sprite keeps and fills each frame (read at once, never held).
+    const stand = Reactor3D.standingPlaceFor(character, this._reactor3dStandAt || (this._reactor3dStandAt = {}));
+    const at = Reactor3D.pointOf(camera, character._realX + 0.5, stand, this._reactor3dAt || (this._reactor3dAt = {}));
+    return Reactor3D.projectToScreen(camera, at.x, at.y, at.z, out);
+};
+
 Sprite_Character.prototype.updateReactor3DPosition = function() {
     if (typeof Reactor3D === "undefined") return false;
     const viewport = Reactor3D.viewport();
@@ -499,15 +511,7 @@ Sprite_Character.prototype.updateReactor3DPosition = function() {
     if (!camera || !Reactor3D.shouldRender3D($dataMap)) return false;
 
     const character = this._character;
-    const gx = character._realX;
-    const gy = character._realY;
-    // Where this character is standing, which is not always its own cell:
-    // a cell whose art was stood into a wall has moved onto that wall, and
-    // a sign hanging on it has to move with it.
-    const stand = Reactor3D.standingPlaceFor(character);
-    const at = Reactor3D.pointOf(camera, gx + 0.5, stand);
-    const point = Reactor3D.projectToScreen(camera, at.x, at.y, at.z,
-        this._reactor3dPoint || (this._reactor3dPoint = {}));
+    const point = this.reactor3DScreenPoint(camera, this._reactor3dPoint || (this._reactor3dPoint = {}));
     if (!point) return false;
 
     this.x = point.x;
@@ -573,7 +577,7 @@ Sprite_Character.prototype.reactor3DScale = function() {
     if (!character) return null;
     const gx = character._realX;
     const gy = character._realY;
-    const stand = Reactor3D.standingPlaceFor(character);
+    const stand = Reactor3D.standingPlaceFor(character, this._reactor3dStandAt || (this._reactor3dStandAt = {}));
     // The whole transform a declared 3D object gets on this cell: width,
     // height and shear. All three come off the same two projected axes, so a
     // sprite anchored at its feet, sheared by the lean and stretched by the
@@ -589,8 +593,9 @@ Sprite_Character.prototype.reactor3DScale = function() {
     const tileHeight = $gameMap.tileHeight();
     const wide = this.patternWidth() / tileWidth;
     const tall = this.patternHeight() / tileHeight;
-    const at = Reactor3D.pointOf(camera, gx + 0.5, stand);
-    return Reactor3D.standScaleAt(camera, at.x, at.y, at.z, wide, tall);
+    const at = Reactor3D.pointOf(camera, gx + 0.5, stand, this._reactor3dAt || (this._reactor3dAt = {}));
+    // The record `update` holds until the next frame takes this factor back off.
+    return Reactor3D.standScaleAt(camera, at.x, at.y, at.z, wide, tall, this._reactor3dStandScale || (this._reactor3dStandScale = {}));
 };
 
 /**
@@ -666,7 +671,10 @@ Sprite_Character.prototype.update = function() {
     // ground line stays level and the top leans, which is the parallelogram a
     // standing billboard actually projects to.
     this.skew.x += stand.skew;
-    this._reactor3dStand = stand;
+    // Held in a record of its own: `reactor3DScale` refills its record whenever an animation on this sprite asks.
+    const held = this._reactor3dStandHeld || (this._reactor3dStandHeld = { x: 1, y: 1, skew: 0 });
+    held.x = stand.x; held.y = stand.y; held.skew = stand.skew;
+    this._reactor3dStand = held;
 };
 
 Sprite_Character.prototype.updateOther = function() {
@@ -2527,6 +2535,7 @@ Sprite_Animation.prototype.initMembers = function() {
 };
 
 Sprite_Animation.prototype.destroy = function(options) {
+    globalThis.ReactorHdrOverlay?.release(this);
     Sprite.prototype.destroy.call(this, options);
     if (this._handle) {
         this._handle.stop();
@@ -2549,6 +2558,7 @@ Sprite_Animation.prototype.setup = function(
     this._effectContext = typeof Reactor3D !== "undefined" ? Reactor3D._spawningEffectContext || null : null;
     this._effect = this._effectContext ? Reactor3D.GpuEffects.load(this._effectContext, animation.effectName) : EffectManager.load(animation.effectName);
     this._playing = true;
+    globalThis.ReactorHdrOverlay?.setup(this, animation);
     const timings = animation.soundTimings.concat(animation.flashTimings);
     for (const timing of timings) {
         if (timing.frame > this._maxTimingFrames) {
@@ -2586,6 +2596,7 @@ Sprite_Animation.prototype.update = function() {
 };
 
 Sprite_Animation.prototype.canStart = function() {
+    if (globalThis.ReactorHdrOverlay && !ReactorHdrOverlay.canStart(this)) return false;
     if (this._previous && this.shouldWaitForPrevious()) {
         return !this._previous.isPlaying();
     } else {
@@ -2780,7 +2791,9 @@ Sprite_Animation.renderActive = function(renderer) {
     // and multiply layers darkened nothing into solid black. The copy is
     // pixel-identical to what it covers, so it is invisible in itself.
     const composited = !!(Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects());
+    const hdr = [];
     for (const inst of list) {
+        if (inst._hdrActive) { hdr.push(inst); continue; }
         try {
             inst._doEffekseerDraw(renderer, composited);
         } catch (e) {
@@ -2794,6 +2807,7 @@ Sprite_Animation.renderActive = function(renderer) {
             }
         }
     }
+    globalThis.ReactorHdrOverlay?.render(renderer, hdr);
     list.length = 0;
 };
 
@@ -2869,31 +2883,31 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
 // extend from its target before clipping at the viewport edge (±ch here).
 Sprite_Animation.effekseerViewportSide = function() {
     const canvas = Graphics._effekseerCanvas;
+    // Twice the screen's height: an effect reaches a screen's height from its
+    // target before the viewport's edge cuts it (a bigger one costs a bigger
+    // backdrop copy for every distorting effect).
     return canvas ? canvas.height * 2 : 1440;
 };
 
+/**
+ * The projection an effect is drawn through, for a viewport `side` pixels
+ * square centered on the target and a screen `height` pixels tall: RPG
+ * Maker's size and perspective (ReactorBattleData.effekseerProjection, which
+ * the editor's previews draw through too). `mirror` flips it across the
+ * target.
+ */
+Sprite_Animation.effekseerProjection = function(height, side, mirror) {
+    return ReactorBattleData.effekseerProjection(side, side, height, 1, mirror);
+};
+
 Sprite_Animation.prototype.setProjectionMatrix = function(renderer) {
-    // AnimationPicker recipe (proven good): p = -1.2 with camera z = -10.
-    // (The MZ original's p ≈ -5.69 silently produced zero pixels through
-    // Effekseer's WebGL1 wrapper on the overlay context.)
-    //
     // The viewport is a SQUARE of side S centered on the target
-    // (setViewport), so the projection is aspect-neutral; the ch/S factor
-    // keeps one world unit = ch/26 pixels on both axes — the same on-screen
-    // effect scale as the editor previews. The effect itself sits at the
-    // world origin (camera axis), so shapes stay undistorted at every
-    // screen position; mirroring flips the x-axis around the target.
+    // (setViewport), so the projection is aspect-neutral and the effect sits
+    // on the camera axis: shapes stay undistorted at every screen position.
+    // Its scale and depth are RPG Maker's (effekseerProjection), so an effect
+    // is the size it is in RPG Maker on every screen.
     const canvas = Graphics._effekseerCanvas || renderer.view;
-    const q = canvas.height / Sprite_Animation.effekseerViewportSide();
-    const x = (this._mirror ? -1 : 1) * q;
-    const y = q;
-    const p = -1.2;
-    Graphics.effekseer.setProjectionMatrix([
-        x, 0, 0, 0,
-        0, y, 0, 0,
-        0, 0, 1, p,
-        0, 0, 0, 1,
-    ]);
+    Graphics.effekseer.setProjectionMatrix(Sprite_Animation.effekseerProjection(canvas.height, Sprite_Animation.effekseerViewportSide(), this._mirror));
 };
 
 Sprite_Animation.prototype.setCameraMatrix = function(/*renderer*/) {
@@ -2949,11 +2963,16 @@ Sprite_Animation.prototype.targetPosition = function(renderer) {
 };
 
 Sprite_Animation.prototype.targetSpritePosition = function(sprite) {
-    // Anchor unconditionally to sprite ORIGIN (typically the bottom for battle
-    // sprites with anchor.y=1). Conditional alignBottom check was leaving
-    // effects ~h/2 too high. If a future animation explicitly needs center-
-    // anchor, restore the conditional later.
-    const point = new Point(0, 0);
+    // On the middle of the target, or on its feet when the animation says
+    // Align Bottom (battle sprites stand on their origin, anchor.y = 1).
+    const bottom = !!this._animation.alignBottom;
+    // A target drawn by something else (a model on a 3D map, whose sprite
+    // stands in unseen) says where its middle is drawn.
+    if (!bottom && typeof sprite.reactorAnimationMiddle === "function") {
+        const middle = sprite.reactorAnimationMiddle();
+        if (middle) return middle;
+    }
+    const point = new Point(0, bottom ? 0 : -sprite.height / 2);
     // v5/6/7: sprite.updateTransform() forced an immediate worldTransform
     // recompute. v8 repurposed updateTransform as an opts-setter (no-args
     // throws). Skip the call on v8 -- v8's transform system has already
@@ -2969,9 +2988,26 @@ Sprite_Animation.prototype.targetSpritePosition = function(sprite) {
     // parent, whose transform stays live.
     if ((!sprite.visible || !Number.isFinite(out.x) || !Number.isFinite(out.y))
         && sprite.parent && sprite.parent.worldTransform) {
-        return sprite.parent.worldTransform.apply(new Point(sprite.x, sprite.y));
+        return sprite.parent.worldTransform.apply(new Point(sprite.x + point.x * sprite.scale.x, sprite.y + point.y * sprite.scale.y));
     }
     return out;
+};
+
+/**
+ * Where an animation on this character is centered, when its picture is a
+ * model on a 3D map (the sprite stands in unseen): the middle of the model's
+ * height, on the screen. Null where the sprite itself is the picture.
+ */
+Sprite_Character.prototype.reactorAnimationMiddle = function() {
+    const character = this._character;
+    if (this.visible || !character || typeof Reactor3D === "undefined" || typeof $dataMap === "undefined" || !$dataMap) return null;
+    if (!Reactor3D.shouldRender3D || !Reactor3D.shouldRender3D($dataMap) || !Reactor3D.projectToScreen) return null;
+    const viewport = Reactor3D.viewport && Reactor3D.viewport(), camera = viewport && viewport.camera && viewport.camera();
+    if (!camera) return null;
+    const ground = (Reactor3D.characterGround ? Reactor3D.characterGround($dataMap, character) : 0) + (character._reactorLift || 0);
+    const tall = Reactor3D.characterHeightTiles ? Reactor3D.characterHeightTiles(character) : 1.5;
+    const at = Reactor3D.projectToScreen(camera, character._realX + 0.5, ground + tall / 2, character._realY + 0.5, {});
+    return at && Number.isFinite(at.x) && Number.isFinite(at.y) ? new Point(at.x, at.y) : null;
 };
 
 Sprite_Animation.prototype.resetViewport = function(renderer) {
@@ -5410,11 +5446,16 @@ Spriteset_Map.prototype.releaseReactor3D = function(now) {
         if (!(kept && Reactor3D.Neighbors && Reactor3D.Neighbors.crossing)) this._reactor3d.viewport.setVisible(false);
         this._reactor3d = null;
         this.destroyReactor3DSprite();
-        // Whatever this map borrowed from the lighting plugin is given back.
+        // Whatever this map borrowed from the lighting plugin is given back, unless the next map's
+        // spriteset has lit its own already (it updates while its map loads, before this one is let go).
         if (this._reactor3dLit) {
-            Reactor3D.suppressFlatLighting(false);
-            Reactor3D.setLights([]);
-            Reactor3D.setAmbient(null);
+            if (!Reactor3D._lightingOwner || Reactor3D._lightingOwner === this) {
+                Reactor3D.suppressFlatLighting(false);
+                Reactor3D.setLights([]);
+                Reactor3D.setAmbient(null);
+                Reactor3D._seamLight = null;
+                Reactor3D._lightingOwner = null;
+            }
             this._reactor3dLit = false;
         }
     }
@@ -5513,13 +5554,18 @@ Spriteset_Map.prototype.createReactor3D = function() {
     // map; it can fail, and the map still has to draw.
     try {
         // Crossed into over a border: the world that stood past it is this map's, as it stands.
-        const scene = (Reactor3D.Neighbors && Reactor3D.Neighbors.adopt($gameMap.mapId())) || new Reactor3D.MapScene($dataMap, this._tilemap.bitmaps);
+        const adopted = Reactor3D.Neighbors && Reactor3D.Neighbors.adopt($gameMap.mapId());
+        if (adopted) this._reactor3dAdoptedAt = Graphics.frameCount;
+        // Opened while the map is still loading: its pieces and water are laid over the frames of that wait
+        // (Reactor3D.Arrival, updateReactor3DArrival).
+        const arrival = !adopted && this.isReactor3DArrivalTime() ? this.reactor3DArrivalJob() : null;
+        const scene = adopted || new Reactor3D.MapScene($dataMap, this._tilemap.bitmaps, arrival ? Reactor3D.Arrival.options($dataMap) : undefined);
         const settings = ($dataMap.reactor3d && $dataMap.reactor3d.camera) || {};
         const camera = Reactor3D.createCamera(settings);
         viewport.setScene(scene.scene(), camera);
         viewport.setVisible(true);
 
-        this._reactor3d = { viewport, scene, camera, settings };
+        this._reactor3d = { viewport, scene, camera, settings, arrival };
         // Entered over a border: the view goes on turning from where it was, in this map's own tiles.
         const neighbors = Reactor3D.Neighbors, cross = neighbors && neighbors.crossing;
         const view = cross && scene._neighborBodies && neighbors.live ? neighbors.live.cameraCurrent : null;
@@ -5594,8 +5640,9 @@ Spriteset_Map.prototype.createReactor3DSprite = function(viewport, scene) {
     // own copy of the canvas, because both are read from it in the same frame.
     const make = (holder, index, slot) => {
         if (shared) {
-            const texture = viewport.passTexture(slot);
-            const sprite = new PIXI.Sprite(texture);
+            // The pass's target, or its small target enlarged as PIXI draws it (Viewport.passSprite).
+            const sprite = viewport.passSprite ? viewport.passSprite(slot) : new PIXI.Sprite(viewport.passTexture(slot));
+            const texture = sprite.texture;
             sprite.width = Graphics.width;
             sprite.height = Graphics.height;
             holder.addChildAt(sprite, Math.min(index, holder.children.length));
@@ -5710,6 +5757,103 @@ Spriteset_Map.prototype.reactor3D = function() {
 };
 
 /**
+ * Whoever may stand as a model: the events, the player and the visible followers (an actor bound to a
+ * model in the database sidecar walks the map as that model). One list, refilled in place each frame; the
+ * sync only walks it.
+ */
+Spriteset_Map.prototype.reactor3DModelCharacters = function() {
+    const characters = this._reactor3dModelWalkers || (this._reactor3dModelWalkers = []);
+    characters.length = 0;
+    for (const event of $gameMap.events()) if (event) characters.push(event);
+    if (typeof $gamePlayer !== "undefined" && $gamePlayer) {
+        characters.push($gamePlayer);
+        const followers = $gamePlayer.followers && $gamePlayer.followers();
+        if (followers && followers.visibleFollowers) {
+            for (const follower of followers.visibleFollowers()) characters.push(follower);
+        }
+    }
+    return characters;
+};
+
+/** Whether the map this spriteset draws is still loading (its scene not started): the time its world is laid in parts. */
+Spriteset_Map.prototype.isReactor3DArrivalTime = function() {
+    const A = Reactor3D.Arrival, scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+    return !!(A && A.enabled && scene instanceof Scene_Map && !scene.isStarted() && (!scene._spriteset || scene._spriteset === this));
+};
+
+/** What the world's later parts are laid from: the map as the scene's build reads it (event tiles written in) and its loader. */
+Spriteset_Map.prototype.reactor3DArrivalJob = function() {
+    let map = $dataMap;
+    try { map = Reactor3D.mapWithEventTiles($dataMap, Reactor3D.currentTilesetId()); } catch (error) { map = $dataMap; }
+    // Its models are asked for while it loads too: each is built the moment its files are in, before the map shows.
+    const models = () => { if (typeof $gameMap !== "undefined" && $gameMap && this._reactor3d && this._reactor3d.scene.syncCharacterModels) this._reactor3d.scene.syncCharacterModels(this.reactor3DModelCharacters()); };
+    return { map, load: name => Reactor3D.defaultMaterialLoader(name), models, stage: 0, frame: -1, drawn: -1 };
+};
+
+/**
+ * Called on every frame of the map's loading wait (Scene_Map.isReady): the 3D world, built without its
+ * pieces and water, has them laid a few chunks a frame (Reactor3D.Arrival.BUDGET_MS). A world whose
+ * tile sheets were still loading as the spriteset was made is built here once they are in. True once the
+ * world stands whole, or there is none to wait for.
+ */
+Spriteset_Map.prototype.updateReactor3DArrival = function() {
+    if (typeof Reactor3D === "undefined") return true;
+    if (this._reactor3dPending && !this._reactor3dFailed) {
+        if (!this.isReactor3DTilesetReady()) return true;
+        this.createReactor3D();
+    }
+    const state = this._reactor3d, job = state && state.arrival;
+    if (!job) return true;
+    // Once a frame however often the wait is asked: on its last update (a slow frame's catch-up runs several).
+    if (job.frame === Graphics.frameCount || (SceneManager.isFinalUpdateOfFrame && !SceneManager.isFinalUpdateOfFrame())) return false;
+    job.frame = Graphics.frameCount;
+    let done = true;
+    try {
+        done = Reactor3D.Arrival.step(state.scene, job, Reactor3D.Arrival.BUDGET_MS);
+        // Laid: the world is drawn, unseen, on the frames left of the wait, so its programs are built and its
+        // pictures sent before the map shows (an integrated GPU builds them in the background and the draw
+        // leaves out what is not ready; a GPU that builds them on the spot does it in the first of these).
+        if (done && job.drawn < 0) job.drawn = 0;
+        if (job.drawn >= 0 && !this.updateReactor3DWarm(job)) done = false;
+    } catch (error) {
+        console.error("Reactor3D: part of the 3D scene could not be laid.", error);
+        Reactor3D.Arrival.abandon(state.scene);
+        done = true;
+    }
+    if (done) state.arrival = null;
+    return done;
+};
+
+/** Whatever of a staged world is still to lay, laid at once (its models are not waited for). */
+Spriteset_Map.prototype.finishReactor3DArrival = function() {
+    const state = this._reactor3d, job = state && state.arrival, A = Reactor3D.Arrival;
+    if (!job) return;
+    state.arrival = null;
+    try {
+        while (job.stage < 5 && !A.step(state.scene, job, Infinity)) { /* the next part */ }
+    } catch (error) {
+        console.error("Reactor3D: part of the 3D scene could not be laid.", error);
+        A.abandon(state.scene);
+    }
+    A.pacing = false;
+};
+
+/** One unseen draw of a map still loading (updateReactor3DArrival). True once nothing waits to be drawn, or the wait is spent. */
+Spriteset_Map.prototype.updateReactor3DWarm = function(job) {
+    const state = this._reactor3d, A = Reactor3D.Arrival;
+    if (!A.WARM_MS) return true;
+    // Nothing is seen yet: more programs are started a draw than a frame of play allows (a map opened again,
+    // its programs built already, has hundreds of new materials to ask about and nothing to build).
+    const warmup = Reactor3D.ShaderWarmup, pace = warmup ? warmup.COMPILES_PER_FRAME : 0;
+    if (warmup && A.WARM_COMPILES) warmup.COMPILES_PER_FRAME = Math.max(pace, A.WARM_COMPILES);
+    state.warming = true;
+    try { this.updateReactor3D(); } finally { state.warming = false; if (warmup) warmup.COMPILES_PER_FRAME = pace; }
+    // (The wait is counted from the end of the first draw, which builds what cannot be built in the background.)
+    if (!job.drawn++) job.warmFrom = performance.now();
+    return job.drawn > 1 && (!warmup || !warmup.lastHidden || performance.now() - job.warmFrom >= A.WARM_MS);
+};
+
+/**
  * Follow the player and draw the 3D pass.
  *
  * Runs before the 2D updates so character sprites, which project through this
@@ -5726,6 +5870,9 @@ Spriteset_Map.prototype.updateReactor3D = function() {
 
     const state = this._reactor3d;
     if (!state) return;
+    // The map started before its world was all laid (a readiness check that passed over the wait): the rest now.
+    // (An update while it still loads, which a plugin may ask for, leaves the laying to the wait.)
+    if (state.arrival && !state.warming && !this.isReactor3DArrivalTime()) this.finishReactor3DArrival();
 
     // Everything past this point exists to produce the frame that is about
     // to be shown: it syncs the camera, the character instances and the
@@ -5740,15 +5887,17 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     }
     // The quality levels count this frame, and at the last level have the
     // world drawn on every other one (the passes keep the picture between).
+    // A draw while the map still loads (updateReactor3DArrival) is not a frame of play: not counted.
     const quality = Reactor3D.Quality;
-    quality.mapOpened($gameMap.mapId());
-    if (!quality.worldTick(performance.now())) return;
+    if (!state.warming) {
+        quality.mapOpened($gameMap.mapId());
+        if (!quality.worldTick(performance.now())) return;
+    }
     // The Options window offers the setting once a 3D map has been drawn on this machine.
     if (!ConfigManager.reactor3dSeen) { ConfigManager.reactor3dSeen = true; ConfigManager.save(); }
 
-    // _realX/_realY interpolate between cells, so the camera glides rather than
-    // stepping a whole tile at a time.
-    this.updateReactor3DCamera();
+    // The camera is aimed once per update, at the top of `update`: every aim
+    // steps a camera transition and the turn ease by one frame.
     // The maps past the borders the player is near: read, built beside this one, let go when left behind.
     if (Reactor3D.Neighbors) Reactor3D.Neighbors.update(state, this._tilemap.bitmaps);
     if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
@@ -5770,21 +5919,7 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // marks each template once, so steady-state this is a no-op scan).
     if (Reactor3D.warmLoadedTemplates) Reactor3D.warmLoadedTemplates();
     if (state.scene.syncCharacterModels && typeof $gameMap !== "undefined" && $gameMap) {
-        // The player and visible followers ride the same instance pool as
-        // events: an actor bound to a model in the database sidecar walks
-        // the map as that model.
-        // Refilled in place each frame; the sync only walks it.
-        const characters = this._reactor3dModelWalkers || (this._reactor3dModelWalkers = []);
-        characters.length = 0;
-        for (const event of $gameMap.events()) if (event) characters.push(event);
-        if (typeof $gamePlayer !== "undefined" && $gamePlayer) {
-            characters.push($gamePlayer);
-            const followers = $gamePlayer.followers && $gamePlayer.followers();
-            if (followers && followers.visibleFollowers) {
-                for (const follower of followers.visibleFollowers()) characters.push(follower);
-            }
-        }
-        state.scene.syncCharacterModels(characters);
+        state.scene.syncCharacterModels(this.reactor3DModelCharacters());
     }
     if (state.scene.syncCharacterBillboards) {
         state.scene.syncCharacterBillboards(this._characterSprites);
@@ -5794,6 +5929,33 @@ Spriteset_Map.prototype.updateReactor3D = function() {
             ? this._tilemap.animationFrame : 0;
         state.scene.setAnimationFrame(frame);
     }
+    // On a screen 60 does not divide, the world is drawn on the refreshes
+    // Graphics.FramePacing picks, between this update and the last.
+    if (typeof Graphics !== "undefined" && Graphics.FramePacing && Graphics.FramePacing.drawsWorld(this)) return;
+    if (this.reactor3DKeepsLastPicture(state)) return;
+    this.drawReactor3D(state);
+};
+
+/**
+ * The update a border is crossed in (Reactor3D.Neighbors): the scene of the map entered is the world that stood
+ * past the border, and the game does not move on this update. The passes still hold the map left's last picture
+ * of that same world, and they show it again; the map entered draws from the next update. The crossing frame
+ * then makes the new scene without also drawing the world (a third of it on a fast machine, a whole frame of
+ * the GPU on an integrated one). Only where every pass this map shows was drawn together in that last draw,
+ * `Neighbors.KEEP_PICTURE` updates back at most.
+ */
+Spriteset_Map.prototype.reactor3DKeepsLastPicture = function(state) {
+    const viewport = state && state.viewport, N = Reactor3D.Neighbors;
+    if (this._reactor3dAdoptedAt !== Graphics.frameCount || !N || !viewport || !viewport.drawnAt || !(viewport.isShared && viewport.isShared())) return false;
+    const drawn = viewport.drawnAt("below");
+    if (!(drawn >= Graphics.frameCount - N.KEEP_PICTURE)) return false;
+    if (this._reactor3dAbove && viewport.drawnAt("above") !== drawn) return false;
+    if (this._reactor3dLights && viewport.drawnAt("lights") !== drawn) return false;
+    return true;
+};
+
+/** The passes of this frame's world, from the camera as it stands. */
+Spriteset_Map.prototype.drawReactor3D = function(state) {
     // The flat copy of whatever the ground was built from, every frame: a
     // parallax plugin rebuilds its layers on its own schedule.
     this.suppressReactor3DGroundParallaxes(true);
@@ -5858,15 +6020,20 @@ Spriteset_Map.prototype.updateReactor3D = function() {
  */
 Spriteset_Map.prototype.updateReactor3DLights = function(state) {
     const wants = Reactor3D.wantsLights3D($dataMap);
+    // The lighting is this spriteset's until another takes it: one left behind gives back only its own.
+    Reactor3D._lightingOwner = this;
+    // Near a border with a neighboring map's world past it, the two maps' lighting meets (Neighbors.lightBlend).
+    Reactor3D._seamLight = wants && Reactor3D.Neighbors && Reactor3D.Neighbors.lightBlend
+        ? Reactor3D.Neighbors.lightBlend(state.scene, $dataMap, $gamePlayer) : null;
     if (wants !== this._reactor3dLit) {
         this._reactor3dLit = wants;
         this._reactor3dAmbientKey = null;
-        Reactor3D.setAmbient(wants ? Reactor3D.ambientFor($dataMap) : null);
+        Reactor3D.setAmbient(wants ? Reactor3D.seamAmbient(Reactor3D.ambientFor($dataMap)) : null);
     } else if (wants) {
         // An AmbientLight command eases the map's ambient over time; only a
         // changed value reaches the compositor, so a steady frame allocates
         // nothing.
-        const ambient = Reactor3D.ambientFor($dataMap);
+        const ambient = Reactor3D.seamAmbient(Reactor3D.ambientFor($dataMap));
         const key = ambient.intensity * 16777216 + ambient.colour;
         if (key !== this._reactor3dAmbientKey) {
             this._reactor3dAmbientKey = key;
@@ -6277,6 +6444,61 @@ Spriteset_Map.prototype.updateParallax = function() {
 Spriteset_Map.prototype.updateTilemap = function() {
     this._tilemap.origin.x = $gameMap.displayX() * $gameMap.tileWidth();
     this._tilemap.origin.y = $gameMap.displayY() * $gameMap.tileHeight();
+    this.updateNeighborTilemaps();
+};
+
+/**
+ * A 2D map's neighbors (its Beyond the Border sides): each one's ground is a tilemap of its own under this map's,
+ * drawn where the view goes past the edge (Game_Map.reactorEdgeReach) and hidden while it does not. A neighbor is
+ * read in the background as a 3D map's are (Reactor3D.Neighbors.request), from the moment the map is entered.
+ * Its events are not drawn; the border is crossed as before.
+ */
+Spriteset_Map.prototype.updateNeighborTilemaps = function() {
+    const R = typeof Reactor3D !== "undefined" ? Reactor3D : null;
+    const held = this._rrNeighborTilemaps || (this._rrNeighborTilemaps = {});
+    if (!R || !R.Neighbors || !R.neighborsOf || this._reactor3d || typeof $gameMap.reactorEdgeReach !== "function") {
+        for (const side of Object.keys(held)) if (held[side]) held[side].tilemap.visible = false;
+        return;
+    }
+    const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight();
+    const dx = $gameMap.displayX(), dy = $gameMap.displayY();
+    for (const side of ["north", "east", "south", "west"]) {
+        let entry = held[side];
+        if (!$gameMap.reactorEdgeReach(side)) { if (entry) entry.tilemap.visible = false; continue; }
+        if (!entry) {
+            const at = R.neighborsOf($dataMap)[side];
+            const record = at ? R.Neighbors.request(at.map) : null;
+            // (Asked again on the next frame until it has been read.)
+            if (!record || record.state !== "ready" || !record.map) continue;
+            entry = held[side] = this.createNeighborTilemap(record.map, at, side);
+            if (!entry) continue;
+        }
+        const past = side === "west" ? dx < 0 : side === "north" ? dy < 0
+            : side === "east" ? dx + $gameMap.screenTileX() > $gameMap.width() : dy + $gameMap.screenTileY() > $gameMap.height();
+        entry.tilemap.visible = past;
+        if (past) {
+            entry.tilemap.origin.x = (dx - entry.offset.x) * tw;
+            entry.tilemap.origin.y = (dy - entry.offset.z) * th;
+        }
+    }
+};
+
+/** The ground of a neighboring map, as a tilemap of its own placed `offset` tiles from this map's first tile. */
+Spriteset_Map.prototype.createNeighborTilemap = function(map, at, side) {
+    const tileset = $dataTilesets && $dataTilesets[map.tilesetId];
+    if (!tileset || !Array.isArray(map.data)) return null;
+    const tilemap = new Tilemap();
+    tilemap.tileWidth = $gameMap.tileWidth();
+    tilemap.tileHeight = $gameMap.tileHeight();
+    tilemap.setData(map.width, map.height, map.data);
+    tilemap.setBitmaps(tileset.tilesetNames.map(name => ImageManager.loadTileset(name)));
+    tilemap.flags = tileset.flags.slice();
+    if (tilemap.setTileAnimation) tilemap.setTileAnimation(tileset.rrTileFrames, tileset.rrWater);
+    tilemap.visible = false;
+    // Under this map's ground and everything standing on it.
+    const index = this._baseSprite.children.indexOf(this._tilemap);
+    this._baseSprite.addChildAt(tilemap, index < 0 ? this._baseSprite.children.length : index);
+    return { tilemap, mapId: at.map, offset: Reactor3D.Neighbors.offsetOf($dataMap, side, at, map.width, map.height) };
 };
 
 Spriteset_Map.prototype.updateShadow = function() {
@@ -6683,6 +6905,74 @@ Sprite_Character.prototype.characterBlockX = function() {
 };
 
 //-----------------------------------------------------------------------------
+// Character sheets tagged "[8D]" (ImageManager.isEightDirCharacter): eight
+// blocks of 3 frames x 4 rows, cut as an eight-character sheet whatever the
+// "$" says. Blocks 0, 2 and 4 face down, left, right and up; the block to the
+// right of each holds its diagonals, rows down-left, down-right, up-left and
+// up-right. A character on block 0 shows block 2 while it dashes; on block 0,
+// 2 or 4 it shows the block to the right while it faces or steps diagonally.
+// Blocks 1, 3, 5, 6 and 7 show as chosen. A sheet without the tag is cut as
+// it always was.
+//-----------------------------------------------------------------------------
+
+Sprite_Character.RR_DIAGONAL_ROW = Object.freeze({ 1: 0, 3: 1, 7: 2, 9: 3 });
+
+/** The way a character faces among eight: the step it is taking, else the diagonal it last took, else its direction. */
+Sprite_Character.rrFacing8 = function(character) {
+    if (character.isDirectionFixed()) return character.direction();
+    if (character.isMoving()) {
+        const dx = character._x - character._realX, dy = character._y - character._realY;
+        if (Math.abs(dx) > 0.001 && Math.abs(dy) > 0.001) return dy > 0 ? (dx > 0 ? 3 : 1) : (dx > 0 ? 9 : 7);
+        if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) return character.direction();
+    }
+    const d8 = character._reactorDir8;
+    return d8 === 1 || d8 === 3 || d8 === 7 || d8 === 9 ? d8 : character.direction();
+};
+
+/** Whether a character is dashing as it moves: the player, or a follower keeping up with a dashing player. */
+Sprite_Character.rrRunning8 = function(character) {
+    if (!character.isMoving()) return false;
+    if (character.isDashing()) return true;
+    return typeof Game_Follower !== "undefined" && character instanceof Game_Follower && !character._rrOrder
+        && (!!character._rrRun || (typeof $gamePlayer !== "undefined" && !!$gamePlayer && $gamePlayer.isDashing()));
+};
+
+const _rr8DUpdateCharacterFrame = Sprite_Character.prototype.updateCharacterFrame;
+Sprite_Character.prototype.updateCharacterFrame = function() {
+    if (this._rr8DName !== this._characterName) {
+        this._rr8DName = this._characterName;
+        this._rr8DSheet = !!this._characterName && ImageManager.isEightDirCharacter(this._characterName);
+    }
+    this._rr8D = null;
+    if (this._rr8DSheet) {
+        const character = this._character, base = character.characterIndex();
+        let block = base, row = -1;
+        if (base === 0 || base === 2 || base === 4) {
+            if (base === 0 && Sprite_Character.rrRunning8(character)) block = 2;
+            const diagonal = Sprite_Character.RR_DIAGONAL_ROW[Sprite_Character.rrFacing8(character)];
+            if (diagonal !== undefined) { block += 1; row = diagonal; }
+        }
+        this._rr8D = { block, row };
+    }
+    _rr8DUpdateCharacterFrame.call(this);
+};
+
+const _rr8DBlockX = Sprite_Character.prototype.characterBlockX;
+Sprite_Character.prototype.characterBlockX = function() {
+    return this._rr8D ? (this._rr8D.block % 4) * 3 : _rr8DBlockX.call(this);
+};
+
+const _rr8DBlockY = Sprite_Character.prototype.characterBlockY;
+Sprite_Character.prototype.characterBlockY = function() {
+    return this._rr8D ? Math.floor(this._rr8D.block / 4) * 4 : _rr8DBlockY.call(this);
+};
+
+const _rr8DPatternY = Sprite_Character.prototype.characterPatternY;
+Sprite_Character.prototype.characterPatternY = function() {
+    return this._rr8D && this._rr8D.row >= 0 ? this._rr8D.row : _rr8DPatternY.call(this);
+};
+
+//-----------------------------------------------------------------------------
 // The look of a battle unit with no picture of its own. Such an event is
 // never invisible (ReactorFight.eventLook, by the rule in
 // reactor_fight_look.js): it stands as its record's character sheet, as an
@@ -6770,12 +7060,14 @@ const ReactorLookPictures = {
             const box = rule.trim(pixels.data, width, height);
             if (!box) { this.fail(entry); return; }
             if (entry.hue) { rule.rotateHue(pixels.data, entry.hue); context.putImageData(pixels, 0, 0); }
-            const scale = Math.min(1, this.FULL_MAX / Math.max(box.width, box.height));
-            const full = new Bitmap(Math.max(1, Math.round(box.width * scale)), Math.max(1, Math.round(box.height * scale)));
+            // A creature drawn high over its shadow stands just over it (ReactorFightLook.art).
+            const art = rule.art(pixels.data, width, box);
+            const scale = Math.min(1, this.FULL_MAX / Math.max(art.width, art.height));
+            const full = new Bitmap(Math.max(1, Math.round(art.width * scale)), Math.max(1, Math.round(art.height * scale)));
             const target = full.context;
             target.imageSmoothingEnabled = true;
             target.imageSmoothingQuality = "high";
-            target.drawImage(source.canvas, box.x, box.y, box.width, box.height, 0, 0, full.width, full.height);
+            rule.drawArt(target, source.canvas, box, art, full.width, full.height);
             full._baseTexture.update();
             entry.full = full;
             entry.state = "ready";

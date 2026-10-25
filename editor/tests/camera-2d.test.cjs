@@ -19,7 +19,7 @@ function world({tile=16,zoom=1,x=0,y=0,width=200,height=200,loop=false,three=fal
         Reactor3D:{isMap3D:data=>data.three},$gameScreen:{zoomScale:()=>1,zoomX:()=>0,zoomY:()=>0,shake:()=>0}};
     vm.createContext(context);
     vm.runInContext('Number.prototype.clamp=function(a,b){return Math.min(Math.max(this,a),b);};Number.prototype.mod=function(n){return (this%n+n)%n;};',context);
-    const mapNames=['reactorCameraZoom','reactorCameraOffset','reactorCanvasToWorld','screenTileX','screenTileY','setDisplayPos','canvasToMapX','canvasToMapY','adjustX','adjustY','roundX','roundY','scrollLeft','scrollRight','scrollUp','scrollDown'];
+    const mapNames=['reactorCameraZoom','reactorCameraOffset','reactorCanvasToWorld','screenTileX','screenTileY','setDisplayPos','canvasToMapX','canvasToMapY','adjustX','adjustY','roundX','roundY','scrollLeft','scrollRight','scrollUp','scrollDown','reactorEdgeReach'];
     const playerNames=['centerX','centerY','center','updateScroll'];
     vm.runInContext(mapNames.map(n=>method(objects,'Game_Map.prototype.'+n)).concat(playerNames.map(n=>method(objects,'Game_Player.prototype.'+n)),method(sprites,'Spriteset_Map.prototype.updateReactor2DCamera')).join('\n'),context);
     const map=context.$gameMap=new context.Game_Map();

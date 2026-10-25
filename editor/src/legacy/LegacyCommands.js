@@ -48,7 +48,7 @@
     function text(s) {
         return String(s || '').replace(/\\_/g, '\\.').replace(/\\[sS]\[\d+\]/g, '');
     }
-    const tone = (r, g, b, sat) => [Math.round(((r ?? 100) - 100) * 2.55), Math.round(((g ?? 100) - 100) * 2.55), Math.round(((b ?? 100) - 100) * 2.55), (sat ?? 100) < 100 ? Math.round((100 - sat) * 2.55) : 0];
+    const tone = (r, g, b, sat) => [Math.round(((r ?? 100) - 100) * 2.55), Math.round(((g ?? 100) - 100) * 2.55), Math.round(((b ?? 100) - 100) * 2.55), Math.round((100 - (sat ?? 100)) * 2.55)];
     const frames = (tenths) => Math.max(1, Math.round((tenths || 0) * 6));
     const valueOrVar = (mode, v) => (mode ? `$gameVariables.value(${v})` : String(v));
 
@@ -254,8 +254,8 @@
                     break;
                 }
                 case 10670: { const slot = [0, 1, 2, 3, 7, 8, 9, 10, 13, 16, 11, 21][p[0]]; if (slot !== undefined) script(`$dataSystem.sounds[${slot}] = ${JSON.stringify(audio(s, p[1], p[2], p[3]))}`, ind); else note('systemSound'); break; }
-                case 10680: comment(`2003: Change System Graphics "${s}"`, ind); note('systemGraphic'); break;
-                case 10690: comment('2003: Change Screen Transitions', ind); note('transitions'); break;
+                case 10680: script(`this.rrSystemGraphic(${JSON.stringify(stem(s))}, ${p[0] || 0}, ${p[1] || 0})`, ind); break;
+                case 10690: script(`this.rrChangeScreenTransition(${p[0] || 0}, ${p[1] || 0})`, ind); if (![0, 16, 19, 20].includes(p[1] || 0) || p[0] > 1) note('transitions'); break;
 
                 // ---- battles, shops, inns ------------------------------------------------
                 case 10710: push(301, [p[0] ? 1 : 0, p[1], p[3] !== 0, p[4] === 1], ind); if (p[5]) note('firstStrike'); break;
@@ -331,7 +331,10 @@
                     if (byVar) { script(`$gameScreen.showPicture(${idX}, ${JSON.stringify(name)}, 1, ${at(x)}, ${at(y)}, ${mag ?? 100}, ${mag ?? 100}, ${opacity}, 0)`, ind); note('pictureIdVariable'); }
                     else push(231, [id, name, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, opacity, 0], ind);
                     const t = tone(r, g, b, sat);
-                    if (t.some(v => v !== 0)) { if (byVar) script(`$gameScreen.tintPicture(${idX}, ${JSON.stringify(t)}, 1)`, ind); else push(234, [id, t, 1, false], ind); }
+                    // Show establishes the initial tone immediately. A move in
+                    // the same event batch must tween from it, not replace a
+                    // still-pending one-frame tint before it ever runs.
+                    if (t.some(v => v !== 0)) { if (byVar) script(`$gameScreen.tintPicture(${idX}, ${JSON.stringify(t)}, 0)`, ind); else push(234, [id, t, 0, false], ind); }
                     if (fixed) { script(`$gameScreen.rrPictureFixToMap(${idX})`, ind); note('pictureFixedToMap'); }
                     pictureEffect(id, effect, p[13], byVar ? 1 : 0, ind);
                     // 2003 1.12 spritesheet: 22 columns (0 = none), 23 rows, 24 2 = animate at speed 25 (26 once), else frame 25 (by variable when 24 is 1), counted from 1
@@ -361,9 +364,10 @@
                         note('pictureIdVariable');
                     } else {
                         // MZ's Move Picture: [id, (unused), origin, designation, x, y, scaleX, scaleY, opacity, blend, frames, wait, easing]
-                        push(232, [id, 0, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, opacity, 0, duration, !!wait, 0], ind);
+                        push(232, [id, 0, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, opacity, 0, duration, false, 0], ind);
                         // a move always restates the colour, so a tinted picture can come back to neutral
-                        push(234, [id, tone(r, g, b, sat), duration, false], ind);
+                        // Start position, opacity and colour together before waiting.
+                        push(234, [id, tone(r, g, b, sat), duration, !!wait], ind);
                     }
                     pictureEffect(id, effect, p[13], byVar ? 1 : 0, ind);
                     break;

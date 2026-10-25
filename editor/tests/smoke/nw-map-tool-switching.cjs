@@ -13,9 +13,10 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
 
 
 
- const results=[];await driver.execute(`window.__toolErrors=[];addEventListener('error',e=>__toolErrors.push(String(e.error?.stack||e.message)));
- window.__toolActions={tiles:()=>document.querySelector('.tileset-layer-tab[data-layer=A]').click(),region:()=>document.querySelector('.tileset-layer-tab[data-layer=R]').click(),objects:()=>document.querySelector('.tileset-layer-tab[data-layer=O]').click(),models:()=>document.querySelector('.tileset-layer-tab[data-layer=M]').click(),events:()=>document.getElementById('toolbar-event-manager-btn').click(),media:()=>document.querySelector('[data-action="media-surfaces"]').click(),lighting:()=>document.querySelector('[data-action="lighting-tool"]').click(),pencil:()=>reactor.uiManager.setDrawTool('pencil'),rectangle:()=>reactor.uiManager.setDrawTool('rectangle'),fill:()=>reactor.uiManager.setDrawTool('fill'),eraser:()=>document.querySelector('[data-action="eraser"]').click(),shadow:()=>document.querySelector('[data-action="shadow-pen"]').click()};
- window.__toolState=()=>({owner:reactor.mapTool,events:reactor.eventManager.eventMode,models:reactor.modelPropsManager.active,media:!!reactor.mediaSurfaceManager.panel,lighting:reactor.lightingManager.active,painting:reactor.mapEditor.enabled,layer:reactor.tilesetPaletteViewer.currentLayer,draw:[...document.querySelectorAll('.tool-draw-mode.active')].map(e=>e.dataset.tool),tabs:[...document.querySelectorAll('.tileset-layer-tab.active')].map(e=>e.dataset.layer),mediaSelected:document.querySelector('[data-action="media-surfaces"]').classList.contains('active'),eventSelected:document.getElementById('toolbar-event-manager-btn').classList.contains('active'),lightSelected:document.querySelector('[data-action="lighting-tool"]').classList.contains('active'),placement:!!reactor.mediaSurfaceManager.cancelPlacement,propsListeners:reactor.modelPropsManager._listeners.length,lightListeners:reactor.lightingManager._listeners?.length||0});`);
+ // The browser's ResizeObserver notice (a layout change seen the frame after) is not a script error.
+ const results=[];await driver.execute(`window.__toolErrors=[];addEventListener('error',e=>{if(!/^ResizeObserver loop/.test(e.message))__toolErrors.push(String(e.error?.stack||e.message));});
+ window.__toolActions={tiles:()=>document.querySelector('.tileset-layer-tab[data-layer=A]').click(),region:()=>document.querySelector('.tileset-layer-tab[data-layer=R]').click(),objects:()=>document.querySelector('.tileset-layer-tab[data-layer=O]').click(),models:()=>{if(!reactor.buildHotbar.visible)document.querySelector('.tool-button[data-action="build-tool"]').click();document.querySelector('.rr-build-group[data-group=models]').click();},events:()=>document.getElementById('toolbar-event-manager-btn').click(),media:()=>document.querySelector('.html-menu-option[data-action="media-surfaces"]').click(),lighting:()=>document.querySelector('.html-menu-option[data-action="lighting-tool"]').click(),pencil:()=>reactor.uiManager.setDrawTool('pencil'),rectangle:()=>reactor.uiManager.setDrawTool('rectangle'),fill:()=>reactor.uiManager.setDrawTool('fill'),eraser:()=>document.querySelector('.tool-button[data-action="eraser"]').click(),shadow:()=>document.querySelector('.tool-button[data-action="shadow-pen"]').click()};
+ window.__toolState=()=>({owner:reactor.mapTool,events:reactor.eventManager.eventMode,models:reactor.modelPropsManager.active,media:!!reactor.mediaSurfaceManager.panel,lighting:reactor.lightingManager.active,painting:reactor.mapEditor.enabled,layer:reactor.tilesetPaletteViewer.currentLayer,draw:[...document.querySelectorAll('.tool-draw-mode.active')].map(e=>e.dataset.tool),tabs:[...document.querySelectorAll('.tileset-layer-tab.active')].map(e=>e.dataset.layer),mediaSelected:!!reactor.mediaSurfaceManager.panel,eventSelected:document.getElementById('toolbar-event-manager-btn').classList.contains('active'),lightSelected:!!reactor.lightingManager.active,placement:!!reactor.mediaSurfaceManager.cancelPlacement,propsListeners:reactor.modelPropsManager._listeners.length,bar:!!reactor.buildHotbar.visible,barGroup:reactor.buildHotbar.visible?document.querySelector('.rr-build-group[aria-checked=true]')?.dataset.group:null,lightListeners:reactor.lightingManager._listeners?.length||0});`);
  const names=['tiles','region','objects','models','events','media','lighting','pencil','rectangle','fill','eraser','shadow'];
  for(const mode of [false,true]){
   assert.equal(await driver.executeAsync(`const done=arguments[arguments.length-1];reactor.applyMap3DViewPreference(arguments[0]).then(()=>done(true),e=>done(String(e.stack)));`,[mode]),true);
@@ -25,17 +26,21 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
    const label=(mode?'3D':'2D')+' '+from+' → '+to;
    for(const name of ['events','models','media','lighting'])assert.equal(row[name],owner===name,label+' active '+name+' '+JSON.stringify(row));
    assert.equal(row.owner,owner,label+' owner');assert.equal(row.painting,owner==='paint',label+' painting');
-   assert.equal(row.mediaSelected,owner==='media',label+' media button');assert.equal(row.eventSelected,owner==='events',label+' event button');assert.equal(row.lightSelected,owner==='lighting',label+' light button');
+   assert.equal(row.mediaSelected,owner==='media',label+' media panel');assert.equal(row.eventSelected,owner==='events',label+' event button');assert.equal(row.lightSelected,owner==='lighting',label+' lighting on');
    if(owner!=='paint')assert.deepEqual(row.draw,[],label+' draw buttons');
-   if(['events','media','lighting'].includes(owner))assert.deepEqual(row.tabs,[],label+' palette highlight');
-   if(owner==='models')assert.deepEqual(row.tabs,['M'],label+' model tab');
+   if(owner!=='paint')assert.deepEqual(row.tabs,[],label+' palette highlight');
+   // The models tool is the Build bar's Models group.
+   if(owner==='models')assert.deepEqual([row.bar,row.barGroup],[true,'models'],label+' Build bar models');
    if(owner!=='models')assert.equal(row.propsListeners,0,label+' stale model handlers');
    assert.equal(row.placement,false,label+' placement handler');results.push({mode:mode?'3D':'2D',from,to,...row});
   }
  }
- // Toggling a panel off restores the prior palette context, including 3D-M.
- for(const context of ['A','M','R','O'])for(const tool of ['events','media','lighting']){
-  const row=await driver.execute(`reactor.tilesetPaletteViewer.selectLayer(arguments[0]);__toolActions[arguments[1]]();__toolActions[arguments[1]]();return __toolState();`,[context,tool]);assert.equal(row.owner,context==='M'?'models':'paint',context+' '+tool+' toggle off');assert.equal(row.media,false);assert.equal(row.events,false);assert.equal(row.lighting,false);
+ // Toggling a panel off restores the prior palette context. Over the Build bar's Models group, Lighting and
+ // Media Surfaces open in the bar and give the map back to it; Events puts the bar away.
+ for(const context of ['A','R','O','models'])for(const tool of ['events','media','lighting']){
+  const row=await driver.execute(`__toolActions.tiles();if(arguments[0]==='models')__toolActions.models();else reactor.tilesetPaletteViewer.selectLayer(arguments[0]);__toolActions[arguments[1]]();__toolActions[arguments[1]]();return __toolState();`,[context,tool]);
+  const back=context==='models'&&tool!=='events'?'pieces':'paint';
+  assert.equal(row.owner,back,context+' '+tool+' toggle off '+JSON.stringify(row));assert.equal(row.bar,back==='pieces',context+' '+tool+' Build bar');assert.equal(row.media,false);assert.equal(row.events,false);assert.equal(row.lighting,false);
  }
  // Clicking the still-visible palette itself also claims painting.
  for(const [layer,method] of [['A',"reactor.tilesetPaletteViewer.updateTileSelection({x:0,y:0},{x:0,y:0})"],['R',"reactor.projectController.getRegionManager().selectRegion(1)"],['O',"reactor.projectController.getObject3DManager().selectObject(1)"]]) {

@@ -165,11 +165,11 @@ test('closing the project and quitting ask first: Cancel leaves the project open
     }
     // Exit, and the window's own close button: both go through requestApplicationClose.
     for (const [decision, closes, saved] of [['save', true, 1], ['discard', true, 0], ['cancel', false, 0]]) {
-        let forcedCloses = 0;
+        let quits = 0;
         const { controller, done } = dirtyController(dialog(), { promptUnsavedChanges: async () => decision },
-            { nw: { Window: { get: () => ({ close: force => { if (force) forcedCloses++; } }) } } });
+            { nw: { App: { quit: () => quits++ } } });
         assert.equal(await controller.requestApplicationClose(), closes, `Exit, ${decision}`);
-        assert.equal(forcedCloses, closes ? 1 : 0);
+        assert.equal(quits, closes ? 1 : 0, 'accepted exits quit the editor instance, including its pop-outs');
         assert.equal(controller.allowApplicationClose, closes);
         assert.equal(done.projectSaves, saved);
         if (!closes) {
@@ -177,6 +177,53 @@ test('closing the project and quitting ask first: Cancel leaves the project open
             assert.equal(controller.applicationCloseRequest, null, 'a cancelled Exit can be asked for again');
         }
     }
+});
+
+test('quitting waits for the save and shares repeated close requests before ending the editor instance', async () => {
+    const order = [];
+    let answer, finishSave;
+    const question = new Promise(resolve => { answer = resolve; });
+    const save = new Promise(resolve => { finishSave = resolve; });
+    const { controller } = dirtyController(dialog(), { promptUnsavedChanges: () => question },
+        { nw: { App: { quit: () => order.push('quit') } } });
+    controller.saveAll = () => { order.push('save'); return save; };
+    controller.releaseProjectLock = () => order.push('release');
+    const closing = controller.requestApplicationClose();
+    assert.equal(controller.requestApplicationClose(), closing, 'two close clicks ask once and quit once');
+    assert.deepEqual(order, []);
+    answer('save');
+    await turn();
+    assert.deepEqual(order, ['save'], 'no window shuts down while the save is pending');
+    assert.equal(controller.allowApplicationClose, false);
+    finishSave(true);
+    assert.equal(await closing, true);
+    assert.deepEqual(order, ['save', 'release', 'quit']);
+});
+
+test('a failed save leaves the editor and its child windows running', async () => {
+    let quits = 0, released = 0;
+    const { controller } = dirtyController(dialog(), { promptUnsavedChanges: async () => 'save' },
+        { nw: { App: { quit: () => quits++ } } });
+    controller.saveAll = async () => false;
+    controller.releaseProjectLock = () => released++;
+    assert.equal(await controller.requestApplicationClose(), false);
+    assert.equal(quits, 0);
+    assert.equal(released, 0);
+    assert.equal(controller.allowApplicationClose, false);
+    await turn();
+    assert.equal(controller.applicationCloseRequest, null, 'the close can be retried after fixing the save');
+});
+
+test('Cancel keeps every window alive and a later accepted close quits the instance', async () => {
+    let decision = 'cancel', quits = 0;
+    const { controller } = dirtyController(dialog(), { promptUnsavedChanges: async () => decision },
+        { nw: { App: { quit: () => quits++ } } });
+    assert.equal(await controller.requestApplicationClose(), false);
+    assert.equal(quits, 0);
+    await turn();
+    decision = 'discard';
+    assert.equal(await controller.requestApplicationClose(), true);
+    assert.equal(quits, 1);
 });
 
 test('opening another project with unsaved changes: Cancel opens no folder chooser', async () => {

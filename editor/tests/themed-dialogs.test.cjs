@@ -1200,6 +1200,24 @@ test('an array element of a plugin parameter is deleted only on Delete, from its
     assert.equal(result.saved(), 0);
 });
 
+test('an array element\'s editor has Cancel, which puts back what its fields changed', () => {
+    const { manager, document } = loadPluginManager([]);
+    const list = ['alpha', 'beta', 'gamma'];
+    let saved = 0;
+    manager.showArrayElementEditor(list, 1, { type: 'text[]' }, null, {}, () => { saved++; });
+    const overlay = document.body.children.at(-1);
+    const field = overlay.querySelectorAll('textarea')[0];
+    field.value = 'changed';
+    for (const handler of field.listeners.change || []) handler({ target: field });
+    assert.equal(list[1], 'changed', 'the field writes as it changes');
+    const cancel = buttonsNamed(overlay, 'Cancel');
+    assert.equal(cancel.length, 1, 'Cancel beside OK and Delete');
+    for (const handler of cancel[0].listeners.click || []) handler({});
+    assert.deepEqual(list, ['alpha', 'beta', 'gamma'], 'Cancel puts the element back');
+    assert.equal(overlay.parentNode === document.body, false, 'and closes the editor');
+    assert.equal(saved, 0, 'nothing is saved');
+});
+
 test('Show Choices refuses fewer than two choices with a notice', () => {
     const { Class, asked } = loadWithDialog('src/event/commands/ShowChoicesCommandEditor.js', 'ShowChoicesCommandEditor', [], { window: {} });
     const editor = Object.create(Class.prototype);

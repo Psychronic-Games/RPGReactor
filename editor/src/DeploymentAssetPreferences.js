@@ -17,6 +17,32 @@ class DeploymentAssetPreferences {
         };
     }
 
+    static get ENCRYPTION_KEY() { return 'rpg-reactor.deployEncryption'; }
+
+    static normalizeEncryption(value) {
+        return {
+            images: !!(value && value.images),
+            audio: !!(value && value.audio),
+            keyText: value && typeof value.keyText === 'string' ? value.keyText.trim().slice(0, 256) : '',
+        };
+    }
+
+    static loadEncryption(storage = localStorage) {
+        try { return this.normalizeEncryption(JSON.parse(storage.getItem(this.ENCRYPTION_KEY))); }
+        catch { return this.normalizeEncryption(null); }
+    }
+
+    static saveEncryption(value, storage = localStorage) {
+        try {
+            // The key is a game's own: it is never carried over to another project's deploy.
+            const { images, audio } = this.normalizeEncryption(value);
+            storage.setItem(this.ENCRYPTION_KEY, JSON.stringify({ images, audio }));
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     static load(storage = localStorage) {
         try { return this.normalize(JSON.parse(storage.getItem(this.STORAGE_KEY))); }
         catch { return this.normalize(null); }

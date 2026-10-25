@@ -547,6 +547,26 @@ test('a primitive the collapse refuses still gets the weld grid', async () => {
 // wiring
 // ---------------------------------------------------------------------------
 
+test('Optimize reports the triangles kept in its status line, on import and from the 3D database', async () => {
+    const bytes = flatMesh(
+        [0, 0, 0, 0.5, 0.5, 0, 0.51, 0.5, 0],
+        [0, 0, 1, 0, 0, 1, 0, 0, 1],
+        [0, 0, 0.5, 0.5, 0.5, 0.5],
+        [0, 1, 2]);
+    assert.deepEqual({ ...Optimizer.triangleResult(bytes, bytes) }, { before: 1, after: 1, percent: 100 });
+    const result = await Optimizer.optimize(bytes, { meshCells: 10 });
+    assert.deepEqual({ ...Optimizer.triangleResult(bytes, result.bytes) }, { before: 1, after: 0, percent: 0 });
+    assert.equal(Optimizer.triangleResult(new Uint8Array(4), bytes), null, 'unreadable source: nothing to report');
+    const phrase = /'\{before\} → \{after\} triangles \(\{percent\}%\)'/;
+    const resourceManager = fs.readFileSync(path.join(srcRoot, 'ResourceManager.js'), 'utf8');
+    assert.match(resourceManager, /RRGlbOptimizer\.triangleResult\(bytes, importBytes\)/);
+    assert.match(resourceManager, phrase);
+    const editor = fs.readFileSync(path.join(srcRoot, 'database', 'Database3DEditor.js'), 'utf8');
+    assert.match(editor, /RRGlbOptimizer\.triangleResult\(original, bytes\)/);
+    assert.match(editor, phrase);
+    assert.match(editor, /\$\{after\}MB\$\{triangleNote\}/, 'the note is part of the summary line');
+});
+
 test('the import flow offers the optimizer and imports the chosen bytes', () => {
     const resourceManager = fs.readFileSync(path.join(srcRoot, 'ResourceManager.js'), 'utf8');
     assert.match(resourceManager, /showModelOptimizeDialog\(/);
@@ -575,7 +595,7 @@ test('the 3D database can optimize a model already in the project', () => {
     assert.match(editor, /async optimizeSelectedModel\(\)/);
     assert.match(editor, /showModelOptimizeDialog\(\{/, 'the same choices the import offers');
     assert.match(editor, /PRESETS\[mode\]/);
-    assert.match(editor, /if \(mode === null \|\| mode === 'keep'\) return;/, 'declining changes nothing');
+    assert.match(editor, /if \(mode === null \|\| \(mode === 'keep' && !compress\)\) return;/, 'declining changes nothing');
     // Reversible, and never clobbering an older backup.
     assert.match(editor, /filePath \+ '\.orig'/);
     assert.match(editor, /if \(!fs\.existsSync\(backup\)\) fs\.copyFileSync\(filePath, backup\);/);

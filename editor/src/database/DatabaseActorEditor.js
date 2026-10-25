@@ -146,11 +146,11 @@ class DatabaseActorEditor {
                         </span>
                         <span class="db-col">
                             <label>${tt('Initial Level')}</label>
-                            <input type="number" class="database-field-value" value="${rrEscapeHtml(actor.initialLevel || 1)}" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" data-field="initialLevel" data-actor-id="${actor.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(actor.initialLevel || 1)}" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999}" data-field="initialLevel" data-actor-id="${actor.id}">
                         </span>
                         <span class="db-col">
                             <label>${tt('Max Level')}</label>
-                            <input type="number" class="database-field-value" value="${rrEscapeHtml(actor.maxLevel || 99)}" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" data-field="maxLevel" data-actor-id="${actor.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(actor.maxLevel || 99)}" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999}" data-field="maxLevel" data-actor-id="${actor.id}">
                         </span>
                     </div>
                     <div class="db-row-cols db-row-grow">
@@ -884,7 +884,7 @@ class DatabaseActorEditor {
             const fallback = fieldName === 'maxLevel' ? 99 : 1;
             actor[fieldName] = Number.isFinite(parsed) ? parsed : fallback;
             if (fieldName === 'initialLevel' || fieldName === 'maxLevel') {
-                const levelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+                const levelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
                 const maximum = fieldName === 'initialLevel'
                     ? Math.max(1, Math.min(levelLimit, Number(actor.maxLevel) || levelLimit))
                     : levelLimit;

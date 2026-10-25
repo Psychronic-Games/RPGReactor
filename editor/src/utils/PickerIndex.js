@@ -36,13 +36,24 @@
         };
         return element._rrListNavigationCleanup;
     };
+    let segmenter, sectionCollators, nameCollators;
+    const makeTextOrder = numeric => ['base', 'variant'].map(sensitivity => {
+        const options = numeric ? { sensitivity, numeric: true } : { sensitivity };
+        if (typeof Intl !== 'undefined' && Intl.Collator) return new Intl.Collator(undefined, options).compare;
+        return (left, right) => left.localeCompare(right, undefined, options);
+    });
+    const compareText = (a, b, numeric = false) => {
+        const pair = numeric ? (nameCollators || (nameCollators = makeTextOrder(true))) : (sectionCollators || (sectionCollators = makeTextOrder(false)));
+        return pair[0](a, b) || pair[1](a, b);
+    };
     const sectionKey = name => {
         const normalized = String(name || '').normalize('NFC');
         if (!normalized) return '#';
 
         let firstGrapheme = Array.from(normalized)[0];
         if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-            const segments = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(normalized);
+            segmenter = segmenter || new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+            const segments = segmenter.segment(normalized);
             firstGrapheme = segments[Symbol.iterator]().next().value?.segment || firstGrapheme;
         }
 
@@ -54,14 +65,23 @@
     const compareSectionKeys = (a, b) => {
         if (a === '#') return b === '#' ? 0 : -1;
         if (b === '#') return 1;
-        return a.localeCompare(b, undefined, { sensitivity: 'base' })
-            || a.localeCompare(b, undefined, { sensitivity: 'variant' });
+        return compareText(a, b);
     };
 
     const compareNames = (a, b) => {
         const sectionOrder = compareSectionKeys(sectionKey(a), sectionKey(b));
-        return sectionOrder || a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })
-            || a.localeCompare(b, undefined, { sensitivity: 'variant', numeric: true });
+        return sectionOrder || compareText(a, b, true);
+    };
+
+    // Sorting asks about each name many times. Keep its section only for this grouping/tree build,
+    // so a large project neither segments every comparison nor leaves an unbounded name cache.
+    const nameOrder = () => {
+        const sections = new Map();
+        const key = name => {
+            if (!sections.has(name)) sections.set(name, sectionKey(name));
+            return sections.get(name);
+        };
+        return { key, compare: (a, b) => compareSectionKeys(key(a), key(b)) || compareText(a, b, true) };
     };
 
     const searchKey = value => String(value || '')
@@ -73,11 +93,12 @@
 
     const group = (names, query = '') => {
         const sections = new Map();
+        const order = nameOrder();
         [...new Set(names || [])]
             .filter(name => matches(name, query))
-            .sort(compareNames)
+            .sort(order.compare)
             .forEach(name => {
-                const key = sectionKey(name);
+                const key = order.key(name);
                 if (!sections.has(key)) sections.set(key, []);
                 sections.get(key).push(name);
             });
@@ -88,6 +109,7 @@
 
     const buildFolderTree = names => {
         const root = { files: [], folders: [], _folders: new Map() };
+        const order = nameOrder();
         for (const fullName of new Set((names || []).map(name => String(name)))) {
             const parts = fullName.split('/');
             if (parts.length < 2) {
@@ -116,9 +138,10 @@
         }
 
         const finish = node => {
-            node.files.sort((a, b) => compareNames(fileName(a), fileName(b)));
+            const basenames = new Map(node.files.map(name => [name, fileName(name)]));
+            node.files.sort((a, b) => order.compare(basenames.get(a), basenames.get(b)));
             node.folders = Array.from(node._folders.values())
-                .sort((a, b) => compareNames(a.name, b.name));
+                .sort((a, b) => order.compare(a.name, b.name));
             for (const folder of node.folders) finish(folder);
             delete node._folders;
             return node;
@@ -208,7 +231,7 @@
                 const active = button.dataset.letter === key;
                 button.classList.toggle('active', active);
                 button.style.backgroundColor = active ? 'var(--color-accent)' : 'var(--color-bg-input-alt)';
-                button.style.color = active ? 'var(--color-bg-deep)' : 'var(--color-text-strong)';
+                button.style.color = active ? 'var(--color-accent-on)' : 'var(--color-text-strong)';
             });
         };
 

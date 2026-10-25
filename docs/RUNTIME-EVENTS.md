@@ -448,6 +448,24 @@ Emitted when a unit ends its turn on watch. The reaction shot's `fightAim`, `fig
 | `unitId` | `number` |
 | `team` | `string` |
 
+### `fightGrapple`
+
+Emitted when a unit's way takes its grapple (an armor's Grapple section), as the way begins.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+
+### `fightFall`
+
+Emitted when a fall past the safe height cost a unit of a battle on the map HP, on landing.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `damage` | `number` |
+| `defeated` | `boolean` |
+
 ### `fightActionEnd`
 
 Emitted when the playback ended.

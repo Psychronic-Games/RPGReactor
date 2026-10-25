@@ -250,8 +250,13 @@
             const m = /\[F(\d+)\]/i.exec(String(name || ''));
             return m ? Math.max(1, Number(m[1])) : 3;
         },
+        /** A "[8D]" sheet: eight blocks of 3 x 4 frames, cut as an eight-character sheet whatever its "$" says. */
+        isEightDirCharacter(name) {
+            return /\[8D\]/i.test(normalizeRelative(name).split('/').pop() || '');
+        },
         isBigCharacter(name) {
             const basename = normalizeRelative(name).split('/').pop() || '';
+            if (/\[8D\]/i.test(basename)) return false;
             const sign = basename.match(/^[!$]+/);
             return Boolean(sign && sign[0].includes('$'));
         },

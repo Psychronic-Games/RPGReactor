@@ -8,6 +8,8 @@ Pick a template (Humanoid, Quadruped, and others), then drag each marker onto th
 
 The humanoid template marks the head, chin, hips, shoulders, elbows, wrists, knees and ankles, and on each hand a **palm** centre plus a **base** and **tip** for the thumb and each finger. Held weapons sit at the palm; the finger markers say where the hand ends and which way it closes. A rig saved before these markers existed keeps what was placed and derives the hand from its own elbow and wrist.
 
+A humanoid with no saved rig opens with its markers already placed: on its own skeleton's bones when it has one (Mixamo, VRM, VRoid, Unreal, Rigify, Daz, Biped names), else read from its shape, fingers and thumb included. **Auto-place markers** does it again at any time and asks before replacing markers you placed. The status line names the parts it guessed, and those markers have a white rim until you move them. A saved rig is never changed unless you press Auto-place markers and save.
+
 ## Things held in a hand
 
 A sword, a tool or a gun takes a rig of markers only: no bones, nothing to bind. The **Blade or tool** template marks **Grip top**, **Grip bottom**, **Tip** and **Edge**; the **Gun** template marks **Grip top**, **Grip bottom**, **Trigger finger**, **Muzzle**, **Rear**, **Fore grip** and **Stock**. Muzzle, Rear and Stock snap to the model's middle plane. Saved as `rig: { template, markers }`.
@@ -28,7 +30,7 @@ The rig lives in the model's sidecar (`model.json`) as `rig: { template, markers
 
 ## Motions a rig gives a model
 
-A rigged humanoid plays a built-in motion for every movement state it has no animation of its own for: Breathe when idle, Walk, Run while dashing, Jump in the air, Swim (a front crawl) through deep water, Tread Water when still in it, and Climb on a ladder. A quadruped gets an idle sway and a walk. The Animations list shows which ones are in use ("Rig defaults: …"), and its switch turns them off (`defaultMotions: false` in `model.json`). A motion or clip the model has for a state always wins.
+A rigged humanoid plays a built-in motion for every movement state it has no animation of its own for: Breathe when idle, Walk, Run while dashing, Jump in the air, Swim (a front crawl) through deep water, Tread Water when still in it, and Climb on a ladder. A quadruped gets an idle sway and a walk. The Animations list shows which ones are in use ("Rig defaults: …"), and its switch turns them off (`defaultMotions: false` in `model.json`). A clip in the model's file named for a state plays in it without being added, rigged or not: Walk or Walking, Run, Running or Sprint, Idle or Breathe, Jump, Swim, Tread, Climb, Ride (a trailing number, "Loop" or "In Place" may follow, as in Idle_9). Its row under Embedded clips says when it plays. An animation in the list set for a state wins over both.
 
 **Motions…** adds a ready-made motion for the model's template. For a humanoid: the movement states above, gestures (Wave, Take a Bow, Nod, Shake Head, Hop), stances that hold until another stance replaces them (Guard, Aim Rifle, Aim Pistol, Dual Wield, Lower Arms, Sit) and strikes (Overhead Strike, Slash, Thrust). Quadrupeds, plants and vehicles have their own (Pounce, Wind Sway, Rustle, Roll, Bounce). Each lands as one editable motion.
 

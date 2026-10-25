@@ -4,6 +4,10 @@ class MediaSurfaceManager {
         this.projectController = projectController;
         this.databaseManager = databaseManager;
         this.undo = []; this.redo = [];
+        this._thumbnailQueue = [];
+        this._thumbnailJobs = new Set();
+        this._videoThumbnails = new Map();
+        this._thumbnailGeneration = 0;
     }
     t(text) { return window.I18n?.tText?.(text) || text; }
     map() { return this.projectController?.tilemapManager?.currentMap; }
@@ -27,15 +31,15 @@ class MediaSurfaceManager {
             if (!window.reactor?.dockMapPanel?.(panel)) document.body.appendChild(panel);
         }
         this.panel.hidden = false;
-        document.querySelector('.tool-button[data-action="media-surfaces"]')?.classList.add('active');
         this.render(); this.syncHistoryButtons(); this.projectController?.mediaSurfacePreviewManager?.syncToolInteraction?.(); return true;
     }
     close() {
         this.cancelPlacement?.();
+        this._stopThumbnails();
+        this._videoThumbnails.clear();
         if (this.panel) { if (window.reactor?.undockMapPanel) window.reactor.undockMapPanel(this.panel); else this.panel.remove(); }
         const wasOpen = !!this.panel;
         this.panel = null;
-        document.querySelector('.tool-button[data-action="media-surfaces"]')?.classList.remove('active');
         if (wasOpen) { const map = window.reactor?.mapEditor; window.reactor?.uiManager?.updateUndoRedoButtons?.(!!map?.canUndo?.(), !!map?.canRedo?.()); }
         this.editor?.close(true);
         this.projectController?.mediaSurfacePreviewManager?.syncToolInteraction?.();
@@ -48,32 +52,138 @@ class MediaSurfaceManager {
     }
     render() {
         const panel = this.panel; if (!panel) return;
+        this._stopThumbnails();
         panel.replaceChildren();
         const header = document.createElement('div'); header.className = 'rr-modal-header';
+        const icon = document.createElement('img'); icon.src = 'images/icon-media-surfaces.svg'; icon.alt = ''; icon.className = 'media-surfaces-icon';
         const title = document.createElement('div'); title.className = 'rr-modal-title'; title.id = 'rr-map-media-surfaces-title'; title.setAttribute('data-i18n-text-source','Media Surfaces'); title.textContent = this.t('Media Surfaces');
-        header.append(title, this.button('×', () => this.close(), 'rr-modal-close')); panel.append(header);
+        header.append(icon, title, this.button('×', () => this.close(), 'rr-modal-close')); panel.append(header);
         const body = document.createElement('div'); body.className = 'rr-modal-body';
-        body.style.cssText = 'padding:12px;overflow:auto;display:flex;flex-direction:column;gap:10px;';
+        body.classList.add('media-surfaces-body', 'rr-accent-scrollbar');
         const help = document.createElement('p'); help.setAttribute('data-i18n-text-source','Images and videos that belong to this map. Save the map to keep your changes.'); help.textContent = this.t('Images and videos that belong to this map. Save the map to keep your changes.');
-        help.style.cssText = 'margin:0;color:var(--color-text-muted);font-size:12px;line-height:1.5;'; body.append(help);
+        help.className = 'media-surfaces-help'; body.append(help);
         body.append(this.button('Place Surface…', () => this.place(), 'rr-button-primary'));
-        if (!this.rows().length) { const empty = document.createElement('p'); empty.setAttribute('data-i18n-text-source','No map surfaces yet.'); empty.textContent = this.t('No map surfaces yet.'); body.append(empty); }
+        if (!this.rows().length) { const empty = document.createElement('p'); empty.className = 'media-surfaces-empty'; empty.setAttribute('data-i18n-text-source','No map surfaces yet.'); empty.textContent = this.t('No map surfaces yet.'); body.append(empty); }
         for (const row of this.rows()) {
-            const item = document.createElement('div'); item.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:6px;background:var(--color-bg-deep);';
-            const edit = this.button(`${row.id}: ${row.movie || row.file || this.t('Media Surface')}`, () => this.edit(Number(row.id)));
-            edit.style.cssText = 'flex:1;min-width:0;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-            edit.setAttribute('data-rr-i18n-skip',''); edit.title = edit.textContent;
-            const actions = document.createElement('div'); actions.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;';
-            const duplicate = this.button('Duplicate', () => this.duplicate(Number(row.id)));
+            const item = document.createElement('article'); item.className = 'media-surface-card';
+            const file = String(row.movie || row.file || '');
+            const edit = this.button('', () => this.edit(Number(row.id)), 'media-surface-open');
+            edit.removeAttribute('data-i18n-text-source');
+            edit.title = `${row.id}: ${file || this.t('Media Surface')}`;
+            edit.setAttribute('aria-label', edit.title);
+            const info = document.createElement('span'); info.className = 'media-surface-info';
+            const name = document.createElement('span'); name.className = 'media-surface-name'; name.setAttribute('data-rr-i18n-skip','');
+            name.textContent = file || this.t('Media Surface');
+            const meta = document.createElement('span'); meta.className = 'media-surface-meta';
+            const id = document.createElement('span'); id.className = 'media-surface-id'; id.textContent = `#${row.id}`; id.setAttribute('data-rr-i18n-skip','');
+            const kind = document.createElement('span'); kind.className = 'media-surface-kind';
+            const label = /\.(?:png|jpe?g|webp)$/i.test(file) ? 'Image' : 'Video';
+            kind.setAttribute('data-i18n-text-source',label); kind.textContent = this.t(label);
+            meta.append(id, kind);
+            const position = document.createElement('span'); position.className = 'media-surface-position'; position.setAttribute('data-rr-i18n-skip','');
+            const value = n => Number.isFinite(Number(n)) ? Math.round(Number(n) * 100) / 100 : 0;
+            position.textContent = `X ${value(row.x)} · Y ${value(row.y)} · Z ${value(row.z)}`;
+            info.append(name, meta, position); edit.append(this._thumbnail(file), info);
+            const actions = document.createElement('div'); actions.className = 'media-surface-actions';
+            const duplicate = this.button('Duplicate', () => this.duplicate(Number(row.id)), 'rr-btn-secondary');
             duplicate.dataset.action = 'duplicate-surface';
             actions.append(duplicate, this.button('Delete', () => {
                 this.change(this.rows().filter(value => value !== row)); this.render();
-            })); item.append(edit, actions); body.append(item);
+            }, 'rr-button-danger')); item.append(edit, actions); body.append(item);
         }
-        const history = document.createElement('div'); history.style.cssText = 'display:flex;gap:8px;';
+        const history = document.createElement('div'); history.className = 'media-surfaces-history';
         const undo = this.button('Undo', () => this.history(this.undo, this.redo)); undo.disabled = !this.undo.length;
         const redo = this.button('Redo', () => this.history(this.redo, this.undo)); redo.disabled = !this.redo.length;
-        history.append(undo, redo); body.append(history); panel.append(body);
+        history.append(undo, redo); panel.append(body, history);
+    }
+
+    /** The same validated project paths and decrypted/Web URLs used by the map preview. */
+    _thumbnailUrl(file) {
+        const Editor = typeof MediaSurfaceEditor !== 'undefined' ? MediaSurfaceEditor : require('./event/commands/MediaSurfaceEditor.js');
+        if (!Editor.safeMoviePath(file)) return '';
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        if (!project?.path) return '';
+        const path = require('path');
+        const assets = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles : require('./utils/AssetFiles.js');
+        return assets.toUrl(path.join(project.path, Editor.isImageFile(file) ? 'img/pictures' : 'movies', ...file.split('/')));
+    }
+
+    _thumbnail(file) {
+        const holder = document.createElement('span'); holder.className = 'media-surface-thumbnail'; holder.setAttribute('aria-hidden','true');
+        const image = /\.(?:png|jpe?g|webp)$/i.test(file);
+        holder.innerHTML = image
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 18 5-5 3 3 4-6 5 8"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 8 6 4-6 4z"/></svg>';
+        let url;
+        try { url = this._thumbnailUrl(file); } catch (_) { url = ''; }
+        if (!url) { holder.classList.add('is-unavailable'); return holder; }
+        if (image) this._showThumbnail(holder, url);
+        else if (this._videoThumbnails.has(url)) this._showThumbnail(holder, this._videoThumbnails.get(url));
+        else {
+            this._thumbnailQueue.push({ url, holder, generation: this._thumbnailGeneration });
+            this._pumpThumbnails();
+        }
+        return holder;
+    }
+
+    _showThumbnail(holder, url) {
+        const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+        img.addEventListener('load', () => holder.classList.add('is-loaded'), { once: true });
+        img.addEventListener('error', () => { img.remove(); holder.classList.add('is-unavailable'); }, { once: true });
+        img.src = url; holder.append(img);
+    }
+
+    _stopThumbnails() {
+        this._thumbnailGeneration++;
+        this._thumbnailQueue.length = 0;
+        for (const stop of Array.from(this._thumbnailJobs)) stop();
+    }
+
+    /** Snapshot at most two videos at once, then release their decoders. Nothing autoplays. */
+    _pumpThumbnails() {
+        while (this._thumbnailQueue.length && this._thumbnailJobs.size < 2) {
+            const { url, holder, generation } = this._thumbnailQueue.shift();
+            if (this._videoThumbnails.has(url)) { this._showThumbnail(holder, this._videoThumbnails.get(url)); continue; }
+            const video = document.createElement('video');
+            video.muted = true; video.playsInline = true; video.preload = 'auto';
+            let timer, done = false;
+            const stop = () => {
+                if (done) return;
+                done = true; clearTimeout(timer);
+                for (const [name, listener] of listeners) video.removeEventListener(name, listener);
+                video.pause(); video.removeAttribute('src'); video.load();
+                this._thumbnailJobs.delete(stop);
+            };
+            const finish = data => {
+                if (done) return;
+                stop();
+                if (generation !== this._thumbnailGeneration) return;
+                if (data) {
+                    this._videoThumbnails.set(url, data);
+                    while (this._videoThumbnails.size > 48) this._videoThumbnails.delete(this._videoThumbnails.keys().next().value);
+                    this._showThumbnail(holder, data);
+                } else holder.classList.add('is-unavailable');
+                this._pumpThumbnails();
+            };
+            const capture = () => {
+                if (video.seeking || !video.videoWidth || !video.videoHeight) return;
+                try {
+                    const canvas = document.createElement('canvas'); canvas.width = 160; canvas.height = 100;
+                    const scale = Math.min(160 / video.videoWidth, 100 / video.videoHeight);
+                    const width = video.videoWidth * scale, height = video.videoHeight * scale;
+                    canvas.getContext('2d').drawImage(video, (160-width)/2, (100-height)/2, width, height);
+                    finish(canvas.toDataURL('image/png'));
+                } catch (_) { finish(null); }
+            };
+            const listeners = [
+                ['loadedmetadata', () => { try { if (video.duration > 0) video.currentTime = Math.min(0.1, video.duration / 2); } catch (_) {} }],
+                ['loadeddata', capture], ['seeked', capture], ['error', () => finish(null)]
+            ];
+            this._thumbnailJobs.add(stop);
+            for (const [name, listener] of listeners) video.addEventListener(name, listener);
+            timer = setTimeout(() => finish(null), 8000);
+            video.src = url; video.load();
+        }
     }
     write(rows) {
         const map = this.map(); if (map !== this.boundMap) return;
@@ -150,6 +260,7 @@ class MediaSurfaceManager {
             y:m?.view?.target?.z ?? map.height/2, ...position};
         const command = {code:357,indent:0,parameters:['RPGReactor','ShowVideoSurface','Show Media Surface',args]};
         this.editor ||= new MediaSurfaceEditor(this.databaseManager, this.projectController);
+        this._stopThumbnails();
         this.panel.style.display = 'none';
         return this.editor.show(command, built => {
             if (built && this.map() === map) {

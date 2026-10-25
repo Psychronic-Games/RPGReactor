@@ -52,7 +52,7 @@ const driver = new WebDriverClient(path.join(root, 'nwjs-linux/chromedriver'));
             for(let i=0;i<6;i++)db._activeDatabaseList.selectIds([i%2+1],i%2+1);
             await wait();
             check('rapid revisits leave one live forecast',document.querySelectorAll('.enemy-forecast').length===1);
-            document.getElementById('database-cancel-btn').click();await wait();
+            {const c=reactor.databaseEditorUI.callbacks,o=c.showConfirm;c.showConfirm=async()=>true;document.getElementById('database-cancel-btn').click();await wait();c.showConfirm=o;}
             check('Cancel retires the forecast',!document.querySelector('.enemy-forecast'));
             check('forecast and navigation preserve actions and skills',authored()===baseline);
             dm.data.enemies[1].actions=[{...action(1,5),conditionType:1,conditionParam1:0,conditionParam2:0}];

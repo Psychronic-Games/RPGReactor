@@ -1255,9 +1255,9 @@ test('the helper loads before the shell, and the Tactics card is a card like the
     assert.ok(helper > 0 && helper < shell && helper < models);
     const tactics = read('src/database/TacticsSection.js');
     assert.doesNotMatch(tactics, /createElement\('details'\)|<summary/, 'no <details> of its own: the shared fold drives it');
-    // Each battle card names itself and says which way of fighting it is for; the names never change with the language.
-    assert.match(tactics, /section\.dataset\.sectionKey = card\.key;/);
-    assert.match(tactics, /section\.dataset\.sectionDefault = fightsFor\(name, kind\);/);
+    // The Combat section names itself and says which ways of fighting it is for; the name never changes with the language.
+    assert.match(tactics, /class="database-section-header rr-combat-header" data-section-key="\$\{SECTION\.key\}"/);
+    assert.match(tactics, /outer\.dataset\.sectionDefault = fights\.length === 1 \? fights\[0\] : 'map-battles';/);
     const { CARDS, fightsFor } = require('../src/database/TacticsSection.js');
     assert.deepEqual(Object.values(CARDS).map(item => [item.key, item.fights]), [['sharedCombat', 'map-battles'], ['tactics', 'tactical-battles'], ['action', 'action-battles']]);
     // An actor's and an enemy's card holds what every battle on the map reads (how it fights, an enemy's picture): it is for all of them.
@@ -1265,8 +1265,8 @@ test('the helper loads before the shell, and the Tactics card is a card like the
         ['tactical-battles', 'tactical-battles', 'tactical-battles', 'tactical-battles', 'tactical-battles', 'tactical-battles', 'tactical-battles', 'tactical-battles']);
     assert.deepEqual(['weapon', 'skill', 'item'].map(kind => fightsFor('action', kind)), ['action-battles', 'action-battles', 'action-battles']);
     assert.match(read('src/DatabaseEditorUI.js'), /defaults: \(page, key, section\) => helper\.battleCardFolded\(key, section, \(\) => this\.battleModes\(\)\)/);
-    assert.match(tactics, /if \(section\.classList\.contains\('is-collapsed'\)\) return;/, 'a folded card draws no picture');
-    assert.match(tactics, /addEventListener\('rr-section-fold', event => \{ if \(event\.target === section && !event\.detail\.collapsed\) draw\(\); \}\)/, 'and draws it when it opens');
+    assert.match(tactics, /if \(outer\.classList\.contains\('is-collapsed'\)\) return;/, 'a folded section draws no picture');
+    assert.match(tactics, /outer\.addEventListener\('rr-section-fold', event => \{ if \(event\.target === outer && !event\.detail\.collapsed\) draw\(\); \}\)/, 'and draws it when it opens');
     assert.doesNotMatch(tactics, /section\.open/);
     // On Items the card stands in a column: as a grid cell it took a column's place.
     assert.match(read('src/database/DatabaseItemEditor.js'), /rightColumn\.append\(\.\.\.\[invocationSection, damageSection, effectsSection, tacticsSection\]\.filter\(Boolean\)\);/);

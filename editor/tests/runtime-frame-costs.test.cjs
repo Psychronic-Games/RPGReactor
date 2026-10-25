@@ -78,7 +78,7 @@ test('the 3D viewport updates world matrices once a frame across its passes', ()
     const at = three.indexOf('Reactor3D.Viewport.prototype.renderPass = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /if \(scene\.matrixWorldAutoUpdate !== false\) scene\.matrixWorldAutoUpdate = false;/);
-    assert.match(body, /if \(this\._matrixFrame !== frame\) \{\n\s*this\._matrixFrame = frame;\n\s*scene\.updateMatrixWorld\(\);\n[^}]*\}/);
+    assert.match(body, /if \(this\._matrixFrame !== frame\) \{\n\s*this\._matrixFrame = frame;\n(?:[^\n]*_spareRefresh[^\n]*\n)?\s*scene\.updateMatrixWorld\(\);\n[^}]*\}/);
     assert.ok(body.indexOf('scene.updateMatrixWorld()') < body.indexOf('mapScene.setPass(which)'), 'before the pass is arranged');
 });
 

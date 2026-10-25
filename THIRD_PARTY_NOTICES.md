@@ -21,6 +21,20 @@ under BSD-3-Clause.
 - License: MIT
 - Upstream: <https://github.com/mrdoob/three.js>
 
+## Basis Universal
+
+- Component: Basis Universal transcoder, as shipped with Three.js 0.185.1 (`examples/jsm/libs/basis`)
+- Bundled files: `runtime/libs/basis/basis_transcoder.js` and `runtime/libs/basis/basis_transcoder.wasm`
+- Copyright: 2016-2026 Binomial LLC
+- License: Apache License 2.0
+- Upstream: <https://github.com/BinomialLLC/basis_universal>
+
+- Component: Basis Universal encoder, as built by ktx2-encoder 0.6.0 (MIT, copyright 2020 Hu Song)
+- Bundled files: `editor/libs/basis/basis_encoder.js` and `editor/libs/basis/basis_encoder.wasm`; the
+  attribution notice and ktx2-encoder's license are beside them (`NOTICE.md`, `LICENSE.ktx2-encoder`)
+- License: Apache License 2.0 (encoder), MIT (ktx2-encoder build)
+- Upstream: <https://github.com/gz65555/ktx2-encoder>
+
 ## Effekseer for WebGL
 
 - Component: Effekseer for WebGL 1.70b

@@ -22,7 +22,7 @@ class ConditionalBranchEditor {
         this.variableValue = 0;
 
         // Self switch condition
-        this.selfSwitchCh = 'A'; // A, B, C, D
+        this.selfSwitchCh = 'A'; // A to Z
         this.selfSwitchValue = 0; // 0=ON, 1=OFF
 
         // Timer condition
@@ -543,7 +543,7 @@ class ConditionalBranchEditor {
         const label = document.createElement('span');
         label.className = 'rr-variable-reference-label';
         label.textContent = this._entryLabel(id, name,
-            `${kind === 'switch' ? this._tt('Switch') : this._tt('Variable')} ${id}`);
+            `${kind === 'switch' ? this._tt('Switch') : this._tt('Variable')} ${String(id).padStart(4, '0')}`);
         const more = document.createElement('span');
         more.textContent = '...';
         button.appendChild(label);
@@ -620,7 +620,7 @@ class ConditionalBranchEditor {
             ]));
 
         page.appendChild(this._conditionRow(2, this._tt('Self Switch'), [
-            this._select(['A', 'B', 'C', 'D'].map(ch => ({ value: ch, label: ch })),
+            this._select('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(ch => ({ value: ch, label: ch })),
                 this.selfSwitchCh, v => { this.selfSwitchCh = v; }, true),
             this._word(this._tt('is')),
             this._onOffSelect(this.selfSwitchValue, v => { this.selfSwitchValue = v; })

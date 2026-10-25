@@ -18,7 +18,7 @@ test('event message color preview escapes source text before adding controlled s
 
     assert.doesNotMatch(html, /<img|onerror="/i);
     assert.match(html, /&lt;img src=x onerror=&quot;globalThis\.injected=true&quot;&gt;/);
-    assert.match(html, /<span style="color: #ffff80">Gold &amp; safe<\/span>/);
+    assert.match(html, /<span class="rr-message-code-color" style="color: #ffff80">Gold &amp; safe<\/span>/);
 });
 
 test('database trait options escape project-authored names', () => {

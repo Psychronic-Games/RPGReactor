@@ -511,7 +511,8 @@ test('nothing starts over a battle: one made here, a battle on the map, a battle
 // $dataTroops during and after.
 
 test('the record is in $dataTroops for the whole battle and gone once the battle scene has ended', () => {
-    const w = world({ events: threeRaiders() });
+    // Rows that come back: the map entered again has them to fight.
+    const w = world({ events: [row(3, 5, 2, 1, { returns: true }), row(4, 6, 3, 1, { returns: true }), row(5, 7, 2, 2, { returns: true })] });
     const before = plain(w.$dataTroops);
     const id = w.Classic.start(w.$gameMap.events());
     w.begin();
@@ -771,6 +772,29 @@ test('Comes back: the row is gone for this visit, is not remembered, and stands 
     w.$gameMap.setup(1);
     assert.equal(w.erased(3), false);
     assert.equal(w.Classic.take().some(r => r.eventId === 3), true);
+});
+
+test('a defeated row stays off its map when the map is entered again, and after a save is loaded; one that comes back stands', () => {
+    const w = world({ events: [row(3, 5, 2, 1, { returns: true }), row(4, 6, 3, 1), row(5, 7, 2, 2)] });
+    w.Classic.start(w.$gameMap.events());
+    w.begin(); w.win(); w.endScene();
+    assert.deepEqual([3, 4, 5].map(w.erased), [true, true, true]);
+    // To another map and back: the map is set up anew.
+    w.$gameMap.setup(2);
+    w.$gameMap.setup(1);
+    assert.deepEqual([3, 4, 5].map(w.erased), [false, true, true], 'the two remembered stay defeated');
+    assert.deepEqual(plain(w.Classic.take().map(r => r.eventId)), [3], 'and only the one that comes back fights next time');
+    // A save loaded: the list is the battle core's, saved with it.
+    const saved = vm.runInContext('JsonEx.stringify({ reactorFight: $gameFight })', w);
+    vm.runInContext('DataManager.createGameObjects();', w);
+    vm.runInContext(`DataManager.extractSaveContents(Object.assign({ system: $gameSystem, screen: $gameScreen, timer: $gameTimer, switches: $gameSwitches,
+        variables: $gameVariables, selfSwitches: $gameSelfSwitches, actors: $gameActors, party: $gameParty, map: $gameMap, player: $gamePlayer }, JsonEx.parse(${JSON.stringify(saved)})));`, w);
+    w.$gameMap.setup(1);
+    assert.deepEqual([3, 4, 5].map(w.erased), [false, true, true]);
+    // A row the author has since made to come back stands again.
+    w.$dataMap.events[4].rrUnit.returns = true;
+    w.$gameMap.setup(1);
+    assert.equal(w.erased(4), false);
 });
 
 test('the defeated are handed to the battle core where it keeps the list', () => {

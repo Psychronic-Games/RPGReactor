@@ -11,6 +11,8 @@ require(path.join(root, 'runtime', 'libs', 'three.js'));
 const THREE = global.THREE;
 const Reactor3D = require(path.join(root, 'runtime', 'reactor_3d.js'));
 require(path.join(root, 'runtime', 'reactor_3d_lighting.js'));
+// The split as an integrated GPU draws it (a discrete one lights per pixel: HalfLight.WEAK_ONLY).
+Reactor3D.HalfLight.WEAK_ONLY = false;
 const HL = Reactor3D.HalfLight, HH = Reactor3D.HalfHaze;
 
 const lit = options => Reactor3D.litMaterial(new THREE.MeshBasicMaterial(options));
@@ -74,7 +76,9 @@ test('the split draws the lit surfaces unlit and hides the rest, then puts every
         assert.equal(glass.material.visible, true);
         assert.equal(originals[0].visible, true);
         const water = new THREE.Scene(); water.userData.rrWater = [{}]; water.add(new THREE.Mesh(new THREE.PlaneGeometry(), lit({})));
-        assert.equal(HL.begin({}, water, target), null, 'a map with water draws as before (its tint is laid over the lit colour)');
+        const wet = HL.begin({}, water, target);
+        assert.ok(wet, 'a map with water splits too: the combine lays its tint on');
+        HL.restore(wet);
         assert.equal(HL.begin({}, scene, { width: 4, height: 4, samples: 0 }), null, 'no readable depth, no split');
     } finally { Reactor3D.LightVolume.supported = saved; }
 });
@@ -182,4 +186,157 @@ test('a pass drawn below full size is enlarged by a sharpening filter into a ful
     SU.mode = 'crisp';
     assert.match(SU.quad().material.fragmentShader, /\* \(1\.0 \+ sharpness\);/, 'crisp: sharpness hardens the edge blend');
     SU.mode = 'cas';
+});
+
+test('water\'s tint and glowing water\'s sheen go over the lit colour: the twin draws without them, the combine lays them on', () => {
+    const material = lit({});
+    const full = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+    material.onBeforeCompile(full, {});
+    assert.match(full.fragmentShader, /outgoingLight = rrWaterTint\(outgoingLight\);/, 'the lit program tints');
+    assert.ok(full.fragmentShader.includes(Reactor3D.WaterLight.SHEEN_GLSL), 'and takes the sheen');
+    const unlit = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+    HL.twin(material).onBeforeCompile(unlit, {});
+    assert.doesNotMatch(unlit.fragmentShader, /outgoingLight = rrWaterTint/, 'the twin: no tint');
+    assert.ok(!unlit.fragmentShader.includes(Reactor3D.WaterLight.SHEEN_GLSL), 'no sheen');
+
+    // Which of the two this scene needs.
+    const scene = new THREE.Scene(), u = Reactor3D.lightUniforms();
+    Reactor3D.LightVolume.uniforms();
+    const edge = u.rrWaterFarEdge.value, sheen = u.rrWaterSheen.value;
+    try {
+        u.rrWaterFarEdge.value = 0;
+        assert.deepEqual(HL.finishing(scene), { wet: false, sheen: false });
+        scene.userData.rrWater = [{}];
+        u.rrWaterFarEdge.value = 6; u.rrWaterSheen.value = 0.3;
+        assert.deepEqual(HL.finishing(scene), { wet: true, sheen: true });
+    } finally { u.rrWaterFarEdge.value = edge; u.rrWaterSheen.value = sheen; }
+
+    // The combine, filtered by surface: dry, it is the program it always was.
+    const dry = HL.upsampleProgram({}).material;
+    assert.doesNotMatch(dry.fragmentShader, /rrFinish|rrWaterTint|shone/);
+    assert.equal(dry.uniforms.rrWaterCount, undefined);
+    const wet = HL.upsampleProgram({}, true, true).material;
+    assert.notEqual(wet, dry, 'a program of its own');
+    assert.match(wet.fragmentShader, /vec3 rrWaterTint\(vec3 color\)/);
+    assert.match(wet.fragmentShader, /if \(rrWaterCount > 0 && texelFetch\(rrLightDepth, px, 0\)\.r < 1\.0\) \{\n\t\tvRRWaterPos = rrLightWorld\(px, textureSize\(rrLightDepth, 0\)\);\n\t\tc = rrWaterTint\(c\);/, 'tinted at the world point of the pixel\'s depth, where anything was drawn');
+    assert.match(wet.fragmentShader, /vec3 rrOwn = c \/ max\(l, vec3\(0\.001\)\);\n\tc \+= shone \* \(rrWaterSheen \*/, 'the sheen, as the lit program lays it, before the tint');
+    assert.ok(wet.fragmentShader.indexOf('c += shone') < wet.fragmentShader.indexOf('c = rrWaterTint(c)'));
+    assert.match(wet.fragmentShader, /rrLitFinished\(px, l, rrWaterShone\)/, 'a rim lit at full size takes its own sheen');
+    assert.match(wet.fragmentShader, /texelFetch\(shone, i3, 0\)\.rgb \* w\.w\) \/ \(w\.x \+ w\.y \+ w\.z \+ w\.w\)/, 'the sheen filtered up with the light\'s weights');
+    assert.equal(wet.uniforms.rrWaterCount, Reactor3D.waterVolumeUniforms().rrWaterCount, 'the scene\'s water, shared');
+    assert.ok('shone' in wet.uniforms);
+    assert.match(HL.upsampleProgram({}, true, false).material.fragmentShader, /rrLitFinished\(px, l, vec3\(0\.0\)\)/, 'water without a glow: no sheen');
+
+    // The light pass hands the glowing water's share to a second target only when it is wanted.
+    assert.doesNotMatch(HL.program({}).material.fragmentShader, /rrShoneOut/);
+    const shining = HL.program({}, true).material.fragmentShader;
+    assert.match(shining, /layout\(location = 1\) out highp vec4 rrShoneOut;/);
+    assert.match(shining, /rrShoneOut = vec4\(rrWaterShone, 0\.0\);/);
+
+    // The plain combine (matchSurfaces off) does the same.
+    const plain = HL.combineQuad(true, true).material;
+    assert.match(plain.fragmentShader, /rrToSrgb\(clamp\(rrFinish\(rrToLinear\(s\.rgb\) \* l, l, texture2D\(shone/);
+    assert.equal(plain.uniforms.rrWaterSheen, Reactor3D.lightUniforms().rrWaterSheen);
+    assert.notEqual(HL.combineQuad(), plain);
+});
+
+test('an upscaled pass is enlarged as PIXI composites it: the same filter on the small target, no full-size target drawn first', () => {
+    const SU = Reactor3D.SharpUpscale;
+    const saved = global.PIXI;
+    const made = [];
+    global.PIXI = {
+        GlProgram: { from: options => ({ ...options }) },
+        UniformGroup: class { constructor(uniforms) { this.uniforms = Object.fromEntries(Object.entries(uniforms).map(([k, v]) => [k, v.value])); } },
+        Shader: class { constructor(options) { Object.assign(this, options); } destroy(programs) { this.destroyed = programs === false ? 'kept program' : 'program too'; } },
+        MeshGeometry: class { constructor(options) { Object.assign(this, options); } destroy() { this.destroyed = true; } },
+        Mesh: class { constructor(options) { Object.assign(this, options); made.push(this); } destroy() { this.gone = true; } },
+        Sprite: class { constructor(texture) { this.texture = texture; } },
+        TextureSource: class {}
+    };
+    try {
+        const viewport = Object.create(Reactor3D.Viewport.prototype);
+        Object.assign(viewport, { _width: 800, _height: 600, _scale: 0.75, _generation: 3, _pixi: { gl: {} }, _shared: true });
+        viewport.passPixelRatio = () => 1;
+        const textures = [];
+        viewport._pixiTexture = (key, make, flip) => { const t = { key, flip, source: { key } }; textures.push(t); return t; };
+        viewport._workTarget = slot => ({ slot });
+        viewport._target = slot => ({ slot, full: true });
+        const mesh = viewport.passSprite('below');
+        assert.equal(made.length, 1, 'a mesh');
+        assert.deepEqual(textures.map(t => [t.key, t.flip]), [['work:below', false]], 'over the small target, read upright by its own coordinates');
+        assert.equal(mesh.shader.resources.source, mesh.texture.source, 'the filter reads it');
+        assert.deepEqual(Array.from(mesh.geometry.uvs), [0, 1, 1, 1, 1, 0, 0, 0], 'the target\'s first row at the bottom of the screen');
+        assert.equal(viewport.enlargedInComposite('below'), true);
+        assert.equal(viewport.enlargedInComposite('above'), false);
+        // The filter as three drew it, in PIXI's names: same arithmetic, tinted as the sprite was.
+        const program = mesh.shader.glProgram;
+        assert.match(program.fragment, /^#version 300 es\n/);
+        assert.match(program.fragment, /finalColor = \(vec4\(clamp\(c\.rgb \+ \(c\.rgb \* 4\.0 - n - s - e - w\) \* 0\.5 \* sharpness, lo, hi\), c\.a\)\) \* uColor;/);
+        assert.doesNotMatch(program.fragment, /gl_FragColor|texture2D|varying/);
+        assert.equal(program.preferredFragmentPrecision, 'highp', 'at three\'s precision');
+        assert.match(program.vertex, /uProjectionMatrix \* uWorldTransformMatrix \* uTransformMatrix/);
+        // Sharpness and mode are read as it is drawn.
+        SU.sharpness = 0.8; SU.mode = 'crisp';
+        try {
+            mesh.onRender();
+            assert.equal(mesh.shader.resources.upscale.uniforms.sharpness, 0.8);
+            assert.match(mesh.shader.glProgram.fragment, /\* \(1\.0 \+ sharpness\);/, 'crisp');
+        } finally { SU.sharpness = 0.5; SU.mode = 'cas'; }
+        const gone = viewport.passSprite('above');
+        gone.destroy({ texture: false });
+        assert.ok(gone.gone && gone.geometry.destroyed && gone.shader.destroyed === 'kept program', 'destroyed with its quad, the program kept');
+        // The pass's draw stops at the small target.
+        let upscales = 0;
+        const draw = SU.draw;
+        SU.draw = () => { upscales++; };
+        viewport.renderInto = () => false;
+        viewport._renderer = { resetState() {}, setRenderTarget() {} };
+        viewport._resetPixi = () => {};
+        try {
+            viewport._renderUpscaled('below');
+            assert.equal(upscales, 0, 'no full-size target');
+            viewport._renderUpscaled('lights');
+            assert.equal(upscales, 1, 'a slot shown by a sprite still is');
+            viewport._generation = 4;
+            viewport._renderUpscaled('below');
+            assert.equal(upscales, 2, 'a new generation is shown by what is made for it');
+        } finally { SU.draw = draw; }
+        SU.inComposite = false;
+        try {
+            const sprite = viewport.passSprite('below');
+            assert.ok(sprite instanceof global.PIXI.Sprite, 'the kill switch: a sprite of the full-size target');
+            assert.equal(viewport.enlargedInComposite('below'), false);
+        } finally { SU.inComposite = true; }
+        viewport.passEnlarged = () => true;
+        assert.ok(viewport.passSprite('below') instanceof global.PIXI.Sprite, 'a canvas enlarged past the passes: the filter runs at the full-size target\'s pixels');
+        delete viewport.passEnlarged;
+        viewport._scale = 1;
+        assert.ok(viewport.passSprite('below') instanceof global.PIXI.Sprite, 'at full size there is nothing to enlarge');
+    } finally { global.PIXI = saved; }
+});
+
+test('the split is drawn on an integrated GPU only: a discrete one lights per pixel in one draw', () => {
+    const scene = new THREE.Scene();
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(), lit({})));
+    const target = { depthTexture: new THREE.DepthTexture(4, 4), width: 4, height: 4, samples: 0 };
+    const saved = Reactor3D.LightVolume.supported, tier = Reactor3D.gpuTierOverride;
+    Reactor3D.LightVolume.supported = () => true;
+    try {
+        HL.WEAK_ONLY = true;
+        Reactor3D.gpuTierOverride = 'full';
+        assert.equal(HL.begin({}, scene, target), null, 'a discrete GPU draws the pass whole');
+        Reactor3D.gpuTierOverride = 'weak';
+        const split = HL.begin({}, scene, target);
+        assert.ok(split, 'an integrated GPU splits it');
+        HL.restore(split);
+        HL.WEAK_ONLY = false;
+        Reactor3D.gpuTierOverride = 'full';
+        const forced = HL.begin({}, scene, target);
+        assert.ok(forced, 'WEAK_ONLY = false splits on every tier');
+        HL.restore(forced);
+    } finally {
+        HL.WEAK_ONLY = false;
+        Reactor3D.gpuTierOverride = tier;
+        Reactor3D.LightVolume.supported = saved;
+    }
 });

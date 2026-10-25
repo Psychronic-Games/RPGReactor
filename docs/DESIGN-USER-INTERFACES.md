@@ -42,9 +42,11 @@ HUDs, not modal menus.
 
 **5. Layout is anchored.** Every node has a screen- or parent-relative anchor
 and pixel offset. Box and Image nodes can parent other nodes, and parent opacity
-affects the subtree. There is no Container node, general row/column flow
-layout, or general alignment-guide system yet. The editor provides an optional
-grid and snap-to-grid.
+affects the subtree. Box, Image, Text, Button, Gauge and Text Input nodes take
+an **Angle** (degrees, -180 to 180) and turn about their center, highlight and
+hit area included; nodes inside them keep their own angle. There is no Container
+node, general row/column flow layout, or general alignment-guide system yet. The
+editor provides an optional grid and snap-to-grid.
 
 **6. Data binding is declarative and typed.** Text retains stock and
 plugin-added escape codes. Lists use fixed row sources rather than arbitrary
@@ -287,8 +289,8 @@ runs the stock after-load lifecycle.
 
 ## Battle HUD
 
-A record with the **Battle HUD** presentation, bound as Battle in System 2 or
-Use As (`reactorBattleInterfaceId`), is drawn over every battle. The battle
+A record with the **Battle HUD** presentation, bound as Battle in Use As
+(`reactorBattleInterfaceId`), is drawn over every battle. The battle
 itself stays `Scene_Battle`: its windows still run the commands, targeting and
 turn order, so battle plugins keep working. The HUD's nodes sit under those
 windows and never take focus, like a map overlay; its transition plays when the
@@ -353,11 +355,11 @@ still runs MOG_BattleHud draws both HUDs; the runtime warns in the console.
 
 ## Tactical Battle HUD
 
-A record with the **Tactical Battle HUD** presentation (`mode: "tactical"`), bound as Tactical Battle in System 2 or Use As (`reactorTacticalInterfaceId`), is drawn over the map while a Tactical battle runs on it. With none bound the game shows the stock layout, sized for the screen. It is separate from the Battle HUD: a Classic battle never reads it, a Battle record never draws on the map, and Action and First Person battles show none of it. Nodes: **Unit Panel** (the unit whose turn it is, or the unit under the cursor with the aimed action's forecast), **Turn Order**, **Battle Text** (objective, turn and phase, phase banner, what to do next and why a greyed command cannot be used), **Tactical Window** (places the stock command, skill or item window). A portrait is the unit's face, else a portrait of its model, else its map sprite, else an enemy's battle picture, else its initials. A Unit Panel's **Gauges** are Clipped corners (the stock look: two corners cut, numbers on the bar's right end, lost HP running down) or Thin bar. The command window is as wide as its longest row and as tall as the panel beside it; Mount, Dismount, Overwatch, Wait and End Turn take their icons from the project's icon sheet through the same `\i[n]` codes the project's own command terms use, and the Tactical Window node has an icon field for each. The unit panels and menus fade while the cinematic camera holds a shot. The HUD works the same on 2D and 3D maps. The drawing is `runtime/reactor_ui_fight.js`, copied byte for byte to `editor/src/utils/FightHud.js` so the canvas shows what the game draws. `reactorFightInterfaceId` and `mode: "fight"` from earlier builds are read as the same thing.
+A record with the **Tactical Battle HUD** presentation (`mode: "tactical"`), bound as Tactical Battle in Use As (`reactorTacticalInterfaceId`), is drawn over the map while a Tactical battle runs on it. With none bound the game shows the stock layout, sized for the screen. It is separate from the Battle HUD: a Classic battle never reads it, a Battle record never draws on the map, and Action and First Person battles show none of it. Nodes: **Unit Panel** (the unit whose turn it is, or the unit under the cursor with the aimed action's forecast), **Turn Order**, **Battle Text** (objective, turn and phase, phase banner, what to do next and why a greyed command cannot be used), **Tactical Window** (places the stock command, skill or item window). A portrait is the unit's face, else a portrait of its model, else its map sprite, else an enemy's battle picture, else its initials. A Unit Panel's **Gauges** are Clipped corners (the stock look: two corners cut, numbers on the bar's right end, lost HP running down) or Thin bar. The command window is as wide as its longest row and as tall as the panel beside it; Mount, Dismount, Overwatch, Wait and End Turn take their icons from the project's icon sheet through the same `\i[n]` codes the project's own command terms use, and the Tactical Window node has an icon field for each. The unit panels and menus fade while the cinematic camera holds a shot. The HUD works the same on 2D and 3D maps. The drawing is `runtime/reactor_ui_fight.js`, copied byte for byte to `editor/src/utils/FightHud.js` so the canvas shows what the game draws. `reactorFightInterfaceId` and `mode: "fight"` from earlier builds are read as the same thing.
 
 ## Action and First Person Battle HUDs
 
-A record with the **Action Battle HUD** or **First Person Battle HUD** presentation (`mode: "action"`, `mode: "firstPerson"`), bound as Action Battle or First Person Battle in System 2 or Use As (`reactorActionInterfaceId`, `reactorFirstPersonInterfaceId`), is drawn over the map while a battle of that mode runs. With none bound the game shows that mode's stock layout. Nodes: **Crosshair** (four styles; the gap is the spread, red over a target, a ring while reloading, ticks on a hit), **Vitals**, **Weapon** (magazine, reload bar, combo pips, the carried weapons after a switch), **Hotbar** (key, cost, cooldown), **Target**, **Enemy Bars**, **Damage Marks** (an arc toward the hit, a low-HP edge), **Action Text**. Neither is read by a Tactical or Classic battle. The drawing is `runtime/reactor_ui_action.js`, copied byte for byte to `editor/src/utils/ActionHud.js`.
+A record with the **Action Battle HUD** or **First Person Battle HUD** presentation (`mode: "action"`, `mode: "firstPerson"`), bound as Action Battle or First Person Battle in Use As (`reactorActionInterfaceId`, `reactorFirstPersonInterfaceId`), is drawn over the map while a battle of that mode runs. With none bound the game shows that mode's stock layout. Nodes: **Crosshair** (four styles; the gap is the spread, red over a target, a ring while reloading, ticks on a hit), **Vitals**, **Weapon** (magazine, reload bar, combo pips, the carried weapons after a switch), **Hotbar** (key, cost, cooldown), **Target**, **Enemy Bars**, **Damage Marks** (an arc toward the hit, a low-HP edge), **Action Text**. Neither is read by a Tactical or Classic battle. The drawing is `runtime/reactor_ui_action.js`, copied byte for byte to `editor/src/utils/ActionHud.js`.
 
 ## Screen sizes
 
@@ -419,7 +421,9 @@ adds compatibility and assigns that System field; unchecking clears the field
 without deleting compatibility. Custom clears only System fields that point to
 the current record and is not serialized in `roles`. Changing the presentation
 clears every assignment the new presentation cannot fill (a scene role on an
-overlay or Battle HUD, Battle on a scene), since the game would ignore it.
+overlay or Battle HUD, Battle on a scene), since the game would ignore it. A
+record laid out as a stock screen that no record replaces says so under the
+toolbar, with a **Use as** button that binds it. Stock layouts carry the screen size they were laid out for (`design`), so a later change of resolution fits them to the new screen.
 
 The collapsible **Game Reference** tray can capture title, menu, item, skill,
 equip, status, options, save, load, shop, game end, and battle with the project's plugins loaded. It
@@ -473,14 +477,16 @@ newer screens through Stock Layout.
 
 Replacement is opt-in and role-gated. The replaceable roles are **Title, Main
 Menu, Status, Game End, Options, Save, Load, Items, Skills, Equipment, Shop, and
-Name Input**; **Battle** binds a Battle HUD without replacing the scene. System 1 selects Title and System 2 the others; they and Use As edit the same System fields, so the last change wins. The System lists offer every record whose presentation fits (a focused scene, or a Battle HUD for Battle), and choosing one there adds the role to its `roles` as Use As does. Shop
+Name Input**; **Battle** binds a Battle HUD without replacing the scene. Use As is the one place a record is bound. Shop
 Processing and Name Input Processing prepare the routed scene a second time
 with their goods or actor, which the interface keeps. A record may advertise one or more matching
 roles, but it must be a valid scene record at the selected ID. Zero, missing or
 malformed records, overlays, ID mismatches, and role mismatches all route to the
-stock scene. Routing wraps the latest `SceneManager.goto`/`push` after project
-plugins load, so plugin-provided routing remains in the call chain and fallback
-does not recurse.
+stock scene. The scene is swapped next to the engine's own `SceneManager.goto`,
+after every plugin wrapped around `goto` and `push` has seen the stock class, so
+a plugin that steps in for a scene (a pre-title splash in place of
+`Scene_Title`) still runs first. A plugin that replaced `goto` outright gets the
+bound scene in place of the stock one it queued.
 
 ## Explicit boundaries
 

@@ -23,13 +23,21 @@ function attributeValues(source, attribute) {
     return Array.from(source.matchAll(new RegExp(`${attribute}="([^"]+)"`, 'g')), m => m[1]);
 }
 
-test('the Database menu lists every database category, in the sidebar order', () => {
+test('the Database menu lists the sidebar\'s sections, each opening its first page', () => {
+    const vm = require('node:vm');
     const ui = fs.readFileSync(path.join(editorRoot, 'src', 'DatabaseEditorUI.js'), 'utf8');
-    const block = ui.match(/const categories = \[\s*\{ name: 'Actors'[\s\S]*?\];/);
-    assert.ok(block, 'DatabaseEditorUI names its categories');
-    const sidebar = Array.from(block[0].matchAll(/type: '([^']+)'/g), m => m[1]);
-    const menu = attributeValues(submenu('database'), 'data-db');
-    assert.deepEqual(menu, sidebar);
+    const Editor = vm.runInNewContext(`${ui}\nDatabaseEditorUI;`, { console });
+    // Copied out of the vm realm, so deepEqual compares values only.
+    const sections = JSON.parse(JSON.stringify(Editor.NAV_SECTIONS));
+    assert.ok(sections.length >= 4 && sections.length <= 6, 'a handful of sections');
+    const menu = submenu('database');
+    assert.deepEqual(attributeValues(menu, 'data-db'), sections.map(section => section.pages[0].type));
+    assert.deepEqual(attributeValues(menu, 'data-i18n-text-source'), sections.map(section => section.name));
+    // Every page is in exactly one section.
+    const pages = sections.flatMap(section => section.pages.map(page => page.type));
+    assert.equal(new Set(pages).size, pages.length);
+    for (const type of ['actors', 'enemies', 'troops', 'states', 'animations', 'tilesets', 'reactor3d', 'vehicles', 'structures', 'commonEvents',
+        'userInterfaces', 'actionSequences', 'quests', 'musicSequences', 'system1', 'system2', 'types', 'terms', 'controls']) assert.ok(pages.includes(type), type);
 });
 
 test('every toolbar tool opens from a menu too', () => {
@@ -43,17 +51,19 @@ test('every toolbar tool opens from a menu too', () => {
         return !(menuActions.has(menuAction) || html.includes(`data-menu="${menuAction}"`));
     });
     assert.deepEqual(missing, []);
-    assert.ok(toolbarActions.includes('build-tool') && toolbarActions.includes('lighting-tool') && toolbarActions.includes('media-surfaces'));
+    assert.ok(toolbarActions.includes('build-tool'));
+    // Lighting and Media Surfaces are Build bar slots and Tools entries, not toolbar buttons too.
+    assert.ok(!toolbarActions.includes('lighting-tool') && !toolbarActions.includes('media-surfaces'));
+    assert.ok(menuActions.has('lighting-tool') && menuActions.has('media-surfaces'));
 });
 
-test('the Forge menu lists every registered Forge tool', () => {
+test('the Forge lists its tools once: in its own sidebar, with one menu entry that opens it', () => {
     const forge = fs.readFileSync(path.join(editorRoot, 'src', 'forge', 'ForgeManager.js'), 'utf8');
     const tools = Array.from(forge.matchAll(/^\s+id: '([a-z-]+)',/gm), m => m[1]);
     assert.ok(tools.length >= 5, 'FORGE_TOOLS is read');
-    const menu = attributeValues(submenu('forge'), 'data-action');
-    assert.deepEqual(tools.filter(id => !menu.includes(`forge-${id}`)), []);
-    const uiManager = fs.readFileSync(path.join(editorRoot, 'src', 'UIManager.js'), 'utf8');
-    for (const id of tools) assert.match(uiManager, new RegExp(`case 'forge-${id}':[\\s\\S]{0,120}openForgeTool\\('${id}'\\)`));
+    assert.deepEqual(attributeValues(submenu('forge'), 'data-action'), ['forge-launcher']);
+    assert.doesNotMatch(forge, /rr-forge-tile|_renderWelcome/, 'no second list of tiles beside the sidebar');
+    assert.match(forge, /if \(!FORGE_TOOLS\.some\(tool => tool\.id === toolId\)\) toolId = FORGE_TOOLS\[0\]\.id;/, 'the Forge opens on a tool');
 });
 
 test('menu entries for the map tools dispatch the way the toolbar does', () => {

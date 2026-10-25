@@ -29,10 +29,10 @@ test('every map property control still exists exactly once after the layout pass
         'map-encounters-list', 'map-note-textarea',
         'map-bgm-track', 'map-bgm-choose-btn', 'map-bgm-levels',
         'map-bgs-track', 'map-bgs-choose-btn', 'map-bgs-levels',
-        'map-3d-checkbox', 'map-3d-options', 'map-3d-height-input',
-        'map-3d-floor-select', 'map-3d-walls-select', 'map-3d-ceiling-select',
-        'map-3d-floor-browse-btn', 'map-3d-walls-browse-btn', 'map-3d-ceiling-browse-btn'
+        'map-3d-checkbox', 'map-3d-options'
     ];
+    // The room and the sky are set on the map (Build › Terrain › Room and Sky), not here.
+    for (const id of ['map-3d-height-input', 'map-3d-floor-select', 'map-3d-sky-select', 'map-3d-sky-sx-input']) assert.equal(modal.includes(`id="${id}"`), false, id);
     for (const id of ids) {
         const matches = modal.split(`id="${id}"`).length - 1;
         assert.equal(matches, 1, `${id} appears exactly once`);
@@ -44,7 +44,7 @@ test('every map property control still exists exactly once after the layout pass
         }
     }
     // Every number field wears the themed stepper rather than the browser spinner.
-    for (const id of ['map-width-input', 'map-height-input', 'map-encounter-steps-input', 'map-3d-height-input',
+    for (const id of ['map-width-input', 'map-height-input', 'map-encounter-steps-input',
         'map-3d-camera-pitch', 'map-3d-camera-yaw', 'map-3d-camera-distance', 'map-3d-camera-fov']) {
         assert.match(modal, new RegExp(`class="rr-number-stepper"><input class="rr-number-stepper-input"[^>]+id="${id}"`), id);
         assert.equal((modal.match(new RegExp(`data-target="${id}"`, 'g')) || []).length, 2, id);

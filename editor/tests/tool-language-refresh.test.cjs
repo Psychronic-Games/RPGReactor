@@ -30,7 +30,7 @@ test('the editor rebuilds the open tool panels on rr-language-changed', () => {
     assert.match(listener[0], /this\.buildHotbar\._modelsBody = null;/);
     assert.match(listener[0], /if \(this\.buildHotbar\?\.visible\) this\.buildHotbar\.render\(\);/);
     assert.match(listener[0], /this\.lightingManager\?\.refreshLanguage\?\.\(\);/);
-    assert.match(read('src/BuildHotbar.js'), /if \(this\._modelsBody && panel\.contains\(this\._modelsBody\) && props\.panel === this\._modelsBody\) return;/, 'the bar mounts the Models panel again once _modelsBody is dropped');
+    assert.match(read('src/BuildHotbar.js'), /if \(this\._modelsBody && panel\.contains\(this\._modelsBody\) && props\.panel === this\._modelsBody\) \{ props\._syncPanel\?\.\(\); return; \}/, 'the bar mounts the Models panel again once _modelsBody is dropped');
 });
 
 test('the loaded map\'s name loses the "No Map Loaded" key', () => {

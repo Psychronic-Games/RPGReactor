@@ -92,7 +92,7 @@ test('requestRender marks the view active, and every input handler still does', 
     assert.match(mapSource, /events: this\.eventGroup \? this\.eventGroup\.children\.length : 0\s*\};\s*this\.requestRender\(\);\s*return true;/);
     assert.match(mapSource, /this\.placeProp\(object, prop, mapData\);\s*group\.add\(object\);\s*this\.requestRender\(\);/);
     assert.match(mapSource, /object\.userData\.modelPreview = true;\s*group\.add\(object\);\s*this\.requestRender\(\);/);
-    assert.match(mapSource, /image\.onload = \(\) => \{ texture\.image = image; texture\.needsUpdate = true; this\.requestRender\(\); \};/);
+    assert.match(mapSource, /image\.onload = \(\) => \{ texture\.image = image; texture\.needsUpdate = true; this\.requestRender\?\.\(\); \};/);
     assert.match(mapSource, /this\.camera\.updateProjectionMatrix\(\);\s*this\.requestRender\(\);/);
     assert.match(mapSource, /select\(mesh\) \{\s*this\.requestRender\(\);/);
     assert.match(mapSource, /refreshPassage\(\) \{\s*this\.requestRender\(\);/);
@@ -108,8 +108,10 @@ test('only what moves by itself keeps the full rate', () => {
         { object: attached, light: true, effect: { light: {} } }
     ];
     assert.equal(view.effectsAnimate(), false, 'an MV overlay, a picture and a steady light are still');
+    assert.equal(view.effectLightsAnimate(), false);
     view.effectPlays.push({ object: attached, light: true, effect: { light: { flicker: 0.4 } } });
-    assert.equal(view.effectsAnimate(), true, 'a flickering carried light moves');
+    assert.equal(view.effectsAnimate(), false, 'a flickering carried light is drawn at the lights\' cadence, not the full rate');
+    assert.equal(view.effectLightsAnimate(), true, 'a flickering carried light moves');
     view.effectPlays = [{ object: attached, plane: { userData: { video: { paused: false, ended: false } } } }];
     assert.equal(view.effectsAnimate(), true, 'a playing video plane moves');
     view.effectPlays = [{ object: { parent: null }, quad: {}, layer: { active: true } }];
@@ -185,7 +187,7 @@ test('the loop draws a still view once, on request, and when the Database window
         requestAnimationFrame(fn) { frames.push(fn); return frames.length; },
         cancelAnimationFrame() {},
         document: { addEventListener() {}, removeEventListener() {}, querySelectorAll: () => [],
-            getElementById: id => id === 'database-viewer' ? { classList: { contains: () => covered } } : null }
+            getElementById: id => id === 'database-viewer' ? { classList: { contains: name => name === 'active' && covered } } : null }
     });
     let clock = 0;
     const view = stillView(MapEditor3D);

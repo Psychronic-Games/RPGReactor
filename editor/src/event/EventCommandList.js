@@ -588,10 +588,16 @@ class EventCommandList {
         });
     }
 
-    /** Whether something lies over the Event Editor: what is under the middle of the window is not part of it. */
+    /**
+     * Whether something lies over the Event Editor: what is under the middle of the window it is in
+     * (the editor window, or its own window) is not part of it.
+     */
     static coveredByDialog(editorModal) {
-        if (!editorModal || typeof document.elementFromPoint !== 'function' || !(window.innerWidth > 0)) return false;
-        const top = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        if (!editorModal) return false;
+        const doc = editorModal.ownerDocument || (typeof document !== 'undefined' ? document : null);
+        const view = (doc && doc.defaultView) || (typeof window !== 'undefined' ? window : null);
+        if (!doc || !view || typeof doc.elementFromPoint !== 'function' || !(view.innerWidth > 0)) return false;
+        const top = doc.elementFromPoint(view.innerWidth / 2, view.innerHeight / 2);
         return !!top && !editorModal.contains(top);
     }
 
@@ -623,6 +629,85 @@ class EventCommandList {
             if (command.code === endCode && (command.indent || 0) === indent) return i;
         }
         return -1;
+    }
+
+    /** Whether rows of `code` are drawn one step further in than their indent: a command's follow-on and branch rows. */
+    static isContinuationRow(code) {
+        return code === 401 || (code >= 402 && code <= 405) || code === 408 || (code >= 411 && code <= 413)
+            || code === 505 || code === 605 || code === 655 || code === 657 || (code >= 601 && code <= 604);
+    }
+
+    /** The indent `command` is drawn at. */
+    static visualIndent(command) {
+        return (command.indent || 0) + (EventCommandList.isContinuationRow(command.code) ? 1 : 0);
+    }
+
+    /**
+     * Where each list draws its rails, in px from a row's padding edge: `base` is where an
+     * indent-0 row's name starts, `step` the width of one indent, `gap` the space below a row.
+     */
+    static get RAIL_GEOMETRY() {
+        return {
+            map: { base: 88, step: 24, gap: 2 },
+            database: { base: 58, step: 20, gap: 1 }
+        };
+    }
+
+    /**
+     * The tree guides beside each row of `list`, one entry per row (null for none):
+     *   through  rails passing this row, as [{ level, color }]
+     *   opens    the rail this header starts below itself
+     *   branch   the rail this row branches off (Else, When, If Win)
+     *   closes   the rail this row ends (the structure's End / Repeat Above)
+     * Rails sit at the header's indent, so a branch row shows which structure it belongs to
+     * and every row between two of them is the body of the branch above it.
+     */
+    static railsFor(list) {
+        if (!Array.isArray(list)) return [];
+        const rows = new Array(list.length).fill(null);
+        const row = i => rows[i] || (rows[i] = { through: [], opens: null, branch: null, closes: null });
+        for (let i = 0; i < list.length; i++) {
+            const shape = EventCommandList.branchShape(list[i]);
+            if (!shape) continue;
+            const range = EventCommandList.structureRange(list, i);
+            if (!range || range.end <= EventCommandList.headerEnd(list, i)) continue;
+            const level = list[i].indent || 0;
+            const rail = { level, color: EventCommandList.railColor(list[i]) };
+            row(i).opens = rail;
+            for (let j = i + 1; j < range.end; j++) {
+                const command = list[j];
+                if ((command.indent || 0) === level && shape.markers.includes(command.code)) row(j).branch = rail;
+                else row(j).through.push(rail);
+            }
+            row(range.end).closes = rail;
+        }
+        return rows;
+    }
+
+    /** A structure's rail color: its header command's. */
+    static railColor(header) {
+        const code = EventCommandList.isMapBattleStart(header) ? 301 : header.code;
+        const color = { 102: 'var(--color-syntax-type)', 301: 'var(--color-syntax-function)' }[code] || 'var(--color-syntax-string)';
+        return `color-mix(in srgb, ${color} 70%, transparent)`;
+    }
+
+    /** Draw one row's rails (an entry of railsFor) into `div`, a positioned row. */
+    static drawRails(div, rail, geometry) {
+        if (!rail) return;
+        const doc = div.ownerDocument || document;
+        const x = level => geometry.base + level * geometry.step + 7;
+        const piece = (css) => {
+            const span = doc.createElement('span');
+            span.className = 'command-rail';
+            span.style.cssText = `position: absolute; pointer-events: none; ${css}`;
+            div.appendChild(span);
+        };
+        const vertical = (r, top, bottom) => piece(`left: ${x(r.level)}px; top: ${top}; bottom: ${bottom}; border-left: 1px solid ${r.color};`);
+        const tick = r => piece(`left: ${x(r.level)}px; top: 50%; width: ${geometry.step - 11}px; border-top: 1px solid ${r.color};`);
+        for (const r of rail.through) vertical(r, '0', `-${geometry.gap}px`);
+        if (rail.opens) vertical(rail.opens, 'calc(50% + 8px)', `-${geometry.gap}px`);
+        if (rail.branch) { vertical(rail.branch, '0', `-${geometry.gap}px`); tick(rail.branch); }
+        if (rail.closes) { vertical(rail.closes, '0', '50%'); tick(rail.closes); }
     }
 
     /** Identifies the page whose folds are being remembered. */
@@ -790,6 +875,7 @@ class EventCommandList {
             this.expandedPluginCommands.clear();
         }
         const hiddenByCollapse = this.collapsedHiddenIndices(page.list);
+        this._rails = EventCommandList.railsFor(page.list);
 
         page.list.forEach((command, index) => {
             if (hiddenByCollapse.has(index)) return;
@@ -833,11 +919,6 @@ class EventCommandList {
             return null;
         }
 
-        // Hide 655 Script continuation rows - folded into parent 355's description
-        if (command.code === 655) {
-            return null;
-        }
-
         // Hide 657 Plugin Args rows unless their plugin command is expanded.
         // They used to render unconditionally AND be duplicated by the parent's
         // ▶/▼, which showed every argument twice; the toggle is now the single
@@ -862,33 +943,16 @@ class EventCommandList {
             padding: 6px 8px;
             margin-bottom: 2px;
             background: ${isSelected ? 'var(--color-bg-selected)' : 'var(--color-bg-list-item)'};
+            ${isSelected ? EventCommandList.SELECTED_INK : ''}
             border-left: 3px solid ${this.getCommandColor(command.code)};
+            position: relative;
             font-size: 12px;
             cursor: pointer;
             user-select: none;
             transition: background-color 0.15s;
         `;
 
-        // Calculate indent
-        let indent = command.indent || 0;
-
-        // Add extra indent for continuation commands (401-404, 408, 411-413, 505, 655, 657, etc.)
-        const isContinuationCommand = command.code === 401 ||
-                                     (command.code >= 402 && command.code <= 404) ||
-                                     command.code === 405 ||
-                                     command.code === 408 ||
-                                     (command.code >= 411 && command.code <= 413) ||
-                                     command.code === 505 ||
-                                     command.code === 605 ||
-                                     command.code === 655 ||
-                                     command.code === 657;
-
-        if (isContinuationCommand) {
-            indent += 1; // Add one level of visual indentation
-        }
-
-        // Calculate pixel padding (24 pixels per indent level for clear visual hierarchy)
-        const indentPadding = indent * 24;
+        const indentPadding = EventCommandList.visualIndent(command) * EventCommandList.RAIL_GEOMETRY.map.step;
 
         // Get command info
         const commandInfo = this.getCommandInfo(command, page, index);
@@ -899,7 +963,7 @@ class EventCommandList {
 
         // Line number
         const lineNum = document.createElement('span');
-        lineNum.style.cssText = 'color: var(--color-text-dim); min-width: 40px;';
+        lineNum.style.cssText = 'color: var(--rr-command-ink, var(--color-text-dim)); min-width: 40px;';
         lineNum.textContent = String(index + 1).padStart(3, '0');
         contentDiv.appendChild(lineNum);
 
@@ -982,16 +1046,19 @@ class EventCommandList {
         }
 
         // Face icon (if present)
+        let faceCanvas = null;
         if (commandInfo.faceIcon) {
-            const faceCanvas = this.createFaceIcon(commandInfo.faceIcon);
+            faceCanvas = this.createFaceIcon(commandInfo.faceIcon);
             if (faceCanvas) {
+                // The face is indented with its command, clear of the rails beside it.
+                faceCanvas.style.marginLeft = `${indentPadding}px`;
                 contentDiv.appendChild(faceCanvas);
             }
         }
 
         // Command name
         const nameSpan = document.createElement('span');
-        nameSpan.style.cssText = `color: ${commandInfo.color}; font-weight: 600; min-width: 100px; padding-left: ${indentPadding}px;`;
+        nameSpan.style.cssText = `color: var(--rr-command-ink, ${commandInfo.color}); font-weight: 600; min-width: 100px; padding-left: ${faceCanvas ? 0 : indentPadding}px;`;
         nameSpan.textContent = commandInfo.name;
         contentDiv.appendChild(nameSpan);
 
@@ -1029,6 +1096,12 @@ class EventCommandList {
         }
 
         div.appendChild(contentDiv);
+        const rail = this._rails?.[index];
+        if (rail) {
+            // A folded block's own rail would run into the rows it hides.
+            const shown = rail.opens && blockEndIndex >= 0 && this.isBlockCollapsed(command) ? { ...rail, opens: null } : rail;
+            EventCommandList.drawRails(div, shown, EventCommandList.RAIL_GEOMETRY.map);
+        }
 
         // Nested argument display, for expanded plugin commands that have no
         // authored 657 rows to show instead — a 356, or 357 data written
@@ -1152,10 +1225,20 @@ class EventCommandList {
         const rows = document.querySelectorAll('.command-list-container .command-item');
         rows.forEach(div => {
             const index = parseInt(div.dataset.index, 10);
-            div.style.backgroundColor = this._isIndexSelected(page, index)
-                ? 'var(--color-bg-selected)'
-                : 'var(--color-bg-list-item)';
+            const selected = this._isIndexSelected(page, index);
+            div.style.backgroundColor = selected ? 'var(--color-bg-selected)' : 'var(--color-bg-list-item)';
+            if (selected) div.style.setProperty('--rr-command-ink', 'var(--color-text-strong)');
+            else div.style.removeProperty('--rr-command-ink');
         });
+    }
+
+    /**
+     * A selected row's line number and command name take the row's strong text color: the dim
+     * number and the syntax colors are too faint on the selection fill. Read by the troop and
+     * common event lists too.
+     */
+    static get SELECTED_INK() {
+        return '--rr-command-ink: var(--color-text-strong);';
     }
 
     /**
@@ -1198,7 +1281,10 @@ class EventCommandList {
             this._awaitingWindowskin = true;
             document.addEventListener('rr-windowskin-loaded', () => {
                 this._awaitingWindowskin = false;
-                if (this.currentPage) {
+                // A list that borrows this one as its formatter (troops, common events) redraws itself.
+                if (typeof this.onWindowskinLoaded === 'function') {
+                    this.onWindowskinLoaded();
+                } else if (this.currentPage) {
                     this.refreshCommandList(this.currentPage, this.currentPageIndex);
                 }
             }, { once: true });
@@ -1233,13 +1319,19 @@ class EventCommandList {
             : require('../utils/HtmlEscape.js');
         let html = escapeHtml(text);
 
+        // Color 0 is the normal text color: the skin's own on a dark list; light themes set
+        // --rr-message-normal-color, since the stock skin's white vanishes on a light row.
+        const normal = `color: var(--rr-message-normal-color, ${colorAt(0)})`;
+
         // Replace \C[n] or \c[n] with color spans
         html = html.replace(/\\[Cc]\[(\d+)\]/g, (match, colorIndex) => {
-            return `</span><span style="color: ${colorAt(parseInt(colorIndex, 10))}">`;
+            const index = parseInt(colorIndex, 10);
+            return index === 0 ? `</span><span style="${normal}">`
+                : `</span><span class="rr-message-code-color" style="color: ${colorAt(index)}">`;
         });
 
         // Wrap in initial color span
-        html = `<span style="color: ${colorAt(0)}">${html}</span>`;
+        html = `<span style="${normal}">${html}</span>`;
 
         // Clean up any empty spans
         html = html.replace(/<span[^>]*><\/span>/g, '');
@@ -2135,23 +2227,10 @@ class EventCommandList {
                     }
                     break;
                 }
-                // Script - collect this line + all following 655 continuations
-                const lines = [params[0] || ''];
-                if (page && index !== undefined && page.list) {
-                    for (let i = index + 1; i < page.list.length; i++) {
-                        if (page.list[i].code !== 655) break;
-                        lines.push((page.list[i].parameters && page.list[i].parameters[0]) || '');
-                    }
-                }
-                const firstNonEmpty = lines.find(l => l && l.trim()) || '';
-                let preview = firstNonEmpty.substring(0, 200);
-                if (firstNonEmpty.length > 200) preview += '...';
-                const extra = lines.length - 1;
-                if (extra > 0) {
-                    description = `${preview}  (+${extra} ${tt(extra === 1 ? 'more line' : 'more lines')})`;
-                } else {
-                    description = preview;
-                }
+                // Script: its first line; each further line is its own 655 row.
+                const scriptLine = params[0] || '';
+                description = scriptLine.substring(0, 200);
+                if (scriptLine.length > 200) description += '...';
                 break;
             }
             case 356:
@@ -2190,6 +2269,12 @@ class EventCommandList {
                         description = VehicleCommandEditor.summary(params[1], params[3]);
                         break;
                     }
+                    // And the quest commands ("Quest: Discover: Herb Hunt").
+                    if (typeof QuestCommandEditor !== 'undefined' && QuestCommandEditor.supports(params[1])) {
+                        info.name = this._commandName(QuestCommandEditor.LABELS[params[1]]);
+                        description = QuestCommandEditor.summary(params[1], params[3], this.questCommandEditor);
+                        break;
+                    }
                     // And the Party Followers commands ("Followers walk in a wedge, 2 tiles apart").
                     if (typeof FollowerCommandEditor !== 'undefined' && FollowerCommandEditor.supports(params[1])) {
                         info.name = this._commandName(FollowerCommandEditor.LABELS[params[1]]);
@@ -2209,7 +2294,9 @@ class EventCommandList {
                     const argEntries = Object.entries(params[3])
                         .filter(([k, v]) => v !== undefined && v !== null && v !== '')
                         .map(([k, v]) => {
-                            const sv = String(v);
+                            // An object or a list of them (a media surface's corners) as its JSON.
+                            let sv = String(v);
+                            if (v && typeof v === 'object') { try { sv = JSON.stringify(v); } catch (_) { /* kept as text */ } }
                             return `${k}=${sv.length > 30 ? sv.substring(0, 27) + '...' : sv}`;
                         });
                     if (argEntries.length > 0) {
@@ -2219,7 +2306,7 @@ class EventCommandList {
                 break;
             }
             case 655: {
-                // Script continuation (rows are hidden; this is defensive)
+                // Script continuation line
                 const scriptLine = params[0] || '';
                 description = scriptLine.substring(0, 200);
                 if (scriptLine.length > 200) {
@@ -2251,7 +2338,7 @@ class EventCommandList {
             case 117: {
                 // Common Event
                 const ceId = params[0] || 1;
-                let ceName = `${tt('Common Event')} ${ceId}`;
+                let ceName = `${tt('Common Event')} ${ceId.toString().padStart(4, '0')}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.commonEvents) {
                     const ce = this.eventEditor.databaseManager.data.commonEvents[ceId];
                     if (ce && ce.name) ceName = ce.name;
@@ -2657,7 +2744,7 @@ class EventCommandList {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const num = `#${id.toString().padStart(4, '0')}`;
         const name = this._lookupSwitchName(id);
-        return name ? `${num} ${name}` : `${num} ${tt('(unnamed)')}`;
+        return `${num} ${name || `${tt('Switch')} ${id.toString().padStart(4, '0')}`}`;
     }
 
     /** Format a variable reference: #0001 VarName */
@@ -2665,7 +2752,7 @@ class EventCommandList {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const num = `#${id.toString().padStart(4, '0')}`;
         const name = this._lookupVariableName(id);
-        return name ? `${num} ${name}` : `${num} ${tt('(unnamed)')}`;
+        return `${num} ${name || `${tt('Variable')} ${id.toString().padStart(4, '0')}`}`;
     }
 
     /** Format a Game Data operand: type+param1+param2 → readable string */
@@ -2861,6 +2948,7 @@ class EventCommandList {
         });
 
         document.body.appendChild(menu);
+        EventCommandList.keepMenuOnScreen(menu, x, y);
 
         // Close menu on click outside
         const closeMenu = (e) => {
@@ -2870,6 +2958,13 @@ class EventCommandList {
             }
         };
         setTimeout(() => document.addEventListener('click', closeMenu), 100);
+    }
+
+    /** At the pointer, kept inside the window: a row near the bottom still reaches Paste and Delete. */
+    static keepMenuOnScreen(menu, x, y) {
+        const w = menu.offsetWidth, h = menu.offsetHeight;
+        menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - w - 4))}px`;
+        menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - h - 4))}px`;
     }
 
     /**
@@ -3063,6 +3158,11 @@ class EventCommandList {
             && command.parameters[0] === 'RPGReactor' && command.parameters[1] === 'StartMapBattle';
     }
 
+    /** Whether `command` owns If Win / If Escape / If Lose rows: Battle Processing or Start Battle on Map. */
+    static isBattleStart(command) {
+        return !!command && (command.code === 301 || EventCommandList.isMapBattleStart(command));
+    }
+
     /** The branch shape a header command owns: the table's entry for its code; Start Battle on Map has Battle Processing's. */
     static branchShape(command) {
         if (!command) return null;
@@ -3091,7 +3191,7 @@ class EventCommandList {
     }
 
     /**
-     * The branch rows under the Start Battle on Map at `index`, by their code:
+     * The branch rows under the battle start (Battle Processing or Start Battle on Map) at `index`, by their code:
      * `Map(code -> { marker, body })`, each body ending in its terminator.
      * Two rows of one code (a hand-made list) are read as one branch.
      */
@@ -3113,13 +3213,13 @@ class EventCommandList {
     }
 
     /**
-     * The branches an edit of the Start Battle on Map at `index` would take
+     * The branches an edit of the battle start at `index` would take
      * with their commands: those `block` no longer has that hold any.
      * `[{ code, count }]` in the order If Win (601), If Escape (602), If Lose
      * (603); `count` is the commands under the row, nested ones included.
      */
     static lostBattleBranches(list, index, block) {
-        if (!EventCommandList.isMapBattleStart(list?.[index])) return [];
+        if (!EventCommandList.isBattleStart(list?.[index])) return [];
         const shape = EventCommandList.BRANCH_STRUCTURES[301];
         const commands = EventCommandList.commandBlock(block);
         const base = commands.length ? (commands[0].indent || 0) : 0;
@@ -3140,7 +3240,7 @@ class EventCommandList {
     }
 
     /**
-     * Asked before an edit of the Start Battle on Map at `index` is stored:
+     * Asked before an edit of the battle start at `index` is stored:
      * when `block` takes a branch that holds commands, the author says
      * whether they go. Resolves true when the edit may be stored.
      */
@@ -3153,11 +3253,11 @@ class EventCommandList {
             : String(text).replace(/\{(\w+)\}/g, (token, key) => (params && key in params ? String(params[key]) : token)));
         const rows = { 601: 'If Win', 602: 'If Escape', 603: 'If Lose' };
         return RRDialog.confirm(EventCommandList.lostBranchWords(lost, code => this._commandName(rows[code]), t),
-            { title: this._commandName('Start Battle on Map'), ok: t('Delete'), danger: true });
+            { title: this._commandName(list[index].code === 301 ? 'Battle Processing' : 'Start Battle on Map'), ok: t('Delete'), danger: true });
     }
 
     /**
-     * Replace the Start Battle on Map at `index`, with its argument rows and
+     * Replace the battle start at `index`, with its argument rows and
      * its branch rows, by `block`: the command, then the branch rows it has
      * now. A branch that stays keeps its body. A branch `block` no longer has
      * goes when it is empty; one that holds commands stays where it is, with
@@ -3167,7 +3267,7 @@ class EventCommandList {
      */
     static replaceBattleStart(list, index, block, options = {}) {
         const commands = EventCommandList.commandBlock(block).slice();
-        if (commands.length === 0 || !EventCommandList.isMapBattleStart(list?.[index])) return null;
+        if (commands.length === 0 || !EventCommandList.isBattleStart(list?.[index])) return null;
         const shape = EventCommandList.BRANCH_STRUCTURES[301];
         const { byCode, endIndex, indent } = EventCommandList.battleBranches(list, index);
         EventCommandList.rebaseInsertIndent(commands, indent);
@@ -3759,6 +3859,18 @@ class EventCommandList {
 
             const code = command.code;
 
+            // Battle Processing brings its branch rows when it can be escaped or lost.
+            if (code === 301) {
+                this.battleProcessingEditor.show(null, (edited) => {
+                    if (!edited) return;
+                    const block = this._rebaseInsertIndent(BattleProcessingEditor.block(edited), baseIndent);
+                    page.list.splice(insertIndex, 0, ...block);
+                    this.selectedIndices = [insertIndex];
+                    this.refreshCommandList(page, pageIndex);
+                });
+                return;
+            }
+
             // A command whose dialog takes one command and hands one back, and a
             // command with nothing to configure, are each fully described by a
             // table above -- SIMPLE_COMMAND_EDITORS and NO_PARAM_EVENT_CODES.
@@ -4084,6 +4196,43 @@ class EventCommandList {
      * - terminated: whether the end marker was actually found. Callers must
      *   not splice past endIndex when this is false.
      */
+    /**
+     * Put an edited Show Choices (`commands`, from its dialog) in place of the
+     * one at `index`. Choice bodies stay in choice order; the cancel body
+     * stays bound to the When Cancel marker, so a changed choice count cannot
+     * move it into a choice. A kept body brings its own terminator, so the
+     * dialog's empty one after that marker is dropped.
+     */
+    static replaceChoiceStructure(list, index, commands) {
+        const header = list[index];
+        const { branches, endIndex } = EventCommandList.collectBranchStructure(list, index, [402, 403], 404, false);
+        const choiceBodies = [];
+        let cancelBody = null;
+        for (const branch of branches) {
+            if (branch.marker.code === 403) cancelBody = branch.body;
+            else choiceBodies.push(branch.body);
+        }
+        list.splice(index, endIndex - index + 1);
+        EventCommandList.rebaseInsertIndent(commands, header.indent || 0);
+        const bodyIndent = (header.indent || 0) + 1;
+        let insertPos = index;
+        let keptTerminator = false;
+        for (const cmd of commands) {
+            if (cmd.code === 0 && keptTerminator) { keptTerminator = false; continue; }
+            keptTerminator = false;
+            list.splice(insertPos++, 0, cmd);
+            let body = null;
+            if (cmd.code === 402) body = choiceBodies.shift();
+            else if (cmd.code === 403) body = cancelBody;
+            if (body && body.length) {
+                for (const nested of body) list.splice(insertPos++, 0, nested);
+                const last = body[body.length - 1];
+                keptTerminator = last.code === 0 && (last.indent || 0) === bodyIndent;
+            }
+        }
+        return list;
+    }
+
     static collectBranchStructure(list, headerIndex, markerCodes, endCode, headerOwnsBody) {
         const baseIndent = list[headerIndex].indent || 0;
         const branches = [];
@@ -4155,6 +4304,17 @@ class EventCommandList {
         // "will be implemented" placeholder alert.
         if (NO_PARAM_EVENT_CODES.has(code)) return;
 
+        // Battle Processing: its branch rows follow Can Escape and Can Lose;
+        // a row that holds commands goes only once the author says so.
+        if (code === 301) {
+            this.battleProcessingEditor.show(command, (edited) => {
+                if (!edited) return;
+                EventCommandList.replaceBattleStart(page.list, index, BattleProcessingEditor.block(edited), { drop: true });
+                this.refreshCommandList(page, pageIndex);
+            }, undefined, { beforeStore: edited => this.confirmLostBranches(page.list, index, BattleProcessingEditor.block(edited)) });
+            return;
+        }
+
         // See SIMPLE_COMMAND_EDITORS: one editor, one command in, one back.
         const simple = EventCommandList.simpleCommandEditor(code);
         if (simple) {
@@ -4194,43 +4354,7 @@ class EventCommandList {
         if (code === 102) {
             this.choicesEditor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
-                    // Collect the old branch bodies. Choice bodies stay in
-                    // choice order; the cancel body stays bound to the 403
-                    // marker so a changed choice count can't migrate it into
-                    // a choice branch.
-                    const { branches, endIndex } = EventCommandList.collectBranchStructure(
-                        page.list, index, [402, 403], 404, false);
-                    const choiceBodies = [];
-                    let cancelBody = null;
-                    for (const branch of branches) {
-                        if (branch.marker.code === 403) {
-                            cancelBody = branch.body;
-                        } else {
-                            choiceBodies.push(branch.body);
-                        }
-                    }
-
-                    // Replace the old structure with the new one, re-attaching
-                    // each body after its marker at the header's indent.
-                    page.list.splice(index, endIndex - index + 1);
-                    this._rebaseInsertIndent(commands, command.indent || 0);
-
-                    let insertPos = index;
-                    for (const cmd of commands) {
-                        page.list.splice(insertPos++, 0, cmd);
-                        let body = null;
-                        if (cmd.code === 402) {
-                            body = choiceBodies.shift();
-                        } else if (cmd.code === 403) {
-                            body = cancelBody;
-                        }
-                        if (body) {
-                            for (const nestedCmd of body) {
-                                page.list.splice(insertPos++, 0, nestedCmd);
-                            }
-                        }
-                    }
-
+                    EventCommandList.replaceChoiceStructure(page.list, index, commands);
                     this.refreshCommandList(page, pageIndex);
                 }
             });

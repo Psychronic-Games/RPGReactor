@@ -36,12 +36,20 @@
 
     /** Whether an editor has the project in `folder` open: its lock file names a running process. */
     function projectOpenAt(fs, path, folder) {
+        const canonical = name => {
+            let resolved = path.resolve(name);
+            try { resolved = fs.realpathSync(resolved); } catch (_) { /* missing folder: compare its requested path */ }
+            return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+        };
+        const target = canonical(folder);
         const open = root.reactor?.projectController?.currentProject?.path;
-        if (open && path.resolve(open) === path.resolve(folder)) return true;
+        if (open && canonical(open) === target) return true;
         let lock;
         try { lock = JSON.parse(fs.readFileSync(path.join(folder, '.rpgreactor.lock'), 'utf8')); } catch (_) { return false; }
         const pid = lock && lock.pid;
-        if (!pid) return false;
+        if (lock?.app !== 'RPG Reactor' || !Number.isInteger(pid) || pid <= 0) return false;
+        // A copied project's lock belongs to the original folder, even while its editor is running.
+        if (typeof lock.project === 'string' && canonical(lock.project) !== target) return false;
         try { process.kill(pid, 0); } catch (error) { if (error?.code !== 'EPERM') return false; }
         // A lock written before this boot belongs to nobody, whoever holds its pid now (ProjectController.projectLockOwnerLives).
         try {
@@ -49,6 +57,21 @@
             if (Number.isFinite(openedAt) && Number.isFinite(bootedAt) && openedAt < bootedAt - 10000) return false;
         } catch (_) { /* no uptime to read: the pid's word stands */ }
         return true;
+    }
+
+    /** A suggested import name creates a new copy; explicit names can still replace a closed project. */
+    function availableProjectName(fs, path, parent, base) {
+        if (!parent || !base) return base;
+        for (let n = 1; n <= 10000; n++) {
+            const name = n === 1 ? base : `${base} ${n}`;
+            const folder = path.resolve(parent, name);
+            let occupied = fs.existsSync(folder);
+            if (!occupied && fs.lstatSync) {
+                try { fs.lstatSync(folder); occupied = true; } catch (_) { /* no entry */ }
+            }
+            if (!occupied && !projectOpenAt(fs, path, folder)) return name;
+        }
+        return base; // Let the normal, explicit conflict handling explain a full destination.
     }
 
     function appRootOf(path) {
@@ -88,6 +111,7 @@
 
         const header = document.createElement('div');
         header.className = 'rr-modal-header';
+        header.style.flex = 'none';
         const titleEl = document.createElement('div');
         titleEl.id = 'rr-legacy-import-title';
         titleEl.className = 'rr-modal-title';
@@ -101,19 +125,38 @@
 
         const body = document.createElement('div');
         body.className = 'rr-modal-body rr-accent-scrollbar';
-        body.style.cssText = 'display:grid;grid-template-columns:max-content 1fr auto;column-gap:10px;row-gap:8px;align-items:center;';
+        body.style.cssText = 'gap:8px;min-height:0;';
+        // The settings on one label | field | button grid; the log below them takes the height that is left.
+        const fields = document.createElement('div');
+        fields.className = 'rr-import-fields';
+        fields.style.cssText = 'flex:none;display:grid;grid-template-columns:max-content 1fr auto;column-gap:10px;row-gap:8px;align-items:center;';
         const label = (text, forId) => { const l = document.createElement('label'); l.setAttribute('for', forId); l.style.cssText = 'color:var(--color-text);font-size:13px;'; l.textContent = text; return l; };
         const input = (id, readOnly) => { const i = document.createElement('input'); i.type = 'text'; i.id = id; i.readOnly = !!readOnly; i.setAttribute('autocomplete', 'off'); i.setAttribute('spellcheck', 'false'); i.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;color:var(--color-text);background:var(--color-bg-input, var(--color-bg-deep));border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);'; return i; };
         const button = (id, text, cls) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; b.className = cls || 'rr-btn-secondary'; b.textContent = text; return b; };
         // A button's text is re-applied by the i18n pass from its English source, so the source moves with it.
         const setLabel = (el, english) => { el.setAttribute('data-i18n-text-source', english); el.textContent = tt(english); };
-        const hint = (text) => { const d = document.createElement('div'); d.style.cssText = 'grid-column:2 / span 2;color:var(--color-text-muted);font-size:12px;margin-top:-4px;'; d.textContent = text; return d; };
+        // A field's line of help; a short window hides the lines and the help stays on the field's tooltip.
+        const hint = (text, control) => { const d = document.createElement('div'); d.className = 'rr-import-hint'; d.style.cssText = 'grid-column:2 / span 2;color:var(--color-text-muted);font-size:12px;margin-top:-4px;'; d.textContent = text; if (control && !control.title) control.title = text; return d; };
 
         const sourceInput = input('rr-legacy-import-source', true);
         const sourceBrowse = button('rr-legacy-import-source-browse', tt('Browse…'));
         const parentInput = input('rr-legacy-import-parent', true);
         const parentBrowse = button('rr-legacy-import-parent-browse', tt('Browse…'));
         const nameInput = input('rr-legacy-import-name', false);
+        const destinationInput = input('rr-legacy-import-destination', true);
+        const updateDestination = () => {
+            const parent = parentInput.value.trim(), name = nameInput.value.trim();
+            destinationInput.value = parent && name ? path.resolve(parent, name) : '';
+            destinationInput.title = destinationInput.value;
+        };
+        let automaticProjectName = '';
+        const updateAutomaticName = () => {
+            if (automaticProjectName && (!nameInput.value.trim() || nameInput.dataset.auto === 'true')) {
+                nameInput.value = availableProjectName(fs, path, parentInput.value.trim(), automaticProjectName);
+                nameInput.dataset.auto = 'true';
+            }
+            updateDestination();
+        };
         const rtpInput = input('rr-legacy-import-rtp', true);
         const rtpBrowse = button('rr-legacy-import-rtp-browse', tt('Browse…'));
         // One Browse: a folder and a file need different system dialogs, so it asks which.
@@ -134,6 +177,17 @@
         const languageSelect = document.createElement('select');
         languageSelect.id = 'rr-legacy-import-language';
         languageSelect.style.cssText = encodingSelect.style.cssText;
+        const graphicsSelect = document.createElement('select');
+        graphicsSelect.id = 'rr-legacy-import-graphics';
+        graphicsSelect.style.cssText = encodingSelect.style.cssText;
+        for (const [value, text] of [['remaster', 'Dither cleanup'], ['original', 'Original artwork']]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = tt(text);
+            graphicsSelect.appendChild(option);
+        }
+        const graphicsFields = document.createElement('div');
+        graphicsFields.style.display = 'none';
         const fillLanguages = (names) => {
             languageSelect.innerHTML = '';
             const original = document.createElement('option'); original.value = ''; original.textContent = tt('Original text'); languageSelect.appendChild(original);
@@ -148,14 +202,18 @@
         detectedEl.setAttribute('aria-live', 'polite');
         detectedEl.style.cssText = 'grid-column:2 / span 2;display:flex;align-items:center;gap:8px;min-height:24px;font-size:13px;color:var(--color-text-muted);';
         detectedEl.textContent = '—';
-        body.append(label(tt('Source folder'), sourceInput.id), sourceInput, sourceBrowse, hint(tt('The game\'s folder: RPG_RT.ldb for 2000/2003, a Data folder or game archive for XP, VX and VX Ace.')));
-        body.append(label(tt('Detected'), detectedEl.id), detectedEl);
-        body.append(label(tt('Create in'), parentInput.id), parentInput, parentBrowse);
-        body.append(label(tt('Project name'), nameInput.id), nameInput, spacer());
-        body.append(label(tt('Text encoding'), encodingSelect.id), encodingSelect, spacer(), hint(tt('Leave on Automatic unless names and messages come out garbled.')));
-        body.append(label(tt('Language'), languageSelect.id), languageSelect, spacer(), hint(tt('A translation the game ships in its Language folder, baked into every text.')));
+        fields.append(label(tt('Source folder'), sourceInput.id), sourceInput, sourceBrowse, hint(tt('The game\'s folder: RPG_RT.ldb for 2000/2003, a Data folder or game archive for XP, VX and VX Ace.'), sourceBrowse));
+        fields.append(label(tt('Detected'), detectedEl.id), detectedEl);
+        fields.append(label(tt('Create in'), parentInput.id), parentInput, parentBrowse);
+        fields.append(label(tt('Project name'), nameInput.id), nameInput, spacer());
+        destinationInput.style.gridColumn = '2 / span 2';
+        fields.append(label(tt('Destination'), destinationInput.id), destinationInput);
+        fields.append(label(tt('Text encoding'), encodingSelect.id), encodingSelect, spacer(), hint(tt('Leave on Automatic unless names and messages come out garbled.'), encodingSelect));
+        graphicsFields.append(label(tt('Artwork'), graphicsSelect.id), graphicsSelect, spacer(), hint(tt('Reduce dithering in backgrounds and large pictures. Original artwork is kept.'), graphicsSelect));
+        fields.appendChild(graphicsFields);
+        fields.append(label(tt('Language'), languageSelect.id), languageSelect, spacer(), hint(tt('A translation the game ships in its Language folder, baked into every text.'), languageSelect));
         rtpInput.placeholder = tt('Drop an RTP folder, installer or archive here');
-        body.append(label(tt('RTP folder'), rtpInput.id), rtpInput, rtpButtons, hint(tt('For 2000/2003 games that use RPG Maker\'s standard files: a folder, an RTP installer (.exe) or an archive (.zip, .rar). One already on this computer is found without it.')));
+        fields.append(label(tt('RTP folder'), rtpInput.id), rtpInput, rtpButtons, hint(tt('For 2000/2003 games that use RPG Maker\'s standard files: a folder, an RTP installer (.exe) or an archive (.zip, .rar). One already on this computer is found without it.'), rtpInput));
         // Shown when the picked game takes files from the RTP and none can be found.
         const rtpMissing = document.createElement('div');
         rtpMissing.id = 'rr-legacy-import-rtp-missing';
@@ -170,15 +228,16 @@
         const rtpAddon = document.createElement('div');
         rtpAddon.id = 'rr-legacy-import-rtp-addon';
         rtpAddon.style.cssText = rtpMissing.style.cssText;
-        body.append(rtpMissing, rtpAddon);
+        fields.append(rtpMissing, rtpAddon);
         fillLanguages([]);
 
         const errorEl = document.createElement('div');
         errorEl.setAttribute('role', 'alert');
-        errorEl.style.cssText = 'grid-column:1 / -1;color:var(--color-danger-bright, #e5484d);font-size:12px;min-height:1.2em;';
-        // The console: a progress bar over the importer's own lines, coloured by level.
+        errorEl.style.cssText = 'flex:none;color:var(--color-danger-bright, #e5484d);font-size:12px;min-height:1.2em;white-space:pre-wrap;overflow-wrap:anywhere;';
+        // The log scrolls with the settings. Progress stays outside that
+        // scroll area, so short windows cannot shrink or hide the bar.
         const consoleEl = document.createElement('div');
-        consoleEl.style.cssText = 'grid-column:1 / -1;display:flex;flex-direction:column;gap:6px;margin-top:4px;';
+        consoleEl.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:6px;margin-top:4px;';
         const consoleHead = document.createElement('div');
         consoleHead.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;';
         const consoleTitle = document.createElement('span');
@@ -187,8 +246,11 @@
         const elapsedEl = document.createElement('span');
         elapsedEl.style.cssText = 'color:var(--color-text-muted);font-size:12px;font-variant-numeric:tabular-nums;';
         consoleHead.append(consoleTitle, elapsedEl);
+        const progressPanel = document.createElement('div');
+        progressPanel.id = 'rr-legacy-import-progress';
+        progressPanel.style.cssText = 'display:none;flex:none;flex-direction:column;gap:6px;padding:10px 20px;border-top:1px solid var(--color-border);';
         const progressRow = document.createElement('div');
-        progressRow.style.cssText = 'display:none;justify-content:space-between;gap:12px;font-size:12px;';
+        progressRow.style.cssText = 'display:none;flex:none;justify-content:space-between;gap:12px;font-size:12px;';
         const statusEl = document.createElement('span');
         statusEl.id = 'rr-legacy-import-status';
         statusEl.style.cssText = 'color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
@@ -199,7 +261,8 @@
         track.setAttribute('role', 'progressbar');
         track.setAttribute('aria-valuemin', '0');
         track.setAttribute('aria-valuemax', '100');
-        track.style.cssText = 'display:none;height:10px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;overflow:hidden;';
+        track.setAttribute('aria-label', tt('Import Project'));
+        track.style.cssText = 'display:none;flex:none;height:10px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;overflow:hidden;';
         const bar = document.createElement('div');
         bar.id = 'rr-legacy-import-bar';
         bar.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg, var(--color-accent-deep), var(--color-accent-hover));transition:width 0.2s ease;';
@@ -207,13 +270,14 @@
         const logEl = document.createElement('div');
         logEl.id = 'rr-legacy-import-log';
         logEl.className = 'audio-scroll';
-        logEl.style.cssText = 'height:220px;overflow-y:auto;padding:8px 10px;font-family:Consolas, Monaco, monospace;font-size:12px;line-height:1.45;color:var(--color-text);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;white-space:pre-wrap;word-wrap:break-word;';
+        logEl.style.cssText = 'flex:0 1 220px;min-height:100px;overflow-y:auto;padding:8px 10px;font-family:Consolas, Monaco, monospace;font-size:12px;line-height:1.45;color:var(--color-text);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;white-space:pre-wrap;word-wrap:break-word;';
         const ready = document.createElement('div');
         ready.style.color = 'var(--color-text-muted)';
         ready.textContent = tt('Ready to import.');
         logEl.appendChild(ready);
-        consoleEl.append(consoleHead, progressRow, track, logEl);
-        body.append(errorEl, consoleEl);
+        consoleEl.append(consoleHead, logEl);
+        progressPanel.append(progressRow, track);
+        body.append(fields, errorEl, consoleEl);
         const LEVEL_COLOURS = {
             stage: 'var(--color-accent-hover)',
             info: 'var(--color-text)',
@@ -224,15 +288,17 @@
 
         const footer = document.createElement('div');
         footer.className = 'rr-modal-footer';
+        footer.style.flex = 'none';
         const cancelButton = button('rr-legacy-import-cancel', tt('Cancel'));
         const openButton = button('rr-legacy-import-open', tt('Open project'), 'rr-button-primary');
         openButton.style.display = 'none';
         const importButton = button('rr-legacy-import-run', tt('Import'), 'rr-button-primary');
         footer.append(cancelButton, openButton, importButton);
-        modal.append(header, body, footer);
+        modal.append(header, body, progressPanel, footer);
         overlay.appendChild(modal);
 
         parentInput.value = (() => { try { return localStorage.getItem('rrLegacyImportParent') || os.homedir(); } catch (_) { return os.homedir(); } })();
+        updateDestination();
 
         return new Promise(resolve => {
             let settled = false, worker = null, destination = null, created = false;
@@ -274,6 +340,7 @@
             let probed = null;
             const showDetected = (info) => {
                 detectedEl.textContent = '';
+                graphicsFields.style.display = info && (info.kind === '2000' || info.kind === '2003') ? 'contents' : 'none';
                 if (!info || !info.kind) { detectedEl.textContent = '—'; return; }
                 const badge = document.createElement('span');
                 const importable = IMPORTABLE.has(info.kind);
@@ -296,17 +363,16 @@
             sourceBrowse.addEventListener('click', () => browse(sourceInput, picked => {
                 probed = probeOf(path, appRoot, picked) || { kind: detect(fs, path, picked), engine: '', title: '', maps: 0, languages: [] };
                 // The name follows the picked game until the author types their own.
-                if (!nameInput.value.trim() || nameInput.dataset.auto === 'true') {
-                    nameInput.value = (probed.title || path.basename(picked)).replace(/[\\/:*?"<>|]/g, '_').trim() + ' (Reactor)';
-                    nameInput.dataset.auto = 'true';
-                }
+                automaticProjectName = (probed.title || path.basename(picked)).replace(/[\\/:*?"<>|]/g, '_').trim() + ' (Reactor)';
+                updateAutomaticName();
                 showDetected(probed);
+                updateDestination();
                 fillLanguages(probed.languages);
                 errorEl.textContent = reason(probed);
                 rtpMode = 'auto';
                 updateRtp();
             }));
-            parentBrowse.addEventListener('click', () => browse(parentInput, picked => { try { localStorage.setItem('rrLegacyImportParent', picked); } catch (_) { /* private mode */ } }));
+            parentBrowse.addEventListener('click', () => browse(parentInput, picked => { updateAutomaticName(); try { localStorage.setItem('rrLegacyImportParent', picked); } catch (_) { /* private mode */ } }));
             // A 2000/2003 game that takes files from the RTP: fill the folder when one is found, say so when none is.
             const rtpNeeded = () => !!(probed && (probed.kind === '2000' || probed.kind === '2003') && probed.needsRtp);
             const importer = () => require(path.join(appRoot, 'src', 'legacy', 'LegacyImporter.js'));
@@ -418,6 +484,7 @@
             const tick = () => { const s = Math.floor((Date.now() - startedAt) / 1000); elapsedEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
             const setProgress = (fraction, status, state) => {
                 const pct = Math.max(0, Math.min(100, fraction * 100));
+                progressPanel.style.display = 'flex';
                 progressRow.style.display = 'flex';
                 track.style.display = 'block';
                 bar.style.width = `${pct}%`;
@@ -434,24 +501,36 @@
                 if (!info || !IMPORTABLE.has(info.kind)) { errorEl.textContent = reason(info); return; }
                 if (!parent || !fs.existsSync(parent)) { errorEl.textContent = tt('Choose a folder to create the project in.'); return; }
                 if (!name || /[\\/:*?"<>|\0-\x1f]/.test(name) || /^\.|[. ]$/.test(name)) { errorEl.textContent = tt('Project name must be a safe single folder name.'); return; }
-                destination = path.join(parent, name);
+                destination = path.resolve(parent, name);
                 created = !fs.existsSync(destination);
+                // A deleted folder can still be the current in-memory project.
+                // It must be closed before a fresh import can reuse its path.
+                if (projectOpenAt(fs, path, destination)) {
+                    errorEl.textContent = `${tt('Close the project before importing into its folder.')}\n${destination}`;
+                    return;
+                }
+                if (!created && !fs.statSync(destination).isDirectory()) {
+                    errorEl.textContent = `${tt('Project target must be an ordinary directory.')}\n${destination}`;
+                    return;
+                }
                 // A folder already there (an earlier or interrupted import) is imported into again, in place, when the author agrees.
                 const force = fs.existsSync(destination) && fs.readdirSync(destination).length > 0;
-                // Never over a project open in an editor, this one included: its lock names a live process.
-                if (force && projectOpenAt(fs, path, destination)) { errorEl.textContent = tt('That folder already exists and is not empty.'); return; }
-                if (force && !(await RRDialog.confirm(`${tt('That folder already exists and is not empty.')} ${tt('Import into it again? Files already there are overwritten.')}`,
+                if (force && !(await RRDialog.confirm(`${tt('That folder already exists and is not empty.')} ${tt('Import into it again? Files already there are overwritten.')}\n\n${destination}`,
                     { title: tt('Import Project'), ok: tt('Overwrite'), danger: true }))) return;
                 if (!rtpFound() && !(await RRDialog.confirm(`${rtpMissingText.textContent} ${tt('Import without the RTP?')}`,
                     { title: tt('Import Project'), ok: tt('Import') }))) return;
                 // Closed, or an import started, while a question was up.
                 if (settled || worker) return;
+                if (projectOpenAt(fs, path, destination)) {
+                    errorEl.textContent = `${tt('Close the project before importing into its folder.')}\n${destination}`;
+                    return;
+                }
                 errorEl.textContent = '';
                 logEl.textContent = '';
                 startedAt = Date.now(); tick(); clock = setInterval(tick, 1000);
                 setProgress(0, tt('Importing…'));
                 const setBusy = busy => {
-                    for (const el of [sourceBrowse, parentBrowse, rtpBrowse, rtpGet, nameInput, encodingSelect, importButton]) el.disabled = busy;
+                    for (const el of [sourceBrowse, parentBrowse, rtpBrowse, rtpGet, nameInput, encodingSelect, graphicsSelect, importButton]) el.disabled = busy;
                     // A source with no translations keeps the language list off.
                     languageSelect.disabled = busy || languageSelect.options.length <= 1;
                 };
@@ -470,7 +549,8 @@
                 let workerPath = path.join(appRoot, 'build-scripts', 'legacy-import-worker.js');
                 try {
                     const { Worker } = require('worker_threads');
-                    const w = worker = new Worker(workerPath, { workerData: { source, destination, options: { force, encoding: encodingSelect.value || undefined, language: languageSelect.value || undefined, rtpPath: rtpInput.value || undefined, noRtp: rtpMode === 'none' || undefined } } });
+                    const graphics = info.kind === '2000' || info.kind === '2003' ? graphicsSelect.value : undefined;
+                    const w = worker = new Worker(workerPath, { workerData: { source, destination, options: { force, encoding: encodingSelect.value || undefined, language: languageSelect.value || undefined, graphics, rtpPath: rtpInput.value || undefined, noRtp: rtpMode === 'none' || undefined } } });
                     worker.on('message', msg => {
                         if (msg.type === 'log') log(msg.message, msg.level);
                         else if (msg.type === 'progress') setProgress(msg.fraction, msg.status);
@@ -503,7 +583,7 @@
                 if (event.key === 'Escape') { event.preventDefault(); close(); }
                 else if (event.key === 'Enter' && event.target === nameInput) { event.preventDefault(); start(); }
             };
-            nameInput.addEventListener('input', () => { errorEl.textContent = ''; nameInput.dataset.auto = 'false'; });
+            nameInput.addEventListener('input', () => { errorEl.textContent = ''; nameInput.dataset.auto = 'false'; updateDestination(); });
             closeButton.addEventListener('click', close);
             cancelButton.addEventListener('click', close);
             importButton.addEventListener('click', start);
@@ -515,7 +595,7 @@
         });
     }
 
-    const api = { show, detect, projectOpenAt, ENCODINGS };
+    const api = { show, detect, projectOpenAt, availableProjectName, ENCODINGS };
     root.RRLegacyImportDialog = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

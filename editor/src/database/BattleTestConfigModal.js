@@ -294,7 +294,7 @@ class BattleTestConfigModal {
         const weaponTypes = system.weaponTypes || [];
         const armorTypes = system.armorTypes || [];
         const actor = this.databaseManager.getActor(battler.actorId);
-        const engineLevelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const engineLevelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const actorLevelLimit = Math.max(1, Math.min(engineLevelLimit, Number(actor?.maxLevel) || engineLevelLimit));
         battler.level = Math.max(1, Math.min(actorLevelLimit, Number(battler.level) || 1));
 
@@ -487,7 +487,7 @@ class BattleTestConfigModal {
         const classData = this.databaseManager.getClass(actor.classId);
         if (!classData || !classData.params) return [0, 0, 0, 0, 0, 0, 0, 0];
 
-        const engineLevelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const engineLevelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const actorLevelLimit = Math.max(1, Math.min(engineLevelLimit, Number(actor.maxLevel) || engineLevelLimit));
         const level = Math.max(1, Math.min(actorLevelLimit, battler.level || 1));
         const stats = [];

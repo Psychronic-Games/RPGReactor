@@ -83,7 +83,7 @@ class ModelPropsPreview2D {
 
     spriteFor(prop, tw) {
         // Position/lift/selection changes retain the animation's clock.
-        const key = JSON.stringify([ModelPropsManager.specOf(prop), prop.direction,
+        const key = JSON.stringify([ModelPropsManager.specOf(prop), prop.direction, prop.vehicle,
             prop.animations, prop.animation, prop.repeat, prop.animationSpeed, prop.effects, prop.effect]);
         let entry = this.entries.get(prop.id);
         if (entry?.key !== key) {
@@ -102,6 +102,10 @@ class ModelPropsPreview2D {
             const template = await RREventPreviewModels.templateFor(this.manager.project(), spec, this.manager.mapEditor3D());
             if (!template || this.entries.get(entry.prop.id) !== entry) return;
             entry.object = RREventPreviewModels.instance(template, spec, entry.prop.direction);
+            const vehicle = entry.prop.vehicle;
+            if (vehicle && Reactor3D.Vehicles?.pose) {
+                Reactor3D.Vehicles.pose({ object: entry.object, spec }, { _rrVehicle: vehicle.type, _rrYaw: vehicle.yaw * Math.PI / 180 }, entry.object, spec, 0);
+            }
             entry.scene = new THREE.Scene();
             entry.scene.add(entry.object);
             entry.scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
@@ -188,9 +192,9 @@ class ModelPropsPreview2D {
     }
 
     ensureViewport() {
+        const pixi = this.app?.renderer;
+        if (!pixi?.gl || pixi.context?.webGLVersion !== 2 || pixi.gl.isContextLost?.()) return null;
         if (this.viewport) return this.viewport;
-        const pixi = this.app.renderer;
-        if (!pixi.gl || pixi.context.webGLVersion !== 2) return null;
         // Only the context-independent target methods are used. Do not create
         // the runtime singleton or replace its Graphics._app with the editor.
         const viewport = Object.create(Reactor3D.Viewport.prototype);
@@ -206,6 +210,8 @@ class ModelPropsPreview2D {
     }
 
     expand(entry) {
+        const gl = this.app?.renderer?.gl;
+        if (!gl || gl.isContextLost?.()) return;
         // Cached rigid/bone boxes, never a per-frame vertex scan.
         const box = this._box || (this._box = new THREE.Box3());
         const piece = this._piece || (this._piece = new THREE.Box3());
@@ -228,7 +234,7 @@ class ModelPropsPreview2D {
         const reach = Math.hypot(...['x', 'y', 'z'].map(axis => Math.max(Math.abs(box.min[axis]), Math.abs(box.max[axis]))));
         if (reach <= entry.radius) return;
         entry.radius = reach * 1.1;
-        entry.size = Math.min(4096, this.app.renderer.gl.getParameter(this.app.renderer.gl.MAX_TEXTURE_SIZE),
+        entry.size = Math.min(4096, gl.getParameter(gl.MAX_TEXTURE_SIZE),
             Math.ceil(entry.radius * 2 * entry.pixelsPerUnit));
         const camera = entry.camera, r = entry.radius;
         camera.left = camera.bottom = -r; camera.right = camera.top = r;
@@ -263,9 +269,14 @@ class ModelPropsPreview2D {
             entry.sprite.texture = entry.texture;
         }
         entry.media?.paint();
+        // A part whose shader or picture is not on the GPU yet sits out the draw (ShaderWarmup), and its upload
+        // is queued by that same draw: the texture is painted again until nothing sat out. Painted once, a still
+        // prop kept the empty picture for good.
+        const warmup = Reactor3D.ShaderWarmup;
+        if (warmup) warmup.lastHidden = 0;
         viewport.renderInto(entry.target, entry.scene, entry.camera);
         entry.sprite.width = entry.sprite.height = entry.radius * 2 * entry.tw;
-        entry.dirty = false;
+        entry.dirty = !!(warmup && warmup.lastHidden > 0);
         entry.paintedFrame = entry.driver?.previewFrame;
         entry.draws = (entry.draws || 0) + 1;
         // New pixels in the sprite's texture, which the 2D scene graph cannot
@@ -302,7 +313,7 @@ class ModelPropsPreview2D {
      * count. Hashed as it goes rather than joined into a string, so an idle
      * frame builds no strings to compare.
      */
-    idleKey(mapLights, ambient, lightingRevision) {
+    idleKey(mapLights, ambient, lightingRevision, lit = true) {
         let hash = 2166136261;
         const mix = value => {
             const number = typeof value === 'number' ? value : typeof value === 'boolean' ? (value ? 1 : 0) : NaN;
@@ -330,8 +341,9 @@ class ModelPropsPreview2D {
                 'priorityRadius', 'colour', 'occlude', 'shadow']) mix(light[key]);
         }
         if (ambient) for (const key of Object.keys(ambient).sort()) { mix(key); mix(ambient[key]); }
-        // Any edit in the Lighting tool, however it arrived.
+        // Any edit in the Lighting tool, however it arrived, and whether the map is lit at all.
         mix(lightingRevision);
+        mix(lit);
         return hash >>> 0;
     }
 
@@ -372,7 +384,7 @@ class ModelPropsPreview2D {
         // out exactly as they did last frame. Skip the posing, projection,
         // light packing and shadow work until one of those inputs moves.
         if (!this.isLive(mapLights)) {
-            const key = this.idleKey(mapLights, rawAmbient, lighting?.revision);
+            const key = this.idleKey(mapLights, rawAmbient, lighting?.revision, lighting?.lit ? lighting.lit() : true);
             if (key === this._idleKey) {
                 this._lastModelTick = now;
                 return;
@@ -416,7 +428,8 @@ class ModelPropsPreview2D {
             }
         }
         const allLights = lights.concat(mapLights);
-        const enabled = rawAmbient?.enabled !== false;
+        // Lit only where the game lights the map; an unlit one is drawn fully lit.
+        const enabled = lighting?.lit ? lighting.lit(lighting.map(), lights.length) : rawAmbient?.enabled !== false;
         const ambient = enabled && rawAmbient ? { intensity: rawAmbient.ambient ?? 1,
             colour: Number.parseInt((rawAmbient.ambientColour || '#ffffff').slice(1), 16) } : { intensity: 1, colour: 0xffffff };
         for (const entry of this.entries.values()) {

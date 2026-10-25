@@ -948,6 +948,10 @@ Reactor3D.GpuEffects = {
         if (entry.disposed && !entry.loading) this.releaseContext(entry);
         this.restoreDefault();
     },
+    /** Whether the game's frame advances `entry` (`update`): a context shared with a map viewport. Its owner must not advance it as well. */
+    advancedByGame(entry) {
+        return !!entry && this._runtime.get(entry.renderer) === entry;
+    },
     update() {
         try {
             for (const entry of this._runtime.values()) {
@@ -1432,6 +1436,10 @@ Reactor3D.EffekseerScene = {
         // The longest seen, since a play the camera looked away from ends
         // early on screen and the picture's length does not change.
         if (play.track && play.lastLit > 0) play.track.visibleFrames = Math.max(play.track.visibleFrames || 0, play.lastLit);
+        // And the update its sprite ended on, for a loop whose picture was
+        // never measured: the effect's own length, whatever was on screen.
+        const ended = play.sprite && play.sprite._frameIndex;
+        if (play.track && ended > 0) play.track.endIndex = Math.max(play.track.endIndex || 0, ended);
         const quad = play.quad;
         if (quad) {
             if (quad.mesh.parent) quad.mesh.parent.remove(quad.mesh);
@@ -2063,9 +2071,15 @@ Reactor3D.updateAnchoredAnimations = function(holder) {
             entry.sprite.visible = false;
             // A loop starts over where its picture ended last time, not
             // when its last invisible particle dies: no dark gap between
-            // plays. The tail keeps running underneath.
+            // plays. The tail keeps running underneath. A new play shows
+            // from its second frame, so it starts a frame early. The
+            // effect's own length is the backstop, measured or not: the
+            // sprite ends an update after the effect's final frame, which
+            // is empty, so the next play starts three updates before that.
             const track = entry.fx3d.track;
-            if (entry.loop && !entry.restarted && track && track.visibleFrames > 0 && entry.fx3d.frames >= track.visibleFrames) {
+            if (entry.loop && !entry.restarted && track
+                && ((track.visibleFrames > 0 && entry.fx3d.frames >= track.visibleFrames - 1)
+                    || (track.endIndex > 3 && entry.sprite._frameIndex >= track.endIndex - 3))) {
                 entry.restarted = true;
                 restart.push(entry);
             }

@@ -75,7 +75,7 @@ test('the runtime builds the room from the sidecar with inward-facing walls', ()
     assert.equal(Elevation.ROOM_MAX_HEIGHT, 512);
 });
 
-test('the editor loads the room images and edits the switch in Map Properties', () => {
+test('the editor loads the room images; Map Properties edits the switch, the Build bar the room', () => {
     const editor3d = read('editor/src/MapEditor3D.js');
     assert.match(editor3d, /Reactor3D\.roomImageNames\(mapData\)/);
 
@@ -83,8 +83,7 @@ test('the editor loads the room images and edits the switch in Map Properties', 
     assert.match(controller, /populateMap3DForm\(mapData\)/);
     assert.match(controller, /this\.noteWithout3D\(noteText\)/);
     assert.match(controller, /\/<3d>\/i\.test\(noteText\)/);
-    assert.match(controller, /this\.saveMap3DSettings\(mapData, room, wants3D\)/g);
-    assert.equal((controller.match(/this\.saveMap3DSettings\(mapData, room, wants3D\)/g) || []).length, 2);
+    assert.equal((controller.match(/this\.saveMap3DSettings\(mapData, room, wants3D, (false|was3D)\)/g) || []).length, 2);
     assert.match(controller, /this\.tilemapManager\?\.loadMapSidecar\?\.\(map\)/);
     // The room never reaches Map###.json.
     const properties = controller.slice(0, controller.indexOf('    async copyMap('));
@@ -93,10 +92,14 @@ test('the editor loads the room images and edits the switch in Map Properties', 
     assert.match(controller, /delete newMapData\.reactor3d/);
 
     const html = read('editor/index.html');
-    for (const key of ['mapProps.threeD', 'mapProps.map3D', 'mapProps.roomHeight', 'mapProps.parallaxFloor',
-        'mapProps.parallaxWalls', 'mapProps.parallaxCeiling', 'mapProps.roomHint', 'mapProps.choose']) {
+    for (const key of ['mapProps.threeD', 'mapProps.map3D', 'mapProps.choose']) {
         assert.equal(html.includes(`data-i18n="${key}"`), true, key);
     }
+    // The room's height and pictures are set on the map, live: Build bar › Terrain › Room and Sky.
+    for (const key of ['mapProps.roomHeight', 'mapProps.parallaxFloor', 'mapProps.parallaxWalls', 'mapProps.parallaxCeiling', 'mapProps.roomHint']) {
+        assert.equal(html.includes(`data-i18n="${key}"`), false, key);
+    }
+    assert.match(read('editor/src/BuildHotbar.js'), /tile\('floor', 'Floor'\) \+ tile\('walls', 'Walls'\) \+ tile\('ceiling', 'Ceiling'\)/);
 });
 
 test('the map audio choice goes through the audio picker', () => {

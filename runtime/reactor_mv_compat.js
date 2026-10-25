@@ -474,7 +474,7 @@
         Decrypter._headerlength = 16;
         Decrypter._xhrOk = 400;
         Decrypter._encryptionKey = "";
-        Decrypter._ignoreList = [];
+        Decrypter._ignoreList = ["img/system/Window.png"];
         Decrypter.checkImgIgnore = function(url) {
             return this._ignoreList && this._ignoreList.indexOf(url) >= 0;
         };
@@ -1227,6 +1227,27 @@
         Scene_Menu.prototype.createStatusWindow = function() {
             this._statusWindow = new Window_MenuStatus(this._commandWindow.width, 0);
             this.addWindow(this._statusWindow);
+        };
+    }
+
+    // TIER 2 ONLY: MV's title command window placed itself from its own
+    // constructor through updatePlacement(); MZ's takes a rectangle and has
+    // no such method. Title plugins hook that method (MOG_TitlePictureCom
+    // hides the window there; TitleCommandPosition offsets it), so the MV
+    // base is installed for them to chain to, and the constructor calls it
+    // whenever a plugin has replaced or wrapped it. Left alone, the
+    // rectangle's placement stands.
+    function installTitleCommandPlacementCompatibility() {
+        if (!global.Window_TitleCommand) return;
+        const mvPlacement = function() {
+            this.x = (Graphics.boxWidth - this.width) / 2;
+            this.y = Graphics.boxHeight - this.height - 96;
+        };
+        Window_TitleCommand.prototype.updatePlacement = mvPlacement;
+        const initialize = Window_TitleCommand.prototype.initialize;
+        Window_TitleCommand.prototype.initialize = function() {
+            initialize.apply(this, arguments);
+            if (this.updatePlacement !== mvPlacement) this.updatePlacement();
         };
     }
 
@@ -5811,6 +5832,7 @@
         installBattleSpritesetFirstUpdateCompatibility();
         installStatusBaseFallthroughCompatibility();
         installMenuSceneCompatibility();
+        installTitleCommandPlacementCompatibility();
         installWindowMetricsCompatibility();
         installSceneLayoutCompatibility();
         installMapDataReloadCompatibility();

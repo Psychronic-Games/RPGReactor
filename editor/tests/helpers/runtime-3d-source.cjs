@@ -15,7 +15,9 @@ function runtime3DFiles() {
     const block = core.match(/Reactor3D\.EXTENSIONS = \[([\s\S]*?)\];/);
     const listed = block ? Array.from(block[1].matchAll(/file: "([^"]+)"/g), m => m[1]) : [];
     const onDisk = fs.readdirSync(runtimeRoot).filter(name => /^reactor_3d_.*\.js$/.test(name));
-    const unlisted = onDisk.filter(name => !listed.includes(name)).sort();
+    // The shared motion data library loads on demand and exports its own API.
+    // It is not a Reactor3D extension and must not overwrite the core export.
+    const unlisted = onDisk.filter(name => name !== 'reactor_3d_motions.js' && !listed.includes(name)).sort();
     return ['reactor_3d.js', ...listed, ...unlisted];
 }
 

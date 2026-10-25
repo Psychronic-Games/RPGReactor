@@ -97,6 +97,10 @@
     // Frames nothing can hurt who has just taken the lead from a fallen leader, and the line that says so stays.
     A.LEAD_SAFE = 60;
     A.NOTICE_FRAMES = 150;
+    // A battle that can be escaped is escaped by running: once an enemy has been near, the leader further than this
+    // from every enemy, in tiles, for this many frames.
+    A.ESCAPE_DISTANCE = 15;
+    A.ESCAPE_FRAMES = 90;
 
     //-------------------------------------------------------------------------
     // Note tags and what a weapon is.
@@ -228,6 +232,21 @@
         return this._active && (this._mode === "action" || this._mode === "firstPerson");
     };
 
+    // A battle with no turns that can be escaped (Can Escape) is left whenever the player asks, unless it is
+    // already ending: it ends as an escape, as a Tactical battle's Retreat ends it.
+    const canRetreat = Game_Fight.prototype.canRetreat;
+    Game_Fight.prototype.canRetreat = function() {
+        if (this.isAction()) return !!this._options.canEscape && !this._ending && this.isHere();
+        return typeof canRetreat === "function" ? canRetreat.call(this) : false;
+    };
+    const commandRetreat = Game_Fight.prototype.commandRetreat;
+    Game_Fight.prototype.commandRetreat = function() {
+        if (!this.isAction()) return typeof commandRetreat === "function" ? commandRetreat.call(this) : false;
+        if (!this.canRetreat()) return false;
+        this.end(F.ESCAPE);
+        return true;
+    };
+
     Game_Fight.prototype.act = function() {
         if (!this._action) {
             this._action = {
@@ -289,6 +308,8 @@
             }
             A.enter(this);
         }
+        // Heights worked out off the main thread are asked for as the battle starts, not at its first line of sight.
+        if (serial && A.HullWorker.enabled) A.measureAll(this);
         return serial;
     };
 
@@ -387,7 +408,7 @@
     // stands and what it is in the middle of (a step, a jump, a climb, a fall).
     A.SEAT = ["_x", "_y", "_realX", "_realY", "_direction", "_reactorDir8", "_opacity", "_jumpCount", "_jumpPeak",
         "_reactorGround", "_reactorAlt", "_reactorAir", "_reactorVz", "_reactorPeak", "_reactorLift", "_reactorZTarget",
-        "_reactorMantle", "_reactorOnLadder", "_reactorClimb", "_reactorSwim", "_reactorDive", "_reactorLeap",
+        "_reactorMantle", "_reactorGrapple", "_reactorOnLadder", "_reactorClimb", "_reactorSwim", "_reactorDive", "_reactorLeap",
         "_reactorStepUp", "_reactorStepDown", "_reactorJumped", "_reactorFall", "_reactorPosePitch", "_reactorFallYaw"];
 
     /**
@@ -456,6 +477,7 @@
     A.handOver = function(fight, st, index) {
         // The party's own order is kept (in the battle's saved state) and given back when the battle ends.
         if (!st.order) st.order = $gameParty._actors.slice();
+        st.led = true;
         A.reseat(() => $gameParty.swapOrder(0, index));
         const p = st.player, leader = $gameParty.leader();
         p.swing = null; p.buffered = false; p.combo = 0; p.comboTimer = 0; p.aim = false; p.guard = false; p.reload = 0; p.dodge = 0; p.lock = 0;
@@ -552,6 +574,8 @@
         const guarded = st && st.player.guard && target === this.playerUnit();
         const subject = this.unit(run.subjectId);
         const taken = target.party && subject && subject.team !== target.team ? A.PARTY_DAMAGE : 1;
+        // A party member struck by the other side fights back, whether or not the leader has opened the fight.
+        if (st && taken !== 1 && st.ai[target.id]) st.ai[target.id].provoked = true;
         // A guard raised just as the blow lands turns it aside whole.
         A._perfect = !!guarded && st.clock - st.player.guardAt <= A.PERFECT_GUARD && !!subject && subject.team !== target.team;
         A._strike.damageRate = A._perfect ? 0.0001 : (run.rate > 0 ? run.rate : 1) * (guarded ? A.GUARD_RATE : 1) * taken;
@@ -705,8 +729,9 @@
         const now = typeof Graphics !== "undefined" && Graphics.frameCount || 0;
         let size = sizes.get(character);
         if (!size) sizes.set(character, size = { at: -1e9, tall: 1.6, wide: A.SLIM, round: true, halfX: A.SLIM, halfZ: A.SLIM, pad: 0, mask: null, hull: null, spec: null, dir: 0, cos: 1, sin: 0 });
-        if (now - size.at >= 180 || now < size.at) {
+        if (now - size.at >= 180 || now < size.at || size.epoch !== A.hullEpoch) {
             size.at = now;
+            size.epoch = A.hullEpoch;
             const R = world3(), deep = !!R && A.is3D();
             size.tall = deep && R.characterHeightTiles ? R.characterHeightTiles(character) || 1.6 : 1.6;
             size.round = true; size.mask = null; size.hull = null; size.spec = null; size.dir = 0; size.pad = 0;
@@ -740,6 +765,8 @@
             const foot = R.eventModelFootprint(character, spec);
             if (!foot || foot.rawX == null) return false;
             if (!always && size.tall > 1.6 * Math.max(foot.rawX, foot.rawZ)) return false;
+            // (Scenery with no mask keeps its heights too: one that overhangs open air stands as them, `A.props`.)
+            const hull = A.hullOf(R, spec);
             size.round = false; size.spec = spec; size.mask = foot.mask || null; size.dir = 0;
             // A mask's bounds reach a walker's half width past the model itself.
             size.pad = foot.mask ? R.COLLISION_BODY_RADIUS || 0 : 0;
@@ -747,7 +774,8 @@
             // A unit is struck where its mesh is, at the heights it is. Scenery in the way stays what stands in a
             // walker's way (a tree its trunk, not its crown), as tall as the mesh is over each of those cells; one
             // that blocks as a box (a model that reads badly as a floor plan) stays its box.
-            size.hull = !always || foot.mask ? A.hullOf(R, spec) : null;
+            // Heights still being worked out (A.HullWorker): its footprint for now, measured again once they are in.
+            size.hull = hull === A.HULL_PENDING ? null : hull;
             return true;
         } catch (error) {
             return false;
@@ -758,18 +786,261 @@
     // counts in) the lowest and the highest its mesh stands there, from all of its triangles. So what overhangs
     // (a gun's barrel) is part of the body, and the open air over a low hull beside a tall turret is not. Worked
     // out once for a model and pose and kept; null for a model whose mesh cannot be read.
-    const hulls = new Map();
+    // Where workers run they are worked out there (A.HullWorker): until they come back the model is asked for
+    // again (A.HULL_PENDING), and whoever measured it measures it again once they are in (A.hullEpoch).
+    const hulls = new Map(), pendingHulls = new Set();
+    const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+    A.HULL_PENDING = Object.freeze({ pending: true });
+    A.hullEpoch = 0;
+    const hullHere = (R, template, json, spec) => {
+        try { return A.buildHull(R, template, json, spec); } catch (error) { return null; }
+    };
+    const settleHull = (kept, hull) => {
+        if (!kept.job) return;
+        kept.job = null;
+        kept.hull = hull;
+        pendingHulls.delete(kept);
+        A.hullEpoch++;
+        // The scenery in a line's way is listed again at its next line.
+        if (A._props) A._props.stamp = -1e9;
+    };
     A.hullOf = function(R, spec) {
         if (!spec || typeof THREE === "undefined" || !R.collisionKeysFor) return null;
         const keys = R.collisionKeysFor(spec), entry = R._glbCache ? R._glbCache[keys.model] : null, template = entry && entry.template;
         if (!template) return null;
         let kept = hulls.get(keys.pose);
         if (!kept || kept.template !== template) {
-            let hull = null;
-            try { hull = A.buildHull(R, template, R._sidecarJson ? R._sidecarJson[spec.name] : null, spec); } catch (error) { hull = null; }
-            hulls.set(keys.pose, kept = { template, hull });
+            if (kept) settleHull(kept, null);
+            const json = R._sidecarJson ? R._sidecarJson[spec.name] : null;
+            hulls.set(keys.pose, kept = { template, hull: null, job: null });
+            const job = A.HullWorker.request(R, template, json, spec);
+            if (job) {
+                kept.job = { since: clock(), R, json, spec };
+                pendingHulls.add(kept);
+                job.then(hull => settleHull(kept, hull), () => settleHull(kept, hullHere(R, template, json, spec)));
+            } else kept.hull = hullHere(R, template, json, spec);
         }
-        return kept.hull;
+        if (kept.job && clock() - kept.job.since > A.HullWorker.WAIT_MS) settleHull(kept, hullHere(kept.job.R, template, kept.job.json, kept.job.spec));
+        return kept.job ? A.HULL_PENDING : kept.hull;
+    };
+
+    /** How many models' heights are still out on the worker; one out past HullWorker.WAIT_MS is worked out here now. */
+    A.hullsPending = function() {
+        for (const kept of Array.from(pendingHulls)) {
+            const job = kept.job;
+            if (job && clock() - job.since > A.HullWorker.WAIT_MS) settleHull(kept, hullHere(job.R, kept.template, job.json, job.spec));
+        }
+        return pendingHulls.size;
+    };
+
+    /** Every body in a battle on a 3D map is measured as it starts, so the heights any of them needs are asked for at once. */
+    A.measureAll = function(fight) {
+        if (!fight || !A.is3D()) return;
+        A.props(fight);
+        for (const unit of fight._units) {
+            const character = unit.gone ? null : fight.character(unit);
+            if (character) sizeOf(fight, character);
+        }
+    };
+
+    /**
+     * A model's heights (A.buildHull) worked out on a background thread: the model's meshes go there as they
+     * stand (their positions, indices and skins, each node's place, the box a skin was measured to) and the same
+     * code reads them there with three.js of its own. A model with a part read some other way (morph targets, an
+     * instanced or batched mesh, a line) is worked out on the main thread, as is everything where workers do not run.
+     */
+    A.HullWorker = {
+        /** Off: a model's heights are worked out where they are first asked for, on the main thread. */
+        enabled: true,
+        /** The longest a model's heights are waited for before they are worked out on the main thread after all. */
+        WAIT_MS: 4000,
+        _worker: undefined,
+        _url: null,
+        _failed: false,
+        _jobs: new Map(),
+        _serial: 0,
+        source(R, threeUrl) {
+            return [
+                "'use strict';",
+                "importScripts(" + JSON.stringify(threeUrl) + ");",
+                "const DEG = Math.PI / 180;",
+                "const clamp = (value, low, high) => Math.max(low, Math.min(high, value));",
+                "const scaleAxes = " + R.scaleAxes.toString() + ";",
+                "const buildHull = " + this.kernel.toString() + ";",
+                "const rebuild = " + A.HullWorker.rebuild.toString() + ";",
+                "self.onmessage = function(event) {",
+                "    const job = event.data;",
+                "    try {",
+                "        const made = rebuild(THREE, job.nodes, job.glbSize);",
+                "        const R = { readModelTransform: () => job.base, scaleAxes, COLLISION_SUBDIV: job.sub, COLLISION_MASK_LIMIT: job.limit, DENSE_TRIANGLES: job.denseTriangles, DENSE_SAMPLES: job.denseSamples };",
+                "        const hull = buildHull(R, made.root, null, job.spec);",
+                "        const side = box => (box && !box.isEmpty() ? box.min.toArray().concat(box.max.toArray()) : null);",
+                "        const boxes = made.meshes.map(mesh => [side(mesh.geometry.boundingBox), mesh.isSkinnedMesh ? side(mesh.boundingBox) : null]);",
+                "        self.postMessage({ id: job.id, hull, boxes }, hull ? [hull.low.buffer, hull.high.buffer, hull.gapLow.buffer, hull.gapHigh.buffer] : []);",
+                "    } catch (error) { self.postMessage({ id: job.id, error: String(error && error.message || error) }); }",
+                "};"
+            ].join("\n");
+        },
+        /** The model as the worker stands it: one group of its meshes, each in its place in the model, skins bound as they were. */
+        rebuild: function(THREE, nodes, glbSize) {
+            const unpack = a => (a.stride ? new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(a.array, a.stride), a.itemSize, a.offset, a.normalized)
+                : new THREE.BufferAttribute(a.array, a.itemSize, a.normalized));
+            const box = b => new THREE.Box3(new THREE.Vector3(b[0], b[1], b[2]), new THREE.Vector3(b[3], b[4], b[5]));
+            const root = new THREE.Group(), meshes = [];
+            root.userData.glbSize = glbSize;
+            for (const n of nodes) {
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute("position", unpack(n.position));
+                // A mesh read from its vertices alone needs only how many its index holds.
+                if (n.index) geometry.setIndex(unpack(n.index)); else if (n.indexCount) geometry.index = { count: n.indexCount };
+                if (n.geometryBox) geometry.boundingBox = box(n.geometryBox);
+                let mesh;
+                if (n.skinned) {
+                    mesh = new THREE.SkinnedMesh(geometry);
+                    if (n.meshBox) mesh.boundingBox = box(n.meshBox);
+                    else {
+                        geometry.setAttribute("skinIndex", unpack(n.skin.index));
+                        geometry.setAttribute("skinWeight", unpack(n.skin.weight));
+                        const bones = n.skin.bones.map(e => { const bone = new THREE.Bone(); bone.matrixWorld.fromArray(e); return bone; });
+                        mesh.skeleton = new THREE.Skeleton(bones, n.skin.inverses.map(e => new THREE.Matrix4().fromArray(e)));
+                        mesh.bindMatrix.fromArray(n.skin.bind);
+                        mesh.bindMatrixInverse.fromArray(n.skin.bindInverse);
+                    }
+                } else mesh = new THREE.Mesh(geometry);
+                mesh.matrixAutoUpdate = false;
+                mesh.matrix.fromArray(n.matrix);
+                root.add(mesh);
+                meshes.push(mesh);
+            }
+            return { root, meshes };
+        },
+        /** What goes to the worker for a model, or null when a part of it is read in a way the worker does not repeat. */
+        snapshot(R, template, json, spec) {
+            const T = THREE;
+            if (!template || typeof template.traverse !== "function" || !T.Box3) return null;
+            template.updateMatrixWorld(true);
+            const nodes = [], made = [], transfer = [], dense = R.DENSE_TRIANGLES || 50000;
+            let plain = true;
+            const copy = attribute => {
+                if (attribute.isInterleavedBufferAttribute) {
+                    const array = attribute.data.array.slice();
+                    transfer.push(array.buffer);
+                    return { array, stride: attribute.data.stride, offset: attribute.offset, itemSize: attribute.itemSize, normalized: attribute.normalized };
+                }
+                if (!attribute.isBufferAttribute || !attribute.array || typeof attribute.array.slice !== "function") { plain = false; return null; }
+                const array = attribute.array.slice();
+                transfer.push(array.buffer);
+                return { array, stride: 0, offset: 0, itemSize: attribute.itemSize, normalized: attribute.normalized };
+            };
+            const side = box => (box ? [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z] : null);
+            template.traverse(node => {
+                if (!plain || node.geometry === undefined) return;
+                if (!node.isMesh || node.isInstancedMesh || node.isBatchedMesh) { plain = false; return; }
+                const geometry = node.geometry, position = geometry && geometry.getAttribute ? geometry.getAttribute("position") : null;
+                if (!position) return;
+                if (geometry.morphAttributes && Object.keys(geometry.morphAttributes).length) { plain = false; return; }
+                const index = geometry.getIndex(), count = index ? index.count : position.count;
+                const n = { position: copy(position), index: null, indexCount: 0, geometryBox: side(geometry.boundingBox), matrix: node.matrixWorld.toArray(), skinned: !!node.isSkinnedMesh, meshBox: null, skin: null };
+                if (index) { if (count / 3 > dense) n.indexCount = index.count; else n.index = copy(index); }
+                if (node.isSkinnedMesh) {
+                    n.meshBox = side(node.boundingBox);
+                    if (!n.meshBox) {
+                        const skinIndex = geometry.getAttribute("skinIndex"), skinWeight = geometry.getAttribute("skinWeight"), skeleton = node.skeleton;
+                        if (!skinIndex || !skinWeight || !skeleton || skeleton.bones.some(bone => !bone)) { plain = false; return; }
+                        n.skin = { index: copy(skinIndex), weight: copy(skinWeight), bones: skeleton.bones.map(bone => bone.matrixWorld.toArray()),
+                            inverses: skeleton.boneInverses.map(m => m.toArray()), bind: node.bindMatrix.toArray(), bindInverse: node.bindMatrixInverse.toArray() };
+                    }
+                }
+                nodes.push(n);
+                made.push(node);
+            });
+            if (!plain || !nodes.length) return null;
+            const base = R.readModelTransform(json);
+            return {
+                made, transfer,
+                payload: { nodes, glbSize: Object.assign({}, template.userData && template.userData.glbSize), base: { offset: base.offset, rotate: base.rotate, scale: base.scale },
+                    spec: { size: spec.size, scale: spec.scale, stretch: spec.stretch, pitch: spec.pitch, roll: spec.roll },
+                    sub: R.COLLISION_SUBDIV, limit: R.COLLISION_MASK_LIMIT, denseTriangles: R.DENSE_TRIANGLES, denseSamples: R.DENSE_SAMPLES }
+            };
+        },
+        worker() {
+            if (this._worker !== undefined) return this._worker;
+            this._worker = null;
+            const R = world3();
+            if (!this.enabled || this._failed || !R || !R.scaleAxes || typeof Worker === "undefined" || typeof Blob === "undefined"
+                || typeof URL === "undefined" || typeof URL.createObjectURL !== "function" || typeof document === "undefined") return null;
+            try {
+                const threeUrl = new URL(R.LIB_URL || "js/libs/three.js", document.baseURI).href;
+                const url = URL.createObjectURL(new Blob([this.source(R, threeUrl)], { type: "text/javascript" }));
+                const worker = new Worker(url, { name: "Reactor model heights" });
+                worker.onmessage = event => this.receive(event.data);
+                worker.onerror = event => { if (event && event.preventDefault) event.preventDefault(); this.fail(); };
+                this._worker = worker;
+                this._url = url;
+            } catch (error) { this._worker = null; }
+            return this._worker;
+        },
+        /**
+         * A promise of a model's heights, or null when they are to be worked out on the main thread. The
+         * model's meshes are copied out for the worker in the idle time between frames (`idleCopy`), one
+         * model at a time: copied as a battle started, every model's at once was a frame of 15 ms on a slow
+         * machine. Whatever cannot go to the worker then is worked out on the main thread (the promise fails).
+         */
+        idleCopy: true,
+        request(R, template, json, spec) {
+            if (!this.enabled || this._failed || !this.kernel || A.buildHull !== this.kernel) return null;
+            const send = () => {
+                // Turned off, or failed, while this model waited for its idle time: nothing is copied.
+                if (!this.enabled || this._failed) return null;
+                let snap = null;
+                try { snap = this.snapshot(R, template, json, spec); } catch (error) { snap = null; }
+                const worker = snap ? this.worker() : null;
+                if (!worker) return null;
+                const id = ++this._serial;
+                return new Promise((resolve, reject) => {
+                    this._jobs.set(id, { resolve, reject, made: snap.made });
+                    worker.postMessage(Object.assign({ id }, snap.payload), snap.transfer);
+                    if (R.IdleWorkers) R.IdleWorkers.touch("hull", () => this._jobs.size > 0, () => this.end());
+                });
+            };
+            if (!this.idleCopy || typeof requestIdleCallback !== "function" || this.worker() === null) return send();
+            return new Promise((resolve, reject) => {
+                this._copies = (this._copies || Promise.resolve()).then(() => new Promise(next => requestIdleCallback(() => {
+                    let job = null;
+                    try { job = send(); } catch (error) { job = null; }
+                    if (job) job.then(resolve, reject); else reject(new Error("not sent to the worker"));
+                    next();
+                }, { timeout: 250 })));
+            });
+        },
+        receive(data) {
+            const job = this._jobs.get(data && data.id);
+            if (!job) return;
+            this._jobs.delete(data.id);
+            if (data.error) { job.reject(new Error(data.error)); return; }
+            // The boxes measured there are kept on the model, as measuring them here would have kept them.
+            const T = THREE, box = b => new T.Box3(new T.Vector3(b[0], b[1], b[2]), new T.Vector3(b[3], b[4], b[5]));
+            (data.boxes || []).forEach((pair, i) => {
+                const node = job.made[i];
+                if (!node) return;
+                if (pair[0] && node.geometry && node.geometry.boundingBox === null) node.geometry.boundingBox = box(pair[0]);
+                if (pair[1] && node.isSkinnedMesh && node.boundingBox === null) node.boundingBox = box(pair[1]);
+            });
+            job.resolve(data.hull || null);
+        },
+        /** The worker failed: whatever was out is worked out on the main thread, and so is everything after. */
+        fail() {
+            this._failed = true;
+            this.end();
+        },
+        end() {
+            const worker = this._worker, jobs = Array.from(this._jobs.values());
+            this._worker = undefined;
+            this._jobs.clear();
+            if (worker) worker.terminate();
+            if (this._url) { try { URL.revokeObjectURL(this._url); } catch (error) { /* already gone */ } this._url = null; }
+            for (const job of jobs) job.reject(new Error("the model heights worker ended"));
+        }
     };
 
     /**
@@ -794,20 +1065,34 @@
         const box = new T.Box3().setFromObject(template);
         if (box.isEmpty()) return null;
         const point = new T.Vector3();
-        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
         for (let corner = 0; corner < 8; corner++) {
             point.set(corner & 1 ? box.max.x : box.min.x, corner & 2 ? box.max.y : box.min.y, corner & 4 ? box.max.z : box.min.z).applyMatrix4(total);
             x0 = Math.min(x0, point.x * kx); x1 = Math.max(x1, point.x * kx); z0 = Math.min(z0, point.z * kz); z1 = Math.max(z1, point.z * kz);
+            y0 = Math.min(y0, point.y * ky); y1 = Math.max(y1, point.y * ky);
         }
         const i0 = clamp(Math.floor(x0 * sub) - 1, -limit, limit), i1 = clamp(Math.floor(x1 * sub) + 1, -limit, limit);
         const j0 = clamp(Math.floor(z0 * sub) - 1, -limit, limit), j1 = clamp(Math.floor(z1 * sub) + 1, -limit, limit);
         const cols = i1 - i0 + 1, rows = j1 - j0 + 1;
         const low = new Float32Array(cols * rows).fill(Infinity), high = new Float32Array(cols * rows).fill(-Infinity);
+        // Which of 32 bands of the model's height each cell's mesh reaches into, and in which of them a face looks
+        // up (the top of something) or down (the underside of something). Open air is a run of bands nothing
+        // reaches into, with a top under it and an underside over it: between a trunk and its crown, under a
+        // bridge's deck. Between an underside and a top (a box's floor and its lid) is the inside of something.
+        const BANDS = 32, span = Math.max(1e-6, y1 - y0), n = cols * rows;
+        const bands = new Uint32Array(n), tops = new Uint32Array(n), unders = new Uint32Array(n);
+        const band = y => Math.max(0, Math.min(BANDS - 1, Math.floor((y - y0) / span * BANDS)));
+        // The way the face being laid down looks: 1 up, -1 down, 0 sideways (or a mesh read from its vertices).
+        let facing = 0;
         const put = (i, j, a, b) => {
             if (i < i0 || i > i1 || j < j0 || j > j1) return;
             const at = (i - i0) * rows + (j - j0);
             if (a < low[at]) low[at] = a;
             if (b > high[at]) high[at] = b;
+            const from = band(a), to = band(b);
+            const bits = (to >= 31 ? 0xffffffff : ((1 << (to + 1)) >>> 0) - 1) & ~(((1 << from) >>> 0) - 1);
+            bands[at] |= bits;
+            if (facing > 0) tops[at] |= bits; else if (facing < 0) unders[at] |= bits;
         };
         // A triangle cut to a cell: what is left of a polygon on one side of a line across x or z.
         const side = () => [new Float64Array(12), new Float64Array(12), new Float64Array(12)];
@@ -829,6 +1114,10 @@
         };
         const face = () => {
             const X = tri[0], Y = tri[1], Z = tri[2];
+            // Which way it looks: the up part of its normal against the whole.
+            const ux = X[1] - X[0], uy = Y[1] - Y[0], uz = Z[1] - Z[0], vx = X[2] - X[0], vy = Y[2] - Y[0], vz = Z[2] - Z[0];
+            const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, length = Math.hypot(nx, ny, nz);
+            facing = length > 1e-12 && Math.abs(ny) > 0.5 * length ? Math.sign(ny) : 0;
             // A hair inside itself, so a face along a cell line belongs to the cell on its own side of the line (an
             // upright face, a line from above, to the cell on the model's side).
             const flat = Math.abs((X[1] - X[0]) * (Z[2] - Z[0]) - (X[2] - X[0]) * (Z[1] - Z[0])) < 1e-9;
@@ -858,6 +1147,7 @@
             matrix.multiplyMatrices(total, node.matrixWorld);
             const index = geometry.getIndex(), count = index ? index.count : position.count;
             if (count / 3 > (R.DENSE_TRIANGLES || 50000)) {
+                facing = 0;
                 const stride = Math.max(1, Math.floor(position.count / (R.DENSE_SAMPLES || 250000)));
                 for (let v = 0; v < position.count; v += stride) {
                     point.fromBufferAttribute(position, v).applyMatrix4(matrix);
@@ -892,7 +1182,8 @@
                 }
                 if (sides === 4) filled.push(at, a, b);
             }
-            for (let k = 0; k < filled.length; k += 3) { low[filled[k]] = filled[k + 1]; high[filled[k]] = filled[k + 2]; }
+            // (Filled from its neighbors, it is solid from its lowest to its highest.)
+            for (let k = 0; k < filled.length; k += 3) { low[filled[k]] = filled[k + 1]; high[filled[k]] = filled[k + 2]; bands[filled[k]] = 0xffffffff; }
         }
         // Kept as tight as what was marked.
         let c0 = cols, c1 = -1, r0 = rows, r1 = -1, bottom = Infinity, top = -Infinity;
@@ -906,12 +1197,26 @@
         const hull = { sub, i0: i0 + c0, j0: j0 + r0, cols: c1 - c0 + 1, rows: r1 - r0 + 1, low: null, high: null, bottom, top,
             minX: (i0 + c0) / sub, maxX: (i0 + c1 + 1) / sub, minZ: (j0 + r0) / sub, maxZ: (j0 + r1 + 1) / sub, reach: 0 };
         hull.low = new Float32Array(hull.cols * hull.rows); hull.high = new Float32Array(hull.cols * hull.rows);
+        // The widest band of open air in each cell between mesh below and mesh above it (`gapLow` to `gapHigh`; NaN
+        // where there is none): a line through it passes, as one under a tree's crown beside its trunk does.
+        hull.gapLow = new Float32Array(hull.cols * hull.rows).fill(NaN); hull.gapHigh = new Float32Array(hull.cols * hull.rows).fill(NaN);
         for (let c = 0; c < hull.cols; c++) for (let r = 0; r < hull.rows; r++) {
-            hull.low[c * hull.rows + r] = low[(c + c0) * rows + r + r0]; hull.high[c * hull.rows + r] = high[(c + c0) * rows + r + r0];
+            const from = (c + c0) * rows + r + r0, to = c * hull.rows + r, mask = bands[from];
+            hull.low[to] = low[from]; hull.high[to] = high[from];
+            let best = 0, bestAt = -1, run = 0, seen = false;
+            for (let k = 0; k < BANDS; k++) {
+                if (!(mask & (1 << k))) { if (seen) run++; continue; }
+                // A run of empty bands with a top under it and an underside over it is open air.
+                if (seen && run > best && (tops[from] & (1 << (k - run - 1))) && (unders[from] & (1 << k))) { best = run; bestAt = k - run; }
+                seen = true; run = 0;
+            }
+            if (bestAt >= 0) { hull.gapLow[to] = y0 + bestAt * span / BANDS; hull.gapHigh[to] = y0 + (bestAt + best) * span / BANDS; }
         }
         hull.reach = Math.hypot(Math.max(Math.abs(hull.minX), Math.abs(hull.maxX)), Math.max(Math.abs(hull.minZ), Math.abs(hull.maxZ)));
         return hull;
     };
+    // The worker runs this code as written; a buildHull put in its place (a plugin's) runs on the main thread.
+    A.HullWorker.kernel = A.buildHull;
 
     A.heightOf = function(character) {
         return sizeOf(typeof $gameFight !== "undefined" ? $gameFight : null, character).tall;
@@ -1076,7 +1381,9 @@
             body.hull = null;
             if (!measure(R, event, body, true)) continue;
             body.only = body.hull && body.mask && body.mask.has ? body.mask : null;
-            if (body.hull && !body.only) body.hull = null;
+            // Scenery with no mask blocks as its box, unless its mesh stands over open air (a tree's crown over the
+            // ground round its trunk, an arch): then as its own heights, so a line passes under it.
+            if (body.hull && !body.only && !A.overhangs(body.hull)) body.hull = null;
             let yaw = 0;
             try { yaw = R.eventModelWorldYaw(event, body.spec) || 0; } catch (error) { yaw = 0; }
             body.cos = Math.cos(yaw); body.sin = Math.sin(yaw);
@@ -1089,6 +1396,22 @@
         }
         for (let i = kept.count; i < kept.list.length; i++) kept.list[i].character = null;
         return kept;
+    };
+
+    // Open air under a model's mesh, this many tiles tall, makes it stand as its heights rather than its box.
+    A.OVERHANG = 1;
+    /** Whether a model's heights (A.buildHull) have open air under its mesh somewhere: under an overhang or between two of its parts. */
+    A.overhangs = function(hull) {
+        if (!hull || !hull.low) return false;
+        if (hull.overhangs !== undefined) return hull.overhangs;
+        let open = false;
+        for (let k = 0; k < hull.low.length && !open; k++) {
+            if (!(hull.high[k] >= hull.low[k])) continue;
+            if (hull.low[k] - hull.bottom >= A.OVERHANG) open = true;
+            else if (hull.gapHigh && hull.gapHigh[k] - hull.gapLow[k] >= A.OVERHANG) open = true;
+        }
+        hull.overhangs = open;
+        return open;
     };
 
     /**
@@ -1173,6 +1496,14 @@
      * cells it crosses are walked one by one, and a cell stops it where the line is between the lowest and the
      * highest the mesh stands there (`flat`: at any height). `body.only`: of those cells, the ones that mask has.
      */
+    /** Where a line at height y0 (at `t`) to y1 (at the cell's far side) comes into heights low to high; -1 when it does not. */
+    function enterSpan(t, y0, y1, dy, low, high) {
+        if (y0 >= low && y0 <= high) return t;
+        if (y0 < low && y1 >= low) return t + (low - y0) / dy;
+        if (y0 > high && y1 <= high) return t + (high - y0) / dy;
+        return -1;
+    }
+
     function rayHull(body, hull, lx, lz, ldx, ldz, oy, dy, lo, hi, flat) {
         const sub = hull.sub, only = body.only || null, pad = A.HULL_PAD;
         let t = lo, i = Math.floor((lx + ldx * lo) * sub), j = Math.floor((lz + ldz * lo) * sub);
@@ -1187,9 +1518,16 @@
                 if (high >= low) {
                     if (flat) return t;
                     const y0 = oy + dy * t - body.ground, y1 = oy + dy * end - body.ground;
-                    if (y0 >= low && y0 <= high) return t;
-                    if (y0 < low && y1 >= low) return t + (low - y0) / dy;
-                    if (y0 > high && y1 <= high) return t + (high - y0) / dy;
+                    // Mesh below and mesh above an open band (a trunk and its crown): two spans, the band between them open.
+                    const gapLow = hull.gapLow ? hull.gapLow[at] + pad : NaN, gapHigh = hull.gapHigh ? hull.gapHigh[at] - pad : NaN;
+                    if (gapHigh > gapLow) {
+                        const under = enterSpan(t, y0, y1, dy, low, gapLow), over = enterSpan(t, y0, y1, dy, gapHigh, high);
+                        if (under >= 0 && (over < 0 || under <= over)) return under;
+                        if (over >= 0) return over;
+                    } else {
+                        const hit = enterSpan(t, y0, y1, dy, low, high);
+                        if (hit >= 0) return hit;
+                    }
                 }
             }
             if (end >= hi) return -1;
@@ -1969,6 +2307,8 @@
         if (!battler || !battler.isAlive() || !battler.canMove() || p.guard || A.bodyBusy($gamePlayer) || A.isActing(this, unit.id)) return false;
         const profile = A.profile(battler), character = $gamePlayer;
         A.takeAim(this, unit, profile.ranged ? profile.range : 12);
+        // The leader has opened the fight: the rest of the party joins in (A.waitsForLead).
+        st.led = true;
         if (!profile.ranged) {
             if (p.swing) { p.buffered = true; return true; }
             if (p.cooldown > 0) return false;
@@ -2162,6 +2502,7 @@
                 }
             }
             if (!target) return false;
+            st.led = true;
             $gamePlayer.turnTowardCharacter(this.character(target));
             // Of everyone it would land on, those it has a clear way to.
             targets = this.actionTargets(unit, action, target).filter(other => other.team === unit.team || lobbed || A.blowClear(this, $gamePlayer, this.character(other)));
@@ -2409,6 +2750,20 @@
         return ai.kind === "shot" ? A.lineOpen(fight, from, 0.7, to, 0.55, false) : A.blowClear(fight, from, to);
     };
 
+    /**
+     * Whether a party member the player does not move holds back: in a real-time battle the leader opens the fight
+     * (an attack, or a skill or item aimed at the other side), and the rest of the party joins in from then on. One
+     * the other side has struck fights back at once; all of them come to a leader under LEAD_HELP of its HP, and a
+     * leader who falls hands the fight on.
+     */
+    A.LEAD_HELP = 0.5;
+    A.waitsForLead = function(fight, st, unit, character, ai, player) {
+        if (!unit.party || character === player || st.led || ai.provoked) return false;
+        const lead = fight.playerUnit(), battler = lead && fight.battler(lead);
+        if (battler && battler.hpRate() < A.LEAD_HELP) { st.led = true; return false; }
+        return true;
+    };
+
     A.updateUnit = function(fight, st, unit, character, battler, ai, player) {
         if (ai.cool > 0) ai.cool--;
         if (ai.state === "stagger") { if (--ai.timer <= 0) ai.state = ai.alert ? "chase" : "idle"; return; }
@@ -2453,6 +2808,7 @@
         ai.late = false;
         let target = ai.targetId ? fight.unit(ai.targetId) : null;
         if (!target || !fight.isAlive(target) || target.team !== foes) { target = null; ai.targetId = 0; }
+        if ((ai.state === "idle" || ai.state === "return") && A.waitsForLead(fight, st, unit, character, ai, player)) return;
         if (ai.state === "idle" || ai.state === "return") {
             let seen = null;
             if (ai.alert) seen = A.nearest(fight, unit, character, foes, 30);
@@ -2543,7 +2899,7 @@
                 if (!character.isMoving() && P) {
                     character.setDirection(spot.d);
                     try {
-                        if (spot.kind === "ladder" && P.playStep) P.playStep(character, { kind: "ladder", d: spot.d, x: spot.tx, y: spot.ty, height: spot.to });
+                        if ((spot.kind === "ladder" || spot.kind === "climb") && P.playStep) P.playStep(character, { kind: spot.kind, d: spot.d, x: spot.tx, y: spot.ty, height: spot.to });
                         else P.tryMantle(character, spot.d, true);
                     } catch (error) { /* no way up after all */ }
                 }
@@ -2587,6 +2943,9 @@
         const P = root.ReactorPhysics, spots = [];
         if (!P || !P.edges || !P.levelsAt || !A.is3D()) return spots;
         const top = A.groundOf(to), reach = A.CLIMB_SEARCH;
+        // A wall out of the hands' reach is climbed where the project lets battlers climb (ReactorPhysics.battleClimbs).
+        const settings = P.settings ? P.settings() : null;
+        const rules = settings && P.battleClimbs && P.battleClimbs(settings) && P.edgeRules ? P.edgeRules({ climb: settings.climbHeight }) : undefined;
         for (let y = to.y - reach; y <= to.y + reach; y++) for (let x = to.x - reach; x <= to.x + reach; x++) {
             if (!$gameMap.isValid(x, y)) continue;
             for (const level of P.levelsAt($dataMap, x, y)) {
@@ -2594,9 +2953,9 @@
                 for (const d of [2, 4, 6, 8]) {
                     if (!$gameMap.isPassable(x, y, d)) continue;
                     let options;
-                    try { options = P.edges($dataMap, x, y, d, level.top); } catch (error) { continue; }
+                    try { options = P.edges($dataMap, x, y, d, level.top, rules); } catch (error) { continue; }
                     for (const option of options) {
-                        if (option.kind !== "mantle" && option.kind !== "ladder") continue;
+                        if (option.kind !== "mantle" && option.kind !== "ladder" && option.kind !== "climb") continue;
                         if (!(option.to > level.top + 1.2) || option.to > top + 0.6) continue;
                         if (!$gameMap.isPassable(option.x, option.y, 10 - d)) continue;
                         spots.push({ x, y, d, kind: option.kind, from: level.top, to: option.to, tx: option.x, ty: option.y,
@@ -2730,6 +3089,7 @@
                 if (battler.isDead()) fight.defeat(unit);
             }
             fight.fireHooks("turnEnd", { turn: fight._turn, team: "any" });
+            if (fight.endTroopTurn) fight.endTroopTurn();
             st.rev++;
             fight.checkOutcome(true);
             if (fight._ending) return;
@@ -2761,9 +3121,27 @@
             if (entry.done || !A.updateRun(fight, entry)) st.runs.splice(i, 1);
         }
         A.updateShots(fight, st);
+        A.updateGetaway(fight, st, playerUnit);
         In.endFrame();
         // Someone fell since the outcome was last judged (in this frame, or by a HUD's own button between frames).
         if (st.defeats !== st.judged) { st.judged = st.defeats; fight.checkOutcome(); }
+    };
+
+    /** Ends a battle that can be escaped as an escape once the leader has run far enough from every enemy. */
+    A.updateGetaway = function(fight, st, playerUnit) {
+        if (!playerUnit || fight._ending || !fight.canRetreat()) return;
+        const leader = fight.character(playerUnit), foes = F.oppose(playerUnit.team);
+        if (!leader) return;
+        let nearest = Infinity;
+        for (const unit of fight._units) {
+            if (unit.gone || unit.team !== foes || !fight.isAlive(unit)) continue;
+            const character = fight.character(unit);
+            if (character) nearest = Math.min(nearest, Math.hypot(character._realX - leader._realX, character._realY - leader._realY));
+        }
+        if (nearest === Infinity) return;
+        if (nearest <= A.ESCAPE_DISTANCE) { st.engaged = true; st.away = 0; return; }
+        // A party that never came near an enemy is not running from one.
+        if (st.engaged && (st.away = (st.away || 0) + 1) >= A.ESCAPE_FRAMES) fight.commandRetreat();
     };
 
     //-------------------------------------------------------------------------

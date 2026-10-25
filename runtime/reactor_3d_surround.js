@@ -726,7 +726,7 @@
         R.MapScene.prototype[name] = wrapped;
     };
     // Laid with the map once its water is (a lake at the border is banked); again when the water is laid again.
-    wrap("addWater", function(mapData, load) { this._surroundMap = mapData; this._surroundLoad = load; this.addSurround(mapData); });
+    wrap("addWater", function(mapData, load) { this._surroundMap = mapData; this._surroundLoad = load; this.followUp(() => this.addSurround(mapData)); });
     // The floor's image arrived after the map was built: the land past it can be laid now.
     wrap("addRoomPiece", function(piece) {
         if (piece === "floor" && this._surroundMap && !(this._surroundMeshes && this._surroundMeshes.length)) this.addSurround(this._surroundMap);
@@ -789,11 +789,27 @@
         KEEP: 16,
         /** Milliseconds a frame of building worlds while the screen fades in from a transfer (one part a frame otherwise). */
         BURST_MS: 80,
+        /** Milliseconds of a world's pieces laid in one part (a chunk at least). */
+        BUDGET_MS: 8,
         /** Frames a neighbor's placed models are given to arrive and be stood in their places. */
         SETTLE: 240,
+        /**
+         * Tiles from the side it shares with the map played within which a neighbor's events that stand as models
+         * (a parked vehicle, a guard at the gate) are stood before the border is crossed: the map entered takes
+         * them over by number, so nothing pops in and nothing is built in the crossing.
+         */
+        EVENTS_AHEAD: 48,
+        /**
+         * Updates back at most that the map left's last picture of the world may have been drawn for the crossing
+         * frame to show it again rather than draw (Spriteset_Map.reactor3DKeepsLastPicture): the scene change takes
+         * an update with no game in it, and a slow machine draws the world on its last update of a frame only. 0: drawn.
+         */
+        KEEP_PICTURE: 4,
         records: new Map(),
         /** The border crossing under way: `{ from, to, side, offset }`, from the step over the border until the map past it has started. */
         crossing: null,
+        /** The map the crossing under way leaves, as the game held it (`begin`), until the map entered takes its world (`adopt`). */
+        leftMap: null,
         /** The 3D state of the map being played (the spriteset's), as last updated. */
         live: null,
         stats: { read: 0, built: 0, adopted: 0, crossed: 0, faded: 0, buildMs: 0 }
@@ -891,12 +907,29 @@
     };
     N._clock = 0;
 
+    /**
+     * The map just left over a border, as a map past a border: its world stands built from `map`, the map the game
+     * held, so nothing is read, parsed or indexed again in the frames after the crossing (Map005 behind the party
+     * was 45 ms on one frame). Only the files are read in the background, for the copy the game is handed if the
+     * party turns back (N.take).
+     */
+    N.played = function(mapId, map) {
+        if (!map || !(mapId > 0)) return null;
+        const record = { mapId, state: "ready", text: null, map, copy: null, used: ++N._clock, measure: "done" };
+        N.records.set(mapId, record);
+        const stem = "Map" + String(mapId).padStart(3, "0");
+        Promise.all([N.read(stem + ".json"), N.read(stem + (R.SIDECAR_SUFFIX || ".r3d.json"))]).then(texts => { if (texts[0]) record.text = texts; });
+        return record;
+    };
+
     /** The map the game is handed as it crosses into `mapId`: read already, or null (then it is loaded as any map is). */
     N.take = function(mapId) {
         const cross = N.crossing, record = N.records.get(mapId);
         if (!cross || cross.to !== mapId || !record || record.state !== "ready") return null;
-        const map = record.copy || N.make(record);
+        const map = record.copy || (record.text ? N.make(record) : null);
         record.copy = null;
+        // Its cells are the world's that stands built from the same files: indexed once (the camera asks in the crossing frame).
+        if (map && R.sharePieceIndex) R.sharePieceIndex(record.map, map);
         return map;
     };
 
@@ -904,7 +937,14 @@
     N.ready = function(side) {
         const live = N.live, body = live && live.scene && live.scene._neighborBodies ? live.scene._neighborBodies[side] : null;
         const record = body ? N.records.get(body.mapId) : null;
-        return !!(N.enabled && body && !body.stage && record && record.state === "ready");
+        return !!(N.enabled && body && !body.stage && record && record.state === "ready" && (record.copy || record.text));
+    };
+
+    /** Whether worlds stand beside the map played: their models, and the entered map's after a crossing, join a few a frame (Reactor3D.ModelJoins). */
+    N.streaming = function() {
+        const bodies = N.enabled && N.live && N.live.scene ? N.live.scene._neighborBodies : null;
+        if (bodies) for (const side in bodies) return true;
+        return false;
     };
 
     /** Whether the world of the map past `side` stands built beside this one (a vehicle rides over that border). */
@@ -916,9 +956,12 @@
     /** The step over a border begins: `exit` is Reactor3D.neighborExit's. True when it will be crossed without a break. */
     N.begin = function(exit, fromMapId) {
         N.crossing = null;
+        N.leftMap = null;
         if (!N.ready(exit.side)) { N.stats.faded++; return false; }
         const body = N.live.scene._neighborBodies[exit.side];
         N.crossing = { from: fromMapId, to: exit.mapId, side: exit.side, offset: { x: body.offset.x, z: body.offset.z } };
+        // The map left, as the game held it: what the world it leaves behind past the border is lit by.
+        N.leftMap = root.$dataMap || null;
         // What the leader rides goes with it, model and all (the event it is on the map entered has another number).
         const ride = root.$gamePlayer && root.$gamePlayer._rrRide;
         if (ride && ride.id) N.crossing.ride = "e" + ride.id;
@@ -961,7 +1004,7 @@
         const bodies = main._neighborBodies || (main._neighborBodies = {});
         // `offset` is from the scene it stands in; `at` from the map being played (`base`: where `main` itself stands).
         const at = { x: (base ? base.x : 0) + offset.x, z: (base ? base.z : 0) + offset.z };
-        const body = bodies[side] = { mapId, scene, group, offset: { x: offset.x, z: offset.z }, at, record: record || null, props: null, settle: N.SETTLE, stage: 0, masks: 0 };
+        const body = bodies[side] = { mapId, side, scene, group, offset: { x: offset.x, z: offset.z }, at, record: record || null, props: null, ahead: null, settle: N.SETTLE, stage: 0, masks: 0 };
         // The scene a world stands in works every place in it out again each frame. A world stilled (N.still) is
         // left out of that: only when it has been stood somewhere else (N.reseat) is it worked out, once.
         const updateMatrixWorld = group.updateMatrixWorld;
@@ -1079,16 +1122,22 @@
         try { return N.within(map, globals, fn); } finally { if (stand) root.$gamePlayer = player; }
     };
 
-    /** The next part of a neighbor's world still to lay: its pieces, then its water (the land and the plants follow the water). */
+    /**
+     * The next part of a neighbor's world still to lay: its pieces, a few chunks a part (`BUDGET_MS`), then
+     * its water (the land and the plants follow the water).
+     */
     N.stage = function(body) {
         const map = body.record && body.record.map, scene = body.scene;
         if (!map || !scene._scene) { body.stage = 0; return; }
         const load = body.load || (name => R.defaultMaterialLoader(name));
         const stage = body.stage;
-        body.stage = stage === 1 ? 2 : 0;
+        // (A part that fails is not tried again: the next one is laid.)
+        body.stage = stage === 1 ? 2 : stage === 2 ? 3 : 0;
         try {
             N.inBody(map, body.at || body.offset, scene._neighborGlobals, () => {
-                if (stage === 1) scene.addPieces(map, load); else scene.addWater(map, load);
+                if (stage === 1) scene.addPieces(map, load, true);
+                else if (stage === 2) { if (!scene.layQueuedPieces(N.BUDGET_MS)) body.stage = 2; }
+                else scene.addWater(map, load);
                 scene._neighborGlobals = globalsOf();
             });
         } catch (error) {
@@ -1149,10 +1198,34 @@
             if (!body.props.length) { body.settle = 0; return; }
             body.scene.syncCharacterModels(body.props);
             const held = body.scene._modelInstances;
+            // (What was stood ahead of the crossing is said so: the map entered keeps it only where its own event matches.)
+            if (held && body.ahead) for (const character of body.ahead) { const holder = held.get(R.modelInstanceKey(character)); if (holder) holder.ahead = true; }
             let waiting = 0;
             if (held) for (const holder of held.values()) if (!holder.object) waiting++;
             // All there: once more to stand them, and that is that.
             body.settle = waiting ? body.settle - 1 : Math.min(body.settle - 1, 2);
+        });
+    };
+
+    /**
+     * The events of the map past a border, beside the map played, that stand as models within `EVENTS_AHEAD` tiles of
+     * the side the two maps share, as the game will hold them (its parked vehicles among them, at the numbers its entry
+     * gives them). Asked once for a world one map out.
+     */
+    N.aheadEvents = function(body) {
+        const map = body.record && body.record.map;
+        if (!map || !Array.isArray(map.events) || typeof root.Game_Event === "undefined" || !R.characterModelSpec || !N.OPPOSITE[body.side]) return [];
+        const facing = N.OPPOSITE[body.side], out = [];
+        return N.within(map, body.scene._neighborGlobals, () => {
+            const V = root.ReactorVehicles;
+            if (V && V.addVisitingVehicles && !map._rrVisitorsAdded) { map._rrVisitorsAdded = true; try { V.addVisitingVehicles(body.mapId); } catch (error) { /* no vehicles then */ } }
+            for (const event of map.events) {
+                if (!event || event.id >= R.PROP_EVENT_BASE || N.sideDistance(map, event.x, event.y, facing) > N.EVENTS_AHEAD) continue;
+                let character = null;
+                try { character = new root.Game_Event(body.mapId, event.id); } catch (error) { continue; }
+                if (character && R.characterModelSpec(character)) out.push(character);
+            }
+            return out;
         });
     };
 
@@ -1172,6 +1245,17 @@
             }
             body.masks = -1;
         });
+    };
+
+    /** Whether a map past a border has had its rocks measured on the background meshers (Reactor3D.prepareRockColumns), asked once: its world is built after. */
+    N.measured = function(record) {
+        if (!record.measure) {
+            record.measure = "busy";
+            const done = () => { record.measure = "done"; };
+            const measuring = R.prepareRockColumns && record.map ? R.prepareRockColumns(record.map) : null;
+            if (measuring) measuring.then(done, done); else done();
+        }
+        return record.measure === "done";
     };
 
     /** Whether the screen is still coming up from black (a map entered by a transfer): worlds are then built several parts a frame. */
@@ -1217,17 +1301,49 @@
         if (body.scene._sky && body.scene._sky.visible) body.scene._sky.visible = false;
         if (!body.record) { const record = N.request(body.mapId); if (record.state === "ready") body.record = record; }
         if (body.stage) { if (N.spend(frame)) N.stage(body); return; }
+        // Beside the map played: what its own combine of the light draws with is compiled ahead (Reactor3D.HalfLight),
+        // so crossing into it compiles nothing.
+        if (depth === 1 && R.HalfLight && R.HalfLight.expect) R.HalfLight.expect();
+        // And, past the side the party nears, the picture of its glowing water while the map played has none to keep (Reactor3D.WaterLight),
+        // and the haze's and the halo's programs when it has lamps or water (Reactor3D.HalfHaze).
+        if (depth === 1 && body.side === N._ahead && body.record && body.record.map) {
+            const map = body.record.map, sidecar = map.reactor3d || {};
+            if (R.WaterLight && R.WaterLight.prepare) R.WaterLight.prepare(map, root.$dataMap);
+            if (R.HalfHaze && R.HalfHaze.expect && ((Array.isArray(sidecar.lights) && sidecar.lights.length) || (Array.isArray(sidecar.water) && sidecar.water.length))) R.HalfHaze.expect();
+        }
+        // Beside the map played: its events by the shared side are stood too, once (a world that came nearer by a crossing
+        // included). Only those within reach are made, and their models join as the others do (Reactor3D.ModelJoins).
+        if (depth === 1 && !body.ahead && body.record && body.record.state === "ready" && N.upkeep(frame)) {
+            body.ahead = N.aheadEvents(body);
+            if (body.ahead.length) {
+                if (!body.props) N.settle(body);
+                if (body.props) for (const character of body.ahead) body.props.push(character);
+                body.settle = Math.max(body.settle, N.SETTLE);
+                if (body.stilled) N.still(body, false);
+            }
+        }
         if (body.settle > 0) N.settle(body);
         else {
             if (!body.stilled) N.still(body, true);
-            if (depth === 1 && body.masks >= 0 && body.record) N.mask(body);
+            if (depth === 1 && body.masks >= 0 && body.record && N.upkeep(frame)) N.mask(body);
         }
         if (depth > 1) { if (body.record) body.record.used = ++N._clock; return; }
         // Its plants are laid as the eye nears them, as this map's are.
         if (body.scene.updateFoliageFrame && body.scene._foliageMap) N.inBody(body.scene._foliageMap, body.at, null, () => body.scene.updateFoliageFrame(null));
         // Read (a map left over a border was never asked for), and a copy of it ready for the game to enter by.
         const record = N.request(body.mapId);
-        if (record.state === "ready" && !record.copy && N._madeAt !== frame) { N._madeAt = frame; record.copy = N.make(record); }
+        if (record.state === "ready" && !record.copy && record.text && N.upkeep(frame)) record.copy = N.make(record);
+    };
+
+    /**
+     * Whether one more piece of a standing world's upkeep (its events stood ahead, a model's footprint measured,
+     * the copy the game enters by) may be done this frame: one a frame, so the frames after a crossing, when the
+     * map one further out comes beside the party, do not take them all at once.
+     */
+    N.upkeep = function(frame) {
+        if (N._upkeptAt === frame) return false;
+        N._upkeptAt = frame;
+        return true;
     };
 
     /** How far a place of the map played is from a world standing at `at`, `width` by `height` tiles: 0 inside it. */
@@ -1236,19 +1352,64 @@
         return Math.hypot(dx, dz);
     };
 
+    /** The scene of the map being played (the game's spriteset's), or null outside a game or for any other map. */
+    N.playedScene = function(mapData) {
+        const scene = root.SceneManager && root.SceneManager._scene, live = scene && scene._spriteset && scene._spriteset._reactor3d;
+        return live && live.scene && root.$dataMap === mapData ? live.scene : null;
+    };
+
     /**
-     * Whether a world standing beside the map played has water where that map has none, or none where it
-     * has: a map with water draws its lit pass whole and one without takes its light afterwards
-     * (Reactor3D.HalfLight), so crossing between the two changes the program every surface is drawn with.
+     * Whether a point past the edge of the map played (`mapData`, in its tiles) is in the ground, or in
+     * something built, of the neighboring map whose world stands there (Reactor3D.cameraArmBlocked): a camera
+     * by a border keeps out of the rock past it as it does out of this map's. `what`: "ground" or "pieces"
+     * for only that, else either. False where no world stands.
      */
-    N.mixedWater = function(scene) {
-        const wet = each => !!(each._waterMeshes && each._waterMeshes.length), own = wet(scene);
-        const differs = host => {
-            const bodies = host._neighborBodies;
-            for (const side in bodies) if (wet(bodies[side].scene) !== own || differs(bodies[side].scene)) return true;
-            return false;
-        };
-        return differs(scene);
+    N.solidAt = function(mapData, x, y, z, thin, doors, what) {
+        const bodies = N.enabled ? (N.playedScene(mapData) || {})._neighborBodies : null;
+        if (!bodies) return false;
+        for (const side of R.SURROUND_SIDES) {
+            const body = bodies[side], map = body ? (body.record && body.record.map) || body.mapData : null;
+            if (!map) continue;
+            const lx = x - body.offset.x, lz = z - body.offset.z;
+            if (!(lx >= 0 && lz >= 0 && lx < map.width && lz < map.height)) continue;
+            return N.within(map, body.scene._neighborGlobals, () => {
+                if (what !== "pieces" && R.terrainHeightAt && R.elevationAt && y < R.elevationAt(map, Math.floor(lx), Math.floor(lz)) + R.terrainHeightAt(map, lx, lz) + R.CAMERA_GROUND_MARGIN) return true;
+                return what !== "ground" && !!(R.hasPieces && R.hasPieces(map) && R.pieceSolidAt(map, lx, y, lz, null, thin, doors));
+            });
+        }
+        return false;
+    };
+
+    /** Tiles each side of a border over which the lighting of the two maps meets (`lightBlend`). */
+    N.LIGHT_BAND = 16;
+    /** The steps it meets in, across the whole band: each step moves a sun once, and redraws its shadows once. */
+    N.LIGHT_STEPS = 16;
+
+    /**
+     * How far toward the lighting of a neighboring map the lighting stands where the player is
+     * (Reactor3D.seamAmbient, Reactor3D.blendSeamSun): `{ home, weight, map, offset, globals }`, `home`
+     * the map played, `weight` from 0 (its own) to 1, `map` the neighbor whose world stands in `scene`,
+     * `offset` where that map's first tile lies in this map's tiles; null with none in reach. Worked
+     * from how much nearer the player is to this map than to the neighbor's: one half on the border,
+     * and at every place the same lighting reckoned from either map, so crossing changes nothing.
+     */
+    N.lightBlend = function(scene, mapData, player) {
+        const bodies = scene && scene._neighborBodies;
+        if (!N.enabled || !bodies || !mapData || !player) return null;
+        const x = player._realX + 0.5, y = player._realY + 0.5, band = N.LIGHT_BAND, steps = N.LIGHT_STEPS;
+        const inside = N.gap(x, y, ZERO, mapData.width, mapData.height);
+        let best = null;
+        for (const side of R.SURROUND_SIDES) {
+            const body = bodies[side], map = body ? (body.record && body.record.map) || body.mapData : null;
+            if (!map) continue;
+            const lead = N.gap(x, y, body.offset, map.width, map.height) - inside;
+            if (lead >= band) continue;
+            const t = Math.max(0, Math.min(1, 0.5 - lead / (2 * band)));
+            // Stepped evenly either side of the half, so either map's reckoning lands on the same step.
+            const u = t * t * (3 - 2 * t) - 0.5, weight = 0.5 + Math.sign(u) * Math.round(Math.abs(u) * steps) / steps;
+            if (weight > 0 && (!best || weight > best.weight)) best = { home: mapData, weight, map, offset: body.offset, globals: body.scene._neighborGlobals || null };
+        }
+        return best;
     };
 
     /**
@@ -1269,8 +1430,6 @@
         // this frame (a map just entered) has been aimed, and has not yet been drawn with.
         const view = R._viewport, eye = view && typeof view.camera === "function" ? view.camera() : null;
         if (eye && eye.updateMatrixWorld) eye.updateMatrixWorld();
-        // Both programs of each surface are ready before a border where the pass changes its way of drawing.
-        if (R.ShaderWarmup) R.ShaderWarmup.both = N.mixedWater(scene);
         const standing = new Set([root.$gameMap && root.$gameMap.mapId ? root.$gameMap.mapId() : 0]);
         // The side the party is about to leave by: the maps past it stand one further out.
         let ahead = "", least = Infinity;
@@ -1316,7 +1475,7 @@
             for (const want of wanted) {
                 if (count >= N.MAX || standing.has(want.entry.map)) continue;
                 const record = N.request(want.entry.map);
-                if (record.state !== "ready") continue;
+                if (record.state !== "ready" || !N.measured(record)) continue;
                 const sheets = tilesetBitmaps(record.map);
                 if (sheets.some(bitmap => bitmap && bitmap.isReady && !bitmap.isReady())) continue;
                 if (!N.spend(frame)) continue;
@@ -1353,6 +1512,23 @@
                 if (horizon) haze.material.color.setRGB(horizon.r * (sky ? sky[0] : 1), horizon.g * (sky ? sky[1] : 1), horizon.b * (sky ? sky[2] : 1));
             }
             N.haze(main, body.scene);
+        }
+    };
+
+    /**
+     * The models stood ahead of the crossing (N.aheadEvents) stay where the map entered has the same event wearing the
+     * same model, and go where it has not (a vehicle ridden off since, a page turned): its own syncing stands it again.
+     */
+    N.keepAhead = function(scene) {
+        const held = scene._modelInstances, map = root.$gameMap;
+        if (!held || !map || typeof map.event !== "function") return;
+        for (const [key, holder] of Array.from(held.entries())) {
+            if (!holder.ahead || !/^e\d+$/.test(key)) continue;
+            const event = map.event(Number(key.slice(1))), spec = event && R.characterModelSpec ? R.characterModelSpec(event) : null;
+            if (spec && R.modelCacheKey(spec.name, spec.ext, spec.file) === holder.spec) { holder.ahead = false; continue; }
+            if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+            if (R.releaseModelHolder) R.releaseModelHolder(holder);
+            held.delete(key);
         }
     };
 
@@ -1400,16 +1576,23 @@
         const V = root.ReactorVehicles, vehicles = V && V.list && cross.convoy ? V.list() : [];
         const convoy = (cross.convoy || []).map(pair => { const now = vehicles.find(event => V.idOf(event) === pair[1]); return [pair[0], now ? "e" + now._eventId : null]; });
         N.carryParty(old.scene, scene, cross.ride, riding && riding.id ? "e" + riding.id : null, convoy);
+        N.keepAhead(scene);
         // The map entered is the one everything reads now; what the map left read is kept for a way back.
         old.scene._neighborGlobals = globalsOf();
         scene._neighborKept = false;
         if (scene._neighborGlobals) setGlobals(scene._neighborGlobals);
-        if (R.Reflections && R.Reflections.reset) R.Reflections.reset();
+        // The reflections go on from the capture they had: the same world, in the entered map's tiles.
+        if (R.Reflections && R.Reflections.shift) R.Reflections.shift(cross.offset);
         if (scene._sky) scene._sky.visible = true;
         // The map left stands past the border come over, kept by its old spriteset no longer.
         old.scene._neighborKept = true;
         const back = N.OPPOSITE[cross.side];
-        N.attach(scene, back, old.scene, cross.from, { x: -cross.offset.x, z: -cross.offset.z }, N.records.get(cross.from) || null).settle = 0;
+        const kept = N.records.get(cross.from);
+        const left = N.attach(scene, back, old.scene, cross.from, { x: -cross.offset.x, z: -cross.offset.z }, (kept && kept.state === "ready" ? kept : null) || N.played(cross.from, N.leftMap));
+        left.settle = 0;
+        // Its map is known before its file is read again (a map played was never read as a neighbor): its lighting meets this map's at once.
+        left.mapData = N.leftMap || null;
+        N.leftMap = null;
         // Its plants were last sorted into seen and unseen from a camera that had already gone over the border with
         // the party (all unseen): they are seen until its next sorting, a frame or two on.
         const plants = old.scene._foliageGroup;

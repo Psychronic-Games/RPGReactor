@@ -68,8 +68,10 @@ class DatabaseTroopEditor {
         this.commandSelectionAnchor = null;
 
         const system = this.databaseManager.getSystem();
-        this.battleback1Name = (system && system.battleback1Name) || '';
-        this.battleback2Name = (system && system.battleback2Name) || '';
+        // The battleback the troop is fought on: where a map starts the battle, else the Battle Test one.
+        this._battlebackChosen = false;
+        this.applyTroopBattleback(this.troopBattleback(troop.id));
+        this.scanTroopBattlebacks(troop.id);
 
         this.configureBattleGeometry(system);
         this.showBattleUI = this.loadBattleUIPreference();
@@ -291,9 +293,9 @@ class DatabaseTroopEditor {
             const replaceBtn = document.createElement('button');
             replaceBtn.textContent = '\u21C4';
             replaceBtn.title = tt('Replace Enemy');
-            replaceBtn.style.cssText = 'width: 18px; height: 18px; padding: 0; border: 1px solid var(--color-border-input); background: var(--color-border-subtle); color: var(--color-syntax-type); cursor: pointer; font-size: 12px; line-height: 1; border-radius: 3px; flex-shrink: 0;';
+            replaceBtn.style.cssText = 'width: 18px; height: 18px; padding: 0; border: 1px solid var(--color-border-input); background: var(--color-bg-button-subtle); color: var(--color-syntax-type); cursor: pointer; font-size: 12px; line-height: 1; border-radius: 3px; flex-shrink: 0;';
             replaceBtn.onmouseenter = () => { replaceBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
-            replaceBtn.onmouseleave = () => { replaceBtn.style.backgroundColor = 'var(--color-border-subtle)'; };
+            replaceBtn.onmouseleave = () => { replaceBtn.style.backgroundColor = 'var(--color-bg-button-subtle)'; };
             replaceBtn.onclick = (e) => {
                 e.stopPropagation();
                 this.selectedMemberIndex = idx;
@@ -322,7 +324,7 @@ class DatabaseTroopEditor {
             const removeBtn = document.createElement('button');
             removeBtn.textContent = '\u00D7';
             removeBtn.title = tt('Remove');
-            removeBtn.style.cssText = 'width: 18px; height: 18px; padding: 0; border: 1px solid var(--color-border-input); background: var(--color-border-subtle); color: var(--color-danger-bright); cursor: pointer; font-size: 13px; line-height: 1; border-radius: 3px; flex-shrink: 0;';
+            removeBtn.style.cssText = 'width: 18px; height: 18px; padding: 0; border: 1px solid var(--color-border-input); background: var(--color-bg-button-subtle); color: var(--color-danger-bright); cursor: pointer; font-size: 13px; line-height: 1; border-radius: 3px; flex-shrink: 0;';
             removeBtn.onclick = (e) => { e.stopPropagation(); this.removeMember(idx); };
             row.appendChild(removeBtn);
 
@@ -733,6 +735,14 @@ class DatabaseTroopEditor {
         const content = document.createElement('div');
         content.className = 'database-section-content';
 
+        // Where the shown battleback comes from.
+        const source = document.createElement('div');
+        source.className = 'rr-troop-battleback-source';
+        source.setAttribute('data-rr-i18n-skip', '1');
+        source.style.cssText = 'margin-bottom: 6px; font-size: 11px; color: var(--color-text-muted); line-height: 1.35;';
+        source.textContent = this.battlebackSourceText();
+        content.appendChild(source);
+
         const project = this.projectManager.getCurrentProject();
         const bb1Files = this.scanImageDir(project, 'battlebacks1');
         const bb2Files = this.scanImageDir(project, 'battlebacks2');
@@ -740,12 +750,14 @@ class DatabaseTroopEditor {
         // Lower Layer (battleback1)
         content.appendChild(this.createBBSelect('Lower Layer:', 'troop-bb1-select', bb1Files, this.battleback1Name, (val) => {
             this.battleback1Name = val;
+            this._battlebackChosen = true;
             this.loadAndRenderCanvas();
         }, 1));
 
         // Upper Layer (battleback2)
         content.appendChild(this.createBBSelect('Upper Layer:', 'troop-bb2-select', bb2Files, this.battleback2Name, (val) => {
             this.battleback2Name = val;
+            this._battlebackChosen = true;
             this.loadAndRenderCanvas();
         }, 2));
 
@@ -776,10 +788,110 @@ class DatabaseTroopEditor {
         browse.className = 'troop-bb-browse-btn';
         browse.dataset.layer = String(layer);
         browse.textContent = tt('Browse…');
-        browse.style.cssText = 'margin-top: 3px; width: 100%; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); padding: 3px; border-radius: 3px; font-size: 11px; cursor: pointer;';
+        browse.style.cssText = 'margin-top: 3px; width: 100%; background: var(--color-bg-button-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); padding: 3px; border-radius: 3px; font-size: 11px; cursor: pointer;';
         browse.addEventListener('click', () => this.openBattlebackPicker(layer, select, onChange));
         row.appendChild(browse);
         return row;
+    }
+
+    /**
+     * Where each troop is fought, from the project's maps: troop id -> { mapId, battleback1Name,
+     * battleback2Name }. A Battle Processing that names the troop (after a Change Battle Back in the same
+     * list, that battleback; else its map's, when the map specifies one) or an encounter of a map that
+     * specifies a battleback. The lowest map id wins; a troop no map gives a battleback is absent.
+     * `maps`: [{ id, map }] with the parsed map files.
+     */
+    static battlebacksFromMaps(maps) {
+        const found = new Map();
+        const offer = (troopId, mapId, names) => {
+            if (!names || found.has(troopId)) return;
+            found.set(troopId, { mapId, battleback1Name: names[0] || '', battleback2Name: names[1] || '' });
+        };
+        for (const { id, map } of [...maps].sort((a, b) => a.id - b.id)) {
+            if (!map) continue;
+            const own = map.specifyBattleback ? [map.battleback1Name, map.battleback2Name] : null;
+            for (const event of map.events || []) {
+                for (const page of (event && event.pages) || []) {
+                    let changed = null;
+                    for (const command of page.list || []) {
+                        if (command.code === 283) changed = command.parameters || null;
+                        else if (command.code === 301 && command.parameters && command.parameters[0] === 0) offer(command.parameters[1], id, changed || own);
+                    }
+                }
+            }
+            for (const encounter of map.encounterList || []) if (encounter) offer(encounter.troopId, id, own);
+        }
+        return found;
+    }
+
+    /** What the scan found for a troop, or null (not scanned yet, or no map gives it a battleback). */
+    troopBattleback(troopId) {
+        const scan = this._battlebackScan;
+        return scan && scan.project === this.projectManager?.getCurrentProject?.()?.path && scan.found ? scan.found.get(troopId) || null : null;
+    }
+
+    applyTroopBattleback(found) {
+        const system = this.databaseManager.getSystem();
+        this._battlebackSource = found;
+        this.battleback1Name = found ? found.battleback1Name : (system && system.battleback1Name) || '';
+        this.battleback2Name = found ? found.battleback2Name : (system && system.battleback2Name) || '';
+    }
+
+    battlebackSourceText() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const found = this._battlebackSource;
+        if (!found) return tt('No map starts this battle: the Battle Test battleback.');
+        const info = this.databaseManager.getMapInfos?.()?.[found.mapId];
+        const name = `${String(found.mapId).padStart(3, '0')}${info && info.name ? ' ' + info.name : ''}`;
+        return tt('From the map that starts this battle: {map}').replace('{map}', name);
+    }
+
+    /**
+     * Reads the project's maps once per Database opening, off the page's path, then shows the troop's own
+     * battleback if the troop on screen is still `troopId` and its battleback was not changed by hand.
+     */
+    scanTroopBattlebacks(troopId) {
+        const project = this.projectManager?.getCurrentProject?.();
+        const session = this.parentEditor?._databaseSession;
+        if (!project?.path) return;
+        const scan = this._battlebackScan;
+        if (scan && scan.project === project.path && scan.session === session) return;
+        let fs, path;
+        try { fs = require('fs'); path = require('path'); } catch (error) { return; }
+        if (!fs?.promises) return;
+        const mine = { project: project.path, session, found: null };
+        this._battlebackScan = mine;
+        const ids = Object.values(this.databaseManager.getMapInfos?.() || {}).filter(info => info && info.id > 0).map(info => info.id);
+        const read = id => fs.promises.readFile(path.join(project.path, 'data', `Map${String(id).padStart(3, '0')}.json`), 'utf8')
+            .then(text => ({ id, map: JSON.parse(text) }), () => ({ id, map: null }));
+        (async () => {
+            const maps = [];
+            for (const id of ids) {
+                if (this._battlebackScan !== mine) return;
+                maps.push(await read(id));
+            }
+            mine.found = DatabaseTroopEditor.battlebacksFromMaps(maps);
+            if (this._battlebackScan !== mine || this.currentTroopId !== troopId) return;
+            const shown = this.canvas && this.canvas.isConnected;
+            const untouched = this._battlebackSource === null && !this._battlebackChosen;
+            const found = mine.found.get(troopId) || null;
+            if (!shown || !untouched || !found) return;
+            this.applyTroopBattleback(found);
+            for (const [id, name] of [['troop-bb1-select', this.battleback1Name], ['troop-bb2-select', this.battleback2Name]]) {
+                const select = document.getElementById(id);
+                if (!select) continue;
+                if (![...select.options].some(option => option.value === name)) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    select.appendChild(option);
+                }
+                select.value = name;
+            }
+            const note = document.querySelector('.rr-troop-battleback-source');
+            if (note) note.textContent = this.battlebackSourceText();
+            this.loadAndRenderCanvas();
+        })().catch(error => console.warn('Troop battleback scan:', error));
     }
 
     openBattlebackPicker(layer, select, onChange) {
@@ -1413,7 +1525,7 @@ class DatabaseTroopEditor {
         ECL.enableDragReorder(container, {
             rowSelector: '[data-cmd-index]',
             indexKey: 'cmdIndex',
-            indentBase: 11,
+            indentBase: 61,
             indentStep: 20,
             list: () => page.list,
             dragIndices: pressed => {
@@ -1442,10 +1554,9 @@ class DatabaseTroopEditor {
             this.expandedPluginCommands.clear();
         }
 
+        const rails = ECL.railsFor(page.list);
         page.list.forEach((cmd, idx) => {
-            // Script continuations are folded into their parent 355's summary,
-            // and plugin arguments are shown only when their command is expanded.
-            if (cmd.code === 655) return;
+            // Plugin arguments are shown only when their command is expanded.
             if (cmd.code === 657 &&
                     !this.expandedPluginCommands.has(ECL.pluginArgsOwnerIndex(page.list, idx))) {
                 return;
@@ -1459,15 +1570,19 @@ class DatabaseTroopEditor {
             const isEnd = cmd.code === 0;
 
             div.style.cssText = `
-                padding: 4px 8px; padding-left: ${(cmd.indent || 0) * 20 + 8}px;
+                padding: 4px 8px;
+                position: relative;
                 font-family: monospace; font-size: 11px; cursor: pointer; user-select: none;
                 border-left: 3px solid ${this.getCommandColor(cmd.code)};
                 background: ${isSelected ? 'var(--color-bg-selected)' : 'var(--color-bg-list-item)'};
+                ${isSelected ? ECL.SELECTED_INK : ''}
                 transition: background-color 0.1s; margin-bottom: 1px;
             `;
 
+            // The line numbers keep one column; a command's name is indented, the tree beside it.
+            const nameIndent = ECL.visualIndent(cmd) * ECL.RAIL_GEOMETRY.database.step;
             if (isEnd) {
-                div.innerHTML = `<span style="color: var(--color-border-input);">${tt('End')}</span>`;
+                div.innerHTML = `<span style="color: var(--color-text-muted); margin-left: ${ECL.RAIL_GEOMETRY.database.base - 8 + nameIndent}px;">${tt('End')}</span>`;
             } else {
                 const info = this.getCommandDisplay(cmd, page, idx);
                 // A plugin command with argument rows gets the toggle that
@@ -1477,10 +1592,10 @@ class DatabaseTroopEditor {
                 const toggle = argRows > 0
                     ? `<span class="plugin-args-toggle" style="color: var(--color-text-muted); cursor: pointer; user-select: none; min-width: 14px; display: inline-block; text-align: center;">${this.expandedPluginCommands.has(idx) ? '▼' : '▶'}</span>`
                     : '<span style="min-width: 14px; display: inline-block;"></span>';
-                div.innerHTML = `<span style="color: var(--color-text-dim); min-width: 32px; display: inline-block;">${String(idx + 1).padStart(3, '0')}</span>` +
+                div.innerHTML = `<span style="color: var(--rr-command-ink, var(--color-text-dim)); min-width: 32px; display: inline-block;">${String(idx + 1).padStart(3, '0')}</span>` +
                     toggle +
-                    `<span style="color: ${info.color}; font-weight: 600; margin: 0 8px 0 4px;">${this.escapeHTML(info.name)}</span>` +
-                    `<span style="color: var(--color-text);">${this.escapeHTML(info.description)}</span>`;
+                    `<span style="color: var(--rr-command-ink, ${info.color}); font-weight: 600; margin: 0 8px 0 ${4 + nameIndent}px;">${this.escapeHTML(info.name)}</span>` +
+                    `<span style="color: var(--color-text);">${this.descriptionHTML(cmd, info.description, () => this.renderCommandList(container, page))}</span>`;
 
                 div.querySelector('.plugin-args-toggle')?.addEventListener('click', (e) => {
                     // Without this the row's own handler would also select the
@@ -1491,6 +1606,8 @@ class DatabaseTroopEditor {
                     this.renderCommandList(container, page);
                 });
             }
+
+            ECL.drawRails(div, rails[idx], ECL.RAIL_GEOMETRY.database);
 
             // Click to select
             div.onclick = (e) => {
@@ -1976,8 +2093,9 @@ class DatabaseTroopEditor {
         if (cmd.code === 0) return;
 
         const ECL = this._eventCommandListClass();
-        if (cmd.code === 657) {
-            const range = ECL.contiguousBlockRange(page.list, idx, 357, 657);
+        if (cmd.code === 657 || cmd.code === 655) {
+            const range = cmd.code === 657 ? ECL.contiguousBlockRange(page.list, idx, 357, 657)
+                : ECL.contiguousBlockRange(page.list, idx, 355, 655);
             if (!range) return;
             idx = range.start;
             cmd = page.list[idx];
@@ -2300,6 +2418,14 @@ class DatabaseTroopEditor {
         return 'var(--color-text-muted)';
     }
 
+    /** A row's description as HTML: Show Text and Comment lines in their \C[n] colors, as the map event list draws them. */
+    descriptionHTML(cmd, description, redraw) {
+        if (cmd.code !== 401 && cmd.code !== 408) return this.escapeHTML(description);
+        const formatter = this.commandDialogs();
+        formatter.onWindowskinLoaded = redraw;
+        return formatter.convertTextCodesToHTML(description);
+    }
+
     getCommandDisplay(cmd, page, index) {
         const info = this.commandDialogs().getCommandInfo(cmd, page, index);
         const named = this.enemySlotDescription(cmd);
@@ -2559,7 +2685,8 @@ class DatabaseTroopEditor {
         const btnRow = document.createElement('div');
         btnRow.className = 'rr-modal-footer troop-conditions-footer';
         btnRow.style.flexShrink = '0';
-        btnRow.appendChild(this.createButton('Cancel', () => document.body.removeChild(modal)));
+        const close = () => { modal.remove(); modal._rrModalKeys?.leave(); };
+        btnRow.appendChild(this.createButton('Cancel', close));
         btnRow.appendChild(this.createButton('OK', () => {
             page.conditions = {
                 turnEnding: document.getElementById('cond-turnEnding').checked,
@@ -2577,15 +2704,18 @@ class DatabaseTroopEditor {
             };
             this.persistTroop();
             this.renderBattlePageContent();
-            document.body.removeChild(modal);
+            close();
         }));
         dialog.appendChild(btnRow);
 
-        header.querySelector('.troop-cond-close').addEventListener('click', () => document.body.removeChild(modal));
+        header.querySelector('.troop-cond-close').addEventListener('click', close);
         modal.appendChild(dialog);
         // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(modal);
         this.commonUI?.databaseEditor?.registerDetailModal(modal);
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(modal, { onEscape: close, container: () => dialog });
+        modal._rrModalKeys?.enter();
     }
 
     // ==========================================

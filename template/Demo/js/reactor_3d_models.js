@@ -1264,14 +1264,22 @@ Reactor3D.aimCharacterBillboard = function(object, camera) {
         right: new THREE.Vector3(), forward: new THREE.Vector3(),
         trueUp: new THREE.Vector3(), basis: new THREE.Matrix4()
     });
-    const right = scratch.right.set(1, 0, 0).applyQuaternion(camera.quaternion);
-    right.y = 0;
-    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
-    else right.normalize();
-    const up = this.billboardUp(camera);
-    const forward = scratch.forward.crossVectors(right, up).normalize();
-    const trueUp = scratch.trueUp.crossVectors(forward, right).normalize();
-    object.quaternion.setFromRotationMatrix(scratch.basis.makeBasis(right, trueUp, forward));
+    const cache = this._billboardFacing || (this._billboardFacing = new WeakMap());
+    let facing = cache.get(camera);
+    const rotation = camera.quaternion, tilt = this.BILLBOARD_TILT;
+    if (!facing || facing.x !== rotation.x || facing.y !== rotation.y || facing.z !== rotation.z || facing.w !== rotation.w || facing.tilt !== tilt) {
+        const right = scratch.right.set(1, 0, 0).applyQuaternion(camera.quaternion);
+        right.y = 0;
+        if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+        else right.normalize();
+        const up = this.billboardUp(camera);
+        const forward = scratch.forward.crossVectors(right, up).normalize();
+        const trueUp = scratch.trueUp.crossVectors(forward, right).normalize();
+        if (!facing) { facing = { value: new THREE.Quaternion() }; cache.set(camera, facing); }
+        facing.value.setFromRotationMatrix(scratch.basis.makeBasis(right, trueUp, forward));
+        facing.x = rotation.x; facing.y = rotation.y; facing.z = rotation.z; facing.w = rotation.w; facing.tilt = tilt;
+    }
+    if (!object.quaternion.equals(facing.value)) object.quaternion.copy(facing.value);
 };
 
 Reactor3D.characterIsBehindModel = function(character, event) {
@@ -1671,6 +1679,12 @@ Reactor3D.bodyLetsOut = function(mover, event, x, y) {
     const shape = this.eventBody(event);
     const from = this.bodyDepth(shape, mover._x - event._x, mover._y - event._y);
     return from > 0 && this.bodyDepth(shape, x - event._x, y - event._y) < from;
+};
+
+/** Placed props with a continuous animation cast moving shadows, as walking events do. */
+Reactor3D.modelCasterMoves = function(character, rules) {
+    if (!(character && typeof character.eventId === "function" && character.eventId() >= this.PROP_EVENT_BASE)) return true;
+    return Array.isArray(rules) && rules.some(rule => rule && (rule.trigger === "always" || rule.trigger === "idle"));
 };
 
 /**
@@ -2127,6 +2141,7 @@ Reactor3D.ModelUse = {
         for (const level of (lod && lod.levels) || []) for (const g of level) geometry(g);
         const cap = R.textureCap ? R.textureCap() : 2048;
         for (const texture of template.userData.glbTextures || []) {
+            if (texture && texture.isCompressedTexture) { bytes += R.KTX2.bytes(texture); continue; }
             const image = texture && (R.ShaderWarmup && R.ShaderWarmup.sourceImage ? R.ShaderWarmup.sourceImage(texture) : texture.image);
             const width = Math.min(cap, image && (image.naturalWidth || image.width) || 0), height = Math.min(cap, image && (image.naturalHeight || image.height) || 0);
             bytes += width * height * 4 * (texture.generateMipmaps === false ? 1 : 1.33);
@@ -2348,19 +2363,80 @@ function reactorSplitGlb(buffer) {
     return { json, bin };
 }
 
+/**
+ * The part of a GLB's binary chunk the runtime reads: every accessor's view,
+ * packed into a buffer of its own (each view keeps its offset's remainder by
+ * 16, so every typed array over it stays aligned), and the pictures a
+ * material draws with (its base color) as Blobs on their `images` entries
+ * (`rrBlob`). Normal, roughness and occlusion maps and pictures nothing
+ * names are left behind, with the rest of the file. `json` is updated in
+ * place to the new offsets. Returns the packed ArrayBuffer.
+ */
+function reactorCompactGlb(json, buffer, binOffset, binLength) {
+    const views = json.bufferViews || [], read = {}, drawn = {};
+    for (const accessor of json.accessors || []) {
+        if (accessor.bufferView != null) read[accessor.bufferView] = true;
+        if (accessor.sparse) { read[accessor.sparse.indices.bufferView] = true; read[accessor.sparse.values.bufferView] = true; }
+    }
+    for (const material of json.materials || []) {
+        const pbr = material.pbrMetallicRoughness || {}, specgloss = material.extensions && material.extensions.KHR_materials_pbrSpecularGlossiness;
+        const info = pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture);
+        const texture = info && json.textures && json.textures[info.index];
+        if (texture && texture.source != null) drawn[texture.source] = true;
+        // And its block-compressed copy (KHR_texture_basisu).
+        const basisu = texture && texture.extensions && texture.extensions.KHR_texture_basisu;
+        if (basisu && basisu.source != null) drawn[basisu.source] = true;
+    }
+    const source = new Uint8Array(buffer, binOffset, binLength), placed = [];
+    let size = 0;
+    for (let i = 0; i < views.length; i++) {
+        if (!read[i]) continue;
+        const from = views[i].byteOffset || 0, length = views[i].byteLength || 0;
+        const at = size + ((from % 16) - (size % 16) + 16) % 16;
+        placed.push([i, from, length, at]);
+        size = at + length;
+    }
+    const packed = new Uint8Array(size);
+    for (const [i, from, length, at] of placed) {
+        packed.set(source.subarray(from, from + length), at);
+        views[i].byteOffset = at;
+    }
+    (json.images || []).forEach((image, index) => {
+        if (!drawn[index] || image.uri || image.bufferView == null || typeof Blob === "undefined") return;
+        const view = views[image.bufferView], from = view.byteOffset || 0;
+        // A view an accessor also reads has moved already.
+        const bytes = read[image.bufferView] ? packed.subarray(from, from + view.byteLength) : source.subarray(from, from + view.byteLength);
+        image.rrBlob = new Blob([bytes], { type: image.mimeType || "image/png" });
+    });
+    return packed.buffer;
+}
+
 // Exposed for tests: the worker runs exactly these functions.
-Reactor3D._workerParts = { splitGlb: reactorSplitGlb };
+Reactor3D._workerParts = { splitGlb: reactorSplitGlb, compactGlb: reactorCompactGlb };
+
+/**
+ * A model keeps only what it reads of its file: the geometry and animation
+ * data in a packed buffer and its base color pictures. Off, its arrays are
+ * views into the whole file, which then stays in memory for as long as the
+ * model does, pictures nothing samples included.
+ */
+Reactor3D.GlbCompact = { enabled: true };
 
 // The worker splits the container and parses its JSON. A model's pictures are
 // not decoded here: each one is decoded when it is first drawn (ShaderWarmup),
 // at this machine's size, and that copy is closed once it is on the GPU.
 Reactor3D._glbWorkerSource = function() {
-    return reactorSplitGlb.toString() + "\n"
+    return reactorSplitGlb.toString() + "\n" + reactorCompactGlb.toString() + "\n"
         + "self.onmessage = function(event) {\n"
         + "    var data = event.data || {};\n"
         + "    var buffer = data.buffer;\n"
         + "    Promise.resolve().then(function() {\n"
         + "        var parsed = reactorSplitGlb(buffer);\n"
+        + "        if (data.compact) {\n"
+        + "            var packed = reactorCompactGlb(parsed.json, buffer, parsed.bin.offset, parsed.bin.length);\n"
+        + "            self.postMessage({ id: data.id, json: parsed.json, binOffset: 0, binLength: packed.byteLength, buffer: packed }, [packed]);\n"
+        + "            return;\n"
+        + "        }\n"
         + "        self.postMessage({ id: data.id, json: parsed.json,\n"
         + "            binOffset: parsed.bin.offset, binLength: parsed.bin.length,\n"
         + "            buffer: buffer }, [buffer]);\n"
@@ -2403,6 +2479,35 @@ Reactor3D._ensureParseWorker = function() {
     return this._parseWorker;
 };
 
+/**
+ * A worker's message arrives with every array holey and generic, whatever it
+ * holds. A node's matrix read from one by three's math (Matrix4.fromArray)
+ * taught it to convert every array it reads to the generic kind, and from
+ * there every matrix in the game held its numbers boxed: a matrix product
+ * allocated 84 bytes. The parsed glTF's arrays of numbers are rebuilt packed.
+ */
+Reactor3D.packJsonArrays = function(value) {
+    if (!value || typeof value !== "object") return value;
+    if (Array.isArray(value)) {
+        let numbers = value.length > 0;
+        for (let i = 0; i < value.length; i++) {
+            const item = value[i];
+            if (typeof item !== "number") numbers = false;
+            if (item && typeof item === "object") value[i] = this.packJsonArrays(item);
+        }
+        if (!numbers) return value;
+        // Its own array literal: one that ever held an object makes every array it makes generic.
+        const packed = [];
+        for (let i = 0; i < value.length; i++) packed.push(value[i]);
+        return packed;
+    }
+    for (const key in value) {
+        const item = value[key];
+        if (item && typeof item === "object") value[key] = this.packJsonArrays(item);
+    }
+    return value;
+};
+
 Reactor3D.parseGlbAsync = function(buffer) {
     const worker = this._ensureParseWorker();
     if (!worker) return Promise.resolve(null);
@@ -2415,13 +2520,13 @@ Reactor3D.parseGlbAsync = function(buffer) {
                 return;
             }
             resolve({
-                json: data.json,
+                json: Reactor3D.packJsonArrays(data.json),
                 bin: new Uint8Array(data.buffer, data.binOffset, data.binLength),
                 bitmaps: data.bitmaps || {}
             });
         });
         try {
-            worker.postMessage({ id, buffer }, [buffer]);
+            worker.postMessage({ id, buffer, compact: !!(this.GlbCompact && this.GlbCompact.enabled) }, [buffer]);
             Reactor3D.IdleWorkers?.touch("glb", () => this._parsePending.size > 0, () => { const idle = this._parseWorker; this._parseWorker = undefined; if (idle) idle.terminate(); });
         } catch (error) {
             this._parsePending.delete(id);
@@ -2460,22 +2565,32 @@ Reactor3D.lowMemory = function() {
     const reported = typeof navigator !== "undefined" ? Number(navigator.deviceMemory) : 0;
     return reported > 0 && reported <= 4;
 };
+/**
+ * A weak GPU keeps model textures at this side (0: the usual cap). Its picture is drawn below the
+ * screen's size, so a model rarely shows a 2048 sheet's top level; the sheet would still cost
+ * 21 MB of the machine's own RAM and the bandwidth to read it.
+ */
+Reactor3D.weakTextureSize = 1024;
 /** The largest side a model texture keeps on this machine. */
 Reactor3D.textureCap = function() {
-    const cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
-    return this.lowMemory() ? Math.min(cap, Math.max(64, Math.floor(this.lowMemoryTextureSize || cap))) : cap;
+    let cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    if (this.lowMemory()) cap = Math.min(cap, Math.max(64, Math.floor(this.lowMemoryTextureSize || cap)));
+    if (this.weakTextureSize > 0 && typeof this.isWeakGpu === "function" && this.isWeakGpu()) cap = Math.min(cap, Math.max(64, Math.floor(this.weakTextureSize)));
+    return cap;
 };
 
 /** The main-thread twin of capBitmapSize for images decoded by the browser: a canvas at the capped size. */
 Reactor3D.capImage = function(image) {
+    // Only a picture the browser draws: a compressed texture's levels are capped where they are transcoded.
+    if (!image || !(image.tagName || typeof image.getContext === "function" || typeof image.close === "function")) return image;
     const cap = this.textureCap();
     const width = image && (image.naturalWidth || image.width);
     const height = image && (image.naturalHeight || image.height);
     if (!image || !(width > cap || height > cap) || typeof document === "undefined") return image;
-    // Under the usual cap and over a low-memory one: the game resamples it where it decodes it
+    // Under the usual cap and over a low-memory one: it is resampled where it is decoded
     // (ShaderWarmup's bitmap, off the main thread), so it stays an <img> here.
     const usual = Math.max(64, Math.floor(this.maxTextureSize || 0));
-    if (cap < usual && width <= usual && height <= usual && image.tagName === "IMG" && this.ShaderWarmup && this.ShaderWarmup.decodesImages()) return image;
+    if (cap < usual && width <= usual && height <= usual && image.tagName === "IMG" && this.ShaderWarmup && this.ShaderWarmup.resamplesModelSheets()) return image;
     const scale = cap / Math.max(width, height);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * scale));
@@ -2533,6 +2648,9 @@ Reactor3D.readModel = function(buffer, ext, baseUrl, texture) {
     const kind = String(ext || ".glb").toLowerCase();
     if (kind === ".glb") {
         const parsed = this.readGlb(buffer);
+        if (this.GlbCompact && this.GlbCompact.enabled && parsed.bin) {
+            parsed.bin = new Uint8Array(reactorCompactGlb(parsed.json, parsed.bin.buffer, parsed.bin.byteOffset, parsed.bin.byteLength));
+        }
         return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl);
     }
     if (kind === ".obj") return this.buildMeshTemplate(this.readObj(buffer), baseUrl, texture);
@@ -3222,6 +3340,9 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
 
 Reactor3D._glbAccessor = function(json, bin, index) {
     const accessor = json.accessors[index];
+    // Without a view the values start as zeros; sparse values are laid over
+    // them (a face's morph targets move only a few vertices).
+    if (accessor.bufferView == null || accessor.sparse) return this._glbSparseAccessor(json, bin, accessor);
     const view = json.bufferViews[accessor.bufferView];
     const offset = (view.byteOffset || 0) + (accessor.byteOffset || 0);
     const comps = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT3: 9, MAT4: 16 }[accessor.type] || 1;
@@ -3297,16 +3418,233 @@ Reactor3D.studioEnvMap = function() {
     return cube;
 };
 
+/**
+ * Block-compressed model pictures. A model compressed at import carries a KTX2
+ * (Basis Universal) copy of each base color picture beside the picture itself
+ * (glTF's KHR_texture_basisu). It is transcoded in a worker to the first
+ * format this GPU samples directly: BC7, then ETC2, then S3TC (BC3, or BC1 for
+ * an opaque picture). A BC7 sheet is a byte a texel on the GPU (a quarter of
+ * plain color) and is read with a quarter of the bandwidth. Where none of the
+ * three is supported, or the transcoder cannot run, the file's own picture is
+ * drawn as before. A machine's texture cap is kept by starting at the mip
+ * level under it. A picture the file samples with nearest filtering is never
+ * block-compressed. Off: every model draws its own picture.
+ */
+Reactor3D.KTX2 = {
+    enabled: true,
+    TRANSCODER: "basis/basis_transcoder.js",
+    WASM: "basis/basis_transcoder.wasm",
+    // Per target: the transcoder's format with and without alpha, and the three.js format each lands in.
+    TARGETS: {
+        bc7: { extensions: ["EXT_texture_compression_bptc"], basis: [7, 7], formats: ["RGBA_BPTC_Format", "RGBA_BPTC_Format"] },
+        etc2: { extensions: ["WEBGL_compressed_texture_etc"], basis: [0, 1], formats: ["RGB_ETC2_Format", "RGBA_ETC2_EAC_Format"] },
+        s3tc: { extensions: ["WEBGL_compressed_texture_s3tc", "WEBGL_compressed_texture_s3tc_srgb"], basis: [2, 3], formats: ["RGB_S3TC_DXT1_Format", "RGBA_S3TC_DXT5_Format"] }
+    },
+    ORDER: ["bc7", "etc2", "s3tc"],
+    _jobs: new Map(),
+    _serial: 0,
+    /** The extension names this machine's WebGL 2 offers (asked once, of a context made for the purpose and let go). */
+    supportedExtensions() {
+        if (this._extensions !== undefined) return this._extensions;
+        this._extensions = [];
+        try {
+            const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+            const gl = canvas && canvas.getContext("webgl2");
+            if (gl) {
+                this._extensions = gl.getSupportedExtensions() || [];
+                const lose = gl.getExtension("WEBGL_lose_context");
+                if (lose) lose.loseContext();
+            }
+        } catch (error) { this._extensions = []; }
+        return this._extensions;
+    },
+    /** The first target this GPU samples, or null. */
+    target() {
+        if (this._target !== undefined) return this._target;
+        const have = new Set(this.supportedExtensions());
+        this._target = this.ORDER.find(name => this.TARGETS[name].extensions.every(ext => have.has(ext))) || null;
+        return this._target;
+    },
+    usable() {
+        return !!this.enabled && typeof Worker !== "undefined" && typeof Blob !== "undefined" && typeof fetch === "function"
+            && typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && !!this.target();
+    },
+    /** Whether a glTF texture may be drawn from its compressed copy: never one the file samples nearest (pixel art). */
+    allowed(json, textureDef) {
+        const sampler = textureDef.sampler != null && json.samplers ? json.samplers[textureDef.sampler] : null;
+        return !(sampler && (sampler.magFilter === 9728 || sampler.minFilter === 9728 || sampler.minFilter === 9984 || sampler.minFilter === 9986));
+    },
+    /** The transcoder worker, made from the transcoder's own script and the message loop below. */
+    worker() {
+        if (this._ready) return this._ready;
+        const url = name => Reactor3D.workerUrl(name);
+        this._ready = Promise.all([
+            fetch(url(this.TRANSCODER)).then(response => { if (!response.ok && response.status !== 0) throw new Error("transcoder " + response.status); return response.text(); }),
+            fetch(url(this.WASM)).then(response => { if (!response.ok && response.status !== 0) throw new Error("transcoder wasm " + response.status); return response.arrayBuffer(); })
+        ]).then(([script, wasm]) => {
+            const source = script + "\n;\n(" + reactorKtx2Worker.toString() + ")(self);";
+            const blobUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+            const worker = new Worker(blobUrl, { name: "Reactor texture transcode" });
+            URL.revokeObjectURL(blobUrl);
+            worker.onmessage = event => {
+                const job = this._jobs.get(event.data && event.data.id);
+                if (!job) return;
+                this._jobs.delete(job.id);
+                if (event.data.error) job.reject(new Error(event.data.error)); else job.resolve(event.data);
+            };
+            worker.onerror = event => {
+                if (event && event.preventDefault) event.preventDefault();
+                for (const job of this._jobs.values()) job.reject(new Error("transcoder worker failed"));
+                this._jobs.clear();
+                this._ready = null;
+            };
+            worker.postMessage({ init: true, wasm }, [wasm]);
+            return worker;
+        });
+        // A transcoder that could not be made is tried again by the next picture (the editor names its
+        // files once a 3D view is open); this picture is drawn as the file has it.
+        const made = this._ready;
+        made.catch(() => { if (this._ready === made) this._ready = null; });
+        return this._ready;
+    },
+    /** Transcode KTX2 bytes (a Blob or bytes) at most `cap` texels on a side: { mipmaps, width, height, format, alpha }. */
+    transcode(bytes, cap) {
+        const target = this.target();
+        return this.worker().then(worker => new Promise((resolve, reject) => {
+            const id = ++this._serial;
+            this._jobs.set(id, { id, resolve, reject });
+            worker.postMessage({ id, bytes, cap, basis: this.TARGETS[target].basis });
+            Reactor3D.IdleWorkers?.touch("ktx2", () => this._jobs.size > 0, () => {
+                const ready = this._ready;
+                this._ready = null;
+                if (ready) ready.then(idle => idle.terminate(), () => {});
+            });
+        })).then(data => {
+            const name = this.TARGETS[target].formats[data.alpha ? 1 : 0];
+            return { mipmaps: data.mipmaps, width: data.width, height: data.height, format: THREE[name], alpha: data.alpha, target };
+        });
+    },
+    /** A transcoded picture put on a texture made to wait for it: from then on it is three's CompressedTexture. */
+    wear(texture, made) {
+        Object.setPrototypeOf(texture, THREE.CompressedTexture.prototype);
+        texture.isCompressedTexture = true;
+        texture.image = { width: made.width, height: made.height };
+        texture.mipmaps = made.mipmaps;
+        texture.format = made.format;
+        texture.type = THREE.UnsignedByteType;
+        texture.generateMipmaps = false;
+        texture.flipY = false;
+        texture.minFilter = made.mipmaps.length > 1 ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+        texture.userData.rrCompressed = made.target;
+        delete texture.userData.rrPending;
+        texture.needsUpdate = true;
+    },
+    /** GPU bytes of a compressed texture's levels. */
+    bytes(texture) {
+        let total = 0;
+        for (const level of texture.mipmaps || []) total += level && level.data ? level.data.byteLength : 0;
+        return total;
+    },
+    /**
+     * A model texture from a glTF texture's KTX2 copy, or null to take the file's own picture.
+     * The texture waits (ShaderWarmup holds what wears it) until the transcode comes back; if it
+     * fails, it takes the file's picture after all.
+     */
+    fromGlb(json, bin, textureDef, image, textures) {
+        const basisu = textureDef.extensions && textureDef.extensions.KHR_texture_basisu;
+        const ktx = basisu && json.images ? json.images[basisu.source] : null;
+        if (!ktx || ktx.uri || ktx.bufferView == null || !this.usable() || !this.allowed(json, textureDef)) return null;
+        const R = Reactor3D;
+        const map = new THREE.Texture();
+        map.userData.rrModelTexture = true;
+        map.userData.rrPending = true;
+        map.flipY = false;
+        if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
+        const bytes = R._glbImageBlob(json, bin, ktx);
+        const fallback = image && !image.uri && image.bufferView != null ? R._glbImageBlob(json, bin, image) : null;
+        this.transcode(bytes, R.textureCap()).then(made => this.wear(map, made), () => {
+            if (!fallback) { delete map.userData.rrPending; return; }
+            const url = URL.createObjectURL(fallback);
+            new THREE.ImageLoader().load(url, img => {
+                URL.revokeObjectURL(url);
+                if (R.ImageWorker && R.ImageWorker.blobs) R.ImageWorker.blobs.set(img, fallback);
+                map.image = R.capImage(img);
+                delete map.userData.rrPending;
+                map.needsUpdate = true;
+            }, undefined, () => { URL.revokeObjectURL(url); delete map.userData.rrPending; });
+        });
+        textures.push(map);
+        return map;
+    }
+};
+
+/**
+ * The transcoder worker's message loop, run after basis_transcoder.js in the worker (so `BASIS` is
+ * there). The first message brings the WebAssembly; each later one a KTX2 file to transcode from the
+ * first level at most `cap` on a side, its levels sent back as they will be uploaded.
+ */
+function reactorKtx2Worker(scope) {
+    let ready = null;
+    scope.onmessage = async event => {
+        const job = event.data;
+        if (job.init) {
+            ready = new Promise(resolve => {
+                const module = { wasmBinary: job.wasm, onRuntimeInitialized: () => resolve(module) };
+                BASIS(module); // eslint-disable-line no-undef
+            }).then(module => { module.initializeBasis(); return module; });
+            return;
+        }
+        let file = null;
+        try {
+            const basis = await ready;
+            const buffer = job.bytes && typeof job.bytes.arrayBuffer === "function" ? await job.bytes.arrayBuffer() : job.bytes;
+            file = new basis.KTX2File(new Uint8Array(buffer));
+            if (!file.isValid()) throw new Error("not a KTX2 file this transcoder reads");
+            if (!file.startTranscoding()) throw new Error("the transcode could not start");
+            const levels = Math.max(1, file.getLevels()), alpha = !!file.getHasAlpha(), format = job.basis[alpha ? 1 : 0];
+            let first = 0;
+            for (;;) {
+                const info = file.getImageLevelInfo(first, 0, 0);
+                if (first >= levels - 1 || !(job.cap > 0) || Math.max(info.origWidth, info.origHeight) <= job.cap) break;
+                first++;
+            }
+            const mipmaps = [], transfer = [];
+            for (let level = first; level < levels; level++) {
+                const info = file.getImageLevelInfo(level, 0, 0);
+                const data = new Uint8Array(file.getImageTranscodedSizeInBytes(level, 0, 0, format));
+                if (!file.transcodeImage(data, level, 0, 0, format, 0, -1, -1)) throw new Error("level " + level + " did not transcode");
+                mipmaps.push({ data, width: levels > 1 ? info.origWidth : info.width, height: levels > 1 ? info.origHeight : info.height });
+                transfer.push(data.buffer);
+            }
+            scope.postMessage({ id: job.id, mipmaps, width: mipmaps[0].width, height: mipmaps[0].height, alpha }, transfer);
+        } catch (error) {
+            scope.postMessage({ id: job.id, error: String(error && error.message || error) });
+        } finally {
+            if (file) { try { file.close(); file.delete(); } catch (error) { /* already gone */ } }
+        }
+    };
+}
+Reactor3D._workerParts.ktx2Worker = reactorKtx2Worker;
+
 Reactor3D._glbImageUrl = function(json, bin, image, baseUrl) {
     if (image.uri) {
         if (/^(data:|blob:|https?:|file:)/i.test(image.uri)) return image.uri;
         const cleaned = String(image.uri).replace(/\\/g, "/").replace(/^\.\//, "");
         return (baseUrl || "") + cleaned;
     }
+    return URL.createObjectURL(this._glbImageBlob(json, bin, image));
+};
+
+/**
+ * An embedded picture's bytes as a Blob: the one the GLB worker made, else cut from the binary chunk.
+ * The worker's Blob serves every texture that names the picture (materials sharing one sheet): a
+ * compacted chunk no longer holds those bytes.
+ */
+Reactor3D._glbImageBlob = function(json, bin, image) {
+    if (image.rrBlob) return image.rrBlob;
     const view = json.bufferViews[image.bufferView];
     const bytes = bin.subarray(view.byteOffset || 0, (view.byteOffset || 0) + view.byteLength);
-    const blob = new Blob([bytes], { type: image.mimeType || "image/png" });
-    return URL.createObjectURL(blob);
+    return new Blob([bytes], { type: image.mimeType || "image/png" });
 };
 
 Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps) {
@@ -3314,6 +3652,9 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     const textureDef = json.textures[texInfo.index];
     if (!textureDef) return null;
     const image = json.images[textureDef.source];
+    // A block-compressed copy of the picture (KHR_texture_basisu), where this GPU takes one.
+    const compressed = this.KTX2.fromGlb(json, bin, textureDef, image, textures);
+    if (compressed) return compressed;
     if (!image) return null;
     // The worker already decoded this image off-thread.
     if (bitmaps && bitmaps[textureDef.source]) {
@@ -3329,7 +3670,10 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     map.userData.rrModelTexture = true;
     map.flipY = false;
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
-    const primary = this._glbImageUrl(json, bin, image, baseUrl);
+    // An embedded picture's Blob goes with its <img> to the image worker, which decodes from it (its
+    // object URL is given back as soon as the <img> has loaded).
+    const blob = !image.uri && image.bufferView != null && typeof Blob !== "undefined" ? this._glbImageBlob(json, bin, image) : null;
+    const primary = blob ? URL.createObjectURL(blob) : this._glbImageUrl(json, bin, image, baseUrl);
     if (/^(blob:|data:)/i.test(primary)) {
         const ownedObjectUrl = !image.uri && /^blob:/i.test(primary);
         let objectUrlReleased = false;
@@ -3341,6 +3685,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         let embedded;
         try {
             embedded = new THREE.TextureLoader().load(primary, loaded => {
+                if (blob && Reactor3D.ImageWorker && Reactor3D.ImageWorker.blobs) Reactor3D.ImageWorker.blobs.set(loaded.image, blob);
                 loaded.image = Reactor3D.capImage(loaded.image);
                 loaded.needsUpdate = true;
                 releaseObjectUrl();
@@ -3377,6 +3722,82 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     return map;
 };
 
+Reactor3D._glbSparseAccessor = function(json, bin, accessor) {
+    const comps = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT3: 9, MAT4: 16 }[accessor.type] || 1;
+    const out = new Float32Array(accessor.count * comps);
+    const views = json.bufferViews;
+    const dense = (bufferView, byteOffset, componentType, count, type) =>
+        this._glbAccessor({ accessors: [{ bufferView, byteOffset, componentType, count, type }], bufferViews: views }, bin, 0);
+    if (accessor.bufferView != null) {
+        const base = dense(accessor.bufferView, accessor.byteOffset || 0, accessor.componentType, accessor.count, accessor.type);
+        const scale = accessor.normalized ? ({ 5120: 127, 5121: 255, 5122: 32767, 5123: 65535 }[accessor.componentType] || 1) : 1;
+        for (let i = 0; i < out.length; i++) out[i] = Math.max(-1, base[i] / scale);
+    }
+    const sparse = accessor.sparse;
+    if (!sparse || !sparse.count) return out;
+    const indices = dense(sparse.indices.bufferView, sparse.indices.byteOffset || 0, sparse.indices.componentType, sparse.count, "SCALAR");
+    const values = dense(sparse.values.bufferView, sparse.values.byteOffset || 0, accessor.componentType, sparse.count, accessor.type);
+    // Normalized integers (KHR_mesh_quantization) read as -1..1.
+    const unit = accessor.normalized ? ({ 5120: 127, 5121: 255, 5122: 32767, 5123: 65535 }[accessor.componentType] || 1) : 1;
+    for (let i = 0; i < sparse.count; i++) for (let c = 0; c < comps; c++) out[indices[i] * comps + c] = Math.max(-1, values[i * comps + c] / unit);
+    return out;
+};
+
+/**
+ * What Material.clone loses of a model material's surface (it copies userData
+ * through JSON): its normal and emissive pictures, shared, and its glow, its
+ * own (so one instance's glow can be changed alone).
+ */
+Reactor3D.carrySurfaceData = function(from, to) {
+    const a = from && from.userData, b = to && to.userData;
+    if (!a || !b) return to;
+    if (a.rrNormalMap && a.rrNormalMap.isTexture) { b.rrNormalMap = a.rrNormalMap; b.rrNormalScale = a.rrNormalScale && a.rrNormalScale.clone ? a.rrNormalScale.clone() : a.rrNormalScale; }
+    if (a.rrEmissiveMap && a.rrEmissiveMap.isTexture) b.rrEmissiveMap = a.rrEmissiveMap;
+    if (a.rrEmissive && a.rrEmissive.isColor) b.rrEmissive = a.rrEmissive.clone();
+    if (a.rrHair) b.rrHair = true;
+    return to;
+};
+
+Reactor3D.cloneSurfaceMaterial = function(material) {
+    const data = material.userData;
+    material.userData = Object.assign({}, data);
+    if (data?.rrNormalMap?.isTexture) delete material.userData.rrNormalMap;
+    if (data?.rrEmissiveMap?.isTexture) delete material.userData.rrEmissiveMap;
+    let cloned;
+    try {
+        cloned = material.clone();
+    } finally {
+        material.userData = data;
+    }
+    return Reactor3D.carrySurfaceData(material, cloned);
+};
+
+/**
+ * Per vertex, the way the picture's v runs over the surface (dP/dv), summed
+ * over the triangles a vertex shares and normalized: a hair card's strand
+ * direction, root to tip, smooth along the card. Zero where it cannot be told.
+ */
+Reactor3D.hairStrandDirections = function(geometry) {
+    const pos = geometry.attributes.position, uv = geometry.attributes.uv, n = pos.count, out = new Float32Array(n * 3);
+    const index = geometry.index ? geometry.index.array : null, count = index ? index.length : n;
+    for (let t = 0; t + 2 < count; t += 3) {
+        const a = index ? index[t] : t, b = index ? index[t + 1] : t + 1, c = index ? index[t + 2] : t + 2;
+        const e1x = pos.getX(b) - pos.getX(a), e1y = pos.getY(b) - pos.getY(a), e1z = pos.getZ(b) - pos.getZ(a);
+        const e2x = pos.getX(c) - pos.getX(a), e2y = pos.getY(c) - pos.getY(a), e2z = pos.getZ(c) - pos.getZ(a);
+        const du1 = uv.getX(b) - uv.getX(a), dv1 = uv.getY(b) - uv.getY(a), du2 = uv.getX(c) - uv.getX(a), dv2 = uv.getY(c) - uv.getY(a);
+        const det = du1 * dv2 - du2 * dv1;
+        if (!(Math.abs(det) > 1e-12)) continue;
+        const r = 1 / det;
+        const bx = (e2x * du1 - e1x * du2) * r, by = (e2y * du1 - e1y * du2) * r, bz = (e2z * du1 - e1z * du2) * r;
+        for (const v of [a, b, c]) { out[v * 3] += bx; out[v * 3 + 1] += by; out[v * 3 + 2] += bz; }
+    }
+    for (let v = 0; v < n; v++) {
+        const x = out[v * 3], y = out[v * 3 + 1], z = out[v * 3 + 2], l = Math.hypot(x, y, z);
+        if (l > 1e-12) { out[v * 3] = x / l; out[v * 3 + 1] = y / l; out[v * 3 + 2] = z / l; }
+    }
+    return out;
+};
+
 Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
     if (typeof THREE === "undefined") throw new Error("three.js is not loaded");
     const root = new THREE.Group();
@@ -3411,6 +3832,35 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         const map = this._loadGlbTexture(
             json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps);
         if (map) mat.map = map;
+        // Its normal map, where it shares the picture's coordinates: lit by which way each texel faces
+        // (Reactor3D.MODEL_FACING). Kept linear; a block-compressed copy is left out (its format is a color's).
+        const normalInfo = def.normalTexture;
+        if (map && normalInfo && !(normalInfo.texCoord > 0) && (!texInfo || !(texInfo.texCoord > 0))) {
+            const normal = this._loadGlbTexture(json, bin, normalInfo, baseUrl, textures, bitmaps, usedBitmaps);
+            if (normal && !normal.isCompressedTexture) {
+                normal.colorSpace = THREE.NoColorSpace || "";
+                normal.needsUpdate = true;
+                mat.userData.rrNormalMap = normal;
+                const k = normalInfo.scale != null ? Number(normalInfo.scale) : 1;
+                mat.userData.rrNormalScale = new THREE.Vector2(k, k);
+            }
+        }
+        // Its glow (emissiveFactor x KHR_materials_emissive_strength, times its emissive picture where that
+        // shares the base picture's coordinates): added over the light (Reactor3D.injectSurfaceGlow).
+        const emissive = Array.isArray(def.emissiveFactor) ? def.emissiveFactor : null;
+        if (emissive && (emissive[0] > 0 || emissive[1] > 0 || emissive[2] > 0)) {
+            const strength = def.extensions && def.extensions.KHR_materials_emissive_strength
+                && Number(def.extensions.KHR_materials_emissive_strength.emissiveStrength) > 0
+                ? Number(def.extensions.KHR_materials_emissive_strength.emissiveStrength) : 1;
+            mat.userData.rrEmissive = new THREE.Color(emissive[0] * strength, emissive[1] * strength, emissive[2] * strength);
+            const emitInfo = def.emissiveTexture;
+            if (map && emitInfo && !(emitInfo.texCoord > 0) && (!texInfo || !(texInfo.texCoord > 0))) {
+                const glow = this._loadGlbTexture(json, bin, emitInfo, baseUrl, textures, bitmaps, usedBitmaps);
+                if (glow) mat.userData.rrEmissiveMap = glow;
+            }
+        }
+        // Hair, as the Character Builder names it: a strand sheen over the light.
+        if (/^(Hair|Beard)\b/.test(String(def.name || ""))) mat.userData.rrHair = true;
         // A file's own polished metal is remembered as a starting point for its
         // Surface; nothing reflects until the model's surface says so.
         const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
@@ -3439,8 +3889,6 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
             if (prim.attributes.NORMAL != null) {
                 geometry.setAttribute("normal", new THREE.BufferAttribute(
                     this._glbAccessor(json, bin, prim.attributes.NORMAL), 3));
-            } else {
-                geometry.computeVertexNormals();
             }
             if (prim.attributes.TEXCOORD_0 != null) {
                 geometry.setAttribute("uv", new THREE.BufferAttribute(
@@ -3455,16 +3903,37 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
                 const idx = this._glbAccessor(json, bin, prim.indices);
                 geometry.setIndex(new THREE.BufferAttribute(idx, 1));
             }
+            // Morph targets (relative POSITION deltas), named from the mesh's extras.targetNames so
+            // every Mesh made over this geometry finds them by name in its morphTargetDictionary.
+            if (prim.targets && prim.targets.length && prim.targets.every(t => t.POSITION != null)) {
+                const names = (mesh.extras && mesh.extras.targetNames) || [];
+                geometry.morphAttributes.position = prim.targets.map((t, i) => {
+                    const attribute = new THREE.BufferAttribute(this._glbAccessor(json, bin, t.POSITION), 3);
+                    attribute.name = names[i] || "morph" + i;
+                    return attribute;
+                });
+                geometry.morphTargetsRelative = true;
+            }
+            // After the index: computed without it, the vertices were taken three at a time as
+            // triangles, and reading past the last one left a vector holding undefined, which boxes
+            // every number three's vectors are given for the rest of the session.
+            if (prim.attributes.NORMAL == null) geometry.computeVertexNormals();
             if (prim.attributes.JOINTS_0 != null && prim.attributes.WEIGHTS_0 != null) {
                 geometry.userData.joints = this._glbAccessor(json, bin, prim.attributes.JOINTS_0);
                 geometry.userData.weights = this._glbAccessor(json, bin, prim.attributes.WEIGHTS_0);
             }
             let material = materials[prim.material] || defaultMat;
             if (prim.attributes.COLOR_0 != null) {
-                material = material.clone();
+                const source = material;
+                material = Reactor3D.cloneSurfaceMaterial(material);
+                Reactor3D.carrySurfaceData(source, material);
                 material.vertexColors = true;
                 material.__reactorModel = true;
                 Reactor3D.litMaterial(material);
+            }
+            // Hair: the way each strand runs, smooth along the card, for its sheen.
+            if (material.userData && material.userData.rrHair && geometry.attributes.uv) {
+                geometry.setAttribute("rrHairDir", new THREE.BufferAttribute(Reactor3D.hairStrandDirections(geometry), 3));
             }
             group.add(new THREE.Mesh(geometry, material));
         }
@@ -4324,7 +4793,7 @@ Reactor3D.groundAnimatedTemplate = function(template, sidecar) {
     if (!clips.length || !THREE.AnimationMixer) return template;
     const content = template.children.find(child => child.name === "content");
     if (!content) return template;
-    const rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+    const rules = sidecar ? this.readModelAnimationRules(sidecar, clips) : [];
     const byTrigger = trigger => rules.find(rule => rule.type === "clip" && rule.trigger === trigger && rule.clip);
     const named = (byTrigger("idle") || byTrigger("always") || {}).clip;
     const clip = clips.find(entry => entry.name === named) || clips[0];
@@ -4436,7 +4905,7 @@ Reactor3D.cloneModelTemplate = function(template) {
     // tints one tank, not every clone of it. Material.clone drops custom
     // properties, so the model marker is carried by hand.
     const instanceMaterial = mat => {
-        const cloned = mat.clone();
+        const cloned = Reactor3D.cloneSurfaceMaterial(mat);
         cloned.__reactorModel = mat.__reactorModel;
         // Nor the light injection, which lives in onBeforeCompile and the
         // program cache key — neither of which clone copies.
@@ -4448,6 +4917,7 @@ Reactor3D.cloneModelTemplate = function(template) {
             && !cloned.userData.baseColor.isColor) {
             cloned.userData.baseColor = new THREE.Color(cloned.userData.baseColor);
         }
+        Reactor3D.carrySurfaceData(mat, cloned);
         return cloned;
     };
     clone.traverse(child => {
@@ -4651,8 +5121,10 @@ Reactor3D.flattenModelWorld = function(root) {
  * rules turn parts about their own recorded pivots. "parts" entries carve
  * regions the source file never named into parts of their own — see
  * readModelParts/carveModelParts below.
+ * `clips` (optional): the clips in the model's file (AnimationClips or
+ * names); those named for a movement state play in it (ownClipAnimations).
  */
-Reactor3D.readModelAnimationRules = function(json) {
+Reactor3D.readModelAnimationRules = function(json, clips) {
     const list = json && Array.isArray(json.animations) ? json.animations : [];
     const rules = [];
     const vec3 = (value, fallback) => {
@@ -4761,6 +5233,8 @@ Reactor3D.readModelAnimationRules = function(json) {
             // One of the rig's own default motions, not the model's (reactor_rig_motions.js).
             defaultMotion: !!raw.defaultMotion
         };
+        // A clip in the model's file playing in the state its name says, not an animation of the sidecar's.
+        if (raw.ownClip) rule.ownClip = true;
         // What a wheel and a steered part carry (a vehicle's rules), kept only on a rule that has them:
         // `exact` reaches the part by its whole name, not by prefix; `axisVector` is the line it turns
         // about (model space, kept at unit length) in place of `axis`; `radius` (model units) rolls a
@@ -4778,13 +5252,93 @@ Reactor3D.readModelAnimationRules = function(json) {
     // A rigged model plays its template's default motion for every state it
     // has none of its own for: it climbs, swims and jumps before anyone
     // animates it. `defaultMotions: false` in the sidecar turns that off.
+    const own = this.ownClipAnimations(list, clips, json);
+    let all = own.length ? list.concat(own) : list;
+    if (own.length) rules.push(...this.readModelAnimationRules({ animations: own }));
     const rig = json && json.rig && typeof json.rig === "object" ? json.rig : null;
+    // The shared library's motions (attachLibraryMotions) for the states still open, then the rig's own procedural ones.
+    const library = rig && json.defaultMotions !== false ? this.libraryMotionRules(all, clips) : [];
+    if (library.length) {
+        rules.push(...this.readModelAnimationRules({ animations: library }));
+        all = all.concat(library);
+    }
     const presets = rig && json.defaultMotions !== false ? Reactor3D.rigMotionPresets() : null;
     if (presets && presets.defaultRules) {
-        const extra = presets.defaultRules(String(rig.template || "humanoid"), list);
+        const extra = presets.defaultRules(String(rig.template || "humanoid"), all);
         if (extra.length) return rules.concat(this.readModelAnimationRules({ animations: extra }));
     }
     return rules;
+};
+
+/**
+ * The words a clip in a model's file is named by for each movement state: "Walk" or "Walking"
+ * plays while walking, "Run" or "Sprint" while dashing, "Idle" or "Breathe" when still.
+ */
+Reactor3D.CLIP_STATE_NAMES = {
+    idle: ["idle", "breathe", "breathing", "stand", "standing"],
+    walking: ["walk", "walking"],
+    dashing: ["run", "running", "dash", "dashing", "sprint", "sprinting"],
+    jumping: ["jump", "jumping"],
+    swimming: ["swim", "swimming"],
+    treading: ["tread", "treading", "tread water", "treading water"],
+    climbing: ["climb", "climbing"],
+    riding: ["ride", "riding"]
+};
+
+/**
+ * The movement state a clip's name says it is for, or null: `{ state, exact }`. An exporter's
+ * "Armature|" prefix, a trailing number ("Idle_9") and "loop" or "in place" are not part of the
+ * name; `exact` is false when one of those was taken off.
+ */
+Reactor3D.clipStateOf = function(name) {
+    let text = String(name || "");
+    text = text.slice(text.lastIndexOf("|") + 1).replace(/([a-z])([A-Z])/g, "$1 $2")
+        .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const whole = text;
+    for (let previous = null; previous !== text;) {
+        previous = text;
+        text = text.replace(/\s*(?:\d+|loop|looped|cycle|in ?place)$/, "").trim();
+    }
+    for (const state of Object.keys(this.CLIP_STATE_NAMES)) {
+        if (this.CLIP_STATE_NAMES[state].indexOf(text) >= 0) return { state, exact: text === whole };
+    }
+    return null;
+};
+
+/**
+ * Clip rules for the clips in a model's file that name a movement state its
+ * own animations leave open (`list`, the sidecar's), so a model with a
+ * "Walking" clip walks with it before anyone adds the clip. An animation set
+ * for the state wins over the clip, and the clip over the rig's default
+ * motion. A clip named exactly wins over a numbered or "in place" one, then
+ * the first in the file. A walk with no run beside it also plays while
+ * dashing, unless the rig's default run does.
+ */
+Reactor3D.ownClipAnimations = function(list, clips, json) {
+    if (!Array.isArray(clips) || !clips.length) return [];
+    const covers = state => (list || []).some(rule => rule && rule.trigger && (rule.trigger === state
+        || (rule.trigger === "moving" && (state === "walking" || state === "dashing"))
+        || (state === "treading" && rule.trigger === "swimming" && rule.type === "clip")));
+    const best = {};
+    for (const clip of clips) {
+        const name = clip && typeof clip === "object" ? clip.name : clip;
+        const match = name ? this.clipStateOf(name) : null;
+        if (!match || covers(match.state)) continue;
+        const kept = best[match.state];
+        if (!kept || (match.exact && !kept.exact)) best[match.state] = { name: String(name), exact: match.exact };
+    }
+    const out = [];
+    for (const state of Object.keys(this.CLIP_STATE_NAMES)) {
+        if (best[state]) out.push({ name: best[state].name, type: "clip", clip: best[state].name, trigger: state, ownClip: true });
+    }
+    const walk = out.find(rule => rule.trigger === "walking");
+    if (walk && !best.dashing && !covers("dashing")) {
+        const rig = json && json.rig && typeof json.rig === "object" ? json.rig : null;
+        const presets = rig && json.defaultMotions !== false ? this.rigMotionPresets() : null;
+        const table = presets && presets.DEFAULTS ? presets.DEFAULTS[String(rig.template || "humanoid")] : null;
+        if (!(table && table.dashing)) walk.trigger = "moving";
+    }
+    return out;
 };
 
 /** The rig presets (reactor_rig_motions.js), wherever this runs; null when absent. */
@@ -4795,6 +5349,279 @@ Reactor3D.rigMotionPresets = function() {
         try { return require("./reactor_rig_motions.js"); } catch (error) { return null; }
     }
     return null;
+};
+
+/**
+ * The shared motion library (reactor_3d_motions.js, its data in
+ * reactor_3d_motions.bin beside it): the motion-captured walk, run, jump,
+ * swim, treading and ladder climb a rigged humanoid plays in each state it
+ * has no motion of its own for. Read from the disk the first time a rigged
+ * humanoid's model.json loads; a browser fetches it then (whenMotionLibrary).
+ * Null while it is not in.
+ */
+Reactor3D.motionLibrary = function() {
+    const root = typeof window !== "undefined" ? window : globalThis;
+    let library = root.RRMotionLibrary || null;
+    if (!library && !this._motionLibraryTried) {
+        this._motionLibraryTried = true;
+        try {
+            if (typeof window === "undefined" && typeof require === "function") library = require("./reactor_3d_motions.js");
+            else if (typeof require === "function" && typeof document !== "undefined" && typeof process !== "undefined" && process.mainModule) {
+                const fs = require("fs");
+                const path = require("path");
+                const file = path.join(path.dirname(process.mainModule.filename), "js", "reactor_3d_motions.js");
+                if (fs.existsSync(file)) {
+                    // On the page itself, so its arrays are the page's own.
+                    const script = document.createElement("script");
+                    script.textContent = fs.readFileSync(file, "utf8") + "\n//# sourceURL=" + file;
+                    document.head.appendChild(script);
+                    script.remove();
+                    library = root.RRMotionLibrary || null;
+                    if (library && !library.dataPath) library.dataPath = path.join(path.dirname(file), "reactor_3d_motions.bin");
+                }
+            }
+        } catch (error) {
+            library = null;
+        }
+    }
+    if (!library || !library.STATE_MOTIONS) return null;
+    if (library.ready()) return library;
+    if (this._motionLibraryUnread) return null;
+    if (library.load()) return library;
+    // Where the disk can be read and holds no data, it is not looked for again.
+    if (typeof require === "function") this._motionLibraryUnread = true;
+    return null;
+};
+
+/** Resolves once the motion library is in, or will not be, for a model.json whose rig is a humanoid's. */
+Reactor3D.whenMotionLibrary = function(json) {
+    const rig = json && json.rig;
+    if (!rig || typeof rig !== "object" || (rig.template && rig.template !== "humanoid") || json.defaultMotions === false
+        || this.motionLibrary() || typeof document === "undefined" || typeof window === "undefined") return Promise.resolve();
+    if (!this._motionLibraryLoading) {
+        this._motionLibraryLoading = new Promise(resolve => {
+            const fetchData = () => {
+                const library = window.RRMotionLibrary;
+                if (!library) { resolve(); return; }
+                library.loadAsync("js/reactor_3d_motions.bin").then(resolve, resolve);
+            };
+            if (window.RRMotionLibrary) { fetchData(); return; }
+            const script = document.createElement("script");
+            script.src = "js/reactor_3d_motions.js";
+            script.async = true;
+            script.onload = fetchData;
+            script.onerror = () => resolve();
+            document.head.appendChild(script);
+        });
+    }
+    return this._motionLibraryLoading;
+};
+
+/** The names the motion library knows a humanoid rig's joints by. */
+Reactor3D.LIBRARY_BONE_NAMES = {
+    Hips: "Hips", Spine: "Spine", Chest: "Spine2", Neck: "Neck", Head: "Head",
+    LeftUpperArm: "LeftArm", LeftLowerArm: "LeftForeArm", LeftHand: "LeftHand",
+    LeftUpperLeg: "LeftUpLeg", LeftLowerLeg: "LeftLeg", LeftFoot: "LeftFoot",
+    RightUpperArm: "RightArm", RightLowerArm: "RightForeArm", RightHand: "RightHand",
+    RightUpperLeg: "RightUpLeg", RightLowerLeg: "RightLeg", RightFoot: "RightFoot"
+};
+
+/** The start of a library motion's clip name: no movement state reads it as its own (clipStateOf). */
+Reactor3D.LIBRARY_CLIP_PREFIX = "__reactor_motion_";
+
+/**
+ * A rigged humanoid's skeleton at rest, as the motion library reads one:
+ * its joints in the root's frame (the rig's), in order, parents first, each
+ * one's parent the nearest joint above it the library moves. Besides the
+ * rig's own joints, a file's collarbones, the joint between the spine and
+ * the chest and the toes. `holders` are the file's other joints, which the
+ * motions keep at rest. Null without the hips, an arm and a leg.
+ */
+Reactor3D.libraryRestSkeleton = function(root) {
+    const byRig = new Map();
+    root.traverse(node => {
+        const part = node.userData && node.userData.__reactorRigBone && node.userData.parts && node.userData.parts[0];
+        if (part && !byRig.has(part.name)) byRig.set(part.name, node);
+    });
+    const picked = new Map();
+    for (const name of Object.keys(this.LIBRARY_BONE_NAMES)) if (byRig.has(name)) picked.set(byRig.get(name), this.LIBRARY_BONE_NAMES[name]);
+    const fileJoint = node => !!node && node !== root && this.isRigJoint(node) && !(node.userData && node.userData.__reactorFinger);
+    const chest = byRig.get("Chest"), spine = byRig.get("Spine");
+    for (const side of ["Left", "Right"]) {
+        const arm = byRig.get(side + "UpperArm");
+        if (arm && chest && fileJoint(arm.parent) && !picked.has(arm.parent) && arm.parent.parent === chest) picked.set(arm.parent, side + "Shoulder");
+        const foot = byRig.get(side + "Foot");
+        const toe = foot ? foot.children.find(child => fileJoint(child) && !picked.has(child)) : null;
+        if (toe) picked.set(toe, side + "ToeBase");
+    }
+    if (spine && chest && fileJoint(chest.parent) && !picked.has(chest.parent) && chest.parent.parent === spine) picked.set(chest.parent, "Spine1");
+    const named = new Set(picked.values());
+    if (!["Hips", "LeftArm", "LeftForeArm", "LeftUpLeg"].every(name => named.has(name))) return null;
+    root.updateMatrixWorld(true);
+    const unturn = root.getWorldQuaternion(new THREE.Quaternion()).invert();
+    const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    const turn = new THREE.Quaternion();
+    const turnOf = node => (node && node !== root ? unturn.clone().multiply(node.getWorldQuaternion(turn)) : new THREE.Quaternion()).toArray();
+    const order = [];
+    const holders = [];
+    root.traverse(node => {
+        if (picked.has(node)) order.push(node);
+        else if (fileJoint(node) && (node.isBone || (node.userData && node.userData.__reactorClipBone))) holders.push({ node, rest: node.quaternion.toArray() });
+    });
+    const at = new Map(order.map((node, i) => [node, i]));
+    const round = v => Math.round(v * 1e4) / 1e4;
+    const joints = order.map(node => {
+        let above = node.parent;
+        while (above && above !== root && !at.has(above)) above = above.parent;
+        const head = node.getWorldPosition(new THREE.Vector3()).applyMatrix4(toRoot).toArray();
+        const joint = { node, name: picked.get(node), parent: above && at.has(above) ? at.get(above) : -1, head,
+            rest: turnOf(node), parentRest: turnOf(node.parent), position: node.position.toArray() };
+        if (joint.parent < 0 && node.parent) {
+            // A rise in the root's frame, in the hips' parent's own (turned, and scaled for a file's armature).
+            const toParent = new THREE.Matrix4().copy(toRoot).multiply(node.parent.matrixWorld).invert();
+            const origin = new THREE.Vector3().applyMatrix4(toParent);
+            joint.up = new THREE.Vector3(0, 1, 0).applyMatrix4(toParent).sub(origin).toArray();
+        }
+        return joint;
+    });
+    const signature = joints.map(j => [j.name, j.parent, ...j.head, ...j.rest, ...j.parentRest, ...j.position, ...(j.up || [])].map(v => typeof v === "number" ? round(v) : v).join(","))
+        .concat(holders.map(h => h.rest.map(round).join(","))).join("|");
+    return { joints, holders, signature };
+};
+
+/**
+ * Gives a rigged humanoid (applyModelRig) the library's motions as clips,
+ * one for each state the file's own clips are not named for. A clip holds
+ * no keys until it first plays (resolveLibraryMotion); readModelAnimationRules
+ * plays each in its state where the model's own animations leave it open.
+ */
+Reactor3D.attachLibraryMotions = function(root, rig) {
+    if (!root || !rig || (rig.template || "humanoid") !== "humanoid" || typeof THREE === "undefined" || !THREE.AnimationMixer) return;
+    const library = this.motionLibrary();
+    if (!library) return;
+    const own = root.__reactorClips || [];
+    const named = new Set();
+    for (const clip of own) {
+        const match = clip && clip.name ? this.clipStateOf(clip.name) : null;
+        if (match) named.add(match.state);
+    }
+    const wanted = library.STATE_MOTIONS.filter(motion => !named.has(motion.state));
+    if (!wanted.length) return;
+    const skeleton = this.libraryRestSkeleton(root);
+    if (!skeleton) return;
+    const clips = wanted.map(motion => {
+        const clip = new THREE.AnimationClip(this.LIBRARY_CLIP_PREFIX + motion.id, 1, []);
+        clip.__reactorLibrary = { id: motion.id, state: motion.state, name: motion.name, skeleton, resolved: false };
+        return clip;
+    });
+    root.__reactorClips = own.concat(clips);
+    // The rig's own bones follow the clips as a file's do, and a pose bends them from the clip's pose.
+    for (const joint of skeleton.joints) if (joint.node.isBone) joint.node.userData.__reactorClipBone = true;
+};
+
+/** The rules that play a model's library motions (attachLibraryMotions) in the states `list` leaves open. */
+Reactor3D.libraryMotionRules = function(list, clips) {
+    if (!Array.isArray(clips) || !clips.length) return [];
+    const presets = this.rigMotionPresets();
+    const covers = presets && presets.covers ? presets.covers : (rules, state) => rules.some(rule => rule && rule.trigger === state);
+    const out = [];
+    for (const clip of clips) {
+        const info = clip && clip.__reactorLibrary;
+        if (!info || covers(list || [], info.state) || out.some(rule => rule.trigger === info.state)) continue;
+        out.push({ name: info.name, type: "clip", clip: clip.name, trigger: info.state, defaultMotion: true });
+    }
+    return out;
+};
+
+/**
+ * Fills a library motion's clip with its keys the first time it plays: the
+ * library's motion made for this skeleton, each joint's turn carried into
+ * its own frame, worked out once for every copy of the model.
+ */
+Reactor3D.resolveLibraryMotion = function(clip) {
+    const info = clip && clip.__reactorLibrary;
+    if (!info || info.resolved) return clip;
+    info.resolved = true;
+    const cache = this._libraryMotions || (this._libraryMotions = new Map());
+    let made = cache.get(info.skeleton.signature);
+    if (!made) {
+        made = new Map();
+        cache.set(info.skeleton.signature, made);
+        if (cache.size > 48) cache.delete(cache.keys().next().value);
+    }
+    let data = made.get(info.id);
+    if (data === undefined) {
+        const library = this.motionLibrary();
+        data = library ? this.retargetLibraryMotion(library, info.skeleton, info.id) : null;
+        made.set(info.id, data);
+    }
+    if (!data) return clip;
+    const { joints, holders } = info.skeleton;
+    for (const track of data.tracks) {
+        const node = track.joint >= 0 ? joints[track.joint].node : holders[track.holder].node;
+        const Track = track.path === "position" ? THREE.VectorKeyframeTrack : THREE.QuaternionKeyframeTrack;
+        clip.tracks.push(new Track(node.uuid + "." + track.path, track.times, track.values));
+    }
+    clip.duration = data.duration;
+    return clip;
+};
+
+/**
+ * One library motion on a skeleton (libraryRestSkeleton): { duration,
+ * tracks: [{ joint | holder, path, times, values }] }. The library turns
+ * joints that rest unturned; a joint of this skeleton turns by its parent's
+ * rest frame undone, the library's turn, then its own rest frame. The hips
+ * rise in their parent's frame.
+ */
+Reactor3D.retargetLibraryMotion = function(library, skeleton, id) {
+    const bones = skeleton.joints.map(joint => ({ name: joint.name, parent: joint.parent, head: joint.head }));
+    let motion = null;
+    try {
+        motion = library.stateClip(bones, id);
+    } catch (error) {
+        console.error("Reactor3D: the motion library's " + id + " could not be made for this model.", error);
+        return null;
+    }
+    if (!motion || !motion.times.length) return null;
+    const mul = (a, b, out, o) => {
+        out[o] = a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1];
+        out[o + 1] = a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0];
+        out[o + 2] = a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3];
+        out[o + 3] = a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2];
+    };
+    const duration = Math.max(1 / 30, motion.times[motion.times.length - 1]);
+    const tracks = [];
+    const left = [0, 0, 0, 1], key = [0, 0, 0, 1], step = [0, 0, 0, 0];
+    for (const track of motion.tracks) {
+        const joint = skeleton.joints[track.bone];
+        const times = track.times || motion.times;
+        if (!joint) continue;
+        if (track.path === "translation") {
+            if (!joint.up) continue;
+            const values = new Float32Array(times.length * 3);
+            for (let f = 0; f < times.length; f++) {
+                const rise = track.values[f * 3 + 1] - joint.head[1];
+                for (let k = 0; k < 3; k++) values[f * 3 + k] = joint.position[k] + joint.up[k] * rise;
+            }
+            tracks.push({ joint: track.bone, path: "position", times, values });
+            continue;
+        }
+        const p = joint.parentRest;
+        left[0] = -p[0]; left[1] = -p[1]; left[2] = -p[2]; left[3] = p[3];
+        const values = new Float32Array(times.length * 4);
+        for (let f = 0; f < times.length; f++) {
+            for (let k = 0; k < 4; k++) key[k] = track.values[f * 4 + k];
+            mul(left, key, step, 0);
+            mul(step, joint.rest, values, f * 4);
+        }
+        tracks.push({ joint: track.bone, path: "quaternion", times, values });
+    }
+    // The file's other joints hold their rest through the motion, whatever a clip before it left them at.
+    const still = Float32Array.of(0, duration);
+    skeleton.holders.forEach((holder, index) => {
+        tracks.push({ holder: index, joint: -1, path: "quaternion", times: still, values: Float32Array.from(holder.rest.concat(holder.rest)) });
+    });
+    return { duration, tracks };
 };
 
 /**
@@ -5545,8 +6372,12 @@ Reactor3D.fingerSkinWeights = function(count, position, read, weight, hands, tri
             const node = regions.node, label = regions.label, all = triangles ? triangles.count / 3 : Math.floor(count / 3), corner = k => (triangles ? triangles.getX(k) : k);
             const mixes = new Map();
             for (let t = 0; t < all; t++) {
-                const tri = [corner(t * 3), corner(t * 3 + 1), corner(t * 3 + 2)];
-                if (tri.some(i => node[i] < 0) || new Set(tri.map(i => label[i]).filter(l => l >= 0)).size < 2) continue;
+                const a = corner(t * 3), b = corner(t * 3 + 1), c = corner(t * 3 + 2);
+                if (node[a] < 0 || node[b] < 0 || node[c] < 0) continue;
+                // Corners of two fingers or more (a corner of none is not counted).
+                const la = label[a], lb = label[b], lc = label[c];
+                if (!((la >= 0 && lb >= 0 && la !== lb) || (la >= 0 && lc >= 0 && la !== lc) || (lb >= 0 && lc >= 0 && lb !== lc))) continue;
+                const tri = [a, b, c];
                 const mean = new Map();
                 for (const i of tri) for (let c = 0; c < 4; c++) if (out[i * 4 + c] > 0) mean.set(index[i * 4 + c], (mean.get(index[i * 4 + c]) || 0) + out[i * 4 + c] / 3);
                 for (const i of tri) {
@@ -5734,6 +6565,128 @@ Reactor3D.fingerRegions = function(count, position, triangles, hand, skinIndex, 
     return { label, t, mitt, carrier, mittLine, joined, own, node };
 };
 
+/**
+ * The fingers' share of a hand's skin, worked out off the main thread: 40 to
+ * 170 ms a model (more on a slow CPU) that otherwise lands on the frame the
+ * model first appears in. The worker runs `fingerSkinWeights` and
+ * `fingerRegions` as written above, over flat copies of the inputs, so the
+ * result is the one the main thread would make. Until it comes back the mesh
+ * wears the skin it had: at rest the fingers' joints sit where the hand
+ * holds them, so nothing moves when the new skin is put on. Off (or with no
+ * workers), the skin is worked out where it is asked for, as before.
+ */
+Reactor3D.FingerSkin = {
+    worker: true,
+    // The two functions the worker runs, kept as defined (a profiler's wrapper must not stand in for them).
+    kernels: { weights: Reactor3D.fingerSkinWeights, regions: Reactor3D.fingerRegions },
+    _jobs: new Map(),
+    _serial: 0,
+    source() {
+        return [
+            "'use strict';",
+            "const R = {};",
+            "R.fingerSkinWeights = " + this.kernels.weights.toString() + ";",
+            "R.fingerRegions = " + this.kernels.regions.toString() + ";",
+            "self.onmessage = function(event) {",
+            "    const job = event.data, P = job.position, I = job.index, W = job.weight, T = job.triangles;",
+            "    try {",
+            "        const position = { getX: i => P[i * 3], getY: i => P[i * 3 + 1], getZ: i => P[i * 3 + 2] };",
+            "        const triangles = T ? { count: T.length, getX: k => T[k] } : null;",
+            "        const made = R.fingerSkinWeights(job.count, position, (i, c) => I[i * 4 + c], (i, c) => W[i * 4 + c], job.hands, triangles);",
+            "        self.postMessage({ id: job.id, index: made.index, weight: made.weight, changed: made.changed, hands: job.hands.map(h => ({ mitt: h.mitt, shared: h.shared })) }, [made.index.buffer, made.weight.buffer]);",
+            "    } catch (error) { self.postMessage({ id: job.id, error: String(error && error.message || error) }); }",
+            "};"
+        ].join("\n");
+    },
+    available() {
+        return !!this.worker && typeof Worker !== "undefined" && typeof Blob !== "undefined" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function";
+    },
+    ensure() {
+        if (this._worker !== undefined) return this._worker;
+        this._worker = null;
+        if (!this.available()) return null;
+        try {
+            const url = URL.createObjectURL(new Blob([this.source()], { type: "text/javascript" }));
+            const worker = new Worker(url, { name: "Reactor finger skin" });
+            URL.revokeObjectURL(url);
+            worker.onmessage = event => {
+                const job = this._jobs.get(event.data && event.data.id);
+                if (!job) return;
+                this._jobs.delete(job.id);
+                if (event.data.error) job.fallback(); else job.done(event.data);
+            };
+            worker.onerror = event => {
+                if (event && event.preventDefault) event.preventDefault();
+                // What was out is worked out here instead; later skins too.
+                this.worker = false;
+                this._worker = null;
+                const jobs = [...this._jobs.values()];
+                this._jobs.clear();
+                for (const job of jobs) job.fallback();
+            };
+            this._worker = worker;
+        } catch (error) { this._worker = null; }
+        return this._worker;
+    },
+    /** A typed copy of four components a vertex, as `getComponent` reads them. */
+    flat(source, count, Ctor) {
+        if (ArrayBuffer.isView(source)) return new Ctor(source.subarray(0, count * 4));
+        const array = source.array;
+        if (!source.isInterleavedBufferAttribute && source.itemSize === 4 && array) {
+            const part = array.subarray(0, count * 4);
+            return source.normalized ? Ctor.from(part, v => THREE.MathUtils.denormalize(v, array)) : new Ctor(part);
+        }
+        const out = new Ctor(count * 4);
+        for (let i = 0; i < count; i++) for (let c = 0; c < 4; c++) out[i * 4 + c] = source.getComponent(i, c);
+        return out;
+    },
+    /** Positions as `getX`/`getY`/`getZ` read them, three a vertex. */
+    positions(position, count) {
+        const array = position.array;
+        if (!position.isInterleavedBufferAttribute && position.itemSize === 3 && !position.normalized && array) return new Float64Array(array.subarray(0, count * 3));
+        const out = new Float64Array(count * 3);
+        for (let i = 0; i < count; i++) { out[i * 3] = position.getX(i); out[i * 3 + 1] = position.getY(i); out[i * 3 + 2] = position.getZ(i); }
+        return out;
+    },
+    /**
+     * Work out a skin: `index` and `weight` are a skin attribute or a flat array (four a vertex),
+     * `hands` the list fingerSkinWeights takes (each gains `mitt` and `shared`). `done(made)` gets
+     * { index, weight, changed }, now when no worker can take it, else once the worker answers.
+     * Returns true when the answer is still to come.
+     */
+    run(count, position, index, weight, hands, triangles, done) {
+        const here = () => {
+            const indexOf = ArrayBuffer.isView(index) ? (i, c) => index[i * 4 + c] : (i, c) => index.getComponent(i, c);
+            const weightOf = ArrayBuffer.isView(weight) ? (i, c) => weight[i * 4 + c] : (i, c) => weight.getComponent(i, c);
+            done(Reactor3D.fingerSkinWeights(count, position, indexOf, weightOf, hands, triangles));
+        };
+        const worker = this.ensure();
+        if (!worker) { here(); return false; }
+        const id = ++this._serial;
+        const job = {
+            id, fallback: here,
+            done: data => {
+                data.hands.forEach((h, i) => { hands[i].mitt = h.mitt; hands[i].shared = h.shared; });
+                done({ index: data.index, weight: data.weight, changed: data.changed });
+            }
+        };
+        let payload;
+        try {
+            const tri = triangles ? (triangles.array ? new Uint32Array(triangles.array.subarray(0, triangles.count)) : Uint32Array.from({ length: triangles.count }, (_, k) => triangles.getX(k))) : null;
+            payload = { id, count, position: this.positions(position, count), index: this.flat(index, count, Uint16Array), weight: this.flat(weight, count, Float32Array),
+                triangles: tri, hands: hands.map(h => ({ index: h.index, ends: h.ends, fingers: h.fingers, toHand: Array.from(h.toHand) })) };
+        } catch (error) { here(); return false; }
+        this._jobs.set(id, job);
+        const transfer = [payload.position.buffer, payload.index.buffer, payload.weight.buffer];
+        if (payload.triangles) transfer.push(payload.triangles.buffer);
+        try { worker.postMessage(payload, transfer); } catch (error) { this._jobs.delete(id); here(); return false; }
+        Reactor3D.IdleWorkers?.touch("finger", () => this._jobs.size > 0, () => { const idle = this._worker; this._worker = undefined; if (idle) idle.terminate(); });
+        return true;
+    },
+    /** A rig's worked-out skins, by the weights record they came from and the hands' places. */
+    _rigSkins: new WeakMap()
+};
+
 Reactor3D._fingerGeometries = new WeakMap();
 
 /**
@@ -5772,18 +6725,24 @@ Reactor3D.skinRigFingers = function(root) {
             made.set(old, entry);
         }
         if (!entry.skeleton) continue;
-        const geometry = this.fingerSkinnedGeometry(mesh, entry.hands);
+        // Fingers the mesh does not separate close as one (once its skin is worked out).
+        const geometry = this.fingerSkinnedGeometry(mesh, entry.hands, made => {
+            for (const joint of joints) if (made.userData.__reactorMitt.indexOf(old.bones.indexOf(joint.hand)) >= 0) this._handGrips.get(joint.hand).layout.mitt = true;
+        });
         if (!geometry) continue;
         mesh.geometry = geometry;
         mesh.bind(entry.skeleton, mesh.bindMatrix);
-        // Fingers the mesh does not separate close as one.
-        for (const joint of joints) if (geometry.userData.__reactorMitt.indexOf(old.bones.indexOf(joint.hand)) >= 0) this._handGrips.get(joint.hand).layout.mitt = true;
         bound++;
     }
     return bound;
 };
 
-Reactor3D.fingerSkinnedGeometry = function(mesh, hands) {
+/**
+ * A copy of a skinned mesh's geometry wearing the fingers' share of its hands' skin; `onSkin(geometry)`
+ * runs once the copy wears it (now, or when the finger skin worker answers: until then the copy wears
+ * the file's own skin).
+ */
+Reactor3D.fingerSkinnedGeometry = function(mesh, hands, onSkin) {
     const source = mesh.geometry, position = source.getAttribute("position"), skinIndex = source.getAttribute("skinIndex"), skinWeight = source.getAttribute("skinWeight");
     if (!position || !skinIndex || !skinWeight) return null;
     const round = v => Math.round(v * 1e4) / 1e4;
@@ -5795,10 +6754,17 @@ Reactor3D.fingerSkinnedGeometry = function(mesh, hands) {
     let skin = versions.find(entry => entry.signature === signature);
     if (!skin) {
         const list = hands.map(h => ({ index: h.index, ends: h.ends, fingers: h.fingers, toHand: new THREE.Matrix4().multiplyMatrices(h.inverse, mesh.bindMatrix).elements }));
-        const made = this.fingerSkinWeights(position.count, position, (i, c) => skinIndex.getComponent(i, c), (i, c) => skinWeight.getComponent(i, c), list, source.index || null);
-        skin = { signature, index: new THREE.BufferAttribute(made.index, 4), weight: new THREE.BufferAttribute(made.weight, 4), changed: made.changed, mitt: list.filter(h => h.mitt).map(h => h.index), shared: list.map(h => [h.index].concat(h.shared || [])) };
+        skin = { signature, index: null, weight: null, waiting: [] };
         versions.push(skin);
         this._fingerGeometries.set(source, versions);
+        const entry = skin;
+        this.FingerSkin.run(position.count, position, skinIndex, skinWeight, list, source.index || null, made => {
+            Object.assign(entry, { index: new THREE.BufferAttribute(made.index, 4), weight: new THREE.BufferAttribute(made.weight, 4), changed: made.changed,
+                mitt: list.filter(h => h.mitt).map(h => h.index), shared: list.map(h => [h.index].concat(h.shared || [])) });
+            const waiting = entry.waiting;
+            entry.waiting = null;
+            for (const [copy, then] of waiting) this.wearFingerSkin(copy, entry, then);
+        });
     }
     // The rest bounds are the source's, worked out once for every copy: with none to share, each new instance's
     // geometry had its box walked out again by the first thing that asked (10 ms a unit on the frame it joined).
@@ -5806,8 +6772,8 @@ Reactor3D.fingerSkinnedGeometry = function(mesh, hands) {
     if (!source.boundingSphere) source.computeBoundingSphere();
     const geometry = new THREE.BufferGeometry();
     for (const name of Object.keys(source.attributes)) if (name !== "skinIndex" && name !== "skinWeight") geometry.setAttribute(name, source.attributes[name]);
-    geometry.setAttribute("skinIndex", skin.index);
-    geometry.setAttribute("skinWeight", skin.weight);
+    geometry.setAttribute("skinIndex", skin.index || skinIndex);
+    geometry.setAttribute("skinWeight", skin.weight || skinWeight);
     geometry.setIndex(source.index);
     geometry.morphAttributes = source.morphAttributes;
     geometry.morphTargetsRelative = source.morphTargetsRelative;
@@ -5815,8 +6781,18 @@ Reactor3D.fingerSkinnedGeometry = function(mesh, hands) {
     geometry.drawRange.start = source.drawRange.start; geometry.drawRange.count = source.drawRange.count;
     geometry.boundingBox = source.boundingBox; geometry.boundingSphere = source.boundingSphere;
     geometry.name = source.name;
-    geometry.userData = Object.assign({}, source.userData, { __reactorFingerSkin: skin.changed, __reactorMitt: skin.mitt, __reactorShared: skin.shared });
+    geometry.userData = Object.assign({}, source.userData);
+    if (skin.waiting) skin.waiting.push([geometry, onSkin]);
+    else this.wearFingerSkin(geometry, skin, onSkin);
     return geometry;
+};
+
+/** A finger-skinned geometry puts on its worked-out skin. */
+Reactor3D.wearFingerSkin = function(geometry, skin, onSkin) {
+    if (geometry.getAttribute("skinIndex") !== skin.index) geometry.setAttribute("skinIndex", skin.index);
+    if (geometry.getAttribute("skinWeight") !== skin.weight) geometry.setAttribute("skinWeight", skin.weight);
+    Object.assign(geometry.userData, { __reactorFingerSkin: skin.changed, __reactorMitt: skin.mitt, __reactorShared: skin.shared });
+    if (typeof onSkin === "function") onSkin(geometry);
 };
 
 Reactor3D._heldClouds = new WeakMap();
@@ -5974,6 +6950,48 @@ Reactor3D.solveGrip = function(layout, cloud, count, pad, out, thumbStays) {
     }
     // A finger that touches first stops there; the rest keep closing. None is carried on through the thing.
     return out;
+};
+
+/**
+ * Grips solved before, kept per held thing's points: a hand of the same model
+ * holding the same thing the same way closes its fingers as the solve found
+ * the first time (15 to 25 ms a battle start on a slow machine, one solve
+ * per unit's hand). The key is the hand's layout and where the thing is in
+ * the hand, to a ten-thousandth; a thing held at a new place each frame (a
+ * gun cupped while aiming) fills a list that is emptied past `LIMIT`.
+ * `enabled = false` solves every time.
+ */
+Reactor3D.GripMemo = {
+    enabled: true,
+    LIMIT: 64,
+    _byCloud: new WeakMap(),
+    layoutKey(layout) {
+        if (layout.__rrGripKey) return layout.__rrGripKey;
+        const r = v => Math.round(v * 1e4);
+        const parts = [layout.side, layout.mitt ? 1 : 0, layout.radius, ...(layout.knuckles || [])].map(v => typeof v === "number" ? r(v) : String(v));
+        for (const f of layout.fingers) {
+            parts.push(f.finger, f.thumb ? 1 : 0, r(f.radius), r(f.length), r(f.open), r(f.max1), r(f.max2));
+            for (const key of ["base", "mid", "tip", "hinge"]) for (const v of f[key] || []) parts.push(r(v));
+        }
+        Object.defineProperty(layout, "__rrGripKey", { value: parts.join(","), configurable: true, writable: true, enumerable: false });
+        return layout.__rrGripKey;
+    },
+    key(layout, trigger, e) {
+        let key = this.layoutKey(layout) + (trigger ? "|t" : "|-");
+        for (let i = 0; i < 15; i++) key += "," + Math.round(e[i] * 1e4);
+        return key;
+    },
+    get(cloud, key) {
+        const kept = cloud && this._byCloud.get(cloud);
+        return kept ? kept.get(key) : null;
+    },
+    set(cloud, key, solved) {
+        if (!cloud) return;
+        let kept = this._byCloud.get(cloud);
+        if (!kept) this._byCloud.set(cloud, kept = new Map());
+        if (kept.size >= this.LIMIT) kept.clear();
+        kept.set(key, Float32Array.from(solved));
+    }
 };
 
 /** The four places a finger is tested, with its joints at `t1` and `t2`: along and at the end of each segment. */
@@ -6211,6 +7229,12 @@ Reactor3D.HandGrip = {
         if (same) { const turn = span * 0.004, slide = layout.radius * 0.08; for (let i = 0; i < 15 && same; i++) if (Math.abs(e[i] - grip.rel[i]) > (i < 12 ? turn : slide)) same = false; }
         if (same) return true;
         grip.rel.set(e); grip.relSet = true; grip.thing = object;
+        // Held this way before, by this hand or another of the same model: the fingers the solve found then.
+        const memo = R.GripMemo.enabled ? R.GripMemo.key(layout, grip.trigger, e) : null;
+        if (memo) {
+            const hit = R.GripMemo.get(cloud, memo);
+            if (hit && hit.length === grip.solved.length) { grip.solved.set(hit); return true; }
+        }
         // The thing's points near the hand, in the hand's frame.
         let reach = 0;
         for (const f of layout.fingers) reach = Math.max(reach, Math.hypot(f.base[0] - layout.knuckles[0], f.base[1] - layout.knuckles[1], f.base[2] - layout.knuckles[2]) + f.length + f.radius * 2);
@@ -6245,6 +7269,7 @@ Reactor3D.HandGrip = {
                 if (d < best - 1e-9) { best = d; grip.solved[i * 2] = one; grip.solved[i * 2 + 1] = two; }
             }
         });
+        if (memo) R.GripMemo.set(cloud, memo, grip.solved);
         return true;
     },
     update() {
@@ -6346,6 +7371,29 @@ Reactor3D.Held = {
         turn(fore, H2.clone().sub(E2), goal.clone().sub(E2));
         return true;
     },
+    /** How far round from the body's front, either way, an arm aims (radians); past it the aim stops at the edge. */
+    AIM_ARC: 70 * Math.PI / 180,
+    /**
+     * Where an aimed arm points: the goal, or, when it lies further round than `AIM_ARC` from the way the
+     * shoulders face (a unit still turning to its target, a rider facing along the ride), the edge of that arc
+     * at the same distance and height. An arm that reached the goal itself went behind the back, the gun through
+     * the body. The front is square to the line between the shoulders.
+     */
+    frontGoal(record, side, shoulder, goal) {
+        const T = THREE, torso = this.torso(record, side);
+        if (!torso || !shoulder || !goal) return goal;
+        const up = new T.Vector3(0, 1, 0), S = shoulder.getWorldPosition(new T.Vector3()), O = torso.across.getWorldPosition(new T.Vector3());
+        const forward = new T.Vector3().crossVectors(O.sub(S), up).setY(0), flat = goal.clone().sub(S).setY(0);
+        if (side === "left") forward.negate();
+        if (forward.lengthSq() < 1e-10 || flat.lengthSq() < 1e-10) return goal;
+        forward.normalize();
+        const length = flat.length();
+        flat.divideScalar(length);
+        if (Math.acos(Math.max(-1, Math.min(1, forward.dot(flat)))) <= this.AIM_ARC) return goal;
+        const sign = new T.Vector3().crossVectors(forward, flat).y < 0 ? -1 : 1;
+        forward.applyAxisAngle(up, sign * this.AIM_ARC);
+        return new T.Vector3(S.x + forward.x * length, goal.y, S.z + forward.z * length);
+    },
     /** Turn a joint by a turn given in the world, on top of the pose it has. */
     turnJoint(bone, q) {
         const parentQ = bone.parent.getWorldQuaternion(new THREE.Quaternion());
@@ -6411,6 +7459,7 @@ Reactor3D.Held = {
         if (!frame || step.aim !== "target" || !goal) return frame;
         const hand = this.joint(owner, side + "Hand"), upper = hand && hand.parent && hand.parent.parent;
         if (!upper) return frame;
+        goal = this.frontGoal(owner, side, upper, goal);
         const shape = held && held.object ? R.heldShape(held.object) : null, scale = held ? held.scale || 1 : 1;
         // Held in the fist by its grip: the barrel's own line (Rear to Muzzle on a marked gun) is laid on the line from the shoulder
         // to the target, and the wrist goes where that puts the grip. A long gun's butt sits at the shoulder; a short one is held out.
@@ -7067,7 +8116,10 @@ Reactor3D.isRigJoint = function(node) {
 
 Reactor3D.applyModelRig = function(root, rig) {
     if (typeof THREE === "undefined" || !root || !rig || !rig.bones.length) return;
-    if (this.mapRigToSkeleton(root, rig)) return;
+    if (this.mapRigToSkeleton(root, rig)) {
+        this.attachLibraryMotions(root, rig);
+        return;
+    }
     const meshes = this.carveTargetMeshes(root);
     const bones = rig.bones.map(def => {
         const bone = new THREE.Bone();
@@ -7116,14 +8168,38 @@ Reactor3D.applyModelRig = function(root, rig) {
         let skinWeights = new Float32Array(data.count * 4);
         for (let i = 0; i < data.count * 4; i++) skinWeights[i] = data.weights[i] * weightScale;
         let skinIndices = Uint16Array.from(data.indices);
+        let fingerSkin = null;
         if (fingerHands.size) {
-            // The hands' share of the skin goes on to their finger joints, in each hand's own frame at rest.
+            // The hands' share of the skin goes on to their finger joints, in each hand's own frame at rest:
+            // worked out once for every copy of this rig, off the main thread where it can be.
             mesh.updateMatrixWorld(true);
-            const list = [...fingerHands.values()].map(hand => ({ index: hand.index, fingers: hand.fingers,
+            const handList = [...fingerHands.values()];
+            const list = handList.map(hand => ({ index: hand.index, fingers: hand.fingers,
                 toHand: new THREE.Matrix4().copy(hand.node.matrixWorld).invert().multiply(mesh.matrixWorld).elements }));
-            const skin = this.fingerSkinWeights(data.count, position, (i, c) => skinIndices[i * 4 + c], (i, c) => skinWeights[i * 4 + c], list, geometry.index || null);
-            skinIndices = skin.index; skinWeights = skin.weight;
-            [...fingerHands.values()].forEach((hand, i) => { if (list[i].mitt) this._handGrips.get(hand.node).layout.mitt = true; });
+            const round = v => Math.round(v * 1e4) / 1e4;
+            const signature = data.count + "|" + (geometry.index ? geometry.index.count : 0) + "|" + list.map(h => h.index + ":" + h.toHand.map(round).join(",") + ":"
+                + h.fingers.map(f => [f.one, f.two, ...f.base.map(round), ...f.tip.map(round), round(f.radius)].join(",")).join(";")).join("|");
+            const versions = this.FingerSkin._rigSkins.get(data) || [];
+            this.FingerSkin._rigSkins.set(data, versions);
+            fingerSkin = versions.find(entry => entry.signature === signature);
+            if (!fingerSkin) {
+                const entry = fingerSkin = { signature, index: null, weight: null, mitts: null, waiting: [] };
+                versions.push(entry);
+                this.FingerSkin.run(data.count, position, skinIndices, skinWeights, list, geometry.index || null, made => {
+                    Object.assign(entry, { index: made.index, weight: made.weight, mitts: list.map(h => !!h.mitt) });
+                    const waiting = entry.waiting;
+                    entry.waiting = null;
+                    for (const wear of waiting) wear();
+                });
+            }
+            const entry = fingerSkin;
+            const wear = () => {
+                geometry.setAttribute("skinIndex", new THREE.BufferAttribute(entry.index, 4));
+                geometry.setAttribute("skinWeight", new THREE.BufferAttribute(entry.weight, 4));
+                handList.forEach((hand, i) => { if (entry.mitts[i]) this._handGrips.get(hand.node).layout.mitt = true; });
+            };
+            if (entry.waiting) entry.waiting.push(wear);
+            else { skinIndices = entry.index; skinWeights = entry.weight; handList.forEach((hand, i) => { if (entry.mitts[i]) this._handGrips.get(hand.node).layout.mitt = true; }); }
         }
         geometry.setAttribute("skinIndex",
             new THREE.BufferAttribute(skinIndices, 4));
@@ -7144,6 +8220,7 @@ Reactor3D.applyModelRig = function(root, rig) {
     }
     root.userData.rigged = true;
     this.presetSkinnedBounds(root);
+    this.attachLibraryMotions(root, rig);
 };
 
 Reactor3D.modelAnimationUrl = function(name) {
@@ -7236,16 +8313,18 @@ Reactor3D.loadModelSidecar = function(name) {
             // collision footprint asks per step.
             if (!Reactor3D._sidecarJson) Reactor3D._sidecarJson = {};
             Reactor3D._sidecarJson[name] = parsed || null;
+            // A rigged humanoid's motions come from the shared library: in before the model is.
+            const done = () => Reactor3D.whenMotionLibrary(parsed).then(() => resolve(parsed));
             const rig = parsed && parsed.rig;
             if (!rig || !rig.weightsFile || rig.weights) {
-                resolve(parsed);
+                done();
                 return;
             }
             // The pointer is a bare filename inside the model's folder;
             // anything path-like is refused.
             const file = String(rig.weightsFile);
             if (/[\\/]/.test(file) || file.indexOf("..") >= 0) {
-                resolve(parsed);
+                done();
                 return;
             }
             const binUrl = "3d/" + name + "/" + file;
@@ -7256,9 +8335,9 @@ Reactor3D.loadModelSidecar = function(name) {
                 if (binXhr.status < 400 && binXhr.response) {
                     rig.weightsBin = Reactor3D.decodeRigWeightsBinary(binXhr.response);
                 }
-                resolve(parsed);
+                done();
             };
-            binXhr.onerror = () => resolve(parsed);
+            binXhr.onerror = () => done();
             binXhr.send();
         };
         const xhr = new XMLHttpRequest();
@@ -7677,7 +8756,7 @@ Reactor3D.rulesForPlacement = function(rules, animation, repeat) {
 
 Reactor3D.modelRuleDuration = function(rule, clips) {
     if (rule.type === "clip") {
-        const clip = (clips || []).find(c => c.name === rule.clip);
+        const clip = Reactor3D.resolveLibraryMotion((clips || []).find(c => c.name === rule.clip));
         return clip ? Math.max(1, Math.round(clip.duration * 60 / (rule.rate || 1))) : 60;
     }
     // A pose goes there and back: in over one period, out over another —
@@ -8430,7 +9509,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             const previous = binding.clipAction;
             let next = null;
             if (desired) {
-                const clip = binding.clips.find(c => c.name === desired);
+                const clip = Reactor3D.resolveLibraryMotion(binding.clips.find(c => c.name === desired));
                 if (clip) {
                     next = binding.mixer.clipAction(clip);
                     next.reset();
@@ -8702,7 +9781,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
             state.camera = camera;
             state.scale = scale;
             state.binding = this.prepareModelInstance(object, object.__reactorClips);
-            state.rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+            state.rules = sidecar ? this.readModelAnimationRules(sidecar, object.__reactorClips) : [];
             state.size = size;
             state.bitmap = new Bitmap(size, size);
             state.ready = true;
@@ -8897,7 +9976,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
             state.camera = camera;
             state.scale = scale;
             state.binding = this.prepareModelInstance(object, object.__reactorClips);
-            state.rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+            state.rules = sidecar ? this.readModelAnimationRules(sidecar, object.__reactorClips) : [];
             state.size = size;
             state.bitmap = new Bitmap(size, size);
             state.ready = true;
@@ -9189,7 +10268,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
             state.camera = camera;
             state.scale = 1 / span;
             state.binding = this.prepareModelInstance(object, object.__reactorClips);
-            state.rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+            state.rules = sidecar ? this.readModelAnimationRules(sidecar, object.__reactorClips) : [];
             state.effects = sidecar ? this.readModelEffects(sidecar, spec) : [];
             object.userData.glbSize = extent;
             this.bindModelLandmarks(object, this.readModelLandmarks(sidecar));
@@ -10405,15 +11484,20 @@ Reactor3D.animationDue = function(holder, character, object, camera) {
 };
 
 /**
- * New models built a few a frame while a battle runs on the map: each is a clone, a rig, its fingers and materials
- * (3 to 5 ms), and an army arriving together was one frame of 200 ms. The first of a frame is always built, more only
- * inside BUDGET ms; outside a battle (a map loading under its fade) every model is built the moment its files are in.
+ * New models built a few a frame while a battle runs on the map, and while a map is laid as it loads
+ * (Reactor3D.Arrival): each is a clone, a rig, its fingers and materials (3 to 5 ms, a hundred and more for a
+ * rigged hand), and an army arriving together was one frame of 200 ms. Also while worlds stand past the borders
+ * of the map played (Reactor3D.Neighbors): their models, and the entered map's after a crossing, arrive in
+ * bursts (18 ms in the crossing frame into North Haven on an integrated GPU). The first of a frame is always
+ * built, more only inside BUDGET ms a frame; otherwise every model is built the moment its files are in.
  */
 Reactor3D.ModelJoins = {
     BUDGET: 4,
     spent: 0,
     queue: [],
     limited() {
+        if (Reactor3D.Arrival && Reactor3D.Arrival.pacing) return true;
+        if (Reactor3D.Neighbors && Reactor3D.Neighbors.streaming && Reactor3D.Neighbors.streaming()) return true;
         const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
         return !!(fight && typeof fight.isActive === "function" && fight.isActive());
     },
@@ -10426,7 +11510,10 @@ Reactor3D.ModelJoins = {
     },
     /** Once a frame, before the frame's own new models: those waiting, oldest first. */
     drain() {
-        this.spent = 0;
+        // The budget is the frame's in play: every scene synced this frame (a neighbor's world beside the map's own)
+        // drains from it. A map laid while the screen is dark (Arrival) takes it again at each ask.
+        const frame = typeof Graphics !== "undefined" && Graphics && Number.isFinite(Graphics.frameCount) ? Graphics.frameCount : null;
+        if (frame === null || frame !== this._frame || (Reactor3D.Arrival && Reactor3D.Arrival.pacing)) { this._frame = frame; this.spent = 0; }
         while (this.queue.length && (this.spent < this.BUDGET || !this.limited())) {
             const start = this.now();
             try { this.queue.shift()(); } catch (error) { console.error("Reactor3D: a model could not join the map", error); }
@@ -10485,13 +11572,12 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 current.object = object;
                 current.binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
                 Reactor3D.bindModelLandmarks(object, Reactor3D.readModelLandmarks(sidecar));
-                current.rules = sidecar ? Reactor3D.readModelAnimationRules(sidecar) : [];
+                current.rules = sidecar ? Reactor3D.readModelAnimationRules(sidecar, object.__reactorClips) : [];
                 current.effects = sidecar ? Reactor3D.readModelEffects(sidecar, spec) : [];
                 current.variant = spec.variant || "";
                 group.add(object);
-                // A prop never moves; its map is cached. An event walks.
-                Reactor3D.Shadows.markCaster(object, !(typeof character.eventId === "function"
-                    && character.eventId() >= Reactor3D.PROP_EVENT_BASE));
+                // Animated prop silhouettes use the moving budget; still props keep cached rows.
+                Reactor3D.Shadows.markCaster(object, Reactor3D.modelCasterMoves(character, current.rules));
                 // The shadow budget is measured from the player, not the eye.
                 object.userData.reactorPlayer = typeof $gamePlayer !== "undefined" && character === $gamePlayer;
                 object.traverse(child => {
@@ -10509,7 +11595,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                     }
                 });
                 this._ambientLevel = undefined;
-            }));
+            })).finally(() => { holder.settled = true; });
         }
         const object = holder.object;
         if (!object) continue;

@@ -542,6 +542,8 @@ class TilemapManager {
         this.updateCanvasWrapperSize();
         this.updateScrollbars();
         this.captureSavedMapState();
+        // The maps past its border, dimmed past its edges.
+        try { globalThis.RRMapNeighbor2D?.sync(this); } catch (error) { console.warn('Neighboring maps:', error); }
         return true;
     }
 
@@ -715,6 +717,8 @@ class TilemapManager {
     createTilemapContainer() {
         // Remove old container if exists
         if (this.container) {
+            // The neighboring maps' strips outlive the container (RRMapNeighbor2D).
+            globalThis.RRMapNeighbor2D?.detach(this);
             this.destroyAllVirtualChunkLayers();
             this.app.stage.removeChild(this.container);
             this.container.destroy({ children: true });
@@ -1403,8 +1407,10 @@ class TilemapManager {
         if (!rect || rect.width <= 0 || rect.height <= 0) return;
 
         const scale = transform.scale ?? (this.container ? this.container.scale.x : 1);
-        const mapWidthPx = this.currentMap.width * this.TILE_SIZE * scale;
-        const mapHeightPx = this.currentMap.height * this.TILE_SIZE * scale;
+        // A neighboring map's strip past the right or bottom edge is in the picture too.
+        const reach = this.neighborReach(scale);
+        const mapWidthPx = this.currentMap.width * this.TILE_SIZE * scale + reach.right;
+        const mapHeightPx = this.currentMap.height * this.TILE_SIZE * scale + reach.bottom;
 
         const targetW = Math.min(rect.width, Math.max(1, mapWidthPx + (transform.x ?? this.container.x)));
         const targetH = Math.min(rect.height, Math.max(1, mapHeightPx + (transform.y ?? this.container.y)));
@@ -1424,6 +1430,7 @@ class TilemapManager {
             const right = Math.max(0, this.app.screen.width - targetW);
             const bottom = Math.max(0, this.app.screen.height - targetH);
             canvas.style.clipPath = right || bottom ? `inset(0px ${right}px ${bottom}px 0px)` : '';
+            globalThis.RRMapNeighbor2D?.view(this);
             return;
         }
         if (canvas?.style?.clipPath) canvas.style.clipPath = '';
@@ -1431,6 +1438,7 @@ class TilemapManager {
         if (this.app.screen.width !== targetW || this.app.screen.height !== targetH) {
             this.app.renderer.resize(targetW, targetH);
         }
+        globalThis.RRMapNeighbor2D?.view(this);
     }
 
     /**
@@ -1605,13 +1613,27 @@ class TilemapManager {
         const rect = this.viewportSize();
         if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
         const padding = this._zoomPadding || {};
+        const reach = this.neighborReach(scale);
         return {
-            minX: Math.min(0, rect.width - this.currentMap.width * this.TILE_WIDTH * scale) - (padding.right || 0),
-            minY: Math.min(0, rect.height - this.currentMap.height * this.TILE_HEIGHT * scale) - (padding.bottom || 0),
-            maxX: padding.left || 0,
-            maxY: padding.top || 0,
+            minX: Math.min(0, rect.width - this.currentMap.width * this.TILE_WIDTH * scale - reach.right) - (padding.right || 0),
+            minY: Math.min(0, rect.height - this.currentMap.height * this.TILE_HEIGHT * scale - reach.bottom) - (padding.bottom || 0),
+            maxX: reach.left + (padding.left || 0),
+            maxY: reach.top + (padding.top || 0),
             width: rect.width,
             height: rect.height
+        };
+    }
+
+    /**
+     * How far, in screen pixels at `scale`, the view goes past each edge: as far as the game's
+     * view goes past a side with a neighboring map, whose tiles are drawn there (RRMapNeighbor2D).
+     */
+    neighborReach(scale = this.container ? this.container.scale.x : 1) {
+        const tiles = globalThis.RRMapNeighbor2D?.reach(this);
+        if (!tiles) return { left: 0, right: 0, top: 0, bottom: 0 };
+        return {
+            left: tiles.west * this.TILE_WIDTH * scale, right: tiles.east * this.TILE_WIDTH * scale,
+            top: tiles.north * this.TILE_HEIGHT * scale, bottom: tiles.south * this.TILE_HEIGHT * scale
         };
     }
 
@@ -1837,7 +1859,7 @@ class TilemapManager {
             this._zoomPadding = null;
             const bounds = this.panBounds(scale);
             if (bounds) this._zoomPadding = {
-                left: Math.max(0, x), top: Math.max(0, y),
+                left: Math.max(0, x - bounds.maxX), top: Math.max(0, y - bounds.maxY),
                 right: Math.max(0, bounds.minX - x), bottom: Math.max(0, bounds.minY - y)
             };
         }
@@ -3623,6 +3645,7 @@ class TilemapManager {
             this.mapMask = null;
         }
         if (this.container) {
+            globalThis.RRMapNeighbor2D?.dispose(this);
             this.destroyAllVirtualChunkLayers();
             this.container.destroy({ children: true });
             this._previewBackground = null;
@@ -3685,6 +3708,7 @@ class TilemapManager {
             this.mapMask.destroy();
             this.mapMask = null;
         }
+        globalThis.RRMapNeighbor2D?.dispose(this);
         if (this.container) {
             this.destroyAllVirtualChunkLayers();
             this.app.stage.removeChild(this.container);
@@ -4248,7 +4272,8 @@ class TilemapManager {
         }
 
         const img = tilesetImages[setNumber];
-        if (!img || !img.complete || img.naturalWidth === 0) {
+        // (An image still loading, or none; a decoded bitmap has no `complete`.)
+        if (!img || img.complete === false || img.naturalWidth === 0 || img.width === 0) {
             return; // No image or image not loaded
         }
 
@@ -4326,7 +4351,7 @@ class TilemapManager {
         }
 
         const img = tilesetImages[setNumber];
-        if (!img || !img.complete || img.naturalWidth === 0) {
+        if (!img || img.complete === false || img.naturalWidth === 0 || img.width === 0) {
             return;
         }
 

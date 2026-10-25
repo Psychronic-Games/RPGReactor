@@ -45,7 +45,7 @@ const CURVES = [
     [null, 5, 5, 5, 5, 5]                                                // flat, so slope is 0
 ];
 
-const LEVELS = [1, 2, 3, 50, 98, 99, 100, 101, 150, 500, 998, 999, 1000, 0, -5];
+const LEVELS = [1, 2, 3, 50, 98, 99, 100, 101, 150, 500, 998, 999, 1000, 5000, 9999, 10000, 20000, 0, -5];
 
 test('the editor and the runtime agree on every class parameter lookup', () => {
     const mismatches = [];
@@ -65,7 +65,7 @@ test('the editor and the runtime agree on the EXP curve', () => {
     const mismatches = [];
     const paramSets = [[30, 20, 30, 30], [50, 0, 10, 40], [100, 100, 100, 100], [30, 20, 30, 1]];
     for (const expParams of paramSets) {
-        for (const level of [1, 2, 10, 99, 100, 500, 999]) {
+        for (const level of [1, 2, 10, 99, 100, 500, 999, 5000, 9999]) {
             const fromEditor = editor.expFor(expParams, level);
             const fromRuntime = runtimeExpFor(level, { expParams });
             if (!Object.is(fromEditor, fromRuntime)) {
@@ -77,7 +77,7 @@ test('the editor and the runtime agree on the EXP curve', () => {
 });
 
 test('levels past the authored table extrapolate rather than reading undefined', () => {
-    // Reactor raises the level ceiling to 999 while authored params tables stay
+    // Reactor raises the level ceiling to 9999 while authored params tables stay
     // 100 entries long, so the stock `params[paramId][level]` lookup would hand
     // both sides undefined. Both extrapolate from the last two authored levels.
     const linear = Array.from({ length: 100 }, (_, level) => 10 + level * 5);
@@ -98,7 +98,7 @@ test('a degenerate table yields a number, never NaN', () => {
 
 test('the level ceiling is shared rather than restated', () => {
     const limits = vm.runInNewContext(`${limitsSource}\nRR_LIMITS;`);
-    assert.equal(limits.ACTOR_LEVEL, 999);
-    assert.match(objectsSource, /Math\.min\(999, Math\.floor\(Number\(level\) \|\| 1\)\)/,
+    assert.equal(limits.ACTOR_LEVEL, 9999);
+    assert.match(objectsSource, /Math\.min\(9999, Math\.floor\(Number\(level\) \|\| 1\)\)/,
         'the runtime clamps to the same ceiling');
 });

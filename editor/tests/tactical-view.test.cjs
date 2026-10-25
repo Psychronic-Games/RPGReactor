@@ -585,7 +585,7 @@ test('what a unit holds is part of its body whenever it came to the hand; the sh
     const source = source3D();
     assert.ok(!/rrFightHides/.test(source), 'nothing is judged by where its sight line lands any more');
     assert.ok(!/rrFa\b/.test(source), 'and no dither is laid over a battle\'s ground');
-    assert.match(source, /"if \(max\(rrCutBody \* rrCutBattle, rrCutBody - 1\.0\) < 0\.5 && vRRWorldPos\.y > rrFightStump\) discard;"/, 'scenery in the way is cut at a height; a body never');
+    assert.match(source, /"if \(rrCutBody < 0\.5 && vRRWorldPos\.y > rrFightStump\) discard;"/, 'scenery in the way is cut at a height; a body never');
     assert.match(source, /shader\.uniforms\.rrFightStump = material\.userData\.rrFightStump \|\| \(material\.userData\.rrFightStump = \{ value: 1e9 \}\);/, 'whole until it is in the way');
     assert.match(source, /"\\tvec2 rrOpenAt = vRRWorldPos\.xz - rrFaceN\.xz \* 0\.02;"/, 'a wall\'s face is asked a hair inside its own tile');
     assert.match(source, /"\\t\\t\\tif \(vRRWorldPos\.y > rrOpenCut\) discard;"/, 'what is opened is gone above its level, whole under it');

@@ -243,7 +243,7 @@ async function launch(app, profile) {
         await key('ok');
         assert.equal(await driver.execute('return !!SceneManager._scene._actorSelection.pending;'),true);
         await key('down');await key('ok');
-        assert.deepEqual(await driver.execute('return $gameParty.members().map(a=>a.actorId());'),[beforeOrder[1],beforeOrder[0]]);
+        assert.deepEqual(await driver.execute('return $gameParty.members().map(a=>a.actorId());'),[beforeOrder[1],beforeOrder[0],...beforeOrder.slice(2)]);
         await key('ok');await key('up');await key('ok');
         assert.deepEqual(await driver.execute('return $gameParty.members().map(a=>a.actorId());'),beforeOrder);
         await key('ok');await key('cancel');

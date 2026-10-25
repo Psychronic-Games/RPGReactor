@@ -81,6 +81,10 @@ class SetMovementRouteEditor {
         this.modal.style.display = 'flex';
     }
 
+    static newCommandRoute() {
+        return { repeat: false, skippable: false, wait: true, list: [{ code: 0 }] };
+    }
+
     show(command, callback) {
         this.autonomous = false;
         this.callback = callback;
@@ -90,15 +94,12 @@ class SetMovementRouteEditor {
             this.characterId = (params[0] != null) ? params[0] : -1;
             this.moveRoute = params[1]
                 ? JSON.parse(JSON.stringify(params[1]))
-                : { repeat: true, skippable: false, wait: false, list: [{ code: 0 }] };
+                : SetMovementRouteEditor.newCommandRoute();
         } else {
+            // A new command runs its route once and the event waits for it;
+            // only a page's autonomous route repeats.
             this.characterId = -1;
-            this.moveRoute = {
-                repeat: true,
-                skippable: false,
-                wait: false,
-                list: [{ code: 0 }]
-            };
+            this.moveRoute = SetMovementRouteEditor.newCommandRoute();
         }
 
         this._openWithRoute();
@@ -1234,8 +1235,8 @@ class SetMovementRouteEditor {
             case 15: return `${name}: ${p[0]} ${this._t('frames')}`;
             case 27:
             case 28: {
-                const sn = this._switchName(p[0]);
-                return sn ? `${name}: [${p[0]}] ${sn}` : `${name}: [${p[0]}]`;
+                const sn = this._switchName(p[0]) || `${this._t('Switch')} ${String(p[0]).padStart(4, '0')}`;
+                return `${name}: [${p[0]}] ${sn}`;
             }
             case 29: {
                 const s = { 1: 'x8 Slower', 2: 'x4 Slower', 3: 'x2 Slower',

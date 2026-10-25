@@ -298,7 +298,7 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media' \|\| owner === 'terrain' \|\| owner === 'models'\)\) this\.buildHotbar\.render\(\);/, 'the bar stays up while Lighting, Media Surfaces, Terrain or Models hold the map');
     assert.match(mainSource, /const building = owner === 'pieces' \|\| \(!!this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media' \|\| owner === 'terrain' \|\| owner === 'models'\)\);/, 'the Build button stays lit beside theirs');
     assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\) \{ this\.buildHotbar\.show\(\); return; \}/, 'closing their panel hands the map back to the bar');
-    { const html = read('editor/index.html'); assert.ok(html.indexOf('data-action="build-tool"') < html.indexOf('data-action="lighting-tool"') && html.indexOf('data-action="lighting-tool"') < html.indexOf('data-action="media-surfaces"'), 'Build sits left of Lighting and Media Surfaces in the toolbar'); }
+    { const html = read('editor/index.html'); assert.ok(html.includes('tool-button" data-action="build-tool"') && !html.includes('tool-button" data-action="lighting-tool"') && !html.includes('tool-button" data-action="media-surfaces"'), 'Build is the toolbar button; Lighting and Media Surfaces open from its bar and the Tools menu'); }
     // Lighting and Media Surfaces dock beside the map, in a column the map makes room for, not a sheet over it.
     { const html = read('editor/index.html'); assert.match(html, /<div id="map-stage">\s*<div id="canvas-container" class="rr-dark-surface"><\/div>\s*<aside id="map-side-dock" hidden><\/aside>\s*<\/div>/, 'the dock sits beside the canvas');
       assert.match(mainSource, /dockMapPanel\(panel\) \{[\s\S]{0,400}window\.dispatchEvent\(new Event\('resize'\)\);/, 'showing the dock lets the canvases size themselves again');
@@ -652,7 +652,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateCutaway\([^\n]*\$gamePlayer, this\.reactor3DCompany\(\)\);/, 'the game names the company');
     assert.match(read('runtime/reactor_sprites.js'), /visibleFollowers\(\)\) list\.push\(follower\);/, 'followers first');
     assert.ok(R.GHOST_WIDTH > 0.4 && R.GHOST_WIDTH < 1, 'the corridor is the body\'s width at the party, so a wall beside the party is not in the way');
-    assert.match(runtime, /if \(!this\._cutLook\) this\.setCutLook\(true\);/, 'the see-through pass is live inside or out, so nothing the corridor takes is ever simply missing');
+    assert.match(runtime, /if \(!this\._cutLook\) this\.setCutLook\(true\);/, 'the see-through pass stays live, so nothing a corridor takes is ever simply missing');
     assert.match(runtime, /if \(rrGhost > 0\.5\) \{ if \(!rrInWay\) discard; \} else if \(rrInWay\) discard;/, 'the solid pass leaves it out and the ghost pass draws only it');
     assert.match(source3D(), /transparent: true, opacity: Reactor3D\.GHOST_OPACITY, depthWrite: false/, 'the ghost pass is translucent');
     assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
@@ -668,7 +668,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
       capScene.updateCutCaps(capMap, 1e9, null); assert.equal(capScene._cutCaps.length, 0, 'no cut, no caps'); }
     assert.ok(R.CUTAWAY_DROP > 0.6 && R.CUTAWAY_DROP < 1, 'the cut plane sits under a doorway header');
     assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');
-    assert.match(runtime, /if \(cutState !== this\._cutState\) \{\n\s*this\._cutState = cutState;\n\s*if \(Reactor3D\.Shadows && Reactor3D\.Shadows\.invalidate\) Reactor3D\.Shadows\.invalidate\(\);/, 'the static shadows are drawn again when the cut changes');
+    assert.match(runtime, /if \(cutState !== this\._cutState\) \{\n\s*this\._cutState = cutState;\n\s*const S = Reactor3D\.Shadows;\n\s*if \(S\) \{ if \(S\.cutChanged\) S\.cutChanged\(\); else if \(S\.invalidate\) S\.invalidate\(\); \}/, 'the static shadows are drawn again, at once, when the cut changes');
     { const THREEx = loadThree(); const stone = new THREEx.MeshBasicMaterial(); stone.__reactorPieces = true; const caster = R.Shadows.casterMaterialFor(stone, false); assert.ok(caster.__rrCaster && typeof caster.onBeforeCompile === 'function' && caster.customProgramCacheKey() === 'reactor3d-caster-pieces', 'pieces get their own caster material'); assert.equal(R.Shadows.casterMaterialFor(new THREEx.MeshBasicMaterial(), false).customProgramCacheKey, THREEx.Material.prototype.customProgramCacheKey, 'other casters are unchanged'); }
     // A floor slab shows only the faces that can be seen: none inside a
     // wall's cell, no seam against the slab next door, and its underside

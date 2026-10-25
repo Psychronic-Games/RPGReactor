@@ -350,12 +350,17 @@ test('nothing solid within three tiles of the road\'s edge, no water on the road
 test('Forest Road has the motorcycle beside the road, the Reactor Room leads to it and it leads back', { skip }, () => {
     const forest = load(IDS[0]), room = json('Map001.json'), types = json('ReactorVehicles.json');
     const road = roadOf(forest);
-    const bikes = forest.events.filter(event => event && event.rrVehicle);
-    assert.equal(bikes.length, 1, 'one vehicle on Forest Road');
-    const bike = bikes[0];
-    assert.equal(types[bike.rrVehicle.type] && types[bike.rrVehicle.type].kind, 'motorcycle');
-    assert.equal(bike.rrVehicle.yaw, 90, 'it faces east, down the road');
-    assert.ok(bike.rrVehicle.key && bike.rrVehicle.key !== 'north-haven-motorcycle', 'under a name of its own');
+    // The motorcycle is a Starting Position of the Vehicles page (one of the Motorcycle's copies), not an event.
+    assert.equal(forest.events.filter(event => event && event.rrVehicle).length, 0, 'no vehicle event on Forest Road');
+    const starts = [];
+    types.forEach((record, type) => {
+        if (!record) return;
+        for (const start of [record, ...(record.copies || [])]) if (start.startMapId === IDS[0]) starts.push({ type, x: start.startX, y: start.startY, direction: start.startDirection });
+    });
+    assert.equal(starts.length, 1, 'one vehicle on Forest Road');
+    const bike = starts[0];
+    assert.equal(types[bike.type].kind, 'motorcycle');
+    assert.equal(bike.direction, 6, 'it faces east, down the road');
     assert.ok(bike.x < W / 2, 'in the west half, where the pass has come down into the woods');
     const beside = road.distance(bike.x + 0.5, bike.y + 0.5);
     assert.ok(beside > ROAD_HALF && beside < ROAD_HALF + VERGE, `parked on the verge (${beside.toFixed(2)} from the road's centre)`);

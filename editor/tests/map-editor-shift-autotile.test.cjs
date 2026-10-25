@@ -116,7 +116,9 @@ test('Shift circle placement preserves exact shapes inside the circular footprin
         throw new Error('Shift circle must not calculate connected shapes');
     };
 
-    editor.paintCircle({ x: 2, y: 2 }, { x: 3, y: 2 });
+    // Alt: the circle grows from the cell the drag started on.
+    editor.circleFromCenter = true;
+    editor.paintCircle({ x: 2, y: 2 }, { x: 3, y: 3 });
 
     assert.deepEqual([7, 11, 12, 13, 17].map(index => map.data[index]), new Array(5).fill(baseTileId));
     assert.equal(map.data[0], baseTileId + 9);

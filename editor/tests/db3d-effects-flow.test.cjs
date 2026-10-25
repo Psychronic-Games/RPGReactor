@@ -127,7 +127,7 @@ test('placed models light the map view through their light effects', () => {
     const lighting = fs.readFileSync(path.join(editorRoot, 'src', 'LightingManager.js'), 'utf8');
     assert.match(lighting, /const modelLights = Array\.isArray\(Reactor3D\._editorEffectLights\) \? Reactor3D\._editorEffectLights : \[\];/);
     assert.match(lighting, /\}\)\)\.concat\(modelLights\)\);/, 'the feed carries them with the map lights');
-    assert.match(lighting, /if \(!this\.lights\(\)\.length && !modelLights\.length && ambient\.ambient === undefined\) \{/, 'a map lit only by its models still feeds');
+    assert.match(lighting, /if \(!this\.lit\(this\.map\(\), modelLights\.length, true\)\) \{/, 'a map lit only by its models still feeds');
     // A carried light that flickers or pulses keeps the view drawing; a steady one is drawn on change.
     assert.match(map3d, /const light = play\.light && play\.effect && play\.effect\.light;\s*if \(light && \(light\.flicker \|\| light\.pulse\)\) return true;/, 'and keeps the view drawing while it moves');
     const i18n = fs.readFileSync(path.join(editorRoot, 'src', 'I18nManager.js'), 'utf8');

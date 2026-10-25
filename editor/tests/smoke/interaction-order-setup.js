@@ -5,6 +5,7 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
     const checks = [], failures = [];
     const check = (name, ok, detail) => { checks.push(name); if (!ok) failures.push({ name, detail }); };
     const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+ const __cancelDb=async()=>{const c=reactor.databaseEditorUI.callbacks,o=c.showConfirm;c.showConfirm=async()=>true;try{document.getElementById('database-cancel-btn').click();await new Promise(r=>setTimeout(r,30));}finally{c.showConfirm=o;}};
     const show = (type, id = 1) => {
         db.openDatabase(type);
         const entry = dm.data[type]?.find?.(entry => entry && entry.id >= id);
@@ -21,7 +22,7 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
     name.dispatchEvent(new Event('change', { bubbles: true }));
     check('actor → class → edit changes only class', actor.name === actorName && cls.name === name.value,
         { actor: actor.name, cls: cls.name });
-    document.getElementById('database-cancel-btn').click();
+    await __cancelDb();
 
     for (const type of ['actors', 'classes']) {
         const first = show(type);
@@ -45,7 +46,7 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
                 check('class rapid revisit opens one curve dialog', opens === 1, opens);
             } finally { editor.showExpCurveModal = original; }
         }
-        document.getElementById('database-cancel-btn').click();
+        await __cancelDb();
     }
 
     for (const [type, kind] of [['skills', 'Skill'], ['items', 'Item'], ['weapons', 'Weapon'], ['armors', 'Armor'], ['states', 'State']]) {
@@ -56,7 +57,7 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
         const slot = document.querySelector('#database-detail [id*="-icon-container-"]');
         check(type + ' repeated detail refresh owns one preview', slot?.querySelectorAll('.database-preview').length === 1,
             slot?.querySelectorAll('.database-preview').length);
-        document.getElementById('database-cancel-btn').click();
+        await __cancelDb();
     }
 
     // A picker retired by navigation must release its document listener and
@@ -76,7 +77,7 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
     currentNone.click();
     currentNone.closest('.rr-modal-overlay').querySelector('.rr-modal-footer button:last-child').click();
     check('current tileset picker still assigns None', nextTileset.tilesetNames[0] === '');
-    document.getElementById('database-cancel-btn').click();
+    await __cancelDb();
 
     // Keyboard movement must reveal rows beyond the lazy-render batch before
     // the browser gets a scroll event. A burst can cross several boundaries.
@@ -90,7 +91,7 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
     for (let i = 0; i < 7; i++) list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     const focusedId = db._activeDatabaseList.focusedId;
     check('arrow burst reveals lazy-list selection', focusedId === 256 && !!list.querySelector('[data-entry-id="256"].selected'), focusedId);
-    document.getElementById('database-cancel-btn').click();
+    await __cancelDb();
 
     // A shortcut in page configuration must not delete an event command.
     const manager = reactor.eventManager;

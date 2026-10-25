@@ -248,15 +248,25 @@
     }
 
     /**
+     * The window a key was pressed in: the editor's, or one of its own windows (the event editor's,
+     * the Database's), whose document the main one reaches into.
+     */
+    function keyWindow(event) {
+        const doc = event && event.target && (event.target.nodeType === 9 ? event.target : event.target.ownerDocument);
+        const view = doc && doc.defaultView;
+        return view && view.document ? { doc: view.document, view } : { doc: root.document, view: root };
+    }
+
+    /**
      * The dialog on top: the one under the middle of the window, where the page can say; else the one
      * entered last. Null when something that is not one of these dialogs lies on top.
      */
-    function topModal() {
-        const open = liveModals();
+    function topModal(event) {
+        const { doc, view } = keyWindow(event);
+        const open = liveModals().filter(trap => (trap.overlay.ownerDocument || root.document) === doc);
         if (!open.length) return null;
-        const doc = root.document;
-        if (typeof doc.elementFromPoint === 'function' && root.innerWidth > 0) {
-            const hit = doc.elementFromPoint(root.innerWidth / 2, root.innerHeight / 2);
+        if (typeof doc.elementFromPoint === 'function' && view.innerWidth > 0) {
+            const hit = doc.elementFromPoint(view.innerWidth / 2, view.innerHeight / 2);
             if (hit) return open.filter(trap => trap.overlay.contains(hit)).sort((a, b) => b.serial - a.serial)[0] || null;
         }
         return open.sort((a, b) => b.serial - a.serial)[0];
@@ -264,7 +274,7 @@
 
     /** A key whose target is no control at all: the page itself, or an element a redraw took away. */
     function strayKey(event, top) {
-        const doc = root.document, target = event.target;
+        const doc = keyWindow(event).doc, target = event.target;
         if (!target || target === doc || target === doc.body || target === doc.documentElement || !connected(target)) return true;
         // Focus left behind in a dialog under the one on top.
         for (const trap of modals) if (trap !== top && trap.overlay.contains(target)) return true;
@@ -287,9 +297,9 @@
      * those dialogs open from are not such layers: Escape never closes one of them from here.
      */
     function closeUnkeyedDialog(event) {
-        const doc = root.document;
-        if (typeof doc.elementFromPoint !== 'function' || !(root.innerWidth > 0)) return false;
-        let layer = doc.elementFromPoint(root.innerWidth / 2, root.innerHeight / 2);
+        const { doc, view } = keyWindow(event);
+        if (typeof doc.elementFromPoint !== 'function' || !(view.innerWidth > 0)) return false;
+        let layer = doc.elementFromPoint(view.innerWidth / 2, view.innerHeight / 2);
         while (layer && layer.parentElement && layer.parentElement !== doc.body) layer = layer.parentElement;
         if (!layer || layer.parentElement !== doc.body) return false;
         if (!String(layer.className || '').split(/\s+/).some(name => /-editor-modal$/.test(name))) return false;
@@ -309,7 +319,7 @@
     function onUnkeyedEscape(event) {
         if (event.key !== 'Escape' || event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
         for (const controller of Array.from(openMenus)) if (!connected(controller.element)) openMenus.delete(controller);
-        if (openMenus.size || topModal()) return;
+        if (openMenus.size || topModal(event)) return;
         if (closeUnkeyedDialog(event)) event.preventDefault();
     }
     if (typeof root.addEventListener === 'function') root.addEventListener('keydown', onUnkeyedEscape);
@@ -321,7 +331,7 @@
         if (event.altKey || event.metaKey || event.ctrlKey) return;
         for (const controller of Array.from(openMenus)) if (!connected(controller.element)) openMenus.delete(controller);
         if (openMenus.size) return;
-        const top = topModal();
+        const top = topModal(event);
         if (!top || top.overlay.contains(event.target) || !strayKey(event, top)) return;
         if (event.key === 'Escape' && !top.options.onEscape) {
             if (replayKey(top.container(), event)) event.preventDefault();
@@ -359,6 +369,8 @@
                 if (event.defaultPrevented) return;
                 event.preventDefault();
                 event.stopPropagation();
+                // An event command's dialog opened from it lies on top, the focus left behind on its list: the key closes that dialog.
+                if (closeUnkeyedDialog(event)) return;
                 state.options.onEscape(event);
                 return;
             }

@@ -2,7 +2,8 @@
  * DatabaseControlsEditor - Database › Controls.
  *
  * Which keys and gamepad buttons do what in the game, starting from RPG
- * Maker's own mapping, and the project's jumping and gravity on 3D maps.
+ * Maker's own mapping. The project's jumping, gravity and swimming on 3D maps
+ * are game rules and stand in System 2 (`physicsCards`, `showPhysicsIn`).
  * Written to System.json: `reactorControls` (only once anything differs from
  * the stock mapping) and `reactorPhysics`. The runtime (reactor_controls.js,
  * reactor_physics.js) applies them; a map may set its own gravity and jump in
@@ -58,6 +59,10 @@ class DatabaseControlsEditor {
     static DEFAULT_JUMP_BUTTONS = [2];
     static BUTTON_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'L3', 'R3', 'D-pad Up', 'D-pad Down', 'D-pad Left', 'D-pad Right'];
     static GRAVITY_PRESETS = [['1', 'Earth'], ['0.38', 'Mars'], ['0.166', 'Moon'], ['0.5', 'Low'], ['2', 'Heavy']];
+    /** What a long fall does in a battle on the map (ReactorPhysics.BATTLE_FALLS). */
+    static BATTLE_FALLS = [['hurt', 'Jump down; past the safe fall it hurts'], ['safe', 'Jump down any height unhurt'], ['off', 'No deeper than the safe fall']];
+    /** A jump down that would leave the player's unit with no HP (ReactorPhysics.LETHAL_FALLS). */
+    static LETHAL_FALLS = [['ask', 'Ask first'], ['allow', 'Allowed without asking'], ['never', 'Not allowed']];
 
     constructor(databaseManager, projectController, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
@@ -139,7 +144,7 @@ class DatabaseControlsEditor {
     }
 
     physics() {
-        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true, mantle: true, mantleReach: 3, stepUp: true, stepUpReach: 1.5 }, this.system().reactorPhysics || {});
+        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true, mantle: true, mantleReach: 3, stepUp: true, stepUpReach: 1.5, battleClimb: true, climbHeight: 6, climbCost: 0.75, battleFall: 'hurt', lethalFall: 'ask' }, this.system().reactorPhysics || {});
     }
 
     savePhysics(physics) {
@@ -178,7 +183,7 @@ class DatabaseControlsEditor {
         const container = this.container;
         if (!container) return;
         const tt = text => this._t(text);
-        const controls = this.controls(), physics = this.physics();
+        const controls = this.controls();
         const chip = (label, data) => `<span class="rr-controls-chip">${rrEscapeHtml(label)}<button type="button" class="rr-controls-remove" ${data} title="${rrEscapeHtml(tt('Remove'))}" aria-label="${rrEscapeHtml(tt('Remove'))}">×</button></span>`;
         const add = data => `<button type="button" class="rr-btn-chip rr-controls-add" ${data} title="${rrEscapeHtml(tt('Press a key or button to add it'))}">+</button>`;
         const listening = (kind, action) => this._capture && this._capture.kind === kind && this._capture.action === action;
@@ -217,8 +222,6 @@ class DatabaseControlsEditor {
         };
         const subhead = text => `<tr class="rr-controls-subhead"><th colspan="2">${rrEscapeHtml(tt(text))}</th></tr>`;
         const jumpRow = (kind, list, name) => `<tr class="rr-controls-jump"><td>${rrEscapeHtml(tt('Jump (3D maps)'))}</td><td>${list.map(code => chip(name(code), `data-kind="${kind}-jump" data-code="${code}"`)).join('')}${listening(kind + '-jump', 'jump') ? `<span class="rr-controls-listen">${rrEscapeHtml(tt(kind === 'key' ? 'Press a key…' : 'Press a gamepad button…'))}</span>` : add(`data-kind="${kind}-jump" data-action="jump"`)}</td></tr>`;
-        const commonEvents = [[0, tt('(none)')]].concat((this.databaseManager.data.commonEvents || []).filter(Boolean).map(e => [e.id, `${String(e.id).padStart(4, '0')}: ${e.name || ''}`]));
-        const presetValue = DatabaseControlsEditor.GRAVITY_PRESETS.some(([v]) => Number(v) === Number(physics.gravity)) ? String(DatabaseControlsEditor.GRAVITY_PRESETS.find(([v]) => Number(v) === Number(physics.gravity))[0]) : 'custom';
         container.innerHTML = `
             <div class="rr-controls">
                 ${this._moved ? `<div class="rr-controls-moved" role="status">${rrEscapeHtml(tt('{key} was {from}. It is now {to}.').replace('{key}', this._moved.key).replace('{from}', this._moved.from).replace('{to}', this._moved.to))}</div>` : ''}
@@ -250,6 +253,18 @@ class DatabaseControlsEditor {
                         <div class="rr-controls-note">${rrEscapeHtml(tt('While a Tactical battle runs, these keys and buttons do this in place of what they do elsewhere.'))}</div>
                     </div>
                 </div>
+            </div>`;
+        this.bind();
+    }
+
+
+    /** The Physics and Swimming cards of 3D maps, as HTML: game rules, shown in System 2. */
+    physicsCards() {
+        const tt = text => this._t(text);
+        const controls = this.controls(), physics = this.physics();
+        const commonEvents = [[0, tt('(none)')]].concat((this.databaseManager.data.commonEvents || []).filter(Boolean).map(e => [e.id, `${String(e.id).padStart(4, '0')}: ${e.name || ''}`]));
+        const presetValue = DatabaseControlsEditor.GRAVITY_PRESETS.some(([v]) => Number(v) === Number(physics.gravity)) ? String(DatabaseControlsEditor.GRAVITY_PRESETS.find(([v]) => Number(v) === Number(physics.gravity))[0]) : 'custom';
+        return `
                 <div class="database-section rr-controls-card">
                     <div class="database-section-header" data-section-key="physics-3d-maps">${rrEscapeHtml(tt('Physics (3D maps)'))}</div>
                     <div class="database-section-content rr-controls-form">
@@ -268,6 +283,11 @@ class DatabaseControlsEditor {
                         <label>${rrEscapeHtml(tt('Hard landing sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="hardLandSe" data-title="Hard landing sound">${rrEscapeHtml(physics.hardLandSe && physics.hardLandSe.name ? physics.hardLandSe.name : tt('(none)'))}</button></div>
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-ragdoll"${physics.ragdoll !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Go limp on a fatal fall'))}</label>
                         <label>${rrEscapeHtml(tt('Or run a common event'))}</label><select class="database-field-value rr-controls-event">${commonEvents.map(([id, name]) => `<option value="${id}"${Number(physics.fallCommonEvent) === Number(id) ? ' selected' : ''}>${rrEscapeHtml(name)}</option>`).join('')}</select>
+                        <label class="rr-controls-check"><input type="checkbox" class="rr-controls-climb"${physics.battleClimb !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Battlers climb walls without a ladder'))}</label>
+                        <label>${rrEscapeHtml(tt('Highest wall climbed'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="climbHeight" min="0" max="50" step="0.5" value="${physics.climbHeight}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
+                        <label>${rrEscapeHtml(tt('Climb cost'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="climbCost" min="0" max="10" step="0.25" value="${physics.climbCost}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('move per tile climbed'))}</span></div>
+                        <label>${rrEscapeHtml(tt('Long falls in battles'))}</label><select class="database-field-value rr-controls-battlefall">${DatabaseControlsEditor.BATTLE_FALLS.map(([v, l]) => `<option value="${v}"${(physics.battleFall || 'hurt') === v ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select>
+                        <label>${rrEscapeHtml(tt('Lethal jumps'))}</label><select class="database-field-value rr-controls-lethalfall">${DatabaseControlsEditor.LETHAL_FALLS.map(([v, l]) => `<option value="${v}"${(physics.lethalFall || 'ask') === v ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select>
                         <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › Physics (the Moon, a low-gravity station).') + ' ' + tt('A ledge higher than a jump and within the reach is grabbed and climbed: press Jump while walking into it.') + ' ' + tt('A ledge up to the height climbed by walking is climbed or stepped down by walking into it for a moment.'))}</div>
                     </div>
                 </div>
@@ -279,9 +299,21 @@ class DatabaseControlsEditor {
                         <label>${rrEscapeHtml(tt('Splash sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="splashSe" data-title="Splash sound">${rrEscapeHtml(physics.splashSe && physics.splashSe.name ? physics.splashSe.name : tt('(none)'))}</button></div>
                         <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Shallower water is waded; deeper water is swum. Dash dives, Jump rises; at the surface Jump leaps out.'))}</div>
                     </div>
-                </div>
-            </div>`;
-        this.bind();
+                </div>`;
+    }
+
+    /** Shows the Physics and Swimming cards in `host` (System 2's column) and keeps them there as they change. */
+    showPhysicsIn(host) {
+        this.physicsHost = host;
+        this.renderPhysics(true);
+    }
+
+    /** Draws the cards again where they were shown, unless that page has gone (`first`: it is being built). */
+    renderPhysics(first = false) {
+        const host = this.physicsHost;
+        if (!host || (!first && !host.isConnected)) return;
+        host.innerHTML = this.physicsCards();
+        this.bindPhysics(host);
     }
 
     /** A physics sound (splash, landing, hard landing): any sound effect of the project, or none. */
@@ -304,7 +336,7 @@ class DatabaseControlsEditor {
                 const p = this.physics();
                 p[field] = result && result.name ? { name: result.name, volume: result.volume, pitch: result.pitch, pan: result.pan } : null;
                 this.savePhysics(p);
-                this.render();
+                this.renderPhysics();
             }
         });
     }
@@ -325,6 +357,10 @@ class DatabaseControlsEditor {
             this.parentEditor?._markDatabaseMutation?.();
             this.render();
         });
+    }
+
+    /** The Physics and Swimming cards' controls, wherever they stand. */
+    bindPhysics(root) {
         root.querySelector('.rr-controls-jumpon').addEventListener('change', event => { const c = this.controls(); c.jump = event.target.checked; this.saveControls(c); });
         root.querySelector('.rr-controls-fall').addEventListener('change', event => { const p = this.physics(); p.fallDamage = event.target.checked; this.savePhysics(p); });
         root.querySelector('.rr-controls-swim').addEventListener('change', event => { const p = this.physics(); p.swim = event.target.checked; this.savePhysics(p); });
@@ -332,6 +368,9 @@ class DatabaseControlsEditor {
         root.querySelector('.rr-controls-ragdoll').addEventListener('change', event => { const p = this.physics(); p.ragdoll = event.target.checked; this.savePhysics(p); });
         root.querySelector('.rr-controls-mantle').addEventListener('change', event => { const p = this.physics(); p.mantle = event.target.checked; this.savePhysics(p); });
         root.querySelector('.rr-controls-stepup').addEventListener('change', event => { const p = this.physics(); p.stepUp = event.target.checked; this.savePhysics(p); });
+        root.querySelector('.rr-controls-climb').addEventListener('change', event => { const p = this.physics(); p.battleClimb = event.target.checked; this.savePhysics(p); });
+        root.querySelector('.rr-controls-battlefall').addEventListener('change', event => { const p = this.physics(); p.battleFall = event.target.value; this.savePhysics(p); });
+        root.querySelector('.rr-controls-lethalfall').addEventListener('change', event => { const p = this.physics(); p.lethalFall = event.target.value; this.savePhysics(p); });
         root.querySelector('.rr-controls-event').addEventListener('change', event => { const p = this.physics(); p.fallCommonEvent = Math.max(0, Number(event.target.value) || 0); this.savePhysics(p); });
         root.querySelector('.rr-controls-gravity').addEventListener('change', event => {
             if (event.target.value === 'custom') return;
@@ -344,7 +383,7 @@ class DatabaseControlsEditor {
             if (!Number.isFinite(n)) return;
             p[input.dataset.field] = Math.max(Number(input.min), Math.min(Number(input.max), n));
             this.savePhysics(p);
-            if (input.dataset.field === 'gravity') this.render();
+            if (input.dataset.field === 'gravity') this.renderPhysics();
         }));
     }
 

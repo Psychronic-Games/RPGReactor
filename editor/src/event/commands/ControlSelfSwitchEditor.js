@@ -7,7 +7,7 @@ class ControlSelfSwitchEditor {
         this.projectController = projectController;
         this.modal = null;
         this.callback = null;
-        this.selfSwitchId = 'A'; // A, B, C, or D
+        this.selfSwitchId = 'A'; // A to Z
         this.value = 0; // 0=ON, 1=OFF
     }
 
@@ -109,20 +109,20 @@ class ControlSelfSwitchEditor {
         switchSection.appendChild(switchLabel);
 
         const switchButtons = document.createElement('div');
-        switchButtons.style.cssText = 'display: flex; gap: 8px;';
+        switchButtons.style.cssText = 'display: grid; grid-template-columns: repeat(13, 1fr); gap: 4px;';
 
-        ['A', 'B', 'C', 'D'].forEach(letter => {
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
             const btn = document.createElement('button');
             btn.textContent = letter;
             btn.style.cssText = `
-                padding: 8px 16px;
+                padding: 6px 0;
                 background-color: ${this.selfSwitchId === letter ? 'var(--color-accent)' : 'var(--color-bg-panel)'};
                 color: ${this.selfSwitchId === letter ? 'var(--color-accent-on)' : 'var(--color-text)'};
                 border: 1px solid ${this.selfSwitchId === letter ? 'var(--color-accent)' : 'var(--color-border-input)'};
                 border-radius: 3px;
                 cursor: pointer;
                 font-size: 13px;
-                flex: 1;
+                min-width: 0;
             `;
             btn.addEventListener('click', () => {
                 this.selfSwitchId = letter;

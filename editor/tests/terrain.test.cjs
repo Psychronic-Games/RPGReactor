@@ -114,7 +114,7 @@ test('every ground surface and every stander goes through the terrain', () => {
     assert.doesNotMatch(read('editor/src/TilesetPaletteViewer.js'), /createLayerTab\('T'/);
     const bar = read('editor/src/BuildHotbar.js');
     // The ground's brushes, dunes, the painted grounds and rock, then the water, then the map's biome and the land past its border.
-    assert.match(bar, /static TERRAIN = \['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'rock', 'pour', 'river', 'drain', 'look', 'biome', 'surround'\];/);
+    assert.match(bar, /static TERRAIN = \['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'rock', 'pour', 'river', 'drain', 'look', 'biome', 'sky', 'surround'\];/);
     assert.match(bar, /if \(!terrain\.active\) terrain\.activate\(\);\n\s*terrain\.setMode\(BuildHotbar\.TERRAIN_MODE\[slot\]\);/);
     assert.match(read('editor/src/main.js'), /onTerrainTabSelected = \(\) => \{/);
     assert.match(read('editor/index.html'), /src\/TerrainManager\.js/);

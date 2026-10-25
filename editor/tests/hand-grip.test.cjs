@@ -533,3 +533,56 @@ test('finger markers placed by hand: a tip off the skin or nearer a neighbour st
     const left = run([0, -0.16, 0.03], [0, -0.16, 0.01], i => (i >= 40 && i < 52 ? 9 : 0), undefined);
     assert.ok([48, 49, 50, 51].every(i => left(i, 9) > 0.99), 'a bone that is not the hand\'s end keeps its skin');
 });
+
+test('a grip held before is the solve found then (Reactor3D.GripMemo): the same fingers, keyed by the hold, the list kept short', () => {
+    const { root, hand } = fileModel(false);
+    Reactor3D.applyModelRig(root, rigWithHands());
+    const G = Reactor3D.HandGrip, M = Reactor3D.GripMemo, grip = Reactor3D._handGrips.get(hand);
+    const thing = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.024, 0.3, 2, 2, 20));
+    thing.position.copy(hand.localToWorld(new THREE.Vector3(0.035, -0.125, 0))); thing.updateMatrixWorld(true);
+    const cloud = Reactor3D.heldCloud(thing);
+    const solveGrip = Reactor3D.solveGrip;
+    let solves = 0;
+    Reactor3D.solveGrip = function() { solves++; return solveGrip.apply(this, arguments); };
+    try {
+        // Solved with the memo off, then with it on (a miss that keeps it), then a hit.
+        M.enabled = false;
+        G.hold(hand, thing);
+        const plain = Array.from(grip.solved);
+        assert.ok(solves > 0 && plain.some(v => v !== 0), 'the fingers closed');
+        assert.ok(!M.get(cloud, M.key(grip.layout, grip.trigger, G._m.a.elements)), 'off, nothing is kept');
+        M.enabled = true;
+        grip.relSet = false; grip.solved.fill(0);
+        G.hold(hand, thing);
+        assert.deepEqual(Array.from(grip.solved), plain, 'a miss solves as before');
+        const before = solves;
+        grip.relSet = false; grip.solved.fill(0);
+        G.hold(hand, thing);
+        assert.equal(solves, before, 'a hit solves nothing');
+        assert.deepEqual(Array.from(grip.solved), plain, 'and gives the same fingers');
+        // The key: the hand's layout, the trigger, and where the thing is in the hand, to a ten-thousandth.
+        const e = Array.from(G._m.a.elements, v => Math.round(v * 1e4) / 1e4), key = M.key(grip.layout, false, e);
+        assert.equal(M.key(grip.layout, false, e.map(v => v + 1e-6)), key, 'a millionth is the same hold');
+        assert.notEqual(M.key(grip.layout, false, e.map((v, i) => (i === 12 ? v + 1e-3 : v))), key, 'a thing moved in the hand is another hold');
+        assert.notEqual(M.key(grip.layout, false, e.map((v, i) => (i === 0 ? v * 0.99 : v))), key, 'turned in the hand: another hold');
+        assert.notEqual(M.key(grip.layout, true, e), key, 'a trigger finger is another hold');
+        // A thing moved in the hand is solved again, not answered from the memo.
+        thing.position.x += 0.01; thing.updateMatrixWorld(true);
+        G.hold(hand, thing);
+        assert.ok(solves > before);
+        assert.notEqual(Array.from(grip.solved).join(), plain.join());
+        // Never more than LIMIT holds kept per thing.
+        const fresh = { points: new Float32Array(3), count: 1 };
+        for (let i = 0; i < M.LIMIT * 2 + 3; i++) {
+            M.set(fresh, 'hold' + i, [i, i]);
+            assert.ok(M._byCloud.get(fresh).size <= M.LIMIT);
+        }
+        assert.deepEqual(Array.from(M.get(fresh, 'hold' + (M.LIMIT * 2 + 2))), [M.LIMIT * 2 + 2, M.LIMIT * 2 + 2], 'the newest is kept');
+        const stored = [1, 2];
+        M.set(fresh, 'copy', stored); stored[0] = 9;
+        assert.deepEqual(Array.from(M.get(fresh, 'copy')), [1, 2], 'kept as a copy');
+    } finally {
+        Reactor3D.solveGrip = solveGrip;
+        M.enabled = true;
+    }
+});

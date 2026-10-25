@@ -162,6 +162,29 @@ test('nothing glows, nothing is drawn or kept: the halo is fed by shining sheets
     } finally { H.dispose(); H._targets = saved.targets; H._idle = saved.idle; H.enabled = saved.enabled; }
 });
 
+test('beside the quarter-size light the halo still tests the farthest of each texel\'s pixels: it runs over what stands in front of its feeders', () => {
+    const H = R.Halo, HH = R.HalfHaze, saved = { draw: H.draw, depth: HH._depth };
+    const scene = sceneWith([pond({ glow: 1, colour: '#6c0ec7' })]);
+    const feeders = scene._scene.userData.rrLightBodies.userData.rrHalo;
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 500);
+    const target = { width: 1440, height: 810, depthTexture: {} };
+    // The light keeps one pixel's distance a texel in its alpha, at the haze's own size.
+    const split = { light: new THREE.WebGLRenderTarget(360, 203) };
+    const list = []; list.halo = feeders;
+    let seen = null;
+    H.draw = function() { const u = HH.uniforms(); seen = { depth: u.rrHazeDepth.value, pick: u.rrHazeDepthPick.value.toArray() }; };
+    try {
+        HH._depth = null;
+        const renderer = noteRenderer();
+        HH.draw(renderer, target, camera, list, split);
+        assert.ok(seen, 'the halo is drawn');
+        same(seen.depth, HH._depth.texture, 'against the shrunk depth');
+        assert.deepEqual(seen.pick, [1, 0, 0, 0], 'its red channel');
+        assert.ok(renderer.calls.some(c => c.scene && c.target === HH._depth), 'shrunk this frame');
+        assert.equal(HH.uniforms().rrHazeDepthOn.value, 0, 'and the test off again after');
+    } finally { H.draw = saved.draw; HH._depth = saved.depth; }
+});
+
 test('a lake lights its banks further than a pond, less with distance, and at a low glow only the shore', () => {
     const W = R.WaterLight;
     // The owner's lake in small: a sheet 90 by 60 on a map of 200, its west bank a straight shore.

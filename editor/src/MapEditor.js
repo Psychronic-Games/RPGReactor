@@ -1210,6 +1210,7 @@ class MapEditor {
 
             this.preserveAutotileShape = Boolean(event.data.originalEvent.shiftKey) &&
                 this.canPreserveAutotileShape();
+            this.circleFromCenter = Boolean(event.data.originalEvent.altKey);
 
             // Update coordinate display in tileset mode
             if (this.enabled && this.onCoordinatesChange && this.tilemapManager.currentMap) {
@@ -1256,6 +1257,7 @@ class MapEditor {
 
             this.preserveAutotileShape = Boolean(event.data.originalEvent.shiftKey) &&
                 this.canPreserveAutotileShape();
+            this.circleFromCenter = Boolean(event.data.originalEvent.altKey);
 
             if (this.currentTool === 'rectangle') {
                 this.paintRectangle(this.drawStart, { x: tileX, y: tileY });
@@ -2135,35 +2137,46 @@ class MapEditor {
         // place) — no uncache/recache flip needed here.
     }
 
+    /**
+     * The cells the Circle tool covers: the ellipse that fits the drag's
+     * rectangle, or with Alt held the one centered on the cell the drag
+     * started from, reaching the pointer's row and column.
+     */
+    circleShape(start, end, fromCenter = !!this.circleFromCenter) {
+        const dx = Math.abs(end.x - start.x), dy = Math.abs(end.y - start.y);
+        const minX = fromCenter ? start.x - dx : Math.min(start.x, end.x);
+        const maxX = fromCenter ? start.x + dx : Math.max(start.x, end.x);
+        const minY = fromCenter ? start.y - dy : Math.min(start.y, end.y);
+        const maxY = fromCenter ? start.y + dy : Math.max(start.y, end.y);
+        const centerX = (minX + maxX + 1) / 2, centerY = (minY + maxY + 1) / 2;
+        // A quarter cell in from the rectangle's edge, so a 3-cell circle is a plus and not a square.
+        const radiusX = Math.max(0.25, (maxX - minX + 1) / 2 - 0.25), radiusY = Math.max(0.25, (maxY - minY + 1) / 2 - 0.25);
+        const contains = (x, y) => {
+            const u = (x + 0.5 - centerX) / radiusX, v = (y + 0.5 - centerY) / radiusY;
+            return u * u + v * v <= 1;
+        };
+        return { minX, maxX, minY, maxY, contains };
+    }
+
     // Paint a circle of tiles
     paintCircle(start, end) {
         if (!this.tilemapManager.currentMap) return;
 
-        const centerX = start.x;
-        const centerY = start.y;
-        const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
-
-        const minX = Math.floor(centerX - radius);
-        const maxX = Math.ceil(centerX + radius);
-        const minY = Math.floor(centerY - radius);
-        const maxY = Math.ceil(centerY + radius);
+        const { minX, maxX, minY, maxY, contains: inCircle } = this.circleShape(start, end);
 
         if (this.eraserMode) {
             if (this.tilesetPaletteViewer.currentLayer === 'R') {
-                this.paintRegionArea(minX, maxX, minY, maxY, (x, y) =>
-                    Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) <= radius, 0);
+                this.paintRegionArea(minX, maxX, minY, maxY, inCircle, 0);
                 return;
             }
             if (this.tilesetPaletteViewer.currentLayer === 'O') {
-                this.eraseObject3DArea(minX, maxX, minY, maxY, (x, y) =>
-                    Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) <= radius);
+                this.eraseObject3DArea(minX, maxX, minY, maxY, inCircle);
                 return;
             }
             const positions = [];
             for (let y = minY; y <= maxY; y++) {
                 for (let x = minX; x <= maxX; x++) {
-                    const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                    if (dist <= radius) {
+                    if (inCircle(x, y)) {
                         positions.push({ x, y });
                     }
                 }
@@ -2175,13 +2188,11 @@ class MapEditor {
         // Region painting (z5): same routing as paintRectangle — the tile
         // path below must never see the 'R' tab.
         if (this.tilesetPaletteViewer.currentLayer === 'R') {
-            this.paintRegionArea(minX, maxX, minY, maxY, (x, y) =>
-                Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) <= radius);
+            this.paintRegionArea(minX, maxX, minY, maxY, inCircle);
             return;
         }
         if (this.tilesetPaletteViewer.currentLayer === 'O') {
-            this.paintObject3DArea(minX, maxX, minY, maxY, (x, y) =>
-                Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) <= radius);
+            this.paintObject3DArea(minX, maxX, minY, maxY, inCircle);
             return;
         }
 
@@ -2217,8 +2228,7 @@ class MapEditor {
 
         for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
-                const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                if (dist <= radius) {
+                if (inCircle(x, y)) {
                     // Calculate which tile from the pattern to use (using modulo for tiling)
                     const patternX = (x - minX) % patternWidth;
                     const patternY = (y - minY) % patternHeight;
@@ -2556,12 +2566,14 @@ class MapEditor {
         if (this._lastShapePreview &&
             this._lastShapePreview.tool === this.currentTool &&
             this._lastShapePreview.sx === start.x && this._lastShapePreview.sy === start.y &&
-            this._lastShapePreview.cx === current.x && this._lastShapePreview.cy === current.y) {
+            this._lastShapePreview.cx === current.x && this._lastShapePreview.cy === current.y &&
+            this._lastShapePreview.fromCenter === !!this.circleFromCenter) {
             return;
         }
         this._lastShapePreview = {
             tool: this.currentTool,
-            sx: start.x, sy: start.y, cx: current.x, cy: current.y
+            sx: start.x, sy: start.y, cx: current.x, cy: current.y,
+            fromCenter: !!this.circleFromCenter
         };
 
         // Clear previous preview
@@ -2656,21 +2668,14 @@ class MapEditor {
                 // Failed to draw tile preview
             }
         } else if (this.currentTool === 'circle') {
-            const centerX = start.x;
-            const centerY = start.y;
-            const radius = Math.sqrt(
-                Math.pow(current.x - start.x, 2) + Math.pow(current.y - start.y, 2)
-            );
+            const shape = this.circleShape(start, current);
+            const inCircle = shape.contains;
 
             if (this.eraserMode) {
-                const minX = Math.floor(centerX - radius);
-                const maxX = Math.ceil(centerX + radius);
-                const minY = Math.floor(centerY - radius);
-                const maxY = Math.ceil(centerY + radius);
+                const { minX, maxX, minY, maxY } = shape;
                 for (let y = minY; y <= maxY; y++) {
                     for (let x = minX; x <= maxX; x++) {
-                        const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                        if (dist <= radius) {
+                        if (inCircle(x, y)) {
                             this.previewGraphics.rect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
                             this.previewGraphics.stroke({ width: 2, color: 0xffffff, alpha: 0.8 });
                         }
@@ -2679,15 +2684,15 @@ class MapEditor {
                 return;
             }
 
-            // Region area preview: colored cells inside the radius, with a
+            // Region area preview: colored cells inside the shape, with a
             // white cell outline (there was NO preview at all for regions —
             // the tile-preview path below has nothing to draw for them)
             if (this.tilesetPaletteViewer.currentLayer === 'O' && this.object3DManager) {
                 const colour = this.object3DManager.objectColors[
                     this.object3DManager.selectedObject];
-                for (let y = Math.floor(centerY - radius); y <= Math.ceil(centerY + radius); y++) {
-                    for (let x = Math.floor(centerX - radius); x <= Math.ceil(centerX + radius); x++) {
-                        if (Math.hypot(x - centerX, y - centerY) > radius) continue;
+                for (let y = shape.minY; y <= shape.maxY; y++) {
+                    for (let x = shape.minX; x <= shape.maxX; x++) {
+                        if (!inCircle(x, y)) continue;
                         this.previewGraphics.rect(x * tileWidth, y * tileHeight,
                             tileWidth, tileHeight);
                         this.previewGraphics.fill({ color: colour, alpha: 0.4 });
@@ -2699,14 +2704,10 @@ class MapEditor {
                 if (this.regionManager && this.regionManager.selectedTiles &&
                     this.regionManager.selectedTiles.length > 0) {
                     const color = this.regionManager.regionColors[this.regionManager.selectedRegion];
-                    const minX = Math.floor(centerX - radius);
-                    const maxX = Math.ceil(centerX + radius);
-                    const minY = Math.floor(centerY - radius);
-                    const maxY = Math.ceil(centerY + radius);
+                    const { minX, maxX, minY, maxY } = shape;
                     for (let y = minY; y <= maxY; y++) {
                         for (let x = minX; x <= maxX; x++) {
-                            const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                            if (dist <= radius) {
+                            if (inCircle(x, y)) {
                                 this.previewGraphics.rect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
                             }
                         }
@@ -2730,17 +2731,13 @@ class MapEditor {
                     const patternHeight = patternMaxY - patternMinY + 1;
                     const currentLayer = this.tilesetPaletteViewer.currentLayer;
 
-                    const minX = Math.floor(centerX - radius);
-                    const maxX = Math.ceil(centerX + radius);
-                    const minY = Math.floor(centerY - radius);
-                    const maxY = Math.ceil(centerY + radius);
+                    const { minX, maxX, minY, maxY } = shape;
 
                     // Build preview pattern map for autotile shape calculation
                     const previewPattern = new Set();
                     for (let y = minY; y <= maxY; y++) {
                         for (let x = minX; x <= maxX; x++) {
-                            const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                            if (dist <= radius) {
+                            if (inCircle(x, y)) {
                                 previewPattern.add(`${x},${y}`);
                             }
                         }
@@ -2749,8 +2746,7 @@ class MapEditor {
                     // Draw each tile in the pattern preview
                     for (let y = minY; y <= maxY; y++) {
                         for (let x = minX; x <= maxX; x++) {
-                            const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                            if (dist <= radius) {
+                            if (inCircle(x, y)) {
                                 tilesInCircle.push({ x, y });
                                 const patternX = (x - minX) % patternWidth;
                                 const patternY = (y - minY) % patternHeight;

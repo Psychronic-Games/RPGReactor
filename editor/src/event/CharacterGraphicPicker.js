@@ -378,7 +378,9 @@ class CharacterGraphicPicker {
 
             const kindText = isSingleCharacter
                 ? this._t('Single Character Sprite Sheet')
-                : this._t('Multi-Character Sprite Sheet (8 characters)');
+                : RRAssetFiles.isEightDirCharacter && RRAssetFiles.isEightDirCharacter(baseName)
+                    ? this._t('8-Direction Sprite Sheet')
+                    : this._t('Multi-Character Sprite Sheet (8 characters)');
             parts.kind.textContent = `${kindText} · ${Math.round(layout.frameWidth)} × ${Math.round(layout.frameHeight)}`;
 
             const sheet = this.createSheet(img, layout);

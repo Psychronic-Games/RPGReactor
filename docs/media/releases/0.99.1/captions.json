@@ -1,0 +1,10 @@
+[
+  { "file": "01-character-builder.jpg", "title": "3D Character Builder", "caption": "Build your hero with sliders and pickers, dress them in a click, and save a rigged 3D model that walks, runs and fights." },
+  { "file": "02-character-lineup.jpg", "title": "Dozens of species", "caption": "Humans, dwarves, elves, orcs, two-headed dragonkin, catfolk, tieflings and starship crews, all from one builder." },
+  { "file": "03-creatures.jpg", "title": "Creatures", "caption": "Add dragons, wolves, horses, sharks, birds and insects to your world, each saved as a rigged 3D model." },
+  { "file": "04-prop-builder.jpg", "title": "3D Prop Builder", "caption": "Make vehicles, furniture, sci-fi consoles, weapons and treasure chests, then drop them straight onto your maps." },
+  { "file": "05-windows.jpg", "title": "Windows of their own", "caption": "Keep the Database and the event editor open beside your map, or move them to a second monitor." },
+  { "file": "06-tactical-climb.jpg", "title": "Climb, grapple and jump", "caption": "Send units up onto roofs and see the fall damage before they jump back down." },
+  { "file": "07-effekseer-battle.jpg", "title": "Effects in battles on the map", "caption": "Effekseer skill effects burst right on the map in Tactical battles, with the camera moving in on the action." },
+  { "file": "08-north-haven-night.jpg", "title": "The world in 3D", "caption": "Walk a lamplit village at night, with maps that join with no stall at the border." }
+]

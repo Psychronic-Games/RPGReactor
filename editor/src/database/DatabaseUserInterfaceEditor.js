@@ -56,6 +56,12 @@ class DatabaseUserInterfaceEditor {
     }
     /** Node types that take focus and run an action. */
     static isControl(type) { return type === 'button' || type === 'list' || type === 'input'; }
+    /** Node types an Angle turns about their center, as in the game. */
+    static get TURNABLE_TYPES() { return ['box', 'image', 'text', 'button', 'gauge', 'input']; }
+    /** A node's Angle in degrees; 0 for a node that cannot turn. */
+    static angleOf(node) {
+        return node && DatabaseUserInterfaceEditor.TURNABLE_TYPES.includes(node.type) ? Number(node.angle) || 0 : 0;
+    }
     static get GAUGE_KINDS() { return ['hp', 'mp', 'tp', 'exp', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'variable']; }
     static get LIST_SOURCES() { return ['party', 'inventory', 'skills', 'actorParameters', 'actorEquipment', 'actorStates', 'options', 'saveSlots', 'variableRange', 'literal',
         'itemCategories', 'skillTypes', 'equipCandidates', 'shopGoods', 'shopSell']; }
@@ -512,6 +518,10 @@ class DatabaseUserInterfaceEditor {
             merged.outlineColor = /^#[0-9a-f]{6}$/i.test(merged.outlineColor || '') ? merged.outlineColor : '';
             merged.outlineWidth = merged.outline === false ? 0 : Math.min(32, Math.max(0, Math.round(Number(merged.outlineWidth)) || 0));
             merged.letterSpacing = Math.min(100, Math.max(-20, Math.round(Number(merged.letterSpacing) || 0)));
+            // Kept only when turned, so records that never turn save as before.
+            const angle = Math.min(180, Math.max(-180, Math.round(Number(merged.angle) || 0)));
+            if (angle && DatabaseUserInterfaceEditor.TURNABLE_TYPES.includes(type)) merged.angle = angle;
+            else delete merged.angle;
             if (!DatabaseUserInterfaceEditor.ACTOR_SOURCES.includes(node.actorSource)) merged.actorSource = node.actorMode === 'actor' ? 'actorId' : 'partySlot';
             if (!merged.actorContextName) merged.actorContextName = 'selection';
             merged.visible = Object.assign({ type: 'always', id: 1, on: true, op: '==', value: 0, script: '' }, merged.visible || {});
@@ -667,6 +677,7 @@ class DatabaseUserInterfaceEditor {
                 </div>
                 <button type="button" class="rr-btn-chip rr-ui-interface-settings">${tt('Interface Settings')}</button>
                 <button type="button" class="rr-button-primary rr-ui-playtest">${tt('Playtest')}</button>
+                <div class="rr-ui-unbound" role="status"${this.unboundStockRole() ? '' : ' hidden'}>${this.unboundNoticeMarkup()}</div>
             </div>
             <div class="rr-ui-workspace">
                 <div class="database-section rr-ui-tree-panel">
@@ -981,7 +992,7 @@ class DatabaseUserInterfaceEditor {
                 <span class="rr-ui-role-value" title="${this.escapeHTML(value)}">${this.escapeHTML(value)}</span><span aria-hidden="true">▾</span>
             </button>
             <div class="rr-ui-role-popup" hidden>
-                <input type="search" class="rr-ui-role-search" aria-label="${this._t('Search roles')}" placeholder="${this._t('Search roles')}">
+                <input type="search" class="rr-input rr-ui-role-search" aria-label="${this._t('Search roles')}" placeholder="${this._t('Search roles')}">
                 <div id="${listId}" class="rr-ui-role-list" role="listbox" aria-multiselectable="true">
                     <div id="${listId}-0" class="rr-ui-role-option rr-ui-role-custom" role="option" aria-selected="${assigned.size === 0}"
                         data-replacement-custom="true" data-role-label="${this.escapeHTML(customLabel)}" tabindex="-1">
@@ -1005,6 +1016,38 @@ class DatabaseUserInterfaceEditor {
         if (!this.wrapper) return;
         const host = this.wrapper.querySelector('.rr-ui-replacement-controls');
         if (host) host.innerHTML = this.replacementRoleMarkup();
+        const notice = this.wrapper.querySelector('.rr-ui-unbound');
+        if (notice) {
+            notice.hidden = !this.unboundStockRole();
+            notice.innerHTML = this.unboundNoticeMarkup();
+        }
+    }
+
+    /**
+     * The screen this record was laid out as, while the game still shows the
+     * stock one: no record replaces it in System. A screen another record
+     * already replaces is that record's, and gets no notice here.
+     */
+    unboundStockRole() {
+        const record = this.current;
+        const id = Number(record && record.id) || 0;
+        if (!(id > 0) || !Array.isArray(record.roles)) return null;
+        const system = this.replacementSystem() || {};
+        const list = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.userInterfaces) || [];
+        const roles = DatabaseUserInterfaceEditor.REPLACEMENT_ROLES.filter(([role]) => record.roles.includes(role) && this.roleFitsMode(role));
+        if (roles.some(([, , field]) => Number(system[field]) === id)) return null;
+        return roles.find(([, , field]) => {
+            const bound = Number(system[field]) || 0;
+            return !(bound > 0 && list[bound]);
+        }) || null;
+    }
+
+    unboundNoticeMarkup() {
+        const role = this.unboundStockRole();
+        if (!role) return '';
+        const label = this._t(role[1]);
+        // Use As above is where the screen is chosen; the note only says why the game still shows its own.
+        return `<span>${this.escapeHTML(this._t('The game still shows its own {name}.').replace('{name}', label))}</span>`;
     }
 
     clearReplacementRoles() {
@@ -1560,7 +1603,13 @@ class DatabaseUserInterfaceEditor {
     // LAYOUT (same math as the runtime)
     // ==========================================
 
-    rects() {
+    /**
+     * Where each node stands on the canvas. A Battle Window that follows the active actor stands where it is
+     * drawn (drawBattleWindowNode): over the actor in the battle, or at the actor's row of the party panel, its
+     * X and Y offsets from there, so its outline, handles and clicks are on the window shown. `raw`: as its
+     * anchor and parent alone would place it.
+     */
+    rects({ raw = false } = {}) {
         const screen = this.screenSize();
         const root = { x: 0, y: 0, width: screen.width, height: screen.height };
         const rects = new Map();
@@ -1585,6 +1634,19 @@ class DatabaseUserInterfaceEditor {
             return rect;
         };
         for (const node of this.current.nodes) resolve(node, new Set());
+        if (!raw) {
+            for (const node of this.current.nodes) {
+                if (node.type !== 'battleWindow' || !node.followActor) continue;
+                const rect = rects.get(node.id);
+                if (node.followTarget === 'model') {
+                    const top = this.previewActorTop();
+                    Object.assign(rect, { x: Math.round(top.x - rect.width / 2 + node.x), y: Math.round(top.y - rect.height + node.y) });
+                } else {
+                    const slot = this.previewSlotRect(rects);
+                    if (slot) Object.assign(rect, { x: slot.x + node.x, y: slot.y + node.y });
+                }
+            }
+        }
         return rects;
     }
 
@@ -2060,6 +2122,8 @@ class DatabaseUserInterfaceEditor {
         const panel = this.wrapper.querySelector('.rr-ui-props');
         if (!panel) return;
         const node = this.selected();
+        // Pressed while the inspector shows the interface's own settings, so a click on it always shows where it leads.
+        this.wrapper.querySelector('.rr-ui-interface-settings')?.setAttribute('aria-pressed', String(!node && this.selectedNodes().length <= 1));
         const title = this.wrapper.querySelector('.rr-ui-inspector-title');
         if (this.selectedNodes().length > 1) {
             const label = `${tt('Selection')} (${this.selectedNodes().length})`;
@@ -2104,6 +2168,7 @@ class DatabaseUserInterfaceEditor {
         html += `<div class="rr-ui-sub"${cursor ? ' hidden' : ''}>`;
         html += this.pair(tt('Width'), this.numberControl('p-width', node.width, 0, 9999), tt('Height'), this.numberControl('p-height', node.height, 0, 9999));
         html += '</div>';
+        if (DatabaseUserInterfaceEditor.TURNABLE_TYPES.includes(node.type)) html += this.row(tt('Angle'), this.numberControl('p-angle', DatabaseUserInterfaceEditor.angleOf(node), -180, 180));
         if (node.type === 'text') html += this.hintRow(tt('Width or height 0 fits the text.'));
         html += this.row(tt('Opacity'), this.numberControl('p-opacity', node.opacity, 0, 255));
         html += this.row(tt('Visible'), this.conditionMarkup('p-visible', node.visible));
@@ -2456,12 +2521,12 @@ class DatabaseUserInterfaceEditor {
         if (reparent || reanchor) {
             // A new parent or anchor changes what x/y are measured from;
             // keep the node where it is on screen and re-express the offset.
-            const before = this.rects().get(node.id);
+            const before = this.rects({ raw: true }).get(node.id);
             if (reparent) node.parent = parent;
             if (reanchor) node.anchor = anchor;
             if (before) {
                 const screen = this.screenSize();
-                const parentRect = this.rects().get(node.parent) || { x: 0, y: 0, width: screen.width, height: screen.height };
+                const parentRect = this.rects({ raw: true }).get(node.parent) || { x: 0, y: 0, width: screen.width, height: screen.height };
                 const [ax, ay] = DatabaseUserInterfaceEditor.ANCHORS[node.anchor];
                 node.x = Math.round(before.x - (parentRect.x + parentRect.width * ax - before.width * ax));
                 node.y = Math.round(before.y - (parentRect.y + parentRect.height * ay - before.height * ay));
@@ -2473,6 +2538,11 @@ class DatabaseUserInterfaceEditor {
         }
         node.width = num('p-width', 0, 9999, node.width);
         node.height = num('p-height', 0, 9999, node.height);
+        if (q('p-angle')) {
+            const angle = num('p-angle', -180, 180, DatabaseUserInterfaceEditor.angleOf(node));
+            if (angle) node.angle = angle;
+            else delete node.angle;
+        }
         node.opacity = num('p-opacity', 0, 255, node.opacity);
         this.readCondition(panel, 'p-visible', node.visible);
         if (DatabaseUserInterfaceEditor.isFightNode(node.type)) this.applyFightProperties(node, q, num);
@@ -2959,7 +3029,7 @@ class DatabaseUserInterfaceEditor {
         this.attachCanvasListeners();
 
         this._resizeObserver = typeof ResizeObserver === 'function'
-            ? new ResizeObserver(() => { this.fitCanvas(); this.scheduleRender(); }) : null;
+            ? new ResizeObserver(() => { this.placeInspectorDrawer(); this.fitCanvas(); this.scheduleRender(); }) : null;
         if (this._resizeObserver) this._resizeObserver.observe(q('.rr-ui-canvas-host'));
     }
 
@@ -2982,7 +3052,7 @@ class DatabaseUserInterfaceEditor {
             const rects = this.rects();
             const selected = this.selected();
             if (selected && this.selectedNodes().length === 1 && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-                const handle = this.handleAt(rects.get(selected.id), point);
+                const handle = this.handleAt(rects.get(selected.id), point, selected);
                 if (handle) {
                     this.pushUndo();
                     this.drag = { kind: 'resize', handle, node: selected, start: point, origin: { x: selected.x, y: selected.y, width: selected.width, height: selected.height }, rect: rects.get(selected.id) };
@@ -3023,7 +3093,7 @@ class DatabaseUserInterfaceEditor {
                     snap(this.drag.origin.y + dy) - this.drag.origin.y, this.drag.origins);
                 this.drag.moved = true;
             } else {
-                this.applyResize(node, this.drag, dx, dy, snap);
+                this.resizeTurned(node, this.drag, dx, dy, snap);
             }
             this.touch();
             this.syncPositionFields(node);
@@ -3142,6 +3212,24 @@ class DatabaseUserInterfaceEditor {
         set('p-height', node.height);
     }
 
+    /** Resizes in the node's own frame; a turned node keeps the opposite handle where it was on the canvas. */
+    resizeTurned(node, drag, dx, dy, snap) {
+        const angle = DatabaseUserInterfaceEditor.angleOf(node);
+        if (!angle) return this.applyResize(node, drag, dx, dy, snap);
+        const a = -angle * Math.PI / 180;
+        this.applyResize(node, drag, dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a), snap);
+        const opposite = drag.handle.replace(/[nsew]/g, side => ({ n: 's', s: 'n', e: 'w', w: 'e' })[side]);
+        const at = rect => {
+            const [, x, y] = this.handles(rect).find(entry => entry[0] === opposite);
+            return this.turnedPoint(node, rect, { x, y });
+        };
+        const after = this.rects().get(node.id);
+        if (!after) return;
+        const from = at(drag.rect), to = at(after);
+        node.x += Math.round(from.x - to.x);
+        node.y += Math.round(from.y - to.y);
+    }
+
     applyResize(node, drag, dx, dy, snap) {
         const { handle, origin } = drag;
         const [ax, ay] = DatabaseUserInterfaceEditor.ANCHORS[node.anchor] || [0, 0];
@@ -3172,8 +3260,37 @@ class DatabaseUserInterfaceEditor {
         node.y = Math.round(y);
     }
 
-    handleAt(rect, point) {
+    /** A canvas point in a node's own frame: its Angle undone about the rect's center. */
+    localPoint(node, rect, point) {
+        const angle = DatabaseUserInterfaceEditor.angleOf(node);
+        if (!angle || !rect) return point;
+        const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+        const a = -angle * Math.PI / 180, dx = point.x - cx, dy = point.y - cy;
+        return { x: cx + dx * Math.cos(a) - dy * Math.sin(a), y: cy + dx * Math.sin(a) + dy * Math.cos(a) };
+    }
+
+    /** Where a point of a node's own frame lands on the canvas once its Angle turns it. */
+    turnedPoint(node, rect, point) {
+        const angle = DatabaseUserInterfaceEditor.angleOf(node);
+        if (!angle || !rect) return point;
+        const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+        const a = angle * Math.PI / 180, dx = point.x - cx, dy = point.y - cy;
+        return { x: cx + dx * Math.cos(a) - dy * Math.sin(a), y: cy + dx * Math.sin(a) + dy * Math.cos(a) };
+    }
+
+    /** Turns the context about the rect's center by the node's Angle, as the game turns its window. */
+    turnContext(node, rect) {
+        const angle = DatabaseUserInterfaceEditor.angleOf(node);
+        if (!angle || !rect) return;
+        const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+        this.ctx.translate(cx, cy);
+        this.ctx.rotate(angle * Math.PI / 180);
+        this.ctx.translate(-cx, -cy);
+    }
+
+    handleAt(rect, point, node = null) {
         if (!rect) return null;
+        point = this.localPoint(node, rect, point);
         const size = 8 / this.scale;
         const handles = this.handles(rect);
         for (const [name, hx, hy] of handles) {
@@ -3198,7 +3315,8 @@ class DatabaseUserInterfaceEditor {
             const rect = rects.get(node.id);
             // A layer of another Victory page is not on the canvas to be picked.
             if (!rect || !this.onVictoryPage(node)) continue;
-            if (point.x >= rect.x && point.y >= rect.y && point.x < rect.x + rect.width && point.y < rect.y + rect.height) return node;
+            const local = this.localPoint(node, rect, point);
+            if (local.x >= rect.x && local.y >= rect.y && local.x < rect.x + rect.width && local.y < rect.y + rect.height) return node;
         }
         return null;
     }
@@ -3207,7 +3325,7 @@ class DatabaseUserInterfaceEditor {
         const selected = this.selected();
         let cursor = 'default';
         if (selected && this.selectedNodes().length === 1) {
-            const handle = this.handleAt(this.rects().get(selected.id), point);
+            const handle = this.handleAt(this.rects().get(selected.id), point, selected);
             if (handle) cursor = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }[handle];
         }
         if (cursor === 'default' && this.nodeAt(this.rects(), point)) cursor = 'move';
@@ -3739,6 +3857,15 @@ class DatabaseUserInterfaceEditor {
     // ==========================================
     // CANVAS RENDERING
     // ==========================================
+
+    /** The narrow-layout Inspector drawer starts where the canvas does, below the Layout tools. */
+    placeInspectorDrawer() {
+        const workspace = this.wrapper && this.wrapper.querySelector('.rr-ui-workspace');
+        const host = workspace && workspace.querySelector('.rr-ui-canvas-host');
+        if (!host) return;
+        const top = Math.max(0, Math.round(host.getBoundingClientRect().top - workspace.getBoundingClientRect().top));
+        workspace.style.setProperty('--rr-ui-drawer-top', `${top}px`);
+    }
 
     fitCanvas() {
         const host = this.wrapper.querySelector('.rr-ui-canvas-host');
@@ -4612,6 +4739,7 @@ class DatabaseUserInterfaceEditor {
                 if (!this.onVictoryPage(node)) continue;
                 ctx.save();
                 ctx.globalAlpha *= (node.opacity ?? 255) / 255;
+                this.turnContext(node, rect);
                 const drawn = DatabaseUserInterfaceEditor.isControl(node.type) ? this.previewControl(node).node : node;
                 switch (drawn.type) {
                     case 'box': this.drawSurface(drawn, rect); break;
@@ -5597,9 +5725,9 @@ class DatabaseUserInterfaceEditor {
     }
 
     /** The first party-panel row on the canvas, where a following Battle Window is previewed. */
-    previewSlotRect() {
+    previewSlotRect(rects = null) {
         const panel = (this.current.nodes || []).find(node => node.type === 'list' && node.rowLayout === 'actorPanel' && node.dataSource === 'party');
-        const rect = panel ? this.rects().get(panel.id) : null;
+        const rect = panel ? (rects || this.rects({ raw: true })).get(panel.id) : null;
         if (!rect) return null;
         const inset = panel.fill === 'window' ? 12 : 0;
         const columns = Math.max(1, panel.columns || 1);
@@ -6264,6 +6392,8 @@ class DatabaseUserInterfaceEditor {
             }
             ctx.globalAlpha = opacityOf(node, new Set());
             ctx.globalAlpha *= stateOpacity / 255;
+            ctx.save();
+            this.turnContext(node, drawnRect);
             switch (drawn.type) {
                 case 'box': this.drawSurface(drawn, drawnRect); break;
                 case 'image': this.drawImageNode(drawn, drawnRect); break;
@@ -6291,6 +6421,7 @@ class DatabaseUserInterfaceEditor {
                 case 'gauge': this.drawGaugeNode(drawn, drawnRect); break;
                 default: break;
             }
+            ctx.restore();
             ctx.globalAlpha = 1;
         }
         for (const selected of this.selectedNodes()) {
@@ -6298,6 +6429,7 @@ class DatabaseUserInterfaceEditor {
             if (!rect || !this.onVictoryPage(selected)) continue;
             const accent = (typeof ThemeColors !== 'undefined' && ThemeColors.resolve) ? ThemeColors.resolve('--color-accent-bright') : '#4da3ff';
             ctx.save();
+            this.turnContext(selected, rect);
             ctx.strokeStyle = accent;
             ctx.lineWidth = 2 / this.scale;
             ctx.setLineDash([6 / this.scale, 4 / this.scale]);

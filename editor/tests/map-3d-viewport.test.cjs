@@ -346,6 +346,7 @@ test('3D shares PIXI WebGL2 instead of creating a second GPU context', () => {
     assert.equal(view.createCanvas(), true);
     assert.equal(view.canvas, canvas);
     assert.equal(view.inputSurface, inputSurface);
+    assert.match(inputSurface.style.cssText, /(^|;)\s*user-select:\s*none/, 'a double-click on the view selects no text, so the next drag is not a native drag');
     assert.equal(rendererOptions.canvas, canvas);
     assert.equal(rendererOptions.context, context);
     assert.equal(rendererOptions.antialias, false, 'the existing PIXI context attributes cannot be changed');
@@ -475,10 +476,12 @@ test('repeated 3D toggles dispose every Three renderer without losing WebGL', as
 
 test('the map view draws nothing while the Database window covers it', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'MapEditor3D.js'), 'utf8');
-    assert.match(src, /if \(this\.suspended \|\| MapEditor3D\.coveredByDatabase\(\) \|\| MapEditor3D\.playtestRunning\(\)\) \{ this\._covered = true; this\.frame = requestAnimationFrame\(tick\); return; \}/);
+    assert.match(src, /const playtest = MapEditor3D\.playtestRunning\(\);/);
+    assert.match(src, /if \(this\.suspended \|\| MapEditor3D\.coveredByDatabase\(\) \|\| playtest\) \{ this\._covered = true; this\.frame = requestAnimationFrame\(tick\); return; \}/);
     // Whatever changed behind the cover is drawn once it lifts.
     assert.match(src, /if \(this\._covered\) \{ this\._covered = false; this\.requestRender\(\); \}/);
-    assert.match(src, /getElementById\('database-viewer'\)\?\.classList\?\.contains\('active'\)/);
+    assert.match(src, /viewer\?\.classList\?\.contains\('active'\) && !viewer\.classList\.contains\('rr-database-floating'\)/,
+        'a Database beside the map, floating or in its own window, covers nothing');
 });
 
 test('a render exception stops the frame loop and fails back to 2D', () => {
@@ -769,10 +772,11 @@ test('a raycast hit becomes a tile coordinate', () => {
         'quadrant tools get pixel offsets in the project\'s tile size');
 });
 
-test('the scene has a sky and fog scaled to the map', () => {
-    // Without them the map is a slab in a void and its edge is a hard line
-    // against nothing.
-    assert.match(source, /scene\.background = colour/);
-    assert.match(source, /new THREE\.Fog\(colour/);
-    assert.match(source, /--color-bg-base/, 'deep is pure black, which fog cannot fade into');
+test('the scene has the theme backdrop and no fog, as the game draws none', () => {
+    // A fog measured from the eye greyed out the far side of a small map from
+    // the game's own camera distance; the editor draws what the game draws.
+    assert.match(source, /scene\.background = new THREE\.Color\(this\.skyColour\(\)\)/);
+    assert.match(source, /scene\.fog = null;/);
+    assert.doesNotMatch(source, /new THREE\.Fog\(/);
+    assert.match(source, /--color-bg-base/, 'deep is pure black against the dark themes');
 });

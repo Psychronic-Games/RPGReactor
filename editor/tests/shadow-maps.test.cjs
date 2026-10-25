@@ -114,7 +114,7 @@ test('the shadow variant of the light shader reads two atlases, however many lig
     assert.match(Reactor3D.lightGlsl(true, 1), /float s = texture\(rrShadowAtlas, vec3\(base \+ q \* scale, dp\)\);\n\tif \(dynamic\) s = min\(s, texture\(rrShadowDynAtlas, vec3\(dynBase \+ q \* dynScale, dp\)\)\);/);
     assert.equal((soft.match(/face = d\.x > 0\.0/g) || []).length, 1, 'one face selection, not one per atlas');
     // Sampled inside the light loop, before the light adds in.
-    assert.match(soft, /float sh = rrLightShadow\[i\];\n\t\tif \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);\n\t\tsum \+= lc\.rgb \* fall;/);
+    assert.match(soft, /float sh = rrLightShadow\[i\];\n\t\tif \(sh > 63\.5\) \{ float sv = rrSunShadowAt\(p\); rrSunShaded = fall \* \(1\.0 - sv\); fall \*= sv; \}\n\t\telse if \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);\n\t\tif \(rrFace > 0\.0\) \{[\s\S]*?\n\t\t\}\n\t\tsum \+= lc\.rgb \* fall;/);
     // Each row measures from where it was rendered, not from the light.
     assert.match(soft, /vec3 d = p - rrShadowPos\[slot\]\.xyz;/);
 
@@ -357,7 +357,7 @@ test('both atlases are real depth textures in compare mode from the moment they 
     // lit surface would vanish. The atlas is made, cleared and bound before
     // the first program can name it.
     const three = source3D();
-    const at = three.indexOf('_makeAtlas(renderer, size, rows) {');
+    const at = three.indexOf('_makeAtlas(renderer, size, rows, band = 0) {');
     const body = three.slice(at, three.indexOf('\n    },', at));
     assert.match(body, /new THREE\.WebGLRenderTarget\(width, height, \{\s*format: THREE\.RedFormat,\s*type: THREE\.UnsignedByteType,/, 'a one-byte colour attachment nothing writes to');
     assert.match(body, /new THREE\.DepthTexture\(width, height, THREE\.UnsignedIntType\)/);
@@ -365,7 +365,7 @@ test('both atlases are real depth textures in compare mode from the moment they 
     assert.match(body, /depth\.minFilter = THREE\.LinearFilter;\s*depth\.magFilter = THREE\.LinearFilter;/, 'hardware 2x2 comparison');
     assert.match(body, /renderer\.setRenderTarget\(target\);\s*renderer\.clear\(true, true, false\);\s*renderer\.setRenderTarget\(was\);/, 'cleared at birth, so an unrendered row reads as lit');
     const ensure = three.slice(three.indexOf('_ensureAtlas(renderer) {'), three.indexOf('\n    },', three.indexOf('_ensureAtlas(renderer) {')));
-    assert.match(ensure, /this\._atlas = this\._makeAtlas\(renderer, size, rows\);\s*this\._dynAtlas = this\._makeAtlas\(renderer, size, dynRows\);/);
+    assert.match(ensure, /this\._atlas = this\._makeAtlas\(renderer, size, rows, band\);\s*this\._dynAtlas = this\._makeAtlas\(renderer, size, dynRows, band\);/);
     assert.match(ensure, /this\._bindMaps\(Reactor3D\.lightUniforms\(\)\);/, 'bound as soon as they exist');
     assert.match(ensure, /while \(size \* 6 > max && size > 64\) size >>= 1;/, 'six faces across must fit the context');
     // The tier says how many rows each atlas holds; a weak GPU gets fewer lights, not blurrier faces.
@@ -381,7 +381,7 @@ test('both atlases are real depth textures in compare mode from the moment they 
     // The bind, and the grid the shader maps a face into.
     const bind = three.slice(three.indexOf('_bindMaps(uniforms) {'), three.indexOf('\n    }', three.indexOf('_bindMaps(uniforms) {')));
     assert.match(bind, /uniforms\.rrShadowAtlas\.value = atlas \? atlas\.target\.depthTexture : null;/);
-    assert.match(bind, /grid\[1\] = atlas \? 1 \/ atlas\.rows : 1;\s*grid\[2\] = dyn \? 1 \/ dyn\.rows : 1;\s*grid\[3\] = atlas \? 1 \/ atlas\.size : 1 \/ 512;/);
+    assert.match(bind, /grid\[1\] = atlas \? atlas\.size \/ atlas\.height : 1;\s*grid\[2\] = dyn \? dyn\.size \/ dyn\.height : 1;\s*grid\[3\] = atlas \? 1 \/ atlas\.size : 1 \/ 512;/);
 });
 
 test('a light with nothing in reach takes no row; rows wait their turn and keep their last rendering; a moved light casts nothing until redrawn', () => {
@@ -390,14 +390,14 @@ test('a light with nothing in reach takes no row; rows wait their turn and keep 
     const render = three.slice(three.indexOf('    render(renderer, scene, mapData, options) {'), three.indexOf('\n    _publish(uniforms) {'));
     assert.match(render, /if \(this\._castersWithin\(candidate, candidate\.far\)\) wanted\.push\(candidate\);/, 'only lights with a caster in reach compete for a row');
     assert.match(render, /const assigned = this\.assign\(wanted, tiles\.length,/);
-    assert.match(render, /\.slice\(0, quality\.staticPerFrame \|\| 1\);/, 'a few static rows a frame');
-    assert.match(render, /\.slice\(0, quality\.dynamicPerFrame \|\| 1\);/, 'a few dynamic rows a frame');
+    assert.match(render, /\.slice\(0, rush \? tiles\.length : quality\.staticPerFrame \|\| 1\);/, 'a few static rows a frame, all of them when a cut changed');
+    assert.match(render, /\.slice\(0, rush \? dynTiles\.length : quality\.dynamicPerFrame \|\| 1\);/, 'a few dynamic rows a frame, all of them when a cut changed');
     assert.match(render, /\.sort\(\(a, b\) => \(a\.valid - b\.valid\) \|\| \(a\.gap - b\.gap\)\)/, 'rows with nothing to show yet first, then the nearest');
     assert.match(render, /\.sort\(\(a, b\) => \(a\.valid - b\.valid\) \|\| \(a\.stamp - b\.stamp\)\)/, 'dynamic rows the longest unrefreshed first');
     assert.match(render, /if \(tile\.id !== candidate\.id \|\| fresh\) \{[\s\S]*?tile\.valid = false;\s*tile\.dirty = true;/, "another light's rendering is not read as this one's");
     assert.match(render, /tile\.want = \{ origin, far, key: keyFor\(origin, far\) \};\s*tile\.dirty = true;/, 'a drifted light asks for a new rendering and keeps reading the old one');
     assert.match(render, /if \(staticChange\.all \|\| this\._touches\(staticChange\.points, tile\.origin, tile\.far\)\) tile\.dirty = true;/, 'a prop change dirties only the rows it stands in');
-    assert.match(render, /t\.dirty && \(!t\.valid \|\| this\._frame - t\.stamp >= interval\)/, 'a row that shows something is redrawn no more often than the interval');
+    assert.match(render, /t\.dirty && \(rush \|\| !t\.valid \|\| this\._frame - t\.stamp >= interval\)/, 'a row that shows something is redrawn no more often than the interval, unless a cut changed');
     assert.equal(Reactor3D.SHADOW_STATIC_INTERVAL, 10);
     // A rendered-to request is adopted only once its rendering exists.
     const flush = three.slice(three.indexOf('    _flush() {'), three.indexOf('\n    unbindFrom('));
@@ -485,10 +485,10 @@ test('both viewports render the maps once a frame before the first pass, and the
     const three = source3D();
     assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible, then the reflections\.\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/);
     assert.match(three, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\(renderer, \(shadows && shadows\.mapData\) \|\| null, shadows \|\| undefined\);/);
-    assert.match(three, /group\.add\(object\);\n\s*\/\/ A prop never moves; its map is cached\. An event walks\.\n\s*Reactor3D\.Shadows\.markCaster\(object, !\(typeof character\.eventId === "function"\n\s*&& character\.eventId\(\) >= Reactor3D\.PROP_EVENT_BASE\)\);/);
+    assert.match(three, /Reactor3D\.Shadows\.markCaster\(object, Reactor3D\.modelCasterMoves\(character, current\.rules\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.
     assert.match(three, /mesh\.onBeforeRender = \(\) => this\._flush\(\);/);
-    assert.match(three, /this\._pending = \{ renderer, scene, statics: staticJobs, dynamics: dynJobs, activate: !this\._active \};/);
+    assert.match(three, /this\._pending = \{ renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs, activate: !this\._active \};/);
     assert.match(three, /const object = new THREE\.Mesh\(geometry, material\);\n\s*group\.add\(object\);\n[\s\S]{0,300}?Reactor3D\.Shadows\.markCaster\(object, true\);/);
     assert.match(three, /if \(level !== current\) this\._lodSwaps\+\+;/);
     assert.match(three, /Reactor3D\.Shadows\._renderer === this\._renderer\) Reactor3D\.Shadows\.dispose\(\);/);
@@ -510,10 +510,12 @@ test('both viewports render the maps once a frame before the first pass, and the
     assert.ok(face.indexOf('renderer.clear(false, true, false);') < face.indexOf('for (let face = 0;'), 'all faces are cleared before selective drawing');
     assert.match(face, /camera\.up\.set\(spec\.up\[0\], spec\.up\[1\], spec\.up\[2\]\);\s*camera\.lookAt\(origin\.x \+ spec\.dir\[0\], origin\.y \+ spec\.dir\[1\], origin\.z \+ spec\.dir\[2\]\);/);
     assert.match(face, /Reactor3D\.Shadows\.renderFace\(renderer, scene, camera\);/);
-    assert.match(three, /renderFace\(renderer, scene, camera\) \{\s*const cull = Reactor3D\.InstanceCull, hidden = cull \? cull\.hide\(scene, camera\) : null;\s*try \{ renderer\.render\(scene, camera\); \} finally \{ if \(hidden\) cull\.show\(hidden\); \}/, 'a face skins only the characters it can see');
+    assert.match(three, /renderFace\(renderer, scene, camera\) \{\s*const cull = Reactor3D\.InstanceCull, hidden = cull \? cull\.hide\(scene, camera\) : null;[\s\S]{0,400}?try \{ renderer\.render\(scene, camera\); \} finally \{ renderer\.sortObjects = sorted; if \(hidden\) cull\.show\(hidden\); \}/, 'a face skins only the characters it can see');
 
     const editor = read('editor/src/MapEditor3D.js');
-    assert.match(editor, /lightingManager\?\.feed3D\?\.\(\);\n[\s\S]{0,400}?this\.mapScene\.renderShadows\?\.\(this\.renderer, this\.currentMap\(\)\);\n[\s\S]{0,300}?Reactor3D\.LightVolume\.frame\(this\.renderer, this\.mapScene, this\.currentMap\(\)\);\n\s*const scene = this\.mapScene\.scene\(\);/);
+    // The world matrices once, then the shadow rows and the volume, before any pass.
+    assert.match(editor, /lightingManager\?\.feed3D\?\.\(now\);\n\s*const scene = this\.mapScene\.scene\(\);\n[\s\S]{0,400}?scene\.updateMatrixWorld\(\);\n\s*const matrixAuto = scene\.matrixWorldAutoUpdate;\n\s*scene\.matrixWorldAutoUpdate = false;\n[\s\S]{0,300}?try \{\n\s*this\.renderFrame\(scene\);/);
+    assert.match(editor, /renderFrame\(scene\) \{\n[\s\S]{0,600}?this\.mapScene\.renderShadows\?\.\(this\.renderer, this\.currentMap\(\)\);\n[\s\S]{0,300}?Reactor3D\.LightVolume\.frame\(this\.renderer, this\.mapScene, this\.currentMap\(\)\);/);
     assert.match(editor, /if \(sprite && Reactor3D\.Shadows\) Reactor3D\.Shadows\.markCaster\(mesh, false\);/);
     // Marked once the animation is prepared (a rig can replace the meshes),
     // and a model that moves by its rules alone is a moving caster too.
@@ -624,3 +626,15 @@ test('rows are ranked on smoothed incident light, so a sweeping cone does not ca
     }
 });
 
+
+
+test('placed flags with continuous clips cast moving shadows; still props retain cached shadows', () => {
+    const prop = { eventId: () => Reactor3D.PROP_EVENT_BASE + 1 };
+    const event = { eventId: () => 1 };
+    assert.equal(Reactor3D.modelCasterMoves(prop, [{ type: 'clip', clip: 'Wave', trigger: 'always' }]), true);
+    assert.equal(Reactor3D.modelCasterMoves(prop, [{ type: 'spin', trigger: 'idle' }]), true);
+    assert.equal(Reactor3D.modelCasterMoves(prop, []), false);
+    assert.equal(Reactor3D.modelCasterMoves(prop, [{ type: 'clip', trigger: 'action' }]), false);
+    assert.equal(Reactor3D.modelCasterMoves(event, []), true);
+    assert.equal(Reactor3D.modelCasterMoves(null, []), true);
+});

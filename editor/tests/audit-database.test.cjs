@@ -86,11 +86,13 @@ test('a screen or hide-target flash keeps its scope when an animation turns into
 });
 
 test('a new or cleared tileset keeps tile 0 a star, so empty upper layers never decide passage', () => {
-    const ui = createUI({ tilesets: [null, { id: 1, name: 'Old', flags: [16] }] });
+    const sheets = require(path.join(editorRoot, 'src', 'utils', 'TilesetSheets.js'));
+    const ui = createUI({ tilesets: [null, { id: 1, name: 'Old', flags: [16] }] }, { RRTilesetSheets: sheets });
     const template = ui.getDefaultTemplates().tilesets;
     assert.equal(template.flags.length, 8192);
     assert.equal(template.flags[0], 0x10);
-    assert.equal(template.flags.slice(1).some(Boolean), false);
+    // Every other tile has RPG Maker's starting flag: A1 water stops walkers.
+    assert.deepEqual(Array.from(template.flags), sheets.defaultFlags());
     assert.equal(ui.clearDatabaseEntry('tilesets', 1).flags[0], 0x10);
 });
 

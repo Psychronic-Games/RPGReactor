@@ -58,7 +58,7 @@ test('a looping effect starts over at its last lit frame, found at a resolution 
     assert.match(layer, /const LIT = 96;/);
     assert.match(layer, /for \(let i = 3; i < data\.length; i \+= 4\) if \(data\[i\] >= 2\) return true;/);
     assert.match(layer, /\} else if \(\+\+dead >= 3\) \{/, 'no grace period of a third of a second');
-    assert.match(layer, /if \(this\.loop && this\.visibleFrames > 0 && ticks >= this\.visibleFrames && alive >= 3\) start\(\);/);
+    assert.match(layer, /const end = this\.visibleFrames > 0 \? this\.visibleFrames \+ 1 : this\.endFrames \|\| 0;\n\s*if \(this\.loop && alive >= 3 && end > 0 && ticks >= end\) start\(\);/);
 });
 
 test('Optimize sits with the cost panel, acts on the selected model, and reaches the dialog from either host', () => {

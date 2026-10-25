@@ -138,7 +138,7 @@ test('2000/2003 text is drawn at the font\'s own size, on whole pixels, never sq
     function Bitmap() {}
     const sandbox = { Bitmap, $dataSystem: null };
     vm.runInNewContext(code, sandbox);
-    const bitmap = Object.assign(new Bitmap(), { context, fontSize: 10, fontFace: 'RM2000', fontItalic: false, fontBold: false, outlineWidth: 0, _baseTexture: { update() {} },
+    const bitmap = Object.assign(new Bitmap(), { context, _drawingContext: () => context, _touchUpload() {}, fontSize: 10, fontFace: 'RM2000', fontItalic: false, fontBold: false, outlineWidth: 0, _baseTexture: { update() {} },
         _drawTextOutline() {}, _drawTextBody(t, x, y, w) { context.fillText(t, x, y, w); } });
     sandbox.$dataSystem = { rrLegacyWindows: 2003, advanced: { fontSize: 13, pixelatedRendering: true } };
     bitmap.drawText('12345', 0, 0, 20, 16, 'right');

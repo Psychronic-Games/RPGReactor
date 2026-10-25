@@ -235,9 +235,12 @@ class ModelPropsManager {
             if (id < 0) continue; // Event previews are selected through Events.
             const bounds = sprite.getBounds ? sprite.getLocalBounds() : null;
             if (!bounds) continue;
-            const left = sprite.x + bounds.x * (sprite.scale?.x || 1);
-            const top = sprite.y + bounds.y * (sprite.scale?.y || 1);
-            if (px >= left && px <= left + bounds.width && py >= top && py <= top + bounds.height) return this.prop(id);
+            // The box as drawn: a picture drawn smaller than its texture is hit only where it shows
+            // (its unscaled size reached tiles away and took clicks meant for empty ground).
+            const sx = sprite.scale?.x || 1, sy = sprite.scale?.y || 1;
+            const x1 = sprite.x + bounds.x * sx, x2 = sprite.x + (bounds.x + bounds.width) * sx;
+            const y1 = sprite.y + bounds.y * sy, y2 = sprite.y + (bounds.y + bounds.height) * sy;
+            if (px >= Math.min(x1, x2) && px <= Math.max(x1, x2) && py >= Math.min(y1, y2) && py <= Math.max(y1, y2)) return this.prop(id);
         }
         return null;
     }
@@ -588,6 +591,7 @@ class ModelPropsManager {
             </div>`;
         container.innerHTML = `
             <div class="mp-panel">
+                <div class="mp-select-hint rr-build-note rr-build-wrap rr-build-lead" hidden>${escape(this._tx('Click a model on the map to select it. Drag moves it, Delete removes it.'))}</div>
                 <div class="mp-fixed rr-accent-scrollbar">
                 <section class="mp-section mp-model-card">
                     <div class="mp-section-body mp-model-heading">
@@ -906,9 +910,13 @@ class ModelPropsManager {
         if (!same) {
             this.fields.animations = [];
             this.fields.effects = [];
+            // Its size and turn too: a tree sized 2.8 and turned 45 degrees does not hand them to the next model.
+            Object.assign(this.fields, { size: 2, scale: 1, stretch: [1, 1, 1], direction: 2, z: 0, yaw: 0, pitch: 0, roll: 0 });
         }
         this.render();
         this._syncPanel();
+        // The Build bar shows the model in hand as its slot, lit: chosen from the Library, it was still showing Select.
+        window.reactor?.buildHotbar?.sync?.();
         this.mapEditor3D()?.selectProp?.(null);
     }
 
@@ -924,6 +932,11 @@ class ModelPropsManager {
         const byId = id => panel.querySelector('#' + id);
         const prop = this.prop(this.selectedId);
         const shown = prop || null;
+        // Select with nothing selected: only what a click does.
+        const idle = this.tool === 'select' && !shown;
+        panel.querySelector('.mp-panel')?.classList.toggle('is-select-idle', idle);
+        const hint = panel.querySelector('.mp-select-hint');
+        if (hint) hint.hidden = !idle;
         if (shown) {
             for (const key of ['size','scale','direction','z','passable','yaw','pitch','roll','repeat']) this.fields[key] = shown[key];
             this.fields.animationSpeed = shown.animationSpeed ?? 100;
@@ -1037,7 +1050,18 @@ class ModelPropsManager {
                 if (slider) { if (Number(num.value) > Number(slider.max)) slider.max = num.value; slider.value = num.value; }
                 apply(num.dataset.key, num.value, true);
             });
-            num.addEventListener('change', () => { this._cardUndoPushed = false; this._cardFor = null; this._syncCard(); });
+            // Leaving the field rebuilds the card (the sliders' ranges follow the value), after the click that left it
+            // has focused its target: a rebuild during 'change' removed the field just clicked, and typing went nowhere.
+            // When that target is another of the card's fields, only the numbers are brought up to date.
+            num.addEventListener('change', () => {
+                this._cardUndoPushed = false;
+                setTimeout(() => {
+                    const active = document.activeElement;
+                    if (active && active !== num && body.isConnected && body.contains(active)) { this._syncCard(); return; }
+                    this._cardFor = null;
+                    this._syncCard();
+                }, 0);
+            });
         });
         const box = body.querySelector('.mp-card-proportional');
         if (box) box.addEventListener('change', () => {

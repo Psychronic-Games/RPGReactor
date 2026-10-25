@@ -202,11 +202,11 @@ test('a character stands on the ground, not on what was built there', () => {
     // A sprite asks where it is standing, which is not always its own cell:
     // a cell whose art was stood into a wall has moved onto that wall, and a
     // sign hanging on it has to move with it.
-    assert.match(sprites, /Reactor3D\.standingPlaceFor\(character\)/);
+    assert.match(sprites, /Reactor3D\.standingPlaceFor\(character[,)]/);
     // Everything that wants to sit against the art goes through one resolver,
     // because the lift runs along the billboard's up axis rather than the
     // world's and nothing may work that out for itself.
-    assert.match(sprites, /Reactor3D\.pointOf\(camera, gx \+ 0\.5, stand\)/);
+    assert.match(sprites, /Reactor3D\.pointOf\(camera, gx \+ 0\.5, stand[,)]/);
     assert.match(sprites, /projectToScreen\(camera, at\.x, at\.y, at\.z,/);
     // And where the sprite is drawn is where `screenX`/`screenY` say it is,
     // or every plugin that places an overlay on a character draws it somewhere
@@ -301,10 +301,10 @@ test('a sprite leans as a parallelogram, not a turned rectangle', () => {
     const at = three.indexOf('Reactor3D.standScaleAt = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /const skew = -Math\.atan2\(upX, -upY\);/);
-    assert.match(body, /skew\n?\s*\};/);
-    assert.match(body, /x: wideOnScreen \/ \(spanU \* tileWidth\)/,
+    assert.match(body, /stand\.skew = skew;/);
+    assert.match(body, /stand\.x = wideOnScreen \/ \(spanU \* tileWidth\)/,
         "measured across the thing's own size, not one tile multiplied");
-    assert.match(body, /y: tallOnScreen \/ \(spanV \* tileHeight\)/);
+    assert.match(body, /stand\.y = tallOnScreen \/ \(spanV \* tileHeight\)/);
 
     const sprites = fs.readFileSync(
         path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');

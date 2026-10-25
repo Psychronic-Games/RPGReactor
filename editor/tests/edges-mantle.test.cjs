@@ -133,7 +133,7 @@ test('a cell with two floors answers for both: under the bridge on foot, onto it
     assert.deepEqual(plain(P.edges(map, 5, 5, 4, 2.1).map(e => e.kind)), ['drop'], 'and off its end');
 });
 
-test('the Tactical grid gets mantles, ladders and long safe drops; walks and hops stay its own', () => {
+test('the Tactical grid gets mantles, ladders and long drops; walks and hops stay its own', () => {
     const pieces = [...column(5, 1, 1), ...column(5, 5, 3), piece('wall', 9, 5, 0)];
     for (let z = 0; z < 5; z++) pieces.push(piece('ladder', 9, 6, z, { rot: 2 }));
     const map = mapOf(pieces);
@@ -145,10 +145,12 @@ test('the Tactical grid gets mantles, ladders and long safe drops; walks and hop
     assert.equal(P.tacticalEdge(4, 5, 6, 0, 0), null, 'a unit that cannot jump cannot mantle');
     assert.deepEqual(JSON.parse(JSON.stringify(P.tacticalEdge(9, 6, 8, 0, 1))), { kind: 'ladder', cost: 3, height: 5 });
     assert.deepEqual(JSON.parse(JSON.stringify(P.tacticalEdge(9, 5, 2, 5, 1))), { kind: 'ladder', cost: 3, height: 0 });
-    assert.deepEqual(JSON.parse(JSON.stringify(P.tacticalEdge(9, 5, 4, 5, 1))), { kind: 'drop', cost: 2, height: 0 }, 'five tiles: further than the unit\'s own drop, inside a safe fall');
+    assert.deepEqual(JSON.parse(JSON.stringify(P.tacticalEdge(9, 5, 4, 5, 1))), { kind: 'drop', cost: 2, height: 0, harm: 0 }, 'five tiles: further than the unit\'s own drop, inside a safe fall');
     assert.equal(P.tacticalEdge(5, 5, 4, 3, 2), null, 'three tiles with a jump of two is the grid\'s own drop');
     const hurt = sandbox(map, { fallDamage: true, fallFrom: 3 }).ReactorPhysics;
-    assert.equal(hurt.tacticalEdge(9, 5, 4, 5, 1), null, 'a fall that hurts is not taken');
+    assert.deepEqual(JSON.parse(JSON.stringify(hurt.tacticalEdge(9, 5, 4, 5, 1))), { kind: 'drop', cost: 2, height: 0, harm: 0.2 }, 'a fall that hurts is taken at its price: two tiles past the safe fall');
+    const kept = sandbox(map, { fallDamage: true, fallFrom: 3, battleFall: 'off' }).ReactorPhysics;
+    assert.equal(kept.tacticalEdge(9, 5, 4, 5, 1), null, 'a project that keeps battles to the safe fall leaves it out');
     // The seams are given to the grid once it exists, and never over somebody else's.
     c.ReactorFight = { Grid: { edge: null, playStep: null, isStepping: () => 'kept' } };
     assert.equal(P.installFightSeams(), true);
@@ -261,7 +263,7 @@ test('the game wires it: Jump against a ledge, a push in the air, followers, the
     const physics = read('runtime/reactor_physics.js');
     assert.match(physics, /if \(this\._reactorPush && ReactorPhysics\.tryMantle\(this, this\._reactorPush\)\) \{ \/\* climbing \*\/ \}/);
     assert.match(physics, /this\._reactorPush = d;\n\s+\/\/[^\n]+\n\s+if \(ReactorPhysics\.isAirborne\(this\) && !ReactorPhysics\.fellOff\(this\)\) ReactorPhysics\.tryMantle\(this, d\);/);
-    assert.match(physics, /return !this\._reactorRagdoll && !this\._reactorMantle && _canMove\.apply\(this, arguments\);/);
+    assert.match(physics, /return !this\._reactorRagdoll && !this\._reactorMantle && !this\._reactorGrapple && _canMove\.apply\(this, arguments\);/);
     assert.match(physics, /if \(character && ReactorPhysics\.followerMantle\(this, character\)\) return;/);
     assert.match(physics, /if \(character\._reactorMantle\) \{ this\.updateMantle\(character\); return; \}/);
     const models = read('runtime/reactor_3d_models.js');
@@ -431,8 +433,10 @@ test('an eave over the way on is taken by Jump as the step ends; a follower clim
     assert.deepEqual(JSON.parse(JSON.stringify(P.tacticalEdge(13, 8, 2, 0, 1))), null, 'the walk under it is the grid\'s');
     const c = sandbox({ width: 14, height: 14, note: '<3d>', reactor3d: { version: 1, mode: '3d', pieces: column(5, 5, 4) } });
     assert.equal(c.ReactorPhysics.TACTICAL_MANTLE_REACH, 2);
-    assert.equal(c.ReactorPhysics.tacticalEdge(4, 5, 6, 0, 1), null, 'four tiles are over a unit of the usual jump');
+    assert.deepEqual(plain(c.ReactorPhysics.tacticalEdge(4, 5, 6, 0, 1)), { kind: 'climb', cost: 3, height: 4 }, 'four tiles are over a unit of the usual jump: it climbs the wall');
     assert.equal(c.ReactorPhysics.tacticalEdge(4, 5, 6, 0, 2).kind, 'mantle', 'and within one that jumps two');
+    c.$dataSystem.reactorPhysics = { battleClimb: false };
+    assert.equal(c.ReactorPhysics.tacticalEdge(4, 5, 6, 0, 1), null, 'with climbing off, out of reach');
 });
 
 test('a camera behind a player on a roof is lifted over the tiles, and left alone anywhere else', () => {
@@ -537,7 +541,7 @@ test('a grid that keeps two heights on a cell is told both ways on: under the ea
     const P = sandbox(map).ReactorPhysics;
     const ways = jump => plain(P.tacticalEdges(13, 8, 2, 0, jump)).map(w => [w.kind, w.cost, Math.round(w.height * 10) / 10]);
     assert.deepEqual(ways(3), [['walk', 1, 0], ['mantle', 2, 4.5]], 'a unit that jumps three tiles makes the eave');
-    assert.deepEqual(ways(1), [['walk', 1, 0]], 'the usual unit walks under it: an eave four and a half tiles up is out of its reach');
+    assert.deepEqual(ways(1), [['walk', 1, 0], ['climb', 4, 4.5]], 'the usual unit walks under it, or climbs the wall to the eave four and a half tiles up');
     assert.equal(P.tacticalEdge(13, 8, 2, 0, 3), null, 'the single answer is still the walk, which is the grid\'s own');
     assert.deepEqual(plain(P.tacticalEdges(13, 9, 2, 4.54, 1)).map(w => [w.kind, w.cost]), [['walk', 1]], 'and up the pitch from the eave');
     assert.deepEqual(plain(P.tacticalEdges(13, 9, 2, 0, 3)), [], 'from under the eave the wall is the end');

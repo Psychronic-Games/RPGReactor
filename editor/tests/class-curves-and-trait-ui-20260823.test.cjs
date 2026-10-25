@@ -16,9 +16,10 @@ const classEditorSource = source('database', 'DatabaseClassEditor.js');
 const DatabaseClassEditor = new Function(`${classEditorSource}\nreturn DatabaseClassEditor;`)();
 const editor = Object.create(DatabaseClassEditor.prototype);
 
-test('parameter curves generate across the full 1..999 level domain', () => {
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+test('parameter curves generate across the stored 1..999 level domain', () => {
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     assert.equal(cap, 999);
+    assert.equal(globalThis.RR_LIMITS.ACTOR_LEVEL, 9999);
 
     const curve = editor._generateParamCurve(50, 8000, 1.4, cap + 1);
     assert.equal(curve.length, cap + 1);
@@ -44,7 +45,7 @@ test('legacy 100-entry MZ arrays still extrapolate linearly to the cap', () => {
 });
 
 test('exponent inference reads whatever domain the array stores', () => {
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     for (const exponent of [0.6, 1.0, 1.8]) {
         const full = editor._generateParamCurve(10, 5000, exponent, cap + 1);
         const inferred = editor._inferCurveExponent(full);
@@ -59,7 +60,7 @@ test('exponent inference reads whatever domain the array stores', () => {
 });
 
 test('curve graphs plot the runtime series and mark extrapolation', () => {
-    assert.match(classEditorSource, /const capLevel = globalThis\.RR_LIMITS\?\.ACTOR_LEVEL \|\| 999;[\s\S]*?rrClassParamAtLevel/);
+    assert.match(classEditorSource, /const capLevel = globalThis\.RR_LIMITS\?\.ACTOR_LEVEL \|\| 9999;[\s\S]*?rrClassParamAtLevel/);
     assert.match(classEditorSource, /setLineDash\(\[5, 4\]\)/); // extrapolated tail draws dashed
     assert.match(classEditorSource, /_generateParamCurve\(lv1, lvMax, exponent, capLevel \+ 1, targetLevel, maxAllowed\)/);
     assert.doesNotMatch(classEditorSource, /rr-pc-lv99-slider/);
@@ -129,7 +130,7 @@ test('the target level comes from the actors that use the class', () => {
 });
 
 test('a targeted curve hits its anchor at the target level and keeps rising past it', () => {
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     const curve = editor._generateParamCurve(50, 800, 1.2, cap + 1, 60);
 
     assert.equal(curve.length, cap + 1);
@@ -150,7 +151,7 @@ test('a targeted curve hits its anchor at the target level and keeps rising past
 test('the tail past a near target is capped at the dialog ceiling', () => {
     // t reaches ~25 by Lv999 when the target is 40; cubed, an uncapped curve
     // would write millions into the array for a stat the dialog caps at 9999.
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     const uncapped = editor._generateParamCurve(10, 500, 3, cap + 1, 40);
     assert.ok(uncapped[cap] > 1e6, 'test premise: an uncapped tail really does explode');
 
@@ -169,7 +170,7 @@ test('moving the target level re-anchors the view without moving the curve', () 
     // class. This is the property the Generate Curve dialog relies on when the
     // class's target level changes between one opening and the next.
     for (const exponent of [0.6, 1.0, 1.8]) {
-        const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+        const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
         const original = editor._generateParamCurve(40, 900, exponent, cap + 1, 99);
         const reanchored = editor._generateParamCurve(
             40, globalThis.rrClassParamAtLevel(original, 60), exponent, cap + 1, 60);
@@ -182,7 +183,7 @@ test('moving the target level re-anchors the view without moving the curve', () 
 });
 
 test('exponent inference reads the target domain when given one', () => {
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     // Even targets are the case the old fit got wrong: it sampled the level at
     // t = 0.508 and solved as if t were 0.5, so reopening the dialog on an
     // even-capped class and pressing Apply shifted every value.
@@ -200,7 +201,7 @@ test('reopening the dialog and applying leaves the curve where it was', () => {
     // Open -> Apply with nothing touched is the single most common interaction,
     // and it must be a no-op. It reads the stored curve, re-fits the exponent,
     // and regenerates: any bias in the fit shows up here as silent rebalancing.
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     for (const target of [40, 60, 99]) {
         const stored = editor._generateParamCurve(544, 4870, 1.15, cap + 1, target, 99999);
 
@@ -301,7 +302,7 @@ test('a class keeps the target level it was given, and forgets it when cleared',
     assert.equal(updates.length, 1, 'the choice is written through the database manager');
 
     // Out-of-range input clamps into the engine domain.
-    assert.equal(owner._setTargetLevel(cls, 5000), globalThis.RR_LIMITS.ACTOR_LEVEL);
+    assert.equal(owner._setTargetLevel(cls, 50000), globalThis.RR_LIMITS.ACTOR_LEVEL);
     assert.equal(owner._setTargetLevel(cls, '1'), 60, 'a level below 2 is no choice at all');
     assert.equal('targetLevel' in cls, false);
 
@@ -384,7 +385,7 @@ test('Parameter Curves is a per-level editor with the generator as a step inside
 });
 
 test('a curve is materialised across the engine domain from whatever the class stores', () => {
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     // A stock 100-entry MZ array continues past 99 on the runtime's own extrapolation.
     const stock = new Array(100).fill(0).map((_, level) => level === 0 ? 10 : 10 + level * 5);
     const curve = editor._materializeCurve(stock, cap);
@@ -412,9 +413,22 @@ test('Quick Setting presets rise from A to E and anchor at the target level', ()
     assert.deepEqual(quick.presetFor(0, 'E'), [700, 8500]);
     assert.deepEqual(quick.presetFor(4, 'nope'), quick.presetFor(4, 'C'), 'an unknown preset is the middle one');
     // Applied through the generator at a Lv150 target, E lands its value at Lv150.
-    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
     const curve = editor._generateParamCurve(700, 8500, 1, cap + 1, 150, 99999);
     assert.equal(curve[1], 700);
     assert.equal(curve[150], 8500);
     assert.ok(curve[99] < 8500, 'Lv99 is on the way there, not the end');
+});
+
+test('curves store 999 levels unless the target is higher, and levels up to 9999 read on', () => {
+    const owner = Object.create(DatabaseClassEditor.prototype);
+    owner.databaseManager = { getActors: () => [{ id: 1, classId: 1, maxLevel: 60 }] };
+    assert.equal(owner._curveLevels({ id: 1 }), 999);
+    assert.equal(owner._curveLevels({ id: 1, targetLevel: 5000 }), 5000);
+
+    const curve = editor._generateParamCurve(50, 800, 1, 1000, 99);
+    assert.equal(curve.length, 1000);
+    const step = curve[999] - curve[998];
+    assert.equal(globalThis.rrClassParamAtLevel(curve, 9999), curve[999] + step * (9999 - 999));
+    assert.equal(globalThis.rrClassParamAtLevel(curve, 20000), globalThis.rrClassParamAtLevel(curve, 9999));
 });

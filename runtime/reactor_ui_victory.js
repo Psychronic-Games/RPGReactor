@@ -1012,7 +1012,7 @@
             name: 'Victory', mode: V.MODE, background: 'none', cancel: { type: 'none' }, firstFocus: 0,
             openTransition: 'fade', closeTransition: 'fade', transitionDuration: 14, coordinateSpace: 'screen',
             nodes: V.stockNodes(metrics), stock: V.ROLE, roles: [V.ROLE],
-            note: 'Baseline victory screen: the EXP each member gained with a bar that fills, a Level Up page for those who gained a level, and the gold and items found. Bind it as Victory in System 2 or Use As.'
+            note: 'Baseline victory screen: the EXP each member gained with a bar that fills, a Level Up page for those who gained a level, and the gold and items found. Bind it as Victory in Use As.'
         };
     };
 

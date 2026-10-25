@@ -56,8 +56,9 @@ test('an unlit map is fully lit, which is the look it already had', () => {
     assert.equal(Reactor3D.ambient(), null);
     assert.equal(Reactor3D.isLit(), false);
 
-    const ambient = Reactor3D.ambientFor({ meta: {} });
+    const ambient = Reactor3D.ambientFor({ meta: { lighting: true } });
     assert.equal(ambient.intensity, 0.25, 'a lit map has a dim floor, not black');
+    assert.equal(Reactor3D.ambientFor({ meta: {} }).intensity, 1, 'an unlit one is in daylight, where an AmbientLight command eases from');
     assert.equal(Reactor3D.ambientFor(
         { reactor3d: { lighting: { ambient: 0.6 } } }).intensity, 0.6, 'and it is authorable');
 });

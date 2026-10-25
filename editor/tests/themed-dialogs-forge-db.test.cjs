@@ -167,6 +167,11 @@ test('the scan tells an answer that is waited for from one that is dropped', () 
     assert.deepEqual(answersWaited(sample, ASKERS), { total: 2, dropped: [6] });
 });
 
+test('the answer scanner recognizes awaited dialogs through an IIFE root alias', () => {
+    const sample = 'const name = safeName(await root.RRDialog.prompt(text));\nif (!await root.RRDialog.confirm(text)) return;\nroot.RRDialog.prompt(text);';
+    assert.deepEqual(answersWaited(sample, QUESTIONS), { total: 3, dropped: [3] });
+});
+
 test('every question and prompt has its answer waited for, and so has every function that asks for its caller', () => {
     const dropped = [];
     let questions = 0, askers = 0;

@@ -186,7 +186,7 @@ test('the vendored build actually loads and exposes what the renderer needs', ()
     }
 });
 
-test('every runtime module is in the boot manifest', () => {
+test('every runtime module has a boot or on-demand loader', () => {
     // reactor_3d_geometry.js was committed, synced to the Demo, and covered by
     // tests while never being loaded by a running game: the existing guards
     // check that manifest entries are committed and that the Demo matches
@@ -199,10 +199,14 @@ test('every runtime module is in the boot manifest', () => {
         .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
         // reactor_main.js is the entry point itself: index.html loads it, and
         // it is what declares the manifest.
-        .filter(entry => entry.name !== 'reactor_main.js')
+        .filter(entry => !['reactor_main.js', 'reactor_3d_motions.js'].includes(entry.name))
         .map(entry => entry.name)
         .filter(name => !manifest.has(name));
 
+    assert.ok(!manifest.has('reactor_3d_motions.js'), '2D games do not eagerly parse the humanoid motion library');
+    const models = fs.readFileSync(path.join(runtimeRoot, 'reactor_3d_models.js'), 'utf8');
+    assert.match(models, /script\.src = "js\/reactor_3d_motions\.js"/, 'rigged models load the shared library on demand');
+    assert.match(models, /library\.loadAsync\("js\/reactor_3d_motions\.bin"\)/, 'the loader reads the matching motion pack');
     assert.deepEqual(unwired, [],
         `these runtime modules are never loaded by the game:\n${unwired.join('\n')}`);
 });
@@ -242,7 +246,7 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
     const roots = fs.readdirSync(runtimeRoot, { withFileTypes: true })
         .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
         .map(entry => entry.name);
-    const threeD = roots.filter(name => name.startsWith('reactor_3d'));
+    const threeD = roots.filter(name => name.startsWith('reactor_3d') && name !== 'reactor_3d_motions.js');
     const listed = Reactor3D.EXTENSIONS.map(extension => extension.file);
     assert.deepEqual(threeD, ['reactor_3d.js', ...listed].sort(),
         'every reactor_3d_*.js file is named in Reactor3D.EXTENSIONS, and nothing else is');
@@ -277,7 +281,9 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
     // files (reactor_vehicles.js: a vehicle in the world; _drive: free movement; _feel: the camera and the sound; _hints: the label and the strip).
     // 60 since 2026-10-11: reactor_vehicles_mount.js (fighting from a vehicle: a mounted unit of a Tactical battle, the
     // vehicle's commands on the battle screen, a rider seated in a Battle Room) is its own concern.
-    assert.ok(roots.length <= 60, `runtime js/ root has grown to ${roots.length} files`);
+    // 61 since 2026-10-18: the humanoid motion library is shared with the Builder and loaded on demand.
+    // 62 since 2026-10-25: reactor_hdr_overlay.js (opt-in HDR rendering of Effekseer effects) is its own concern.
+    assert.ok(roots.length <= 62, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 test('the game boots every extension straight after the core, before anything reads them', () => {
@@ -356,7 +362,7 @@ test('runtime 3D advances A1 UVs from the tilemap animation clock', () => {
     const at = spritesSource.indexOf('Spriteset_Map.prototype.updateReactor3D = function');
     const body = spritesSource.slice(at, spritesSource.indexOf('\n};', at));
     const animate = body.indexOf('state.scene.setAnimationFrame(frame);');
-    const render = body.indexOf('state.viewport.renderPass');
+    const render = body.indexOf('this.drawReactor3D(state)');
     assert.match(body, /this\._tilemap\.animationFrame/);
     assert.ok(animate >= 0 && animate < render,
         'animated UVs move before either runtime render pass is captured');

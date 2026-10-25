@@ -4,6 +4,67 @@
  */
 
 /**
+ * Whether an HDR sidecar is one the game runtime accepts. The same rules as
+ * `valid` in runtime/reactor_hdr_overlay.js; hdr-preview-twin.test.cjs holds
+ * the two to the same answers.
+ */
+function RR_isValidHdrSidecar(s) {
+    const finite = Number.isFinite;
+    return !!(s && s.version === 1 && s.gradeInput === 'hdr' && typeof s.grade === 'string'
+        && /\bhdr\b/.test(s.grade) && /\btmOut\b/.test(s.grade)
+        && typeof s.fallback === 'string' && s.fallback
+        && s.bloom && Array.isArray(s.bloom.sizes) && Array.isArray(s.bloom.tints)
+        && s.bloom.sizes.length === 6 && s.bloom.tints.length === 6
+        && s.bloom.sizes.every(x => finite(x) && x > 0)
+        && s.bloom.tints.every(x => finite(x) && x >= 0)
+        && finite(s.bloom.intensity) && s.bloom.intensity >= 0
+        && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0);
+}
+
+/**
+ * The editor's previews have no HDR pipeline (it lives in the game runtime),
+ * so an HDR effect would play here as raw, ungraded light. Resolve it the way
+ * the game does when it cannot render HDR: a valid `<effect>.hdr.json` names a
+ * normally graded twin, and that is what the preview plays. Where the game
+ * refuses an effect, so does the preview: a `-hdr` effect with no sidecar, or
+ * a sidecar that cannot be read or is invalid.
+ *
+ * @returns null for an ordinary effect, else { twinPath, twinName, sidecarPath }
+ * @throws an Error with `rrHdrRefused` set when the game would not play it
+ */
+function RR_resolveHdrPreviewTwin(effectPath) {
+    const fs = require('fs');
+    const path = require('path');
+    const refuse = message => Object.assign(new Error(message), { rrHdrRefused: true });
+    const dir = path.dirname(effectPath);
+    const name = path.basename(effectPath).replace(/\.efkefc$/i, '');
+    const sidecarPath = path.join(dir, name + '.hdr.json');
+    if (!fs.existsSync(sidecarPath)) {
+        if (/-hdr$/i.test(name)) throw refuse(`HDR effect ${name} has no ${name}.hdr.json`);
+        return null;
+    }
+    let sidecar;
+    try {
+        sidecar = JSON.parse(String(fs.readFileSync(sidecarPath, 'utf8')));
+    } catch (error) {
+        throw refuse(`Cannot read ${sidecarPath}: ${error.message}`);
+    }
+    if (!RR_isValidHdrSidecar(sidecar)) throw refuse(`Invalid HDR sidecar ${sidecarPath}`);
+    // As in the runtime: a name without '/' sits beside the HDR effect, one
+    // with '/' is relative to the effects folder.
+    let root = dir;
+    if (sidecar.fallback.includes('/')) {
+        while (path.basename(root).toLowerCase() !== 'effects') {
+            const up = path.dirname(root);
+            if (up === root) throw refuse(`No effects folder above ${effectPath} for twin ${sidecar.fallback}`);
+            root = up;
+        }
+    }
+    const twinPath = path.join(root, ...sidecar.fallback.split('/')) + '.efkefc';
+    return { twinPath, twinName: sidecar.fallback, sidecarPath };
+}
+
+/**
  * Load an .efkefc effect through Node fs instead of a URL fetch.
  *
  * The editor page lives on the chrome-extension:// scheme, whose URLs
@@ -19,10 +80,14 @@
  * core already caches every referenced resource path — callers that use
  * the returned effect inside onLoad must handle that timing.
  *
+ * An HDR effect is loaded as its normally graded twin (see
+ * RR_resolveHdrPreviewTwin), and the returned effect carries `rrHdrTwin`.
+ *
  * @returns the effekseer effect handle from context.loadEffect
- * @throws if the effect file itself cannot be read
+ * @throws if the effect file itself cannot be read, or (with `rrHdrRefused`)
+ *         if it is an HDR effect the game would refuse to play
  */
-function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onError) {
+function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onError, hdrSource = null) {
     const fs = require('fs');
     const path = require('path');
     const baseDir = path.dirname(effectPath);
@@ -47,6 +112,15 @@ function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onEr
             throw retryable;
         }
         throw error;
+    }
+    // After the read, so the web host has warmed this folder, sidecar included.
+    if (!hdrSource) {
+        const twin = RR_resolveHdrPreviewTwin(effectPath);
+        if (twin) {
+            const effect = RR_loadEffekseerEffectFromFile(context, twin.twinPath, scale, onLoad, onError, effectPath);
+            if (effect) effect.rrHdrTwin = twin;
+            return effect;
+        }
     }
     // Copy into a page-realm ArrayBuffer: NW.js runs Node and the DOM in
     // separate JS contexts, so the Buffer's underlying ArrayBuffer fails
@@ -202,6 +276,42 @@ class DatabaseAnimationEditor {
 
     static canAddMVCell(frame) {
         return Array.isArray(frame) && frame.length < 16;
+    }
+
+    /** One frame per sheet cell, in order: each shows that cell centered at full size and opacity. */
+    static framesFromSheetCells(count) {
+        const total = Math.max(0, Math.min(100, Math.floor(Number(count)) || 0));
+        return Array.from({ length: total }, (_, pattern) => [[pattern, 0, 0, 100, 0, 0, 255, 1]]);
+    }
+
+    /**
+     * How many cells of a sprite animation sheet (5 columns of 192 px cells) are in use: up to
+     * the last one with a visible pixel, at most 100. `alphaAt(x, y, w, h)` answers whether a
+     * region has any visible pixel.
+     */
+    static usedSheetCells(width, height, alphaAt, cellSize = 192, columns = 5) {
+        const rows = Math.floor(height / cellSize);
+        const total = Math.min(100, rows * columns);
+        let used = 0;
+        for (let pattern = 0; pattern < total; pattern++) {
+            const x = (pattern % columns) * cellSize, y = Math.floor(pattern / columns) * cellSize;
+            if (x + cellSize > width) continue;
+            if (alphaAt(x, y, cellSize, cellSize)) used = pattern + 1;
+        }
+        return used;
+    }
+
+    static usedSheetCellsOfImage(image) {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(image, 0, 0);
+        return DatabaseAnimationEditor.usedSheetCells(canvas.width, canvas.height, (x, y, w, h) => {
+            const data = context.getImageData(x, y, w, h).data;
+            for (let i = 3; i < data.length; i += 4) if (data[i] > 0) return true;
+            return false;
+        });
     }
 
     constructor(databaseManager, projectManager, commonUI, parentEditor) {
@@ -482,7 +592,9 @@ class DatabaseAnimationEditor {
 
                 <div class="anim-editor-workspace">
                     <div class="anim-editor-content-column">
-                    <!-- Properties -->
+                    <!-- Properties: a sprite animation's sheets, position and frames. An Effekseer animation has none
+                         here; its settings are in the Particle Effect panel. -->
+                    ${isSpriteAnimation ? `
                     <div class="anim-editor-properties" style="min-width:180px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
                         <div class="rr-db-fold-header" data-section-key="properties" style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--color-text);flex-shrink:0;">${tt('Properties')}</div>
                         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:10px;flex:1;min-height:0;overflow-y:auto;padding-right:2px;">
@@ -518,13 +630,9 @@ class DatabaseAnimationEditor {
                                 </div>
                             ` : ''}
 
-                            ${isEffekseer ? `
-                                <div style="grid-column:1 / -1;color:var(--color-text-muted);font-size:10px;padding:4px;">
-                                    ${tt('Effect file, display type, scale and other settings are editable in the Particle Effect panel below.')}
-                                </div>
-                            ` : ''}
                         </div>
                     </div>
+                    ` : ''}
 
                 <!-- Sprite Sheet Preview Row -->
                 ${isSpriteAnimation ? `
@@ -546,6 +654,7 @@ class DatabaseAnimationEditor {
                             <div style="display: flex; gap: 3px;">
                                 <button id="add-frame-btn" style="padding: 3px 6px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 9px;" title="${tt('Add Frame')}">+</button>
                                 <button id="remove-frame-btn" style="padding: 3px 6px; background: var(--color-danger); border: 1px solid var(--color-danger-border); color: var(--color-text); border-radius: 2px; cursor: pointer; font-size: 9px;" title="${tt('Remove Frame')}">-</button>
+                                <button id="fill-frames-btn" style="padding: 3px 6px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 2px; cursor: pointer; font-size: 9px;" title="${tt('Fill Frames from Sheet')}" aria-label="${tt('Fill Frames from Sheet')}">▦</button>
                             </div>
                         </div>
                         <div id="animation-frame-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;">
@@ -642,6 +751,7 @@ class DatabaseAnimationEditor {
                                 <canvas id="animation-preview-canvas" width="960" height="540" style="image-rendering: pixelated; max-width: 100%; max-height: 100%;"></canvas>
                                 ${!isSpriteAnimation && !isEffekseer ? `<div style="color: var(--color-text-muted); position: absolute;">${tt('No preview available')}</div>` : ''}
                             </div>
+                            ${isEffekseer ? `<div id="animation-hdr-note" hidden style="margin-top:4px;font-size:10px;color:var(--color-text-muted);"></div>` : ''}
 
                             <!-- Playback Controls -->
                             <div style="margin-top:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
@@ -3525,6 +3635,8 @@ class DatabaseAnimationEditor {
         const handleKeyDown = (e) => {
             // Only handle if the canvas container is focused or visible
             if (!canvas.offsetParent) return;
+            // Beside a live map, the keys are the Database's only after a click or Tab into it.
+            if (typeof RRDatabaseWindow !== 'undefined' && !RRDatabaseWindow.ownsKeys()) return;
 
             // Ctrl+Z - Undo
             if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
@@ -3582,6 +3694,38 @@ class DatabaseAnimationEditor {
                 populateFrameList();
                 renderStaticFrame(currentFrame);
                 updateFrameCounter();
+            });
+        }
+
+        const fillFramesBtn = document.getElementById('fill-frames-btn');
+        if (fillFramesBtn) {
+            fillFramesBtn.addEventListener('click', async () => {
+                const fillTitle = tt('Fill Frames from Sheet');
+                if (!animation.animation1Name) {
+                    RRDialog.alert(tt('Choose the Animation 1 image first.'), { title: fillTitle, kind: 'warning' });
+                    return;
+                }
+                await loadSpriteSheets();
+                const count = spriteSheet1 ? DatabaseAnimationEditor.usedSheetCellsOfImage(spriteSheet1) : 0;
+                if (!count) {
+                    RRDialog.alert(tt('The Animation 1 image has no cells to fill frames from.'), { title: fillTitle, kind: 'warning' });
+                    return;
+                }
+                const hasCells = animation.frames.some(frame => Array.isArray(frame) && frame.length > 0);
+                if (hasCells && !(await RRDialog.confirm(
+                    tt('Replace every frame with one frame per cell of the sheet ({count} frames)?').replace('{count}', count),
+                    { title: fillTitle, ok: tt('Replace'), danger: true }))) return;
+                saveState();
+                animation.frames = DatabaseAnimationEditor.framesFromSheetCells(count);
+                currentFrame = 0;
+                selectedFrameIndices.clear();
+                selectedFrameIndices.add(0);
+                persistAnimation();
+                populateFrameList();
+                renderStaticFrame(0);
+                updateFrameCounter();
+                const total = document.getElementById('animation-frame-total');
+                if (total) total.textContent = String(animation.frames.length);
             });
         }
 
@@ -4031,10 +4175,8 @@ class DatabaseAnimationEditor {
 
         // Load Effekseer effect
         const loadEffect = () => {
-            if (!animation.effectName) {
-                console.error('No effect name specified');
-                return;
-            }
+            // A new animation has no effect file yet: nothing to preview.
+            if (!animation.effectName) return;
 
             const path = require('path');
             const effectsPath = path.join(currentProject.path, 'effects');
@@ -4062,9 +4204,26 @@ class DatabaseAnimationEditor {
                 playBtn.style.opacity = '0.5';
             };
 
+            // An HDR effect previews as its graded twin, or not at all; say which.
+            const hdrNote = document.getElementById('animation-hdr-note');
+            const showHdrNote = (text, warning = false) => {
+                if (!hdrNote) return;
+                hdrNote.textContent = text;
+                hdrNote.hidden = !text;
+                hdrNote.style.color = warning ? 'var(--color-warning)' : 'var(--color-text-muted)';
+            };
+            showHdrNote('');
+
             try {
                 effect = RR_loadEffekseerEffectFromFile(effekseerContext, effectPath, 1.0, onLoad, onError);
+                if (effect?.rrHdrTwin) {
+                    showHdrNote(tt('HDR effect: the preview plays its normally graded twin, {twin}.')
+                        .replace('{twin}', effect.rrHdrTwin.twinName));
+                }
             } catch (e) {
+                if (e.rrHdrRefused) {
+                    showHdrNote(tt('HDR effect without a valid .hdr.json file: the game will not play it, so the preview does not either.'), true);
+                }
                 onError(e.message, effectPath);
             }
         };
@@ -4148,21 +4307,12 @@ class DatabaseAnimationEditor {
                 effekseerContext.captureBackground(0, 0, canvas.width, canvas.height);
             }
 
-            // RPG Maker MZ style setup - balanced FOV
-            const viewportSize = canvas.height * 1.2; // Balanced FOV to fill canvas without clipping
-            // x is scaled by height/width so one world unit spans the same
-            // number of pixels on both axes (round spheres on a wide canvas)
-            const x = canvas.height / canvas.width; // * (mirror ? -1 : 1)
-            const y = 1;
-            const p = -(viewportSize / canvas.height);
-
-            // Set projection matrix - RPG Maker MZ style (pass as ARRAY!)
-            effekseerContext.setProjectionMatrix([
-                x, 0, 0, 0,
-                0, y, 0, 0,
-                0, 0, 1, p,
-                0, 0, 0, 1
-            ]);
+            // As the game draws it, the canvas standing for the game's screen: the same size against the screen,
+            // round on a wide canvas (ReactorBattleData.effekseerProjection).
+            const screenHeight = Number(editorSelf.databaseManager?.getSystem?.()?.advanced?.screenHeight) || canvas.height;
+            const projection = ReactorBattleData.effekseerProjection(canvas.width, canvas.height, screenHeight, canvas.height / screenHeight);
+            const p = projection[11], viewportSize = canvas.height;
+            effekseerContext.setProjectionMatrix(projection);
 
             // Set camera matrix - RPG Maker MZ style (pass as ARRAY!)
             effekseerContext.setCameraMatrix([
@@ -5091,18 +5241,9 @@ class DatabaseAnimationEditor {
                     previewGL.clearColor(previewBackdropRgb[0], previewBackdropRgb[1], previewBackdropRgb[2], 1);
                     previewGL.clear(previewGL.COLOR_BUFFER_BIT | previewGL.DEPTH_BUFFER_BIT);
 
-                    // Setup matrices - balanced FOV
-                    const viewportSize = previewCanvas.height * 1.2; // Balanced FOV to fill canvas without clipping
-                    const x = previewCanvas.height / previewCanvas.width;
-                    const y = 1;
-                    const p = -(viewportSize / previewCanvas.height);
-
-                    previewEffekseerContext.setProjectionMatrix([
-                        x, 0, 0, 0,
-                        0, y, 0, 0,
-                        0, 0, 1, p,
-                        0, 0, 0, 1
-                    ]);
+                    // As the game draws it, the canvas standing for the game's screen (ReactorBattleData.effekseerProjection).
+                    const screenHeight = Number(this.databaseManager?.getSystem?.()?.advanced?.screenHeight) || previewCanvas.height;
+                    previewEffekseerContext.setProjectionMatrix(ReactorBattleData.effekseerProjection(previewCanvas.width, previewCanvas.height, screenHeight, previewCanvas.height / screenHeight));
 
                     previewEffekseerContext.setCameraMatrix([
                         1, 0, 0, 0,

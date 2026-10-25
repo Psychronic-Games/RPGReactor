@@ -679,3 +679,28 @@ test('the editor canvas draws the Action HUD with the game\'s own drawing: the s
     record.mode = 'tactical';
     assert.deepEqual(draw('Vitals'), []);
 });
+
+test('the HUD leaves the screen to the battle\'s results and to a message, and comes back after a message', () => {
+    const sandbox = loadRuntime();
+    const UI = sandbox.ReactorUI, scene = sandbox.__scene;
+    const fight = sandbox.$gameFight = fakeFight('action');
+    let busy = false;
+    sandbox.$gameMessage = { isBusy: () => busy };
+    for (let i = 0; i < 40; i++) UI.updateActionScene(scene);
+    const hud = scene._reactorActionHud;
+    assert.equal(hud._visibilityAlpha, 1);
+    assert.ok(hud._nodeWindows.some(window => window.visible), 'the HUD is up');
+    // A message (a battle page's line): the battle waits, and the HUD stands down under it.
+    busy = true;
+    for (let i = 0; i < 40; i++) UI.updateActionScene(scene);
+    assert.equal(hud._visibilityAlpha, 0);
+    assert.ok(hud._nodeWindows.every(window => !window.visible));
+    busy = false;
+    for (let i = 0; i < 40; i++) UI.updateActionScene(scene);
+    assert.equal(hud._visibilityAlpha, 1, 'back once the message is gone');
+    // The battle is won: the victory lines have the screen.
+    fight._ending = { result: 0 };
+    for (let i = 0; i < 40; i++) UI.updateActionScene(scene);
+    assert.equal(hud._visibilityAlpha, 0);
+    assert.ok(hud._nodeWindows.every(window => !window.visible));
+});

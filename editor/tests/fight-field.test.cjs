@@ -508,3 +508,20 @@ test('a blow at someone far off is framed with its target: the view on the middl
     assert.equal(fight._tac.view.wide, false);
     assert.equal(fight._tac.view.zoom, zoom);
 });
+
+test('a HUD panel knows when it covers a unit or the cursor: on a small map the panels lie over the map\'s cells', () => {
+    const w = world({ events: [unit(1, 1, 12, 'enemy 1')] });
+    const fight = begin(w), U = w.ReactorFight.UnitMarks;
+    U.collect(fight);
+    const tw = w.$gameMap.tileWidth(), th = w.$gameMap.tileHeight();
+    const screen = (x, y) => [w.$gameMap.adjustX(x) * tw, w.$gameMap.adjustY(y) * th];
+    // A panel in the lower left over the enemy's cell (its feet at the cell's bottom edge).
+    const [ex, ey] = screen(1, 12);
+    assert.equal(U.covers(fight, ex - 10, ey, tw + 20, th + 4), true, 'over the enemy');
+    assert.equal(U.covers(fight, ex - 10, ey - 6 * th, tw + 20, th), false, 'far over its head');
+    // Over nobody, but over the cursor's cell.
+    const [cx, cy] = screen(10, 6);
+    assert.equal(U.covers(fight, cx + 2, cy + 2, tw - 4, th - 4), false);
+    fight.setCursor(10, 6);
+    assert.equal(U.covers(fight, cx + 2, cy + 2, tw - 4, th - 4), true, 'over the cursor');
+});

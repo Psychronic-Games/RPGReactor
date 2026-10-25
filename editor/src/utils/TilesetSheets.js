@@ -88,7 +88,62 @@
         return tilesetNames;
     };
 
+    // Passage flags a tile has before anyone sets them, as RPG Maker gives a
+    // new tileset: tile 0 is a star; A1 water stops walkers (sea and deep sea
+    // carry boats and ships, the second sheet column of each pair is a
+    // waterfall); A3 is roofs and walls; A4 wall tops are open but for the
+    // edges their shape shows, A4 wall faces are closed; everything else is
+    // open. Boats and ships cross nothing but A1 water; an airship lands on
+    // nothing but open ground.
+    const FLAG_TOTAL = 8192;
+    const A4_TOP_SHAPES = [
+        0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00, 0xe00,
+        0xe02, 0xe02, 0xe02, 0xe02, 0xe08, 0xe08, 0xe08, 0xe08, 0xe04, 0xe04, 0xe04, 0xe04, 0xe00, 0xe00, 0xe00, 0xe00,
+        0xe06, 0xe08, 0xe0a, 0xe0a, 0xe0c, 0xe0c, 0xe04, 0xe04, 0xe02, 0xe02, 0xe0e, 0xe0a, 0xe06, 0xe0c, 0xe0e, 0xe0f
+    ];
+
+    /** The flag a tile starts with (see above). */
+    const defaultFlag = tileId => {
+        if (tileId === 0) return 0x10;
+        if (tileId >= 2048 && tileId < 2816) {
+            const kind = Math.floor((tileId - 2048) / 48);
+            if (kind === 0) return 0x80f;
+            if (kind === 1) return 0xa0f;
+            if (kind < 4) return 0xe0f;
+            return kind % 2 ? 0xe0f : 0x80f;
+        }
+        if (tileId >= 4352 && tileId < 5888) return 0xe0f;
+        if (tileId >= 5888 && tileId < FLAG_TOTAL) {
+            const kind = Math.floor((tileId - 5888) / 48);
+            return Math.floor(kind / 8) % 2 ? 0xe0f : A4_TOP_SHAPES[(tileId - 5888) % 48];
+        }
+        return 0x600;
+    };
+
+    /** A whole flags array as a new tileset has it. */
+    const defaultFlags = () => Array.from({ length: FLAG_TOTAL }, (_, tileId) => defaultFlag(tileId));
+
+    /**
+     * Grows `flags` to every tile and gives each tile without a number its
+     * starting flag, in place, so no hole is left for JSON to write as null.
+     * Set flags are kept. Returns how many tiles were filled.
+     */
+    const fillFlags = flags => {
+        if (!Array.isArray(flags)) return 0;
+        let filled = 0;
+        for (let tileId = 0; tileId < FLAG_TOTAL; tileId++) {
+            if (Number.isInteger(flags[tileId])) continue;
+            flags[tileId] = defaultFlag(tileId);
+            filled++;
+        }
+        return filled;
+    };
+
     const api = {
+        FLAG_TOTAL,
+        defaultFlag,
+        defaultFlags,
+        fillFlags,
         SHEET_KEYS,
         SHEET_COUNT,
         NORMAL_SHEET_KEYS,

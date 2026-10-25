@@ -55,6 +55,12 @@ for (const scriptName of scripts) {
         assert.equal(isStagingExcluded(nodePath.join('js', 'plugins', 'forge.js')), false);
     });
 
+    test(`${scriptName}: the Character Generator's recipes stay out, the sheets go in`, () => {
+        assert.equal(isStagingExcluded(nodePath.join('img', 'characters', '$Hero.character.json')), true);
+        assert.equal(isStagingExcluded(nodePath.join('img', 'characters', '$Hero.png')), false);
+        assert.equal(isStagingExcluded(nodePath.join('data', 'Hero.character.json')), false, 'only beside pictures');
+    });
+
     test(`${scriptName}: the Test_ rule does not reach outside data/`, () => {
         // A plugin or asset legitimately named Test_… must not be dropped.
         assert.equal(isStagingExcluded(nodePath.join('js', 'plugins', 'Test_Harness.json')), false);

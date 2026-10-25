@@ -66,17 +66,13 @@ class DatabaseStateEditor {
                     </div>
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>${tt('[SV] Motion')}</label>
-                            <select class="database-field-value" data-field="motion" data-state-id="${state.id}">
-                                ${['Normal', 'Abnormal', 'Sleep', 'Dead'].map((name, idx) => `<option value="${idx}" ${(state.motion || 0) === idx ? 'selected' : ''}>${tt(name)}</option>`).join('')}
-                            </select>
-                        </span>
-                        <span class="db-col">
                             <label>${tt('[SV] Overlay')}</label>
                             <select class="database-field-value" data-field="overlay" data-state-id="${state.id}">
                                 ${['None', 'Poison', 'Blind', 'Silence', 'Rage', 'Confusion', 'Fascination', 'Sleep', 'Paralyze', 'Curse', 'Fear'].map((name, idx) => `<option value="${idx}" ${(state.overlay || 0) === idx ? 'selected' : ''}>${tt(name)}</option>`).join('')}
                             </select>
                         </span>
+                        <!-- The state's motion is set in its Motion section. -->
+                        <span class="db-col" aria-hidden="true"></span>
                     </div>
                 </div></div>
             </div>

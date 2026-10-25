@@ -33,3 +33,5 @@ test('each render rechecks the backdrop and shader overrides keep their own pass
  for(const change of [f=>f.glProgram={},f=>f.apply=()=>{},f=>f.resolution=.5,f=>f.antialias='on',f=>f.blendMode='add']){const y=fixture();change(y.filters[0]);assert.equal(y.draw()[0],true);}
  x.C.skipNeutralScenePasses=false;assert.deepEqual(x.draw(),[true,true,true]);
 });
+
+test('legacy oversaturation keeps the scene colour pass even with a neutral final matrix',()=>{const x=fixture(),tone=x.filters[2];tone.setLegacyTone(true);tone.setColorTone([0,0,0,-255]);assert.equal(x.draw()[2],true);tone.setColorTone([0,0,0,0]);assert.equal(x.draw()[2],false);});

@@ -222,7 +222,7 @@ class DatabaseCommonEventEditor {
         ECL.enableDragReorder(container, {
             rowSelector: '[data-cmd-index]',
             indexKey: 'cmdIndex',
-            indentBase: 11,
+            indentBase: 61,
             indentStep: 20,
             list: () => event.list,
             dragIndices: pressed => {
@@ -251,9 +251,8 @@ class DatabaseCommonEventEditor {
             this.expandedPluginCommands.clear();
         }
 
+        const rails = ECL.railsFor(event.list);
         event.list.forEach((cmd, idx) => {
-            // Hide 655 Script continuation rows - folded into parent 355's summary
-            if (cmd.code === 655) return;
             // Plugin arguments are shown only when their command is expanded.
             if (cmd.code === 657 &&
                     !this.expandedPluginCommands.has(ECL.pluginArgsOwnerIndex(event.list, idx))) {
@@ -268,15 +267,19 @@ class DatabaseCommonEventEditor {
             const isEnd = cmd.code === 0;
 
             div.style.cssText = `
-                padding: 4px 8px; padding-left: ${(cmd.indent || 0) * 20 + 8}px;
+                padding: 4px 8px;
+                position: relative;
                 font-family: monospace; font-size: 11px; cursor: pointer; user-select: none;
                 border-left: 3px solid ${this.getCommandColor(cmd.code)};
                 background: ${isSelected ? 'var(--color-bg-selected)' : 'var(--color-bg-list-item)'};
+                ${isSelected ? ECL.SELECTED_INK : ''}
                 transition: background-color 0.1s; margin-bottom: 1px;
             `;
 
+            // The line numbers keep one column; a command's name is indented, the tree beside it.
+            const nameIndent = ECL.visualIndent(cmd) * ECL.RAIL_GEOMETRY.database.step;
             if (isEnd) {
-                div.innerHTML = `<span style="color: var(--color-border-input);">${tt('End')}</span>`;
+                div.innerHTML = `<span style="color: var(--color-text-muted); margin-left: ${ECL.RAIL_GEOMETRY.database.base - 8 + nameIndent}px;">${tt('End')}</span>`;
             } else {
                 const info = this.getCommandDisplay(cmd, event, idx);
                 // A plugin command with argument rows gets the toggle that
@@ -286,10 +289,10 @@ class DatabaseCommonEventEditor {
                 const toggle = argRows > 0
                     ? `<span class="plugin-args-toggle" style="color: var(--color-text-muted); cursor: pointer; user-select: none; min-width: 14px; display: inline-block; text-align: center;">${this.expandedPluginCommands.has(idx) ? '▼' : '▶'}</span>`
                     : '<span style="min-width: 14px; display: inline-block;"></span>';
-                div.innerHTML = `<span style="color: var(--color-text-dim); min-width: 32px; display: inline-block;">${String(idx + 1).padStart(3, '0')}</span>` +
+                div.innerHTML = `<span style="color: var(--rr-command-ink, var(--color-text-dim)); min-width: 32px; display: inline-block;">${String(idx + 1).padStart(3, '0')}</span>` +
                     toggle +
-                    `<span style="color: ${info.color}; font-weight: 600; margin: 0 8px 0 4px;">${this.escapeHTML(tt(info.name))}</span>` +
-                    `<span style="color: var(--color-text);">${this.escapeHTML(info.description)}</span>`;
+                    `<span style="color: var(--rr-command-ink, ${info.color}); font-weight: 600; margin: 0 8px 0 ${4 + nameIndent}px;">${this.escapeHTML(tt(info.name))}</span>` +
+                    `<span style="color: var(--color-text);">${this.descriptionHTML(cmd, info.description, () => this.renderCommandList(container, this.currentEvent))}</span>`;
 
                 div.querySelector('.plugin-args-toggle')?.addEventListener('click', (e) => {
                     // Without this the row's own handler would also select the
@@ -300,6 +303,8 @@ class DatabaseCommonEventEditor {
                     this.renderCommandList(container, event);
                 });
             }
+
+            ECL.drawRails(div, rails[idx], ECL.RAIL_GEOMETRY.database);
 
             // Click to select. Plain click = single, Ctrl/Cmd-click =
             // toggle, Shift-click = range from anchor.
@@ -709,31 +714,8 @@ class DatabaseCommonEventEditor {
             editor.show(command, (commands) => {
                 if (!isCurrent()) return;
                 if (commands && commands.length > 0) {
-                    // Choice bodies stay in choice order; the cancel body
-                    // stays bound to the 403 marker. Nested structures ride
-                    // along inside the bodies untouched.
-                    const { branches, endIndex } = ECL.collectBranchStructure(
-                        event.list, idx, [402, 403], 404, false);
-                    const choiceBodies = [];
-                    let cancelBody = null;
-                    for (const branch of branches) {
-                        if (branch.marker.code === 403) cancelBody = branch.body;
-                        else choiceBodies.push(branch.body);
-                    }
-
-                    event.list.splice(idx, endIndex - idx + 1);
-                    ECL.rebaseInsertIndent(commands, command.indent || 0);
-
-                    let insertPos = idx;
-                    for (const cmd of commands) {
-                        event.list.splice(insertPos++, 0, cmd);
-                        let body = null;
-                        if (cmd.code === 402) body = choiceBodies.shift();
-                        else if (cmd.code === 403) body = cancelBody;
-                        if (body) {
-                            for (const nc of body) event.list.splice(insertPos++, 0, nc);
-                        }
-                    }
+                    // Each branch keeps its body; nested structures ride along inside them.
+                    ECL.replaceChoiceStructure(event.list, idx, commands);
                     refreshList();
                 }
             });
@@ -1653,6 +1635,14 @@ class DatabaseCommonEventEditor {
 
     getCommandDisplay(cmd, page, index) {
         return this._getFormatter().getCommandInfo(cmd, page, index);
+    }
+
+    /** A row's description as HTML: Show Text and Comment lines in their \C[n] colors, as the map event list draws them. */
+    descriptionHTML(cmd, description, redraw) {
+        if (cmd.code !== 401 && cmd.code !== 408) return this.escapeHTML(description);
+        const formatter = this._getFormatter();
+        formatter.onWindowskinLoaded = redraw;
+        return formatter.convertTextCodesToHTML(description);
     }
 
     // ==========================================

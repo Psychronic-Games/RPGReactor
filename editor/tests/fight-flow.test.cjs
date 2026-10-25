@@ -1422,22 +1422,31 @@ test('Start Battle on Map reached while a battle runs gives that battle its goal
     near.run(1);
     assert.deepEqual(inBattle(near), [1, 3], 'the command brings the one the rule now takes, and not the unit 19 tiles off');
     assert.equal(near.$gameFight.serial(), 1);
-    // A battle kept on another map while the party is away: the command here starts nothing, brings nothing and takes no branch.
-    const away = world('action', { events: [row(1, 6, 2)], mapNote: '<battle trigger: 0>' });
-    away.$dataEnemies[1].params[0] = 9000;
-    assert.ok(away.$gameFight.start({ mode: 'action', who: 'near', onTransfer: 'keep' }) > 0);
-    away.run(2);
-    arrive(away, 2, '<battle trigger: 0>', 2, 2);
+    // A battle kept on another map while the party is away gives way to the command here: it ends as an escape,
+    // and the command's battle is fought on this map, the event waiting for it.
+    const keptAway = () => {
+        const away = world('action', { events: [row(1, 6, 2)], mapNote: '<battle trigger: 0>' });
+        away.$dataEnemies[1].params[0] = 9000;
+        assert.ok(away.$gameFight.start({ mode: 'action', who: 'near', onTransfer: 'keep' }) > 0);
+        away.run(2);
+        arrive(away, 2, '<battle trigger: 0>', 2, 2);
+        return away;
+    };
+    const away = keptAway();
     away.$gameMap._interpreter.setup(second.concat([end]), 9);
     away.run(3);
-    assert.equal(away.$gameFight.serial(), 1);
-    assert.deepEqual(plain(away.$gameFight.objective()), { type: 'defeatAll' }, 'the battle left behind keeps its goal');
-    assert.deepEqual(switches(away), [4], 'the event goes on, and none of its result rows is taken: no battle was fought here');
-    // Ended from afar (a script's call), it leaves no hold on the map the party stands on: its units are another map's events.
-    away.$gameFight._ending = { result: F.ESCAPE, shown: true, quiet: true };
-    away.$gameFight.finish();
-    assert.equal(away.$gameFight.isActive(), false);
-    assert.deepEqual([hold(away), heldUnits(away)], [[false, 0], []]);
+    assert.equal(away.$gameFight.resultOf(1), F.ESCAPE, 'the battle left behind ended as an escape');
+    assert.deepEqual([away.$gameFight.serial(), away.$gameFight.isHere(), away.$gameFight.mode()], [2, true, 'tactical'], 'the command\'s battle runs here');
+    assert.deepEqual(plain(away.$gameFight.objective()), { type: 'survive', turns: 9 });
+    assert.equal(away.$gameMap._interpreter._waitMode, 'reactorFight', 'the event waits for it');
+    assert.deepEqual(switches(away), []);
+    // Ended from afar (a script's call), a kept battle leaves no hold on the map the party stands on: its units are another map's events.
+    const afar = keptAway();
+    afar.run(3);
+    afar.$gameFight._ending = { result: F.ESCAPE, shown: true, quiet: true };
+    afar.$gameFight.finish();
+    assert.equal(afar.$gameFight.isActive(), false);
+    assert.deepEqual([hold(afar), heldUnits(afar)], [[false, 0], []]);
 });
 
 test('Battle Processing reached while a battle runs brings its troop into it and waits; the battle screen never opens over a battle on the map', () => {

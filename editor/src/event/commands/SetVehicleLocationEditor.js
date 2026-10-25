@@ -2,11 +2,35 @@
  * SetVehicleLocationEditor - Editor for Set Vehicle Location event command (code 202)
  */
 class SetVehicleLocationEditor {
-    /** The vehicles of the Vehicles page, each copy its own entry (`{ value, label }`); a stored one the page no longer has is kept as it is. */
-    static reactorVehicles(databaseManager, stored) {
-        const list = typeof RRVehicles !== 'undefined' ? RRVehicles.placedVehicles(databaseManager?.data?.vehicles) : [];
-        if (typeof stored === 'string' && stored && !list.some(entry => entry.value === stored)) list.push({ value: stored, label: stored });
+    /**
+     * The vehicles of the Vehicles page, each copy its own entry (`{ value, label }`), then the vehicle events of
+     * `map` (the map open in the editor), named `<mapId>:<eventId>`; a stored one neither has is kept as it is.
+     */
+    static reactorVehicles(databaseManager, stored, map = SetVehicleLocationEditor.openMap()) {
+        const vehicles = databaseManager?.data?.vehicles;
+        const list = typeof RRVehicles !== 'undefined' ? RRVehicles.placedVehicles(vehicles) : [];
+        list.push(...SetVehicleLocationEditor.mapVehicles(map, vehicles));
+        if (typeof stored === 'string' && stored && !list.some(entry => entry.value === stored)) {
+            const event = /^([1-9]\d*):(\d+)$/.exec(stored);
+            const map = typeof window !== 'undefined' && window.I18n ? window.I18n.tText('Map') : 'Map';
+            list.push({ value: stored, label: event ? `${map} ${event[1]} EV${event[2].padStart(3, '0')}` : stored });
+        }
         return list;
+    }
+    /** The vehicle events of a map (the Event Editor's Vehicle row), as `{ value: '<mapId>:<eventId>', label }`. */
+    static mapVehicles(map, vehicles) {
+        const list = [];
+        if (!map || !(Number(map.id) > 0) || typeof RRVehicles === 'undefined') return list;
+        for (const event of Array.isArray(map.events) ? map.events : []) {
+            const row = event ? RRVehicles.vehicleOf(event) : null;
+            if (row) list.push({ value: `${map.id}:${event.id}`, label: 'EV' + String(event.id).padStart(3, '0') + ': ' + (event.name || (vehicles && vehicles[row.type] && vehicles[row.type].name) || '') });
+        }
+        return list;
+    }
+    /** The map open in the editor, or null. */
+    static openMap() {
+        const reactor = typeof window !== 'undefined' ? window.reactor : null;
+        return reactor?.eventManager?.currentMap || reactor?.tilemapManager?.currentMap || null;
     }
     /** The name a stored vehicle is listed by: Boat, Ship, Airship, or a vehicle of the Vehicles page. */
     static vehicleName(stored, databaseManager, tt = text => text) {

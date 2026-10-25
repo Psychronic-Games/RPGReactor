@@ -23,6 +23,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { archiveHandoff, planArchive } = require('./archive-handoff.cjs');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const REPO = 'Psychronic-Games/RPGReactor';
@@ -70,7 +71,10 @@ function changelogSection(version) {
     if (!fs.existsSync(file)) throw new Error(`changelog/${version}.md does not exist`);
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     const body = (lines[0].startsWith('# ') ? lines.slice(1) : lines).join('\n').trim();
-    return body.replace(/\]\(\.\.\//g, `](https://github.com/${REPO}/blob/v${version}/`);
+    // Pictures load from the raw file at the tag (a blob page is not an image); other links open the page.
+    return body
+        .replace(/(!\[[^\]]*\])\(\.\.\//g, `$1(https://raw.githubusercontent.com/${REPO}/v${version}/`)
+        .replace(/\]\(\.\.\//g, `](https://github.com/${REPO}/blob/v${version}/`);
 }
 
 /** Every place the version is written down, rolled together. */
@@ -194,9 +198,17 @@ function main() {
     execFileSync('node', [path.join('.github', 'scripts', 'check-syntax.cjs')], { cwd: repoRoot, encoding: 'utf8' });
 
     say('Running the editor test suite...');
-    const testOutput = execFileSync('node', ['--test'], {
-        cwd: path.join(repoRoot, 'editor'), encoding: 'utf8'
-    });
+    // The suite's report passed 1 MB (execFileSync's default buffer) at 0.99.1.
+    let testOutput;
+    try {
+        testOutput = execFileSync('node', ['--test', '--test-concurrency=8'], {
+            cwd: path.join(repoRoot, 'editor'), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024
+        });
+    } catch (error) {
+        // A failing run exits non-zero: name the failures before refusing.
+        const failing = String(error.stdout || '').split('\n').filter(line => /^\s*(✖|not ok)\s/.test(line));
+        throw new Error(`the test suite failed; not releasing\n${[...new Set(failing)].slice(0, 40).join('\n')}`);
+    }
     const passed = Number((testOutput.match(/^# pass (\d+)$/m)
         || testOutput.match(/pass (\d+)/) || [])[1] || 0);
     const failed = Number((testOutput.match(/^# fail (\d+)$/m)
@@ -206,6 +218,17 @@ function main() {
 
     const edits = rollVersionSurfaces(version, passed);
     say(edits.length ? `Rolled: ${edits.join(', ')}\n` : 'Version surfaces already current\n');
+
+    // The cycle's handoff entries go to the archive in the release commit, so
+    // the next cycle starts from a short handoff (docs-budget.test.cjs).
+    if (options.dryRun) {
+        const plan = planArchive({ through: today(), version });
+        say(`Would archive ${plan.moved.length} handoff entr${plan.moved.length === 1 ? 'y' : 'ies'} to ${plan.file}\n`);
+    } else {
+        const archived = archiveHandoff({ through: today(), version });
+        edits.push(...archived.written);
+        if (archived.written.length) say(`Archived ${archived.moved.length} handoff entries to ${archived.file}\n`);
+    }
 
     const body = changelogSection(version);
     say(`Release notes: ${body.split('\n').length} lines from the changelog\n`);

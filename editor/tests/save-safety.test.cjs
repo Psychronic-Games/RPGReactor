@@ -617,9 +617,9 @@ test('discard closes projects and applications without saving', async () => {
     assert.equal(controller.hasUnsavedChanges(), false,
         'discarded database state cannot prompt again after the project closes');
 
-    let forcedCloses = 0;
+    let appQuits = 0;
     const AppProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', {
-        nw: { Window: { get: () => ({ close: force => { if (force) forcedCloses++; } }) } }
+        nw: { App: { quit: () => { appQuits++; } } }
     });
     const appController = new AppProjectController(
         {},
@@ -631,7 +631,7 @@ test('discard closes projects and applications without saving', async () => {
     appController.saveAll = async () => { saves++; return true; };
     assert.equal(await appController.requestApplicationClose(), true);
     assert.equal(saves, 0, 'discard does not save during application close');
-    assert.equal(forcedCloses, 1);
+    assert.equal(appQuits, 1, 'quitting closes the application including detached editor windows');
     assert.equal(appController.allowApplicationClose, true);
 });
 

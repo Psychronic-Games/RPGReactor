@@ -160,7 +160,7 @@ test('a biome tints the steep ground, and the Ground panel reads the tint from t
 
 test('the Terrain group ends with Beyond the Border, a slot with no brush', () => {
     const BuildHotbar = require(path.join(repoRoot, 'editor/src/BuildHotbar.js'));
-    assert.deepEqual(BuildHotbar.TERRAIN.slice(-2), ['biome', 'surround']);
+    assert.deepEqual(BuildHotbar.TERRAIN.slice(-3), ['biome', 'sky', 'surround']);
     assert.equal(BuildHotbar.TERRAIN_MODE.surround, 'surround');
     const terrain = { mode: 'raise', active: true, activate() {}, setMode(mode) { this.mode = mode; } };
     const bar = Object.create(BuildHotbar.prototype);
@@ -180,10 +180,10 @@ test('the Terrain group ends with Beyond the Border, a slot with no brush', () =
     assert.equal(real.mode, 'surround');
     assert.equal(real.beginStroke({ x: 3, y: 3 }), false);
     assert.equal(real.undoStack.length, 0);
-    assert.match(read('editor/src/MapEditor3D.js'), /const ringless = \['fill', 'drain', 'look', 'river', 'biome', 'surround'\]\.includes\(manager\.mode\);/);
+    assert.match(read('editor/src/MapEditor3D.js'), /const ringless = \['fill', 'drain', 'look', 'river', 'biome', 'sky', 'surround'\]\.includes\(manager\.mode\);/);
     // One history with every other map tool: a step says what it was.
     const main = read('editor/src/main.js');
-    assert.match(main, /label: entry => \(entry\?\.surroundSet \? 'Beyond the Border' : entry\?\.cliffSet \? 'Steep Ground' : entry\?\.biome \? \(entry\.label \|\| 'Biome'\) : /);
+    assert.match(main, /label: entry => \(entry\?\.surroundSet \? 'Beyond the Border' : entry\?\.cliffSet \? 'Steep Ground' : entry\?\.roomSet \? 'Room and Sky' : entry\?\.biome \? \(entry\.label \|\| 'Biome'\) : /);
     assert.match(main, /terrain\._settleMapSettings\?\.\(\);/);
 });
 
@@ -267,9 +267,8 @@ test('the Ground panel\'s Steep Ground card: the material, tint and angle of a s
     assert.match(bar, /\+ section\(t\('terrain\.brush'\), brushRows\)\n\s+\+ edit \+ whole;/);
 });
 
-test('OK in Map Properties leaves the steep ground and the land past the border as they are', () => {
-    const fields = { 'map-3d-height-input': { value: '12' }, 'map-3d-floor-select': { value: '!Grass-01' }, 'map-3d-walls-select': { value: '' }, 'map-3d-ceiling-select': { value: '' },
-        'map-3d-sky-select': { value: 'Sky-01' }, 'map-3d-sky-sx-input': { value: '0.1' }, 'map-3d-sky-sy-input': { value: '0' } };
+test('OK in Map Properties leaves the room, the sky, the steep ground and the land past the border as they are', () => {
+    const fields = {};
     const ProjectController = vm.runInNewContext(`${read('editor/src/ProjectController.js')}\nProjectController;`,
         { console, process, require, nw: {}, document: { getElementById: id => fields[id] || null } });
     const context = {}; context.window = context;
@@ -289,11 +288,9 @@ test('OK in Map Properties leaves the steep ground and the land past the border 
     assert.equal(pc.saveMap3DSettings({ id: 7, width: 6, height: 5 }, room, true), false, 'nothing changed: nothing to write');
     assert.equal(JSON.stringify(map.reactor3d), before);
     assert.equal(written, 0);
-    // The room changed in the dialog: the cliff and the surroundings stay.
-    fields['map-3d-height-input'].value = '20';
-    fields['map-3d-sky-select'].value = '';
-    assert.equal(pc.saveMap3DSettings({ id: 7, width: 6, height: 5 }, pc.readMap3DForm(), true), true);
-    assert.equal(written, 1);
+    // The room changed on the map (Build › Terrain › Room and Sky): OK keeps it, and the cliff and the surroundings stay.
+    elevation.setRoom(map, Object.assign({}, elevation.room(map), { height: 20, sky: '' }));
+    assert.equal(pc.saveMap3DSettings({ id: 7, width: 6, height: 5 }, pc.readMap3DForm(), true), false, 'the dialog changes nothing of it');
     assert.deepEqual([map.reactor3d.room.height, map.reactor3d.room.sky], [20, '']);
     assert.deepEqual([map.reactor3d.room.cliff, map.reactor3d.room.cliffSlope, map.reactor3d.room.cliffTint], ['Moss', 55, '#a99f93']);
     assert.deepEqual(plain(map.reactor3d.surround), { style: 'mountains', distance: 320, rough: 1 });
@@ -323,7 +320,7 @@ test('OK in Map Properties leaves the steep ground and the land past the border 
     // Neither is in the dialog, and nothing of the old form is left behind.
     const html = read('editor/index.html');
     assert.doesNotMatch(html, /map-3d-cliff|map-surround-section|mapProps\.groupSteep|mapProps\.steepHint/);
-    assert.match(html, /data-i18n="mapProps\.groupRoom">Room and Sky<\/div>/);
+    assert.doesNotMatch(html, /mapProps\.groupRoom|id="map-3d-height-input"|id="map-3d-sky-select"/);
     assert.match(html, /data-i18n="mapProps\.groupCamera">Camera<\/div>/);
     const controller = read('editor/src/ProjectController.js');
     assert.doesNotMatch(controller, /RRMapEdges|previewMapCliff|cancelMapCliffPreview|bindMapPropertiesPeek|mapPropertiesScene|fillMaterialSelect/);

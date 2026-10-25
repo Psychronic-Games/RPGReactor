@@ -218,29 +218,35 @@
     //=============================================================================
 
     const _Game_BattlerBase_paySkillCost = Game_BattlerBase.prototype.paySkillCost;
+    // The cost report in the console, for checking a skill's percentage costs:
+    // true prints it each time a cost is paid (it costs a few ms a battle frame).
+    const LOG_SKILL_COSTS = false;
     Game_BattlerBase.prototype.paySkillCost = function(skill) {
-        // Debug logging
-        console.log("=== PAYING SKILL COST ===");
-        console.log("Skill Name:", skill.name);
-        console.log("Skill ID:", skill.id);
-        console.log("mpCostPercent:", skill.mpCostPercent);
-        console.log("Original MP Cost:", skill.mpCost);
-        console.log("Calculated MP Cost:", this.skillMpCost(skill));
-        console.log("Actor Current MP:", this._mp);
-        console.log("Actor Max MP:", this.mmp);
+        if (LOG_SKILL_COSTS) {
+            console.log("=== PAYING SKILL COST ===");
+            console.log("Skill Name:", skill.name);
+            console.log("Skill ID:", skill.id);
+            console.log("mpCostPercent:", skill.mpCostPercent);
+            console.log("Original MP Cost:", skill.mpCost);
+            console.log("Calculated MP Cost:", this.skillMpCost(skill));
+            console.log("Actor Current MP:", this._mp);
+            console.log("Actor Max MP:", this.mmp);
+        }
 
         // Pay HP cost first
         const hpCost = this.skillHpCost(skill);
         if (hpCost > 0) {
-            console.log("Paying HP Cost:", hpCost);
+            if (LOG_SKILL_COSTS) console.log("Paying HP Cost:", hpCost);
             this._hp -= hpCost;
         }
 
         // Pay MP and TP costs
         _Game_BattlerBase_paySkillCost.call(this, skill);
 
-        console.log("Actor MP After:", this._mp);
-        console.log("=========================");
+        if (LOG_SKILL_COSTS) {
+            console.log("Actor MP After:", this._mp);
+            console.log("=========================");
+        }
     };
 
     //=============================================================================

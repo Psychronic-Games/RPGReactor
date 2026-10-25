@@ -78,10 +78,11 @@ async function measure(driver) {
             inspectorOpen: inspector.classList.contains('is-open'), inspectorTitle: q('.rr-ui-inspector-title').textContent.trim(),
             referenceVisible: Boolean(reference && reference.getBoundingClientRect().bottom <= layers.getBoundingClientRect().bottom + 1
                 && reference.getBoundingClientRect().top >= layers.getBoundingClientRect().top - 1),
-            toolbarContained: toolbarChildren.every(element => {
+            // A child that is not drawn (the hidden Use as notice) has no box to escape with.
+            toolbarEscaped: toolbarChildren.filter(element => element.getClientRects().length && !(() => {
                 const rect = element.getBoundingClientRect(), parent = toolbar.getBoundingClientRect();
                 return rect.left >= parent.left - 1 && rect.right <= parent.right + 1 && rect.top >= parent.top - 1 && rect.bottom <= parent.bottom + 1;
-            }),
+            })()).map(element => element.className),
             controlHeights: {
                 gameReference: reference ? +reference.getBoundingClientRect().height.toFixed(1) : 0,
                 capture: +q('.rr-ui-capture').getBoundingClientRect().height.toFixed(1),
@@ -107,7 +108,7 @@ function assertCommon(result, target) {
     assert.ok(Math.abs(result.editorScroll.scrollHeight - result.editorScroll.clientHeight) <= 2, `${label}: editor vertical overflow`);
     assert.ok(result.detailScroll.scrollHeight <= result.detailScroll.clientHeight + 2, `${label}: detail vertical overflow`);
     assert.deepEqual(result.overflowElements, [], `${label}: horizontal overflow ${JSON.stringify({ overflow: result.overflowElements, workspace: result.workspace, inspector: result.inspector, position: result.inspectorPosition, open: result.inspectorOpen })}`);
-    assert.equal(result.toolbarContained, true, `${label}: toolbar child escaped`);
+    assert.deepEqual(result.toolbarEscaped, [], `${label}: toolbar child escaped`);
     assert.equal(result.fit, 'both', `${label}: workspace fit mode`);
     assert.ok(Math.abs(result.workspace.height - result.workspaceExpectedHeight) <= 2, `${label}: workspace does not fill remaining height`);
     assert.equal(result.referenceVisible, true, `${label}: Game Reference starts below the Layers panel fold`);

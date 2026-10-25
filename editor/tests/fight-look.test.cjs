@@ -1199,3 +1199,28 @@ test('a fighter whose model is changed for another during a battle keeps its siz
     w.Reactor3D._databaseSidecar = null;
     assert.equal(frame(), 1);
 });
+
+test('a picture whose creature flies high over its own shadow is cut so it stands just over it, in its own cell', () => {
+    // The stock Crow: the bird in the top 134 rows of 234, its shadow in the last 20, open air between.
+    const width = 10, height = 234, data = new Uint8ClampedArray(width * height * 4);
+    const paint = (from, to) => { for (let y = from; y < to; y++) for (let x = 0; x < width; x++) data[(y * width + x) * 4 + 3] = 255; };
+    paint(0, 134); paint(214, 234);
+    const box = L.trim(data, width, height);
+    const art = L.art(data, width, box);
+    assert.equal(art.parts.length, 2);
+    assert.deepEqual(plain(art.parts), [{ y: 0, height: 134 }, { y: 214, height: 20 }]);
+    assert.equal(art.gap, Math.round(234 * L.GAP_KEEP));
+    assert.equal(art.height, 134 + art.gap + 20, 'the open air is cut to a sliver');
+    // Fitted as a unit's picture, the bird no longer rises a whole tile over its cell.
+    const before = L.fit(width, height, 48, 48, 1), after = L.fit(art.width, art.height, 48, 48, 1);
+    assert.ok(after.height * (134 / art.height) > before.height * (134 / 234), 'the bird itself is drawn larger');
+    // Drawn part by part, top to bottom, the band between them left empty.
+    const calls = [];
+    L.drawArt({ drawImage: (...args) => calls.push(args.slice(1)) }, 'source', box, art, 10, art.height);
+    assert.deepEqual(calls, [[0, 0, 10, 134, 0, 0, 10, 134], [0, 214, 10, 20, 0, 134 + art.gap, 10, 20]]);
+    // A picture with no such band is drawn whole.
+    const whole = new Uint8ClampedArray(width * 40 * 4).fill(255);
+    const solid = L.art(whole, width, L.trim(whole, width, 40));
+    assert.equal(solid.parts.length, 1);
+    assert.equal(solid.height, 40);
+});

@@ -503,9 +503,13 @@ test('a top is a place to stand when it is wide enough: not a post, a rail, a gr
     // The Tactical grid: its own hop asks only how high, so the world says no for it.
     assert.deepEqual(JSON.parse(JSON.stringify(P.tacticalEdge(4, 11, 6, 0, 1))), { kind: 'blocked', cost: 0, height: 0 }, 'a fence within the unit\'s jump');
     assert.equal(P.tacticalEdge(4, 3, 6, 0, 2).kind, 'blocked', 'a post within it');
-    assert.equal(P.tacticalEdge(8, 9, 6, 0, 1).kind, 'blocked', 'a counter within its jump with no room to stand on it');
+    const counter = P.tacticalEdge(8, 9, 6, 0, 1);
+    assert.deepEqual([counter.kind, Math.round(counter.height * 10) / 10], ['climb', 3.1], 'a counter within its jump with no room to stand on it: the wall is climbed to the low roof over it');
+    c.$dataSystem.reactorPhysics = { battleClimb: false };
+    assert.equal(P.tacticalEdge(8, 9, 6, 0, 1).kind, 'blocked', 'and with climbing off, the counter is no way on');
+    c.$dataSystem.reactorPhysics = {};
     assert.equal(P.tacticalEdge(4, 9, 6, 0, 1), null, 'a crate is the grid\'s own hop');
-    assert.equal(P.tacticalEdge(4, 1, 6, 0, 3), null, 'the lamp is too high for any unit: the grid says so itself');
+    assert.equal(P.tacticalEdge(4, 1, 6, 0, 3).kind, 'blocked', 'the lamp is no place to stand, within a climb as out of it');
     // One question for whoever puts a body somewhere (a spawn, a unit's move): where, on this cell, can it stand?
     assert.equal(P.standingAt(map, 5, 1), null, 'not on a lamp');
     assert.equal(P.standingAt(map, 5, 11), null, 'not on a fence');
@@ -873,7 +877,7 @@ test("Database, Controls, Physics offers the walk-up rule: a switch and a height
     const editor = read("editor/src/database/DatabaseControlsEditor.js");
     assert.match(editor, /class="rr-controls-stepup"\$\{physics\.stepUp !== false \? . checked. : ..\}/);
     assert.match(editor, /data-field="stepUpReach" min="0" max="20" step="0\.25" value="\$\{physics\.stepUpReach\}"/);
-    assert.match(editor, /stepUp: true, stepUpReach: 1\.5 \}, this\.system\(\)\.reactorPhysics/);
+    assert.match(editor, /stepUp: true, stepUpReach: 1\.5, battleClimb: true, climbHeight: 6, climbCost: 0\.75, battleFall: 'hurt', lethalFall: 'ask' \}, this\.system\(\)\.reactorPhysics/);
     assert.match(editor, /querySelector\(.\.rr-controls-stepup.\)\.addEventListener\(.change., event => \{ const p = this\.physics\(\); p\.stepUp = event\.target\.checked; this\.savePhysics\(p\); \}\);/);
     const phrases = ["Climb low ledges by walking into them", "Height climbed by walking",
         "A ledge up to the height climbed by walking is climbed or stepped down by walking into it for a moment."];

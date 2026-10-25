@@ -88,6 +88,7 @@ function loadCompat({ v8 = true } = {}) {
         if (!PIXI.__reactorFlushTextureUploads) throw error;
     }
 
+    PIXI.__sandbox = sandbox;
     return { PIXI, uploads, renders, resizes, TextureSource, AbstractRenderer };
 }
 
@@ -237,4 +238,82 @@ test('off v8 the upload stays immediate, since nothing would drain a queue', () 
     assert.equal(typeof PIXI.__reactorFlushTextureUploads, 'function');
     assert.equal(PIXI.__reactorPendingTextureUploads(), 0);
     assert.equal(uploads.length, 0);
+});
+
+// A WebGL 2 renderer stand-in that records sub-rectangle uploads, and the
+// area a Bitmap draw op names before its update() (Bitmap._touchUpload).
+function partialFixture() {
+    const loaded = loadCompat();
+    const calls = [];
+    const gl = {
+        TEXTURE_2D: 3553, UNPACK_SKIP_PIXELS: 3316, UNPACK_SKIP_ROWS: 3315, UNPACK_PREMULTIPLY_ALPHA_WEBGL: 37441,
+        isContextLost: () => false,
+        bindTexture: (target, texture) => calls.push(['bind', texture]),
+        pixelStorei: (name, value) => calls.push(['store', name, value]),
+        texSubImage2D: (...args) => calls.push(['sub', ...args.slice(2, 6)])
+    };
+    const renderer = { uid: 1, gl, context: { webGLVersion: 2 }, texture: { _boundTextures: [], _activeTextureLocation: 0, _premultiplyAlpha: true } };
+    const sandbox = loaded.PIXI.__sandbox;
+    const canvas = { width: 400, height: 200 };
+    const base = new loaded.PIXI.BaseTexture(canvas);
+    const source = base._textureSource;
+    source._gpuData = { 1: { texture: 'tex', target: 3553, width: 400, height: 200, format: 6408, type: 5121 } };
+    source.alphaMode = 'premultiply-alpha-on-upload';
+    const touch = (x, y, w, h) => Object.assign(source, { __rrTouch: true, __rrTouchX0: x, __rrTouchY0: y, __rrTouchX1: x + w, __rrTouchY1: y + h });
+    return { ...loaded, calls, renderer, base, source, touch, sandbox };
+}
+
+function withGame(fixture, partialUploads = true) {
+    fixture.sandbox.Graphics = { _app: { renderer: fixture.renderer } };
+    fixture.sandbox.Bitmap = { partialUploads };
+}
+
+test('a frame of small draws sends only the area they changed', () => {
+    const x = partialFixture();
+    withGame(x);
+    x.uploads.length = 0;
+    x.touch(10, 20, 30, 40); x.base.update();
+    x.touch(100, 30, 20, 10); x.base.update();
+    x.PIXI.__reactorFlushTextureUploads();
+    assert.equal(x.uploads.length, 0, 'no whole-canvas upload');
+    const sub = x.calls.filter(c => c[0] === 'sub');
+    assert.deepEqual(sub, [['sub', 10, 20, 110, 40]], 'one upload of the union');
+    const stores = x.calls.filter(c => c[0] === 'store').map(c => c.slice(1));
+    assert.deepEqual(stores, [[3316, 10], [3315, 20], [3316, 0], [3315, 0]], 'skip set for the area, then reset');
+    assert.equal(x.renderer.texture._boundTextures[0], x.source, 'the renderer knows what is bound');
+    x.calls.length = 0;
+    x.PIXI.__reactorFlushTextureUploads();
+    assert.equal(x.calls.length, 0, 'and the area is forgotten once sent');
+});
+
+test('an update that names no area, a big area, or no GPU copy yet sends the whole canvas', () => {
+    const cases = {
+        'plugin drawing': x => { x.touch(0, 0, 10, 10); x.base.update(); x.base.update(); },
+        'over half the canvas': x => { x.touch(0, 0, 300, 150); x.base.update(); },
+        'never uploaded': x => { x.source._gpuData = {}; x.touch(0, 0, 10, 10); x.base.update(); },
+        'switch off': x => { x.sandbox.Bitmap.partialUploads = false; x.touch(0, 0, 10, 10); x.base.update(); },
+        'WebGL 1': x => { x.renderer.context.webGLVersion = 1; x.touch(0, 0, 10, 10); x.base.update(); }
+    };
+    for (const [name, run] of Object.entries(cases)) {
+        const x = partialFixture();
+        withGame(x);
+        x.uploads.length = 0;
+        run(x);
+        x.PIXI.__reactorFlushTextureUploads();
+        assert.equal(x.uploads.length, 1, name);
+        assert.equal(x.calls.filter(c => c[0] === 'sub').length, 0, name);
+    }
+});
+
+test('a named area applies to the update right after it only', () => {
+    const x = partialFixture();
+    withGame(x);
+    x.uploads.length = 0;
+    x.touch(0, 0, 10, 10);
+    x.PIXI.__reactorDeferTextureUploads = false;
+    x.base.update();
+    x.PIXI.__reactorDeferTextureUploads = true;
+    x.base.update();
+    x.PIXI.__reactorFlushTextureUploads();
+    assert.equal(x.uploads.length, 2, 'the later update had no area of its own: whole');
 });

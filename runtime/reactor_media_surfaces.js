@@ -14,6 +14,55 @@
     /** Screen pixels past the edge a video still uploads its frames within. */
     const VIDEO_UPLOAD_MARGIN = 96;
     const DESCRIPTOR_VERSION = 1;
+    /** Failed uploads in a row before a video's frames stop being sent to the 3D view. */
+    const VIDEO_IMPORT_STRIKES = 3;
+    /** How many of a video's first uploads are checked. */
+    const VIDEO_IMPORT_CHECKS = 8;
+
+    /**
+     * Some systems decode video on one GPU and draw on another (Linux with an
+     * NVIDIA card drawing and the integrated GPU's VA-API decoding): there the
+     * browser cannot hand a frame to the drawing GPU, every upload fails with
+     * INVALID_VALUE and the screen stays black. The first uploads of each
+     * video are checked; after VIDEO_IMPORT_STRIKES failures in a row the
+     * texture stops taking frames, so it no longer costs an upload and an
+     * error each frame, and the console says why once. Launching with
+     * --disable-accelerated-video-decode decodes in software, which plays.
+     */
+    function watchVideoImport(texture, renderer) {
+        if (!texture || !texture.isVideoTexture || !renderer || typeof renderer.getContext !== "function") return texture;
+        const gl = renderer.getContext(), invalid = gl.INVALID_VALUE;
+        let checks = 0, strikes = 0;
+        const earlier = texture.onUpdate;
+        texture.onUpdate = function() {
+            if (typeof earlier === "function") earlier.apply(this, arguments);
+            // Once one video has failed on this GPU, the next takes one failure as proof.
+            const needed = watchVideoImport.reported ? 1 : VIDEO_IMPORT_STRIKES;
+            if (checks >= VIDEO_IMPORT_CHECKS) return;
+            checks++;
+            // Every flag set since the last look: another call's error may be older than the upload's.
+            let failed = false;
+            for (let i = 0, e = gl.getError(); e && i < 8; i++, e = gl.getError()) if (e === invalid) failed = true;
+            if (!failed) { strikes = 0; return; }
+            if (++strikes < needed) return;
+            const video = texture.image;
+            if (video && texture._requestVideoFrameCallbackId && typeof video.cancelVideoFrameCallback === "function") video.cancelVideoFrameCallback(texture._requestVideoFrameCallbackId);
+            texture._requestVideoFrameCallbackId = 0;
+            texture.update = function() {};
+            texture.userData.rrImportFailed = true;
+            if (!watchVideoImport.reported) {
+                watchVideoImport.reported = true;
+                console.warn("RPG Reactor: this GPU cannot take video frames from the video decoder (" + (video && video.currentSrc ? String(video.currentSrc).split("/").pop() : "video")
+                    + "): 3D video surfaces stay still. Launch with --disable-accelerated-video-decode to decode in software.");
+            }
+        };
+        return texture;
+    }
+
+    function threeRenderer() {
+        const viewport = typeof Reactor3D !== "undefined" && Reactor3D && Reactor3D.viewport ? Reactor3D.viewport() : null;
+        return viewport ? (typeof viewport.renderer === "function" ? viewport.renderer() : viewport._renderer) : null;
+    }
 
     function own(object, key) {
         return Object.prototype.hasOwnProperty.call(object || {}, key);
@@ -846,7 +895,7 @@ function normalizeShowArgs(raw, interpreter) {
             const texture = this.isImage
                 ? (pictures ? pictures.texture(this.imageSource(), true) : new THREE.CanvasTexture(this.imageSource()))
                 : this.shared ? this.manager.sharedThreeTexture(this.shared, this)
-                : new THREE.VideoTexture(this.video);
+                : watchVideoImport(new THREE.VideoTexture(this.video), threeRenderer());
             if (this.isImage) texture.needsUpdate = true;
             texture.generateMipmaps = false;
             if (THREE.LinearFilter) {
@@ -1411,7 +1460,7 @@ function normalizeShowArgs(raw, interpreter) {
 
         /** One three texture per shared video: a new frame is uploaded once, not once per screen. */
         sharedThreeTexture(entry, owner) {
-            if (!entry.texture) entry.texture = new THREE.VideoTexture(entry.video);
+            if (!entry.texture) entry.texture = watchVideoImport(new THREE.VideoTexture(entry.video), threeRenderer());
             entry.textureUsers.add(owner);
             return entry.texture;
         }
@@ -1842,6 +1891,7 @@ function normalizeShowArgs(raw, interpreter) {
         applyWorldCorners: applyWorldCorners,
         turnCache: turnCache,
         secondPlacement: secondPlacement,
+        watchVideoImport: watchVideoImport,
         MediaSurfaceOwner: MediaSurfaceOwner,
         MediaSurfaceManager: MediaSurfaceManager,
         // Legacy API names refer to the same classes and manager.

@@ -3,7 +3,7 @@
   "frameWidth": 144,
   "frameHeight": 144,
   "templateAlignX": "center",
-  "templateAlignY": "middle",
+  "templateAlignY": "bottom",
   "gridEnabled": false,
   "gridStep": 16,
   "layerOrderByStyle": {

@@ -1359,6 +1359,35 @@
         follower.setMoveSpeed(follower._rrRun ? Math.min(6, pace + 1) : pace);
     };
 
+    /**
+     * The party crossed into a neighboring map with no break: the trail, each follower's place and any
+     * walk it was on move with it into the entered map's tiles, so the line keeps walking the way the
+     * leader came. A follower still past the border walks back onto the map (canPass below).
+     */
+    Game_Followers.prototype.rrShift = function(dx, dy) {
+        const trail = this._rrTrail;
+        if (trail) {
+            for (let i = 0; i < trail.cap; i++) { trail.x[i] += dx; trail.y[i] += dy; }
+            trail.dirty = true;
+        }
+        for (const follower of this._data) {
+            follower._x += dx; follower._y += dy;
+            follower._realX += dx; follower._realY += dy;
+            if (follower._rrTx !== undefined) { follower._rrTx += dx; follower._rrTy += dy; }
+            const walk = follower._reactorWalk;
+            if (walk) { walk.x += dx; walk.y += dy; }
+        }
+    };
+
+    // How many steps a tile lies past the map's edges: 0 on the map.
+    const pastEdge = (x, y) => Math.max(0, -x, x - ($gameMap.width() - 1)) + Math.max(0, -y, y - ($gameMap.height() - 1));
+    const baseCanPass = Game_Follower.prototype.canPass;
+    /** A follower left past the border by a crossing steps back toward the map, over the ground the leader came by. */
+    Game_Follower.prototype.canPass = function(x, y, d) {
+        if (!$gameMap.isValid(x, y)) return pastEdge($gameMap.roundXWithDirection(x, d), $gameMap.roundYWithDirection(y, d)) < pastEdge(x, y);
+        return baseCanPass.call(this, x, y, d);
+    };
+
     /** A follower left too far behind is put on its place in the file, on the first tile of it nobody stands on, and fades in. */
     Game_Followers.prototype.rrBring = function(follower, trail) {
         const index = this._data.indexOf(follower), spacing = this.formation().spacing;

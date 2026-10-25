@@ -214,13 +214,13 @@ test('a game with no stored battle settings reads as Classic, front view, turn-b
     assert.equal(field('.system-battle-slowmo').checked, true);
     assert.equal(field('.system-battle-revive').checked, true);
     assert.equal(shownRows(card, 'data-tactical'), 0, 'nothing of Tactical in a Classic game');
-    assert.equal(shownRows(card, 'data-action'), 0, 'nor of Action or First Person');
+    // Action and First Person have no rows of their own here: no heading stands over nothing.
+    assert.equal(card.querySelectorAll('[data-action]').length, 0, 'no Action and First Person heading without rows');
     assert.equal(shownRows(card, 'data-on-map'), 0, 'nor of battles on the map');
     for (const mode of ['tactical', 'action', 'firstPerson']) {
         const shown = battles({ reactorBattle: { mode } }).card;
-        assert.equal(shownRows(shown, 'data-action') > 0, mode !== 'tactical', `${mode}: Action headings belong to real-time combat`);
         assert.equal(shownRows(shown, 'data-tactical') > 0, mode === 'tactical', `${mode}: turn settings belong to Tactical combat`);
-        assert.equal(shown.querySelector('[data-on-map].system-battle-group').textContent.trim(), 'Shared Combat Settings');
+        assert.equal(shown.querySelector('[data-on-map].system-battle-group').textContent.trim(), 'Battles on the Map');
     }
 });
 

@@ -50,7 +50,7 @@
             return Window_Command.prototype.overallHeight.call(this) + this.headHeight();
         };
         // The pages that ask before something that cannot be taken back: the first row is the answer that changes nothing.
-        const QUESTIONS = ["endTurn", "retreat", "auto"];
+        const QUESTIONS = ["endTurn", "retreat", "auto", "fall"];
         Window_FightMenu.prototype.itemTextAlign = function() {
             return this._page === "main" || QUESTIONS.includes(this._page) ? "center" : "left";
         };
@@ -114,6 +114,11 @@
                 this._head = t("autoAsk").split("\n");
                 this.addCommand(t("autoNo"), "back");
                 this.addCommand(t("autoYes"), "confirm");
+            } else if (page === "fall") {
+                const ask = fight._tac && fight._tac.fallAsk, battler = ask ? fight.battler(fight.unit(ask.unitId)) : null;
+                this._head = t("fallAsk").replace("%1", battler ? battler.name() : "").split("\n");
+                this.addCommand(t("fallNo"), "back");
+                this.addCommand(t("fallYes"), "confirm");
             }
         };
         // The cursor's row is kept in view with the lines over the rows counted in; the first row shows them too.
@@ -227,7 +232,8 @@
                 win.setHandler("hints", () => { W.changeOption(win, 1); win.activate(); });
                 win.setHandler("confirm", () => {
                     const page = win._page;
-                    W.menuDo(scene, () => (page === "retreat" ? $gameFight.commandRetreat() : page === "auto" ? $gameFight.commandAuto() : $gameFight.commandEndTurn()));
+                    W.menuDo(scene, () => (page === "retreat" ? $gameFight.commandRetreat() : page === "auto" ? $gameFight.commandAuto()
+                        : page === "fall" ? $gameFight.commandFallAnswer(true) : $gameFight.commandEndTurn()));
                 });
                 win.setHandler("back", back);
                 win.setHandler("cancel", back);
@@ -255,6 +261,8 @@
         W.menuBack = function(scene) {
             const win = scene._fightMenuWindow;
             if (!win) return;
+            // No to a fatal fall: the unit stays where it is, its move still to make.
+            if (win._page === "fall") $gameFight.commandFallAnswer(false);
             if (win._page === win._root) { W.closeMenu(scene); return; }
             // From a question back to where it was asked; from the game options' row and the like back to the menu.
             const to = win._root, at = win._page;
@@ -314,6 +322,11 @@
             const fight = $gameFight;
             if (fight.unactedCount() > 0) W.openMenu(scene, "endTurn", "command");
             else if (!fight.commandEndTurn() && scene._fightCommandWindow) scene._fightCommandWindow.activate();
+        };
+
+        /** A way that ends in a fatal fall was chosen (Lethal jumps: Ask first): the question, Stay first. */
+        W.askFall = function(scene) {
+            if (scene) W.openMenu(scene, "fall", "move");
         };
 
         /** Whether Cancel with nothing to step back from opens the battle menu now. */

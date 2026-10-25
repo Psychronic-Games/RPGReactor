@@ -369,7 +369,7 @@ test('editing Start Battle on Map writes and removes its branch rows; a branch t
     assert.deepEqual(EventCommandList.lostBattleBranches(full(), 0, noLoss), [{ code: 603, count: 2 }]);
     assert.deepEqual(EventCommandList.lostBattleBranches(full(), 0, noWait), [{ code: 601, count: 1 }, { code: 602, count: 1 }, { code: 603, count: 2 }]);
     assert.deepEqual(EventCommandList.lostBattleBranches([start(waiting), row(601), row(0, 1), row(602), row(0, 1), row(603), row(0, 1), row(604), row(0)], 0, block({ wait: false })), [], 'empty branches go without a question');
-    assert.deepEqual(EventCommandList.lostBattleBranches([row(301), row(601), text('x', 1), row(0, 1), row(604), row(0)], 0, noWait), [], 'only a Start Battle on Map');
+    assert.deepEqual(EventCommandList.lostBattleBranches([row(230), row(601), text('x', 1), row(0, 1), row(604), row(0)], 0, noWait), [], 'only a battle start');
     const names = { 601: 'If Win', 602: 'If Escape', 603: 'If Lose' };
     const words = (text, params) => text.replace(/\{(\w+)\}/g, (m, key) => params[key]);
     assert.equal(EventCommandList.lostBranchWords([{ code: 603, count: 2 }], code => names[code], words), 'The commands under If Lose will be deleted.');
@@ -407,7 +407,44 @@ test('editing Start Battle on Map writes and removes its branch rows; a branch t
     list = [start(waiting), row(601), row(111, 1, [0, 1, 0]), text('in', 2), row(0, 2), row(412, 1), row(0, 1), row(604), row(0)];
     EventCommandList.replaceBattleStart(list, 0, block({ wait: true, canEscape: true }));
     assert.deepEqual(shape(list), ['357@0', '601@0', '111@1', '230@2:in', '0@2', '412@1', '0@1', '602@0', '0@1', '604@0', '0@0']);
-    assert.equal(EventCommandList.replaceBattleStart([row(301), row(0)], 0, block(waiting)), null, 'only a Start Battle on Map');
+    assert.equal(EventCommandList.replaceBattleStart([row(230), row(0)], 0, block(waiting)), null, 'only a battle start');
+});
+
+test('Battle Processing brings If Win, If Escape and If Lose when it can be escaped or lost, and keeps their commands through an edit', async () => {
+    const BattleProcessingEditor = require(path.join(commandsRoot, 'BattleProcessingEditor.js'));
+    const bp = (canEscape, canLose, indent = 0) => ({ code: 301, indent, parameters: [0, 6, canEscape, canLose] });
+    // OK hands the command and its rows: none for a battle that must be won.
+    assert.deepEqual(shape(BattleProcessingEditor.block(bp(false, false))), ['301@0']);
+    assert.deepEqual(shape(BattleProcessingEditor.block(bp(true, true))), ['301@0', '601@0', '0@1', '602@0', '0@1', '603@0', '0@1', '604@0']);
+    assert.deepEqual(shape(BattleProcessingEditor.block(bp(false, true, 2))), ['301@2', '601@2', '0@3', '603@2', '0@3', '604@2']);
+    assert.deepEqual(shape(BattleProcessingEditor.block(bp(true, false))), ['301@0', '601@0', '0@1', '602@0', '0@1', '604@0']);
+    // An edit keeps what is under each row and writes the rows the new settings bring.
+    const full = () => [bp(true, true), row(601), text('won', 1), row(0, 1), row(602), text('fled', 1), row(0, 1), row(603), text('lost', 1), row(0, 1), row(604), text('after', 0), row(0)];
+    let list = full();
+    EventCommandList.replaceBattleStart(list, 0, BattleProcessingEditor.block(Object.assign(bp(true, true), { parameters: [0, 3, true, true] })));
+    assert.deepEqual(shape(list), shape(full()));
+    assert.equal(list[0].parameters[1], 3);
+    list = [bp(false, false), text('after', 0), row(0)];
+    EventCommandList.replaceBattleStart(list, 0, BattleProcessingEditor.block(bp(false, true)));
+    assert.deepEqual(shape(list), ['301@0', '601@0', '0@1', '603@0', '0@1', '604@0', '230@0:after', '0@0']);
+    // Unticking Can Escape would take the commands under If Escape: the author is asked first.
+    assert.deepEqual(EventCommandList.lostBattleBranches(full(), 0, BattleProcessingEditor.block(bp(false, true))), [{ code: 602, count: 1 }]);
+    list = full();
+    EventCommandList.replaceBattleStart(list, 0, BattleProcessingEditor.block(bp(false, true)), { drop: true });
+    assert.deepEqual(shape(list), ['301@0', '601@0', '230@1:won', '0@1', '603@0', '230@1:lost', '0@1', '604@0', '230@0:after', '0@0']);
+    // The dialog stores nothing and stays open while the author says no.
+    const stored = [];
+    let closed = 0;
+    const dialog = { buildCommand: () => bp(false, true), close: () => closed++, callback: command => stored.push(command), hooks: { beforeStore: async () => false } };
+    await BattleProcessingEditor.prototype.save.call(dialog);
+    assert.deepEqual([stored.length, closed], [0, 0]);
+    dialog.hooks.beforeStore = async () => true;
+    await BattleProcessingEditor.prototype.save.call(dialog);
+    assert.deepEqual([stored.length, closed], [1, 1]);
+    // Inserting and editing in an event list go through the block, not the one-command table.
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'), 'utf8');
+    assert.match(source, /if \(code === 301\) \{\s+this\.battleProcessingEditor\.show\(null, \(edited\) => \{[\s\S]{0,200}BattleProcessingEditor\.block\(edited\)/);
+    assert.match(source, /EventCommandList\.replaceBattleStart\(page\.list, index, BattleProcessingEditor\.block\(edited\), \{ drop: true \}\)/);
 });
 
 test('Reactor commands with a dialog of their own show no raw-argument triangle, and the picker lists Start Battle on Map with the battles', () => {

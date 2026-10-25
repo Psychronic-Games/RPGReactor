@@ -20,6 +20,7 @@ const K = require('./LegacyConvert.js');
 const C = require('./LegacyCommands.js');
 const D = require('./LegacyDatabase.js');
 const F = require('./LegacyFont.js');
+const Artwork = require('./LegacyArtwork.js');
 const PF = require('./ProjectFiles.js');
 const LL = require('./LegacyLanguages.js');
 
@@ -201,6 +202,7 @@ function runtimeEngine(folder) {
 }
 
 function open(source, destination, options) {
+    if (options && options.graphics !== undefined && !['remaster', 'original'].includes(options.graphics)) throw new Error('Artwork must be remaster or original.');
     options = options || {};
     source = path.resolve(source);
 /** Windows projects are case-insensitive; find `name` under `root` whatever its spelling. */
@@ -352,6 +354,10 @@ function open(source, destination, options) {
     }
     
     const notes = { maps: {}, images: {}, skipped: [] };
+    const graphicsMode = options.graphics === 'original' ? 'original' : 'remaster';
+    const graphics = { mode: graphicsMode, algorithm: 'dither-cleanup-v' + Artwork.VERSION,
+        originalDirectory: 'legacy/original-graphics', preservedFiles: 0, processedFiles: 0,
+        changedFiles: 0, changedPixels: 0, maxPixelsPerImage: Artwork.MAX_PIXELS, assets: [] };
     const addNote = (bucket, key, n = 1) => { bucket[key] = (bucket[key] || 0) + n; };
     const safeName = (name) => String(name).replace(/[\\/:*?"<>|]/g, '_').trim();
     const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
@@ -409,7 +415,25 @@ function open(source, destination, options) {
                     if (options.transform) img = options.transform(img, entry.name);
                     const outName = (options.rename ? options.rename(base) : base) + suffix + '.png';
                     mkdir(outDir);
-                    fs.writeFileSync(path.join(outDir, safeName(outName)), encodePng(img));
+                    const filename = safeName(outName);
+                    const original = encodePng(img);
+                    if (graphicsMode === 'remaster' && Artwork.eligibility(img, folder) === null) {
+                        const relative = path.join(target, rel, filename).replace(/\\/g, '/');
+                        const backup = path.join(destination, graphics.originalDirectory, relative);
+                        mkdir(path.dirname(backup));
+                        fs.writeFileSync(backup, original);
+                        const restored = Artwork.restore(img, folder);
+                        img = restored.image;
+                        graphics.preservedFiles++;
+                        graphics.processedFiles++;
+                        if (restored.stats.changedPixels) graphics.changedFiles++;
+                        graphics.changedPixels += restored.stats.changedPixels;
+                        graphics.assets.push(Object.assign({ image: relative, width: img.width, height: img.height,
+                            original: graphics.originalDirectory + '/' + relative }, restored.stats));
+                        fs.writeFileSync(path.join(outDir, filename), restored.stats.changedPixels ? encodePng(img) : original);
+                    } else {
+                        fs.writeFileSync(path.join(outDir, filename), original);
+                    }
                     written++;
                 }
             }
@@ -585,6 +609,28 @@ function open(source, destination, options) {
         // 4. System: the old engine's framework.
         const base = JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8'));
         const system = D.system(K.systemJson(base, db, project.tree, project.ini), db, project.tree, dbNotes);
+        // A System graphic can change during play (custom save/menu screens
+        // often do this). Keep every referenced skin, not just the initial one.
+        const legacyWindows = [];
+        const skinNames = new Map();
+        const addSkinName = name => { if (name) skinNames.set(String(name).replace(/\.png$/i, '').toLowerCase(), String(name).replace(/\.png$/i, '')); };
+        addSkinName(sys.system_name);
+        const scanSkins = commands => { for (const c of commands || []) if (c.code === 10680) addSkinName(c.string); };
+        for (const ce of db.commonevents || []) if (ce) scanSkins(ce.event_commands);
+        for (const troop of db.troops || []) if (troop) for (const page of troop.pages || []) if (page) scanSkins(page.event_commands);
+        for (const map of Object.values(project.maps)) for (const event of map.events || []) if (event) for (const page of event.pages || []) if (page) scanSkins(page.event_commands);
+        system.rrLegacySkins = {};
+        for (const [key, name] of skinNames) {
+            const file = resolveInsensitive(source, path.join('System', name + '.png')) || (rtp && resolveInsensitive(rtp, path.join('System', name + '.png')));
+            if (!file) continue;
+            const output = key === String(sys.system_name || '').toLowerCase() ? 'Window' : 'RR2kWindow_' + legacyWindows.length;
+            try {
+                const image = decodePng(fs.readFileSync(file), true);
+                if (image.width < 160 || image.height < 80) throw new Error('expected a 160×80 System graphic');
+                if (!options.skipAssets || fs.existsSync(path.join(dest, 'img/system', output + '.png'))) system.rrLegacySkins[key] = output;
+                legacyWindows.push({ name, output, image });
+            } catch (error) { notes.skipped.push(`System/${name}: window skin ${error.message}`); }
+        }
         if (translator) {   // terms are translated by value: the 2003 term table was laid into MZ's
             const walk = (obj) => { for (const k of Object.keys(obj)) { const v = obj[k]; if (typeof v === 'string') { const t = translator.term(v); if (t !== undefined) obj[k] = t; } else if (v && typeof v === 'object') walk(v); } };
             walk(system.terms);
@@ -613,25 +659,50 @@ function open(source, destination, options) {
             system.advanced.picturesUpperLimit = base + 399;
         }
         if (system.title1Name && !resolveInsensitive(source, path.join('Title', system.title1Name + '.png'))) { notes.skipped.push(`Title/${system.title1Name}: named by the game but not on disk; no title image`); system.title1Name = ''; }
-        {   // The game font: the 2003 bitmap font (Mincho RM2000 or Gothic RMG2000) becomes a TrueType file drawn dot for dot.
-            const wanted = sys.font_id === 0 ? ['RMG2000.fon', 'RM2000.fon'] : ['RM2000.fon', 'RMG2000.fon'];
-            let fontFile = null;
-            for (const folder of ['', 'fonts', 'Font', 'Fonts']) for (const name of wanted) { const p = resolveInsensitive(source, folder ? path.join(folder, name) : name); if (p && !fontFile) fontFile = p; }
-            if (!fontFile) fontFile = findLegacyFont(wanted, [options.fontPath, rtpFound, rtpFound && path.dirname(rtpFound)]);
-            if (fontFile && !fontFile.startsWith(source)) log(`  Game font: ${fontFile}`, 'info');
-            if (fontFile) {
+        {   // Fonts are installed separately from game graphics. Full-package games still need their RTP/system font.
+            const names = ['RMG2000.fon', 'RM2000.fon'];
+            const initial = Number(sys.font_id) === 1 ? 1 : 0;
+            const roots = [source, options.fontPath, rtpFound, rtpFound && path.dirname(rtpFound),
+                ...(!options.noRtp ? rtpCandidates(db.engine, Object.assign({ source }, options)) : [])];
+            const selectedFile = findLegacyFont([names[initial], names[1 - initial]], roots);
+            const convertedFonts = new Map();
+            const writtenFontNames = new Set();
+            const convertFont = (file) => {
+                if (!file) return null;
+                if (convertedFonts.has(file)) return convertedFonts.get(file);
+                let info = null;
                 try {
                     const decoder = new TextDecoder(project.encoding || 'windows-1252');
-                    const font = F.convert(fs.readFileSync(fontFile), { decode: (code) => decoder.decode(Uint8Array.of(code)) });
+                    const font = F.convert(fs.readFileSync(file), { decode: (code) => decoder.decode(Uint8Array.of(code)) });
                     if (!font) throw new Error('no bitmap font inside');
+                    const base = safeName(font.name);
+                    let filename = base + '.ttf', suffix = 2;
+                    // Custom Gothic/Mincho files can share the same internal
+                    // face name. Do not let the alternate overwrite the first.
+                    while (writtenFontNames.has(filename.toLowerCase())) filename = base + '_' + suffix++ + '.ttf';
                     mkdir(path.join(dest, 'fonts'));
-                    fs.writeFileSync(path.join(dest, 'fonts', font.name + '.ttf'), font.ttf);
-                    system.advanced.mainFontFilename = font.name + '.ttf';
-                    system.advanced.numberFontFilename = font.name + '.ttf';
-                    system.advanced.fontSize = font.height;
+                    fs.writeFileSync(path.join(dest, 'fonts', filename), font.ttf);
+                    writtenFontNames.add(filename.toLowerCase());
+                    info = { filename, height: font.height, ascent: font.ascent };
                     addNote(notes.images, `font:${font.name}`, font.glyphs);
-                } catch (error) { notes.skipped.push(`${path.basename(fontFile)}: ${error.message}; the template font stands in`); }
-            } else notes.skipped.push('RM2000.fon: the game font is neither with the game nor installed; the template font stands in (set it with --font or put RM2000.fon in the RTP folder or the system fonts)');
+                    log(`  Game font: ${file}`, 'info');
+                } catch (error) { notes.skipped.push(`${path.basename(file)}: ${error.message}; the template font stands in`); }
+                convertedFonts.set(file, info);
+                return info;
+            };
+            const selected = convertFont(selectedFile);
+            if (selected) {
+                system.rrLegacyFontId = initial;
+                system.rrLegacyFonts = {};
+                for (let id = 0; id < names.length; id++) {
+                    const info = id === initial ? selected : convertFont(findLegacyFont([names[id]], roots));
+                    // A missing alternate retains the imported font, rather than loading an absent file later.
+                    system.rrLegacyFonts[id] = info || selected;
+                }
+                system.advanced.mainFontFilename = selected.filename;
+                system.advanced.numberFontFilename = selected.filename;
+                system.advanced.fontSize = selected.height;
+            } else if (!selectedFile) notes.skipped.push('RM2000.fon: the game font is neither with the game nor installed; the template font stands in (set it with --font or put RM2000.fon in the RTP folder or the system fonts)');
         }
         const plugins = [];   // the importer's own plugins this game gets
         {   // 4b. Language packs: a game that switches language while it plays (EasyRPG's set_language) gets
@@ -703,14 +774,13 @@ function open(source, destination, options) {
         await importImages('Title', 'img/titles1', { key: false });
         await importImages('GameOver', 'img/system', { key: false, rename: () => 'GameOver' });
         await importImages('System', 'img/system', { key: true });
-        {   // the game's window skin, over the stock Window.png for the parts 2003 had no equivalent of
-            const skinFile = sys.system_name ? resolveInsensitive(source, path.join('System', sys.system_name + '.png')) : null;
+        {   // Initial and event-selected window skins; stock supplies only the parts 2000/2003 did not have.
             const baseFile = EditorPaths.skeletonFile('img/system/Window.png');
-            if (skinFile) {
+            for (const entry of legacyWindows) {
                 try {
-                    const skin = K.windowSkin(decodePng(fs.readFileSync(skinFile), true), fs.existsSync(baseFile) ? decodePng(fs.readFileSync(baseFile), false) : null);
-                    fs.writeFileSync(path.join(dest, 'img', 'system', 'Window.png'), encodePng(skin));
-                } catch (error) { notes.skipped.push(`System/${sys.system_name}: window skin ${error.message}`); }
+                    const skin = K.windowSkin(entry.image, fs.existsSync(baseFile) ? decodePng(fs.readFileSync(baseFile), false) : null);
+                    fs.writeFileSync(path.join(dest, 'img', 'system', entry.output + '.png'), encodePng(skin));
+                } catch (error) { notes.skipped.push(`System/${entry.name}: window skin ${error.message}`); }
             }
         }
         await importImages('System2', 'img/system', { key: true });
@@ -760,9 +830,10 @@ function open(source, destination, options) {
         pkg['chromium-args'] = '--force-color-profile=srgb --window-size=640,480';
         writeJson(path.join(dest, 'package.json'), pkg);
         const now = new Date().toISOString();
-        writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: db.engine, importedAt: now, created: now, modified: now });
+        writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: db.engine, importedAt: now, created: now, modified: now, importedGraphics: graphicsMode });
     
         const summary = { source: path.resolve(source), engine: db.engine, runtime: db.runtime, encoding: project.encoding, title, writtenAt: now, ms: Date.now() - t0, tilesets: chipsets.length, maps: written.length, approximations: Object.assign({}, notes.maps, dbNotes), files: notes.images, skipped: notes.skipped, stage: 'assets, tilesets, maps, database, events and their commands; DynRPG comment commands converted where Reactor has an equivalent' };
+        summary.graphics = graphics;
         // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
         summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
         if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
@@ -777,6 +848,7 @@ function open(source, destination, options) {
         const plain = Object.entries(approx).filter(([k]) => !k.startsWith('dynrpg')).sort((a, b) => b[1] - a[1]);
         log(`Wrote "${title}" to ${dest} in ${(summary.ms / 1000).toFixed(1)} s: ${summary.tilesets} tilesets, ${summary.maps} maps.`, 'done');
         log(`  Files: ${Object.entries(notes.images).map(([k, v]) => `${k} ${v}`).join(', ')}`, 'info');
+        if (graphicsMode === 'remaster') log(`  Artwork cleanup: ${graphics.changedFiles} of ${graphics.processedFiles} large artwork files changed; ${graphics.changedPixels} dither pixels restored. Original converted images: ${graphics.originalDirectory}/img/.`, 'info');
         if (dynConverted || dynKept) log(`  DynRPG plugin commands: ${dynConverted} converted to Reactor screen features, ${dynKept} kept as comments.`, dynKept ? 'warn' : 'info');
         if (plain.length) log(`  Approximated: ${plain.map(([k, v]) => `${k} ${v}`).join(', ')}`, 'warn');
         if (notes.skipped.length) {

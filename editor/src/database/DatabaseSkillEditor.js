@@ -14,6 +14,19 @@ class DatabaseSkillEditor {
         this.effectEditor = new DatabaseEffectEditor(databaseManager, commonUI);
     }
 
+    /**
+     * The Skill Type choices: None (0, the type of Attack and Guard), then every named type. A skill
+     * whose type has no name keeps its own entry, so the field always shows what is stored.
+     */
+    static skillTypeOptions(names, current, tt = text => text) {
+        const option = (value, label) => `<option value="${value}" ${current === value ? 'selected' : ''}>${rrEscapeHtml(label)}</option>`;
+        const rows = [option(0, tt('None'))];
+        names.forEach((name, idx) => {
+            if (idx > 0 && (name || current === idx)) rows.push(option(idx, name || `#${idx}`));
+        });
+        return rows.join('');
+    }
+
     showSkillDetail(container, skill) {
         const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentSkill = skill;
@@ -74,7 +87,7 @@ class DatabaseSkillEditor {
                         <span class="db-col">
                             <label>${tt('Skill Type')}</label>
                             <select class="database-field-value" data-field="stypeId" data-skill-id="${skill.id}">
-                                ${skillTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.stypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
+                                ${DatabaseSkillEditor.skillTypeOptions(skillTypeNames, skill.stypeId, tt)}
                             </select>
                         </span>
                         <span class="db-col">

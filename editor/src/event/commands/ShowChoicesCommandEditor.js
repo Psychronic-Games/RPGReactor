@@ -8,8 +8,8 @@ class ShowChoicesCommandEditor {
         this.modal = null;
         this.callback = null;
         this.choices = ['', '', '', '']; // Up to 6 choices, start with 4
-        this.cancelType = -1; // -2=disallow, -1=branch, 0-5=choice index
-        this.defaultType = 0; // Default selected choice
+        this.cancelType = 1; // -2=branch, -1=disallow, 0-5=choice index (the interpreter's reading)
+        this.defaultType = 0; // -1=none, 0-5=choice index
         this.positionType = 2; // 0=left, 1=middle, 2=right
         this.background = 0; // 0=window, 1=dim, 2=transparent
     }
@@ -42,7 +42,7 @@ class ShowChoicesCommandEditor {
     parseCommand(command) {
         const params = command.parameters;
         this.choices = params[0] ? [...params[0]] : ['', ''];
-        this.cancelType = params[1] !== undefined ? params[1] : -1;
+        this.cancelType = params[1] !== undefined ? params[1] : 1;
         this.defaultType = params[2] !== undefined ? params[2] : 0;
         this.positionType = params[3] !== undefined ? params[3] : 2;
         this.background = params[4] !== undefined ? params[4] : 0;
@@ -59,7 +59,7 @@ class ShowChoicesCommandEditor {
     resetToDefaults() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.choices = [tt('Choice 1'), tt('Choice 2'), '', ''];
-        this.cancelType = -1;
+        this.cancelType = 1;
         this.defaultType = 0;
         this.positionType = 2;
         this.background = 0;
@@ -236,8 +236,8 @@ class ShowChoicesCommandEditor {
             font-size: 12px;
         `;
         cancelSelect.innerHTML = `
-            <option value="-2">${t('Disallow')}</option>
-            <option value="-1">${t('Branch')}</option>
+            <option value="-2">${t('Branch')}</option>
+            <option value="-1">${t('Disallow')}</option>
             <option value="0">${t('Choice 1')}</option>
             <option value="1">${t('Choice 2')}</option>
             <option value="2">${t('Choice 3')}</option>
@@ -272,6 +272,7 @@ class ShowChoicesCommandEditor {
             font-size: 12px;
         `;
         defaultSelect.innerHTML = `
+            <option value="-1">${t('None')}</option>
             <option value="0">${t('Choice 1')}</option>
             <option value="1">${t('Choice 2')}</option>
             <option value="2">${t('Choice 3')}</option>
@@ -361,84 +362,44 @@ class ShowChoicesCommandEditor {
      * Build commands array (includes branching structure)
      */
     buildCommands() {
-        // Filter out empty choices and ensure at least 2. Cancel/default
-        // reference choices BY INDEX, so removing a blank choice must remap
-        // them to the surviving positions — otherwise they shift onto the
-        // wrong choice (or off the end of the list).
-        const filteredChoices = [];
-        const indexMap = new Map();
-        this.choices.forEach((choice, i) => {
-            if (choice.trim() !== '') {
-                indexMap.set(i, filteredChoices.length);
-                filteredChoices.push(choice);
-            }
-        });
+        // The choices run to the last one with text. A blank choice before it
+        // keeps its place and its branch, so cancel and default keep pointing
+        // at the choice they name.
+        let count = this.choices.length;
+        while (count > 0 && String(this.choices[count - 1] || '').trim() === '') count--;
+        const filteredChoices = this.choices.slice(0, count).map(choice => String(choice || ''));
         if (filteredChoices.length < 2) {
             const tt = text => window.I18n ? window.I18n.tText(text) : text;
             RRDialog.alert(tt('You must have at least 2 choices.'), { title: tt('Show Choices'), kind: 'warning' });
             return null;
         }
 
-        // Negative values (Disallow/Branch) pass through; an index pointing
-        // at a removed blank choice falls back to Disallow / Choice 1.
-        const cancelType = this.cancelType >= 0
-            ? (indexMap.has(this.cancelType) ? indexMap.get(this.cancelType) : -2)
-            : this.cancelType;
-        const defaultType = this.defaultType >= 0
-            ? (indexMap.has(this.defaultType) ? indexMap.get(this.defaultType) : 0)
-            : this.defaultType;
+        // -2 is Branch and -1 Disallow. The interpreter reads a cancel past the
+        // last choice as Branch, so one pointing at a dropped choice becomes
+        // Disallow; a default past the end becomes Choice 1.
+        const cancelType = this.cancelType >= filteredChoices.length ? -1 : this.cancelType;
+        const defaultType = this.defaultType >= filteredChoices.length ? 0 : this.defaultType;
+        const branchOnCancel = cancelType === -2;
 
-        const commands = [];
-
-        // Main Show Choices command
-        commands.push({
+        // Every branch marker sits at the header's indent (the interpreter
+        // keys its branch state by indent) and is followed by its body, which
+        // ends in a code-0 row one level in, even when the body is empty.
+        const commands = [{
             code: 102,
             indent: 0,
-            parameters: [
-                filteredChoices,
-                cancelType,
-                defaultType,
-                this.positionType,
-                this.background
-            ]
-        });
-
-        // Create branches for each choice
+            parameters: [filteredChoices, cancelType, defaultType, this.positionType, this.background]
+        }];
         for (let i = 0; i < filteredChoices.length; i++) {
-            // When [Choice N]
-            // Branch markers sit at the SAME indent as the 102 header (MZ
-            // format); the interpreter keys its branch state by indent, so a
-            // 402 at indent 1 checked _branch[1] (never set) and skipped the
-            // picked choice's body every time.
-            // The marker carries the choice text alongside its index. Only the
-            // index drives branching, but the text is what the command list and
-            // other tooling label the branch with, so a marker without it reads
-            // as an unnamed "Choice N".
-            commands.push({
-                code: 402,
-                indent: 0,
-                parameters: [i, filteredChoices[i]]
-            });
-
-            // Placeholder for commands under this choice (empty for now)
-
-            // If this is the last choice and cancel is set to branch, add cancel branch
-            if (i === filteredChoices.length - 1 && cancelType === -1) {
-                commands.push({
-                    code: 403,
-                    indent: 0,
-                    parameters: []
-                });
-            }
+            // The marker carries the choice text beside its index: the index
+            // drives branching, the text labels the branch in the list.
+            commands.push({ code: 402, indent: 0, parameters: [i, filteredChoices[i]] });
+            commands.push({ code: 0, indent: 1, parameters: [] });
         }
-
-        // End
-        commands.push({
-            code: 404,
-            indent: 0,
-            parameters: []
-        });
-
+        if (branchOnCancel) {
+            commands.push({ code: 403, indent: 0, parameters: [6, null] });
+            commands.push({ code: 0, indent: 1, parameters: [] });
+        }
+        commands.push({ code: 404, indent: 0, parameters: [] });
         return commands;
     }
 

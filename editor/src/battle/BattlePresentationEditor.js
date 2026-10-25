@@ -321,28 +321,56 @@ class BattlePresentationEditor {
         api.afterSync=()=>draw();
         draw();
     }
+    /**
+     * A state's motion, set in one place: one list holds the four side-view motions (the state's own `motion`),
+     * the other motions a drawn battler can play (`graphicMotion.motion`) and the motion sequences (`reaction`).
+     * Choosing one clears the other two, so what the list shows is what the battler does.
+     */
     stateGraphic(container,record){
-        const settings=this.settings(),{panel,body}=this.section('Battler Motion Override');body.classList.add('rr-state-motion-fields');
+        const settings=this.settings(),{panel,body}=this.section('Motion');body.classList.add('rr-state-motion-fields');
+        panel.querySelector('.database-section-header')?.setAttribute('data-section-key','motion');
         const get=()=>settings.states?.[record.id]?.graphicMotion||{};
         const set=patch=>{settings.states||={};settings.states[record.id]={...settings.states[record.id],graphicMotion:{...get(),...patch}};this.changed();};
-        // A state's own reaction sequence: what the battler does while afflicted (poison, sleep, a custom state).
         const B=ReactorBattleData,reaction=()=>settings.states?.[record.id]?.reaction||{mode:'inherit'};
         const setReaction=binding=>{settings.states||={};settings.states[record.id]={...settings.states[record.id],reaction:binding};this.changed();};
-        const drawReaction=()=>{
-            reactionRow.replaceChildren();const binding=reaction();
-            const options=[['inherit','Use the Battler’s Motion'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='motion').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+        const live=()=>this.db.data.states?.[record.id]||record;
+        const setStock=index=>{const state=live();if((state.motion||0)!==index){state.motion=index;if(state!==record)record.motion=index;this.db.updateState?.(record.id,state);}};
+        const STOCK=['Normal','Abnormal','Sleep','Dead'];
+        const OTHER=['walk','chant','guard','damage','evade','attack','thrust','swing','missile','cast','skill','item','escape','dying','victory'];
+        const label=name=>(B.battlerStates.find(([key])=>key===name)||[])[1]||name.charAt(0).toUpperCase()+name.slice(1);
+        const chosen=()=>{
+            const binding=reaction();
+            if(binding.mode==='sequence')return 'sequence:'+binding.sequenceId;
+            if(get().motion)return 'sprite:'+get().motion;
+            return 'stock:'+Math.max(0,Math.min(3,Number(live().motion)||0));
+        };
+        const motionRow=this.element('div','rr-battle-assignment-controls');
+        const drawMotion=()=>{
+            motionRow.replaceChildren();const binding=reaction(),own=get().motion;
+            const options=STOCK.map((name,index)=>['stock:'+index,name]).concat(OTHER.map(name=>['sprite:'+name,label(name)]));
+            if(own&&!OTHER.includes(own))options.push(['sprite:'+own,own,true]);
+            options.push(...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='motion').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true]));
             if(binding.mode==='sequence'&&!this.db.data.actionSequences?.[binding.sequenceId])options.push(['sequence:'+binding.sequenceId,this.message('Missing Sequence #{id}',{id:binding.sequenceId})]);
-            reactionRow.append(this.select(options,binding.mode==='sequence'?'sequence:'+binding.sequenceId:'inherit',id=>{setReaction(id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:'inherit'});drawReaction();}));
-            reactionRow.append(this.button(binding.mode==='sequence'?'Open Sequence':'Create Motion',()=>{
+            const select=this.select(options,chosen(),value=>{
+                const [kind,rest]=[value.slice(0,value.indexOf(':')),value.slice(value.indexOf(':')+1)];
+                if(kind==='sequence'){setReaction({mode:'sequence',sequenceId:Number(rest)});if(get().motion)set({motion:''});}
+                else{
+                    if(reaction().mode==='sequence')setReaction({mode:'inherit'});
+                    if(kind==='sprite')set({motion:rest});
+                    else{if(get().motion)set({motion:''});setStock(Number(rest));this.changed();}
+                }
+                drawMotion();
+            });
+            select.classList.add('rr-state-motion-select');
+            motionRow.append(select);
+            motionRow.append(this.button(binding.mode==='sequence'?'Open Sequence':'Create Motion',()=>{
                 let id=binding.sequenceId;
-                if(binding.mode!=='sequence'){const records=this.db.data.actionSequences||=[null];id=records.length;records.push({id,version:1,purpose:'motion',name:(record.name||'#'+record.id)+' — '+this.text('Reaction'),steps:[B.step('motion',{motion:record.motion===2?'sleep':'abnormal',duration:60})]});setReaction({mode:'sequence',sequenceId:id});}
+                if(binding.mode!=='sequence'){const records=this.db.data.actionSequences||=[null];id=records.length;records.push({id,version:1,purpose:'motion',name:(record.name||'#'+record.id)+' — '+this.text('Reaction'),steps:[B.step('motion',{motion:get().motion||(live().motion===2?'sleep':'abnormal'),duration:60})]});setReaction({mode:'sequence',sequenceId:id});if(get().motion)set({motion:''});}
                 const sequence=this.db.data.actionSequences[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}
             }));
         };
-        const reactionRow=this.element('div','rr-battle-assignment-controls');
-        this.field(body,'Reaction Sequence',reactionRow);drawReaction();
-        body.append(this.element('p','rr-battle-help','Plays instead of the idle motion while this state is on the battler; the highest-priority state with a sequence wins. Poison, sleep and custom states each set their own here.'));
-        this.field(body,'Motion',this.select([['','Use Normal State Motion'],...Object.keys(ReactorBattleData.spriteMotions).map(v=>[v,v])],get().motion||'',v=>set({motion:v})));
+        this.field(body,'Motion',motionRow);drawMotion();
+        body.append(this.element('p','rr-battle-help','What the battler does while this state is on it; the highest-priority state wins. A sequence plays instead of the idle motion.'));
         this.number(body,'Idle Speed Multiplier',get().speedMultiplier||1,v=>set({speedMultiplier:Math.max(.1,v)}),.1);
         const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Advanced'));const advanced=this.element('div','rr-battle-graphic-options');details.append(advanced);body.append(details);
         this.number(advanced,'Motion Priority',get().priority??record.priority??50,v=>set({priority:Math.round(v)}),1);
@@ -351,7 +379,6 @@ class BattlePresentationEditor {
         this.field(advanced,'Direction',this.select([[0,'Use Graphic Direction'],[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],get().direction||0,v=>set({direction:Number(v)})));
         this.field(advanced,'Playback',this.select([['loop','Loop'],['once','Hold Last Frame'],['play','Play Once']],get().loop===false?'play':get().loop==='once'?'once':'loop',v=>set({loop:v==='loop'?true:v==='once'?'once':false})));
         this.number(advanced,'Motion Speed (0 = graphic default)',get().speed||0,v=>set({speed:Math.max(0,Math.round(v))}),1);
-        body.append(this.element('p','rr-battle-help','When multiple states apply, the highest-priority state with an override controls the battler.'));
         (container.firstElementChild||container).append(panel);panel.style.marginTop='16px';
     }
     roomPanel(troopEditor) {
@@ -544,9 +571,12 @@ class BattlePresentationEditor {
         const modal=this.element('div','rr-battle-room-modal');panel.classList.add('rr-battle-room-dialog');modal.append(panel);document.body.append(modal);
         const workspace=this.element('div','rr-battle-workspace'),stage=this.element('div','rr-battle-stage'),inspector=this.element('div','rr-battle-inspector');workspace.append(stage,inspector);body.append(workspace);
         const message=this.element('p','','Loading…');stage.append(message);
-        let view,raf=0,stopNavigation=()=>{},refreshLanguage=()=>{},selected={side:'actors',index:0},dragging=false;
+        // The seven camera numbers stay folded until opened; the inspector is redrawn often and keeps the fold.
+        let view,raf=0,stopNavigation=()=>{},refreshLanguage=()=>{},selected={side:'actors',index:0},dragging=false,cameraNumbersOpen=false;
         const cleanup=()=>{cancelAnimationFrame(raf);stopNavigation();window.removeEventListener('rr-language-changed',refreshLanguage);view?.dispose();modal.remove();this.views.delete(cleanup);};this.views.add(cleanup);
-        const footer=this.element('div','rr-battle-toolbar');footer.append(this.button('Cancel',cleanup),this.button('Apply',()=>{Object.assign(config,draft);this.changed();cleanup();troopEditor.loadAndRenderCanvas?.();}));body.append(footer);
+        // Cancel and OK at the bottom right, as in every dialog.
+        const ok=this.button('OK',()=>{Object.assign(config,draft);this.changed();cleanup();troopEditor.loadAndRenderCanvas?.();});ok.className='rr-button-primary';
+        const footer=this.element('div','rr-battle-toolbar rr-battle-room-footer');footer.append(this.button('Cancel',cleanup),ok);body.append(footer);
         try{
             const map=await this.readMap(config.mapId),assets=await this.assets();if(!modal.isConnected)return;
             view=new ReactorBattleRoomView(map,this.db.getTileset(map.tilesetId),draft,assets);await view.build();if(!modal.isConnected){view.dispose();return;}
@@ -572,8 +602,9 @@ class BattlePresentationEditor {
                 if(draft.cameraSource==='map')inspector.append(this.element('p','rr-battle-help',this.message('Map camera: {mode}. Third/first person follows party slot 1.',{mode:this.text(this.cameraLabel(effective.mode))})));
                 else this.field(inspector,'Mode',this.select([...Object.keys(Reactor3D.Camera.MODES).map(m=>[m,this.cameraLabel(m)]),['cinematic','Cinematic Cuts']],draft.camera.mode||'fixed',mode=>{const defaults=Reactor3D.Camera.MODES[mode]||{yaw:45,pitch:35,fov:40,distance:24};Object.assign(draft.camera,{mode,yaw:defaults.yaw,pitch:defaults.pitch,fov:defaults.fov,distance:defaults.distance||24});drawInspector();}));
                 if(draft.cameraSource==='custom'&&draft.camera.mode==='cinematic')inspector.append(this.element('p','rr-battle-help','Cuts to the acting battler, then to the target as the hit lands, and back to this overview after the action.'));
+                const numbers=this.element('details','rr-battle-camera-numbers');numbers.append(this.element('summary','','Exact camera values'));numbers.open=cameraNumbersOpen;numbers.ontoggle=()=>{cameraNumbersOpen=numbers.open;};inspector.append(numbers);
                 for(const key of ['x','y','z','yaw','pitch','distance','fov']){
-                    const input=this.number(inspector,({yaw:'Yaw',pitch:'Pitch',distance:'Distance',fov:'Field of View'})[key]||key.toUpperCase(),Math.round((draft.cameraSource==='map'?effective[key]:draft.camera[key]??effective[key])*1000)/1000,value=>draft.camera[key]=key==='distance'?Math.max(.5,value):key==='fov'?Math.max(5,Math.min(150,value)):key==='pitch'?Math.max(-89,Math.min(89,value)):value);
+                    const input=this.number(numbers,({yaw:'Yaw',pitch:'Pitch',distance:'Distance',fov:'Field of View'})[key]||key.toUpperCase(),Math.round((draft.cameraSource==='map'?effective[key]:draft.camera[key]??effective[key])*1000)/1000,value=>draft.camera[key]=key==='distance'?Math.max(.5,value):key==='fov'?Math.max(5,Math.min(150,value)):key==='pitch'?Math.max(-89,Math.min(89,value)):value);
                     input.dataset.cameraField=key;input.disabled=draft.cameraSource==='map'&&['yaw','pitch','distance','fov'].includes(key);
                 }
                 inspector.append(this.button('Reset Formation',()=>{draft.actors=[];draft.enemies=[];materializeFormation();drawInspector();}));

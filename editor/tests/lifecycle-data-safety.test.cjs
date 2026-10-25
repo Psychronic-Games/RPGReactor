@@ -131,7 +131,7 @@ test('EventManager commits editor changes with one undo snapshot and keeps cance
     assert.equal(manager.undoStack.length, 1);
 });
 
-test('the X button cancels; the backdrop never does', () => {
+test('the X button closes, asking first about unapplied edits; the backdrop never does', () => {
     const listeners = {};
     const closeButton = { addEventListener: (name, handler) => { listeners.close = handler; } };
     const modal = {
@@ -142,10 +142,10 @@ test('the X button cancels; the backdrop never does', () => {
     const EventManager = loadClass('EventManager.js', 'EventManager', { document });
     const manager = Object.create(EventManager.prototype);
     let cancellations = 0;
-    manager.eventEditor = { cancelChanges: () => cancellations++ };
+    manager.eventEditor = { requestClose: () => cancellations++, cancelChanges: () => { throw new Error('the X asks first'); } };
     manager.setupEventEditorModal();
     listeners.close();
-    assert.equal(cancellations, 1, 'the X routes through cancellation');
+    assert.equal(cancellations, 1, 'the X routes through the asking close');
     if (listeners.backdrop) listeners.backdrop({ target: modal });
     assert.equal(cancellations, 1, 'a click beside the dialog costs nothing');
 });
@@ -210,6 +210,31 @@ test('project locks are exclusive, recover stale owners, fail closed when malfor
         assert.equal(first.acquireProjectLock(tempRoot), false);
         assert.equal(fs.readFileSync(lockPath, 'utf8'), '{ malformed');
         assert.ok(alerts.length >= 2);
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test('a copy of an open project opens, while the original stays locked', () => {
+    const ProjectController = loadClass('ProjectController.js', 'ProjectController', { nw: {}, alert() {} });
+    const uiManager = { updateStatus() {} };
+    const owner = new ProjectController({}, { data: {} }, uiManager);
+    const other = new ProjectController({}, { data: {} }, uiManager);
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-project-copy-lock-'));
+    const original = path.join(tempRoot, 'Quest');
+    const copy = path.join(tempRoot, 'Quest copy');
+    try {
+        fs.mkdirSync(original);
+        assert.equal(owner.acquireProjectLock(original), true);
+        assert.equal(JSON.parse(fs.readFileSync(path.join(original, '.rpgreactor.lock'), 'utf8')).project, fs.realpathSync(original));
+        // A file manager copies the folder with the open editor's lock inside.
+        fs.cpSync(original, copy, { recursive: true });
+        assert.equal(other.acquireProjectLock(original), false, 'the open project stays locked');
+        assert.equal(other.acquireProjectLock(copy), true, 'its copy opens');
+        const copyLock = JSON.parse(fs.readFileSync(path.join(copy, '.rpgreactor.lock'), 'utf8'));
+        assert.equal(copyLock.token, other.projectLockToken);
+        assert.equal(copyLock.project, fs.realpathSync(copy));
+        assert.equal(fs.existsSync(path.join(original, '.rpgreactor.lock')), true, "the owner's lock is untouched");
     } finally {
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }

@@ -62,7 +62,7 @@
         { code: '\\G', label: 'Currency', param: null, insert: '\\G', scope: 'global',
             detail: 'Replaced with the currency unit.' },
         { code: '\\C[n]', label: 'Text Color', param: 'color', insert: '\\C[{n}]', scope: 'global',
-            detail: 'Draws the subsequent text in colour n, sampled from the windowskin.' },
+            detail: 'Draws the subsequent text in color n, sampled from the windowskin.' },
         { code: '\\I[n]', label: 'Icon', param: 'icon', insert: '\\I[{n}]', scope: 'global',
             detail: 'Draws icon n from img/system/IconSet.png.' },
         { code: '\\{', label: 'Increase Font Size', param: null, insert: '\\{', scope: 'global',
@@ -102,8 +102,8 @@
             { code: '</b>', detail: 'Removes bold from subsequent text.' },
             { code: '<i>', detail: 'Makes subsequent text italic.' },
             { code: '</i>', detail: 'Removes italic from subsequent text.' },
-            { code: '<ColorLock>', detail: "Prevents text codes from changing the text colour for subsequent text." },
-            { code: '</ColorLock>', detail: 'Removes the colour lock.' }
+            { code: '<ColorLock>', detail: "Prevents text codes from changing the text color for subsequent text." },
+            { code: '</ColorLock>', detail: 'Removes the color lock.' }
         ]) },
         // Word wrap is message-only, and both exclusions are from source rather
         // than from the docs, which call these Global.
@@ -243,10 +243,10 @@
             // way, so without CoreEngine it silently does nothing.
             { code: '<BgColor: x>', param: 'color', insert: '<BgColor: {n}>',
                 requires: 'VisuMZ_0_CoreEngine',
-                detail: "Sets this choice's background to text colour x." },
+                detail: "Sets this choice's background to text color x." },
             { code: '<BgColor: #rrggbb>', param: 'text', insert: '<BgColor: {n}>',
                 requires: 'VisuMZ_0_CoreEngine',
-                detail: "Sets this choice's background to a hex colour." },
+                detail: "Sets this choice's background to a hex color." },
             { code: '<Help> text </Help>', param: 'text', insert: '<Help>{n}</Help>',
                 detail: 'Shows a help window with the given text while this choice is selected.' },
             { code: '<Shuffle>', detail: 'Shuffles the order of all choices.' },
@@ -352,10 +352,10 @@
         TransparentBG: 'Changes the window background to transparent.',
         FontChange: 'Changes the font face to font name x.',
         ResetFont: 'Resets font settings.',
-        ResetColor: 'Resets colour settings.',
-        HexColor: 'Changes text colour to hex value x, for example #123abc.',
-        OutlineColor: 'Changes the outline colour to text colour x.',
-        OutlineHexColor: 'Changes the outline colour to hex value x.',
+        ResetColor: 'Resets color settings.',
+        HexColor: 'Changes text color to hex value x, for example #123abc.',
+        OutlineColor: 'Changes the outline color to text color x.',
+        OutlineHexColor: 'Changes the outline color to hex value x.',
         OutlineWidth: 'Changes the outline width to x.',
         WindowMoveTo: 'Moves the window to exact coordinates. Format: targetX, targetY[, width, height, duration, easing].',
         WindowMoveBy: 'Moves the window by relative values. Same argument format as WindowMoveTo.',

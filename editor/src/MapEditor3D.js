@@ -15,14 +15,27 @@
 class MapEditor3D {
     /** The most pixels an in-scene effect is drawn at per frame in this view (a 1920x1080 view). */
     static EFFECT_PIXELS = 1920 * 1080;
+    /**
+     * The surface over the view that takes the pointer. It selects no text, so a double-click leaves
+     * nothing for the next drag to carry off as a native drag, which would cancel the pointer.
+     */
+    static INPUT_SURFACE_CSS = 'position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 6; user-select: none; -webkit-user-select: none;';
     /** After a different map is built, how long before the models only the last one used are given back. */
     static MODEL_SWEEP_DELAY_MS = 3000;
     /**
-     * Off: a model let go on a map change is read again when a map that uses it comes back, and
-     * the copy read before is still held by the view (72 MB more per North Haven round trip,
-     * measured). Until that holder is found, models stay loaded for the project.
+     * After a map change, the models only the map before used are given back (Reactor3D.ModelUse
+     * keeps its grace allowance); a map that uses one again reads it again. The scene's shadow
+     * casters leave Reactor3D.Shadows in clearScene, which is what held the old copies.
      */
-    static SWEEP_MODELS_ON_MAP_CHANGE = false;
+    static SWEEP_MODELS_ON_MAP_CHANGE = true;
+    /** How long a playtest has the GPU before this view gives its graphics back (parkForPlaytest); 0 keeps them. */
+    static PARK_AFTER_MS = 5000;
+    /** Video effect planes of one file share one video and texture in this view (_videoEffectPlane). */
+    static SHARE_EFFECT_MEDIA = true;
+    /** When this view takes over, the 2D view's collectable graphics-card data is freed at once (release2DGraphics). */
+    static RELEASE_2D_GRAPHICS = true;
+    /** While the view moves, the reflection capture takes a face every other draw; the draws after it stops fill the cube. */
+    static PROBE_HALF_WHILE_MOVING = true;
 
     constructor(projectController) {
         this.projectController = projectController;
@@ -53,6 +66,8 @@ class MapEditor3D {
         // A shallow pitch is the point of the view: from overhead a standing
         // facade is edge-on and the map looks exactly like the 2D one.
         this.view = { yaw: 0, pitch: 34, distance: 24, target: { x: 0, y: 0, z: 0 } };
+        // Up to which storey the view shows the map (0: all of it): see setStoreyCut.
+        this.storeyCut = 0;
         this.pointer = null;
         this.billboards = [];
         this.labels = [];
@@ -223,7 +238,13 @@ class MapEditor3D {
         const urls = new Map();
         const sourceUrl = name => {
             if (urls.has(name)) return urls.get(name);
-            if (!['reactor_geometry_worker.js', 'reactor_effect_measure_worker.js', 'meshopt_simplifier.js'].includes(name)) throw new Error('Unknown renderer worker');
+            if (!['reactor_geometry_worker.js', 'reactor_effect_measure_worker.js', 'meshopt_simplifier.js', 'basis/basis_transcoder.js', 'basis/basis_transcoder.wasm'].includes(name)) throw new Error('Unknown renderer worker');
+            // The texture transcoder's WebAssembly is read as bytes.
+            if (name.endsWith('.wasm')) {
+                const url = URL.createObjectURL(new Blob([this.fs.readFileSync(this.path.join(runtimePath, 'libs', name))], { type: 'application/wasm' }));
+                urls.set(name, url);
+                return url;
+            }
             let source = this.fs.readFileSync(this.path.join(runtimePath, 'libs', name), 'utf8');
             if (name === 'reactor_geometry_worker.js') source = source.replace("'./meshopt_simplifier.js'", JSON.stringify(sourceUrl('meshopt_simplifier.js')));
             const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
@@ -409,6 +430,8 @@ class MapEditor3D {
             // The land past the border is laid again on its own, and the steep ground changes on the floor as it stands.
             if (event?.detail?.surround && this.updateSurroundInPlace()) return;
             if (event?.detail?.cliff && this.updateCliffInPlace()) return;
+            // The sky's drift changes on the dome as it stands; a picture or the room's height builds again.
+            if (event?.detail?.room && event.detail.drift && this.updateSkyDriftInPlace()) return;
             const since = Date.now() - (this._lastRebuildAt || 0);
             if (since >= REBUILD_INTERVAL) {
                 clearTimeout(this._rebuildTimer);
@@ -726,6 +749,7 @@ class MapEditor3D {
         if (this._pixiWasRunning) app?.start?.();
         try { app?.render?.(); } catch (_) {}
         this._pixiWasRunning = false;
+        this._released2D = false;
         window.reactor?.updateMapZoom?.();
         this.projectController?.mediaSurfacePreviewManager?.refreshBackend?.();
     }
@@ -749,6 +773,32 @@ class MapEditor3D {
         }
     }
 
+    /**
+     * PIXI's collector frees what it has not drawn for a minute, but only after its own draws, and
+     * it does not draw while this view is up: the 2D map's tile batches, meshes and shapes stayed
+     * on the graphics card for the whole 3D session. Everything the collector may free is freed
+     * now, and PIXI uploads it again when it next draws. Textures PIXI does not collect (tile
+     * sheets, pooled layer caches, props drawn by three) stay. Called while PIXI owns the context,
+     * before either renderer's state is reset. True when it ran.
+     */
+    static release2DGraphics(pixiRenderer) {
+        const gc = pixiRenderer?.gc;
+        if (!MapEditor3D.RELEASE_2D_GRAPHICS || !gc || !gc.enabled || typeof gc.run !== 'function') return false;
+        const maxUnusedTime = gc.maxUnusedTime;
+        // At 0 nothing counts as recently used, the renderables touched by the last 2D frame included.
+        gc.maxUnusedTime = 0;
+        try {
+            gc.run();
+        } catch (error) {
+            console.error('Could not release the 2D view\'s graphics:', error);
+            return false;
+        } finally {
+            gc.maxUnusedTime = maxUnusedTime;
+        }
+        pixiRenderer.gl?.flush?.();
+        return true;
+    }
+
     container() {
         return document.getElementById('canvas-container');
     }
@@ -766,6 +816,7 @@ class MapEditor3D {
             // paused and hidden exactly as in the shared path.
             this._pixiWasRunning = app?.ticker?.started === true;
             app?.stop?.();
+            this._released2D = MapEditor3D.release2DGraphics(app?.renderer);
             this.canvas = document.createElement('canvas');
             this.canvas.id = 'map-3d-canvas';
             this.canvas.style.cssText =
@@ -774,14 +825,13 @@ class MapEditor3D {
             this._ownCanvas = true;
             this.inputSurface = document.createElement('div');
             this.inputSurface.id = 'map-3d-input';
-            this.inputSurface.style.cssText =
-                'position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 6;';
+            this.inputSurface.style.cssText = MapEditor3D.INPUT_SURFACE_CSS;
             container.appendChild(this.inputSurface);
             this.createHint(container);
             this.renderer = new THREE.WebGLRenderer({
                 canvas: this.canvas,
                 antialias: false,
-                powerPreference: 'default'
+                powerPreference: 'high-performance'
             });
             if (typeof RRModelRelease !== 'undefined') RRModelRelease.track(this.renderer, 'map-3d');
             this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -814,6 +864,7 @@ class MapEditor3D {
             ? { width: pixiScreen.width, height: pixiScreen.height }
             : null;
         app.stop?.();
+        this._released2D = MapEditor3D.release2DGraphics(pixiRenderer);
         pixiRenderer.resetState?.();
         Object.assign(this.canvas.style, {
             position: 'absolute',
@@ -828,8 +879,7 @@ class MapEditor3D {
         // This surface handles input only and creates no additional GPU context.
         this.inputSurface = document.createElement('div');
         this.inputSurface.id = 'map-3d-input';
-        this.inputSurface.style.cssText =
-            'position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 6;';
+        this.inputSurface.style.cssText = MapEditor3D.INPUT_SURFACE_CSS;
         container.appendChild(this.inputSurface);
 
         this.createHint(container);
@@ -1005,6 +1055,9 @@ class MapEditor3D {
         }
 
         this.attachSidecar(mapData);
+        // Another map shows every storey again.
+        if (this._storeyCutMap !== mapData.id) { this._storeyCutMap = mapData.id; this.storeyCut = 0; this._storeyCutKey = null; }
+        this.syncStoreyCutControl();
         this.loadClassification();
         // Images and geometry are independent. Mesh rocks with the runtime's
         // workers while the images load, then show the complete map at once.
@@ -1212,29 +1265,21 @@ class MapEditor3D {
     }
 
     /**
-     * Give the scene a sky and some distance.
-     *
-     * Without them the map is a lit slab floating in a void, and its edge is a
-     * hard line against nothing. Fog fades the far side of a large map into the
-     * same colour as the sky, which reads as depth and hides that edge. The
-     * colour is taken from the editor's own theme so the viewport does not
-     * fight whatever palette is in use.
+     * Give the scene its backdrop: the editor's own theme colour behind the
+     * map, so the viewport does not fight whatever palette is in use. No fog:
+     * the game draws none, and a fog measured from the eye greyed out the far
+     * side of even a small map from the game's own camera distance.
      */
     applyAtmosphere(mapData) {
         if (!this.mapScene) return;
         const scene = this.mapScene.scene();
-        const colour = new THREE.Color(this.skyColour());
-        scene.background = colour;
-        // Starts fading beyond a screenful and is total at roughly twice the
-        // map's longest side, so a small map never fogs at all.
-        const span = Math.max(mapData.width, mapData.height);
-        scene.fog = new THREE.Fog(colour, span * 0.9, span * 2.2);
+        scene.background = new THREE.Color(this.skyColour());
+        scene.fog = null;
     }
 
     skyColour() {
         // `--color-bg-base`, not `--color-bg-deep`: deep is pure black on the
-        // dark themes, and a black sky gives fog nothing to fade into, so
-        // distance reads as the map simply ending.
+        // dark themes, where a map's dark edge tiles would vanish into it.
         const fallback = 0x1a1a1a;
         if (typeof window === 'undefined' || !window.getComputedStyle) return fallback;
         try {
@@ -1414,6 +1459,9 @@ class MapEditor3D {
         this.buildStartMarkers(mapData);
         scene.add(this.eventGroup);
         this.faceCamera();
+        // Built while an event's window is open (the view turned to 3D, the map built again): it is lit.
+        this._editingEventId = null;
+        this.syncEditingEvent();
         return true;
     }
 
@@ -2253,6 +2301,20 @@ class MapEditor3D {
      * is. The angle and the tint change with the images already in hand; only another material is read
      * off disk first, and the newest one asked for wins.
      */
+    /** The room's sky drift, onto the dome already up (image pixels a frame, as the runtime reads them). */
+    updateSkyDriftInPlace() {
+        const mapData = this.currentMap(), mesh = this.mapScene && this.mapScene._sky;
+        if (!mapData || typeof Reactor3D === 'undefined' || !Reactor3D.skyFor) return false;
+        const sky = Reactor3D.skyFor(mapData);
+        if (!mesh) return !sky;
+        const image = mesh.material && mesh.material.map && mesh.material.map.image;
+        if (!sky || !image || !mesh.userData.sky) return false;
+        mesh.userData.sky.driftX = (Number(sky.scrollX) || 0) / Math.max(1, image.width || 1);
+        mesh.userData.sky.driftY = (Number(sky.scrollY) || 0) / Math.max(1, image.height || 1);
+        this.requestRender();
+        return true;
+    }
+
     updateCliffInPlace() {
         const scene = this.mapScene;
         if (!this.currentMap() || !scene?.setRoomCliff || typeof RRMapElevation === 'undefined' || !RRMapElevation.roomCliff) return false;
@@ -3061,8 +3123,8 @@ class MapEditor3D {
 
     /**
      * The page of an event this view draws at real size: the one Preview
-     * Event chose, else, for a battle unit, the page it is a unit on. Null
-     * for an event shown by its marker alone.
+     * Event chose, else, for a battle unit, the page it is a unit on, else a
+     * first page given a model. Null for an event shown by its marker alone.
      */
     static previewEvents(map) {
         return typeof EventManager !== 'undefined' && EventManager.mapPreviewEvents
@@ -3074,7 +3136,9 @@ class MapEditor3D {
         if (typeof EventManager !== 'undefined' && typeof EventManager.previewPage === 'function') return EventManager.previewPage(mapData, event);
         const previews = mapData?.reactor3d?.eventPreviews;
         const page = previews ? previews[String(event?.id)] : undefined;
-        return Number.isInteger(page) && event?.pages?.[page] ? page : null;
+        if (Number.isInteger(page) && event?.pages?.[page]) return page;
+        // A first page given a model stands as it.
+        return event?.pages?.[0] && mapData?.reactor3d?.events?.[String(event.id)]?.['0']?.name ? 0 : null;
     }
 
     /** The model a previewed page stands as: its own, else (a battle unit with none) the one the Database gives its record, as in the game. */
@@ -3292,7 +3356,7 @@ class MapEditor3D {
                 if (plane) {
                     plane.userData.__reactorOverlay = true;
                     object.add(plane);
-                    (this.effectPlays || (this.effectPlays = [])).push({ object, effect, plane });
+                    (this.effectPlays || (this.effectPlays = [])).push({ object, effect, plane, resumeVideo: !!this._previewPaused });
                 }
                 continue;
             }
@@ -3301,6 +3365,7 @@ class MapEditor3D {
             const wrap = this.canvas && this.canvas.parentElement;
             if (!wrap) continue;
             const layer = new RRAnimationPreviewLayer(wrap);
+            layer.setWorkspaceActive?.(!this._previewPaused);
             layer.wrap.style.zIndex = '3';
             const play = { object, effect, layer, record };
             // An Effekseer effect is drawn from this view's camera and shown
@@ -3328,12 +3393,24 @@ class MapEditor3D {
         const file = path.join(project.path,
             isImage ? path.join('img', 'pictures') : 'movies', effect.video.file);
         const url = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.toUrl ? RRAssetFiles.toUrl(file) : 'file://' + file;
+        // The view's planes of one file share one picture or one playing video and its texture
+        // (each video element is a decoder of its own: six screens of one clip cost a gigabyte).
+        // The caller's own map holds them (the 2D model preview passes itself); called on the
+        // prototype, each plane keeps a copy.
+        const shared = this !== MapEditor3D.prototype && MapEditor3D.SHARE_EFFECT_MEDIA
+            ? (this._effectMedia || (this._effectMedia = new Map())) : null;
+        const key = (isImage ? 'image:' : 'video:' + (effect.video.loop !== false) + ':') + url;
+        const reused = shared && shared.get(key);
         let video = null;
         let texture;
-        if (isImage) {
+        if (reused) {
+            reused.users++;
+            video = reused.video;
+            texture = reused.texture;
+        } else if (isImage) {
             const image = new Image();
             texture = new THREE.Texture();
-            image.onload = () => { texture.image = image; texture.needsUpdate = true; this.requestRender(); };
+            image.onload = () => { texture.image = image; texture.needsUpdate = true; this.requestRender?.(); };
             image.src = url;
         } else {
             video = document.createElement('video');
@@ -3351,8 +3428,28 @@ class MapEditor3D {
         plane.scale.set(native[0] * axes[0], native[1] * axes[1], 1);
         plane.userData.video = video;
         plane.userData.texture = texture;
-        if (video) video.play().catch(() => {});
+        if (shared) {
+            const entry = reused || { video, texture, users: 1 };
+            if (!reused) shared.set(key, entry);
+            plane.userData.effectMedia = { map: shared, key, entry };
+        }
+        if (video && !reused && !this._previewPaused) video.play().catch(() => {});
         return plane;
+    }
+
+    /** A video effect plane leaves: its picture or video goes with the last plane that shows it. */
+    static releaseEffectPlane(plane) {
+        const data = plane?.userData;
+        if (!data) return;
+        // The plane lets go of its media first, so releasing it twice frees nothing another plane shows.
+        const media = data.effectMedia, video = data.video, texture = data.texture;
+        data.effectMedia = data.video = data.texture = null;
+        if (media) {
+            if (--media.entry.users > 0) return;
+            if (media.map.get(media.key) === media.entry) media.map.delete(media.key);
+        }
+        if (video) { try { video.pause(); video.removeAttribute('src'); video.load(); } catch (_) {} }
+        texture?.dispose?.();
     }
 
     /** Keep every playing effect on its anchor as the camera and models move. */
@@ -3457,7 +3554,11 @@ class MapEditor3D {
             rect, viewWidth: size.x, viewHeight: size.y
         });
         const uniforms = play.quad.material.uniforms;
-        uniforms.resolution.value.set(size.x, size.y);
+        // The quad finds its pixel by its place in the pass that draws it:
+        // the main pass's target, which is smaller than the canvas below
+        // full render scale (mainTarget).
+        const pass = this.mainTarget();
+        uniforms.resolution.value.set(pass ? pass.width : size.x, pass ? pass.height : size.y);
         uniforms.rectMin.value.set(0, 0);
         uniforms.rectSize.value.set(1, 1);
         Reactor3D.EffekseerScene.standQuad(mesh, world, camera);
@@ -3543,11 +3644,10 @@ class MapEditor3D {
             }
             if (play.layer) play.layer.dispose();
             if (play.plane) {
-                try { play.plane.userData.video.pause(); play.plane.userData.video.src = ''; } catch (_) {}
                 play.plane.parent?.remove(play.plane);
                 play.plane.geometry.dispose();
                 play.plane.material.dispose();
-                play.plane.userData.texture.dispose();
+                MapEditor3D.releaseEffectPlane(play.plane);
             }
         }
         this.effectPlays = filter ? (this.effectPlays || []).filter(play => !filter(play)) : [];
@@ -3675,6 +3775,7 @@ class MapEditor3D {
                 }
                 await this.buildEvents(mapData);
                 this.refreshPassage();
+                this.syncEditingEvent();
                 return;
             }
             // The rings left standing follow Event mode and Battle Setup, whatever is built again below.
@@ -3732,6 +3833,8 @@ class MapEditor3D {
             this._eventSnapshot = fresh;
             if (reselect !== null && fresh.has(reselect)) this.selectEventById(reselect);
             this.syncEventArrows();
+            // A rebuilt event whose window is open is lit again.
+            this.syncEditingEvent();
             this.refreshPassage();
         });
     }
@@ -3813,6 +3916,15 @@ class MapEditor3D {
     }
 
     /** Right-click in Build › Select: Copy, Paste here, Duplicate, Delete for the piece under the pointer and the selection. */
+    /** A right-click while building: in Select, the menu for the piece under the pointer; placing, the piece comes off. */
+    pieceRightClick(clientX, clientY) {
+        const manager = this.pieceManager();
+        if (!manager || !this.canEditPieces()) return;
+        if (manager.mode === 'select' && typeof RRContextMenu !== 'undefined') { this.showPieceMenu(clientX, clientY); return; }
+        const target = this.pieceTargetAt(clientX, clientY, { erase: true });
+        if (target) manager.removeAt(target);
+    }
+
     showPieceMenu(clientX, clientY) {
         const manager = this.pieceManager(), t = key => (window.I18n ? window.I18n.t(key) : key), tx = text => (window.I18n ? window.I18n.tText(text) : text);
         const pick = this.pieceTargetAt(clientX, clientY, { erase: true });
@@ -4218,7 +4330,7 @@ class MapEditor3D {
 
         const big = window.RRAssetFiles?.isBigCharacter
             ? window.RRAssetFiles.isBigCharacter(image.characterName)
-            : /^[!$]*\$/.test(image.characterName);
+            : /^[!$]*\$/.test(image.characterName) && !/\[8D\]/i.test(image.characterName);
         const directionRow = { 2: 0, 4: 1, 6: 2, 8: 3 }[image.direction || 2] || 0;
 
         let frameWidth, frameHeight, baseX, baseY;
@@ -4672,9 +4784,22 @@ class MapEditor3D {
         const leaves = this.mapScene._doorGroup ? this.mapScene._doorGroup.children : null;
         if (leaves) for (const leaf of leaves) meshes.push(leaf);
         if (typeof RRMeshBvh !== 'undefined' && RRMeshBvh.raycastMeshes) {
-            return RRMeshBvh.raycastMeshes(this._raycaster.ray, meshes, THREE);
+            const hit = RRMeshBvh.raycastMeshes(this._raycaster.ray, meshes, THREE);
+            if (!this.cutAway(hit)) return hit;
+            // Above the storey cut nothing is drawn: the ray goes on from just past it.
+            const ray = this._raycaster.ray, origin = ray.origin.clone();
+            let found = hit, travelled = 0;
+            for (let i = 0; i < 16 && this.cutAway(found); i++) {
+                const step = found.distance + 1e-3;
+                travelled += step;
+                ray.origin.addScaledVector(ray.direction, step);
+                found = RRMeshBvh.raycastMeshes(ray, meshes, THREE);
+            }
+            ray.origin.copy(origin);
+            if (!found || this.cutAway(found)) return null;
+            return Object.assign({}, found, { distance: found.distance + travelled });
         }
-        const hits = this._raycaster.intersectObjects(meshes, false);
+        const hits = this._raycaster.intersectObjects(meshes, false).filter(found => !this.cutAway(found));
         return hits.length ? { point: hits[0].point, distance: hits[0].distance, object: hits[0].object, triangle: hits[0].faceIndex } : null;
     }
 
@@ -4792,13 +4917,37 @@ class MapEditor3D {
         }
     }
 
-    /** The box marks the cell, so it holds its size: the selected one brightens to the accent and shows through what stands on it. */
+    /**
+     * The box marks the cell, so it holds its size: the selected one brightens to the accent and
+     * shows through what stands on it. So does the box of the event whose editor window is open.
+     */
     highlightEventBox(mesh, on) {
         const box = mesh.userData.box;
         if (!box) return;
+        on = on || (this._editingEventId != null && mesh.userData.event?.id === this._editingEventId);
         box.material.opacity = on ? 1 : 0.8;
         box.material.color.setHex(on ? this.selectedEventColor() : box.userData.color);
         this.eventBoxOnTop(box, on || mesh.userData.modelShown === true);
+    }
+
+    /**
+     * The event whose editor window is open keeps its box lit as a selected one's, in event and tile
+     * mode alike, without the selection's arrows and model card (EventManager.updateEditingHighlight).
+     */
+    syncEditingEvent() {
+        const editor = typeof window !== 'undefined' ? window.reactor?.eventManager?.eventEditor : null;
+        const event = editor?.isOpen?.() ? editor.sourceEvent : null;
+        const before = this._editingEventId;
+        this._editingEventId = event && !event._rrDatabaseVehicle ? event.id : null;
+        if (before != null && before !== this._editingEventId) {
+            const marker = this.eventMarker({ id: before });
+            if (marker) this.highlightEventBox(marker, this.selected?.userData?.event?.id === before);
+        }
+        if (this._editingEventId != null) {
+            const marker = this.eventMarker(event);
+            if (marker) this.highlightEventBox(marker, true);
+        }
+        this.requestRender();
     }
 
     eventColor(event) {
@@ -4817,6 +4966,8 @@ class MapEditor3D {
     }
 
     clearScene() {
+        // The shadow lists let go of this scene's casters while their parents still lead up to it.
+        try { if (this.mapScene && typeof Reactor3D !== 'undefined') Reactor3D.Shadows?.forgetScene?.(this.mapScene.scene()); } catch (error) { /* no shadows */ }
         this.projectController?.mediaSurfacePreviewManager?.detachThree?.();
         this.animatedModels = [];
         this.disposeEffectPlays();
@@ -4894,14 +5045,18 @@ class MapEditor3D {
         if (!input) return;
         this._onPointerDown = event => {
             this._lastActiveAt = performance.now();
+            // Building, the left button lays pieces: a right-drag turns the view instead of moving it
+            // (a right-click still removes); Shift or the middle button moves it.
+            const turn = event.button === 2 && !event.shiftKey && !event.ctrlKey && !event.altKey && this.canEditPieces();
             this.pointer = {
                 x: event.clientX,
                 y: event.clientY,
                 // Where the drag began, so a click can be told from an orbit.
                 startX: event.clientX,
                 startY: event.clientY,
-                pan: event.button !== 0 || event.shiftKey,
+                pan: (event.button !== 0 || event.shiftKey) && !turn,
                 look: (event.button === 0 && event.altKey) || (event.button === 2 && event.ctrlKey),
+                turn,
                 paint: false
             };
             input.setPointerCapture?.(event.pointerId);
@@ -5243,6 +5398,14 @@ class MapEditor3D {
                 if (this.canvas) this.canvas.style.cursor = '';
                 return;
             }
+            // A right-click while building: its menu or its removal waited for the release, so a right-drag only turns.
+            if (drag && drag.turn) {
+                const still = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= 4;
+                if (drag.rightClick && still) this.pieceRightClick(drag.rightClick.x, drag.rightClick.y);
+                // (Where the menu comes after the release, it is told the press was a turn.)
+                this._turnedAt = still ? 0 : performance.now();
+                return;
+            }
             if (!drag || drag.pan || drag.look) return;
             if (drag.propHold) {
                 this.finishPropDrag(drag);
@@ -5287,10 +5450,10 @@ class MapEditor3D {
             // rest of the selection); placing, a right-click pulls the piece off, the way a brick
             // comes off a model.
             if (this.canEditPieces()) {
-                const manager = this.pieceManager();
-                if (manager.mode === 'select' && typeof RRContextMenu !== 'undefined') { this.showPieceMenu(event.clientX, event.clientY); return; }
-                const target = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
-                if (target) manager.removeAt(target);
+                // Where the menu comes with the press (Linux), it waits for the release: a right-drag turns the view.
+                if (drag && drag.turn) { drag.rightClick = { x: event.clientX, y: event.clientY }; return; }
+                if (!drag && this._turnedAt && performance.now() - this._turnedAt < 400) return;
+                this.pieceRightClick(event.clientX, event.clientY);
                 return;
             }
             // With the models tool up: a menu for the model under the pointer, or (on the ground)
@@ -5617,7 +5780,7 @@ class MapEditor3D {
         if (this.canEditTerrain()) {
             const manager = this.terrainManager(), point = this.groundPointAt(clientX, clientY);
             // The water tools click, and the biome and the border have no brush: no ring.
-            const ringless = ['fill', 'drain', 'look', 'river', 'biome', 'surround'].includes(manager.mode);
+            const ringless = ['fill', 'drain', 'look', 'river', 'biome', 'sky', 'surround'].includes(manager.mode);
             this.updateTerrainRing(ringless ? null : point);
             manager.hoverAt?.(point);
         } else if (this.terrainRing) this.terrainRing.visible = false;
@@ -5804,8 +5967,10 @@ class MapEditor3D {
         const target = event.target;
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'
             || target.isContentEditable)) return false;
-        return ![...document.querySelectorAll('.modal-overlay, .rr-modal-overlay, #database-modal')]
+        return ![...document.querySelectorAll('.modal-overlay, .rr-modal-overlay, #database-modal, .plugin-manager-child-modal')]
             .some(modal => modal.getClientRects().length > 0
+                && !(modal.id === 'forge-workspace' && typeof RRForgeWindow !== 'undefined' && !RRForgeWindow.ownsKeys())
+                && !(modal.id === 'plugin-manager-modal' && typeof RRPluginManagerWindow !== 'undefined' && !RRPluginManagerWindow.ownsKeys())
                 && (!modal.classList.contains('video-surface-editor-modal') || !this.projectController?.mediaSurfacePreviewManager?.authoring));
     }
 
@@ -5817,6 +5982,8 @@ class MapEditor3D {
             this._lastActiveAt = performance.now();
             const way = directions[String(event.key).toLowerCase()];
             if (!way || !this.acceptsFlyKey(event)) return;
+            // A key Build took first (Q/E change the level, the arrows nudge a building) does not also fly.
+            if (event.defaultPrevented && this.canEditPieces()) return;
             event.preventDefault();
             this.flyKeys.add(way);
             // The clock starts on the first key rather than at the last frame,
@@ -5921,14 +6088,23 @@ class MapEditor3D {
     // camera and hover cell moving, which are compared each frame); the loop
     // then draws for a short tail, which covers the frames a reflection
     // capture takes to go round its six faces and any follow-up that lands a
-    // frame late. Only a picture that really moves keeps the full rate:
-    // playing media, a flight, a drifting sky, a running effect, an animated
-    // model or light, water waves (at the old idle cadence) and the A1 and
-    // stepping-character frames (only on the frame they change). A still
-    // view otherwise draws once a second, a safety net for a change nobody
-    // announced — a model or picture that finished loading on its own time.
+    // frame late. That, and a flight, draws on every refresh of the display.
+    // A picture that moves by itself (playing media, a running effect, an
+    // animated model, a light volume baking) draws at the game's rate, sixty
+    // a second at most however fast the display refreshes; a flickering or
+    // pulsing light, a drifting sky and water waves at their own slower
+    // cadence (`idleInterval`); the A1 and stepping-character frames only on
+    // the frame they change. A still view otherwise draws once a second, a
+    // safety net for a change nobody announced — a model or picture that
+    // finished loading on its own time.
 
     startLoop() {
+        const activity = typeof window !== 'undefined' ? window.RRDetachedWindow : null;
+        if (!this._previewActivityOff && activity?.onPreviewActivity) {
+            this._previewActivityOff = activity.onPreviewActivity(() => this.syncPreviewActivity());
+        }
+        if ((activity?.previewActive?.() === false) !== this._previewPaused) this.syncPreviewActivity();
+        if (this._previewPaused) return;
         if (this.frame !== null) return;
         const tick = now => {
             // Let go of the handle on the way out. `startLoop` refuses to start
@@ -5941,16 +6117,23 @@ class MapEditor3D {
             // Suspended (the browser playtest runs in an overlay iframe):
             // keep the loop alive but do no GPU work — the playtest owns
             // the machine until the overlay closes.
-            if (this.suspended || MapEditor3D.coveredByDatabase() || MapEditor3D.playtestRunning()) { this._covered = true; this.frame = requestAnimationFrame(tick); return; }
+            const playtest = MapEditor3D.playtestRunning();
+            if (playtest) this.parkForPlaytest(now);
+            else this._playtestSince = null;
+            if (this.suspended || MapEditor3D.coveredByDatabase() || playtest) { this._covered = true; this.frame = requestAnimationFrame(tick); return; }
+            if (this._parked) this.unpark();
             this.frame = null;
             try {
                 if (this.keepCanvasFilling()) this.resize();
                 // Whatever changed behind the cover is drawn when it lifts.
                 if (this._covered) { this._covered = false; this.requestRender(); }
                 this.stepFly(now);
-                const lightsLive = !!window.reactor?.lightingManager?.wants3DFrames?.();
+                const lightsLive = !!window.reactor?.lightingManager?.wants3DFrames?.() || this.effectLightsAnimate();
                 const stepped = this.stepAnimations(now);
-                if (MapEditor3D.shouldRender({ now, active: this.previewActive(now) || lightsLive || stepped, lastRenderAt: this._lastRenderAt, idleInterval: this.idleInterval() })) {
+                const active = this.previewActive(now) || stepped;
+                // While the view moves, the reflection capture takes a face every other draw (`render`).
+                this._drawActive = active;
+                if (MapEditor3D.shouldRender({ now, active, animating: this.animating(), lastRenderAt: this._lastRenderAt, idleInterval: this.idleInterval(lightsLive) })) {
                     this._lastRenderAt = now;
                     this.render(now);
                 }
@@ -5966,6 +6149,48 @@ class MapEditor3D {
     stopLoop() {
         if (this.frame !== null) cancelAnimationFrame(this.frame);
         this.frame = null;
+        this._previewActivityOff?.();
+        this._previewActivityOff = null;
+        clearTimeout(this._previewParkTimer);
+        this._previewParkTimer = null;
+    }
+
+    syncPreviewActivity() {
+        const paused = typeof window !== 'undefined' && window.RRDetachedWindow?.previewActive?.() === false;
+        if (paused === this._previewPaused) return;
+        this._previewPaused = paused;
+        clearTimeout(this._previewParkTimer);
+        this._previewParkTimer = null;
+        if (paused && MapEditor3D.PARK_AFTER_MS > 0 && MapEditor3D.playtestRunning()) {
+            this._previewParkTimer = setTimeout(() => {
+                this._previewParkTimer = null;
+                if (this.enabled && this._previewPaused && MapEditor3D.playtestRunning()) this.park();
+            }, MapEditor3D.PARK_AFTER_MS);
+        }
+        for (const play of this.effectPlays || []) {
+            play.layer?.setWorkspaceActive?.(!paused);
+            const video = play.plane?.userData?.video;
+            if (!video) continue;
+            if (paused) {
+                if (!video.paused && !video.ended) { play.resumeVideo = true; video.pause(); }
+            } else if (play.resumeVideo) {
+                play.resumeVideo = false;
+                if (video.paused && !video.ended) video.play()?.catch?.(() => {});
+            }
+        }
+        this._lastModelTick = 0;
+        this._lastPreviewTick = null;
+        this._flewAt = null;
+        if (paused) {
+            if (this.frame !== null) cancelAnimationFrame(this.frame);
+            this.frame = null;
+            this.flyKeys?.clear();
+            this.flyFast = false;
+        } else if (this.enabled) {
+            this._covered = true;
+            this.requestRender();
+            this.startLoop();
+        }
     }
 
     /**
@@ -5977,38 +6202,125 @@ class MapEditor3D {
         this._lastActiveAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
     }
 
+    /**
+     * The playtest has had the GPU for PARK_AFTER_MS: the scene and the models' graphics-card
+     * copies are given back, so the game has that memory (half the view's on North Haven).
+     */
+    parkForPlaytest(now) {
+        if (this._playtestSince == null) this._playtestSince = now;
+        if (MapEditor3D.PARK_AFTER_MS > 0 && now - this._playtestSince >= MapEditor3D.PARK_AFTER_MS) this.park();
+    }
+
+    park() {
+        if (this._parked || !this.enabled || !this.renderer) return false;
+        this._parked = true;
+        // A rebuild in flight or waiting is dropped; unpark builds the map as it is then.
+        this._rebuildGeneration++;
+        clearTimeout(this._rebuildTimer);
+        this._rebuildTimer = null;
+        try { this.clearScene(); } catch (error) { console.error('Could not completely clear the 3D scene:', error); }
+        try { globalThis.RRMapNeighborView?.dispose(this); } catch (error) { console.error('Could not clear the neighboring maps:', error); }
+        try { this.lastPark = this.releaseGraphics(this.renderer); } catch (error) { console.error('Could not release the 3D view\'s models:', error); }
+        try { this.unbindGraphics(); } catch (error) { console.error('Could not unbind the 3D view\'s graphics:', error); }
+        // A frame from each renderer: the GPU process gives deleted things back when a frame is
+        // drawn, and the 2D view collects what it has not drawn for a minute only on its own draws
+        // (a 2D view already released at takeover would only upload its map again).
+        // The view shows its clear color until the editor is back.
+        try {
+            if (!this._released2D) this.projectController?.app?.render?.();
+            this.renderer.resetState?.();
+            this.renderer.setRenderTarget(null);
+            this.renderer.clear(true, true, true);
+            this._sharedPixiRenderer?.resetState?.();
+        } catch (error) { console.error('Could not clear the parked 3D view:', error); }
+        return true;
+    }
+
+    /**
+     * Nothing left bound on the context: a deleted texture, buffer or framebuffer still bound to a
+     * unit, a vertex array or a target is kept by the driver (a third of the view's memory on North
+     * Haven). Both renderers' state caches are reset after.
+     */
+    unbindGraphics() {
+        const gl = this.renderer?.getContext?.();
+        if (!gl || gl.isContextLost?.()) return;
+        const units = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS) || 0;
+        const webgl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+        for (let unit = 0; unit < units; unit++) {
+            gl.activeTexture(gl.TEXTURE0 + unit);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+            if (webgl2) {
+                gl.bindTexture(gl.TEXTURE_3D, null);
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+                gl.bindSampler(unit, null);
+            }
+        }
+        gl.activeTexture(gl.TEXTURE0);
+        if (webgl2) {
+            gl.bindVertexArray(null);
+            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+            gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+            gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        gl.useProgram(null);
+        gl.flush();
+        this.renderer.resetState?.();
+        this._sharedPixiRenderer?.resetState?.();
+    }
+
+    /** The editor has the GPU again: the scene is built again from the models still held in memory. */
+    unpark() {
+        if (!this._parked) return;
+        this._parked = false;
+        this._playtestSince = null;
+        if (this.enabled) this.rebuild().catch(error => this.fail(error));
+    }
+
     /** A playtest is open and the editor is not focused: the game gets the GPU (PlaytestManager.ownsGpu). */
     static playtestRunning() {
         return typeof window !== 'undefined' && !!window.reactor?.playtestManager?.ownsGpu?.();
     }
 
-    /** The Database window covers the map: its own previews get the GPU. */
+    /** The Database covers the map: its own previews get the GPU. Beside the map, in a window of its own or floating, it covers nothing. */
     static coveredByDatabase() {
-        return typeof document !== 'undefined' && typeof document.getElementById === 'function'
-            && !!document.getElementById('database-viewer')?.classList?.contains('active');
+        if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return false;
+        const viewer = document.getElementById('database-viewer');
+        return !!viewer?.classList?.contains('active') && !viewer.classList.contains('rr-database-floating');
     }
 
     /**
-     * Whether this frame should draw: anything moving draws every frame; a
-     * still view draws only once `idleInterval` has passed since its last
-     * draw — once a second by default, the safety net described above.
+     * Whether this frame should draw: a change, the camera or a flight draws
+     * every frame; a picture that moves by itself (`animating`) once
+     * `ANIMATION_INTERVAL_MS` has passed since the last draw; a still view
+     * only once `idleInterval` has — once a second by default, the safety
+     * net described above.
      */
-    static shouldRender({ now, active, lastRenderAt, idleInterval = MapEditor3D.IDLE_INTERVAL_MS }) {
+    static shouldRender({ now, active, animating = false, lastRenderAt, idleInterval = MapEditor3D.IDLE_INTERVAL_MS }) {
         if (active) return true;
         if (!(lastRenderAt > 0)) return true;
-        return now - lastRenderAt >= idleInterval;
+        return now - lastRenderAt >= (animating ? Math.min(MapEditor3D.ANIMATION_INTERVAL_MS, idleInterval) : idleInterval);
     }
 
     /**
      * How long a still view may go between draws. Water waves run on their
      * own clock in the shader: held at the ten frames a second a still view
-     * always gave them, rather than lifted to the full rate.
+     * always gave them, rather than lifted to the full rate. A flickering or
+     * pulsing light (`lights`) is drawn at `LIGHT_INTERVAL_MS`, about twenty
+     * times a second, its flicker read off the clock as the game's is.
      */
-    idleInterval() {
+    idleInterval(lights = false) {
         // A drifting sky moves a fraction of a pixel a frame: a still view under one draws thirty times a
         // second, not sixty. (It drew every frame, for hours, on any map whose sky scrolls.)
         const sky = this.mapScene?._sky?.userData?.sky;
         if (sky && (sky.driftX || sky.driftY)) return MapEditor3D.SKY_INTERVAL_MS;
+        if (lights) return MapEditor3D.LIGHT_INTERVAL_MS;
         return this.mapScene?._waterMeshes?.length ? 100 : MapEditor3D.IDLE_INTERVAL_MS;
     }
 
@@ -6029,18 +6341,27 @@ class MapEditor3D {
         return stepped;
     }
 
-    /** The camera or hover moved, a draw was asked for within the tail, or something on screen moves by itself. */
+    /** The camera or hover moved, a draw was asked for within the tail, or a flight is under way. */
     previewActive(now) {
-        if (this.projectController?.mediaSurfacePreviewManager?.previewActive?.()) return true;
         if (this.flying()) return true;
-        // (A drifting sky is drawn at its own rate: see idleInterval.)
-        if (this.effectsAnimate()) return true;
-        if (this.modelsAnimate()) return true;
-        // The light volume is baked over a few dozen drawn frames: a still
-        // view drawing once a second took half a minute to light itself.
-        if (typeof Reactor3D !== 'undefined' && Reactor3D.LightVolume?.baking?.()) return true;
         if (this.viewMoved()) this._lastActiveAt = now;
         return Number.isFinite(this._lastActiveAt) && now - this._lastActiveAt < MapEditor3D.ACTIVE_TAIL_MS;
+    }
+
+    /**
+     * Whether something on screen moves by itself: playing media, a running
+     * effect, an animated model, or the light volume baking (over a few
+     * dozen drawn frames: a still view drawing once a second took half a
+     * minute to light itself). Drawn at the game's rate. (A drifting sky and
+     * an animated light are drawn at their own: see idleInterval.)
+     */
+    animating() {
+        if (this.projectController?.mediaSurfacePreviewManager?.previewActive?.()) return true;
+        if (this.effectsAnimate()) return true;
+        if (this.modelsAnimate()) return true;
+        // The sun's cascades laid again round a moved view, drawn over the next frames.
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.Shadows?.sunPending?.()) return true;
+        return typeof Reactor3D !== 'undefined' && !!Reactor3D.LightVolume?.baking?.();
     }
 
     /**
@@ -6074,10 +6395,10 @@ class MapEditor3D {
 
     /**
      * A playing effect is a moving picture: an Effekseer quad takes a new
-     * frame only when this view draws, a video plane plays, and a carried
-     * light that flickers or pulses changes every frame. A still picture, a
-     * steady light and an MV overlay (which animates itself and only follows
-     * the camera) do not keep the view drawing.
+     * frame only when this view draws, and a video plane plays. A still
+     * picture, a carried light (see effectLightsAnimate) and an MV overlay
+     * (which animates itself and only follows the camera) do not keep the
+     * view drawing.
      */
     effectsAnimate() {
         for (const play of this.effectPlays || []) {
@@ -6085,6 +6406,14 @@ class MapEditor3D {
             if (play.quad && play.layer && play.layer.active) return true;
             const video = play.plane && play.plane.userData && play.plane.userData.video;
             if (video && !video.paused && !video.ended) return true;
+        }
+        return false;
+    }
+
+    /** Whether a light a placed model carries flickers or pulses: drawn at the lights' cadence, as a map's own are. */
+    effectLightsAnimate() {
+        for (const play of this.effectPlays || []) {
+            if (!play || !play.object || !play.object.parent) continue;
             const light = play.light && play.effect && play.effect.light;
             if (light && (light.flicker || light.pulse)) return true;
         }
@@ -6151,16 +6480,149 @@ class MapEditor3D {
         this.projectController?.mediaSurfacePreviewManager?.updateThree?.();
         // Lights are map content: feed the compositor on every drawn frame,
         // whether or not the Lighting panel is open.
-        window.reactor?.lightingManager?.feed3D?.();
+        window.reactor?.lightingManager?.feed3D?.(now);
+        const scene = this.mapScene.scene();
+        // World matrices once for the frame, as the game's viewport takes
+        // them: every draw below (the shadow rows, the reflections, the unlit
+        // surfaces, the rest, the star tiles, the overlay, the lights)
+        // recomposed the whole graph again.
+        scene.updateMatrixWorld();
+        const matrixAuto = scene.matrixWorldAutoUpdate;
+        scene.matrixWorldAutoUpdate = false;
+        // The storey cut for this view's frame only: the cut is shared by every view's pieces (the game's
+        // cutaway), and a Database preview drawn after this one is whole.
+        const cut = this.applyStoreyCut();
+        try {
+            this.renderFrame(scene);
+        } finally {
+            scene.matrixWorldAutoUpdate = matrixAuto;
+            if (cut) { cut.uniforms.rrCutTop.value = cut.top; cut.uniforms.rrCutBox.value = cut.box; }
+        }
+    }
+
+    //-------------------------------------------------------------------------
+    // Storey cut: the view shows the map up to a chosen storey, as the game cuts away what is over a
+    // player under a roof, so a roofed inside is seen and built in. 0 shows every storey.
+
+    /** How many storeys the map's pieces stand: one at least. */
+    static storeyCount(mapData) {
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null, list = mapData?.reactor3d?.pieces;
+        if (!R || !Array.isArray(list) || !list.length) return 1;
+        const S = R.PIECE_STOREY || 5;
+        let top = 0;
+        for (const piece of list) {
+            if (!piece) continue;
+            const tall = Array.isArray(piece.size) && Number(piece.size[1]) > 0 ? Number(piece.size[1]) : R.pieceHeight ? R.pieceHeight(piece.kind) : 1;
+            top = Math.max(top, (Number(piece.z) || 0) + tall);
+        }
+        return Math.max(1, Math.ceil(top / S - 1e-6));
+    }
+
+    /** The cut's plane, in world tiles: under the top of storey `n` over the ground it was set on (as the game's, under a doorway's header). */
+    storeyCutTop() {
+        if (!(this.storeyCut > 0) || typeof Reactor3D === 'undefined') return 1e9;
+        return (this._storeyCutBase || 0) + this.storeyCut * Reactor3D.PIECE_STOREY - (Reactor3D.CUTAWAY_DROP || 0.65);
+    }
+
+    /**
+     * Show the map up to storey `n` (0: all of it). The storeys are counted from the ground at the
+     * place looked at (a building on a hill is counted from its own pad), or at `cell` when given.
+     */
+    setStoreyCut(n, cell = null) {
+        const mapData = this.currentMap();
+        n = Math.max(0, Math.floor(Number(n)) || 0);
+        // (`'keep'`: counted from the same ground as before, as when Build's level moves the cut.)
+        if (mapData && typeof Reactor3D !== 'undefined' && n > 0 && !(cell === 'keep' && this.storeyCut > 0)) {
+            const at = (cell && cell !== 'keep' && cell) || (this.view && this.view.target ? { x: Math.floor(this.view.target.x + 0.5), y: Math.floor(this.view.target.z + 0.5) } : { x: 0, y: 0 });
+            const x = Math.max(0, Math.min(mapData.width - 1, at.x)), y = Math.max(0, Math.min(mapData.height - 1, at.y));
+            this._storeyCutBase = Reactor3D.pieceBaseAt(mapData, x, y);
+        }
+        if (n === this.storeyCut && n === 0) return;
+        this.storeyCut = n;
+        this._storeyCutKey = null;
+        // What the cut takes away casts no shadow from the next frame on (Shadows.cutChanged).
+        const S = typeof Reactor3D !== 'undefined' ? Reactor3D.Shadows : null;
+        if (S) { if (S.cutChanged) S.cutChanged(); else if (S.invalidate) S.invalidate(); }
+        this.syncStoreyCutControl();
+        this.requestRender();
+    }
+
+    /**
+     * Before a frame: the cut's plane over the whole map, and the caps on what it cuts through, laid again
+     * when the cut or the pieces change. Returns what the shared values were, to put back after the frame.
+     */
+    applyStoreyCut() {
+        const mapData = this.currentMap();
+        if (typeof Reactor3D === 'undefined' || !Reactor3D.cutawayUniforms || !mapData || !this.mapScene) return null;
+        const top = this.storeyCutTop();
+        const key = top >= 1e8 ? 'none' : top + ':' + mapData.width + 'x' + mapData.height;
+        // (The caps follow the pieces: a fresh list each change.)
+        const pieces = mapData.reactor3d && mapData.reactor3d.pieces;
+        if (key !== this._storeyCutKey || pieces !== this._storeyCutPieces || this.mapScene !== this._storeyCutScene) {
+            const box = top >= 1e8 ? null : [-1, -1, mapData.width + 1, mapData.height + 1];
+            if (this.mapScene.updateCutCaps && (top < 1e8 || this._storeyCutKey !== 'none')) this.mapScene.updateCutCaps(mapData, top, box);
+            this._storeyCutKey = key; this._storeyCutPieces = pieces; this._storeyCutScene = this.mapScene;
+        }
+        if (top >= 1e8) return null;
+        const uniforms = Reactor3D.cutawayUniforms();
+        const saved = { uniforms, top: uniforms.rrCutTop.value, box: uniforms.rrCutBox.value };
+        uniforms.rrCutTop.value = top;
+        uniforms.rrCutBox.value = [-1, -1, mapData.width + 1, mapData.height + 1];
+        return saved;
+    }
+
+    /** Whether a hit stands above the storey cut, where nothing is drawn: a pick passes through it. */
+    cutAway(hit) {
+        if (!hit || !hit.point || !(this.storeyCut > 0)) return false;
+        const data = hit.object && hit.object.userData;
+        return !!(data && (data.pieces || data.rrDoor)) && hit.point.y > this.storeyCutTop();
+    }
+
+    /** The map bar's Storeys list: All, then one per storey the map stands. */
+    syncStoreyCutControl() {
+        if (typeof document === 'undefined') return;
+        const select = document.getElementById('map-storey-cut');
+        if (!select) return;
+        if (!select._rrBound) {
+            select._rrBound = true;
+            select.addEventListener('change', () => this.setStoreyCut(Number(select.value)));
+            // The storeys are counted when the list is opened: pieces laid since are in it.
+            select.addEventListener('pointerdown', () => this.syncStoreyCutControl());
+            select.addEventListener('focus', () => this.syncStoreyCutControl());
+            if (typeof window !== 'undefined') window.addEventListener('rr-language-changed', () => this.syncStoreyCutControl());
+        }
+        const tt = text => (typeof window !== 'undefined' && window.I18n?.tText ? window.I18n.tText(text) : text);
+        const all = tt('All'), label = select.closest('.map-storey-cut');
+        if (label) label.title = tt('Show the 3D view up to this storey, as the game cuts away a roof over the player');
+        select.setAttribute('aria-label', tt('Storeys'));
+        const count = Math.max(MapEditor3D.storeyCount(this.currentMap()), this.storeyCut || 0);
+        const want = ['0'].concat(Array.from({ length: count }, (_, i) => String(i + 1)));
+        if ([...select.options].map(o => o.value + o.textContent).join() !== want.map(v => v + (v === '0' ? all : v)).join()) {
+            select.innerHTML = want.map(v => `<option value="${v}">${v === '0' ? all : v}</option>`).join('');
+        }
+        select.value = String(this.storeyCut || 0);
+        select.closest('.map-storey-cut')?.classList.toggle('is-on', this.storeyCut > 0);
+    }
+
+    /** One frame's passes, with the world matrices already current (see render). */
+    renderFrame(scene) {
+        // Chunks laid or taken away since the last frame, into their regions' draws (Reactor3D.DrawBatches).
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.DrawBatches) Reactor3D.DrawBatches.flush(this.renderer);
         // The shadow maps, before any pass hides a group: the same step the
         // game's viewport takes, from the same lights the feed just synced.
         this.mapScene.renderShadows?.(this.renderer, this.currentMap());
         // The still, flickering and pulsing lights from the baked volume, the
         // moving ones gathered once a frame (Reactor3D.LightVolume), as in the game.
         if (typeof Reactor3D !== 'undefined' && Reactor3D.LightVolume) Reactor3D.LightVolume.frame(this.renderer, this.mapScene, this.currentMap());
-        const scene = this.mapScene.scene();
         // A face of the reflection capture, as the game takes it.
-        if (typeof Reactor3D !== 'undefined' && Reactor3D.Reflections && this.camera) Reactor3D.Reflections.update(this.renderer, scene, this.camera.position, this.mapScene.reflectionHidden?.());
+        // A frame after one that showed nothing shiny takes none, once the cube is whole (`Reflections.idle`).
+        const reflections = typeof Reactor3D !== 'undefined' ? Reactor3D.Reflections : null;
+        if (reflections && this.camera) {
+            if (reflections.enabled()) reflections._frame++;
+            const moving = this._drawActive && MapEditor3D.PROBE_HALF_WHILE_MOVING;
+            if (moving) this._probeTurn = !this._probeTurn;
+            if (!reflections.idle() && (!moving || this._probeTurn)) reflections.update(this.renderer, scene, this.camera.position, this.mapScene.reflectionHidden?.());
+        }
         // Mirror pieces and reflective water show their sharp mirrors here as in the game.
         if (typeof Reactor3D !== 'undefined' && Reactor3D.Mirrors && this.camera && this.mapScene.mirrorCandidates) {
             Reactor3D.Mirrors.update(this.renderer, scene, this.camera, this.mapScene.mirrorCandidates(this.camera), null, null);
@@ -6170,12 +6632,6 @@ class MapEditor3D {
         const eventVisible = this.eventGroup ? this.eventGroup.visible : null;
         const gridVisible = this.grid ? this.grid.visible : null;
         const hoverVisible = this.hoverCell ? this.hoverCell.visible : null;
-        // World matrices once for the frame, as the game's viewport takes
-        // them: every draw below (the unlit surfaces, the rest, the star
-        // tiles, the overlay, the lights) recomposed the whole graph again.
-        scene.updateMatrixWorld();
-        const matrixAuto = scene.matrixWorldAutoUpdate;
-        scene.matrixWorldAutoUpdate = false;
         try {
             // Match the tilemap's two canvases. Lower geometry and events share
             // real 3D depth; starred geometry starts with a fresh depth buffer
@@ -6232,7 +6688,6 @@ class MapEditor3D {
             if (overlay && overlayVisible !== null) overlay.visible = overlayVisible;
             this.renderLightsPass(scene);
         } finally {
-            scene.matrixWorldAutoUpdate = matrixAuto;
             scene.background = background;
             this.renderer.autoClear = autoClear;
             if (this.eventGroup && eventVisible !== null) this.eventGroup.visible = eventVisible;
@@ -6406,6 +6861,10 @@ MapEditor3D.IDLE_INTERVAL_MS = 1000;
 MapEditor3D.SKY_INTERVAL_MS = 30;
 /** How long the view keeps drawing after a change: a reflection capture's six faces, and a follow-up a frame late. */
 MapEditor3D.ACTIVE_TAIL_MS = 500;
+/** The least time between two draws of a picture that moves by itself: every refresh at 60 Hz, every second at 120 or 144, every third at 180. */
+MapEditor3D.ANIMATION_INTERVAL_MS = 12;
+/** How often a still view with a flickering or pulsing light draws: every third refresh at 60 Hz. */
+MapEditor3D.LIGHT_INTERVAL_MS = 45;
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = MapEditor3D;

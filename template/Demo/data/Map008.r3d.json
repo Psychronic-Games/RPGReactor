@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lighting": {"ambient":1,"ambientColour":"#ffffff"},
+  "lighting": {"ambient":0.22,"ambientColour":"#9db4ff"},
   "elevation": [
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -125,11 +125,11 @@
   ],
   "width": 120,
   "height": 120,
-  "room": {"height":30,"floor":"!Grass-01","walls":"","ceiling":"","sky":"Sky-01","skyScrollX":0.1,"skyScrollY":0,"cliffSlope":42,"cliffTint":"#a99f93"},
+  "room": {"height":30,"floor":"!Grass-01","walls":"","ceiling":"","sky":"Sky-01","skyScrollX":0.1,"skyScrollY":0,"cliffSlope":80,"cliffTint":"#a99f93"},
   "camera": {"mode":"thirdPerson"},
   "mode": "3d",
   "lights": [
-    {"id":"light1","type":"sun","x":38,"y":26,"height":150,"yaw":0,"pitch":0,"radius":280,"angle":70,"width":0.08,"color":"#fff3d2","intensity":0.4,"occlude":true,"shadow":true,"on":true,"tag":"","attach":null,"flicker":0,"pulse":null}
+    {"id":"light1","type":"sun","x":38,"y":26,"height":150,"yaw":0,"pitch":0,"radius":280,"angle":70,"width":0.08,"color":"#fff3d2","intensity":1,"occlude":true,"shadow":true,"on":true,"tag":"","attach":null,"flicker":0,"pulse":null}
   ],
   "props": [
     {"id":1,"name":"Map-Objects/Tree-01","ext":".glb","file":"Tree-01","texture":"","x":101.01,"y":37.59,"z":0,"yaw":35,"pitch":0,"roll":0,"direction":2,"size":17.2,"scale":1,"passable":false,"animations":[],"animation":"","repeat":false,"effects":[],"effect":""},

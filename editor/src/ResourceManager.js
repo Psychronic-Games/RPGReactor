@@ -1545,8 +1545,9 @@ class ResourceManager {
                         typeof this.uiManager?.showModelOptimizeDialog === 'function') {
                         const analysis = window.RRGlbOptimizer.analyze(bytes);
                         if (analysis) {
+                            const compression = { compress: false };
                             const mode = await this.uiManager.showModelOptimizeDialog({
-                                fileName: file.name, analysis });
+                                fileName: file.name, analysis, compression });
                             if (mode === null || generation !== this.operationGeneration) return;
                             if (mode !== 'keep') {
                                 const optimized = await window.RRGlbOptimizer.optimize(bytes, Object.assign({
@@ -1555,8 +1556,12 @@ class ResourceManager {
                                 if (generation !== this.operationGeneration) return;
                                 if (optimized.bytes !== bytes) {
                                     importBytes = optimized.bytes;
+                                    const triangles = window.RRGlbOptimizer.triangleResult
+                                        ? window.RRGlbOptimizer.triangleResult(bytes, importBytes) : null;
+                                    const triangleNote = triangles ? ', ' + this.text('{before} → {after} triangles ({percent}%)', {
+                                        before: triangles.before.toLocaleString(), after: triangles.after.toLocaleString(), percent: triangles.percent }) : '';
                                     shrunkNote = ` (${(bytes.length / 1048576).toFixed(1)}MB → ` +
-                                        `${(importBytes.length / 1048576).toFixed(1)}MB)`;
+                                        `${(importBytes.length / 1048576).toFixed(1)}MB${triangleNote})`;
                                 }
                                 // Off by default: see the note on PRESETS. The
                                 // reduced model carries its own saving at every
@@ -1574,6 +1579,21 @@ class ResourceManager {
                                         sidecar = { lods: extraSourceFiles.map(extra => extra.name) };
                                         shrunkNote += ' ' + this.countText(extraSourceFiles.length, '+ 1 distance level', '+ {count} distance levels');
                                     }
+                                }
+                            }
+                            // A compressed copy of each texture the game draws, encoded in a worker.
+                            if (compression.compress && window.RRTextureCompressor && typeof window.RRGlbOptimizer.compressTextures === 'function') {
+                                const compressed = await window.RRGlbOptimizer.compressTextures(importBytes, {
+                                    encodeImage: (data, mimeType) => window.RRTextureCompressor.encode(data, mimeType),
+                                    onProgress: (done, total) => {
+                                        if (generation === this.operationGeneration && total) this.setStatus(this.text('Compressing texture {done} of {total} for {name}…', { done: Math.min(total, done + 1), total, name: file.name }));
+                                    }
+                                });
+                                window.RRTextureCompressor.release();
+                                if (generation !== this.operationGeneration) return;
+                                if (compressed.compressed) {
+                                    importBytes = compressed.bytes;
+                                    shrunkNote += ' ' + this.countText(compressed.compressed, '+ 1 compressed texture', '+ {count} compressed textures');
                                 }
                             }
                         }

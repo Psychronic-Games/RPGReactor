@@ -445,7 +445,7 @@ class MessageCommandEditor {
             const firstLine = (box.lines.find(line => String(line).trim().length) || '').trim();
             excerpt.textContent = firstLine || this._t('(empty)');
             excerpt.style.cssText = `
-                color: var(--color-text-muted); overflow: hidden;
+                color: ${index === this.activeIndex ? 'var(--color-text)' : 'var(--color-text-muted)'}; overflow: hidden;
                 text-overflow: ellipsis; white-space: nowrap;
             `;
 
@@ -816,7 +816,7 @@ class MessageCommandEditor {
         if (sheet) {
             const sign = (/^[!$]+/.exec(sheet.split('/').pop()) || [''])[0];
             if (sign.includes('!') || !this._hasFaceFile(sheet)) return none;
-            return { state: 'face', name: sheet, index: sign.includes('$') ? 0 : (image.characterIndex || 0), hint: this._t('The face of %1.').replace('%1', name) };
+            return { state: 'face', name: sheet, index: sign.includes('$') && !/\[8D\]/i.test(sheet) ? 0 : (image.characterIndex || 0), hint: this._t('The face of %1.').replace('%1', name) };
         }
         // A battle unit with no picture of its own wears the model the Database binds to its record.
         const unit = /<unit\s*:\s*([^>]+)>/i.exec(String(event.note || ''));
@@ -1578,7 +1578,7 @@ class MessageCommandEditor {
         openFolderBtn.textContent = this._t('Open in Folder');
         openFolderBtn.style.cssText = `
             padding: 6px 20px;
-            background-color: var(--color-border-subtle);
+            background-color: var(--color-bg-button-subtle);
             color: var(--color-text-strong);
             border: 1px solid var(--color-border-input);
             border-radius: 3px;
@@ -1597,7 +1597,7 @@ class MessageCommandEditor {
             }
         });
         openFolderBtn.addEventListener('mouseenter', () => { openFolderBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; openFolderBtn.style.borderColor = 'var(--color-accent)'; });
-        openFolderBtn.addEventListener('mouseleave', () => { openFolderBtn.style.backgroundColor = 'var(--color-border-subtle)'; openFolderBtn.style.borderColor = 'var(--color-border-input)'; });
+        openFolderBtn.addEventListener('mouseleave', () => { openFolderBtn.style.backgroundColor = 'var(--color-bg-button-subtle)'; openFolderBtn.style.borderColor = 'var(--color-border-input)'; });
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = this._t('Cancel');

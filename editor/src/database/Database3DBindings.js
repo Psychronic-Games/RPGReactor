@@ -241,7 +241,7 @@
                     thumb.style.opacity = '0.35';
                     const render = () => Promise.resolve().then(() => options.thumbnail(spec)).then(url => {
                         const still = get(project.path, section, id);
-                        if (url && still && still.name === spec.name) {
+                        if (url && still && still.name === spec.name && (still.variant || '') === (spec.variant || '')) {
                             thumb.src = url;
                             thumb.style.opacity = '1';
                         }
@@ -315,10 +315,22 @@
     }
 
     /**
+     * The key a use's thumbnail is kept under: the model's name alone when it
+     * wears nothing (shared with the model list), else the name, the variant
+     * and what that wears, so each variant, and each edit of one, has its own.
+     */
+    function thumbnailKey(spec, worn) {
+        const stamp = typeof ModelVariantsPanel !== 'undefined' ? ModelVariantsPanel.lookStamp(worn) : '';
+        return spec.variant || stamp ? [spec.name, spec.variant || '', stamp].join('|') : spec.name;
+    }
+
+    /**
      * A model's thumbnail as a data URL, cached on the Database 3D
      * section's editor (shared with its model list). Rendered once per
-     * model — a re-render per detail refresh stalled the page — with one
-     * delayed refresh because embedded textures decode after the model.
+     * model and look — a re-render per detail refresh stalled the page —
+     * with one delayed refresh because embedded textures decode after the
+     * model. It shows what the use wears in the game: its variant's surface,
+     * color and texture, or the model's own.
      */
     function modelThumbnail(reactor3dEditor, spec) {
         const ed = reactor3dEditor;
@@ -328,7 +340,10 @@
         const current = () => !ed._project || ed._project() === project;
         if (!ed._thumbs) ed._thumbs = {};
         if (!ed._thumbPromises) ed._thumbPromises = {};
-        if (ed._thumbs[spec.name]) return ed._thumbs[spec.name];
+        const worn = typeof ModelVariantsPanel !== 'undefined'
+            ? ModelVariantsPanel.lookOf(project && project.path, spec.name, spec.variant || '') : null;
+        const key = thumbnailKey(spec, worn);
+        if (ed._thumbs[key]) return ed._thumbs[key];
         if (!ed.projectController.mapEditor3D && typeof window !== 'undefined'
             && window.reactor && window.reactor.projectController
             && window.reactor.projectController.mapEditor3D) {
@@ -337,18 +352,19 @@
                 mapEditor3D: window.reactor.projectController.mapEditor3D
             };
         }
-        const entry = { name: spec.name, ext: spec.ext, file: spec.file, texture: spec.texture };
+        const entry = { name: spec.name, ext: spec.ext, file: spec.file, texture: spec.texture,
+            ...(spec.variant ? { variant: spec.variant } : null), ...(key !== spec.name ? { worn } : null) };
         const cached = ed._readCachedThumbnail?.(entry);
         if (cached) {
-            ed._thumbs[spec.name] = cached;
+            ed._thumbs[key] = cached;
             return cached;
         }
-        if (ed._thumbPromises[spec.name]) return ed._thumbPromises[spec.name];
+        if (ed._thumbPromises[key]) return ed._thumbPromises[key];
         const pendingCache = ed._thumbPromises;
         const pending = ed._renderThumbnail(entry, { isCurrent: current }).then(url => {
             if (!current()) return null;
             if (url) {
-                ed._thumbs[spec.name] = url;
+                ed._thumbs[key] = url;
                 const template = ed._templates?.[spec.name];
                 const decoded = typeof Database3DEditor === 'undefined'
                     || Database3DEditor.texturesDecoded(template?.userData?.glbTextures);
@@ -357,15 +373,15 @@
                     if (!current()) return;
                     Promise.resolve(ed._renderThumbnail(entry, { isCurrent: current })).then(settled => {
                         if (current() && settled) {
-                            ed._thumbs[spec.name] = settled;
+                            ed._thumbs[key] = settled;
                             ed._writeCachedThumbnail?.(entry, settled);
                         }
                     }).catch(() => {});
                 }, 1800);
             }
             return url;
-        }).finally(() => { delete pendingCache[spec.name]; });
-        ed._thumbPromises[spec.name] = pending;
+        }).finally(() => { delete pendingCache[key]; });
+        ed._thumbPromises[key] = pending;
         return pending;
     }
 
@@ -479,7 +495,7 @@
                 thumb.style.opacity = '0.35';
                 if (options.thumbnail) {
                     const render = () => Promise.resolve().then(() => options.thumbnail(spec)).then(url => {
-                        if (url && bound() && bound().name === spec.name) {
+                        if (url && bound() && bound().name === spec.name && (bound().variant || '') === (spec.variant || '')) {
                             thumb.src = url;
                             thumb.style.opacity = '1';
                         }
@@ -550,7 +566,7 @@
         return api;
     }
 
-    const api = { filePath, read, get, set, apply, prune, writeStore, useStore, attachRow, decorateSlot, modelThumbnail };
+    const api = { filePath, read, get, set, apply, prune, writeStore, useStore, attachRow, decorateSlot, modelThumbnail, thumbnailKey };
     root.RRDatabase3DBindings = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -1564,3 +1564,30 @@ test('with the battle\'s own bindings in force the driver reads its named action
     assert.match(source, /Window_FightSkill\.prototype\.processCursorMove = pageOnViewKeys\(Window_SkillList\);/);
     assert.match(source, /Window_FightItem\.prototype\.processCursorMove = pageOnViewKeys\(Window_ItemList\);/);
 });
+
+test('a walk that drew a reaction shot cannot be undone; one that drew none can', () => {
+    const make = () => {
+        const w = world({ events: [unit(1, 12, 2, 'enemy 1')] });
+        w.$dataEnemies[1].note = '<ai: ranged><move: 2>';
+        w.$dataEnemies[1].params[0] = 5000;
+        w.$dataSkills[1].note = '<range: 2-4>';
+        const fight = begin(w);
+        assert.ok(fight.commandEndTurn());
+        tick(w, 600, () => fight.tacticalState() === 'unit');
+        assert.equal(fight.isOnOverwatch(foe(w, 1)), true, 'the enemy keeps watch from 10,2');
+        fight.commandSelectUnit(hero(w).id);
+        return { w, fight };
+    };
+    // Into its reach: the shot is taken and the walk stands.
+    let { w, fight } = make();
+    assert.ok(fight.commandMoveTo(6, 2));
+    tick(w, 400, () => fight.tacticalState() === 'command');
+    assert.equal(fight.isOnOverwatch(foe(w, 1)), false, 'it took its shot');
+    assert.equal(fight.canUndoMove(), false, 'undoing the walk would dodge the shot');
+    // Short of its reach: no shot, and the walk can be taken back.
+    ({ w, fight } = make());
+    assert.ok(fight.commandMoveTo(4, 2));
+    tick(w, 400, () => fight.tacticalState() === 'command');
+    assert.equal(fight.isOnOverwatch(foe(w, 1)), true);
+    assert.equal(fight.canUndoMove(), true);
+});

@@ -138,7 +138,7 @@ test('unsaved is what a Save button has not written yet', () => {
     // The footer saves them; Cancel and leaving ask first.
     const ui = fs.readFileSync(path.join(__dirname, '..', 'src', 'DatabaseEditorUI.js'), 'utf8');
     assert.equal((ui.match(/if \(models\(\) && !\(await models\(\)\.savePending\(\)\)\) return;/g) || []).length, 2, 'OK and Apply save the page first');
-    assert.match(ui, /const cancelAsked = \(\) => afterModels\(cancelAndClose\);/);
+    assert.match(ui, /const cancelAsked = \(\) => afterModels\(\(\) => this\.requestCloseDatabase\(cancelAndClose\)\);/);
     assert.match(ui, /models\.settlePending\(\)\.then\(go => \{ if \(go\) this\.openDatabase\(type, \{ select \}\); \}\);/, 'another section waits for the answer');
 });
 

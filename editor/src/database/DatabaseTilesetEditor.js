@@ -104,6 +104,29 @@ class DatabaseTilesetEditor {
         return 'file://' + encodeURI(normalized).replace(/#/g, '%23');
     }
 
+    /**
+     * Gives every tile of `tileset` without a flag RPG Maker's starting flag
+     * (RRTilesetSheets.fillFlags), growing a short array to all 8192 tiles.
+     * `onView`: the record is being opened, which the Database does not count
+     * as an edit. Returns how many tiles were filled.
+     */
+    fillMissingFlags(tileset, { onView = false } = {}) {
+        const sheets = typeof RRTilesetSheets !== 'undefined' ? RRTilesetSheets : null;
+        if (!tileset || !sheets) return 0;
+        const flags = tileset.flags;
+        // A loop, not every(): every() skips the holes this is looking for.
+        let whole = Array.isArray(flags) && flags.length >= sheets.FLAG_TOTAL;
+        for (let tileId = 0; whole && tileId < sheets.FLAG_TOTAL; tileId++) whole = Number.isInteger(flags[tileId]);
+        if (whole) return 0;
+        const fill = entry => {
+            if (!Array.isArray(entry.flags)) entry.flags = [];
+            return sheets.fillFlags(entry.flags);
+        };
+        const database = this.parentEditor;
+        if (onView && database && typeof database.normalizeOnView === 'function') return database.normalizeOnView('tilesets', tileset, fill);
+        return fill(tileset);
+    }
+
     // Initialize the tileset editor UI
     async loadTilesets() {
         if (!this.fs) {
@@ -368,6 +391,9 @@ class DatabaseTilesetEditor {
         // Set the current tileset
         this.currentTileset = tileset;
         this.clearTile3DSelection();
+        // A tile without a flag (a short array, or a hole JSON wrote as null) gets its starting flag.
+        // Opening the record is not an edit.
+        this.fillMissingFlags(tileset, { onView: true });
 
         // Debug: Log initialization details
         console.debug('=== Initializing Compact Tileset UI ===');
@@ -378,14 +404,13 @@ class DatabaseTilesetEditor {
 
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-                <!-- Header with tileset name and save button -->
+                <!-- Header with the tileset name; the Database's OK and Apply write it -->
                 <div style="padding: 8px 12px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-menubar); flex-shrink: 0;">
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <label style="font-size: 11px; color: var(--color-text-muted);">${tt('Name:')}</label>
                         <input type="text" id="compact-tileset-name-input" value="${rrEscapeHtml(tileset.name)}"
                                style="flex: 1; max-width: 250px; padding: 4px 8px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;"
                                placeholder="${tt('Tileset name')}" />
-                        <button id="compact-save-tileset-btn" class="tool-button" style="font-size: 11px; padding: 4px 12px;">${tt('Save')}</button>
                     </div>
                 </div>
 
@@ -879,8 +904,10 @@ class DatabaseTilesetEditor {
 
         // Update tileset data. Slots past the end of a legacy nine-entry
         // array are filled rather than assigned directly, so no holes are
-        // left behind for JSON.stringify to turn into nulls.
+        // left behind for JSON.stringify to turn into nulls; the same for the
+        // flags of the tiles the sheet brings.
         RRTilesetSheets.setNameAt(this.currentTileset.tilesetNames, layerIndex, baseName);
+        this.fillMissingFlags(this.currentTileset);
 
         // Clear cache for new layer as well
         this.imageCache.delete(this.baseCacheKey(layerIndex, baseName));
@@ -1180,14 +1207,8 @@ class DatabaseTilesetEditor {
         if (nameInput) {
             nameInput.addEventListener('input', (e) => {
                 this.currentTileset.name = e.target.value;
-            });
-        }
-
-        // Save button
-        const saveBtn = document.getElementById('compact-save-tileset-btn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                this.saveTileset();
+                // The list row follows the name as it is typed.
+                this.parentEditor?.refreshDatabaseListLabel?.(this.currentTileset, 'tilesets');
             });
         }
 

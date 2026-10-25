@@ -190,7 +190,7 @@
             b.button(box.id, this.term(system, 'options'), PADDING, PADDING + LINE * 2, inner,
                 action('titleOptions'));
             const record = this.record('title', 'Title Screen', b, { background: 'none', cancel: action('none'), firstFocus: first.id });
-            record.note = 'Baseline of the stock title screen. Bind it in System 1 to replace the title.';
+            record.note = 'Baseline of the stock title screen. Bind it as Title Screen in Use As to replace the title.';
             return record;
         },
 
@@ -656,15 +656,20 @@
             return hud.stockRecord({ width: m.width, height: m.height });
         },
 
-        /** One baseline by kind (for Stock Layout on an existing record). */
+        /**
+         * One baseline by kind (for Stock Layout on an existing record). It names the screen it was laid out
+         * for, so a project that changes its resolution later has the record fitted to the new screen.
+         */
         buildOne(kind, data) {
-            return this.KINDS.includes(kind) ? this[kind](data && typeof data === 'object' ? data : {}) : null;
+            if (!this.KINDS.includes(kind)) return null;
+            const source = data && typeof data === 'object' ? data : {};
+            const m = this.metrics(source.system || {});
+            return Object.assign(this[kind](source), { design: { width: m.width, height: m.height } });
         },
 
         /** Every baseline record, in list order, for a project's data. */
         build(data) {
-            const source = data && typeof data === 'object' ? data : {};
-            return this.KINDS.map((kind, index) => Object.assign({ id: index + 1 }, this[kind](source)));
+            return this.KINDS.map((kind, index) => Object.assign({ id: index + 1 }, this.buildOne(kind, data)));
         }
     };
 

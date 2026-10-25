@@ -250,6 +250,11 @@
                 if (!item) return "";
                 return (item.iconIndex > 0 ? "\\I[" + item.iconIndex + "]" : "") + item.name + (amount !== 1 ? " \u00d7" + amount : "");
             }
+            case "commonEvent": {
+                const events = typeof $dataCommonEvents !== "undefined" && $dataCommonEvents ? $dataCommonEvents : [];
+                const event = events[Number(reward.giveId)];
+                return event && event.name ? String(event.name) : "";
+            }
             default: return "";
         }
     };
@@ -775,6 +780,11 @@
         const wanted = ReactorQuests.takeOpenOn();
         if (wanted) this._listWindow.selectQuest(wanted);
         this._categoryWindow.activate();
+    };
+
+    // No help window: the list and the detail reach the bottom of the screen.
+    Scene_Quest.prototype.helpAreaHeight = function() {
+        return 0;
     };
 
     Scene_Quest.prototype.categoryWindowRect = function() {

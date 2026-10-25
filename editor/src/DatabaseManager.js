@@ -1079,6 +1079,11 @@ class DatabaseManager {
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
                 continue;
             }
+            // Nor one whose stock interfaces, seeded on load, are still as they were seeded.
+            if (key === 'userInterfaces' && !dirty.has(key) && this.savedState[key] !== undefined
+                && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
+                continue;
+            }
             // Likewise a project that never authored a quest.
             if (key === 'quests' && !this.hasQuests()
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {

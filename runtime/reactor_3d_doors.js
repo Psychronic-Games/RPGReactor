@@ -822,6 +822,47 @@
         return false;
     };
 
+    const NO_WALKERS = [];
+    /**
+     * A shut door at rest is passed over while nobody is near enough to be
+     * noticed by it, to rattle it or to be in its doorway: on North Haven
+     * the thirty-nine doors were asked about every character each frame.
+     * `enabled = false` asks every door every frame.
+     */
+    R.DoorRest = {
+        enabled: true,
+        /** The walkers' places this frame, read once: [x, z] per walker, NaN for none. */
+        _at: new Float64Array(64),
+        _count: 0,
+        /**
+         * Read once a frame rather than once per door: characters come in a
+         * dozen and more hidden classes, and a number read from a property
+         * through a lookup that sees that many is a new heap object each time
+         * (39 doors by 50 walkers was 50 KB a frame).
+         */
+        gather(walkers) {
+            if (this._at.length < walkers.length * 2) this._at = new Float64Array(walkers.length * 4);
+            const at = this._at;
+            for (let i = 0; i < walkers.length; i++) {
+                const c = walkers[i];
+                const x = c ? c._realX : NaN, y = c ? c._realY : NaN;
+                at[i * 2] = Number.isFinite(x) ? x + 0.5 : NaN;
+                at[i * 2 + 1] = Number.isFinite(y) ? y + 0.5 : NaN;
+            }
+            this._count = walkers.length;
+        },
+        /** Whether any walker gathered this frame stands within `notice` tiles of the door's doorway (its width counted in). */
+        walkerNear(door, notice) {
+            const reach = notice + (door.piece.width || 1) * 0.5 + 1, at = this._at, n = this._count * 2;
+            const x = door.x, z = door.z;
+            for (let i = 0; i < n; i += 2) {
+                const dx = at[i] - x, dz = at[i + 1] - z;
+                if (dx * dx + dz * dz <= reach * reach) return true;
+            }
+            return false;
+        }
+    };
+
     /** Each frame of the game: who walks up to an automatic door, who has gone, and every leaf to its swing. */
     R.MapScene.prototype.updateDoorsFrame = function(characters) {
         if (!this._doors || !this._doors.length) return;
@@ -831,10 +872,28 @@
         this._doorWalkers = characters || [];
         const step = 1 / R.DOOR_SWING_FRAMES;
         const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+        // The farthest any walker can be noticed from this frame (below: 1.2 tiles beyond the door plus the
+        // swing at their pace): a shut door at rest with nobody within that of it has nothing to do this frame.
+        const walkers = characters || NO_WALKERS;
+        if (R.DoorRest.enabled) R.DoorRest.gather(walkers);
+        let noticeFrom = 0;
+        for (let i = 0; i < walkers.length; i++) {
+            const c = walkers[i];
+            if (!c) continue;
+            const pace = c.isMoving && c.isMoving() && c.distancePerFrame ? c.distancePerFrame() : 0.0625;
+            const reach = 1.2 + pace * R.DOOR_SWING_FRAMES * 1.3;
+            if (reach > noticeFrom) noticeFrom = reach;
+        }
         for (const door of this._doors) {
             const state = states.get(door.piece.id);
             if (!state) continue;
             const piece = door.piece;
+            if (R.DoorRest.enabled && state.t === 0 && !state.open && !(state.bump > 0) && state.dir && door.angle === 0
+                && !R.DoorRest.walkerNear(door, noticeFrom)) {
+                if (piece.opens === "auto" || (piece.opens === "locked" && !R.doorLocked(piece, state))) state.idle = 0;
+                state.wait = false;
+                continue;
+            }
             // Someone walking up to an automatic door (or the player turned to it), or standing in it: it opens for
             // them and stays open while anyone is in the doorway. Someone merely standing beside it does not hold it.
             // A walker is noticed early enough that the leaf is clear of their way before they reach it:

@@ -129,6 +129,21 @@ Reactor3D.SHADER_LIGHTS = 32;
  */
 Reactor3D.VOLUME_LIGHT_GAIN = 2;
 
+/**
+ * Models are lit by which way each face points: a light lands at its full
+ * strength on a face turned to it, wrapped round the edge by
+ * MODEL_FACING_WRAP (0 is plain Lambert), and a face turned away keeps
+ * MODEL_FACING_FLOOR of it, so the shaded side of a figure reads as form and
+ * never as a black cut-out. The ambient takes MODEL_SKY_FALLOFF less on a face
+ * turned straight down. Map tiles, pieces and terrain keep their own shading.
+ * False lights every model by distance alone, as before (read when a
+ * material compiles).
+ */
+Reactor3D.MODEL_FACING = true;
+Reactor3D.MODEL_FACING_WRAP = 0.5;
+Reactor3D.MODEL_FACING_FLOOR = 0.3;
+Reactor3D.MODEL_SKY_FALLOFF = 0.12;
+
 /** How strongly a light's own body glows, before its intensity. */
 Reactor3D.VOLUME_GLOW = 0.55;
 /** The largest glow ball a point light's body grows to, in tiles. */
@@ -375,6 +390,8 @@ Reactor3D.lightUniforms = function() {
         // The light a material's relief is shaded against: the map's sun where it stands (w 1),
         // else a direction from above (w 0).
         rrKeyLight: { value: new Float32Array(Reactor3D.KEY_LIGHT_DEFAULT) },
+        // The key light's color when it is a sun (what shiny surfaces take a highlight from), else black.
+        rrKeyColor: { value: new Float32Array(3) },
         // Which shadow tile each light samples, -1 for none.
         rrLightShadow: { value: new Float32Array(n).fill(-1) },
         // Per tile: near, far, its dynamic tile (-1 for none), softness (in face units).
@@ -389,7 +406,20 @@ Reactor3D.lightUniforms = function() {
         rrShadowDynAtlas: { value: null },
         // 1/faces across, 1/rows in the static atlas, 1/rows in the dynamic
         // one, and one texel in face units.
-        rrShadowGrid: { value: new Float32Array([1 / 6, 1, 1, 1 / 512]) }
+        rrShadowGrid: { value: new Float32Array([1 / 6, 1, 1, 1 / 512]) },
+        // The sun's cascades (Reactor3D.SUN_SHADOW_MAP): world to each cascade's clip space.
+        rrSunShadowMatrix: { value: new Float32Array(32) },
+        // One texel of a cascade, the filter's spread in texels, the cascades whose moving casters are drawn
+        // (bit per cascade), the cascades drawn at all (bit per cascade).
+        rrSunShadowInfo: { value: new Float32Array([1 / 512, 1, 0, 0]) },
+        // Where the cascades' band starts and how tall it is, in the static atlas, then in the dynamic one.
+        rrSunShadowBand: { value: new Float32Array([0, 1, 0, 1]) },
+        // Each cascade's compare offset in depth, and one cascade's width across either atlas.
+        rrSunShadowBias: { value: new Float32Array([0, 0, 0.5, 0]) },
+        // The share of the ambient the sun's shadow takes away (Reactor3D.SUN_SHADE).
+        rrSunShade: { value: 0 },
+        rrSunShadowDir: { value: new Float32Array([0, 1, 0, 0]) },
+        rrSunShadowTexel: { value: new Float32Array([0.03, 0.12, 0.1, 0]) }
     };
     return this._lightUniforms;
 };
@@ -467,6 +497,78 @@ Reactor3D.shadowGlsl = function(taps) {
         "\tif (dynamic) s = min(s, texture(rrShadowDynAtlas, vec3(dynBase + q * dynScale, dp)));",
         "\treturn s;",
         "#endif",
+        "}",
+        // The sun: the nearest cascade whose square holds the point, its
+        // static casters in the band under the static atlas's rows and its
+        // moving ones in the same place under the dynamic atlas's. Depth is
+        // the orthographic camera's, linear, so one offset holds at any range.
+        "uniform mat4 rrSunShadowMatrix[2];",
+        "uniform vec4 rrSunShadowInfo;",
+        "uniform vec4 rrSunShadowBand;",
+        "uniform vec4 rrSunShadowBias;",
+        // The way toward the sun (xyz), and each cascade's texel in tiles (x, y) with the near cascade's blend band (z, in its uv).
+        "uniform vec4 rrSunShadowDir;",
+        "uniform vec4 rrSunShadowTexel;",
+        // How much of the ambient a point in the sun's shadow loses, and how shaded this point is.
+        "uniform float rrSunShade;",
+        "float rrSunShaded = 0.0;",
+        // The surface's own facing, from rrLight's derivatives (taken where every pixel runs them).
+        "vec3 rrSunNormal;",
+        "float rrSunCascade(int c, vec3 s) {",
+        "\tfloat ref = s.z - (c == 0 ? rrSunShadowBias.x : rrSunShadowBias.y);",
+        "\tbool dyn = mod(floor(rrSunShadowInfo.z / (c == 0 ? 1.0 : 2.0)), 2.0) > 0.5;",
+        "\tfloat u0 = float(c) * rrSunShadowBias.z;",
+        "#if RR_SHADOW_TAPS > 1",
+        "\tfloat phi = rrShadowNoise(gl_FragCoord.xy) * 6.283185307179586;",
+        "\tfloat a = 0.0, b = 0.0;",
+        "\tfor (int i = 0; i < 5; i++) {",
+        "\t\tvec2 q = s.xy + rrShadowTap(i, phi) * (rrSunShadowInfo.x * rrSunShadowInfo.y);",
+        "\t\tfloat u = u0 + q.x * rrSunShadowBias.z;",
+        "\t\ta += texture(rrShadowAtlas, vec3(u, rrSunShadowBand.x + q.y * rrSunShadowBand.y, ref));",
+        "\t\tif (dyn) b += texture(rrShadowDynAtlas, vec3(u, rrSunShadowBand.z + q.y * rrSunShadowBand.w, ref));",
+        "\t}",
+        "\treturn dyn ? min(a, b) * 0.2 : a * 0.2;",
+        "#else",
+        // Four hardware-filtered taps half a texel about the point: an edge ramps over two texels
+        // with no grain, where one tap shows each texel's step.
+        // The far cascade lies where a texel is a pixel or less: one tap.
+        "\tif (c > 0) {",
+        "\t\tfloat u = u0 + s.x * rrSunShadowBias.z;",
+        "\t\tfloat a = texture(rrShadowAtlas, vec3(u, rrSunShadowBand.x + s.y * rrSunShadowBand.y, ref));",
+        "\t\treturn dyn ? min(a, texture(rrShadowDynAtlas, vec3(u, rrSunShadowBand.z + s.y * rrSunShadowBand.w, ref))) : a;",
+        "\t}",
+        "\tfloat h = 0.5 * rrSunShadowInfo.x, a = 0.0, b = 0.0;",
+        "\tfor (int i = 0; i < 4; i++) {",
+        "\t\tvec2 q = s.xy + vec2(i == 0 || i == 2 ? -h : h, i < 2 ? -h : h);",
+        "\t\tfloat u = u0 + q.x * rrSunShadowBias.z;",
+        "\t\ta += texture(rrShadowAtlas, vec3(u, rrSunShadowBand.x + q.y * rrSunShadowBand.y, ref));",
+        "\t\tif (dyn) b += texture(rrShadowDynAtlas, vec3(u, rrSunShadowBand.z + q.y * rrSunShadowBand.w, ref));",
+        "\t}",
+        "\treturn dyn ? min(a, b) * 0.25 : a * 0.25;",
+        "#endif",
+        "}",
+        "float rrSunShadowAt(vec3 p) {",
+        "\tfloat edge = rrSunShadowInfo.x * (rrSunShadowInfo.y + 1.0);",
+        // Off the surface along its facing, turned toward the sun, by a texel and a half of each
+        // cascade: a surface never reads its own depth, at any angle to the sun.
+        "\tfloat nl = length(rrSunNormal);",
+        "\tvec3 n = nl > 0.0 ? rrSunNormal / nl : vec3(0.0);",
+        "\tif (dot(n, rrSunShadowDir.xyz) < 0.0) n = -n;",
+        "\tfloat sum = 0.0, left = 1.0;",
+        "\tfor (int c = 0; c < 2; c++) {",
+        "\t\tif (mod(floor(rrSunShadowInfo.w / (c == 0 ? 1.0 : 2.0)), 2.0) < 0.5) continue;",
+        "\t\tvec3 q = p + n * ((c == 0 ? rrSunShadowTexel.x : rrSunShadowTexel.y) * " + (this.SUN_SHADOW_NORMAL_OFFSET || 1.5).toFixed(2) + ");",
+        "\t\tvec3 s = (rrSunShadowMatrix[c] * vec4(q, 1.0)).xyz * 0.5 + 0.5;",
+        "\t\tfloat inside = min(min(s.x, s.y), min(1.0 - s.x, 1.0 - s.y)) - edge;",
+        "\t\tif (inside <= 0.0) continue;",
+        "\t\tfloat v = s.z >= 1.0 || s.z <= 0.0 ? 1.0 : rrSunCascade(c, s);",
+        // The near cascade hands over to the far one across its last band, so sharpness never steps.
+        "\t\tfloat w = c == 0 ? clamp(inside / rrSunShadowTexel.z, 0.0, 1.0) : 1.0;",
+        "\t\tsum += left * w * v;",
+        "\t\tleft *= 1.0 - w;",
+        "\t\tif (left <= 0.0) return sum;",
+        "\t}",
+        "\treturn sum + left;",
         "}"
     ];
     return lines.join("\n") + "\n";
@@ -483,8 +585,36 @@ Reactor3D.lightGlsl = function(shadows, taps) {
         "uniform vec4 rrKeyLight;",
         "uniform float rrSelfLit;",
         "varying vec3 vRRWorldPos;",
+        // A model's facing (Reactor3D.MODEL_FACING): its normal and how much it counts, set
+        // by the material before it asks for the light; 0 everywhere else, as before.
+        "vec3 rrFaceN = vec3(0.0, 1.0, 0.0);",
+        "float rrFace = 0.0;",
+        "uniform vec3 rrKeyColor;",
+        // The light direction and strength interpolated from the model's vertices. This
+        // keeps local-light facing in the quarter-size path without another pixel light loop.
+        "#ifdef RR_VERTEX_FACE",
+        "varying vec4 vRRFaceLight;",
+        "float rrFaceShare(vec3 n) {",
+        "\tfloat k = vRRFaceLight.w, a = dot(rrAmbient, vec3(0.333));",
+        "\tfloat w = k / max(k + a, 1e-4);",
+        "\tfloat nl = dot(n, vRRFaceLight.xyz) / max(k, 1e-4);",
+        "\tfloat t = " + (this.MODEL_FACING_FLOOR || 0).toFixed(3) + " + " + (1 - (this.MODEL_FACING_FLOOR || 0)).toFixed(3) + " * clamp((nl + " + (this.MODEL_FACING_WRAP || 0).toFixed(3) + ") / " + (1 + (this.MODEL_FACING_WRAP || 0)).toFixed(3) + ", 0.0, 1.0);",
+        "\treturn (1.0 - w) * (1.0 - " + (this.MODEL_SKY_FALLOFF || 0).toFixed(3) + " * (1.0 - n.y)) + w * t;",
+        "}",
+        "#else",
+        "float rrFaceShare(vec3 n) {",
+        "\tfloat k = dot(rrKeyColor, vec3(0.333)), a = dot(rrAmbient, vec3(0.333));",
+        "\tfloat w = rrKeyLight.w < 0.5 ? k / max(k + a, 1e-4) : 0.0;",
+        "\tfloat t = " + (this.MODEL_FACING_FLOOR || 0).toFixed(3) + " + " + (1 - (this.MODEL_FACING_FLOOR || 0)).toFixed(3) + " * clamp((dot(n, normalize(rrKeyLight.xyz)) + " + (this.MODEL_FACING_WRAP || 0).toFixed(3) + ") / " + (1 + (this.MODEL_FACING_WRAP || 0)).toFixed(3) + ", 0.0, 1.0);",
+        "\treturn (1.0 - w) * (1.0 - " + (this.MODEL_SKY_FALLOFF || 0).toFixed(3) + " * (1.0 - n.y)) + w * t;",
+        "}",
+        "#endif",
+        // About the light the quarter-size combine will multiply a surface by: what a glow or a
+        // sheen added before it is divided by, so it comes out near its own strength.
+        "float rrLightGuess() { return max(dot(rrAmbient + rrKeyColor, vec3(0.333)), 0.25); }",
         "vec3 rrLight(vec3 p) {",
         "\tvec3 sum = rrAmbient;",
+        shadows ? "\trrSunShaded = 0.0;\n\trrSunNormal = cross(dFdx(p), dFdy(p));" : "",
         "\tfor (int i = 0; i < " + this.SHADER_LIGHTS + "; i++) {",
         "\t\tif (i >= rrLightCount) break;",
         "\t\tvec4 lp = rrLightPos[i];",
@@ -526,9 +656,19 @@ Reactor3D.lightGlsl = function(shadows, taps) {
         "\t\t\tif (fall <= 0.0) continue;",
         "\t\t}",
         "\t\t}",
-        shadows ? "\t\tfloat sh = rrLightShadow[i];\n\t\tif (sh >= 0.0) fall *= rrShadowAt(int(sh + 0.5), p);" : "",
+        shadows ? "\t\tfloat sh = rrLightShadow[i];\n\t\tif (sh > " + ((this.SUN_SHADOW_ROW || 64) - 0.5).toFixed(1) + ") { float sv = rrSunShadowAt(p); rrSunShaded = fall * (1.0 - sv); fall *= sv; }\n\t\telse if (sh >= 0.0) fall *= rrShadowAt(int(sh + 0.5), p);" : "",
+        // Toward the light (a sun's direction is its aim): the side facing away keeps a floor of it.
+        "\t\tif (rrFace > 0.0) {",
+        "\t\t\tvec3 rrDL = lc.w > 2.5 ? rrLightAim[i].xyz : -d;",
+        "\t\t\tfloat rrNL = dot(rrFaceN, rrDL) * inversesqrt(max(dot(rrDL, rrDL), 1e-8));",
+        "\t\t\tfall *= mix(1.0, " + (this.MODEL_FACING_FLOOR || 0).toFixed(3) + " + " + (1 - (this.MODEL_FACING_FLOOR || 0)).toFixed(3) + " * clamp((rrNL + " + (this.MODEL_FACING_WRAP || 0).toFixed(3) + ") / " + (1 + (this.MODEL_FACING_WRAP || 0)).toFixed(3) + ", 0.0, 1.0), rrFace);",
+        "\t\t}",
         "\t\tsum += lc.rgb * fall;",
         "\t}",
+        // What stands between a point and the sun also hides part of the sky.
+        shadows ? "\tsum -= rrAmbient * (rrSunShade * rrSunShaded);" : "",
+        // The sky's light comes from above: a face turned down takes less of the ambient.
+        "\tif (rrFace > 0.0) sum -= rrAmbient * (rrFace * " + (this.MODEL_SKY_FALLOFF || 0).toFixed(3) + " * (1.0 - rrFaceN.y));",
         "\treturn sum;",
         "}"
     ].filter(line => line !== "").join("\n") + "\n";
@@ -579,6 +719,9 @@ Reactor3D.packLightUniforms = function(lights, ambient, uniforms = this.lightUni
         const rgb = light.colour === undefined ? 0xffffff : light.colour;
         const gain = (light.intensity === undefined ? 1 : light.intensity) * this.LIGHT_GAIN * this.VOLUME_LIGHT_GAIN;
         let ax = 0, ay = -1, az = 0, shape = -1;
+        const sunDir = light.type === this.LIGHT_SUN
+            ? (light.sunDir || this.sunDirection(-(light.yaw || 0), light.pitch, light.daylight === "fixed" ? null : this.daylight(ambient || null), light.daylight === "fixed")) : null;
+        if (sunDir) { ax = sunDir[0]; ay = sunDir[1]; az = sunDir[2]; }
         if (spot || beam) {
             const yaw = ((light.yaw || 0) * Math.PI) / 180;
             const pitch = ((light.pitch || 0) * Math.PI) / 180;
@@ -606,7 +749,7 @@ Reactor3D.packLightUniforms = function(lights, ambient, uniforms = this.lightUni
                 id: light.id !== undefined && light.id !== null ? String(light.id) : "#" + count,
                 x, y: y + Math.max(0, this.SHADOW_LIFT - height), z, radius: castReach,
                 gap: focus ? Math.hypot(x - focus.x, z - focus.z) - light.radius : 0,
-                lightY: y, spot: spot || beam, beam, ax, ay, az, cosHalf: spot ? shape : -1,
+                lightY: y, spot: spot || beam, beam, sun, dir: sunDir, ax, ay, az, cosHalf: spot ? shape : -1,
                 width: beam ? shape * 2 : 0,
                 priorityRadius: sun ? castReach : light.radius,
                 strength: (light.intensity === undefined ? 1 : light.intensity) * (((rgb >> 16) & 255) + ((rgb >> 8) & 255) + (rgb & 255)) / 765,
@@ -627,8 +770,15 @@ Reactor3D.setKeyLight = function(uniforms, count) {
     const key = uniforms.rrKeyLight && uniforms.rrKeyLight.value;
     if (!key) return;
     const pos = uniforms.rrLightPos.value, col = uniforms.rrLightColor.value;
+    const aim = uniforms.rrLightAim && uniforms.rrLightAim.value;
+    const tint = uniforms.rrKeyColor && uniforms.rrKeyColor.value;
+    if (tint) tint.fill(0);
     for (let i = 0; i < count; i++) {
-        if (col[i * 4 + 3] > 2.5) { key[0] = pos[i * 4]; key[1] = pos[i * 4 + 1]; key[2] = pos[i * 4 + 2]; key[3] = 1; return; }
+        if (col[i * 4 + 3] <= 2.5) continue;
+        if (tint) { tint[0] = col[i * 4]; tint[1] = col[i * 4 + 1]; tint[2] = col[i * 4 + 2]; }
+        // A sun is directional: the way toward it, as its aim holds it.
+        if (aim && aim[i * 4 + 1] > 0) { key[0] = aim[i * 4]; key[1] = aim[i * 4 + 1]; key[2] = aim[i * 4 + 2]; key[3] = 0; return; }
+        key[0] = pos[i * 4]; key[1] = pos[i * 4 + 1]; key[2] = pos[i * 4 + 2]; key[3] = 1; return;
     }
     key.set(this.KEY_LIGHT_DEFAULT);
 };
@@ -671,7 +821,7 @@ Reactor3D.sameAsOther = function(last, v) { for (let i = 0; i < v.length; i++) i
 Reactor3D.CACHED_UNIFORM_TYPES = new Set([0x1406, 0x8B50, 0x8B51, 0x8B52, 0x1404, 0x8B53, 0x8B54, 0x8B55, 0x8B5A, 0x8B5B, 0x8B5C]);
 Reactor3D.cacheUniformArrays = function(renderer) {
     const programs = renderer && renderer.info && renderer.info.programs;
-    if (!programs || renderer.__rrCachedPrograms === programs.length && programs.every(program => program.__rrArraysCached)) return;
+    if (!programs || renderer.__rrCachedPrograms === programs.length && programs.every(program => program.__rrArraysCached || program.__rrArraysLazy)) return;
     renderer.__rrCachedPrograms = programs.length;
     const wrap = uniform => {
         if (uniform.__rrCached || typeof uniform.setValue !== "function" || !this.CACHED_UNIFORM_TYPES.has(uniform.type)) return;
@@ -682,7 +832,27 @@ Reactor3D.cacheUniformArrays = function(renderer) {
     };
     const visit = list => { for (const uniform of list || []) { if (uniform.seq) visit(uniform.seq); else if (uniform.size !== undefined) wrap(uniform); } };
     for (const program of programs) {
-        if (program.__rrArraysCached) continue;
+        if (program.__rrArraysCached || program.__rrArraysLazy) continue;
+        // Taken in when three first reads the program's uniforms (its first
+        // draw), or when ShaderWarmup reads them between frames: reading them
+        // here was a wait on the GPU process for every new program at once,
+        // behind every upload and compile queued ahead (79 ms in one frame of
+        // North Haven's arrival on the Radeon).
+        if (this.lazyUniformArrays !== false && typeof program.getUniforms === "function" && !Object.prototype.hasOwnProperty.call(program, "__rrUniformsRead")) {
+            program.__rrArraysLazy = true;
+            const read = program.getUniforms;
+            program.getUniforms = function() {
+                const uniforms = read.apply(this, arguments);
+                program.getUniforms = read;
+                program.__rrUniformsRead = true;
+                if (!program.__rrArraysCached) {
+                    program.__rrArraysCached = true;
+                    try { visit(uniforms && uniforms.seq); } catch (error) { /* a program that failed to link has none */ }
+                }
+                return uniforms;
+            };
+            continue;
+        }
         // A program still compiling on the driver's threads is taken on a
         // later call: reading its uniforms now would wait for the compile.
         if (typeof program.isReady === "function" && !program.isReady()) { renderer.__rrCachedPrograms = -1; continue; }
@@ -690,8 +860,124 @@ Reactor3D.cacheUniformArrays = function(renderer) {
         try { visit(program.getUniforms().seq); } catch (error) { /* a program that failed to link has none */ }
     }
 };
+/** False reads every linked program's uniforms as the draw begins (a wait on the GPU process per new program). */
+Reactor3D.lazyUniformArrays = true;
 
-Reactor3D.injectLightShader = function(shader, renderer) {
+/** The world-space normal a lit material's fragment reads (`vRRWorldNormal`), declared once whoever asks first. */
+Reactor3D.WORLD_NORMAL_VARYING = "#ifndef RR_WORLD_NORMAL\n#define RR_WORLD_NORMAL\nvarying vec3 vRRWorldNormal;\n#endif\n";
+Reactor3D.injectWorldNormal = function(shader) {
+    if (shader.vertexShader.indexOf("vRRWorldNormal = ") >= 0) return;
+    shader.vertexShader = this.WORLD_NORMAL_VARYING + shader.vertexShader.replace(
+        "#include <project_vertex>",
+        [
+            "#include <project_vertex>",
+            "{",
+            "#ifdef USE_SKINNING",
+            "\tvec3 rrObjN = objectNormal;",
+            "#else",
+            "\tvec3 rrObjN = normal;",
+            "#endif",
+            "#ifdef USE_INSTANCING",
+            "\trrObjN = mat3(instanceMatrix) * rrObjN;",
+            "#endif",
+            "\tvRRWorldNormal = normalize(mat3(modelMatrix) * rrObjN);",
+            "}"
+        ].join("\n")
+    );
+    if (shader.fragmentShader.indexOf("RR_WORLD_NORMAL") < 0) shader.fragmentShader = this.WORLD_NORMAL_VARYING + shader.fragmentShader;
+};
+
+/** Whether each light in the loop is weighed by a model's facing: on every tier but the weak one. */
+Reactor3D.facesPerLight = function() {
+    return this.tier() !== "weak";
+};
+
+/** Whether a material is lit by which way its faces point (a model's, see MODEL_FACING). */
+Reactor3D.facesLight = function(material) {
+    return !!(this.MODEL_FACING && material && material.__reactorModel && !material.__reactorSelfLit);
+};
+
+/**
+ * The GLSL that sets a model's facing before its light is asked for: its
+ * normal, turned toward the eye (a double-sided leaf or cloth lights from the
+ * side seen), bent by its normal map where it has one.
+ */
+Reactor3D.faceGlsl = function(normalMap) {
+    return [
+        // A mesh without normals lights as before. No branch: the normal map's derivatives need every pixel.
+        "{",
+        "\tfloat rrFL = dot(vRRWorldNormal, vRRWorldNormal);",
+        "\tvec3 rrFN = rrFL > 1e-8 ? vRRWorldNormal * inversesqrt(rrFL) : vec3(0.0, 1.0, 0.0);",
+        "\tif (dot(rrFN, cameraPosition - vRRWorldPos) < 0.0) rrFN = -rrFN;",
+        normalMap ? "\trrFN = rrPerturbNormal(vRRWorldPos, rrFN, texture2D(rrNormalMap, vMapUv).xyz * 2.0 - 1.0, vMapUv);" : "",
+        "\trrFaceN = rrFN;",
+        "\trrFace = rrFL > 1e-8 ? 1.0 : 0.0;",
+        "}"
+    ].filter(Boolean).join("\n\t") + "\n\t";
+};
+
+/** A normal map's normal on a surface with no tangents: the frame from the screen derivatives of place and uv. */
+Reactor3D.PERTURB_NORMAL_GLSL = [
+    "uniform sampler2D rrNormalMap;",
+    "uniform vec2 rrNormalScale;",
+    "vec3 rrPerturbNormal(vec3 pos, vec3 n, vec3 m, vec2 uv) {",
+    "\tvec3 q0 = dFdx(pos), q1 = dFdy(pos);",
+    "\tvec2 st0 = dFdx(uv), st1 = dFdy(uv);",
+    "\tvec3 q1p = cross(q1, n), q0p = cross(n, q0);",
+    "\tvec3 t = q1p * st0.x + q0p * st1.x, b = q1p * st0.y + q0p * st1.y;",
+    "\tfloat det = max(dot(t, t), dot(b, b));",
+    "\tfloat k = det == 0.0 ? 0.0 : inversesqrt(det);",
+    "\tm.xy *= rrNormalScale;",
+    "\treturn normalize(t * (m.x * k) + b * (m.y * k) + n * m.z);",
+    "}"
+].join("\n") + "\n";
+
+/** Local light moments at vertices: all packed lights count, with no shadow or pixel light loop. */
+Reactor3D.injectVertexFacing = function(shader) {
+    if (shader.vertexShader.includes("varying vec4 vRRFaceLight;")) return;
+    const declarations = [
+        "uniform int rrLightCount;",
+        "uniform vec4 rrLightPos[" + this.SHADER_LIGHTS + "];",
+        "uniform vec4 rrLightColor[" + this.SHADER_LIGHTS + "];",
+        "uniform vec4 rrLightAim[" + this.SHADER_LIGHTS + "];",
+        "varying vec4 vRRFaceLight;",
+        "vec4 rrVertexFaceLight(vec3 p) {",
+        "\tvec4 sum = vec4(0.0);",
+        "\tfor (int i = 0; i < " + this.SHADER_LIGHTS + "; i++) {",
+        "\t\tif (i >= rrLightCount) break;",
+        "\t\tvec4 lp = rrLightPos[i], lc = rrLightColor[i];",
+        "\t\tvec3 d = p - lp.xyz;",
+        "\t\tfloat fall, dist = 0.0;",
+        "\t\tvec3 toward;",
+        "\t\tif (lc.w > 2.5) {",
+        "\t\t\tfall = smoothstep(lp.w, lp.w * 0.6, length(d.xz));",
+        "\t\t\ttoward = rrLightAim[i].xyz;",
+        "\t\t} else {",
+        "\t\t\tif (max(max(abs(d.x), abs(d.y)), abs(d.z)) >= max(lp.w, 0.001)) continue;",
+        "\t\t\tdist = length(d);",
+        "\t\t\tfall = max(0.0, 1.0 - dist / max(lp.w, 0.001)); fall *= fall;",
+        "\t\t\tvec4 aim = rrLightAim[i];",
+        "\t\t\tif (lc.w > 1.5) {",
+        "\t\t\t\tfloat along = dot(d, aim.xyz);",
+        "\t\t\t\tif (along < 0.0 || along > lp.w) continue;",
+        "\t\t\t\tfall = smoothstep(aim.w, aim.w * 0.35, length(d - aim.xyz * along)) * sqrt(max(0.0, 1.0 - along / max(lp.w, 0.001)));",
+        "\t\t\t} else if (lc.w > 0.5) {",
+        "\t\t\t\tfloat cone = dot(d / max(dist, 0.0001), aim.xyz);",
+        "\t\t\t\tfall *= smoothstep(aim.w, mix(aim.w, 1.0, 0.35), cone);",
+        "\t\t\t}",
+        "\t\t\ttoward = -d;",
+        "\t\t}",
+        "\t\tfloat energy = dot(lc.rgb, vec3(0.333)) * fall;",
+        "\t\tsum.xyz += toward * inversesqrt(max(dot(toward, toward), 1e-8)) * energy;",
+        "\t\tsum.w += energy;",
+        "\t}",
+        "\treturn sum;",
+        "}"
+    ].join("\n") + "\n";
+    shader.vertexShader = declarations + shader.vertexShader.replace(/}\s*$/, "\tvRRFaceLight = rrVertexFaceLight(vRRWorldPos);\n}");
+};
+
+Reactor3D.injectLightShader = function(shader, renderer, material) {
     const uniforms = this.lightUniforms();
     this.LightGrid.ensure(uniforms);
     if (this.LightVolume) this.LightVolume.uniforms();
@@ -717,17 +1003,37 @@ Reactor3D.injectLightShader = function(shader, renderer) {
     // is first set: a fragment about to be thrown away never pays for the
     // light loop. The product is the same, taken in another order. A
     // self-lit material (a Glow) skips the loop outright: its term is 1.
+    // A model: lit by which way its faces point (and its normal map, where it has one beside its picture).
+    const faces = this.facesLight(material);
+    const normalMap = faces && !!(material.userData && material.userData.rrNormalMap && material.userData.rrNormalMap.isTexture) && !!material.map;
+    let face = "", faceDecl = "";
+    if (faces) {
+        this.injectWorldNormal(shader);
+        this.injectVertexFacing(shader);
+        faceDecl = "#define RR_VERTEX_FACE\n";
+        face = this.faceGlsl(normalMap);
+        // On the weak tier the loop does not weigh each light: the whole light takes the direct light's and the
+        // sky's share of the facing (rrFaceShare), as a model lit in the quarter-size pass does.
+        if (!this.facesPerLight()) face += "float rrFaceKeep = rrFace;\n\trrFace = 0.0;\n\t";
+        if (normalMap) {
+            faceDecl += this.PERTURB_NORMAL_GLSL;
+            shader.uniforms.rrNormalMap = { value: material.userData.rrNormalMap };
+            shader.uniforms.rrNormalScale = { value: material.userData.rrNormalScale || new THREE.Vector2(1, 1) };
+        }
+    }
     if (this.lateLighting !== false && shader.fragmentShader.indexOf("#include <alphahash_fragment>") >= 0
         && shader.fragmentShader.indexOf("vec4 diffuseColor = vec4( diffuse, opacity );") >= 0) {
-        shader.fragmentShader = glsl + shader.fragmentShader.replace(
+        shader.fragmentShader = faceDecl + glsl + shader.fragmentShader.replace(
             "#include <alphahash_fragment>",
-            "#include <alphahash_fragment>\n\tif (rrSelfLit < 1.0) diffuseColor.rgb *= mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);\n\t" + this.LIT_MARK
+            "#include <alphahash_fragment>\n\t" + face + "if (rrSelfLit < 1.0) diffuseColor.rgb *= mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);\n\t"
+                + (faces && !this.facesPerLight() ? "if (rrFaceKeep > 0.0 && rrSelfLit < 1.0) diffuseColor.rgb *= rrFaceShare(rrFaceN);\n\t" : "") + this.LIT_MARK
         );
         return;
     }
-    shader.fragmentShader = glsl + shader.fragmentShader.replace(
+    shader.fragmentShader = faceDecl + glsl + shader.fragmentShader.replace(
         "vec4 diffuseColor = vec4( diffuse, opacity );",
-        "vec3 rrLightTerm = mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);\n\tvec4 diffuseColor = vec4( diffuse * rrLightTerm, opacity );"
+        face + "vec3 rrLightTerm = mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);\n\t"
+            + (faces && !this.facesPerLight() ? "if (rrFaceKeep > 0.0) rrLightTerm *= rrFaceShare(rrFaceN);\n\t" : "") + "vec4 diffuseColor = vec4( diffuse * rrLightTerm, opacity );"
     );
 };
 /** Where the lit colour is final, for what blends over it (see injectBlendColor). */
@@ -855,9 +1161,8 @@ Reactor3D.injectCutaway = function(material, shader) {
     // gone over it: one height per material, a model's materials being its own. A unit's own model never is.
     material.userData = material.userData || {};
     shader.uniforms.rrFightStump = material.userData.rrFightStump || (material.userData.rrFightStump = { value: 1e9 });
-    // In a battle a character's own model (who fights, who walks with the player, who stands by) fades neither in
-    // the sight line nor over the battle's ground: characters are not cover. One flag per material, counted only
-    // while a battle runs here (rrCutBattle), so the map's own fade is the map's again when it is over.
+    // A character's own model (who fights, who walks with the player, who stands by) fades neither in the sight line
+    // nor over a battle's ground: characters are not cover, and one cut part-way showed the inside of its model.
     shader.uniforms.rrCutBody = material.userData.rrCutBody || (material.userData.rrCutBody = { value: 0 });
     const openings = Reactor3D.CUTAWAY_OPENINGS;
     shader.fragmentShader = "uniform float rrFightStump;\nuniform float rrCutBody;\nuniform float rrCutBattle;\nuniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\nuniform float rrGhost;\nuniform float rrGhostWidth;\nuniform vec3 rrCutFoci[" + Reactor3D.CUTAWAY_FOCI + "];\nuniform int rrCutFocusCount;\n"
@@ -929,8 +1234,8 @@ Reactor3D.injectCutaway = function(material, shader) {
                 "if (rrGhost > 0.5) { if (!rrInWay) discard; } else if (rrInWay) discard;"
             ].join("\n\t")
                 // Scenery in the way of a battle's units is cut off above its foot; a body never is.
-                : "if (max(rrCutBody * rrCutBattle, rrCutBody - 1.0) < 0.5 && vRRWorldPos.y > rrFightStump) discard;",
-            "if (rrCutRadius > 0.0 && max(rrCutBody * rrCutBattle, rrCutBody - 1.0) < 0.5 && vRRWorldPos.y > rrCutFocus.y - 1.2) {",
+                : "if (rrCutBody < 0.5 && vRRWorldPos.y > rrFightStump) discard;",
+            "if (rrCutRadius > 0.0 && rrCutBody < 0.5 && vRRWorldPos.y > rrCutFocus.y - 1.2) {",
             "\tvec3 rrSight = rrCutFocus - rrCutEye;",
             "\tfloat rrSightLength = length(rrSight);",
             "\tif (rrSightLength > 0.001) {",
@@ -999,7 +1304,8 @@ Reactor3D.CUTAWAY_REACH = 24;
  * is itself under the ceiling (first person, a low third-person orbit)
  * has nothing overhead in its way, and cutting the ceiling from it would
  * show the sky through the room. A wall between the camera and the
- * player is opened whether they are inside or out.
+ * player is seen through while the player is inside a building (and in a
+ * battle on the map); walking outside, buildings stay whole.
  */
 /**
  * `others`: the characters beside the player a wall must not hide either
@@ -1010,12 +1316,15 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     const frame = (this._cutFrame = (this._cutFrame || 0) + 1);
     Reactor3D._cutFrameNow = frame;
     // A placed model thins where it stands near the line from the eye to the player (a bough, a cart), and over a
-    // tactical battle's ground. In a battle characters stand all along that line and all over that ground, and each
-    // was drawn as a dithered ghost: characters are not cover. Theirs are marked as the battle begins and a few
-    // times a second after, and the fades pass them by while the battle runs. (Before anything returns: a map with
-    // nothing built has bodies too.)
+    // tactical battle's ground. Characters stand along that line too (followers behind the player, a battle's
+    // units), and one thinned part-way showed the inside of its model: characters are not cover. Theirs are marked
+    // as bodies on the first frame, when a battle begins, and a few times a second after, and the fades pass them
+    // by. (Before anything returns: a map with nothing built has bodies too.)
     const battle = !!camera && Reactor3D.cutawayInBattle();
-    if (battle && (!shared.rrCutBattle.value || frame % Reactor3D.CUTAWAY_BODY_FRAMES === 1)) Reactor3D.cutawayMarkBodies(character);
+    if (!this._cutBodiesMarked || (battle && !shared.rrCutBattle.value) || frame % Reactor3D.CUTAWAY_BODY_FRAMES === 1) {
+        Reactor3D.cutawayMarkBodies(character);
+        this._cutBodiesMarked = true;
+    }
     shared.rrCutBattle.value = battle ? 1 : 0;
     if (!camera || !mapData || !character || !Reactor3D.hasPieces(mapData)) {
         shared.rrCutTop.value = 1e9;
@@ -1038,12 +1347,13 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     shared.rrCutTop.value = eye.y > cutTop ? cutTop : 1e9;
     if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
     // The see-through pass is live whenever the corridor is: a wall between
-    // the camera and the party is seen through inside a building or out.
+    // the camera and the party is seen through while the player is inside a building.
     if (!this._cutLook) this.setCutLook(true);
     const cutState = shared.rrCutTop.value === 1e9 ? "none" : shared.rrCutTop.value + ":" + shared.rrCutBox.value.join(",");
     if (cutState !== this._cutState) {
         this._cutState = cutState;
-        if (Reactor3D.Shadows && Reactor3D.Shadows.invalidate) Reactor3D.Shadows.invalidate();
+        const S = Reactor3D.Shadows;
+        if (S) { if (S.cutChanged) S.cutChanged(); else if (S.invalidate) S.invalidate(); }
         if (this.updateCutCaps) this.updateCutCaps(mapData, shared.rrCutTop.value, cutState === "none" ? null : shared.rrCutBox.value);
     }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
@@ -1061,11 +1371,13 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
         }
     }
     // A corridor only for who something built really hides: a rim, a bench or a counter the eye sees over is not
-    // cover, and a corridor through it was a box cut out of it at the character's feet.
+    // cover, and a corridor through it was a box cut out of it at the character's feet. Only for a player inside a
+    // building, or in a battle here: walking outside, a building between the camera and the party stays whole.
     let count = 0;
-    if (Reactor3D.cutawayHides(mapData, eye, character, x, ground, z, true, frame)) { foci[0] = x; foci[1] = ground + 1.5; foci[2] = z; count = 1; }
+    const opens = !!covered || battle;
+    if (opens && Reactor3D.cutawayHides(mapData, eye, character, x, ground, z, true, frame)) { foci[0] = x; foci[1] = ground + 1.5; foci[2] = z; count = 1; }
     let slot = 0;
-    for (const other of others || []) {
+    for (const other of opens ? others || [] : []) {
         if (count >= Reactor3D.CUTAWAY_FOCI) break;
         if (!other) continue;
         slot++;
@@ -1165,10 +1477,9 @@ Reactor3D.CUTAWAY_PARTY_ROOM = 3.5;
 Reactor3D.CUTAWAY_BATTLE_ROOM = 0.6;
 
 /**
- * Marks the models of everyone in a battle's picture as bodies the fades leave whole: the player, the followers,
- * the battle's units, and every other character on the map (scenery, the placed models, is not one). A model
- * instance is marked once; one that arrives later is found on a later look. The mark stays on the material and
- * counts only while a battle runs here (`rrCutBattle`): nothing is walked again to take it off.
+ * Marks the models of every character as bodies the fades leave whole: the player, the followers, a battle's units,
+ * and every other character on the map (scenery, the placed models, is not one). A model instance is marked once;
+ * one that arrives later is found on a later look.
  */
 Reactor3D.cutawayMarkBodies = function(player) {
     this.cutawayMarkBody(player);
@@ -1211,7 +1522,7 @@ Reactor3D.cutawayMarkRide = function(object, on) {
             material.userData = material.userData || {};
             const mark = material.userData.rrCutBody || (material.userData.rrCutBody = { value: 0 });
             const rides = material.userData.rrCutRides = Math.max(0, (material.userData.rrCutRides || 0) + (on ? 1 : -1));
-            // (2: a body always. 1: a body while a battle runs, as it was marked.)
+            // (2: a ridden vehicle, a body while ridden. 1: a character's body, as it was marked.)
             if (rides > 0) { if (mark.value < 2) { material.userData.rrCutWas = mark.value; mark.value = 2; } }
             else if (mark.value >= 2) mark.value = material.userData.rrCutWas || 0;
         }
@@ -1479,10 +1790,14 @@ Reactor3D.cameraArm = function(mapData, focus, to, least, margin, step, how) {
         d = Math.min(length, d + (here ? stride / 2 : stride));
     }
 };
-/** One point of `cameraArm`'s way: under the ground (and a margin over it), or inside a piece. */
+/**
+ * One point of `cameraArm`'s way: under the ground (and a margin over it), or inside a piece. Past the
+ * map's edge, the neighboring map whose world stands there answers (`Neighbors.solidAt`).
+ */
 Reactor3D.cameraArmBlocked = function(mapData, focus, dx, dy, dz, t, built, cut, thin, doors) {
     const x = focus.x + dx * t, y = focus.y + dy * t, z = focus.z + dz * t;
-    if (x >= 0 && z >= 0 && x < mapData.width && z < mapData.height && this.terrainHeightAt && this.elevationAt
+    if (!(x >= 0 && z >= 0 && x < mapData.width && z < mapData.height)) return !!(this.Neighbors && this.Neighbors.solidAt && this.Neighbors.solidAt(mapData, x, y, z, thin, doors));
+    if (this.terrainHeightAt && this.elevationAt
         && y < this.elevationAt(mapData, Math.floor(x), Math.floor(z)) + this.terrainHeightAt(mapData, x, z) + this.CAMERA_GROUND_MARGIN) return true;
     return built && this.pieceSolidAt(mapData, x, y, z, cut, thin, doors);
 };
@@ -1499,11 +1814,16 @@ Reactor3D.cameraArmBlocked = function(mapData, focus, dx, dy, dz, t, built, cut,
  * pieces.
  */
 Reactor3D.clearCameraPath = function(camera, focus, mapData) {
-    if (!camera || !focus || !mapData || !this.hasPieces(mapData)) return false;
+    if (!camera || !focus || !mapData) return false;
+    const to = camera.position, own = this.hasPieces(mapData);
+    // Past the map's edge the pieces of the neighboring map standing there (Neighbors.solidAt).
+    const past = (x, z) => !(x >= 0 && z >= 0 && x < mapData.width && z < mapData.height) && !!(this.Neighbors && this.Neighbors.solidAt);
+    if (!own && !past(to.x, to.z)) return false;
     const shared = this._cutawayUniforms;
     const cut = shared && shared.rrCutRadius.value > 0 ? { top: shared.rrCutTop.value, box: shared.rrCutBox.value } : null;
-    const to = camera.position;
-    if (!this.pieceSolidAt(mapData, to.x, to.y, to.z, cut, 0, this.DOORS_OPEN)) return false;
+    const solid = (x, y, z) => past(x, z) ? this.Neighbors.solidAt(mapData, x, y, z, 0, this.DOORS_OPEN, "pieces")
+        : own && this.pieceSolidAt(mapData, x, y, z, cut, 0, this.DOORS_OPEN);
+    if (!solid(to.x, to.y, to.z)) return false;
     const from = focus;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const length = Math.hypot(dx, dy, dz);
@@ -1512,7 +1832,7 @@ Reactor3D.clearCameraPath = function(camera, focus, mapData) {
     let free = 0.5;
     for (let d = length - step; d >= 0.5; d -= step) {
         const t = d / length;
-        if (!this.pieceSolidAt(mapData, from.x + dx * t, from.y + dy * t, from.z + dz * t, cut, 0, this.DOORS_OPEN)) { free = Math.max(0.5, d - 0.3); break; }
+        if (!solid(from.x + dx * t, from.y + dy * t, from.z + dz * t)) { free = Math.max(0.5, d - 0.3); break; }
     }
     const t = free / length;
     camera.position.set(from.x + dx * t, from.y + dy * t, from.z + dz * t);
@@ -1531,7 +1851,9 @@ Reactor3D.CAMERA_GROUND_MARGIN = 0.35;
 Reactor3D.clearCameraGround = function(camera, focus, mapData) {
     if (!camera || !focus || !mapData || !this.terrainHeightAt || !this.elevationAt) return false;
     const ground = (x, z) => this.elevationAt(mapData, Math.floor(x), Math.floor(z)) + this.terrainHeightAt(mapData, x, z);
-    const inside = (x, y, z) => x >= 0 && z >= 0 && x < mapData.width && z < mapData.height && y < ground(x, z) + this.CAMERA_GROUND_MARGIN;
+    // Past the map's edge, the ground of the neighboring map standing there (Neighbors.solidAt).
+    const inside = (x, y, z) => x >= 0 && z >= 0 && x < mapData.width && z < mapData.height ? y < ground(x, z) + this.CAMERA_GROUND_MARGIN
+        : !!(this.Neighbors && this.Neighbors.solidAt && this.Neighbors.solidAt(mapData, x, y, z, 0, 0, "ground"));
     const to = camera.position;
     if (!inside(to.x, to.y, to.z)) return false;
     const dx = to.x - focus.x, dy = to.y - focus.y, dz = to.z - focus.z;
@@ -1878,6 +2200,10 @@ Reactor3D.waterVolumeMaterial = function(material) {
 /** The cube capture's face size: sharp enough to read a room in chrome (half on a middling GPU, see `reflectionSize`). */
 Reactor3D.REFLECTION_SIZE = 512;
 Reactor3D.reflectionSize = function() { return this.tier() === "full" ? this.REFLECTION_SIZE : this.REFLECTION_SIZE / 2; };
+/** The brightest a shiny surface's sun highlight gets, times the sun's color. */
+Reactor3D.SHINE_HIGHLIGHT_MAX = 4;
+/** The sharpest mip a shiny surface reads from the live capture: 2 is a 128-texel face at 512. */
+Reactor3D.REFLECTION_MIN_LOD = 2;
 
 Reactor3D.Reflections = {
     _target: null,
@@ -2013,6 +2339,27 @@ Reactor3D.Reflections = {
     },
 
     /**
+     * Once the cube is whole, an update's face is drawn on the next refresh
+     * with no update, or with the next update when none came between
+     * (`Reactor3D.prepareReflections`); false draws it in its own update.
+     */
+    SPARE_REFRESH: true,
+    /** The face the last update left to a spare refresh: what it was drawn with, or null. */
+    _owed: null,
+
+    /** On a refresh with no update: the face owed, from where the camera stands now. */
+    takeOwed(renderer, mapScene, scene) {
+        const owed = this._owed;
+        if (!owed || owed.renderer !== renderer || owed.mapScene !== mapScene || owed.scene !== scene) return;
+        this._owed = null;
+        if (!this.enabled() || !mapScene.reflectionProbe) return;
+        const probe = mapScene.reflectionProbe(owed.camera);
+        if (!probe) return;
+        renderer.resetState();
+        this.update(renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius, probe.reach);
+    },
+
+    /**
      * Whether this frame's capture can wait: once the cube is whole, a frame
      * after one that showed nothing shiny takes no face (the capture was most
      * of the reflection cost on a map whose chrome is off screen). The frame
@@ -2033,6 +2380,20 @@ Reactor3D.Reflections = {
         };
     },
 
+    /**
+     * A border crossed without a break (`Neighbors.adopt`): the world drawn is
+     * the same, now counted from the map entered, whose first tile stood at
+     * `offset` (x, z). The capture goes on as it was: where it was taken moves
+     * with the world, and what shines still shines. Only the face owed from
+     * the map left is dropped (it names that map's scene).
+     */
+    shift(offset) {
+        if (this._probe && offset) { this._probe.x -= Number(offset.x) || 0; this._probe.z -= Number(offset.z) || 0; }
+        this._owed = null;
+        const record = this._owedRecord;
+        if (record) record.renderer = record.mapScene = record.scene = record.camera = null;
+    },
+
     /** A new map: no capture carries over, and nothing is known to shine yet. */
     reset() {
         this.wanted = false;
@@ -2041,6 +2402,10 @@ Reactor3D.Reflections = {
         this._frame = 0;
         this._shownFrame = -1;
         this._ready = false;
+        this._owed = null;
+        // The record the owed face reuses lets the last map's scene go.
+        const record = this._owedRecord;
+        if (record) record.renderer = record.mapScene = record.scene = record.camera = null;
         if (this._uniforms) this._uniforms.rrEnvMap.value = null;
         if (Reactor3D.Mirrors) Reactor3D.Mirrors.reset();
     }
@@ -2116,7 +2481,7 @@ Reactor3D.SRGB_DECODE_GLSL = [
 /** The mirror slots' uniforms, declared for a fragment shader. */
 Reactor3D.mirrorUniformDeclarations = function() {
     const lines = [this.SRGB_DECODE_GLSL];
-    for (let slot = 0; slot < this.MIRROR_SLOTS; slot++) lines.push("uniform float rrMirrorOn" + slot + ";", "uniform vec4 rrMirrorPlane" + slot + ";", "uniform mat4 rrMirrorMatrix" + slot + ";", "uniform sampler2D rrMirrorMap" + slot + ";");
+    for (let slot = 0; slot < this.MIRROR_SLOTS; slot++) lines.push("uniform float rrMirrorOn" + slot + ";", "uniform vec4 rrMirrorPlane" + slot + ";", "uniform mat4 rrMirrorMatrix" + slot + ";", "uniform sampler2D rrMirrorMap" + slot + ";", "uniform vec4 rrMirrorArea" + slot + ";");
     return lines.join("\n");
 };
 
@@ -2130,7 +2495,7 @@ Reactor3D.mirrorLookup = function(target, on, offset, scale) {
     for (let slot = 0; slot < this.MIRROR_SLOTS; slot++) {
         lines.push((slot ? "\t} else if (" : "\tif (") + "rrMirrorOn" + slot + " > 0.5 && " + on(slot) + ") {",
             "\t\tvec4 rrMC = rrMirrorMatrix" + slot + " * vec4(vRRWorldPos, 1.0); vec2 rrMU = rrMC.xy / rrMC.w" + (offset ? " + " + offset : "") + ";",
-            "\t\tif (rrMC.w > 0.0 && rrMU.x > 0.0 && rrMU.y > 0.0 && rrMU.x < 1.0 && rrMU.y < 1.0) " + target + " = rrSRGBToLinear(textureLod(rrMirrorMap" + slot + ", rrMU, 0.0).rgb) * " + scale + ";");
+            "\t\tif (rrMC.w > 0.0 && all(greaterThan(rrMU, rrMirrorArea" + slot + ".xy)) && all(lessThan(rrMU, rrMirrorArea" + slot + ".zw))) " + target + " = rrSRGBToLinear(textureLod(rrMirrorMap" + slot + ", rrMU, 0.0).rgb) * " + scale + ";");
     }
     lines.push("\t}");
     return lines.join("\n");
@@ -2176,6 +2541,8 @@ Reactor3D.WaterSight = {
     /** The sheet's draws ask from now on; it counts as seen until the first answers are in. */
     watch(mesh) {
         const sight = this;
+        // Every sheet, for the mirror's screen area (Mirrors.waterArea): a sheet at a mirror's level reads its picture.
+        (this.sheets || (this.sheets = new Set())).add(mesh);
         mesh.userData.rrSight = { seen: this._frame, query: null, open: null, gl: null, generation: -1 };
         mesh.onBeforeRender = function(renderer, scene, camera) { sight._before(this, renderer, camera); };
         mesh.onAfterRender = function() { sight._after(this); };
@@ -2304,6 +2671,8 @@ Reactor3D.Mirrors = {
                 this._uniforms["rrMirrorPlane" + slot] = { value: new THREE.Vector4(0, 1, 0, -1e6) };
                 this._uniforms["rrMirrorMatrix" + slot] = { value: new THREE.Matrix4() };
                 this._uniforms["rrMirrorMap" + slot] = { value: this.dummy() };
+                // The part of the picture that was drawn (u0, v0, u1, v1): a lookup outside it keeps the capture.
+                this._uniforms["rrMirrorArea" + slot] = { value: new THREE.Vector4(0, 0, 1, 1) };
             }
             this._uniforms.rrMirrorTolerance = { value: Reactor3D.MIRROR_TOLERANCE };
         }
@@ -2328,7 +2697,7 @@ Reactor3D.Mirrors = {
     /** Every slot off: nothing reads a mirror picture (a preview, a capture, the edge of the recursion). */
     clear() {
         const u = this.uniforms();
-        for (let slot = 0; slot < Reactor3D.MIRROR_SLOTS; slot++) { u["rrMirrorOn" + slot].value = 0; u["rrMirrorMap" + slot].value = this.dummy(); }
+        for (let slot = 0; slot < Reactor3D.MIRROR_SLOTS; slot++) { u["rrMirrorOn" + slot].value = 0; u["rrMirrorMap" + slot].value = this.dummy(); u["rrMirrorArea" + slot].value.set(0, 0, 1, 1); }
     },
 
     target(slot, level, width, height) {
@@ -2370,6 +2739,179 @@ Reactor3D.Mirrors = {
     },
 
     /**
+     * Water's picture is drawn only where water at its level can be on
+     * screen (`waterArea`), at the same pixels as the whole picture; false
+     * draws it whole. A fountain in a corner of the view had the whole
+     * reflected world drawn for it every frame.
+     */
+    WATER_AREA: true,
+    /** The frame's own camera, whose pictures `waterArea` narrows (a reflected eye's are drawn whole). */
+    _eye: null,
+
+    /**
+     * Where, in `camera`'s view (x0, y0, x1, y1 from -1 to 1), a water plane's
+     * picture can be read: the part in view of every sheet at its level
+     * (any sheet near the plane's level reads the slot: other lakes and the
+     * neighbor maps' too), widened by how far a ripple moves a lookup. Null
+     * for the whole picture (not water, or the switch off); an empty area
+     * when no such water is in view.
+     */
+    waterArea(plane, camera) {
+        const object = plane.object, sheets = Reactor3D.WaterSight && Reactor3D.WaterSight.sheets;
+        if (!this.WATER_AREA || !sheets || !camera.isPerspectiveCamera || !object || !object.userData || !object.userData.water || !(plane.normal.y > 0.9)) return null;
+        const frustum = this._frustum || (this._frustum = new THREE.Frustum());
+        const viewProjection = this._viewProjection || (this._viewProjection = new THREE.Matrix4());
+        frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+        const area = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+        // The shader takes water within 0.4 of the plane (the boxes stand a tile off their water for waves).
+        const top = plane.d + 0.4, bottom = plane.d - 0.4;
+        let reach = 0;
+        for (const sheet of sheets) {
+            if (!sheet.parent) { sheets.delete(sheet); continue; }
+            if (!this.drawn(sheet)) continue;
+            const blocks = this.sheetBlocks(sheet);
+            if (!blocks.length || blocks.minY > top || blocks.maxY < bottom) continue;
+            let inView = false;
+            const part = this._part || (this._part = { x0: 0, y0: 0, x1: 0, y1: 0 });
+            for (let i = 0; i < blocks.length; i++) {
+                const block = blocks[i];
+                if (block.min.y > top || block.max.y < bottom || !frustum.intersectsBox(block)) continue;
+                inView = true;
+                part.x0 = part.y0 = Infinity; part.x1 = part.y1 = -Infinity;
+                this.spread(part, block, camera);
+                // A block near the eye spreads far past what its water covers: taken tile by tile.
+                if ((part.x1 - part.x0) * (part.y1 - part.y0) > this.REFINE_AREA) {
+                    for (let j = 0; j < block.tiles.length; j++) { const tile = block.tiles[j]; if (tile.min.y <= top && tile.max.y >= bottom && frustum.intersectsBox(tile)) this.spread(area, tile, camera); }
+                } else this.join(area, part);
+            }
+            // A lookup moves by the wave normal's level part (at most 1) times 0.035 + 0.1 of the sheet's roughness.
+            const look = sheet.material && sheet.material.userData && sheet.material.userData.rrWaterLook;
+            if (inView) reach = Math.max(reach, 0.035 + 0.1 * (look && Number.isFinite(look.y) ? Math.max(0, look.y) : 1));
+        }
+        if (!(area.x1 > area.x0 && area.y1 > area.y0)) return { x0: 0, y0: 0, x1: 0, y1: 0 };
+        // In picture widths; the view's coordinates span two.
+        const margin = 2 * reach;
+        return { x0: Math.max(-1, area.x0 - margin), y0: Math.max(-1, area.y0 - margin), x1: Math.min(1, area.x1 + margin), y1: Math.min(1, area.y1 + margin) };
+    },
+
+    /** A block covering more of the view than this (of 4, the whole view) is measured by its tiles. */
+    REFINE_AREA: 0.1,
+
+    join(area, part) {
+        if (!(part.x1 >= part.x0 && part.y1 >= part.y0)) return;
+        if (part.x0 < area.x0) area.x0 = part.x0; if (part.x1 > area.x1) area.x1 = part.x1;
+        if (part.y0 < area.y0) area.y0 = part.y0; if (part.y1 > area.y1) area.y1 = part.y1;
+    },
+
+    /** Whether the object and every parent are shown. */
+    drawn(object) {
+        for (let node = object; node; node = node.parent) if (!node.visible) return false;
+        return true;
+    },
+
+    /**
+     * A sheet's world boxes, one per 8-tile block its triangles touch, with
+     * their lowest and highest level: worked out again when the sheet's
+     * geometry or place changes.
+     */
+    sheetBlocks(sheet) {
+        const g = sheet.geometry, position = g && g.attributes && g.attributes.position;
+        const e = sheet.matrixWorld.elements, cache = sheet.userData.__rrBlocks;
+        if (cache && cache.geometry === g && cache.version === (position ? position.version : -1)) {
+            let same = true;
+            for (let i = 0; i < 16; i++) if (cache.matrix[i] !== e[i]) { same = false; break; }
+            if (same) return cache.blocks;
+        }
+        const blocks = [];
+        blocks.minY = Infinity; blocks.maxY = -Infinity;
+        if (position) {
+            const byKey = new Map(), byTile = new Map(), point = new THREE.Vector3();
+            for (let i = 0; i < position.count; i++) {
+                point.fromBufferAttribute(position, i).applyMatrix4(sheet.matrixWorld);
+                const key = Math.floor(point.x / 8) + "," + Math.floor(point.z / 8);
+                let box = byKey.get(key);
+                if (!box) { box = new THREE.Box3(); box.tiles = []; byKey.set(key, box); blocks.push(box); }
+                box.expandByPoint(point);
+                const tileKey = Math.floor(point.x) + "," + Math.floor(point.z);
+                let tile = byTile.get(tileKey);
+                if (!tile) { tile = new THREE.Box3(); byTile.set(tileKey, tile); box.tiles.push(tile); }
+                tile.expandByPoint(point);
+                if (point.y < blocks.minY) blocks.minY = point.y;
+                if (point.y > blocks.maxY) blocks.maxY = point.y;
+            }
+            // A corner is kept by the tile it starts: each box reaches the next corner on, and waves stand a tile off the sheet.
+            const grow = box => { box.max.x += 1; box.max.z += 1; box.min.y -= 1; box.max.y += 1; };
+            for (const box of blocks) { grow(box); box.tiles.forEach(grow); }
+        }
+        sheet.userData.__rrBlocks = { geometry: g, version: position ? position.version : -1, matrix: Array.from(e), blocks };
+        return blocks;
+    },
+
+    /** `area` grown by the box's part in front of `camera`, projected (the corners, and where its edges cross the near plane). */
+    spread(area, box, camera) {
+        const corners = this._corners || (this._corners = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new THREE.Vector3()));
+        const point = this._point || (this._point = new THREE.Vector3());
+        const near = -camera.near;
+        for (let i = 0; i < 8; i++) corners[i].set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(camera.matrixWorldInverse);
+        const add = p => {
+            point.copy(p).applyMatrix4(camera.projectionMatrix);
+            if (point.x < area.x0) area.x0 = point.x; if (point.x > area.x1) area.x1 = point.x;
+            if (point.y < area.y0) area.y0 = point.y; if (point.y > area.y1) area.y1 = point.y;
+        };
+        for (let i = 0; i < 8; i++) {
+            const a = corners[i], front = a.z <= near;
+            if (front) add(a);
+            for (let bit = 1; bit < 8; bit <<= 1) {
+                if (i & bit) continue;
+                const b = corners[i | bit];
+                if (front === (b.z <= near)) continue;
+                const t = (near - a.z) / (b.z - a.z);
+                add(point.set(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, near));
+            }
+        }
+    },
+
+    /**
+     * An area of the view as whole pixels of a `width` x `height` picture, a
+     * pixel to spare each side, and the part of the picture a lookup may read
+     * (`uv`, half a texel in from the drawn edge so filtering stays inside).
+     * Null when it is the whole picture.
+     */
+    pixelArea(area, width, height) {
+        if (!(area.x1 > area.x0 && area.y1 > area.y0)) return { x: 0, y: 0, w: 0, h: 0, uv: new THREE.Vector4(0, 0, 0, 0) };
+        const x = Math.max(0, Math.floor((area.x0 + 1) * 0.5 * width) - 1), y = Math.max(0, Math.floor((area.y0 + 1) * 0.5 * height) - 1);
+        const x1 = Math.min(width, Math.ceil((area.x1 + 1) * 0.5 * width) + 1), y1 = Math.min(height, Math.ceil((area.y1 + 1) * 0.5 * height) + 1);
+        if (x === 0 && y === 0 && x1 === width && y1 === height) return null;
+        return { x, y, w: x1 - x, h: y1 - y, uv: new THREE.Vector4((x + 0.5) / width, (y + 0.5) / height, (x1 - 0.5) / width, (y1 - 0.5) / height) };
+    },
+
+    /**
+     * The reflected eye draws only the pixels in `area`: its projection's x
+     * and y rows scaled about them (every point lands on the same pixel as in
+     * the whole picture, and what falls outside is culled), the target's
+     * viewport and scissor on them. `widen` puts both back.
+     */
+    narrow(camera, target, area, width, height) {
+        const whole = this._wholeProjection || (this._wholeProjection = new THREE.Matrix4());
+        whole.copy(camera.projectionMatrix);
+        const e = camera.projectionMatrix.elements;
+        const cx = (2 * area.x + area.w) / width - 1, cy = (2 * area.y + area.h) / height - 1, sx = width / area.w, sy = height / area.h;
+        for (let c = 0; c < 16; c += 4) { e[c] = (e[c] - cx * e[c + 3]) * sx; e[c + 1] = (e[c + 1] - cy * e[c + 3]) * sy; }
+        camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+        target.viewport.set(area.x, area.y, area.w, area.h);
+        target.scissor.set(area.x, area.y, area.w, area.h);
+        target.scissorTest = true;
+    },
+
+    widen(camera, target, width, height) {
+        camera.projectionMatrix.copy(this._wholeProjection);
+        camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+        target.viewport.set(0, 0, width, height);
+        target.scissor.set(0, 0, width, height);
+        target.scissorTest = false;
+    },
+
+    /**
      * The mirror pictures seen from `camera`, `level` reflections deep: for
      * each plane in front of it, the view from its reflection (with the
      * other plane's own picture from there drawn first), into a target of
@@ -2398,16 +2940,25 @@ Reactor3D.Mirrors = {
                 u["rrMirrorMap" + entry.slot].value = entry.texture;
             }
             const target = this.target(slot, level, width, height);
+            // Seen from the frame's own camera, only the part of the picture its water can read is drawn
+            // (`plane.area`); the rest of the target is never looked up.
+            const area = camera === this._eye && plane.area ? this.pixelArea(plane.area, width, height) : null;
+            if (area && area.w <= 0) { seen.push({ slot, texture: target.texture, matrix, uv: area.uv }); continue; }
             const previous = renderer.getRenderTarget();
             // A lake is left out of its own picture: its wave crests stand above the level the glass
             // clips at, and their undersides showed in the reflection as a grid of dark blots.
             const own = plane.object && plane.object.userData && plane.object.userData.water && plane.object.visible ? [plane.object] : [];
             for (const object of own) object.visible = false;
             for (const object of hidden) object.visible = false;
+            if (area) this.narrow(out, target, area, width, height);
             renderer.setRenderTarget(target);
             try { Reactor3D.withSkyAt(scene, out.position, () => renderer.render(scene, out)); }
-            finally { for (const object of hidden) object.visible = true; for (const object of own) object.visible = true; renderer.setRenderTarget(previous); }
-            seen.push({ slot, texture: target.texture, matrix });
+            finally {
+                for (const object of hidden) object.visible = true; for (const object of own) object.visible = true;
+                if (area) this.widen(out, target, width, height);
+                renderer.setRenderTarget(previous);
+            }
+            seen.push({ slot, texture: target.texture, matrix, uv: area ? area.uv : null });
         }
         return seen;
     },
@@ -2535,6 +3086,8 @@ Reactor3D.Mirrors = {
         const height = Math.max(16, Math.round(Math.min(1080, size.y) * (Reactor3D.MIRROR_AT_VIEW_SCALE !== false && scale > 0 && scale < 1 ? scale : 1))), width = Math.round(height * (camera.aspect || size.x / size.y));
         const shadowSentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
         const hide = (hidden || []).concat(shadowSentinel ? [shadowSentinel] : []).filter(object => object && object.visible);
+        this._eye = camera;
+        for (const plane of planes) plane.area = this.waterArea(plane, camera);
         this._rendering = true;
         let seen;
         try {
@@ -2563,6 +3116,7 @@ Reactor3D.Mirrors = {
             u["rrMirrorPlane" + entry.slot].value.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.d);
             u["rrMirrorMatrix" + entry.slot].value.copy(entry.matrix);
             u["rrMirrorMap" + entry.slot].value = entry.texture;
+            if (entry.uv) u["rrMirrorArea" + entry.slot].value.copy(entry.uv);
         }
     }
 };
@@ -2606,23 +3160,7 @@ Reactor3D.injectShine = function(material, shader) {
     for (const name of Object.keys(mirror)) shader.uniforms[name] = mirror[name];
     shader.uniforms.rrShine = { value: shine.vector };
     shader.uniforms.rrShineTint = { value: shine.tint };
-    shader.vertexShader = "varying vec3 vRRWorldNormal;\n" + shader.vertexShader.replace(
-        "#include <project_vertex>",
-        [
-            "#include <project_vertex>",
-            "{",
-            "#ifdef USE_SKINNING",
-            "\tvec3 rrObjN = objectNormal;",
-            "#else",
-            "\tvec3 rrObjN = normal;",
-            "#endif",
-            "#ifdef USE_INSTANCING",
-            "\trrObjN = mat3(instanceMatrix) * rrObjN;",
-            "#endif",
-            "\tvRRWorldNormal = normalize(mat3(modelMatrix) * rrObjN);",
-            "}"
-        ].join("\n")
-    );
+    this.injectWorldNormal(shader);
     shader.fragmentShader = [
         "uniform samplerCube rrEnvMap;",
         "uniform float rrEnvMaxLod;",
@@ -2634,7 +3172,7 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform float rrMirrorTolerance;",
         "uniform vec4 rrShine;",
         "uniform vec3 rrShineTint;",
-        "varying vec3 vRRWorldNormal;"
+        this.WORLD_NORMAL_VARYING
     ].join("\n") + "\n" + shader.fragmentShader.replace(
         "#include <opaque_fragment>",
         [
@@ -2661,7 +3199,13 @@ Reactor3D.injectShine = function(material, shader) {
             "\t\tif (rrH > 0.0) rrR = normalize(rrL + rrR * (-rrB + sqrt(rrH)));",
             "\t}",
             "\trrR.x *= rrEnvFlip;",
-            "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrShine.y * rrEnvMaxLod).rgb;",
+            // The capture's mips are box filtered: a lobe as wide as roughness spreads it
+            // reads the level whose texel covers it (sigma = pi r^2 / (1 + r) of the face),
+            // and never finer than REFLECTION_MIN_LOD, past which a point capture's near
+            // detail (grass a tile below) only speckles a curved surface. The studio has one level.
+            "\tfloat rrLod = rrEnvMaxLod > 0.0 ? clamp(rrEnvMaxLod + log2(max(3.14159265 * rrShine.y * rrShine.y / (1.0 + rrShine.y), 1e-6)), "
+                + (Reactor3D.REFLECTION_MIN_LOD || 0).toFixed(2) + ", rrEnvMaxLod) : 0.0;",
+            "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrLod).rgb;",
             // A live capture holds sRGB (flip 1); the studio cube is decoded by the GPU (flip -1).
             "\tif (rrEnvFlip > 0.0) rrEnv = rrSRGBToLinear(rrEnv);",
             // The studio is a noon sky: dimmed and tinted to the map's time of day.
@@ -2679,10 +3223,105 @@ Reactor3D.injectShine = function(material, shader) {
             "\tvec3 rrMirror = mix(outgoingLight, rrRefl, rrA * (1.0 - rrShine.w));",
             "\tvec3 rrGlaze = clamp(rrRefl * rrRefl * rrRefl * 1.6 * rrA * rrShine.w, 0.0, 1.0);",
             "\toutgoingLight = rrMirror + rrGlaze - rrMirror * rrGlaze;",
+            // The sun's highlight: a GGX lobe as wide as the roughness, in the reflection's
+            // tint, gone where the sun is shadowed. What gives a metal its shape and its
+            // color under an open sky; a mirror's is a small bright point.
+            "\tif (rrKeyLight.w < 0.5 && dot(rrKeyColor, rrKeyColor) > 0.0) {",
+            "\t\tvec3 rrKL = normalize(rrKeyLight.xyz), rrKH = normalize(rrKL + rrV);",
+            "\t\tfloat rrKNL = max(dot(rrN, rrKL), 0.0), rrKNH = max(dot(rrN, rrKH), 0.0);",
+            "\t\tfloat rrKA = max(rrShine.y * rrShine.y, 0.002), rrKA2 = rrKA * rrKA, rrKD = rrKNH * rrKNH * (rrKA2 - 1.0) + 1.0;",
+            "\t\tfloat rrKGGX = min(rrKA2 / (3.14159265 * rrKD * rrKD) * rrKNL * 0.25, " + (Reactor3D.SHINE_HIGHLIGHT_MAX || 4).toFixed(2) + ");",
+            "#ifdef RR_SHADOW_TAPS",
+            "\t\trrKGGX *= 1.0 - clamp(rrSunShaded, 0.0, 1.0);",
+            "#endif",
+            "\t\toutgoingLight += rrKeyColor * rrShineTint * (rrKGGX * rrShine.x * rrF0);",
+            "\t}",
             "}",
             "#include <opaque_fragment>"
         ].join("\n")
     );
+};
+
+/**
+ * A model's glTF emissive (`emissiveFactor`, times `KHR_materials_emissive_strength`,
+ * times its `emissiveTexture` where it shares the picture's coordinates):
+ * `material.userData.rrEmissive`, a THREE.Color changed in place to animate it,
+ * and `rrEmissiveMap`. Added over the lit colour, so no shade, shadow or
+ * darkness dims it.
+ *
+ * Hair (a model material named Hair or Beard,
+ * `userData.rrHair`) takes a two-lobe strand sheen (Kajiya-Kay) from the key
+ * light: a narrow pale one shifted toward the tip and a broad one in the
+ * hair's own colour shifted toward the root, the strand running the way its
+ * picture's v runs (root to tip on the builder's cards). Lit by the sun where
+ * there is one, else by a share of the ambient from above.
+ */
+Reactor3D.HAIR_SHEEN = { primary: 0.06, secondary: 0.3, sharp: 110, soft: 24, shift: 0.14 };
+Reactor3D.glowKey = function(material) {
+    const data = material && material.userData;
+    if (!data) return "";
+    const emit = data.rrEmissive && (data.rrEmissive.r > 0 || data.rrEmissive.g > 0 || data.rrEmissive.b > 0);
+    return (emit ? (data.rrEmissiveMap && data.rrEmissiveMap.isTexture && material.map ? "|emit-map" : "|emit") : "") + (data.rrHair && material.map ? "|hair" : "");
+};
+Reactor3D.injectSurfaceGlow = function(material, shader) {
+    const key = this.glowKey(material);
+    if (!key || !shader || shader.fragmentShader.indexOf("#include <opaque_fragment>") < 0) return;
+    const data = material.userData, lines = [], decl = [];
+    if (/\|emit/.test(key)) {
+        shader.uniforms.rrEmissive = { value: data.rrEmissive };
+        decl.push("uniform vec3 rrEmissive;");
+        if (/emit-map/.test(key)) {
+            shader.uniforms.rrEmissiveMap = { value: data.rrEmissiveMap };
+            decl.push("uniform sampler2D rrEmissiveMap;");
+            lines.push("\toutgoingLight += rrEmissive * texture2D(rrEmissiveMap, vMapUv).rgb;");
+        } else lines.push("\toutgoingLight += rrEmissive;");
+    }
+    if (/\|hair/.test(key)) {
+        this.injectWorldNormal(shader);
+        // The strand direction the loader worked out (Reactor3D.hairStrandDirections), skinned with the hair.
+        if (shader.vertexShader.indexOf("rrHairDir") < 0) {
+            shader.vertexShader = "attribute vec3 rrHairDir;\nvarying vec3 vRRHairDir;\n" + shader.vertexShader.replace("#include <project_vertex>", [
+                "#include <project_vertex>",
+                "{",
+                "\tvec3 rrHD = rrHairDir;",
+                "#ifdef USE_SKINNING",
+                "\trrHD = (skinMatrix * vec4(rrHD, 0.0)).xyz;",
+                "#endif",
+                "\tvRRHairDir = mat3(modelMatrix) * rrHD;",
+                "}"
+            ].join("\n"));
+            decl.push("varying vec3 vRRHairDir;");
+        }
+        const h = this.HAIR_SHEEN, f = v => Number(v).toFixed(3);
+        lines.push(
+            "\t{",
+            "\t\tvec3 rrHN = normalize(vRRWorldNormal), rrHV = normalize(cameraPosition - vRRWorldPos);",
+            "\t\tif (dot(rrHN, rrHV) < 0.0) rrHN = -rrHN;",
+            // The strand: the way the picture's v runs on the surface, from the screen derivatives (taken before any branch).
+            "\t\tvec3 rrQ0 = dFdx(vRRWorldPos), rrQ1 = dFdy(vRRWorldPos);",
+            "\t\tvec2 rrS0 = dFdx(vMapUv), rrS1 = dFdy(vMapUv);",
+            "\t\tfloat rrHD = rrS0.x * rrS1.y - rrS1.x * rrS0.y;",
+            "\t\tvec3 rrHT = dot(vRRHairDir, vRRHairDir) > 1e-8 ? vRRHairDir : (rrQ1 * rrS0.x - rrQ0 * rrS1.x) * (rrHD < 0.0 ? -1.0 : 1.0);",
+            "\t\trrHT -= rrHN * dot(rrHT, rrHN);",
+            "\t\tfloat rrHTL = dot(rrHT, rrHT);",
+            "\t\tvec3 rrHL = normalize(rrKeyLight.w < 0.5 ? rrKeyLight.xyz : rrKeyLight.xyz - vRRWorldPos);",
+            "\t\tvec3 rrHC = rrKeyLight.w < 0.5 && dot(rrKeyColor, rrKeyColor) > 0.0 ? rrKeyColor : rrAmbient * 0.6;",
+            "#ifdef RR_SHADOW_TAPS",
+            "\t\trrHC *= 1.0 - clamp(rrSunShaded, 0.0, 1.0);",
+            "#endif",
+            "\t\tif (rrHTL > 1e-14) {",
+            "\t\t\trrHT *= inversesqrt(rrHTL);",
+            "\t\t\tvec3 rrHH = normalize(rrHL + rrHV);",
+            "\t\t\tvec3 rrT1 = normalize(rrHT + rrHN * " + f(h.shift) + "), rrT2 = normalize(rrHT - rrHN * " + f(h.shift) + ");",
+            "\t\t\tfloat rrD1 = dot(rrT1, rrHH), rrD2 = dot(rrT2, rrHH);",
+            "\t\t\tfloat rrP = pow(sqrt(max(0.0, 1.0 - rrD1 * rrD1)), " + f(h.sharp) + "), rrSec = pow(sqrt(max(0.0, 1.0 - rrD2 * rrD2)), " + f(h.soft) + ");",
+            "\t\t\tfloat rrHNL = clamp(dot(rrHN, rrHL) * 0.5 + 0.5, 0.0, 1.0);",
+            "\t\t\toutgoingLight += rrHC * rrHNL * (" + f(h.primary) + " * rrP * mix(vec3(1.0), diffuseColor.rgb, 0.5) + " + f(h.secondary) + " * rrSec * diffuseColor.rgb);",
+            "\t\t}",
+            "\t}"
+        );
+    }
+    shader.fragmentShader = decl.join("\n") + "\n" + shader.fragmentShader.replace("#include <opaque_fragment>", lines.join("\n") + "\n#include <opaque_fragment>");
 };
 
 Reactor3D.litMaterial = function(material) {
@@ -2691,7 +3330,7 @@ Reactor3D.litMaterial = function(material) {
     const earlier = material.onBeforeCompile;
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
-        Reactor3D.injectLightShader(shader, renderer);
+        Reactor3D.injectLightShader(shader, renderer, this);
         if (Reactor3D.injectMaterialDetail) Reactor3D.injectMaterialDetail(this, shader);
         // A self-lit material (a Glow) ignores the lights: its own uniform, one per material.
         shader.uniforms.rrSelfLit = { value: this.__reactorSelfLit ? 1 : 0 };
@@ -2702,12 +3341,16 @@ Reactor3D.litMaterial = function(material) {
         Reactor3D.injectShine(this, shader);
         // A model variant's color adjustment, last: the texel is adjusted before anything above mixes over it.
         if (Reactor3D.injectLook) Reactor3D.injectLook(this, shader);
+        // What a surface gives off over its light, last: its glow and a hair strand's sheen.
+        Reactor3D.injectSurfaceGlow(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
         return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "")
             + (Reactor3D.shineOf(this) ? "|shine" : "")
+            + (Reactor3D.facesLight(this) ? (this.userData && this.userData.rrNormalMap && this.userData.rrNormalMap.isTexture && this.map ? "|face-nmap" : "|face") + (Reactor3D.facesPerLight() ? "" : "-share") : "")
+            + (Reactor3D.glowKey ? Reactor3D.glowKey(this) : "")
             + (Reactor3D.lookOf && Reactor3D.lookOf(this) ? "|look" : "")
             + (Reactor3D.detailProgramKey ? Reactor3D.detailProgramKey(this) : "");
     };
@@ -2885,9 +3528,60 @@ Reactor3D.SHADOW_SLOTS = 8;
  * budget takes one such character, the full tier a party of them.
  */
 Reactor3D.SHADOW_QUALITY = {
-    full: { slots: 8, dynamicSlots: 3, size: 512, taps: 5, dynamicTriangles: 600000, staticPerFrame: 2, dynamicPerFrame: 2, dynamicInterval: 1 },
-    weak: { slots: 4, dynamicSlots: 2, size: 256, taps: 1, dynamicTriangles: 200000, staticPerFrame: 1, dynamicPerFrame: 1, dynamicInterval: 2 }
+    full: { slots: 8, dynamicSlots: 3, size: 512, taps: 5, dynamicTriangles: 600000, staticPerFrame: 2, dynamicPerFrame: 2, dynamicInterval: 1, sunSize: 1024, sunSpans: [24, 96], dynamicRowsWithSun: true },
+    weak: { slots: 4, dynamicSlots: 2, size: 256, taps: 1, dynamicTriangles: 200000, staticPerFrame: 1, dynamicPerFrame: 1, dynamicInterval: 2, sunSize: 768, sunSpans: [16, 64], dynamicRowsWithSun: false }
 };
+/**
+ * A sun casts along one direction through an orthographic map that follows
+ * the focus, not through six cube faces from where it hangs: a cube face
+ * from 150 tiles up spreads one texel over a tile or more of ground, and its
+ * perspective depth spends the compare offset on tens of tiles, so every
+ * caster shaded its own lit side and nothing under it kept a shape.
+ *
+ * `sunSize` is one cascade's side in texels and `sunSpans` the ground each
+ * cascade covers, in tiles, nearest first: two square cascades sit side by
+ * side in a band under the rows of both atlases (static casters in the
+ * static atlas, moving ones in the dynamic atlas), so a lit program keeps
+ * its two shadow samplers. False draws the sun through a cube row, as before.
+ *
+ * `dynamicRowsWithSun` false (the weak tier): while the sun's cascades cast,
+ * the characters cast through them alone, and the lamps' rows hold only the
+ * props and buildings. Redrawing a walking party into a lamp's cube faces
+ * every other frame cost more than every other shadow together.
+ */
+Reactor3D.SUN_SHADOW_MAP = true;
+/** Where the sun reads in `rrLightShadow`: any value above the cube rows. */
+Reactor3D.SUN_SHADOW_ROW = 64;
+/** A cascade is laid again round the focus once it strays this share of the cascade's span from its centre. */
+Reactor3D.SUN_SHADOW_RECENTER = 0.125;
+/** The sun's direction is taken again once it turns this far from the one the cascades hold, in radians. */
+Reactor3D.SUN_SHADOW_TURN = 0.0175;
+/** How far the cascade's box reaches toward the sun and away from it from the focus, in tiles. */
+Reactor3D.SUN_SHADOW_REACH = 64;
+/**
+ * The compare offset toward the sun: this many texels of the cascade, and
+ * never less than `SUN_SHADOW_BIAS_MIN` tiles. The receiver also steps off
+ * its surface along its facing by SUN_SHADOW_NORMAL_OFFSET texels, and the
+ * casters are drawn back faces first with a slope-scaled offset
+ * (SHADOW_SLOPE_BIAS), so the depth offset itself stays small and shadows
+ * stay under what casts them.
+ */
+Reactor3D.SUN_SHADOW_BIAS_TEXELS = 0.75;
+Reactor3D.SUN_SHADOW_BIAS_MIN = 0.02;
+Reactor3D.SUN_SHADOW_NORMAL_OFFSET = 1.5;
+/** The share of the near cascade, at its edge, over which it hands over to the far one. */
+Reactor3D.SUN_SHADOW_BLEND = 0.12;
+/** The filter's spread, in texels of a cascade. */
+Reactor3D.SUN_SHADOW_SOFTNESS = 1.25;
+/**
+ * How much of the ambient the sun's shadow also takes away, at a sun two
+ * thirds as bright as the ambient or brighter (a dimmer sun takes its share). The
+ * ambient is the sky's light, and what blocks the sun blocks part of the
+ * sky: without it a day map's shade, lit by an ambient of one under a sun of
+ * a fraction of that, was nearly as bright as the sunlit ground. Lit ground
+ * is unchanged; shade never falls below the rest of the ambient.
+ */
+Reactor3D.SUN_SHADE = 0.6;
 /**
  * The six faces of a row, in atlas order: the direction each camera looks
  * and its up. `shadowGlsl` picks the face from the major axis of the
@@ -3081,6 +3775,35 @@ Reactor3D.Shadows = {
     },
 
     /**
+     * The storey cut changed (a roof taken away over the player, or put back; a storey picked in the
+     * editor): every static row and the sun's cascades are drawn again on the next frame, all of
+     * them, so a roof cut away casts no shadow for even a frame and one put back casts at once. A
+     * frame with the cut unchanged draws nothing more.
+     */
+    cutChanged() {
+        this._generation++;
+        this._rush = true;
+    },
+
+    /**
+     * The casters under `scene` leave the lists: a map scene going away keeps its
+     * groups' children attached, so no later draw finds them parentless and drops
+     * them, and each list would hold that map's models (their geometry and pictures).
+     */
+    forgetScene(scene) {
+        if (!scene) return 0;
+        const under = root => { for (let node = root; node; node = node.parent) if (node === scene) return true; return false; };
+        let dropped = 0;
+        for (const list of [this._static, this._dynamic, this._casting]) {
+            if (!list) continue;
+            for (const root of list) if (under(root)) { list.delete(root); dropped++; }
+        }
+        if (dropped) this._generation++;
+        if (this._sun && this._sun.scene === scene) this._sun = null;
+        return dropped;
+    },
+
+    /**
      * Make an object cast. Dynamic casters are the characters — anything
      * that moves by itself each frame; everything else is static and cached.
      */
@@ -3245,11 +3968,12 @@ Reactor3D.Shadows = {
      * one-byte colour attachment nothing writes to. Cleared once here, so
      * every row reads as fully lit until it is rendered, and so the depth
      * texture exists before any program names it — a shadow sampler bound
-     * to three's empty fallback texture fails the draw outright.
+     * to three's empty fallback texture fails the draw outright. `band` is
+     * the height of the strip under the rows that holds the sun's cascades.
      */
-    _makeAtlas(renderer, size, rows) {
+    _makeAtlas(renderer, size, rows, band = 0) {
         const width = size * 6;
-        const height = size * rows;
+        const height = size * rows + band;
         const target = new THREE.WebGLRenderTarget(width, height, {
             format: THREE.RedFormat,
             type: THREE.UnsignedByteType,
@@ -3274,7 +3998,7 @@ Reactor3D.Shadows = {
         renderer.setRenderTarget(target);
         renderer.clear(true, true, false);
         renderer.setRenderTarget(was);
-        return { target, size, rows };
+        return { target, size, rows, band, width, height };
     },
 
     /**
@@ -3319,10 +4043,13 @@ Reactor3D.Shadows = {
         const max = (renderer.capabilities && renderer.capabilities.maxTextureSize) || 4096;
         let size = quality.size;
         while (size * 6 > max && size > 64) size >>= 1;
-        const rows = Math.max(1, Math.min(quality.slots, Reactor3D.SHADOW_SLOTS, Math.floor(max / size)));
-        const dynRows = Math.max(1, Math.min(quality.dynamicSlots, Reactor3D.SHADOW_SLOTS, Math.floor(max / size)));
-        this._atlas = this._makeAtlas(renderer, size, rows);
-        this._dynAtlas = this._makeAtlas(renderer, size, dynRows);
+        // Two cascades side by side across the six faces' width.
+        const band = Reactor3D.SUN_SHADOW_MAP ? Math.min(quality.sunSize || size * 2, size * 3, max) : 0;
+        const rows = Math.max(1, Math.min(quality.slots, Reactor3D.SHADOW_SLOTS, Math.floor((max - band) / size)));
+        const dynRows = Math.max(1, Math.min(quality.dynamicSlots, Reactor3D.SHADOW_SLOTS, Math.floor((max - band) / size)));
+        this._atlas = this._makeAtlas(renderer, size, rows, band);
+        this._dynAtlas = this._makeAtlas(renderer, size, dynRows, band);
+        this._sun = null;
         this._tiles = [];
         for (let k = 0; k < rows; k++) this._tiles.push(this._makeTile());
         this._dynTiles = [];
@@ -3351,6 +4078,8 @@ Reactor3D.Shadows = {
         this._tiles = null;
         this._dynTiles = null;
         this._camera = null;
+        this._sun = null;
+        this._sunCamera = null;
         this._sentinel = null;
         this._pending = null;
         this._renderer = null;
@@ -3365,6 +4094,7 @@ Reactor3D.Shadows = {
         uniforms.rrShadowAtlas.value = null;
         uniforms.rrShadowDynAtlas.value = null;
         uniforms.rrShadowInfo.value.fill(-1);
+        uniforms.rrSunShadowInfo.value[2] = uniforms.rrSunShadowInfo.value[3] = 0;
     },
 
     dispose() {
@@ -3462,9 +4192,16 @@ Reactor3D.Shadows = {
             if (dynamic) {
                 if (!this._dynamicMoved(root)) continue;
             } else {
-                const hash = this._staticHashOf(root);
-                if (hash === root.userData.rrShadowHash) continue;
-                root.userData.rrShadowHash = hash;
+                // `_staticHashOf`, worked out here: asked of every static caster each frame, a number
+                // handed back from a call is a new heap object.
+                // Kept in a one-number array: a number read from a userData (each of its own shape) is a
+                // new heap object per read, and every static caster is read each frame.
+                const m = root.matrixWorld.elements;
+                const hash = root.visible ? m[12] * 1.7 + m[13] * 2.3 + m[14] * 3.1 + m[0] * 0.7 + m[5] * 1.1 + m[10] * 1.3 + m[1] * 0.3 + m[8] * 0.5 + 1 : 0.11;
+                let box = root.userData.rrShadowHash;
+                if (box instanceof Float64Array && box[0] === hash) continue;
+                if (!(box instanceof Float64Array)) box = root.userData.rrShadowHash = new Float64Array(1);
+                box[0] = hash;
             }
             const e = root.matrixWorld.elements;
             const now = { x: e[12], y: e[13], z: e[14], r: Reactor3D.instanceSpan(root) };
@@ -3866,6 +4603,7 @@ Reactor3D.Shadows = {
         this.lastRenderAt = typeof performance !== "undefined" ? performance.now() : Date.now();
         const want = Reactor3D.shadowsWanted(mapData);
         if (!want) {
+            this._sun = null;
             if (this._active) {
                 this._active = false;
                 (this._lightSet || uniforms).rrLightShadow.value.fill(-1);
@@ -3883,6 +4621,9 @@ Reactor3D.Shadows = {
         const dynTiles = this._dynTiles;
         this._frame++;
         const staticChange = this._changedStatics();
+        // A cut changed since the last frame (`cutChanged`): what it touches is drawn now, past the pacing.
+        const rush = !!this._rush;
+        this._rush = false;
         // Which characters can afford to cast, and whether any of them has
         // moved or animated since the rows were drawn. Both must run before
         // the row loop: the budget decides what the change list even holds.
@@ -3894,8 +4635,12 @@ Reactor3D.Shadows = {
         // first to the lights that actually land on the player.
         const farById = new Map();
         for (const tile of tiles) if (tile.id !== null) farById.set(tile.id, tile.far);
+        // The brightest sun casts through its own cascades and takes no row.
+        const sun = Reactor3D.SUN_SHADOW_MAP && this._atlas.band > 0 ? this._pickSun() : null;
+        const sunJobs = this._planSun(sun, focus, scene, staticChange, dynamicChange, quality, rush);
         const wanted = [];
         for (const candidate of this._candidates) {
+            if (sunJobs && candidate === sun) continue;
             candidate.far = this.farFor(candidate.radius, farById.get(candidate.id) || 0);
             candidate.rank = this._rankFor(candidate, focus, this._smoothedIncident(candidate, focus));
             if (this._castersWithin(candidate, candidate.far)) wanted.push(candidate);
@@ -3946,7 +4691,7 @@ Reactor3D.Shadows = {
                 }
                 if (staticChange.all || this._touches(staticChange.points, tile.origin, tile.far)) tile.dirty = true;
             }
-            if (this._dynamicWithin(candidate, far)) dynWanted.push({ id: candidate.id, gap: candidate.gap, rank: candidate.rank, tile: k });
+            if ((!sunJobs || quality.dynamicRowsWithSun !== false) && this._dynamicWithin(candidate, far)) dynWanted.push({ id: candidate.id, gap: candidate.gap, rank: candidate.rank, tile: k });
         }
         // The dynamic rows go to the best-ranked of those lights with a
         // character in reach, and follow their light's static row.
@@ -3980,9 +4725,9 @@ Reactor3D.Shadows = {
         // animated part, or a torch in the player's hand, redraws the props
         // around it a few times a second rather than every frame.
         const interval = Reactor3D.SHADOW_STATIC_INTERVAL;
-        let staticJobs = tiles.filter(t => t.id !== null && t.dirty && (!t.valid || this._frame - t.stamp >= interval))
+        let staticJobs = tiles.filter(t => t.id !== null && t.dirty && (rush || !t.valid || this._frame - t.stamp >= interval))
             .sort((a, b) => (a.valid - b.valid) || (a.gap - b.gap))
-            .slice(0, quality.staticPerFrame || 1);
+            .slice(0, rush ? tiles.length : quality.staticPerFrame || 1);
         // A new origin/far plane changes how BOTH atlases are sampled. Queue
         // its dynamic partner too, even if the characters stood still.
         for (const row of dynTiles) {
@@ -3990,9 +4735,9 @@ Reactor3D.Shadows = {
             if (row.id !== null && tile && tile.id === row.id && tile.want && staticJobs.includes(tile)) row.dirty = true;
         }
         const dynInterval = quality.dynamicInterval || 1;
-        const dynJobs = dynTiles.filter(d => d.id !== null && d.dirty && (!d.valid || this._frame - d.stamp >= dynInterval))
+        const dynJobs = dynTiles.filter(d => d.id !== null && d.dirty && (rush || !d.valid || this._frame - d.stamp >= dynInterval))
             .sort((a, b) => (a.valid - b.valid) || (a.stamp - b.stamp))
-            .slice(0, quality.dynamicPerFrame || 1);
+            .slice(0, rush ? dynTiles.length : quality.dynamicPerFrame || 1);
         // Keep the old, matching pair until both rows fit this frame's
         // budgets. Publishing just the new static origin would hide the old
         // dynamic shadow for a frame (or longer on the weak tier).
@@ -4001,9 +4746,10 @@ Reactor3D.Shadows = {
         this.backlog = tiles.filter(t => t.id !== null && t.dirty).length - staticJobs.length
             + dynTiles.filter(d => d.id !== null && d.dirty).length - dynJobs.length;
         this._publish(uniforms);
-        this._pending = { renderer, scene, statics: staticJobs, dynamics: dynJobs, activate: !this._active };
+        this._pending = { renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs, activate: !this._active };
         this.lastFrame = {
             statics: staticJobs.length, dynamics: dynJobs.length,
+            sunStatics: sunJobs ? sunJobs.statics.length : 0, sunDynamics: sunJobs ? sunJobs.dynamics.length : 0,
             slots: assigned.filter(Boolean).length, dynamicSlots: dynAssigned.filter(Boolean).length,
             candidates: this._candidates.length, wanted: wanted.length, backlog: this.backlog
         };
@@ -4013,7 +4759,8 @@ Reactor3D.Shadows = {
             this._reported = true;
             console.info("RPG Reactor shadows: " + Reactor3D.tier() + " tier, " + tiles.length + " casting light row(s), "
                 + dynTiles.length + " moving-caster row(s), " + quality.dynamicTriangles + " moving-caster triangles per row, faces "
-                + this._atlas.size + "px");
+                + this._atlas.size + "px" + (this._atlas.band > 0 ? ", sun cascades " + this._atlas.band + "px over "
+                + (quality.sunSpans || []).join(" and ") + " tiles" : ""));
         }
     },
 
@@ -4050,6 +4797,225 @@ Reactor3D.Shadows = {
             if (!tile || !tile.valid || tile.id !== row.id || tile.key !== row.key) continue;
             info[row.tile * 4 + 2] = j;
         }
+        // The sun reads every cascade drawn so far, each from where it was drawn.
+        const sun = this._sun, sunInfo = uniforms.rrSunShadowInfo.value;
+        let drawn = 0, moving = 0;
+        if (sun && sun.candidate) {
+            const matrices = uniforms.rrSunShadowMatrix.value, bias = uniforms.rrSunShadowBias.value;
+            for (let k = 0; k < sun.cascades.length; k++) {
+                const cascade = sun.cascades[k];
+                if (!cascade.valid) continue;
+                drawn |= 1 << k;
+                if (cascade.dynValid && cascade.hasDyn) moving |= 1 << k;
+                matrices.set(cascade.matrix, k * 16);
+                bias[k] = cascade.bias;
+            }
+            if (drawn) shadowOf[sun.candidate.index] = Reactor3D.SUN_SHADOW_ROW;
+        }
+        sunInfo[2] = moving;
+        sunInfo[3] = drawn;
+        uniforms.rrSunShade.value = drawn ? this.sunShade(this._lightSet || uniforms, sun.candidate.index) : 0;
+        if (drawn) {
+            const dir = uniforms.rrSunShadowDir.value, texel = uniforms.rrSunShadowTexel.value, band = this._atlas ? this._atlas.band : 512;
+            const pose = sun.cascades[0].pose || sun.cascades[1].pose;
+            if (pose) { dir[0] = pose.dir[0]; dir[1] = pose.dir[1]; dir[2] = pose.dir[2]; }
+            texel[0] = sun.cascades[0].span / band;
+            texel[1] = sun.cascades[1].span / band;
+            texel[2] = Reactor3D.SUN_SHADOW_BLEND;
+        }
+    },
+
+    /** The share of the ambient the sun's shadow takes (SUN_SHADE), from the light set's sun and ambient as packed. */
+    sunShade(set, index) {
+        const col = set && set.rrLightColor && set.rrLightColor.value, amb = set && set.rrAmbient && set.rrAmbient.value;
+        if (!col || !amb || !(Reactor3D.SUN_SHADE > 0)) return 0;
+        const sun = (col[index * 4] + col[index * 4 + 1] + col[index * 4 + 2]) / 3;
+        const ambient = (amb[0] + amb[1] + amb[2]) / 3;
+        if (!(sun > 0) || !(ambient > 0)) return 0;
+        return Reactor3D.SUN_SHADE * Math.min(1, (1.5 * sun) / ambient);
+    },
+
+    /** The sun that casts through the cascades: the brightest of this frame's suns. */
+    _pickSun() {
+        let best = null;
+        for (const candidate of this._candidates) {
+            if (!candidate.sun) continue;
+            if (!best || (candidate.strength || 0) > (best.strength || 0)) best = candidate;
+        }
+        return best;
+    },
+
+    /** Whether the sun's cascades still have drawing to do (the editor draws until they are done). */
+    sunPending() {
+        const sun = this._sun;
+        if (!sun) return false;
+        for (const cascade of sun.cascades) if (!cascade.valid || cascade.dirty || cascade.dynDirty) return true;
+        return false;
+    },
+
+    /**
+     * Which of the sun's cascades are drawn this frame. Each cascade is a
+     * square of ground round the focus, seen straight down the sun's
+     * direction, centred on whole texels: it is laid again only once the
+     * focus strays past SUN_SHADOW_RECENTER of its span, the sun turns past
+     * SUN_SHADOW_TURN, or a caster in it changes, so a still view and a short
+     * walk draw nothing. The static half of a cascade is drawn no more than
+     * one cascade a frame, and its moving half with it, so the two always
+     * share a pose; the moving half alone follows the characters in it,
+     * the far cascade at half the near one's rate. Null when no sun casts.
+     */
+    _planSun(sun, focus, scene, staticChange, dynamicChange, quality, rush = false) {
+        if (!sun || !focus || !Number.isFinite(focus.x)) { this._sun = null; return null; }
+        // Directional: its own direction when it has one, else from the focus toward where it stands.
+        const lx = sun.dir ? sun.dir[0] : sun.x - focus.x, ly = sun.dir ? sun.dir[1] : (sun.lightY !== undefined ? sun.lightY : sun.y) - focus.y;
+        const lz = sun.dir ? sun.dir[2] : sun.z - focus.z;
+        const length = Math.sqrt(lx * lx + ly * ly + lz * lz);
+        // A sun at or under the focus's own level lights it from the side or below: nothing to cast down.
+        if (!(length > 0.001) || ly <= 0) { this._sun = null; return null; }
+        let state = this._sun;
+        const spans = (quality.sunSpans || [24, 96]).slice(0, 2);
+        if (!state || state.id !== sun.id || state.scene !== scene || state.cascades.length !== spans.length) {
+            state = this._sun = { id: sun.id, scene, candidate: sun, dir: null, cascades: spans.map(span => ({
+                span, valid: false, dynValid: false, hasDyn: false, dirty: true, dynDirty: true, want: null,
+                pose: null, matrix: new Float32Array(16), bias: 0, stamp: -1e9, dynStamp: -1e9
+            })) };
+        }
+        state.candidate = sun;
+        const dx = lx / length, dy = ly / length, dz = lz / length;
+        const held = state.dir;
+        if (!held || held[0] * dx + held[1] * dy + held[2] * dz < Math.cos(Reactor3D.SUN_SHADOW_TURN)) {
+            // Right and up across the sun's view, as an orthographic camera looking down it has them.
+            const ref = Math.abs(dz) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+            let rx = ref[1] * dz - ref[2] * dy, ry = ref[2] * dx - ref[0] * dz, rz = ref[0] * dy - ref[1] * dx;
+            const rl = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1;
+            rx /= rl; ry /= rl; rz /= rl;
+            state.dir = [dx, dy, dz];
+            state.right = [rx, ry, rz];
+            state.up = [dy * rz - dz * ry, dz * rx - dx * rz, dx * ry - dy * rx];
+        }
+        const D = state.dir, R = state.right, U = state.up, band = this._atlas.band;
+        const fa = focus.x * R[0] + focus.y * R[1] + focus.z * R[2];
+        const fb = focus.x * U[0] + focus.y * U[1] + focus.z * U[2];
+        const fc = focus.x * D[0] + focus.y * D[1] + focus.z * D[2];
+        const recenter = Reactor3D.SUN_SHADOW_RECENTER, reach = Reactor3D.SUN_SHADOW_REACH;
+        // Kept on the state: read by this frame's flush, filled again by the next frame's plan.
+        const jobs = state.jobs || (state.jobs = { statics: [], dynamics: [] });
+        jobs.statics.length = 0;
+        jobs.dynamics.length = 0;
+        for (let k = 0; k < state.cascades.length; k++) {
+            const cascade = state.cascades[k], texel = cascade.span / band, pose = cascade.pose;
+            const strayed = !cascade.valid || !pose || pose.dir !== D || Math.abs(fa - pose.a) > cascade.span * recenter
+                || Math.abs(fb - pose.b) > cascade.span * recenter || Math.abs(fc - pose.c) > reach * 0.25;
+            if (strayed) {
+                const want = cascade.want;
+                if (!want || want.dir !== D || Math.abs(fa - want.a) > texel || Math.abs(fb - want.b) > texel || Math.abs(fc - want.c) > texel) {
+                    cascade.want = { dir: D, right: R, up: U, a: Math.round(fa / texel) * texel, b: Math.round(fb / texel) * texel, c: fc };
+                }
+                cascade.dirty = true;
+            } else cascade.want = null;
+            const at = cascade.want || pose;
+            if (staticChange.all || this._sunTouches(staticChange.points, cascade, at)) cascade.dirty = true;
+            if (dynamicChange.points.length && this._sunTouches(dynamicChange.points, cascade, at)) cascade.dynDirty = true;
+        }
+        const interval = Reactor3D.SHADOW_STATIC_INTERVAL, dynInterval = quality.dynamicInterval || 1;
+        // Nothing yet first, then the nearest cascade.
+        let chosen = null;
+        for (const cascade of state.cascades) {
+            // (A cut just changed: every cascade it left stale, this frame.)
+            if (rush && cascade.dirty) { jobs.statics.push(cascade); jobs.dynamics.push(cascade); continue; }
+            if (!cascade.dirty || (cascade.valid && this._frame - cascade.stamp < interval && !cascade.want)) continue;
+            if (!chosen || (chosen.valid && !cascade.valid)) chosen = cascade;
+        }
+        if (chosen && !rush) {
+            jobs.statics.push(chosen);
+            jobs.dynamics.push(chosen);
+        }
+        for (let k = 0; k < state.cascades.length; k++) {
+            const cascade = state.cascades[k];
+            if (cascade === chosen || jobs.statics.includes(cascade) || !cascade.valid || !cascade.dynDirty) continue;
+            if (this._frame - cascade.dynStamp < dynInterval * (k + 1)) continue;
+            jobs.dynamics.push(cascade);
+        }
+        return jobs;
+    },
+
+    /** Whether any reported place lies over a cascade's square, as posed at `pose`. */
+    _sunTouches(points, cascade, pose) {
+        if (!pose || !points.length) return false;
+        const R = pose.right, U = pose.up, half = cascade.span * 0.5;
+        for (const p of points) {
+            const r = (p.r || 0) + 1;
+            const a = p.x * R[0] + p.y * R[1] + p.z * R[2] - pose.a;
+            const b = p.x * U[0] + p.y * U[1] + p.z * U[2] - pose.b;
+            if (Math.abs(a) <= half + r && Math.abs(b) <= half + r) return true;
+        }
+        return false;
+    },
+
+    /** The orthographic camera of one cascade at `pose`, its layers set to `layer`. */
+    _aimSun(pose, span, layer) {
+        const camera = this._sunCamera || (this._sunCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
+        const half = span * 0.5, reach = Reactor3D.SUN_SHADOW_REACH, D = pose.dir, R = pose.right, U = pose.up;
+        camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
+        camera.near = 0; camera.far = reach * 2;
+        camera.updateProjectionMatrix();
+        const cx = R[0] * pose.a + U[0] * pose.b + D[0] * pose.c;
+        const cy = R[1] * pose.a + U[1] * pose.b + D[1] * pose.c;
+        const cz = R[2] * pose.a + U[2] * pose.b + D[2] * pose.c;
+        camera.position.set(cx + D[0] * reach, cy + D[1] * reach, cz + D[2] * reach);
+        camera.up.set(U[0], U[1], U[2]);
+        camera.lookAt(cx, cy, cz);
+        camera.updateMatrixWorld(true);
+        camera.layers.set(layer);
+        return camera;
+    },
+
+    /**
+     * One half of a cascade: its square of the band cleared and the casters
+     * on `layer` drawn into it from the sun, each at the level of detail a
+     * texel of the cascade allows. `dynamic` picks the dynamic atlas's band.
+     */
+    _renderSunCascade(renderer, scene, k, cascade, pose, layer, roots, dynamic) {
+        const atlas = dynamic ? this._dynAtlas : this._atlas, band = atlas.band, target = atlas.target;
+        target.viewport.set(k * band, atlas.size * atlas.rows, band, band);
+        target.scissor.copy(target.viewport);
+        target.scissorTest = true;
+        renderer.setRenderTarget(target);
+        renderer.clear(false, true, false);
+        const camera = this._aimSun(pose, cascade.span, layer);
+        const detail = Reactor3D.GeometryDetail, swapped = [];
+        if (detail && detail.shadowLevel && detail.enabled && !detail._failed && typeof Worker !== "undefined") {
+            // A texel of the cascade, as the cube faces' test takes it: focal over distance.
+            const perUnit = band / cascade.span, far = 1000;
+            for (const root of roots) {
+                if (!root || !root.visible || !root.parent) continue;
+                root.traverseVisible(object => {
+                    const selected = detail.shadowLevel(object, perUnit * far, Reactor3D.SHADOW_NEAR, null, far);
+                    if (!selected || selected === object.geometry) return;
+                    swapped.push([object, object.geometry]);
+                    object.geometry = selected;
+                });
+            }
+        }
+        try {
+            this.renderFace(renderer, scene, camera);
+        } finally {
+            if (swapped.length) detail.end(swapped);
+        }
+        return camera;
+    },
+
+    /** Whether a casting character stands over a cascade's square at `pose`. */
+    _sunHasMoving(cascade, pose) {
+        const R = pose.right, U = pose.up, half = cascade.span * 0.5;
+        for (const root of this._casting || this._dynamic) {
+            if (!root.parent || !root.visible || root.userData.rrShadowCasts === false) continue;
+            const e = root.matrixWorld.elements, r = (Reactor3D.instanceSpan(root) || 1) + 1;
+            const a = e[12] * R[0] + e[13] * R[1] + e[14] * R[2] - pose.a;
+            const b = e[12] * U[0] + e[13] * U[1] + e[14] * U[2] - pose.b;
+            if (Math.abs(a) <= half + r && Math.abs(b) <= half + r) return true;
+        }
+        return false;
     },
 
     /**
@@ -4119,6 +5085,53 @@ Reactor3D.Shadows = {
     },
 
     /**
+     * Before one kind of row is drawn, every subtree of the scene with
+     * nothing on that kind's layer is hidden, the largest it can be, until
+     * `_showAgain`. Each face is three's walk of the whole scene, whose layer
+     * test turned everything else away object by object, six faces a row: a
+     * moving caster's row walked every piece and plant of the map to draw
+     * the party. Nothing hidden here would pass that test, so each face draws
+     * what it drew. Read from the pass's walk when it is held (the rows are
+     * drawn from inside the pass's draw: Reactor3D.SceneWalk), else walked
+     * once here for every face of the kind. `casterOnly = false` walks
+     * everything in every face, as before.
+     */
+    casterOnly: true,
+    _hideNonCasters(scene, layer) {
+        if (!this.casterOnly || !scene) return null;
+        const walk = Reactor3D.SceneWalk, held = walk.list(scene);
+        const list = held || (this._casterList = walk.gather(scene, this._casterList));
+        const { nodes, ends, parents, count } = list;
+        if (!this._casterFlags || this._casterFlags.length < count) this._casterFlags = new Uint8Array(count * 2);
+        const flags = this._casterFlags, bit = 1 << layer, CASTS = 1, GONE = 2, hidden = [];
+        try {
+            for (let i = 0; i < count;) {
+                const object = nodes[i];
+                // Hidden already (a half of the split, a mesh still compiling): left as it is.
+                if (object.visible === false) { flags[i] = GONE; i = ends[i]; continue; }
+                const layers = object.layers;
+                flags[i] = layers && (layers.mask & bit) !== 0 && (object.isMesh || object.isLine || object.isPoints || object.isSprite) ? CASTS : 0;
+                i++;
+            }
+            for (let i = count - 1; i > 0; i--) if (!(flags[i] & GONE)) flags[parents[i]] |= flags[i];
+            for (let i = 1; i < count;) {
+                const f = flags[i];
+                if (f & (GONE | CASTS)) { i = f & GONE ? ends[i] : i + 1; continue; }
+                nodes[i].visible = false;
+                hidden.push(nodes[i]);
+                i = ends[i];
+            }
+        } finally {
+            if (!held) { list.nodes.fill(null, 0, list.count); list.count = 0; }
+        }
+        return hidden;
+    },
+
+    _showAgain(hidden) {
+        if (hidden) for (const object of hidden) object.visible = true;
+    },
+
+    /**
      * One row: six faces of depth from `origin`, each cleared and, when a
      * caster stands in it, drawn through three's ordinary render with the
      * camera's layers set to the casters' layer — so it culls to the face,
@@ -4176,8 +5189,13 @@ Reactor3D.Shadows = {
     /** One face of a row: characters the face cannot see are not skinned into it (InstanceCull). */
     renderFace(renderer, scene, camera) {
         const cull = Reactor3D.InstanceCull, hidden = cull ? cull.hide(scene, camera) : null;
-        try { renderer.render(scene, camera); } finally { if (hidden) cull.show(hidden); }
+        // A face holds depth only, the same whatever order it is drawn in: three's sort of the face's
+        // list (and the garbage it makes) is skipped. `sortFaces = true` sorts them as before.
+        const sorted = renderer.sortObjects;
+        if (!this.sortFaces) renderer.sortObjects = false;
+        try { renderer.render(scene, camera); } finally { renderer.sortObjects = sorted; if (hidden) cull.show(hidden); }
     },
+    sortFaces: false,
 
     _renderFacesOriginal(renderer, scene, target, size, row, origin, camera, mask) {
         for (let face = 0; face < 6; face++) {
@@ -4200,9 +5218,13 @@ Reactor3D.Shadows = {
      * on, the atlas is bound before any program declares a sampler for it,
      * and only then do the lit materials switch to the shadow variant — a
      * shadow sampler bound to no depth texture fails the draw outright.
+     * Drawn from the scene whole: the hook runs inside the first half of a
+     * split pass (HalfLight.whole), and the casters lit at full size wait
+     * in the second.
      */
     _flush() {
-        return Reactor3D.GeometryDetail.withOriginal(() => this._flushOriginal());
+        const half = Reactor3D.HalfLight;
+        return Reactor3D.GeometryDetail.withOriginal(() => half && half.whole ? half.whole(() => this._flushOriginal()) : this._flushOriginal());
     },
 
     _flushOriginal() {
@@ -4210,7 +5232,9 @@ Reactor3D.Shadows = {
         if (!pending) return;
         this._pending = null;
         const { renderer, scene, statics, dynamics } = pending;
-        if (statics.length || dynamics.length) {
+        const sunJobs = pending.sun && this._sun ? pending.sun : null;
+        const sunStatics = sunJobs ? sunJobs.statics : [], sunDynamics = sunJobs ? sunJobs.dynamics : [];
+        if (statics.length || dynamics.length || sunStatics.length || sunDynamics.length) {
             const target = renderer.getRenderTarget();
             const autoClear = renderer.autoClear;
             const autoUpdate = scene.matrixWorldAutoUpdate;
@@ -4219,14 +5243,25 @@ Reactor3D.Shadows = {
             scene.matrixWorldAutoUpdate = false;
             scene.background = null;
             try {
-                if (statics.length) {
+                if (statics.length || sunStatics.length) {
                     const swapped = this._swapCasters(this._static);
                     try {
                         this._atCoarsestLod(() => {
-                            for (const tile of statics) {
-                                const to = tile.want || tile;
-                                this._renderTile(renderer, scene, this._atlas, this._tiles.indexOf(tile), to.origin, to.far,
-                                    Reactor3D.SHADOW_LAYER_STATIC, this._static, tile.candidate && tile.candidate.carrier);
+                            const others = this._hideNonCasters(scene, Reactor3D.SHADOW_LAYER_STATIC);
+                            try {
+                                for (const tile of statics) {
+                                    const to = tile.want || tile;
+                                    this._renderTile(renderer, scene, this._atlas, this._tiles.indexOf(tile), to.origin, to.far,
+                                        Reactor3D.SHADOW_LAYER_STATIC, this._static, tile.candidate && tile.candidate.carrier);
+                                }
+                                for (const cascade of sunStatics) {
+                                    const camera = this._renderSunCascade(renderer, scene, this._sun.cascades.indexOf(cascade), cascade,
+                                        cascade.want || cascade.pose, Reactor3D.SHADOW_LAYER_STATIC, this._static, false);
+                                    cascade.drawnMatrix = (cascade.drawnStore || (cascade.drawnStore = new THREE.Matrix4()))
+                                        .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+                                }
+                            } finally {
+                                this._showAgain(others);
                             }
                         });
                     } finally {
@@ -4244,17 +5279,29 @@ Reactor3D.Shadows = {
                         tile.stamp = this._frame;
                     }
                 }
-                if (dynamics.length) {
+                if (dynamics.length || sunDynamics.length) {
                     const roots = this._casting || this._dynamic;
                     const swapped = this._swapCasters(roots);
+                    let others = null;
                     try {
+                        others = this._hideNonCasters(scene, Reactor3D.SHADOW_LAYER_DYNAMIC);
                         for (const row of dynamics) {
                             const tile = this._tiles[row.tile];
                             if (!tile || tile.id !== row.id) continue;
                             this._renderTile(renderer, scene, this._dynAtlas, this._dynTiles.indexOf(row), tile.origin, tile.far,
                                 Reactor3D.SHADOW_LAYER_DYNAMIC, roots, tile.candidate && tile.candidate.carrier);
                         }
+                        for (const cascade of sunDynamics) {
+                            const pose = sunStatics.includes(cascade) ? cascade.want || cascade.pose : cascade.pose;
+                            if (!pose) continue;
+                            cascade.hasDyn = this._sunHasMoving(cascade, pose);
+                            // An empty square needs one clear, and is not read after it.
+                            if (cascade.hasDyn || cascade.dynValid) this._renderSunCascade(renderer, scene, this._sun.cascades.indexOf(cascade), cascade,
+                                pose, Reactor3D.SHADOW_LAYER_DYNAMIC, roots, true);
+                            cascade.dynDone = true;
+                        }
                     } finally {
+                        this._showAgain(others);
                         this._unswap(swapped);
                     }
                     for (const row of dynamics) {
@@ -4264,6 +5311,27 @@ Reactor3D.Shadows = {
                         row.dirty = false;
                         row.stamp = this._frame;
                     }
+                }
+                // A cascade's two halves land together, under the pose they were drawn at.
+                const band = this._atlas.band, reach = Reactor3D.SUN_SHADOW_REACH;
+                for (const cascade of sunStatics) {
+                    if (!cascade.drawnMatrix) continue;
+                    if (cascade.want) cascade.pose = cascade.want;
+                    cascade.want = null;
+                    cascade.matrix.set(cascade.drawnMatrix.elements);
+                    cascade.drawnMatrix = null;
+                    const texel = cascade.span / band;
+                    cascade.bias = Math.max(Reactor3D.SUN_SHADOW_BIAS_MIN, Reactor3D.SUN_SHADOW_BIAS_TEXELS * texel) / (reach * 2);
+                    cascade.valid = true;
+                    cascade.dirty = false;
+                    cascade.stamp = this._frame;
+                }
+                for (const cascade of sunDynamics) {
+                    if (!cascade.dynDone) continue;
+                    cascade.dynDone = false;
+                    cascade.dynValid = cascade.valid;
+                    cascade.dynDirty = false;
+                    cascade.dynStamp = this._frame;
                 }
             } finally {
                 renderer.setRenderTarget(target);
@@ -4304,9 +5372,18 @@ Reactor3D.Shadows = {
         uniforms.rrShadowDynAtlas.value = dyn ? dyn.target.depthTexture : null;
         const grid = uniforms.rrShadowGrid.value;
         grid[0] = 1 / 6;
-        grid[1] = atlas ? 1 / atlas.rows : 1;
-        grid[2] = dyn ? 1 / dyn.rows : 1;
+        // One row's share of each atlas's height: the sun's band sits under the rows.
+        grid[1] = atlas ? atlas.size / atlas.height : 1;
+        grid[2] = dyn ? dyn.size / dyn.height : 1;
         grid[3] = atlas ? 1 / atlas.size : 1 / 512;
+        const band = uniforms.rrSunShadowBand.value;
+        if (atlas && dyn && atlas.band > 0) {
+            band[0] = (atlas.size * atlas.rows) / atlas.height; band[1] = atlas.band / atlas.height;
+            band[2] = (dyn.size * dyn.rows) / dyn.height; band[3] = dyn.band / dyn.height;
+            uniforms.rrSunShadowInfo.value[0] = 1 / atlas.band;
+            uniforms.rrSunShadowInfo.value[1] = Reactor3D.SUN_SHADOW_SOFTNESS;
+            uniforms.rrSunShadowBias.value[2] = atlas.band / atlas.width;
+        }
     }
 };
 
@@ -4430,6 +5507,40 @@ Reactor3D.daylight = function(ambient = this._ambient) {
  * A sun's colour and brightness at this time of day (`day` from `daylight`),
  * into `out`: as authored for a fixed sun or anything that is not a sun.
  */
+/**
+ * Where a sun's light comes from. A sun is directional: it shines the way its
+ * yaw and pitch aim it, as a spotlight is aimed (yaw 0 shines south, and a
+ * pitch below level shines down at that angle). A sun left level (pitch 0,
+ * as the Sun preset makes it) stands at SUN_ELEVATION, and one left at yaw 0
+ * as well shines along SUN_BEARING (degrees from south toward east): mostly
+ * east, so shadows fall to the side of what casts them in a view facing north
+ * or south, the way most maps are seen. One that follows the
+ * time of day sinks to SUN_TWILIGHT_ELEVATION as day turns to twilight; the
+ * moon stands as high as the sun. Where the sun stands on the map says only
+ * how far its light reaches.
+ */
+Reactor3D.SUN_ELEVATION = 50;
+Reactor3D.SUN_BEARING = 70;
+Reactor3D.SUN_TWILIGHT_ELEVATION = 18;
+/**
+ * The unit vector toward a sun, into `out`, from its authored `yaw` and
+ * `pitch` in degrees (as the sidecar holds them) and the time of day `day`
+ * (from `daylight`; null or a fixed sun keeps its elevation).
+ */
+Reactor3D.sunDirection = function(yaw, pitch, day, fixed, out) {
+    out = out || [0, 1, 0];
+    const authoredPitch = Number(pitch) || 0, authoredYaw = Number(yaw) || 0;
+    let elevation = authoredPitch < 0 ? Math.min(90, -authoredPitch) : this.SUN_ELEVATION;
+    const bearing = authoredPitch < 0 || authoredYaw !== 0 ? authoredYaw : -this.SUN_BEARING;
+    if (day && !fixed) elevation = elevation * (day.day + day.night) + this.SUN_TWILIGHT_ELEVATION * day.twilight;
+    const e = (Math.max(1, elevation) * Math.PI) / 180, b = (-bearing * Math.PI) / 180;
+    // The light travels along (sin b, -, cos b) as a spot's aim does; the sun lies the other way.
+    out[0] = -Math.sin(b) * Math.cos(e);
+    out[1] = Math.sin(e);
+    out[2] = -Math.cos(b) * Math.cos(e);
+    return out;
+};
+
 Reactor3D.sunAtDaylight = function(light, colour, intensity, day, out) {
     out = out || {};
     out.colour = colour; out.intensity = intensity;
@@ -4938,31 +6049,99 @@ Reactor3D.suppressFlatLighting = function(hide) {
  * that made it a 3D map at all.
  */
 Reactor3D.wantsLights3D = function(mapData) {
+    if (this.authoredLights3D(mapData)) return true;
+    // An AmbientLight command on an unlit map lights it, easing from its daylight (`ambientFor`);
+    // a map whose sidecar turns lighting off stays off.
+    return this.isMap3D(mapData) && this.mapLightingChoice(mapData) === null && this.ambientOverrideActive();
+};
+
+/** Whether the map lights itself in three dimensions, before any AmbientLight command. */
+Reactor3D.authoredLights3D = function(mapData) {
     if (!this.isMap3D(mapData)) return false;
-    const sidecar = mapData && mapData.reactor3d;
-    if (sidecar && sidecar.lighting && sidecar.lighting.enabled !== undefined) {
-        return !!sidecar.lighting.enabled;
-    }
-    // Native lights placed on the map are themselves the opt-in: an author
-    // who put a lamp somewhere wants to see it lit.
-    if (this.readMapLights(mapData).length) return true;
-    if (mapData && mapData.meta && mapData.meta["3d lights"]) return true;
+    const said = this.mapLightingChoice(mapData);
+    if (said !== null) return said;
+    const meta = this.mapMeta(mapData);
+    if (meta && meta["3d lights"]) return true;
     // So is a placed model whose light effect is burning right now.
     return this.hasLiveEffectLights();
 };
 
+/** Whether an AmbientLight command holds this map's ambient. */
+Reactor3D.ambientOverrideActive = function() {
+    const override = this.currentLightOverrides() && $gameMap._reactorAmbientOverride;
+    return !!override && override.mapId === this.currentLightMapId();
+};
+
+/**
+ * What the map's sidecar says about lighting: `true` or `false`, or `null`
+ * when it says nothing and the note or the placed models decide. The
+ * `enabled` flag is final. Otherwise placed lights opt in (an author who put
+ * a lamp somewhere wants to see it lit), and so does an ambient that darkens
+ * or tints: an author who set the map to night wants night. Full white
+ * daylight is the unlit look and asks for nothing.
+ */
+Reactor3D.mapLightingChoice = function(mapData) {
+    const sidecar = mapData && mapData.reactor3d;
+    const lighting = sidecar && sidecar.lighting;
+    if (lighting && lighting.enabled !== undefined) return !!lighting.enabled;
+    if (this.readMapLights(mapData).length) return true;
+    if (lighting && (lighting.ambient !== undefined || lighting.ambientColour !== undefined)) {
+        // Asked every frame by both renderers: worked out again only when the values change.
+        const memo = this._ambientAskMemo || (this._ambientAskMemo = { ambient: NaN, colour: NaN, asks: false });
+        if (memo.ambient !== lighting.ambient || memo.colour !== lighting.ambientColour) {
+            const level = lighting.ambient === undefined ? 0.25 : Number(lighting.ambient);
+            const colour = this.parseColour(lighting.ambientColour === undefined ? 0xffffff : lighting.ambientColour);
+            memo.ambient = lighting.ambient;
+            memo.colour = lighting.ambientColour;
+            memo.asks = !(level >= 1) || (colour & 0xffffff) !== 0xffffff;
+        }
+        if (memo.asks) return true;
+    }
+    return null;
+};
+
+/**
+ * The map's note tags: `meta` as the game's DataManager made it, or read from
+ * the note the same way when the map came without one (the editor's maps).
+ */
+Reactor3D.mapMeta = function(mapData) {
+    if (!mapData) return null;
+    if (mapData.meta) return mapData.meta;
+    const note = mapData.note;
+    if (typeof note !== "string" || note.indexOf("<") < 0) return null;
+    const cache = this._noteMetaCache || (this._noteMetaCache = { note: null, meta: null });
+    if (cache.note !== note) {
+        const meta = {};
+        const pattern = /<([^<>:]+)(:?)([^>]*)>/g;
+        let match;
+        while ((match = pattern.exec(note))) meta[match[1]] = match[2] === ":" ? match[3] : true;
+        cache.note = note;
+        cache.meta = meta;
+    }
+    return cache.meta;
+};
+
 /** How dark an unlit corner of a lit map is. */
-Reactor3D.ambientFor = function(mapData) {
+/** A map's ambient as its sidecar writes it, before any AmbientLight command. */
+Reactor3D.authoredAmbient = function(mapData) {
     const sidecar = mapData && mapData.reactor3d;
     const lighting = (sidecar && sidecar.lighting) || {};
-    const authored = {
-        intensity: lighting.ambient === undefined ? 0.25 : lighting.ambient,
+    // With no ambient written, a lit map's dark corners are at a quarter; an unlit map is in full daylight,
+    // which is where an AmbientLight command on it eases from.
+    const unset = lighting.ambient === undefined;
+    return {
+        intensity: !unset ? lighting.ambient
+            : ((this.isMap3D(mapData) ? this.authoredLights3D(mapData) : this.authoredLighting(mapData)) ? 0.25 : 1),
         // The sidecar stores "#rrggbb"; the compositors bit-shift a number.
         // Passed through raw, the string shifted as NaN and the ambient
         // multiplied the whole world by black.
         colour: this.parseColour(
             lighting.ambientColour === undefined ? 0xffffff : lighting.ambientColour)
     };
+};
+
+Reactor3D.ambientFor = function(mapData) {
+    const authored = this.authoredAmbient(mapData);
     // An AmbientLight command eases the map away from what it authored.
     const override = this.currentLightOverrides() && $gameMap._reactorAmbientOverride;
     if (!override || override.mapId !== this.currentLightMapId()) return authored;
@@ -4978,6 +6157,97 @@ Reactor3D.ambientFor = function(mapData) {
         intensity: fromI + (toI - fromI) * t,
         colour: this.mixColour(fromC, toC, t)
     };
+};
+
+//-----------------------------------------------------------------------------
+// Lighting across a border
+//
+// Beside a neighboring map's world (Reactor3D.Neighbors) the light of the two
+// maps meets: `_seamLight` (`Neighbors.lightBlend`, set by the spriteset each
+// frame) says how far toward the neighbor's the lighting stands at the
+// player's place, and the ambient (the time of day) and the sun are taken
+// that far toward the neighbor's own. Halfway on the border, from either side,
+// so the step over it changes nothing; this map's own outside the band.
+
+/** The ambient `ambient` of the map played, taken toward the neighbor's as far as `_seamLight` says. */
+Reactor3D.seamAmbient = function(ambient, mapData) {
+    const seam = this._seamLight;
+    if (!ambient || !seam || !(seam.weight > 0) || seam.home !== (mapData || (typeof $dataMap !== "undefined" ? $dataMap : null))) return ambient;
+    const other = this.authoredAmbient(seam.map), w = seam.weight;
+    return {
+        intensity: ambient.intensity + (other.intensity - ambient.intensity) * w,
+        colour: this.mixColour(ambient.colour, other.colour, w)
+    };
+};
+
+/** The neighbor's sun, as `{ light, ground }` (its authored light and the ground under it), or null: read once per map. */
+Reactor3D.seamSunOf = function(seam) {
+    const cache = this._seamSuns || (this._seamSuns = new WeakMap());
+    if (cache.has(seam.map)) return cache.get(seam.map);
+    const light = this.readMapLights(seam.map).find(entry => entry.type === this.LIGHT_SUN && entry.on && !entry.attach) || null;
+    let found = null;
+    if (light) {
+        const x = Math.round(light.x), y = Math.round(light.y), N = this.Neighbors;
+        const ground = N && N.within ? N.within(seam.map, seam.globals || null, () => this.surfaceHeightAt(seam.map, x, y)) : 0;
+        found = { light, ground: Number.isFinite(ground) ? ground : 0 };
+    }
+    cache.set(seam.map, found);
+    return found;
+};
+
+/**
+ * The map's lights (`out`, from `nativeLights`) with its sun taken toward the
+ * neighbor's as far as `_seamLight` says: its place, the ground it stands
+ * over, its height, reach, colour and brightness, both at the time of day
+ * `day`. A sun only one of the two maps has fades toward none. It keeps its
+ * id, so its shadow row stays its own.
+ */
+Reactor3D.blendSeamSun = function(out, map, day) {
+    const seam = this._seamLight;
+    if (!seam || seam.home !== map || !(seam.weight > 0)) return out;
+    const w = seam.weight, mix = (a, b) => a + (b - a) * w;
+    let own = null;
+    for (const light of out) if (light.type === this.LIGHT_SUN) { own = light; break; }
+    const found = this.seamSunOf(seam);
+    if (!own && !found) return out;
+    let other = null;
+    if (found) {
+        const light = found.light;
+        const sun = light.daylight !== "fixed" && day ? this.sunAtDaylight(light, light.color, light.intensity, day, {}) : { colour: light.color, intensity: light.intensity };
+        other = { x: light.x + seam.offset.x, y: light.y + seam.offset.z, ground: found.ground, height: light.height, radius: light.radius, colour: sun.colour, intensity: sun.intensity,
+            sunDir: this.sunDirection(light.yaw, light.pitch, light.daylight !== "fixed" ? day : null, light.daylight === "fixed") };
+    }
+    if (own && other) {
+        const ground = this.surfaceHeightAt(map, Math.round(own.x), Math.round(own.y));
+        own.groundY = mix(Number.isFinite(ground) ? ground : 0, other.ground);
+        own.x = mix(own.x, other.x);
+        own.y = mix(own.y, other.y);
+        own.height = mix(own.height, other.height);
+        own.radius = mix(own.radius, other.radius);
+        if (own.priorityRadius !== undefined) own.priorityRadius = mix(own.priorityRadius, other.radius);
+        own.colour = this.mixColour(own.colour, other.colour, w);
+        own.intensity = mix(own.intensity, other.intensity);
+        // The direction too, so the shadows turn across the border rather than jump at it.
+        if (own.sunDir && other.sunDir) {
+            const d = own.sunDir, o = other.sunDir;
+            const x = mix(d[0], o[0]), y = mix(d[1], o[1]), z = mix(d[2], o[2]), l = Math.hypot(x, y, z) || 1;
+            own.sunDir = [x / l, y / l, z / l];
+        }
+        if (own.priorityIntensity !== undefined) own.priorityIntensity = mix(own.priorityIntensity, other.intensity);
+    } else if (own) {
+        own.intensity *= 1 - w;
+        if (own.priorityIntensity !== undefined) own.priorityIntensity *= 1 - w;
+    } else {
+        const light = found.light;
+        out.push({
+            id: "seam:" + light.id, type: light.type, x: other.x, y: other.y, groundY: other.ground, height: other.height,
+            radius: other.radius, colour: other.colour, intensity: other.intensity * w,
+            priorityRadius: other.radius, priorityIntensity: other.intensity * w,
+            angle: light.angle, width: light.width, yaw: -light.yaw, pitch: light.pitch, occlude: light.occlude,
+            shadow: light.shadow, body: light.body, baseRadius: undefined, sunDir: other.sunDir
+        });
+    }
+    return out;
 };
 
 /** Display-space ambient tint for the flat multiply overlay. */
@@ -5134,15 +6404,20 @@ Reactor3D.readMapLights = function(mapData) {
  * Whether this map has native lighting at all, in either renderer.
  *
  * The sidecar's word is final when it says anything; otherwise placed lights
- * mean yes, and the map notes can ask for it by hand.
+ * or a darkened or tinted ambient mean yes (`mapLightingChoice`), and the map
+ * notes can ask for it by hand.
  */
 Reactor3D.lightingEnabled = function(mapData) {
-    const sidecar = mapData && mapData.reactor3d;
-    if (sidecar && sidecar.lighting && sidecar.lighting.enabled !== undefined) {
-        return !!sidecar.lighting.enabled;
-    }
-    if (this.readMapLights(mapData).length) return true;
-    const meta = mapData && mapData.meta;
+    if (this.authoredLighting(mapData)) return true;
+    // As in 3D (wantsLights3D): an AmbientLight command lights an unlit map.
+    return this.mapLightingChoice(mapData) === null && this.ambientOverrideActive();
+};
+
+/** Whether the map lights itself, before any AmbientLight command. */
+Reactor3D.authoredLighting = function(mapData) {
+    const said = this.mapLightingChoice(mapData);
+    if (said !== null) return said;
+    const meta = this.mapMeta(mapData);
     return !!(meta && (meta["3d lights"] || meta.lighting)) || this.hasLiveEffectLights();
 };
 
@@ -5390,7 +6665,7 @@ Reactor3D.animateLight = function(spec, frame, seedIndex, radius, intensity) {
 Reactor3D.nativeLights = function(mapData) {
     const map = mapData || (typeof $dataMap !== "undefined" ? $dataMap : null);
     const authored = this.readMapLights(map);
-    if (!authored.length) return [];
+    if (!authored.length && !(this._seamLight && this._seamLight.home === map)) return [];
     const out = [];
     const frame = typeof Graphics !== "undefined" && Graphics.frameCount
         ? Graphics.frameCount : 0;
@@ -5445,21 +6720,29 @@ Reactor3D.nativeLights = function(mapData) {
         radius = animated.radius;
         intensity = animated.intensity;
         // A sun at the map's time of day (the flicker's base scaled alike, so it reads as no flicker).
-        let lit = colour, priorityIntensity = animated.priorityIntensity;
-        if (light.type === this.LIGHT_SUN && light.daylight !== "fixed") {
-            const day = this.daylight(this.ambientFor(map));
-            const sun = this.sunAtDaylight(light, colour, intensity, day, this._sunScratch || (this._sunScratch = {}));
-            lit = sun.colour; intensity = sun.intensity;
-            if (priorityIntensity !== undefined) priorityIntensity *= day.sun;
+        let lit = colour, priorityIntensity = animated.priorityIntensity, sunDir;
+        if (light.type === this.LIGHT_SUN) {
+            const fixed = light.daylight === "fixed";
+            const day = fixed ? null : this.daylight(this.seamAmbient(this.ambientFor(map), map));
+            if (!fixed) {
+                const sun = this.sunAtDaylight(light, colour, intensity, day, this._sunScratch || (this._sunScratch = {}));
+                lit = sun.colour; intensity = sun.intensity;
+                if (priorityIntensity !== undefined) priorityIntensity *= day.sun;
+            }
+            sunDir = this.sunDirection(yaw, pitch, day, fixed);
         }
         out.push({
             id: light.id, type: light.type, x: x, y: y, height: height,
             radius: radius, colour: lit, intensity: intensity,
             priorityRadius: animated.priorityRadius, priorityIntensity: priorityIntensity,
             angle: angle, width: width, yaw: -(yaw + facing), pitch: pitch, occlude: light.occlude,
-            shadow: light.shadow, body: light.body, baseRadius: baseRadius
+            shadow: light.shadow, body: light.body, baseRadius: baseRadius,
+            sunDir
         });
     }
+    // Beside a neighboring map's world the sun stands toward that map's own (`blendSeamSun`).
+    const seam = this._seamLight;
+    if (seam && seam.home === map && seam.weight > 0) this.blendSeamSun(out, map, this.daylight(this.seamAmbient(this.ambientFor(map), map)));
     return out;
 };
 
@@ -5488,6 +6771,15 @@ Reactor3D.LightVolume = {
     BELOW: 4,
     HEIGHT: 32,
     MAX_SIDE: 128,
+    /**
+     * How far, in tiles, the focus may stray from where the volume was
+     * centred before it is laid again round it. It was laid again for every
+     * tile walked (its key held its corner): a walk through North Haven
+     * rebaked it without end, 24 draws a frame, and each rebake made three
+     * new 8 MB targets and threw three away. The grid is the world's, so
+     * holding it still shifts no sample. 0 follows tile by tile, as before.
+     */
+    REGION_STEP: 8,
     STABLE_FRAMES: 30,
     LAYERS_PER_FRAME: 8,
     FLICKER_SLOTS: 4,
@@ -5620,6 +6912,36 @@ Reactor3D.LightVolume = {
      * view culling: its settings at base brightness and radius (a flicker's
      * jitter is not a change), and whether it may cast. Null: never cached.
      */
+    /** Whether a light has a key (keyOf is not null): one with no id, and a beam, are never cached. */
+    keyed(light) {
+        return !!light && light.id !== undefined && light.id !== null && light.type !== Reactor3D.LIGHT_BEAM;
+    },
+    /**
+     * Whether `light`'s settings are those `record` last saw (keyOf's parts, compared in place; a
+     * frame's string per light was garbage), the record taking them if not. A record's key is then a
+     * number that changes when they do (`_keySerial`, never reused).
+     */
+    sameKey(record, light) {
+        const parts = record.keyParts;
+        const radius = light.baseRadius !== undefined ? light.baseRadius : light.priorityRadius !== undefined ? light.priorityRadius : light.radius;
+        const intensity = light.priorityIntensity !== undefined ? light.priorityIntensity : light.intensity;
+        let same = parts.length === 14;
+        same = this._keyPart(parts, 0, light.type, same); same = this._keyPart(parts, 1, light.x, same); same = this._keyPart(parts, 2, light.y, same);
+        same = this._keyPart(parts, 3, light.height, same); same = this._keyPart(parts, 4, light.groundY, same); same = this._keyPart(parts, 5, light.yaw, same);
+        same = this._keyPart(parts, 6, light.pitch, same); same = this._keyPart(parts, 7, light.angle, same); same = this._keyPart(parts, 8, light.width, same);
+        same = this._keyPart(parts, 9, light.colour, same); same = this._keyPart(parts, 10, radius, same); same = this._keyPart(parts, 11, intensity, same);
+        same = this._keyPart(parts, 12, light.shadow, same); same = this._keyPart(parts, 13, light.occlude, same);
+        return same;
+    },
+    /** One part compared as keyOf's text would have it (null and undefined alike, a number by its value), and kept. */
+    _keyPart(parts, i, value, same) {
+        const v = value === undefined || value === null ? "" : value;
+        const was = parts[i];
+        if (same && (was === v || (typeof was === "number" && typeof v === "number" && was !== was && v !== v) || String(was) === String(v))) return true;
+        parts[i] = v;
+        return false;
+    },
+    _keySerial: 0,
     keyOf(light) {
         // A carried light (a model's effect light) counts too: where it
         // stands and aims is in the key, so one on a model that holds still
@@ -5643,18 +6965,18 @@ Reactor3D.LightVolume = {
         const u = Reactor3D.lightUniforms();
         const pos = u.rrLightPos.value, col = u.rrLightColor.value, aim = u.rrLightAim.value;
         for (const light of list) {
-            const key = this.keyOf(light);
-            if (key === null) continue;
+            if (!this.keyed(light)) continue;
             const id = String(light.id);
             let record = this._records.get(id);
             if (!record) {
-                this._records.set(id, record = { id, key, since: frame, packed: null, packedKey: null, index: -1, present: -1, flicker: 1, flickers: false });
+                this._records.set(id, record = { id, key: 0, keyParts: [], since: frame, packed: null, packedKey: null, index: -1, present: -1, flicker: 1, flickers: false });
+                this.sameKey(record, light);
+                record.key = ++this._keySerial;
                 this._settleUntil = frame + this.STABLE_FRAMES + 2;
-            }
-            if (record.key !== key) {
+            } else if (!this.sameKey(record, light)) {
                 // A light that had held still and changed: the volume will bake again once it holds.
                 if (frame - record.since >= this.STABLE_FRAMES) this._settleUntil = frame + this.STABLE_FRAMES + 2;
-                record.key = key; record.since = frame;
+                record.key = ++this._keySerial; record.since = frame;
             }
             record.declared = frame;
             const base = light.priorityIntensity !== undefined ? light.priorityIntensity : light.intensity;
@@ -5699,6 +7021,8 @@ Reactor3D.LightVolume = {
     /** A light's shadow state: its static row and when it was last drawn; null for a moving-caster row. */
     shadowKey(id) {
         const S = Reactor3D.Shadows, tiles = S._tiles || [], dyn = S._dynTiles || [];
+        // The sun's cascades follow the focus: never baked.
+        if (S._sun && S._sun.id === id) return null;
         for (const row of dyn) if (row && row.id === id && row.valid) return null;
         for (let k = 0; k < tiles.length; k++) {
             const tile = tiles[k];
@@ -5751,9 +7075,29 @@ Reactor3D.LightVolume = {
         return this._supported;
     },
 
+    /** Whether two regions are the same size and height and their corners within `step` tiles. */
+    near(a, b, step) {
+        return a.dims[0] === b.dims[0] && a.dims[1] === b.dims[1] && a.dims[2] === b.dims[2] && a.origin[1] === b.origin[1]
+            && Math.abs(a.origin[0] - b.origin[0]) < step && Math.abs(a.origin[2] - b.origin[2]) < step;
+    },
+
+    /** A volume no longer shown: its targets kept for the next one of its size (`makeVolume`), the last kept let go of. */
+    retire(volume) {
+        if (!volume) return;
+        if (this._spare) this.dispose(this._spare);
+        this._spare = volume;
+    },
+    _spare: null,
+
     /** A volume being filled or shown: two 3D targets, its region and the lights it holds. */
     makeVolume(region, want) {
         const [nx, ny, nz] = region.dims;
+        // The targets of one retired at this size, filled again layer by layer (each layer is drawn whole).
+        const spare = this._spare;
+        if (spare && spare.static.width === nx && spare.static.height === ny && spare.static.depth === nz) {
+            this._spare = null;
+            return { static: spare.static, flicker: spare.flicker, pulse: spare.pulse, region, want, layer: 0, ready: false };
+        }
         const make = () => {
             const target = new THREE.WebGL3DRenderTarget(nx, ny, nz, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false });
             target.texture.minFilter = target.texture.magFilter = THREE.LinearFilter;
@@ -5772,7 +7116,8 @@ Reactor3D.LightVolume = {
     },
 
     reset() {
-        this.dispose(this._front); this.dispose(this._back);
+        this.dispose(this._front); this.dispose(this._back); this.dispose(this._spare);
+        this._spare = null;
         if (this._dynAtlas) { this._dynAtlas.dispose(); this._dynAtlas = null; }
         this._dynSig = null; this._dynAtlasBaked = null;
         this._front = this._back = null;
@@ -5798,6 +7143,9 @@ Reactor3D.LightVolume = {
         const shadowPart = shadows ? Reactor3D.shadowGlsl(1).replace("uniform float rrLightShadow[" + n + "];", "") : "";
         const fragment = [
             shadowPart,
+            // The bake lights air, not a face.
+            "vec3 rrFaceN = vec3(0.0, 1.0, 0.0);",
+            "float rrFace = 0.0;",
             "uniform vec4 rrBakePos[" + n + "];",
             "uniform vec4 rrBakeColor[" + n + "];",
             "uniform vec4 rrBakeAim[" + n + "];",
@@ -5857,7 +7205,9 @@ Reactor3D.LightVolume = {
             rrBakeCells: { value: new Float32Array(3) }, rrBakeTiles: { value: new Float32Array(2) }
         };
         Object.assign(uniforms, Reactor3D.WaterLight.bakeUniforms());
-        if (shadows) for (const key of ["rrShadowInfo", "rrShadowPos", "rrShadowBias", "rrShadowAtlas", "rrShadowDynAtlas", "rrShadowGrid"]) uniforms[key] = shared[key];
+        if (shadows) for (const key of ["rrShadowInfo", "rrShadowPos", "rrShadowBias", "rrShadowAtlas", "rrShadowDynAtlas", "rrShadowGrid",
+            "rrSunShadowMatrix", "rrSunShadowInfo", "rrSunShadowBand", "rrSunShadowBias", "rrSunShade",
+            "rrSunShadowDir", "rrSunShadowTexel"]) uniforms[key] = shared[key];
         const material = new THREE.ShaderMaterial({
             uniforms, fragmentShader: fragment,
             vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
@@ -6182,8 +7532,11 @@ Reactor3D.LightVolume = {
         // Glowing water is light this volume holds too: the volume then stands where that water can be in it.
         const water = Reactor3D.WaterLight.describe(mapData);
         if (water) focus = Reactor3D.WaterLight.focus(focus, mapData);
-        const region = this.region(mapData, focus);
+        let region = this.region(mapData, focus);
         if (water) Reactor3D.WaterLight.fit(region, water, focus);
+        // The volume shown (or being laid) stays where it is while the focus is near where it was laid.
+        const laid = this._back ? this._back.region : this._front ? this._front.region : null;
+        if (laid && this.REGION_STEP > 0 && this.near(laid, region, this.REGION_STEP)) region = laid;
         const regionKey = region.origin.join(",") + "/" + region.dims.join(",");
         const base = want.signature + "/" + regionKey;
         let signature = base + (water ? "/" + water.signature : "");
@@ -6193,7 +7546,7 @@ Reactor3D.LightVolume = {
         const hasLights = want.statics.length + want.flickers.length + (want.pulses || []).length > 0 || !!water;
         if (!(this._front && this._front.signature === signature) && hasLights) {
             if (!this._back || this._back.signature !== signature) {
-                this.dispose(this._back);
+                this.retire(this._back);
                 this._back = this.makeVolume(region, want);
                 this._back.signature = signature;
                 this._back.base = base;
@@ -6201,7 +7554,7 @@ Reactor3D.LightVolume = {
                 this._back.waterMap = water ? mapData : null;
             }
             if (this.bakeSome(renderer, this._back)) {
-                this.dispose(this._front);
+                this.retire(this._front);
                 this._front = this._back;
                 this._back = null;
             }
@@ -6309,7 +7662,7 @@ Reactor3D.WaterLight = {
     _memo: new WeakMap(),
     _spreads: new Map(),
     _serial: 0,
-    _lastKey: "",
+    _signatures: new Map(),
 
     /** What a sheet's spread depends on: where its water lies. */
     shapeKey(region) {
@@ -6342,8 +7695,15 @@ Reactor3D.WaterLight = {
             sheets.sort((a, b) => b.shade.light - a.shade.light || b.cells - a.cells);
             sheets.length = Math.min(sheets.length, this.MAX_SHEETS);
             const key = mapData.width + "x" + mapData.height + ";" + sheets.map(sheet => this.shapeKey(sheet.region) + "|" + sheet.region.glow + "|" + (sheet.region.colour || "")).join(";");
-            if (key !== this._lastKey) { this._lastKey = key; this._serial++; }
-            info = { signature: "water" + this._serial, sheets, width: mapData.width, height: mapData.height };
+            // One signature per look of the water, kept: a map entered again over a border (a new copy of
+            // its data) finds its picture made already instead of making it in the crossing frame.
+            let signature = this._signatures.get(key);
+            if (!signature) {
+                if (this._signatures.size >= 64) this._signatures.clear();
+                signature = "water" + (++this._serial);
+                this._signatures.set(key, signature);
+            }
+            info = { signature, sheets, width: mapData.width, height: mapData.height };
         }
         this._memo.set(raw, info);
         return info;
@@ -6464,6 +7824,24 @@ Reactor3D.WaterLight = {
         held.texture.needsUpdate = true;
         held.signature = info.signature;
         return held.texture;
+    },
+
+    /**
+     * The picture of a map beside the one played (past a border), made in idle time while the map
+     * played has no glowing water of its own using the picture: crossing into it then makes nothing
+     * (7 ms of the crossing frame into North Haven on an integrated GPU).
+     */
+    prepare(mapData, played) {
+        if (this._preparing || !mapData || this.describe(played)) return;
+        const info = this.describe(mapData), held = this._texture;
+        if (!info || (held && held.signature === info.signature && held.width === info.width && held.height === info.height)) return;
+        this._preparing = true;
+        const later = typeof requestIdleCallback === "function" ? fn => requestIdleCallback(fn, { timeout: 1000 }) : fn => setTimeout(fn, 0);
+        later(() => {
+            this._preparing = false;
+            const now = typeof $dataMap !== "undefined" ? $dataMap : null, again = this.describe(mapData);
+            if (again && !this.describe(now)) this.texture(mapData, again);
+        });
     },
 
     /** How high the focus may stand before the volume is raised with it: under this the volume stays where every map's does. */
@@ -6869,12 +8247,42 @@ Reactor3D.Halo = {
 // back to linear, multiplies, and encodes again into the pass, as the lit
 // program did. The light is a quarter of the size each way: at the edge of
 // a model it is filtered from its neighbours.
+//
+// Water lays its tint over the lit colour (injectWaterVolume), and glowing
+// water a sheen in its own colour that goes with how light the surface is
+// (WaterLight.SHEEN_GLSL): neither multiplies, so the twin draws without
+// them and the combine lays both on after the light, in the lit program's
+// order, at the point the pass's depth gives. The sheen's share of the
+// glowing water's light is worked out with the light, into a second target
+// of its size, and filtered up with the same weights.
+
+// A pixel of the pass, back to the world point its depth holds.
+const HALF_LIGHT_WORLD = [
+    "uniform highp sampler2D rrLightDepth;",
+    "uniform mat4 rrLightInvViewProj;",
+    "vec3 rrLightWorld(ivec2 texel, ivec2 size) {",
+    "\tvec2 uv = (vec2(texel) + 0.5) / vec2(size);",
+    "\tvec4 world = rrLightInvViewProj * vec4(uv * 2.0 - 1.0, texelFetch(rrLightDepth, texel, 0).r * 2.0 - 1.0, 1.0);",
+    "\treturn world.xyz / world.w;",
+    "}"
+];
+// What a subtree holds for the split (HalfLight.begin).
+const SPLIT_DEFERRED = 1, SPLIT_FORWARD = 2, SPLIT_KEEP = 4, SPLIT_GONE = 8;
 const HALF_LIGHT_SRGB = [
     "vec3 rrToLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }",
     "vec3 rrToSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }"
 ].join("\n");
 Reactor3D.HalfLight = {
     enabled: true,
+    /**
+     * Only where the light's cost is the GPU's: an integrated GPU (the weak
+     * tier), where the split saves 3 to 8 ms a frame. A discrete GPU draws the
+     * light per pixel faster than the split's bookkeeping costs the CPU (its
+     * second walk and draw of the scene, the twins): North Haven at 144 Hz on
+     * an RTX 3060 laptop, 12.3 to 10.3 ms a refresh with an update, frame
+     * median 13.8 to 6.9 ms, the GPU 3 to about 4 ms. False splits on every tier.
+     */
+    WEAK_ONLY: true,
     // A quarter each way: measured beside the full-size light, only the rim
     // of a model against a much brighter or darker ground tells them apart.
     SCALE: 0.25,
@@ -6913,12 +8321,26 @@ Reactor3D.HalfLight = {
         twin.uuid = THREE.MathUtils.generateUUID();
         twin._listeners = {};
         twin.__rrTwinOf = material;
+        // Its own program, so its own warmup record (Reactor3D.ShaderWarmup): one read through from the original
+        // (warmed in a pass that draws it lit) let the twin skip the warmup and compile inside its first draw.
+        twin.__rrWarm = undefined;
+        twin.__rrWarmMap = undefined;
+        twin.__rrSeen = 0;
         twin.customProgramCacheKey = function() { return material.customProgramCacheKey.call(this) + "|unlit"; };
         twin.onBeforeCompile = function(shader, renderer) {
             material.onBeforeCompile.call(this, shader, renderer);
+            // The water's sheen and tint go over the lit colour: the combine lays them on (`finishGlsl`).
+            // A model keeps its facing: the quarter-size light knows no normals, so its picture takes
+            // the local lights' and the sky's share of it (rrFaceShare) and the combine multiplies the rest.
             shader.fragmentShader = shader.fragmentShader
-                .replace("if (rrSelfLit < 1.0) diffuseColor.rgb *= mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);", "")
-                .replace("vec3 rrLightTerm = mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);", "vec3 rrLightTerm = vec3(1.0);");
+                .replace("if (rrSelfLit < 1.0) diffuseColor.rgb *= mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);",
+                    Reactor3D.facesLight(this) ? "if (rrFace > 0.0 && rrSelfLit < 1.0) diffuseColor.rgb *= rrFaceShare(rrFaceN);" : "")
+                .replace("vec3 rrLightTerm = mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);", "vec3 rrLightTerm = vec3(1.0);")
+                // A glow and a sheen go in before the combine multiplies by the light: divided by about that light.
+                .replace(/outgoingLight \+= rrEmissive/g, "outgoingLight += (1.0 / rrLightGuess()) * rrEmissive")
+                .replace("outgoingLight += rrHC * rrHNL", "outgoingLight += (1.0 / rrLightGuess()) * rrHC * rrHNL")
+                .replace(Reactor3D.WaterLight.SHEEN_GLSL + "\n", "")
+                .replace("outgoingLight = rrWaterTint(outgoingLight);", "");
         };
         material.__rrUnlitTwin = twin;
         return twin;
@@ -6928,61 +8350,108 @@ Reactor3D.HalfLight = {
      * Before the pass's draw: the surfaces that will take the light
      * afterwards are drawn alone and unlit. Returns the split, or null to
      * draw the pass as it was.
+     *
+     * Read from the scene's one walk (Reactor3D.SceneWalk). Each half hides
+     * what has no part in it as whole subtrees, the largest it can (a
+     * model's whole tree, the foliage, the doors), not object by object:
+     * three walks every visible object of each half, and every reader of
+     * the walk after this one passes a hidden subtree over in one step.
      */
     begin(renderer, scene, target) {
-        if (!this.enabled || !target || !target.depthTexture || target.samples > 0 || !scene || !scene.isScene) return null;
+        if (!this.enabled || (this.WEAK_ONLY && Reactor3D.tier() !== "weak") || !target || !target.depthTexture || target.samples > 0 || !scene || !scene.isScene) return null;
         if (!Reactor3D.LightVolume || !Reactor3D.LightVolume.supported(renderer)) return null;
-        // The water's tint is laid over the lit colour: that map draws as before.
-        const water = scene.userData && scene.userData.rrWater;
-        if (water && water.length) return null;
-        // Only materials shown now are hidden and shown again: one a pass hid
-        // (setPass) must stay hidden when the rest of the pass is drawn.
-        const deferred = new Set(), forward = new Set(), swapped = [], sentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
-        // A leaf with one material leaves the half it has no part in as a
-        // whole object: three otherwise culled and updated it there only to
-        // find its material hidden (both halves visit the whole scene).
-        const leafForward = [], leafDeferred = [];
-        const visit = object => {
-            if (!object.visible) return;
-            const material = object.material;
-            if (material && object !== sentinel && !Array.isArray(material) && !object.children.length) {
-                if (this.deferrable(material)) {
-                    deferred.add(material);
-                    swapped.push(object, material);
-                    object.material = this.twin(material);
-                    leafDeferred.push(object);
-                } else if (material.visible) {
-                    forward.add(material);
-                    leafForward.push(object);
-                }
-                return;
-            }
-            if (material && object !== sentinel) {
-                if (Array.isArray(material)) {
+        const walk = Reactor3D.SceneWalk, held = walk.hold(scene);
+        try {
+            const list = walk.list(scene) || walk.gather(scene, null);
+            const { nodes, ends, parents, count } = list;
+            if (!this._flags || this._flags.length < count) { this._flags = new Uint8Array(count * 2); this._subtrees = new Uint8Array(count * 2); }
+            const own = this._flags, sub = this._subtrees;
+            // Only materials shown now are hidden and shown again: one a pass hid
+            // (setPass) must stay hidden when the rest of the pass is drawn.
+            const split = this.splitRecord(), sentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
+            const deferred = split.deferred, forward = split.forward, swapped = split.swapped;
+            // Each material taken this pass carries its stamp (negative in the forward half); one the last pass took and this one did not leaves the sets after the walk.
+            const stamp = this._stamp = (this._stamp + 1) % 1e9 || 1;
+            split.sentinel = sentinel;
+            let swaps = 0;
+            for (let i = 0; i < count;) {
+                const object = nodes[i];
+                // Hidden since the walk (the haze waiting for its own pass): neither half's.
+                if (object.visible === false) { own[i] = SPLIT_GONE; i = ends[i]; continue; }
+                let flag = 0;
+                const material = object.material;
+                // The sentinel draws the shadow rows from the first half; a light and a level-of-detail
+                // switch are read by three's own walk: none is ever hidden with a subtree.
+                if (object === sentinel || object.isLight || object.isLOD) flag = SPLIT_KEEP;
+                else if (Array.isArray(material)) {
                     let twins = null;
-                    for (let i = 0; i < material.length; i++) {
-                        const m = material[i];
+                    for (let k = 0; k < material.length; k++) {
+                        const m = material[k];
                         if (!m) continue;
-                        if (this.deferrable(m)) { deferred.add(m); (twins || (twins = material.slice()))[i] = this.twin(m); }
-                        else if (m.visible) forward.add(m);
+                        if (this.deferrable(m)) {
+                            if (m.__rrSplitStamp !== stamp) { m.__rrSplitStamp = stamp; deferred.add(m); }
+                            if (!twins) twins = this.twinList(material);
+                            twins[k] = this.twin(m);
+                            flag |= SPLIT_DEFERRED;
+                        } else if (m.visible) {
+                            if (m.__rrSplitStamp !== -stamp) { m.__rrSplitStamp = -stamp; forward.add(m); }
+                            flag |= SPLIT_FORWARD;
+                        }
                     }
-                    if (twins) { swapped.push(object, material); object.material = twins; }
-                } else if (this.deferrable(material)) {
-                    deferred.add(material);
-                    swapped.push(object, material);
-                    object.material = this.twin(material);
-                } else if (material.visible) forward.add(material);
+                    if (twins) { swapped[swaps++] = object; swapped[swaps++] = material; object.material = twins; }
+                } else if (material) {
+                    if (this.deferrable(material)) {
+                        if (material.__rrSplitStamp !== stamp) { material.__rrSplitStamp = stamp; deferred.add(material); }
+                        swapped[swaps++] = object; swapped[swaps++] = material;
+                        object.material = this.twin(material);
+                        flag = SPLIT_DEFERRED;
+                    } else if (material.visible) {
+                        if (material.__rrSplitStamp !== -stamp) { material.__rrSplitStamp = -stamp; forward.add(material); }
+                        flag = SPLIT_FORWARD;
+                    }
+                }
+                own[i] = flag;
+                i++;
             }
-            const children = object.children;
-            for (let i = 0; i < children.length; i++) visit(children[i]);
-        };
-        visit(scene);
-        const split = { deferred, forward, swapped, sentinel, albedo: null, leafForward, leafDeferred };
-        if (!deferred.size) { this.unswap(split); return null; }
-        for (const m of forward) m.visible = false;
-        for (const object of leafForward) object.visible = false;
-        split.albedo = this.albedoFor(target);
-        return split;
+            split.swaps = swaps;
+            for (const m of deferred) if (m.__rrSplitStamp !== stamp) deferred.delete(m);
+            for (const m of forward) if (m.__rrSplitStamp !== -stamp) forward.delete(m);
+            if (!deferred.size) { this.unswap(split); return null; }
+            split.phase = "albedo";
+            // What each subtree holds, children into parents.
+            sub.set(own.subarray(0, count));
+            for (let i = count - 1; i > 0; i--) if (!(sub[i] & SPLIT_GONE)) sub[parents[i]] |= sub[i];
+            // The largest subtrees with something of one half and nothing of the other, below the scene.
+            this.collect(list, sub, SPLIT_FORWARD, SPLIT_DEFERRED | SPLIT_KEEP, split.albedoHide);
+            this.collect(list, sub, SPLIT_DEFERRED, SPLIT_FORWARD | SPLIT_KEEP, split.forwardHide);
+            for (const m of forward) m.visible = false;
+            for (const object of split.albedoHide) object.visible = false;
+            split.albedo = this.albedoFor(target);
+            this._split = split;
+            return split;
+        } finally {
+            walk.release(held);
+        }
+    },
+
+    /**
+     * `fn` with the whole pass shown, the half being drawn and the other:
+     * the shadow rows are drawn from inside the first half's draw (the
+     * sentinel), and a caster drawn lit at full size (a character, a prop
+     * with a finish) is in the other half.
+     */
+    whole(fn) {
+        const split = this._split;
+        if (!split || (split.phase !== "albedo" && split.phase !== "forward")) return fn();
+        const albedo = split.phase === "albedo";
+        const materials = albedo ? split.forward : split.deferred, objects = albedo ? split.albedoHide : split.forwardHide;
+        for (const m of materials) m.visible = true;
+        for (const object of objects) object.visible = true;
+        try { return fn(); }
+        finally {
+            for (const m of materials) m.visible = false;
+            for (const object of objects) object.visible = false;
+        }
     },
 
     /**
@@ -7008,24 +8477,113 @@ Reactor3D.HalfLight = {
     },
 
     unswap(split) {
-        const list = split.swapped;
-        for (let i = 0; i < list.length; i += 2) list[i].material = list[i + 1];
-        list.length = 0;
+        // The list keeps its length between passes (a length set to 0 lets its storage go,
+        // and the next pass grows it again): `swaps` says how much of it is this pass's.
+        const list = split.swapped, swaps = split.swaps;
+        for (let i = 0; i < swaps; i += 2) { list[i].material = list[i + 1]; list[i] = null; list[i + 1] = null; }
+        split.swaps = 0;
+    },
+
+    /**
+     * The split, made once and filled again each pass: the walk takes a
+     * mesh in two of every three, and building its lists afresh was
+     * 40 KB of garbage a pass on North Haven. A pass drawn inside another
+     * pass's draw gets one of its own.
+     */
+    splitRecord() {
+        const kept = this._kept;
+        if (kept && kept.phase === "done") return kept;
+        const split = { deferred: new Set(), forward: new Set(), swapped: [], swaps: 0, sentinel: null, albedo: null, albedoHide: [], forwardHide: [], phase: "done", light: null };
+        if (!kept) this._kept = split;
+        return split;
+    },
+    _stamp: 0,
+
+    /** The twins standing in for a mesh's materials: one list per material list, its entries refilled each pass. */
+    twinList(materials) {
+        let twins = materials.__rrTwins;
+        if (!twins || twins.length !== materials.length) {
+            twins = materials.slice();
+            Object.defineProperty(materials, "__rrTwins", { value: twins, writable: true, configurable: true, enumerable: false });
+        }
+        for (let k = 0; k < materials.length; k++) twins[k] = materials[k];
+        return twins;
+    },
+
+    /** The largest subtrees below the scene with something of `has` and nothing of `without`, into `out` (refilled). */
+    collect(list, sub, has, without, out) {
+        const { nodes, ends, count } = list;
+        let n = 0;
+        for (let i = 1; i < count;) {
+            const f = sub[i];
+            if (f & SPLIT_GONE) { i = ends[i]; continue; }
+            if ((f & has) && !(f & without)) { out[n++] = nodes[i]; i = ends[i]; } else i++;
+        }
+        // Shortened, not emptied: a length set to 0 gives the storage up.
+        if (n) out.length = n;
+        else if (out.length) out.length = 0;
+    },
+
+    /**
+     * What the combine lays over the light in this scene: `wet` when it has
+     * water volumes (their tint), `sheen` while glowing water lights the map
+     * (WaterLight.loadFar).
+     */
+    finishing(scene) {
+        const water = scene && scene.userData && scene.userData.rrWater;
+        const u = Reactor3D.lightUniforms();
+        return { wet: !!(water && water.length), sheen: !!(u.rrWaterFarEdge && u.rrWaterFarEdge.value > 0 && u.rrWaterSheen && u.rrWaterSheen.value > 0) };
+    },
+
+    /**
+     * A map about to become the one played (the map past a border) is drawn with whichever combine
+     * its water and its glowing water ask for, which only the scene it is drawn in knows (the
+     * water of every world standing in it): each of the four is compiled ahead by `warmAhead`.
+     */
+    _expected: null,
+    expect() {
+        if (!this._expected) this._expected = [false, true].flatMap(wet => [false, true].map(sheen => ({ wet, sheen })));
+    },
+
+    /**
+     * One expected full-screen program of `kind` ("light", "upsample" or "combine") not yet built
+     * starts compiling on the driver's threads, from inside the pass that draws that kind, so its
+     * target (and the output it decides) is the one its draw will have. The first draw after a
+     * border crossing then finds it linked: built in that draw, it stopped the frame on the
+     * driver's answer (48 ms on an integrated Radeon). Nothing without parallel compiling: there
+     * a compile cannot be started without waiting for it.
+     */
+    warmAhead(renderer, kind) {
+        const W = Reactor3D.ShaderWarmup;
+        if (!this._expected || !W || !W.enabled || !W.supported(renderer)) return;
+        for (const { wet, sheen } of this._expected) {
+            const quad = kind === "light" ? this.program(renderer, sheen) : kind === "upsample" ? this.upsampleProgram(renderer, wet, sheen) : this.combineQuad(wet, sheen);
+            if (quad.warmed === renderer) continue;
+            quad.warmed = renderer;
+            if (renderer.properties.get(quad.material).currentProgram) continue;
+            try { W.compileGuarded(renderer, quad.scene, quad.camera, quad.scene); } catch (error) { /* built in its first draw */ }
+            return;
+        }
     },
 
     /** After the unlit draw: the light, the combine, then the rest of the pass. */
     finish(renderer, scene, target, camera, split) {
         this.unswap(split);
         for (const m of split.forward) m.visible = true;
-        for (const object of split.leafForward) object.visible = true;
+        for (const object of split.albedoHide) object.visible = true;
+        split.phase = "between";
         const w = Math.max(1, Math.ceil(target.width * this.SCALE)), h = Math.max(1, Math.ceil(target.height * this.SCALE));
-        let light = this._target;
+        const { wet, sheen } = this.finishing(scene);
+        // With the sheen, a second target beside the light holds the glowing water's share of it.
+        const slot = sheen ? "_sheenTarget" : "_target";
+        let light = this[slot];
         if (!light || light.width !== w || light.height !== h) {
             if (light) light.dispose();
-            light = this._target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false,
-                minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
+            light = this[slot] = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false,
+                minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, count: sheen ? 2 : 1 });
         }
-        const pass = this.program(renderer);
+        const shone = sheen ? light.textures[1] : null;
+        const pass = this.program(renderer, sheen);
         const autoClear = renderer.autoClear;
         try {
             renderer.autoClear = false;
@@ -7041,15 +8599,17 @@ Reactor3D.HalfLight = {
             camera.getWorldPosition(pass.camera.position);
             renderer.setRenderTarget(light);
             renderer.render(pass.scene, pass.camera);
+            this.warmAhead(renderer, "light");
             split.light = light;
             // Every pixel of the pass written: the unlit colour, lit. Matched
             // to the surfaces the light falls on, the pass's depth is read,
             // so the colour is written through a target without it.
             const view = this.matchSurfaces ? Reactor3D.colourOnly(renderer, target) : null;
             if (view) {
-                const up = this.upsampleProgram(renderer), uu = up.material.uniforms;
+                const up = this.upsampleProgram(renderer, wet, sheen), uu = up.material.uniforms;
                 uu.unlit.value = split.albedo.texture;
                 uu.light.value = light.texture;
+                if (shone) uu.shone.value = shone;
                 uu.rrLightDepth.value = target.depthTexture;
                 uu.rrLightInvViewProj.value.copy(pu.rrLightInvViewProj.value);
                 uu.rrLightStep.value.copy(pu.rrLightStep.value);
@@ -7064,17 +8624,26 @@ Reactor3D.HalfLight = {
                 up.camera.position.copy(pass.camera.position);
                 renderer.setRenderTarget(view);
                 renderer.render(up.scene, up.camera);
+                this.warmAhead(renderer, "upsample");
                 renderer.setRenderTarget(target);
             } else {
                 renderer.setRenderTarget(target);
-                const combine = this.combineQuad();
-                combine.material.uniforms.unlit.value = split.albedo.texture;
-                combine.material.uniforms.light.value = light.texture;
+                const combine = this.combineQuad(wet, sheen), cu = combine.material.uniforms;
+                cu.unlit.value = split.albedo.texture;
+                cu.light.value = light.texture;
+                if (shone) cu.shone.value = shone;
+                if (wet) {
+                    cu.rrLightDepth.value = target.depthTexture;
+                    cu.rrLightInvViewProj.value.copy(pu.rrLightInvViewProj.value);
+                    combine.camera.position.copy(pass.camera.position);
+                }
                 renderer.render(combine.scene, combine.camera);
+                this.warmAhead(renderer, "combine");
             }
             // Everything else, lit as it always was, over the lit surfaces.
             for (const m of split.deferred) m.visible = false;
-            for (const object of split.leafDeferred) object.visible = false;
+            for (const object of split.forwardHide) object.visible = false;
+            split.phase = "forward";
             const sentinelMaterial = split.sentinel && split.sentinel.material;
             if (sentinelMaterial) sentinelMaterial.visible = false;
             // A background colour makes three clear the target whatever
@@ -7093,9 +8662,11 @@ Reactor3D.HalfLight = {
         this.unswap(split);
         for (const m of split.forward) m.visible = true;
         for (const m of split.deferred) m.visible = true;
-        for (const object of split.leafForward) object.visible = true;
-        for (const object of split.leafDeferred) object.visible = true;
+        for (const object of split.albedoHide) object.visible = true;
+        for (const object of split.forwardHide) object.visible = true;
         if (split.sentinel && split.sentinel.material) split.sentinel.material.visible = true;
+        split.phase = "done";
+        if (this._split === split) this._split = null;
     },
 
     /** The light's GLSL and uniforms for a full-screen program: shadows as the renderer has them, the light at any pixel of the pass. */
@@ -7110,16 +8681,12 @@ Reactor3D.HalfLight = {
         // derivatives across a half-size grid step over leaves and edges.
         const glsl = Reactor3D.LightGrid.glsl(shadows ? Reactor3D.lightGlsl(true, taps) : Reactor3D.LIGHT_GLSL)
             .replace("varying vec3 vRRWorldPos;", "vec3 rrPassNormal;")
-            .replace("vec3 rrVN = cross(dFdx(p), dFdy(p));", "vec3 rrVN = rrPassNormal;") + "\n" + [
-            "uniform highp sampler2D rrLightDepth;",
-            "uniform mat4 rrLightInvViewProj;",
+            .replace("vec3 rrVN = cross(dFdx(p), dFdy(p));", "vec3 rrVN = rrPassNormal;")
+            .replace("rrSunNormal = cross(dFdx(p), dFdy(p));", "rrSunNormal = rrPassNormal;") + "\n" + [
+            ...HALF_LIGHT_WORLD.slice(0, 2),
             "uniform vec2 rrLightStep;",
             "uniform mat4 rrLightView;",
-            "vec3 rrLightWorld(ivec2 texel, ivec2 size) {",
-            "\tvec2 uv = (vec2(texel) + 0.5) / vec2(size);",
-            "\tvec4 world = rrLightInvViewProj * vec4(uv * 2.0 - 1.0, texelFetch(rrLightDepth, texel, 0).r * 2.0 - 1.0, 1.0);",
-            "\treturn world.xyz / world.w;",
-            "}",
+            ...HALF_LIGHT_WORLD.slice(2),
             // Each way, the step to the nearer neighbour: the one on the same surface.
             "vec3 rrLightStepTo(vec3 p, ivec2 a, ivec2 b, ivec2 size) {",
             "\tvec3 pa = rrLightWorld(clamp(a, ivec2(0), size - 1), size) - p;",
@@ -7153,30 +8720,68 @@ Reactor3D.HalfLight = {
         return { material, scene, camera: new THREE.Camera() };
     },
 
-    /** The light at half size: each texel's world point from the pass's depth, lit as a surface there would be. */
-    program(renderer) {
-        const cached = this._programs[this._lightKey(renderer)];
+    /**
+     * The light at half size: each texel's world point from the pass's
+     * depth, lit as a surface there would be. With `sheen`, the glowing
+     * water's share of that light (`rrWaterShone`) goes to a second target.
+     */
+    program(renderer, sheen) {
+        const key = this._lightKey(renderer) + (sheen ? "+sheen" : "");
+        const cached = this._programs[key];
         if (cached) return cached;
         const source = this._lightSource(renderer);
         const material = new THREE.ShaderMaterial({
             uniforms: source.uniforms,
             vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
             fragmentShader: source.glsl + "\n" + [
+                sheen ? "layout(location = 1) out highp vec4 rrShoneOut;" : null,
                 "void main() {",
                 // One of the pixels this texel covers, and where it stands.
                 "\tivec2 size = textureSize(rrLightDepth, 0);",
                 "\tivec2 texel = min(ivec2(floor(gl_FragCoord.xy * rrLightStep)), size - 1);",
                 "\tfloat depth = texelFetch(rrLightDepth, texel, 0).r;",
                 // Nothing drawn here: the combine leaves the pixel as it is.
-                "\tif (depth >= 1.0) { gl_FragColor = vec4(1.0, 1.0, 1.0, 60000.0); return; }",
+                "\tif (depth >= 1.0) { gl_FragColor = vec4(1.0, 1.0, 1.0, 60000.0);" + (sheen ? " rrShoneOut = vec4(0.0);" : "") + " return; }",
                 "\tvec3 p = rrLightWorld(texel, size);",
                 // Alpha: the distance from the eye, for the combine and the haze (Reactor3D.HalfHaze).
                 "\tgl_FragColor = vec4(rrLightAtTexel(p, texel, size), -(rrLightView * vec4(p, 1.0)).z);",
+                sheen ? "\trrShoneOut = vec4(rrWaterShone, 0.0);" : null,
                 "}"
-            ].join("\n"),
+            ].filter(line => line !== null).join("\n"),
             depthTest: false, depthWrite: false, blending: THREE.NoBlending
         });
-        return (this._programs[source.key] = this._fullScreen(material));
+        return (this._programs[key] = this._fullScreen(material));
+    },
+
+    /**
+     * What the lit program lays over its colour after the light, for the
+     * combine: the glowing water's sheen (WaterLight.SHEEN_GLSL, over `l`,
+     * the light, and `shone`, its glowing water's share), then the water's
+     * tint (injectWaterVolume) at the world point of the pixel's depth; a
+     * pixel with nothing drawn takes no tint. `rrFinish(c, l, shone, px)`
+     * on linear colour. Needs `rrLightWorld` and `rrLightDepth` declared
+     * before it when `wet`, and `rrWaterSheen` when `sheen`.
+     */
+    finishGlsl(wet, sheen) {
+        const lines = [];
+        if (wet) lines.push(Reactor3D.WATER_VOLUME_GLSL.replace("varying vec3 vRRWaterPos;", "vec3 vRRWaterPos;"));
+        lines.push("vec3 rrFinish(vec3 c, vec3 l, vec3 shone, ivec2 px) {");
+        if (sheen) lines.push(Reactor3D.WaterLight.SHEEN_GLSL.replace(/outgoingLight/g, "c").replace("rrLitBy", "l").replace("rrWaterShone", "shone"));
+        if (wet) {
+            lines.push("\tif (rrWaterCount > 0 && texelFetch(rrLightDepth, px, 0).r < 1.0) {",
+                "\t\tvRRWaterPos = rrLightWorld(px, textureSize(rrLightDepth, 0));",
+                "\t\tc = rrWaterTint(c);",
+                "\t}");
+        }
+        lines.push("\treturn c;", "}");
+        return lines.join("\n");
+    },
+
+    /** A full-screen program's uniforms for what `finishGlsl` reads. */
+    _finishUniforms(uniforms, wet, sheen) {
+        if (wet) Object.assign(uniforms, Reactor3D.waterVolumeUniforms());
+        if (sheen) uniforms.shone = { value: null };
+        return uniforms;
     },
 
     /**
@@ -7208,13 +8813,18 @@ Reactor3D.HalfLight = {
      * target of its own: the pass's depth is read here, and the pass itself
      * holds that depth.
      */
-    upsampleProgram(renderer) {
+    upsampleProgram(renderer, wet, sheen) {
         const known = this._upsamples || (this._upsamples = {});
-        const exact = this.exactEdges !== false, key = this._lightKey(renderer) + (exact ? "" : "-x");
+        const exact = this.exactEdges !== false, key = this._lightKey(renderer) + (exact ? "" : "-x") + (wet ? "+wet" : "") + (sheen ? "+sheen" : "");
         const cached = known[key];
         if (cached) return cached;
         const source = this._lightSource(renderer);
-        const uniforms = source.uniforms;
+        const uniforms = this._finishUniforms(source.uniforms, wet, sheen);
+        // The colour as the lit program leaves it: lit, then what it lays over the light (finishGlsl).
+        const finished = wet || sheen;
+        const lit = (light, shone) => finished ? "rrLitFinished(px, " + light + ", " + (sheen ? shone : "vec3(0.0)") + ")" : "rrLit(px, " + light + ")";
+        const blend = (texel, weights, over) => "(" + ["i0", "i1", "i2", "i3"].map((i, k) => texel(i, k) + " * " + weights + "." + "xyzw"[k]).join(" + ") + ")" + (over ? " / " + over : "");
+        const shoneAt = (i) => "texelFetch(shone, " + i + ", 0).rgb";
         uniforms.unlit = { value: null };
         uniforms.light = { value: null };
         uniforms.rrLightZ = { value: new THREE.Vector4() };
@@ -7233,9 +8843,12 @@ Reactor3D.HalfLight = {
                 "uniform vec4 rrLightZ;",
                 "uniform float rrPlainSpread;",
                 "uniform float rrPlainBend;",
+                sheen ? "uniform highp sampler2D shone;" : null,
                 HALF_LIGHT_SRGB,
                 // The unlit colour (sRGB bytes) back to linear, times the light, encoded again: the lit program's arithmetic, in its order.
                 "vec4 rrLit(ivec2 px, vec3 l) { vec4 s = texelFetch(unlit, px, 0); return vec4(rrToSrgb(clamp(rrToLinear(s.rgb) * l, 0.0, 1.0)), s.a); }",
+                finished ? this.finishGlsl(wet, sheen) : null,
+                finished ? "vec4 rrLitFinished(ivec2 px, vec3 l, vec3 shone) { vec4 s = texelFetch(unlit, px, 0); return vec4(rrToSrgb(clamp(rrFinish(rrToLinear(s.rgb) * l, l, shone, px), 0.0, 1.0)), s.a); }" : null,
                 // A pixel's distance from the eye, from the depth alone.
                 "float rrDist(ivec2 t, ivec2 size) { float z = texelFetch(rrLightDepth, clamp(t, ivec2(0), size - 1), 0).r * 2.0 - 1.0; return -(rrLightZ.x * z + rrLightZ.y) / (rrLightZ.z * z + rrLightZ.w); }",
                 // Each way, the change of distance per pixel toward the nearer neighbour: the pixel's own surface.
@@ -7254,7 +8867,7 @@ Reactor3D.HalfLight = {
                 "\tvec4 dist = vec4(a.a, c.a, e.a, g.a);",
                 "\tfloat lo = min(min(dist.x, dist.y), min(dist.z, dist.w)), hi = max(max(dist.x, dist.y), max(dist.z, dist.w));",
                 "\tif (hi - lo < lo * rrPlainSpread && abs(dist.x + dist.w - dist.y - dist.z) < lo * rrPlainBend) {",
-                "\t\tgl_FragColor = rrLit(px, a.rgb * bilinear.x + c.rgb * bilinear.y + e.rgb * bilinear.z + g.rgb * bilinear.w);",
+                "\t\tgl_FragColor = " + lit("a.rgb * bilinear.x + c.rgb * bilinear.y + e.rgb * bilinear.z + g.rgb * bilinear.w", blend(shoneAt, "bilinear")) + ";",
                 "\t\treturn;",
                 "\t}",
                 "\tivec2 size = textureSize(rrLightDepth, 0);",
@@ -7267,11 +8880,14 @@ Reactor3D.HalfLight = {
                 "\tvec4 r = (dist - (d + vec4(dot(slope, o0), dot(slope, o1), dot(slope, o2), dot(slope, o3)))) / (d * rrSameSurface);",
                 "\tvec4 same = max(exp(-r * r), 1e-5);",
                 // No sample on the pixel's surface (the rim of a model, a thin part): lit at full size.
-                "\tif (max(max(same.x, same.y), max(same.z, same.w)) < rrExactBelow) { gl_FragColor = rrLit(px, " + (exact ? "rrLightAtTexel(rrLightWorld(px, size), px, size)" : "vec3(1.0, 0.0, 1.0)") + "); return; }",
+                // (The light at full size leaves its glowing water's share in rrWaterShone.)
+                "\tif (max(max(same.x, same.y), max(same.z, same.w)) < rrExactBelow) { " + (exact
+                    ? "vec3 l = rrLightAtTexel(rrLightWorld(px, size), px, size); gl_FragColor = " + lit("l", "rrWaterShone") + ";"
+                    : "gl_FragColor = rrLit(px, vec3(1.0, 0.0, 1.0));") + " return; }",
                 "\tvec4 w = (bilinear + 0.001) * same;",
-                "\tgl_FragColor = rrLit(px, (a.rgb * w.x + c.rgb * w.y + e.rgb * w.z + g.rgb * w.w) / (w.x + w.y + w.z + w.w));",
+                "\tgl_FragColor = " + lit("(a.rgb * w.x + c.rgb * w.y + e.rgb * w.z + g.rgb * w.w) / (w.x + w.y + w.z + w.w)", blend(shoneAt, "w", "(w.x + w.y + w.z + w.w)")) + ";",
                 "}"
-            ].join("\n"),
+            ].filter(line => line !== null).join("\n"),
             depthTest: false, depthWrite: false, blending: THREE.NoBlending
         });
         return (known[key] = this._fullScreen(material));
@@ -7280,27 +8896,39 @@ Reactor3D.HalfLight = {
     /**
      * The combine: each unlit pixel (sRGB bytes, as the pass stores them)
      * back to linear, times the full-size light, and encoded again; its
-     * alpha as it was. The same arithmetic as the lit program's, in its order.
+     * alpha as it was. The same arithmetic as the lit program's, in its
+     * order, with what it lays over the light (`finishGlsl`).
      */
-    combineQuad() {
-        if (this._combine) return this._combine;
+    combineQuad(wet, sheen) {
+        const known = this._combines || (this._combines = {});
+        const key = (wet ? "wet" : "") + (sheen ? "sheen" : "");
+        if (known[key]) return known[key];
+        const uniforms = this._finishUniforms({ unlit: { value: null }, light: { value: null } }, wet, sheen);
+        if (wet) { uniforms.rrLightDepth = { value: null }; uniforms.rrLightInvViewProj = { value: new THREE.Matrix4() }; }
+        if (sheen) uniforms.rrWaterSheen = Reactor3D.lightUniforms().rrWaterSheen;
+        const finished = wet || sheen;
         const material = new THREE.ShaderMaterial({
-            uniforms: { unlit: { value: null }, light: { value: null } },
+            uniforms,
             vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
             fragmentShader: [
                 "uniform sampler2D unlit;",
                 "uniform sampler2D light;",
+                sheen ? "uniform sampler2D shone;\nuniform float rrWaterSheen;" : null,
+                wet ? HALF_LIGHT_WORLD.join("\n") : null,
                 HALF_LIGHT_SRGB,
+                finished ? this.finishGlsl(wet, sheen) : null,
                 "void main() {",
                 "\tivec2 px = ivec2(gl_FragCoord.xy);",
                 "\tvec4 s = texelFetch(unlit, px, 0);",
                 "\tvec3 l = texture2D(light, gl_FragCoord.xy / vec2(textureSize(unlit, 0))).rgb;",
-                "\tgl_FragColor = vec4(rrToSrgb(clamp(rrToLinear(s.rgb) * l, 0.0, 1.0)), s.a);",
+                finished
+                    ? "\tgl_FragColor = vec4(rrToSrgb(clamp(rrFinish(rrToLinear(s.rgb) * l, l, " + (sheen ? "texture2D(shone, gl_FragCoord.xy / vec2(textureSize(unlit, 0))).rgb" : "vec3(0.0)") + ", px), 0.0, 1.0)), s.a);"
+                    : "\tgl_FragColor = vec4(rrToSrgb(clamp(rrToLinear(s.rgb) * l, 0.0, 1.0)), s.a);",
                 "}"
-            ].join("\n"),
+            ].filter(line => line !== null).join("\n"),
             depthTest: false, depthWrite: false, blending: THREE.NoBlending
         });
-        return (this._combine = this._fullScreen(material));
+        return (known[key] = this._fullScreen(material));
     }
 };
 

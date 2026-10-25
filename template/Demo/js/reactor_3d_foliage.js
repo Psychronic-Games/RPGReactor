@@ -933,16 +933,22 @@
         this._foliageQueue = queue;
     };
 
+    /** The instanced component a chunk's clumps are sorted by (foliageClumps): the share of them drawn is a prefix. */
+    const FOLIAGE_SORT = { name: "aFolShape", component: 3 };
+
     R.MapScene.prototype.layFoliageChunk = function(mapData, foliage, cx, cy) {
         const group = this.foliageGroup();
+        // Drawn a region at a time (R.DrawBatches), the blades kept in order of their thinning share.
+        const batches = R.DrawBatches, size = R.FOLIAGE_CHUNK;
         foliage.layers.forEach((layer, i) => {
             const mesh = this.foliageChunkMesh(mapData, layer, i, cx, cy);
-            if (mesh) group.add(mesh);
+            if (mesh) { group.add(mesh); if (batches) batches.add(this, mesh, cx * size, cy * size, FOLIAGE_SORT); }
         });
         const bushes = this.bushChunkMesh(mapData, foliage.bushes, cx, cy);
         if (bushes) {
             group.add(bushes);
             if (R.Shadows && R.Shadows.markCaster) { R.Shadows.markCaster(bushes, false); if (R.Shadows.invalidate) R.Shadows.invalidate(); }
+            if (batches) batches.add(this, bushes, cx * size, cy * size);
         }
     };
 
@@ -1001,7 +1007,8 @@
             const far = lodOf().far + 2;
             for (const mesh of group.children) {
                 const info = mesh.userData.rrFoliageChunk;
-                if (!info) continue;
+                // A chunk drawn in its region's batch stays hidden; the batch is culled by the region.
+                if (!info || mesh.userData.rrBatchedIn) continue;
                 const dx = Math.max(info.x0 - at.x, 0, at.x - info.x1), dz = Math.max(info.z0 - at.z, 0, at.z - info.z1), dy = Math.max(info.y0 - at.y, 0, at.y - info.y1);
                 mesh.visible = dx * dx + dy * dy + dz * dz < far * far;
             }
@@ -1035,7 +1042,7 @@
         R.MapScene.prototype[name] = wrapped;
     };
     // Laid with the map, after the water (whose cells it keeps out of); again when the water is laid again.
-    wrap("addWater", function(mapData) { this.addFoliage(mapData, null); });
+    wrap("addWater", function(mapData) { this.followUp(() => this.addFoliage(mapData, null)); });
     // The ground moved under it, or pieces came or went: the chunks there grow again.
     wrap("updateTerrain", function(mapData, region) {
         this.updateFoliage(mapData, region ? { x0: region.x0, y0: region.z0, x1: region.x1, y1: region.z1 } : null);

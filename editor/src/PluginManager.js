@@ -43,6 +43,21 @@ class PluginManager {
             this.fs = require('fs');
             this.path = require('path');
         }
+        if (typeof window !== 'undefined' && window.addEventListener) {
+            window.addEventListener('rr-plugin-manager-docked', () => {
+                // A destroyed child window loses DOM handlers; keep the in-memory plugin edits.
+                const modal = document.getElementById('plugin-manager-modal');
+                if (!modal || !this._windowContainer) return;
+                this.container.innerHTML = '';
+                this.createUI();
+                this.renderPluginList();
+                modal._rrModalKeys?.leave();
+                delete modal._rrModalKeys;
+                modal.__rrFloating = false;
+                if (typeof RRPluginManagerWindow !== 'undefined') RRPluginManagerWindow.install(modal);
+                if (modal.style.display !== 'none') this.show();
+            });
+        }
     }
 
     /**
@@ -55,62 +70,21 @@ class PluginManager {
             return;
         }
 
-        // Create modal structure if not already created
+        const shownBefore = modal.style.display !== 'none' && modal.style.display !== '';
+        // Create the persistent floating frame once.
         if (!modal.hasChildNodes()) {
-            modal.style.cssText = `
-                display: none;
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.4);
-                z-index: 10000;
-            `;
-
-            // Floating, draggable, resizable window
-            const defaultW = Math.min(1200, window.innerWidth - 80);
-            const defaultH = Math.min(750, window.innerHeight - 80);
-            const defaultX = Math.round((window.innerWidth - defaultW) / 2);
-            const defaultY = Math.round((window.innerHeight - defaultH) / 2);
-
+            modal.style.display = 'none';
             const windowContainer = document.createElement('div');
-            windowContainer.style.cssText = `
-                position: absolute;
-                left: ${defaultX}px;
-                top: ${defaultY}px;
-                width: ${defaultW}px;
-                height: ${defaultH}px;
-                box-sizing: border-box;
-                max-width: calc(100vw - 24px);
-                min-width: min(700px, calc(100vw - 24px));
-                min-height: 400px;
-                background-color: var(--color-bg-surface);
-                border: 1px solid var(--color-border-input);
-                border-radius: 6px;
-                display: flex;
-                flex-direction: column;
-            max-height: 92vh;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
-                overflow: hidden;
-            `;
-
+            windowContainer.className = 'rr-plugin-window';
             modal.appendChild(windowContainer);
-
-            // Close when clicking the backdrop (not the window)
-            modal.addEventListener('mousedown', (e) => {
-                // A click on the backdrop no longer closes the dialog: an accidental
-                // click beside it must never cost in-progress work. Close deliberately.
-            });
 
             this.init(windowContainer);
             this._windowContainer = windowContainer;
-            this._viewportResizeHandler = () => this.fitWindowToViewport();
-            window.addEventListener('resize', this._viewportResizeHandler);
 
             // Keyboard shortcuts for copy/cut/paste
             this._keyHandler = (e) => {
                 if (modal.style.display === 'none') return;
+                if (typeof RRPluginManagerWindow !== 'undefined' && !RRPluginManagerWindow.ownsKeys()) return;
                 if (document.querySelector('.plugin-manager-child-modal')) return;
                 // Picking a plugin redraws its row and leaves the focus on the page: Escape still closes.
                 if (e.key === 'Escape' && !e.defaultPrevented && !modal.contains(e.target)) { e.preventDefault(); this.hide(); return; }
@@ -151,13 +125,16 @@ class PluginManager {
                 }
             };
             document.addEventListener('keydown', this._keyHandler);
-        } else {
-            // Reload plugins when showing the modal again
+        } else if (!shownBefore) {
+            // Raising an open manager keeps edits; reopening a closed one reloads from disk.
             this.loadPlugins();
         }
 
-        modal.style.display = 'block';
-        this.fitWindowToViewport();
+        modal.style.display = 'flex';
+        if (typeof RRPluginManagerWindow !== 'undefined') {
+            RRPluginManagerWindow.install(modal);
+            RRPluginManagerWindow.open(modal, { shownBefore });
+        }
         const trap = window.RRKeyboardNavigation?.modal(modal, {
             onEscape: () => {
                 if (document.querySelector('.plugin-manager-child-modal')) return;
@@ -170,18 +147,6 @@ class PluginManager {
         else this.pluginListContainer?.focus({ preventScroll: true });
     }
 
-    fitWindowToViewport() {
-        const win = this._windowContainer;
-        if (!win || !win.getClientRects().length) return;
-        const bounds = win.getBoundingClientRect();
-        const width = Math.min(bounds.width, window.innerWidth - 24);
-        const height = Math.min(bounds.height, window.innerHeight - 24);
-        win.style.width = `${width}px`;
-        win.style.height = `${height}px`;
-        win.style.left = `${Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12))}px`;
-        win.style.top = `${Math.max(12, Math.min(bounds.top, window.innerHeight - height - 12))}px`;
-    }
-
     /**
      * Hide the plugin manager modal
      */
@@ -191,7 +156,19 @@ class PluginManager {
             this._hidePluginContextMenu();
             modal.style.display = 'none';
             modal._rrModalKeys?.leave();
+            if (typeof RRPluginManagerWindow !== 'undefined') RRPluginManagerWindow.hidePopout();
         }
+    }
+
+    /** A floating manager must not retain the previous project's save destination. */
+    onProjectChanged() {
+        this.hide();
+        this.plugins = [];
+        this.availablePlugins = [];
+        this._pluginsFilePath = null;
+        this._pluginProjectPath = null;
+        this._pluginsLoadError = null;
+        this.clearPluginSelection();
     }
 
     /**
@@ -367,9 +344,9 @@ class PluginManager {
 
         // Header
         const header = document.createElement('div');
+        header.className = 'rr-modal-header rr-plugin-dialog-header';
         header.style.cssText = `
             padding: 12px 16px;
-            background-color: var(--color-bg-panel);
             border-bottom: 1px solid var(--color-border);
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
@@ -769,9 +746,9 @@ class PluginManager {
 
         // Header
         const header = document.createElement('div');
+        header.className = 'rr-modal-header rr-plugin-dialog-header';
         header.style.cssText = `
             padding: 12px 16px;
-            background-color: var(--color-bg-panel);
             border-bottom: 1px solid var(--color-border);
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
@@ -799,7 +776,7 @@ class PluginManager {
             height: 30px;
             line-height: 1;
         `;
-        closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+        closeBtn.addEventListener('click', () => overlay.remove());
         closeBtn.addEventListener('mouseenter', () => closeBtn.style.color = 'var(--color-text-strong)');
         closeBtn.addEventListener('mouseleave', () => closeBtn.style.color = 'var(--color-text-muted)');
         header.appendChild(closeBtn);
@@ -858,7 +835,7 @@ class PluginManager {
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
-        cancelBtn.addEventListener('click', () => document.body.removeChild(overlay));
+        cancelBtn.addEventListener('click', () => overlay.remove());
         footer.appendChild(cancelBtn);
 
         const saveBtn = document.createElement('button');
@@ -867,7 +844,7 @@ class PluginManager {
         saveBtn.addEventListener('mouseenter', () => { saveBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         saveBtn.addEventListener('mouseleave', () => { saveBtn.style.backgroundColor = 'var(--color-accent)'; });
         saveBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
+            overlay.remove();
             onSave(parsedValue);
         });
         footer.appendChild(saveBtn);
@@ -1201,9 +1178,9 @@ class PluginManager {
                     `;
                     table.appendChild(row);
                 } else if (isGroup) {
+                    row.className = 'lit-section-header rr-plugin-struct-group';
                     row.style.cssText = `
                         padding: 7px 10px 7px ${10 + depth * 16}px;
-                        background-color: var(--color-bg-toolbar);
                         color: var(--color-text-strong);
                         border-left: 3px solid var(--color-accent);
                         font-size: 11px;
@@ -1224,7 +1201,7 @@ class PluginManager {
 
                     const nameCell = document.createElement('div');
                     nameCell.className = 'rr-plugin-struct-name';
-                    nameCell.style.cssText = `padding:8px 8px 8px ${8 + depth * 16}px;border-right:1px solid var(--color-border);color:var(--color-syntax-function);font-size:11px;line-height:1.35;`;
+                    nameCell.style.cssText = `padding:8px 8px 8px ${8 + depth * 16}px;border-right:1px solid var(--color-border);color:var(--color-text-strong);font-size:11px;line-height:1.35;`;
                     nameCell.textContent = fieldSchema.text || fieldName;
                     if (fieldSchema.desc) nameCell.title = fieldSchema.desc;
                     row.appendChild(nameCell);
@@ -1454,7 +1431,7 @@ class PluginManager {
                 value,
                 onChange: newValue => { structData[fieldName] = newValue; },
                 context: this.pluginWidgetContext(),
-                inputStyle: 'width:100%;padding:4px 8px;background-color:var(--color-border);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;box-sizing:border-box;font-size:11px;'
+                inputStyle: 'width:100%;padding:4px 8px;background-color:var(--color-bg-input);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;box-sizing:border-box;font-size:11px;'
             })
             : null;
         if (choiceWidget) return choiceWidget;
@@ -1465,7 +1442,7 @@ class PluginManager {
             select.style.cssText = `
                 width: 100%;
                 padding: 4px 8px;
-                background-color: var(--color-border);
+                background-color: var(--color-bg-input);
                 color: var(--color-text);
                 border: 1px solid var(--color-border-input);
                 border-radius: 3px;
@@ -1507,7 +1484,7 @@ class PluginManager {
             input.style.cssText = `
                 width: 100%;
                 padding: 4px 8px;
-                background-color: var(--color-border);
+                background-color: var(--color-bg-input);
                 color: var(--color-text);
                 border: 1px solid var(--color-border-input);
                 border-radius: 3px;
@@ -1564,7 +1541,7 @@ class PluginManager {
                 width: 100%;
                 min-height: 88px;
                 padding: 6px 8px;
-                background-color: var(--color-border);
+                background-color: var(--color-bg-input);
                 color: var(--color-text);
                 border: 1px solid var(--color-border-input);
                 border-radius: 3px;
@@ -1583,7 +1560,7 @@ class PluginManager {
         const structInputStyle = `
             width: 100%;
             padding: 4px 8px;
-            background-color: var(--color-border);
+            background-color: var(--color-bg-input);
             color: var(--color-text);
             border: 1px solid var(--color-border-input);
             border-radius: 3px;
@@ -1607,7 +1584,7 @@ class PluginManager {
         input.style.cssText = `
             width: 100%;
             padding: 4px 8px;
-            background-color: var(--color-border);
+            background-color: var(--color-bg-input);
             color: var(--color-text);
             border: 1px solid var(--color-border-input);
             border-radius: 3px;
@@ -1666,7 +1643,7 @@ class PluginManager {
             `;
 
             const nameCell = document.createElement('div');
-            nameCell.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border); color: var(--color-syntax-function); font-size: 11px; font-family: monospace;';
+            nameCell.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border); color: var(--color-text-strong); font-size: 11px; font-family: monospace;';
             nameCell.textContent = name;
             row.appendChild(nameCell);
 
@@ -1680,7 +1657,7 @@ class PluginManager {
             input.style.cssText = `
                 width: 100%;
                 padding: 4px 8px;
-                background-color: var(--color-border);
+                background-color: var(--color-bg-input);
                 color: var(--color-text);
                 border: 1px solid var(--color-border-input);
                 border-radius: 3px;
@@ -1710,6 +1687,8 @@ class PluginManager {
      */
     showArrayElementEditor(arrayData, index, parentMetadata, structSchema, allStructDefinitions, onSave) {
         const element = arrayData[index];
+        // The fields below write into the element as they change; Cancel puts this copy back.
+        const original = element && typeof element === 'object' ? JSON.parse(JSON.stringify(element)) : element;
 
         // Create mini modal
         const overlay = document.createElement('div');
@@ -1741,9 +1720,9 @@ class PluginManager {
 
         // Header
         const header = document.createElement('div');
+        header.className = 'rr-modal-header rr-plugin-dialog-header';
         header.style.cssText = `
             padding: 12px 16px;
-            background-color: var(--color-bg-panel);
             border-bottom: 1px solid var(--color-border);
             border-top-left-radius: 6px;
             border-top-right-radius: 6px;
@@ -1779,7 +1758,7 @@ class PluginManager {
             // The question was about the element this editor shows; the editor may have closed meanwhile.
             if (!confirmed || arrayData[index] !== element || overlay.parentNode !== document.body) return;
             arrayData.splice(index, 1);
-            document.body.removeChild(overlay);
+            overlay.remove();
             onSave();
         });
         header.appendChild(deleteBtn);
@@ -1846,19 +1825,39 @@ class PluginManager {
             gap: 8px;
         `;
 
+        const cancel = () => {
+            if (overlay.parentNode !== document.body) return;
+            if (index < arrayData.length) arrayData[index] = original;
+            overlay.remove();
+        };
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = this._tt('Cancel');
+        cancelBtn.className = 'rr-btn-secondary';
+        cancelBtn.addEventListener('click', cancel);
+        footer.appendChild(cancelBtn);
+
         const okBtn = document.createElement('button');
         okBtn.textContent = this._tt('OK');
         okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
         okBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
+            overlay.remove();
             onSave();
         });
         footer.appendChild(okBtn);
 
         modal.appendChild(footer);
         overlay.appendChild(modal);
+        overlay.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            // A dialog opened from this one is on top and answers Escape itself.
+            const modals = document.querySelectorAll('.plugin-manager-child-modal');
+            if (modals[modals.length - 1] !== overlay) return;
+            event.preventDefault();
+            event.stopPropagation();
+            cancel();
+        });
         document.body.appendChild(overlay);
     }
 
@@ -1881,9 +1880,9 @@ class PluginManager {
     createUI() {
         // Header / title bar (draggable)
         const header = document.createElement('div');
+        header.className = 'rr-modal-header rr-plugin-header';
         header.style.cssText = `
             padding: 8px 16px;
-            background-color: var(--color-bg-panel);
             border-bottom: 1px solid var(--color-border);
             border-top-left-radius: 6px;
             border-top-right-radius: 6px;
@@ -1895,28 +1894,8 @@ class PluginManager {
             user-select: none;
         `;
 
-        // Drag-to-move on title bar
-        header.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'BUTTON') return;
-            const win = this.container;
-            const startX = e.clientX - win.offsetLeft;
-            const startY = e.clientY - win.offsetTop;
-            header.style.cursor = 'grabbing';
-            const onMove = (ev) => {
-                win.style.left = (ev.clientX - startX) + 'px';
-                win.style.top = (ev.clientY - startY) + 'px';
-                this.fitWindowToViewport();
-            };
-            const onUp = () => {
-                header.style.cursor = 'grab';
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-        });
-
         const title = document.createElement('h2');
+        title.className = 'rr-plugin-title';
         title.textContent = this._tt('Plugin Manager');
         title.style.cssText = 'margin: 0; color: var(--color-text-strong); font-size: 16px; pointer-events: none;';
         header.appendChild(title);
@@ -1967,9 +1946,9 @@ class PluginManager {
         `;
 
         const listHeader = document.createElement('div');
+        listHeader.className = 'lit-section-header';
         listHeader.style.cssText = `
             padding: 8px 12px;
-            background-color: var(--color-bg-list-item);
             border-bottom: 1px solid var(--color-border);
             color: var(--color-text);
             font-weight: bold;
@@ -2110,46 +2089,6 @@ class PluginManager {
         this.container.appendChild(actionFooter);
         this.updatePluginActionFooter();
 
-        // Resize handle at bottom-right corner
-        const resizeHandle = document.createElement('div');
-        resizeHandle.style.cssText = `
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 18px;
-            height: 18px;
-            cursor: nwse-resize;
-            z-index: 10;
-        `;
-        // Draw a grip triangle
-        resizeHandle.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" style="display:block;">
-            <path d="M 14 4 L 14 14 L 4 14" fill="none" stroke="var(--color-border-input)" stroke-width="1.5"/>
-            <path d="M 17 7 L 17 17 L 7 17" fill="none" stroke="var(--color-border-input)" stroke-width="1.5"/>
-        </svg>`;
-        resizeHandle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const win = this.container;
-            const startX = e.clientX;
-            const startY = e.clientY;
-            const startW = win.offsetWidth;
-            const startH = win.offsetHeight;
-            const onMove = (ev) => {
-                const newW = Math.max(700, startW + (ev.clientX - startX));
-                const newH = Math.max(400, startH + (ev.clientY - startY));
-                win.style.width = newW + 'px';
-                win.style.height = newH + 'px';
-                this.fitWindowToViewport();
-            };
-            const onUp = () => {
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-        });
-        this.container.appendChild(resizeHandle);
-
         this.renderEmptyDetails();
     }
 
@@ -2182,6 +2121,7 @@ class PluginManager {
             }
 
             const projectPath = currentProject.path;
+            this._pluginProjectPath = projectPath;
             const pluginsPath = this.resolvePluginsPath(projectPath);
 
             if (!pluginsPath) {
@@ -2502,7 +2442,7 @@ class PluginManager {
         const addBtn = document.createElement('div');
         addBtn.style.cssText = `
             padding: 12px;
-            color: var(--color-accent);
+            color: var(--color-accent-bright);
             cursor: pointer;
             text-align: center;
             border-top: 1px solid var(--color-border);
@@ -2619,13 +2559,17 @@ class PluginManager {
         checkbox.addEventListener('click', (e) => {
             e.stopPropagation();
             plugin.status = checkbox.checked;
+            // An unselected row's name dims when its plugin is off, as it does when the list is drawn.
+            if (!this.selectedPluginIndices.has(index)) nameSpan.style.color = nameColor();
         });
         item.appendChild(checkbox);
 
         // Plugin name
+        const nameColor = () => this.selectedPluginIndices.has(index) ? 'var(--color-accent-on)'
+            : plugin.status ? 'var(--color-text-strong)' : 'var(--color-text-muted)';
         const nameSpan = document.createElement('span');
         nameSpan.style.cssText = `
-            color: ${isSelected ? 'var(--color-accent-on)' : plugin.status ? 'var(--color-text-strong)' : 'var(--color-text-muted)'};
+            color: ${nameColor()};
             font-size: 13px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -3000,9 +2944,9 @@ class PluginManager {
         `;
 
         const header = document.createElement('div');
+        header.className = 'rr-modal-header rr-plugin-dialog-header';
         header.style.cssText = `
             padding: 12px 16px;
-            background-color: var(--color-bg-input);
             border-bottom: 1px solid var(--color-border);
             color: var(--color-text-strong);
             font-weight: bold;
@@ -3071,7 +3015,7 @@ class PluginManager {
                 });
                 item.addEventListener('click', () => {
                     this.addPlugin(name);
-                    document.body.removeChild(modal);
+                    modal.remove();
                 });
                 listContainer.appendChild(item);
             });
@@ -3094,7 +3038,7 @@ class PluginManager {
         cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => {
-            document.body.removeChild(modal);
+            modal.remove();
         });
         footer.appendChild(cancelBtn);
 
@@ -3360,40 +3304,37 @@ class PluginManager {
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-list-item);
-            border-bottom: 1px solid var(--color-border);
-            flex-shrink: 0;
-        `;
+        header.className = 'plugin-details-header';
+        header.style.cssText = 'flex-shrink: 0;';
 
         const name = document.createElement('h3');
-        name.style.cssText = 'margin: 0 0 8px 0; color: var(--color-text-strong); font-size: 16px;';
+        name.className = 'lit-section-header plugin-details-title';
+        name.style.cssText = 'margin: 0; font-size: 15px; text-transform: none; letter-spacing: 0;';
         name.textContent = plugin.name;
         header.appendChild(name);
 
         if (plugin.description) {
             const desc = document.createElement('div');
-            desc.style.cssText = 'color: var(--color-text-muted); font-size: 12px; line-height: 1.4; margin-bottom: 8px;';
+            desc.className = 'plugin-details-description';
             desc.textContent = plugin.description;
             header.appendChild(desc);
         }
 
         // Author and URL info
         const metaInfo = document.createElement('div');
-        metaInfo.style.cssText = 'display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;';
+        metaInfo.className = 'plugin-details-meta';
 
         if (plugin.author) {
             const authorDiv = document.createElement('div');
-            authorDiv.style.cssText = 'font-size: 13px;';
+            authorDiv.className = 'plugin-meta-item';
 
             const authorLabel = document.createElement('span');
-            authorLabel.style.cssText = 'color: var(--color-text-muted);';
+            authorLabel.className = 'plugin-meta-label';
             authorLabel.textContent = this._tt('Author:') + ' ';
             authorDiv.appendChild(authorLabel);
 
             const authorValue = document.createElement('span');
-            authorValue.style.cssText = 'color: var(--color-text);';
+            authorValue.className = 'plugin-meta-value';
             authorValue.textContent = plugin.author;
             authorDiv.appendChild(authorValue);
 
@@ -3402,10 +3343,10 @@ class PluginManager {
 
         if (plugin.url) {
             const urlDiv = document.createElement('div');
-            urlDiv.style.cssText = 'font-size: 13px;';
+            urlDiv.className = 'plugin-meta-item';
 
             const urlLabel = document.createElement('span');
-            urlLabel.style.cssText = 'color: var(--color-text-muted);';
+            urlLabel.className = 'plugin-meta-label';
             urlLabel.textContent = this._tt('URL:') + ' ';
             urlDiv.appendChild(urlLabel);
 
@@ -3414,10 +3355,8 @@ class PluginManager {
             urlLink.target = '_blank';
             urlLink.rel = 'noreferrer';
             urlLink.className = 'external-link';
-            urlLink.style.cssText = 'color: var(--color-link); text-decoration: none;';
+            urlLink.classList.add('plugin-meta-url');
             urlLink.textContent = plugin.url;
-            urlLink.addEventListener('mouseenter', () => urlLink.style.textDecoration = 'underline');
-            urlLink.addEventListener('mouseleave', () => urlLink.style.textDecoration = 'none');
             urlDiv.appendChild(urlLink);
 
             metaInfo.appendChild(urlDiv);
@@ -3433,21 +3372,11 @@ class PluginManager {
         if (plugin.help) {
             const helpSection = document.createElement('details');
             helpSection.className = 'plugin-help-section';
-            helpSection.style.cssText = `
-                padding: 12px 16px;
-                background-color: var(--color-bg-list-item);
-                border-bottom: 1px solid var(--color-border);
-                flex-shrink: 0;
-            `;
+            helpSection.style.cssText = 'flex-shrink: 0;';
 
             const summary = document.createElement('summary');
-            summary.style.cssText = `
-                color: var(--color-link);
-                cursor: pointer;
-                font-size: 13px;
-                font-weight: bold;
-                margin-bottom: 8px;
-            `;
+            summary.className = 'lit-section-header plugin-help-heading';
+            summary.style.cssText = 'cursor: pointer;';
             summary.textContent = this._tt('Plugin Help & Documentation');
             helpSection.appendChild(summary);
 
@@ -3457,7 +3386,7 @@ class PluginManager {
                 display: flex;
                 align-items: center;
                 gap: 6px;
-                margin: 8px 0;
+                margin: 10px 12px;
                 padding: 7px;
                 background-color: var(--color-bg-deep);
                 border: 1px solid var(--color-border);
@@ -3532,7 +3461,7 @@ class PluginManager {
             helpContent.className = 'plugin-help-content';
             helpContent.classList.add('rr-accent-scrollbar');
             helpContent.style.cssText = `
-                margin: 8px 0 0 0;
+                margin: 8px 12px 12px;
                 padding: 12px;
                 background-color: var(--color-bg-surface);
                 border: 1px solid var(--color-border);
@@ -3618,7 +3547,8 @@ class PluginManager {
         `;
 
         const paramsTitle = document.createElement('h4');
-        paramsTitle.style.cssText = 'margin: 0 0 8px 0; color: var(--color-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px;';
+        paramsTitle.className = 'lit-section-header plugin-parameters-heading';
+        paramsTitle.style.cssText = 'margin: 0 0 10px;';
         paramsTitle.textContent = this._tt('Parameters');
         paramsContainer.appendChild(paramsTitle);
 
@@ -3799,16 +3729,15 @@ class PluginManager {
 
         // Header-only parameters (grouping labels)
         if (isHeaderOnly) {
+            container.className = 'lit-section-header rr-plugin-parameter-group';
             // Clean up display name: strip leading arrows/decorators
             const displayName = (metadata.text || groupMatch?.[1] || key).replace(/^->\s*/, '').replace(/<+$/, '').trim();
 
             container.style.cssText = `
                 margin: ${depth > 0 ? '6px' : '10px'} 0 2px 0;
                 padding: 5px 10px 5px ${leftPadding}px;
-                background-color: var(--color-bg-toolbar);
-                border-left: 3px solid var(--color-accent);
-                border-bottom: 1px solid var(--color-border);
-                border-radius: 0 3px 3px 0;
+                flex-direction: column;
+                align-items: stretch;
             `;
 
             const header = document.createElement('div');
@@ -3824,6 +3753,7 @@ class PluginManager {
 
             if (metadata.desc) {
                 const desc = document.createElement('div');
+                desc.className = 'rr-plugin-group-description';
                 desc.style.cssText = 'color: var(--color-text-muted); font-size: 10px; margin-top: 2px;';
                 desc.textContent = metadata.desc;
                 container.appendChild(desc);
@@ -3874,7 +3804,7 @@ class PluginManager {
         const inputStyle = `
             width: 100%;
             padding: 4px 8px;
-            background-color: var(--color-border);
+            background-color: var(--color-bg-input);
             color: var(--color-text);
             border: 1px solid var(--color-border-input);
             border-radius: 2px;
@@ -4308,6 +4238,9 @@ class PluginManager {
             }
 
             const projectPath = currentProject.path;
+            if (this._pluginProjectPath && this._pluginProjectPath !== projectPath) {
+                throw new Error('Plugin settings belong to a different project; reopen Plugin Manager before saving.');
+            }
             // Use the path we loaded from, or default to reactor_plugins.js
             const pluginsPath = this._pluginsFilePath || this.path.join(projectPath, 'js', 'reactor_plugins.js');
             const isRpgMakerPluginsFile = this.path.basename(pluginsPath) === 'plugins.js';

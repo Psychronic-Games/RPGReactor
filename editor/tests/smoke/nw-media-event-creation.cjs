@@ -13,7 +13,7 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
  await driver.execute(`reactor.mediaSurfaceManager.open();const row=reactor.mediaSurfaceManager.rows()[0];reactor.mediaSurfaceManager.duplicate(Number(row.id));`);
  await driver.waitForScript(`return !!reactor.mediaSurfacePreviewManager.authoring;`,[],{timeout:10000});
  await driver.execute(`document.getElementById('toolbar-event-manager-btn').click();`);
- const state=await driver.execute(`return {mode:reactor.eventManager.eventMode,authoring:!!reactor.mediaSurfacePreviewManager.authoring,panel:!!reactor.mediaSurfaceManager.panel,selected:document.querySelector('[data-action="media-surfaces"]').classList.contains('active'),map:reactor.eventManager.currentMap.id};`);
+ const state=await driver.execute(`return {mode:reactor.eventManager.eventMode,authoring:!!reactor.mediaSurfacePreviewManager.authoring,panel:!!reactor.mediaSurfaceManager.panel,selected:!!reactor.mediaSurfaceManager.panel,map:reactor.eventManager.currentMap.id};`);
  const mediaBefore=await driver.execute('return reactor.mediaSurfaceManager.rows();');
  assert.equal(mediaBefore.length,5);
  console.log('Event mode after media:',state);

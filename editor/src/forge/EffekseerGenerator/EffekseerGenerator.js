@@ -1264,7 +1264,7 @@ class EffekseerGenerator {
                 </div>
             </div>`;
         }).join('');
-        bar.innerHTML = `<div style="max-width: 560px; margin: 0 auto; background: rgba(0, 0, 0, 0.45); border: 1px solid var(--color-border); border-radius: 6px; padding: 10px 12px;">` + header + `<div style="display: flex; flex-direction: column; gap: 6px;">${cards}</div></div>`;
+        bar.innerHTML = `<div style="max-width: 560px; margin: 0 auto; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 6px; padding: 10px 12px;">` + header + `<div style="display: flex; flex-direction: column; gap: 6px;">${cards}</div></div>`;
 
         const stop = (fn) => (e) => { e.stopPropagation(); fn(e); };
         bar.querySelectorAll('.rr-efk-lp-card').forEach(card => {

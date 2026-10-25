@@ -261,7 +261,8 @@ test('the tag of a setting leaves the Note with the change, the card\'s other ta
     const every = '<range: 2-5>\n<area: circle 2>\n<los: no>\n<move: 3>\n<jump: 2>\n<ai: support>\n<fire rate: 4>\n<magazine: 8>\n<reload: 1.5>\n<spread: 3>\n<combo: 4>\n<projectile: bolt>\n<cooldown: 6>\n<unit character: Evil, 2>';
     for (const kind of T.KINDS) {
         for (const card of T.cardsFor(kind)) {
-            const keys = T.ownKeys(card, kind), record = { id: 4, scope: 1, hitType: 2, wtypeId: 2, note: every };
+            // (Comes back is a setting no tag says: nothing of it is in the Note to move.)
+            const keys = T.ownKeys(card, kind).filter(key => key !== 'comesBack'), record = { id: 4, scope: 1, hitType: 2, wtypeId: 2, note: every };
             const first = keys[0], value = { range: null, move: null, fireRate: null, cooldown: null }[first];
             const done = T.change(card, kind, record, context, { [first]: value });
             const left = Object.assign({}, T.parseTags(done.note), T.parseCombat(done.note)), sheet = T.recordCharacter({ note: done.note });

@@ -12,6 +12,9 @@
  *     The runtime reader already normalizes integer weights.
  *   - Oversized textures. An 8K color map on a prop that covers 300px of
  *     screen decodes to the same pixels as a 2K one.
+ *   - Pictures the runtime never samples: it draws a material's base color
+ *     map only, so normal, metal-roughness, occlusion and emissive maps are
+ *     bytes shipped and loaded for nothing.
  *   - Duplicate vertices. Exports split vertices per-face for flat shading or
  *     UV islands; welding the coincident ones (position, UV and normal all
  *     agreeing) reindexes the same triangles over far fewer vertices.
@@ -66,8 +69,8 @@
      * every distance. `lods()` is still here for anyone who wants the files.
      */
     const PRESETS = {
-        optimize: { textureSize: 2048, textureQuality: 0.85, dropTangents: true, quantizeWeights: true, meshRatio: 0.6, meshCells: 1600, cacheOrder: true, buildLods: false, weldTolerance: DEFAULT_WELD_TOLERANCE },
-        aggressive: { textureSize: 2048, textureQuality: 0.85, dropTangents: true, quantizeWeights: true, meshRatio: 0.25, meshCells: 700, cacheOrder: true, buildLods: false, weldTolerance: DEFAULT_WELD_TOLERANCE }
+        optimize: { textureSize: 2048, textureQuality: 0.85, dropTangents: true, dropUnsampledImages: true, quantizeWeights: true, meshRatio: 0.6, meshCells: 1600, cacheOrder: true, buildLods: false, weldTolerance: DEFAULT_WELD_TOLERANCE },
+        aggressive: { textureSize: 2048, textureQuality: 0.85, dropTangents: true, dropUnsampledImages: true, quantizeWeights: true, meshRatio: 0.25, meshCells: 700, cacheOrder: true, buildLods: false, weldTolerance: DEFAULT_WELD_TOLERANCE }
     };
 
     /**
@@ -698,6 +701,101 @@
     }
 
     /**
+     * The material slots the runtime draws with: the base color (a
+     * specular-glossiness material's diffuse), and a normal or emissive map
+     * beside a base color map on the same coordinates (`keepsBeside`).
+     * Metal-roughness, occlusion and every extension's maps are never sampled.
+     */
+    function sampledTexture(material) {
+        const pbr = material.pbrMetallicRoughness || {};
+        const specgloss = material.extensions && material.extensions.KHR_materials_pbrSpecularGlossiness;
+        return pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture) || null;
+    }
+
+    /** Whether the runtime draws a map in this slot (`normalTexture`, `emissiveTexture`): one on the base color map's own coordinates. */
+    function keepsBeside(material, slot) {
+        const base = sampledTexture(material), info = material[slot];
+        return !!(base && info && !(info.texCoord > 0) && !(base.texCoord > 0));
+    }
+
+    /**
+     * Remove every picture the runtime never samples: each material keeps its
+     * base color map and loses its other texture slots (an emissive map goes
+     * with its factor, so another viewer does not light the whole surface);
+     * textures, samplers and images nothing names any more are dropped and
+     * the rest renumbered, then their buffer views collected. Returns the
+     * bytes of picture data removed.
+     */
+    function dropUnsampledImages(json, replacements, notes) {
+        const basisuOf = texture => texture.extensions && texture.extensions.KHR_texture_basisu;
+        const before = (json.images || []).reduce((sum, image) => sum + (image.bufferView != null ? json.bufferViews[image.bufferView].byteLength : 0), 0);
+        let slots = 0;
+        for (const material of json.materials || []) {
+            const keep = sampledTexture(material);
+            const pbr = material.pbrMetallicRoughness;
+            if (pbr && pbr.metallicRoughnessTexture) { delete pbr.metallicRoughnessTexture; slots++; }
+            if (material.normalTexture && !keepsBeside(material, 'normalTexture')) { delete material.normalTexture; slots++; }
+            if (material.occlusionTexture) { delete material.occlusionTexture; slots++; }
+            if (material.emissiveTexture && !keepsBeside(material, 'emissiveTexture')) { delete material.emissiveTexture; delete material.emissiveFactor; slots++; }
+            const extensions = material.extensions || {};
+            for (const name of Object.keys(extensions)) {
+                const extension = extensions[name];
+                if (!extension || typeof extension !== 'object') continue;
+                for (const key of Object.keys(extension)) {
+                    const info = extension[key];
+                    if (info && typeof info === 'object' && typeof info.index === 'number' && /Texture$/.test(key) && info !== keep) { delete extension[key]; slots++; }
+                }
+            }
+        }
+        // Textures still named by a material, then the images and samplers they name.
+        const usedTextures = new Set();
+        const eachTextureRef = visit => {
+            for (const material of json.materials || []) {
+                const walk = object => {
+                    for (const key of Object.keys(object)) {
+                        const value = object[key];
+                        if (!value || typeof value !== 'object') continue;
+                        if (/Texture$/.test(key) && typeof value.index === 'number') value.index = visit(value.index);
+                        else walk(value);
+                    }
+                };
+                walk(material);
+            }
+        };
+        eachTextureRef(index => { usedTextures.add(index); return index; });
+        const textureRemap = new Map();
+        const textures = (json.textures || []).filter((texture, index) => {
+            if (!usedTextures.has(index)) return false;
+            textureRemap.set(index, textureRemap.size);
+            return true;
+        });
+        if (textures.length === (json.textures || []).length && (json.images || []).every((image, index) => textures.some(t => t.source === index || (basisuOf(t) && basisuOf(t).source === index)))) {
+            if (slots) notes.push('dropped texture slots the game never draws');
+            return 0;
+        }
+        eachTextureRef(index => textureRemap.get(index));
+        const usedImages = new Set(textures.flatMap(t => [t.source, basisuOf(t) && basisuOf(t).source]).filter(s => s != null));
+        const usedSamplers = new Set(textures.map(t => t.sampler).filter(s => s != null));
+        const imageRemap = new Map(), samplerRemap = new Map();
+        const images = (json.images || []).filter((image, index) => { if (!usedImages.has(index)) return false; imageRemap.set(index, imageRemap.size); return true; });
+        const samplers = (json.samplers || []).filter((sampler, index) => { if (!usedSamplers.has(index)) return false; samplerRemap.set(index, samplerRemap.size); return true; });
+        for (const texture of textures) {
+            if (texture.source != null) texture.source = imageRemap.get(texture.source);
+            if (texture.sampler != null) texture.sampler = samplerRemap.get(texture.sampler);
+            if (basisuOf(texture) && basisuOf(texture).source != null) basisuOf(texture).source = imageRemap.get(basisuOf(texture).source);
+        }
+        const set = (key, list) => { if (list.length) json[key] = list; else delete json[key]; };
+        set('textures', textures);
+        set('images', images);
+        set('samplers', samplers);
+        collectGarbage(json, replacements);
+        const after = (json.images || []).reduce((sum, image) => sum + (image.bufferView != null ? json.bufferViews[image.bufferView].byteLength : 0), 0);
+        const removed = before - after;
+        if (removed > 0 || slots) notes.push(`dropped pictures the game never draws (${(removed / 1048576).toFixed(1)}MB)`);
+        return removed;
+    }
+
+    /**
      * Drop every accessor nothing references and every bufferView nothing
      * uses, remapping all references (primitives, morph targets, animation
      * samplers, skin bind matrices, images) and any staged replacements.
@@ -1074,6 +1172,8 @@
         const replacements = new Map();
         // Tangents go first so the vertex-weld pass sees a clean attribute set.
         if (settings.dropTangents) dropTangents(json, replacements, notes);
+        // Pictures the game never samples go before anything is re-encoded.
+        if (settings.dropUnsampledImages) dropUnsampledImages(json, replacements, notes);
         // Edge collapse first when a ratio is asked for: it cannot open a hole,
         // because a collapse removes an edge's two triangles and rewires their
         // neighbours. The weld grid merges by proximity with no regard for
@@ -1101,7 +1201,8 @@
         if (settings.textureSize > 0 && typeof settings.encodeImage === 'function') {
             for (const image of json.images || []) {
                 const data = imageData(json, bin, image);
-                if (!data || !ownsImageView(json, image)) continue;
+                // A block-compressed copy is not a picture the canvas re-encodes.
+                if (!data || !ownsImageView(json, image) || image.mimeType === 'image/ktx2') continue;
                 const dims = imageDimensions(data, image.mimeType);
                 let encoded = null;
                 try {
@@ -1120,6 +1221,64 @@
         }
         if (!notes.length) return { bytes, notes: ['nothing to reduce'] };
         return { bytes: rebuildGlb(json, bin, replacements), notes };
+    }
+
+    /**
+     * Add a block-compressed copy (KTX2, Basis Universal) of every base color
+     * picture the game draws, beside the picture itself (glTF's
+     * KHR_texture_basisu, listed as used, not required: another viewer draws
+     * the picture). The runtime transcodes the copy for the GPU and keeps
+     * the picture as its fallback. Pictures the file samples with nearest
+     * filtering (pixel art), pictures whose sides are not multiples of four,
+     * external pictures and pictures already compressed are left alone.
+     * `options.encodeImage(bytes, mimeType)` returns the KTX2 bytes (or null);
+     * `options.onProgress(done, total)` is told as each picture finishes.
+     * Returns { bytes, notes, compressed }.
+     */
+    async function compressTextures(bytes, options) {
+        const settings = options || {};
+        const parsed = parseGlb(bytes);
+        if (!parsed) return { bytes, notes: ['not a readable GLB; left as it is'], compressed: 0 };
+        const { json, bin } = parsed;
+        if (Array.isArray(json.extensionsRequired) && json.extensionsRequired.length) return { bytes, notes: ['uses required glTF extensions; left as it is'], compressed: 0 };
+        if (typeof settings.encodeImage !== 'function') return { bytes, notes: ['no texture encoder'], compressed: 0 };
+        const notes = [], groups = new Map();
+        for (const material of json.materials || []) {
+            const info = sampledTexture(material);
+            const texture = info && json.textures ? json.textures[info.index] : null;
+            if (!texture || texture.source == null || (texture.extensions && texture.extensions.KHR_texture_basisu)) continue;
+            const sampler = texture.sampler != null && json.samplers ? json.samplers[texture.sampler] : null;
+            if (sampler && (sampler.magFilter === 9728 || sampler.minFilter === 9728 || sampler.minFilter === 9984 || sampler.minFilter === 9986)) { notes.push('a pixel-art picture (nearest filtering) is left as it is'); continue; }
+            const image = json.images[texture.source];
+            if (!image || image.uri || image.bufferView == null || !/^image\/(png|jpeg)$/.test(image.mimeType || '')) continue;
+            if (!groups.has(texture.source)) groups.set(texture.source, new Set());
+            groups.get(texture.source).add(texture);
+        }
+        const replacements = new Map(), total = groups.size;
+        let done = 0, compressed = 0;
+        if (typeof settings.onProgress === 'function') settings.onProgress(0, total);
+        for (const [source, users] of groups) {
+            const image = json.images[source], data = imageData(json, bin, image);
+            const dims = imageDimensions(data, image.mimeType);
+            let ktx2 = null;
+            if (!dims.width || dims.width % 4 || dims.height % 4) notes.push(`a ${dims.width}x${dims.height} picture is left as it is (sides must be multiples of four)`);
+            else {
+                try { ktx2 = await settings.encodeImage(data, image.mimeType); } catch (error) { notes.push('a picture could not be compressed: ' + (error && error.message || error)); }
+            }
+            done++;
+            if (typeof settings.onProgress === 'function') settings.onProgress(done, total);
+            if (!ktx2 || !ktx2.length) continue;
+            const bytesOut = ktx2 instanceof Uint8Array ? ktx2 : new Uint8Array(ktx2);
+            json.bufferViews.push({ buffer: 0, byteOffset: 0, byteLength: bytesOut.length });
+            replacements.set(json.bufferViews.length - 1, bytesOut);
+            json.images.push({ bufferView: json.bufferViews.length - 1, mimeType: 'image/ktx2' });
+            for (const texture of users) texture.extensions = Object.assign({}, texture.extensions, { KHR_texture_basisu: { source: json.images.length - 1 } });
+            notes.push(`texture ${(data.length / 1048576).toFixed(1)}MB -> compressed copy ${(bytesOut.length / 1048576).toFixed(1)}MB`);
+            compressed++;
+        }
+        if (!compressed) return { bytes, notes: notes.length ? notes : ['no picture to compress'], compressed: 0 };
+        json.extensionsUsed = Array.from(new Set((json.extensionsUsed || []).concat(['KHR_texture_basisu'])));
+        return { bytes: rebuildGlb(json, bin, replacements), notes, compressed };
     }
 
     /** True when no accessor also reads the image's bufferView (never the case in practice, but never corrupt one). */
@@ -1207,7 +1366,18 @@
             .catch(() => lods(bytes, options));
     }
 
-    const api = { PRESETS, LOD_LEVELS, LOD_MIN_TRIANGLES, analyze, optimize, lods, lodsAsync, canvasEncoder, parseGlb, remapParts, imageDimensions, fromMesh };
+    /**
+     * Triangles before and after an optimization, and the share kept (whole percent).
+     * Texture seams can hold a reduced model near its source, so callers report this.
+     */
+    function triangleResult(beforeBytes, afterBytes) {
+        const before = (analyze(beforeBytes) || {}).triangles || 0;
+        const after = afterBytes === beforeBytes ? before : ((analyze(afterBytes) || {}).triangles || 0);
+        if (!before) return null;
+        return { before, after, percent: Math.round(after / before * 100) };
+    }
+
+    const api = { PRESETS, LOD_LEVELS, LOD_MIN_TRIANGLES, analyze, optimize, triangleResult, dropUnsampledImages, compressTextures, lods, lodsAsync, canvasEncoder, parseGlb, remapParts, imageDimensions, fromMesh };
 
     root.RRGlbOptimizer = api;
 

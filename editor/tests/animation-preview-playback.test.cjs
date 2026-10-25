@@ -211,12 +211,15 @@ test('all Effekseer surfaces use authored X rotation and aspect-neutral positive
     for (const source of [modal, database, event, forge, sprites, core]) {
         assert.doesNotMatch(source, /180\s*-\s*(?:rot|rotation|this\._animation)/);
     }
-    assert.match(modal, /const ax = fxCanvas\.height \/ fxCanvas\.width;[\s\S]{0,180}?0, 1, 0, 0/);
-    assert.match(event, /const x = canvas\.height \/ canvas\.width;[\s\S]{0,180}?0, 1, 0, 0/);
-    assert.match(database, /const x = previewCanvas\.height \/ previewCanvas\.width;\s*const y = 1/);
-    assert.match(database, /const x = canvas\.height \/ canvas\.width;[^]*?const y = 1/);
+    // The previews draw through the game's own projection (aspect-neutral, positive Y: ReactorBattleData.effekseerProjection).
+    assert.match(modal, /ReactorBattleData\.effekseerProjection\(fxCanvas\.width, fxCanvas\.height,/);
+    assert.match(event, /ReactorBattleData\.effekseerProjection\(canvas\.width, canvas\.height,/);
+    assert.match(database, /ReactorBattleData\.effekseerProjection\(previewCanvas\.width, previewCanvas\.height,/);
+    assert.match(database, /ReactorBattleData\.effekseerProjection\(canvas\.width, canvas\.height,/);
     assert.match(forge, /setProjectionMatrix\(\[1, 0, 0, 0, 0, 1,/);
-    assert.match(sprites, /const y = q;/);
+    // The game's overlay draws through the shared projection: positive Y, the same pixels on both axes.
+    assert.match(sprites, /ReactorBattleData\.effekseerProjection\(side, side, height, 1, mirror\)/);
+    assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_data.js'), 'utf8'), /\(mirror \? -1 : 1\) \* scale \* frame \/ width, 0, 0, 0,\s*0, scale \* frame \/ height, 0, 0,/);
     assert.match(core, /setProjectionMatrix\(\[1, 0, 0, 0,\s*0, 1,/);
 });
 

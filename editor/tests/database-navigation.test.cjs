@@ -256,9 +256,9 @@ test('loop-driving database values clamp to their documented ranges', () => {
         updateActor: () => {}
     };
     actorEditor.commonUI = { updateStatus: () => {} };
-    assert.equal(actorEditor.updateActorField(1, 'maxLevel', '99999'), 999);
+    assert.equal(actorEditor.updateActorField(1, 'maxLevel', '99999'), 9999);
     assert.equal(actorEditor.updateActorField(1, 'initialLevel', '-10'), 1);
-    assert.equal(actorEditor.updateActorField(1, 'initialLevel', '99999'), 999);
+    assert.equal(actorEditor.updateActorField(1, 'initialLevel', '99999'), 9999);
     assert.equal(actorEditor.updateActorField(1, 'maxLevel', '50'), 50);
     assert.equal(actor.initialLevel, 50);
 
@@ -284,12 +284,13 @@ test('loop-driving database values clamp to their documented ranges', () => {
     assert.equal(itemEditor.updateItemField(1, 'price', '9999999'), 9999999);
 });
 
-test('level 999 extrapolates finite class parameters without expanding class data', () => {
+test('level 9999 extrapolates finite class parameters without expanding class data', () => {
     const source = fs.readFileSync(path.join(repoRoot, 'src', 'utils', 'DataLimits.js'), 'utf8');
     const { limits, resolve, expForLevel } = vm.runInNewContext(`${source}\n({ limits: RR_LIMITS, resolve: rrClassParamAtLevel, expForLevel: rrExpForLevel });`);
     const curve = new Array(100).fill(0).map((_, level) => level * 2);
 
-    assert.equal(limits.ACTOR_LEVEL, 999);
+    assert.equal(limits.ACTOR_LEVEL, 9999);
+    assert.equal(limits.CLASS_CURVE_LEVEL, 999);
     assert.equal(limits.ACTION_REPEATS, 100);
     assert.equal(limits.MAP_COUNT, 2000);
     assert.equal(limits.DATABASE_ENTRIES.animations, 5000);
@@ -298,10 +299,11 @@ test('level 999 extrapolates finite class parameters without expanding class dat
     assert.equal(resolve(curve, 99), 198);
     assert.equal(resolve(curve, 100), 200);
     assert.equal(resolve(curve, 999), 1998);
-    assert.equal(resolve([null, 7], 999), 7);
+    assert.equal(resolve(curve, 9999), 19998);
+    assert.equal(resolve([null, 7], 9999), 7);
     assert.equal(expForLevel([30, 20, 30, 30], 1), 0);
     assert.equal(expForLevel([30, 20, 30, 30], 2), 50);
-    assert.equal(Number.isFinite(expForLevel([100, 100, 100, 100], 999)), true);
+    assert.equal(Number.isSafeInteger(expForLevel([100, 100, 100, 100], 9999)), true);
 
     const DatabaseEditorUI = loadBrowserClass(path.join(repoRoot, 'src', 'DatabaseEditorUI.js'), 'DatabaseEditorUI');
     const templates = Object.create(DatabaseEditorUI.prototype).getDefaultTemplates();

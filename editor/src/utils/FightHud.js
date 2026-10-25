@@ -744,7 +744,7 @@
     /** The front-facing standing frame of a character sheet: `[sx, sy, sw, sh]` on a picture `width` x `height`. */
     H.characterFrame = function(name, index, width, height) {
         const sign = String(name).replace(/^.*\//, '').match(/^[!$]+/);
-        const big = !!sign && sign[0].includes('$');
+        const big = !!sign && sign[0].includes('$') && !/\[8D\]/i.test(String(name));
         const cw = big ? width / 3 : width / 12;
         const ch = big ? height / 4 : height / 8;
         const bx = big ? 0 : (index % 4) * 3;

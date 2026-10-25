@@ -18,7 +18,7 @@ test('SelectThemingShim measures every select before wrapping the first', () => 
     assert.match(wrapAll, /for \(const \[selectEl, flex\] of pending\) wrap\(selectEl, flex\);/);
     assert.match(source, /const computedFlex = flex !== undefined \? flex : window\.getComputedStyle\(selectEl\)\.flex;/);
     // The observer gathers every select across all records into one batch.
-    const observer = source.slice(source.indexOf('const mutObs = new MutationObserver'));
+    const observer = source.slice(source.indexOf('const wrapAdded = (mutations) =>'));
     assert.match(observer, /if \(found\.length\) wrapAll\(found\);/);
     assert.doesNotMatch(observer, /\bwrap\(n\)/);
     assert.doesNotMatch(observer, /\bscan\(n\)/);

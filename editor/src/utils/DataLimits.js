@@ -1,6 +1,9 @@
 // Limits are based on Reactor's current memory, DOM, and runtime workloads.
 globalThis.RR_LIMITS = Object.freeze({
-    ACTOR_LEVEL: 999,
+    ACTOR_LEVEL: 9999,
+    // Levels a class's parameter curves store unless its target level is higher; past the last stored
+    // level a curve continues by its last step (rrClassParamAtLevel).
+    CLASS_CURVE_LEVEL: 999,
     ACTION_REPEATS: 100,
     MAP_COUNT: 2000,
     MAP_ID: 9999,

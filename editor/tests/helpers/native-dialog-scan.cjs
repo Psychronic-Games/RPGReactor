@@ -79,7 +79,7 @@ function blankNonCode(source) {
     return out.join('');
 }
 
-const NATIVE_CALL = /(?:^|[^\w$.])((?:window|globalThis|self)\s*\.\s*)?(alert|confirm|prompt)\s*\(/g;
+const NATIVE_CALL = /(?:^|[^\w$.])((?:window|globalThis|self|root)\s*\.\s*)?(alert|confirm|prompt)\s*\(/g;
 
 /**
  * Where a function of the file's own carries one of the names: `const confirm = () => {}` or
@@ -176,7 +176,7 @@ function answersWaited(source, pattern) {
         total++;
         const close = closingParen(code, match.index + match[0].length - 1);
         // `window.RRDialog.confirm(...)` is the same call.
-        const before = code.slice(Math.max(0, match.index - 40), match.index).replace(/(?:window|globalThis|self)\s*\.\s*$/, '');
+        const before = code.slice(Math.max(0, match.index - 40), match.index).replace(/(?:window|globalThis|self|root)\s*\.\s*$/, '');
         const after = code.slice(close + 1, close + 40);
         const waited = /\bawait\s*\(?\s*$/.test(before) || /\breturn\s+$/.test(before) || /=>\s*$/.test(before) || /^\s*\.then\(/.test(after);
         if (!waited) dropped.push(code.slice(0, match.index).split('\n').length);

@@ -320,17 +320,17 @@ class DatabaseSystem1Editor {
             <div style="margin-top: 10px;">
                 <label class="database-field-label" style="margin-bottom: 6px; display: block;">${tt('Window Tone:')}</label>
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                    <span style="color: #f66; min-width: 14px; font-size: 11px;">R</span>
+                    <span style="color: var(--color-channel-r); min-width: 14px; font-size: 11px;">R</span>
                     <input type="range" class="window-tone-slider" data-tone-idx="0" min="-255" max="255" value="${wt[0]}" style="flex: 1;">
                     <span class="window-tone-val" style="color: var(--color-text-muted); font-size: 11px; min-width: 30px; text-align: right;">${wt[0]}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                    <span style="color: #6f6; min-width: 14px; font-size: 11px;">G</span>
+                    <span style="color: var(--color-channel-g); min-width: 14px; font-size: 11px;">G</span>
                     <input type="range" class="window-tone-slider" data-tone-idx="1" min="-255" max="255" value="${wt[1]}" style="flex: 1;">
                     <span class="window-tone-val" style="color: var(--color-text-muted); font-size: 11px; min-width: 30px; text-align: right;">${wt[1]}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                    <span style="color: #66f; min-width: 14px; font-size: 11px;">B</span>
+                    <span style="color: var(--color-channel-b); min-width: 14px; font-size: 11px;">B</span>
                     <input type="range" class="window-tone-slider" data-tone-idx="2" min="-255" max="255" value="${wt[2]}" style="flex: 1;">
                     <span class="window-tone-val" style="color: var(--color-text-muted); font-size: 11px; min-width: 30px; text-align: right;">${wt[2]}</span>
                 </div>
@@ -518,6 +518,10 @@ class DatabaseSystem1Editor {
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;" title="${rrEscapeHtml(tt('A Show Text with no face picture shows the face of whoever speaks: an actor or an event of that name.'))}">
                     <input type="checkbox" class="system-checkbox" ${system.reactorSpeakerFace === true ? 'checked' : ''} data-field="reactorSpeakerFace">
                     ${tt("Show the speaker's face in messages")}
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;" title="${rrEscapeHtml(tt('Two arrow keys held together walk the player diagonally.'))}">
+                    <input type="checkbox" class="system-checkbox" ${system.reactorDiagonalMove === true ? 'checked' : ''} data-field="reactorDiagonalMove">
+                    ${tt('Diagonal movement')}
                 </label>
             </div>
         `;
@@ -886,7 +890,6 @@ class DatabaseSystem1Editor {
         const mode = E.modeName(battle.mode) || 'classic';
         const used = this.battleModesInUse(mode);
         const tactical = used.has('tactical') ? '' : ' hidden', onMap = used.size ? '' : ' hidden';
-        const action = used.has('action') || used.has('firstPerson') ? '' : ' hidden';
         const options = (pairs, current) => pairs.map(([value, source]) =>
             `<option value="${value}"${String(value) === String(current) ? ' selected' : ''}${word(source)}</option>`).join('');
         const hasMap = typeof window !== 'undefined' && !!window.reactor?.eventManager?.currentMap;
@@ -930,9 +933,7 @@ class DatabaseSystem1Editor {
                     ${options([['normal', 'Normal'], ['fast', 'db.battles.paceFast'], ['skip', 'db.battles.paceSkip']], ['fast', 'skip'].includes(battle.pace) ? battle.pace : 'normal')}
                 </select>
                 <div class="system-battle-mode-hint" data-tactical${tactical}${keyed('db.battles.paceHint')}</div>
-                <div class="system-battle-group" data-action${action}${lit('Action and First Person Battles')}</div>
-                <div class="system-battle-mode-hint" data-action${action}${lit('Real-time attacks and cooldowns. First Person uses the same combat rules.')}</div>
-                <div class="system-battle-group" data-on-map${onMap}${lit('Shared Combat Settings')}</div>
+                <div class="system-battle-group" data-on-map${onMap}${lit('Battles on the Map')}</div>
                 <span data-on-map${onMap}></span>
                 <label class="system-battle-check" data-on-map${onMap}>
                     <input type="checkbox" class="system-battle-revive" ${battle.reviveAfterBattle !== false ? 'checked' : ''}>
@@ -1051,7 +1052,6 @@ class DatabaseSystem1Editor {
         if (!select) return;
         const mode = select.value || 'classic', used = this.battleModesInUse(mode);
         container.querySelectorAll('.system-battle-mode-grid [data-tactical]').forEach(row => { row.hidden = !used.has('tactical'); });
-        container.querySelectorAll('.system-battle-mode-grid [data-action]').forEach(row => { row.hidden = !used.has('action') && !used.has('firstPerson'); });
         container.querySelectorAll('.system-battle-mode-grid [data-on-map]').forEach(row => { row.hidden = used.size === 0; });
         const elsewhere = container.querySelector('.system-battle-mode-grid [data-tactical-elsewhere]');
         if (elsewhere) elsewhere.hidden = !used.has('tactical') || mode === 'tactical';
@@ -1366,7 +1366,7 @@ class DatabaseSystem1Editor {
             </div>
         `;
 
-        const close = () => document.body.removeChild(overlay);
+        const close = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
 
         modal.querySelector('.cmd-modal-close').addEventListener('click', close);
         modal.querySelector('.cmd-modal-cancel').addEventListener('click', close);
@@ -1387,6 +1387,9 @@ class DatabaseSystem1Editor {
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: close, container: () => modal });
+        overlay._rrModalKeys?.enter();
     }
 
     updateSystemField(fieldName, value) {
@@ -1635,7 +1638,7 @@ class DatabaseSystem1Editor {
             gap: 8px;
         `;
 
-        const close = () => overlay.remove();
+        const close = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
@@ -1670,6 +1673,9 @@ class DatabaseSystem1Editor {
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: close, container: () => modal });
+        overlay._rrModalKeys?.enter();
     }
 
     showMusicPicker(system, musicType) {

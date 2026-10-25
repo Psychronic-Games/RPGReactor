@@ -228,6 +228,14 @@ Game_Map.prototype.events = function() {
     return list;
 };
 
+/**
+ * The live event list is made again on the next call: for code that puts an event into `_events` (or takes one
+ * out) and asks for the list in the same frame. Spawn Unit followed by Start Battle on Map runs in one frame.
+ */
+Game_Map.prototype.refreshEventList = function() {
+    if (this._events) reactorEventLists.delete(this._events);
+};
+
 Game_Map.prototype.event = function(eventId) {
     return this._events[eventId];
 };
@@ -283,7 +291,7 @@ Game_Map.prototype.setDisplayPos = function(x, y) {
         this._parallaxX = x;
     } else {
         const endX = this.width() - this.screenTileX();
-        this._displayX = endX < 0 ? endX / 2 : x.clamp(0, endX);
+        this._displayX = endX < 0 ? endX / 2 : x.clamp(0 - this.reactorEdgeReach("west"), endX + this.reactorEdgeReach("east"));
         this._parallaxX = this._displayX;
     }
     if (this.isLoopVertical()) {
@@ -291,9 +299,27 @@ Game_Map.prototype.setDisplayPos = function(x, y) {
         this._parallaxY = y;
     } else {
         const endY = this.height() - this.screenTileY();
-        this._displayY = endY < 0 ? endY / 2 : y.clamp(0, endY);
+        this._displayY = endY < 0 ? endY / 2 : y.clamp(0 - this.reactorEdgeReach("north"), endY + this.reactorEdgeReach("south"));
         this._parallaxY = this._displayY;
     }
+};
+
+/**
+ * How far the view of a 2D map may go past its edge on `side`, in tiles: half a screen where a neighboring map
+ * lies past it (its ground is drawn there, Spriteset_Map.updateNeighborTilemaps), so the party keeps the middle of
+ * the screen up to the border; none elsewhere, on a looping side, or on a 3D map (whose scene stands the neighbor).
+ */
+Game_Map.prototype.reactorEdgeReach = function(side) {
+    // Worked out once a map (kept off the Game_Map, which is saved).
+    const data = typeof $dataMap !== "undefined" ? $dataMap : null, known = Game_Map._rrEdgeSides || (Game_Map._rrEdgeSides = { map: undefined });
+    if (known.map !== data) {
+        known.map = data;
+        const R = typeof Reactor3D !== "undefined" ? Reactor3D : null, infos = typeof $dataMapInfos !== "undefined" ? $dataMapInfos : null;
+        const sides = data && R && R.Neighbors && R.neighborsOf && !(R.shouldRender3D && R.shouldRender3D(data)) ? R.neighborsOf(data) : {};
+        for (const name of ["north", "east", "south", "west"]) known[name] = !!(sides[name] && infos && infos[sides[name].map]);
+    }
+    if (!known[side] || !(typeof Reactor3D !== "undefined" && Reactor3D.Neighbors && Reactor3D.Neighbors.enabled)) return 0;
+    return Math.ceil((side === "west" || side === "east" ? this.screenTileX() : this.screenTileY()) / 2);
 };
 
 Game_Map.prototype.parallaxOx = function() {
@@ -560,7 +586,7 @@ Game_Map.prototype.scrollDown = function(distance) {
         const lastY = this._displayY;
         this._displayY = Math.min(
             this._displayY + distance,
-            this.height() - this.screenTileY()
+            this.height() - this.screenTileY() + this.reactorEdgeReach("south")
         );
         this._parallaxY += this._displayY - lastY;
     }
@@ -575,7 +601,7 @@ Game_Map.prototype.scrollLeft = function(distance) {
         }
     } else if (this.width() >= this.screenTileX()) {
         const lastX = this._displayX;
-        this._displayX = Math.max(this._displayX - distance, 0);
+        this._displayX = Math.max(this._displayX - distance, 0 - this.reactorEdgeReach("west"));
         this._parallaxX += this._displayX - lastX;
     }
 };
@@ -591,7 +617,7 @@ Game_Map.prototype.scrollRight = function(distance) {
         const lastX = this._displayX;
         this._displayX = Math.min(
             this._displayX + distance,
-            this.width() - this.screenTileX()
+            this.width() - this.screenTileX() + this.reactorEdgeReach("east")
         );
         this._parallaxX += this._displayX - lastX;
     }
@@ -606,7 +632,7 @@ Game_Map.prototype.scrollUp = function(distance) {
         }
     } else if (this.height() >= this.screenTileY()) {
         const lastY = this._displayY;
-        this._displayY = Math.max(this._displayY - distance, 0);
+        this._displayY = Math.max(this._displayY - distance, 0 - this.reactorEdgeReach("north"));
         this._parallaxY += this._displayY - lastY;
     }
 };
@@ -1014,6 +1040,87 @@ Game_CharacterBase.prototype.initMembers = function() {
     this._jumpCount = 0;
     this._jumpPeak = 0;
     this._movementSuccess = true;
+    // The fields the engine gives a character later, declared now in one order (undefined, so a save does not hold them).
+    // A name the character already answers, its own or from a prototype (a plugin's default), is left as it is.
+    if (Game_CharacterBase.evenShapes) {
+        const late = Game_CharacterBase.LATE_FIELDS;
+        for (let i = 0; i < late.length; i++) if (!(late[i] in this)) this[late[i]] = undefined;
+    }
+};
+
+/**
+ * One shape per kind of character. Fields the engine adds as play goes on
+ * (the physics' air and ground, a model's yaw, a staged unit's place)
+ * arrived in a different order on each character, so the game's characters
+ * stood in fifteen hidden classes, every read of `_realX` across them was a
+ * lookup that made a new number, and a walk on North Haven made 100 KB more
+ * garbage a frame. `LATE_FIELDS` are declared, undefined, when a character
+ * is made; a game loaded from a save has its characters rebuilt in one
+ * order per kind (`DataManager.extractSaveContents`). Undefined fields are
+ * not written to a save: saves are as before. `evenShapes = false` leaves
+ * the shapes as they come.
+ */
+Game_CharacterBase.evenShapes = true;
+Game_CharacterBase.LATE_FIELDS = [
+    "_interpreter",
+    "_reactorGround", "_reactorAir", "_reactorVz", "_reactorAlt", "_reactorPeak", "_reactorSwim", "_reactorLeap", "_reactorClimb",
+    "_reactorOnLadder", "_reactorDive", "_reactorFloat", "_reactorRiding", "_reactorMantle", "_reactorGrapple", "_reactorStepDown", "_reactorStepUp",
+    "_reactorJumped", "_reactorDir8", "_reactorWalk", "_reactorTurnStamp", "_reactorModelYaw", "_reactorModelYawAt", "_reactorLift",
+    "_reactorChaseLater", "_reactorPosePitch", "_reactorFallYaw", "_reactorPush", "_reactorPushAlso", "_reactorPushDir",
+    "_reactorPushFrames", "_reactorDriftX", "_reactorDriftY", "_rrSpin", "_rrSpinCount", "_rrVehicle", "_rrHome", "_rrYaw",
+    "_rrStage", "_rrFade", "_rrDrop", "_rrVehicleTransfer", "_borderArrival", "_destinationCheckCounter"
+];
+
+/**
+ * Characters restored from a save, rebuilt so each kind has one shape: the
+ * fields in the order the fullest of its kind holds them, then the declared
+ * ones none of them holds yet. Each keeps exactly its own fields (a plugin's
+ * included, accessors and hidden ones through their descriptors) plus the
+ * declared ones its prototype does not answer, as a new character has them.
+ * Anything not a character, or not extensible, is left out. Returns a map
+ * from each to its rebuilt self.
+ */
+Game_CharacterBase.evenOut = function(characters) {
+    const kinds = new Map(), rebuilt = new Map(), taken = new Set();
+    const own = Object.prototype.hasOwnProperty, late = new Set(this.LATE_FIELDS);
+    for (const character of characters) {
+        if (!(character instanceof Game_CharacterBase) || !Object.isExtensible(character) || taken.has(character)) continue;
+        taken.add(character);
+        const proto = Object.getPrototypeOf(character), list = kinds.get(proto);
+        if (list) list.push(character); else kinds.set(proto, [character]);
+    }
+    // A name the prototype chain holds as an accessor or a read-only field is not assigned (that would call it or fail).
+    const assignable = (proto, key) => {
+        for (let p = proto; p; p = Object.getPrototypeOf(p)) {
+            const d = Object.getOwnPropertyDescriptor(p, key);
+            if (d) return "value" in d && d.writable;
+        }
+        return true;
+    };
+    for (const [proto, list] of kinds) {
+        const order = [], seen = new Set();
+        const fullest = list.slice().sort((a, b) => Object.keys(b).length - Object.keys(a).length);
+        for (const character of fullest) for (const key of Object.keys(character)) if (!seen.has(key)) { seen.add(key); order.push(key); }
+        for (const key of this.LATE_FIELDS) if (!seen.has(key)) { seen.add(key); order.push(key); }
+        const plain = new Set(order.filter(key => assignable(proto, key)));
+        for (const character of list) {
+            const even = Object.create(proto);
+            for (const key of order) {
+                if (own.call(character, key)) {
+                    const d = Object.getOwnPropertyDescriptor(character, key);
+                    if (plain.has(key) && "value" in d && d.writable && d.enumerable && d.configurable) even[key] = d.value;
+                    else Object.defineProperty(even, key, d);
+                } else if (late.has(key) && !(key in proto)) {
+                    even[key] = undefined;
+                }
+            }
+            for (const key of Reflect.ownKeys(character)) {
+                if (!own.call(even, key)) Object.defineProperty(even, key, Object.getOwnPropertyDescriptor(character, key));
+            }
+            rebuilt.set(character, even);
+        }
+    }
+    return rebuilt;
 };
 
 Game_CharacterBase.prototype.pos = function(x, y) {
@@ -1550,6 +1657,8 @@ Game_CharacterBase.prototype.moveDiagonally = function(horz, vert) {
     if (this._direction === this.reverseDir(vert)) {
         this.setDirection(vert);
     }
+    // The turn to a straight direction above keeps the diagonal as the way it faces among eight.
+    if (d8 && this._reactorCanFace(d8)) this._reactorDir8 = d8;
 };
 
 Game_CharacterBase.prototype.jump = function(xPlus, yPlus) {
@@ -2440,7 +2549,7 @@ Game_Character.prototype.reactorUpdateWalk = function() {
         return false;
     }
     // In the air or pulling itself up a ledge it takes no step and plans none.
-    if (this._reactorMantle || (typeof ReactorPhysics !== "undefined" && ReactorPhysics.isAirborne(this))) {
+    if (this._reactorMantle || this._reactorGrapple || (typeof ReactorPhysics !== "undefined" && ReactorPhysics.isAirborne(this))) {
         return false;
     }
     const paths = Game_Character._walkPaths;
@@ -2809,7 +2918,7 @@ Game_Player.prototype.reserveTransfer = function(mapId, x, y, d, fadeType) {
 Game_Player.prototype.leaveByBorder = function(d, reach) {
     if (this.isTransferring() || this.isMoveRouteForcing()) return false;
     if (typeof Reactor3D === "undefined" || !Reactor3D.neighborExit || typeof $dataMap === "undefined" || !$dataMap) return false;
-    if (typeof $gameFight !== "undefined" && $gameFight && $gameFight.isActive && $gameFight.isActive()) return false;
+    if (typeof $gameFight !== "undefined" && $gameFight && $gameFight.isHere && $gameFight.isHere()) return false;
     const exit = Reactor3D.neighborExit($dataMap, this.x, this.y, d, reach || 0);
     if (!exit || typeof $dataMapInfos === "undefined" || !$dataMapInfos || !$dataMapInfos[exit.mapId]) return false;
     if (typeof $gameTemp !== "undefined" && $gameTemp) $gameTemp.clearDestination();
@@ -2842,10 +2951,7 @@ Game_Player.prototype.arriveByBorder = function(exit, tile) {
     this.center(realX, realY);
     this.makeEncounterCount();
     if (this.isInVehicle()) this.vehicle().refresh();
-    for (const follower of this._followers._data) {
-        follower._x -= ox; follower._y -= oy;
-        follower._realX -= ox; follower._realY -= oy;
-    }
+    this._followers.rrShift(-ox, -oy);
 };
 
 Game_Player.prototype.borderArrivalTile = function(exit) {
@@ -3023,9 +3129,13 @@ Game_Player.prototype.makeEncounterTroopId = function() {
 };
 
 Game_Player.prototype.meetsEncounterConditions = function(encounter) {
+    // Region IDs run 1 to 255. A set of only 0 is how editor builds before
+    // 0.99.1 stored "Whole Map", so it counts as the whole map.
+    const regionSet = encounter.regionSet || [];
     return (
-        encounter.regionSet.length === 0 ||
-        encounter.regionSet.includes(this.regionId())
+        regionSet.length === 0 ||
+        (regionSet.length === 1 && regionSet[0] === 0) ||
+        regionSet.includes(this.regionId())
     );
 };
 
@@ -3102,11 +3212,26 @@ Game_Player.prototype.canMove = function() {
     return true;
 };
 
+// Database › System 1 › Options › Diagonal movement (System.json "reactorDiagonalMove": true): two arrow
+// keys held together walk diagonally. A project without the key walks in four directions, as it always did.
+Game_Player.prototype.isDiagonalMoveOn = function() {
+    return !!(typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.reactorDiagonalMove === true);
+};
+
 Game_Player.prototype.getInputDirection = function() {
-    return Input.dir4;
+    return this.isDiagonalMoveOn() ? Input.dir8 : Input.dir4;
 };
 
 Game_Player.prototype.executeMove = function(direction) {
+    if (direction === 1 || direction === 3 || direction === 7 || direction === 9) {
+        const horz = direction === 1 || direction === 7 ? 4 : 6;
+        const vert = direction <= 3 ? 2 : 8;
+        // Blocked on the diagonal: it slides along the wall, up or down first, then sideways.
+        this.moveDiagonally(horz, vert);
+        if (!this.isMovementSucceeded()) this.moveStraight(vert);
+        if (!this.isMovementSucceeded()) this.moveStraight(horz);
+        return;
+    }
     this.moveStraight(direction);
 };
 

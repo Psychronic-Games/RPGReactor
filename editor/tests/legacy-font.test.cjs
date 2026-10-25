@@ -117,5 +117,16 @@ test('RM2000.fon converts: 13 px, ascent 11, 225 glyphs, A is five columns wide'
     assert.deepEqual([out.name, out.height, out.ascent, out.glyphs], ['RM2000', 13, 11, 225]);
     const font = F.readFon(fs.readFileSync(deep8Font));
     assert.equal(font.glyphs.get(65).rows.map(r => Array.from(r.slice(0, 5)).join('')).slice(1, 4).join('|'), '00100|01010|01010');
-    assert.equal(F.advances(font, 6).get(0xc6), 12, 'Æ is a full-width glyph');
+    assert.equal(F.advances(font, 6).get(0xc6), 6, 'Western RM2000 ink may overhang its fixed 6 px advance');
+});
+
+test('RM font overhanging symbols keep the original six-pixel pitch in the converted font', () => {
+    const font = F.readFon(fnt({ height: 7, ascent: 6, glyphs, face: 'RMG2000' }));
+    assert.equal(F.advances(font, 6).get(64), 6, '@ overhang is not a full-width character');
+    const bytes = Buffer.from(F.toTrueType(font, c => String.fromCharCode(c), font.face));
+    const tables = {};
+    for (let i = 0; i < bytes.readUInt16BE(4); i++) { const at = 12 + i * 16; tables[bytes.toString('latin1', at, at + 4)] = bytes.readUInt32BE(at + 8); }
+    const scale = bytes.readUInt16BE(tables.head + 18) / 7;
+    assert.equal(bytes.readUInt16BE(tables.hmtx + 4), 6 * scale, 'generated TTF metrics match the native engine');
+    assert.equal(F.advances(F.readFon(fixture), 6).get(64), 12, 'unrelated custom wide-cell fonts retain their wide glyph');
 });

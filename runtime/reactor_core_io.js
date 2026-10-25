@@ -494,6 +494,11 @@ WebAudio.prototype._startLoading = function() {
         const suffix = Utils.hasEncryptedAudio() ? "_" : "";
         this._url = Utils.resolveAudioExtension(this._url, suffix);
         this._url = Utils.resolveFileCase(this._url, suffix);
+        // An encrypted MV game's audio is on disk as .rpgmvo / .rpgmvm: ask for it by that name.
+        if (suffix && !this._mvEncryptedUrl && Utils.localAssetExists(this._url + suffix) === false) {
+            const mv = String(this._url).replace(/\.ogg$/i, ".rpgmvo").replace(/\.m4a$/i, ".rpgmvm");
+            if (mv !== this._url && Utils.localAssetExists(mv)) this._mvEncryptedUrl = Utils.correctFileCase(mv) || mv;
+        }
         const url = this._realUrl();
         if (Utils.isLocal()) {
             this._startXhrLoading(url);
@@ -608,6 +613,7 @@ WebAudio.prototype._destroyDecoder = function() {
 };
 
 WebAudio.prototype._realUrl = function() {
+    if (this._mvEncryptedUrl) return this._mvEncryptedUrl;
     return this._url + (Utils.hasEncryptedAudio() ? "_" : "");
 };
 
@@ -669,6 +675,16 @@ WebAudio.prototype._onError = function() {
     // audio extensions before treating the file as missing. (With NW.js
     // the extension was already resolved up front and this never fires.)
     const noData = this._fetchedSize === 0 && (!this._data || !this._data.length);
+    // An encrypted MV game names its audio .rpgmvo / .rpgmvm where MZ adds "_"
+    // (the bytes are encrypted the same way): ask for that name once.
+    if (noData && Utils.hasEncryptedAudio() && !this._mvEncryptedUrl) {
+        const mv = String(this._url || "").replace(/\.ogg$/i, ".rpgmvo").replace(/\.m4a$/i, ".rpgmvm");
+        if (mv !== this._url) {
+            this._mvEncryptedUrl = Utils.correctFileCase(mv) || mv;
+            this._startLoading();
+            return;
+        }
+    }
     if (noData && !Utils.isNwjs()) {
         const match = /\.[a-z0-9]+$/i.exec(this._url || "");
         const ext = match ? match[0].toLowerCase() : "";
@@ -1757,11 +1773,14 @@ Input._onLostFocus = function() {
 };
 
 Input._pollGamepads = function() {
-    const connected = [];
+    // Every frame: the connected list is reused and the pads are walked by index, so polling allocates nothing.
+    const connected = this._connectedScratch || (this._connectedScratch = []);
+    connected.length = 0;
     if (navigator.getGamepads) {
         const gamepads = navigator.getGamepads();
         if (gamepads) {
-            for (const gamepad of gamepads) {
+            for (let i = 0; i < gamepads.length; i++) {
+                const gamepad = gamepads[i];
                 if (gamepad && gamepad.connected) {
                     connected[gamepad.index] = true;
                     this._updateGamepadState(gamepad);
@@ -1774,10 +1793,19 @@ Input._pollGamepads = function() {
         if (!state || connected[index]) continue;
         this._gamepadStates[index] = [];
     }
-    const mappedNames = new Set(Object.values(this.gamepadMapper));
-    for (const buttonName of mappedNames) {
+    // Each mapped name once, in the mapper's order.
+    const mapper = this.gamepadMapper;
+    const seen = this._mappedScratch || (this._mappedScratch = new Set());
+    seen.clear();
+    for (const key in mapper) {
+        if (!Object.prototype.hasOwnProperty.call(mapper, key)) continue;
+        const buttonName = mapper[key];
+        if (seen.has(buttonName)) continue;
+        seen.add(buttonName);
         let pressed = false;
-        for (const state of this._gamepadStates) {
+        const states = this._gamepadStates;
+        for (let s = 0; s < states.length; s++) {
+            const state = states[s];
             if (!state) continue;
             for (let button = 0; button < state.length; button++) {
                 if (this.gamepadMapper[button] === buttonName && state[button]) pressed = true;

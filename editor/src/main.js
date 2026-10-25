@@ -80,6 +80,7 @@ class RPGReactor {
             closeProject: () => this.projectController.closeProject(),
             exit: () => this.projectController.requestApplicationClose(),
             saveProject: () => this.projectController.saveProject(),
+            saveProjectAs: () => this.projectController.saveProjectAs(),
             saveAll: () => this.projectController.saveAll(),
             playtest: () => this.playtest(),
             openDatabase: (type) => this.openDatabase(type),
@@ -158,7 +159,7 @@ class RPGReactor {
             const appWindow = nw.Window.get();
             appWindow.on('close', () => {
                 if (this.projectController.allowApplicationClose) {
-                    appWindow.close(true);
+                    nw.App.quit();
                     return;
                 }
                 this.projectController.requestApplicationClose();
@@ -749,8 +750,8 @@ class RPGReactor {
             modal._rrModalKeys?.leave();
         };
         const trap = keys?.modal(modal, { onEscape: close, container: () => modal.querySelector('.modal-content') || modal });
-        const closeButton = modal.querySelector('.modal-close');
-        if (closeButton && !closeButton._rrAboutClose) {
+        for (const closeButton of modal.querySelectorAll('.modal-close, [data-about-close]')) {
+            if (closeButton._rrAboutClose) continue;
             closeButton._rrAboutClose = true;
             closeButton.addEventListener('click', close);
         }
@@ -842,7 +843,8 @@ class RPGReactor {
         const building = owner === 'pieces' || (!!this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain' || owner === 'models'));
         // The Build button stays lit under Image Layers too, while the bar is up.
         const underImageLayers = !!this.buildHotbar?.visible && owner === 'imageLayers';
-        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['.tool-button[data-action="media-surfaces"]','media'],['.tool-button[data-action="lighting-tool"]','lighting'],['.tool-button[data-action="build-tool"]','pieces']]) {
+        // (Lighting and Media Surfaces open from the Build bar and the Tools menu: no toolbar button of their own.)
+        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['.tool-button[data-action="build-tool"]','pieces']]) {
             const on = tool === 'pieces' ? building || underImageLayers : owner === tool;
             const button=document.querySelector(selector);button?.classList.toggle('active',on);button?.setAttribute('aria-pressed',String(on));
         }
@@ -902,7 +904,7 @@ class RPGReactor {
                 terrain._settleMapSettings?.();
                 if (terrain._stroke || terrain._foliageStroke || terrain._groundStroke) terrain.endStroke();
             },
-            label: entry => (entry?.surroundSet ? 'Beyond the Border' : entry?.cliffSet ? 'Steep Ground' : entry?.biome ? (entry.label || 'Biome') : entry?.foliageSet ? 'Foliage' : entry?.groundSet ? 'Ground' : entry?.water && !entry.ground ? 'Water' : 'Terrain') });
+            label: entry => (entry?.surroundSet ? 'Beyond the Border' : entry?.cliffSet ? 'Steep Ground' : entry?.roomSet ? 'Room and Sky' : entry?.biome ? (entry.label || 'Biome') : entry?.foliageSet ? 'Foliage' : entry?.groundSet ? 'Ground' : entry?.water && !entry.ground ? 'Water' : 'Terrain') });
         if (this.lightingManager) history.register('lighting', { object: this.lightingManager, undoKey: '_undo', redoKey: '_redo', label: () => 'Light' });
         const media = this.mediaSurfaceManager;
         if (media && !history.owners.has('media')) {
@@ -1398,10 +1400,40 @@ class RPGReactor {
 
             // Display dimensions
             mapDimensionsEl.textContent = `${map.width} x ${map.height}`;
+            this.updateMissingTilesetNotice(map, tilemapManager);
         }
 
         // Update zoom level
         this.updateMapZoom();
+    }
+
+    /**
+     * A map naming a tileset the database does not have is drawn with the first one, and the game
+     * cannot open it: the map bar says so until the map names a real one.
+     */
+    updateMissingTilesetNotice(map, tilemapManager) {
+        const left = document.getElementById('map-info-left');
+        if (!left) return;
+        let notice = document.getElementById('map-missing-tileset');
+        const database = tilemapManager && tilemapManager.databaseManager;
+        const missing = !!(map && database && typeof database.getTileset === 'function' && !database.getTileset(map.tilesetId));
+        if (!missing) {
+            if (notice) notice.hidden = true;
+            return;
+        }
+        const tt = text => (window.I18n ? window.I18n.tText(text) : text);
+        if (!notice) {
+            notice = document.createElement('span');
+            notice.id = 'map-missing-tileset';
+            notice.className = 'map-info-item map-info-warning';
+            notice.setAttribute('role', 'status');
+            notice.setAttribute('data-rr-i18n-skip', '');
+            left.appendChild(notice);
+        }
+        const id = String(map.tilesetId);
+        notice.textContent = tt('Tileset {id} is missing').replace('{id}', id);
+        notice.title = tt('The game cannot open this map. Choose its tileset in Map Properties.');
+        notice.hidden = false;
     }
 
     // Update zoom level display

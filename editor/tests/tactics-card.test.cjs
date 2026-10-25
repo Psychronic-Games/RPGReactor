@@ -316,13 +316,15 @@ test('each card holds its own fields on the shared form grid, and none of the ot
     assert.deepEqual(['weapon', 'skill', 'item', 'actor', 'class', 'enemy', 'armor', 'state'].map(kind => pictured('tactical', kind)), [0, 0, 0, 1, 1, 1, 0, 0]);
     assert.deepEqual(['weapon', 'skill', 'item'].map(kind => pictured('action', kind)), [1, 0, 0]);
     // An enemy has one row more, on the same grid: its picture on the map, the way to pick one, the way back, and a line for what it stands as left alone.
-    assert.match(T.cardHtml('shared', 'enemy'), /<label>On the map<\/label>\s*<span class="rr-tactics-inline rr-tactics-look">\s*<canvas class="rr-tactics-sprite" width="48" height="48"><\/canvas>\s*<span class="rr-tactics-look-name"><\/span>\s*<button type="button" class="rr-btn-chip rr-tactics-look-change">Choose a picture\.\.\.<\/button>\s*<button type="button" class="rr-btn-chip rr-tactics-look-auto" hidden>Automatic<\/button>\s*<\/span>\s*<span class="rr-tactics-hint rr-tactics-look-hint" hidden><\/span>\s*<\/div>/);
+    assert.match(T.cardHtml('shared', 'enemy'), /<label>On the map<\/label>\s*<span class="rr-tactics-inline rr-tactics-look">\s*<canvas class="rr-tactics-sprite" width="48" height="48"><\/canvas>\s*<span class="rr-tactics-look-name"><\/span>\s*<button type="button" class="rr-btn-chip rr-tactics-look-change">Choose a picture\.\.\.<\/button>\s*<button type="button" class="rr-btn-chip rr-tactics-look-auto" hidden>Automatic<\/button>\s*<\/span>\s*<span class="rr-tactics-hint rr-tactics-look-hint" hidden><\/span>\s*<label class="rr-tactics-check"><input type="checkbox" class="system-checkbox rr-tactics-comes-back"><span>Comes back<\/span><\/label>\s*<span class="rr-tactics-hint">[^<]+<\/span>\s*<\/div>/);
     for (const kind of ['actor', 'class', 'weapon', 'skill', 'item', 'armor', 'state']) assert.doesNotMatch(T.cardHtml('tactical', kind) + (T.cardsFor(kind).includes('action') ? T.cardHtml('action', kind) : ''), /rr-tactics-look|On the map/, kind);
-    assert.equal((T.cardHtml('shared', 'enemy').match(/database-section-header|class="db-form/g) || []).length, 2, 'a row of the card, not a card of its own');
-    // Every card: one title line with its own title, summary and Automatic chip, and one form on the shared grid.
-    for (const [card, kind, title] of [['shared', 'weapon', 'Shared Combat Settings'], ['tactical', 'armor', 'Tactical Battles'], ['action', 'weapon', 'Action and First Person Battles'], ['action', 'skill', 'Action and First Person Battles']]) {
+    assert.equal((T.cardHtml('shared', 'enemy').match(/rr-tactics-header|class="db-form/g) || []).length, 2, 'a row of the group, not a group of its own');
+    // A group is no card of its own: the Combat section is the card, and only it folds.
+    for (const card of ['shared', 'tactical', 'action']) assert.doesNotMatch(T.cardHtml(card, 'weapon'), /database-section/, card);
+    // Every group: one title line with its own title, summary and Automatic chip, and one form on the shared grid.
+    for (const [card, kind, title] of [['shared', 'weapon', 'Targeting'], ['shared', 'enemy', 'Behavior'], ['tactical', 'armor', 'Tactical Battles'], ['action', 'weapon', 'Action and First Person Battles'], ['action', 'skill', 'Action and First Person Battles']]) {
         const html = T.cardHtml(card, kind);
-        assert.match(html, new RegExp(`<div class="database-section-header rr-tactics-header"><span class="rr-tactics-title">${title}</span><span class="rr-tactics-summary"></span><button type="button" class="rr-btn-chip rr-tactics-reset" hidden>Automatic</button></div>`), `${card} ${kind}`);
+        assert.match(html, new RegExp(`<div class="rr-tactics-header"><span class="rr-tactics-title">${title}</span><span class="rr-tactics-summary"></span><button type="button" class="rr-btn-chip rr-tactics-reset" hidden>Automatic</button></div>`), `${card} ${kind}`);
         assert.equal((html.match(/<div class="db-form rr-tactics-form">/g) || []).length, 1, `${card} ${kind}`);
         assert.doesNotMatch(html, /<button[^>]*role="tab"|rr-tactics-tabs/);
     }
@@ -598,11 +600,12 @@ function showRecord(detail, kind, record, extra = {}) {
     globalThis.document = { createElement: pageElement };
     let placed;
     try { placed = T.createSection(Object.assign({ kind, record, databaseManager: extra.database || database }, extra.options)); } finally { delete globalThis.document; }
-    // What the cards say before the page has placed them and before any timer has run.
-    const first = (placed.className === 'rr-battle-cards' ? placed.children : [placed]).map(card => card.querySelector('.rr-tactics-summary').textContent);
+    // The groups of the one Combat section the page places.
+    const cards = Array.from(placed.querySelector('.rr-combat-body').children);
+    // What the groups say before the page has placed them and before any timer has run.
+    const first = cards.map(card => card.querySelector('.rr-tactics-summary').textContent);
     grid.append(traits, placed, note, ...Object.values(others));
     detail.replaceChildren(grid);
-    const cards = placed.className === 'rr-battle-cards' ? placed.children : [placed];
     const part = (card, selector) => card.querySelector(selector);
     return {
         grid, traits, placed, note, fields: others, cards, first,
@@ -623,20 +626,21 @@ function detailPane() {
     return detail;
 }
 
-test('records get separate shared, Tactical and Action cards only where their fields apply', async () => {
+test('a record page has one Combat section, its targeting, Tactical and Action groups only where their fields apply', async () => {
     for (const [kind, record] of [['weapon', { id: 5, wtypeId: 6, note: '' }], ['skill', { id: 9, scope: 1, hitType: 2, note: '' }], ['item', { id: 3, scope: 7, hitType: 0, note: '' }]]) {
         const page = showRecord(detailPane(), kind, record);
         await tick();
-        assert.equal(page.placed.className, 'rr-battle-cards', kind);
-        const expected = [['sharedCombat', 'map-battles', 'Shared Combat Settings']];
-        if (kind === 'weapon') expected.push(['tactics', 'tactical-battles', 'Tactical Battles']);
+        assert.equal(page.placed.className, 'database-section rr-combat-section', kind);
+        assert.deepEqual([page.placed.querySelector('.rr-combat-header').getAttribute('data-section-key'), page.placed.dataset.sectionDefault, page.placed.querySelector('.rr-combat-title').textContent], ['combat', 'map-battles', 'Combat'], kind);
+        const expected = [['shared', 'map-battles', 'Targeting']];
+        if (kind === 'weapon') expected.push(['tactical', 'tactical-battles', 'Tactical Battles']);
         expected.push(['action', 'action-battles', 'Action and First Person Battles']);
-        assert.deepEqual(page.cards.map(card => [card.dataset.sectionKey, card.dataset.sectionDefault, card.querySelector('.rr-tactics-title').textContent]), expected, kind);
-        assert.ok(page.cards.every(card => card.className === 'database-section rr-tactics-section' && card.children.length === 2), 'a title line and a body each');
+        assert.deepEqual(page.cards.map(card => [card.dataset.card, card.dataset.fights, card.querySelector('.rr-tactics-title').textContent]), expected, kind);
+        assert.ok(page.cards.every(card => card.className === 'rr-tactics-section' && card.children.length === 2), 'a title line and a body each');
         assert.deepEqual(page.placed.querySelectorAll('[role="tab"]'), [], 'no tabs');
         assert.ok(page.cards.every(card => !page.summary(card) || page.summary(card).startsWith('Automatic: ')), kind + ': each says what the untouched record does');
         assert.ok(page.cards.every(card => page.chip(card).hidden), 'nothing to set back');
-        assert.ok(page.cards.every(card => card.dataset.sectionInUse === undefined), 'and nothing that asks to be shown');
+        assert.equal(page.placed.dataset.sectionInUse, undefined, 'and nothing that asks to be shown');
     }
     // Made, a card already says what its record does: the page never shows one empty for a moment.
     const made = showRecord(detailPane(), 'weapon', { id: 5, wtypeId: 6, note: '<magazine: 40>' });
@@ -648,10 +652,11 @@ test('records get separate shared, Tactical and Action cards only where their fi
     for (const kind of ['armor', 'state', 'actor', 'class', 'enemy']) {
         const page = showRecord(detailPane(), kind, { id: 4, note: '' });
         const shared = kind === 'actor' || kind === 'enemy';
-        assert.equal(page.placed.className, shared ? 'rr-battle-cards' : 'database-section rr-tactics-section', kind);
-        assert.deepEqual([page.movement.dataset.sectionKey, page.movement.dataset.sectionDefault, page.action], ['tactics', 'tactical-battles', null], kind);
+        assert.equal(page.placed.className, 'database-section rr-combat-section', kind);
+        assert.equal(page.placed.dataset.sectionDefault, shared ? 'map-battles' : 'tactical-battles', kind + ': folded by the battles its groups are for');
+        assert.deepEqual([page.movement.dataset.card, page.movement.dataset.fights, page.action], ['tactical', 'tactical-battles', null], kind);
         assert.equal(page.movement.querySelector('.rr-tactics-title').textContent, 'Tactical Battles', kind);
-        if (shared) assert.deepEqual([page.shared.dataset.sectionKey, page.shared.dataset.sectionDefault, page.shared.querySelector('.rr-tactics-title').textContent], ['sharedCombat', 'map-battles', 'Shared Combat Settings']);
+        if (shared) assert.deepEqual([page.shared.dataset.card, page.shared.querySelector('.rr-tactics-title').textContent], ['shared', 'Behavior']);
     }
 });
 
@@ -710,7 +715,7 @@ test('the Automatic chip is there only while it has something to take out, and t
     await tick();
     assert.equal(page.summary(page.primary), 'Target range 0-3, Circle 2');
     assert.equal(page.chip(page.primary).hidden, true, 'nothing the chip could take out');
-    assert.equal(page.primary.dataset.sectionInUse, 'true', 'the card is still one the record uses');
+    assert.equal(page.placed.dataset.sectionInUse, 'true', 'the section is still one the record uses');
     // A plain tag beside the block is the chip's to clear, and the block stays.
     page.type(ptbs + '\n<range: 5>');
     assert.deepEqual([page.summary(page.primary), page.chip(page.primary).hidden], ['Target range 1-5, Circle 2', false]);
@@ -724,15 +729,15 @@ test('the Automatic chip is there only while it has something to take out, and t
     const plate = showRecord(detailPane(), 'armor', { id: 2, note: 'Heavy.\n<move: 0>' });
     await tick();
     assert.deepEqual([plate.summary(plate.primary), plate.chip(plate.primary).hidden], ['', true]);
-    // Pressed with a key the chip holds the focus; when it leaves, the focus goes to its card's title line.
+    // Pressed with a key the chip holds the focus; when it leaves, the focus goes to the Combat section's title line.
     const rifle = showRecord(detailPane(), 'weapon', { id: 5, wtypeId: 6, note: '<range: 3-9>\n<magazine: 5>\n<reload: 3>' });
     await tick();
-    const chip = rifle.chip(rifle.action), title = rifle.action.querySelector('.rr-tactics-header'), page0 = rifle.action.ownerDocument;
+    const chip = rifle.chip(rifle.action), title = rifle.placed.querySelector('.rr-combat-header'), page0 = rifle.action.ownerDocument;
     chip.focus();
     assert.ok(page0.activeElement === chip);
     chip.dispatchEvent({ type: 'click', bubbles: true });
     assert.deepEqual([rifle.note.value, chip.hidden], ['<range: 3-9>', true]);
-    assert.ok(page0.activeElement === title, 'the focus is on the title line of the same card');
+    assert.ok(page0.activeElement === title, 'the focus is on the title line of its section');
     // A chip that stays keeps the focus; a chip that did not hold it moves nothing.
     const other = rifle.chip(rifle.primary);
     rifle.note.focus();
@@ -938,41 +943,42 @@ function foldingOn(detail, grid, store, modes) {
 const memory = () => { const map = new Map(); return { getItem: key => (map.has(key) ? map.get(key) : null), setItem: (key, value) => map.set(key, String(value)) }; };
 const isFolded = card => card.classList.contains('is-collapsed');
 
-test('nobody having touched them, each card is open when the project fights its way or the record uses it, and folded otherwise', async () => {
+test('nobody having touched it, the Combat section is open when the project fights on the map or the record uses it, and folded otherwise', async () => {
     const detail = detailPane(), store = S.createStore({ storage: memory() });
     let modes = { tactical: false, action: false }, page = null;
     const sections = foldingOn(detail, () => page.grid, store, () => modes);
-    const show = async note => { page = showRecord(detail, 'weapon', { id: 5, wtypeId: 6, note }); sections.refresh(); await tick(); return [isFolded(page.primary), isFolded(page.action)]; };
-    assert.deepEqual(await show(''), [true, true], 'Classic only: both folded');
-    // Two folded cards are two title lines across the row, as one folded card is; the card beside them takes its own row.
-    assert.deepEqual([page.placed.classList.contains('is-collapsed'), page.placed.classList.contains('rr-section-solo'), page.traits.classList.contains('rr-section-solo')], [true, true, true]);
+    const show = async note => { page = showRecord(detail, 'weapon', { id: 5, wtypeId: 6, note }); sections.refresh(); await tick(); return isFolded(page.placed); };
+    assert.equal(await show(''), true, 'Classic only: folded');
+    // A folded section is a title line across the row; the card beside it takes its own row.
+    assert.deepEqual([page.placed.classList.contains('rr-section-solo'), page.traits.classList.contains('rr-section-solo')], [true, true]);
     modes = { tactical: true, action: false };
-    assert.deepEqual(await show(''), [false, true], 'a Tactical game: Tactical open, Action folded');
-    assert.deepEqual([page.placed.classList.contains('is-collapsed'), page.placed.classList.contains('rr-section-solo'), page.traits.classList.contains('rr-section-solo')], [false, false, false], 'with a card open the two stay beside Traits');
+    assert.equal(await show(''), false, 'a Tactical game: open');
+    assert.deepEqual([page.placed.classList.contains('rr-section-solo'), page.traits.classList.contains('rr-section-solo')], [false, false], 'open, it stays beside Traits');
     modes = { tactical: false, action: true };
-    assert.deepEqual(await show(''), [false, false], 'an Action map: shared targeting and Action open');
+    assert.equal(await show(''), false, 'an Action map: open');
     modes = { tactical: false, action: false };
-    assert.deepEqual(await show('<magazine: 5>'), [true, false], 'a record with Action tags in a Classic game: its Action card open');
-    assert.equal(page.action.dataset.sectionInUse, 'true');
-    assert.deepEqual(await show('<range: 2-9>'), [false, true], 'and one with Tactical tags: its Tactical card');
-    assert.deepEqual(await show('<move: 1>\n<combo: 4>'), [true, false]);
-    assert.deepEqual(await show(''), [true, true], 'the next record, with nothing set, is folded again');
-    // Folded by hand, a card stays folded on a record that uses it; opened by hand, it stays open on one that does not.
+    assert.equal(await show('<magazine: 5>'), false, 'a record with Action tags in a Classic game: open');
+    assert.equal(page.placed.dataset.sectionInUse, 'true');
+    assert.equal(await show('<range: 2-9>'), false, 'and one with targeting tags');
+    assert.equal(await show(''), true, 'the next record, with nothing set, is folded again');
+    // Folded by hand, it stays folded on a record that uses it; opened by hand, it stays open on one that does not.
     await show('<magazine: 5>');
-    page.action.querySelector('.rr-tactics-title').dispatchEvent({ type: 'click', bubbles: true });
-    assert.deepEqual([isFolded(page.primary), isFolded(page.action)], [true, true]);
-    assert.deepEqual([store.get('/game', 'weapons', 'action'), store.get('/game', 'weapons', 'tactics')], [true, undefined], 'each card is remembered by itself');
-    assert.deepEqual(await show('<magazine: 5>'), [true, true]);
-    page.primary.querySelector('.rr-tactics-summary').dispatchEvent({ type: 'click', bubbles: true });
-    assert.deepEqual(await show(''), [false, true]);
-    assert.equal(store.get('/game', 'weapons', 'sharedCombat'), false);
-    // The Automatic chip in a title line is the chip's click, not a fold.
+    page.placed.querySelector('.rr-combat-title').dispatchEvent({ type: 'click', bubbles: true });
+    assert.equal(isFolded(page.placed), true);
+    assert.equal(store.get('/game', 'weapons', 'combat'), true, 'remembered as the Combat section');
+    assert.equal(await show('<magazine: 5>'), true);
+    // Folded, its title line says what the record sets.
+    assert.equal(page.placed.querySelector('.rr-combat-summary').textContent, 'Bullet, 2.5/s, Magazine 5');
+    page.placed.querySelector('.rr-combat-summary').dispatchEvent({ type: 'click', bubbles: true });
+    assert.equal(await show(''), false);
+    assert.equal(store.get('/game', 'weapons', 'combat'), false);
+    // The Automatic chip in a group's title line is the chip's click, not a fold.
     await show('<range: 2-9>');
     page.chip(page.primary).dispatchEvent({ type: 'click', bubbles: true, preventDefault() {} });
-    assert.deepEqual([isFolded(page.primary), page.note.value], [false, '']);
+    assert.deepEqual([isFolded(page.placed), page.note.value], [false, '']);
 });
 
-test('a folded card draws nothing, draws when it opens, and the other card goes on drawing', async () => {
+test('a folded Combat section draws nothing, and draws when it opens', async () => {
     const detail = detailPane(), store = S.createStore({ storage: memory() });
     let page = null;
     const sections = foldingOn(detail, () => page.grid, store, () => ({ tactical: false, action: true }));
@@ -980,22 +986,17 @@ test('a folded card draws nothing, draws when it opens, and the other card goes 
     sections.refresh();
     await tick();
     const grid = page.primary.querySelector('canvas'), cone = page.action.querySelector('canvas');
-    assert.deepEqual([isFolded(page.primary), isFolded(page.action)], [false, false]);
-    page.primary.querySelector('.rr-tactics-title').dispatchEvent({ type: 'click', bubbles: true });
+    assert.equal(isFolded(page.placed), false);
+    page.placed.querySelector('.rr-combat-title').dispatchEvent({ type: 'click', bubbles: true });
     const before = [grid.draws, cone.draws];
     page.type('<range: 1-12>\n<spread: 9>');
     page.set(page.action.querySelector('.rr-combat-magazine'), 30);
-    assert.equal(grid.draws, before[0], 'nothing is drawn under the folded card');
-    assert.ok(cone.draws > before[1], 'the open card draws');
-    assert.equal(page.summary(page.primary), 'Target range 1-12, One target', 'folded, its title line still says what the record does');
-    page.primary.querySelector('.rr-tactics-title').dispatchEvent({ type: 'click', bubbles: true });
-    assert.equal(isFolded(page.primary), false);
-    assert.equal(grid.draws, before[0] + 1, 'opened, the picture is drawn once');
-    // Folding the other card by hand leaves this one drawing.
-    page.action.querySelector('.rr-tactics-title').dispatchEvent({ type: 'click', bubbles: true });
-    const folded = cone.draws, open = grid.draws;
-    page.type('<range: 1-20>\n<spread: 2>');
-    assert.deepEqual([cone.draws, grid.draws > open], [folded, true]);
+    assert.deepEqual([grid.draws, cone.draws], before, 'nothing is drawn under the folded section');
+    assert.equal(page.summary(page.primary), 'Target range 1-12, One target', 'folded, each group still knows what the record does');
+    assert.equal(page.placed.querySelector('.rr-combat-summary').textContent, 'Target range 1-12, One target · Bullet, 2.5/s, Magazine 30');
+    page.placed.querySelector('.rr-combat-title').dispatchEvent({ type: 'click', bubbles: true });
+    assert.equal(isFolded(page.placed), false);
+    assert.deepEqual([grid.draws, cone.draws], [before[0] + 1, before[1] + 1], 'opened, each picture is drawn once');
 });
 
 //-----------------------------------------------------------------------------
@@ -1117,28 +1118,28 @@ test('a field changed on the page: the record gets a new rrBattle, the card\'s t
     assert.deepEqual([heldRecord.rrBattle, shownRecord.rrBattle, enemies.data.enemies[3] === heldRecord, enemies.updates], [{ move: 2, jump: 3 }, { move: 2, jump: 3 }, true, [3]]);
 });
 
-test('a record that sets something in a card by a setting of its own opens that card as a tag does', async () => {
+test('a record that sets something in a group by a setting of its own opens the Combat section as a tag does', async () => {
     const detail = detailPane(), store = S.createStore({ storage: memory() });
     let page = null;
     const sections = foldingOn(detail, () => page.grid, store, () => ({ tactical: false, action: false }));
-    const show = async rrBattle => { page = showRecord(detail, 'weapon', Object.assign({ id: 5, wtypeId: 6, note: '' }, rrBattle ? { rrBattle } : null)); sections.refresh(); await tick(); return [isFolded(page.primary), isFolded(page.action)]; };
-    assert.deepEqual(await show(null), [true, true], 'a Classic project, nothing set: both folded');
-    assert.deepEqual(await show({ magazine: 5 }), [true, false]);
-    assert.equal(page.action.dataset.sectionInUse, 'true');
-    assert.deepEqual(await show({ range: { min: 2, max: 9 } }), [false, true]);
-    assert.deepEqual(await show({ move: 1, combo: 4 }), [true, false]);
-    assert.deepEqual(await show({}), [true, true]);
-    assert.deepEqual(await show({ range: 'far', magazine: 'many' }), [true, true], 'what the game would not take sets nothing');
-    // An actor's and an enemy's card is for every battle on the map: open in a project that only fights Action battles.
+    const show = async rrBattle => { page = showRecord(detail, 'weapon', Object.assign({ id: 5, wtypeId: 6, note: '' }, rrBattle ? { rrBattle } : null)); sections.refresh(); await tick(); return isFolded(page.placed); };
+    assert.equal(await show(null), true, 'a Classic project, nothing set: folded');
+    assert.equal(await show({ magazine: 5 }), false);
+    assert.equal(page.placed.dataset.sectionInUse, 'true');
+    assert.equal(await show({ range: { min: 2, max: 9 } }), false);
+    assert.equal(await show({ move: 1, combo: 4 }), false);
+    assert.equal(await show({}), true);
+    assert.equal(await show({ range: 'far', magazine: 'many' }), true, 'what the game would not take sets nothing');
+    // An actor's and an enemy's section is for every battle on the map: open in a project that only fights Action battles.
     const action = { tactical: false, action: true };
     for (const [kind, folded] of [['enemy', false], ['actor', false], ['class', true], ['armor', true], ['state', true]]) {
         const made = showRecord(detailPane(), kind, { id: 2, note: '' });
-        assert.equal(S.battleCardFolded('tactics', made.primary, action), folded, kind);
-        assert.equal(S.battleCardFolded('tactics', made.primary, { tactical: false, action: false }), true, kind + ': folded in a Classic project');
-        assert.equal(S.battleCardFolded('tactics', made.primary, { tactical: true, action: false }), false, kind);
+        assert.equal(S.battleCardFolded('combat', made.placed, action), folded, kind);
+        assert.equal(S.battleCardFolded('combat', made.placed, { tactical: false, action: false }), true, kind + ': folded in a Classic project');
+        assert.equal(S.battleCardFolded('combat', made.placed, { tactical: true, action: false }), false, kind);
     }
     const sword = showRecord(detailPane(), 'weapon', { id: 2, wtypeId: 2, note: '' });
-    assert.deepEqual([S.battleCardFolded('sharedCombat', sword.primary, action), S.battleCardFolded('action', sword.action, action)], [false, false]);
+    assert.equal(S.battleCardFolded('combat', sword.placed, action), false);
 });
 
 test('an enemy\'s picture on the map: a row to pick a sheet, the way back to Automatic, and what it stands as left alone', async () => {
@@ -1157,7 +1158,7 @@ test('an enemy\'s picture on the map: a row to pick a sheet, the way back to Aut
         const box = q('.rr-tactics-sprite');
         // A sheet named by a tag shows as the tag is read, and writes nothing.
         assert.deepEqual(row(), ['Monster', 'Monster, 3', false, null]);
-        assert.deepEqual(['rrBattle' in wolf, page.note.value, page.summary(page.primary), page.chip(page.primary).hidden, page.primary.dataset.sectionInUse], [false, wolf.note, 'Up close · Monster', false, 'true']);
+        assert.deepEqual(['rrBattle' in wolf, page.note.value, page.summary(page.primary), page.chip(page.primary).hidden, page.placed.dataset.sectionInUse], [false, wolf.note, 'Up close · Monster', false, 'true']);
         // The button opens the sheet picker on the sheet in use; the frame picked is the enemy's own setting, and the tag is gone.
         pick.dispatchEvent({ type: 'click', bubbles: true });
         assert.deepEqual([picks.length, picks[0].project === project, picks[0].name, picks[0].index, picks[0].pattern, picks[0].direction], [1, true, 'Monster', 3, 1, 2]);
@@ -1418,7 +1419,7 @@ test('a number typed outside a field\'s limits is held to the limit and shown so
     assert.deepEqual([gun.rrBattle, weapon.action.querySelector('.rr-combat-magazine').value], [{ magazine: 999 }, '999']);
 });
 
-test('the look: a title line that gives a long summary its own line in a narrow card, rows that keep their words out of the picture, two cards as one stack', () => {
+test('the look: a title line that gives a long summary its own line in a narrow group, rows that keep their words out of the picture, one Combat card', () => {
     const css = read('css/styles.css');
     assert.match(css, /\.rr-tactics-section > \.rr-tactics-header \{[^}]*flex-wrap: wrap;[^}]*container-type: inline-size;/);
     assert.match(css, /@container \(max-width: 480px\) \{\s*\.rr-tactics-summary \{ order: 1; flex: 0 0 100%; \}\s*\.rr-tactics-reset \{ margin-inline-start: auto; \}/);
@@ -1435,18 +1436,17 @@ test('the look: a title line that gives a long summary its own line in a narrow 
     // A field that says a word is as wide as the word; what is hidden in a row takes no room.
     assert.doesNotMatch(css, /\.is-worded/, 'numeric distance fields never display words');
     assert.match(css, /\.rr-tactics-inline > \[hidden\] \{ display: none; \}/);
-    assert.match(css, /\.database-section\.rr-tactics-section > \.database-section-content\.rr-tactics-body \{[^}]*flex-wrap: wrap;/, 'and under them in a narrow one');
-    // The stack: the gap of the page's own cards; an open card takes the height its row has to spare.
-    assert.match(css, /\.rr-battle-cards \{ display: flex; flex-direction: column; gap: 16px; min-width: 0; \}/);
-    assert.match(css, /\.rr-battle-cards > \.database-section \{ flex: 1 1 auto; display: flex; flex-direction: column; \}/);
-    assert.match(css, /\.database-item-column > \.rr-battle-cards > \.database-section \{ margin-bottom: 0; \}/);
-    // Beside a list card and with an open card after them, the two cards stand across both rows: the list card and
-    // the card after them share the height, and the list card is not stretched to the two cards together.
-    assert.match(css, /\.database-sections-grid > \.rr-battle-cards:nth-child\(even\):not\(\.rr-section-solo\):has\(\+ \.database-section:not\(\.is-collapsed\)\) \{ grid-row: span 2; \}/);
-    // With the card after them folded there is no height to share: the list card keeps its own.
-    assert.match(css, /\.database-sections-grid > \.database-section:has\(\+ \.rr-battle-cards:nth-child\(even\):not\(\.rr-section-solo\) \+ \.database-section\.is-collapsed\) \{ place-self: start stretch; \}/);
+    assert.match(css, /\.rr-tactics-section > \.rr-tactics-body \{[^}]*flex-wrap: wrap;/, 'and under them in a narrow one');
+    // The groups under ruled headings in one card; folded, the card's title line says what the record sets.
+    assert.match(css, /\.rr-tactics-section \+ \.rr-tactics-section \{ padding-top: 12px; border-top: 1px solid var\(--color-border\); \}/);
+    assert.match(css, /\.rr-combat-section:not\(\.is-collapsed\) \.rr-combat-summary, \.rr-combat-summary:empty \{ display: none; \}/);
+    // Open beside a list card and with an open card after it, the section stands across both rows: the list card and
+    // the card after it share the height, and the list card is not stretched to the section.
+    assert.match(css, /\.database-sections-grid > \.rr-combat-section:nth-child\(even\):not\(\.rr-section-solo\):not\(\.is-collapsed\):has\(\+ \.database-section:not\(\.is-collapsed\)\) \{ grid-row: span 2; \}/);
+    // With the card after it folded there is no height to share: the list card keeps its own.
+    assert.match(css, /\.database-sections-grid > \.database-section:has\(\+ \.rr-combat-section:nth-child\(even\):not\(\.rr-section-solo\):not\(\.is-collapsed\) \+ \.database-section\.is-collapsed\) \{ place-self: start stretch; \}/);
     // Theme tokens only.
-    const rules = css.slice(css.indexOf('/* The battle cards of a Database record page'), css.indexOf('/* Battle Setup (map view')) + css.slice(css.indexOf('/* Database battle cards'), css.indexOf('/* End of the Database battle cards. */'));
+    const rules = css.slice(css.indexOf('/* The Combat section of a Database record page'), css.indexOf('/* Battle Setup (map view')) + css.slice(css.indexOf('/* Database Combat section'), css.indexOf('/* End of the Database Combat section. */'));
     assert.ok(rules.length > 1500, 'the card rules are where the test looks');
     assert.doesNotMatch(rules, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, 'no color of its own');
 });

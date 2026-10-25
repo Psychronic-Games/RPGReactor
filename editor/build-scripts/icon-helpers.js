@@ -1,9 +1,10 @@
 /**
  * icon-helpers.js — CommonJS module for icon operations during builds.
- * No npm dependencies — uses only Node.js built-ins.
+ * Node.js built-ins, plus pngjs (when present) to scale an icon down.
  *
  * Exports:
  *   readPngDimensions(buf)              — parse PNG IHDR for width/height
+ *   shrinkPng(pngBuf, maxSide)          — scale a PNG down to fit maxSide
  *   createIcoFromPng(pngBuf)            — create ICO (PNG-inside-ICO, Vista+)
  *   createIcnsFromPng(pngBuf)           — create ICNS wrapping PNG data
  *   replaceAppIcon(appBundlePath, pngBuf, log) — replace .icns in macOS .app
@@ -31,13 +32,53 @@ function readPngDimensions(buf) {
     };
 }
 
+/**
+ * The PNG scaled down so neither side exceeds `maxSide` (an area average over
+ * premultiplied alpha). A PNG already that small comes back as it is; null
+ * when it cannot be decoded or pngjs is not available.
+ */
+function shrinkPng(pngBuf, maxSide) {
+    let PNG;
+    try { ({ PNG } = require('pngjs')); } catch (_) { return null; }
+    let src;
+    try { src = PNG.sync.read(pngBuf); } catch (_) { return null; }
+    const scale = Math.max(src.width, src.height) / maxSide;
+    if (scale <= 1) return pngBuf;
+    const width = Math.max(1, Math.round(src.width / scale));
+    const height = Math.max(1, Math.round(src.height / scale));
+    const out = new PNG({ width, height });
+    for (let y = 0; y < height; y++) {
+        const y0 = Math.floor(y * src.height / height), y1 = Math.max(y0 + 1, Math.floor((y + 1) * src.height / height));
+        for (let x = 0; x < width; x++) {
+            const x0 = Math.floor(x * src.width / width), x1 = Math.max(x0 + 1, Math.floor((x + 1) * src.width / width));
+            let r = 0, g = 0, b = 0, a = 0, n = 0;
+            for (let sy = y0; sy < y1; sy++) {
+                for (let sx = x0; sx < x1; sx++) {
+                    const i = (sy * src.width + sx) * 4, alpha = src.data[i + 3];
+                    r += src.data[i] * alpha; g += src.data[i + 1] * alpha; b += src.data[i + 2] * alpha;
+                    a += alpha; n++;
+                }
+            }
+            const o = (y * width + x) * 4;
+            out.data[o] = a ? Math.round(r / a) : 0;
+            out.data[o + 1] = a ? Math.round(g / a) : 0;
+            out.data[o + 2] = a ? Math.round(b / a) : 0;
+            out.data[o + 3] = Math.round(a / n);
+        }
+    }
+    return PNG.sync.write(out);
+}
+
 // ── ICO creation (PNG-inside-ICO, Vista+ format) ────────────────────
 
 /**
  * Create a .ico file containing a single PNG entry.
  * Format: 6-byte header + 16-byte directory entry + raw PNG data.
+ * An ICO entry is at most 256 px a side, so a larger PNG is scaled to 256.
  */
 function createIcoFromPng(pngBuf) {
+    const { width: sourceWidth, height: sourceHeight } = readPngDimensions(pngBuf);
+    if (sourceWidth > 256 || sourceHeight > 256) pngBuf = shrinkPng(pngBuf, 256) || pngBuf;
     const { width, height } = readPngDimensions(pngBuf);
 
     // ICO header (6 bytes)
@@ -131,7 +172,18 @@ function replaceAppIcon(appBundlePath, pngBuf, log) {
 function embedExeIcon(exePath, icoBuf, log) {
     try {
         const exe = fs.readFileSync(exePath);
-        const result = _replaceExeIcon(exe, icoBuf);
+        let result = _replaceExeIcon(exe, icoBuf);
+        // A single-PNG icon too large for the executable's icon slots goes in smaller.
+        const png = !result && icoBuf.length > 22 && icoBuf.readUInt16LE(4) === 1
+            ? icoBuf.slice(icoBuf.readUInt32LE(18)) : null;
+        if (png && png[0] === 0x89 && png[1] === 0x50) {
+            for (const side of [128, 64, 48, 32]) {
+                const smaller = shrinkPng(png, side);
+                if (!smaller) break;
+                result = _replaceExeIcon(exe, createIcoFromPng(smaller));
+                if (result) break;
+            }
+        }
         if (result) {
             fs.writeFileSync(exePath, result);
             log(`  [icon] Embedded icon in ${path.basename(exePath)}`);
@@ -336,6 +388,7 @@ function _replaceExeIcon(exe, icoBuf) {
 
 module.exports = {
     readPngDimensions,
+    shrinkPng,
     createIcoFromPng,
     createIcnsFromPng,
     replaceAppIcon,
