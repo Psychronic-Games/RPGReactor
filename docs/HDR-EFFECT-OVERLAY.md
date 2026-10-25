@@ -137,6 +137,9 @@ complete `ReactorHdrOverlay.overrides[effectName]` entry, including fallback.
   be excluded from HDR assets. A future authoring approach can start a separate
   ordinary refraction twin alongside the HDR effect; Effekseer cannot filter
   individual nodes during a draw. That synchronized twin is not implemented here.
+- The editor's animation previews have no HDR pipeline. They play the sidecar's
+  normally graded twin instead, and refuse what the game refuses; Database ›
+  Animations says which, under the preview. The HDR look shows only in the game.
 
 ## Verification
 

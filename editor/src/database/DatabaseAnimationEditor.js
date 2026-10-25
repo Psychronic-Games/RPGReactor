@@ -4,6 +4,67 @@
  */
 
 /**
+ * Whether an HDR sidecar is one the game runtime accepts. The same rules as
+ * `valid` in runtime/reactor_hdr_overlay.js; hdr-preview-twin.test.cjs holds
+ * the two to the same answers.
+ */
+function RR_isValidHdrSidecar(s) {
+    const finite = Number.isFinite;
+    return !!(s && s.version === 1 && s.gradeInput === 'hdr' && typeof s.grade === 'string'
+        && /\bhdr\b/.test(s.grade) && /\btmOut\b/.test(s.grade)
+        && typeof s.fallback === 'string' && s.fallback
+        && s.bloom && Array.isArray(s.bloom.sizes) && Array.isArray(s.bloom.tints)
+        && s.bloom.sizes.length === 6 && s.bloom.tints.length === 6
+        && s.bloom.sizes.every(x => finite(x) && x > 0)
+        && s.bloom.tints.every(x => finite(x) && x >= 0)
+        && finite(s.bloom.intensity) && s.bloom.intensity >= 0
+        && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0);
+}
+
+/**
+ * The editor's previews have no HDR pipeline (it lives in the game runtime),
+ * so an HDR effect would play here as raw, ungraded light. Resolve it the way
+ * the game does when it cannot render HDR: a valid `<effect>.hdr.json` names a
+ * normally graded twin, and that is what the preview plays. Where the game
+ * refuses an effect, so does the preview: a `-hdr` effect with no sidecar, or
+ * a sidecar that cannot be read or is invalid.
+ *
+ * @returns null for an ordinary effect, else { twinPath, twinName, sidecarPath }
+ * @throws an Error with `rrHdrRefused` set when the game would not play it
+ */
+function RR_resolveHdrPreviewTwin(effectPath) {
+    const fs = require('fs');
+    const path = require('path');
+    const refuse = message => Object.assign(new Error(message), { rrHdrRefused: true });
+    const dir = path.dirname(effectPath);
+    const name = path.basename(effectPath).replace(/\.efkefc$/i, '');
+    const sidecarPath = path.join(dir, name + '.hdr.json');
+    if (!fs.existsSync(sidecarPath)) {
+        if (/-hdr$/i.test(name)) throw refuse(`HDR effect ${name} has no ${name}.hdr.json`);
+        return null;
+    }
+    let sidecar;
+    try {
+        sidecar = JSON.parse(String(fs.readFileSync(sidecarPath, 'utf8')));
+    } catch (error) {
+        throw refuse(`Cannot read ${sidecarPath}: ${error.message}`);
+    }
+    if (!RR_isValidHdrSidecar(sidecar)) throw refuse(`Invalid HDR sidecar ${sidecarPath}`);
+    // As in the runtime: a name without '/' sits beside the HDR effect, one
+    // with '/' is relative to the effects folder.
+    let root = dir;
+    if (sidecar.fallback.includes('/')) {
+        while (path.basename(root).toLowerCase() !== 'effects') {
+            const up = path.dirname(root);
+            if (up === root) throw refuse(`No effects folder above ${effectPath} for twin ${sidecar.fallback}`);
+            root = up;
+        }
+    }
+    const twinPath = path.join(root, ...sidecar.fallback.split('/')) + '.efkefc';
+    return { twinPath, twinName: sidecar.fallback, sidecarPath };
+}
+
+/**
  * Load an .efkefc effect through Node fs instead of a URL fetch.
  *
  * The editor page lives on the chrome-extension:// scheme, whose URLs
@@ -19,10 +80,14 @@
  * core already caches every referenced resource path — callers that use
  * the returned effect inside onLoad must handle that timing.
  *
+ * An HDR effect is loaded as its normally graded twin (see
+ * RR_resolveHdrPreviewTwin), and the returned effect carries `rrHdrTwin`.
+ *
  * @returns the effekseer effect handle from context.loadEffect
- * @throws if the effect file itself cannot be read
+ * @throws if the effect file itself cannot be read, or (with `rrHdrRefused`)
+ *         if it is an HDR effect the game would refuse to play
  */
-function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onError) {
+function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onError, hdrSource = null) {
     const fs = require('fs');
     const path = require('path');
     const baseDir = path.dirname(effectPath);
@@ -47,6 +112,15 @@ function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onEr
             throw retryable;
         }
         throw error;
+    }
+    // After the read, so the web host has warmed this folder, sidecar included.
+    if (!hdrSource) {
+        const twin = RR_resolveHdrPreviewTwin(effectPath);
+        if (twin) {
+            const effect = RR_loadEffekseerEffectFromFile(context, twin.twinPath, scale, onLoad, onError, effectPath);
+            if (effect) effect.rrHdrTwin = twin;
+            return effect;
+        }
     }
     // Copy into a page-realm ArrayBuffer: NW.js runs Node and the DOM in
     // separate JS contexts, so the Buffer's underlying ArrayBuffer fails
@@ -677,6 +751,7 @@ class DatabaseAnimationEditor {
                                 <canvas id="animation-preview-canvas" width="960" height="540" style="image-rendering: pixelated; max-width: 100%; max-height: 100%;"></canvas>
                                 ${!isSpriteAnimation && !isEffekseer ? `<div style="color: var(--color-text-muted); position: absolute;">${tt('No preview available')}</div>` : ''}
                             </div>
+                            ${isEffekseer ? `<div id="animation-hdr-note" hidden style="margin-top:4px;font-size:10px;color:var(--color-text-muted);"></div>` : ''}
 
                             <!-- Playback Controls -->
                             <div style="margin-top:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
@@ -4129,9 +4204,26 @@ class DatabaseAnimationEditor {
                 playBtn.style.opacity = '0.5';
             };
 
+            // An HDR effect previews as its graded twin, or not at all; say which.
+            const hdrNote = document.getElementById('animation-hdr-note');
+            const showHdrNote = (text, warning = false) => {
+                if (!hdrNote) return;
+                hdrNote.textContent = text;
+                hdrNote.hidden = !text;
+                hdrNote.style.color = warning ? 'var(--color-warning)' : 'var(--color-text-muted)';
+            };
+            showHdrNote('');
+
             try {
                 effect = RR_loadEffekseerEffectFromFile(effekseerContext, effectPath, 1.0, onLoad, onError);
+                if (effect?.rrHdrTwin) {
+                    showHdrNote(tt('HDR effect: the preview plays its normally graded twin, {twin}.')
+                        .replace('{twin}', effect.rrHdrTwin.twinName));
+                }
             } catch (e) {
+                if (e.rrHdrRefused) {
+                    showHdrNote(tt('HDR effect without a valid .hdr.json file: the game will not play it, so the preview does not either.'), true);
+                }
                 onError(e.message, effectPath);
             }
         };
