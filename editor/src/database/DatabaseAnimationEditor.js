@@ -18,7 +18,8 @@ function RR_isValidHdrSidecar(s) {
         && s.bloom.sizes.every(x => finite(x) && x > 0)
         && s.bloom.tints.every(x => finite(x) && x >= 0)
         && finite(s.bloom.intensity) && s.bloom.intensity >= 0
-        && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0);
+        && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0
+        && (s.bloom.threshold === undefined || finite(s.bloom.threshold)));
 }
 
 /**
