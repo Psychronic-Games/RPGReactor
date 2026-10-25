@@ -320,3 +320,23 @@ test('Stock Layout drops a binding its presentation cannot fill, and Undo restor
         if (previous === undefined) delete global.RRStockInterfaces; else global.RRStockInterfaces = previous;
     }
 });
+
+test('a save writes no UserInterfaces.json while the seeded stock interfaces are unchanged, and one once an interface is edited', async t => {
+    const os = require('node:os');
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-stock-interfaces-save-'));
+    t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+    const dataPath = path.join(project, 'data');
+    fs.mkdirSync(dataPath);
+    fs.writeFileSync(path.join(dataPath, 'System.json'), JSON.stringify(fixtureSystem));
+    const DatabaseManager = new Function('RRStockInterfaces', 'require', 'RRJson',
+        read('editor/src/DatabaseManager.js') + '\nreturn DatabaseManager;')(Stock, require, require('../src/utils/JsonFiles.js'));
+    const manager = new DatabaseManager(); manager.fs = fs; manager.path = path;
+    assert.equal(await manager.loadAllData(project), true);
+    const file = path.join(dataPath, 'UserInterfaces.json');
+    manager.data.system.gameTitle = 'Changed';
+    assert.equal(await manager.saveAllData(project), true);
+    assert.equal(fs.existsSync(file), false, 'OK with the interfaces untouched adds no file');
+    manager.data.userInterfaces[1].name = 'My title';
+    assert.equal(await manager.saveAllData(project), true);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8'))[1].name, 'My title', 'an edited interface is written');
+});

@@ -41,7 +41,7 @@ test('a wall hides the light behind it, height respected', () => {
 test('the quads still skip and shorten through the occlusion switch', () => {
     const source = source3D();
     assert.match(source, /Reactor3D\.LIGHT_OCCLUSION = true;/, 'and it can be turned off in one place');
-    assert.match(source, /const beamReach = Reactor3D\.LIGHT_OCCLUSION\n/, 'cones clamp through the switch');
+    assert.match(source, /const beamReach = spot && Reactor3D\.LIGHT_OCCLUSION\n/, 'cones clamp through the switch');
     assert.match(source, /pool\.count--;\n\s*continue;/, 'a hidden light writes no quad at all');
     assert.match(source, /const tipU = alongU \* beamReach, tipV = alongV \* beamReach;/, 'the tip is the clamped reach');
 });

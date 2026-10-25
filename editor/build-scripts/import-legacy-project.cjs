@@ -12,6 +12,8 @@
  * installed) when a 2000/2003 game needs one and none is found.
  * `--font <file or folder>` names RM2000.fon / RMG2000.fon when neither the game, the RTP
  * nor the system fonts hold it.
+ * `--graphics remaster|original` selects restored or untouched artwork for 2000/2003.
+ * Restoration is the default; originals are retained in the new project's legacy folder.
  * `--report` says what the project holds and what an import will do with
  * it, and writes nothing unless `--json` names a file. With a destination
  * a new Reactor project is written there (the editor's File › Import
@@ -23,14 +25,24 @@ const I = require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyImporter.js
 
 const argv = process.argv.slice(2);
 const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? (argv[i + 1] || true) : null; };
-const flagValues = new Set(['--json', '--encoding', '--maps', '--language', '--rtp', '--font'].map(flag).filter(v => v && v !== true));
-const positional = argv.filter(a => !a.startsWith('--') && !flagValues.has(a));
+const valueFlags = new Set(['--json', '--encoding', '--maps', '--language', '--rtp', '--font', '--graphics']);
+const positional = [];
+for (let i = 0; i < argv.length; i++) {
+    if (valueFlags.has(argv[i])) {
+        if (argv[i + 1] && !argv[i + 1].startsWith('--')) i++;
+    } else if (!argv[i].startsWith('--')) positional.push(argv[i]);
+}
 const [source, destination] = positional;
 if (!source || (!flag('--report') && !destination)) {
-    console.error('usage: import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]\n       import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>] [--rtp <folder> | --download-rtp] [--font <RM2000.fon or folder>]');
+    console.error('usage: import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]\n       import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>] [--rtp <folder> | --download-rtp] [--font <RM2000.fon or folder>] [--graphics remaster|original]');
     process.exit(2);
 }
 const encoding = flag('--encoding') && flag('--encoding') !== true ? flag('--encoding') : undefined;
+const graphics = flag('--graphics') || 'remaster';
+if (!['remaster', 'original'].includes(graphics)) {
+    console.error('--graphics must be remaster or original');
+    process.exit(2);
+}
 (async () => { try {
     if (flag('--report')) {
         const report = I.report(source, { encoding });
@@ -60,7 +72,7 @@ const encoding = flag('--encoding') && flag('--encoding') !== true ? flag('--enc
         }
     }
     const fontPath = flag('--font') && flag('--font') !== true ? flag('--font') : undefined;
-    const summary = await I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, rtpPath, fontPath, log: (line) => console.log(line) });
+    const summary = await I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, graphics, rtpPath, fontPath, log: (line) => console.log(line) });
     // Movies Chromium cannot play become WebM and MIDI becomes Ogg once the project is written.
     const media = require('../src/legacy/LegacyMedia.js');
     if (summary && summary.destination && media.pendingMedia(summary.destination)) {

@@ -1408,7 +1408,8 @@ class DatabaseEnemyEditor {
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
-        cancelBtn.addEventListener('click', () => overlay.remove());
+        const close = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
+        cancelBtn.addEventListener('click', close);
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
@@ -1426,7 +1427,7 @@ class DatabaseEnemyEditor {
             if (actionIndex >= 0) enemy.actions[actionIndex] = draft;
             else enemy.actions.push(draft);
             this.databaseManager.updateEnemy(enemy.id, enemy);
-            overlay.remove();
+            close();
             this.refreshEnemyDetail(enemy);
         });
 
@@ -1434,10 +1435,13 @@ class DatabaseEnemyEditor {
         btnRow.appendChild(okBtn);
         modal.appendChild(btnRow);
         overlay.appendChild(modal);
-        modal.querySelector('.action-edit-close')?.addEventListener('click', () => overlay.remove());
+        modal.querySelector('.action-edit-close')?.addEventListener('click', close);
         // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: close, container: () => modal });
+        overlay._rrModalKeys?.enter();
     }
 
     // ==========================================

@@ -578,12 +578,25 @@ class MediaSurfaceEditor {
         this._markChanged(key);
     }
 
-    _section(parent, title) {
-        const section = this._el('section', 'vs-control-section');
+    /**
+     * A titled card of controls. `fold` names a card that folds: shut until opened (the surface is placed by
+     * dragging it in the view), and open again next time once opened (kept in this browser's storage).
+     */
+    _section(parent, title, fold = '') {
+        const section = this._el(fold ? 'details' : 'section', 'vs-control-section');
         section.style.cssText = 'padding:10px;border:1px solid var(--color-border);border-radius:5px;background:var(--color-bg-panel);';
-        const heading = this._el('div', '', this._t(title));
-        heading.style.cssText = 'margin-bottom:8px;color:var(--color-text-strong);font-size:12px;font-weight:700;letter-spacing:.03em;';
+        const heading = this._el(fold ? 'summary' : 'div', '', this._t(title));
+        heading.style.cssText = 'margin-bottom:8px;color:var(--color-text-strong);font-size:12px;font-weight:700;letter-spacing:.03em;' + (fold ? 'cursor:pointer;' : '');
         section.appendChild(heading);
+        if (fold) {
+            const key = 'rr.mediaSurface.open.' + fold;
+            try { section.open = typeof localStorage !== 'undefined' && localStorage.getItem(key) === '1'; } catch (_) { section.open = false; }
+            if (!section.open) heading.style.marginBottom = '0';
+            this._listen(section, 'toggle', () => {
+                heading.style.marginBottom = section.open ? '8px' : '0';
+                try { localStorage.setItem(key, section.open ? '1' : '0'); } catch (_) { /* kept for this session only */ }
+            });
+        }
         parent.appendChild(section);
         return section;
     }
@@ -869,7 +882,7 @@ class MediaSurfaceEditor {
             identityGrid.appendChild(movieGroup);
         }
 
-        const binding = this._section(parent, 'Binding & Position');
+        const binding = this._section(parent, 'Binding & Position', 'binding');
         this.positionHint = this._el('div', 'vs-position-hint');
         this.positionHint.style.cssText = 'margin:-2px 0 8px;color:var(--color-text-muted);font-size:10px;';
         binding.appendChild(this.positionHint);
@@ -893,7 +906,7 @@ class MediaSurfaceEditor {
             onChange: (value, previous) => this._resizeDimension('height', previous)
         });
 
-        const placement3d = this._section(parent, '3D World Transform');
+        const placement3d = this._section(parent, '3D World Transform', 'transform');
         const linked = this._el('label', 'vs-check');
         linked.style.cssText = 'display:flex;align-items:center;gap:7px;margin-bottom:10px;color:var(--color-text);font-size:12px;';
         const keep = this._el('input'); keep.type = 'checkbox'; keep.checked = this.keepProportions !== false;
@@ -1001,6 +1014,7 @@ class MediaSurfaceEditor {
                 allowNone: false,
                 // The picker previews per file; only real movies get <video>.
                 mediaType: kind === 'image' ? undefined : 'video',
+                selectButtonLabel: this._t(kind === 'image' ? 'Select This Image' : 'Select This Video'),
                 // Above this dialog's own overlay (21000).
                 zIndex: 21050
             });
@@ -1626,36 +1640,34 @@ class MediaSurfaceEditor {
         const height = Math.max(420, Math.round(rect.height));
         nw.Window.open('media-surface-panel.html', {
             width, height, min_width: 320, min_height: 360,
-            frame: true, show: true, resizable: true, icon: 'images/icon.png'
+            frame: true, show: false, resizable: true, icon: 'images/icon.png'
         }, win => {
+            if (this.popout !== popout) { try { win?.close(true); } catch (_) {} return; }
             if (!win) { this.popout = null; return; }
             popout.win = win;
             const mount = () => {
-                if (this.popout !== popout) return;
+                if (this.popout !== popout || popout.mounted) return;
+                popout.mounted = true;
                 const doc = win.window.document;
                 doc.title = this._t(this.context.mapSurface ? 'Map Media Surface' : MediaSurfaceEditor.OPERATIONS[this.operation]);
-                for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
-                    const copy = doc.createElement('link');
-                    copy.rel = 'stylesheet';
-                    copy.href = link.href;
-                    doc.head.appendChild(copy);
-                }
-                const theme = document.documentElement.getAttribute('data-theme');
-                if (theme) doc.documentElement.setAttribute('data-theme', theme);
+                const stylesReady = window.RRPopoutBridge.dressLike(doc);
                 doc.body.style.cssText = 'margin:0;height:100vh;display:flex;background:var(--color-bg-deep,#111);';
                 dialog.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;min-height:0;';
                 if (body) body.style.gridTemplateColumns = 'minmax(260px,1fr)';
                 if (popout.button) popout.button.style.display = 'none';
                 doc.body.appendChild(dialog);
-                // The manifest's main-window minimum wins over the requested
-                // size until the child window has settled, so size it afterwards.
-                const size = () => {
+                // Settle the manifest's inherited minimum and geometry before revealing it.
+                Promise.resolve(stylesReady).then(() => {
                     if (this.popout !== popout) return;
-                    try { win.setMinimumSize(320, 360); win.resizeTo(width, height); } catch (_) {}
-                };
-                setTimeout(size, 50);
-                setTimeout(size, 400);
-                this._previewManager()?.revealAuthoringSurface?.();
+                    win.setMinimumSize(320, 360);
+                    win.resizeTo(width, height);
+                    setTimeout(() => {
+                        if (this.popout !== popout) return;
+                        win.show();
+                        win.focus();
+                        this._previewManager()?.revealAuthoringSurface?.();
+                    }, 50);
+                });
             };
             const ready = () => win.window?.document?.readyState === 'complete';
             if (ready()) mount(); else win.on('loaded', mount);

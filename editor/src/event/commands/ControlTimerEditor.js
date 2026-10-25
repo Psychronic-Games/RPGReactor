@@ -11,6 +11,12 @@ class ControlTimerEditor {
         this.seconds = 60; // Timer duration in seconds
     }
 
+    /** "(m:ss)" beside the seconds field. */
+    static durationLabel(seconds) {
+        const total = Math.max(0, Math.floor(Number(seconds) || 0));
+        return `(${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')})`;
+    }
+
     /**
      * Show editor for a control timer command
      * @param {object} command - The command to edit (or null for new)
@@ -166,20 +172,19 @@ class ControlTimerEditor {
                 font-size: 12px;
                 width: 100px;
             `;
-            input.addEventListener('input', (e) => {
-                this.seconds = parseInt(e.target.value) || 60;
-            });
 
             const secondsLabel = document.createElement('span');
             secondsLabel.textContent = tt('seconds');
             secondsLabel.style.cssText = 'color: var(--color-text-muted); font-size: 12px;';
 
             // Time preview
-            const minutes = Math.floor(this.seconds / 60);
-            const secs = this.seconds % 60;
             const preview = document.createElement('span');
-            preview.textContent = `(${minutes}:${String(secs).padStart(2, '0')})`;
+            preview.textContent = ControlTimerEditor.durationLabel(this.seconds);
             preview.style.cssText = 'color: var(--color-link); font-size: 12px; margin-left: 8px;';
+            input.addEventListener('input', (e) => {
+                this.seconds = parseInt(e.target.value) || 60;
+                preview.textContent = ControlTimerEditor.durationLabel(this.seconds);
+            });
 
             inputRow.appendChild(input);
             inputRow.appendChild(secondsLabel);

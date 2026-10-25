@@ -451,7 +451,7 @@ test('the game sync carves the clone before binding and reads rules from one sid
     const carve = source.indexOf('Reactor3D.carveModelParts(object, Reactor3D.readModelParts(sidecar))');
     const bind = source.indexOf('current.binding = Reactor3D.prepareModelInstance(object');
     assert.ok(carve > 0 && bind > carve, 'carve happens before the binding is prepared');
-    assert.match(source, /current\.rules = sidecar \? Reactor3D\.readModelAnimationRules\(sidecar\) : \[\]/);
+    assert.match(source, /current\.rules = sidecar \? Reactor3D\.readModelAnimationRules\(sidecar, object\.__reactorClips\) : \[\]/);
     // A missing model.json is a normal state: on disk it is stat-ed first
     // so no unsuppressible network error reaches the console.
     assert.match(source, /Reactor3D\.loadModelSidecar = function[\s\S]*?fs\.existsSync\(path\.join\(base, url\)\)/);
@@ -793,4 +793,39 @@ test('cloning a template neither serialises its textures nor leaves skinned mesh
     // three's renderer computes the skinned sphere only while it is null.
     assert.notEqual(skinnedClone.boundingSphere, null);
     assert.equal(instance.children.find(c => c.isMesh && !c.isSkinnedMesh).frustumCulled, true, 'ordinary meshes keep culling');
+});
+
+test('model instances share surface textures without serialising them and retain independent material state', () => {
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const normal = new THREE.Texture(), emissive = new THREE.Texture();
+    normal.toJSON = emissive.toJSON = () => assert.fail('surface textures must not be encoded during cloning');
+    const material = new THREE.MeshBasicMaterial();
+    material.userData = {
+        rrNormalMap: normal, rrNormalScale: new THREE.Vector2(0.4, 0.6), rrEmissiveMap: emissive,
+        rrEmissive: new THREE.Color(0xffaa33), baseColor: material.color.clone(), settings: { value: 2 }
+    };
+    const data = material.userData;
+    const template = new THREE.Group();
+    template.add(new THREE.Mesh(new THREE.BufferGeometry(), material));
+    const first = Reactor3D.cloneModelTemplate(template).children[0].material;
+    const second = Reactor3D.cloneModelTemplate(template).children[0].material;
+    assert.equal(material.userData, data);
+    assert.equal(first.userData.rrNormalMap, normal);
+    assert.equal(first.userData.rrEmissiveMap, emissive);
+    assert.notEqual(first, second);
+    assert.notEqual(first.userData.rrNormalScale, data.rrNormalScale);
+    assert.ok(first.userData.rrNormalScale.equals(data.rrNormalScale));
+    first.userData.rrEmissive.setHex(0x000000);
+    first.userData.settings.value = 9;
+    assert.equal(second.userData.rrEmissive.getHex(), 0xffaa33);
+    assert.equal(second.userData.settings.value, 2);
+    assert.equal(data.settings.value, 2);
+    material.clone = () => { throw new Error('clone failed'); };
+    assert.throws(() => Reactor3D.cloneSurfaceMaterial(material), /clone failed/);
+    assert.equal(material.userData, data);
+    assert.equal(data.rrNormalMap, normal);
+    assert.equal(data.rrEmissiveMap, emissive);
 });

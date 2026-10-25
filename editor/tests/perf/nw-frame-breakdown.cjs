@@ -25,6 +25,13 @@
  *   --walk-size  the side, in tiles, of the square --walk loops round.
  *   --throttle   slow the main thread this many times (spikes and load): the
  *                nearer picture of a low-end CPU.
+ *   --profile-dir=<dir>  keep the browser profile there instead of a fresh one
+ *                per run: a second run on it is a warm launch, with the shader
+ *                and code caches the first left behind.
+ *
+ * RR_PERF_CHROME_ARGS adds browser switches, space-separated: with
+ * "disable-gpu-vsync disable-frame-rate-limit" frames come as fast as they
+ * can be made, the nearer picture of a screen faster than 60 Hz.
  *
  * Profile a disposable project copy: project plugins can autosave.
  * Not part of `npm test`.
@@ -262,7 +269,8 @@ const FROZEN = `
         const variant = F.variants[step];
         variant.on();
         try {
-            for (let i = 0; i < 10; i++) { draw(); await sleep(); }
+            // "warmFrames" on a variant: more frames before the picture, for one whose programs compile afresh.
+            for (let i = 0; i < (variant.warmFrames || 10); i++) { draw(); await sleep(); }
             draw();
             const image = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
             const was = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
@@ -386,10 +394,11 @@ async function main() {
     try {
         await driver.start();
         await driver.createSession({ browserName: "chrome", "goog:chromeOptions": {
-            args: [`nwapp=${projectRoot}`, `user-data-dir=${path.join(tempRoot, "profile")}`, "no-first-run", "no-default-browser-check",
+            args: [`nwapp=${projectRoot}`, `user-data-dir=${option("profile-dir", null) ? path.resolve(option("profile-dir")) : path.join(tempRoot, "profile")}`, "no-first-run", "no-default-browser-check",
                 "disable-backgrounding-occluded-windows", "disable-renderer-backgrounding", "disable-background-timer-throttling",
                 // RR_PERF_MUTE=1: no sound from a harness window on a machine someone is working at.
-                ...(process.env.RR_PERF_MUTE ? ["mute-audio"] : [])] } });
+                ...(process.env.RR_PERF_MUTE ? ["mute-audio"] : []),
+                ...(process.env.RR_PERF_CHROME_ARGS || "").split(/\s+/).filter(Boolean)] } });
         await driver.setScriptTimeout(Math.max(120000, SECONDS * 3000));
         await driver.waitForScript("return Boolean(window.SceneManager && SceneManager._scene && !(SceneManager._scene instanceof Scene_Boot) && Graphics.width > 0);", [], { timeout: 90000, description: "title screen" });
         // --mode=load records the map loading itself: from New Game on the title screen.

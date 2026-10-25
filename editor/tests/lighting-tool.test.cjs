@@ -97,12 +97,12 @@ test('the lighting manager composites the way the runtime does', () => {
     // without this pass the lights were fully computed and never drawn —
     // the "Lighting · 10 but a bright, lightless room" the tool shipped
     // with, caught only by looking at the rendered pixels.
-    assert.match(manager, /feed3D\(\) \{/);
+    assert.match(manager, /feed3D\(now\) \{/);
     assert.match(manager, /wants3DFrames\(\) \{/);
     const editor3d = read('src/MapEditor3D.js');
     assert.match(editor3d, /renderLightsPass\(scene\) \{/);
     assert.match(editor3d, /setPass\('lights'\)/);
-    assert.match(editor3d, /lightingManager\?\.feed3D\?\.\(\)/);
+    assert.match(editor3d, /lightingManager\?\.feed3D\?\.\(now\)/);
     assert.match(editor3d, /wants3DFrames\?\.\(\)/);
     const passCalls = editor3d.match(/this\.renderLightsPass\(scene\);/g) || [];
     assert.equal(passCalls.length, 2, 'the world branch and the split-pass chain both draw lights');
@@ -113,10 +113,10 @@ test('the lighting manager composites the way the runtime does', () => {
     assert.match(manager, /RRMapLights\.restore\(map, from\.pop\(\)\)/);
 });
 
-test('the tool is wired: toolbar button, scripts, dispatcher, instance', () => {
+test('the tool is wired: Tools menu entry (no toolbar button: the Build bar opens it), scripts, dispatcher, instance', () => {
     const html = read('index.html');
-    assert.match(html, /data-action="lighting-tool"[^>]*data-i18n-title="toolbar\.title\.lighting"/);
-    assert.match(html, /icon-lighting\.svg/);
+    assert.match(html, /class="html-menu-option" data-action="lighting-tool" data-i18n="toolbar\.title\.lighting"/);
+    assert.doesNotMatch(html, /tool-button" data-action="lighting-tool"/);
     const lights = html.indexOf('src/utils/MapLights.js');
     const manager = html.indexOf('src/LightingManager.js');
     const main = html.indexOf('src/main.js');

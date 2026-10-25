@@ -8062,6 +8062,81 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }
 
+// Character Builder: insects, crustaceans, birds and bats.
+{
+ const keys = 'Tick|Bee|Wasp|Mosquito|Fly|Butterfly|Dragonfly|Lobster|Bird|Bat|Birds and bats|Wing spread|Antenna length|Beetle type|Ground beetle|Stag beetle|Rhinoceros beetle|Ladybird|Crab type|Shore crab|Fiddler crab|Blue crab|Lobster type|American lobster|Spiny lobster|Bird type|Eagle|Owl|Crow|Sparrow|Pigeon|Duck|Chicken|Parrot|Flamingo|Hummingbird|Penguin|Bat type|Little brown bat|Flying fox|Vampire bat|Flying'.split('|');
+ const rows = {
+  ja: 'マダニ|ハチ|スズメバチ|蚊|ハエ|チョウ|トンボ|ロブスター|鳥|コウモリ|鳥とコウモリ|翼の開き|触角の長さ|甲虫の種類|オサムシ|クワガタ|カブトムシ|テントウムシ|カニの種類|イソガニ|シオマネキ|ブルークラブ|ロブスターの種類|アメリカンロブスター|イセエビ|鳥の種類|ワシ|フクロウ|カラス|スズメ|ハト|カモ|ニワトリ|オウム|フラミンゴ|ハチドリ|ペンギン|コウモリの種類|トビイロホオヒゲコウモリ|オオコウモリ|チスイコウモリ|飛行',
+  'zh-Hant': '蜱蟲|蜜蜂|胡蜂|蚊子|蒼蠅|蝴蝶|蜻蜓|龍蝦|鳥|蝙蝠|鳥與蝙蝠|展翅程度|觸角長度|甲蟲種類|步行蟲|鍬形蟲|獨角仙|瓢蟲|螃蟹種類|岸蟹|招潮蟹|藍蟹|龍蝦種類|美洲螯龍蝦|刺龍蝦|鳥類種類|鷹|貓頭鷹|烏鴉|麻雀|鴿子|鴨|雞|鸚鵡|紅鶴|蜂鳥|企鵝|蝙蝠種類|小棕蝠|狐蝠|吸血蝠|飛行',
+  'zh-Hans': '蜱虫|蜜蜂|胡蜂|蚊子|苍蝇|蝴蝶|蜻蜓|龙虾|鸟|蝙蝠|鸟与蝙蝠|展翅程度|触角长度|甲虫种类|步甲|锹甲|独角仙|瓢虫|螃蟹种类|岸蟹|招潮蟹|蓝蟹|龙虾种类|美洲螯龙虾|刺龙虾|鸟类种类|鹰|猫头鹰|乌鸦|麻雀|鸽子|鸭|鸡|鹦鹉|火烈鸟|蜂鸟|企鹅|蝙蝠种类|小棕蝠|狐蝠|吸血蝠|飞行',
+  ko: '진드기|꿀벌|말벌|모기|파리|나비|잠자리|바닷가재|새|박쥐|새와 박쥐|날개 펼침|더듬이 길이|딱정벌레 종류|먼지벌레|사슴벌레|장수풍뎅이|무당벌레|게 종류|해안 게|농게|꽃게류 블루크랩|바닷가재 종류|아메리카바닷가재|닭새우|새 종류|독수리|올빼미|까마귀|참새|비둘기|오리|닭|앵무새|홍학|벌새|펭귄|박쥐 종류|작은갈색박쥐|과일박쥐|흡혈박쥐|비행',
+  es: 'Garrapata|Abeja|Avispa|Mosquito|Mosca|Mariposa|Libélula|Langosta|Ave|Murciélago|Aves y murciélagos|Apertura de alas|Longitud de antenas|Tipo de escarabajo|Escarabajo de tierra|Ciervo volante|Escarabajo rinoceronte|Mariquita|Tipo de cangrejo|Cangrejo de costa|Cangrejo violinista|Cangrejo azul|Tipo de langosta|Bogavante americano|Langosta espinosa|Tipo de ave|Águila|Búho|Cuervo|Gorrión|Paloma|Pato|Gallina|Loro|Flamenco|Colibrí|Pingüino|Tipo de murciélago|Murciélago marrón pequeño|Zorro volador|Murciélago vampiro|Volando',
+  pt: 'Carrapato|Abelha|Vespa|Mosquito|Mosca|Borboleta|Libélula|Lagosta|Ave|Morcego|Aves e morcegos|Abertura das asas|Comprimento das antenas|Tipo de besouro|Besouro de solo|Besouro-veado|Besouro-rinoceronte|Joaninha|Tipo de caranguejo|Caranguejo da costa|Caranguejo-violinista|Siri-azul|Tipo de lagosta|Lagosta-americana|Lagosta espinhosa|Tipo de ave|Águia|Coruja|Corvo|Pardal|Pombo|Pato|Galinha|Papagaio|Flamingo|Beija-flor|Pinguim|Tipo de morcego|Pequeno morcego-marrom|Raposa-voadora|Morcego-vampiro|Voando',
+  fr: 'Tique|Abeille|Guêpe|Moustique|Mouche|Papillon|Libellule|Homard|Oiseau|Chauve-souris|Oiseaux et chauves-souris|Ouverture des ailes|Longueur des antennes|Type de coléoptère|Carabe|Lucane|Scarabée rhinocéros|Coccinelle|Type de crabe|Crabe de rivage|Crabe violoniste|Crabe bleu|Type de homard|Homard américain|Langouste|Type d’oiseau|Aigle|Hibou|Corbeau|Moineau|Pigeon|Canard|Poule|Perroquet|Flamant rose|Colibri|Manchot|Type de chauve-souris|Petite chauve-souris brune|Roussette|Chauve-souris vampire|Vol',
+  it: 'Zecca|Ape|Vespa|Zanzara|Mosca|Farfalla|Libellula|Aragosta|Uccello|Pipistrello|Uccelli e pipistrelli|Apertura delle ali|Lunghezza delle antenne|Tipo di coleottero|Carabo|Cervo volante|Scarabeo rinoceronte|Coccinella|Tipo di granchio|Granchio costiero|Granchio violinista|Granchio blu|Tipo di aragosta|Astice americano|Aragosta spinosa|Tipo di uccello|Aquila|Gufo|Corvo|Passero|Piccione|Anatra|Gallina|Pappagallo|Fenicottero|Colibrì|Pinguino|Tipo di pipistrello|Piccolo pipistrello bruno|Volpe volante|Pipistrello vampiro|Volo',
+  de: 'Zecke|Biene|Wespe|Mücke|Fliege|Schmetterling|Libelle|Hummer|Vogel|Fledermaus|Vögel und Fledermäuse|Flügelspreizung|Fühlerlänge|Käferart|Laufkäfer|Hirschkäfer|Nashornkäfer|Marienkäfer|Krabbenart|Strandkrabbe|Winkerkrabbe|Blaukrabbe|Hummerart|Amerikanischer Hummer|Languste|Vogelart|Adler|Eule|Krähe|Spatz|Taube|Ente|Huhn|Papagei|Flamingo|Kolibri|Pinguin|Fledermausart|Kleine Braune Fledermaus|Flughund|Vampirfledermaus|Fliegen',
+  ru: 'Клещ|Пчела|Оса|Комар|Муха|Бабочка|Стрекоза|Омар|Птица|Летучая мышь|Птицы и летучие мыши|Раскрытие крыльев|Длина усиков|Вид жука|Жужелица|Жук-олень|Жук-носорог|Божья коровка|Вид краба|Береговой краб|Краб-скрипач|Голубой краб|Вид омара|Американский омар|Лангуст|Вид птицы|Орёл|Сова|Ворона|Воробей|Голубь|Утка|Курица|Попугай|Фламинго|Колибри|Пингвин|Вид летучей мыши|Малая бурая ночница|Летучая лисица|Вампировая летучая мышь|Полёт',
+  pl: 'Kleszcz|Pszczoła|Osa|Komar|Mucha|Motyl|Ważka|Homar|Ptak|Nietoperz|Ptaki i nietoperze|Rozłożenie skrzydeł|Długość czułków|Rodzaj chrząszcza|Biegacz|Jelonek rogacz|Rohatyniec|Biedronka|Rodzaj kraba|Krab brzegowy|Krab skrzypek|Krab błękitny|Rodzaj homara|Homar amerykański|Langusta|Rodzaj ptaka|Orzeł|Sowa|Wrona|Wróbel|Gołąb|Kaczka|Kura|Papuga|Flaming|Koliber|Pingwin|Rodzaj nietoperza|Nocek mały brunatny|Latający lis|Wampir|Lot',
+  el: 'Τσιμπούρι|Μέλισσα|Σφήκα|Κουνούπι|Μύγα|Πεταλούδα|Λιβελούλα|Αστακός|Πουλί|Νυχτερίδα|Πουλιά και νυχτερίδες|Άνοιγμα φτερών|Μήκος κεραιών|Τύπος σκαθαριού|Σκαθάρι εδάφους|Ελαφοκάνθαρος|Σκαθάρι ρινόκερος|Πασχαλίτσα|Τύπος καβουριού|Παράκτιο καβούρι|Καβούρι βιολιστής|Μπλε καβούρι|Τύπος αστακού|Αμερικανικός αστακός|Αγκαθωτός αστακός|Τύπος πουλιού|Αετός|Κουκουβάγια|Κοράκι|Σπουργίτι|Περιστέρι|Πάπια|Κότα|Παπαγάλος|Φλαμίνγκο|Κολίμπρι|Πιγκουίνος|Τύπος νυχτερίδας|Μικρή καφέ νυχτερίδα|Ιπτάμενη αλεπού|Νυχτερίδα βαμπίρ|Πτήση',
+  ar: 'قرادة|نحلة|دبور|بعوضة|ذبابة|فراشة|يعسوب|كركند|طائر|خفاش|طيور وخفافيش|فتح الأجنحة|طول قرون الاستشعار|نوع الخنفساء|خنفساء أرضية|خنفساء الأيل|خنفساء وحيد القرن|دعسوقة|نوع السلطعون|سلطعون الشاطئ|سلطعون عازف|سلطعون أزرق|نوع الكركند|كركند أمريكي|كركند شوكي|نوع الطائر|عقاب|بومة|غراب|عصفور|حمامة|بطة|دجاجة|ببغاء|نحام|طائر طنان|بطريق|نوع الخفاش|خفاش بني صغير|ثعلب طائر|خفاش مصاص الدماء|طيران',
+  tr: 'Kene|Arı|Yaban arısı|Sivrisinek|Sinek|Kelebek|Yusufçuk|Istakoz|Kuş|Yarasa|Kuşlar ve yarasalar|Kanat açıklığı|Anten uzunluğu|Kın kanatlı türü|Toprak böceği|Geyik böceği|Gergedan böceği|Uğur böceği|Yengeç türü|Kıyı yengeci|Kemancı yengeç|Mavi yengeç|Istakoz türü|Amerikan ıstakozu|Dikenli ıstakoz|Kuş türü|Kartal|Baykuş|Karga|Serçe|Güvercin|Ördek|Tavuk|Papağan|Flamingo|Sinek kuşu|Penguen|Yarasa türü|Küçük kahverengi yarasa|Uçan tilki|Vampir yarasa|Uçuş',
+  id: 'Caplak|Lebah|Tawon|Nyamuk|Lalat|Kupu-kupu|Capung|Lobster|Burung|Kelelawar|Burung dan kelelawar|Bukaan sayap|Panjang antena|Jenis kumbang|Kumbang tanah|Kumbang rusa|Kumbang badak|Kumbang koksi|Jenis kepiting|Kepiting pantai|Kepiting biola|Kepiting biru|Jenis lobster|Lobster Amerika|Lobster berduri|Jenis burung|Elang|Burung hantu|Gagak|Burung gereja|Merpati|Bebek|Ayam|Nuri|Flamingo|Kolibri|Penguin|Jenis kelelawar|Kelelawar cokelat kecil|Kalong|Kelelawar vampir|Terbang',
+  vi: 'Bọ ve|Ong mật|Ong bắp cày|Muỗi|Ruồi|Bướm|Chuồn chuồn|Tôm hùm|Chim|Dơi|Chim và dơi|Độ mở cánh|Chiều dài râu|Loại bọ cánh cứng|Bọ chân chạy|Bọ hươu|Bọ tê giác|Bọ rùa|Loại cua|Cua bờ biển|Cua đàn vĩ|Cua xanh|Loại tôm hùm|Tôm hùm Mỹ|Tôm hùm gai|Loại chim|Đại bàng|Cú|Quạ|Chim sẻ|Bồ câu|Vịt|Gà|Vẹt|Hồng hạc|Chim ruồi|Chim cánh cụt|Loại dơi|Dơi nâu nhỏ|Dơi cáo|Dơi hút máu|Bay',
+  th: 'เห็บ|ผึ้ง|ตัวต่อ|ยุง|แมลงวัน|ผีเสื้อ|แมลงปอ|กุ้งมังกร|นก|ค้างคาว|นกและค้างคาว|การกางปีก|ความยาวหนวด|ชนิดด้วง|ด้วงดิน|ด้วงคีม|ด้วงแรด|เต่าทอง|ชนิดปู|ปูชายฝั่ง|ปูก้ามดาบ|ปูม้าอเมริกัน|ชนิดกุ้งมังกร|กุ้งมังกรอเมริกัน|กุ้งมังกรหนาม|ชนิดนก|นกอินทรี|นกฮูก|อีกา|นกกระจอก|นกพิราบ|เป็ด|ไก่|นกแก้ว|นกฟลามิงโก|นกฮัมมิงเบิร์ด|เพนกวิน|ชนิดค้างคาว|ค้างคาวสีน้ำตาลเล็ก|ค้างคาวแม่ไก่|ค้างคาวดูดเลือด|บิน'
+ };
+ for (const [locale, row] of Object.entries(rows)) row.split('|').forEach((value,i) => { globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][keys[i]] = value; });
+}
+
+// Cat breed choices and the paired dragon humanoid.
+{
+ const keys='Cat type|Domestic shorthair|Ragamuffin|Ragdoll|Persian|Maine Coon|Siamese|British shorthair|Hydrata'.split('|');
+ const rows={
+  ja:'猫の種類|ドメスティックショートヘア|ラガマフィン|ラグドール|ペルシャ|メインクーン|シャム|ブリティッシュショートヘア|ヒドラタ',
+  'zh-Hant':'貓咪品種|家養短毛貓|襤褸貓|布偶貓|波斯貓|緬因貓|暹羅貓|英國短毛貓|海德拉塔',
+  'zh-Hans':'猫咪品种|家养短毛猫|褴褛猫|布偶猫|波斯猫|缅因猫|暹罗猫|英国短毛猫|海德拉塔',
+  ko:'고양이 품종|집단모종|라가머핀|랙돌|페르시안|메인쿤|샴|브리티시 쇼트헤어|히드라타',
+  es:'Raza de gato|Gato doméstico de pelo corto|Ragamuffin|Ragdoll|Persa|Maine Coon|Siamés|Británico de pelo corto|Hydrata',
+  pt:'Raça de gato|Gato doméstico de pelo curto|Ragamuffin|Ragdoll|Persa|Maine Coon|Siamês|Britânico de pelo curto|Hydrata',
+  fr:'Race de chat|Chat domestique à poil court|Ragamuffin|Ragdoll|Persan|Maine Coon|Siamois|British shorthair|Hydrata',
+  de:'Katzenrasse|Hauskatze mit kurzem Fell|Ragamuffin|Ragdoll|Perserkatze|Maine Coon|Siamkatze|Britisch Kurzhaar|Hydrata',
+  it:'Razza del gatto|Gatto domestico a pelo corto|Ragamuffin|Ragdoll|Persiano|Maine Coon|Siamese|British shorthair|Hydrata',
+  ru:'Порода кошки|Домашняя короткошёрстная|Рагамаффин|Рэгдолл|Персидская|Мейн-кун|Сиамская|Британская короткошёрстная|Гидрата',
+  pl:'Rasa kota|Kot domowy krótkowłosy|Ragamuffin|Ragdoll|Perski|Maine coon|Syjamski|Brytyjski krótkowłosy|Hydrata',
+  el:'Ράτσα γάτας|Οικόσιτη κοντότριχη|Ραγκάμαφιν|Ράγκντολ|Περσική|Μέιν Κουν|Σιαμαία|Βρετανική κοντότριχη|Υδράτα',
+  ar:'سلالة القط|قط منزلي قصير الشعر|راغامافن|راغدول|فارسي|مين كون|سيامي|بريطاني قصير الشعر|هيدراتا',
+  tr:'Kedi ırkı|Evcil kısa tüylü|Ragamuffin|Ragdoll|İran kedisi|Maine Coon|Siyam|British shorthair|Hydrata',
+  id:'Ras kucing|Kucing domestik berbulu pendek|Ragamuffin|Ragdoll|Persia|Maine Coon|Siam|British shorthair|Hydrata',
+  vi:'Giống mèo|Mèo nhà lông ngắn|Ragamuffin|Ragdoll|Mèo Ba Tư|Maine Coon|Mèo Xiêm|Mèo Anh lông ngắn|Hydrata',
+  th:'สายพันธุ์แมว|แมวบ้านขนสั้น|รากามัฟฟิน|แร็กดอลล์|เปอร์เซีย|เมนคูน|วิเชียรมาศ|บริติชชอร์ตแฮร์|ไฮดราตา'
+ };
+ for(const [locale,row]of Object.entries(rows))row.split('|').forEach((value,i)=>{globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][keys[i]]=value;});
+}
+
+// Fitted companion clothing and constructed fantasy garments.
+{
+ const keys='Bandana|Weather coat|Companion wear|Travel companion|Gambeson|Heraldic tabard|Gem brooch'.split('|');
+ const rows={
+ ja:'バンダナ|防寒コート|ペットの服|旅の相棒|ギャンベゾン|紋章入りタバード|宝石のブローチ',
+ 'zh-Hant':'頭巾|防風外套|寵物服裝|旅行夥伴|棉甲|紋章罩袍|寶石胸針',
+ 'zh-Hans':'头巾|防风外套|宠物服装|旅行伙伴|棉甲|纹章罩袍|宝石胸针',
+ ko:'반다나|방한 코트|반려동물 의상|여행 동반자|누비 갑옷|문장 타바드|보석 브로치',
+ es:'Pañuelo|Abrigo protector|Ropa de compañía|Compañero de viaje|Gambesón|Tabardo heráldico|Broche con gema',
+ pt:'Bandana|Casaco de proteção|Roupas de companhia|Companheiro de viagem|Gibão acolchoado|Tabardo heráldico|Broche com gema',
+ fr:'Bandana|Manteau de protection|Vêtements pour animaux|Compagnon de voyage|Gambison|Tabard héraldique|Broche sertie',
+ de:'Halstuch|Wettermantel|Tierkleidung|Reisebegleiter|Gambeson|Wappenrock|Edelsteinbrosche',
+ it:'Bandana|Cappotto protettivo|Abiti per animali|Compagno di viaggio|Gambesone|Tabarro araldico|Spilla con gemma',
+ ru:'Бандана|Защитная попона|Одежда для питомцев|Спутник в путешествии|Гамбезон|Геральдический табард|Брошь с самоцветом',
+ pl:'Chusta|Płaszcz ochronny|Ubrania dla zwierząt|Towarzysz podróży|Przeszywanica|Tabard herbowy|Broszka z klejnotem',
+ el:'Μπαντάνα|Προστατευτικό παλτό|Ρούχα ζώων συντροφιάς|Σύντροφος ταξιδιού|Καπιτονέ θώρακας|Εραλδικός επενδύτης|Καρφίτσα με πετράδι',
+ ar:'منديل رقبة|معطف واقٍ|ملابس الحيوانات الأليفة|رفيق السفر|درع مبطن|سترة بشعار نبالة|بروش مرصع',
+ tr:'Bandana|Koruyucu palto|Evcil hayvan giysileri|Yol arkadaşı|Kapitoneli zırh|Armalı tabard|Taşlı broş',
+ id:'Bandana|Mantel pelindung|Pakaian hewan pendamping|Teman perjalanan|Baju zirah berlapis|Tabard berlambang|Bros permata',
+ vi:'Khăn quàng|Áo khoác bảo vệ|Trang phục thú cưng|Bạn đồng hành|Giáp vải chần|Áo choàng huy hiệu|Trâm đá quý',
+ th:'ผ้าพันคอ|เสื้อคลุมกันลม|เสื้อผ้าสัตว์เลี้ยง|เพื่อนร่วมทาง|เกราะผ้าบุนวม|เสื้อคลุมตราประจำตระกูล|เข็มกลัดอัญมณี'
+ };
+ for(const [locale,row]of Object.entries(rows))row.split('|').forEach((value,i)=>{globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][keys[i]]=value;});
+}
+
 // Web builds: files in pack archives.
 {
  const keys=["Pack files into archives", "A few zip archives in place of many files, for web hosts with file limits.", "this window blocks service workers, which read the project. Open a normal (not private) window with site data allowed."];
@@ -8086,3 +8161,97 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  };
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }
+
+// Original procedural field clothing and equipment.
+{
+ const keys=['Field coat','Courier','Pathfinder','Utility harness'];
+ const rows={
+ ja:'フィールドコート|運び屋|先導者|ユーティリティハーネス',
+ 'zh-Hant':'野外大衣|信使|探路者|多用途背帶',
+ 'zh-Hans':'野外大衣|信使|探路者|多用途背带',
+ ko:'야전 코트|배달원|길잡이|다용도 하네스',
+ es:'Abrigo de campo|Mensajero|Explorador|Arnés utilitario',
+ pt:'Casaco de campo|Mensageiro|Desbravador|Arnês utilitário',
+ fr:'Manteau de terrain|Messager|Éclaireur|Harnais utilitaire',
+ de:'Feldmantel|Kurier|Pfadfinder|Ausrüstungsgurt',
+ it:'Cappotto da campo|Corriere|Esploratore|Imbracatura multiuso',
+ ru:'Походный плащ|Курьер|Следопыт|Разгрузочная система',
+ pl:'Płaszcz terenowy|Kurier|Tropiciel|Uprząż użytkowa',
+ el:'Παλτό πεδίου|Αγγελιοφόρος|Ανιχνευτής|Εξάρτυση γενικής χρήσης',
+ ar:'معطف ميداني|ساعٍ|مستكشف|حمالة معدات',
+ tr:'Arazi paltosu|Kurye|İzci|Çok amaçlı koşum',
+ id:'Mantel lapangan|Kurir|Perintis|Sabuk perlengkapan',
+ vi:'Áo khoác dã ngoại|Người đưa tin|Người dẫn đường|Đai trang bị',
+ th:'เสื้อคลุมภาคสนาม|ผู้ส่งสาร|ผู้บุกเบิก|สายรัดอุปกรณ์'
+ };
+ for(const [locale,row]of Object.entries(rows))row.split('|').forEach((value,i)=>{globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][keys[i]]=value;});
+}
+
+// Room furniture, appliances and control equipment in the Prop Builder.
+{
+ const keys=['Furniture','Appliances','Electronics','Sci-fi interiors','Dining chair','Armchair','Sofa','Bench','Dining table','Desk','Bed','Cabinet','Bookshelf','Refrigerator','Microwave','Television','Desktop computer','Sci-fi wall panel','Computer console','Server rack','Modern','Rustic','Screen'];
+ const rows={
+ ja:'家具|家電|電子機器|SF内装|ダイニングチェア|肘掛け椅子|ソファ|ベンチ|ダイニングテーブル|机|ベッド|キャビネット|本棚|冷蔵庫|電子レンジ|テレビ|デスクトップパソコン|SF壁パネル|コンピューターコンソール|サーバーラック|モダン|素朴|画面',
+ 'zh-Hant':'家具|家電|電子設備|科幻室內設備|餐椅|扶手椅|沙發|長凳|餐桌|書桌|床|櫥櫃|書架|冰箱|微波爐|電視|桌上型電腦|科幻牆板|電腦控制台|伺服器機架|現代|鄉村|螢幕',
+ 'zh-Hans':'家具|家电|电子设备|科幻室内设备|餐椅|扶手椅|沙发|长凳|餐桌|书桌|床|橱柜|书架|冰箱|微波炉|电视|台式电脑|科幻墙板|电脑控制台|服务器机架|现代|乡村|屏幕',
+ ko:'가구|가전제품|전자기기|SF 실내 장비|식탁 의자|안락의자|소파|벤치|식탁|책상|침대|수납장|책장|냉장고|전자레인지|텔레비전|데스크톱 컴퓨터|SF 벽 패널|컴퓨터 콘솔|서버 랙|현대식|소박한 양식|화면',
+ es:'Muebles|Electrodomésticos|Electrónica|Interiores de ciencia ficción|Silla de comedor|Sillón|Sofá|Banco|Mesa de comedor|Escritorio|Cama|Armario|Estantería|Frigorífico|Microondas|Televisor|Ordenador de sobremesa|Panel de pared de ciencia ficción|Consola de ordenador|Bastidor de servidores|Moderno|Rústico|Pantalla',
+ pt:'Móveis|Eletrodomésticos|Eletrônicos|Interiores de ficção científica|Cadeira de jantar|Poltrona|Sofá|Banco|Mesa de jantar|Escrivaninha|Cama|Armário|Estante de livros|Geladeira|Micro-ondas|Televisão|Computador de mesa|Painel de parede de ficção científica|Console de computador|Rack de servidores|Moderno|Rústico|Tela',
+ fr:'Mobilier|Électroménager|Électronique|Intérieurs de science-fiction|Chaise de salle à manger|Fauteuil|Canapé|Banc|Table à manger|Bureau|Lit|Armoire|Bibliothèque|Réfrigérateur|Micro-ondes|Téléviseur|Ordinateur de bureau|Panneau mural de science-fiction|Console informatique|Baie de serveurs|Moderne|Rustique|Écran',
+ de:'Möbel|Haushaltsgeräte|Elektronik|Science-Fiction-Einrichtung|Esszimmerstuhl|Sessel|Sofa|Bank|Esstisch|Schreibtisch|Bett|Schrank|Bücherregal|Kühlschrank|Mikrowelle|Fernseher|Desktop-Computer|Science-Fiction-Wandpaneel|Computerkonsole|Serverschrank|Modern|Rustikal|Bildschirm',
+ it:'Mobili|Elettrodomestici|Elettronica|Interni fantascientifici|Sedia da pranzo|Poltrona|Divano|Panca|Tavolo da pranzo|Scrivania|Letto|Armadio|Libreria|Frigorifero|Microonde|Televisore|Computer desktop|Pannello a parete fantascientifico|Console informatica|Rack server|Moderno|Rustico|Schermo',
+ ru:'Мебель|Бытовая техника|Электроника|Фантастические интерьеры|Обеденный стул|Кресло|Диван|Скамья|Обеденный стол|Письменный стол|Кровать|Шкаф|Книжный шкаф|Холодильник|Микроволновая печь|Телевизор|Настольный компьютер|Фантастическая настенная панель|Компьютерная консоль|Серверная стойка|Современный|Деревенский|Экран',
+ pl:'Meble|Sprzęt AGD|Elektronika|Wnętrza science fiction|Krzesło do jadalni|Fotel|Sofa|Ławka|Stół do jadalni|Biurko|Łóżko|Szafka|Regał na książki|Lodówka|Kuchenka mikrofalowa|Telewizor|Komputer stacjonarny|Panel ścienny science fiction|Konsola komputerowa|Szafa serwerowa|Nowoczesny|Rustykalny|Ekran',
+ el:'Έπιπλα|Οικιακές συσκευές|Ηλεκτρονικά|Εσωτερικοί χώροι επιστημονικής φαντασίας|Καρέκλα τραπεζαρίας|Πολυθρόνα|Καναπές|Πάγκος|Τραπεζαρία|Γραφείο|Κρεβάτι|Ντουλάπι|Βιβλιοθήκη|Ψυγείο|Φούρνος μικροκυμάτων|Τηλεόραση|Επιτραπέζιος υπολογιστής|Πάνελ τοίχου επιστημονικής φαντασίας|Κονσόλα υπολογιστή|Ικρίωμα διακομιστών|Μοντέρνο|Ρουστίκ|Οθόνη',
+ ar:'أثاث|أجهزة منزلية|إلكترونيات|تجهيزات داخلية للخيال العلمي|كرسي طعام|كرسي بذراعين|أريكة|مقعد طويل|طاولة طعام|مكتب|سرير|خزانة|رف كتب|ثلاجة|ميكروويف|تلفاز|حاسوب مكتبي|لوحة حائط للخيال العلمي|وحدة تحكم حاسوبية|حامل خوادم|حديث|ريفي|شاشة',
+ tr:'Mobilya|Ev aletleri|Elektronik|Bilimkurgu iç mekânları|Yemek sandalyesi|Koltuk|Kanepe|Bank|Yemek masası|Çalışma masası|Yatak|Dolap|Kitaplık|Buzdolabı|Mikrodalga|Televizyon|Masaüstü bilgisayar|Bilimkurgu duvar paneli|Bilgisayar konsolu|Sunucu rafı|Modern|Rustik|Ekran',
+ id:'Furnitur|Peralatan rumah tangga|Elektronik|Interior fiksi ilmiah|Kursi makan|Kursi berlengan|Sofa|Bangku|Meja makan|Meja kerja|Tempat tidur|Lemari|Rak buku|Kulkas|Microwave|Televisi|Komputer desktop|Panel dinding fiksi ilmiah|Konsol komputer|Rak server|Modern|Rustik|Layar',
+ vi:'Đồ nội thất|Thiết bị gia dụng|Thiết bị điện tử|Nội thất khoa học viễn tưởng|Ghế ăn|Ghế bành|Ghế sofa|Ghế dài|Bàn ăn|Bàn làm việc|Giường|Tủ|Giá sách|Tủ lạnh|Lò vi sóng|Tivi|Máy tính để bàn|Bảng tường khoa học viễn tưởng|Bàn điều khiển máy tính|Tủ máy chủ|Hiện đại|Mộc mạc|Màn hình',
+ th:'เฟอร์นิเจอร์|เครื่องใช้ในบ้าน|อุปกรณ์อิเล็กทรอนิกส์|อุปกรณ์ภายในแนวไซไฟ|เก้าอี้กินข้าว|เก้าอี้มีที่วางแขน|โซฟา|ม้านั่ง|โต๊ะกินข้าว|โต๊ะทำงาน|เตียง|ตู้|ชั้นหนังสือ|ตู้เย็น|ไมโครเวฟ|โทรทัศน์|คอมพิวเตอร์ตั้งโต๊ะ|แผงผนังไซไฟ|คอนโซลคอมพิวเตอร์|ตู้แร็กเซิร์ฟเวอร์|สมัยใหม่|ชนบท|หน้าจอ'
+ };
+ for(const [locale,row]of Object.entries(rows)){
+  const values=row.split('|');if(values.length!==keys.length)throw Error('Furniture translation count: '+locale);
+  keys.forEach((key,i)=>{globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i];});
+ }
+}
+
+// Original transport and prop construction controls (2026-10-22).
+(() => {
+ const keys='Vehicles|Compact car|Sports coupe|Utility truck|Armored rover|Motorcycle|Hover transport|Shuttle|Survey drone|Utility walker|Bill length|Pockets|Vents|Pair spacing|Edge rounding|Frame material|Roughness|Plinth|Seat cushions|Cushion thickness|Back height|Arm width|Book fill|Shelves|Drawers|Screens|Keyboard rows|Keyboard angle|Control knobs|Screen design|Status display|Radar|Roof rack|Bumpers|Tire tread|Wheel spokes|Cabin height|Cabin length|Ground clearance|Wheelbase|Axles|Engine size|Stance width|Cargo load|Armor thickness|Body color|Welder|Fasteners|Grip ribs'.split('|');
+ const rows={
+ ja:'乗り物|小型車|スポーツクーペ|作業用トラック|装甲探査車|オートバイ|ホバー輸送車|シャトル|調査ドローン|作業用歩行機|つばの長さ|ポケット|通気口|ペアの間隔|角の丸み|フレーム素材|粗さ|台座|座面クッション数|クッションの厚さ|背もたれの高さ|肘掛けの幅|本の充填率|棚数|引き出し数|画面数|キーの行数|キーボードの角度|操作ノブ数|画面デザイン|状態表示|レーダー|ルーフラック|バンパー|タイヤの溝|ホイールのスポーク数|キャビンの高さ|キャビンの長さ|最低地上高|ホイールベース|車軸数|エンジンの大きさ|足の開き|積載量|装甲の厚さ|車体色|溶接機|留め具|グリップの溝',
+ 'zh-Hant':'載具|小型汽車|運動雙門車|工作卡車|裝甲探測車|機車|懸浮運輸車|接駁艇|勘測無人機|作業步行機|帽簷長度|口袋|通風口|成對間距|邊緣圓角|框架材質|粗糙度|底座|座墊數|坐墊厚度|椅背高度|扶手寬度|書籍填充量|層板數|抽屜數|螢幕數|鍵盤列數|鍵盤角度|控制旋鈕數|螢幕設計|狀態顯示|雷達|車頂架|保險桿|輪胎胎紋|輪輻數|座艙高度|座艙長度|離地間隙|軸距|車軸數|引擎大小|站姿寬度|貨物量|裝甲厚度|車體顏色|焊接器|緊固件|握把刻紋',
+ 'zh-Hans':'载具|小型汽车|运动双门车|工作卡车|装甲探测车|摩托车|悬浮运输车|穿梭艇|勘测无人机|作业步行机|帽檐长度|口袋|通风口|成对间距|边缘圆角|框架材质|粗糙度|底座|座垫数|坐垫厚度|椅背高度|扶手宽度|书籍填充量|层板数|抽屉数|屏幕数|键盘行数|键盘角度|控制旋钮数|屏幕设计|状态显示|雷达|车顶架|保险杠|轮胎胎纹|轮辐数|座舱高度|座舱长度|离地间隙|轴距|车轴数|引擎大小|站姿宽度|货物量|装甲厚度|车体颜色|焊接器|紧固件|握把刻纹',
+ ko:'탈것|소형 자동차|스포츠 쿠페|작업용 트럭|장갑 탐사차|오토바이|호버 수송차|셔틀|탐사 드론|작업용 보행기|챙 길이|주머니|통풍구|한 쌍의 간격|모서리 둥글기|프레임 재질|거칠기|받침대|좌석 쿠션 수|쿠션 두께|등받이 높이|팔걸이 너비|책 채움|선반 수|서랍 수|화면 수|키보드 행 수|키보드 각도|조작 손잡이 수|화면 디자인|상태 표시|레이더|지붕 짐받이|범퍼|타이어 무늬|바퀴살 수|객실 높이|객실 길이|최저 지상고|축간 거리|차축 수|엔진 크기|발 간격|화물량|장갑 두께|차체 색상|용접기|체결 부품|손잡이 홈',
+ es:'Vehículos|Coche compacto|Cupé deportivo|Camioneta de trabajo|Explorador blindado|Motocicleta|Transporte flotante|Lanzadera|Dron de exploración|Andador de trabajo|Longitud de la visera|Bolsillos|Rejillas|Separación del par|Redondeo de bordes|Material del armazón|Rugosidad|Zócalo|Cojines de asiento|Grosor del cojín|Altura del respaldo|Anchura del reposabrazos|Cantidad de libros|Estantes|Cajones|Pantallas|Filas del teclado|Ángulo del teclado|Mandos giratorios|Diseño de pantalla|Pantalla de estado|Radar|Portaequipajes|Parachoques|Dibujo del neumático|Radios de rueda|Altura de cabina|Longitud de cabina|Altura libre al suelo|Distancia entre ejes|Ejes|Tamaño del motor|Anchura de postura|Carga|Grosor del blindaje|Color de carrocería|Soldador|Fijaciones|Estrías de la empuñadura',
+ pt:'Veículos|Carro compacto|Cupê esportivo|Caminhonete de trabalho|Explorador blindado|Motocicleta|Transporte flutuante|Nave de transporte|Drone de exploração|Andador utilitário|Comprimento da aba|Bolsos|Aberturas de ventilação|Distância entre o par|Arredondamento das bordas|Material da estrutura|Rugosidade|Base fechada|Almofadas do assento|Espessura da almofada|Altura do encosto|Largura do apoio de braço|Quantidade de livros|Prateleiras|Gavetas|Telas|Fileiras do teclado|Ângulo do teclado|Botões giratórios|Design da tela|Tela de estado|Radar|Bagageiro de teto|Para-choques|Sulcos do pneu|Raios da roda|Altura da cabine|Comprimento da cabine|Altura livre do solo|Distância entre eixos|Eixos|Tamanho do motor|Largura da postura|Carga|Espessura da blindagem|Cor da carroceria|Soldador|Fixadores|Ranhuras da empunhadura',
+ fr:'Véhicules|Voiture compacte|Coupé sportif|Camion utilitaire|Rôdeur blindé|Moto|Transport à sustentation|Navette|Drone de reconnaissance|Marcheur utilitaire|Longueur de visière|Poches|Aérations|Écartement de la paire|Arrondi des bords|Matériau du cadre|Rugosité|Socle|Coussins d’assise|Épaisseur du coussin|Hauteur du dossier|Largeur des accoudoirs|Remplissage en livres|Étagères|Tiroirs|Écrans|Rangées de touches|Angle du clavier|Boutons rotatifs|Présentation de l’écran|Affichage d’état|Radar|Galerie de toit|Pare-chocs|Sculpture des pneus|Rayons de roue|Hauteur de cabine|Longueur de cabine|Garde au sol|Empattement|Essieux|Taille du moteur|Écartement des pieds|Chargement|Épaisseur du blindage|Couleur de carrosserie|Soudeur|Fixations|Rainures de poignée',
+ it:'Veicoli|Auto compatta|Coupé sportiva|Camion da lavoro|Esploratore corazzato|Motocicletta|Trasporto a levitazione|Navetta|Drone da ricognizione|Camminatore da lavoro|Lunghezza della visiera|Tasche|Prese d’aria|Distanza della coppia|Arrotondamento dei bordi|Materiale del telaio|Rugosità|Zoccolo|Cuscini del sedile|Spessore del cuscino|Altezza dello schienale|Larghezza dei braccioli|Riempimento di libri|Ripiani|Cassetti|Schermi|Righe della tastiera|Angolo della tastiera|Manopole di controllo|Grafica dello schermo|Schermata di stato|Radar|Portapacchi|Paraurti|Battistrada|Raggi della ruota|Altezza della cabina|Lunghezza della cabina|Altezza da terra|Passo|Assi|Dimensione del motore|Larghezza della postura|Carico|Spessore della corazza|Colore della carrozzeria|Saldatore|Fissaggi|Scanalature dell’impugnatura',
+ de:'Fahrzeuge|Kleinwagen|Sportcoupé|Nutzfahrzeug|Gepanzerter Rover|Motorrad|Schwebetransporter|Shuttle|Erkundungsdrohne|Arbeitsläufer|Schirmlänge|Taschen|Lüftungsöffnungen|Paarabstand|Kantenrundung|Rahmenmaterial|Rauheit|Sockel|Sitzpolster|Polsterdicke|Lehnenhöhe|Armlehnenbreite|Bücherfüllung|Regalböden|Schubladen|Bildschirme|Tastaturreihen|Tastaturwinkel|Drehregler|Bildschirmdesign|Statusanzeige|Radar|Dachgepäckträger|Stoßfänger|Reifenprofil|Radspeichen|Kabinenhöhe|Kabinenlänge|Bodenfreiheit|Radstand|Achsen|Motorgröße|Standbreite|Beladung|Panzerungsdicke|Karosseriefarbe|Schweißgerät|Befestigungen|Griffrillen',
+ ru:'Транспорт|Компактный автомобиль|Спортивное купе|Рабочий грузовик|Бронированный разведчик|Мотоцикл|Парящий транспорт|Шаттл|Разведывательный дрон|Рабочий шагоход|Длина козырька|Карманы|Вентиляционные отверстия|Расстояние между парой|Скругление краёв|Материал каркаса|Шероховатость|Цоколь|Подушки сиденья|Толщина подушки|Высота спинки|Ширина подлокотника|Заполнение книгами|Полки|Ящики|Экраны|Ряды клавиатуры|Угол клавиатуры|Ручки управления|Оформление экрана|Экран состояния|Радар|Багажник на крыше|Бамперы|Протектор шин|Спицы колеса|Высота кабины|Длина кабины|Дорожный просвет|Колёсная база|Оси|Размер двигателя|Ширина стойки|Груз|Толщина брони|Цвет кузова|Сварочный аппарат|Крепления|Насечки рукояти',
+ pl:'Pojazdy|Samochód kompaktowy|Sportowe coupé|Samochód użytkowy|Opancerzony zwiadowca|Motocykl|Transport poduszkowy|Wahadłowiec|Dron zwiadowczy|Maszyna krocząca|Długość daszka|Kieszenie|Otwory wentylacyjne|Odstęp pary|Zaokrąglenie krawędzi|Materiał ramy|Chropowatość|Cokół|Poduszki siedziska|Grubość poduszki|Wysokość oparcia|Szerokość podłokietników|Wypełnienie książkami|Półki|Szuflady|Ekrany|Rzędy klawiatury|Kąt klawiatury|Pokrętła sterowania|Wygląd ekranu|Ekran stanu|Radar|Bagażnik dachowy|Zderzaki|Bieżnik opony|Szprychy koła|Wysokość kabiny|Długość kabiny|Prześwit|Rozstaw osi|Osie|Wielkość silnika|Szerokość rozstawu nóg|Ładunek|Grubość pancerza|Kolor nadwozia|Spawarka|Mocowania|Rowki chwytu',
+ el:'Οχήματα|Μικρό αυτοκίνητο|Σπορ κουπέ|Φορτηγό εργασίας|Θωρακισμένο όχημα εξερεύνησης|Μοτοσικλέτα|Αιωρούμενο μεταφορικό|Σκάφος μεταφοράς|Μη επανδρωμένο αναγνώρισης|Μηχανή βάδισης εργασίας|Μήκος γείσου|Τσέπες|Αεραγωγοί|Απόσταση ζεύγους|Στρογγύλευση ακμών|Υλικό πλαισίου|Τραχύτητα|Βάθρο|Μαξιλάρια καθίσματος|Πάχος μαξιλαριού|Ύψος πλάτης|Πλάτος μπράτσων|Γέμισμα βιβλίων|Ράφια|Συρτάρια|Οθόνες|Σειρές πληκτρολογίου|Γωνία πληκτρολογίου|Περιστροφικά χειριστήρια|Σχέδιο οθόνης|Ένδειξη κατάστασης|Ραντάρ|Σχάρα οροφής|Προφυλακτήρες|Πέλμα ελαστικού|Ακτίνες τροχού|Ύψος καμπίνας|Μήκος καμπίνας|Απόσταση από το έδαφος|Μεταξόνιο|Άξονες|Μέγεθος κινητήρα|Πλάτος στάσης|Φορτίο|Πάχος θωράκισης|Χρώμα αμαξώματος|Συγκολλητής|Συνδετήρες|Αυλακώσεις λαβής',
+ ar:'المركبات|سيارة مدمجة|كوبيه رياضية|شاحنة خدمات|عربة استطلاع مدرعة|دراجة نارية|ناقلة حوامة|مكوك|طائرة استطلاع مسيرة|آلة مشي خدمية|طول حافة القبعة|الجيوب|فتحات التهوية|تباعد الزوج|تدوير الحواف|مادة الهيكل|الخشونة|قاعدة مصمتة|وسائد المقعد|سمك الوسادة|ارتفاع المسند|عرض مسند الذراع|امتلاء الكتب|الرفوف|الأدراج|الشاشات|صفوف لوحة المفاتيح|زاوية لوحة المفاتيح|مقابض التحكم|تصميم الشاشة|عرض الحالة|الرادار|حامل السقف|المصدات|نقشة الإطار|أسلاك العجلة|ارتفاع المقصورة|طول المقصورة|الخلوص الأرضي|قاعدة العجلات|المحاور|حجم المحرك|عرض الوقفة|حمولة الشحن|سمك التدريع|لون الجسم|أداة لحام|المثبتات|أخاديد المقبض',
+ tr:'Araçlar|Kompakt otomobil|Spor coupe|Hizmet kamyoneti|Zırhlı keşif aracı|Motosiklet|Havada süzülen taşıt|Mekik|Keşif dronu|İş yürüyücüsü|Siper uzunluğu|Cepler|Havalandırmalar|Çift aralığı|Kenar yuvarlama|Çerçeve malzemesi|Pürüzlülük|Kaide|Oturma minderleri|Minder kalınlığı|Sırt yüksekliği|Kolçak genişliği|Kitap doluluğu|Raflar|Çekmeceler|Ekranlar|Klavye sıraları|Klavye açısı|Kontrol düğmeleri|Ekran tasarımı|Durum ekranı|Radar|Tavan bagajı|Tamponlar|Lastik dişi|Jant telleri|Kabin yüksekliği|Kabin uzunluğu|Yerden yükseklik|Dingil mesafesi|Dingiller|Motor boyutu|Duruş genişliği|Yük miktarı|Zırh kalınlığı|Gövde rengi|Kaynak aleti|Bağlantı elemanları|Kabza olukları',
+ id:'Kendaraan|Mobil kompak|Coupe sport|Truk serbaguna|Penjelajah lapis baja|Sepeda motor|Angkutan melayang|Pesawat antar-jemput|Drone survei|Mesin berjalan serbaguna|Panjang lidah topi|Kantong|Ventilasi|Jarak pasangan|Pembulatan tepi|Bahan rangka|Kekasaran|Alas tertutup|Bantalan duduk|Ketebalan bantalan|Tinggi sandaran|Lebar sandaran lengan|Isi buku|Rak|Laci|Layar|Baris papan ketik|Sudut papan ketik|Kenop kontrol|Desain layar|Tampilan status|Radar|Rak atap|Bumper|Tapak ban|Jari-jari roda|Tinggi kabin|Panjang kabin|Jarak ke tanah|Jarak sumbu roda|Gandar|Ukuran mesin|Lebar kuda-kuda|Muatan kargo|Ketebalan baja|Warna bodi|Alat las|Pengencang|Alur pegangan',
+ vi:'Phương tiện|Xe nhỏ gọn|Xe coupe thể thao|Xe tải đa dụng|Xe thám hiểm bọc giáp|Xe máy|Xe vận tải lơ lửng|Tàu con thoi|Drone khảo sát|Máy đi bộ đa dụng|Độ dài lưỡi trai|Túi|Khe thông gió|Khoảng cách cặp|Bo tròn cạnh|Vật liệu khung|Độ nhám|Bệ kín|Đệm ghế|Độ dày đệm|Chiều cao tựa lưng|Độ rộng tay vịn|Mức lấp đầy sách|Kệ|Ngăn kéo|Màn hình|Số hàng bàn phím|Góc bàn phím|Núm điều khiển|Thiết kế màn hình|Hiển thị trạng thái|Radar|Giá nóc|Cản xe|Vân lốp|Nan hoa|Chiều cao cabin|Chiều dài cabin|Khoảng sáng gầm|Chiều dài cơ sở|Trục xe|Kích thước động cơ|Độ rộng thế đứng|Lượng hàng|Độ dày giáp|Màu thân xe|Dụng cụ hàn|Chi tiết bắt giữ|Rãnh tay cầm',
+ th:'ยานพาหนะ|รถยนต์ขนาดเล็ก|รถคูเป้สปอร์ต|รถบรรทุกอเนกประสงค์|รถสำรวจหุ้มเกราะ|รถจักรยานยนต์|รถขนส่งลอยตัว|ยานรับส่ง|โดรนสำรวจ|หุ่นเดินอเนกประสงค์|ความยาวปีกหมวก|กระเป๋า|ช่องระบายอากาศ|ระยะห่างของคู่|ความมนของขอบ|วัสดุโครง|ความหยาบ|ฐานทึบ|เบาะนั่ง|ความหนาเบาะ|ความสูงพนักพิง|ความกว้างที่วางแขน|ปริมาณหนังสือ|ชั้นวาง|ลิ้นชัก|หน้าจอ|แถวแป้นพิมพ์|มุมแป้นพิมพ์|ปุ่มหมุนควบคุม|รูปแบบหน้าจอ|จอแสดงสถานะ|เรดาร์|แร็คหลังคา|กันชน|ดอกยาง|ซี่ล้อ|ความสูงห้องโดยสาร|ความยาวห้องโดยสาร|ระยะใต้ท้องรถ|ระยะฐานล้อ|เพลา|ขนาดเครื่องยนต์|ความกว้างท่ายืน|ปริมาณสินค้า|ความหนาเกราะ|สีตัวถัง|เครื่องเชื่อม|ตัวยึด|ร่องด้ามจับ'
+ };
+ for(const [locale,row]of Object.entries(rows)){
+  const values=row.split('|');if(values.length!==keys.length)throw Error('Prop construction translation count: '+locale+' '+values.length+'/'+keys.length);
+  keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+ }
+})();
+
+// Formed upholstery patterns (2026-10-22).
+(() => {
+ const keys=['Upholstery','Tufted','Channel stitched'];
+ const rows={ja:'張り地|ボタン留め|縦溝ステッチ', 'zh-Hant':'軟墊面料|拉扣軟墊|條紋縫線','zh-Hans':'软垫面料|拉扣软垫|条纹缝线',ko:'실내 장식|버튼 장식|채널 스티치',es:'Tapicería|Capitoné|Costuras acanaladas',fr:'Rembourrage|Capitonné|Coutures en canaux',de:'Polsterung|Knopfheftung|Kanalsteppung',it:'Rivestimento|Trapuntato|Cuciture a canali',pt:'Estofamento|Capitonê|Costura em canais',ru:'Обивка|Каретная стяжка|Канальная прострочка',pl:'Tapicerka|Pikowanie guzikami|Przeszycia kanałowe',tr:'Döşeme|Düğmeli kapitone|Kanal dikişi',el:'Ταπετσαρία|Καπιτονέ|Ραφές με κανάλια',ar:'التنجيد|تنجيد بأزرار|خياطة بقنوات',id:'Pelapis|Berkancing|Jahitan kanal',vi:'Bọc đệm|Chần nút|Đường may rãnh',th:'วัสดุหุ้มเบาะ|ดึงกระดุม|เย็บเป็นร่อง'};
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Upholstery translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();
+
+// Editable labels on procedural screen props.
+(() => {
+ const values={ja:'画面テキスト','zh-Hant':'螢幕文字','zh-Hans':'屏幕文字',ko:'화면 텍스트',es:'Texto de pantalla',fr:'Texte de l’écran',de:'Bildschirmtext',it:'Testo sullo schermo',pt:'Texto da tela',ru:'Текст на экране',pl:'Tekst na ekranie',tr:'Ekran metni',el:'Κείμενο οθόνης',ar:'نص الشاشة',id:'Teks layar',vi:'Văn bản trên màn hình',th:'ข้อความบนหน้าจอ'};
+ for(const [locale,value]of Object.entries(values))globalThis.RR_REVIEWED_TRANSLATIONS.text[locale]['Screen text']=value;
+})();

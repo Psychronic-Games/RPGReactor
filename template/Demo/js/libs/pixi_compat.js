@@ -1235,6 +1235,8 @@
         // render() flush hook below. Off v8 the call is already a cheap dirty
         // flag, so keep it immediate rather than queueing work nothing drains.
         if (!_isV8Pixi || !PIXI.__reactorDeferTextureUploads) {
+            source.__rrTouch = false;
+            source.__rrUploadArea = false;
             source.update();
             return;
         }
@@ -1248,11 +1250,79 @@
         const resource = source.resource;
         if (resource && resource.width !== undefined &&
             (resource.width !== source.pixelWidth || resource.height !== source.pixelHeight)) {
+            source.__rrTouch = false;
+            source.__rrUploadArea = false;
             source.update();
             return;
         }
+        // The area this update covers: the one a Bitmap draw op just named
+        // (Bitmap._touchUpload), or the whole canvas when none was named.
+        if (source.__rrTouch && source.__rrUploadArea !== "all") {
+            source.__rrTouch = false;
+            if (source.__rrUploadArea) {
+                source.__rrUploadX0 = Math.min(source.__rrUploadX0, source.__rrTouchX0);
+                source.__rrUploadY0 = Math.min(source.__rrUploadY0, source.__rrTouchY0);
+                source.__rrUploadX1 = Math.max(source.__rrUploadX1, source.__rrTouchX1);
+                source.__rrUploadY1 = Math.max(source.__rrUploadY1, source.__rrTouchY1);
+            } else {
+                source.__rrUploadArea = "part";
+                source.__rrUploadX0 = source.__rrTouchX0;
+                source.__rrUploadY0 = source.__rrTouchY0;
+                source.__rrUploadX1 = source.__rrTouchX1;
+                source.__rrUploadY1 = source.__rrTouchY1;
+            }
+        } else {
+            source.__rrTouch = false;
+            source.__rrUploadArea = "all";
+        }
         if (!pendingTextureUploads) pendingTextureUploads = new Set();
         pendingTextureUploads.add(source);
+    }
+
+    // Partial uploads (Bitmap.partialUploads): only the changed area of a
+    // canvas goes to its GPU texture, when the texture already holds the rest
+    // at this size and the area is under half of it. WebGL 2 takes a
+    // sub-rectangle of a canvas through the unpack skip parameters.
+    PIXI.__reactorUploadStats = { partial: 0, whole: 0, partialBytes: 0 };
+
+    function uploadTextureArea(source) {
+        const area = source.__rrUploadArea;
+        source.__rrUploadArea = false;
+        if (area !== "part" || typeof Bitmap === "undefined" || !Bitmap.partialUploads) return false;
+        const app = typeof Graphics !== "undefined" ? Graphics._app : null;
+        const renderer = app && app.renderer;
+        const gl = renderer && renderer.gl;
+        const textures = renderer && renderer.texture;
+        if (!gl || !textures || !renderer.context || renderer.context.webGLVersion !== 2 || gl.isContextLost()) return false;
+        const glTexture = source._gpuData ? source._gpuData[renderer.uid] : null;
+        const resource = source.resource;
+        const width = source.pixelWidth, height = source.pixelHeight;
+        if (!glTexture || !glTexture.texture || glTexture.width !== width || glTexture.height !== height ||
+            !resource || resource.width !== width || resource.height !== height) return false;
+        const x0 = Math.max(0, source.__rrUploadX0), y0 = Math.max(0, source.__rrUploadY0);
+        const x1 = Math.min(width, source.__rrUploadX1), y1 = Math.min(height, source.__rrUploadY1);
+        if (x1 <= x0 || y1 <= y0) return true;
+        if ((x1 - x0) * (y1 - y0) * 2 > width * height) return false;
+        // As GlTextureSystem.onSourceUpdate binds before it uploads.
+        gl.bindTexture(glTexture.target, glTexture.texture);
+        textures._boundTextures[textures._activeTextureLocation] = source;
+        const premultiplied = source.alphaMode === "premultiply-alpha-on-upload";
+        if (textures._premultiplyAlpha !== premultiplied) {
+            textures._premultiplyAlpha = premultiplied;
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplied);
+        }
+        gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x0);
+        gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y0);
+        try {
+            gl.texSubImage2D(glTexture.target, 0, x0, y0, x1 - x0, y1 - y0, glTexture.format, glTexture.type, resource);
+        } finally {
+            gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+            gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+        }
+        const stats = PIXI.__reactorUploadStats;
+        stats.partial++;
+        stats.partialBytes += (x1 - x0) * (y1 - y0) * 4;
+        return true;
     }
 
     function flushTextureUploads() {
@@ -1264,7 +1334,12 @@
         sources.forEach(function(source) {
             try {
                 if (source && !source.destroyed && typeof source.update === "function") {
-                    source.update();
+                    let sent = false;
+                    try { sent = uploadTextureArea(source); } catch (e) { sent = false; }
+                    if (!sent) {
+                        PIXI.__reactorUploadStats.whole++;
+                        source.update();
+                    }
                 }
             } catch (e) {
                 // A source can be destroyed between the draw and the flush.
@@ -2735,7 +2810,10 @@
     // propagates child updates.
     if (PIXI.Container && !PIXI.Container.prototype.update) {
         PIXI.Container.prototype.update = function() {
-            for (const child of this.children) {
+            // Indexed: runs every frame for every container, and allocates nothing.
+            const children = this.children;
+            for (let i = 0; i < children.length; i++) {
+                const child = children[i];
                 if (child.update) {
                     child.update();
                 }
@@ -2904,6 +2982,13 @@
 
         const wrapClass = (orig, pixiBase) => {
             const wrapped = function(...args) {
+                // An ES5 super call from a plugin's own subclass, `Sprite.call(this, bitmap)` (ULDS),
+                // initializes that `this`, as MV's constructor did; building a new instance here left
+                // the caller's object with no transform or event emitter.
+                if (!new.target && this && typeof this === "object" && this !== window && orig.prototype.isPrototypeOf(this)) {
+                    orig.apply(this, args);
+                    return this;
+                }
                 let v8Inst;
                 try {
                     v8Inst = Reflect.construct(
@@ -3666,6 +3751,11 @@
                     }
                 }
             };
+            // Counts as UltraMode7's own hook for chunked tile painting
+            // (Tilemap.ChunkPaint.GATES): seven-argument calls go straight on.
+            if (Tilemap.ChunkPaint && Tilemap.ChunkPaint.origins) {
+                Tilemap.ChunkPaint.origins.set(Tilemap.CombinedLayer.prototype.addRect, "UltraMode7");
+            }
             compatLog("pixi_compat: UltraMode7 pre-2.2.0 CombinedLayer bridge installed (addRect ax/ay forwarding + animationFrame fan-out)");
         }
 

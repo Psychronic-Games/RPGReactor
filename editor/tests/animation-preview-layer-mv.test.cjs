@@ -55,6 +55,22 @@ test('an MV animation draws every frame and finishes', async () => {
     assert.ok(layer.mvCanvas.getContext().drawCalls >= 4, 'every frame drew a cell');
 });
 
+test('a sprite effect pauses its frame loop with the workspace and does not catch up on return', async () => {
+    const { Layer, tick } = loadLayer();
+    const layer = new Layer(makeElement('div'));
+    layer.play(mvAnimation, '/project', {});
+    await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve));
+    tick(70);
+    const drawn = layer.mvCanvas.getContext().drawCalls;
+    layer.setWorkspaceActive(false); tick(10000); tick(10000);
+    assert.equal(layer.mvCanvas.getContext().drawCalls, drawn);
+    assert.equal(layer.mv.raf, null);
+    layer.setWorkspaceActive(true); tick(70);
+    assert.equal(layer.mvCanvas.getContext().drawCalls, drawn + 1);
+    assert.equal(layer.active, true);
+    layer.stop();
+});
+
 test('a draw that throws still lets the animation finish instead of stalling', async () => {
     const { Layer, tick } = loadLayer();
     const layer = new Layer(makeElement('div'));

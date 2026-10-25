@@ -233,6 +233,8 @@
         return d.height * tall * shaped;
     };
 
+    /** The steepest bank Lower digs, in tiles of fall per tile: under the runtime's walk limit (Reactor3D.TERRAIN_SLOPE_LIMIT, 0.75), so it is walked into. */
+    const LOWER_BANK_SLOPE = 0.7;
     const paintTerrain = (mapData, x, y, options = {}) => {
         const grid = ensureTerrain(mapData);
         if (!grid) return false;
@@ -242,7 +244,17 @@
         const stride = mapData.width + 1;
         const x0 = Math.max(0, Math.floor(x - radius)), x1 = Math.min(mapData.width, Math.ceil(x + radius));
         const y0 = Math.max(0, Math.floor(y - radius)), y1 = Math.min(mapData.height, Math.ceil(y + radius));
-        const before = mode === 'smooth' ? grid.slice() : null;
+        const before = mode === 'smooth' || mode === 'lower' ? grid.slice() : null;
+        // Lower keeps the banks it digs walkable: a corner sinks no further than LOWER_BANK_SLOPE below any
+        // corner beside it, so a pit deepens only as far as the brush is wide and is always walked into.
+        const bankFloor = (cx, cy) => {
+            let top = -Infinity;
+            if (cx > 0) top = Math.max(top, Number(before[cy * stride + cx - 1]) || 0);
+            if (cx < mapData.width) top = Math.max(top, Number(before[cy * stride + cx + 1]) || 0);
+            if (cy > 0) top = Math.max(top, Number(before[(cy - 1) * stride + cx]) || 0);
+            if (cy < mapData.height) top = Math.max(top, Number(before[(cy + 1) * stride + cx]) || 0);
+            return top - LOWER_BANK_SLOPE;
+        };
         let changed = false;
         for (let cy = y0; cy <= y1; cy++) {
             for (let cx = x0; cx <= x1; cx++) {
@@ -254,7 +266,7 @@
                 const current = Number(grid[index]) || 0;
                 let next = current;
                 if (mode === 'raise') next = current + strength * falloff;
-                else if (mode === 'lower') next = current - strength * falloff;
+                else if (mode === 'lower') next = Math.min(current, Math.max(current - strength * falloff, bankFloor(cx, cy)));
                 else if (mode === 'smooth') {
                     let sum = 0, count = 0;
                     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -1813,7 +1825,7 @@
         snapshot, restore, isFlat, save,
         TERRAIN_MAX, TERRAIN_MODES, terrain, hasTerrain, ensureTerrain, terrainAt, terrainHeightAt,
         paintTerrain, terrainSnapshot, restoreTerrain, restoreTerrainChanges, clearTerrain,
-        duneHeightAt, duneSettings, DUNE_DEFAULT, DUNE_LEE, DUNE_WALK_SLOPE
+        duneHeightAt, duneSettings, DUNE_DEFAULT, DUNE_LEE, DUNE_WALK_SLOPE, LOWER_BANK_SLOPE
     };
     /**
      * A sidecar as text: readable, and not four times its data. Each top-level

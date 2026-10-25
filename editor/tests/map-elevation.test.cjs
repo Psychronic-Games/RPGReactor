@@ -454,7 +454,8 @@ test('the 3D ground is drawn into the PIXI scene, not behind it', () => {
     // The render has to reach PIXI every frame or the sprite shows frame one
     // forever, and each pass must be uploaded before the next overwrites the
     // canvas it came off.
-    const update = sprites.slice(sprites.indexOf('Spriteset_Map.prototype.updateReactor3D = function'));
+    // (The passes are drawn by drawReactor3D: in the update, or on a paced frame.)
+    const update = sprites.slice(sprites.indexOf('Spriteset_Map.prototype.drawReactor3D = function'));
     const body = update.slice(0, update.indexOf('\n};'));
     // Model maps render "world"/"overlay", legacy maps "below"/"above"; the
     // draw-then-upload ordering is the invariant either way.

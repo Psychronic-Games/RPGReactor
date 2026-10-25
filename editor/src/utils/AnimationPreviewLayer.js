@@ -64,6 +64,7 @@
             this.transform = { rotate: [0, 0, 0], scale: [1, 1, 1] };
             this.screenHeight = projectScreenHeight();
             this.span = 1;
+            this.workspaceActive = true;
             // The canvases' native size: SIZE at rest, grown with the
             // overlay (see moveTo) so a big effect is not a stretched thumbnail.
             this.size = SIZE;
@@ -162,7 +163,7 @@
             this.active = true;
             this.loop = !!options.loop;
             this.onSound = options.onSound;this.paused=false;this.mv.ready=false;
-            if (animation !== this._lastPlayed) { this.visibleFrames = null; this._litPlays = 0; }
+            if (animation !== this._lastPlayed) { this.visibleFrames = null; this.endFrames = 0; this._litPlays = 0; }
             this._lastPlayed = animation;
             if (options.transform) this.setTransform(options.transform);
             this.wrap.style.display = this.world ? 'none' : 'block';
@@ -188,7 +189,20 @@
             return canvas;
         }
 
+        setWorkspaceActive(active) {
+            if (this.workspaceActive === active) return;
+            this.workspaceActive = active;
+            if (!active) {
+                if (this.mv.raf) cancelAnimationFrame(this.mv.raf);
+                if (this.fx.raf) cancelAnimationFrame(this.fx.raf);
+                this.mv.raf = this.fx.raf = null;
+            } else if (this.active) {
+                this._resumeMV?.(); this._resumeFX?.();
+            }
+        }
+
         stop() {
+            this._resumeMV = this._resumeFX = null;
             this.generation++;
             this.active = false;
             if (this.mv.raf) { cancelAnimationFrame(this.mv.raf); this.mv.raf = null; }
@@ -294,6 +308,8 @@
                 const sounds=(from,to)=>{for(const timing of animation.timings||[])if(timing.frame>=from&&timing.frame<=to&&timing.se?.name)this.onSound?.(timing.se);};
                 const loop = () => {
                     if (generation !== this.generation) return;
+                    this.mv.raf = null;
+                    if (!this.workspaceActive) return;
                     try { step(); } catch (error) { console.warn('Animation preview:', error); this._finish(generation); }
                 };
                 const step = () => {
@@ -314,7 +330,12 @@
                     this.mv.raf = requestAnimationFrame(loop);
                 };
                 try { draw(0); sounds(0, 0); } catch (error) { console.warn('Animation preview:', error); this._finish(generation); return; }
-                this.mv.raf = requestAnimationFrame(loop);
+                this._resumeMV = () => {
+                    if (!this.workspaceActive || generation !== this.generation || this.mv.raf) return;
+                    last = performance.now();
+                    this.mv.raf = requestAnimationFrame(loop);
+                };
+                this._resumeMV();
             });
             return true;
         }
@@ -380,15 +401,39 @@
                 };
                 // Frames since the play began, and the last one anything
                 // was lit: a loop starts over there, not when the last
-                // invisible particle dies, so there is no dark gap.
-                let ticks = 0, lastLit = 0;
+                // invisible particle dies, so there is no dark gap. Only a
+                // later look that found nothing makes it the picture's end:
+                // a play still lit at every look runs its full length.
+                let ticks = 0, lastLit = 0, darkAfter = false, nextLook = 3;
+                // Looks are taken on the first frame at or past each tenth,
+                // since a slow frame runs several updates and skips ticks.
+                const look = (frame, isLit) => {
+                    if (isLit === null) return;
+                    if (isLit) { if (frame > lastLit) { lastLit = frame; darkAfter = false; } }
+                    else if (lastLit > 0 && frame > lastLit) darkAfter = true;
+                };
+                const due = () => (this._litPlays || 0) < 2 && ticks >= nextLook;
+                const looked = () => { nextLook = Math.floor(ticks / 10) * 10 + 10; };
                 const start = () => {
                     fx.ctx._makeContextCurrent?.();
                     this._plays = (this._plays || 0) + 1;
-                    if (lastLit > 0) { this.visibleFrames = Math.max(this.visibleFrames || 0, lastLit); this._litPlays = (this._litPlays || 0) + 1; }
+                    if (lastLit > 0) {
+                        if (darkAfter) this.visibleFrames = Math.max(this.visibleFrames || 0, lastLit);
+                        this._litPlays = (this._litPlays || 0) + 1;
+                    }
+                    const again = !!fx.handle;
                     fx.handle = fx.ctx.play(effect);
-                    alive = 0; dead = 0; ticks = 0; lastLit = 0;
+                    alive = 0; dead = 0; ticks = 0; lastLit = 0; darkAfter = false; nextLook = 3;
                     this._applyHandleTransform();
+                    // A play draws nothing before its first update, and a
+                    // loop's next play is drawn before the loop's next
+                    // update: step it once now, or every loop shows an
+                    // empty frame. The context is this layer's own.
+                    if (again) {
+                        fx.ctx.update();
+                        ticks = 1;
+                        if (fx.handle && fx.handle.exists) alive = 1;
+                    }
                 };
                 // Whether anything is lit. Read at 96x96 with a low bar: a
                 // 32x32 look averaged a 1024-pixel canvas 32 pixels to a
@@ -404,7 +449,7 @@
                     ctx.clearRect(0, 0, LIT, LIT);
                     ctx.drawImage(this.fxCanvas, 0, 0, this.fxCanvas.width, this.fxCanvas.height, 0, 0, LIT, LIT);
                     let data;
-                    try { data = ctx.getImageData(0, 0, LIT, LIT).data; } catch (e) { return false; }
+                    try { data = ctx.getImageData(0, 0, LIT, LIT).data; } catch (e) { return null; }
                     for (let i = 3; i < data.length; i += 4) if (data[i] >= 2) return true;
                     return false;
                 };
@@ -437,16 +482,18 @@
                               width: rect ? Math.round(world.viewWidth*s) : width, height: rect ? Math.round(world.viewHeight*s) : height },
                             world.projection, world.view, fx.handle, true);
                         const drawn = !!target && !!fx.handle?.exists;
-                        if (drawn && !this._gpuLitPending && (this._litPlays || 0) < 2 && (ticks === 3 || ticks % 10 === 0)) {
+                        if (drawn && !this._gpuLitPending && due()) {
                             const frame = ticks, play = this._plays;
                             this._gpuLitPending = true;
                             const queued = Reactor3D.GpuEffects.read(fx.gpu, target, (pixels, w, h) => {
                                 this._gpuLitPending = false;
                                 if (!pixels || generation !== this.generation || play !== this._plays) return;
                                 const data = Reactor3D.GpuEffects.downsample(pixels, w, h, LIT, LIT);
-                                for (let i=3;i<data.length;i+=4) if (data[i]>=2) { lastLit=frame; break; }
+                                let isLit = false;
+                                for (let i=3;i<data.length;i+=4) if (data[i]>=2) { isLit = true; break; }
+                                look(frame, isLit);
                             });
-                            if (!queued) this._gpuLitPending = false;
+                            if (queued) looked(); else this._gpuLitPending = false;
                         }
                         return drawn;
                     }
@@ -485,11 +532,13 @@
                     // Where the picture ends is learned from the first two
                     // plays; the readback that finds it stalls the GPU, so
                     // it is not repeated once known.
-                    if (drawn && (this._litPlays || 0) < 2 && (ticks === 3 || ticks % 10 === 0) && lit()) lastLit = ticks;
+                    if (drawn && due()) { look(ticks, lit()); looked(); }
                     return drawn;
                 };
                 const loop = () => {
                     if (generation !== this.generation) return;
+                    fx.raf = null;
+                    if (!this.workspaceActive) return;
                     const now = Date.now();
                     if(!this.paused)acc += (now - last)*(this.speed??1);
                     last = now;
@@ -503,20 +552,34 @@
                         ticks++;
                     }
                     if (acc > step * 5) acc = 0;
+                    // A loop starts over before this frame is drawn, on the
+                    // frame after its last lit one: measured, or else the
+                    // play's final frame, which is empty. A play that has
+                    // ended starts over at once, and its length is kept for
+                    // the plays after it.
+                    const end = this.visibleFrames > 0 ? this.visibleFrames + 1 : this.endFrames || 0;
+                    if (this.loop && alive >= 3 && end > 0 && ticks >= end) start();
+                    else if (this.loop && alive >= 3 && !fx.handle?.exists) {
+                        this.endFrames = Math.max(this.endFrames || 0, alive);
+                        start();
+                    }
                     const drawn = fx.gpu && this.world ? !!fx.handle?.exists : this._drawFrame();
                     if (drawn) {
                         dead = 0;
-                        if (this.loop && this.visibleFrames > 0 && ticks >= this.visibleFrames && alive >= 3) start();
                     } else if (++dead >= 3) {
                         // Nothing drawn for a few frames: the handle is
-                        // gone, or drew nothing. A loop starts over at once
-                        // rather than after a visible gap.
+                        // gone, or never drew.
                         if (!this.loop || alive < 3) { this._finish(generation); return; }
                         start();
                     }
                     fx.raf = requestAnimationFrame(loop);
                 };
-                fx.raf = requestAnimationFrame(loop);
+                this._resumeFX = () => {
+                    if (!this.workspaceActive || generation !== this.generation || fx.raf) return;
+                    last = Date.now();
+                    fx.raf = requestAnimationFrame(loop);
+                };
+                this._resumeFX();
             };
             const cached = fx.effects.get(animation.effectName);
             if (cached) {

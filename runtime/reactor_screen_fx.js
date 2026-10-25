@@ -419,7 +419,9 @@
         const container = this._pictureContainer, tilemap = this._tilemap;
         const all = (this._rrPictureSprites || (this._rrPictureSprites = container.children.filter(c => c instanceof Sprite_Picture)));
         let moved = null;
-        for (const sprite of all) {
+        // Indexed: runs every frame, and allocates nothing while no picture moves.
+        for (let i = 0; i < all.length; i++) {
+            const sprite = all[i];
             const p = sprite.picture();
             if (!p || !p.name()) continue;
             const layer = mapLayerOf(p);
@@ -826,6 +828,230 @@ void main() {
         };
     }
 
+    // The importer predates the dedicated flag, so existing imports opt in
+    // through their legacy panorama metadata unless explicitly disabled.
+    const legacyTone = () => !!($dataSystem && ($dataSystem.rrLegacyTone === true
+        || ($dataSystem.rrLegacyTone !== false && $dataSystem.rrLegacyParallax)));
+    const _Spriteset_Base_updateBaseFilters = Spriteset_Base.prototype.updateBaseFilters;
+    Spriteset_Base.prototype.updateBaseFilters = function() {
+        this._baseColorFilter.setLegacyTone?.(legacyTone());
+        _Spriteset_Base_updateBaseFilters.call(this);
+    };
+    const _Sprite_Picture_updateTone = Sprite_Picture.prototype.updateTone;
+    Sprite_Picture.prototype.updateTone = function() {
+        _Sprite_Picture_updateTone.call(this);
+        this._colorFilter?.setLegacyTone?.(legacyTone());
+    };
+
+    // Older conversions encoded Show Picture's initial tone as a one-frame
+    // tween. A following Move Picture then replaced it before its first tick.
+    // Repair that exact generated sequence when an existing import is played.
+    const _Game_Interpreter_command234InitialTone = Game_Interpreter.prototype.command234;
+    Game_Interpreter.prototype.command234 = function(params) {
+        const previous = this._list?.[this._index - 1];
+        if (legacyTone() && params[2] === 1 && !params[3]
+            && previous?.code === 231 && previous.parameters[0] === params[0]) {
+            params = params.slice();
+            params[2] = 0;
+        }
+        return _Game_Interpreter_command234InitialTone.call(this, params);
+    };
+
+    // Changing a legacy panorama yields until the new file can be drawn.
+    // Keeping the old name meanwhile also keeps the old plane visible.
+    const legacyBitmapReady = (bitmap) => {
+        if (bitmap.isError?.()) ImageManager.throwLoadError(bitmap);
+        if (bitmap.isReady()) return true;
+        ImageManager._checkStalledBitmap?.(bitmap);
+        return false;
+    };
+    const _Game_Interpreter_command284 = Game_Interpreter.prototype.command284;
+    Game_Interpreter.prototype.command284 = function(params) {
+        if (!$dataSystem || !$dataSystem.rrLegacyParallax || !params[0]) {
+            this._rrPendingParallax = null;
+            return _Game_Interpreter_command284.call(this, params);
+        }
+        let request = this._rrPendingParallax;
+        if (request && (request.map !== $gameMap || request.mapId !== $gameMap.mapId())) {
+            this._rrPendingParallax = null;
+            return true;
+        }
+        if (!request || request.name !== params[0]) {
+            request = this._rrPendingParallax = { map: $gameMap, mapId: $gameMap.mapId(),
+                name: params[0], bitmap: ImageManager.loadParallax(params[0]) };
+        }
+        if (!legacyBitmapReady(request.bitmap)) return false;
+        this._rrPendingParallax = null;
+        return _Game_Interpreter_command284.call(this, params);
+    };
+
+    const _Game_Interpreter_clearParallax = Game_Interpreter.prototype.clear;
+    Game_Interpreter.prototype.clear = function() {
+        this._rrPendingParallax = null;
+        return _Game_Interpreter_clearParallax.apply(this, arguments);
+    };
+
+    // Legacy teleport erase/show defaults are independent, persistent settings.
+    // A None erase followed by Cut show must never acquire MZ's black fade.
+    Game_Interpreter.prototype.rrChangeScreenTransition = function(which, effect) {
+        const slots = $gameSystem._rrLegacyTransitions || ($gameSystem._rrLegacyTransitions = []);
+        slots[Math.max(0, Math.min(5, Number(which) || 0))] = Math.max(0, Math.min(20, Number(effect) || 0));
+    };
+    const legacyTransition = (show) => {
+        const defaults = $dataSystem && $dataSystem.rrLegacyTransitions;
+        if (!defaults) return null;
+        const index = show ? 1 : 0, saved = $gameSystem._rrLegacyTransitions;
+        return saved && saved[index] !== undefined ? saved[index] : defaults[index];
+    };
+    Scene_Map.prototype._rrClearTransferZoom = function() {
+        const zoom = this._rrTransferZoom;
+        if (!zoom) return;
+        this._rrTransferZoom = null;
+        if (zoom.sprite.parent) zoom.sprite.parent.removeChild(zoom.sprite);
+        zoom.sprite.destroy();
+        zoom.bitmap.destroy();
+    };
+    Scene_Map.prototype._rrDrawTransferZoom = function() {
+        const z = this._rrTransferZoom;
+        if (!z) return;
+        const w = Graphics.width, h = Graphics.height, last = z.frames - 1;
+        let frame = Math.min(z.frames - 2, z.frames - this._fadeDuration);
+        if (z.show) frame = Math.max(0, z.frames - 2 - frame);
+        const crop = (length, target) => {
+            const near = length / 4, far = length * 3 / 4;
+            let pos = Math.max(near, Math.min(target, far)) * frame / last;
+            const size = length * (last - frame) / last;
+            const edge = target < near ? last * target / near - last : target > far ? last * (target - far) / (length - far) : 0;
+            if (edge && frame > 0) {
+                const fixedPos = pos * Math.abs(edge) / frame;
+                const fixedSize = length * (last - Math.abs(edge)) / last;
+                pos += frame < Math.abs(edge) ? (edge > 0 ? length - size : 0) - pos
+                    : edge > 0 ? length - fixedPos - fixedSize : -fixedPos;
+            }
+            return [Math.floor(pos), Math.max(1, Math.floor(size))];
+        };
+        const [x, cw] = crop(w, z.x), [y, ch] = crop(h, z.y);
+        z.sprite.setFrame(x, y, cw, ch);
+        z.sprite.scale.set(w / cw, h / ch);
+    };
+    Scene_Map.prototype._rrStartLegacyTransfer = function(show, effect) {
+        this._rrClearTransferZoom();
+        this._rrLegacyTransferBusy = true;
+        if (effect === 20) { this._fadeDuration = 0; return; }
+        if (effect === 19) {
+            this._fadeDuration = 1;
+            this._fadeOpacity = show ? 0 : 255;
+            this._fadeSign = show ? 1 : -1;
+            this.updateColorFilter();
+            return;
+        }
+        if (effect !== 16) {
+            // Other legacy wipes retain a fade fallback; source timing is 41
+            // frames, while the authored fade itself takes 35.
+            if (show) this.startFadeIn(effect === 0 ? 35 : 41, false);
+            else this.startFadeOut(effect === 0 ? 35 : 41, false);
+            return;
+        }
+        this._fadeOpacity = 0;
+        this._fadeDuration = 41;
+        this._fadeSign = 1;
+        this.updateColorFilter();
+        const bitmap = SceneManager.snap(), sprite = new Sprite(bitmap);
+        this.addChild(sprite);
+        this._rrTransferZoom = { bitmap, sprite, frames: 41, show,
+            x: Math.max(0, Math.min(Graphics.width, $gamePlayer.screenX())),
+            y: Math.max(0, Math.min(Graphics.height, $gamePlayer.screenY() - 8)) };
+        this._rrDrawTransferZoom();
+    };
+    for (const [name, show] of [["fadeOutForTransfer", false], ["fadeInForTransfer", true]]) {
+        const original = Scene_Map.prototype[name];
+        Scene_Map.prototype[name] = function() {
+            const effect = legacyTransition(show);
+            if (effect === null) return original.apply(this, arguments);
+            if (!show) {
+                // An incoming autorun can immediately teleport again. Its
+                // pending reveal must not replace the new outgoing effect.
+                this._rrPendingTransferShow = undefined;
+                if ($gameTemp._rrTransferBackdrop) $gameTemp._rrTransferBackdrop.destroy();
+                $gameTemp._rrTransferBackdrop = effect === 20 ? SceneManager.snap() : null;
+                this._rrStartLegacyTransfer(false, effect);
+                this._rrClearTransferLoadGuard();
+            } else {
+                // Execute the incoming map's first event batch, then wait for
+                // its requested pictures/parallax before revealing any layer.
+                this._rrPendingTransferShow = effect;
+                this._rrTransferPrimed = false;
+                this._rrTransferWarmups = 0;
+                const bitmap = $gameTemp._rrTransferBackdrop || new Bitmap(Graphics.width, Graphics.height);
+                if (!$gameTemp._rrTransferBackdrop) bitmap.fillAll("#000000");
+                $gameTemp._rrTransferBackdrop = null;
+                const sprite = new Sprite(bitmap);
+                this.addChild(sprite);
+                this._rrTransferLoadGuard = { bitmap, sprite };
+            }
+        };
+    }
+    const _Scene_Map_updateFade = Object.prototype.hasOwnProperty.call(Scene_Map.prototype, "updateFade")
+        ? Scene_Map.prototype.updateFade : null;
+    Scene_Map.prototype.updateFade = function() {
+        const base = _Scene_Map_updateFade || Object.getPrototypeOf(Scene_Map.prototype).updateFade;
+        base.call(this);
+        if (this._rrTransferZoom) {
+            this._rrDrawTransferZoom();
+            // changeScene ran before this tick. Keep the outgoing final
+            // crop until terminate, rather than flash its full map once.
+            if (this._fadeDuration <= 0 && this._rrTransferZoom.show) this._rrClearTransferZoom();
+        }
+    };
+    const _Scene_Map_updateMain = Scene_Map.prototype.updateMain;
+    Scene_Map.prototype.updateMain = function() {
+        if (this._rrPendingTransferShow !== undefined) {
+            if (this._rrTransferPrimed && !ImageManager.isReady()) return;
+            this._rrTransferPrimed = true;
+        }
+        if (this._rrLegacyTransferBusy) {
+            if (this._fadeDuration > 0) return;
+            this._rrLegacyTransferBusy = false;
+        }
+        _Scene_Map_updateMain.call(this);
+    };
+    Scene_Map.prototype._rrClearTransferLoadGuard = function() {
+        const guard = this._rrTransferLoadGuard;
+        if (!guard) return;
+        this._rrTransferLoadGuard = null;
+        if (guard.sprite.parent) guard.sprite.parent.removeChild(guard.sprite);
+        guard.sprite.destroy();
+        guard.bitmap.destroy();
+    };
+    const _Scene_Map_updateTransferReady = Scene_Map.prototype.update;
+    Scene_Map.prototype.update = function() {
+        _Scene_Map_updateTransferReady.call(this);
+        if (SceneManager.isSceneChanging?.()) return;
+        if (this._rrPendingTransferShow === undefined || !this._rrTransferPrimed) return;
+        // Sprite updates precede event logic. Prime currently shown pictures
+        // now, then let the sprites bind their ready textures on the next tick.
+        for (const picture of $gameScreen._pictures) {
+            if (picture && picture.name()) ImageManager.loadPicture(picture.name());
+        }
+        if (++this._rrTransferWarmups < 2 || !ImageManager.isReady()) return;
+        const spriteset = this._spriteset;
+        if (spriteset?._parallax && spriteset._parallaxName !== $gameMap.parallaxName()) return;
+        for (const sprite of spriteset?._rrPictureSprites || []) {
+            const picture = sprite.picture();
+            if (picture && picture.name() && (sprite._pictureName !== picture.name() || !sprite.bitmap?.isReady())) return;
+        }
+        const effect = this._rrPendingTransferShow;
+        this._rrPendingTransferShow = undefined;
+        this._rrClearTransferLoadGuard();
+        this._rrStartLegacyTransfer(true, effect);
+    };
+    const _Scene_Map_terminateZoom = Scene_Map.prototype.terminate;
+    Scene_Map.prototype.terminate = function() {
+        this._rrClearTransferZoom();
+        this._rrClearTransferLoadGuard();
+        _Scene_Map_terminateZoom.apply(this, arguments);
+    };
+
     // RPG Maker 2000/2003 panoramas that neither scroll nor loop move with the camera in proportion
     // (System.json rrLegacyParallax): across the map's scroll range the image slides from its left edge
     // to its right, so one as large as the map is fixed to it. MZ pins such a parallax to the screen.
@@ -837,9 +1063,41 @@ void main() {
         const range = (tiles - perScreen) * tile;
         return Math.floor(Math.min(range, bitmapSize - screen) * display * tile / range);
     };
+    // A leading ! is an ordinary legacy filename, not MZ's zero-parallax
+    // directive. Loop toggles retain the old visible phase on the same image.
+    const _Game_Map_setupParallax = Game_Map.prototype.setupParallax;
+    Game_Map.prototype.setupParallax = function() {
+        _Game_Map_setupParallax.call(this);
+        if ($dataSystem && $dataSystem.rrLegacyParallax) this._parallaxZero = false;
+    };
+    const _Game_Map_changeParallax = Game_Map.prototype.changeParallax;
+    Game_Map.prototype.changeParallax = function(name, loopX, loopY, sx, sy) {
+        const legacy = $dataSystem && $dataSystem.rrLegacyParallax;
+        let ox = null, oy = null;
+        if (legacy && name && name === this._parallaxName) {
+            const bitmap = ImageManager.loadParallax(name);
+            if (bitmap.isReady()) {
+                if (loopX && !this._parallaxLoopX) ox = legacyPanorama(bitmap.width, Graphics.width,
+                    this.width(), this.tileWidth(), this.displayX(), this.isLoopHorizontal());
+                if (loopY && !this._parallaxLoopY) oy = legacyPanorama(bitmap.height, Graphics.height,
+                    this.height(), this.tileHeight(), this.displayY(), this.isLoopVertical());
+            }
+        }
+        _Game_Map_changeParallax.apply(this, arguments);
+        if (legacy) {
+            this._parallaxZero = false;
+            if (ox !== null) this._parallaxX = ox * 2 / this.tileWidth();
+            if (oy !== null) this._parallaxY = oy * 2 / this.tileHeight();
+        }
+    };
     const _Spriteset_Map_updateParallax = Spriteset_Map.prototype.updateParallax;
     Spriteset_Map.prototype.updateParallax = function() {
-        _Spriteset_Map_updateParallax.call(this);
+        const name = $gameMap.parallaxName();
+        // Direct/plugin swaps get the same last-ready-plane protection as
+        // event command284; no completion callback can publish a stale name.
+        const pending = $dataSystem && $dataSystem.rrLegacyParallax && name
+            && this._parallaxName !== name && !legacyBitmapReady(ImageManager.loadParallax(name));
+        if (!pending) _Spriteset_Map_updateParallax.call(this);
         const bitmap = this._parallax && this._parallax.bitmap;
         if (!bitmap || !bitmap.isReady() || !$dataSystem || !$dataSystem.rrLegacyParallax || $gameMap._parallaxZero) return;
         const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight();

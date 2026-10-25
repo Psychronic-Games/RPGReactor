@@ -34,6 +34,7 @@ function harness() {
     Object.assign(manager, { isBuilding: false, worker: null, downloadProgressRows: new Map(), versionPicker: { load: async () => {}, hasVersion: () => true } });
     manager.selectedRuntimeLocales = () => [];
     manager.assetOptimizationSettings = () => ({});
+    manager.encryptionSettings = () => ({ images: false, audio: false, keyText: '' });
     return { manager, workers, saved: () => saves, finishSave: () => { for (const resolve of releases.splice(0)) resolve(true); } };
 }
 

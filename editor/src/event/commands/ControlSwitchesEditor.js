@@ -210,7 +210,7 @@ class ControlSwitchesEditor {
         button.disabled = disabled;
         const label = document.createElement('span');
         label.className = 'rr-variable-reference-label';
-        label.textContent = `${String(this.startId).padStart(4, '0')} ${switchName || `${tt('Switch')} ${this.startId}`}`;
+        label.textContent = `${String(this.startId).padStart(4, '0')} ${switchName || `${tt('Switch')} ${String(this.startId).padStart(4, '0')}`}`;
         const more = document.createElement('span');
         more.textContent = '...';
         button.appendChild(label);

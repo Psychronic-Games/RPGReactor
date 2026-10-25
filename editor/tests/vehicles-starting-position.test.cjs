@@ -193,3 +193,23 @@ test('map previews resolve the vehicle rules when the app hands over its bare pr
         for(const [key,value] of Object.entries(previous))if(value===undefined)delete global[key];else global[key]=value;
     }
 });
+
+test('an event with the Vehicle field and no picture of its own draws its vehicle model on the 2D map', () => {
+    const catalog=types(),vehicleEvent={...event(2,6,6),rrVehicle:{type:1}};
+    vehicleEvent.pages[0].image={tileId:0,characterName:'',direction:2,pattern:0,characterIndex:0};
+    const map={id:2,width:40,height:30,events:[null,null,vehicleEvent]};
+    const previous={window:global.window,Reactor3D:global.Reactor3D,EventManager:global.EventManager,RRVehicles:global.RRVehicles};
+    global.window={reactor:{databaseManager:{data:{vehicles:catalog}}}};
+    global.Reactor3D=R;global.EventManager=EventManager;global.RRVehicles=setup;
+    try {
+        const editor=Object.create(EventManager.prototype);editor.currentMap=map;editor.unitLook=()=>null;
+        const previews=editor.modelPreviewProps();
+        assert.deepEqual(previews.map(p=>[p.name,p.x,p.y]),[[catalog[1].model.name,6,6]],'the 2D view draws what the 3D view and the game show');
+        assert.deepEqual(previews[0].vehicle,{type:1,yaw:180},'drawn at its heading along the model\'s front, as the 3D view poses it');
+        assert.equal(MapEditor3D.previewModelSpec(map,vehicleEvent,0).name,previews[0].name);
+        map.events.push(null);catalog[1].startMapId=2;catalog[1].startX=12;catalog[1].startY=4;catalog[1].startDirection=6;
+        assert.deepEqual(editor.modelPreviewProps().map(p=>[p.x,p.y,p.vehicle&&p.vehicle.yaw]),[[6,6,180],[12,4,90]],'a starting position faces its Direction');
+        vehicleEvent.pages[0].image.characterName='Actor1';
+        assert.equal(editor.previewModelRaw(vehicleEvent,0),null,'a page with a picture of its own keeps it');
+    } finally { for(const [key,value] of Object.entries(previous))if(value===undefined)delete global[key];else global[key]=value; }
+});

@@ -10,7 +10,7 @@ const EventCommandList = require(path.join(editorRoot, 'src', 'event', 'EventCom
 /**
  * Three lists render event commands - the map event editor, troop battle pages
  * and common events - and each builds its own rows. They have drifted before:
- * 655 Script continuations were folded away in two of the three, and 657 plugin
+ * 655 Script continuations were drawn in some and not others, and 657 plugin
  * arguments in none. These tests hold all three to the same answer about which
  * rows exist, which is the part that can be checked without a DOM.
  */
@@ -102,7 +102,6 @@ test('all three lists agree on which continuation rows they drop', () => {
     };
 
     for (const [name, source] of Object.entries(sources)) {
-        assert.match(source, /code === 655/, `${name} folds Script continuations away`);
         assert.match(source, /code === 657/, `${name} gates plugin argument rows`);
         assert.match(source, /pluginArgs(OwnerIndex|Expanded)/,
             `${name} uses the shared owner lookup rather than its own scan`);

@@ -170,7 +170,7 @@ test('the game: a record with no design size is laid out as before; with one it 
     const tool = runtime(0, 0);
     assert.strictEqual(tool.ReactorUI.normalizeInterface(Object.assign({}, records[1], { design: { width: 1920, height: 1080 } })).fit, null);
     const source = read('runtime/reactor_ui.js');
-    assert.match(source, /const window = new WindowClass\(ReactorUI\.windowRect\(rect, this, fit\), this, node\);\s+if \(fit && window\.scale\) \{ window\.scale\.set\(fit\.scale, fit\.scale\); window\._uiFitScale = fit\.scale; \}/);
+    assert.match(source, /const window = new \(built\(WindowClass\)\)\(ReactorUI\.windowRect\(rect, this, fit\), this, node\);\s+if \(fit && window\.scale\) \{ window\.scale\.set\(fit\.scale, fit\.scale\); window\._uiFitScale = fit\.scale; \}/);
     assert.match(source, /const rect = this\.windowRect\(entry\.rect, scene, fit\);\s+state\.scale = fit \? fit\.scale : 1;\s+if \(fit && win\.scale\) win\.scale\.set\(fit\.scale, fit\.scale\);/);
 });
 

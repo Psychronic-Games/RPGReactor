@@ -61,6 +61,7 @@ test('every catalogue entry carries a code and a description', () => {
         for (const entry of group.codes) {
             assert.ok(entry.code, `${group.id} entry has a code`);
             assert.ok(entry.detail, `${entry.code} has a description`);
+            assert.doesNotMatch(entry.detail, /colour/i, `${entry.code} is described in US spelling`);
         }
     }
 });

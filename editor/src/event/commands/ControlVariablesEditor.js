@@ -319,7 +319,7 @@ class ControlVariablesEditor {
         button.disabled = disabled;
         const label = document.createElement('span');
         label.className = 'rr-variable-reference-label';
-        label.textContent = `${String(value).padStart(4, '0')} ${variableName || `${tt('Variable')} ${value}`}`;
+        label.textContent = `${String(value).padStart(4, '0')} ${variableName || `${tt('Variable')} ${String(value).padStart(4, '0')}`}`;
         const more = document.createElement('span');
         more.textContent = '...';
         button.appendChild(label);

@@ -306,9 +306,9 @@ class AnimationPickerModal {
                     gl.viewport(0, 0, fxCanvas.width, fxCanvas.height);
                     gl.clearColor(backdropRgb[0], backdropRgb[1], backdropRgb[2], 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                    const p = -1.2;
-                    const ax = fxCanvas.height / fxCanvas.width; // aspect-neutral x (1 on the square canvas)
-                    fx.ctx.setProjectionMatrix([ax, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, p, 0, 0, 0, 1]);
+                    // As the game draws it, the canvas standing for the game's screen (ReactorBattleData.effekseerProjection).
+                    const screenHeight = Number(databaseManager?.getSystem?.()?.advanced?.screenHeight) || fxCanvas.height;
+                    fx.ctx.setProjectionMatrix(ReactorBattleData.effekseerProjection(fxCanvas.width, fxCanvas.height, screenHeight, fxCanvas.height / screenHeight));
                     fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
                     fx.ctx.beginDraw();
                     if (fx.handle && fx.handle.exists) {

@@ -9,11 +9,13 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-test('the starter tileset\'s tile 0 is a star and nothing else is flagged', () => {
+test('the starter tileset\'s tile 0 is a star and every other tile has RPG Maker\'s starting flag', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ProjectManager.js'), 'utf8');
-    const ProjectManager = vm.runInNewContext(`${source}\nProjectManager;`, { console, process, require, nw: {} });
+    const RRTilesetSheets = require('../src/utils/TilesetSheets.js');
+    const ProjectManager = vm.runInNewContext(`${source}\nProjectManager;`, { console, process, require, nw: {}, RRTilesetSheets });
     const tileset = Object.create(ProjectManager.prototype).getStarterTileset();
     assert.equal(tileset.flags.length, 8192);
     assert.equal(tileset.flags[0], 0x10);
-    assert.ok(tileset.flags.slice(1).every(flag => flag === 0));
+    assert.deepEqual(Array.from(tileset.flags), RRTilesetSheets.defaultFlags());
+    assert.equal(tileset.flags[2048], 0x80f, 'A1 sea stops walkers');
 });

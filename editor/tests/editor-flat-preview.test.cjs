@@ -6,6 +6,25 @@ global.FlatLightField2D = require('../src/utils/FlatLightField2D.js');
 global.ModelPropShadows2D = require('../src/utils/ModelPropShadows2D.js');
 const Preview = require('../src/utils/ModelPropsPreview2D.js');
 
+test('missing or lost WebGL skips model painting and bounds expansion, then permits recovery', () => {
+    const preview = new Preview({});
+    // A previous viewport must not bypass the context check after a GPU crash.
+    const viewport = {};
+    preview.viewport = viewport;
+    for (const renderer of [undefined, {}, { gl: {}, context: {} },
+        { gl: { isContextLost: () => true }, context: { webGLVersion: 2 } }]) {
+        preview.app = { renderer };
+        assert.equal(preview.ensureViewport(), null);
+        assert.doesNotThrow(() => preview.paint({}));
+    }
+    for (const renderer of [undefined, {}, { gl: { isContextLost: () => true } }]) {
+        preview.app = { renderer };
+        assert.doesNotThrow(() => preview.expand({}));
+    }
+    preview.app = { renderer: { gl: { isContextLost: () => false }, context: { webGLVersion: 2 } } };
+    assert.equal(preview.ensureViewport() === viewport, true);
+});
+
 test('selection and movement retain the live sprite; replacement and removal dispose it', () => {
     global.ModelPropsManager = { specOf: p => ({ name: p.name, size: p.size }) };
     const preview = new Preview({});
@@ -266,4 +285,57 @@ test('flat surfaces use world-height lights even when their floor footprint is e
     entry.prop.x = 20;
     preview.syncLighting(entry, [{ ...light, shadowSource: { x: 20.5, y: 6, z: 30.5 } }], { intensity: 1 });
     assert.deepEqual(Array.from(entry.lighting.rrLightPos.value.slice(0, 3)), [0, 2, 0], 'carried lights use their world anchor rather than projected screen coordinates');
+});
+
+test('a vehicle on the 2D map is posed at its heading along its model\'s front, as the 3D view poses it', async () => {
+    global.ModelPropsManager = { specOf: p => ({ name: p.name }) };
+    const posed = [];
+    global.Reactor3D = { normalizeModelSpec: p => p, Vehicles: { pose: (holder, character, object) => posed.push([character._rrVehicle, character._rrYaw, object.id]) } };
+    // The build stops after posing: what follows needs three.js.
+    global.RREventPreviewModels = { templateFor: async () => ({ userData: {} }), instance: () => ({ id: 'bike' }) };
+    global.THREE = { Scene: class { constructor() { throw new Error('built'); } } };
+    const preview = new Preview({ project: () => ({ path: '/demo' }), mapEditor3D: () => null });
+    preview.isolateLighting = () => null;
+    for (const prop of [{ id: -5, name: 'bike', vehicle: { type: 11, yaw: 90 } }, { id: -6, name: 'crate' }]) {
+        const entry = { prop };
+        preview.entries.set(prop.id, entry);
+        await preview.load(entry);
+    }
+    assert.deepEqual(posed, [[11, Math.PI / 2, 'bike']], 'only the vehicle is posed, at its yaw');
+    const key = id => preview.entries.get(id)?.key;
+    preview.load = () => {};
+    preview.entries.clear();
+    preview.spriteFor({ id: 1, name: 'bike', vehicle: { type: 11, yaw: 90 } }, 48); const east = key(1);
+    preview.spriteFor({ id: 1, name: 'bike', vehicle: { type: 11, yaw: 180 } }, 48);
+    assert.notEqual(key(1), east, 'turning the vehicle draws it again');
+    delete global.ModelPropsManager; delete global.Reactor3D; delete global.RREventPreviewModels; delete global.THREE;
+});
+
+test('a prop painted while a part sat out the draw is painted again until nothing sits out', () => {
+    const hadReactor = 'Reactor3D' in global, previous = global.Reactor3D;
+    const warmup = { lastHidden: 0 };
+    global.Reactor3D = { ShaderWarmup: warmup };
+    try {
+        const preview = new Preview({ container: { worldTransform: { a: 1 } } });
+        preview.app = { renderer: { resolution: 1, gl: { MAX_TEXTURE_SIZE: 1, getParameter: () => 4096 } } };
+        let hidden = 1;
+        // The draw holds out the mesh whose picture is still going up, as ShaderWarmup.hide does.
+        preview.ensureViewport = () => ({ renderInto: () => { warmup.lastHidden = hidden; } });
+        preview.expand = () => {};
+        const entry = { radius: 1, tw: 48, size: 120, target: {}, sprite: {}, dirty: true };
+        warmup.lastHidden = 3; // left over from another view's draw
+        preview.paint(entry);
+        assert.equal(entry.dirty, true, 'the picture is owed again while its texture is not on the GPU');
+        hidden = 0;
+        preview.paint(entry);
+        assert.equal(entry.dirty, false, 'a draw with nothing held out settles');
+        assert.equal(entry.draws, 2);
+        // A stale count from another renderer does not keep a settled prop repainting.
+        warmup.lastHidden = 5;
+        preview.ensureViewport = () => ({ renderInto: () => {} });
+        preview.paint(entry);
+        assert.equal(entry.dirty, false);
+    } finally {
+        if (hadReactor) global.Reactor3D = previous; else delete global.Reactor3D;
+    }
 });

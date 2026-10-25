@@ -72,6 +72,9 @@ const EXPECTED_EMITS = {
     fightUnitSpawned: 1,
     // A unit on watch (overwatch) and its reaction shot: a second emit site for aim, fire and action end.
     fightOverwatch: 1,
+    // A grapple taken on a unit's way (reactor_fight_tactical.js), and a fall that cost a unit HP (reactor_fight.js, every on-map mode).
+    fightGrapple: 1,
+    fightFall: 1,
     // Action and First Person battles (reactor_fight_action.js): a shot at once or one that flies, an alert by sight or by a blow taken.
     fightShot: 2,
     fightSwing: 1,

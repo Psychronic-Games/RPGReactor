@@ -225,7 +225,8 @@
         const localDir = new THREE.Vector3();
         let best = null;
         for (const mesh of meshes) {
-            if (!mesh || !mesh.visible || !mesh.geometry) continue;
+            // A chunk drawn in its region's batch (Reactor3D.DrawBatches) is hidden but still the thing picked.
+            if (!mesh || !(mesh.visible || (mesh.userData && mesh.userData.rrBatchedIn)) || !mesh.geometry) continue;
             const tree = forGeometry(mesh.geometry);
             if (!tree) continue;
             inverse.copy(mesh.matrixWorld).invert();

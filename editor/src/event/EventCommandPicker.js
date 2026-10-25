@@ -435,7 +435,7 @@ class EventCommandPicker {
             tab.style.cssText = `
                 padding: 8px 16px;
                 background-color: ${index === this.currentTab ? 'var(--color-accent-bright)' : 'var(--color-bg-input-alt)'};
-                color: ${index === this.currentTab ? 'var(--color-accent-on)' : 'var(--color-text-strong)'};
+                color: ${index === this.currentTab ? 'var(--color-accent-bright-on)' : 'var(--color-text-strong)'};
                 border: none;
                 border-radius: 3px;
                 cursor: pointer;

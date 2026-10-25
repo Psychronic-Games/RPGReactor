@@ -103,7 +103,6 @@ class RRMotionEditor {
         if (this.host._sim.action && this.host._sim.action.name === '__motion') this.host._sim.action = null;
         if (this.root) this.root.remove();
         this.root = null;
-        this.fitCanvas();
         this.host.renderRuleList();
     }
 
@@ -212,7 +211,7 @@ class RRMotionEditor {
     // ---- The panel -------------------------------------------------------
 
     render() {
-        const wrap = this.host._detail && this.host._detail.querySelector('.r3d-canvas-wrap');
+        const wrap = this.host._detail && this.host._detail.querySelector('.r3d-model-workspace');
         if (!wrap || !this.motion) return;
         if (!this.root) {
             this.root = document.createElement('div');
@@ -266,14 +265,6 @@ class RRMotionEditor {
         this.renderPlayButton();
         this.drawPlayhead();
         this.bind();
-        this.fitCanvas();
-    }
-
-    /** The viewport ends above the panel, so the whole model stays in view while it moves. */
-    fitCanvas() {
-        const canvas = this.host._detail && this.host._detail.querySelector('.r3d-db-canvas');
-        if (!canvas) return;
-        canvas.style.height = this.root ? `calc(100% - ${this.root.offsetHeight + 16}px)` : '100%';
     }
 
     renderPlayButton() {

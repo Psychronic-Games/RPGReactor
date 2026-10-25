@@ -39,7 +39,7 @@ const driver = new WebDriverClient(path.join(root, 'nwjs-linux/chromedriver'));
                 const select=name=>config.querySelector('select[data-field="'+name+'Id"]');
                 return {language:I18n.language,theme:document.documentElement.dataset.theme,size:[innerWidth,innerHeight],height:box.height,width:box.width,
                     drawn:pixels.some((v,i)=>i%4===0&&v===240&&pixels[i+1]===48&&pixels[i+2]===160),
-                    overflowX:config.scrollWidth-config.clientWidth,scroll:getComputedStyle(config).overflowY,
+                    overflowX:config.scrollWidth-config.clientWidth,scroll:getComputedStyle(config.querySelector('.event-page-settings')).overflowY,
                     dropdowns:[...config.querySelectorAll('select')].map(e=>{const trigger=e.parentElement.classList.contains('rr-shim-wrapper')?e.parentElement.querySelector('.rr-shim-trigger'):e;const b=trigger.getBoundingClientRect();return {field:e.dataset.field,width:b.width,height:b.height,text:trigger.textContent,visible:getComputedStyle(trigger).display};}),
                     disabled:['item','actor'].every(n=>select(n).disabled&&select(n).value===''),errors:__errors};
             `);

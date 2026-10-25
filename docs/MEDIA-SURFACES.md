@@ -5,6 +5,12 @@ The **Media Surfaces** toolbar tool manages map-owned surfaces. Event commands
 are displayed as **Show Media Surface**, **Transform Media Surface**, and
 **Stop Media Surface**.
 
+The map panel uses the editor's theme and shows each surface as a card with an
+image thumbnail or a still frame from its video, its filename, ID, media type,
+and position. Click the preview or filename to edit it; Duplicate and Delete
+remain below the card. Video thumbnails are silent still images. Undo and Redo
+stay at the foot of the panel while the surface list scrolls.
+
 A model's media surface can show a different picture or movie per variant, or be off: Database › 3D Models › Variants, the variant's Effects tab.
 
 Effects are placed on the model once; each variant chooses which it wears. On an effect's card, **Shown in** is All variants or the chosen ones. On a variant's card, the **Effects** tab lists every effect: tick to show it in this variant, pick the picture or movie this variant shows on a media surface, press **Place** to move it on the model with the variant still worn, press **+** to add a media surface only this variant wears. In `model.json` an effect's `variants` lists the variants that wear it (`""` is the model's own look); with no list every variant wears it. A media surface shows on its own only when Play when is not On demand.

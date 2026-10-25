@@ -582,6 +582,29 @@ Utils.correctFileCaseFromIndex = function(url) {
  * @param {string} suffix - The encrypted-asset suffix, "_" or "".
  * @returns {string} The URL with on-disk casing, without the suffix.
  */
+/**
+ * Whether a relative asset file is on disk, in any letter case. Known only with
+ * the filesystem at hand (NW.js): null elsewhere, where a request finds out.
+ *
+ * @param {string} url - The relative URL.
+ * @returns {?boolean}
+ */
+Utils.localAssetExists = function(url) {
+    if (!this.isNwjs()) return null;
+    try {
+        const fs = require("fs");
+        const path = require("path");
+        const clean = decodeURIComponent(String(url).split("?")[0]);
+        if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(clean)) return null;
+        const segments = clean.split("/").filter(s => s && s !== ".");
+        if (segments.some(s => s === "..")) return null;
+        const base = path.dirname(process.mainModule.filename);
+        return fs.existsSync(path.join(base, ...segments)) || !!this.correctFileCase(url);
+    } catch (e) {
+        return null;
+    }
+};
+
 Utils.resolveFileCase = function(url, suffix) {
     const corrected = this.correctFileCase(url + suffix);
     if (!corrected) return url;
@@ -794,6 +817,7 @@ Graphics.setStage = function(stage) {
     if (this._app) {
         this._app.stage = stage;
     }
+    this._redrawWanted = true;
 };
 
 /**
@@ -935,6 +959,7 @@ Graphics.resize = function(width, height) {
     this._width = width;
     this._height = height;
     this._app.renderer.resize(width, height);
+    this._redrawWanted = true;
     this._updateAllElements();
 };
 
@@ -1030,13 +1055,482 @@ Graphics._updateReactor3DCanvas = function() {
  */
 Graphics._reactorBeforeRender = Graphics._reactorBeforeRender || new Set();
 
+/**
+ * A refresh that ran no update draws the composite only when something
+ * changed since the last one. On a screen faster than the game's sixty
+ * updates (three refreshes an update at 180 Hz) the refreshes between
+ * updates drew the same picture again: the 3D world is drawn on updates,
+ * and the game moves nothing between them. What can still change between
+ * updates draws: a texture source taking new pixels (a video frame, a canvas
+ * uploaded), the stage queueing render work (a plugin animating a sprite
+ * from its own frame callback), a draw into a texture, a resize (it clears
+ * the canvas), a new stage, and `requestRedraw()`. The Effekseer overlay is
+ * drawn with the composite it lies over. A tick handler that does not say
+ * how many updates it ran (a plugin's own loop) draws every refresh.
+ * `skipUnchangedFrames = false` draws every refresh, as before.
+ */
+Graphics.skipUnchangedFrames = true;
+Graphics._textureUpdates = 0;
+
+/** Draw the composite on the next refresh, update or not. */
+Graphics.requestRedraw = function() {
+    this._redrawWanted = true;
+};
+
+/** Count texture sources taking new pixels (`update()`): none of them touches the sprite showing it. */
+Graphics._watchTextureSources = function() {
+    const proto = typeof PIXI !== "undefined" && PIXI.TextureSource && PIXI.TextureSource.prototype;
+    if (!proto || typeof proto.update !== "function" || proto.update.__rrCounted) return;
+    const update = proto.update;
+    const counted = function() {
+        Graphics._textureUpdates++;
+        return update.apply(this, arguments);
+    };
+    counted.__rrCounted = true;
+    proto.update = counted;
+};
+
+/**
+ * The render work the stage has queued, as two numbers that only grow
+ * between composites: its render groups, and every group's pending
+ * transform, view and structure updates (PIXI 8 queues each change there,
+ * and a composite consumes the queues). Null where the stage has no render
+ * group to read.
+ */
+Graphics._stageWork = function(stage, into) {
+    const root = stage && stage.renderGroup;
+    if (!root) return null;
+    into.groups = 0; into.pending = 0;
+    const visit = group => {
+        into.groups++;
+        if (group.structureDidChange) into.pending++;
+        if (group.isCachedAsTexture && group.textureNeedsUpdate) into.pending++;
+        if (group.childrenRenderablesToUpdate) into.pending += group.childrenRenderablesToUpdate.index || 0;
+        const byDepth = group.childrenToUpdate;
+        if (byDepth) for (const depth in byDepth) into.pending += (byDepth[depth] && byDepth[depth].index) || 0;
+        const children = group.renderGroupChildren;
+        if (children) for (let i = 0; i < children.length; i++) visit(children[i]);
+    };
+    visit(root);
+    return into;
+};
+
+/** Whether this refresh draws: `updates` is what the tick handler returned. */
+Graphics._frameChanged = function(updates) {
+    const last = this._lastComposite;
+    if (!this.skipUnchangedFrames || updates !== 0 || this._redrawWanted || !last) return true;
+    if (this._textureUpdates !== last.textures) return true;
+    if (PIXI.__reactorPendingTextureUploads && PIXI.__reactorPendingTextureUploads() > 0) return true;
+    const now = this._stageWork(this._app.stage, this._workNow || (this._workNow = { groups: 0, pending: 0 }));
+    return !now || last.stage !== this._app.stage || now.groups !== last.groups || now.pending !== last.pending;
+};
+
+/** What the composite just drawn left behind, for the next refresh to compare with. */
+Graphics._noteComposite = function() {
+    const last = this._lastComposite || (this._lastComposite = { textures: 0, stage: null, groups: 0, pending: 0 });
+    this._redrawWanted = false;
+    last.textures = this._textureUpdates;
+    last.stage = this._app.stage;
+    const work = this._stageWork(this._app.stage, last);
+    if (!work) this._lastComposite = null;
+};
+
+/**
+ * Even motion however the screen's refreshes fall against the updates.
+ *
+ * The game updates 60 times a second and drew its map in the updates. A
+ * frame rate 60 does not divide shows those updates unevenly: a 144 Hz
+ * screen on a 3, 2, 2, 3 ... pattern of refreshes, a 180 Hz one whose frames
+ * take two refreshes on a 1, 1, 0 pattern, a 50 Hz one with a double step
+ * every fifth refresh. Motion then judders however fast each frame is made.
+ * While the updates land unevenly on the frames, the map is drawn on every
+ * k-th frame (k = frames per update, rounded down, at least 1: 72 pictures a
+ * second at 144 Hz, 90 when a 180 Hz screen gets every other refresh), and
+ * what the engine places from the game's state is drawn where it stands at
+ * that frame's moment, between the last update and the one before: the
+ * camera, the characters' models, billboards and sprites (`_realX`,
+ * `_realY`, the jump, the air), the tilemap and parallax scroll. The game's
+ * updates, their timing and everything they decide are untouched; what a
+ * plugin moves itself is drawn where it put it. Updates that land evenly
+ * (60 at 60 Hz, one in two frames at 120, one in three at 180) are drawn in
+ * the updates as before, and the change between the two is eased over
+ * `EASE_FRAMES` so the picture never steps.
+ *
+ * Aboard a vehicle, and at the quality levels' half rate, the map is drawn
+ * in its updates. `enabled = false` draws in the updates always.
+ */
+Graphics.FramePacing = {
+    enabled: true,
+    /** decide(): not paced (the usual rules), a paced frame that draws, one that does not. */
+    OFF: 0, DRAW: 1, SKIP: 2,
+    /** Frames judged at once, and the share of their updates landing off the even pattern that makes them uneven. */
+    WINDOW: 32,
+    UNEVEN_SHARE: 0.15,
+    /** Windows running that turn pacing on (uneven) and off (even). */
+    ON_AFTER: 2,
+    OFF_AFTER: 4,
+    /** A spacing between frames that ran updates this far from their usual spacing (a share of it) is off the pattern. */
+    SPACING: 0.25,
+    /** Frames over which the picture goes from the updates' moment to the paced one, and back. */
+    EASE_FRAMES: 30,
+    /** A whole number of frames per update within this share counts as whole. */
+    WHOLE: 0.04,
+    /** Tiles a character or the view moves in one update past which it is drawn where it is (a transfer, a looping map). */
+    JUMP: 2,
+    /** The camera's move (tiles) and turn (radians) in one update past which it is drawn as it is (a cut). */
+    CAMERA_JUMP: 3,
+    CAMERA_TURN: 1,
+    /** The frames' interval in ms (0 until read): the median of the last few. */
+    frameMs: 0,
+    INTERVALS: 15,
+    _intervals: new Float64Array(15), _intervalAt: 0, _intervalCount: 0, _sorted: new Float64Array(15), _last: 0,
+    _times: new Float64Array(32), _counts: new Float64Array(32), _spacings: new Float64Array(32), _frames: 0,
+    _uneven: 0, _even: 0, _paced: false, _ease: 0,
+    _active: false, _index: 0,
+    _chars: [], _prev: new Float64Array(256), _prevCount: 0, _capturedAt: -1, _live: new Float64Array(256),
+    _display: new Float64Array(2), _camera: new Float64Array(7), _cameraValid: false,
+    _applied: false, _objects: [], _objectCount: 0, _sprites: [], _spriteCount: 0, _spriteAt: new Float64Array(64),
+    _cameraSaved: new Float64Array(7), _cameraObject: null, _origin: null,
+
+    /** Frames per update at the frames' own interval; 0 until it is known. */
+    ratio() {
+        return this.frameMs > 0 ? (1000 / 60) / this.frameMs : 0;
+    },
+    /** How many frames apart the map is drawn. */
+    every() {
+        return Math.max(1, Math.floor(this.ratio() + this.WHOLE));
+    },
+    noteInterval(now) {
+        const interval = now - this._last;
+        this._last = now;
+        if (!(interval > 1 && interval < 250)) return;
+        this._intervals[this._intervalAt] = interval;
+        this._intervalAt = (this._intervalAt + 1) % this.INTERVALS;
+        if (this._intervalCount < this.INTERVALS) this._intervalCount++;
+        const n = this._intervalCount, sorted = this._sorted;
+        for (let i = 0; i < n; i++) sorted[i] = this._intervals[i];
+        const part = sorted.subarray(0, n);
+        part.sort();
+        this.frameMs = part[n >> 1];
+    },
+    /**
+     * After a frame's updates: is the window of frames full, and did its
+     * updates land evenly? Uneven: more than UNEVEN_SHARE of the frames that
+     * ran updates ran a different number of them than most, or came at a
+     * spacing SPACING off the usual one.
+     */
+    judge(now, updates) {
+        const i = this._frames++;
+        this._times[i] = now; this._counts[i] = updates;
+        if (this._frames < this.WINDOW) return;
+        this._frames = 0;
+        let ran = 0, last = -1, spaced = 0;
+        const counts = this._counts, times = this._times, spacings = this._spacings;
+        for (let k = 0; k < this.WINDOW; k++) {
+            if (!(counts[k] > 0)) continue;
+            if (last >= 0) spacings[spaced++] = times[k] - times[last];
+            last = k; ran++;
+        }
+        let uneven = false;
+        if (ran >= 4 && spaced >= 3) {
+            // The usual count and spacing: the median of each.
+            const usual = this.median(counts, this.WINDOW, true), spacing = this.median(spacings, spaced, false);
+            let off = 0;
+            for (let k = 0; k < this.WINDOW; k++) if (counts[k] > 0 && counts[k] !== usual) off++;
+            for (let k = 0; k < spaced; k++) if (Math.abs(spacings[k] - spacing) > spacing * this.SPACING) off++;
+            uneven = off > ran * this.UNEVEN_SHARE;
+        }
+        if (uneven) { this._even = 0; if (++this._uneven >= this.ON_AFTER) this._paced = true; }
+        else { this._uneven = 0; if (++this._even >= this.OFF_AFTER) this._paced = false; }
+    },
+    _medianScratch: new Float64Array(32),
+    median(values, n, positiveOnly) {
+        const scratch = this._medianScratch;
+        let m = 0;
+        for (let i = 0; i < n; i++) if (!positiveOnly || values[i] > 0) scratch[m++] = values[i];
+        if (!m) return 0;
+        const part = scratch.subarray(0, m);
+        part.sort();
+        return part[m >> 1];
+    },
+    /** The map shown now, when it can be paced; else null. */
+    spriteset() {
+        const manager = typeof SceneManager !== "undefined" ? SceneManager : null;
+        const scene = manager && manager._scene;
+        if (!scene || typeof Scene_Map === "undefined" || !(scene instanceof Scene_Map) || !scene.isStarted || !scene.isStarted()) return null;
+        if (manager.isSceneChanging && manager.isSceneChanging()) return null;
+        const spriteset = scene._spriteset;
+        if (!spriteset || typeof spriteset.drawReactor3D !== "function") return null;
+        const state = spriteset._reactor3d;
+        if (state && (state.arrival || state.warming || !state.viewport || !state.scene)) return null;
+        if (spriteset._reactor3dPending) return null;
+        return spriteset;
+    },
+    /** Whether this frame's map can be paced at all. */
+    allowed() {
+        if (!this.enabled || typeof SceneManager === "undefined" || SceneManager.trueSpeed === false) return false;
+        if (!this.spriteset()) return false;
+        // At the quality levels' last step the world is drawn on every other update.
+        const quality = typeof Reactor3D !== "undefined" ? Reactor3D.Quality : null;
+        if (quality && quality.h) return false;
+        // A vehicle's model and its camera's lay are placed by its own code: drawn in the updates.
+        const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+        if (player && ((player.isInVehicle && player.isInVehicle()) || player._vehicleType === "reactor")) return false;
+        return true;
+    },
+    /** A frame begins: its interval, and whether its map is paced (drawn by `draw`, not in the update). */
+    begin(now) {
+        this.noteInterval(now);
+        this._active = this.allowed() && (this._paced || this._ease > 0);
+        if (this._active) this._index++;
+        else this._ease = 0;
+    },
+    /** Whether `spriteset`'s world waits for a paced frame rather than drawing in its update. */
+    drawsWorld(spriteset) {
+        return this._active && this.spriteset() === spriteset;
+    },
+    /** After the updates: OFF, DRAW or SKIP. */
+    decide(updates) {
+        if (updates !== undefined && this.enabled) this.judge(this._last, updates);
+        if (!this._active || updates === undefined) return this.OFF;
+        if (!this.spriteset()) { this._active = false; return this.OFF; }
+        // Eased in while paced, out once the updates land evenly again; out, every frame draws (in an update, or here).
+        this._ease = this._paced ? Math.min(this.EASE_FRAMES, this._ease + 1) : Math.max(0, this._ease - 1);
+        if (!this._paced) return updates > 0 || this._ease > 0 ? this.DRAW : this.SKIP;
+        return this._index % this.every() === 0 ? this.DRAW : this.SKIP;
+    },
+    /** How far between the update before last and the last this frame stands: 1 at the last. */
+    alpha() {
+        if (this._capturedAt !== Graphics.frameCount - 1) return 1;
+        // An update is made a tenth of a tick early (SceneManager.determineRepeatNumber).
+        const phase = (SceneManager._elapsedTime || 0) + 0.1;
+        const at = phase <= 0 ? 0 : phase >= 1 ? 1 : phase;
+        // Eased from the updates' own moment (1) to the paced one over EASE_FRAMES, and back.
+        const ease = this._ease / this.EASE_FRAMES;
+        return 1 - ease * (1 - at);
+    },
+    /** The characters the engine places, in a list kept between updates. */
+    gather() {
+        const list = this._chars;
+        let n = 0;
+        if (typeof $gamePlayer !== "undefined" && $gamePlayer) {
+            list[n++] = $gamePlayer;
+            const followers = $gamePlayer._followers && $gamePlayer._followers._data;
+            if (followers) for (let i = 0; i < followers.length; i++) if (followers[i]) list[n++] = followers[i];
+        }
+        if (typeof $gameMap !== "undefined" && $gameMap) {
+            // The map's own list of its events (the props' ids start at 10000: the raw array is mostly holes).
+            const events = typeof $gameMap.events === "function" ? $gameMap.events() : $gameMap._events || [];
+            for (let i = 0; i < events.length; i++) if (events[i]) list[n++] = events[i];
+            const vehicles = $gameMap._vehicles;
+            if (vehicles) for (let i = 0; i < vehicles.length; i++) if (vehicles[i]) list[n++] = vehicles[i];
+        }
+        for (let i = n; i < list.length && list[i]; i++) list[i] = null;
+        return n;
+    },
+    /** An update begins (SceneManager.updateMain): where everything stands before it. */
+    beforeUpdate() {
+        // Only the frame's last update is drawn from: a catch-up's earlier ones are not looked at.
+        if (!this._active || (SceneManager.isFinalUpdateOfFrame && !SceneManager.isFinalUpdateOfFrame())) return;
+        const n = this.gather();
+        if (this._prev.length < n * 4) this._prev = new Float64Array(n * 8);
+        const prev = this._prev, list = this._chars;
+        for (let i = 0; i < n; i++) {
+            const c = list[i], k = i * 4;
+            prev[k] = c._realX; prev[k + 1] = c._realY;
+            prev[k + 2] = c._jumpCount || 0; prev[k + 3] = c._reactorAir || 0;
+        }
+        this._prevCount = n;
+        if (typeof $gameMap !== "undefined" && $gameMap) { this._display[0] = $gameMap._displayX; this._display[1] = $gameMap._displayY; }
+        const camera = this.camera();
+        this._cameraValid = !!camera;
+        if (camera) {
+            const c = this._camera, p = camera.position, q = camera.quaternion;
+            c[0] = p.x; c[1] = p.y; c[2] = p.z; c[3] = q.x; c[4] = q.y; c[5] = q.z; c[6] = q.w;
+        }
+        this._capturedAt = Graphics.frameCount;
+    },
+    camera() {
+        const spriteset = this.spriteset(), state = spriteset && spriteset._reactor3d;
+        const viewport = state && state.viewport;
+        return viewport && viewport.camera ? viewport.camera() : null;
+    },
+    /** The index of `character` in the list gathered at the update's start, or -1. */
+    indexOf(character) {
+        const list = this._chars;
+        for (let i = 0; i < this._prevCount; i++) if (list[i] === character) return i;
+        return -1;
+    },
+    /** The live state of the characters swapped for their places at `alpha` (`into` = true), or back (false). */
+    swapCharacters(alpha, into) {
+        const list = this._chars, prev = this._prev, live = this._live || (this._live = new Float64Array(256));
+        if (live.length < this._prevCount * 4) this._live = new Float64Array(this._prevCount * 8);
+        const keep = this._live;
+        for (let i = 0; i < this._prevCount; i++) {
+            const c = list[i], k = i * 4;
+            if (!c) continue;
+            if (into) {
+                const x = c._realX, y = c._realY;
+                keep[k] = x; keep[k + 1] = y; keep[k + 2] = c._jumpCount || 0; keep[k + 3] = c._reactorAir || 0;
+                if (!(Math.abs(x - prev[k]) <= this.JUMP && Math.abs(y - prev[k + 1]) <= this.JUMP)) { keep[k] = NaN; continue; }
+                c._realX = prev[k] + (x - prev[k]) * alpha;
+                c._realY = prev[k + 1] + (y - prev[k + 1]) * alpha;
+                // Mid-jump or landing only: a jump that began this update starts from where it is.
+                if (prev[k + 2] > 0) c._jumpCount = prev[k + 2] + (keep[k + 2] - prev[k + 2]) * alpha;
+                if (c._reactorAir || prev[k + 3]) c._reactorAir = prev[k + 3] + (keep[k + 3] - prev[k + 3]) * alpha;
+            } else if (keep[k] === keep[k]) {
+                c._realX = keep[k]; c._realY = keep[k + 1];
+                if (prev[k + 2] > 0) c._jumpCount = keep[k + 2];
+                if (c._reactorAir || keep[k + 3]) c._reactorAir = keep[k + 3];
+            }
+        }
+    },
+    /** Moves `object` by the difference between character `i`'s place at alpha and now (into `_live`), kept to undo. */
+    shift(object, i, withAir) {
+        const keep = this._live, k = i * 4, c = this._chars[i];
+        if (!object || !c || keep[k] !== keep[k] || object.matrixAutoUpdate === false) return;
+        const dx = c._realX - keep[k], dz = c._realY - keep[k + 1], dy = withAir ? (c._reactorAir || 0) - keep[k + 3] : 0;
+        if (!dx && !dz && !dy) return;
+        const p = object.position, list = this._objects, n = this._objectCount;
+        list[n] = object; list[n + 1] = p.x; list[n + 2] = p.y; list[n + 3] = p.z;
+        this._objectCount = n + 4;
+        p.x += dx; p.y += dy; p.z += dz;
+    },
+    /** This refresh's map, drawn with what the engine places where it stands at this refresh's moment. */
+    draw() {
+        const spriteset = this.spriteset();
+        if (!spriteset) return;
+        this._applied = true;
+        this._objectCount = 0; this._spriteCount = 0; this._origin = null; this._cameraObject = null;
+        const alpha = this.alpha(), state = spriteset._reactor3d;
+        const between = alpha < 1 && this._prevCount > 0;
+        if (state) {
+            const camera = state.viewport.camera ? state.viewport.camera() : null;
+            const sprites = spriteset._characterSprites || [];
+            // The sprites over the world: where they are now, first.
+            if (between && camera) this.noteSprites(sprites, sp => sp.reactor3DScreenPoint ? sp.reactor3DScreenPoint(camera, this._point || (this._point = {})) : null, true);
+            if (between) {
+                this.swapCharacters(alpha, true);
+                const models = state.scene._modelInstances;
+                if (models) for (const holder of models.values()) {
+                    const i = holder.character ? this.indexOf(holder.character) : -1;
+                    if (i >= 0) this.shift(holder.object, i, true);
+                }
+                const boards = state.scene._billboards;
+                if (boards && boards.size) for (const sprite of sprites) {
+                    const c = sprite && sprite._character, i = c ? this.indexOf(c) : -1;
+                    if (i < 0) continue;
+                    const key = typeof c.eventId === "function" ? "e" + c.eventId() : c === $gamePlayer ? "p" : "c" + (c._memberIndex != null ? c._memberIndex : -1);
+                    const holder = boards.get(key);
+                    if (holder) this.shift(holder.object, i, false);
+                }
+            }
+            if (camera && between && this._cameraValid) this.easeCamera(camera, alpha);
+            if (between && camera) this.moveSprites(sprite => sprite.reactor3DScreenPoint(camera, this._point));
+            if (between) this.swapCharacters(alpha, false);
+            spriteset.drawReactor3D(state);
+            return;
+        }
+        if (!between) return;
+        // A flat map: the scroll and the sprites.
+        const map = $gameMap, sprites = spriteset._characterSprites || [];
+        const screenOf = sprite => { const c = sprite._character, p = this._point || (this._point = {}); p.x = c.screenX(); p.y = c.screenY(); return p; };
+        this.noteSprites(sprites, screenOf, false);
+        const dx = map._displayX, dy = map._displayY;
+        const jump = Math.abs(dx - this._display[0]) > this.JUMP || Math.abs(dy - this._display[1]) > this.JUMP;
+        if (!jump) { map._displayX = this._display[0] + (dx - this._display[0]) * alpha; map._displayY = this._display[1] + (dy - this._display[1]) * alpha; }
+        this.swapCharacters(alpha, true);
+        this.moveSprites(screenOf);
+        const tilemap = spriteset._tilemap, parallax = spriteset._parallax;
+        this._origin = { tx: tilemap ? tilemap.origin.x : 0, ty: tilemap ? tilemap.origin.y : 0, px: parallax ? parallax.origin.x : 0, py: parallax ? parallax.origin.y : 0, tilemap, parallax };
+        if (tilemap) { tilemap.origin.x = map.displayX() * map.tileWidth(); tilemap.origin.y = map.displayY() * map.tileHeight(); }
+        if (parallax && parallax.bitmap && parallax.bitmap.width) { parallax.origin.x = map.parallaxOx() % parallax.bitmap.width; parallax.origin.y = map.parallaxOy() % parallax.bitmap.height; }
+        this.swapCharacters(alpha, false);
+        map._displayX = dx; map._displayY = dy;
+    },
+    /** The visible character sprites and where `pointOf` puts them now, to be moved by the difference. */
+    noteSprites(sprites, pointOf) {
+        const list = this._sprites, at = this._spriteAt;
+        let n = 0;
+        for (let i = 0; i < sprites.length; i++) {
+            const sprite = sprites[i];
+            if (!sprite || !sprite.visible || !sprite._character || this.indexOf(sprite._character) < 0) continue;
+            const p = pointOf(sprite);
+            if (!p) continue;
+            if (at.length < (n + 1) * 4) { this._spriteAt = new Float64Array(at.length * 2); this._spriteAt.set(at); return this.noteSprites(sprites, pointOf); }
+            list[n] = sprite; at[n * 4] = p.x; at[n * 4 + 1] = p.y; at[n * 4 + 2] = sprite.x; at[n * 4 + 3] = sprite.y;
+            n++;
+        }
+        this._spriteCount = n;
+    },
+    moveSprites(pointOf) {
+        const list = this._sprites, at = this._spriteAt;
+        for (let i = 0; i < this._spriteCount; i++) {
+            const sprite = list[i], p = pointOf(sprite);
+            if (!p) continue;
+            sprite.x = at[i * 4 + 2] + (p.x - at[i * 4]);
+            sprite.y = at[i * 4 + 3] + (p.y - at[i * 4 + 1]);
+        }
+    },
+    /** The camera between its pose before the update and now, unless it cut. */
+    easeCamera(camera, alpha) {
+        const c = this._camera, p = camera.position, q = camera.quaternion, saved = this._cameraSaved;
+        saved[0] = p.x; saved[1] = p.y; saved[2] = p.z; saved[3] = q.x; saved[4] = q.y; saved[5] = q.z; saved[6] = q.w;
+        const dx = p.x - c[0], dy = p.y - c[1], dz = p.z - c[2];
+        let dot = q.x * c[3] + q.y * c[4] + q.z * c[5] + q.w * c[6];
+        if (dx * dx + dy * dy + dz * dz > this.CAMERA_JUMP * this.CAMERA_JUMP || 2 * Math.acos(Math.min(1, Math.abs(dot))) > this.CAMERA_TURN) return;
+        if (!dx && !dy && !dz && dot >= 1) return;
+        this._cameraObject = camera;
+        p.set(c[0] + dx * alpha, c[1] + dy * alpha, c[2] + dz * alpha);
+        // Normalised linear blend along the shorter arc: within CAMERA_TURN it strays from the slerp by under a degree.
+        const sign = dot < 0 ? -1 : 1;
+        let x = c[3] * sign + (saved[3] - c[3] * sign) * alpha, y = c[4] * sign + (saved[4] - c[4] * sign) * alpha;
+        let z = c[5] * sign + (saved[5] - c[5] * sign) * alpha, w = c[6] * sign + (saved[6] - c[6] * sign) * alpha;
+        const length = Math.sqrt(x * x + y * y + z * z + w * w) || 1;
+        q.set(x / length, y / length, z / length, w / length);
+        camera.updateMatrixWorld();
+    },
+    /** After the composite: everything the paced draw moved, back where the game put it. */
+    restore() {
+        if (!this._applied) return;
+        this._applied = false;
+        const camera = this._cameraObject;
+        if (camera) {
+            const s = this._cameraSaved;
+            camera.position.set(s[0], s[1], s[2]);
+            camera.quaternion.set(s[3], s[4], s[5], s[6]);
+            camera.updateMatrixWorld();
+            this._cameraObject = null;
+        }
+        const list = this._objects;
+        for (let i = 0; i < this._objectCount; i += 4) { list[i].position.set(list[i + 1], list[i + 2], list[i + 3]); list[i] = null; }
+        this._objectCount = 0;
+        const sprites = this._sprites, at = this._spriteAt;
+        for (let i = 0; i < this._spriteCount; i++) { sprites[i].x = at[i * 4 + 2]; sprites[i].y = at[i * 4 + 3]; sprites[i] = null; }
+        this._spriteCount = 0;
+        const origin = this._origin;
+        if (origin) {
+            if (origin.tilemap) { origin.tilemap.origin.x = origin.tx; origin.tilemap.origin.y = origin.ty; }
+            if (origin.parallax) { origin.parallax.origin.x = origin.px; origin.parallax.origin.y = origin.py; }
+            this._origin = null;
+        }
+    }
+};
+
+/** The screen refreshes ticked so far: work that may wait for a refresh with no update reads it. */
+Graphics.refreshCount = 0;
+
 Graphics._onTick = function(deltaTime) {
     const prof = ReactorProfiler._active ? ReactorProfiler : null;
     if (prof) prof.frameBegin();
     this._fpsCounter.startTick();
+    // Counts the screen's refreshes (a refresh may hold no update, or several).
+    this.refreshCount++;
     // The quality levels watch what each frame of a 3D map costs (reactor_3d.js, `Reactor3D.Quality`).
     const quality = typeof Reactor3D !== "undefined" && Reactor3D.Quality ? Reactor3D.Quality : null;
     if (quality) quality.tickBegin(performance.now());
+    const pacing = this.FramePacing;
+    pacing.begin(performance.now());
     // Resource watchdogs, driven from the runtime's own heartbeat so they
     // work no matter which manager/prototype methods plugins replace.
     // Throttled to ~1Hz.
@@ -1051,6 +1545,7 @@ Graphics._onTick = function(deltaTime) {
             console.warn("Graphics._onTick: watchdog sweep threw", e);
         }
     }
+    let updates;
     if (this._tickHandler) {
         // v5/v6/v7: callback receives delta as a number.
         // v8: callback receives the Ticker instance; extract its deltaTime.
@@ -1061,7 +1556,7 @@ Graphics._onTick = function(deltaTime) {
                     ? deltaTime.deltaTime
                     : 1);
         const tUpdate = prof ? performance.now() : 0;
-        this._tickHandler(dt);
+        updates = this._tickHandler(dt);
         // Send any batched canvas->GPU uploads now that the frame's drawing is
         // done. pixi_compat also flushes from render(), but plugins that do
         // their own GL work outside a PIXI render pass (LeTBS/MOG popups,
@@ -1072,12 +1567,21 @@ Graphics._onTick = function(deltaTime) {
         }
         if (prof) prof.phase("update", performance.now() - tUpdate);
     }
-    if (this._canRender()) {
+    // On a screen 60 does not divide, the map is drawn on the refreshes the pacing picks, between updates.
+    const paced = pacing.decide(updates);
+    if (this._canRender() && (paced === pacing.DRAW || (paced !== pacing.SKIP && this._frameChanged(updates))
+        || (paced === pacing.SKIP && this._mustComposite()))) {
         const tRender = prof ? performance.now() : 0;
-        for (const hook of this._reactorBeforeRender) {
-            try { hook(); } catch (e) { console.warn("Graphics._onTick: a before-render hook threw", e); }
-        }
-        this._app.render();
+        if (paced === pacing.DRAW) pacing.draw();
+        // Draws from here to the composite are its own (Graphics._frameChanged).
+        this._compositing = true;
+        try {
+            for (const hook of this._reactorBeforeRender) {
+                try { hook(); } catch (e) { console.warn("Graphics._onTick: a before-render hook threw", e); }
+            }
+            this._app.render();
+        } finally { this._compositing = false; }
+        this._noteComposite();
         if (prof) prof.phase("render", performance.now() - tRender);
         // v8: Sprite_Animation._render runs via the onRender bridge, which v8
         // invokes BEFORE the actual GPU draws happen. Effekseer's draws would
@@ -1094,9 +1598,17 @@ Graphics._onTick = function(deltaTime) {
             }
         }
     }
+    // The paced draw's places given back before the next update.
+    if (paced === pacing.DRAW) pacing.restore();
     this._fpsCounter.endTick();
     if (quality) quality.tickEnd(performance.now());
     if (prof) prof.frameEnd();
+};
+
+/** A composite owed whatever the pacing says: the first, a new stage, or one asked for. */
+Graphics._mustComposite = function() {
+    const last = this._lastComposite;
+    return !last || this._redrawWanted || last.stage !== this._app.stage;
 };
 
 //-----------------------------------------------------------------------------
@@ -1227,6 +1739,8 @@ ReactorProfiler._wrap = function(proto, method, phaseName) {
             profiler._hits[phaseName] = (profiler._hits[phaseName] || 0) + 1;
         }
     };
+    // Code that checks for plugin replacements (Tilemap.ChunkPaint) sees through the timer.
+    proto[method].__rrProfilerOriginal = original;
 };
 
 ReactorProfiler._install = function() {
@@ -1900,6 +2414,8 @@ Graphics._updateCanvas = function() {
         this._canvas.width = this._width;
         this._canvas.height = this._height;
     }
+    // A resized canvas is a cleared one.
+    this._redrawWanted = true;
     this._canvas.style.zIndex = 1;
     this._centerElement(this._canvas);
     // _centerElement sizes from the backing store, which the ratio inflated;
@@ -2085,6 +2601,13 @@ Graphics._cancelFullScreen = function() {
     }
 };
 
+/**
+ * The GPU the game's WebGL contexts ask for: "high-performance" picks the
+ * discrete GPU of a dual-GPU Mac; "default" lets the system choose. On
+ * Windows the choice is the manifest's --force-high-performance-gpu switch.
+ */
+Graphics.gpuPowerPreference = "high-performance";
+
 Graphics._createPixiApp = async function() {
     try {
         this._setupPixi();
@@ -2103,6 +2626,7 @@ Graphics._createPixiApp = async function() {
             await app.init({
                 canvas: this._canvas,
                 autoStart: false,
+                powerPreference: this.gpuPowerPreference,
                 // No alpha channel in the drawing buffer: the canvas is opaque
                 // at the compositor level. v8 decides this once, at init, from
                 // `background.alpha < 1`. A 3D map once drew on a canvas
@@ -2137,6 +2661,7 @@ Graphics._createPixiApp = async function() {
             app = new PIXI.Application({
                 view: this._canvas,
                 autoStart: false,
+                powerPreference: this.gpuPowerPreference,
                 // Same reasoning as v8 above: v5-v7 take the context's alpha
                 // from `transparent`, decided once when the renderer is made.
                 transparent: false
@@ -2148,6 +2673,18 @@ Graphics._createPixiApp = async function() {
         app.ticker.remove(app.render, app);
         app.ticker.add(this._onTick, this);
         this._app = app;
+        // What can change the picture between updates (Graphics._frameChanged).
+        if (typeof this._watchTextureSources === "function") this._watchTextureSources();
+        const renderer = app.renderer;
+        if (renderer && typeof renderer.render === "function") {
+            const render = renderer.render;
+            // A draw into a texture changes pixels a sprite then shows.
+            renderer.render = function() {
+                if (!Graphics._compositing) Graphics._redrawWanted = true;
+                return render.apply(this, arguments);
+            };
+        }
+        if (this._canvas && this._canvas.addEventListener) this._canvas.addEventListener("webglcontextrestored", () => this.requestRedraw());
         if (this._startRequested) {
             this._app.start();
         }
@@ -2363,7 +2900,7 @@ Graphics._createEffekseerContext = function() {
             console.error("Effekseer: overlay canvas missing; not initializing");
             return;
         }
-        const opts = { premultipliedAlpha: false, alpha: true };
+        const opts = { premultipliedAlpha: false, alpha: true, powerPreference: this.gpuPowerPreference };
         const efxGL = overlay.getContext("webgl", opts) ||
                       overlay.getContext("experimental-webgl", opts);
         if (!efxGL) {
@@ -2412,6 +2949,8 @@ Graphics._listenEffekseerStateResets = function() {
     if (overlay) {
         // Taking the loss is what lets the browser give the context back.
         overlay.addEventListener("webglcontextlost", event => event.preventDefault());
+        // The HDR overlay's targets die with the context.
+        overlay.addEventListener("webglcontextlost", () => globalThis.ReactorHdrOverlay?.contextLost());
         overlay.addEventListener("webglcontextrestored", () => this._restoreEffekseerContext());
     }
 };
@@ -2424,6 +2963,7 @@ Graphics._listenEffekseerStateResets = function() {
 Graphics._restoreEffekseerContext = function() {
     const gl = this._effekseerGL;
     if (!gl || !window.effekseer || gl.isContextLost()) return;
+    globalThis.ReactorHdrOverlay?.contextRestored();
     try {
         const context = effekseer.createContext();
         if (!context) return;
@@ -2919,6 +3459,8 @@ Object.defineProperty(Bitmap.prototype, "image", {
 Object.defineProperty(Bitmap.prototype, "canvas", {
     get: function() {
         this._ensureCanvas();
+        // Outside code may draw on it: uploads of this bitmap stay whole (Bitmap.partialUploads).
+        this._rrLent = true;
         return this._canvas;
     },
     configurable: true
@@ -2934,6 +3476,8 @@ Object.defineProperty(Bitmap.prototype, "canvas", {
 Object.defineProperty(Bitmap.prototype, "context", {
     get: function() {
         this._ensureCanvas();
+        // Outside code may draw with it: uploads of this bitmap stay whole (Bitmap.partialUploads).
+        this._rrLent = true;
         return this._context;
     },
     configurable: true
@@ -3015,7 +3559,7 @@ Object.defineProperty(Bitmap.prototype, "paintOpacity", {
     set: function(value) {
         if (this._paintOpacity !== value) {
             this._paintOpacity = value;
-            this.context.globalAlpha = this._paintOpacity / 255;
+            this._drawingContext().globalAlpha = this._paintOpacity / 255;
         }
     },
     configurable: true
@@ -3067,8 +3611,10 @@ Bitmap.prototype.blt = function(source, sx, sy, sw, sh, dx, dy, dw, dh) {
     dh = dh || sh;
     try {
         const image = source._canvas || source._image;
-        this.context.globalCompositeOperation = "source-over";
-        this.context.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+        const context = this._drawingContext();
+        context.globalCompositeOperation = "source-over";
+        context.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+        this._touchUpload(dx, dy, dw, dh);
         this._baseTexture.update();
     } catch (e) {
         //
@@ -3083,7 +3629,7 @@ Bitmap.prototype.blt = function(source, sx, sy, sw, sh, dx, dy, dw, dh) {
  * @returns {string} The pixel color (hex format).
  */
 Bitmap.prototype.getPixel = function(x, y) {
-    const data = this.context.getImageData(x, y, 1, 1).data;
+    const data = this._drawingContext().getImageData(x, y, 1, 1).data;
     let result = "#";
     for (let i = 0; i < 3; i++) {
         result += data[i].toString(16).padZero(2);
@@ -3099,7 +3645,7 @@ Bitmap.prototype.getPixel = function(x, y) {
  * @returns {string} The alpha value.
  */
 Bitmap.prototype.getAlphaPixel = function(x, y) {
-    const data = this.context.getImageData(x, y, 1, 1).data;
+    const data = this._drawingContext().getImageData(x, y, 1, 1).data;
     return data[3];
 };
 
@@ -3112,7 +3658,8 @@ Bitmap.prototype.getAlphaPixel = function(x, y) {
  * @param {number} height - The height of the rectangle to clear.
  */
 Bitmap.prototype.clearRect = function(x, y, width, height) {
-    this.context.clearRect(x, y, width, height);
+    this._drawingContext().clearRect(x, y, width, height);
+    this._touchUpload(x, y, width, height);
     this._baseTexture.update();
 };
 
@@ -3133,11 +3680,12 @@ Bitmap.prototype.clear = function() {
  * @param {string} color - The color of the rectangle in CSS format.
  */
 Bitmap.prototype.fillRect = function(x, y, width, height, color) {
-    const context = this.context;
+    const context = this._drawingContext();
     context.save();
     context.fillStyle = color;
     context.fillRect(x, y, width, height);
     context.restore();
+    this._touchUpload(x, y, width, height);
     this._baseTexture.update();
 };
 
@@ -3160,11 +3708,13 @@ Bitmap.prototype.fillAll = function(color) {
  * @param {string} color - The color of the rectangle in CSS format.
  */
 Bitmap.prototype.strokeRect = function(x, y, width, height, color) {
-    const context = this.context;
+    const context = this._drawingContext();
     context.save();
     context.strokeStyle = color;
     context.strokeRect(x, y, width, height);
     context.restore();
+    const edge = Math.ceil(context.lineWidth / 2) + 1;
+    this._touchUpload(x - edge, y - edge, width + edge * 2, height + edge * 2);
     this._baseTexture.update();
 };
 
@@ -3183,7 +3733,7 @@ Bitmap.prototype.strokeRect = function(x, y, width, height, color) {
 Bitmap.prototype.gradientFillRect = function(
     x, y, width, height, color1, color2, vertical
 ) {
-    const context = this.context;
+    const context = this._drawingContext();
     const x1 = vertical ? x : x + width;
     const y1 = vertical ? y + height : y;
     const grad = context.createLinearGradient(x, y, x1, y1);
@@ -3193,6 +3743,7 @@ Bitmap.prototype.gradientFillRect = function(
     context.fillStyle = grad;
     context.fillRect(x, y, width, height);
     context.restore();
+    this._touchUpload(x, y, width, height);
     this._baseTexture.update();
 };
 
@@ -3205,13 +3756,14 @@ Bitmap.prototype.gradientFillRect = function(
  * @param {string} color - The color of the circle in CSS format.
  */
 Bitmap.prototype.drawCircle = function(x, y, radius, color) {
-    const context = this.context;
+    const context = this._drawingContext();
     context.save();
     context.fillStyle = color;
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2, false);
     context.fill();
     context.restore();
+    this._touchUpload(x - radius - 1, y - radius - 1, radius * 2 + 2, radius * 2 + 2);
     this._baseTexture.update();
 };
 
@@ -3228,13 +3780,15 @@ Bitmap.prototype.drawCircle = function(x, y, radius, color) {
 Bitmap.prototype.drawText = function(text, x, y, maxWidth, lineHeight, align) {
     // [Note] Different browser makes different rendering with
     //   textBaseline == 'top'. So we use 'alphabetic' here.
-    const context = this.context;
+    const context = this._drawingContext();
     const alpha = context.globalAlpha;
     const fixed = Bitmap.fixedFontSize();
     const span = maxWidth || 0xffffffff;
     maxWidth = fixed ? 0xffffffff : span;
     let tx = x;
-    let ty = Math.round(y + lineHeight / 2 + (fixed || this.fontSize) * 0.35);
+    const legacyFont = Bitmap.legacyFontInfo?.();
+    let ty = legacyFont ? Math.round(y + 2 + legacyFont.ascent)
+        : Math.round(y + lineHeight / 2 + (fixed || this.fontSize) * 0.35);
     context.save();
     context.font = this._makeFontNameText();
     if (Bitmap.pixelText()) {
@@ -3252,11 +3806,20 @@ Bitmap.prototype.drawText = function(text, x, y, maxWidth, lineHeight, align) {
     }
     context.textAlign = align || "left";
     context.textBaseline = "alphabetic";
-    context.globalAlpha = 1;
-    this._drawTextOutline(text, tx, ty, maxWidth);
-    context.globalAlpha = alpha;
-    this._drawTextBody(text, tx, ty, maxWidth);
+    if (!this._drawLegacyPaletteRun?.(text, tx, ty)) {
+        context.globalAlpha = 1;
+        this._drawTextOutline(text, tx, ty, maxWidth);
+        context.globalAlpha = alpha;
+        this._drawTextBody(text, tx, ty, maxWidth);
+    }
     context.restore();
+    // Glyphs reach above and below the line and past their advance; the margin covers that and the outline.
+    const size = fixed || this.fontSize;
+    const pad = Math.ceil(this.outlineWidth + size * 0.5 + 2);
+    const runsPast = fixed || span >= 0xffffffff;
+    const left = runsPast ? 0 : x - pad;
+    const right = runsPast ? this.width : x + span + pad;
+    this._touchUpload(left, ty - size * 1.3 - pad, right - left, size * 1.9 + pad * 2);
     this._baseTexture.update();
 };
 
@@ -3267,7 +3830,7 @@ Bitmap.prototype.drawText = function(text, x, y, maxWidth, lineHeight, align) {
  * @returns {number} The width of the text in pixels.
  */
 Bitmap.prototype.measureTextWidth = function(text) {
-    const context = this.context;
+    const context = this._drawingContext();
     context.save();
     context.font = this._makeFontNameText();
     const width = context.measureText(text).width;
@@ -3313,9 +3876,18 @@ Bitmap.pixelText = function() {
  * RPG Maker 2000/2003 (System.json rrLegacyWindows): every text is drawn at the font's own size
  * (advanced.fontSize) and at its natural width, never squeezed; a pixel font at any other size blurs.
  */
+Bitmap.legacyFontInfo = function() {
+    const system = typeof $dataSystem !== "undefined" && $dataSystem;
+    if (!system?.rrLegacyWindows) return null;
+    const info = typeof $gameSystem !== "undefined" && $gameSystem?.legacyFontInfo?.();
+    return info && Number.isFinite(info.height) && info.height > 0 && info.height <= 1024
+        && Number.isFinite(info.ascent) && info.ascent > 0 && info.ascent <= info.height ? info : null;
+};
+
 Bitmap.fixedFontSize = function() {
     const system = typeof $dataSystem !== "undefined" && $dataSystem;
-    return (system && system.rrLegacyWindows && system.advanced && system.advanced.fontSize) || 0;
+    return Bitmap.legacyFontInfo?.()?.height
+        || (system && system.rrLegacyWindows && system.advanced && system.advanced.fontSize) || 0;
 };
 
 /** System.json advanced.rrTextShadow: text casts a sharp 1 px drop shadow instead of an outline, as 2000/2003 drew it. */
@@ -3325,12 +3897,19 @@ Bitmap.textShadow = function() {
 };
 
 Bitmap.prototype._drawTextOutline = function(text, tx, ty, maxWidth) {
-    const context = this.context;
+    if (this.outlineWidth <= 0) return;
+    const context = this._drawingContext();
     if (this.outlineWidth > 0 && Bitmap.textShadow()) {
-        context.fillStyle = "#000000";
+        const paint = this._rrLegacyPaletteShadow && this.outlineColor === this._rrLegacyShadowCss
+            && typeof ColorManager !== "undefined" ? ColorManager.legacyTextPaint?.(20) : null;
+        if (paint && this._drawLegacyPaletteText(text, tx + 1, ty + 1, paint, true)) return;
+        const color = typeof $dataSystem !== "undefined" && $dataSystem?.rrLegacyTextPalette ? this.outlineColor : "#000000";
+        if (this._drawLegacyPixelText(text, tx + 1, ty + 1, color)) return;
+        context.fillStyle = color;
         context.fillText(text, tx + 1, ty + 1, maxWidth);
         return;
     }
+    if (this._drawLegacyPixelText(text, tx, ty, this.outlineColor, this.outlineWidth)) return;
     context.strokeStyle = this.outlineColor;
     context.lineWidth = this.outlineWidth;
     context.lineJoin = "round";
@@ -3338,9 +3917,187 @@ Bitmap.prototype._drawTextOutline = function(text, tx, ty, maxWidth) {
 };
 
 Bitmap.prototype._drawTextBody = function(text, tx, ty, maxWidth) {
-    const context = this.context;
+    const paint = this.textColor === this._rrLegacyPaletteCss && typeof ColorManager !== "undefined"
+        ? ColorManager.legacyTextPaint?.(this._rrLegacyPaletteIndex) : null;
+    if (paint && this._drawLegacyPaletteText(text, tx, ty, paint, false)) return;
+    if (this._drawLegacyPixelText(text, tx, ty, this.textColor)) return;
+    const context = this._drawingContext();
     context.fillStyle = this.textColor;
     context.fillText(text, tx, ty, maxWidth);
+};
+
+/** Paint one source System colour cell through a monochrome glyph mask. */
+Bitmap.paintLegacyGlyph = function(pixels, width, height, pad, ascent, paint, shadow) {
+    const top = pad * 2 - ascent;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const at = (y * width + x) * 4;
+        if (pixels[at + 3] < 128) { pixels[at + 3] = 0; continue; }
+        // The native font box begins two pixels below the 16px text row.
+        // Source offsets (2,4) restart for every glyph; its 1px shadow uses
+        // the separate (16,32) cell from its own unshifted mask origin.
+        const sx = Math.max(0, Math.min(15, x - pad + (shadow ? 0 : 2)));
+        const sy = Math.max(0, Math.min(15, y - top + (shadow ? 0 : 4)));
+        const from = (sy * 16 + sx) * 4;
+        pixels[at] = paint.data[from]; pixels[at + 1] = paint.data[from + 1];
+        pixels[at + 2] = paint.data[from + 2]; pixels[at + 3] = 255;
+    }
+};
+
+/** Native legacy text draws each glyph's shadow and body before the next glyph. */
+Bitmap.prototype._drawLegacyPaletteRun = function(text, tx, ty) {
+    // Keep custom CSS, outlines and smoothing on their existing paths.
+    if (!Bitmap.textShadow() || this.outlineWidth <= 0 || !this._rrLegacyPaletteShadow
+        || this.outlineColor !== this._rrLegacyShadowCss || this.textColor !== this._rrLegacyPaletteCss
+        || typeof ColorManager === "undefined") return false;
+    const body = ColorManager.legacyTextPaint?.(this._rrLegacyPaletteIndex);
+    const shadow = ColorManager.legacyTextPaint?.(20);
+    return !!(body && shadow && this._drawLegacyPaletteText(text, tx, ty, shadow, true, body));
+};
+
+Bitmap.prototype._drawLegacyPaletteText = function(text, tx, ty, paint, shadow, pairedBodyPaint) {
+    if (!Bitmap.fixedFontSize() || !Bitmap.pixelText()) return false;
+    const context = this._drawingContext(), value = String(text), font = this._makeFontNameText();
+    const size = Bitmap.fixedFontSize(), info = Bitmap.legacyFontInfo();
+    const ascent = info?.ascent || Math.round(size * 0.85);
+    const width = context.measureText(value).width;
+    if (width > 8192 || size > 256) return false;
+    if (context.textAlign === "center") tx -= width / 2;
+    else if (context.textAlign === "right" || context.textAlign === "end") tx -= width;
+    const cache = Bitmap._legacyPixelTextCache || (Bitmap._legacyPixelTextCache = new Map());
+    const passes = pairedBodyPaint ? [
+        { paint, shadow: true, dx: 1, dy: 1, alpha: 1 },
+        { paint: pairedBodyPaint, shadow: false, dx: 0, dy: 0, alpha: context.globalAlpha }
+    ] : [{ paint, shadow, dx: 0, dy: 0, alpha: context.globalAlpha }];
+    context.save(); context.imageSmoothingEnabled = false;
+    let advance = 0;
+    for (const glyph of value) {
+        const ready = !document.fonts || document.fonts.check(font, glyph);
+        let glyphAdvance = 0;
+        for (const pass of passes) {
+            const key = JSON.stringify(["palette", font, glyph, pass.paint.key, pass.shadow, ascent]);
+            let item = ready && cache.get(key);
+            if (!item) {
+                const pad = Math.ceil(size), canvas = document.createElement("canvas");
+                const glyphWidth = context.measureText(glyph).width;
+                canvas.width = Math.max(1, Math.ceil(glyphWidth) + pad * 2); canvas.height = pad * 3;
+                const ink = canvas.getContext("2d", { willReadFrequently: true });
+                ink.font = font; ink.textBaseline = "alphabetic"; ink.fillStyle = "#ffffff";
+                ink.fillText(glyph, pad, pad * 2);
+                const pixels = ink.getImageData(0, 0, canvas.width, canvas.height);
+                Bitmap.paintLegacyGlyph(pixels.data, canvas.width, canvas.height, pad, ascent, pass.paint, pass.shadow);
+                ink.putImageData(pixels, 0, 0);
+                item = { canvas, pad, advance: glyphWidth };
+                if (ready) {
+                    cache.set(key, item);
+                    Bitmap._legacyPixelTextPixels = (Bitmap._legacyPixelTextPixels || 0) + canvas.width * canvas.height;
+                    while (cache.size > 128 || Bitmap._legacyPixelTextPixels > 1048576) {
+                        const oldest = cache.keys().next().value, old = cache.get(oldest);
+                        Bitmap._legacyPixelTextPixels -= old.canvas.width * old.canvas.height; cache.delete(oldest);
+                    }
+                }
+            } else { cache.delete(key); cache.set(key, item); }
+            context.globalAlpha = pass.alpha;
+            context.drawImage(item.canvas, Math.round(tx + advance + pass.dx) - item.pad, Math.round(ty + pass.dy) - item.pad * 2);
+            glyphAdvance = item.advance;
+        }
+        advance += glyphAdvance;
+    }
+    context.restore();
+    return true;
+};
+
+/**
+ * 2000/2003 used monochrome glyph masks. Nearest texture sampling cannot
+ * remove antialiasing already baked into a browser-rendered fallback font.
+ * Cache native-size, hard-edged masks for these projects only; modern text
+ * and legacy projects with Pixelated Rendering disabled retain canvas text.
+ */
+Bitmap.prototype._drawLegacyPixelText = function(text, tx, ty, color, outline = 0) {
+    if (!Bitmap.fixedFontSize() || !Bitmap.pixelText()) return false;
+    const context = this._drawingContext();
+    const value = String(text);
+    const size = Bitmap.fixedFontSize();
+    const font = this._makeFontNameText();
+    // During a plugin font load, do not retain a mask made with its fallback.
+    const ready = !document.fonts || document.fonts.check(font, value);
+    const key = JSON.stringify([font, value, color, outline]);
+    const cache = Bitmap._legacyPixelTextCache || (Bitmap._legacyPixelTextCache = new Map());
+    let item = ready && cache.get(key);
+    if (!item) {
+        const pad = Math.ceil(size + outline);
+        const width = Math.ceil(context.measureText(value).width) + pad * 2;
+        const height = pad * 3;
+        // Bound allocations even for a plugin passing an unusually long line.
+        if (width > 8192 || height > 1024) return false;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ink = canvas.getContext("2d", { willReadFrequently: true });
+        ink.font = font;
+        ink.textBaseline = "alphabetic";
+        ink.fillStyle = "#ffffff";
+        if (outline > 0) {
+            ink.strokeStyle = "#ffffff";
+            ink.lineWidth = outline;
+            ink.lineJoin = "round";
+            ink.strokeText(value, pad, pad * 2);
+        } else ink.fillText(value, pad, pad * 2);
+        const pixels = ink.getImageData(0, 0, canvas.width, canvas.height);
+        const data = pixels.data;
+        for (let i = 3; i < data.length; i += 4) data[i] = data[i] >= 128 ? 255 : 0;
+        ink.putImageData(pixels, 0, 0);
+        ink.globalCompositeOperation = "source-in";
+        ink.fillStyle = color;
+        ink.fillRect(0, 0, canvas.width, canvas.height);
+        item = { canvas, pad, advance: context.measureText(value).width };
+        if (ready) {
+            cache.set(key, item);
+            Bitmap._legacyPixelTextPixels = (Bitmap._legacyPixelTextPixels || 0) + canvas.width * canvas.height;
+            while (cache.size > 128 || Bitmap._legacyPixelTextPixels > 1048576) {
+                const oldest = cache.keys().next().value;
+                const old = cache.get(oldest);
+                Bitmap._legacyPixelTextPixels -= old.canvas.width * old.canvas.height;
+                cache.delete(oldest);
+            }
+        }
+    } else {
+        cache.delete(key);
+        cache.set(key, item);
+    }
+    if (context.textAlign === "center") tx -= item.advance / 2;
+    else if (context.textAlign === "right" || context.textAlign === "end") tx -= item.advance;
+    context.save();
+    context.imageSmoothingEnabled = false;
+    context.drawImage(item.canvas, Math.round(tx) - item.pad, Math.round(ty) - item.pad * 2);
+    context.restore();
+    return true;
+};
+
+/**
+ * Partial uploads (Bitmap.partialUploads): each draw op below names the area
+ * it changed, and the frame's upload of the bitmap sends only the changed
+ * area when that is a small part of the canvas (pixi_compat's upload flush).
+ * An update() that names no area (a plugin's own drawing) sends the whole
+ * canvas, and so does every upload once code outside these ops has taken the
+ * canvas or its context, since it can draw without naming an area.
+ */
+Bitmap.partialUploads = true;
+
+// The context for the ops in this file, without marking it lent.
+Bitmap.prototype._drawingContext = function() {
+    this._ensureCanvas();
+    return this._context;
+};
+
+Bitmap.prototype._touchUpload = function(x, y, width, height) {
+    const base = this._baseTexture;
+    const source = base && base.source;
+    if (!source || this._rrLent || !Bitmap.partialUploads) return;
+    source.__rrTouch = true;
+    source.__rrTouchX0 = Math.floor(Math.min(x, x + width));
+    source.__rrTouchY0 = Math.floor(Math.min(y, y + height));
+    source.__rrTouchX1 = Math.ceil(Math.max(x, x + width));
+    source.__rrTouchY1 = Math.ceil(Math.max(y, y + height));
 };
 
 Bitmap.prototype._createCanvas = function(width, height) {
@@ -3399,6 +4156,7 @@ Bitmap.prototype._updateScaleMode = function() {
 Bitmap.prototype._startLoading = function() {
     this._revokeObjectUrl();
     this._triedMvEncrypted = false;
+    this._triedPlain = false;
     this._image = new Image();
     this._image.onload = this._onLoad.bind(this);
     this._image.onerror = this._onError.bind(this);
@@ -3431,6 +4189,22 @@ Bitmap.prototype._startLoading = function() {
 
 Bitmap.prototype._startDecrypting = function() {
     this._url = Utils.resolveFileCase(this._url, "_");
+    // With the disk at hand, ask for the name that is there (MV's .rpgmvp,
+    // or a file left plain) instead of failing a request first.
+    if (Utils.localAssetExists(this._url + "_") === false && /\.png$/i.test(this._url)) {
+        const mv = this._url.slice(0, -4) + ".rpgmvp";
+        if (Utils.localAssetExists(mv)) {
+            this._triedMvEncrypted = true;
+            this._requestEncrypted(Utils.correctFileCase(mv) || mv);
+            return;
+        }
+        if (Utils.localAssetExists(this._url)) {
+            this._triedMvEncrypted = true;
+            this._triedPlain = true;
+            this._requestBytes(this._url);
+            return;
+        }
+    }
     this._requestEncrypted(this._url + "_");
 };
 
@@ -3484,6 +4258,13 @@ Bitmap.prototype._onEncryptedError = function() {
         this._triedMvEncrypted = true;
         const candidate = this._url.slice(0, -4) + ".rpgmvp";
         this._requestEncrypted(Utils.correctFileCase(candidate) || candidate);
+        return;
+    }
+    // An encrypted game can still ship a file as it is: MV never encrypts
+    // img/system/Window.png, and a deploy can leave others plain.
+    if (!this._triedPlain) {
+        this._triedPlain = true;
+        this._requestBytes(Utils.resolveFileCase(this._url, ""));
         return;
     }
     this._onError();

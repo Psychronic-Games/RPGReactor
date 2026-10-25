@@ -507,11 +507,14 @@
     }
 
     function tick(scene) {
+        tickTalk(scene);
         for (const [character, state] of active) {
             const buffer = state.buffer;
             if (buffer.isError?.() || !buffer.isPlaying()) { stop(character); continue; }
             const holder = scene._modelInstances?.get(R.modelInstanceKey(character));
             if (!holder?.object) { state.driver?.restore(); continue; }
+            // A model with mouth shapes of its own is moved by its talk (below), the voice opening it.
+            if (talk.character === character && talk.rig) continue;
             if (state.object !== holder.object) {
                 state.driver?.restore(); state.object = holder.object; state.driver = prepare(holder.object);
             }
@@ -542,6 +545,7 @@
     }
 
     function install() {
+        installTalk();
         if (typeof WebAudio !== "undefined" && WebAudio.prototype._onDecode
             && !WebAudio.prototype._onDecode.__reactorSpeech3D) {
             const decode = WebAudio.prototype._onDecode;
@@ -587,18 +591,238 @@
         }
     }
 
+    //-------------------------------------------------------------------------
+    // Lip sync on models with mouth shapes (morph targets viseme_<id>, as the
+    // Character Builder saves them). The speaker of a Show Text is found as
+    // its face is (ReactorSpeakerFace's rules: the speaker name's actor or
+    // event, else the event that runs it). Each frame the letters the message
+    // window printed choose the shape (held a few frames, eased in and out), so
+    // the mouth keeps the window's own text speed and shuts when the text waits,
+    // pauses for input or ends; a voice playing for the speaker (SpeakModel3D)
+    // opens it by its loudness instead. The eyes blink while it talks. Only the
+    // speaking model's weights are written, into arrays made once per model.
+
+    /** Mouth shapes by letter (lower case; digraphs first). The Character Builder holds the same table. */
+    const VISEMES = ["aa", "ee", "ih", "oh", "ou", "fv", "mbp", "l", "th", "ch", "s"];
+    const LETTER_VISEMES = {
+        digraphs: { th: "th", sh: "ch", ch: "ch", oo: "ou", ee: "ee", ph: "fv", wh: "ou", ng: "ih", qu: "ou" },
+        letters: {
+            a: "aa", e: "ee", i: "ih", o: "oh", u: "ou", y: "ih", w: "ou", r: "ou", l: "l", f: "fv", v: "fv", m: "mbp", b: "mbp", p: "mbp",
+            s: "s", z: "s", c: "s", x: "s", t: "s", d: "s", n: "s", k: "ih", g: "ih", h: "aa", j: "ch", q: "ou"
+        }
+    };
+    /** How open each shape is (a voice's loudness scales the shape the text gives). */
+    const TALK = { HOLD: 3, ATTACK: 0.045, RELEASE: 0.075, STRENGTH: 0.9, BLINK_MIN: 2.2, BLINK_MAX: 5.2, BLINK_TIME: 0.16 };
+
+    /**
+     * The shape of each character of a message's text (-1: none, a space,
+     * punctuation, an escape code such as \x1bC[2]). Letters beyond
+     * a-z (accents) take their base letter's shape; other scripts open and
+     * close on every printed glyph.
+     */
+    function lineVisemes(text) {
+        const s = String(text || "");
+        const out = new Int8Array(s.length).fill(-1);
+        for (let i = 0; i < s.length; i++) {
+            const ch = s[i];
+            if (ch === "\x1b") {
+                // An escape: its letters and a bracketed parameter (\x1bC[2]), or one sign (\x1b. \x1b|).
+                let j = i + 1;
+                if (/[A-Za-z]/.test(s[j] || "")) {
+                    while (j < s.length && /[A-Za-z]/.test(s[j])) j++;
+                    if (s[j] === "[") { const end = s.indexOf("]", j); j = end >= 0 ? end + 1 : j; }
+                } else j++;
+                i = j - 1;
+                continue;
+            }
+            const lower = ch.toLowerCase().normalize("NFD")[0];
+            const two = (lower + (s[i + 1] || "")).toLowerCase();
+            const di = LETTER_VISEMES.digraphs[two];
+            if (di) { out[i] = out[i + 1] = VISEMES.indexOf(di); i++; continue; }
+            const v = LETTER_VISEMES.letters[lower];
+            if (v) out[i] = VISEMES.indexOf(v);
+            else if (/[\p{L}\p{N}]/u.test(ch)) out[i] = (i % 3 === 0 ? 0 : i % 3 === 1 ? 2 : 3);
+        }
+        return out;
+    }
+
+    const rigs = new WeakMap();
+
+    /** A model's mouth shapes: every mesh's morph index for each viseme and the blink, or null when it has none. */
+    function talkRig(object) {
+        if (!object) return null;
+        if (rigs.has(object)) return rigs.get(object);
+        const meshes = [];
+        object.traverse(node => {
+            const d = node.morphTargetDictionary;
+            if (!d || !node.morphTargetInfluences || d.viseme_aa == null) return;
+            const index = new Int16Array(VISEMES.length + 1).fill(-1);
+            VISEMES.forEach((v, k) => { if (d["viseme_" + v] != null) index[k] = d["viseme_" + v]; });
+            if (d.blink != null) index[VISEMES.length] = d.blink;
+            meshes.push({ influences: node.morphTargetInfluences, index });
+        });
+        const rig = meshes.length ? { meshes } : null;
+        rigs.set(object, rig);
+        return rig;
+    }
+
+    /** The one talk at a time: who speaks, the window printing it, and the shape weights (made once). */
+    const talk = {
+        character: null, window: null, object: null, rig: null, shapes: null, printed: -1, hold: 0, last: -1,
+        target: new Float32Array(VISEMES.length), weight: new Float32Array(VISEMES.length + 1),
+        blinkIn: 3, blinkAt: -1, ending: false, time: 0
+    };
+
+    /** A Show Text began: its speaker, if a model of theirs has mouth shapes, talks with it. */
+    function startTalk(window, character) {
+        endTalk(true);
+        if (!character) return;
+        talk.character = character; talk.window = window; talk.object = null; talk.rig = null;
+        talk.printed = -1; talk.hold = 0; talk.last = -1; talk.ending = false; talk.time = 0;
+        talk.text = null; talk.shapes = null;
+        talk.blinkIn = 0.6 + Math.random() * 1.5; talk.blinkAt = -1;
+    }
+
+    /** The message is gone: the mouth eases shut, then the talk lets go. `now`: at once. */
+    function endTalk(now) {
+        if (!talk.character) return;
+        if (!now) { talk.ending = true; return; }
+        if (talk.rig) for (const m of talk.rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = 0;
+        talk.weight.fill(0); talk.target.fill(0);
+        talk.character = null; talk.window = null; talk.object = null; talk.rig = null; talk.shapes = null; talk.text = null;
+    }
+
+    /**
+     * One frame of the talk: the newest printed letter's shape is the target
+     * (held HOLD frames, then rest), a voice's loudness scales it, and the
+     * weights ease toward it. `printed` is the window's text index (-1 when it
+     * prints nothing), `level` a voice's 0..1 loudness or null, `dt` seconds.
+     */
+    function stepTalk(t, text, printed, level, dt) {
+        if (text !== t.text) { t.text = text; t.shapes = text != null ? lineVisemes(text) : null; t.printed = -1; t.last = -1; }
+        t.target.fill(0);
+        let shape = -1;
+        if (t.shapes && printed > t.printed && !t.ending) {
+            // The most open of the letters printed since the last frame.
+            for (let i = Math.max(0, t.printed); i < Math.min(printed, t.shapes.length); i++) if (t.shapes[i] >= 0) shape = shape < 0 || t.shapes[i] === 0 ? t.shapes[i] : shape;
+            t.printed = printed;
+            if (shape >= 0) { t.last = shape; t.hold = TALK.HOLD; }
+            else t.hold = Math.min(t.hold, 1);
+        } else if (t.hold > 0) t.hold--;
+        if (t.hold > 0 && t.last >= 0) t.target[t.last] = TALK.STRENGTH;
+        if (level != null && !t.ending) {
+            // A voice: its loudness opens the mouth, in the text's shape while it prints, else wide.
+            if (t.hold > 0 && t.last >= 0) t.target[t.last] = Math.min(1, level * 1.4);
+            else t.target[0] = Math.min(1, level * 1.4);
+        }
+        const up = 1 - Math.exp(-dt / TALK.ATTACK), down = 1 - Math.exp(-dt / TALK.RELEASE);
+        let open = 0;
+        for (let k = 0; k < VISEMES.length; k++) {
+            const w = t.weight[k], to = t.target[k];
+            t.weight[k] = w + (to - w) * (to > w ? up : down);
+            if (t.weight[k] < 1e-3 && to === 0) t.weight[k] = 0;
+            open += t.weight[k];
+        }
+        // A blink every few seconds while talking.
+        t.time += dt;
+        const b = VISEMES.length;
+        if (t.blinkAt < 0 && t.time >= t.blinkIn && !t.ending) t.blinkAt = t.time;
+        if (t.blinkAt >= 0) {
+            const p = (t.time - t.blinkAt) / TALK.BLINK_TIME;
+            t.weight[b] = p >= 1 ? 0 : p < 0.4 ? p / 0.4 : 1 - (p - 0.4) / 0.6;
+            if (p >= 1) { t.blinkAt = -1; t.blinkIn = t.time + TALK.BLINK_MIN + Math.random() * (TALK.BLINK_MAX - TALK.BLINK_MIN); }
+        }
+        return open + t.weight[b];
+    }
+
+    /** Writes the talk's weights into its model's morph influences. */
+    function writeTalk(t) {
+        for (const m of t.rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = t.weight[k];
+    }
+
+    function tickTalk(scene) {
+        if (!talk.character) return;
+        const holder = scene._modelInstances?.get(R.modelInstanceKey(talk.character));
+        const object = holder?.object || null;
+        if (object !== talk.object) {
+            if (talk.rig) for (const m of talk.rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = 0;
+            talk.object = object; talk.rig = talkRig(object);
+        }
+        if (!talk.rig) { if (talk.ending) endTalk(true); return; }
+        const w = talk.window, state = w && w._textState;
+        const voice = active.get(talk.character);
+        let level = null;
+        if (voice && voice.buffer.isPlaying && voice.buffer.isPlaying()) {
+            const seconds = typeof WebAudio !== "undefined" && Number.isFinite(voice.buffer._startTime)
+                ? (WebAudio._currentTime() - voice.buffer._startTime) * voice.buffer._pitch : voice.buffer.seek();
+            level = levelAt(voice.buffer, seconds);
+        }
+        const printing = state && !(w.pause || w._waitCount > 0);
+        const moving = stepTalk(talk, state ? state.text : talk.text, printing ? state.index : -1, level, 1 / 60);
+        writeTalk(talk);
+        if (talk.ending && moving <= 0) endTalk(true);
+    }
+
+    /** Who a Show Text's speaker is on the map: an actor's character, an event, or the event that runs it. */
+    function speakerCharacter() {
+        if (typeof $gameMessage === "undefined" || typeof $gameMap === "undefined" || !$gameMap) return null;
+        const S = root.ReactorSpeakerFace, name = $gameMessage.speakerName ? $gameMessage.speakerName() : "";
+        const running = $gameMap._interpreter && $gameMap._interpreter.isRunning() ? $gameMap._interpreter.eventId() : 0;
+        if (S && S.whoSpeaks) {
+            const actors = [];
+            for (let id = 1; typeof $dataActors !== "undefined" && id < $dataActors.length; id++) if ($dataActors[id]) actors.push({ id, name: $gameActors.actor(id) ? $gameActors.actor(id).name() : $dataActors[id].name });
+            const events = $gameMap.events().map(e => ({ id: e.eventId(), name: (e.event() && e.event().name) || "" }));
+            const party = $gameParty && $gameParty.allMembers ? $gameParty.allMembers().map(a => a.actorId()) : [];
+            const lookup = { actorName: id => ($gameActors.actor(id) ? $gameActors.actor(id).name() : ""), partyMemberName: n => { const a = $gameParty.members()[n - 1]; return a ? a.name() : ""; }, variable: n => $gameVariables.value(n), currency: "" };
+            const who = S.whoSpeaks(name, { actors, party, events, runningEventId: running, lookup });
+            if (who.kind === "event") return $gameMap.event(who.id) || null;
+            if (who.kind === "actor") {
+                const leader = $gameParty.leader && $gameParty.leader();
+                if (leader && leader.actorId() === who.id) return $gamePlayer;
+                for (const f of $gamePlayer.followers()._data || []) if (f.actor && f.actor() && f.actor().actorId() === who.id) return f;
+                return null;
+            }
+            if (who.kind === "none" && name) return null;
+        }
+        return running > 0 ? $gameMap.event(running) || null : null;
+    }
+
+    function installTalk() {
+        if (typeof Window_Message === "undefined") return;
+        installTalk.done = true;
+        if (Window_Message.prototype.startMessage.__reactorTalk) return;
+        const start = Window_Message.prototype.startMessage;
+        Window_Message.prototype.startMessage = function() {
+            const result = start.apply(this, arguments);
+            let who = null;
+            try { who = speakerCharacter(); } catch (_) { who = null; }
+            startTalk(this, who);
+            return result;
+        };
+        Window_Message.prototype.startMessage.__reactorTalk = true;
+        const terminate = Window_Message.prototype.terminateMessage;
+        Window_Message.prototype.terminateMessage = function() {
+            if (talk.window === this) endTalk(false);
+            return terminate.apply(this, arguments);
+        };
+    }
+
     const sync = R.MapScene.prototype.syncCharacterModels;
     R.MapScene.prototype.syncCharacterModels = function() {
+        // The message window's class loads after this file: the talk takes its hook once it exists.
+        if (!installTalk.done) installTalk();
         for (const state of active.values()) state.driver?.restore();
         const result = sync.apply(this, arguments); tick(this); return result;
     };
     const clear = R.MapScene.prototype.clear;
     R.MapScene.prototype.clear = function() {
         for (const character of Array.from(active.keys())) stop(character);
+        endTalk(true);
         for (const holder of this._modelInstances?.values() || []) drivers.get(holder.object)?.dispose();
         return clear.apply(this, arguments);
     };
     R.Speech = { RATE, envelope, levelAt, prepare, attach, play, stop, tick, active, install,
+        VISEMES, LETTER_VISEMES, TALK, lineVisemes, talkRig, talk, startTalk, endTalk, stepTalk, tickTalk, speakerCharacter,
         pointsShape, outlineShape, outlineFromPoints, outlineMiddles, heightOver, OPEN_SHARE, OPEN_SHARE_MAX };
     install();
     if (typeof module !== "undefined" && module.exports) module.exports = R;

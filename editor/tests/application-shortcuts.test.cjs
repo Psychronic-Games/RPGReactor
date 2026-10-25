@@ -394,7 +394,7 @@ test('the New Project flow and list context menus no longer reach window dialogs
     // falling through to NW.js's Reload App / Inspect menu.
     assert.match(controller, /mapsList\.addEventListener\('contextmenu'[\s\S]*?closest\('\[data-map-id\]'\)\) return;[\s\S]*?showMapListContextMenu\(e\.pageX, e\.pageY\)/);
     assert.match(controller, /quickAccessList\.addEventListener\('contextmenu'[\s\S]*?closest\('\[data-map-id\]'\)\) return;[\s\S]*?showQuickAccessContextMenu\(e\.pageX, e\.pageY\)/);
-    assert.match(controller, /showMapListContextMenu\(x, y\) \{[\s\S]*?createNewMap\(null\)[\s\S]*?pasteMap\(\)/,
+    assert.match(controller, /showMapListContextMenu\(x, y\) \{[\s\S]*?createNewMap\(null\)[\s\S]*?pasteMap\(null\)/,
         'the tree menu offers a root-level new map and paste');
     assert.match(controller, /showQuickAccessContextMenu\(x, y\) \{[\s\S]*?toggleQuickAccess\(currentId\)/);
     const forge = fs.readFileSync(path.join(editorRoot, 'src', 'forge', 'ForgeManager.js'), 'utf8');

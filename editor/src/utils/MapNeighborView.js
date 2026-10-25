@@ -261,11 +261,11 @@
             return laid;
         },
 
-        /** The next part of a world: its pieces, then its water with its land and plants (Reactor3D.Neighbors.stage). */
+        /** The next part of a world: its pieces, a few chunks a part, then its water with its land and plants (Reactor3D.Neighbors.stage). */
         lay(body) {
-            const started = now(), stage = body.stage;
+            const started = now(), stage = body.stage, part = stage === 3 ? 'water' : 'pieces';
             R().Neighbors.stage(body);
-            body.record.ms[stage === 1 ? 'pieces' : 'water'] = Math.round(now() - started);
+            body.record.ms[part] = (stage === 1 ? 0 : body.record.ms[part] || 0) + Math.round(now() - started);
         },
 
         /** A world kept from the scene before stands in this one, as it was. */

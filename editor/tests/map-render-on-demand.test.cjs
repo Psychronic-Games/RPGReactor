@@ -221,7 +221,7 @@ test('input over the map, keys and a restored context ask for a frame', () => {
 
 test('the project controller installs the scheduler and resizes the renderer once a frame', () => {
     const source = src('ProjectController.js');
-    assert.match(source, /new MapRenderScheduler\(this\.app, \{[\s\S]*?isCovered: \(\) => !!databaseViewer\(\)\?\.classList\?\.contains\('active'\)[\s\S]*?\}\)\.install\(\{ inputElement: container \}\)/);
+    assert.match(source, /new MapRenderScheduler\(this\.app, \{[\s\S]*?isCovered: \(\) => \(!!databaseViewer\(\)\?\.classList\?\.contains\('active'\) && !databaseViewer\(\)\.classList\.contains\('rr-database-floating'\)\)[\s\S]*?\}\)\.install\(\{ inputElement: container \}\)/);
     assert.match(source, /if \(resizeFrame !== null\) return;\s*resizeFrame = requestAnimationFrame\(/);
 });
 

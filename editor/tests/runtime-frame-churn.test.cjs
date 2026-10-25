@@ -67,5 +67,5 @@ test('Points and Rectangles are plain field writes on PIXI 8, and window per-fra
     assert.match(core, /const rect = this\._clampedCursorScratch \|\| \(this\._clampedCursorScratch = new Rectangle\(0, 0, 0, 0\)\);/);
     assert.match(core, /const wt = this\._clientArea\.worldTransform;[\s\S]*?wt\.apply\(this\._filterOriginScratch, this\._filterPosScratch\)/);
     // A hidden tilemap (a 3D map in its place) paints nothing until shown.
-    assert.match(core, /const hidden = this\._lowerLayer\.visible === false && this\._upperLayer\.visible === false;\s*if \(\s*!hidden && \(/);
+    assert.match(core, /const hidden = this\._lowerLayer\.visible === false && this\._upperLayer\.visible === false;\s*const chunked = !hidden && [^\n]*\n[^\n]*\n\s*if \(\s*!chunked && !hidden && \(/);
 });

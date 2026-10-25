@@ -1,8 +1,9 @@
 /**
- * TacticsSection - a record's combat settings, grouped by where they apply:
- * Shared Combat Settings (targeting, AI behavior and enemy appearance),
- * Tactical Battles (turn-based movement and climbing), and Action and
- * First Person Battles (weapon behavior and hotbar cooldowns).
+ * TacticsSection - a record's combat settings, one Combat section per page,
+ * its groups by where they apply: targeting or behavior (every battle on the
+ * map: targeting, AI behavior and enemy appearance), Tactical Battles
+ * (turn-based movement and climbing), and Action and First Person Battles
+ * (weapon behavior and hotbar cooldowns).
  *
  * Everything is stored in the record itself, as `rrBattle`, each key
  * there only while the record sets it:
@@ -16,6 +17,7 @@
  *   projectile: "bullet" | "arrow" | "bolt" | "rocket" | "none"
  *   cooldown                                                 on skills and items
  *   character: { name, index }        an enemy's picture on the map
+ *   comesBack: true                   an enemy's events stand again when their map is entered (no tag)
  *
  * The game reads a setting there first (runtime/reactor_fight_tactical.js,
  * reactor_fight_action.js, reactor_fight_look.js) and, for whatever the
@@ -183,6 +185,7 @@
         if (projectile && PROJECTILES.includes(projectile)) out.projectile = projectile;
         const rule = Look(), sheet = rule ? rule.ownCharacter(record) : null;
         if (sheet) out.character = { name: sheet.characterName, index: sheet.characterIndex };
+        if (held.comesBack === true) out.comesBack = true;
         return Object.keys(out).length ? out : null;
     }
 
@@ -647,13 +650,13 @@
     const FILES = { 'Actors.json': 'actor', 'Classes.json': 'class', 'Skills.json': 'skill', 'Items.json': 'item', 'Weapons.json': 'weapon', 'Armors.json': 'armor', 'Enemies.json': 'enemy', 'States.json': 'state' };
 
     /**
-     * The combat cards. `key` is the name a card's fold is remembered by, the
-     * same in every language; `fights` is the way of fighting it is for
-     * (the Database folds a card nobody touched while the project never
-     * fights that way); `kinds` are the records that get it.
+     * The groups of the Combat section. `key` names the group, the same in
+     * every language; `fights` is the way of fighting it is for (the
+     * Database folds a Combat section nobody touched while the project never
+     * fights the way of any group in it); `kinds` are the records that get it.
      */
     const CARDS = {
-        shared: { key: 'sharedCombat', title: 'Shared Combat Settings', fights: 'map-battles', kinds: ['actor', 'enemy', ...ACTION_KINDS] },
+        shared: { key: 'sharedCombat', title: 'Targeting', fights: 'map-battles', kinds: ['actor', 'enemy', ...ACTION_KINDS] },
         tactical: { key: 'tactics', title: 'Tactical Battles', fights: 'tactical-battles', kinds: [...UNIT_KINDS, ...BONUS_KINDS] },
         action: { key: 'action', title: 'Action and First Person Battles', fights: 'action-battles', kinds: ACTION_KINDS }
     };
@@ -668,17 +671,20 @@
         return CARDS[card].fights;
     }
 
-    /** One title for the same group on every record page. */
+    /** A group's title: the shared group is targeting on skills, items and weapons, behavior on actors and enemies. */
     function titleFor(card, kind) {
-        return CARDS[card].title;
+        return card === 'shared' && (kind === 'actor' || kind === 'enemy') ? 'Behavior' : CARDS[card].title;
     }
+
+    // The section the groups stand in: its fold is remembered by this name.
+    const SECTION = { key: 'combat', title: 'Combat' };
 
     /** The settings a card holds on a kind of record: the ones its Automatic chip takes out, as keys of `rrBattle` and as tags. */
     function ownTags(card, kind) {
         if (card === 'action') return kind === 'weapon' ? ['fireRate', 'magazine', 'reload', 'spread', 'combo', 'projectile'] : kind === 'skill' || kind === 'item' ? ['cooldown'] : [];
         if (card === 'shared') {
             if (ACTION_KINDS.includes(kind)) return ['range', 'area', 'los'];
-            if (kind === 'enemy') return ['ai', 'character'];
+            if (kind === 'enemy') return ['ai', 'character', 'comesBack'];
             return kind === 'actor' ? ['ai'] : [];
         }
         return card === 'tactical' && (UNIT_KINDS.includes(kind) || BONUS_KINDS.includes(kind)) ? ['move', 'jump'] : [];
@@ -693,6 +699,8 @@
         fireRate: [0, 20], magazine: [0, 999], reload: [0, 30], spread: [0, 45], combo: [0, 5], cooldown: [0, 600] };
     const within = (value, limit) => Math.max(limit[0], Math.min(limit[1], value));
 
+    // Settings a card holds that no Note tag says.
+    const UNTAGGED = ['comesBack'];
     const plainObject = value => !!value && typeof value === 'object' && !Array.isArray(value);
     const sameSettings = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
     const hundredths = value => Math.round(Math.max(0, Number(value) || 0) * 100) / 100;
@@ -707,9 +715,9 @@
     function stored(record, patch, keep) {
         const entry = record || {}, next = Object.assign({}, plainObject(entry.rrBattle) ? entry.rrBattle : null), taken = [];
         for (const key of Object.keys(patch || {})) {
-            if (!TAGS[key]) continue;
+            if (!TAGS[key] && !UNTAGGED.includes(key)) continue;
             if (patch[key] === null || patch[key] === undefined) delete next[key]; else next[key] = patch[key];
-            if (!(keep && keep[key])) taken.push(TAGS[key]);
+            if (TAGS[key] && !(keep && keep[key])) taken.push(TAGS[key]);
         }
         return { note: without(entry.note, taken), rrBattle: Object.keys(next).length ? next : undefined };
     }
@@ -792,6 +800,8 @@
             } else if (key === 'character') {
                 const name = text(value.name).trim();
                 patch.character = name ? { name, index: Math.min(7, whole(value.index)) } : null;
+            } else if (key === 'comesBack') {
+                patch.comesBack = value === true ? true : null;
             } else if (key === 'projectile') {
                 patch.projectile = !PROJECTILES.includes(value) || value === combatProfile(bare(key), context).projectile ? null : value;
             } else if (key === 'cooldown') {
@@ -871,11 +881,13 @@
             parts.push(said(tagged, range + area) + (found.los === false && sight ? ' · ' + t('no line of sight needed') : ''));
         }
         if (card === 'shared' && (kind === 'actor' || kind === 'enemy')) {
-            tagged = !!found.ai || (kind === 'enemy' && !!recordCharacter(entry));
+            const back = kind === 'enemy' && !!(own(entry) || {}).comesBack;
+            tagged = !!found.ai || (kind === 'enemy' && !!recordCharacter(entry)) || back;
             const behavior = { aggressive: 'Up close', ranged: 'From a distance', support: 'Supporting allies' };
             parts.push(said(tagged, t(behavior[found.ai] || behavior.aggressive)));
             const sheet = kind === 'enemy' ? recordCharacter(entry) : null;
             if (sheet) parts.push(sheet.characterName);
+            if (back) parts.push(t('Comes back'));
         }
         if (card === 'tactical' && UNIT_KINDS.includes(kind)) {
             tagged = found.move !== undefined || found.jump !== undefined;
@@ -1153,13 +1165,15 @@
                 <button type="button" class="rr-btn-chip rr-tactics-look-change">${word('Choose a picture...')}</button>
                 <button type="button" class="rr-btn-chip rr-tactics-look-auto" hidden>${word('Automatic')}</button>
             </span>
-            <span class="rr-tactics-hint rr-tactics-look-hint" hidden></span>`;
+            <span class="rr-tactics-hint rr-tactics-look-hint" hidden></span>
+            <label class="rr-tactics-check"><input type="checkbox" class="system-checkbox rr-tactics-comes-back"><span>${word('Comes back')}</span></label>
+            <span class="rr-tactics-hint">${word('Its events on a map stand again when the map is entered, unless an event says otherwise.')}</span>`;
             }
             if (name === 'tactical' && BONUS_KINDS.includes(kind)) rows += number('Move range', 'rr-tactics-move', 'tiles more or fewer', LIMITS.bonus[0], LIMITS.bonus[1], 1) + number('Climb', 'rr-tactics-jump', 'levels more or fewer', LIMITS.bonus[0], LIMITS.bonus[1], 1);
         }
         return `
-            <div class="database-section-header rr-tactics-header"><span class="rr-tactics-title">${word(titleFor(name, kind))}</span><span class="rr-tactics-summary"></span><button type="button" class="rr-btn-chip rr-tactics-reset" hidden>${word('Automatic')}</button></div>
-            <div class="database-section-content rr-tactics-body">
+            <div class="rr-tactics-header"><span class="rr-tactics-title">${word(titleFor(name, kind))}</span><span class="rr-tactics-summary"></span><button type="button" class="rr-btn-chip rr-tactics-reset" hidden>${word('Automatic')}</button></div>
+            <div class="rr-tactics-body">
                 <div class="rr-tactics-scope">${word(CARD_HINTS[name])}</div>
                 <div class="db-form rr-tactics-form">${rows}</div>
                 ${picture ? '<div class="rr-tactics-picture">' + (name === 'shared' ? `<span class="rr-tactics-preview-title">${word('Tactical targeting preview')}</span>` : '') + '<canvas width="198" height="198"></canvas><div class="rr-tactics-legend"></div>' + (name === 'shared' ? '<span class="rr-tactics-preview-hint" hidden></span>' : '') + '</div>' : ''}
@@ -1338,7 +1352,7 @@
 
     // The field of each setting's row, and what the row says while the Note keeps a tag for a plugin.
     const KEPT_ROWS = { range: '.rr-tactics-min', area: '.rr-tactics-shape', los: '.rr-tactics-los', move: '.rr-tactics-move', jump: '.rr-tactics-jump', ai: '.rr-tactics-ai',
-        character: '.rr-tactics-look-change', fireRate: '.rr-combat-fireRate', magazine: '.rr-combat-magazine', reload: '.rr-combat-reload', spread: '.rr-combat-spread',
+        character: '.rr-tactics-look-change', comesBack: '.rr-tactics-comes-back', fireRate: '.rr-combat-fireRate', magazine: '.rr-combat-magazine', reload: '.rr-combat-reload', spread: '.rr-combat-spread',
         combo: '.rr-combat-combo', cooldown: '.rr-combat-cooldown', projectile: '.rr-combat-projectile' };
     const KEPT_WORDS = 'Its tag stays in the Note: the plugin {name} reads it.';
 
@@ -1404,7 +1418,7 @@
         const min = q('.rr-tactics-min'), max = q('.rr-tactics-max'), shape = q('.rr-tactics-shape'), size = q('.rr-tactics-size'), los = q('.rr-tactics-los');
         const rangeSource = q('.rr-tactics-range-source'), rangeValues = q('.rr-tactics-range-values'), rangeBox = q('.rr-tactics-range'), rangeLabel = q('.rr-tactics-range-label'), rangeHint = q('.rr-tactics-range-hint');
         const sizeLabel = q('.rr-tactics-size-label'), sizeValues = q('.rr-tactics-size-values'), previewHint = q('.rr-tactics-preview-hint');
-        const move = q('.rr-tactics-move'), jump = q('.rr-tactics-jump'), ai = q('.rr-tactics-ai');
+        const move = q('.rr-tactics-move'), jump = q('.rr-tactics-jump'), ai = q('.rr-tactics-ai'), comesBack = q('.rr-tactics-comes-back');
         const sprite = q('.rr-tactics-sprite'), lookName = q('.rr-tactics-look-name'), lookChange = q('.rr-tactics-look-change'), lookAuto = q('.rr-tactics-look-auto'), lookHint = q('.rr-tactics-look-hint');
         let pointer = null;
 
@@ -1467,6 +1481,7 @@
                 jump.placeholder = String(stats.base.jump);
             }
             if (ai) ai.value = found.ai || 'aggressive';
+            if (comesBack) comesBack.checked = !!(own(entry) || {}).comesBack;
             if (bonus) {
                 move.value = found.move || '';
                 move.placeholder = '0';
@@ -1532,6 +1547,7 @@
         number(move, 'move');
         number(jump, 'jump');
         if (ai) ai.addEventListener('change', () => set({ ai: ai.value }));
+        if (comesBack) comesBack.addEventListener('change', () => set({ comesBack: comesBack.checked }));
         if (lookChange) {
             lookChange.addEventListener('click', () => {
                 // The sheet picker is a class of the page: a name in its scope, not a property of the window.
@@ -1609,31 +1625,25 @@
     }
 
     /**
-     * One card of a record: 'shared', 'tactical' or 'action'. It folds like every
-     * Database section (the shell's RRDatabaseSections): folded, its title
-     * line still says what the record does in that kind of battle.
+     * One group of a record's Combat section: 'shared', 'tactical' or 'action'. Its title line says what the
+     * record does in that kind of battle and holds the group's Automatic chip; `outer` is the section it
+     * stands in, which folds.
      */
-    function createCard(name, options, link) {
-        const { kind } = options, card = CARDS[name];
+    function createCard(name, options, link, outer) {
+        const { kind } = options;
         const tt = t => (root.I18n ? root.I18n.tText(t) : t);
         const page = document, section = page.createElement('div');
-        section.className = 'database-section rr-tactics-section';
+        section.className = 'rr-tactics-section';
         section.dataset.kind = kind;
         section.dataset.card = name;
-        // The name the fold is remembered by, the same in every language.
-        section.dataset.sectionKey = card.key;
-        // Nobody having folded or opened it, the card is folded while the project never fights this way,
-        // except for a record that already sets something in it, by a setting of its own or by a tag.
-        section.dataset.sectionDefault = fightsFor(name, kind);
-        if (summarize(name, kind, link.live(), link.context).tagged) section.dataset.sectionInUse = 'true';
+        section.dataset.fights = fightsFor(name, kind);
         section.innerHTML = cardHtml(name, kind, tt);
 
-        const header = section.querySelector('.rr-tactics-header');
         const summary = section.querySelector('.rr-tactics-summary'), chip = section.querySelector('.rr-tactics-reset');
         const parts = (name === 'action' ? actionParts : tacticalParts)(section, kind, link, tt, () => draw(), name);
         const draw = () => {
-            // A folded card shows no picture: it is drawn when the card opens.
-            if (section.classList.contains('is-collapsed')) return;
+            // A folded section shows no picture: it is drawn when the section opens.
+            if (outer.classList.contains('is-collapsed')) return;
             parts.paint();
         };
         // A tag one of the project's plugins reads stays in the Note: its row says so, under the field.
@@ -1664,11 +1674,13 @@
             }
             for (const key of Object.keys(stays)) if (!shown[key]) stays[key].line.hidden = true;
         };
+        const card = { name, section, told: { text: '', tagged: false } };
         link.redraws.push(() => {
             parts.fill();
             const live = link.live(), told = summarize(name, kind, live, link.context, tt);
+            card.told = told;
             summary.textContent = told.text;
-            // The whole line, for a card too narrow to show it.
+            // The whole line, for a group too narrow to show it.
             summary.title = told.text;
             // The chip is there while it has something to take out: what a PTBS block sets, and a tag a plugin
             // reads, is read and never rewritten.
@@ -1679,36 +1691,46 @@
         chip.addEventListener('click', () => {
             const shown = section.ownerDocument || root.document;
             const focused = !!shown && shown.activeElement === chip;
-            // The chip leaves once nothing is set: the focus it held stays on its card, on the title line.
-            link.act(() => reset(name, kind, link.live(), link.context), () => { if (focused && chip.hidden && typeof header.focus === 'function') header.focus(); });
+            // The chip leaves once nothing is set: the focus it held goes to the section's title line.
+            const header = outer.querySelector('.rr-combat-header');
+            link.act(() => reset(name, kind, link.live(), link.context), () => { if (focused && chip.hidden && header && typeof header.focus === 'function') header.focus(); });
         });
-        section.addEventListener('rr-section-fold', event => { if (event.target === section && !event.detail.collapsed) draw(); });
-        return section;
+        outer.addEventListener('rr-section-fold', event => { if (event.target === outer && !event.detail.collapsed) draw(); });
+        card.draw = draw;
+        return card;
     }
 
     /**
-     * Combat cards stacked in one place. While every card
-     * in it is folded the stack says so itself (`is-collapsed`), so a page
-     * that gives a folded card the whole row gives it to the stack too.
+     * A record's Combat section: one card on the page that folds like every Database section (the shell's
+     * RRDatabaseSections), its groups inside. Folded, its title line still says what the record sets, or what
+     * it does left alone. Nobody having folded or opened it, it is folded while the project never fights the
+     * way of any group in it, except for a record that already sets something in it.
      */
-    function stackOf(cards) {
-        const stack = document.createElement('div');
-        stack.className = 'rr-battle-cards';
-        stack.append(...cards);
-        stack.addEventListener('rr-section-fold', () => stack.classList.toggle('is-collapsed', cards.every(card => card.classList.contains('is-collapsed'))));
-        return stack;
-    }
-
-    /** The applicable shared, Tactical and Action cards, each owning its fields and reset. */
     function createSection(options) {
         const names = cardsFor(options.kind);
         if (!names.length) return null;
+        const tt = t => (root.I18n ? root.I18n.tText(t) : t);
         const link = recordLink(options);
-        const cards = names.map(name => createCard(name, options, link));
-        const element = cards.length > 1 ? stackOf(cards) : cards[0];
+        const outer = document.createElement('div');
+        outer.className = 'database-section rr-combat-section';
+        outer.dataset.kind = options.kind;
+        const fights = Array.from(new Set(names.map(name => fightsFor(name, options.kind))));
+        outer.dataset.sectionDefault = fights.length === 1 ? fights[0] : 'map-battles';
+        // Its fold is remembered by its key, the same in every language.
+        outer.innerHTML = `<div class="database-section-header rr-combat-header" data-section-key="${SECTION.key}"><span class="rr-combat-title">${esc(tt(SECTION.title))}</span><span class="rr-combat-summary"></span></div><div class="database-section-content rr-combat-body"></div>`;
+        const body = outer.querySelector('.rr-combat-body'), summary = outer.querySelector('.rr-combat-summary');
+        const cards = names.map(name => createCard(name, options, link, outer));
+        for (const card of cards) body.appendChild(card.section);
+        link.redraws.push(() => {
+            const tagged = cards.filter(card => card.told.tagged && card.told.text);
+            const text = (tagged.length ? tagged : cards.filter(card => card.told.text).slice(0, 1)).map(card => card.told.text).join(' · ');
+            summary.textContent = text;
+            summary.title = text;
+        });
         for (const redraw of link.redraws) redraw();
-        link.place(element);
-        return element;
+        if (cards.some(card => card.told.tagged)) outer.dataset.sectionInUse = 'true';
+        link.place(outer);
+        return outer;
     }
 
     const api = {
@@ -1720,7 +1742,7 @@
         change, reset, convert, differs, put,
         tagsRead, enabledPlugins, scanPluginTags, pluginTags,
         reachCells, areaCells, directionTo, describe, picture, drawGrid,
-        CARDS, CARD_HINTS, cardsFor, fightsFor, titleFor, ownTags, ownKeys: ownTags, summarize, cardHtml, reachRow, watchPage, createSection
+        CARDS, CARD_HINTS, SECTION, cardsFor, fightsFor, titleFor, ownTags, ownKeys: ownTags, summarize, cardHtml, reachRow, watchPage, createSection
     };
     root.RRTactics = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -18,10 +18,17 @@ class EventEditor {
         this.clipboard = null; // For copy/paste event pages
         this.commandList = new EventCommandList(this); // Command list manager
 
-        if (typeof window !== 'undefined') window.addEventListener('rr-language-changed', () => {
-            const container = document.querySelector('.event-editor-container');
-            if (container && this.currentEvent) this.showEventEditor(container, this.currentEvent);
-        });
+        if (typeof window !== 'undefined') {
+            const redraw = () => {
+                const container = document.querySelector('.event-editor-container');
+                if (container && this.currentEvent) this.showEventEditor(container, this.currentEvent);
+            };
+            window.addEventListener('rr-language-changed', redraw);
+            // Back from its own window: the same edits, drawn with live handlers.
+            window.addEventListener('rr-event-editor-docked', event => {
+                if (event.detail && event.detail.windowGone && this.isOpen()) redraw();
+            });
+        }
     }
 
     _t(key, params = {}) {
@@ -106,7 +113,8 @@ class EventEditor {
         const cancel = document.getElementById('event-editor-cancel-btn');
         const apply = document.getElementById('event-editor-apply-btn');
         if (ok) ok.onclick = () => this.saveAndClose();
-        if (cancel) cancel.onclick = () => this.cancelChanges();
+        // Cancel drops the edits, asking first when there are any (as Escape and the × do).
+        if (cancel) cancel.onclick = () => this.requestClose();
         if (apply) apply.onclick = () => this.applyChanges();
     }
 
@@ -142,11 +150,100 @@ class EventEditor {
         this._hideEditor();
     }
 
+    /** Whether the window is showing. */
+    isOpen() {
+        const modal = typeof document !== 'undefined' ? document.getElementById('event-editor-modal') : null;
+        return !!modal && modal.style.display !== 'none' && modal.style.display !== '';
+    }
+
+    /**
+     * Edits not yet applied, judged as Apply would judge them: the event, its height and size
+     * fields, its models, or a new event not yet placed.
+     */
+    hasUncommittedChanges() {
+        if (!this.currentEvent || !this.sourceEvent || !this.isOpen()) return false;
+        if (this.needsInitialCommit) return true;
+        this._readPositionFields();
+        const zChanged = (this.pendingZ != null && this.pendingZ !== this._eventZ(this.currentEvent.id))
+            || this._sizeState() !== this.pendingSizeBaseline;
+        return zChanged
+            || JSON.stringify(this.currentEvent) !== JSON.stringify(this.cancelBaseline)
+            || JSON.stringify(this.pendingModels) !== JSON.stringify(this.pendingModelsBaseline);
+    }
+
+    /**
+     * Before the window leaves this event (another event opened, the map changed): unapplied
+     * edits are applied, discarded or kept on the person's word. Resolves true when it may leave.
+     */
+    async resolvePendingChanges({ closing = false } = {}) {
+        if (!this.hasUncommittedChanges()) return true;
+        const ui = (typeof window !== 'undefined' && window.reactor && window.reactor.uiManager) || this.projectController?.uiManager;
+        const name = this.currentEvent.name || `EV${String(this.currentEvent.id).padStart(3, '0')}`;
+        const decision = ui && ui.promptUnsavedChanges
+            ? await ui.promptUnsavedChanges(name, { saveLabel: this._t('common.apply') })
+            : 'cancel';
+        if (decision === 'save') return this.applyChanges();
+        if (decision === 'discard') {
+            // Leaving for another event keeps the window where it is; closing it closes it.
+            if (closing) this.cancelChanges(); else this.leaveEvent();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Let go of the open event without closing the window, its edits not applied: the next event
+     * opens in the same place (the window does not hide, recenter or leave its screen).
+     */
+    leaveEvent() {
+        this._autoTicket = (this._autoTicket || 0) + 1;
+        if (this.onCancel) this.onCancel(this.sourceEvent);
+        this.pageEditor?._disposeModelPreview?.();
+        this.pageEditor = null;
+        this.currentPageIndex = 0;
+    }
+
+    /** Escape and the window's ×: it closes, asking first about edits not yet applied. */
+    async requestClose() {
+        if (!this.isOpen()) return false;
+        // A field still being typed in takes its value first (its change comes on blur), so Escape asks about it.
+        const overlay = typeof document !== 'undefined' ? document.getElementById('event-editor-modal') : null;
+        const active = overlay && overlay.ownerDocument && overlay.ownerDocument.activeElement;
+        if (active && active !== overlay && overlay.contains(active) && typeof active.blur === 'function') active.blur();
+        if (!await this.resolvePendingChanges({ closing: true })) return false;
+        if (this.isOpen()) this.cancelChanges();
+        return true;
+    }
+
+    /** The map is about to change: the window closes, asking first about unapplied edits. */
+    async closeForMapChange({ ask = true } = {}) {
+        if (!this.isOpen()) return true;
+        if (ask && !await this.resolvePendingChanges({ closing: true })) return false;
+        if (this.isOpen()) this.cancelChanges();
+        return true;
+    }
+
+    /** The open event was moved on the map behind the window: its place there is the one shown. */
+    followMapMove(event) {
+        if (!event || event !== this.sourceEvent || !this.isOpen()) return;
+        for (const target of [this.currentEvent, this.cancelBaseline]) {
+            if (target) { target.x = event.x; target.y = event.y; }
+        }
+        for (const [id, value] of [['event-position-x', event.x], ['event-position-y', event.y]]) {
+            const field = document.getElementById(id);
+            if (field) field.value = String(value);
+        }
+    }
+
     _hideEditor() {
         const modal = document.getElementById('event-editor-modal');
+        // Popped out, its window hides with it and keeps its screen for the next event.
+        if (typeof RREventEditorWindow !== 'undefined' && RREventEditorWindow.isPoppedOut()) RREventEditorWindow.hidePopout();
         if (modal) {
             modal.style.display = 'none';
         }
+        // The event it held is no longer outlined on the map.
+        this.mapManager?.updateEditingHighlight?.();
         this.pageEditor?._disposeModelPreview?.();
         this.pageEditor = null;
         // Cancel may have taken pages back: nothing keeps pointing at one of them.
@@ -330,15 +427,11 @@ class EventEditor {
                 });
             }
             (this.pendingModels || []).forEach((spec, index) => {
+                // A page with no model clears only a model the sidecar holds: a map with no sidecar gains none.
+                if ((!spec || !spec.name) && !(store && store[String(index)])) return;
                 Reactor3D.setEventModelSpec(map, event.id, index, spec);
             });
             return;
-        }
-        if (!map.reactor3d || typeof map.reactor3d !== 'object') {
-            map.reactor3d = { version: 1, mode: '3d' };
-        }
-        if (!map.reactor3d.events || typeof map.reactor3d.events !== 'object') {
-            map.reactor3d.events = {};
         }
         const key = String(event.id);
         const pages = {};
@@ -364,9 +457,21 @@ class EventEditor {
             if (typeof spec.variant === 'string' && spec.variant.trim()) written.variant = spec.variant.trim();
             pages[String(index)] = written;
         });
-        if (Object.keys(pages).length) map.reactor3d.events[key] = pages;
-        else delete map.reactor3d.events[key];
-        if (!Object.keys(map.reactor3d.events).length) delete map.reactor3d.events;
+        if (!Object.keys(pages).length) {
+            // No model to write: a map with no sidecar gains none.
+            const store = map.reactor3d && map.reactor3d.events;
+            if (!store || typeof store !== 'object') return;
+            delete store[key];
+            if (!Object.keys(store).length) delete map.reactor3d.events;
+            return;
+        }
+        if (!map.reactor3d || typeof map.reactor3d !== 'object') {
+            map.reactor3d = { version: 1, mode: '3d' };
+        }
+        if (!map.reactor3d.events || typeof map.reactor3d.events !== 'object') {
+            map.reactor3d.events = {};
+        }
+        map.reactor3d.events[key] = pages;
     }
 
     _commitChanges() {
@@ -549,9 +654,26 @@ class EventEditor {
         const move = String(change.move == null ? '' : change.move).trim();
         if (move !== '') next.move = Math.max(1, Math.min(20, Math.floor(Number(move) || 4)));
         else delete next.move;
-        if (team === 'enemy' && change.returns) next.returns = true;
-        else delete next.returns;
+        // Comes back is an enemy's only. Set from its box (`returns` given), it is kept only where it differs from
+        // what the enemy record says (Database › Enemies), so the event follows its enemy otherwise.
+        if (team !== 'enemy') delete next.returns;
+        else if (change.returns !== undefined) {
+            if (!!change.returns === EventEditor.recordComesBack(next, lists && lists.enemies)) delete next.returns;
+            else next.returns = !!change.returns;
+        }
         return next;
+    }
+
+    /** Whether the enemy record a row fights as comes back by its own setting (`rrBattle.comesBack`). */
+    static recordComesBack(row, enemies) {
+        return !!row && row.record === 'enemy' && (Array.isArray(enemies) ? enemies : [])
+            .some(entry => entry && entry.id === row.id && entry.rrBattle && entry.rrBattle.comesBack === true);
+    }
+
+    /** Whether a defeated enemy row stands again when its map is entered: its own Comes back, else its enemy record's. */
+    static unitComesBack(row, enemies) {
+        if (!row || row.team !== 'enemy') return false;
+        return typeof row.returns === 'boolean' ? row.returns : EventEditor.recordComesBack(row, enemies);
     }
 
     /** A unit an event is by a `<unit: …>` tag (its Note or a page comment) while it has no row; null otherwise. */
@@ -702,7 +824,7 @@ class EventEditor {
                     <select class="event-unit-id">${records(recordOf(unit))}</select>
                     <label>${rrEscapeHtml(this._t('event.unitMove'))}</label>
                     <input type="number" class="event-unit-move database-field-value" data-no-stepper min="1" max="20" step="1" value="${unit && unit.move ? unit.move : ''}" placeholder="${rrEscapeHtml(tt('Auto'))}" title="${rrEscapeHtml(tt('Tiles a turn in a Tactical battle. Empty: the Move of its Database record, else 4.'))}">
-                    <label class="event-unit-returns" title="${rrEscapeHtml(tt('Defeated, it stands here again the next time the map is entered.'))}"><input type="checkbox" class="event-unit-returns-box system-checkbox"${unit && unit.returns ? ' checked' : ''}><span>${rrEscapeHtml(tt('Comes back'))}</span></label>
+                    <label class="event-unit-returns" title="${rrEscapeHtml(tt('Defeated, it stands here again the next time the map is entered.'))}"><input type="checkbox" class="event-unit-returns-box system-checkbox"${EventEditor.unitComesBack(unit, lists.enemies) ? ' checked' : ''}><span>${rrEscapeHtml(tt('Comes back'))}</span></label>
                 </span>
             </div>`;
         const team = row.querySelector('.event-unit-team'), id = row.querySelector('.event-unit-id'), move = row.querySelector('.event-unit-move');
@@ -711,7 +833,8 @@ class EventEditor {
             more.hidden = !team.value;
             returns.hidden = team.value !== 'enemy';
         };
-        const write = async () => {
+        const write = async change => {
+            const fromBox = !!change && change.target === returnsBox;
             // A tag unit becomes a row at its first change. A comment made it a unit on its own page only: the author is told before that changes.
             const tagged = !!EventEditor.tagUnit(event);
             if (tagged) {
@@ -722,7 +845,7 @@ class EventEditor {
                         team.value = unit.team;
                         id.innerHTML = records(recordOf(unit));
                         move.value = unit.move ? unit.move : '';
-                        returnsBox.checked = false;
+                        returnsBox.checked = EventEditor.unitComesBack(unit, lists.enemies);
                         show();
                         return;
                     }
@@ -730,11 +853,12 @@ class EventEditor {
                 EventEditor.useUnitRow(event);
             }
             const before = event.rrUnit || null;
-            const next = EventEditor.unitRowValue(before, { team: team.value, record: id.value, move: move.value, returns: returnsBox.checked }, lists);
+            const next = EventEditor.unitRowValue(before, { team: team.value, record: id.value, move: move.value, returns: fromBox ? returnsBox.checked : undefined }, lists);
             if (next) event.rrUnit = next; else delete event.rrUnit;
             // A side chosen for the first time picked its record: the select follows.
             if (next && recordOf(next) !== id.value) id.innerHTML = records(recordOf(next));
             if (next) this._nameAfterUnit(event, next, lists); else this._nameWithoutUnit(event);
+            returnsBox.checked = EventEditor.unitComesBack(next, lists.enemies);
             show();
             this.pageEditor?.refreshCharacterPreview?.();
             // The tag left the Note or a page's commands: the editor shows the event as it is now.
@@ -1052,8 +1176,11 @@ class EventEditor {
     copyCurrentPage() {
         const currentPage = this.currentEvent.pages[this.currentPageIndex];
         this.clipboard = JSON.parse(JSON.stringify(currentPage)); // Deep clone
+        // The page's 3D model goes with it.
+        const model = this.pendingModels && this.pendingModels[this.currentPageIndex];
+        this.clipboardModel = model ? this._clone(model) : null;
         if (typeof ReactorClipboard !== 'undefined') {
-            ReactorClipboard.write('eventPage', { page: this.clipboard });
+            ReactorClipboard.write('eventPage', { page: this.clipboard, model: this.clipboardModel });
         }
         console.log('Page copied to clipboard');
     }
@@ -1063,12 +1190,14 @@ class EventEditor {
      */
     async pasteEventPage() {
         const targetEvent = this.currentEvent;
-        let pageData = null;
+        let pageData = null, modelData = null;
         if (typeof ReactorClipboard !== 'undefined') {
             const clipboardData = await ReactorClipboard.read('eventPage');
             pageData = clipboardData?.payload?.page || null;
+            modelData = clipboardData?.payload?.model || null;
         } else {
             pageData = this.clipboard;
+            modelData = this.clipboardModel || null;
         }
         if (this.currentEvent !== targetEvent) return;
 
@@ -1077,11 +1206,15 @@ class EventEditor {
             return;
         }
 
+        // The copy takes the place of the page in view; New Page is how a page is added.
         const pastedPage = JSON.parse(JSON.stringify(pageData)); // Deep clone
-        this.currentEvent.pages.push(pastedPage);
+        const index = Math.max(0, Math.min(this.currentPageIndex || 0, this.currentEvent.pages.length));
+        this.currentEvent.pages[index] = pastedPage;
         if (!this.pendingModels) this.pendingModels = [];
-        this.pendingModels.push(null);
-        this.currentPageIndex = this.currentEvent.pages.length - 1;
+        this.pendingModels[index] = modelData && modelData.name ? this._clone(modelData) : null;
+        this.currentPageIndex = index;
+        // An Auto size follows the model.
+        if (modelData && modelData.name) this.refreshAutoSize();
 
         // Refresh the entire editor
         const container = document.querySelector('.event-editor-container');

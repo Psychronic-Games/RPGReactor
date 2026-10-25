@@ -1,6 +1,9 @@
 /** Media attached to a flat model. Videos and Effekseer effects share the
  * model render target/depth; MV sprite animations retain their 2D overlay. */
 class ModelPropEffects2D {
+    /** The preview's video planes of one file share one video and texture, played while any of them shows. */
+    static SHARE_VIDEO = true;
+
     constructor(preview, entry, effects) {
         this.preview = preview;
         this.entry = entry;
@@ -10,13 +13,15 @@ class ModelPropEffects2D {
         for (const effect of effects) {
             if (effect.type === 'light') continue;
             if (effect.type === 'video' && effect.video?.file) {
-                const plane = MapEditor3D.prototype._videoEffectPlane(effect, project, entry.object.userData.glbSize);
+                const owner = ModelPropEffects2D.SHARE_VIDEO ? preview : MapEditor3D.prototype;
+                const plane = MapEditor3D.prototype._videoEffectPlane.call(owner, effect, project, entry.object.userData.glbSize);
                 if (!plane) continue;
                 plane.userData.__reactorOverlay = true;
                 entry.object.add(plane);
                 plane.geometry.computeBoundingBox();
                 entry.bounds.push({ mesh: plane, box: plane.geometry.boundingBox });
-                const play = { effect, plane, video: plane.userData.video, dirty: true };
+                // media.showing counts the planes showing this video, across every prop of the preview.
+                const play = { effect, plane, video: plane.userData.video, media: plane.userData.effectMedia?.entry || {}, dirty: true };
                 this.plays.push(play);
             } else if (records[effect.animation] && typeof RRAnimationPreviewLayer !== 'undefined') {
                 const parent = preview.app.canvas.parentElement;
@@ -41,7 +46,7 @@ class ModelPropEffects2D {
 
     suspend() {
         for (const play of this.plays) {
-            play.video?.pause();
+            this.showVideo(play, false);
             if (play.layer?.active) play.layer.stop();
             if (play.clip) play.clip.style.display = 'none';
             if (play.quad) { play.quad.mesh.visible = false; this.entry.dirty = true; }
@@ -65,8 +70,7 @@ class ModelPropEffects2D {
                 play.plane.quaternion.premultiply(root.clone().invert().multiply(pose).multiply(root));
                 const video = play.video;
                 if (video) {
-                    if (visible && !play.visible && !video.ended) video.play().catch(() => {});
-                    if (!visible && !video.paused) video.pause();
+                    this.showVideo(play, visible);
                     const frame = video.getVideoPlaybackQuality?.().totalVideoFrames ?? Math.floor(video.currentTime * 30);
                     if (visible && video.readyState >= 2 && frame !== play.frame) {
                         play.frame = frame; dirty = true;
@@ -113,6 +117,18 @@ class ModelPropEffects2D {
             play.visible = visible;
         }
         return dirty;
+    }
+
+    /** A video plays from the first of its planes shown and pauses when the last one is hidden. */
+    showVideo(play, on) {
+        const video = play.video;
+        if (!video) return;
+        if (on !== !!play.showing) {
+            play.showing = on;
+            play.media.showing = Math.max(0, (play.media.showing || 0) + (on ? 1 : -1));
+            if (on && !video.ended) video.play().catch(() => {});
+        }
+        if (!play.media.showing && !video.paused) video.pause();
     }
 
     placeEffect(play) {
@@ -173,10 +189,10 @@ class ModelPropEffects2D {
             }
             if (play.plane) {
                 play.plane.removeFromParent();
-                play.video?.pause();
-                if (play.video) { play.video.removeAttribute('src'); play.video.load(); }
+                this.showVideo(play, false);
                 play.plane.geometry.dispose(); play.plane.material.dispose();
-                play.plane.userData.texture.dispose();
+                // Frees the video and texture with the last plane that holds them.
+                MapEditor3D.releaseEffectPlane(play.plane);
             }
         }
         this.plays = [];

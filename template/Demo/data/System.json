@@ -1,5 +1,5 @@
 {
-  "advanced": {"gameId":45388004,"screenWidth":1920,"screenHeight":1080,"uiAreaWidth":1920,"uiAreaHeight":1080,"numberFontFilename":"_decterm.ttf","fallbackFonts":"Verdana, sans-serif","fontSize":26,"mainFontFilename":"_decterm.ttf","screenScale":1,"windowOpacity":192,"picturesUpperLimit":100,"pixelatedRendering":false},
+  "advanced": {"gameId":45388004,"screenWidth":1920,"screenHeight":1080,"uiAreaWidth":1920,"uiAreaHeight":1080,"numberFontFilename":"_decterm.ttf","fallbackFonts":"Verdana, sans-serif","fontSize":26,"mainFontFilename":"_decterm.ttf","screenScale":1,"windowOpacity":192,"picturesUpperLimit":100,"pixelatedRendering":true},
   "airship": {"bgm":{"name":"Psychronic - Harmonic Nebula","pan":0,"pitch":100,"volume":90},"characterIndex":3,"characterName":"Vehicle","startMapId":0,"startX":0,"startY":0},
   "armorTypes": ["","General Armor","Magic Armor","Light Armor","Heavy Armor","Small Shield","Large Shield","","","",""],
   "attackMotions": [
@@ -45,7 +45,7 @@
   "optSideView": true,
   "optSlipDeath": false,
   "optTransparent": false,
-  "partyMembers": [1,2,3,4,5],
+  "partyMembers": [1,2,3,4,5,6],
   "ship": {"bgm":{"name":"Psychronic - Cybertech Flight","pan":0,"pitch":100,"volume":90},"characterIndex":1,"characterName":"Vehicle","startMapId":0,"startX":0,"startY":0},
   "skillTypes": ["","Magic","\\i[578] SPECIAL"],
   "sounds": [
@@ -90,7 +90,7 @@
   "titleBgm": {"name":"Psychronic - Forest Trek","pan":0,"pitch":100,"volume":90},
   "titleCommandWindow": {"background":0,"offsetX":0,"offsetY":0},
   "variables": ["","Battle result","","","","","","","","","","","","","","","","","","",""],
-  "versionId": 78799050,
+  "versionId": 2461176,
   "victoryMe": {"name":"Victory1","pan":0,"pitch":100,"volume":90},
   "weaponTypes": ["","Dagger","Sword","Flail","Axe","Whip","Staff","Bow","Crossbow","Gun","Claw","Glove","Spear","Pistol","Rifle","Shotgun","Cannon"],
   "windowTone": [0,0,0,0],

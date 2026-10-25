@@ -39,6 +39,8 @@
         mediaUrl(file){const media=root.RPGReactorMediaSurfaces,isImage=media?.isImageFile(file),folder=isImage?'img/pictures':'movies';
             if(Utils.isNwjs()){const fs=require('fs'),path=require('path');if(!fs.existsSync(path.join(path.dirname(process.mainModule.filename),folder,file)))return '';}
             return media?(isImage?media.pictureUrl(file):media.movieUrl(file)):folder+'/'+file.split('/').map(encodeURIComponent).join('/');},
+        // A picture through the game's image loader: an encrypted deployment's .png_ decrypts as Show Picture's does.
+        loadImage(file){const name=/\.png$/i.test(file)?file.replace(/\.[^.]+$/,''):file;return ImageManager.loadPicture(name);},
         warn:P.warn
     };
     P.sequence=function(subject,action){
@@ -82,6 +84,12 @@
         const unsupported=names.match(/VE_BattleMotions|YEP_BattleEngineCore|VisuMZ_1_BattleCore/i)||(root.Lecode?.S_TBS?.commandOn?['LeTBS']:null);
         return unsupported ? 'The active '+unsupported[0]+' battle engine needs a presentation adapter. Existing behavior is retained.' : '';
     };
+    // Of the log methods queued from `from` on, the popups and battler reactions (popupDamage, perform*) move ahead of the lines and waits, each group in its own order.
+    P.gatherResultDisplay=(methods,from)=>{const added=methods.splice(from),now=m=>/^(popupDamage|perform)/.test(m?.name||'');methods.push(...added.filter(now),...added.filter(m=>!now(m)));};
+    // A battle engine plugin that moves and draws the battlers itself keeps them: Reactor's battler
+    // states (entry, idle, damage, victory...) stand aside for Victor's Battle Motions and the YEP and
+    // VisuStella battle cores, and its battler graphics for Victor's Battle Motions and Battler Graphic Setup.
+    P.enginePlugins=()=>{const scripts=root.PluginManager?._scripts||[];if(P._engineScripts!==scripts.length){P._engineScripts=scripts.length;const names=scripts.join(' ');P._engineStates=/VE_BattleMotions|YEP_BattleEngineCore|VisuMZ_1_BattleCore/i.test(names);P._engineGraphics=/VE_BattleMotions|VE_BattlerGraphicSetup/i.test(names);}return {states:P._engineStates,graphics:P._engineGraphics};};
     P.adapter=function(manager,subject,targets,stateOnly=false){
         const ss=manager._spriteset,room=ss?._reactorRoom;
         const visibleTargets=[...new Set(targets)],roles={user:ss?.findTargetSprite(subject)};
@@ -158,10 +166,10 @@
                 }
                 const projectile=adapter.projectile;
                 if(projectile){const a=roles.user,b=roles.target;if(a&&b){const t=Math.min(1,Math.max(0,(frame-projectile.start)/Math.max(1,projectile.duration)));projectile.graphic.x=a.x+(b.x-a.x)*t;projectile.graphic.y=a.y+(b.y-a.y)*t-48;projectile.graphic.visible=t<1;
-                    if(room){const pa=a._reactorRoomPosition,pb=b._reactorRoomPosition;room.billboard('extra:projectile',projectile.graphic.bitmap.canvas,{x:0,y:0,width:projectile.graphic.bitmap.width,height:projectile.graphic.bitmap.height},{x:pa.x+(pb.x-pa.x)*t,y:pa.y+(pb.y-pa.y)*t,z:1},projectile.graphic.bitmap.height/48);const record=room.billboards.get('extra:projectile');if(record)record.object.visible=t<1;projectile.graphic.visible=false;}
+                    if(room){const pa=a._reactorRoomPosition,pb=b._reactorRoomPosition;room.billboard('extra:projectile',projectile.graphic.bitmap.canvas,{x:0,y:0,width:projectile.graphic.bitmap.width,height:projectile.graphic.bitmap.height},{x:pa.x+(pb.x-pa.x)*t,y:pa.y+(pb.y-pa.y)*t,z:1},projectile.graphic.bitmap.height/48,projectile.graphic.bitmap);const record=room.billboards.get('extra:projectile');if(record)record.object.visible=t<1;projectile.graphic.visible=false;}
                 }}
                 const weapon=adapter.weapon;if(weapon){const s=weapon.step,p=roles.user;weapon.graphic.x=p.x+(s.x??.5)*48;weapon.graphic.y=p.y-(s.z??1)*48+(s.y||0)*48;weapon.graphic.rotation=(s.rotation||0)*Math.PI/180;weapon.graphic.scale.set(s.scale||1);
-                    if(room&&weapon.graphic.bitmap.isReady()){const home=p._reactorRoomPosition;room.billboard('extra:weapon',weapon.graphic.bitmap.canvas,weapon.graphic._frame,{x:home.x+(s.x??.5),y:home.y+(s.y||0),z:(home.z||0)+(s.z??1),rotateZ:s.rotation||0,scale:s.scale||1},.7);weapon.graphic.visible=false;}
+                    if(room&&weapon.graphic.bitmap.isReady()){const home=p._reactorRoomPosition;room.billboard('extra:weapon',weapon.graphic.bitmap.canvas,weapon.graphic._frame,{x:home.x+(s.x??.5),y:home.y+(s.y||0),z:(home.z||0)+(s.z??1),rotateZ:s.rotation||0,scale:s.scale||1},.7,weapon.graphic.bitmap);weapon.graphic.visible=false;}
                 }
             },
             resolveNext(){if(manager._targets.length)manager.invokeAction(subject,manager._targets.shift());adapter.pendingImpact=manager._targets.length>0;},
@@ -382,8 +390,16 @@
             }
             try{manager.invokeAction(subject,target);}finally{for(const [key,entry] of Object.entries(methods)){if(entry.own)action[key]=entry.value;else delete action[key];}}
         };
+        // An impact lands on every distinct battler in its queue on the same frame, their popups and
+        // reactions together ahead of the log's lines; a battler listed again (a repeat) waits for the next wave.
         adapter.resolveNext=()=>{
-            if(impactQueue.length)damageCall(impactQueue.shift());
+            if(impactQueue.length){
+                const wave=[],rest=[];for(const target of impactQueue)(wave.includes(target)?rest:wave).push(target);
+                impactQueue=rest;
+                const methods=log?._methods,before=Array.isArray(methods)?methods.length:-1;
+                for(const target of wave)damageCall(target);
+                if(wave.length>1&&before>=0&&log._methods===methods)P.gatherResultDisplay(methods,before);
+            }
             adapter.pendingImpact=impactQueue.length>0;
         };
         adapter.cue=(raw,start)=>{
@@ -750,7 +766,7 @@
     };
     P.battlerIdentity = battler => battler?.isActor?.()?{kind:'actors',id:battler.actorId(),classId:battler.currentClass?.()?.id||0}:{kind:'enemies',id:battler?.enemyId?.(),classId:0};
     P.graphicFor = battler => {
-        if(!battler)return null;const {kind,id}=P.battlerIdentity(battler),config=P.settings[kind]?.[id]?.graphic;
+        if(!battler||P.enginePlugins().graphics)return null;const {kind,id}=P.battlerIdentity(battler),config=P.settings[kind]?.[id]?.graphic;
         if(!config?.mode||config.mode==='auto'||config.mode==='model')return null;
         let graphic=B.graphic(P.settings,kind,id,battler.actor?.()||battler.enemy?.());
         if(graphic.type==='character'&&battler.isDead?.()&&graphic.damagedName)graphic={...graphic,name:graphic.damagedName,index:graphic.damagedIndex||0,direction:graphic.damagedDirection||2};
@@ -768,7 +784,7 @@
         return 'idle';
     };
     // Whether the project wrote a sequence for this battler's state (through its own binding, its class, or a state it is under).
-    P.authoredState=(battler,state)=>{const identity=P.battlerIdentity?.(battler);if(!identity||!P.settings)return false;return !!B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,null,(battler.states?.()||[]).map(s=>s.id));};
+    P.authoredState=(battler,state)=>{const identity=P.battlerIdentity?.(battler);if(!identity||!P.settings||P.enginePlugins().states)return false;return !!B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,null,(battler.states?.()||[]).map(s=>s.id));};
     P.battlerState = (battler,sprite) => {
         if(battler.isDead?.())return 'dead';
         const index=battler.stateMotionIndex?.();if(index===2)return 'sleep';if(index===1)return 'abnormal';
@@ -822,12 +838,17 @@
             proto.performAttack=function(){const g=P.settings.enemies?.[this.enemyId()]?.graphic;if(g?.mode&&g.mode!=='auto'){this.requestMotion?.('thrust');if(g.showWeapon!==false){const type=this.weapons()[0]?.wtypeId,motion=$dataSystem.attackMotions?.[type];if(motion)this.startWeaponAnimation?.(motion.weaponImageId);}return;}return perform?.call(this);};
         }
         // The stock side-view step (48 px forward while inputting or acting, back home after, the retreat on escape) belongs to sprite-sheet actors with no authored states. A battler drawn from a native graphic, or one whose input state is authored, is placed by its sequences alone.
+        // Likewise the stock entry (a 30-frame run in from 300 px off home): such an actor, or one whose entry state is authored, starts at home and its entry sequence plays there. The run in kept the battle busy at its first update, when an ATB plugin's turn count can pass the troop's turn-0 page by.
+        if(root.Sprite_Actor){const entry=Sprite_Actor.prototype.startEntryMotion;Sprite_Actor.prototype.startEntryMotion=function(...args){const actor=this._actor;if(actor&&(P.graphicFor(actor)||P.authoredState(actor,'entry'))){this.startMove(0,0,0);return;}return entry?.apply(this,args);};}
         if(root.Sprite_Actor){const target=Sprite_Actor.prototype.updateTargetPosition;Sprite_Actor.prototype.updateTargetPosition=function(...args){const actor=this._actor;if(actor&&(P.graphicFor(actor)||P.authoredState(actor,'input')))return;return target?.apply(this,args);};}
         if(root.Sprite_Actor){const setup=Sprite_Actor.prototype.setupWeaponAnimation;Sprite_Actor.prototype.setupWeaponAnimation=function(){if(P.graphicFor(this._actor)?.showWeapon===false){this._actor.clearWeaponAnimation?.();return;}return setup?.call(this);};}
         if(root.Game_Actor){const visible=Game_Actor.prototype.isSpriteVisible;Game_Actor.prototype.isSpriteVisible=function(){const g=P.settings.actors?.[this.actorId()]?.graphic;return g?.mode&&g.mode!=='auto'?true:visible.call(this);};}
         for(const Class of [root.Game_Actor,root.Game_Enemy])if(Class){
             const methods={performDamage:'damage',performEvasion:'evade',performMagicEvasion:'magicEvade',performCollapse:'collapse',performVictory:'victory',performEscape:'escape'};
-            for(const [method,name] of Object.entries(methods)){const prior=Class.prototype[method];Class.prototype[method]=function(...args){const result=prior?.apply(this,args),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);if(sprite)P.requestGraphicMotion(sprite,name);this._rrReaction=name;
+            for(const [method,name] of Object.entries(methods)){const prior=Class.prototype[method];Class.prototype[method]=function(...args){const result=prior?.apply(this,args),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);
+                // Victory and escape asked for again while they play keep playing: an end-of-battle check can ask every frame (YEP Victory Aftermath does), which restarted them on their first frame. Asked again after they end, they play again.
+                if((name==='victory'||name==='escape')&&sprite?._rrStateName===name)return result;
+                if(sprite)P.requestGraphicMotion(sprite,name);this._rrReaction=name;
                 // A model in a room takes the hit on the body: knocked back from the attacker, then springing forward.
                 if(name==='damage'&&sprite?._reactorRoomKey){const room=SceneManager._scene?._spriteset?._reactorRoom,attacker=SceneManager._scene?._spriteset?.findTargetSprite(BattleManager._subject);room?.startRecoil(sprite._reactorRoomKey,attacker?._reactorRoomPosition||null);}
                 return result;};}
@@ -838,6 +859,7 @@
     // Pictures a battler state left on its sprite go at the end of the battle.
     P.clearBattlerLayers=ss=>{for(const sprite of ss?.battlerSprites?.()||[]){for(const entry of sprite._rrLayers?.values()||[]){entry.graphic.removeFromParent();entry.graphic.destroy();}sprite._rrLayers=null;}};
     P.updateStates=ss=>{
+        if(P.enginePlugins().states)return;
         for(const sprite of ss.battlerSprites?.()||[]){
             const battler=sprite._battler||sprite._actor||sprite._enemy;if(!battler)continue;
             if(BattleManager._reactorSequence?.adapter.owns(sprite)){sprite._rrStatePlayer?.cancel();sprite._rrStatePlayer=null;continue;}
@@ -997,6 +1019,27 @@
         const lie=Math.max(0,Math.min(1,amount||0)),turn=(position.rotateZ||0),wide=tall*frame.width/Math.max(1,frame.height);
         return {...position,rotateZ:turn-(root.Sprite_Enemy?.CORPSE_TURN??-1)*90*lie,z:(position.z||0)-lie*(tall-wide)/2};
     };
+    /**
+     * A battler (or a room event) drawn by its battle room, as a picture or a model there, draws nothing of
+     * its own: its flat sprite holds the empty texture for good. Its frame changes every few updates (the
+     * motion's cells), and a sprite builds itself a new texture for each (Sprite._refresh); here a change only
+     * moves its pivot, as it would have, so nothing is made and nothing is left behind.
+     */
+    P.drawnInRoom=function(sprite){
+        if(!sprite)return;
+        if(sprite._reactorDrawnInRoom){if(sprite.texture!==PIXI.Texture.EMPTY)sprite.texture=PIXI.Texture.EMPTY;return;}
+        sprite._reactorDrawnInRoom=true;
+        const own=sprite.texture;
+        sprite.texture=PIXI.Texture.EMPTY;
+        if(own&&own.__rrSpriteOwned&&!own.destroyed)own.destroy();
+        sprite._refresh=P.roomSpriteRefresh;
+    };
+    /** Sprite._refresh for a sprite drawn by its battle room: the pivot its frame gives it, and no texture. */
+    P.roomSpriteRefresh=function(){
+        const base=this._bitmap?this._bitmap.baseTexture:null,bw=base?base.width:0,bh=base?base.height:0;
+        const frameX=Math.floor(this._frame.x),frameY=Math.floor(this._frame.y);
+        this.pivot.x=frameX-Math.min(Math.max(frameX,0),bw);this.pivot.y=frameY-Math.min(Math.max(frameY,0),bh);
+    };
     P.updateRoom=function(ss){
         const room=ss._reactorRoom;if(room.disposed)return;
         room.aim();const live=new Set();
@@ -1011,11 +1054,11 @@
             const main=sprite._mainSprite||sprite;
             if(spec){if(room.billboards.has(key))room.remove(key);room.addModel(key,spec,p);room.place(key,p);if(actor)P.fallPose(room,key,battler);else P.liePose(room,key,sprite._corpse);}
             else {if(room.models.has(key))room.remove(key);}
-            if(!spec&&main.bitmap?.isReady()){const tall=Math.max(.5,main._frame.height/48);room.billboard(key,main.bitmap.canvas,main._frame,{...P.lieBillboard(p,main._frame,tall,actor?0:sprite._corpse),flipX:actor?p.facing>0:p.facing<0},tall);}
+            if(!spec&&main.bitmap?.isReady()){const tall=Math.max(.5,main._frame.height/48);room.billboard(key,main.bitmap.canvas,main._frame,{...P.lieBillboard(p,main._frame,tall,actor?0:sprite._corpse),flipX:actor?p.facing>0:p.facing<0},tall,main.bitmap);}
             const record=room.models.get(key)||room.billboards.get(key);
             if(record?.object)P.mirrorSpriteLook(sprite,battler,record);
             const projected=P.roomScreenPosition(sprite);if(projected){sprite.x=projected.x;sprite.y=projected.y;}
-            if(main.texture)main.texture=PIXI.Texture.EMPTY;
+            P.drawnInRoom(main);
         }
         for(const key of [...room.models.keys(),...room.billboards.keys()])if(!key.startsWith('prop:')&&!key.startsWith('event:')&&!key.startsWith('extra:')&&!live.has(key))room.remove(key);
         P.updateRoomEvents?.(room);

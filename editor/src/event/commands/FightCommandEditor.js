@@ -1029,7 +1029,7 @@ class FightCommandEditor {
         };
         modal.addEventListener('keydown', onKey);
         // A click on the dialog's own words leaves the focus on the page: Enter there is the dialog's while nothing it opened lies over it.
-        const onPageKey = event => { if (event.target === document.body && FightCommandEditor.onTop(modal)) onKey(event); };
+        const onPageKey = event => { if (event.target === (modal.ownerDocument || document).body && FightCommandEditor.onTop(modal)) onKey(event); };
         if (typeof document.addEventListener === 'function') document.addEventListener('keydown', onPageKey);
         if (keys) {
             const first = keys.enter();
@@ -1039,10 +1039,12 @@ class FightCommandEditor {
         }
     }
 
-    /** Whether `overlay` is what lies in the middle of the window: nothing opened from it is over it. */
+    /** Whether `overlay` is what lies in the middle of the window it is in: nothing opened from it is over it. */
     static onTop(overlay) {
-        if (typeof document.elementFromPoint !== 'function' || typeof window === 'undefined') return true;
-        const hit = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        const doc = (overlay && overlay.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+        const view = (doc && doc.defaultView) || (typeof window !== 'undefined' ? window : null);
+        if (!doc || typeof doc.elementFromPoint !== 'function' || !view) return true;
+        const hit = doc.elementFromPoint(view.innerWidth / 2, view.innerHeight / 2);
         return !!hit && overlay.contains(hit);
     }
 

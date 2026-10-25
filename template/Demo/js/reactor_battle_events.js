@@ -59,9 +59,9 @@
         for(const [id,event] of room.events||[]){event.refresh();event.update();const sprite=room.eventSprites.get(id),p={x:event._realX,y:event._realY,z:event.jumpHeight()/(room.assets.tileSize||48),facing:({2:0,4:90,6:-90,8:180})[event.direction()]||0};
             const model=Reactor3D.eventModelSpec(room.map,id,event._pageIndex)||Reactor3D.modelSpecFromNote(event.event().note);
             if(model){room.addModel('event:'+id,model,p);room.place('event:'+id,p);}
-            else if(sprite.bitmap?.isReady())room.billboard('event:'+id,sprite.bitmap.canvas,sprite._frame,p,Math.max(.5,sprite._frame.height/48));
+            else if(sprite.bitmap?.isReady())room.billboard('event:'+id,sprite.bitmap.canvas,sprite._frame,p,Math.max(.5,sprite._frame.height/48),sprite.bitmap);
             const record=room.models.get('event:'+id)||room.billboards.get('event:'+id);if(record)record.object.visible=!event.isTransparent();
-            if(sprite.texture)sprite.texture=PIXI.Texture.EMPTY;
+            if(sprite.texture)P.drawnInRoom(sprite);
             if(room.settings.eventModes?.[id]==='parallel'&&!room.interpreters.some(i=>i._eventId===id&&i.isRunning()))room.callEvent(id);
         }
         const scroll=room.scroll;

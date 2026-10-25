@@ -181,6 +181,48 @@ test('away from a battle that is kept the followers trail the leader as on any m
     assert.equal(followers.isVisible(), false);
 });
 
+test('a battle kept on a map the party left gives way to a battle on the map it is on: Start Battle on Map, an encounter, the battle screen', () => {
+    // The party walks out of a battle kept on map 1, onto map 2 where an enemy stands.
+    const away = () => {
+        const w = fightWorld({ events: [foe(1, 8, 8)], mapNote: '<battle trigger: 0>' });
+        const pristine = copy(w.$dataMap), fight = w.$gameFight;
+        w.$dataEnemies[1].params[0] = 9000;
+        const kept = fight.start({ mode: 'tactical', onTransfer: 'keep', canEscape: true });
+        w.run(3);
+        const other = copy(pristine);
+        other.events = [null, null, null, null, null, foe(5, 6, 6)];
+        other.encounterList = [{ troopId: 2, weight: 10, regionSet: [] }];
+        w.$dataMap = other;
+        w.$gamePlayer.reserveTransfer(2, 3, 3, 2, 0);
+        w.$gamePlayer.performTransfer();
+        assert.equal(fight.isActive() && !fight.isHere(), true, 'the battle is kept on map 1');
+        return { w, fight, kept, F: w.ReactorFight };
+    };
+    // Start Battle on Map: the battle here starts, and the kept one ends as an escape.
+    const command = away();
+    command.w.PluginManager.callCommand(new command.w.Game_Interpreter(), 'RPGReactor', 'StartMapBattle', { mode: 'tactical', who: 'map', canEscape: 'true' });
+    assert.equal(command.fight.isHere(), true, 'a battle runs on map 2');
+    assert.ok(command.fight.unitOfEvent(5), 'against map 2\'s enemy');
+    assert.equal(command.fight.resultOf(command.kept), command.F.ESCAPE, 'the kept battle ended as an escape');
+    // A random encounter on map 2 whose troop fights on the map.
+    const encounter = away();
+    assert.equal(encounter.w.$gamePlayer.canEncounter(), true, 'encounters are on away from the kept battle');
+    encounter.w.$gamePlayer._encounterCount = 0;
+    encounter.w.$gamePlayer.executeEncounter();
+    assert.equal(encounter.fight.isHere(), true);
+    assert.equal(encounter.fight.units({ team: 'enemy' }).filter(unit => unit.enemy.enemyId() === 2).length, 1, 'the troop\'s Bat is in it');
+    assert.equal(encounter.fight.resultOf(encounter.kept), encounter.F.ESCAPE);
+    // Battle Processing on the battle screen: the troop is the screen's, nothing of the kept battle is left in it.
+    const screen = away();
+    screen.w.$dataTroops[2].reactorBattle = { mode: 'classic' };
+    const interpreter = new screen.w.Game_Interpreter();
+    interpreter.command301([0, 2, true, false]);
+    assert.deepEqual(Array.from(screen.w.pushed), ['Scene_Battle']);
+    assert.equal(screen.fight.isActive(), false);
+    assert.equal(screen.fight.resultOf(screen.kept), screen.F.ESCAPE);
+    assert.deepEqual(Array.from(screen.w.$gameTroop.members(), enemy => enemy.enemyId()), [2], 'the battle screen fights its own troop');
+});
+
 //-----------------------------------------------------------------------------
 // A party that changes in a battle.
 
@@ -207,4 +249,27 @@ test('a member who left the party in a battle does not keep it from being lost w
     empty.$gameParty.removeActor(1);
     empty.$gameFight.checkOutcome();
     assert.equal(empty.$gameFight._ending, null);
+});
+
+test('a member who joins the party in a battle (Change Party Member) is a unit of it, on a cell of their own', () => {
+    for (const mode of ['tactical', 'action']) {
+        const w = fightWorld({ system: { partyMembers: [1, 2] }, events: [foe(1, 12, 8)], mapNote: '<battle trigger: 0>', tactical: mode === 'tactical', action: mode === 'action' });
+        const fight = w.$gameFight;
+        w.$dataEnemies[1].params[0] = 9000;
+        fight.start({ mode });
+        fight._wait = 1e6;
+        w.run(3);
+        w.$gameParty.addActor(3);
+        const unit = fight._units.find(one => one.actorId === 3);
+        assert.ok(unit && unit.party && unit.team === 'ally', mode + ': Ally is a unit of the party');
+        assert.equal(fight.isAlive(unit), true, mode + ': standing in the battle');
+        w.run(30);
+        const cells = fight.units({ team: 'ally', alive: true }).map(one => { const c = fight.character(one); return c.x + ',' + c.y; });
+        assert.equal(cells.length, 3);
+        assert.equal(new Set(cells).size, 3, mode + ': each on a cell of their own');
+        // Out of the party and back again: the same unit, not a second.
+        w.$gameParty.removeActor(3);
+        w.$gameParty.addActor(3);
+        assert.equal(fight._units.filter(one => one.actorId === 3).length, 1, mode + ': one unit for Ally');
+    }
 });

@@ -66,7 +66,18 @@ Window_Base.prototype.baseTextRect = function() {
 };
 
 Window_Base.prototype.loadWindowskin = function() {
-    this.windowskin = ImageManager.loadSystem("Window");
+    const name = $gameSystem?.windowSkinName ? $gameSystem.windowSkinName() : "Window";
+    this.windowskin = ImageManager.loadSystem(name);
+    this._rrWindowSkinKey = name + ":" + ($gameSystem?.windowBackgroundMode ? $gameSystem.windowBackgroundMode() : 0);
+    if ($dataSystem?.rrLegacyWindows && ColorManager._windowskin !== this.windowskin) ColorManager.loadWindowskin();
+    if ($dataSystem?.rrLegacyWindows && this.contents && typeof this.refresh === "function") {
+        const skin = this.windowskin;
+        skin.addLoadListener(() => {
+            if (this.destroyed || this.windowskin !== skin) return;
+            this.resetFontSettings();
+            this.refresh();
+        });
+    }
 };
 
 Window_Base.prototype.updatePadding = function() {
@@ -119,14 +130,18 @@ Window_Base.prototype.resetFontSettings = function() {
 };
 
 Window_Base.prototype.resetTextColor = function() {
-    this.changeTextColor(ColorManager.normalColor());
-    this.changeOutlineColor(ColorManager.outlineColor());
+    this.changeTextColor(ColorManager.normalColor(), 0);
+    this.changeOutlineColor(ColorManager.outlineColor(), true);
 };
 
 Window_Base.prototype.update = function() {
     // Set by Spriteset_Map.updateOffscreenCulling for plugin windows that
     // ride the map (event mini labels): far offscreen ones skip updating.
     if (this._rrCulled) return;
+    if ($dataSystem?.rrLegacyWindows && $gameSystem?.windowSkinName) {
+        const key = $gameSystem.windowSkinName() + ":" + $gameSystem.windowBackgroundMode();
+        if (key !== this._rrWindowSkinKey) { this.loadWindowskin(); this._refreshBack(); }
+    }
     Window.prototype.update.call(this);
     this.updateTone();
     this.updateOpen();
@@ -198,12 +213,16 @@ Window_Base.prototype.translucentOpacity = function() {
     return 160;
 };
 
-Window_Base.prototype.changeTextColor = function(color) {
+Window_Base.prototype.changeTextColor = function(color, paletteIndex = null) {
     this.contents.textColor = color;
+    this.contents._rrLegacyPaletteIndex = paletteIndex;
+    this.contents._rrLegacyPaletteCss = color;
 };
 
-Window_Base.prototype.changeOutlineColor = function(color) {
+Window_Base.prototype.changeOutlineColor = function(color, paletteShadow = false) {
     this.contents.outlineColor = color;
+    this.contents._rrLegacyPaletteShadow = paletteShadow;
+    this.contents._rrLegacyShadowCss = color;
 };
 
 Window_Base.prototype.changePaintOpacity = function(enabled) {
@@ -394,7 +413,7 @@ Window_Base.prototype.processEscapeCharacter = function(code, textState) {
 };
 
 Window_Base.prototype.processColorChange = function(colorIndex) {
-    this.changeTextColor(ColorManager.textColor(colorIndex));
+    this.changeTextColor(ColorManager.textColor(colorIndex), colorIndex);
 };
 
 Window_Base.prototype.processDrawIcon = function(iconIndex, textState) {
@@ -504,7 +523,7 @@ Window_Base.prototype.drawCurrencyValue = function(value, unit, x, y, width) {
     const unitWidth = Math.min(80, this.textWidth(unit));
     this.resetTextColor();
     this.drawText(value, x, y, width - unitWidth - 6, "right");
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(unit, x + width - unitWidth, y, unitWidth, "right");
 };
 
@@ -705,8 +724,9 @@ Window_Scrollable.prototype.update = function() {
 };
 
 Window_Scrollable.prototype.processWheelScroll = function() {
-    if (this.isWheelScrollEnabled() && this.isTouchedInsideFrame()) {
-        const threshold = 20;
+    // The wheel is read first: the hit test runs only on a frame the wheel turned.
+    const threshold = 20;
+    if (Math.abs(TouchInput.wheelY) >= threshold && this.isWheelScrollEnabled() && this.isTouchedInsideFrame()) {
         if (TouchInput.wheelY >= threshold) {
             this.smoothScrollDown(1);
         }
@@ -744,8 +764,11 @@ Window_Scrollable.prototype.isScrollEnabled = function() {
 };
 
 Window_Scrollable.prototype.isTouchedInsideFrame = function() {
-    const touchPos = new Point(TouchInput.x, TouchInput.y);
-    const localPos = this.worldTransform.applyInverse(touchPos);
+    // One point per window, reused for the touch and its local position.
+    const point = this._touchFrameScratch || (this._touchFrameScratch = new Point(0, 0));
+    point.x = TouchInput.x;
+    point.y = TouchInput.y;
+    const localPos = this.worldTransform.applyInverse(point, point);
     return this.innerRect.contains(localPos.x, localPos.y);
 };
 
@@ -1777,7 +1800,8 @@ Window_StatusBase.prototype.drawActorFace = function(
 
 Window_StatusBase.prototype.drawActorName = function(actor, x, y, width) {
     width = width || 168;
-    this.changeTextColor(ColorManager.hpColor(actor));
+    const paletteIndex = $dataSystem?.rrLegacyWindows ? (!actor ? 0 : actor.isDead() ? 5 : actor.isDying() ? 4 : 0) : null;
+    this.changeTextColor(ColorManager.hpColor(actor), paletteIndex);
     this.drawText(actor.name(), x, y, width);
 };
 
@@ -1794,10 +1818,10 @@ Window_StatusBase.prototype.drawActorNickname = function(actor, x, y, width) {
 };
 
 Window_StatusBase.prototype.drawActorLevel = function(actor, x, y) {
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(TextManager.levelA, x, y, 48);
     this.resetTextColor();
-    this.drawText(actor.level, x + 72, y, 48, "right");
+    this.drawText(actor.level, x + 60, y, 60, "right");
 };
 
 Window_StatusBase.prototype.drawActorIcons = function(actor, x, y, width) {
@@ -2555,7 +2579,7 @@ Window_EquipStatus.prototype.drawItem = function(x, y, paramId) {
 
 Window_EquipStatus.prototype.drawParamName = function(x, y, paramId) {
     const width = this.paramX() - this.itemPadding() * 2;
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(TextManager.param(paramId), x, y, width);
 };
 
@@ -2567,7 +2591,7 @@ Window_EquipStatus.prototype.drawCurrentParam = function(x, y, paramId) {
 
 Window_EquipStatus.prototype.drawRightArrow = function(x, y) {
     const rightArrowWidth = this.rightArrowWidth();
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText("\u2192", x, y, rightArrowWidth, "center");
 };
 
@@ -2676,7 +2700,7 @@ Window_EquipSlot.prototype.drawItem = function(index) {
         const slotNameWidth = this.slotNameWidth();
         const rect = this.itemLineRect(index);
         const itemWidth = rect.width - slotNameWidth;
-        this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+        this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
         this.changePaintOpacity(this.isEnabled(index));
         this.drawText(slotName, rect.x, rect.y, slotNameWidth, rect.height);
         this.drawItemName(item, rect.x + slotNameWidth, rect.y, itemWidth);
@@ -2870,7 +2894,7 @@ Window_Status.prototype.drawExpInfo = function(x, y) {
     const lineHeight = this.lineHeight();
     const expTotal = TextManager.expTotal.format(TextManager.exp);
     const expNext = TextManager.expNext.format(TextManager.level);
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(expTotal, x, y + lineHeight * 0, 270);
     this.drawText(expNext, x, y + lineHeight * 2, 270);
     this.resetTextColor();
@@ -2931,7 +2955,7 @@ Window_StatusParams.prototype.drawItem = function(index) {
     const paramId = index + 2;
     const name = TextManager.param(paramId);
     const value = this._actor.param(paramId);
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(name, rect.x, rect.y, 160);
     this.resetTextColor();
     this.drawText(value, rect.x + 160, rect.y, 60, "right");
@@ -2979,7 +3003,7 @@ Window_StatusEquip.prototype.drawItem = function(index) {
     const item = equips[index];
     const slotName = this.actorSlotName(this._actor, index);
     const sw = 138;
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(slotName, rect.x, rect.y, sw, rect.height);
     this.drawItemName(item, rect.x + sw, rect.y, rect.width - sw);
 };
@@ -3719,7 +3743,7 @@ Window_ShopStatus.prototype.isEquipItem = function() {
 Window_ShopStatus.prototype.drawPossession = function(x, y) {
     const width = this.innerWidth - this.itemPadding() - x;
     const possessionWidth = this.textWidth("0000");
-    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
     this.drawText(TextManager.possession, x, y, width - possessionWidth);
     this.resetTextColor();
     this.drawText($gameParty.numItems(this._item), x, y, width, "right");
@@ -4924,7 +4948,9 @@ Window_Message.prototype.newLineX = function(textState) {
     const faceExists = $gameMessage.faceName() !== "";
     const faceWidth = ImageManager.faceWidth;
     const spacing = 20;
-    const margin = faceExists ? faceWidth + spacing : 4;
+    // Legacy windows already supply the original eight-pixel inset through
+    // their padding; MZ's extra four pixels displace every dialogue glyph.
+    const margin = faceExists ? faceWidth + spacing : ($dataSystem?.rrLegacyWindows ? 0 : 4);
     return textState.rtl ? this.innerWidth - margin : margin;
 };
 
@@ -7083,7 +7109,7 @@ Window_NameBox.prototype.updateBackground = function() {
         const label = savefileId === 0 ? TextManager.autosave : TextManager.file;
         const number = savefileId === 0 ? "" : String(savefileId).padStart(2, " ");
         const numberX = this.textWidth(label) + Math.floor(this.textWidth(" ") / 2);
-        this.changeTextColor(ColorManager.textColor(info ? 0 : 3));
+        this.changeTextColor(ColorManager.textColor(info ? 0 : 3), info ? 0 : 3);
         this.drawText(label, 0, 0, this.innerWidth);
         if (number) this.drawText(number, numberX, 0, this.innerWidth);
         this.setCursorRect(selected ? -4 : 0, 0, selected ? numberX + this.textWidth(number) + 8 : 0, selected ? this.lineHeight() : 0);
@@ -7091,7 +7117,7 @@ Window_NameBox.prototype.updateBackground = function() {
         const leader = info.rrLeader;
         if (leader) {
             this.drawText(leader.name, 0, 16, 84);
-            this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+            this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
             const lv = TextManager.levelA, hp = TextManager.hpA;
             this.drawText(lv, 0, 32, 40);
             this.drawText(hp, 42, 32, 40);
@@ -7295,11 +7321,13 @@ Window_NameBox.prototype.updateBackground = function() {
     /** A value's color: knocked out at 0 (when it can be), critical at a quarter or less. */
     const valueColor = (have, max, knockout) => knockout && have === 0 ? ColorManager.deathColor()
         : max > 0 && have <= Math.floor(max / 4) ? ColorManager.crisisColor() : ColorManager.normalColor();
+    const valueColorIndex = (have, max, knockout) => knockout && have === 0 ? 5
+        : max > 0 && have <= Math.floor(max / 4) ? 4 : 0;
     /** "HP 40/ 40": the label, then current and maximum right-aligned in `digits` 6 px cells around a slash. */
     Window_Base.prototype.drawLegacyValue = function(label, value, max, x, y, digits, knockout, showMax) {
-        this.changeTextColor(ColorManager.systemColor());
+        this.changeTextColor(ColorManager.systemColor(), 1);
         this.drawText(label, x, y, 12);
-        this.changeTextColor(valueColor(value, max, knockout));
+        this.changeTextColor(valueColor(value, max, knockout), valueColorIndex(value, max, knockout));
         this.drawText(String(value), x + 12, y, digits * 6, "right");
         this.resetTextColor();
         if (showMax === false) return;
@@ -7309,7 +7337,7 @@ Window_NameBox.prototype.updateBackground = function() {
     /** The state that shows, in its own color, or the Normal term. */
     Window_Base.prototype.drawLegacyState = function(actor, x, y, width) {
         const top = actor.states()[0];
-        this.changeTextColor(top ? ColorManager.textColor(top.rrColor ?? 6) : ColorManager.normalColor());
+        this.changeTextColor(top ? ColorManager.textColor(top.rrColor ?? 6) : ColorManager.normalColor(), top ? (top.rrColor ?? 6) : 0);
         this.drawText(top ? top.name : ($dataSystem.rrNormalStatus || "Normal"), x, y, width);
         this.resetTextColor();
     };
@@ -7367,7 +7395,7 @@ Window_NameBox.prototype.updateBackground = function() {
         this.resetTextColor();
         this.drawText(actor.name(), x, y, 88);
         this.drawText(actor.nickname(), x + 88, y, this.innerWidth - x - 88);
-        this.changeTextColor(ColorManager.systemColor());
+        this.changeTextColor(ColorManager.systemColor(), 1);
         this.drawText(TextManager.levelA, x, y + line, 12);
         this.resetTextColor();
         this.drawText(String(actor.level), x, y + line, 24, "right");
@@ -7377,7 +7405,7 @@ Window_NameBox.prototype.updateBackground = function() {
         const columns = is2003() ? 7 : 6;
         const exp = String(actor.currentExp()), next = actor.isMaxLevel() ? "-".repeat(columns) : String(actor.nextLevelExp());
         if (!is2003()) {
-            this.changeTextColor(ColorManager.systemColor());
+            this.changeTextColor(ColorManager.systemColor(), 1);
             this.drawText(TextManager.expA, x, y + line * 2, 12);
             this.resetTextColor();
         }
@@ -7474,7 +7502,7 @@ Window_NameBox.prototype.updateBackground = function() {
     });
     /** "L  1": the level term and the level right-aligned in the next 24 px. */
     Window_Base.prototype.drawLegacyLevel = function(actor, x, y) {
-        this.changeTextColor(ColorManager.systemColor());
+        this.changeTextColor(ColorManager.systemColor(), 1);
         this.drawText(TextManager.levelA, x, y, 12);
         this.resetTextColor();
         this.drawText(String(actor.level), x, y, 24, "right");
@@ -7526,15 +7554,15 @@ Window_NameBox.prototype.updateBackground = function() {
         const value = is2003() ? 72 : 78, cells = is2003() ? 4 : 3;
         [2, 3, 4, 6].forEach((paramId, i) => {
             const y = 16 + 16 * i;
-            this.changeTextColor(ColorManager.systemColor());
+            this.changeTextColor(ColorManager.systemColor(), 1);
             this.drawText(TextManager.param(paramId), 0, y, value - cells * 6);
             this.resetTextColor();
             this.drawText(String(actor.param(paramId)), 0, y, value, "right");
             if (!this._tempActor) return;
-            this.changeTextColor(ColorManager.systemColor());
+            this.changeTextColor(ColorManager.systemColor(), 1);
             this.drawText(">", value + 3, y, 6);
             const next = this._tempActor.param(paramId), old = actor.param(paramId);
-            this.changeTextColor(ColorManager.textColor(next === old ? 0 : next > old ? 2 : 3));
+            this.changeTextColor(ColorManager.textColor(next === old ? 0 : next > old ? 2 : 3), next === old ? 0 : next > old ? 2 : 3);
             this.drawText(String(next), value, y, 12 + cells * 6, "right");
             this.resetTextColor();
         });
@@ -7543,7 +7571,7 @@ Window_NameBox.prototype.updateBackground = function() {
         if (!this._actor) return;
         const rect = this.itemLineRect(index);
         this.changePaintOpacity(this.isEnabled(index));
-        this.changeTextColor(ColorManager.systemColor());
+        this.changeTextColor(ColorManager.systemColor(), 1);
         this.drawText(this.actorSlotName(this._actor, index), rect.x, rect.y, 60);
         this.drawItemName(this.itemAt(index), rect.x + 60, rect.y, rect.width - 60);
         this.changePaintOpacity(true);
@@ -7704,7 +7732,7 @@ Window_NameBox.prototype.updateBackground = function() {
         this.drawText(actor.name(), 0, y, 76);
         if (is2003()) {
             this.drawLegacyState(actor, 80, y, 52);
-            this.changeTextColor(valueColor(actor.hp, actor.mhp, true));
+            this.changeTextColor(valueColor(actor.hp, actor.mhp, true), valueColorIndex(actor.hp, actor.mhp, true));
             this.drawText(String(actor.hp), 132, y, 24, "right");
             this.resetTextColor();
         } else {

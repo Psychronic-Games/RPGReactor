@@ -170,6 +170,25 @@ class BuildManager {
                                 </div>
                                 <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('Only smaller validated results replace staged assets.')} ${tt('OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.')}</div>
                             </div>
+
+                            <div style="margin-top: 20px;">
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Encryption')}</h3>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="build-encrypt-images" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Encrypt image files')}</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="build-encrypt-audio" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Encrypt audio files')}</span>
+                                    </label>
+                                </div>
+                                <div style="margin-top: 8px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
+                                    <label for="build-encryption-key" style="color: var(--color-text-muted); font-size: 11px;">${tt('Encryption key')}</label>
+                                    <input id="build-encryption-key" class="rr-input" type="text" autocomplete="off" spellcheck="false" placeholder="${tt('Automatic')}" style="font-size: 12px; padding: 5px 7px;">
+                                </div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt("Images and audio ship as .png_ and .ogg_ files in RPG Maker MZ's encrypted format.")}</div>
+                            </div>
                         </div>
 
                         <!-- Right Column: Output, Log, Actions -->
@@ -218,6 +237,7 @@ class BuildManager {
             DeploymentPathPreferences.load('game', 'dist');
         this.setupLocaleOptions();
         this.setupAssetOptimizationOptions();
+        this.setupEncryptionOptions();
         this.versionPicker = new NwVersionPicker(
             document.getElementById('build-nw-version-exact'),
             document.getElementById('build-nw-version-list'));
@@ -316,6 +336,25 @@ class BuildManager {
         png.addEventListener('change', save);
         audio.addEventListener('change', save);
         quality.addEventListener('change', save);
+    }
+
+    setupEncryptionOptions() {
+        const preference = DeploymentAssetPreferences.loadEncryption();
+        const images = document.getElementById('build-encrypt-images');
+        const audio = document.getElementById('build-encrypt-audio');
+        images.checked = preference.images;
+        audio.checked = preference.audio;
+        const save = () => DeploymentAssetPreferences.saveEncryption(this.encryptionSettings());
+        images.addEventListener('change', save);
+        audio.addEventListener('change', save);
+    }
+
+    encryptionSettings() {
+        return DeploymentAssetPreferences.normalizeEncryption({
+            images: document.getElementById('build-encrypt-images').checked,
+            audio: document.getElementById('build-encrypt-audio').checked,
+            keyText: document.getElementById('build-encryption-key').value,
+        });
     }
 
     assetOptimizationSettings() {
@@ -639,6 +678,7 @@ class BuildManager {
         const includeProprietaryCodecs = document.getElementById('build-include-proprietary-codecs').checked;
         const runtimeLocales = this.selectedRuntimeLocales();
         const assetOptimization = this.assetOptimizationSettings();
+        const assetEncryption = this.encryptionSettings();
         const createLinuxAppImage = document.getElementById('build-create-linux-appimage').checked;
         const packWebFiles = platforms.includes('web') && document.getElementById('build-pack-files').checked;
 
@@ -670,6 +710,7 @@ class BuildManager {
                     includeProprietaryCodecs,
                     runtimeLocales,
                     assetOptimization,
+                    assetEncryption,
                     createLinuxAppImage,
                     packWebFiles,
                     appRoot: appRoot,

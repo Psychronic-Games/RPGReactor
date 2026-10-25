@@ -9,7 +9,8 @@
  * which way it faces, its material, its size and settings, a stair run's
  * steps, a screen's media, a light's colour, the blueprint to stamp.
  * Number keys pick slots, R turns, Q and E move the level, right-click
- * removes, Ctrl-drag lays a box, Ctrl+Z undoes. Select picks a placed
+ * removes, a right-drag turns the view, Ctrl-drag lays a box, Ctrl+Z
+ * undoes, Escape in Select with nothing selected leaves. Select picks a placed
  * piece up again: the panel then edits it, a drag moves it, a shape wears
  * handles to move, turn and size it, Delete removes it.
  *
@@ -47,8 +48,8 @@ class BuildHotbar {
     static ROCK_PRESETS = { boulder: [3, 2, 3], rock: [4, 4, 4], cliff: [4, 8, 4], spire: [2, 8, 2], ledge: [6, 2, 3], slab: [6, 1, 6] };
     static SLOTS = ['select'].concat(BuildHotbar.PIECES, BuildHotbar.EXTRA);
     /** The Terrain group: the ground's brushes, the water, then the whole map's look and the land past its border. Each is a TerrainManager mode. */
-    static TERRAIN = ['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'rock', 'pour', 'river', 'drain', 'look', 'biome', 'surround'];
-    static TERRAIN_MODE = { raise: 'raise', lower: 'lower', smooth: 'smooth', flatten: 'flatten', dunes: 'dunes', ground: 'ground', terase: 'ground', pour: 'fill', river: 'river', drain: 'drain', look: 'look', biome: 'biome', surround: 'surround' };
+    static TERRAIN = ['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'rock', 'pour', 'river', 'drain', 'look', 'biome', 'sky', 'surround'];
+    static TERRAIN_MODE = { raise: 'raise', lower: 'lower', smooth: 'smooth', flatten: 'flatten', dunes: 'dunes', ground: 'ground', terase: 'ground', pour: 'fill', river: 'river', drain: 'drain', look: 'look', biome: 'biome', sky: 'sky', surround: 'surround' };
     /** The Models group's fixed slots; the models themselves follow as model0, model1... */
     static MODELS = ['mselect', 'mremove', 'library'];
     /** The Foliage group: four kinds painted as a density, then bushes. Each is a TerrainManager mode of the same name. */
@@ -58,6 +59,8 @@ class BuildHotbar {
     /** The foliage kinds that are not Earth's, and their names. */
     static ALIEN_FOLIAGE = { bulbs: 'Bulbs', tendrils: 'Fronds', crystals: 'Crystals' };
     static GROUPS = ['build', 'terrain', 'foliage', 'models'];
+    /** The Build group's keys, as Build binds them (PieceBuilderManager.handleKey, MapEditor3D's pointer). */
+    static KEYS_HINT = 'click to place · drag a row · Ctrl-drag a box · right-click removes · right-drag turns the view · R turns the piece · Q/E level · Ctrl+Z undo';
     /**
      * How long after the last change a run of them (arrow keys on a slider, a number's arrows held, a color moved) is
      * kept as one undo step, in ms: longer than the wait before a held key or a held arrow starts to repeat.
@@ -320,6 +323,8 @@ class BuildHotbar {
             dunes: 'M2 18c3-7 6-7 8-2 2-6 6-8 12 2z M2 21h20',
             ground: 'M3 20h18 M3 15c3-2 6 2 9 0s6-2 9 0 M7 10l2-5 2 5z M14 10c0-3 5-3 5 0z',
             biome: 'M12 3a9 9 0 1 0 0.01 0z M3 12h18 M12 3c-3 3-3 15 0 18 M12 3c3 3 3 15 0 18',
+            // Room and Sky: a cloud under the sun.
+            sky: 'M6 19h11a4 4 0 0 0 .4-7.98A5.5 5.5 0 0 0 6.6 12.2 3.4 3.4 0 0 0 6 19z M17 3v2 M21 7h-2 M13.5 4.5l1.2 1.2',
             // Beyond the border: a far ridge on the horizon, the map's edge in front.
             surround: 'M2 14h20 M6 14l4-6 3 4 2-2.5 3 4.5 M5 21v-3h14v3',
             undo: 'M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3',
@@ -353,7 +358,7 @@ class BuildHotbar {
         if (slot === 'mremove' || slot === 'terase' || slot === 'ferase') return this._t('build.hammer');
         if (slot === 'library') return this._t('build.library');
         if (/^model\d+$/.test(slot)) return (this.props()?.libraryModels()[Number(slot.slice(5))]?.name || '').split('/').pop();
-        if (slot === 'dunes' || slot === 'ground' || slot === 'biome' || slot === 'surround') return this._tt({ dunes: 'Dunes', ground: 'Ground', biome: 'Biome', surround: 'Beyond the Border' }[slot]);
+        if (slot === 'dunes' || slot === 'ground' || slot === 'biome' || slot === 'sky' || slot === 'surround') return this._tt({ dunes: 'Dunes', ground: 'Ground', biome: 'Biome', sky: 'Room and Sky', surround: 'Beyond the Border' }[slot]);
         if (BuildHotbar.TERRAIN.includes(slot)) return this._t({ pour: 'terrain.waterPour', drain: 'terrain.drain', look: 'terrain.lookShort' }[slot] || 'terrain.' + slot);
         if (BuildHotbar.ALIEN_FOLIAGE[slot]) return this._tt(BuildHotbar.ALIEN_FOLIAGE[slot]);
         if (BuildHotbar.FOLIAGE.includes(slot)) return this._t('foliage.' + slot);
@@ -379,7 +384,7 @@ class BuildHotbar {
             <div class="rr-build-row rr-build-slots">
                 <div class="rr-build-groups" role="radiogroup">${BuildHotbar.GROUPS.map(g => `<button type="button" class="rr-build-group" data-group="${g}" role="radio" aria-checked="${g === group}" title="${this._t('build.group.' + g)}">${this.icon(g, 18)}<span>${this._t('build.group.' + g)}</span></button>`).join('')}</div>
                 ${slots.map(button).join('')}</div>
-            <div class="rr-build-hint">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b><span class="rr-build-keys"> · ${this._t('build.keys')}</span>`}</div>`;
+            <div class="rr-build-hint">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b><span class="rr-build-keys"> · ${this._tt(BuildHotbar.KEYS_HINT)}</span>`}</div>`;
         this._slotsKey = slots.join('|');
         root.querySelectorAll('.rr-build-slot').forEach(el => el.addEventListener('click', () => this.pick(el.dataset.slot)));
         root.querySelectorAll('.rr-build-group').forEach(el => el.addEventListener('click', () => {
@@ -417,7 +422,7 @@ class BuildHotbar {
     renderModelsPanel() {
         const panel = this.panel, props = this.props();
         if (!panel || !props) return;
-        if (this._modelsBody && panel.contains(this._modelsBody) && props.panel === this._modelsBody) return;
+        if (this._modelsBody && panel.contains(this._modelsBody) && props.panel === this._modelsBody) { props._syncPanel?.(); return; }
         this.setPanel('models', this._t('build.group.models'), '', '');
         panel.querySelector('.rr-build-panel-body').classList.add('rr-build-models-body');
         this._modelsBody = panel.querySelector('.rr-build-models-body');
@@ -889,7 +894,7 @@ class BuildHotbar {
         const tt = text => this._tt(text), d = this.doorOf(piece);
         const escape = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         const select = (key, options, value) => `<select class="database-field-value rr-build-door" data-key="${key}">${options.map(([v, label]) => `<option value="${v}"${v === value ? ' selected' : ''}>${escape(tt(label))}</option>`).join('')}</select>`;
-        const row = (label, control) => `<label class="rr-build-field rr-build-wide"><span>${escape(label)}</span>${control}</label>`;
+        const row = (label, control) => `<label class="rr-build-field rr-build-setting"><span>${escape(label)}</span>${control}</label>`;
         let look = row(tt('Style'), select('style', BuildHotbar.DOOR_STYLES, d.style || 'plank'));
         if (piece) look += row(tt('Width'), `<input type="number" class="database-field-value rr-build-door" data-key="width" value="${d.width || 1}" min="1" max="6" step="1">`);
         look += row(tt('Hinge'), select('hinge', [['left', 'Left'], ['right', 'Right']], d.hinge || 'left'))
@@ -922,7 +927,7 @@ class BuildHotbar {
         const manager = this.manager(), tt = text => this._tt(text);
         const frame = piece ? (piece.frame || null) : manager.windowFrame;
         const style = frame ? frame.style || 'cottage' : '';
-        const row = (label, control) => `<label class="rr-build-field rr-build-wide"><span>${tt(label)}</span>${control}</label>`;
+        const row = (label, control) => `<label class="rr-build-field rr-build-setting"><span>${tt(label)}</span>${control}</label>`;
         let body = row('Style', `<select class="database-field-value rr-build-frame" data-key="style">${BuildHotbar.WINDOW_FRAMES.map(([v, label]) => `<option value="${v}"${v === style ? ' selected' : ''}>${tt(label)}</option>`).join('')}</select>`);
         if (frame) {
             const shutters = frame.shutters || '';
@@ -1231,7 +1236,7 @@ class BuildHotbar {
             // A map with no floor has nothing for a ground to lie over: say so, and offer one.
             const floors = terrain.hasGroundFloor() || !this.is3D() ? [] : this.groundFloors();
             const noFloor = terrain.hasGroundFloor() ? '' : `<div class="rr-build-note rr-build-wrap rr-build-gnofloor">${tt('This map has no floor to paint over.')}</div>`
-                + (floors.length ? `<div class="rr-build-actions"><button type="button" class="rr-btn-secondary rr-build-gsetfloor" data-floor="${escape(floors[0])}">${tt('Set a floor')}</button></div>` : `<div class="rr-build-note rr-build-wrap">${tt('Choose one in Map Properties, 3D, Floor.')}</div>`);
+                + (floors.length ? `<div class="rr-build-actions"><button type="button" class="rr-btn-secondary rr-build-gsetfloor" data-floor="${escape(floors[0])}">${tt('Set a floor')}</button></div>` : `<div class="rr-build-note rr-build-wrap">${tt('Choose one in Room and Sky.')}</div>`);
             const fold = (key, title, meta, inner) => `<details class="lit-section rr-build-section rr-build-more" data-more="${key}"${this.moreOpen(key) ? ' open' : ''}><summary class="lit-section-header">${title}${meta ? `<span class="lit-section-meta">${meta}</span>` : ''}</summary><div class="lit-section-body">${inner}</div></details>`;
             const brushRows = range('rr-build-tradius', t('terrain.radius'), terrain.radius, 1, 12, 0.5, terrain.radius)
                 + range('rr-build-tstrength', t('terrain.strength'), terrain.strength, 0.05, 1, 0.05, terrain.strength)
@@ -1260,6 +1265,8 @@ class BuildHotbar {
             body = lead(tt('A starting look for the whole map: its ground, cliffs, plant colors and water together. Heights stay as they are.'))
                 + section(tt('Biome'), `<div class="rr-build-finishes">${Object.keys(TerrainManager.BIOMES).map(key => chipOf('rr-build-biome', key, tt(names[key]), terrain.biome === key)).join('')}</div>`
                     + `<label class="rr-build-check"><input type="checkbox" class="rr-build-breplace"${terrain.biomeReplace ? ' checked' : ''}> ${tt('Also clear the ground already painted')}</label>`);
+        } else if (slot === 'sky') {
+            body = this.roomBody(terrain, section, range);
         } else if (slot === 'surround') {
             body = this.surroundBody(terrain, section);
         } else if (slot === 'pour') {
@@ -1354,6 +1361,7 @@ class BuildHotbar {
             });
         });
         this.bindSteepSection(terrain);
+        this.bindRoomBody(terrain);
         this.bindSurroundBody(terrain);
         // Biome: one click sets the map's look.
         panel.querySelector('.rr-build-breplace')?.addEventListener('change', event => { terrain.biomeReplace = event.target.checked; });
@@ -1471,6 +1479,68 @@ class BuildHotbar {
         else tint?.addEventListener('input', event => tintInput(event.target.value));
     }
 
+    /** The pictures under img/parallaxes the room and the sky are chosen from, and where each is read. */
+    parallaxFolder() {
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        if (!project?.path || typeof require !== 'function') return '';
+        return require('path').join(project.path, 'img', 'parallaxes');
+    }
+
+    /**
+     * Room and Sky: the sky's picture and its drift, the room's height and its floor, walls and ceiling
+     * pictures. Each picture is a tile showing it; a click opens the parallax pictures to choose from.
+     */
+    roomBody(terrain, section, range) {
+        const tt = text => this._tt(text);
+        const escape = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const room = terrain.roomLook();
+        if (!room || !this.is3D()) return `<div class="rr-build-note rr-build-wrap">${escape(this._t('build.needs3D'))}</div>`;
+        const folder = this.parallaxFolder(), assets = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles : null;
+        const urlOf = name => { try { return name && folder && assets?.imageUrlFor ? assets.imageUrlFor(folder, name) : ''; } catch (error) { return ''; } };
+        const tile = (piece, label) => `<div class="rr-build-field rr-build-setting"><span>${escape(tt(label))}</span>`
+            + (typeof RRMaterialPopup !== 'undefined' ? RRMaterialPopup.tile({ cls: 'rr-build-roomimg', value: room[piece], url: urlOf(room[piece]), blank: tt('None'), attrs: `data-piece="${piece}"` })
+                : `<button type="button" class="rr-btn-secondary rr-build-roomimg" data-piece="${piece}">${escape(room[piece] || tt('None'))}</button>`) + '</div>';
+        const drift = value => (Math.round(value * 100) / 100).toString();
+        return `<div class="rr-build-note rr-build-wrap rr-build-lead">${escape(tt('The sky over the map and the room around it, from the pictures in img/parallaxes. Changes show at once.'))}</div>`
+            + section(tt('Sky'), tile('sky', 'Picture')
+                + range('rr-build-skysx', tt('Drift X'), room.skyScrollX, -8, 8, 0.05, drift(room.skyScrollX))
+                + range('rr-build-skysy', tt('Drift Y'), room.skyScrollY, -8, 8, 0.05, drift(room.skyScrollY)))
+            + section(tt('Room'), range('rr-build-roomh', tt('Height (tiles)'), room.height, 1, Math.max(64, room.height), 1, room.height)
+                + tile('floor', 'Floor') + tile('walls', 'Walls') + tile('ceiling', 'Ceiling')
+                + `<div class="rr-build-note rr-build-wrap">${escape(tt('The walls and the ceiling face inward: the camera looks past them into the room.'))}</div>`);
+    }
+
+    /** Room and Sky's controls: a picture picked is one undo step, a slider one a drag or a run of arrow keys. */
+    bindRoomBody(terrain) {
+        const panel = this.panel;
+        if (!panel || !panel.querySelector('.rr-build-roomh')) return;
+        const keep = () => terrain.setRoomLook({}, 'commit');
+        const live = (el, patch) => {
+            if (this._roomOwner !== el) { keep(); this._roomOwner = el; }
+            terrain.setRoomLook(patch, 'live');
+        };
+        const slider = (cls, key, show) => {
+            const el = panel.querySelector('.' + cls);
+            this.gestureRange(el, value => { live(el, { [key]: value }); panel.querySelector('.' + cls + '-value').textContent = show(value); }, keep);
+        };
+        slider('rr-build-skysx', 'skyScrollX', v => Math.round(v * 100) / 100);
+        slider('rr-build-skysy', 'skyScrollY', v => Math.round(v * 100) / 100);
+        slider('rr-build-roomh', 'height', v => v);
+        panel.querySelectorAll('.rr-build-roomimg').forEach(el => el.addEventListener('click', () => {
+            const piece = el.dataset.piece, folder = this.parallaxFolder();
+            const picker = window.reactor?.databaseEditorUI, assets = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles : null;
+            if (!folder || !assets || !picker?.showImagePicker) return;
+            let files = [];
+            try { files = assets.listImageReferences(folder); } catch (error) { files = []; }
+            if (!files.length) { this.flash(this._tt('No parallax images found in img/parallaxes folder')); return; }
+            const title = { sky: 'mapProps.pickSky', floor: 'mapProps.pickFloor', walls: 'mapProps.pickWalls', ceiling: 'mapProps.pickCeiling' }[piece] || 'mapProps.pickFloor';
+            picker.showImagePicker(this._t(title), files,
+                name => { keep(); if (terrain.setRoomLook({ [piece]: name || '' }, 'commit')) this.renderTerrainPanel(); },
+                name => assets.imageUrlFor(folder, name), terrain.roomLook()?.[piece] || undefined,
+                { selectButtonLabel: this._tt('Use This Parallax'), allowNone: true });
+        }));
+    }
+
     /**
      * Beyond the Border: what is seen past the map's border. The six styles as pictures, how far the
      * land reaches and how hilly it is; the map past each side (walking off that side enters it); under
@@ -1489,7 +1559,7 @@ class BuildHotbar {
         // The land is laid from the map's floor: without one there is nothing to lay.
         const bare = on && !terrain.hasGroundFloor(), floors = bare ? this.groundFloors() : [];
         const noFloor = !bare ? '' : `<div class="rr-build-note rr-build-wrap rr-build-gnofloor">${escape(tt('Nothing shows past the border of a map with no floor.'))}</div>`
-            + (floors.length ? `<div class="rr-build-actions"><button type="button" class="rr-btn-secondary rr-build-gsetfloor" data-floor="${escape(floors[0])}">${tt('Set a floor')}</button></div>` : `<div class="rr-build-note rr-build-wrap">${tt('Choose one in Map Properties, 3D, Floor.')}</div>`);
+            + (floors.length ? `<div class="rr-build-actions"><button type="button" class="rr-btn-secondary rr-build-gsetfloor" data-floor="${escape(floors[0])}">${tt('Set a floor')}</button></div>` : `<div class="rr-build-note rr-build-wrap">${tt('Choose one in Room and Sky.')}</div>`);
         // The map view's Surroundings tick is off: the land is laid and not shown.
         const hidden = !on || edges.visible() ? '' : `<div class="rr-build-note rr-build-wrap rr-build-shidden">${escape(tt('The land past the border is hidden in this view.'))}</div>`
             + `<div class="rr-build-actions"><button type="button" class="rr-btn-secondary rr-build-sshow">${escape(tt('Show Surroundings'))}</button></div>`;

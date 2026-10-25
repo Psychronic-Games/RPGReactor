@@ -78,7 +78,7 @@ test('the runtime waits for the scene to settle, writes, and exits; the editor n
     assert.match(editor, /wrapper\.addEventListener\('keydown', event => this\.onKey\(event\)\);/);
     assert.match(editor, /const handled = \(\) => \{ event\.preventDefault\(\); event\.stopPropagation\(\); \};/);
     const dbUi = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'DatabaseEditorUI.js'), 'utf8');
-    assert.match(dbUi, /event\.target !== detailEl && detailEl\.contains\(event\.target\)\) return;/, 'the record list ignores keys from the detail pane');
+    assert.match(dbUi, /target !== detailEl && detailEl\.contains\(target\)\) return;/, 'the record list ignores keys from the detail pane');
     // Add Box takes the captured window's rect; addNode hands the node back.
     assert.match(editor, /this\.select\(node\.id\);\s*return node;\s*\}/);
     assert.match(editor, /box\.fillOpacity = clamp\(entry\.backOpacity\)/);

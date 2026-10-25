@@ -117,18 +117,20 @@
         closeOpenPopup();
         if (selectEl.disabled) return;
         const rect = triggerEl.getBoundingClientRect();
+        // The window the trigger is in: the editor's, or one of its own (the event editor popped out).
+        const view = (triggerEl.ownerDocument && triggerEl.ownerDocument.defaultView) || window;
         const popup = document.createElement('div');
         popup.className = 'rr-shim-popup';
         // Fixed positioning, anchored to the trigger; open upward when the
         // space below is tight, and clamp the height to the viewport.
-        const spaceBelow = window.innerHeight - rect.bottom - 10;
+        const spaceBelow = view.innerHeight - rect.bottom - 10;
         const spaceAbove = rect.top - 10;
         const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
         const maxH = Math.min(360, Math.max(140, openUp ? spaceAbove : spaceBelow));
         popup.style.cssText = `
             position: fixed;
             left: ${rect.left}px;
-            ${openUp ? `bottom: ${window.innerHeight - rect.top + 2}px;` : `top: ${rect.bottom + 2}px;`}
+            ${openUp ? `bottom: ${view.innerHeight - rect.top + 2}px;` : `top: ${rect.bottom + 2}px;`}
             min-width: ${rect.width}px;
             max-height: ${maxH}px;
             display: flex;
@@ -288,12 +290,12 @@
         });
 
         popup.appendChild(list);
-        document.body.appendChild(popup);
+        (triggerEl.ownerDocument || document).body.appendChild(popup);
         // Anchored at the trigger's left, a popup wider than the room to its right
         // ran off the window -- a dropdown at the right edge of a form, whose
         // options carry hints. Slide it back in, never past the left margin.
         const margin = 8;
-        const overflow = popup.getBoundingClientRect().right - (window.innerWidth - margin);
+        const overflow = popup.getBoundingClientRect().right - (view.innerWidth - margin);
         if (overflow > 0) popup.style.left = `${Math.max(margin, rect.left - overflow)}px`;
         openPopup = popup;
         popup.focus({ preventScroll: true });
@@ -538,8 +540,15 @@
         scan(document);
     }
 
-    // Watch the document for any future <select>s.
-    const mutObs = new MutationObserver((mutations) => {
+    // Watch a document for any future <select>s: this one, and each window of its own the editor
+    // opens (the event editor's), where its redraws add selects the page here never sees.
+    const watch = (doc) => {
+        scan(doc);
+        const observer = new MutationObserver(wrapAdded);
+        observer.observe(doc.documentElement, { childList: true, subtree: true });
+        return () => observer.disconnect();
+    };
+    const wrapAdded = (mutations) => {
         const found = [];
         for (const m of mutations) {
             for (const n of m.addedNodes) {
@@ -549,6 +558,9 @@
             }
         }
         if (found.length) wrapAll(found);
-    });
-    mutObs.observe(document.documentElement, { childList: true, subtree: true });
+    };
+    watch(document);
+    if (window.RRPopoutBridge && window.RRPopoutBridge.onAttach) {
+        window.RRPopoutBridge.onAttach(childWindow => watch(childWindow.document));
+    }
 })();

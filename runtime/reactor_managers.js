@@ -647,6 +647,60 @@ DataManager.extractSaveContents = function(contents) {
     $gameParty = contents.party;
     $gameMap = contents.map;
     $gamePlayer = contents.player;
+    this.evenCharacterShapes(contents);
+};
+
+/**
+ * The restored characters rebuilt in one shape per kind
+ * (Game_CharacterBase.evenOut), and every reference to one anywhere in the
+ * loaded game (`contents`, or the game objects when not given) moved to its
+ * rebuilt self: a save that keeps shared references (an interpreter waiting
+ * on an event, a plugin's list of characters) plays on the same objects.
+ */
+DataManager.evenCharacterShapes = function(contents) {
+    if (typeof Game_CharacterBase === "undefined" || !Game_CharacterBase.evenShapes || !Game_CharacterBase.evenOut) return;
+    try {
+        const followers = $gamePlayer && $gamePlayer._followers && Array.isArray($gamePlayer._followers._data) ? $gamePlayer._followers._data : [];
+        const events = $gameMap && Array.isArray($gameMap._events) ? $gameMap._events : [];
+        const vehicles = $gameMap && Array.isArray($gameMap._vehicles) ? $gameMap._vehicles : [];
+        const all = [$gamePlayer, ...followers, ...vehicles];
+        for (const event of events) if (event) all.push(event);
+        const rebuilt = Game_CharacterBase.evenOut(all);
+        if (rebuilt.size === 0) return;
+        $gamePlayer = rebuilt.get($gamePlayer) || $gamePlayer;
+        const roots = contents && typeof contents === "object" ? [contents, $gamePlayer]
+            : [$gameSystem, $gameScreen, $gameTimer, $gameSwitches, $gameVariables, $gameSelfSwitches, $gameActors, $gameParty, $gameMap, $gamePlayer];
+        this.swapReferences(roots, rebuilt);
+    } catch (error) {
+        console.warn("DataManager: the characters could not be given one shape; they play as loaded.", error);
+    }
+};
+
+/** Every writable reference reachable from `roots` to a key of `swaps` replaced by its value (data fields only; accessors are not read). */
+DataManager.swapReferences = function(roots, swaps) {
+    const visited = new Set(), stack = roots.slice();
+    while (stack.length > 0) {
+        const value = stack.pop();
+        if (!value || typeof value !== "object" || visited.has(value) || ArrayBuffer.isView(value)) continue;
+        visited.add(value);
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                const child = value[i];
+                if (!child || typeof child !== "object") continue;
+                const swap = swaps.get(child);
+                if (swap) value[i] = swap;
+                stack.push(swap || child);
+            }
+            continue;
+        }
+        for (const key of Object.keys(value)) {
+            const d = Object.getOwnPropertyDescriptor(value, key);
+            if (!d || !("value" in d) || !d.value || typeof d.value !== "object") continue;
+            const swap = swaps.get(d.value);
+            if (swap && d.writable) value[key] = swap;
+            stack.push(swap || d.value);
+        }
+    }
 };
 
 DataManager.correctDataErrors = function() {
@@ -1287,7 +1341,13 @@ ImageManager.isObjectCharacter = function(filename) {
     return sign && sign[0].includes("!");
 };
 
+// A sheet tagged [8D] is cut as eight blocks of 3 x 4 frames whatever its "$" says (reactor_sprites.js).
+ImageManager.isEightDirCharacter = function(filename) {
+    return /\[8D\]/i.test(Utils.extractFileName(filename || ""));
+};
+
 ImageManager.isBigCharacter = function(filename) {
+    if (ImageManager.isEightDirCharacter(filename)) return false;
     const sign = Utils.extractFileName(filename).match(/^[!$]+/);
     return sign && sign[0].includes("$");
 };
@@ -1310,6 +1370,7 @@ EffectManager._errorUrls = [];
 
 EffectManager.load = function(filename) {
     if (filename) {
+        globalThis.ReactorHdrOverlay?.request(filename);
         const url = this.makeUrl(filename);
         const cache = this._cache;
         if (!cache[url] && Graphics.effekseer) {
@@ -1369,6 +1430,93 @@ EffectManager.isReady = function() {
             return false;
         }
     }
+    return true;
+};
+
+/**
+ * The effects a map can play, loaded with the map: the scene waits for them
+ * (`isReady`) behind the loading fade, so the first time one plays mid-game
+ * it uploads and loads nothing (an effect's first play was 25 MB of textures
+ * in one frame). What is read: the map's Show Animation and Show Battle
+ * Animation commands, the party's attack and skills, and the attacks and
+ * skills of the enemies its events stand for and of the troops it can start.
+ * A file that is missing or does not load in `PRELOAD_WAIT_MS` is let go,
+ * never held against the map (it loads, or fails, when it is played).
+ * `preloadWithMap = false` loads each effect when it is first played.
+ */
+EffectManager.preloadWithMap = true;
+EffectManager.PRELOAD_WAIT_MS = 8000;
+EffectManager.PRELOAD_SKILLS = 12;
+EffectManager.preloadMap = function(mapData) {
+    if (!this.preloadWithMap || !mapData || !Graphics.effekseer) return 0;
+    const names = new Set();
+    for (const id of this.mapAnimationIds(mapData)) {
+        const animation = typeof $dataAnimations !== "undefined" && $dataAnimations ? $dataAnimations[id] : null;
+        if (animation && animation.effectName) names.add(animation.effectName);
+    }
+    let started = 0;
+    for (const name of names) if (this.preload(name)) started++;
+    return started;
+};
+
+/** The animations a map can show: see `preloadMap`. */
+EffectManager.mapAnimationIds = function(mapData) {
+    const ids = new Set(), troops = new Set(), enemies = new Set();
+    const skillsOf = list => { for (const skillId of list.slice(0, this.PRELOAD_SKILLS)) { const skill = $dataSkills[skillId]; if (skill) ids.add(skill.animationId); } };
+    const scan = list => {
+        for (const command of list || []) {
+            if (!command) continue;
+            if (command.code === 212 || command.code === 337) ids.add(command.parameters[1]);
+            else if (command.code === 301 && command.parameters[0] === 0) troops.add(command.parameters[1]);
+            else if (command.code === 357) {
+                const args = command.parameters[3];
+                if (args && typeof args === "object") for (const key of ["troopId", "troop"]) if (Number(args[key]) > 0) troops.add(Number(args[key]));
+                if (args && args.record === "enemy" && Number(args.id) > 0) enemies.add(Number(args.id));
+            }
+        }
+    };
+    for (const event of mapData.events || []) if (event) for (const page of event.pages || []) if (page) scan(page.list);
+    for (const encounter of mapData.encounterList || []) if (encounter && encounter.troopId > 0) troops.add(encounter.troopId);
+    if (typeof $dataSkills === "undefined" || !$dataSkills) return ids;
+    if (typeof $gameParty !== "undefined" && $gameParty && $gameParty.battleMembers) {
+        for (const actor of $gameParty.battleMembers()) {
+            if (!actor) continue;
+            if (actor.attackAnimationId1) ids.add(actor.attackAnimationId1());
+            skillsOf((actor.skills ? actor.skills() : []).map(skill => skill.id));
+        }
+    }
+    for (const troopId of troops) {
+        const troop = typeof $dataTroops !== "undefined" && $dataTroops ? $dataTroops[troopId] : null;
+        if (troop) for (const member of troop.members || []) if (member) enemies.add(member.enemyId);
+    }
+    if (typeof ReactorFight !== "undefined" && ReactorFight && ReactorFight.Stage && ReactorFight.Stage.mapRecords) {
+        try { for (const spec of ReactorFight.Stage.mapRecords(mapData)) if (spec.record === "enemy") enemies.add(spec.id); } catch (error) { /* the records are a courtesy */ }
+    }
+    for (const enemyId of enemies) {
+        const enemy = typeof $dataEnemies !== "undefined" && $dataEnemies ? $dataEnemies[enemyId] : null;
+        if (enemy) skillsOf([1, ...(enemy.actions || []).map(action => action.skillId)]);
+    }
+    ids.delete(0); ids.delete(-1);
+    return ids;
+};
+
+/**
+ * One effect loaded ahead of its first play; false when it is loaded or
+ * loading already. One let go that loads after all is released, unless it
+ * is the cached one by then.
+ */
+EffectManager.preload = function(filename) {
+    if (!filename || !Graphics.effekseer) return false;
+    const url = this.makeUrl(filename), cache = this._cache;
+    if (cache[url]) return false;
+    let effect = null, failed = false;
+    const forget = () => { if (effect && cache[url] === effect && !effect.isLoaded) delete cache[url]; };
+    const loaded = () => { if (effect && cache[url] !== effect) Graphics.effekseer.releaseEffect(effect); };
+    const fail = () => { failed = true; forget(); };
+    try { effect = Graphics.effekseer.loadEffect(url, 1, loaded, fail); } catch (error) { return false; }
+    if (!effect || failed) return false;
+    cache[url] = effect;
+    setTimeout(forget, this.PRELOAD_WAIT_MS);
     return true;
 };
 
@@ -2818,13 +2966,42 @@ function ColorManager() {
 }
 
 ColorManager.loadWindowskin = function() {
-    this._windowskin = ImageManager.loadSystem("Window");
+    const name = typeof $gameSystem !== "undefined" && $gameSystem?.windowSkinName ? $gameSystem.windowSkinName() : "Window";
+    this._windowskin = ImageManager.loadSystem(name);
     this.clearTextColorCache();
 };
 
 ColorManager.clearTextColorCache = function() {
     this._textColorCache = null;
     this._textColorCacheSkin = null;
+    this._legacyTextPaints = null;
+    this._legacyTextPaintSkin = null;
+};
+
+// Ordinary CSS colours remain the public contract. A window explicitly
+// carries its palette index separately so duplicate sampled colours still
+// select different gradients, and a plugin's custom CSS stays a flat colour.
+ColorManager.legacyTextPaint = function(index) {
+    if (typeof $dataSystem === "undefined" || !$dataSystem?.rrLegacyTextPalette
+        || !Number.isInteger(index) || index < 0 || index > 20) return null;
+    const skin = this._windowskin;
+    if (!skin?.isReady()) return null;
+    if (this._legacyTextPaintSkin !== skin) {
+        this._legacyTextPaintSkin = skin;
+        this._legacyTextPaints = new Map();
+        this._legacyTextPaintAvailable = skin.getPixel(95, 191) === "#525232";
+    }
+    if (!this._legacyTextPaintAvailable) return null;
+    let paint = this._legacyTextPaints.get(index);
+    if (!paint) {
+        const x = (index % 6) * 16, y = 128 + Math.floor(index / 6) * 16;
+        const pixels = skin._drawingContext().getImageData(x, y, 16, 16).data;
+        this._legacyTextPaintSerial = (this._legacyTextPaintSerial || 0) + 1;
+        paint = { key: this._legacyTextPaintSerial, index,
+            data: pixels, css: skin.getPixel(x, y) };
+        this._legacyTextPaints.set(index, paint);
+    }
+    return paint;
 };
 
 ColorManager.readTextColor = function(n) {
@@ -2974,7 +3151,7 @@ ColorManager.damageColor = function(colorType) {
 };
 
 ColorManager.outlineColor = function() {
-    return "rgba(0, 0, 0, 0.6)";
+    return this.legacyTextPaint(20)?.css || "rgba(0, 0, 0, 0.6)";
 };
 
 ColorManager.dimColor1 = function() {
@@ -3080,9 +3257,16 @@ SceneManager.setupEventHandlers = function() {
     document.addEventListener("keydown", this.onKeyDown.bind(this));
 };
 
+/**
+ * One refresh: the updates it owes. Returns how many ran, which tells
+ * Graphics a refresh with none changed nothing it draws
+ * (`Graphics._frameChanged`); undefined when the loop stopped on an error.
+ */
 SceneManager.update = function(deltaTime) {
+    let ran;
     try {
         const n = this.determineRepeatNumber(deltaTime);
+        ran = n;
         for (let i = 0; i < n; i++) {
             // Which pass of the catch-up loop this is. Game logic must run
             // every time — that is the whole point of the loop, and what
@@ -3097,10 +3281,12 @@ SceneManager.update = function(deltaTime) {
             this.updateMain();
         }
     } catch (e) {
+        ran = undefined;
         this.catchException(e);
     } finally {
         this._finalUpdateOfFrame = true;
     }
+    return ran;
 };
 
 /**
@@ -3115,7 +3301,8 @@ SceneManager.isFinalUpdateOfFrame = function() {
 /**
  * How many updates this frame owes.
  *
- * Locked to a 60 Hz screen (frames within 3% of a tick apart): one a frame,
+ * Locked to a 60 Hz screen (frames a tick apart, within 3% on average and
+ * 10% each): one a frame,
  * with no bookkeeping, so a 59.94 Hz screen never owes a stray second update.
  * Otherwise time is added up and the updates made as they come due: none or
  * one on a faster screen, one or two on a 50 Hz screen or a machine short of
@@ -3148,7 +3335,11 @@ SceneManager.determineRepeatNumber = function(deltaTime) {
         }
         return 0;
     }
-    if (this._smoothDeltaTime >= 0.97 && this._smoothDeltaTime <= 1.03) {
+    // This frame a tick long too: frames of 1, 2 and 3 refreshes of a 144 Hz
+    // screen average a tick, and taking them for a 60 Hz screen gave each
+    // one update whatever its length (the game sped up and slowed down with
+    // the frames) and threw away the time between.
+    if (this._smoothDeltaTime >= 0.97 && this._smoothDeltaTime <= 1.03 && deltaTime >= 0.9 && deltaTime <= 1.1) {
         this._elapsedTime = 0;
         return 1;
     }
@@ -3268,6 +3459,8 @@ SceneManager.catchUnknownError = function(e) {
 };
 
 SceneManager.updateMain = function() {
+    // Where everything the engine places stands before this update (the paced draw eases from there).
+    if (Graphics.FramePacing && Graphics.FramePacing._active) Graphics.FramePacing.beforeUpdate();
     this.updateFrameCount();
     this.updateInputData();
     this.updateEffekseer();
@@ -4295,6 +4488,12 @@ PluginManager._commands = {};
 PluginManager.setup = function(plugins) {
     for (const plugin of plugins) {
         const pluginName = Utils.extractFileName(plugin.name);
+        // The built-in implementation replaces the former opt-in plugin. Keep
+        // its tuning when upgrading, but never run both renderers.
+        if (plugin.status && pluginName.toLowerCase() === "reactorhdroverlay" && globalThis.ReactorHdrOverlay?.native) {
+            ReactorHdrOverlay.configure(plugin.parameters || {});
+            continue;
+        }
         if (plugin.status && !this._scripts.includes(pluginName)) {
             this.setParameters(pluginName, plugin.parameters);
             this.loadScript(plugin.name);

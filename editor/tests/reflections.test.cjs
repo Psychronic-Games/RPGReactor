@@ -39,7 +39,7 @@ test('a shiny material carries the reflection; a plain one compiles as before; a
     assert.doesNotMatch(plain.customProgramCacheKey(), /\|shine/);
     const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
     Reactor3D.injectShine(shiny, shader);
-    assert.match(shader.fragmentShader, /textureLod\(rrEnvMap, rrR, rrShine\.y \* rrEnvMaxLod\)/, 'rougher reads a blurrier level');
+    assert.match(shader.fragmentShader, /float rrLod = rrEnvMaxLod > 0\.0 \? clamp\(rrEnvMaxLod \+ log2\(max\(3\.14159265 \* rrShine\.y \* rrShine\.y \/ \(1\.0 \+ rrShine\.y\), 1e-6\)\), [0-9.]+, rrEnvMaxLod\) : 0\.0;\n\tvec3 rrEnv = textureLod\(rrEnvMap, rrR, rrLod\)\.rgb;/, 'rougher reads a blurrier level');
     assert.ok(shader.uniforms.rrShine.value.isVector4);
     const clone = shiny.clone();
     clone.userData = JSON.parse(JSON.stringify(shiny.userData));
@@ -97,10 +97,12 @@ test('the capture is taken after the shadow maps, in the game and in the editor'
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(core, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/, 'the map\'s frame step');
     assert.match(core, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\([^\n]+\n\s*Reactor3D\.prepareReflections\(renderer, mapScene, scene, camera, scale\);/, 'the capture and the mirrors after the shadow maps');
-    assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,1100}renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
-    assert.match(core, /const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
+    assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,1900}if \(capture \|\| mirrors\.length\) renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
+    assert.match(core, /const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(camera\) : null;\n\s*if \(probe\) F\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
+    // A face left for a refresh with no update is taken the same way, after three forgets its state.
+    assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8'), /const probe = mapScene\.reflectionProbe\(owed\.camera\);\n\s*if \(!probe\) return;\n\s*renderer\.resetState\(\);\n\s*this\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
-    assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
+    assert.match(editor, /reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
 });
 
 test('nothing reflects until its model says so; the capture leaves out the shadow sentinel and the characters', () => {
@@ -146,6 +148,25 @@ test('near a mirror-bright model the capture stands inside it, with it hidden an
     assert.deepEqual([near.position.x, near.position.z], [10, 10], 'from the model\'s middle');
     assert.deepEqual(near.hidden, [tank], 'only the model itself is left out: the hero is in the mirror');
     assert.ok(near.toward, 'and the face toward the camera is kept fresh');
+    // What stands inside the capture's reach is left out too: filmed from within, or a hand's width
+    // off, it filled the cube with its own dark insides (the party on one tile at a map's arrival,
+    // a motorcycle beside the player), and every shiny surface near it reflected black.
+    const stacked = new THREE.Group(); stacked.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1))); stacked.position.set(10, 1, 10);
+    const bike = new THREE.Group(); bike.add(new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1))); bike.position.set(11, 0, 10);
+    scene.add(stacked, bike); scene.updateMatrixWorld(true);
+    fake._modelInstances.set(3, { object: stacked }); fake._modelInstances.set(4, { object: bike });
+    fake._probeChoice = null;
+    const crowded = Reactor3D.MapScene.prototype.reflectionProbe.call(fake, { position: new THREE.Vector3(10, 4, 18) });
+    assert.deepEqual(crowded.hidden, [tank, stacked, bike], 'the model, and what stands inside its reach; the hero three tiles off is still in the mirror');
+    // Another shiny model a few tiles off is left out as well: it would reflect a close-up of itself.
+    const chrome = new THREE.Group(); chrome.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shiny)); chrome.position.set(14, 0, 10);
+    const distant = new THREE.Group(); distant.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shiny)); distant.position.set(10 + Reactor3D.MIRROR_HIDE_REACH + 3, 0, 10);
+    scene.add(chrome, distant); scene.updateMatrixWorld(true);
+    fake._modelInstances.set(5, { object: chrome }); fake._modelInstances.set(6, { object: distant });
+    fake._probeChoice = null;
+    const shinyNear = Reactor3D.MapScene.prototype.reflectionProbe.call(fake, { position: new THREE.Vector3(10, 4, 18) });
+    assert.ok(shinyNear.hidden.includes(chrome) && !shinyNear.hidden.includes(distant) && !shinyNear.hidden.includes(hero), 'a shiny neighbor is left out; one past MIRROR_HIDE_REACH and the plain hero stay');
+    for (const k of [3, 4, 5, 6]) fake._modelInstances.delete(k);
     fake._probeChoice = null;
     const far = Reactor3D.MapScene.prototype.reflectionProbe.call(fake, { position: new THREE.Vector3(80, 4, 80) });
     assert.equal(far.position.x, 80, 'out of reach, from the camera');
@@ -244,7 +265,7 @@ test('battle shadows: the room\'s lights become shadow candidates with their own
     S._lightSet = null; S._tiles = null; S._dynTiles = null;
     const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
     assert.match(battle, /id:'room:'\+index/, 'room lights: names repeat, so rows would swap between them');
-    assert.match(battle, /R\.Shadows\.markCaster\(object, !key\.startsWith\('prop:'\)\)/, 'props hold still, battlers move');
+    assert.match(battle, /R\.Shadows\.markCaster\(object, !key\.startsWith\('prop:'\) \|\| R\.modelCasterMoves\?\./, 'animated props and battlers cast moving shadows');
     assert.match(battle, /key\.call\(this\) \+ '\|battle-room' \+ \(view\._shadowed \? '\|room-shadows' : ''\)/, 'programs follow whether the room holds the rows');
     assert.match(battle, /if\(m\.__battleRoomLight\)\{m\.dispose\(\);m\.needsUpdate=true;\}/, 'and are compiled again, never reused, when that changes');
 });
@@ -364,7 +385,11 @@ test('the reflection capture waits while nothing shiny is on screen, and goes on
     F._frame++;
     assert.equal(F.idle(), true);
     const core = require('./helpers/runtime-3d-source.cjs').source3D();
-    assert.match(core, /if \(reflections\) Reactor3D\.Reflections\._frame\+\+;\n\s+const capture = reflections && !Reactor3D\.Reflections\.idle\(\);\n\s+if \(capture \|\| mirrors\.length\) renderer\.resetState\(\);/);
+    assert.match(core, /if \(reflections\) F\._frame\+\+;\n\s+const wanted = reflections && !F\.idle\(\);/);
+    assert.match(core, /const capture = wanted && \(/);
+    // The editor waits the same way.
+    const editor = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'MapEditor3D.js'), 'utf8');
+    assert.match(editor, /if \(reflections\.enabled\(\)\) reflections\._frame\+\+;\n[^\n]*\n[^\n]*\n\s*if \(!reflections\.idle\(\) &&/);
     F.reset();
 });
 

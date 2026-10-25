@@ -281,6 +281,19 @@ function assertRuntimeArchitecture(runtimeRoot, platform, expected = 'x64') {
     return actual;
 }
 
+// Files only the SDK build carries (the DevTools build of nw itself looks like the normal one).
+const SDK_ONLY_FILES = ['nwjc', 'nwjc.exe', 'chromedriver', 'chromedriver.exe'];
+
+/** True when the runtime at `runtimeRoot` is the SDK build, by its marker or by the SDK-only tools beside it. */
+function isSdkRuntime(runtimeRoot) {
+    if (!runtimeRoot) return false;
+    try {
+        const marker = JSON.parse(fs.readFileSync(path.join(runtimeRoot, '.rpg-reactor-nw-runtime.json'), 'utf8'));
+        if (marker && marker.edition) return marker.edition === 'sdk';
+    } catch {}
+    return SDK_ONLY_FILES.some(name => fs.existsSync(path.join(runtimeRoot, name)));
+}
+
 function writeRuntimeMarker(runtimeRoot, metadata) {
     assertRuntimeArchitecture(runtimeRoot, metadata.platform, metadata.arch || 'x64');
     fs.writeFileSync(path.join(runtimeRoot, '.rpg-reactor-nw-runtime.json'), JSON.stringify({
@@ -450,6 +463,7 @@ module.exports = {
     detectRuntimeArchitecture,
     assertRuntimeArchitecture,
     writeRuntimeMarker,
+    isSdkRuntime,
     pruneDesktopLocales,
     loadVersionManifest,
     resolveVersion,

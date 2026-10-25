@@ -161,9 +161,9 @@ test('pictures, screen and audio keep their numbers in MZ units', () => {
     ], ctx());
     assert.deepEqual(list[0].parameters, [3, 'Pic', 1, 0, 160, 120, 150, 150, 153, 0]);
     assert.deepEqual(list[1].parameters, [4, 'Red', 1, 1, 10, 11, 100, 100, 255, 0]);
-    assert.deepEqual(list[2], { code: 234, indent: 0, parameters: [4, [255, 0, 0, 255], 1, false] });
-    assert.deepEqual(list[3].parameters, [3, 0, 1, 0, 0, 0, 100, 100, 0, 0, 90, true, 0], 'MZ Move Picture: id, unused, origin, designation, x, y, scales, opacity, blend, frames, wait, easing');
-    assert.deepEqual(list[4], { code: 234, indent: 0, parameters: [3, [0, 0, 0, 0], 90, false] }, 'a move restates the colour, so an earlier tint can clear');
+    assert.deepEqual(list[2], { code: 234, indent: 0, parameters: [4, [255, 0, 0, 255], 0, false] });
+    assert.deepEqual(list[3].parameters, [3, 0, 1, 0, 0, 0, 100, 100, 0, 0, 90, false, 0], 'MZ Move Picture: id, unused, origin, designation, x, y, scales, opacity, blend, frames, wait, easing');
+    assert.deepEqual(list[4], { code: 234, indent: 0, parameters: [3, [0, 0, 0, 0], 90, true] }, 'a move restates the colour, so an earlier tint can clear');
     assert.deepEqual(list[5].parameters, [3]);
     assert.deepEqual(list[6].parameters, [[0, 0, 0, 255], 60, true]);
     assert.deepEqual(list[7].parameters, [[248, 248, 0, 120], 30, false]);

@@ -154,6 +154,44 @@
         return right < 0 ? null : { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
     };
 
+    // An empty band of rows taller than this share of a picture's art parts it (a flying creature drawn high over
+    // its own shadow); the band is drawn this share of the art tall.
+    L.GAP_SHARE = 0.12;
+    L.GAP_KEEP = 0.06;
+
+    /**
+     * The art of a picture as a unit stands as it, from its box (`trim`) in RGBA pixels `data`, `width` pixels a
+     * row: { width, height, parts: [{ y, height }], gap }. The parts are the box's rows to draw, top to bottom,
+     * `gap` empty rows apart; the tallest empty band, when it parts the art, is drawn `GAP_KEEP` of it tall, so a
+     * creature that flies stands just over its shadow and inside its own cell.
+     */
+    L.art = function(data, width, box) {
+        const whole = { width: box.width, height: box.height, parts: [{ y: box.y, height: box.height }], gap: 0 };
+        let start = -1, best = 0, bestAt = -1;
+        for (let y = box.y; y < box.y + box.height; y++) {
+            let empty = true;
+            for (let x = box.x, at = (y * width + box.x) * 4 + 3; x < box.x + box.width; x++, at += 4) if (data[at] > L.TRIM_ALPHA) { empty = false; break; }
+            if (empty) { if (start < 0) start = y; continue; }
+            if (start >= 0 && y - start > best) { best = y - start; bestAt = start; }
+            start = -1;
+        }
+        if (bestAt < 0 || best <= box.height * L.GAP_SHARE) return whole;
+        const gap = Math.max(1, Math.round(box.height * L.GAP_KEEP));
+        const parts = [{ y: box.y, height: bestAt - box.y }, { y: bestAt + best, height: box.y + box.height - bestAt - best }];
+        return { width: box.width, height: parts[0].height + gap + parts[1].height, parts, gap };
+    };
+
+    /** Draws `art` (`L.art`) from `source` (the whole picture: an image or a canvas) onto a 2D `context`, filling `w` by `h` pixels at (0, 0). */
+    L.drawArt = function(context, source, box, art, w, h) {
+        const sx = w / art.width, sy = h / art.height;
+        let at = 0;
+        for (const part of art.parts) {
+            context.drawImage(source, box.x, part.y, box.width, part.height, 0, Math.round(at * sy), w, Math.max(1, Math.round(part.height * sy)));
+            at += part.height + art.gap;
+        }
+        return sx;
+    };
+
     /** Turns the hue of RGBA pixels by `hue` degrees, in place: what a battler's hue does to its picture in a battle. */
     L.rotateHue = function(data, hue) {
         const turn = ((((Number(hue) || 0) % 360) + 360) % 360) / 360;

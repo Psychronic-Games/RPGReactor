@@ -216,14 +216,14 @@ class DatabaseClassEditor {
     /**
      * The level this class is actually being balanced for. A class that was
      * given one keeps it in `targetLevel`; otherwise it is the highest maxLevel
-     * among the actors assigned to it. Curves are STORED across the full 1..999
-     * engine domain, but authoring against 999 asks the designer for a number no
+     * among the actors assigned to it. Curves are STORED across 1..999 (further
+     * when the target is higher), but authoring against the level limit asks the designer for a number no
      * player in their game will ever reach — a party capped at 60 got a Lv999
      * anchor and no readout of the level that mattered. Falls back to the highest
      * maxLevel anywhere in the database, then to the MZ default of 99.
      */
     _targetLevelFor(classEntry) {
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const clamp = value => Math.max(2, Math.min(capLevel, Math.floor(Number(value))));
         const chosen = Number(classEntry?.targetLevel);
         if (Number.isFinite(chosen) && chosen >= 2) return clamp(chosen);
@@ -256,7 +256,7 @@ class DatabaseClassEditor {
      */
     _setTargetLevel(classEntry, value) {
         if (!classEntry) return 99;
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const raw = String(value ?? '').trim();
         const level = Math.floor(Number(raw));
         if (raw === '' || !Number.isFinite(level) || level < 2) delete classEntry.targetLevel;
@@ -265,13 +265,20 @@ class DatabaseClassEditor {
         return this._targetLevelFor(classEntry);
     }
 
+    /** The eight parameter colors of the current theme, as hex for the curve canvases. */
+    static paramColors() {
+        const stock = ['#ff3366', '#33ccff', '#ff9933', '#ffd700', '#9966ff', '#33ff99', '#ff66cc', '#66ffff'];
+        const resolve = typeof ThemeColors !== 'undefined' && typeof document !== 'undefined' ? ThemeColors.resolve : null;
+        return stock.map((color, i) => (resolve ? resolve(`--color-param-${i}`, color) : color));
+    }
+
     createParameterCurvesSection(classEntry) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
 
         const paramNames = globalThis.rrParamNames(tt);
-        const paramColors = ['#FF3366', '#33CCFF', '#FF9933', '#FFD700', '#9966FF', '#33FF99', '#FF66CC', '#66FFFF'];
+        const paramColors = DatabaseClassEditor.paramColors();
         const params = classEntry.params || [];
         const targetLevel = this._targetLevelFor(classEntry);
         const midLevel = Math.max(2, Math.min(targetLevel - 1, Math.round((1 + targetLevel) / 2)));
@@ -298,7 +305,7 @@ class DatabaseClassEditor {
             `;
         });
 
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const targetHint = Number.isFinite(Number(classEntry.targetLevel))
             ? tt('The level these curves are balanced for. Clear it to follow the actors of this class again.')
             : tt('The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.');
@@ -367,6 +374,16 @@ class DatabaseClassEditor {
      * take the runtime's own extrapolation, so what the dialog shows at Lv120
      * is what the game already gives there.
      */
+    /**
+     * The levels a class's curves store: CLASS_CURVE_LEVEL, or the class's target
+     * level when that is higher. Past the last stored level the runtime continues a
+     * curve by its last step, so a class stays small however high its actors go.
+     */
+    _curveLevels(classEntry) {
+        const stored = globalThis.RR_LIMITS?.CLASS_CURVE_LEVEL || 999;
+        return Math.max(stored, this._targetLevelFor(classEntry));
+    }
+
     _materializeCurve(values, capLevel) {
         const source = Array.isArray(values) ? values : [];
         const curve = new Array(capLevel + 1);
@@ -386,10 +403,10 @@ class DatabaseClassEditor {
      */
     showParameterCurvesDialog(classEntry, initialParamIdx = 0) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = this._curveLevels(classEntry);
         const targetLevel = this._targetLevelFor(classEntry);
         const paramNames = globalThis.rrParamNames(tt);
-        const paramColors = ['#FF3366', '#33CCFF', '#FF9933', '#FFD700', '#9966FF', '#33FF99', '#FF66CC', '#66FFFF'];
+        const paramColors = DatabaseClassEditor.paramColors();
         if (!classEntry.params) classEntry.params = [];
         const working = paramNames.map((_, idx) => this._materializeCurve(classEntry.params[idx], capLevel));
         const touched = new Set();
@@ -621,8 +638,8 @@ class DatabaseClassEditor {
     /**
      * Generate-Curve modal for a single parameter: user picks the Lv1 value, a
      * target level, the value at that target level, and a curve shape
-     * (exponent). The editor still writes the full 1..999 array the runtime
-     * reads — the target level only decides where the second anchor sits and
+     * (exponent). The editor writes the curve over `_curveLevels` (999, or the target
+     * level when higher), which the runtime reads — the target level only decides where the second anchor sits and
      * how far the preview plots, so the numbers on screen are levels the game
      * will actually reach. Levels past the target continue the same curve
      * rather than flat-lining, so raising an actor's maxLevel later still has
@@ -632,7 +649,7 @@ class DatabaseClassEditor {
      */
     showParameterCurveModal(classEntry, paramIdx, paramName, color, options = {}) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = this._curveLevels(classEntry);
         if (!classEntry.params) classEntry.params = [];
         if (!Array.isArray(classEntry.params[paramIdx]) || classEntry.params[paramIdx].length < 100) {
             const source = classEntry.params[paramIdx] || [];
@@ -757,7 +774,7 @@ class DatabaseClassEditor {
         lvMaxInput.addEventListener('input', e => syncLvMax(e.target.value));
         shapeSlider.addEventListener('input', e => syncShape(e.target.value));
 
-        const close = () => overlay.remove();
+        const close = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
         modal.querySelector('.rr-param-curve-close').addEventListener('click', close);
         modal.querySelector('.rr-pc-cancel').addEventListener('click', close);
         modal.querySelector('.rr-pc-apply').addEventListener('click', () => {
@@ -786,6 +803,9 @@ class DatabaseClassEditor {
             }
         });
         // A click on the backdrop no longer closes the dialog: close deliberately.
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: close, container: () => modal });
+        overlay._rrModalKeys?.enter();
 
         recompute();
     }
@@ -832,7 +852,7 @@ class DatabaseClassEditor {
      */
     _inferCurveExponent(values, targetLevel) {
         if (!values || values.length < 3) return 1;
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const requested = Math.floor(Number(targetLevel) || capLevel);
         const lastLevel = Math.max(2, Math.min(values.length - 1, capLevel, requested));
         const lv1 = Number(values[1]);
@@ -883,7 +903,7 @@ class DatabaseClassEditor {
 
         if (!values || values.length === 0) return;
 
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
         const plotLevel = Math.max(2, Math.min(capLevel, Math.floor(Number(options?.maxLevel) || capLevel)));
         let authoredLevel = Math.min(values.length - 1, plotLevel);
         while (authoredLevel > 1 && !Number.isFinite(Number(values[authoredLevel]))) authoredLevel--;
@@ -1113,7 +1133,7 @@ class DatabaseClassEditor {
             <div class="rr-modal-body">
                 <div class="db-form">
                     <label>${tt('Level')}</label>
-                    <input class="database-field-value learning-edit-level" type="number" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" value="${draft.level}">
+                    <input class="database-field-value learning-edit-level" type="number" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999}" value="${draft.level}">
                     <label>${tt('Skill')}</label>
                     <select class="database-field-value learning-edit-skill">${skillOptions}</select>
                     <label>${tt('Note')}</label>
@@ -1129,13 +1149,16 @@ class DatabaseClassEditor {
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
 
-        const close = () => overlay.remove();
+        const close = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
         modal.querySelector('.learning-edit-close').addEventListener('click', close);
         modal.querySelector('.learning-edit-cancel').addEventListener('click', close);
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: close, container: () => modal });
+        overlay._rrModalKeys?.enter();
         // A click on the backdrop no longer closes the dialog: close deliberately.
         modal.querySelector('.learning-edit-ok').addEventListener('click', () => {
             if (!isCurrent() || !overlay.isConnected) return;
-            const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+            const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 9999;
             draft.level = Math.max(1, Math.min(maxLevel, parseInt(modal.querySelector('.learning-edit-level').value) || 1));
             draft.skillId = parseInt(modal.querySelector('.learning-edit-skill').value) || draft.skillId;
             draft.note = modal.querySelector('.learning-edit-note').value;
@@ -1907,6 +1930,7 @@ class DatabaseClassEditor {
             if (updateFrame !== null) cancelAnimationFrame(updateFrame);
             updateFrame = null;
             overlay.remove();
+            overlay._rrModalKeys?.leave();
         };
 
         // Sync slider and number input
@@ -1959,6 +1983,9 @@ class DatabaseClassEditor {
 
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        // Escape closes this dialog only: the keys follow the focus into it.
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: closeExpModal, container: () => modal });
+        overlay._rrModalKeys?.enter();
 
         // Initialize
         updateTabDisplay();

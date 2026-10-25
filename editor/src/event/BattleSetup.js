@@ -607,15 +607,17 @@
     function trimmedArt(image, hue) {
         const whole = canvasOf(image.naturalWidth || image.width, image.naturalHeight || image.height), context = whole.getContext('2d', { willReadFrequently: true });
         context.drawImage(image, 0, 0);
-        let box = null;
+        let box = null, art = null;
         try {
             const pixels = context.getImageData(0, 0, whole.width, whole.height);
             if (hue) { Look().rotateHue(pixels.data, hue); context.putImageData(pixels, 0, 0); }
             box = Look().trim(pixels.data, whole.width, whole.height);
+            // A creature drawn high over its shadow stands just over it, as in the game.
+            if (box) art = Look().art(pixels.data, whole.width, box);
         } catch (error) { box = null; }
-        if (!box) return whole;
-        const cut = canvasOf(box.width, box.height);
-        cut.getContext('2d').drawImage(whole, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
+        if (!box || !art) return whole;
+        const cut = canvasOf(art.width, art.height);
+        Look().drawArt(cut.getContext('2d'), whole, box, art, art.width, art.height);
         return cut;
     }
 
@@ -806,7 +808,7 @@
             if (look.kind === 'character') {
                 const image = await loadImage(imageUrl('characters', look.characterName));
                 if (image) {
-                    const name = String(look.characterName).split('/').pop(), big = /^[!$]+/.test(name) && name.match(/^[!$]+/)[0].includes('$');
+                    const name = String(look.characterName).split('/').pop(), big = /^[!$]+/.test(name) && name.match(/^[!$]+/)[0].includes('$') && !/\[8D\]/i.test(name);
                     const fw = image.width / (big ? 3 : 12), fh = image.height / (big ? 4 : 8);
                     const index = big ? 0 : look.characterIndex || 0, row = (facing - 2) / 2;
                     const canvas = canvasOf(fw, fh);

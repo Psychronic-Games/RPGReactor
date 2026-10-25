@@ -6,9 +6,18 @@ class VehicleCommandEditor {
     static build(name, args, indent = 0) {
         return { code: 357, indent, parameters: ['RPGReactor', name, VehicleCommandEditor.LABELS[name], { ...args }] };
     }
-    /** The Database's vehicles as `{ value, label }`, each copy of one its own entry: a command names one by its identity. */
+    /**
+     * The Database's vehicles a party can get on, as `{ value, label }`, each copy of one its own entry: a command
+     * names one by its identity. A blank record with no name and no Starting Position is left out.
+     */
     static vehicleChoices(vehicles) {
-        return RRVehicles.placedVehicles(vehicles).map(entry => ({ value: entry.value, label: entry.label }));
+        const list = Array.isArray(vehicles) ? vehicles : [];
+        return RRVehicles.placedVehicles(list).filter(entry => {
+            const record = list[entry.type];
+            if (String(record && record.name || '').trim()) return true;
+            const start = RRVehicles.startsOf(record).find(placed => placed.copy === entry.copy);
+            return !!start && start.mapId > 0;
+        }).map(entry => ({ value: entry.value, label: entry.label }));
     }
     static STOCK = [['boat', 'Boat'], ['ship', 'Ship'], ['airship', 'Airship']];
     /** The events of a map that are vehicles (the Event Editor's Vehicle row), as `{ value, label }`: named by their event number. */

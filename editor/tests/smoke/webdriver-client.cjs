@@ -40,6 +40,17 @@ async function poll(check, options = {}) {
     throw error;
 }
 
+/**
+ * On Linux, the desktop session's display a harness would open on, or '' when it would open
+ * on another (a headless display, CI's xvfb). NW.js follows WAYLAND_DISPLAY when it is set.
+ */
+function desktopDisplay(env, platform = process.platform) {
+    if (platform !== 'linux' || env.RR_HARNESS_ON_DESKTOP === '1') return '';
+    if (env.WAYLAND_DISPLAY) return `WAYLAND_DISPLAY=${env.WAYLAND_DISPLAY}`;
+    if (/^:0(\.\d+)?$/.test(env.DISPLAY || '')) return `DISPLAY=${env.DISPLAY}`;
+    return '';
+}
+
 class WebDriverClient {
     constructor(driverPath, options = {}) {
         this.driverPath = driverPath;
@@ -57,6 +68,10 @@ class WebDriverClient {
     }
 
     async start() {
+        const onDesktop = desktopDisplay(this.env);
+        if (onDesktop) {
+            throw new Error(`Refusing to open a harness window on the desktop (${onDesktop}). Start a headless display with editor/tests/perf/headless-display.sh and run with: env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 DISPLAY=<its display> XAUTHORITY= ... Set RR_HARNESS_ON_DESKTOP=1 to open it on the desktop on purpose.`);
+        }
         if (!this.port) this.port = await getFreePort(this.host);
         this.process = spawn(this.driverPath, [`--port=${this.port}`, ...this.driverArgs], {
             env: this.env,
@@ -224,4 +239,4 @@ async function reportSmokeFailure(title, error, driver, probeScript) {
     }
 }
 
-module.exports = { WebDriverClient, getFreePort, poll, reportSmokeFailure };
+module.exports = { WebDriverClient, getFreePort, poll, reportSmokeFailure, desktopDisplay };

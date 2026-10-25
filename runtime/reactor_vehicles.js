@@ -576,6 +576,12 @@
                 if (event._rrIdentity) event.refresh();
                 const id = V.idOf(event), entry = store ? store.at[id] : null;
                 if (!entry) continue;
+                // Moved by Set Vehicle Location before its map was entered: its type, home and heading are its event's.
+                if (entry.pending) {
+                    entry.type = event._rrVehicle; entry.home = [authored[i].x, authored[i].y];
+                    if (!Number.isFinite(entry.yaw)) entry.yaw = round3(V.degrees(event._rrYaw));
+                    delete entry.pending;
+                }
                 if (entry.type !== event._rrVehicle || !entry.home || (!event._rrIdentity && (entry.home[0] !== authored[i].x || entry.home[1] !== authored[i].y))) {
                     delete store.at[id];
                 } else if (entry.map !== map._mapId) {
@@ -1047,16 +1053,19 @@
     };
 
     /**
-     * Puts a vehicle of the Vehicles page (`identity`, `0:<number>`) on tile (x, y) of any map, wherever it is now:
-     * what Set Vehicle Location does for it. On this map it is moved (`setLocation`); from this map to another it
-     * leaves and waits there; from another map to this one it appears. Its heading is kept. False for one that is
-     * ridden, that the Database does not have, or that does not fit there.
+     * Puts a vehicle on tile (x, y) of any map, wherever it is now: what Set Vehicle Location does for it. A vehicle
+     * of the Vehicles page is named `0:<number>`, a map's vehicle event `<mapId>:<eventId>`. On this map it is moved;
+     * from this map to another it leaves and waits there; from another map to this one it appears. Its heading is
+     * kept. False for one that is ridden, that the Database or the map does not have, or that does not fit there. A
+     * vehicle event never seen since the game began (its map's data not read) can be moved on its own map only: it
+     * stands there when that map is entered.
      */
     V.moveTo = function(identity, mapId, x, y) {
         const map = typeof $gameMap !== "undefined" ? $gameMap : null, data = mapData();
         identity = String(identity == null ? "" : identity).trim();
         mapId = Math.floor(number(mapId)); x = Math.floor(number(x)); y = Math.floor(number(y));
-        if (!map || !/^0:\d+$/.test(identity) || !(mapId > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (!map || !/^\d+:\d+$/.test(identity) || !(mapId > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        const homeMap = Number(identity.split(":")[0]);
         const live = V.list().find(event => V.idOf(event) === identity) || null;
         if (live && (live._rrBoarded || live === carried)) return false;
         const store = registry(true);
@@ -1080,11 +1089,14 @@
             data.events[id] = authored;
             const event = map._events[id] = new Game_Event(map._mapId, id);
             if (!mark(event, authored)) { map._events[id] = null; data.events[id] = null; return false; }
+            // Its home is where it was placed first, wherever it is put now (as when it arrives with a rider).
+            if (entry && entry.home) event._rrHome = [entry.home[0], entry.home[1], Number.isFinite(entry.yaw) ? entry.yaw : V.degrees(event._rrYaw)];
             event.refresh();
             place(event, x, y, undefined, entry && Number.isFinite(entry.yaw) ? entry.yaw : V.degrees(event._rrYaw));
             event._reactorGround = undefined; event._reactorAlt = undefined;
             event._through = pageThrough(event);
-            // (The map's own list of its events is made once a frame: an event made now is not in it until the next.)
+            // (The map's own list of its events is made once a frame: it is made again now, with this event in it.)
+            if (map.refreshEventList) map.refreshEventList();
             rebuild(map);
             if (kept.list.indexOf(event) < 0) { kept.list.push(event); kept.board.push("ok"); kept.keys.push(""); kept.types.push(V.type(event._rrVehicle)); }
             note(event, false);
@@ -1096,15 +1108,28 @@
         // To another map: it waits there. One that stands on this map leaves it.
         let entry = store.at[identity];
         if (live && !live._erased) { note(live, false); entry = store.at[identity]; }
+        if (!entry && homeMap > 0) {
+            // A map's vehicle event that is at home on a map not entered since: it is put on its own map, and takes
+            // its type and home from its event when that map is entered (`enterMap`).
+            if (mapId !== homeMap) return false;
+            store.at[identity] = { map: mapId, x, y, z: null, yaw: null, pending: true };
+            offer.stamp = -1;
+            return true;
+        }
         if (!entry) {
             const authored = models().placementOf && models().placementOf(root.$dataReactorVehicles, identity);
             if (!authored) return false;
             entry = store.at[identity] = { map: mapId, x, y, z: null, yaw: authored.rrVehicle.yaw, type: authored.rrVehicle.type, home: [authored.x, authored.y] };
         }
         if (!entry.event) {
-            const authored = (live && live._rrAuthored) || (models().placementOf && models().placementOf(root.$dataReactorVehicles, identity));
+            const authored = (live && (live._rrAuthored || live.event())) || (models().placementOf && models().placementOf(root.$dataReactorVehicles, identity));
             if (authored) entry.event = copy(authored);
+            // Its 3D look goes with it, as it does when it is ridden to another map.
+            const looks = data && data.reactor3d && data.reactor3d.events;
+            if (live && !entry.models && looks && looks[live._eventId]) entry.models = copy(looks[live._eventId]);
         }
+        // Away from its own map with nothing to make it of there: it stays where it is.
+        if (!entry.event && mapId !== homeMap) return false;
         Object.assign(entry, { map: mapId, x, y, z: null });
         delete entry.gone;
         if (live && !live._erased) { live._rrAway = true; live.erase(); rebuild(map); }
@@ -2264,6 +2289,8 @@
             }
         }
     };
+    /** The same for a map not yet entered (`$dataMap` being that map's data): a neighbor's parked vehicles stand at the numbers its entry gives them (Reactor3D.Neighbors). */
+    V.addVisitingVehicles = mapId => visitingVehicles({ _mapId: mapId });
 
     const installMap = function() {
         if (typeof Game_Map === "undefined" || Game_Map.prototype.vehicle.__rrVehicles) return;
@@ -2509,7 +2536,8 @@
             const start = Game_Fight.prototype.start;
             Game_Fight.prototype.start = function(options) {
                 const p = player();
-                const riding = !this._active && p && p._vehicleType === "reactor";
+                // (A battle kept on another map is not running here: it gives way to this one.)
+                const riding = !(this._active && this.isHere()) && p && p._vehicleType === "reactor";
                 // A battle fought on a grid keeps the party in the saddle (reactor_vehicles_mount.js); any other puts it on foot.
                 const mounted = riding && V.Mount && V.Mount.keeps(options);
                 if (mounted) halt();

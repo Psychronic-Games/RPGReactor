@@ -410,7 +410,7 @@
                 while (lights.some(l => l && l.id === 'light' + nextLight)) nextLight++;
                 lights.push({ id: 'light' + nextLight++, type: 'point', x: x + 0.5, y: y + 0.5, height: Math.round(z * 100) / 100, yaw: 0, pitch: 0,
                     radius: Number(fx.radius) > 0 ? Number(fx.radius) : 6, angle: 70, width: 0.08, color: String(fx.color || '#9fd8ff'), intensity: Number.isFinite(Number(fx.intensity)) ? Number(fx.intensity) : 1.2,
-                    occlude: true, shadow: false, on: true, body: false, tag, attach: null, flicker: 0, pulse: null, ...(group ? { structure: group } : {}) });
+                    occlude: true, shadow: true, on: true, body: false, tag, attach: null, flicker: 0, pulse: null, ...(group ? { structure: group } : {}) });
             } else if (fx.type === 'animation' && Number(fx.animation) > 0) {
                 events.push({ key: fx.key, name: fx.name || 'effect', template: '', direction: 2, at: [x, y], animation: Math.floor(Number(fx.animation)) });
             }

@@ -157,7 +157,7 @@ test('a camera stands back only as far as the world leaves it', () => {
     assert.equal(R.cameraArm(mapWith([]), focus, { x: 12.5, y: 2, z: 5.5 }), 7 * Math.hypot(1, 0.1 / 7), 'an empty map: the whole way');
 });
 
-test('the cutaway opens a corridor only where something built hides the character, and in a battle fades scenery but no character', t => {
+test('the cutaway opens a corridor only where something built hides a player inside a building, and fades scenery but no character', t => {
     const scene = Object.create(R.MapScene.prototype);
     const camera = new THREE.PerspectiveCamera();
     const shared = R.cutawayUniforms();
@@ -167,18 +167,27 @@ test('the cutaway opens a corridor only where something built hides the characte
     scene.updateCutaway(camera, rim, { _realX: 8, _realY: 8 });
     assert.equal(shared.rrCutFocusCount.value, 0, 'the eye sees over a rim: no corridor through it');
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS, 'the cut itself stays live');
-    // A wall between them is cover.
-    const walled = mapWith([piece(1, 'wall', 7, 11, 0), piece(2, 'wall', 8, 11, 0), piece(3, 'wall', 9, 11, 0)]);
+    // Walking outside, a building between the camera and the player stays whole: no corridor.
+    const street = mapWith([piece(1, 'wall', 7, 11, 0), piece(2, 'wall', 8, 11, 0), piece(3, 'wall', 9, 11, 0)]);
+    scene.updateCutaway(camera, street, { _realX: 8, _realY: 8 });
+    assert.equal(shared.rrCutFocusCount.value, 0, 'outside, a wall in the way is not seen through');
+    // Inside a building (a ceiling over the player), a wall between them is cover.
+    const walled = mapWith([piece(1, 'wall', 7, 11, 0), piece(2, 'wall', 8, 11, 0), piece(3, 'wall', 9, 11, 0), piece(4, 'floor', 8, 8, R.PIECE_STOREY)]);
     scene.updateCutaway(camera, walled, { _realX: 8, _realY: 8 });
-    assert.equal(shared.rrCutFocusCount.value, 1, 'a wall in the way opens');
+    assert.equal(shared.rrCutFocusCount.value, 1, 'inside, a wall in the way opens');
     assert.deepEqual(Array.from(shared.rrCutFoci.value.slice(0, 3)), [8.5, 1.5, 8.5]);
     // A wall at the character's back hides nothing of it.
     const behind = mapWith([piece(1, 'wall', 8, 7, 0)]);
     scene.updateCutaway(camera, behind, { _realX: 8, _realY: 8 });
     assert.equal(shared.rrCutFocusCount.value, 0);
-    // Company: the one behind the wall is kept in sight, the one in the open is left alone.
+    // Company: with the player outside nothing opens, a follower behind a wall included.
     const hidden = { _realX: 8, _realY: 8 }, open = { _realX: 12, _realY: 13 };
     scene.updateCutaway(camera, walled, open, [hidden]);
+    assert.equal(shared.rrCutFocusCount.value, 0, 'the player walking outside: no corridor for anyone');
+    // In a battle here the corridors open outside too: the one behind the wall is kept in sight.
+    const beforeFight = global.$gameFight;
+    global.$gameFight = { isHere: () => true };
+    try { scene.updateCutaway(camera, walled, open, [hidden]); } finally { global.$gameFight = beforeFight; }
     assert.equal(shared.rrCutFocusCount.value, 1);
     assert.deepEqual(Array.from(shared.rrCutFoci.value.slice(0, 3)), [8.5, 1.5, 8.5], 'the first corridor is the hidden one\'s');
     // Who the picture shows through a wall is in plain view (a number on it is shown); who stands in the open has
@@ -196,13 +205,13 @@ test('the cutaway opens a corridor only where something built hides the characte
     assert.equal(R.cutawayShows(null, 13.5, 8.5), false, 'off it');
     box[0] = box[1] = box[2] = box[3] = 0;
     assert.equal(R.cutawayShows(null, 8.5, 8.5), false);
-    // A placed model thins near the line from the eye to the player. In a battle the characters' own models are
-    // marked as bodies, which the fade passes by; scenery still thins.
+    // A placed model thins near the line from the eye to the player. The characters' own models are marked as
+    // bodies, which the fade passes by, battle or not; scenery still thins.
     const { source3D } = require('./helpers/runtime-3d-source.cjs');
     const has = (pattern, why) => assert.ok(pattern.test(source3D()), why);
-    // (A body counts in a battle only, 1; a ridden vehicle is its rider's body always, 2.)
-    has(/"if \(rrCutRadius > 0\.0 && max\(rrCutBody \* rrCutBattle, rrCutBody - 1\.0\) < 0\.5 && vRRWorldPos\.y > rrCutFocus\.y - 1\.2\) \{"/, 'the sight-line fade asks the material whether it is a body, and counts that in a battle only unless it is ridden');
-    has(/"if \(max\(rrCutBody \* rrCutBattle, rrCutBody - 1\.0\) < 0\.5 && vRRWorldPos\.y > rrFightStump\) discard;"/, 'the cut that takes scenery out of a Tactical battle\'s way passes a body by too: a bystander is no scenery');
+    // (A character's body, 1; a ridden vehicle, its rider's body while ridden, 2.)
+    has(/"if \(rrCutRadius > 0\.0 && rrCutBody < 0\.5 && vRRWorldPos\.y > rrCutFocus\.y - 1\.2\) \{"/, 'the sight-line fade asks the material whether it is a body: a follower behind the player is never cut part-way');
+    has(/"if \(rrCutBody < 0\.5 && vRRWorldPos\.y > rrFightStump\) discard;"/, 'the cut that takes scenery out of a Tactical battle\'s way passes a body by too: a bystander is no scenery');
     has(/shader\.uniforms\.rrCutBody = material\.userData\.rrCutBody \|\| \(material\.userData\.rrCutBody = \{ value: 0 \}\);/, 'every model material carries the mark, off until set');
     has(/uniform float rrCutBody;\\nuniform float rrCutBattle;/, 'and the shader is told whether a battle runs');
     const model = () => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
@@ -217,15 +226,15 @@ test('the cutaway opens a corridor only where something built hides the characte
         global.$gameFight = undefined;
         for (let i = 0; i < R.CUTAWAY_BODY_FRAMES + 2; i++) scene.updateCutaway(camera, walled, player);
         assert.deepEqual(Array.from(shared.rrCutFocus.value), [8.5, 1.5, 8.5], 'the sight line ends at the player');
-        assert.deepEqual([marked(player), marked(raider), marked(tree)], [0, 0, 0], 'on the map nothing is marked: the fade is as it was');
+        assert.deepEqual([marked(player), marked(follower), marked(raider), marked(tree)], [1, 1, 1, 0], 'on the map the characters are bodies too; scenery is not');
         assert.equal(shared.rrCutBattle.value, 0);
         global.$gameFight = { isHere: () => false };
         for (let i = 0; i < R.CUTAWAY_BODY_FRAMES + 2; i++) scene.updateCutaway(camera, walled, player);
-        assert.equal(marked(raider), 0, 'a battle kept on another map changes nothing here');
-        assert.equal(shared.rrCutBattle.value, 0);
+        assert.equal(shared.rrCutBattle.value, 0, 'a battle kept on another map is not here');
         global.$gameFight = { isHere: () => true };
+        holders.set(late, { object: model() });
         scene.updateCutaway(camera, walled, player);
-        assert.deepEqual([marked(player), marked(raider), shared.rrCutBattle.value], [1, 1, 1], 'from the battle\'s first frame, not half a second in');
+        assert.deepEqual([marked(late), shared.rrCutBattle.value], [1, 1], 'a battle looks again from its first frame, not half a second in');
         for (let i = 0; i < R.CUTAWAY_BODY_FRAMES + 2; i++) scene.updateCutaway(camera, walled, player);
         assert.deepEqual([marked(player), marked(follower), marked(raider)], [1, 1, 1], 'in a battle the player, the followers and every character are bodies: never dithered');
         assert.equal(marked(tree), 0, 'scenery is not: a bough in the way still thins');
@@ -241,9 +250,11 @@ test('the cutaway opens a corridor only where something built hides the characte
         assert.deepEqual(Array.from(shared.rrCutFocus.value), [8.5, 1.5, 8.5]);
         assert.equal(shared.rrCutFocusCount.value, 1, 'walls still open for who they hide');
         // A model that arrives later (a unit spawned, a model still loading) is found on a later look.
-        holders.set(late, { object: model() });
+        const later = { _realX: 6, _realY: 12, eventId: () => 6 };
+        global.$gameMap = { events: () => [raider, tree, later] };
+        holders.set(later, { object: model() });
         for (let i = 0; i < R.CUTAWAY_BODY_FRAMES + 2; i++) scene.updateCutaway(camera, walled, player);
-        assert.equal(marked(late), 1);
+        assert.equal(marked(later), 1);
         // One mark per material, as the shader reads it; a marked model is not walked again.
         assert.equal(R.cutawayMarkBody(raider), false);
         // A map with nothing built has bodies too (a bystander on a tactical battle's ground), and a view that
@@ -254,11 +265,10 @@ test('the cutaway opens a corridor only where something built hides the characte
         for (let i = 0; i < R.CUTAWAY_BODY_FRAMES + 2; i++) scene.updateCutaway(camera, bare, raider);
         assert.deepEqual([marked(unmarked), marked(lead)], [1, 1]);
         assert.equal(shared.rrCutBattle.value, 1);
-        // The battle over: the marks stay on their materials and count for nothing, so a character standing in
-        // front of the map's camera thins again as it did before any battle.
+        // The battle over: the marks stay, and a character is still no cover on the map.
         global.$gameFight = { isHere: () => false };
         scene.updateCutaway(camera, walled, player);
-        assert.equal(shared.rrCutBattle.value, 0, 'the map\'s own fade is the map\'s again');
+        assert.equal(shared.rrCutBattle.value, 0);
         assert.equal(marked(raider), 1);
         global.$gameFight = undefined;
         scene.updateCutaway(camera, bare, player);

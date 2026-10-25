@@ -10,7 +10,15 @@
  *
  *   node tests/perf/nw-game-profile.cjs [--project=<dir>] [--seconds=6]
  *        [--nw-root=<dir>] [--shot=<png>] [--setup=<script.js>] [--pixel-ratio=<n>]
- *        [--render-node=/dev/dri/renderD129]
+ *        [--render-node=/dev/dri/renderD129] [--profile-dir=<dir>]
+ *
+ * --profile-dir keeps the browser profile there (made when missing) instead of
+ * a fresh one per run: the second launch on it is the warm one, with the
+ * shader and code caches the first left behind.
+ *
+ * Boot timing: "boot" reports when the page loaded, when Scene_Boot and the
+ * first scene after it started (ms from navigation), and "opened" reports
+ * mapMs, New Game to the map's first drawn frame.
  *
  * --pixel-ratio sets Graphics.maxCanvasPixelRatio before the map loads, to
  * compare the stretched-window cost. --setup runs an async WebDriver script
@@ -31,6 +39,7 @@ const outDir = path.resolve(option("out", os.tmpdir()));
 const SECONDS = Number(option("seconds", 6));
 const PIXEL_RATIO = option("pixel-ratio", null);
 const RENDER_NODE = option("render-node", null);
+const PROFILE_DIR = option("profile-dir", null);
 const exe = process.platform === "win32" ? ".exe" : "";
 
 async function cdp(driver, cmd, params = {}) {
@@ -45,7 +54,7 @@ async function main() {
         await driver.createSession({
             browserName: "chrome",
             "goog:chromeOptions": {
-                args: [`nwapp=${projectRoot}`, `user-data-dir=${path.join(tempRoot, "profile")}`, "no-first-run", "no-default-browser-check",
+                args: [`nwapp=${projectRoot}`, `user-data-dir=${PROFILE_DIR ? path.resolve(PROFILE_DIR) : path.join(tempRoot, "profile")}`, "no-first-run", "no-default-browser-check",
                     // An occluded window stops getting animation frames, and the owner's editor is usually in front of this one.
                     "disable-backgrounding-occluded-windows", "disable-renderer-backgrounding", "disable-background-timer-throttling",
                     ...(RENDER_NODE ? ["render-node-override=" + RENDER_NODE] : []),
@@ -54,10 +63,25 @@ async function main() {
             },
         });
         await driver.setScriptTimeout(120000);
+        // Scene starts, timed from navigation. The window has usually just
+        // loaded its scripts when the session opens; a scene already running
+        // by then is reported as missed.
+        await driver.execute(`const t = window.__rrBootTimes = { scenes: [] };
+            const current = window.SceneManager && SceneManager._scene; let last = current && current._started ? current : null;
+            t.missed = last ? last.constructor.name : null;
+            const poll = () => { const s = window.SceneManager && SceneManager._scene;
+                if (s && s !== last && s._started) { last = s; t.scenes.push([s.constructor.name, +performance.now().toFixed(1)]); }
+                if (!t.scenes.some(([name]) => name !== "Scene_Boot")) setTimeout(poll, 2); };
+            poll();`);
         // Past Scene_Boot: it sizes the screen and loads the fonts, and a
         // map started before it ran draws into a 0x0 surface — a black window.
         await driver.waitForScript("return Boolean(window.SceneManager && SceneManager._scene && !(SceneManager._scene instanceof Scene_Boot) && Graphics.width > 0);", [], { timeout: 90000, description: "title screen" });
 
+        await driver.waitForScript("return window.__rrBootTimes.scenes.some(([name]) => name !== 'Scene_Boot');", [], { timeout: 10000, description: "title start" }).catch(() => {});
+        const boot = await driver.execute(`const n = performance.getEntriesByType("navigation")[0], t = window.__rrBootTimes;
+            return { loadMs: n ? +n.loadEventStart.toFixed(1) : null, scenes: t.scenes, missed: t.missed,
+                titleMs: (t.scenes.find(([name]) => name !== "Scene_Boot") || [])[1] || null, heapMb: Math.round(performance.memory.usedJSHeapSize / 1048576) };`);
+        console.log("boot", JSON.stringify(boot));
         const opened = await driver.executeAsync(`
             const pixelRatio = arguments[0]; const done = arguments[arguments.length - 1];
             (async () => {
@@ -65,18 +89,21 @@ async function main() {
                 // The scene only updates while the window has focus, and this window rarely does.
                 SceneManager.isGameActive = () => true;
                 DataManager.setupNewGame();
+                const mapStart = performance.now();
                 SceneManager.goto(Scene_Map);
                 const t0 = Date.now();
                 while (Date.now() - t0 < 60000) {
                     const scene = SceneManager._scene;
                     if (scene && scene instanceof Scene_Map && scene.isActive && scene.isActive() && $gameMap && $gameMap.mapId() > 0) break;
-                    await new Promise(r => setTimeout(r, 100));
+                    await new Promise(r => setTimeout(r, 2));
                 }
+                await new Promise(r => requestAnimationFrame(r));
+                const mapMs = +(performance.now() - mapStart).toFixed(1);
                 await new Promise(r => setTimeout(r, 4000));
                 const vp = typeof Reactor3D !== "undefined" && Reactor3D.viewport ? Reactor3D.viewport() : null;
                 const spriteset = SceneManager._scene._spriteset;
                 const passes = spriteset ? ["_reactor3dBelow", "_reactor3dAbove", "_reactor3dLights"].filter(k => spriteset[k]) : [];
-                done({ mapId: $gameMap.mapId(), scene: SceneManager._scene && SceneManager._scene.constructor.name,
+                done({ mapMs, mapId: $gameMap.mapId(), scene: SceneManager._scene && SceneManager._scene.constructor.name,
                     is3D: !!(spriteset && spriteset._reactor3dBelow), shared: vp && vp.isShared ? vp.isShared() : null, passes,
                     width: Graphics.width, height: Graphics.height, realScale: Graphics._realScale, canvasPixelRatio: Graphics.canvasPixelRatio ? Graphics.canvasPixelRatio() : null,
                     stretch: Graphics._stretchEnabled, lights: typeof Reactor3D !== "undefined" && Reactor3D.lights ? Reactor3D.lights().length : null,

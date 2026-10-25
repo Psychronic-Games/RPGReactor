@@ -35,27 +35,29 @@ class EventPageEditor {
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
         container.style.gap = '4px';
+        container.style.overflow = 'hidden';
 
-        // Short windows must scroll the settings instead of collapsing the image.
-        container.style.overflowY = 'auto';
-        container.style.overflowX = 'hidden';
+        // Options, Priority and Trigger stay in view at any height: the sections above them scroll on their own.
+        const settings = document.createElement('div');
+        settings.className = 'event-page-settings rr-accent-scrollbar';
+        settings.style.cssText = 'display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;';
+        container.appendChild(settings);
 
         // Conditions Section (full width)
         const conditionsSection = this.createConditionsSection(page, pageIndex);
         conditionsSection.style.flexShrink = '0';
-        container.appendChild(conditionsSection);
+        settings.appendChild(conditionsSection);
 
-        // Image Section (full width)
+        // Image Section (full width): a picture takes the height there is; an empty box stays small.
         const imageSection = this.createImageSection(page, pageIndex);
-        imageSection.style.flex = '1 0 180px';
-        imageSection.style.minHeight = '180px';
         imageSection.style.overflow = 'hidden';
-        container.appendChild(imageSection);
+        this._sizeImageSection(imageSection, page, pageIndex);
+        settings.appendChild(imageSection);
 
         // Autonomous Movement Section (full width)
         const movementSection = this.createMovementSection(page, pageIndex);
         movementSection.style.flexShrink = '0';
-        container.appendChild(movementSection);
+        settings.appendChild(movementSection);
 
         // Row: Options + (Priority + Trigger stacked)
         const row = document.createElement('div');
@@ -67,6 +69,7 @@ class EventPageEditor {
 
         // Priority and Trigger stacked in right column
         const priorityTriggerColumn = document.createElement('div');
+        priorityTriggerColumn.className = 'event-priority-trigger';
         priorityTriggerColumn.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px;';
         const prioritySection = this.createPrioritySection(page, pageIndex);
         const triggerSection = this.createTriggerSection(page, pageIndex);
@@ -185,10 +188,7 @@ class EventPageEditor {
                         style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;"
                         ${!conditions.selfSwitchValid ? 'disabled' : ''}>
                     <option value="" ${!conditions.selfSwitchValid ? 'selected' : ''}></option>
-                    <option value="A" ${conditions.selfSwitchCh === 'A' ? 'selected' : ''}>A</option>
-                    <option value="B" ${conditions.selfSwitchCh === 'B' ? 'selected' : ''}>B</option>
-                    <option value="C" ${conditions.selfSwitchCh === 'C' ? 'selected' : ''}>C</option>
-                    <option value="D" ${conditions.selfSwitchCh === 'D' ? 'selected' : ''}>D</option>
+                    ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(ch => `<option value="${ch}" ${conditions.selfSwitchCh === ch ? 'selected' : ''}>${ch}</option>`).join('')}
                 </select>
             </div>
 
@@ -355,11 +355,11 @@ class EventPageEditor {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 3px;flex:1;min-height:0;">
-                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; width: 100%;flex:1;min-height:88px;">
+                <div class="image-preview-box" style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; width: 100%;flex:1;min-height:88px;">
                     <canvas class="character-preview-canvas"
                             width="192"
                             height="88"
-                            style="image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; display: block; width: 100%; height: 100%;"></canvas>
+                            style="image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; display: block; width: 100%; height: 100%; object-fit: contain;"></canvas>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 4px; min-width: 0; flex-shrink: 0;">
@@ -422,6 +422,11 @@ class EventPageEditor {
         }
 
         this._disposeModelPreview();
+        // A model preview sizes itself (watchSize); a picture is drawn again for the new size.
+        this._redrawOnResize(canvas, () => {
+            if (this._modelPreviewRenderer && this._modelPreviewRenderer.domElement === canvas) return;
+            this.renderCharacterPreview(section, page);
+        });
 
         const row = RRVehicles.vehicleOf(this.parentEditor.currentEvent);
         const sheet = row && this.databaseManager.data.vehicles?.[row.type]?.sheet;
@@ -589,12 +594,39 @@ class EventPageEditor {
         img.src = imgPath;
     }
 
+    /** Whether the Image box has nothing to show: no picture, tile, model, vehicle or unit look. */
+    _imageIsEmpty(page, pageIndex) {
+        const image = page.image || {};
+        if (image.characterName || image.tileId > 0) return false;
+        const model = this.pageModelSpec(pageIndex);
+        if ((model && model.name) || this.vehicleModelSpec(pageIndex)) return false;
+        const event = this.parentEditor && this.parentEditor.currentEvent;
+        if (typeof RRVehicles !== 'undefined' && RRVehicles.vehicleOf(event)) return false;
+        return !this.unitLook(pageIndex);
+    }
+
+    /** An empty Image box is a short strip; one with something to show grows into the height there is. */
+    _sizeImageSection(section, page, pageIndex) {
+        let empty = false;
+        // Only the box's size hangs on this: a look that cannot be worked out keeps the full box.
+        try { empty = this._imageIsEmpty(page, pageIndex); } catch (error) { empty = false; }
+        section.style.flex = empty ? '0 0 auto' : '1 0 140px';
+        section.style.minHeight = empty ? '0' : '140px';
+        const box = section.querySelector('.image-preview-box');
+        if (box) {
+            box.style.flex = empty ? '0 0 40px' : '1';
+            box.style.height = empty ? '40px' : '';
+            box.style.minHeight = empty ? '40px' : '88px';
+        }
+    }
+
     /** Draws the Image box again: the unit row changed what the event stands as. */
     refreshCharacterPreview() {
         const section = document.querySelector('.event-page-config .image-section');
         const editor = this.parentEditor;
         const page = editor && editor.currentEvent && editor.currentEvent.pages[editor.currentPageIndex];
         if (!section || !page) return;
+        this._sizeImageSection(section, page, editor.currentPageIndex);
         // A canvas that drew a model cannot draw a picture afterwards: each look starts on a canvas of its own.
         const canvas = section.querySelector('.character-preview-canvas');
         if (canvas) {
@@ -1201,6 +1233,29 @@ class EventPageEditor {
         // this selection to the map alongside the rest of the event draft.
         // An Auto size follows the model.
         this.parentEditor.refreshAutoSize?.();
+    }
+
+    /**
+     * The preview is drawn for its box's size; when the box changes (the editor's window resized,
+     * or moved to another window) it is drawn again for the new one, in proportion. Until then
+     * `object-fit: contain` keeps the old drawing in proportion too.
+     */
+    _redrawOnResize(canvas, redraw) {
+        canvas._rrRedraw = redraw;
+        if (canvas._rrSizeWatch) return;
+        const view = (canvas.ownerDocument && canvas.ownerDocument.defaultView) || window;
+        const Observer = view.ResizeObserver || (typeof ResizeObserver === 'function' ? ResizeObserver : null);
+        if (!Observer) return;
+        let settle = null;
+        canvas._rrSizeWatch = new Observer(() => {
+            const box = canvas.getBoundingClientRect();
+            if (Math.abs(Math.round(box.width) - canvas.width) < 2 && Math.abs(Math.round(box.height) - canvas.height) < 2) return;
+            clearTimeout(settle);
+            settle = setTimeout(() => {
+                if (canvas.isConnected && box.width > 0 && box.height > 0 && canvas._rrRedraw) canvas._rrRedraw();
+            }, 150);
+        });
+        canvas._rrSizeWatch.observe(canvas);
     }
 
     _fitPreviewCanvas(canvas) {

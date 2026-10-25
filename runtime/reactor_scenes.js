@@ -314,6 +314,11 @@ Scene_Boot.prototype.loadGameFonts = function() {
     const advanced = $dataSystem.advanced;
     FontManager.load("rmmz-mainfont", advanced.mainFontFilename);
     FontManager.load("rmmz-numberfont", advanced.numberFontFilename);
+    // Register both bitmap families before any windows (including restored saves) draw.
+    const fonts = $dataSystem.rrLegacyFonts;
+    for (const id of [0, 1]) {
+        if (fonts && fonts[id]) FontManager.load("rmmz-legacy-font-" + id, fonts[id].filename);
+    }
 };
 
 Scene_Boot.prototype.isPlayerDataLoaded = function() {
@@ -753,6 +758,8 @@ Scene_Map.prototype.onMapLoaded = function() {
         $gamePlayer.performTransfer();
     }
     this.createDisplayObjects();
+    // The effects this map can play load behind the fade (the scene waits for them): EffectManager.preloadMap.
+    try { EffectManager.preloadMap($dataMap); } catch (error) { console.warn("EffectManager: the map's effects could not be loaded ahead.", error); }
 };
 
 Scene_Map.prototype.onTransfer = function() {
@@ -774,7 +781,8 @@ Scene_Map.prototype.start = function() {
         // One world: no fade, no save in the middle of a walk, and the first picture is of the map entered.
         this._mapNameWindow.open();
         $gameMap.autoplay();
-        this._spriteset.update();
+        // Made and drawn in this same update (createSpriteset): nothing has moved since, and a second draw of the world was a third of the crossing frame.
+        if (this._spritesetMadeAt !== Graphics.frameCount) this._spriteset.update();
         Reactor3D.Neighbors.end();
     } else if (this._transfer) {
         this.fadeInForTransfer();
@@ -1012,6 +1020,7 @@ Scene_Map.prototype.createSpriteset = function() {
     this._spriteset = new Spriteset_Map();
     this.addChild(this._spriteset);
     this._spriteset.update();
+    this._spritesetMadeAt = Graphics.frameCount;
 };
 
 Scene_Map.prototype.createAllWindows = function() {
@@ -3768,7 +3777,12 @@ Scene_Map.prototype.onMapLoaded = function() {
 
 const _reactorSceneMapIsReady = Scene_Map.prototype.isReady;
 Scene_Map.prototype.isReady = function() {
-    return _reactorSceneMapIsReady.call(this) && this._reactorPreloadDone !== false;
+    // The 3D world is laid a part a frame for as long as the map loads (Spriteset_Map.updateReactor3DArrival),
+    // whatever else it is still waiting for, and the map starts once it stands whole.
+    const ready = _reactorSceneMapIsReady.call(this) && this._reactorPreloadDone !== false;
+    const spriteset = this._mapLoaded ? this._spriteset : null;
+    const laid = !spriteset || typeof spriteset.updateReactor3DArrival !== "function" || spriteset.updateReactor3DArrival();
+    return ready && laid;
 };
 
 const _reactorSceneMapStart = Scene_Map.prototype.start;

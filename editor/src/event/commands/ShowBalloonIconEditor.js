@@ -313,6 +313,8 @@ class ShowBalloonIconEditor {
 
         // Preview area with animated balloon and character sprite
         const previewSection = document.createElement('div');
+        // The stage is dark in every theme, so its label takes the dark theme's colors.
+        previewSection.className = 'rr-dark-surface';
         previewSection.style.cssText = `
             width: 240px;
             padding: 20px;

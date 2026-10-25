@@ -233,8 +233,8 @@ class AudioPlayer {
 
     showAudioPlayer() {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-        // Show modal
-        const modal = document.getElementById('audio-player-modal');
+        // Show modal: in the window it is opened from (the Database's, the event editor's, or the editor's).
+        const modal = window.RRPopoutBridge?.bringToWindowInUse?.(document.getElementById('audio-player-modal')) || document.getElementById('audio-player-modal');
 
         if (!modal) {
             return;

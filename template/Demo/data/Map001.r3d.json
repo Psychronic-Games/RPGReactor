@@ -94,5 +94,5 @@
     {"id":2,"target":"map","movie":"SS-Origins-Poster.jpg","x":6.21,"y":-0.48,"z":5.69,"width":320,"height":180,"opacity":255,"loop":true,"muted":true,"volume":100,"playbackRate":1,"corners":[{"x":-160,"y":-90},{"x":160,"y":-90},{"x":160,"y":90},{"x":-160,"y":90}],"rotationX":0,"rotationY":0,"rotationZ":0,"scaleX":1,"scaleY":1,"layer":3,"depth":0,"cullingDistance":0,"scanlines":0,"wait":"false"},
     {"id":3,"target":"map","movie":"Star Shift Freelancers - Poster.jpg","x":19.95,"y":-0.48,"z":5.69,"width":320,"height":180,"opacity":255,"loop":true,"muted":true,"volume":100,"playbackRate":1,"corners":[{"x":-160,"y":-90},{"x":160,"y":-90},{"x":160,"y":90},{"x":-160,"y":90}],"rotationX":0,"rotationY":0,"rotationZ":0,"scaleX":1,"scaleY":1,"layer":3,"depth":0,"cullingDistance":0,"scanlines":0,"wait":"false"}
   ],
-  "eventSizeAuto": {"24":[5,2,-2,-1]}
+  "eventSizeAuto": {"24":[5,2,-2,-1],"25":[3,5,-1,-2]}
 }

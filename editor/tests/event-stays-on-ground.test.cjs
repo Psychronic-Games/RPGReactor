@@ -156,10 +156,11 @@ test('the facade answer says it is standing on art', () => {
     const runtime = source3D();
     const place = runtime.slice(runtime.indexOf('Reactor3D.standingPlaceFor = function'));
     const body = place.slice(0, place.indexOf('\n};'));
-    assert.match(body, /lift: facade\.lift, onArt: true/);
-    // And the ground answer does not, so nothing that was on the ground moves.
-    assert.match(body, /const ground = \{ height: [^}]*lift: 0 \};/);
-    assert.doesNotMatch(body.slice(0, body.indexOf('const facade =')), /onArt/);
+    assert.match(body, /onArt\.lift = facade\.lift;\s*onArt\.onArt = true;/);
+    // And the ground answer does not, so nothing that was on the ground moves
+    // (a record the caller reuses is cleared of an earlier answer's).
+    assert.match(body, /ground\.lift = 0;\s*if \(ground\.onArt\) ground\.onArt = false;/);
+    assert.doesNotMatch(body.slice(0, body.indexOf('const facade =')), /onArt = true|onArt: true/);
 });
 
 test('a camera that answers nothing useful costs the step, not the frame', () => {

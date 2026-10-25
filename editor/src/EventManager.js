@@ -352,6 +352,11 @@ class EventManager {
             this.selectionHighlight = null;
         }
 
+        if (this.editingHighlight && this.editingHighlight.parent !== tilemapManager.container) {
+            if (this.editingHighlight.parent) this.editingHighlight.parent.removeChild(this.editingHighlight);
+            this.editingHighlight = null;
+        }
+
         if (this.startingPositionContainer && this.startingPositionContainer.parent !== tilemapManager.container) {
             if (this.startingPositionContainer.parent) {
                 this.startingPositionContainer.parent.removeChild(this.startingPositionContainer);
@@ -382,6 +387,14 @@ class EventManager {
             this.selectionHighlight = new PIXI.Graphics();
             this.selectionHighlight.visible = false;
             tilemapManager.container.addChild(this.selectionHighlight);
+        }
+
+        // The outline on the event whose editor window is open, in event and tile mode alike.
+        if (!this.editingHighlight) {
+            this.editingHighlight = new PIXI.Graphics();
+            this.editingHighlight.label = 'editing event';
+            this.editingHighlight.visible = false;
+            tilemapManager.container.addChild(this.editingHighlight);
         }
 
         // Create starting position container
@@ -825,6 +838,35 @@ class EventManager {
         this.selectionHighlight.visible = true;
     }
 
+    /**
+     * The event whose editor window is open stays outlined on the map while it is open, whatever
+     * the mode (tile painting deselects events) and wherever the person is working: one look
+     * tells which event the window holds.
+     */
+    updateEditingHighlight() {
+        // The 3D view lights the same event's box, as it lights a selected one.
+        const map3d = this.projectController?.mapEditor3D;
+        if (map3d?.isEnabled?.()) map3d.syncEditingEvent?.();
+        const outline = this.editingHighlight;
+        if (!outline || !this.currentMap || !this.tilemapManager) return;
+        const editor = this.eventEditor;
+        const event = editor && editor.isOpen && editor.isOpen() ? editor.sourceEvent : null;
+        if (!event || !Number.isInteger(event.x) || !Number.isInteger(event.y)) {
+            outline.visible = false;
+            return;
+        }
+        const tileWidth = this.tilemapManager.TILE_WIDTH, tileHeight = this.tilemapManager.TILE_HEIGHT;
+        const [firstX, firstY, spanX, spanY] = this._eventRect(event);
+        outline.clear();
+        outline.rect(firstX * tileWidth, firstY * tileHeight, spanX * tileWidth, spanY * tileHeight);
+        outline.fill({ color: 0xFFD700, alpha: 0.18 });
+        outline.rect(firstX * tileWidth, firstY * tileHeight, spanX * tileWidth, spanY * tileHeight);
+        outline.stroke({ color: 0xFFD700, width: 3, alpha: 1 });
+        outline.visible = true;
+        // Over the event sprites drawn since.
+        if (outline.parent) outline.parent.addChild(outline);
+    }
+
     // Show context menu
     showContextMenu(x, y, tileX, tileY, eventAtPos) {
         // Remove existing context menu if any
@@ -1181,7 +1223,7 @@ class EventManager {
         if (!sprite) return;
         // A sized event's footprint takes the tone with its square.
         if (sprite._rrArea) this._drawEventFootprint(sprite._rrArea, this._eventFootprint(eventId), isSelected);
-        if (sprite._rrSquare) this._drawEventSquare(sprite._rrSquare, isSelected);
+        if (sprite._rrSquare) this._drawEventSquare(sprite._rrSquare, isSelected, sprite._rrSquareAlpha ?? 0.75);
         // Its outline over a preview follows too.
         const outline = this.eventOutlines?.get(eventId);
         const event = outline && (this.currentMap?.events || []).find(e => e && e.id === eventId);
@@ -1308,6 +1350,7 @@ class EventManager {
                         // What is drawn of the event at real size (its picture or model, its name, its ring) goes with it.
                         this.movePreviewWith(this.draggedEvent);
                         this.updateSelectionHighlight();
+                        this.updateEditingHighlight();
                     } else {
                         this.renderEvents();
                     }
@@ -1326,6 +1369,9 @@ class EventManager {
         if (this.tilemapManager.container) {
             this.tilemapManager.container.cursor = 'default';
         }
+
+        // The event open in the window follows where it was dropped.
+        this.eventEditor?.followMapMove?.(this.draggedEvent);
 
         this.isDragging = false;
         this.draggedEvent = null;
@@ -1914,12 +1960,24 @@ class EventManager {
     setupEventEditorModal() {
         const modal = document.getElementById('event-editor-modal');
         const closeBtn = document.getElementById('event-editor-close-btn');
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                if (this.eventEditor) this.eventEditor.cancelChanges();
-                else if (modal) modal.style.display = 'none';
+        // Back from a pop-out window destroyed under it, the close button is wired again.
+        if (!this._rewiresOnDock && typeof window !== 'undefined') {
+            this._rewiresOnDock = true;
+            window.addEventListener('rr-event-editor-docked', event => {
+                if (event.detail && event.detail.windowGone) this.setupEventEditorModal();
             });
+        }
+
+        // The × and Escape close the window, asking first about edits not yet applied (Cancel too, in EventEditor).
+        const requestClose = () => {
+            if (this.eventEditor) this.eventEditor.requestClose();
+            else if (modal) modal.style.display = 'none';
+        };
+        if (closeBtn) closeBtn.addEventListener('click', requestClose);
+        if (modal && typeof window !== 'undefined' && window.RRKeyboardNavigation) {
+            // Wired again after a destroyed pop-out window took the old listener with it.
+            modal._rrModalKeys?.dispose?.();
+            window.RRKeyboardNavigation.modal(modal, { onEscape: requestClose });
         }
 
         // Close modal when clicking outside
@@ -1936,6 +1994,25 @@ class EventManager {
         if (!event) {
             console.warn('No event to edit');
             return;
+        }
+
+        // The window floats over a live map: opening another event leaves this one, asking first
+        // about edits not yet applied; the open event itself just comes forward.
+        const open = this.eventEditor && this.eventEditor.isOpen && this.eventEditor.isOpen();
+        if (open && !session.pendingResolved) {
+            if (this.eventEditor.sourceEvent === event) {
+                if (typeof RREventEditorWindow !== 'undefined' && RREventEditorWindow.isPoppedOut()) RREventEditorWindow.showPopout();
+                else document.querySelector('#event-editor-modal .rr-modal')?.focus?.();
+                return;
+            }
+            if (this.eventEditor.hasUncommittedChanges()) {
+                this.eventEditor.resolvePendingChanges().then(leave => {
+                    if (leave) this.editEvent(event, { ...session, pendingResolved: true });
+                });
+                return;
+            }
+            // Nothing to apply: the window stays where it is and takes the new event.
+            this.eventEditor.leaveEvent();
         }
 
         // Initialize event editor if not already created
@@ -1992,8 +2069,12 @@ class EventManager {
             }
         });
 
-        // Display the modal
+        // The editor opens in its own window, where it was left (the web editor: over the map, in the page)
+        const shownBefore = modal.style.display === 'flex';
+        if (typeof RREventEditorWindow !== 'undefined') RREventEditorWindow.install(modal);
         modal.style.display = 'flex';
+        if (typeof RREventEditorWindow !== 'undefined') RREventEditorWindow.open(modal, { shownBefore });
+        this.updateEditingHighlight();
 
         console.debug('Event editor opened for:', event.name);
     }
@@ -2103,6 +2184,10 @@ class EventManager {
     // Delete event
     deleteEvent(event) {
         if (!event || !this.currentMap) return;
+        // Deleting the event the window has open closes the window: there is nothing left to apply to.
+        if (this.eventEditor && this.eventEditor.isOpen && this.eventEditor.isOpen() && this.eventEditor.sourceEvent === event) {
+            this.eventEditor.cancelChanges();
+        }
 
         // No confirmation - just delete
         {
@@ -2476,6 +2561,13 @@ class EventManager {
         return rule && typeof rule.color === 'function' ? rule.color(team) : EventManager.SIDE_COLORS[team] || EventManager.SIDE_COLORS.neutral;
     }
 
+    /** Whether page `index` of an event is given a 3D model in the map's Reactor sidecar. */
+    static pageHasModel(map, event, index) {
+        const pages = map && map.reactor3d && map.reactor3d.events && event ? map.reactor3d.events[String(event.id)] : null;
+        const spec = pages && typeof pages === 'object' ? pages[String(index)] : null;
+        return !!(spec && spec.name);
+    }
+
     /** The page of an event Preview Event chose; null when none is chosen. */
     static chosenPreviewPage(map, event) {
         const previews = map && map.reactor3d ? map.reactor3d.eventPreviews : null;
@@ -2486,14 +2578,18 @@ class EventManager {
     /**
      * The page of an event the map draws at real size: the one Preview Event
      * chose, else, for a battle unit, the page it is a unit on (its first
-     * page for a row or a Note tag). Null: the event is its square alone.
+     * page for a row or a Note tag), else its first page when that page is
+     * given a 3D model (the game stands the event as the model, as it stands
+     * a page's character as its sprite). Null: the event is its square alone.
      */
     static previewPage(map, event) {
         const chosen = EventManager.chosenPreviewPage(map, event);
         if (chosen !== null) return chosen;
         const unit = EventManager.unitOf(event);
         if (!unit || !event.pages) {
-            return typeof RRVehicles !== 'undefined' && RRVehicles.vehicleOf(event) && event.pages?.[0] ? 0 : null;
+            if (!event?.pages?.[0]) return null;
+            if (typeof RRVehicles !== 'undefined' && RRVehicles.vehicleOf(event)) return 0;
+            return EventManager.pageHasModel(map, event, 0) ? 0 : null;
         }
         const index = unit.page > 0 ? unit.page - 1 : 0;
         return event.pages[index] ? index : null;
@@ -2741,13 +2837,15 @@ class EventManager {
                     const box = rule.trim(pixels.data, width, height);
                     if (!box) { figure(); return; }
                     if (look.hue) { rule.rotateHue(pixels.data, look.hue); context.putImageData(pixels, 0, 0); }
-                    const scale = Math.min(1, EventManager.LOOK_ART_MAX / Math.max(box.width, box.height));
+                    // As the game cuts it: a creature drawn high over its shadow stands just over it.
+                    const art = rule.art(pixels.data, width, box);
+                    const scale = Math.min(1, EventManager.LOOK_ART_MAX / Math.max(art.width, art.height));
                     const canvas = document.createElement('canvas');
-                    canvas.width = Math.max(1, Math.round(box.width * scale)); canvas.height = Math.max(1, Math.round(box.height * scale));
+                    canvas.width = Math.max(1, Math.round(art.width * scale)); canvas.height = Math.max(1, Math.round(art.height * scale));
                     const target = canvas.getContext('2d');
                     target.imageSmoothingEnabled = true;
                     target.imageSmoothingQuality = 'high';
-                    target.drawImage(whole, box.x, box.y, box.width, box.height, 0, 0, canvas.width, canvas.height);
+                    rule.drawArt(target, whole, box, art, canvas.width, canvas.height);
                     done(canvas);
                 }).catch(() => figure());
             }
@@ -2960,6 +3058,12 @@ class EventManager {
         const own = this.currentMap?.reactor3d?.events?.[String(event?.id)]?.[String(pageIndex)];
         if (own?.name) return own;
         if (event?._rrDatabaseVehicle && typeof RRVehicles !== 'undefined') return RRVehicles.modelOf(event, window.reactor?.databaseManager?.data?.vehicles);
+        // An event with the Vehicle field whose page shows no picture wears its vehicle's model, as in the 3D view and the game.
+        const image = event?.pages?.[pageIndex]?.image;
+        if (typeof RRVehicles !== 'undefined' && !image?.characterName && !(image?.tileId > 0)) {
+            const vehicle = RRVehicles.modelOf(event, typeof window !== 'undefined' ? window.reactor?.databaseManager?.data?.vehicles : null);
+            if (vehicle?.name) return vehicle;
+        }
         const look = this.unitLook(event);
         return look && look.kind === 'model' && look.page === pageIndex && look.spec && look.spec.name ? look.spec : null;
     }
@@ -2994,11 +3098,14 @@ class EventManager {
             if (pageIndex === null) continue;
             const spec = this.previewModelRaw(event, pageIndex);
             if (!spec?.name) continue;
+            const vehicle = typeof RRVehicles !== 'undefined' ? RRVehicles.vehicleOf(event) : null;
             previews.push({ ...spec, id: event._rrDatabaseVehicle ? event.id : -event.id, x: event.x, y: event.y,
                 size: Number(spec.size) > 0 ? Number(spec.size) : 2,
                 scale: Number(spec.scale) > 0 ? Number(spec.scale) : 1,
                 z: Number(map.reactor3d?.eventZ?.[event.id]) || 0,
-                direction: event.pages[pageIndex].image?.direction || 2 });
+                direction: event.pages[pageIndex].image?.direction || 2,
+                // A vehicle stands at its heading along its model's own front, as in the 3D view and the game.
+                ...(vehicle ? { vehicle: { type: vehicle.type, yaw: vehicle.yaw } } : null) });
         }
         // Battle Setup: the unit a click would place, on the tile under the pointer.
         const setup = typeof window !== 'undefined' ? window.RRBattleSetup : null;
@@ -3245,6 +3352,7 @@ class EventManager {
     renderEvents() {
         if (!this.eventContainer || !this.currentMap) return;
         this.renderEventPreviews();
+        this.updateEditingHighlight();
         // The 3D view draws the same events; without this an edited event
         // kept its old model there until the next full rebuild.
         const map3d = this.projectController?.mapEditor3D;
@@ -3561,9 +3669,13 @@ class EventManager {
         container.addChild(marker);
         container._rrMarker = marker;
 
-        // Always draw the black background box with white border (RPG Maker style)
+        // The black background box with white border (RPG Maker style). An event that stands as its
+        // model is drawn under this box (with the placed models): there the box is faint, so the model shows.
         const graphics = new PIXI.Graphics();
-        this._drawEventSquare(graphics, isSelected, isDragging ? 0.9 : 0.75);
+        const previewPage = this.getEventPreviewPage(event);
+        const asModel = previewPage !== null && !!this.previewModelRaw(event, previewPage)?.name;
+        container._rrSquareAlpha = asModel ? 0.15 : (isDragging ? 0.9 : 0.75);
+        this._drawEventSquare(graphics, isSelected, container._rrSquareAlpha);
         marker.addChild(graphics);
         container._rrSquare = graphics;
 

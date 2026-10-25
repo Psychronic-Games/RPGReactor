@@ -189,7 +189,7 @@ class TerrainManager {
     }
 
     setMode(mode) {
-        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && !['drain', 'fill', 'look', 'river', 'ground', 'dunes', 'biome', 'surround'].includes(mode) && !this.isFoliageMode(mode)) return;
+        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && !['drain', 'fill', 'look', 'river', 'ground', 'dunes', 'biome', 'surround', 'sky'].includes(mode) && !this.isFoliageMode(mode)) return;
         if (mode !== 'river') this.cancelRiver();
         this.mode = mode;
         if (mode !== 'look' && this.selectedWater) this.selectWater(null);
@@ -261,6 +261,7 @@ class TerrainManager {
         this._groundSnapshot = null;
         this._lookSnapshot = null;
         this._cliffSnapshot = null;
+        this._roomSnapshot = null;
         this._surroundSnapshot = null;
         this._surroundNumbers = null;
         this.mapEdges()?.drop?.();
@@ -303,8 +304,8 @@ class TerrainManager {
         if (this.mode === 'river') return this.riverPoint(point);
         if (this.isFoliageMode()) return this.beginFoliage(point);
         if (this.mode === 'ground') return this.beginGround(point);
-        // The biome and the border panels have no brush.
-        if (this.mode === 'biome' || this.mode === 'surround') return false;
+        // The biome, the border and the room panels have no brush.
+        if (this.mode === 'biome' || this.mode === 'surround' || this.mode === 'sky') return false;
         if (this.mode === 'drain') {
             const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
             return this.drain(saved => elevation.removeWaterAt(map, cell.x, cell.y));
@@ -844,6 +845,50 @@ class TerrainManager {
         document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, cliff: true } }));
     }
 
+    /** The room around the map and the sky over it: `{ height, floor, walls, ceiling, sky, skyScrollX, skyScrollY }` (images under img/parallaxes). */
+    roomLook() {
+        const map = this.currentMap(), elevation = this.elevation();
+        const room = elevation && map ? elevation.room(map) : null;
+        return room ? { height: room.height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY } : null;
+    }
+
+    _writeRoomLook(map, look) {
+        const elevation = this.elevation();
+        return elevation.setRoom(map, Object.assign({}, elevation.room(map), look));
+    }
+
+    /**
+     * Change the room or the sky by `patch`: 'live' while a slider moves (one undo step gathered, the view
+     * follows at once), 'commit' when it lets go or a picture is picked (the step is kept). Only on a 3D map.
+     */
+    setRoomLook(patch, phase = 'commit') {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation?.setRoom || !elevation.hasNote(map)) return false;
+        const said = patch && Object.keys(patch).length;
+        if (phase !== 'live' && said && this._roomSnapshot) this.setRoomLook({}, 'commit');
+        if (phase !== 'live' && !this._roomSnapshot && !said) return false;
+        const before = this.roomLook();
+        if (!this._roomSnapshot) this._roomSnapshot = before;
+        if (said && this._writeRoomLook(map, Object.assign({}, before, patch))) this.announceRoom(before);
+        if (phase === 'live') return true;
+        const gathered = this._roomSnapshot;
+        this._roomSnapshot = null;
+        if (JSON.stringify(gathered) === JSON.stringify(this.roomLook())) return false;
+        this.undoStack.push({ roomSet: true, room: gathered }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.syncHistoryButtons();
+        return true;
+    }
+
+    /** The room changed: a sky's drift alone moves at once in the view; a picture or the height builds the view again. */
+    announceRoom(before) {
+        this.syncHistoryButtons();
+        const after = this.roomLook(), only = before && after && ['height', 'floor', 'walls', 'ceiling', 'sky'].every(key => before[key] === after[key]);
+        const mapEditor = window.reactor?.mapEditor;
+        if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
+        if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+        document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, room: true, drift: !!only } }));
+    }
+
     /** The map's `surround` as stored (what lies past its border), or null. */
     surround() { const map = this.currentMap(); return (map && map.reactor3d && map.reactor3d.surround) || null; }
 
@@ -904,6 +949,7 @@ class TerrainManager {
     /** The steep ground or the land past the border still being dragged is a step first. */
     _settleMapSettings() {
         if (this._cliffSnapshot) this.setCliff({}, 'commit');
+        if (this._roomSnapshot) this.setRoomLook({}, 'commit');
         if (this._surroundSnapshot) this.setSurround(this.surround(), 'commit');
     }
 
@@ -1116,6 +1162,14 @@ class TerrainManager {
             to.push({ surroundSet: true, surround: now ? JSON.parse(JSON.stringify(now)) : null });
             this._writeSurround(map, entry.surround);
             this.announceSurround();
+            window.reactor?.buildHotbar?.render?.();
+            return;
+        }
+        if (entry && entry.roomSet) {
+            const before = this.roomLook();
+            to.push({ roomSet: true, room: before });
+            this._writeRoomLook(map, entry.room);
+            this.announceRoom(before);
             window.reactor?.buildHotbar?.render?.();
             return;
         }

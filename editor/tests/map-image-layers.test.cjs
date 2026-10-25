@@ -766,7 +766,7 @@ test('Image Layers is a map tool: a toolbar button, a Tools entry, one map owner
     const html = read('index.html');
     assert.match(html, /<button class="tool-button" data-action="image-layers"[^>]*data-i18n-title="menu\.imageLayers"[^>]*><img src="images\/icon-image-layers\.svg" alt=""><\/button>/);
     assert.match(html, /<div class="html-menu-option" data-action="image-layers" data-i18n="menu\.imageLayers"/);
-    assert.ok(html.indexOf('data-action="media-surfaces"') < html.indexOf('data-action="image-layers"'), 'beside Media Surfaces');
+    assert.ok(html.indexOf('html-menu-option" data-action="media-surfaces"') < html.indexOf('html-menu-option" data-action="image-layers"'), 'beside Media Surfaces in Tools');
     assert.ok(fs.existsSync(path.join(editorRoot, 'images', 'icon-image-layers.svg')));
     const scripts = [...html.matchAll(/<script src="src\/([^"]+)"/g)].map(m => m[1]);
     assert.ok(scripts.indexOf('MapImageLayersEditor.js') >= 0 && scripts.indexOf('MapImageLayersEditor.js') < scripts.indexOf('MapImageLayersManager.js'));

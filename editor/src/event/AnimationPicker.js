@@ -720,16 +720,9 @@ class AnimationPicker {
             gl.clearColor(backdrop[0], backdrop[1], backdrop[2], 1);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            // Projection & camera matrices (RPG Maker MZ style)
-            const viewportSize = canvas.height * 1.2;
-            const p = -(viewportSize / canvas.height);
-            const x = canvas.height / canvas.width;
-            effekseerContext.setProjectionMatrix([
-                x, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, p,
-                0, 0, 0, 1
-            ]);
+            // As the game draws it, the canvas standing for the game's screen (ReactorBattleData.effekseerProjection).
+            const screenHeight = Number(this.databaseManager?.getSystem?.()?.advanced?.screenHeight) || canvas.height;
+            effekseerContext.setProjectionMatrix(ReactorBattleData.effekseerProjection(canvas.width, canvas.height, screenHeight, canvas.height / screenHeight));
             effekseerContext.setCameraMatrix([
                 1, 0, 0, 0,
                 0, 1, 0, 0,

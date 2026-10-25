@@ -106,7 +106,7 @@ Object.defineProperty(Sprite.prototype, "opacity", {
         return this.alpha * 255;
     },
     set: function(value) {
-        this.alpha = value.clamp(0, 255) / 255;
+        this.alpha = Math.min(Math.max(value, 0), 255) / 255;
     },
     configurable: true
 });
@@ -194,7 +194,10 @@ Sprite.prototype.update = function() {
     if (this.visible && this.worldVisible !== false && this._bitmap) {
         this._bitmap._updateAnimatedImage();
     }
-    for (const child of this.children) {
+    // Indexed: runs every frame for every node, and allocates nothing.
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (child.update) {
             child.update();
         }
@@ -348,10 +351,11 @@ Sprite.prototype._refresh = function() {
     const baseTexture = this._bitmap ? this._bitmap.baseTexture : null;
     const baseTextureW = baseTexture ? baseTexture.width : 0;
     const baseTextureH = baseTexture ? baseTexture.height : 0;
-    const realX = frameX.clamp(0, baseTextureW);
-    const realY = frameY.clamp(0, baseTextureH);
-    const realW = (frameW - realX + frameX).clamp(0, baseTextureW - realX);
-    const realH = (frameH - realY + frameY).clamp(0, baseTextureH - realY);
+    // Number#clamp boxes its number on each call; this runs for every sprite every frame.
+    const realX = Math.min(Math.max(frameX, 0), baseTextureW);
+    const realY = Math.min(Math.max(frameY, 0), baseTextureH);
+    const realW = Math.min(Math.max(frameW - realX + frameX, 0), baseTextureW - realX);
+    const realH = Math.min(Math.max(frameH - realY + frameY, 0), baseTextureH - realY);
     if (texture) {
         this.pivot.x = frameX - realX;
         this.pivot.y = frameY - realY;
@@ -418,6 +422,7 @@ Sprite.prototype._refresh = function() {
 
 Sprite.prototype._createColorFilter = function() {
     this._colorFilter = new ColorFilter();
+    if (this._colorFilter.allowNeutralSpriteSkip) this._colorFilter.allowNeutralSpriteSkip(this);
     // v8: container.filters is a setter that may store a frozen copy, so
     // .push() on the existing array can fail. Build a fresh array and assign.
     const filters = this.filters ? this.filters.slice() : [];
@@ -562,6 +567,7 @@ Object.defineProperty(Tilemap.prototype, "height", {
  * Destroys the tilemap.
  */
 Tilemap.prototype.destroy = function() {
+    if (this._rrChunks) this._rrLeaveChunks();
     const options = { children: true, texture: true };
     PIXI.Container.prototype.destroy.call(this, options);
 };
@@ -607,7 +613,10 @@ Tilemap.prototype.update = function() {
             this._needsRepaint = true;
         }
     }
-    for (const child of this.children) {
+    // Indexed: runs every frame for every node, and allocates nothing.
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (child.update) {
             child.update();
         }
@@ -633,7 +642,19 @@ Tilemap.prototype._prepareV8Frame = function() {
     try {
         this.updateTransform();
     } catch (e) { /* legacy PIXI tail; repaint work already done */ }
+    // A plugin's updateTransform that paints by itself (UltraMode7 drawing
+    // the map) skips the chunk check: its blocks go, and the stats say why.
+    if (this._rrCheckedFrame !== this._v8PreparedFrame) this._rrChunksSkipped();
     this._syncV8TileLayers();
+};
+
+Tilemap.prototype._rrChunksSkipped = function() {
+    if (this._rrChunks) this._rrLeaveChunks();
+    const hidden = this._lowerLayer && this._lowerLayer.visible === false &&
+        this._upperLayer && this._upperLayer.visible === false;
+    const stats = Tilemap.Layer._v8Stats();
+    stats.chunked = false;
+    stats.chunkFallback = hidden ? "hidden" : (Tilemap.ChunkPaint.gateReason() || "plugin updateTransform");
 };
 
 Tilemap.prototype._syncV8TileLayers = function() {
@@ -641,7 +662,8 @@ Tilemap.prototype._syncV8TileLayers = function() {
     // plugin holds them outside the child list; each once. Runs every frame,
     // so it walks the list instead of building a Set and a closure for it.
     const children = this.children;
-    for (const child of children) {
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (child && typeof child._syncV8Backend === "function") child._syncV8Backend();
     }
     const lower = this._lowerLayer;
@@ -698,8 +720,10 @@ Tilemap.prototype.updateTransform = function() {
     // tiles nobody draws, every time the view crosses a tile, cost a mesh
     // rebuild per layer for nothing. The repaint waits until they show.
     const hidden = this._lowerLayer.visible === false && this._upperLayer.visible === false;
+    const chunked = !hidden && this._rrChunkBlocker() === null && this._rrPaintChunks(startX, startY);
+    if (!chunked && this._rrChunks) this._rrLeaveChunks();
     if (
-        !hidden && (
+        !chunked && !hidden && (
         this._needsRepaint ||
         this._lastAnimationFrame !== this.animationFrame ||
         this._lastStartX !== startX ||
@@ -802,6 +826,808 @@ Tilemap.prototype._addAllSpots = function(startX, startY) {
     }
 };
 
+//-----------------------------------------------------------------------------
+// Chunked painting (PIXI 8).
+//
+// The paint above rebuilds the whole view's tile mesh each time the view
+// crosses a tile and each water frame. While every painting hook is the one
+// this file defines, the map is painted SIZE x SIZE tiles at a time instead,
+// each block its own mesh: the blocks the view needs are built at once, the
+// ring around them one per frame ahead of time, and blocks far from the view
+// are let go. The view moves the blocks; water and waterfalls change frame by
+// a UV offset on their quads. A plugin hook anywhere on the painting path
+// (other than one that provably hands every call straight on, see
+// "Plugin hooks that hand straight on" below), a plugin's own tile layer, or
+// tile frames from an import keep the paint above, unchanged. Blocks are
+// checked against the map data one per frame, so a tile written without
+// refresh() still shows.
+//-----------------------------------------------------------------------------
+
+Tilemap.ChunkPaint = {
+    enabled: true,
+    SIZE: 8,
+    PREFETCH: 1,
+    KEEP: 2,
+    BUILDS_PER_FRAME: 1,
+    POOL: 64,
+    HOOKS: ["updateTransform", "_addAllSpots", "_addSpot", "_addSpotTile", "_addTile",
+        "_addNormalTile", "_addAutotile", "_addTableEdge", "_addShadow", "_readMapData",
+        "_isHigherTile", "_isTableTile", "_isOverpassPosition", "_createLayers"],
+    stock: null,
+    // A method the profiler (F10) wrapped still counts as the original.
+    unwrap(fn) {
+        while (fn && fn.__rrProfilerOriginal) fn = fn.__rrProfilerOriginal;
+        return fn;
+    }
+};
+
+// The tile layer inside one of the two canonical layers, when both are as
+// this file makes them; null otherwise.
+Tilemap.ChunkPaint.stockTileLayer = function(combined) {
+    const stock = this.stock;
+    if (!stock || !(combined instanceof Tilemap.CombinedLayer) ||
+        !this.passes(combined.addRect, "combinedAddRect") ||
+        !this.passes(combined.clear, "combinedClear")) return null;
+    const children = combined.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        if (typeof child.addRect !== "function") continue;
+        if (!(child instanceof Tilemap.Layer) ||
+            !this.passes(child.addRect, "layerAddRect") ||
+            !this.passes(child.clear, "layerClear")) return null;
+    }
+    const first = children[0];
+    return first instanceof Tilemap.Layer && first._v8TileRoot ? first : null;
+};
+
+//-----------------------------------------------------------------------------
+// Plugin hooks that hand straight on.
+//
+// A plugin that draws the map itself only on some maps (UltraMode7) hooks the
+// painting path everywhere; on its other maps each hook calls the method it
+// replaced, with the same arguments, and does nothing else. Such a hook
+// counts as the stock method while all of these hold:
+// - a plugin in GATES installed it: its script was running when the method
+//   was assigned (the painting methods are watched from this file's load to
+//   the first paint; anything assigned later has no known origin),
+// - that plugin says it is not drawing the map (asked every frame),
+// - run on a stand-in that records every read, write and call made on the
+//   tilemap, on the arguments and on whatever those hand back, plus the
+//   return value, the hook leaves the same record as the stock method, for
+//   every probe call in PROBES.
+// Verdicts are worked out again on a new map, and each one RECHECK checks
+// after it was made (one per check); with passThrough off every hook keeps
+// the full paint. A hook from any other
+// source keeps the full paint even when it looks like a pass-through: it may
+// count its calls or keep state outside the tilemap, which painting in blocks
+// (fewer, different calls) would change.
+//-----------------------------------------------------------------------------
+
+Tilemap.ChunkPaint.passThrough = true;
+Tilemap.ChunkPaint.RECHECK = 600;
+Tilemap.ChunkPaint.PROBE_LIMIT = 5000;
+// active(): true while the plugin draws the map itself, null while it is not installed.
+Tilemap.ChunkPaint.GATES = [{
+    plugin: "UltraMode7",
+    active: () => typeof UltraMode7 === "undefined" ? null : !!UltraMode7.isActive(),
+    reason: "UltraMode7 active",
+    failed: "UltraMode7 check failed",
+    state: null
+}];
+// The calls each painting method is probed with: tile ids of every kind the
+// paint treats differently (still and moving water, waterfall, A1 rocks, A2
+// table, A3 wall, A4 wall, A5, B, none); LAYER stands for a recorded layer.
+Tilemap.ChunkPaint.LAYER = Symbol("layer");
+Tilemap.ChunkPaint.PROBES = (L => ({
+    updateTransform: [[]],
+    _createLayers: [[]],
+    _addAllSpots: [[3, 2]],
+    _addSpot: [[3, 2, 1, 1]],
+    _addSpotTile: [[2053, 24, 48], [5, 24, 48]],
+    _addTile: [[L, 2053, 24, 48], [L, 5, 24, 48], [L, 0, 24, 48]],
+    _addNormalTile: [[L, 5, 24, 48], [L, 1600, 24, 48]],
+    _addAutotile: [[L, 2053, 24, 48], [L, 2101, 24, 48], [L, 2149, 24, 48], [L, 2250, 24, 48],
+        [L, 2290, 24, 48], [L, 2967, 24, 48], [L, 4453, 24, 48], [L, 6323, 24, 48]],
+    _addTableEdge: [[L, 2967, 24, 48]],
+    _addShadow: [[L, 5, 24, 48]],
+    _readMapData: [[3, 4, 1]],
+    _isHigherTile: [[5]],
+    _isTableTile: [[2967]],
+    _isOverpassPosition: [[3, 4]],
+    layerAddRect: [[1, 48, 96, 24, 0, 24, 24], [-1, 0, 0, 24, 24, 24, 24]],
+    layerClear: [[]],
+    combinedAddRect: [[1, 48, 96, 24, 0, 24, 24]],
+    combinedClear: [[]]
+}))(Tilemap.ChunkPaint.LAYER);
+Tilemap.ChunkPaint.origins = new WeakMap();
+Tilemap.ChunkPaint._verdicts = new Map();
+Tilemap.ChunkPaint._verdictMap = null;
+Tilemap.ChunkPaint._verdictSwitch = null;
+Tilemap.ChunkPaint._checks = 0;
+Tilemap.ChunkPaint._rejudged = false;
+Tilemap.ChunkPaint._stockTraces = new Map();
+Tilemap.ChunkPaint._watched = null;
+
+/** The file name of the script running now ("" outside one): a plugin while it loads. */
+Tilemap.ChunkPaint.scriptName = function() {
+    const script = typeof document !== "undefined" ? document.currentScript : null;
+    const src = script ? String(script._url || script.src || "") : "";
+    const match = /([^/\\?#]+?)(?:\.js)?(?:[?#].*)?$/.exec(src);
+    if (!match) return "";
+    try {
+        return decodeURIComponent(match[1]);
+    } catch (e) {
+        return match[1];
+    }
+};
+
+// Until settle(), notes which script assigns each of these methods. An
+// assignment through an instance or a subclass prototype lands there as its
+// own property, as it would on a plain property.
+Tilemap.ChunkPaint.watch = function(targets) {
+    const C = this;
+    const watched = [];
+    for (const [proto, names] of targets) {
+        for (const name of names) {
+            const desc = Object.getOwnPropertyDescriptor(proto, name);
+            if (!desc || !("value" in desc) || !desc.configurable) continue;
+            const slot = { proto, name, value: desc.value, enumerable: desc.enumerable, get: null };
+            slot.get = function() { return slot.value; };
+            Object.defineProperty(proto, name, {
+                configurable: true,
+                enumerable: desc.enumerable,
+                get: slot.get,
+                set(value) {
+                    if (typeof value === "function" && !C.origins.has(value)) {
+                        const origin = C.scriptName();
+                        if (origin) C.origins.set(value, origin);
+                    }
+                    if (this === proto) slot.value = value;
+                    else Object.defineProperty(this, name, { value, writable: true, configurable: true, enumerable: true });
+                }
+            });
+            watched.push(slot);
+        }
+    }
+    this._watched = watched;
+};
+
+/** The watched methods back to plain properties, holding what plugins left there. */
+Tilemap.ChunkPaint.settle = function() {
+    const watched = this._watched;
+    this._watched = null;
+    if (!watched) return;
+    for (const slot of watched) {
+        const desc = Object.getOwnPropertyDescriptor(slot.proto, slot.name);
+        if (!desc || desc.get !== slot.get) continue;
+        Object.defineProperty(slot.proto, slot.name,
+            { value: slot.value, writable: true, configurable: true, enumerable: slot.enumerable });
+    }
+};
+
+/** The reason while a plugin in GATES draws the map itself, else null. */
+Tilemap.ChunkPaint.gateReason = function() {
+    const gates = this.GATES;
+    for (let i = 0; i < gates.length; i++) {
+        const gate = gates[i];
+        let state;
+        let reason = gate.reason;
+        try {
+            state = gate.active();
+        } catch (e) {
+            state = true;
+            reason = gate.failed;
+        }
+        gate.state = state;
+        if (state) {
+            if (this._verdicts.size) this._verdicts.clear();
+            return reason;
+        }
+    }
+    return null;
+};
+
+// Verdicts hold for one map and while the switch stays as it was. Each is
+// judged again RECHECK checks after it was made, one per check at most, so
+// the work never lands on a single frame.
+Tilemap.ChunkPaint.ageVerdicts = function() {
+    const mapId = typeof $gameMap !== "undefined" && $gameMap && typeof $gameMap.mapId === "function" ?
+        $gameMap.mapId() : 0;
+    if (mapId !== this._verdictMap || this.passThrough !== this._verdictSwitch) {
+        this._verdicts.clear();
+        this._verdictMap = mapId;
+        this._verdictSwitch = this.passThrough;
+    }
+    this._checks++;
+    this._rejudged = false;
+};
+
+/** Whether `fn` stands in for the stock method `name`: { ok, reason }. */
+Tilemap.ChunkPaint.verdict = function(fn, name) {
+    let verdict = this._verdicts.get(fn);
+    if (verdict && verdict.name === name) {
+        if (this._checks - verdict.at <= this.RECHECK || this._rejudged) return verdict;
+        this._rejudged = true;
+    }
+    const origin = (typeof fn === "function" && this.origins.get(fn)) || "";
+    let ok = false;
+    if (this.passThrough && origin) {
+        const gates = this.GATES;
+        for (let i = 0; i < gates.length; i++) {
+            if (gates[i].plugin === origin && gates[i].state === false) {
+                ok = this.probe(fn, name);
+                break;
+            }
+        }
+    }
+    verdict = { name, ok, reason: ok ? "" : "plugin hook " + name + (origin ? " (" + origin + ")" : ""), at: this._checks };
+    this._verdicts.set(fn, verdict);
+    return verdict;
+};
+
+/** `fn` is the stock method `name`, or a plugin hook that stands in for it. */
+Tilemap.ChunkPaint.passes = function(fn, name) {
+    fn = this.unwrap(fn);
+    return fn === this.stock[name] || this.verdict(fn, name).ok;
+};
+
+/** Every probe call in PROBES leaves the same record from `fn` as from the stock method. */
+Tilemap.ChunkPaint.probe = function(fn, name) {
+    const sets = this.PROBES[name];
+    const stock = this.stock[name];
+    if (!sets || typeof stock !== "function" || typeof fn !== "function") return false;
+    for (let i = 0; i < sets.length; i++) {
+        const key = name + "/" + i;
+        let want = this._stockTraces.get(key);
+        const makesLayers = name === "_createLayers";
+        if (want === undefined) this._stockTraces.set(key, want = this.trace(stock, sets[i], makesLayers));
+        if (want === null || this.trace(fn, sets[i], makesLayers) !== want) return false;
+    }
+    return true;
+};
+
+/**
+ * Runs `fn` on a stand-in tilemap and returns, one line each and in order,
+ * every read, write, call and number conversion made on the stand-in, on
+ * LAYER arguments and on whatever those hand back, then the return value;
+ * null when it throws or runs past PROBE_LIMIT. Every stand-in reads as 1.
+ * makesLayers: Tilemap.CombinedLayer makes recorded stand-ins meanwhile.
+ */
+Tilemap.ChunkPaint.trace = function(fn, args, makesLayers) {
+    const limit = this.PROBE_LIMIT;
+    const log = [];
+    const byPath = new Map();
+    const pathOf = new WeakMap();
+    const note = entry => {
+        if (log.length >= limit) throw new Error("probe limit");
+        log.push(entry);
+    };
+    const show = value => {
+        if (typeof value === "string") return JSON.stringify(value);
+        if (value === null || (typeof value !== "object" && typeof value !== "function")) return String(value);
+        if (pathOf.has(value)) return pathOf.get(value);
+        if (Array.isArray(value)) {
+            return value.length > 64 ? "array " + value.length : "[" + value.map(show).join(", ") + "]";
+        }
+        return typeof value;
+    };
+    // One handler for every stand-in; each target knows its path.
+    const targetPath = new WeakMap();
+    const calls = new Map();
+    const handler = {
+        get(target, key) {
+            const path = targetPath.get(target);
+            if (key === Symbol.toPrimitive) return hint => { note(path + " as " + hint); return 1; };
+            const name = path + "." + String(key);
+            note("get " + name);
+            return stand(name);
+        },
+        set(target, key, value) {
+            note("set " + targetPath.get(target) + "." + String(key) + " = " + show(value));
+            return true;
+        },
+        has(target, key) {
+            note("has " + targetPath.get(target) + "." + String(key));
+            return false;
+        },
+        deleteProperty(target, key) {
+            note("delete " + targetPath.get(target) + "." + String(key));
+            return true;
+        },
+        apply(target, self, callArgs) {
+            const path = targetPath.get(target);
+            note("call " + path + " on " + show(self) + " (" + callArgs.map(show).join(", ") + ")");
+            const n = calls.get(path) || 0;
+            calls.set(path, n + 1);
+            return stand(path + "()" + n);
+        }
+    };
+    const stand = path => {
+        let proxy = byPath.get(path);
+        if (proxy) return proxy;
+        if (path.length > 512) throw new Error("probe limit");
+        const target = () => {};
+        targetPath.set(target, path);
+        proxy = new Proxy(target, handler);
+        byPath.set(path, proxy);
+        pathOf.set(proxy, path);
+        return proxy;
+    };
+    const self = stand("this");
+    const callArgs = args.map(arg => arg === this.LAYER ? stand("layer") : arg);
+    const CombinedLayer = Tilemap.CombinedLayer;
+    let made = 0;
+    if (makesLayers) {
+        Tilemap.CombinedLayer = function() {
+            note("new CombinedLayer");
+            return stand("CombinedLayer#" + made++);
+        };
+    }
+    try {
+        note("return " + show(fn.apply(self, callArgs)));
+    } catch (e) {
+        return null;
+    } finally {
+        if (makesLayers) Tilemap.CombinedLayer = CombinedLayer;
+    }
+    return log.join("\n");
+};
+
+/** Why the tilemap's painting methods keep the full paint, or null. */
+Tilemap.ChunkPaint.hookBlocker = function(tilemap) {
+    const gate = this.gateReason();
+    if (gate) return gate;
+    this.ageVerdicts();
+    const hooks = this.HOOKS;
+    for (let i = 0; i < hooks.length; i++) {
+        const name = hooks[i];
+        const fn = this.unwrap(tilemap[name]);
+        if (fn === this.stock[name]) continue;
+        const verdict = this.verdict(fn, name);
+        if (!verdict.ok) return verdict.reason;
+    }
+    return null;
+};
+
+/** Why this frame keeps the full paint, or null when it paints in chunks. */
+Tilemap.prototype._rrChunkBlocker = function() {
+    const C = Tilemap.ChunkPaint;
+    if (C._watched) C.settle();
+    this._rrCheckedFrame = Graphics.frameCount;
+    let reason = null;
+    if (!C.enabled) reason = "off";
+    else if (!PIXI.TextureSource || !C.stock || typeof PIXI.Mesh !== "function") reason = "no PIXI 8 mesh";
+    else if (this._rrChunkFailed) reason = this._rrChunkFailed;
+    else if (this._rrTileFrames) reason = "tile frames";
+    else reason = C.hookBlocker(this);
+    if (!reason) {
+        const lower = this._lowerLayer;
+        const upper = this._upperLayer;
+        const lowerTiles = lower !== upper ? C.stockTileLayer(lower) : null;
+        const upperTiles = lowerTiles ? C.stockTileLayer(upper) : null;
+        if (!lowerTiles || !upperTiles) reason = "plugin tile layers";
+        else if (this._needsBitmapsUpdate || !this._bitmaps || !this._bitmaps.length ||
+            !lowerTiles._v8Backend || !upperTiles._v8Backend) reason = "tileset loading";
+        else if (lowerTiles._v8Backend !== "mesh" || upperTiles._v8Backend !== "mesh") reason = "sprite tiles";
+        else {
+            const children = this.children;
+            for (let i = 0; i < children.length; i++) {
+                const child = children[i];
+                if (child !== lower && child !== upper && typeof child.addRect === "function") {
+                    reason = "plugin tile layers";
+                    break;
+                }
+            }
+        }
+    }
+    if (PIXI.TextureSource) {
+        const stats = Tilemap.Layer._v8Stats();
+        stats.chunked = !reason;
+        stats.chunkFallback = reason || "";
+    }
+    return reason;
+};
+
+// Collects one chunk's rects as the painting hooks hand them to a layer,
+// with the water motion _addAutotile marks them with.
+Tilemap.ChunkRecorder = function(tilemap) {
+    this._tilemap = tilemap;
+    this.rects = new Float32Array(8 * 512);
+    this.count = 0;
+};
+
+Tilemap.ChunkRecorder.prototype.addRect = function(setNumber, sx, sy, dx, dy, w, h) {
+    let rects = this.rects;
+    const at = this.count * 8;
+    if (at + 8 > rects.length) {
+        const grown = new Float32Array(rects.length * 2);
+        grown.set(rects);
+        rects = this.rects = grown;
+    }
+    rects[at] = setNumber;
+    rects[at + 1] = sx;
+    rects[at + 2] = sy;
+    rects[at + 3] = dx;
+    rects[at + 4] = dy;
+    rects[at + 5] = w;
+    rects[at + 6] = h;
+    rects[at + 7] = this._tilemap._rrPaintAnim || 0;
+    this.count++;
+};
+
+Tilemap.ChunkRecorder.prototype.clear = function() {
+    this.count = 0;
+};
+
+Tilemap.ChunkRecorder.prototype.size = function() {
+    return this.count;
+};
+
+Tilemap.prototype._rrEnterChunks = function() {
+    // The layers' own meshes hide; the blocks draw inside their tile roots.
+    this._lowerLayer.clear();
+    this._upperLayer.clear();
+    const C = Tilemap.ChunkPaint;
+    const makeRoot = combined => {
+        const root = new PIXI.Container();
+        root.eventMode = "none";
+        C.stockTileLayer(combined)._v8TileRoot.addChild(root);
+        return root;
+    };
+    return {
+        chunks: new Map(),
+        live: [],
+        pool: [],
+        lowerRoot: makeRoot(this._lowerLayer),
+        upperRoot: makeRoot(this._upperLayer),
+        lowerRecorder: new Tilemap.ChunkRecorder(this),
+        upperRecorder: new Tilemap.ChunkRecorder(this),
+        atlas: null,
+        bitmaps: undefined,
+        frame: 0,
+        verifyAt: 0,
+        phase: 0,
+        waterShift: 0,
+        fallShift: 0
+    };
+};
+
+Tilemap.prototype._rrLeaveChunks = function() {
+    const state = this._rrChunks;
+    this._rrChunks = null;
+    if (!state) return;
+    for (const chunk of state.live) {
+        this._rrDestroyChunkPart(chunk.lower);
+        this._rrDestroyChunkPart(chunk.upper);
+    }
+    for (const part of state.pool) this._rrDestroyChunkPart(part);
+    for (const root of [state.lowerRoot, state.upperRoot]) {
+        if (root.parent) root.parent.removeChild(root);
+        if (!root.destroyed) root.destroy({ children: false });
+    }
+    if (state.atlas) Tilemap.Layer._releaseV8Atlas(state.atlas);
+    // The full paint takes over from the next frame on.
+    this._needsRepaint = true;
+    if (PIXI.TextureSource) Tilemap.Layer._v8Stats().chunksLive = 0;
+};
+
+Tilemap.prototype._rrDestroyChunkPart = function(part) {
+    if (!part || part.mesh.destroyed) return;
+    if (part.mesh.parent) part.mesh.parent.removeChild(part.mesh);
+    part.mesh.destroy({ texture: false, textureSource: false });
+    part.geometry.destroy(true);
+};
+
+// Every block goes back to the pool: the tileset, the map or its flags changed, or refresh() was called.
+Tilemap.prototype._rrResetChunks = function(state) {
+    while (state.live.length) this._rrReleaseChunk(state, state.live[state.live.length - 1]);
+    if (state.bitmaps !== this._bitmaps || !state.atlas) {
+        if (state.atlas) Tilemap.Layer._releaseV8Atlas(state.atlas);
+        state.atlas = null;
+        state.atlas = Tilemap.Layer._acquireV8Atlas(this._bitmaps);
+    }
+    Object.assign(state, {
+        bitmaps: this._bitmaps,
+        flags: this.flags,
+        mapData: this._mapData,
+        mapWidth: this._mapWidth,
+        mapHeight: this._mapHeight,
+        tileWidth: this.tileWidth,
+        tileHeight: this.tileHeight,
+        horizontalWrap: this.horizontalWrap,
+        verticalWrap: this.verticalWrap,
+        size: Tilemap.ChunkPaint.SIZE
+    });
+};
+
+Tilemap.prototype._rrChunksStale = function(state) {
+    return this._needsRepaint || state.bitmaps !== this._bitmaps || state.flags !== this.flags ||
+        state.mapData !== this._mapData || state.mapWidth !== this._mapWidth ||
+        state.mapHeight !== this._mapHeight || state.tileWidth !== this.tileWidth ||
+        state.tileHeight !== this.tileHeight || state.horizontalWrap !== this.horizontalWrap ||
+        state.verticalWrap !== this.verticalWrap || state.size !== Tilemap.ChunkPaint.SIZE;
+};
+
+Tilemap._rrChunkKey = function(cx, cy) {
+    return (cy + 0x8000) * 0x10000 + (cx + 0x8000);
+};
+
+/** Paints this frame in chunks; false (after handing back to the full paint) when that fails. */
+Tilemap.prototype._rrPaintChunks = function(startX, startY) {
+    try {
+        const state = this._rrChunks || (this._rrChunks = this._rrEnterChunks());
+        if (this._rrChunksStale(state)) {
+            this._rrResetChunks(state);
+            this._needsRepaint = false;
+        }
+        Tilemap.Layer._keepV8AtlasPixels(state.atlas);
+        const C = Tilemap.ChunkPaint;
+        const size = state.size;
+        const tileWidth = this.tileWidth;
+        const tileHeight = this.tileHeight;
+        // The tiles the full paint would cover.
+        const tileCols = Math.ceil((this.width + this._margin * 2) / tileWidth) + 1;
+        const tileRows = Math.ceil((this.height + this._margin * 2) / tileHeight) + 1;
+        const cx0 = Math.floor(startX / size);
+        const cy0 = Math.floor(startY / size);
+        const cx1 = Math.floor((startX + tileCols - 1) / size);
+        const cy1 = Math.floor((startY + tileRows - 1) / size);
+        // The canonical layers stand at the view's first tile; the blocks at their map position.
+        state.lowerRoot.x = state.upperRoot.x = -startX * tileWidth;
+        state.lowerRoot.y = state.upperRoot.y = -startY * tileHeight;
+        // The water frame, as _addAutotile picks it.
+        const frame = Number.isFinite(this.animationFrame) ? this.animationFrame : 0;
+        const water = this._rrWater && this._rrWater.cycle === 3 ? frame % 3 : (frame % 4 === 3 ? 1 : frame % 4);
+        const fall = frame % 3;
+        state.phase = water * 3 + fall;
+        state.waterShift = water * 2 * tileWidth;
+        state.fallShift = fall * tileHeight;
+        const now = ++state.frame;
+        for (let cy = cy0; cy <= cy1; cy++) {
+            for (let cx = cx0; cx <= cx1; cx++) {
+                const chunk = state.chunks.get(Tilemap._rrChunkKey(cx, cy)) || this._rrBuildChunk(state, cx, cy, true);
+                chunk.seen = now;
+                if (!chunk.shown) this._rrShowChunk(chunk, true);
+                if (chunk.phase !== state.phase) this._rrAnimateChunk(state, chunk);
+            }
+        }
+        const keep = C.KEEP;
+        const live = state.live;
+        for (let i = live.length - 1; i >= 0; i--) {
+            const chunk = live[i];
+            if (chunk.seen === now) continue;
+            if (chunk.shown) this._rrShowChunk(chunk, false);
+            if (chunk.cx < cx0 - keep || chunk.cx > cx1 + keep || chunk.cy < cy0 - keep || chunk.cy > cy1 + keep) {
+                this._rrReleaseChunk(state, chunk);
+            }
+        }
+        // Ahead of the view: the ring around it, a few blocks a frame.
+        let budget = C.BUILDS_PER_FRAME;
+        const ring = C.PREFETCH;
+        for (let cy = cy0 - ring; cy <= cy1 + ring && budget > 0; cy++) {
+            for (let cx = cx0 - ring; cx <= cx1 + ring && budget > 0; cx++) {
+                if (!state.chunks.has(Tilemap._rrChunkKey(cx, cy))) {
+                    this._rrBuildChunk(state, cx, cy, false);
+                    budget--;
+                }
+            }
+        }
+        // One block a frame is compared with the map data it was painted from.
+        if (live.length) {
+            state.verifyAt = (state.verifyAt + 1) % live.length;
+            const chunk = live[state.verifyAt];
+            if (this._rrChunkChanged(chunk)) {
+                if (chunk.seen === now) {
+                    this._rrBuildChunk(state, chunk.cx, chunk.cy, true);
+                    this._rrAnimateChunk(state, chunk);
+                } else {
+                    this._rrReleaseChunk(state, chunk);
+                }
+            }
+        }
+        Tilemap.Layer._v8Stats().chunksLive = live.length;
+        return true;
+    } catch (error) {
+        this._rrChunkFailed = "chunk paint failed: " + (error && error.message ? error.message : String(error));
+        const stats = Tilemap.Layer._v8Stats();
+        stats.chunked = false;
+        stats.chunkFallback = this._rrChunkFailed;
+        this._rrLeaveChunks();
+        return false;
+    }
+};
+
+Tilemap.prototype._rrShowChunk = function(chunk, shown) {
+    chunk.shown = shown;
+    if (chunk.lower) chunk.lower.mesh.visible = shown && chunk.lower.count > 0;
+    if (chunk.upper) chunk.upper.mesh.visible = shown && chunk.upper.count > 0;
+};
+
+Tilemap.prototype._rrReleaseChunk = function(state, chunk) {
+    state.chunks.delete(chunk.key);
+    const index = state.live.indexOf(chunk);
+    if (index >= 0) {
+        state.live[index] = state.live[state.live.length - 1];
+        state.live.pop();
+    }
+    for (const part of [chunk.lower, chunk.upper]) {
+        if (!part) continue;
+        if (part.mesh.parent) part.mesh.parent.removeChild(part.mesh);
+        if (state.pool.length < Tilemap.ChunkPaint.POOL) state.pool.push(part);
+        else this._rrDestroyChunkPart(part);
+    }
+    chunk.lower = chunk.upper = null;
+};
+
+/**
+ * Paints one block through the painting hooks, into recorders standing in
+ * for the canonical layers, at water frame 0, and makes its meshes. `now`:
+ * the view needs it this frame (shown at once).
+ */
+Tilemap.prototype._rrBuildChunk = function(state, cx, cy, now) {
+    const started = typeof performance !== "undefined" ? performance.now() : 0;
+    const size = state.size;
+    const x0 = cx * size;
+    const y0 = cy * size;
+    const lowerRecorder = state.lowerRecorder;
+    const upperRecorder = state.upperRecorder;
+    lowerRecorder.count = 0;
+    upperRecorder.count = 0;
+    const lower = this._lowerLayer;
+    const upper = this._upperLayer;
+    const frame = this.animationFrame;
+    this._lowerLayer = lowerRecorder;
+    this._upperLayer = upperRecorder;
+    this.animationFrame = 0;
+    this._rrPaintAnim = 0;
+    try {
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                this._addSpot(x0, y0, x, y);
+            }
+        }
+    } finally {
+        this._lowerLayer = lower;
+        this._upperLayer = upper;
+        this.animationFrame = frame;
+        this._rrPaintAnim = 0;
+    }
+    const key = Tilemap._rrChunkKey(cx, cy);
+    let chunk = state.chunks.get(key);
+    if (!chunk) {
+        chunk = { key, cx, cy, size, lower: null, upper: null, shown: false, seen: 0, phase: 0,
+            snapshot: new Int32Array(5 * (size + 1) * size) };
+        state.chunks.set(key, chunk);
+        state.live.push(chunk);
+    }
+    const left = x0 * this.tileWidth;
+    const top = y0 * this.tileHeight;
+    chunk.lower = this._rrChunkPart(state, chunk.lower, lowerRecorder, state.lowerRoot, left, top);
+    chunk.upper = this._rrChunkPart(state, chunk.upper, upperRecorder, state.upperRoot, left, top);
+    chunk.phase = 0;
+    this._rrChunkSnapshot(chunk, chunk.snapshot);
+    this._rrShowChunk(chunk, now);
+    const stats = Tilemap.Layer._v8Stats();
+    stats.chunkBuilds = (stats.chunkBuilds || 0) + 1;
+    if (now) stats.chunkSyncBuilds = (stats.chunkSyncBuilds || 0) + 1;
+    if (started) stats.chunkBuildMs = (stats.chunkBuildMs || 0) + performance.now() - started;
+    return chunk;
+};
+
+// One layer's mesh of a block, from its recorder: reuses the part it had or a pooled one.
+Tilemap.prototype._rrChunkPart = function(state, part, recorder, root, left, top) {
+    const count = recorder.count;
+    if (!count && !part) return null;
+    if (!part) part = state.pool.pop() || null;
+    if (!part) {
+        const geometry = new PIXI.MeshGeometry({
+            positions: new Float32Array(8),
+            uvs: new Float32Array(8),
+            indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
+            shrinkBuffersToFit: false
+        });
+        geometry.batchMode = "no-batch";
+        const mesh = new PIXI.Mesh({ geometry, texture: state.atlas.texture, roundPixels: true });
+        mesh.eventMode = "none";
+        part = { mesh, geometry, quads: Tilemap.Layer._newV8Quads(), count: 0,
+            animCount: 0, anim: null, animBase: null };
+    }
+    if (part.mesh.texture !== state.atlas.texture) part.mesh.texture = state.atlas.texture;
+    if (part.mesh.parent !== root) root.addChild(part.mesh);
+    part.mesh.position.set(left, top);
+    const quads = part.quads;
+    const grew = Tilemap.Layer._ensureV8Quads(quads, count);
+    const rects = recorder.rects;
+    const atlas = state.atlas;
+    let animCount = 0;
+    for (let n = 0; n < count; n++) {
+        const at = n * 8;
+        Tilemap.Layer._writeV8Quad(atlas, quads.positions, quads.uvs, n,
+            rects[at], rects[at + 1], rects[at + 2], rects[at + 3], rects[at + 4], rects[at + 5], rects[at + 6]);
+        if (rects[at + 7]) animCount++;
+    }
+    if (animCount) {
+        if (!part.anim || part.anim.length < animCount * 2) {
+            part.anim = new Int32Array(animCount * 2);
+            part.animBase = new Float32Array(animCount * 4);
+        }
+        const uvs = quads.uvs;
+        for (let n = 0, a = 0; n < count; n++) {
+            const kind = rects[n * 8 + 7];
+            if (!kind) continue;
+            const p = n * 8;
+            part.anim[a * 2] = n;
+            part.anim[a * 2 + 1] = kind;
+            part.animBase[a * 4] = uvs[p];
+            part.animBase[a * 4 + 1] = uvs[p + 1];
+            part.animBase[a * 4 + 2] = uvs[p + 4];
+            part.animBase[a * 4 + 3] = uvs[p + 5];
+            a++;
+        }
+    }
+    part.animCount = animCount;
+    Tilemap.Layer._publishV8Quads(part.geometry, quads, count, grew);
+    part.count = count;
+    return part;
+};
+
+// The water frame on a block's animated quads: water slides along x, falls along y.
+Tilemap.prototype._rrAnimateChunk = function(state, chunk) {
+    chunk.phase = state.phase;
+    const atlas = state.atlas;
+    const du = state.waterShift / atlas.width;
+    const dv = state.fallShift / atlas.height;
+    for (const part of [chunk.lower, chunk.upper]) {
+        if (!part || !part.animCount) continue;
+        const started = typeof performance !== "undefined" ? performance.now() : 0;
+        const uvs = part.quads.uvs;
+        const anim = part.anim;
+        const base = part.animBase;
+        for (let a = 0; a < part.animCount; a++) {
+            const p = anim[a * 2] * 8;
+            const left = base[a * 4];
+            const top = base[a * 4 + 1];
+            const right = base[a * 4 + 2];
+            const bottom = base[a * 4 + 3];
+            if (anim[a * 2 + 1] === 1) {
+                uvs[p] = uvs[p + 6] = left + du;
+                uvs[p + 2] = uvs[p + 4] = right + du;
+            } else {
+                uvs[p + 1] = uvs[p + 3] = top + dv;
+                uvs[p + 5] = uvs[p + 7] = bottom + dv;
+            }
+        }
+        part.geometry.attributes.aUV.buffer.update(part.quads.used * 8 * 4);
+        const stats = Tilemap.Layer._v8Stats();
+        stats.animPatches = (stats.animPatches || 0) + 1;
+        if (started) stats.animPatchMs = (stats.animPatchMs || 0) + performance.now() - started;
+    }
+};
+
+// The map data a block was painted from: layers 0-4 of its tiles and of the row above (table edges).
+Tilemap.prototype._rrChunkSnapshot = function(chunk, into) {
+    const size = chunk.size;
+    const x0 = chunk.cx * size;
+    const y0 = chunk.cy * size - 1;
+    let i = 0;
+    for (let z = 0; z < 5; z++) {
+        for (let y = 0; y <= size; y++) {
+            for (let x = 0; x < size; x++) {
+                into[i++] = this._readMapData(x0 + x, y0 + y, z);
+            }
+        }
+    }
+};
+
+Tilemap.prototype._rrChunkChanged = function(chunk) {
+    const snapshot = chunk.snapshot;
+    const scratch = Tilemap._rrChunkScratch && Tilemap._rrChunkScratch.length === snapshot.length ?
+        Tilemap._rrChunkScratch : (Tilemap._rrChunkScratch = new Int32Array(snapshot.length));
+    this._rrChunkSnapshot(chunk, scratch);
+    for (let i = 0; i < snapshot.length; i++) if (scratch[i] !== snapshot[i]) return true;
+    return false;
+};
+
 Tilemap.prototype._addSpot = function(startX, startY, x, y) {
     const mx = startX + x;
     const my = startY + y;
@@ -898,6 +1724,9 @@ Tilemap.prototype._addAutotile = function(layer, tileId, dx, dy) {
     let by = 0;
     let autotileTable = Tilemap.FLOOR_AUTOTILE_TABLE;
     let isTable = false;
+    // How the quads below move with the water frame, for a chunked paint
+    // (Tilemap.ChunkPaint): 1 along x with the surface, 2 along y with the fall.
+    let anim = 0;
 
     if (Tilemap.isTileA1(tileId)) {
         const waterSurfaceIndex = this._rrWater && this._rrWater.cycle === 3 ? this.animationFrame % 3 : [0, 1, 2, 1][this.animationFrame % 4];
@@ -905,9 +1734,11 @@ Tilemap.prototype._addAutotile = function(layer, tileId, dx, dy) {
         if (kind === 0) {
             bx = waterSurfaceIndex * 2;
             by = 0;
+            anim = 1;
         } else if (kind === 1) {
             bx = waterSurfaceIndex * 2;
             by = 3;
+            anim = 1;
         } else if (kind === 2) {
             bx = 6;
             by = 0;
@@ -919,10 +1750,12 @@ Tilemap.prototype._addAutotile = function(layer, tileId, dx, dy) {
             by = ty * 6 + (Math.floor(tx / 2) % 2) * 3;
             if (kind % 2 === 0) {
                 bx += waterSurfaceIndex * 2;
+                anim = 1;
             } else {
                 bx += 6;
                 autotileTable = Tilemap.WATERFALL_AUTOTILE_TABLE;
                 by += this.animationFrame % 3;
+                anim = 2;
             }
         }
     } else if (Tilemap.isTileA2(tileId)) {
@@ -947,6 +1780,7 @@ Tilemap.prototype._addAutotile = function(layer, tileId, dx, dy) {
     const table = autotileTable[shape];
     const w1 = this.tileWidth / 2;
     const h1 = this.tileHeight / 2;
+    this._rrPaintAnim = anim;
     for (let i = 0; i < 4; i++) {
         const qsx = table[i][0];
         const qsy = table[i][1];
@@ -965,6 +1799,7 @@ Tilemap.prototype._addAutotile = function(layer, tileId, dx, dy) {
             layer.addRect(setNumber, sx1, sy1, dx1, dy1, w1, h1);
         }
     }
+    this._rrPaintAnim = 0;
 };
 
 Tilemap.prototype._addTableEdge = function(layer, tileId, dx, dy) {
@@ -1353,7 +2188,16 @@ Tilemap.Layer._v8Stats = function() {
             spriteAllocations: 0,
             spritePoolHits: 0,
             fallbacks: 0,
-            fallbackReason: ""
+            fallbackReason: "",
+            // Tilemap.ChunkPaint: whether the last frame painted in chunks, and why not.
+            chunked: false,
+            chunkFallback: "",
+            chunkBuilds: 0,
+            chunkSyncBuilds: 0,
+            chunkBuildMs: 0,
+            chunksLive: 0,
+            animPatches: 0,
+            animPatchMs: 0
         };
     }
     return root.$reactorTilemapStats;
@@ -1366,6 +2210,128 @@ Tilemap.Layer._requestedV8Backend = function() {
         requested === "mesh" ? "mesh" : "auto";
 };
 
+// The tile sheets packed side by side, sized to the sheets themselves
+// (Tilemap.Layer.v8AtlasPacked; off: one 1024px slot per sheet in a
+// 4096x3072 atlas). The CPU copy is let go once the GPU has the pixels
+// (Tilemap.Layer.v8AtlasDropsCanvas) and drawn again whenever the GPU loses
+// them (a lost context, PIXI's texture GC): see _keepV8AtlasPixels.
+Tilemap.Layer.v8AtlasPacked = true;
+Tilemap.Layer.v8AtlasDropsCanvas = true;
+Tilemap.Layer.V8_ATLAS_SHEETS = 11;
+
+Tilemap.Layer._v8AtlasImages = function(bitmaps) {
+    const images = [];
+    for (let i = 0; i < this.V8_ATLAS_SHEETS; i++) {
+        const bitmap = bitmaps[i];
+        const image = bitmap && (bitmap.image || bitmap.canvas);
+        const width = image ? image.naturalWidth || image.videoWidth || image.width || 0 : 0;
+        const height = image ? image.naturalHeight || image.videoHeight || image.height || 0 : 0;
+        images.push(width && height ? { image, width, height } : null);
+    }
+    return images;
+};
+
+/**
+ * Where each sheet goes. Sheets fill columns as wide as the widest sheet, each
+ * placed in the shortest column, tallest sheets first; the column count that
+ * gives the smallest atlas within the GPU's texture limit wins. A 2x2 texel
+ * block under the shortest column holds the shadow colour. Areas a sheet
+ * does not cover are never sampled: a tile rect past its sheet's edge is
+ * clipped to it (_writeV8Quad), as the transparent margin of a fixed slot
+ * drew it.
+ */
+Tilemap.Layer._packV8Atlas = function(images, maxSize) {
+    const sheets = [];
+    let columnWidth = 1;
+    images.forEach((entry, index) => {
+        if (!entry) return;
+        sheets.push({ index, width: entry.width, height: entry.height });
+        columnWidth = Math.max(columnWidth, entry.width);
+    });
+    if (columnWidth > maxSize) throw new Error(`a tileset sheet is wider than the GPU texture limit ${maxSize}`);
+    sheets.sort((a, b) => b.height - a.height || a.index - b.index);
+    const layouts = [];
+    const most = Math.max(1, Math.min(sheets.length || 1, Math.floor(maxSize / columnWidth)));
+    for (let columns = 1; columns <= most; columns++) {
+        const heights = new Array(columns).fill(0);
+        const places = [];
+        for (const sheet of sheets) {
+            let column = 0;
+            for (let c = 1; c < columns; c++) if (heights[c] < heights[column]) column = c;
+            places.push({ index: sheet.index, x: column * columnWidth, y: heights[column] });
+            heights[column] += sheet.height;
+        }
+        let shadowColumn = 0;
+        for (let c = 1; c < columns; c++) if (heights[c] < heights[shadowColumn]) shadowColumn = c;
+        const shadowX = shadowColumn * columnWidth;
+        const shadowY = heights[shadowColumn];
+        heights[shadowColumn] += 2;
+        const width = columns * columnWidth;
+        const height = Math.max(...heights);
+        if (height > maxSize) continue;
+        layouts.push({ width, height, places, shadowX, shadowY });
+    }
+    if (!layouts.length) throw new Error(`the tileset sheets do not fit the GPU texture limit ${maxSize}`);
+    // Near the smallest area, the squarest: a long strip of a texture is legal but needs a high limit.
+    const least = Math.min(...layouts.map(l => l.width * l.height));
+    let best = null;
+    for (const layout of layouts) {
+        if (layout.width * layout.height > least * 1.15) continue;
+        if (!best || Math.max(layout.width, layout.height) < Math.max(best.width, best.height)) best = layout;
+    }
+    return best;
+};
+
+Tilemap.Layer._v8AtlasLayout = function(images, maxSize) {
+    const count = this.V8_ATLAS_SHEETS;
+    const layout = { ox: new Array(count).fill(0), oy: new Array(count).fill(0),
+        rw: new Array(count).fill(0), rh: new Array(count).fill(0) };
+    if (this.v8AtlasPacked) {
+        const packed = this._packV8Atlas(images, maxSize);
+        for (const place of packed.places) {
+            layout.ox[place.index] = place.x;
+            layout.oy[place.index] = place.y;
+            layout.rw[place.index] = images[place.index].width;
+            layout.rh[place.index] = images[place.index].height;
+        }
+        return Object.assign(layout, { width: packed.width, height: packed.height, shadowX: packed.shadowX, shadowY: packed.shadowY });
+    }
+    const slot = this.V8_ATLAS_SLOT_SIZE;
+    const width = this.V8_ATLAS_COLUMNS * slot;
+    const height = this.V8_ATLAS_ROWS * slot;
+    if (maxSize < Math.max(width, height)) throw new Error(`GPU texture limit is below ${Math.max(width, height)}`);
+    for (let i = 0; i < count; i++) {
+        const entry = images[i];
+        if (entry && (entry.width > slot || entry.height > slot)) {
+            throw new Error(`tileset sheet ${i} exceeds the ${slot}px atlas slot`);
+        }
+        layout.ox[i] = (i % this.V8_ATLAS_COLUMNS) * slot;
+        layout.oy[i] = Math.floor(i / this.V8_ATLAS_COLUMNS) * slot;
+        layout.rw[i] = layout.rh[i] = slot;
+    }
+    const shadowSlot = count;
+    return Object.assign(layout, { width, height,
+        shadowX: (shadowSlot % this.V8_ATLAS_COLUMNS) * slot,
+        shadowY: Math.floor(shadowSlot / this.V8_ATLAS_COLUMNS) * slot });
+};
+
+Tilemap.Layer._paintV8Atlas = function(entry) {
+    const canvas = entry.canvas;
+    if (canvas.width !== entry.width) canvas.width = entry.width;
+    if (canvas.height !== entry.height) canvas.height = entry.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not create the tile atlas canvas");
+    context.imageSmoothingEnabled = false;
+    context.clearRect(0, 0, entry.width, entry.height);
+    const images = this._v8AtlasImages(entry.bitmaps);
+    for (let i = 0; i < images.length; i++) {
+        if (images[i]) context.drawImage(images[i].image, entry.ox[i], entry.oy[i]);
+    }
+    context.fillStyle = "rgba(0,0,0,0.5)";
+    context.fillRect(entry.shadowX, entry.shadowY, 2, 2);
+    entry.dropped = false;
+};
+
 Tilemap.Layer._acquireV8Atlas = function(bitmaps) {
     let entry = this._v8AtlasCache.get(bitmaps);
     if (entry) {
@@ -1375,58 +2341,71 @@ Tilemap.Layer._acquireV8Atlas = function(bitmaps) {
     if (typeof document === "undefined" || !PIXI.CanvasSource || !PIXI.Texture) {
         throw new Error("PIXI 8 canvas textures are unavailable");
     }
-    const slot = this.V8_ATLAS_SLOT_SIZE;
-    const width = this.V8_ATLAS_COLUMNS * slot;
-    const height = this.V8_ATLAS_ROWS * slot;
     const renderer = typeof Graphics !== "undefined" && Graphics.app && Graphics.app.renderer;
     const gl = renderer && renderer.gl;
-    if (gl && gl.getParameter(gl.MAX_TEXTURE_SIZE) < Math.max(width, height)) {
-        throw new Error(`GPU texture limit is below ${Math.max(width, height)}`);
-    }
+    const maxSize = gl ? gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096 : 4096;
+    const images = this._v8AtlasImages(bitmaps);
+    const layout = this._v8AtlasLayout(images, maxSize);
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Could not create the tile atlas canvas");
-    context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, width, height);
-    const images = bitmaps.map(bitmap => bitmap && (bitmap.image || bitmap.canvas));
-    for (let i = 0; i < images.length && i < 11; i++) {
-        const image = images[i];
-        if (!image) continue;
-        const imageWidth = image.naturalWidth || image.videoWidth || image.width || 0;
-        const imageHeight = image.naturalHeight || image.videoHeight || image.height || 0;
-        if (!imageWidth || !imageHeight) continue;
-        if (imageWidth > slot || imageHeight > slot) {
-            throw new Error(`tileset sheet ${i} exceeds the ${slot}px atlas slot`);
-        }
-        const x = (i % this.V8_ATLAS_COLUMNS) * slot;
-        const y = Math.floor(i / this.V8_ATLAS_COLUMNS) * slot;
-        context.drawImage(image, x, y);
-    }
-    const shadowSlot = 11;
-    const shadowX = (shadowSlot % this.V8_ATLAS_COLUMNS) * slot;
-    const shadowY = Math.floor(shadowSlot / this.V8_ATLAS_COLUMNS) * slot;
-    context.fillStyle = "rgba(0,0,0,0.5)";
-    context.fillRect(shadowX, shadowY, 1, 1);
-    const source = new PIXI.CanvasSource({
+    entry = Object.assign({ bitmaps, canvas, refs: 1, dropped: false }, layout);
+    this._paintV8Atlas(entry);
+    entry.source = new PIXI.CanvasSource({
         resource: canvas,
         scaleMode: "nearest",
         addressMode: "clamp-to-edge",
         autoGenerateMipmaps: false
     });
-    const texture = new PIXI.Texture({ source });
-    entry = { bitmaps, canvas, source, texture, width, height, shadowX, shadowY, refs: 1 };
+    entry.texture = new PIXI.Texture({ source: entry.source });
     this._v8AtlasCache.set(bitmaps, entry);
+    this._v8AtlasLive.add(entry);
+    this._watchV8AtlasContext();
     return entry;
 };
+
+/**
+ * Once a frame per atlas user: lets the CPU copy go after the GPU holds the
+ * pixels, and draws it again when the GPU copy is gone (a lost context, or
+ * PIXI's texture GC), before the next draw uploads from it.
+ */
+Tilemap.Layer._keepV8AtlasPixels = function(entry) {
+    if (!entry || !entry.source || entry.source.destroyed) return;
+    const renderer = typeof Graphics !== "undefined" && Graphics.app && Graphics.app.renderer;
+    const gpu = renderer && entry.source._gpuData ? entry.source._gpuData[renderer.uid] : null;
+    const uploaded = Boolean(gpu && gpu.width === entry.width && gpu.height === entry.height);
+    if (entry.dropped) {
+        if (!uploaded) this._paintV8Atlas(entry);
+    } else if (uploaded && this.v8AtlasDropsCanvas && renderer.gl && !renderer.gl.isContextLost()) {
+        entry.canvas.width = 1;
+        entry.canvas.height = 1;
+        entry.dropped = true;
+    }
+};
+
+// A restored context uploads every texture again from its resource: each
+// dropped atlas is drawn again first.
+Tilemap.Layer._watchV8AtlasContext = function() {
+    const canvas = typeof Graphics !== "undefined" && (Graphics._canvas || (Graphics.app && Graphics.app.canvas));
+    if (!canvas || typeof canvas.addEventListener !== "function" || canvas.__rrTileAtlasWatched) return;
+    canvas.__rrTileAtlasWatched = true;
+    canvas.addEventListener("webglcontextrestored", () => {
+        const live = Tilemap.Layer._v8AtlasLive;
+        for (const entry of live) if (entry.dropped && !entry.source.destroyed) Tilemap.Layer._paintV8Atlas(entry);
+    });
+};
+
+Tilemap.Layer._v8AtlasLive = new Set();
 
 Tilemap.Layer._releaseV8Atlas = function(entry) {
     if (!entry || --entry.refs > 0) return;
     this._v8AtlasCache.delete(entry.bitmaps);
+    this._v8AtlasLive.delete(entry);
     if (entry.texture && !entry.texture.destroyed) {
         Tilemap.Layer._unbindV8AtlasSource(entry.source);
         entry.texture.destroy(true);
+    }
+    if (entry.canvas) {
+        entry.canvas.width = 0;
+        entry.canvas.height = 0;
     }
 };
 
@@ -1451,6 +2430,115 @@ Tilemap.Layer._unbindV8AtlasSource = function(source) {
         if (resources.uSampler === source.style) resources.uSampler = empty.source.style;
     } catch (error) {
         // Cosmetic only — the warning self-heals.
+    }
+};
+
+// Quad storage a tile mesh keeps between paints: arrays only grow, so a
+// repaint allocates nothing. Quads past the ones in use sit at one point
+// (no area, nothing drawn) until written.
+Tilemap.Layer._newV8Quads = function() {
+    return { positions: null, uvs: null, indices: null, capacity: 0, used: 0 };
+};
+
+Tilemap.Layer._ensureV8Quads = function(quads, count) {
+    if (quads.positions && quads.capacity >= count) return false;
+    const capacity = Math.max(64, count, Math.ceil(quads.capacity * 1.5));
+    const positions = new Float32Array(capacity * 8);
+    const uvs = new Float32Array(capacity * 8);
+    const indices = new Uint32Array(capacity * 6);
+    for (let n = 0, v = 0, i = 0; n < capacity; n++, v += 4, i += 6) {
+        indices[i] = v;
+        indices[i + 1] = v + 1;
+        indices[i + 2] = v + 2;
+        indices[i + 3] = v;
+        indices[i + 4] = v + 2;
+        indices[i + 5] = v + 3;
+    }
+    if (quads.positions) {
+        positions.set(quads.positions.subarray(0, quads.used * 8));
+        uvs.set(quads.uvs.subarray(0, quads.used * 8));
+    }
+    Object.assign(quads, { positions, uvs, indices, capacity });
+    return true;
+};
+
+/**
+ * Quad n of a tile mesh: the corners and atlas UVs of one tile rect. The
+ * part of a rect past its sheet's edge is clipped off, so it draws as the
+ * transparent margin around a sheet did; a rect wholly past it is not drawn.
+ */
+Tilemap.Layer._writeV8Quad = function(atlas, positions, uvs, n, setNumber, sx, sy, dx, dy, w, h) {
+    const p = n * 8;
+    let left;
+    let top;
+    let right;
+    let bottom;
+    if (setNumber < 0) {
+        left = right = (atlas.shadowX + 0.5) / atlas.width;
+        top = bottom = (atlas.shadowY + 0.5) / atlas.height;
+    } else {
+        if (!(setNumber < Tilemap.Layer.V8_ATLAS_SHEETS)) {
+            throw new Error(`tileset sheet ${setNumber} is outside the mesh atlas`);
+        }
+        const sheetWidth = atlas.rw[setNumber];
+        const sheetHeight = atlas.rh[setNumber];
+        if (sx + w > sheetWidth) w = sheetWidth - sx;
+        if (sy + h > sheetHeight) h = sheetHeight - sy;
+        if (!(w > 0 && h > 0)) {
+            positions.fill(0, p, p + 8);
+            uvs.fill(0, p, p + 8);
+            return;
+        }
+        const offsetX = atlas.ox[setNumber];
+        const offsetY = atlas.oy[setNumber];
+        // Inset the UV rect by a hair, not half a texel. Interpolated
+        // fragment UVs stay strictly inside the vertex bounds, so a
+        // tiny inset is enough to keep a quad edge from ever sampling
+        // the neighbouring atlas row; a half-texel inset compresses w
+        // texels into a (w - 1) span, and the moment the tilemap sits
+        // at a fractional screen position or any zoom, one texel row
+        // per tile duplicates or drops — crawling horizontal seams
+        // whenever a camera pans or zooms.
+        const inset = 1 / 128;
+        left = (offsetX + sx + inset) / atlas.width;
+        top = (offsetY + sy + inset) / atlas.height;
+        right = (offsetX + sx + w - inset) / atlas.width;
+        bottom = (offsetY + sy + h - inset) / atlas.height;
+    }
+    positions[p] = dx;
+    positions[p + 1] = dy;
+    positions[p + 2] = dx + w;
+    positions[p + 3] = dy;
+    positions[p + 4] = dx + w;
+    positions[p + 5] = dy + h;
+    positions[p + 6] = dx;
+    positions[p + 7] = dy + h;
+    uvs[p] = left;
+    uvs[p + 1] = top;
+    uvs[p + 2] = right;
+    uvs[p + 3] = top;
+    uvs[p + 4] = right;
+    uvs[p + 5] = bottom;
+    uvs[p + 6] = left;
+    uvs[p + 7] = bottom;
+};
+
+// Hands the written quads to the mesh: new arrays when they grew, otherwise
+// an upload of the quads in use (and of any that just fell out of use).
+Tilemap.Layer._publishV8Quads = function(geometry, quads, count, grew) {
+    if (count < quads.used) {
+        quads.positions.fill(0, count * 8, quads.used * 8);
+    }
+    const written = Math.max(count, quads.used);
+    quads.used = count;
+    const positionBuffer = geometry.attributes.aPosition.buffer;
+    if (grew || positionBuffer.data !== quads.positions) {
+        geometry.positions = quads.positions;
+        geometry.uvs = quads.uvs;
+        geometry.indices = quads.indices;
+    } else if (written > 0) {
+        positionBuffer.update(written * 8 * 4);
+        geometry.attributes.aUV.buffer.update(written * 8 * 4);
     }
 };
 
@@ -1516,8 +2604,8 @@ Tilemap.Layer.prototype._setupV8Backend = function(bitmaps) {
         if (typeof PIXI.Mesh !== "function" || typeof PIXI.MeshGeometry !== "function") {
             throw new Error("PIXI 8 mesh classes are unavailable");
         }
-        // The atlas (a 4096x3072 canvas: 48 MB, and as much again once it is on the GPU) is made
-        // when the first tile is drawn (_syncV8Backend): a layer that draws none, as on a 3D map,
+        // The atlas (the tileset sheets packed together, about 20 MB on the GPU for a full set
+        // of 48px sheets) is made when the first tile is drawn (_syncV8Backend): a layer that draws none, as on a 3D map,
         // never makes one.
         this._v8AtlasBitmaps = bitmaps;
         this._v8Geometry = new PIXI.MeshGeometry({
@@ -1643,6 +2731,7 @@ Tilemap.Layer.prototype._syncV8Backend = function() {
         }
         return;
     }
+    if (this._v8Atlas) Tilemap.Layer._keepV8AtlasPixels(this._v8Atlas);
     if (!this._v8MeshDirty) return;
     try {
         const count = this._elements.length;
@@ -1655,66 +2744,19 @@ Tilemap.Layer.prototype._syncV8Backend = function() {
             this._v8Atlas = Tilemap.Layer._acquireV8Atlas(this._v8AtlasBitmaps);
             this._v8Mesh.texture = this._v8Atlas.texture;
         }
-        const positions = new Float32Array(count * 8);
-        const uvs = new Float32Array(count * 8);
-        const indices = new Uint32Array(count * 6);
         const atlas = this._v8Atlas;
-        const slot = Tilemap.Layer.V8_ATLAS_SLOT_SIZE;
-        const columns = Tilemap.Layer.V8_ATLAS_COLUMNS;
-        let vertexAt = 0;
-        let indexAt = 0;
+        const quads = this._v8Quads || (this._v8Quads = Tilemap.Layer._newV8Quads());
+        const grew = Tilemap.Layer._ensureV8Quads(quads, count);
+        const positions = quads.positions;
+        const uvs = quads.uvs;
         const started = typeof performance !== "undefined" ? performance.now() : 0;
+        const elements = this._elements;
         for (let n = 0; n < count; n++) {
-            const item = this._elements[n];
-            const setNumber = item[0];
-            const sx = item[1];
-            const sy = item[2];
-            const dx = item[3];
-            const dy = item[4];
-            const w = item[5];
-            const h = item[6];
-            positions.set([
-                dx, dy,
-                dx + w, dy,
-                dx + w, dy + h,
-                dx, dy + h
-            ], vertexAt * 2);
-            let left;
-            let top;
-            let right;
-            let bottom;
-            if (setNumber < 0) {
-                left = right = (atlas.shadowX + 0.5) / atlas.width;
-                top = bottom = (atlas.shadowY + 0.5) / atlas.height;
-            } else {
-                if (setNumber >= 11) throw new Error(`tileset sheet ${setNumber} is outside the mesh atlas`);
-                const offsetX = (setNumber % columns) * slot;
-                const offsetY = Math.floor(setNumber / columns) * slot;
-                // Inset the UV rect by a hair, not half a texel. Interpolated
-                // fragment UVs stay strictly inside the vertex bounds, so a
-                // tiny inset is enough to keep a quad edge from ever sampling
-                // the neighbouring atlas row; a half-texel inset compresses w
-                // texels into a (w - 1) span, and the moment the tilemap sits
-                // at a fractional screen position or any zoom, one texel row
-                // per tile duplicates or drops — crawling horizontal seams
-                // whenever a camera pans or zooms.
-                const inset = 1 / 128;
-                left = (offsetX + sx + inset) / atlas.width;
-                top = (offsetY + sy + inset) / atlas.height;
-                right = (offsetX + sx + w - inset) / atlas.width;
-                bottom = (offsetY + sy + h - inset) / atlas.height;
-            }
-            uvs.set([left, top, right, top, right, bottom, left, bottom], vertexAt * 2);
-            indices.set([
-                vertexAt, vertexAt + 1, vertexAt + 2,
-                vertexAt, vertexAt + 2, vertexAt + 3
-            ], indexAt);
-            vertexAt += 4;
-            indexAt += 6;
+            const item = elements[n];
+            Tilemap.Layer._writeV8Quad(atlas, positions, uvs, n,
+                item[0], item[1], item[2], item[3], item[4], item[5], item[6]);
         }
-        this._v8Geometry.positions = positions;
-        this._v8Geometry.uvs = uvs;
-        this._v8Geometry.indices = indices;
+        Tilemap.Layer._publishV8Quads(this._v8Geometry, quads, count, grew);
         this._v8Mesh.visible = count > 0;
         this._v8MeshDirty = false;
         const stats = Tilemap.Layer._v8Stats();
@@ -2008,10 +3050,15 @@ Tilemap.CombinedLayer.prototype.size = function() {
 Tilemap.CombinedLayer.prototype.addRect = function(
     setNumber, sx, sy, dx, dy, w, h
 ) {
-    for (const child of this.children) {
+    // Runs for every rect of every paint: an indexed walk, and the seven
+    // arguments passed as such unless a caller gave more.
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (typeof child.size === "function" && typeof child.addRect === "function" &&
             child.size() < Tilemap.Layer.MAX_SIZE) {
-            child.addRect(...arguments);
+            if (arguments.length > 7) child.addRect.apply(child, arguments);
+            else child.addRect(setNumber, sx, sy, dx, dy, w, h);
             break;
         }
     }
@@ -2025,10 +3072,31 @@ Tilemap.CombinedLayer.prototype.isReady = function() {
 };
 
 Tilemap.CombinedLayer.prototype._syncV8Backend = function() {
-    for (const child of this.children) {
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (typeof child._syncV8Backend === "function") child._syncV8Backend();
     }
 };
+
+// The painting path as this file defines it, before any plugin loads: a
+// tilemap paints in chunks only while its methods are still these.
+if (Tilemap.ChunkPaint) Tilemap.ChunkPaint.stock = (function() {
+    const stock = {};
+    for (const name of Tilemap.ChunkPaint.HOOKS) stock[name] = Tilemap.prototype[name];
+    stock.layerAddRect = Tilemap.Layer.prototype.addRect;
+    stock.layerClear = Tilemap.Layer.prototype.clear;
+    stock.combinedAddRect = Tilemap.CombinedLayer.prototype.addRect;
+    stock.combinedClear = Tilemap.CombinedLayer.prototype.clear;
+    return stock;
+})();
+
+// Plugins load after this file: note which of them installs each painting method.
+if (Tilemap.ChunkPaint) Tilemap.ChunkPaint.watch([
+    [Tilemap.prototype, Tilemap.ChunkPaint.HOOKS],
+    [Tilemap.Layer.prototype, ["addRect", "clear"]],
+    [Tilemap.CombinedLayer.prototype, ["addRect", "clear"]]
+]);
 
 Tilemap.Renderer = function() {
     this.initialize(...arguments);
@@ -2240,7 +3308,7 @@ Object.defineProperty(TilingSprite.prototype, "opacity", {
         return this.alpha * 255;
     },
     set: function(value) {
-        this.alpha = value.clamp(0, 255) / 255;
+        this.alpha = Math.min(Math.max(value, 0), 255) / 255;
     },
     configurable: true
 });
@@ -2260,7 +3328,10 @@ TilingSprite.prototype.update = function() {
     if (this.visible && this.worldVisible !== false && this._bitmap) {
         this._bitmap._updateAnimatedImage();
     }
-    for (const child of this.children) {
+    // Indexed: runs every frame for every node, and allocates nothing.
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (child.update) {
             child.update();
         }
@@ -2422,7 +3493,7 @@ Object.defineProperty(ScreenSprite.prototype, "opacity", {
         return this.alpha * 255;
     },
     set: function(value) {
-        this.alpha = value.clamp(0, 255) / 255;
+        this.alpha = Math.min(Math.max(value, 0), 255) / 255;
     },
     configurable: true
 });
@@ -2714,7 +3785,7 @@ Object.defineProperty(Window.prototype, "opacity", {
         return this._container.alpha * 255;
     },
     set: function(value) {
-        this._container.alpha = value.clamp(0, 255) / 255;
+        this._container.alpha = Math.min(Math.max(value, 0), 255) / 255;
     },
     configurable: true
 });
@@ -2730,7 +3801,7 @@ Object.defineProperty(Window.prototype, "backOpacity", {
         return this._backSprite.alpha * 255;
     },
     set: function(value) {
-        this._backSprite.alpha = value.clamp(0, 255) / 255;
+        this._backSprite.alpha = Math.min(Math.max(value, 0), 255) / 255;
     },
     configurable: true
 });
@@ -2746,7 +3817,7 @@ Object.defineProperty(Window.prototype, "contentsOpacity", {
         return this._contentsSprite.alpha * 255;
     },
     set: function(value) {
-        this._contentsSprite.alpha = value.clamp(0, 255) / 255;
+        this._contentsSprite.alpha = Math.min(Math.max(value, 0), 255) / 255;
     },
     configurable: true
 });
@@ -2763,7 +3834,7 @@ Object.defineProperty(Window.prototype, "openness", {
     },
     set: function(value) {
         if (this._openness !== value) {
-            this._openness = value.clamp(0, 255);
+            this._openness = Math.min(Math.max(value, 0), 255);
             this._container.scale.y = this._openness / 255;
             this._container.y = (this.height / 2) * (1 - this._openness / 255);
         }
@@ -2838,7 +3909,10 @@ Window.prototype.update = function() {
     if (this.active) {
         this._animationCount++;
     }
-    for (const child of this.children) {
+    // Indexed: runs every frame for every node, and allocates nothing.
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (child.update) {
             child.update();
         }
@@ -2962,10 +4036,23 @@ Window.prototype.addInnerChild = function(child) {
     return this._clientArea.addChild(child);
 };
 
+/** The kill switch: false lays out every window every frame, hidden or closed, as before. */
+Window.SKIP_UNSEEN_LAYOUT = true;
+
 /**
  * Updates the transform on all children of this container for rendering.
  */
 Window.prototype.updateTransform = function() {
+    // PIXI v8 asks every window each frame, shown or not: a hidden window has
+    // nothing to lay out, nor does a closed one once it was laid out closed
+    // (its client area hidden). On a map screen most windows are, and laying
+    // them out was a quarter of a millisecond a frame.
+    if (Window.SKIP_UNSEEN_LAYOUT && PIXI.TextureSource) {
+        if (!this.visible) return;
+        const closed = this._openness <= 0;
+        if (closed && this._rrLaidClosed) return;
+        this._rrLaidClosed = closed;
+    }
     this._updateClientArea();
     this._updateFrame();
     this._updateContentsBack();
@@ -3147,6 +4234,24 @@ Window.prototype._refreshBack = function() {
         return;
     }
     const tilingSprite = sprite.children[0];
+    const legacy = typeof $dataSystem !== "undefined" && $dataSystem?.rrLegacyWindows;
+    if (legacy) {
+        const tiled = $dataSystem.rrLegacySkins && typeof $gameSystem !== "undefined" && $gameSystem?.windowBackgroundMode?.() === 1;
+        sprite.bitmap = this._windowskin;
+        sprite.move(m, m);
+        sprite.setFrame(0, tiled ? 96 : 0, tiled ? 32 : 96, tiled ? 32 : 96);
+        sprite.scale.x = tiled ? 1 : w / 96;
+        sprite.scale.y = tiled ? 1 : h / 96;
+        if (tilingSprite) {
+            tilingSprite.bitmap = this._windowskin;
+            tilingSprite.setFrame(0, 96, 32, 32);
+            tilingSprite.move(0, 0, w, h);
+            tilingSprite.scale.x = tilingSprite.scale.y = 1;
+            tilingSprite.visible = !!tiled && w > 0 && h > 0;
+        }
+        if (sprite.setColorTone) sprite.setColorTone(this._colorTone);
+        return;
+    }
     // [Note] We use 95 instead of 96 here to avoid blurring edges.
     sprite.bitmap = this._windowskin;
     sprite.setFrame(0, 0, 95, 95);
@@ -3541,7 +4646,10 @@ WindowLayer.prototype.initialize = function() {
  * Updates the window layer for each frame.
  */
 WindowLayer.prototype.update = function() {
-    for (const child of this.children) {
+    // Indexed: runs every frame for every node, and allocates nothing.
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         if (child.update) {
             child.update();
         }
@@ -3838,7 +4946,63 @@ ColorFilter.prototype.allowNeutralSceneSkip = function(owner) {
         set(value) { this._neutralRequestedEnabled = value; }
     });
 };
+// A sprite's own colour pass (Sprite._colorFilter: a tone, a flash, a hue)
+// stays on the sprite once made. While it changes nothing it is skipped:
+// the sprite is drawn straight, as one that never had a tone. Only when it is
+// the sprite's one filter, its blend is the sprite's own, and everything
+// under the sprite draws with a backdrop-keeping blend, unfiltered and
+// unmasked, so drawing straight gives the same pixels as the group pass.
+ColorFilter.skipNeutralSpritePasses = true;
+ColorFilter.prototype.allowNeutralSpriteSkip = function(owner) {
+    if (!PIXI.GlProgram || !this.matrix || this._neutralSceneOwner || this._neutralSpriteOwner) return;
+    this._neutralSpriteOwner = owner;
+    this._neutralRequestedEnabled = this.enabled;
+    const glProgram = this.glProgram, gpuProgram = this.gpuProgram, apply = this.apply;
+    Object.defineProperty(this, 'enabled', {
+        configurable: true, enumerable: true,
+        get() {
+            if (!this._neutralRequestedEnabled) return false;
+            if (!ColorFilter.skipNeutralSpritePasses || this.glProgram !== glProgram ||
+                this.gpuProgram !== gpuProgram || this.apply !== apply) return true;
+            return !ColorFilter._spritePassCanSkip(this, this._neutralSpriteOwner);
+        },
+        set(value) { this._neutralRequestedEnabled = value; }
+    });
+};
+ColorFilter._isIdentityMatrix = function(m) {
+    if (!m || m.length !== 20) return false;
+    for (let i = 0; i < 20; i++) if (m[i] !== (i === 0 || i === 6 || i === 12 || i === 18 ? 1 : 0)) return false;
+    return true;
+};
+ColorFilter._spritePassCanSkip = function(filter, owner) {
+    if (filter._rrLegacySaturationMatrix) return false;
+    if (filter.alpha !== 1 || filter.resolution !== 1 || filter.padding !== 0 || filter.blendRequired ||
+        !ColorFilter._isIdentityMatrix(filter.matrix)) return false;
+    const filters = owner.filters;
+    if (!filters || filters.length !== 1 || filters[0] !== filter) return false;
+    const own = owner._blendMode === undefined ? 'normal' : _normalizeBlendMode(owner._blendMode);
+    if (filter.blendMode !== own && !(filter.blendMode === 'normal' && own === 'inherit')) return false;
+    if (owner.mask) return false;
+    const children = owner.children;
+    if (children && children.length) {
+        // Children blend onto the sprite inside the group, onto the screen without it:
+        // the same only for plain alpha blending all the way down.
+        if (own !== 'normal' && own !== 'inherit') return false;
+        for (let i = 0; i < children.length; i++) if (!ColorFilter._drawsStraight(children[i])) return false;
+    }
+    return true;
+};
+// A subtree that draws the same on its own as inside its parent's group pass.
+ColorFilter._drawsStraight = function(node) {
+    if (!node.visible || !node.renderable) return true;
+    if (node.mask || (node.filters && node.filters.length) ||
+        (node.blendMode !== 'normal' && node.blendMode !== 'inherit')) return false;
+    const children = node.children;
+    if (children) for (let i = 0; i < children.length; i++) if (!ColorFilter._drawsStraight(children[i])) return false;
+    return true;
+};
 ColorFilter.isNeutralSceneMatrix = function(filter) {
+    if (filter._rrLegacySaturationMatrix) return false;
     if (filter.alpha !== 1 || filter.blendMode !== 'normal' || filter.resolution !== 1 ||
         filter.antialias !== 'off' || filter.padding !== 0 || filter.blendRequired) return false;
     const m = filter.matrix;
@@ -3894,9 +5058,9 @@ ColorFilter._sceneBlendsKeepBackdrop = function(node) {
     if (!node.visible || !node.renderable) return true;
     if (!ColorFilter._safeSceneBlend(node.blendMode)) return false;
     const filters = node.filters;
-    if (filters) for (const f of filters) if (!ColorFilter._safeSceneBlend(f.blendMode)) return false;
+    if (filters) for (let i = 0; i < filters.length; i++) if (!ColorFilter._safeSceneBlend(filters[i].blendMode)) return false;
     const children = node.children;
-    if (children) for (const child of children) if (!ColorFilter._sceneBlendsKeepBackdrop(child)) return false;
+    if (children) for (let i = 0; i < children.length; i++) if (!ColorFilter._sceneBlendsKeepBackdrop(children[i])) return false;
     return true;
 };
 
@@ -4051,6 +5215,60 @@ ColorFilter._matrixMultiply = function(a, b) {
     return out;
 };
 
+// Imported RPG Maker 2000/2003 tones use hard light around 128, rather
+// than MZ's additive RGB offsets. Keep their serialized MZ-shaped values
+// readable by older runtimes and select the different colour rule per pass.
+ColorFilter.prototype.setLegacyTone = function(enabled) {
+    enabled = !!enabled;
+    if (this._rrLegacyTone === enabled) return;
+    this._rrLegacyTone = enabled;
+    if (PIXI.GlProgram && PIXI.ColorMatrixFilter) this._rebuildColorMatrix();
+};
+ColorFilter.legacyToneMatrix = function(tone) {
+    const m = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
+    // EasyRPG Bitmap::ToneBlit: Y'CbCr saturation precedes hard light.
+    // The command values retain the source percentage, including >100%.
+    const gray = Math.max(0, Math.min(255, 128 - (tone[3] || 0) * 128 / 255));
+    const sat = gray > 128 ? 1 + (gray - 128) / 64 : gray / 128;
+    const lum = [19595 / 65536, 38470 / 65536, 7471 / 65536];
+    for (let row = 0; row < 3; row++) {
+        const value = tone[row] || 0;
+        // At neutral the old engine bypasses the tone operation entirely.
+        const t = Math.max(0, Math.min(255, 128 + value * 128 / 255));
+        const scale = value === 0 ? 1 : t <= 128 ? 2 * t / 255 : 2 * (255 - t) / 255;
+        for (let col = 0; col < 3; col++) m[row * 5 + col] = scale * ((1 - sat) * lum[col] + (row === col ? sat : 0));
+        m[row * 5 + 4] = t > 128 ? 1 - scale : 0;
+    }
+    return m;
+};
+
+// Oversaturation must clamp before hard light. Only that legacy case
+// needs a second pass; its temporary target comes from PIXI's texture pool.
+// Resolve inherited hooks at call time so plugins loaded afterwards can
+// still replace ColorMatrixFilter/Filter behaviour.
+const _rrColorFilterApply = function() {
+    return Object.getPrototypeOf(ColorFilter.prototype).apply.apply(this, arguments);
+};
+ColorFilter.prototype.apply = function(manager, input, output, clear) {
+    if (!this._rrLegacySaturationMatrix || !PIXI.TexturePool) {
+        return _rrColorFilterApply.call(this, manager, input, output, clear);
+    }
+    const pass = this._rrSaturationPass || (this._rrSaturationPass = new PIXI.ColorMatrixFilter());
+    pass._loadMatrix(this._rrLegacySaturationMatrix, false);
+    const temp = PIXI.TexturePool.getSameSizeTexture(input);
+    try {
+        pass.apply(manager, input, temp, true);
+        _rrColorFilterApply.call(this, manager, temp, output, clear);
+    } finally {
+        PIXI.TexturePool.returnTexture(temp);
+    }
+};
+ColorFilter.prototype.destroy = function() {
+    this._rrSaturationPass?.destroy();
+    this._rrSaturationPass = null;
+    return Object.getPrototypeOf(ColorFilter.prototype).destroy?.apply(this, arguments);
+};
+
 // v8 only: combine hue/colorTone/blendColor/brightness into one 5x4 matrix
 // and push it to the inherited ColorMatrixFilter. Offsets are pre-normalized
 // to 0-1 because PIXI.ColorMatrixFilter's matrix setter writes the value to
@@ -4079,29 +5297,41 @@ ColorFilter.prototype._rebuildColorMatrix = function() {
         m = ColorFilter._matrixMultiply(hueM, m);
     }
 
-    // 2. Grayscale (saturation reduction) by colorTone[3] / 255.
-    const grayAmount =
-        Math.max(0, Math.min(255, this._colorTone[3] || 0)) / 255;
-    if (grayAmount > 0) {
-        const k = grayAmount;
-        const lr = 0.2125, lg = 0.7154, lb = 0.0721;
-        const grayM = [
-            lr * k + (1 - k), lg * k,            lb * k,            0, 0,
-            lr * k,           lg * k + (1 - k),  lb * k,            0, 0,
-            lr * k,           lg * k,            lb * k + (1 - k),  0, 0,
-            0, 0, 0, 1, 0
-        ];
-        m = ColorFilter._matrixMultiply(grayM, m);
-    }
+    this._rrLegacySaturationMatrix = null;
+    if (this._rrLegacyTone) {
+        if (this._colorTone[3] < 0) {
+            this._rrLegacySaturationMatrix = ColorFilter._matrixMultiply(
+                ColorFilter.legacyToneMatrix([0, 0, 0, this._colorTone[3]]), m);
+            m = ColorFilter.legacyToneMatrix([this._colorTone[0], this._colorTone[1], this._colorTone[2], 0]);
+        } else {
+            m = ColorFilter._matrixMultiply(ColorFilter.legacyToneMatrix(this._colorTone), m);
+        }
+    } else {
+        // 2. Grayscale (saturation reduction) by colorTone[3] / 255.
+        const grayAmount =
+            Math.max(0, Math.min(255, this._colorTone[3] || 0)) / 255;
+        if (grayAmount > 0) {
+            const k = grayAmount;
+            const lr = 0.2125, lg = 0.7154, lb = 0.0721;
+            const grayM = [
+                lr * k + (1 - k), lg * k,            lb * k,            0, 0,
+                lr * k,           lg * k + (1 - k),  lb * k,            0, 0,
+                lr * k,           lg * k,            lb * k + (1 - k),  0, 0,
+                0, 0, 0, 1, 0
+            ];
+            m = ColorFilter._matrixMultiply(grayM, m);
+        }
 
-    // 3. Additive color tone (RGB offsets, 0..255 input normalized to 0..1).
-    const r2 = (this._colorTone[0] || 0) / 255;
-    const g2 = (this._colorTone[1] || 0) / 255;
-    const b2 = (this._colorTone[2] || 0) / 255;
-    if (r2 !== 0 || g2 !== 0 || b2 !== 0) {
-        m[4]  += r2;
-        m[9]  += g2;
-        m[14] += b2;
+        // 3. Additive color tone (RGB offsets, 0..255 input normalized to 0..1).
+        const r2 = (this._colorTone[0] || 0) / 255;
+        const g2 = (this._colorTone[1] || 0) / 255;
+        const b2 = (this._colorTone[2] || 0) / 255;
+        if (r2 !== 0 || g2 !== 0 || b2 !== 0) {
+            m[4]  += r2;
+            m[9]  += g2;
+            m[14] += b2;
+        }
+
     }
 
     // 4. Blend color: output = output * (1 - i3) + blend * i3.

@@ -21,6 +21,24 @@
         }
         return limit;
     };
+    // An Effekseer animation's size, the same in the game and in the editor's previews. RPG Maker draws an effect in
+    // a 4096 px square with its camera 10 units back and p = -4096 / screen height: one effect unit at the effect's
+    // middle is 2048 * h / (h + 40960) pixels on a screen h pixels tall, in the same perspective at every depth.
+    B.EFFEKSEER_FRAME = 4096;
+    /**
+     * The projection matrix (as Effekseer takes it) that draws an effect that size in a viewport `width` x `height`
+     * pixels centred on it. `screenHeight`: the game's screen height; `scale`: how big a preview is drawn against
+     * that screen (its height / the screen's), 1 in the game; `mirror` flips it across its middle.
+     */
+    B.effekseerProjection = (width, height, screenHeight = height, scale = 1, mirror = false) => {
+        const frame = B.EFFEKSEER_FRAME, screen = screenHeight > 0 ? screenHeight : height;
+        return [
+            (mirror ? -1 : 1) * scale * frame / width, 0, 0, 0,
+            0, scale * frame / height, 0, 0,
+            0, 0, 1, -(frame / screen),
+            0, 0, 0, 1
+        ];
+    };
     B.empty = () => ({ version: 1, troops: {}, skills: {}, items: {}, weapons: {}, actors: {}, enemies: {}, classes: {} });
     B.types = ['move', 'motion', 'sound', 'animation', 'projectile', 'weapon', 'impact', 'wait', 'camera'];
     B.actionPhases = [
@@ -596,8 +614,13 @@
         let frame = 0;
         const poses = context?.homes ? copy(context.homes) : null, target = context?.target || poses?.target || { x: 0, y: 0, z: 0 }, busy = {}, active = {};
         const travelling = ['move'], lifting = ['jump','leap','float','fall'];
+        let lastPhase = null;
         const cues = (sequence.steps || []).map(step => {
             let duration = Math.max(0, number(step.duration));
+            // Return begins once every battler has stopped travelling: a walk home started in Execute plays out instead of being cut short by the Return's move.
+            const phase = B.stepPhase(step);
+            if (phase === 'return' && lastPhase !== null && lastPhase !== 'return') frame = Math.max(frame, ...Object.values(busy).map(b => Math.max(b.move || 0, b.jump || 0)));
+            lastPhase = phase;
             const key = B.roleKey(step);
             const cue = { step };
             if (step.type === 'move' && poses) {

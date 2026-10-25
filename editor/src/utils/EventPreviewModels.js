@@ -344,7 +344,7 @@
                 if (Reactor3D.applyPivotOverrides) Reactor3D.applyPivotOverrides(object, Reactor3D.readModelPivots(sidecar));
             }
             const binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
-            const rules = Reactor3D.readModelAnimationRules(sidecar);
+            const rules = Reactor3D.readModelAnimationRules(sidecar, object.__reactorClips);
             if (!binding || !rules.length) return null;
             return { binding, rules, clips: binding.clips };
         } catch (error) {

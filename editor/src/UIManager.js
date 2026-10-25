@@ -182,6 +182,9 @@ class UIManager {
             case 'save-project':
                 this.callbacks.saveProject();
                 break;
+            case 'save-project-as':
+                if (this.callbacks.saveProjectAs) this.callbacks.saveProjectAs();
+                break;
             case 'playtest':
                 this.callbacks.playtest();
                 break;
@@ -199,31 +202,6 @@ class UIManager {
             case 'forge-launcher':
                 if (this.callbacks.showForgeLauncher) {
                     this.callbacks.showForgeLauncher();
-                }
-                break;
-            case 'forge-character-generator':
-                if (this.callbacks.openForgeTool) {
-                    this.callbacks.openForgeTool('character-generator');
-                }
-                break;
-            case 'forge-animation-generator':
-                if (this.callbacks.openForgeTool) {
-                    this.callbacks.openForgeTool('animation-generator');
-                }
-                break;
-            case 'forge-sound-effect-generator':
-                if (this.callbacks.openForgeTool) {
-                    this.callbacks.openForgeTool('sound-effect-generator');
-                }
-                break;
-            case 'forge-effekseer-generator':
-                if (this.callbacks.openForgeTool) {
-                    this.callbacks.openForgeTool('effekseer-generator');
-                }
-                break;
-            case 'forge-project-tools':
-                if (this.callbacks.openForgeTool) {
-                    this.callbacks.openForgeTool('project-tools');
                 }
                 break;
             // The map tools open from the menu exactly as from the toolbar.
@@ -314,7 +292,7 @@ class UIManager {
         fileMenu.append(new nw.MenuItem({ type: 'separator' }));
         fileMenu.append(new nw.MenuItem({
             label: 'Exit',
-            click: () => nw.App.quit()
+            click: () => this.callbacks.exit()
         }));
 
         menubar.append(new nw.MenuItem({
@@ -603,8 +581,7 @@ class UIManager {
             // Sidebar lists own navigation even while Events is the active tool.
             // This listener runs before the list's own keyboard handler.
             if ((arrowDelta || e.key === 'Enter') && e.target?.closest?.('#maps-list, #quick-access-list, #events-list')) return;
-            const eventEditorModal = document.getElementById('event-editor-modal');
-            const eventEditorOpen = eventEditorModal && eventEditorModal.style.display !== 'none';
+            const eventEditorOpen = this.eventEditorHasKeys();
             const commandModifier = e.ctrlKey || e.metaKey;
             const propsManager = window.reactor?.projectController?.modelPropsManager || window.reactor?.modelPropsManager;
             const lightsManager = window.reactor?.projectController?.lightingManager || window.reactor?.lightingManager;
@@ -737,8 +714,9 @@ class UIManager {
                 }
             }
 
-            // Ctrl/Cmd+C - Copy event (only in event mode)
-            if (commandModifier && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c') {
+            // Ctrl/Cmd+C - Copy event (only in event mode). With the event
+            // editor open the key belongs to its command list.
+            if (commandModifier && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && !eventEditorOpen) {
                 const activeElement = document.activeElement;
                 const isTextInput = activeElement && (
                     activeElement.tagName === 'INPUT' ||
@@ -774,9 +752,8 @@ class UIManager {
                     activeElement.isContentEditable
                 );
 
-                // Check if event editor is open (don't intercept Ctrl+X)
-                const ctxModal = document.getElementById('event-editor-modal');
-                const eventEditorOpen = ctxModal && ctxModal.style.display !== 'none';
+                // The event window has the keys when the person is working in it (don't intercept Ctrl+X)
+                const eventEditorOpen = this.eventEditorHasKeys();
 
                 if (!isTextInput && !eventEditorOpen) {
                     const eventManager = this.callbacks.getEventManager ? this.callbacks.getEventManager() : null;
@@ -806,9 +783,8 @@ class UIManager {
                     activeElement.isContentEditable
                 );
 
-                // Check if event editor is open (don't intercept Ctrl+V)
-                const pasteModal = document.getElementById('event-editor-modal');
-                const eventEditorOpenForPaste = pasteModal && pasteModal.style.display !== 'none';
+                // The event window has the keys when the person is working in it (don't intercept Ctrl+V)
+                const eventEditorOpenForPaste = this.eventEditorHasKeys();
 
                 if (!isTextInput && !eventEditorOpenForPaste && this.callbacks.getEventManager) {
                     const eventManager = this.callbacks.getEventManager();
@@ -845,9 +821,8 @@ class UIManager {
                     activeElement.isContentEditable
                 );
 
-                // Check if event editor is open (don't intercept Delete key)
-                const delModal = document.getElementById('event-editor-modal');
-                const eventEditorOpen = delModal && delModal.style.display !== 'none';
+                // The event window has the keys when the person is working in it (don't intercept Delete)
+                const eventEditorOpen = this.eventEditorHasKeys();
 
                 if (!isTextInput && !eventEditorOpen && this.callbacks.getEventManager) {
                     const eventManager = this.callbacks.getEventManager();
@@ -891,16 +866,20 @@ class UIManager {
     }
 
     isEditorModalOpenForGlobalShortcuts() {
-        const databaseViewer = document.getElementById('database-viewer');
-        if (databaseViewer && databaseViewer.classList.contains('active')) {
-            return true;
+        if (typeof RRForgeWindow !== 'undefined' && RRForgeWindow.ownsKeys()) return true;
+        if (typeof RRPluginManagerWindow !== 'undefined' && RRPluginManagerWindow.ownsKeys()) return true;
+        // The Database beside a live map has the keys only after a click or Tab into it.
+        if (typeof RRDatabaseWindow !== 'undefined') {
+            if (RRDatabaseWindow.ownsKeys()) return true;
+        } else {
+            const databaseViewer = document.getElementById('database-viewer');
+            if (databaseViewer && databaseViewer.classList.contains('active')) return true;
         }
 
         const modalIds = [
             'map-properties-modal',
             'image-picker-modal',
-            'audio-player-modal',
-            'plugin-manager-modal'
+            'audio-player-modal'
         ];
 
         if (modalIds.some(id => {
@@ -910,8 +889,10 @@ class UIManager {
 
         // Any other dialog on screen (Import Project, Unsaved Changes, Options, pickers…): the map
         // behind it takes no keys. The event editor is handled key by key by the caller.
-        return Array.from(document.querySelectorAll?.('.rr-modal-overlay, .modal-overlay, .modal') || [])
-            .some(el => el.id !== 'event-editor-modal' && el.getClientRects?.().length > 0);
+        // A dialog in another window (the Database's, the event editor's) only while that window was the last one worked in.
+        const worked = (typeof RRDetachedWindow !== 'undefined' && RRDetachedWindow.lastWorked()?.ownerDocument) || document;
+        return Array.from(document.querySelectorAll?.('.rr-modal-overlay, .modal-overlay, .modal, .plugin-manager-child-modal') || [])
+            .some(el => !['event-editor-modal', 'forge-workspace', 'plugin-manager-modal'].includes(el.id) && (!el.ownerDocument || el.ownerDocument === document || el.ownerDocument === worked) && el.getClientRects?.().length > 0);
     }
 
     /**
@@ -937,7 +918,17 @@ class UIManager {
         return true;
     }
 
-    promptUnsavedChanges(subject) {
+    /**
+     * Whether the event window takes the key: it floats over a live map, so it has the keys only
+     * when the person last clicked or tabbed into it; after a click on the map, the map has them.
+     */
+    eventEditorHasKeys() {
+        if (typeof RREventEditorWindow !== 'undefined') return RREventEditorWindow.ownsKeys();
+        const modal = document.getElementById('event-editor-modal');
+        return !!modal && modal.style.display !== 'none';
+    }
+
+    promptUnsavedChanges(subject, { saveLabel = null } = {}) {
         if (this.unsavedChangesPrompt) return this.unsavedChangesPrompt;
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const previouslyFocused = document.activeElement;
@@ -992,7 +983,7 @@ class UIManager {
         saveButton.id = 'rr-unsaved-save';
         saveButton.type = 'button';
         saveButton.className = 'rr-button-primary';
-        saveButton.textContent = tt('Save');
+        saveButton.textContent = saveLabel || tt('Save');
         footer.append(cancelButton, discardButton, saveButton);
         modal.append(header, body, footer);
         overlay.appendChild(modal);
@@ -1057,9 +1048,10 @@ class UIManager {
      * Resolves { name, blank } or null when cancelled. `validate(name)` returns
      * an error message to show inline, or an empty string when the name is
      * acceptable; the dialog stays open on an error. The folder chooser that
-     * follows is the platform's own.
+     * follows is the platform's own. Save As asks for the name alone, under
+     * its own `title` and `okLabel`, with `templates` off.
      */
-    showNewProjectDialog({ defaultName = 'Reactor One', hasTemplate = true, validate = null } = {}) {
+    showNewProjectDialog({ defaultName = 'Reactor One', hasTemplate = true, validate = null, title = '', okLabel = '', templates = true } = {}) {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const previouslyFocused = document.activeElement;
         const overlay = document.createElement('div');
@@ -1078,7 +1070,7 @@ class UIManager {
         const titleEl = document.createElement('div');
         titleEl.id = 'rr-new-project-title';
         titleEl.className = 'rr-modal-title';
-        titleEl.textContent = tt('New Project');
+        titleEl.textContent = title || tt('New Project');
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
         closeButton.id = 'rr-new-project-close';
@@ -1145,8 +1137,9 @@ class UIManager {
         addChoice('rr-new-project-template-demo', 'demo', tt('Reactor One demo'),
             tt('Sample maps, database, and assets to explore and reuse.'), hasTemplate, hasTemplate);
         addChoice('rr-new-project-template-blank', 'blank', tt('Blank project'),
-            tt('An empty database and one map. Start from nothing.'), !hasTemplate, true);
-        body.append(nameLabel, nameInput, errorEl, templateLabel, choices);
+            tt('One hero in the party and one map; the rest of the database starts empty.'), !hasTemplate, true);
+        body.append(nameLabel, nameInput, errorEl);
+        if (templates) body.append(templateLabel, choices);
 
         const footer = document.createElement('div');
         footer.className = 'rr-modal-footer';
@@ -1159,7 +1152,7 @@ class UIManager {
         okButton.type = 'button';
         okButton.id = 'rr-new-project-create';
         okButton.className = 'rr-button-primary';
-        okButton.textContent = tt('Create');
+        okButton.textContent = okLabel || tt('Create');
         footer.append(cancelButton, okButton);
         modal.append(header, body, footer);
         overlay.appendChild(modal);
@@ -1224,7 +1217,7 @@ class UIManager {
      */
     showModelOptimizeDialog({ fileName = '', analysis = null,
         title = 'Import 3D Model', confirmLabel = 'Import',
-        keepLabel = 'Import as-is', keepDetail = 'Keep every byte of the original file.' } = {}) {
+        keepLabel = 'Import as-is', keepDetail = 'Keep every byte of the original file.', compression = null } = {}) {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const previouslyFocused = document.activeElement;
         const megabytes = value => `${(value / 1048576).toFixed(1)}MB`;
@@ -1303,6 +1296,29 @@ class UIManager {
             tt('Everything above, cut to about a quarter of the triangles. May soften very fine detail.'), false);
         addChoice('keep', tt(keepLabel), tt(keepDetail), false);
         body.append(summary, choices);
+        // Off by default: a compressed copy of each texture, made in a worker after the choice above.
+        let compressBox = null;
+        if (compression && typeof compression === 'object') {
+            const row = document.createElement('label');
+            // Inset like the choices above, so its box lines up with their radios.
+            row.style.cssText = 'display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:start;margin-top:10px;' +
+                'padding:8px 10px;border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);cursor:pointer;';
+            compressBox = document.createElement('input');
+            compressBox.type = 'checkbox';
+            compressBox.className = 'rr-model-optimize-compress';
+            compressBox.checked = !!compression.compress;
+            compressBox.style.cssText = 'margin-top:3px;';
+            const text = document.createElement('div');
+            const strong = document.createElement('div');
+            strong.style.cssText = 'color:var(--color-text-strong, var(--color-text));font-size:13px;';
+            strong.textContent = tt('Compress textures for the graphics card');
+            const small = document.createElement('div');
+            small.style.cssText = 'color:var(--color-text-muted);font-size:12px;';
+            small.textContent = tt('Adds a compressed copy of each texture that takes a quarter of the graphics memory. Takes a few seconds per texture.');
+            text.append(strong, small);
+            row.append(compressBox, text);
+            body.appendChild(row);
+        }
 
         const footer = document.createElement('div');
         footer.className = 'rr-modal-footer';
@@ -1333,6 +1349,7 @@ class UIManager {
             };
             const submit = () => {
                 const picked = radios.find(radio => radio.checked);
+                if (compressBox) compression.compress = compressBox.checked;
                 finish(picked ? picked.value : 'optimize');
             };
             const handleKeyDown = event => {

@@ -1,21 +1,41 @@
 # RPG Reactor
 
+<p align="center"><img src="docs/media/readme/key-art.jpg" alt="RPG Reactor" width="420"></p>
+
 RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.99.0](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.0).
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.1/08-north-haven-night.jpg" alt="A lamplit 3D village at night"><br><sub>Walk a lamplit 3D village at night, in worlds whose maps join with no loading.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.1/06-tactical-climb.jpg" alt="A Tactical battle on the rooftops"><br><sub>Tactical battles on the map itself: climb, grapple and see the fall damage before you jump.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.1/07-effekseer-battle.jpg" alt="Effekseer effects in a battle on the map"><br><sub>Effekseer skill effects burst right where your party stands.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.1/05-windows.jpg" alt="The editor with the Database and event editor in their own windows"><br><sub>Map, Database and event editor side by side, on one screen or two.</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/media/releases/0.99.1/02-character-lineup.jpg" alt="Characters made in the 3D Character Builder"><br><sub>Dozens of species, any build, clothing and armor: the 3D Character Builder saves rigged models that walk, run and fight.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.1/03-creatures.jpg" alt="A drake in the Character Builder"><br><sub>Dragons, wolves, horses, sharks, birds and insects, built the same way.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.1/04-prop-builder.jpg" alt="A walker in the Prop Builder"><br><sub>The 3D Prop Builder makes vehicles, furniture, weapons and props for your maps.</sub></td>
+</tr>
+</table>
 
-## What's new in 0.99.0
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.2 and is not published yet; the latest tagged source release is [0.99.1](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.1).
 
-- **Battles on the map:** Tactical, Action and First Person battles play on the map itself, beside the Classic battle screen: range, flanking, cover and height, overwatch, a cinematic camera, a HUD per mode that you can restyle, and your Action Sequences on 2D and 3D maps alike.
-- **Vehicles:** author vehicles in the Database, ride them between maps with your party riding behind, and fight from them. Vehicles take damage, can be wrecked and revived, and sink in deep water.
-- **One seamless world:** maps join at their borders with no fade or loading screen, neighboring maps stand on the horizon, and the Demo adds the five-map Open Road.
-- **Landscapes:** rocks that stack into cliffs, rivers and waterfalls, foliage, painted ground, dunes and biomes, doors that open, materials with relief, and night.
-- **Models and movement:** model variants, hands that grip their weapons, weapons and vehicle seats you rig with a few markers, and characters that climb ledges and roofs.
-- **Faster, lighter, further:** games keep their speed and frame rate on weak hardware, the editor uses less memory, more RPG Maker 2000 to VX Ace games import with their own systems, and web builds can pack their files into a few archives.
+## What's new in 0.99.1
 
-Read the [0.99.0 release notes](docs/posts/release-notes-0.99.0.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+- **3D Character Builder:** make a character with sliders and pickers (dozens of species, any build, hair, clothing and armor) and save it as a rigged 3D model that walks, runs and fights in your game. Animals, birds, insects and sea creatures too.
+- **3D Prop Builder:** furniture, appliances, electronics, sci-fi interiors, weapons, tools and nine vehicles, built and saved the same way.
+- **Windows of their own:** the Database, the event editor, the Forge and plugin settings open beside the map, on a second monitor too.
+- **Battles:** battlers climb walls, jump down roofs (with fall damage you can see coming) and grapple up to ledges with a Grappler accessory. Troop pages run in battles on the map, and Effekseer effects match RPG Maker MZ's size.
+- **The world:** crossing between maps has no stall, the editor shows neighboring maps past a 2D map's edge, and self switches run from A to Z.
+- **Faster on weak hardware:** big 3D maps draw far less, 2D maps walk smoother, and high refresh rate screens get smooth motion.
+
+Read the [0.99.1 release notes](docs/posts/release-notes-0.99.1.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -34,7 +54,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.0.md): features, fixes, and compatibility limits for 0.99.0.
+- [Latest release notes](docs/posts/release-notes-0.99.1.md): features, fixes, and compatibility limits for 0.99.1.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Authoring a world](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
@@ -149,7 +169,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-29, local working-tree validation completed with **7000 passing tests**, zero failures or skips. This was not a clean release run. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-29, local working-tree validation completed with **8336 passing tests**, zero failures or skips. This was not a clean release run. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
 
 ## Trusted Projects
 
@@ -173,17 +193,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.99.0 changes have been committed:
+`main` worktree after all 0.99.2 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.99.0 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.0
+node editor/build-scripts/cut-release.cjs 0.99.2 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.2
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.99.0` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.99.2` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

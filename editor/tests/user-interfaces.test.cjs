@@ -53,9 +53,10 @@ function loadRuntimeUI({ argv = [], search = '', globals = {} } = {}) {
         ConfigManager: { alwaysDash: false, commandRemember: false, touchUI: true, bgmVolume: 100, bgsVolume: 100, meVolume: 100, seVolume: 100, save() {} },
         PluginManager: { _commands: {}, registerCommand(plugin, name, fn) { this._commands[plugin + ':' + name] = fn; } },
         SceneManager: {
-            _stack: [], _scene: null,
-            push(scene) { sceneCalls.push(['push', scene]); },
-            goto(scene) { sceneCalls.push(['goto', scene]); },
+            _stack: [], _scene: null, _nextScene: null,
+            // As MZ: push stacks the scene and goes to the next one through goto, which queues it.
+            push(scene) { sceneCalls.push(['push', scene]); this.goto(scene); },
+            goto(scene) { sceneCalls.push(['goto', scene]); this._nextScene = { constructor: scene }; },
             prepareNextScene(...args) { sceneCalls.push(['prepare', ...args]); }
         },
         $dataSystem: { variables: [], versionId: 1, reactorTitleInterfaceId: 0, reactorMenuInterfaceId: 0, reactorStatusInterfaceId: 0,
@@ -353,7 +354,7 @@ test('the database tab, template, and detail editor are registered', () => {
     assert.match(ui, /userInterfaces: \{ name: 'New Interface',[\s\S]*?coordinateSpace: 'screen', nodes: \[\], note: '' \}/);
     const html = read('editor/index.html');
     assert.ok(html.indexOf('src/database/DatabaseUserInterfaceEditor.js') < html.indexOf('src/DatabaseEditorUI.js'));
-    assert.match(html, /data-db="userInterfaces" data-i18n="menu\.userInterfaces"/);
+    assert.match(ui, /\{ name: 'User Interfaces', type: 'userInterfaces' \}/, 'a page of the sidebar section the Database menu opens');
     assert.match(read('editor/src/UIManager.js'), /openDatabase\('userInterfaces'\)/);
     assert.match(read('editor/src/I18nManager.js'), /userInterfaces: 'menu\.userInterfaces'/);
 });
@@ -574,9 +575,10 @@ test('System bindings route matching scene records and reject zero, missing, ove
     sandbox.SceneManager.push(sandbox.Scene_Menu);
     sandbox.SceneManager.push(sandbox.Scene_Status);
     sandbox.SceneManager.push(sandbox.Scene_GameEnd);
+    // A push stacks the stock class and is swapped where it reaches goto.
     assert.deepEqual(sandbox.__sceneCalls.map(call => call[0] === 'prepare' ? call.slice(1) : [call[0], call[1] === sandbox.Scene_ReactorUI]), [
-        ['goto', true], [1, 'title'], ['push', true], [1, 'menu'],
-        ['push', true], [1, 'status'], ['push', true], [1, 'gameEnd']
+        ['goto', true], [1, 'title'], ['push', false], ['goto', true], [1, 'menu'],
+        ['push', false], ['goto', true], [1, 'status'], ['push', false], ['goto', true], [1, 'gameEnd']
     ]);
 
     sandbox.__sceneCalls.length = 0;
@@ -588,10 +590,9 @@ test('System bindings route matching scene records and reject zero, missing, ove
     sandbox.SceneManager.push(sandbox.Scene_Menu);
     sandbox.SceneManager.push(sandbox.Scene_Status);
     sandbox.SceneManager.push(sandbox.Scene_GameEnd);
-    assert.equal(sandbox.__sceneCalls[0][1], sandbox.Scene_Title);
-    assert.equal(sandbox.__sceneCalls[1][1], sandbox.Scene_Menu);
-    assert.equal(sandbox.__sceneCalls[2][1], sandbox.Scene_Status);
-    assert.equal(sandbox.__sceneCalls[3][1], sandbox.Scene_GameEnd);
+    assert.deepEqual(sandbox.__sceneCalls.filter(call => call[0] === 'goto').map(call => call[1]),
+        [sandbox.Scene_Title, sandbox.Scene_Menu, sandbox.Scene_Status, sandbox.Scene_GameEnd]);
+    assert.equal(sandbox.__sceneCalls.some(call => call[0] === 'prepare'), false);
 });
 
 test('scene routing reinstalls around plugin replacements without recursion and preserves plugin calls', () => {
@@ -615,12 +616,48 @@ test('scene routing reinstalls around plugin replacements without recursion and 
     assert.equal(sandbox.ReactorUI.sceneRoutingInstalled(), true);
     sandbox.SceneManager.goto(sandbox.Scene_Title);
     sandbox.SceneManager.push(sandbox.Scene_Status);
-    assert.deepEqual(pluginCalls, [['goto', sandbox.Scene_ReactorUI], ['push', sandbox.Scene_ReactorUI]]);
+    // Plugins see the stock classes; the scene is swapped next to the engine's goto.
+    assert.deepEqual(pluginCalls, [['goto', sandbox.Scene_Title], ['push', sandbox.Scene_Status], ['goto', sandbox.Scene_Status]]);
+    assert.deepEqual(sandbox.__sceneCalls.filter(call => call[0] === 'goto').map(call => call[1]), [sandbox.Scene_ReactorUI, sandbox.Scene_ReactorUI]);
     assert.deepEqual(sandbox.__sceneCalls.filter(call => call[0] === 'prepare').map(call => call.slice(1)), [[1, 'title'], [1, 'status']]);
     const installedGoto = sandbox.SceneManager.goto;
     sandbox.ReactorUI.installSceneRouting();
     assert.equal(sandbox.SceneManager.goto, installedGoto, 'verification does not wrap its own wrapper');
     assert.match(read('runtime/reactor_main.js'), /ReactorUI\.installSceneRouting\(\);[\s\S]*SceneManager\.run\(Scene_Boot\)/);
+});
+
+test('a plugin that steps in for Scene_Title (a pre-title splash) still plays before a replaced title', () => {
+    const sandbox = loadRuntimeUI();
+    sandbox.$dataUserInterfaces = [null, { id: 1, mode: 'scene', roles: ['title'], nodes: [] }];
+    sandbox.$dataSystem.reactorTitleInterfaceId = 1;
+    function Scene_Splash() {}
+    // As Ramza_PreTitleSplash_MZ: the first goto to Scene_Title becomes the splash; the splash later pushes Scene_Title.
+    let fromBoot = true;
+    const previousGoto = sandbox.SceneManager.goto;
+    sandbox.SceneManager.goto = function(sceneClass) {
+        if (fromBoot && sceneClass === sandbox.Scene_Title) sceneClass = Scene_Splash;
+        fromBoot = false;
+        return previousGoto.call(this, sceneClass);
+    };
+    sandbox.ReactorUI.installSceneRouting();
+    sandbox.SceneManager.goto(sandbox.Scene_Title);
+    assert.equal(sandbox.SceneManager._nextScene.constructor, Scene_Splash);
+    assert.equal(sandbox.__sceneCalls.some(call => call[0] === 'prepare'), false);
+    sandbox.SceneManager.push(sandbox.Scene_Title);
+    assert.equal(sandbox.SceneManager._nextScene.constructor, sandbox.Scene_ReactorUI);
+    assert.deepEqual(sandbox.__sceneCalls.filter(call => call[0] === 'prepare').map(call => call.slice(1)), [[1, 'title']]);
+});
+
+test('a plugin that replaced goto outright still gets the bound scene', () => {
+    const sandbox = loadRuntimeUI();
+    sandbox.$dataUserInterfaces = [null, { id: 1, mode: 'scene', roles: ['menu'], nodes: [] }];
+    sandbox.$dataSystem.reactorMenuInterfaceId = 1;
+    sandbox.SceneManager.goto = function(sceneClass) { this._nextScene = { constructor: sceneClass }; };
+    sandbox.ReactorUI.installSceneRouting();
+    sandbox.Scene_ReactorUI.prototype.initialize = function() {};
+    sandbox.SceneManager.goto(sandbox.Scene_Menu);
+    assert.ok(sandbox.SceneManager._nextScene instanceof sandbox.Scene_ReactorUI);
+    assert.deepEqual(sandbox.__sceneCalls.filter(call => call[0] === 'prepare').map(call => call.slice(1)), [[1, 'menu']]);
 });
 
 test('replacement scenes keep title lifecycle and stock Game End to-title ordering', () => {
@@ -658,7 +695,7 @@ test('overlay records attach to Scene_Map, remain nonfocusable, and update from 
     const runtime = read('runtime/reactor_ui.js');
     assert.match(runtime, /Scene_Map\.prototype\.createReactorUIOverlays/);
     assert.match(runtime, /record\.mode === "overlay"/);
-    assert.match(runtime, /const shown = ReactorUI\.evaluateCondition\(this\._interface\.visible, scene\)/);
+    assert.match(runtime, /const shown = !this\._standDown && ReactorUI\.evaluateCondition\(this\._interface\.visible, scene\)/);
     assert.match(runtime, /focusInitial\(\) \{\}/);
     assert.match(runtime, /canFocus\(\) \{ return false; \}/);
     assert.doesNotMatch(runtime, /Scene_Map\.prototype\.start = function/);
@@ -1242,7 +1279,8 @@ test('Options, Save, and Load routing requires matching roles and falls back saf
     sandbox.SceneManager.push(sandbox.Scene_Options);
     sandbox.SceneManager.push(sandbox.Scene_Save);
     sandbox.SceneManager.push(sandbox.Scene_Load);
-    assert.deepEqual(sandbox.__sceneCalls.map(call => call[1]), [sandbox.Scene_Options, sandbox.Scene_Save, sandbox.Scene_Load]);
+    assert.deepEqual(sandbox.__sceneCalls.filter(call => call[0] === 'goto').map(call => call[1]), [sandbox.Scene_Options, sandbox.Scene_Save, sandbox.Scene_Load]);
+    assert.equal(sandbox.__sceneCalls.some(call => call[0] === 'prepare'), false);
 });
 
 test('script conditions accept stock expressions and explicit return bodies without changing action scripts', () => {

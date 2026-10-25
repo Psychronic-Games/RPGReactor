@@ -186,7 +186,7 @@ test('picking the same model again keeps the chosen animation and effect; the ef
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
     const choose = source.slice(source.indexOf('\n    chooseModel(model) {'), source.indexOf('\n    }\n', source.indexOf('\n    chooseModel(model) {')));
     assert.match(choose, /const same = this\.model && model && this\.model\.name === model\.name && this\.model\.file === model\.file;/);
-    assert.match(choose, /if \(!same\) \{\s*this\.fields\.animations = \[\];\s*this\.fields\.effects = \[\];\s*\}/);
+    assert.match(choose, /if \(!same\) \{\s*this\.fields\.animations = \[\];\s*this\.fields\.effects = \[\];/);
     assert.match(source, /const effects = ModelPropsManager\.modelEffectNames\(project\.path, name\);/, 'effects carry their trigger');
     assert.match(source, /names\.push\(\{ name: String\(effect\.name\), trigger: effect\.trigger \|\| 'action' \}\);/);
 });
@@ -304,4 +304,115 @@ test('a model grows under the pointer while its size handle is dragged', () => {
     calls.length = 0;
     drag.call(editor, { id: 7, startSize: 3, start: 0, reach: 2, travel: () => null }, 0, 0);
     assert.deepEqual(calls, []);
+});
+
+test('leaving a transform number for another one keeps the field clicked; leaving the card rebuilds it', async () => {
+    const vm = require('node:vm');
+    const makeInput = (cls, key) => {
+        const handlers = {};
+        return { className: cls, dataset: { key }, value: '0', max: '10',
+            addEventListener(type, fn) { (handlers[type] = handlers[type] || []).push(fn); },
+            fire(type) { (handlers[type] || []).forEach(fn => fn({})); } };
+    };
+    let inputs = [];
+    const body = { isConnected: true,
+        set innerHTML(_) { inputs = ['yaw', 'size'].flatMap(key => [makeInput('mp-card-slider', key), makeInput('mp-card-num', key)]); },
+        querySelectorAll: sel => inputs.filter(i => sel.split(',').some(s => s.trim() === '.' + i.className)),
+        querySelector: sel => inputs.find(i => sel === `.${i.className}[data-key="${i.dataset.key}"]`) || null,
+        contains: el => inputs.includes(el) };
+    const tabs = { style: {}, innerHTML: '' };
+    const document = { activeElement: null };
+    const context = vm.createContext({ setTimeout, document, window: {} });
+    vm.runInContext(read('editor/src/ModelPropsManager.js') + '\nthis.Manager = ModelPropsManager;', context);
+    const manager = Object.create(context.Manager.prototype);
+    const prop = { id: 1, x: 3, y: 4, z: 0, yaw: 0, pitch: 0, roll: 0, size: 2, scale: 1 };
+    Object.assign(manager, { selectedId: 1, model: null, fields: {}, _t: k => k, _tx: k => k,
+        panel: { querySelector: sel => sel === '#model-props-card-tabs' ? tabs : sel === '#model-props-card-body' ? body : null, querySelectorAll: sel => body.querySelectorAll(sel) },
+        prop: () => prop });
+    let builds = 0;
+    const render = manager._renderCard;
+    manager._renderCard = function () { builds++; return render.call(this); };
+    manager._renderCard();
+    const yaw = inputs.find(i => i.className === 'mp-card-num' && i.dataset.key === 'yaw');
+    const size = inputs.find(i => i.className === 'mp-card-num' && i.dataset.key === 'size');
+    // Typed into Yaw, then a click on Size: Size takes the focus as 'change' fires on Yaw.
+    yaw.fire('change');
+    document.activeElement = size;
+    await new Promise(r => setTimeout(r, 5));
+    assert.equal(builds, 1, 'the card is not rebuilt under the field just clicked');
+    assert.ok(inputs.includes(size), 'the clicked field is still in the card');
+    // Leaving the card altogether (Enter, a click on the map) rebuilds it.
+    document.activeElement = null;
+    size.fire('change');
+    await new Promise(r => setTimeout(r, 5));
+    assert.equal(builds, 2);
+});
+
+test('a model chosen from the Library lights its own slot on the Build bar', () => {
+    const vm = require('node:vm');
+    let syncs = 0;
+    const context = vm.createContext({ window: { reactor: { buildHotbar: { sync: () => { syncs++; } } } } });
+    vm.runInContext(read('editor/src/ModelPropsManager.js') + '\nthis.Manager = ModelPropsManager;', context);
+    const manager = Object.create(context.Manager.prototype);
+    Object.assign(manager, { model: null, recent: [], fields: { animations: [], effects: [] }, tool: 'select', render() {}, _syncPanel() {}, mapEditor3D: () => null });
+    manager.chooseModel({ name: 'Props/tree', file: 'tree' });
+    assert.equal(manager.tool, 'place');
+    assert.equal(syncs, 1, 'the bar is told, so it shows the model in hand instead of Select');
+});
+
+test('a different model starts at the default size and turn; the same model again keeps them', () => {
+    const vm = require('node:vm');
+    const context = vm.createContext({ window: {} });
+    vm.runInContext(read('editor/src/ModelPropsManager.js') + '\nthis.Manager = ModelPropsManager;', context);
+    const manager = Object.create(context.Manager.prototype);
+    Object.assign(manager, { model: { name: 'Props/tree', file: 'tree' }, recent: [], tool: 'place', render() {}, _syncPanel() {}, mapEditor3D: () => null,
+        fields: { size: 2.8, scale: 1, stretch: [1, 2, 1], direction: 4, z: 1, yaw: 45, pitch: 5, roll: 0, passable: true, animations: [], effects: [] } });
+    manager.chooseModel({ name: 'Props/tree', file: 'tree' });
+    assert.deepEqual([manager.fields.size, manager.fields.yaw], [2.8, 45], 'another of the same tree, sized and turned alike');
+    manager.chooseModel({ name: 'Actors/vay', file: 'vay' });
+    const f = manager.fields;
+    assert.deepEqual([f.size, f.scale, Array.from(f.stretch), f.direction, f.z, f.yaw, f.pitch, f.roll], [2, 1, [1, 1, 1], 2, 0, 0, 0, 0]);
+});
+
+test('a placed model is hit where its picture is drawn, not where its unscaled texture would reach', () => {
+    const vm = require('node:vm');
+    const context = vm.createContext({ window: {} });
+    vm.runInContext(read('editor/src/ModelPropsManager.js') + '\nthis.Manager = ModelPropsManager;', context);
+    const manager = Object.create(context.Manager.prototype);
+    const tree = { id: 3, name: 'tree', x: 5, y: 5 };
+    // A 512px picture drawn at a quarter size, anchored at its foot, standing on tile 5,5 (48px tiles).
+    const sprite = { x: 5 * 48 + 24, y: 6 * 48, scale: { x: 0.25, y: 0.25 }, getBounds() {}, getLocalBounds: () => ({ x: -256, y: -512, width: 512, height: 512 }) };
+    Object.assign(manager, { _sprites: new Map([[3, sprite]]), prop: id => (id === 3 ? tree : null) });
+    assert.equal(manager.propAtPoint(5 * 48 + 24, 6 * 48 - 40), tree, 'on the tree');
+    assert.equal(manager.propAtPoint(8 * 48 + 24, 3 * 48 + 24), null, 'tile 8,3: empty ground');
+    sprite.scale.x = -0.25;
+    assert.equal(manager.propAtPoint(5 * 48 + 30, 6 * 48 - 40), tree, 'flipped, still hit');
+});
+
+test('a new map starts on the tileset of the map it is made from in the tree, else the first one with a picture', () => {
+    const vm = require('node:vm');
+    const source = read('editor/src/ProjectController.js');
+    const start = source.indexOf('    newMapTilesetId(sourceMapId = null) {');
+    const body = source.slice(start, source.indexOf('\n    }\n', start) + 6);
+    const Probe = vm.runInNewContext(`(class { ${body} })`);
+    const probe = new Probe();
+    probe.databaseManager = { data: { tilesets: [null, { id: 1, tilesetNames: ['', '', ''] }, { id: 2, tilesetNames: ['Outside_A1', ''] }, { id: 3, tilesetNames: ['Inside_A2'] }, { id: 4, tilesetNames: ['Dungeon_A2'] }] } };
+    probe.mapFileTilesetId = id => ({ 7: 4, 8: 9 })[id] || null;
+    probe.tilemapManager = { currentMap: { id: 2, tilesetId: 3 } };
+    assert.equal(probe.newMapTilesetId(), 3, 'from the empty part of the tree: the open map');
+    assert.equal(probe.newMapTilesetId(2), 3, 'the open map named in the tree');
+    assert.equal(probe.newMapTilesetId(7), 4, 'another map named in the tree: its own tileset, read from its file');
+    assert.equal(probe.newMapTilesetId(8), 2, 'a map naming a missing tileset: the first with a picture');
+    probe.tilemapManager = null;
+    assert.equal(probe.newMapTilesetId(), 2, 'tileset 1 is empty: the first with a picture');
+    assert.match(source, /tilesetId: this\.newMapTilesetId\(afterMapId\),/);
+});
+
+test('a rig on a model with its own skeleton says so, not "0 vertices"', () => {
+    const source = read('editor/src/database/Database3DEditor.js');
+    assert.match(source, /total > 0\s*\? this\._t\('Rig bound — \{bones\} bones, \{vertices\} vertices'[\s\S]{0,160}: this\._t\("Rig bound to the model's own skeleton — \{bones\} joints"/);
+    const i18n = read('editor/src/I18nManager.js');
+    for (const locale of ['ja', 'zh-Hant', 'zh-Hans', 'ko', 'es', 'pt', 'fr', 'it', 'de', 'ru', 'pl', 'el', 'ar', 'tr', 'id', 'vi', 'th']) {
+        assert.ok(i18n.includes(`RR_TEXT_TRANSLATIONS["${locale}"], {"Rig bound to the model's own skeleton — {bones} joints":`), locale);
+    }
 });

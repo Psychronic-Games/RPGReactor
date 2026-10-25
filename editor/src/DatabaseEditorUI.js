@@ -80,6 +80,16 @@ class DatabaseEditorUI {
                     if (activeType === 'terms') this.showTermsEditor();
                 }
             });
+            // Its window destroyed under it (a crash): the Database is back in the page with its
+            // handlers gone, so it closes and is built afresh at the next opening.
+            window.addEventListener('rr-database-docked', event => {
+                if (!event.detail?.windowGone) return;
+                const viewer = document.getElementById('database-viewer');
+                if (viewer?.classList.contains('active')) this.closeDatabaseViewer();
+                viewer?._rrModalKeys?.dispose?.();
+                const nav = document.getElementById('database-navigation');
+                if (nav) nav.innerHTML = '';
+            });
             window.addEventListener('rr-database-list-labels-changed', () => {
                 this._activeDatabaseList?.refresh();
             });
@@ -196,6 +206,9 @@ class DatabaseEditorUI {
         document.querySelectorAll('.database-nav-item').forEach(item => {
             item.textContent = this._dbTitle(item.dataset.type, item.dataset.fallbackName || item.textContent);
         });
+        document.querySelectorAll('.database-nav-section').forEach(heading => {
+            if (heading.dataset.name) heading.textContent = this._tt(heading.dataset.name);
+        });
         const titleEl = document.getElementById('database-viewer-title');
         const active = document.querySelector('.database-nav-item.active');
         if (titleEl && active) titleEl.textContent = this._dbTitle(active.dataset.type, titleEl.textContent);
@@ -213,6 +226,11 @@ class DatabaseEditorUI {
      * Update the current project reference
      */
     setCurrentProject(project) {
+        // The Database beside the map belongs to the project it opened on.
+        if (project !== this.currentProject && this.currentProject
+                && typeof document !== 'undefined' && document.getElementById?.('database-viewer')?.classList?.contains?.('active')) {
+            this.closeDatabaseViewer();
+        }
         if (project !== this.currentProject) {
             this.saveDatabaseSelections();
             this.cleanupDatabaseDetail();
@@ -369,6 +387,23 @@ class DatabaseEditorUI {
         });
     }
 
+    /**
+     * A click on a part of the detail that takes no focus (a preview canvas) leaves the focus on
+     * the page: the keys pressed after it still belong to the detail, never to the record list.
+     */
+    /** Whether a key's target is no control: a page itself or its body, in this window or the Database's own. */
+    static isPageTarget(target) {
+        if (!target) return false;
+        if (target.nodeType === 9 || (typeof document !== 'undefined' && (target === document || target === document.body))) return true;
+        return !!target.ownerDocument && target === target.ownerDocument.body;
+    }
+
+    _keyFollowsDetailClick(event, detailEl) {
+        const lastClick = this._lastDatabasePointerTarget;
+        return !!(DatabaseEditorUI.isPageTarget(event.target) && detailEl && lastClick && typeof lastClick === 'object'
+            && lastClick !== detailEl && detailEl.contains(lastClick));
+    }
+
     cleanupDatabaseListChrome() {
         const listEl = document.getElementById('database-list');
         const parent = listEl?.parentNode;
@@ -466,15 +501,21 @@ class DatabaseEditorUI {
         if (listPanelEl) {
             listPanelEl.style.display = showListPanel ? '' : 'none';
         }
-        if (viewer) {
-            viewer.classList.add('active');
-        }
+        if (viewer) this.presentDatabaseViewer(viewer);
 
         this.takeDatabaseSnapshot();
         this.setupDatabaseControls();
         viewer?._rrModalKeys?.enter();
 
         return { viewer, titleEl, listEl, listPanelEl, detailEl };
+    }
+
+    /** Show the Database: in its own window beside the map (another screen too), else floating in the page. */
+    presentDatabaseViewer(viewer) {
+        const shownBefore = viewer.classList.contains('active');
+        if (typeof RRDatabaseWindow !== 'undefined') RRDatabaseWindow.install(viewer);
+        viewer.classList.add('active');
+        if (!shownBefore && typeof RRDatabaseWindow !== 'undefined') RRDatabaseWindow.open(viewer, { shownBefore });
     }
 
     closeDatabaseViewer() {
@@ -509,6 +550,7 @@ class DatabaseEditorUI {
         if (viewer) {
             viewer.classList.remove('active');
         }
+        if (typeof RRDatabaseWindow !== 'undefined') RRDatabaseWindow.hidePopout();
     }
 
     revertDatabaseSnapshot() {
@@ -612,7 +654,14 @@ class DatabaseEditorUI {
             if (!page) return then();
             page.settlePending().then(go => { if (go) then(); });
         };
-        const cancelAsked = () => afterModels(cancelAndClose);
+        // Cancel, × and Escape all ask the same question before unsaved edits are dropped.
+        const cancelAsked = () => afterModels(() => this.requestCloseDatabase(cancelAndClose));
+        // Its window closed by Alt+F4 or the taskbar: as Escape, asking first; resolves once answered.
+        this.askToCloseDatabase = async () => {
+            const page = models();
+            if (page && !(await page.settlePending())) return;
+            await this.requestCloseDatabase(cancelAndClose);
+        };
 
         if (closeBtn) closeBtn.onclick = cancelAsked;
         if (cancelBtn) cancelBtn.onclick = cancelAsked;
@@ -1312,20 +1361,28 @@ class DatabaseEditorUI {
         });
 
         if (this._listKeyHandler) document.removeEventListener('keydown', this._listKeyHandler);
+        if (!this._databasePointerTracker) {
+            this._databasePointerTracker = event => { this._lastDatabasePointerTarget = event.target; };
+            document.addEventListener('pointerdown', this._databasePointerTracker, true);
+        }
         const getSelectedEntry = () => data.find(entry => entry?.id === focusedId && !entry.stockVehicle) || getSelectedEntries()[0] || null;
         const listKeyHandler = event => {
             if (event.defaultPrevented) return;
             if (!viewer.classList.contains('active') || this._activeDatabaseList !== listSession) return;
+            // Beside a live map, the keys are the Database's only after a click or Tab into it.
+            if (typeof RRDatabaseWindow !== 'undefined' && !RRDatabaseWindow.ownsKeys()) return;
             // Body-mounted pickers are separate keyboard scopes, even though
-            // the database remains visible beneath them.
-            if (event.target instanceof Node && event.target !== document && event.target !== document.body
-                && !viewer.contains(event.target)) return;
+            // the database remains visible beneath them. (Its own window's
+            // nodes are not this window's Node instances.)
+            const target = event.target && typeof event.target === 'object' ? event.target : null;
+            if (target && !DatabaseEditorUI.isPageTarget(target) && !viewer.contains(target)) return;
             const tag = document.activeElement?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
             // Keys pressed inside the detail pane belong to the detail (a
             // node canvas, a tree row, a button): Delete there must not
             // clear the record.
-            if (event.target instanceof Node && event.target !== detailEl && detailEl.contains(event.target)) return;
+            if (target && target !== detailEl && detailEl.contains(target)) return;
+            if (this._keyFollowsDetailClick(event, detailEl)) return;
             const key = event.key.toLowerCase();
             if (key === 'arrowup' || key === 'arrowdown') {
                 if (filteredData.length === 0) return;
@@ -1405,7 +1462,7 @@ class DatabaseEditorUI {
         }
         // With a record to open on, the list is built as far as its row.
         populateList('', false, { preserveScroll: !!opening });
-        viewer.classList.add('active');
+        this.presentDatabaseViewer(viewer);
         if (opening) {
             applySelection();
             this.showDatabaseDetail(this.databaseManager.data[type]?.[opening.id] || opening, type, { reuse: true });
@@ -2053,6 +2110,27 @@ class DatabaseEditorUI {
         }
     }
 
+    /** The Database's pages in the sections the sidebar and the editor's Database menu show. */
+    static get NAV_SECTIONS() {
+        return [
+            { name: 'Actors and Items', pages: [
+                { name: 'Actors', type: 'actors' }, { name: 'Classes', type: 'classes' }, { name: 'Skills', type: 'skills' },
+                { name: 'Items', type: 'items' }, { name: 'Weapons', type: 'weapons' }, { name: 'Armors', type: 'armors' }] },
+            { name: 'Battle', pages: [
+                { name: 'Enemies', type: 'enemies' }, { name: 'Troops', type: 'troops' }, { name: 'States', type: 'states' },
+                { name: 'Animations', type: 'animations' }, { name: 'Action Sequences', type: 'actionSequences' }] },
+            { name: 'World', pages: [
+                { name: 'Tilesets', type: 'tilesets' }, { name: '3D Models', type: 'reactor3d' },
+                { name: 'Structures', type: 'structures' }, { name: 'Vehicles', type: 'vehicles' }] },
+            { name: 'Events and Interfaces', pages: [
+                { name: 'Common Events', type: 'commonEvents' }, { name: 'Quests', type: 'quests' },
+                { name: 'User Interfaces', type: 'userInterfaces' }, { name: 'Music Sequences', type: 'musicSequences' }] },
+            { name: 'System', pages: [
+                { name: 'System 1', type: 'system1' }, { name: 'System 2', type: 'system2' }, { name: 'Types', type: 'types' },
+                { name: 'Terms', type: 'terms' }, { name: 'Controls', type: 'controls' }] }
+        ];
+    }
+
     /**
      * Setup the database navigation sidebar
      */
@@ -2063,47 +2141,31 @@ class DatabaseEditorUI {
         const activeType = navEl.querySelector('.database-nav-item.active')?.dataset.type;
         navEl.innerHTML = '';
 
-        const categories = [
-            { name: 'Actors', type: 'actors' },
-            { name: 'Classes', type: 'classes' },
-            { name: 'Skills', type: 'skills' },
-            { name: 'Items', type: 'items' },
-            { name: 'Weapons', type: 'weapons' },
-            { name: 'Armors', type: 'armors' },
-            { name: 'Enemies', type: 'enemies' },
-            { name: 'Troops', type: 'troops' },
-            { name: 'States', type: 'states' },
-            { name: 'Animations', type: 'animations' },
-            { name: 'Tilesets', type: 'tilesets' },
-            { name: '3D Models', type: 'reactor3d' },
-            { name: 'Vehicles', type: 'vehicles' },
-            { name: 'Structures', type: 'structures' },
-            { name: 'Common Events', type: 'commonEvents' },
-            { name: 'User Interfaces', type: 'userInterfaces' },
-            { name: 'Action Sequences', type: 'actionSequences' },
-            { name: 'Quests', type: 'quests' },
-            { name: 'Music Sequences', type: 'musicSequences' },
-            { name: 'System 1', type: 'system1' },
-            { name: 'System 2', type: 'system2' },
-            { name: 'Types', type: 'types' },
-            { name: 'Terms', type: 'terms' },
-            { name: 'Controls', type: 'controls' }
-        ];
+        // The sidebar in sections; the editor's Database menu lists the same sections (index.html).
+        for (const section of DatabaseEditorUI.NAV_SECTIONS) {
+            const heading = document.createElement('div');
+            heading.className = 'database-nav-section';
+            heading.setAttribute('role', 'presentation');
+            heading.setAttribute('data-rr-i18n-skip', '1');
+            const title = section.name;
+            heading.dataset.name = title;
+            heading.textContent = this._tt(title);
+            navEl.appendChild(heading);
+            for (const category of section.pages) {
+                const item = document.createElement('div');
+                item.className = 'database-nav-item';
+                if (category.type === activeType) item.classList.add('active');
+                item.textContent = this._dbTitle(category.type, category.name);
+                item.dataset.type = category.type;
+                item.dataset.fallbackName = category.name;
 
-        categories.forEach(category => {
-            const item = document.createElement('div');
-            item.className = 'database-nav-item';
-            if (category.type === activeType) item.classList.add('active');
-            item.textContent = this._dbTitle(category.type, category.name);
-            item.dataset.type = category.type;
-            item.dataset.fallbackName = category.name;
+                item.addEventListener('click', () => {
+                    this.openDatabase(category.type);
+                });
 
-            item.addEventListener('click', () => {
-                this.openDatabase(category.type);
-            });
-
-            navEl.appendChild(item);
-        });
+                navEl.appendChild(item);
+            }
+        }
 
         navEl.setAttribute('role', 'tablist');
         navEl.setAttribute('aria-orientation', 'vertical');
@@ -2389,9 +2451,10 @@ class DatabaseEditorUI {
             // it with a strict === 0. The Type control can convert this record
             // into an immediately editable stock MV sprite animation.
             animations: { name: 'New Animation', flashTimings: [], soundTimings: [], effectName: '', displayType: 0, offsetX: 0, offsetY: 0, rotation: { x: 0, y: 0, z: 0 }, scale: 100, speed: 100 },
-            // Tile 0 (the empty tile on every unpainted upper layer) is a star: as an O,
-            // checkPassage would stop at it and every wall on the map would be walkable.
-            tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: Object.assign(new Array(8192).fill(0), { 0: 0x10 }), note: '' },
+            // Every tile starts with the flag RPG Maker gives its sheet (utils/TilesetSheets.js): tile 0, the
+            // empty tile on every unpainted upper layer, is a star, as an O checkPassage would stop at it and
+            // every wall on the map would be walkable; A1 water stops walkers.
+            tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: typeof RRTilesetSheets !== 'undefined' ? RRTilesetSheets.defaultFlags() : Object.assign(new Array(8192).fill(0), { 0: 0x10 }), note: '' },
             commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] },
             // Reactor section; the runtime (reactor_ui.js) fills in any field an
             // older record lacks, so this is the whole shape.
@@ -2594,12 +2657,13 @@ class DatabaseEditorUI {
 
 
             // The file each 2D preview comes from, under the preview; the
-            // 3D slot decoration shows the model name in the same place.
+            // 3D slot decoration shows the model name in the same place. The
+            // index is the stored one, as the picker and the event list number it.
             const sourceTag = (name, index) => {
                 const tag = document.createElement('div');
                 tag.className = 'graphic-preview-name';
                 tag.setAttribute('data-rr-i18n-skip', '1');
-                tag.textContent = name ? (index === undefined ? name : `${name} (${index + 1})`) : '';
+                tag.textContent = name ? (index === undefined ? name : `${name} (${index})`) : '';
                 tag.title = tag.textContent;
                 return tag;
             };
@@ -3185,7 +3249,8 @@ class DatabaseEditorUI {
         let closed = false;
         const isCurrent = () => !closed && generation === this._imagePickerGeneration && detailCurrent();
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const modal = document.getElementById('image-picker-modal');
+        // Opened from the Database's or the event editor's own window: it opens there.
+        const modal = window.RRPopoutBridge?.bringToWindowInUse?.(document.getElementById('image-picker-modal')) || document.getElementById('image-picker-modal');
         const titleEl = document.getElementById('image-picker-title');
         const listEl = document.getElementById('image-picker-list');
         const previewEl = document.getElementById('image-picker-preview');
@@ -3482,7 +3547,7 @@ class DatabaseEditorUI {
         button.type = 'button';
         button.className = 'rr-image-browse-btn';
         button.textContent = tt('Browse…');
-        button.style.cssText = 'flex: 0 0 auto; padding: 6px 12px; background: var(--color-border-subtle); color: var(--color-text-strong); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px;';
+        button.style.cssText = 'flex: 0 0 auto; padding: 6px 12px; background: var(--color-bg-button-subtle); color: var(--color-text-strong); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px;';
 
         const fill = (field, value) => {
             field.value = value;
@@ -4058,6 +4123,7 @@ class DatabaseEditorUI {
         endTurnAsk: '%1 units have not acted.\nEnd the turn?', endTurnAskOne: '1 unit has not acted.\nEnd the turn?', endTurnYes: 'End the turn', endTurnNo: 'Keep playing',
         retreatAsk: 'Leave the battle?', retreatYes: 'Retreat', retreatNo: 'Stay and fight',
         autoAsk: 'Your units act by themselves\nfor the rest of this turn?', autoYes: 'Let them act', autoNo: 'Keep playing',
+        fallAsk: '%1 will not survive this fall.\nJump anyway?', fallYes: 'Jump', fallNo: 'Stay', fallLethal: 'Fatal fall',
         tipPick: 'Choose a unit: %1', tipNext: '%1: next unit', tipMenu: '%1: battle menu', tipTurn: '%1 %2: turn the view', tipZoom: 'Mouse wheel: zoom',
         tipAuto: 'Battle menu: Auto plays the turn',
         tipMove: 'Where to move: %1', tipStay: '%1 on its own tile: stay', tipBack: '%1: back', tipUnit: '%1: back to the unit', tipLevel: "%1: the tile's next level",
@@ -4090,7 +4156,7 @@ class DatabaseEditorUI {
         ['reasons', 'db.battleWords.reasons', /^why[A-Z]/],
         ['goal', 'db.battleWords.goal', /^goal/],
         ['notices', 'db.battleWords.notices', /^units?(?:Placed|NoRoom)$/],
-        ['menu', 'db.battleWords.menu', /^(?:menu|pace|unit|endTurn|retreat|escape|auto)[A-Z]|^(?:on|off)$/],
+        ['menu', 'db.battleWords.menu', /^(?:menu|pace|unit|endTurn|retreat|escape|auto|fall)[A-Z]|^(?:on|off)$/],
         ['tips', 'db.battleWords.tips', /^(?:tip|or)[A-Z]/],
         ['controls', 'db.battleWords.controls', /^(?:ctl|key)[A-Z]/],
         ['action', 'db.battleWords.action', /^(?:lead|takeMouse)$/],

@@ -48,5 +48,5 @@ test('a ragdoll, a hidden instance and the kill switch are left alone', () => {
 test('renderScene and every shadow face draw through the cull and always show again', () => {
     const fs = require('node:fs');
     const three = fs.readFileSync(path.join(root, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(three, /Reactor3D\.renderScene = function\(renderer, scene, camera\) \{[\s\S]{0,200}InstanceCull\.hide\(scene, camera\)[\s\S]{0,400}if \(hidden\) this\.InstanceCull\.show\(hidden\);/);
+    assert.match(three, /Reactor3D\.renderScene = function\(renderer, scene, camera\) \{[\s\S]{0,400}InstanceCull\.hide\(scene, camera\)[\s\S]{0,400}if \(hidden\) this\.InstanceCull\.show\(hidden\);/);
 });

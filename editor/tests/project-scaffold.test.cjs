@@ -62,9 +62,9 @@ describe('generated fallback project scaffold', () => {
         fs.rmSync(tempRoot, { recursive: true, force: true });
     });
 
-    test('the starter map stores Day as its own ambient default', () => {
-        const sidecar = readJson(path.join(projectPath, 'data', 'Map001.r3d.json'));
-        assert.deepEqual(sidecar.lighting, { ambient: 1, ambientColour: '#ffffff' });
+    test('the starter map is a 2D map with no 3D sidecar', () => {
+        assert.equal(fs.existsSync(path.join(projectPath, 'data', 'Map001.r3d.json')), false);
+        assert.doesNotMatch(readJson(path.join(projectPath, 'data', 'Map001.json')).note, /<3d>/i);
     });
 
     test('contains all runtime and database files needed at startup', () => {
@@ -140,6 +140,15 @@ describe('generated fallback project scaffold', () => {
         assert.equal(magicSkills.every(id => Number.isInteger(id) && id > 0 && id < skillTypes.length), true);
     });
 
+    test('starter System names every message term the menus and battles show', () => {
+        const { terms } = readJson(path.join(projectPath, 'data', 'System.json'));
+        const skeleton = readJson(path.join(editorRoot, 'src', 'legacy', 'skeleton', 'data', 'System.json')).terms.messages;
+        assert.deepEqual(terms.messages, skeleton);
+        for (const key of ['alwaysDash', 'bgmVolume', 'saveMessage', 'loadMessage', 'file', 'emerge', 'victory', 'levelUp']) {
+            assert.ok(terms.messages[key], `${key} has words`);
+        }
+    });
+
     test('starter plugin configuration is empty', () => {
         const pluginsPath = path.join(projectPath, 'js', 'reactor_plugins.js');
         const source = fs.readFileSync(pluginsPath, 'utf8');
@@ -160,5 +169,24 @@ describe('generated fallback project scaffold', () => {
             assert.equal(png.readUInt32BE(16), width, `${name} width`);
             assert.equal(png.readUInt32BE(20), height, `${name} height`);
         }
+    });
+
+    test('starter window skin has readable text colors, a cursor, arrows and a pause sign', () => {
+        const { PNG } = require('pngjs');
+        const skin = PNG.sync.read(fs.readFileSync(path.join(projectPath, 'img', 'system', 'Window.png')));
+        const pixel = (x, y) => [...skin.data.subarray((y * skin.width + x) * 4, (y * skin.width + x) * 4 + 4)];
+        // The engine reads text color n from the middle of its 12 px cell at (96, 144).
+        const textColor = n => pixel(96 + (n % 8) * 12 + 6, 144 + Math.floor(n / 8) * 12 + 6);
+        assert.deepEqual(textColor(0), [255, 255, 255, 255], 'normal text is white');
+        assert.deepEqual(textColor(16), [0x84, 0xaa, 0xff, 255], 'system text is light blue');
+        assert.deepEqual(textColor(18), [0xff, 0x20, 0x20, 255], 'death text is red');
+        const background = pixel(48, 48);
+        assert.ok(background[3] === 255 && Math.max(...background.slice(0, 3)) < 80, 'the window back is dark under white text');
+        const opaque = (x0, y0, w, h) => { let n = 0; for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (pixel(x, y)[3]) n++; return n; };
+        assert.ok(opaque(96 + 4, 96 + 4, 40, 40) === 40 * 40, 'the cursor (96, 96) fills its middle');
+        assert.ok(opaque(132, 24, 24, 12) > 20, 'the up arrow (132, 24) is drawn');
+        assert.ok(opaque(132, 60, 24, 12) > 20, 'the down arrow (132, 60) is drawn');
+        for (const [x, y] of [[144, 96], [168, 96], [144, 120], [168, 120]]) assert.ok(opaque(x, y, 24, 24) > 20, `pause sign frame at (${x}, ${y})`);
+        assert.equal(opaque(96 + 4, 4, 88, 20), 0, 'the frame is clear inside its border');
     });
 });

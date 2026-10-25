@@ -448,6 +448,10 @@
         if (!system || system.width < 160 || system.height < 80) return out;
         const region = (sx, sy, w, h) => { const r = blank(w, h); blit(r, system, sx, sy, w, h, 0, 0); return r; };
         blit(out, scaleNearest(region(0, 0, 32, 32), 3), 0, 0, 96, 96, 0, 0);
+        // MZ's stock tiled overlay must not show through the imported skin.
+        // Keep the native 32 px background here for the old engine's tile mode.
+        blit(out, blank(96, 96), 0, 0, 96, 96, 0, 96);
+        blit(out, region(0, 0, 32, 32), 0, 0, 32, 32, 0, 96);
         // The frame keeps its 8 px thickness: MZ cuts 24 px corners from the 96 px cell, so the 2003 corners sit in
         // the outer 8 px of each, the edges stretch along the sides and the rest of the cell is clear.
         {
@@ -465,10 +469,22 @@
             for (const [fx, fy] of [[144, 96], [168, 96], [144, 120], [168, 120]]) { const f = blank(24, 24); blit(f, arrow, 0, 0, 16, 8, 4, 8); blit(out, f, 0, 0, 24, 24, fx, fy); }
         }
         blit(out, scaleNearest(region(64, 0, 32, 32), 1.5), 0, 0, 48, 48, 96, 96);
-        for (let i = 0; i < 20; i++) {
-            const cell = scaleNearest(region((i % 10) * 16, 48 + Math.floor(i / 10) * 16, 16, 16), 0.75);
-            blit(out, cell, 0, 0, 12, 12, 96 + (i % 8) * 12, 144 + Math.floor(i / 8) * 12);
+        // Text masks are colour data, including palette-index-zero black;
+        // they must remain opaque even when that RGB keys the window frame.
+        // The bottom-left 96x64 is otherwise unused (native back tile ends127).
+        for (let i = 0; i <= 20; i++) {
+            const raw = i === 20 ? region(16, 32, 16, 16)
+                : region((i % 10) * 16, 48 + Math.floor(i / 10) * 16, 16, 16);
+            for (let at = 3; at < raw.data.length; at += 4) raw.data[at] = 255;
+            blit(out, raw, 0, 0, 16, 16, (i % 6) * 16, 128 + Math.floor(i / 6) * 16);
+            if (i < 20) {
+                const cell = scaleNearest(raw, 0.75);
+                blit(out, cell, 0, 0, 12, 12, 96 + (i % 8) * 12, 144 + Math.floor(i / 8) * 12);
+            }
         }
+        // Atlas marker: a missing System graphic returns the stock skin
+        // above, which must never be interpreted as source colour masks.
+        out.data.set([82, 82, 50, 255], (191 * out.width + 95) * 4);
         return out;
     }
 
@@ -524,6 +540,9 @@
         out.rrLegacyPageOpacity = true;
         // A panorama that neither scrolls nor loops moves with the camera in proportion, as in the old engine.
         out.rrLegacyParallax = true;
+        // Screen and picture tones use the original hard-light colour rule.
+        out.rrLegacyTone = true;
+        out.rrLegacyTransitions = [sys.transition_out ?? 0, sys.transition_in ?? 0];
         // Choices are listed inside the message window, after the text.
         out.rrChoicesInMessage = true;
         out.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
@@ -538,6 +557,8 @@
         // The old engines' windows: no box margin, one-line rows, a four-line message across the screen; menus and
         // battles laid out as the runtime the game shipped with drew them.
         out.rrLegacyWindows = (db.runtime || db.engine) === 'RPG Maker 2003' ? 2003 : 2000;
+        out.rrLegacyWindowStretch = db.system?.message_stretch || 0;
+        out.rrLegacyTextPalette = 1;
         // The old engines had no touch UI: the menu button stays off until the player turns it on in Options.
         out.rrTouchUiOff = true;
         out.editMapId = out.startMapId;

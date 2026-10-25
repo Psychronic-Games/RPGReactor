@@ -349,7 +349,7 @@ test('everything standing shares one idea of where the ground is', () => {
     assert.match(three,
         /Number\.isFinite\(object\.planeZ\) \? object\.planeZ : footing \+ 0\.5;/,
         'props otherwise use the common footing or their declared flat-row hinge');
-    assert.match(three, /z: character\._realY \+ 0\.5/, 'characters');
+    assert.match(three, /ground\.z = character\._realY \+ 0\.5;/, 'characters');
     const objectsSource = runtimeSource('reactor_objects.js');
     assert.match(objectsSource, /ground, this\._realY \+ 0\.5\)/,
         'and the position every plugin is told');
@@ -357,8 +357,8 @@ test('everything standing shares one idea of where the ground is', () => {
 
     const sprites = fs.readFileSync(
         path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-    assert.match(sprites, /Reactor3D\.pointOf\(camera, gx \+ 0\.5, stand\)/, 'sprites');
-    assert.match(sprites, /standScaleAt\(camera, at\.x, at\.y, at\.z, wide, tall\)/,
+    assert.match(sprites, /Reactor3D\.pointOf\(camera, gx \+ 0\.5, stand[,)]/, 'sprites');
+    assert.match(sprites, /standScaleAt\(camera, at\.x, at\.y, at\.z, wide, tall[,)]/,
         'and the scale is measured where the sprite actually stands');
 
     const objects = runtimeSource('reactor_objects.js');

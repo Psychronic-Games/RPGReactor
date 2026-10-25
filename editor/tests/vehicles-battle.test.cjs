@@ -148,7 +148,7 @@ test('a start that answers 0 leaves the party on foot beside the bike', () => {
     const w = withFollowers(world());
     const p = rideAway(w), e = w.vehicle(31), fight = w.$gameFight;
     // Something inside the chain refuses the battle after the party has been put on foot.
-    w.ReactorVehicles.Feel.sound = name => { w.sounds.push(name); if (name === 'bump') fight._active = true; return true; };
+    w.ReactorVehicles.Feel.sound = name => { w.sounds.push(name); if (name === 'bump') { fight._active = true; fight._mapId = w.$gameMap.mapId(); } return true; };
     assert.equal(fight.start({ mode: 'action', troopId: 1 }), 0);
     fight._active = false;
     assert.deepEqual([p._vehicleType, p._rrFree, p._rrRide], ['walk', 0, null]);
@@ -162,7 +162,9 @@ test('a start that answers 0 leaves the party on foot beside the bike', () => {
 test('a battle already running is not touched: the wrapper stands down', () => {
     const w = withFollowers(world());
     const p = rideAway(w), fight = w.$gameFight;
+    // (One on this map: a battle kept on another map gives way to a new one.)
     fight._active = true;
+    fight._mapId = w.$gameMap.mapId();
     assert.equal(fight.start({ mode: 'action', troopId: 1 }), 0);
     fight._active = false;
     assert.equal(p._vehicleType, 'reactor', 'nothing was started and nobody was put on foot');

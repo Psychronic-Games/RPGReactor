@@ -1,6 +1,7 @@
 const phase=arguments[0],done=arguments[arguments.length-1];
 (async()=>{
  const db=reactor.databaseEditorUI,dm=reactor.databaseManager,wait=ms=>new Promise(r=>setTimeout(r,ms));
+ const __cancelDb=async()=>{const c=reactor.databaseEditorUI.callbacks,o=c.showConfirm;c.showConfirm=async()=>true;try{document.getElementById('database-cancel-btn').click();await new Promise(r=>setTimeout(r,30));}finally{c.showConfirm=o;}};
  db.setCurrentProject(reactor.projectController.currentProject);
  const failures=[],checks=[];
  const check=(name,ok,detail)=>{checks.push(name);if(!ok)failures.push({name,detail});};
@@ -17,7 +18,7 @@ const phase=arguments[0],done=arguments[arguments.length-1];
    show(type==='items'?'actors':'items');show(type);await wait(25);
    const found=[...document.querySelectorAll('#database-detail input')].some(e=>e.value===`Sequence ${type}`);
    check(`${type}: edit → leave → return`,dm.data[type][id].name===`Sequence ${type}`&&found);
-   document.getElementById('database-cancel-btn').click();
+   await __cancelDb();
    check(`${type}: Cancel restores original`,dm.data[type][id].name===name);
   }
   // Apply becomes the next Cancel baseline, verified in the disposable files.
@@ -29,7 +30,7 @@ const phase=arguments[0],done=arguments[arguments.length-1];
    const saved=JSON.parse(require('fs').readFileSync(require('path').join(db.currentProject.path,'data/Actors.json'),'utf8'));
    check('Apply writes database',saved[actor.id].name==='Applied sequence');
    actor.name='Cancelled after Apply';show('items');const item=dm.data.items[1],itemName=item.name;item.name='Cancelled item';
-   document.getElementById('database-cancel-btn').click();
+   await __cancelDb();
    check('Apply → edit another section → Cancel',dm.data.actors[actor.id].name==='Applied sequence'&&dm.data.items[1].name===itemName);
   }finally{db.callbacks.saveProject=oldSave;dm.data.actors[actor.id].name=oldName;}
   // Interface undo belongs only to the currently selected interface.
@@ -37,7 +38,7 @@ const phase=arguments[0],done=arguments[arguments.length-1];
   if(a.nodes?.length){ui.pushUndo();a.nodes[0].x+=17;ui.touch();const b=dm.data.userInterfaces.find(e=>e&&e.id!==a.id);
    if(b){db.showDatabaseDetail(b,'userInterfaces');const before=JSON.stringify(ui.current);ui.undo();ui.redo();check('interface undo after record switch',JSON.stringify(ui.current)===before);}
   }
-  document.getElementById('database-cancel-btn').click();
+  await __cancelDb();
   return {checks,failures};
  }
  if(phase==='races'){
@@ -46,7 +47,7 @@ const phase=arguments[0],done=arguments[arguments.length-1];
   let resolve;DatabaseRowClipboard.read=()=>new Promise(r=>resolve=r);
   try{
    a.name='Cancelled actor draft';const pending=db.actorEditor.pasteTrait(a,null);
-   document.getElementById('database-cancel-btn').click();
+   await __cancelDb();
    resolve({row:{code:21,dataId:2,value:1.5}});await pending;
    check('actor paste after Cancel',JSON.stringify(dm.data.actors[a.id])===before);
   }finally{DatabaseRowClipboard.read=originalRead;dm.data.actors[a.id]=JSON.parse(before);}
@@ -102,7 +103,7 @@ const phase=arguments[0],done=arguments[arguments.length-1];
   // Cancel must roll back changes made before and after a section transition.
   if(phase==='classes'&&target==='items'){
    const a=dm.data.classes[1],b=dm.data.items[1],names=[a.name,b.name];a.name='Sequence class';b.name='Sequence item';
-   document.getElementById('database-cancel-btn').click();show(target);
+   await __cancelDb();show(target);
    check('cross-section Cancel',dm.data.classes[1].name===names[0]&&dm.data.items[1].name===names[1]);
   }
  }

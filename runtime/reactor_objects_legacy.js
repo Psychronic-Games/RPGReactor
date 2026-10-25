@@ -17,6 +17,12 @@
 (function() {
     const _updateWaitMode = Game_Interpreter.prototype.updateWaitMode;
     Game_Interpreter.prototype.updateWaitMode = function() {
+        if (this._waitMode === "rrSystemGraphic") {
+            const skin = ColorManager._windowskin;
+            if ((skin && !skin.isReady()) || !FontManager.isReady()) return true;
+            this._waitMode = "";
+            return false;
+        }
         if (this._waitMode === "rrKeyInput") {
             const k = this._rrKeyInput;
             if (!k) { this._waitMode = ""; return false; }
@@ -127,6 +133,21 @@
         const m = $gameSystem._rrMessage || ($gameSystem._rrMessage = { faceName: "", faceIndex: 0, background: 0, position: 2 });
         m.faceName = String(name || "");
         m.faceIndex = Number(index) || 0;
+    };
+
+    Game_Interpreter.prototype.rrSystemGraphic = function(name, stretch, font) {
+        const skins = $dataSystem && $dataSystem.rrLegacySkins;
+        const selected = skins && skins[String(name || "").replace(/\.png$/i, "").toLowerCase()];
+        if (!selected) return;
+        $gameSystem._rrWindowSkin = { name: selected, stretch: Number(stretch) === 1 ? 1 : 0, font: Number(font) || 0 };
+        $gameSystem._rrFontId = Number(font) === 1 ? 1 : 0;
+        const info = $gameSystem.legacyFontInfo && $gameSystem.legacyFontInfo();
+        if (info && typeof FontManager !== "undefined") FontManager.load("rmmz-legacy-font-" + $gameSystem._rrFontId, info.filename);
+        ColorManager.loadWindowskin();
+        // The following message/menu must use the selected font and palette.
+        const skin = ColorManager._windowskin;
+        if (info && typeof FontManager !== "undefined" && !FontManager.isReady()) this.setWaitMode("rrSystemGraphic");
+        else if (skin && !skin.isReady()) this.setWaitMode("image");
     };
 
     // RPG Maker 2000/2003 motion (System.json rrLegacyMotion): a character covers 2^(speed + 1) / 256 of
@@ -335,6 +356,25 @@
         }
         return 0;
     };
+
+    // A transfer resets an unfinished camera return; lock/follow mode stays.
+    const _Game_Map_setupLegacyPan = Game_Map.prototype.setup;
+    Game_Map.prototype.setup = function() {
+        if ($dataSystem && $dataSystem.rrLegacyParallax) this._rrPanReturn = 0;
+        _Game_Map_setupLegacyPan.apply(this, arguments);
+    };
+
+    // The old camera centres a whole tile left of the viewport midpoint
+    // when its tile count is even. MZ's half-tile centre shifts a 320px
+    // panorama by 8px on interior maps and misaligns authored picture setups.
+    for (const name of ["centerX", "centerY"]) {
+        const original = Game_Player.prototype[name];
+        Game_Player.prototype[name] = function() {
+            if (!$dataSystem || !$dataSystem.rrLegacyParallax) return original.apply(this, arguments);
+            const tiles = name === "centerX" ? $gameMap.screenTileX() : $gameMap.screenTileY();
+            return Math.ceil(tiles / 2) - 1;
+        };
+    }
 
     // 2000/2003 panning: a locked pan ($gameMap._rrPanLocked) keeps the camera where it is while the
     // player moves; returning the pan scrolls back to the player at the command's speed (1-6), by the

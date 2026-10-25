@@ -17,9 +17,13 @@ class BattleProcessingEditor {
      * Show editor for a battle processing command
      * @param {object} command - The command to edit (or null for new)
      * @param {function} callback - Callback when done editing
+     * @param {*} options - unused; the third argument every table-driven dialog takes
+     * @param {object} hooks - `beforeStore(command)` resolves false to keep the dialog open with nothing stored
      */
-    show(command, callback) {
+    show(command, callback, options, hooks) {
         this.callback = callback;
+        this.hooks = hooks || null;
+        this.saving = false;
 
         if (command && command.code === 301) {
             const params = command.parameters;
@@ -343,14 +347,32 @@ class BattleProcessingEditor {
     }
 
     /**
+     * What OK hands to an event list: the command, then its branch rows when
+     * the battle can be escaped or lost: If Win, If Escape when the party can
+     * escape, If Lose when the game goes on after a loss, and the end row.
+     */
+    static block(command) {
+        if (!command || command.code !== 301) return command ? [command] : [];
+        const indent = command.indent || 0, params = command.parameters || [];
+        if (!params[2] && !params[3]) return [command];
+        const row = code => [{ code, indent, parameters: [] }, { code: 0, indent: indent + 1, parameters: [] }];
+        return [command].concat(row(601), params[2] ? row(602) : [], params[3] ? row(603) : [], [{ code: 604, indent, parameters: [] }]);
+    }
+
+    /**
      * Save and return command
      */
-    save() {
-        if (this.callback) {
-            const command = this.buildCommand();
-            this.callback(command);
+    async save() {
+        if (this.saving) return;
+        const command = this.buildCommand();
+        if (this.hooks && typeof this.hooks.beforeStore === 'function') {
+            this.saving = true;
+            let go = false;
+            try { go = await this.hooks.beforeStore(command); } finally { this.saving = false; }
+            if (!go) return;
         }
         this.close();
+        if (this.callback) this.callback(command);
     }
 
     /**

@@ -98,7 +98,7 @@ test('three renders into targets that hold the same bytes the canvas did, and bo
 
 test('a shared pass is never copied, uploaded, or destroyed by the spriteset', () => {
     const create = sprites.slice(sprites.indexOf('Spriteset_Map.prototype.createReactor3DSprite'), sprites.indexOf('Spriteset_Map.prototype.destroyReactor3DSprite'));
-    assert.match(create, /if \(shared\) \{\s*const texture = viewport\.passTexture\(slot\);/);
+    assert.match(create, /if \(shared\) \{\s*\/\/[^\n]*\n\s*const sprite = viewport\.passSprite \? viewport\.passSprite\(slot\) : new PIXI\.Sprite\(viewport\.passTexture\(slot\)\);/);
     assert.match(create, /return \{ sprite, texture, shared: true, generation: viewport\.generation\(\) \};/);
     assert.match(sprites, /if \(!pass \|\| pass\.shared\) return;\s*\/\/ Copied off the three canvas/);
     assert.match(sprites, /if \(!pass\.shared\) pass\.texture\.destroy\(false\);/);

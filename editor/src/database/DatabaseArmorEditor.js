@@ -202,6 +202,10 @@ class DatabaseArmorEditor {
         const tacticsSection = window.RRTactics?.createSection({ kind: 'armor', record: armor, databaseManager: this.databaseManager });
         if (tacticsSection) gridWrapper.appendChild(tacticsSection);
 
+        // Grapple: pulls the wearer up to a roof edge or ledge in battles on the map.
+        const grappleSection = window.RRGrapple?.createSection({ record: armor, databaseManager: this.databaseManager });
+        if (grappleSection) gridWrapper.appendChild(grappleSection);
+
         // Note Section
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';

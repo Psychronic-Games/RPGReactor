@@ -254,7 +254,7 @@ class CommonEventEditor {
             const commonEvent = commonEvents[index];
             if (!commonEvent) continue;
             const id = commonEvent.id ?? index;
-            options.push({ value: id, label: `${String(id).padStart(4, '0')}: ${commonEvent.name || ''}` });
+            options.push({ value: id, label: `${String(id).padStart(4, '0')}: ${commonEvent.name || `${tt('Common Event')} ${String(id).padStart(4, '0')}`}` });
             if (id === this.commonEventId) hasCurrent = true;
         }
         if (!hasCurrent) {

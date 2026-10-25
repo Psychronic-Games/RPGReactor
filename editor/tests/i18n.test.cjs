@@ -95,6 +95,17 @@ test('i18n manager reads, applies, and persists language preference', () => {
     assert.equal(document.documentElement.dir, 'rtl');
 });
 
+test('builder and movement labels use the selected language rather than copied Greek', () => {
+    const { catalogs } = loadI18nForTest();
+    const labels = ['Everything', 'This event keeps moving', 'Last action',
+        'The player keeps moving while this holds.', 'Face Ceiling', 'Face Ground', 'Stand Up', 'Rotate...'];
+    for (const [locale, table] of Object.entries(catalogs.text)) {
+        if (locale === 'el') continue;
+        for (const label of labels) assert.ok(!/[Α-Ωα-ω]/u.test(table[label]), `${locale}: ${label}`);
+    }
+    assert.equal(catalogs.text.de['Saving…'], 'Speichern…');
+});
+
 test('localized UI key references exist in the English dictionary', () => {
     const { RR_I18N_STRINGS } = loadI18nForTest();
     const knownKeys = new Set(Object.keys(RR_I18N_STRINGS.en));
@@ -507,7 +518,7 @@ test('source inventory follows inherited literal helpers without treating overri
 test('every database navigation category has a localized keyed title', () => {
     const { manager, RR_LANGUAGES, dbTypes, RR_I18N_STRINGS } = loadI18nForTest();
     const source = fs.readFileSync(path.join(repoRoot,'src/DatabaseEditorUI.js'),'utf8');
-    const start=source.indexOf('const categories = [');
+    const start=source.indexOf('static get NAV_SECTIONS() {');
     assert.ok(start>=0);
     const catalog=source.slice(start,source.indexOf('];',start));
     const types=[...catalog.matchAll(/type: '([^']+)'/g)].map(m=>m[1]);
@@ -590,4 +601,13 @@ test('the collapse sound row names whatever its own Collapse Effect row names', 
     }
     assert.equal(text.ja['Collapse Sound'], '消滅音', 'and reads as the effect above it, not as breaking glass');
     assert.equal(text['zh-Hans']['Collapse Sound'], '消失音效');
+});
+
+
+test('creature Body section captions have translations in every non-English locale', () => {
+    const { catalogs } = loadI18nForTest();
+    for (const [locale, text] of Object.entries(catalogs.text)) {
+        if (locale === 'en') continue;
+        for (const key of ['Fins', 'Appendages']) assert.ok(text[key] && text[key] !== key, `${locale}: ${key}`);
+    }
 });

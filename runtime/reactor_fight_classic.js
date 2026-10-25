@@ -16,7 +16,7 @@
 // the victory step are the battle screen's own.
 //
 // When the battle is won or escaped, every member that fell is a defeated
-// unit: its event is erased and, unless its row says Comes back, remembered
+// unit: its event is erased and, unless it comes back (F.staysDefeated), remembered
 // in the list defeated units are kept in ($gameFight). A lost battle changes
 // nothing on the map.
 //
@@ -102,8 +102,7 @@
      * In battle setting (`rrUnit`); it counts while the event is on the map, on the Enemy side, with an enemy
      * record that exists. Tag units, allies, bystanders, actor records and units a command spawned are no part
      * of a Classic battle.
-     * `remembered`: it stays defeated once it falls. Only a row whose own side is Enemy does (one a command
-     * turned into an enemy stands again when the map is entered again), and not one that says Comes back.
+     * `remembered`: it stays defeated once it falls (F.staysDefeated).
      */
     C.rowOf = function(event) {
         if (typeof event === "number") event = $gameMap.event(event);
@@ -113,7 +112,7 @@
         if (!data || !data.rrUnit || data.rrSpawned || !event.page()) return null;
         const unit = typeof F.eventUnit === "function" ? F.eventUnit(event) : C.unitNow(event);
         if (!unit || unit.team !== "enemy" || unit.record !== "enemy" || !$dataEnemies[unit.id]) return null;
-        return { event, eventId: event.eventId(), enemyId: unit.id, remembered: data.rrUnit.team === "enemy" && data.rrUnit.returns !== true };
+        return { event, eventId: event.eventId(), enemyId: unit.id, remembered: F.staysDefeated(data) };
     };
 
     /**
@@ -270,7 +269,7 @@
         // A battle made here whose battle screen never opened stops no other.
         if (C._session && !C.sceneUp()) C.drop();
         if (C._session || $gameParty.inBattle()) return 0;
-        if (typeof $gameFight !== "undefined" && $gameFight && $gameFight.isActive()) return 0;
+        if (typeof $gameFight !== "undefined" && $gameFight && $gameFight.isHere()) return 0;
         if (typeof SceneManager !== "undefined" && SceneManager.isSceneChanging && SceneManager.isSceneChanging()) return 0;
         const rows = C.take(events, options.group);
         if (!rows.length) return 0;

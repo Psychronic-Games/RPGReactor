@@ -29,7 +29,20 @@
 
     /** Tiles per second squared for one Earth: 9.8 m/s² at 0.6 m a tile. */
     ReactorPhysics.EARTH = 9.8 / 0.6;
-    ReactorPhysics.DEFAULTS = { gravity: 1, jumpHeight: 1.25, jump: true, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true, mantle: true, mantleReach: 3, stepUp: true, stepUpReach: 1.5 };
+    ReactorPhysics.DEFAULTS = { gravity: 1, jumpHeight: 1.25, jump: true, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true, mantle: true, mantleReach: 3, stepUp: true, stepUpReach: 1.5,
+        battleClimb: true, climbHeight: 6, climbCost: 0.75, battleFall: "hurt", lethalFall: "ask" };
+    /**
+     * What a long fall does in a battle on the map (`battleFall`): "hurt" (a unit may jump down any height and
+     * takes the fall rule's damage past the safe fall), "safe" (any height, no damage), "off" (no deeper than the
+     * safe fall; higher roofs are left by a ladder or a climb).
+     */
+    ReactorPhysics.BATTLE_FALLS = ["hurt", "safe", "off"];
+    /**
+     * A fall that would leave a unit with no HP (`lethalFall`): "ask" (the player may choose one for a unit it
+     * orders, after a question), "allow" (the same, without the question), "never" (nobody is offered one). A unit
+     * that decides for itself never takes one.
+     */
+    ReactorPhysics.LETHAL_FALLS = ["ask", "allow", "never"];
     /** Named gravities the editor offers, in Earths. */
     ReactorPhysics.PRESETS = { earth: 1, moon: 0.166, mars: 0.38, low: 0.5, heavy: 2 };
 
@@ -70,6 +83,11 @@
         // Whatever the project or the map sets, a walk never climbs more than a hop.
         out.stepUpReach = Math.min(num(out.stepUpReach, 1.5, 0, 20), this.stepUpCap(out.jumpHeight));
         out.fallDamage = !!out.fallDamage;
+        out.battleClimb = out.battleClimb !== false;
+        out.climbHeight = num(out.climbHeight, 6, 0, 50);
+        out.climbCost = num(out.climbCost, 0.75, 0, 10);
+        out.battleFall = this.BATTLE_FALLS.includes(out.battleFall) ? out.battleFall : "hurt";
+        out.lethalFall = this.LETHAL_FALLS.includes(out.lethalFall) ? out.lethalFall : "ask";
         return out;
     };
 
@@ -404,6 +422,8 @@
         }
         // Pulling itself up a ledge: the mantle moves it, not gravity.
         if (character._reactorMantle) { this.updateMantle(character); return; }
+        // On a grapple's line: the pull moves it.
+        if (character._reactorGrapple) { this.updateGrapple(character); return; }
         const point = this.groundPoint(character), px = point[0], py = point[1];
         const limit = Reactor3D.TERRAIN_SLOPE_LIMIT;
         const alt = Number.isFinite(character._reactorAlt) ? character._reactorAlt : null;
@@ -729,6 +749,9 @@
         if (typeof $gamePlayer === "undefined") return;
         const fatal = typeof $gameTemp !== "undefined" && $gameTemp._reactorFatalFall;
         if (fatal && this.isPartyCharacter(character)) { this.goLimp(character, this.impactSpeed(fell, settings)); return; }
+        // A unit of a battle on the map lands as the battle says (`Game_Fight.onUnitLanded`): the fall hurts that unit alone.
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        if (fight && fight.isActive && fight.isActive() && fight.onUnitLanded && fight.onUnitLanded(character, fell, settings)) return;
         if (character !== $gamePlayer) return;
         const hurts = settings.fallDamage && fell > settings.fallFrom;
         if (!hurts) {
@@ -762,6 +785,16 @@
         for (const follower of $gamePlayer.followers ? $gamePlayer.followers().visibleFollowers() : []) {
             if (!this.isAirborne(follower)) this.goLimp(follower, impact * 0.5);
         }
+    };
+
+    /** The share of max HP a fall of `fell` tiles takes by the fall rule (0 up to the safe fall, at most all of it). */
+    ReactorPhysics.fallShare = function(fell, settings = this.settings()) {
+        return fell > settings.fallFrom + 1e-6 ? Math.min(1, (fell - settings.fallFrom) * settings.fallPercent / 100) : 0;
+    };
+
+    /** The HP a share of max HP is to a battler of `mhp`: at least 1 when the share is more than nothing. */
+    ReactorPhysics.fallHp = function(mhp, share) {
+        return share > 0 ? Math.max(1, Math.round(Math.max(0, Number(mhp) || 0) * share)) : 0;
     };
 
     /** The speed (tiles a frame) of a body that fell this far under these settings. */
@@ -1013,8 +1046,9 @@
      * The limits an edge is judged by: the project's and the map's physics,
      * with `overrides` over them (`jump` on or off, `jumpHeight`, `hop` the
      * highest rise hopped, `reach` the highest mantled, `mantle`,
-     * `mantleReach`, `body`, the fall rule). A Tactical unit passes its own
-     * `hop` and `reach`.
+     * `mantleReach`, `body`, the fall rule, `climb` the highest edge a wall
+     * is climbed to without a ladder, 0 for none). A Tactical unit passes its
+     * own `hop`, `reach` and `climb`.
      */
     ReactorPhysics.edgeRules = function(overrides) {
         const R = world(), settings = this.settings(), o = overrides || {};
@@ -1028,6 +1062,7 @@
         const reach = Number.isFinite(o.reach) ? o.reach : (jump && mantle && mantleReach > 0 ? jumpHeight + mantleReach : 0);
         return {
             _rules: true, limit, jump, jumpHeight, hop, reach, mantle,
+            climb: Number.isFinite(o.climb) && o.climb > 0 ? o.climb : 0,
             body: Number.isFinite(o.body) ? o.body : this.BODY_HEIGHT,
             gravity: this.gravityPerFrame(settings),
             fallDamage: o.fallDamage !== undefined ? !!o.fallDamage : settings.fallDamage,
@@ -1048,14 +1083,17 @@
         return Math.max(this.MANTLE_MIN, Math.min(this.MANTLE_MAX, Math.round(6 + Math.max(0, rise) * this.MANTLE_FRAMES_PER_TILE)));
     };
 
-    const KIND_ORDER = { walk: 0, ladder: 1, hop: 2, mantle: 3, drop: 4, blocked: 5 };
+    const KIND_ORDER = { walk: 0, ladder: 1, hop: 2, mantle: 3, climb: 4, drop: 5, blocked: 6 };
+    /** A wall climbed without a ladder: frames per tile of rise (half a ladder's speed). */
+    ReactorPhysics.CLIMB_FRAMES_PER_TILE = 1 / ReactorPhysics.LADDER_SPEED;
 
     /**
      * Every way a body at `height` on cell (x, y) can go toward `d` (2, 4, 6,
      * 8), best first: one entry for each place to stand on the neighbour that
      * it can reach, or a single `blocked` entry saying why not. An entry is
      * `{ kind, x, y, d, from, to, rise, frames, cost }`: `kind` is "walk",
-     * "ladder", "hop", "mantle", "drop" or "blocked"; `x`, `y` the cell it
+     * "ladder", "hop", "mantle", "climb" (a wall too high to mantle, within
+     * `rules.climb`), "drop" or "blocked"; `x`, `y` the cell it
      * ends on; `to` the height it ends at and `rise` the height gained
      * (negative down); `frames` the time it takes and `cost` the same in
      * tiles walked. A drop adds `fell`, `hurts` and `harm` (the share of max
@@ -1114,7 +1152,10 @@
             if (rise > 0) {
                 // The hands take the edge nearest the climber: a roof's eave is lower than the cell's middle.
                 const lip = level.slope > 0.05 ? R.groundHeightAt(mapData, x2 + 0.5 - step[0] * 0.49, y2 + 0.5 - step[1] * 0.49, level.top) : level.top;
-                if (rise > rules.hop && lip - from > rules.reach) { refuse("high", level); continue; }
+                const high = rise > rules.hop && lip - from > rules.reach;
+                // Out of reach of raised hands: a wall within the climb is climbed hand over hand.
+                const climbs = high && rules.climb > 0 && lip - from <= rules.climb + 1e-6;
+                if (high && !climbs) { refuse("high", level); continue; }
                 if (!level.stand) { refuse(level.level ? "thin" : "steep", level); continue; }
                 if (level.ceiling - level.top < rules.body - 1e-6) { refuse("headroom", level); continue; }
                 // The body rises past the edge on its own side before it goes over.
@@ -1124,6 +1165,8 @@
                 } else if (!level.level && !level.roof) {
                     // A mantle ends standing: nobody pulls up onto a slope steeper than a roof is walked.
                     refuse("steep", level);
+                } else if (climbs) {
+                    out.push(entry("climb", level.top, walkFrames + rise * this.CLIMB_FRAMES_PER_TILE));
                 } else {
                     const pull = this.mantleFrames(rise);
                     out.push(entry("mantle", level.top, pull + walkFrames - this.mantleOverlap(pull)));
@@ -1197,21 +1240,29 @@
         // In the air the jump is spent: what is left is the reach of the hands. What the rest of
         // the rise will carry the body onto anyway is left to the jump.
         const rising = Math.max(0, Number(character._reactorVz) || 0);
-        const rules = this.edgeRules(grounded ? null : { jump: true, jumpHeight: 0,
+        // In an Action or First Person battle a wall out of reach is climbed, as far as the project's climb height.
+        const climb = grounded && this.battleClimbs(settings) ? settings.climbHeight : 0;
+        const rules = this.edgeRules(grounded ? (climb ? { climb } : null) : { jump: true, jumpHeight: 0,
             hop: R.TERRAIN_SLOPE_LIMIT + rising * rising / (2 * this.gravityPerFrame(settings)), reach: settings.mantleReach });
         let found = null;
         for (const option of this.edges($dataMap, character.x, character.y, d, alt, rules)) {
             if (Number.isFinite(highest) && option.to > highest) continue;
             // From the ground, a hop the jump would only just make (its top reached on one frame) is pulled up instead.
             const tight = grounded && option.kind === "hop" && option.rise > rules.hop - this.HOP_MARGIN;
-            if (option.kind === "mantle" || ((hops || tight) && option.kind === "hop")) { found = option; break; }
+            if (option.kind === "mantle" || option.kind === "climb" || ((hops || tight) && option.kind === "hop")) { found = option; break; }
         }
         if (!found) return false;
         if (typeof $gameMap !== "undefined" && $gameMap && $gameMap.isPassable && character.reverseDir
             && !($gameMap.isPassable(character.x, character.y, d) && $gameMap.isPassable(found.x, found.y, character.reverseDir(d)))) return false;
         if (this.mantleTopTaken(character, found.x, found.y)) return false;
-        this.startMantle(character, d, found.x, found.y, alt, found.to);
+        this.startMantle(character, d, found.x, found.y, alt, found.to, found.kind === "climb" ? found.rise * this.CLIMB_FRAMES_PER_TILE : undefined);
         return true;
+    };
+
+    /** Whether walls are climbed here: a battle on the map other than a Tactical one (its grid climbs by itself), and the project's switch. */
+    ReactorPhysics.battleClimbs = function(settings = this.settings()) {
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        return !!settings.battleClimb && !!fight && !!fight.isActive && fight.isActive() && !(fight.isTactical && fight.isTactical());
     };
 
     /** How far under the highest rise a jump carries a body onto a hop is left to the jump, in tiles. */
@@ -1524,30 +1575,54 @@
     //
     // The Tactical grid asks the same question through its own seam
     // (`ReactorFight.Grid.edge`, `playStep`, `isStepping`): a unit mantles a
-    // ledge within its jump and its reach, climbs and descends ladders, and
-    // drops as far as a fall is safe. A walk and a plain hop stay the grid's.
+    // ledge within its jump and its reach, climbs a wall hand over hand up to
+    // the project's climb height (`battleClimb`, `climbHeight`, `climbCost`),
+    // climbs and descends ladders, and drops: as far as the project's
+    // `battleFall` lets it, a fall past the safe height costing the fall
+    // rule's share of its max HP. A walk and a plain hop stay the grid's.
 
     /** Move points a mantle and a storey of ladder cost a unit, and the tiles of ladder one extra point climbs. */
     ReactorPhysics.TACTICAL_MANTLE_COST = 2;
     ReactorPhysics.TACTICAL_LADDER_TILES = 2.5;
+    /** Move points a drop longer than a unit's own costs. */
+    ReactorPhysics.TACTICAL_DROP_COST = 2;
     /**
      * Tiles over its jump a unit pulls itself up: with the usual jump of 1, onto what is no higher than itself (a crate,
-     * a counter, a wall its own height). A canopy or a roof's eave takes a ladder or a higher jump.
+     * a counter, a wall its own height). A canopy or a roof's eave takes a ladder, a climb or a higher jump.
      */
     ReactorPhysics.TACTICAL_MANTLE_REACH = 2;
     // Why an edge is blocked for good, whatever a unit's jump: there is nowhere for a body on top.
     const NO_HOP = { thin: true, steep: true, headroom: true, overhead: true };
 
-    /** The limits a Tactical unit of that jump is judged by: it hops its jump and mantles a little over it. */
+    /** The limits a Tactical unit of that jump is judged by: it hops its jump, mantles a little over it and climbs walls to the project's height. */
     ReactorPhysics.tacticalRules = function(hop, settings = this.settings()) {
-        return this.edgeRules({ jump: hop > 0, jumpHeight: hop, hop, reach: hop > 0 && settings.mantle ? hop + this.TACTICAL_MANTLE_REACH : 0 });
+        return this.edgeRules({ jump: hop > 0, jumpHeight: hop, hop, reach: hop > 0 && settings.mantle ? hop + this.TACTICAL_MANTLE_REACH : 0,
+            climb: hop > 0 && settings.battleClimb ? settings.climbHeight : 0 });
+    };
+
+    /** Move points a climb of `rise` tiles costs: `climbCost` a tile, rounded up, and never less than a mantle. */
+    ReactorPhysics.climbCostFor = function(rise, settings = this.settings()) {
+        return Math.max(this.TACTICAL_MANTLE_COST, Math.ceil(Math.max(0, rise) * settings.climbCost - 1e-6));
     };
 
     /**
-     * The Tactical grid's edge: `{ kind, cost, height }` for a mantle, a
-     * ladder or a long drop from cell (x, y) at `height` toward `d` by a unit
-     * of that `jump`, or null where the grid's own rule (a walk, a hop, a
-     * short drop) should decide.
+     * A drop as a Tactical unit of that jump takes it: `{ cost, harm }` (`harm` the share of max HP the fall takes),
+     * or null when it is not taken (into deep water, or deeper than `battleFall` allows). A drop within the unit's
+     * own (one level further than it climbs) costs a step.
+     */
+    ReactorPhysics.tacticalDrop = function(option, hop, settings = this.settings()) {
+        if (!option || option.kind !== "drop" || option.water) return null;
+        const own = option.fell <= hop + 1 + 0.01;
+        if (settings.battleFall === "off" && !own && option.fell > settings.fallFrom + 1e-6) return null;
+        const harm = settings.battleFall === "hurt" ? this.fallShare(option.fell, settings) : 0;
+        return { cost: own ? 1 : this.TACTICAL_DROP_COST, harm, own };
+    };
+
+    /**
+     * The Tactical grid's edge: `{ kind, cost, height, harm }` for a mantle,
+     * a climb, a ladder or a long drop from cell (x, y) at `height` toward `d`
+     * by a unit of that `jump`, or null where the grid's own rule (a walk, a
+     * hop, a short safe drop) should decide.
      */
     ReactorPhysics.tacticalEdge = function(x, y, d, height, jump) {
         try {
@@ -1564,12 +1639,14 @@
                 if (option.kind === "walk" || option.kind === "hop" || option.kind === "blocked") return null;
                 if (map && map.isPassable && !(map.isPassable(x, y, d) && map.isPassable(option.x, option.y, 10 - d))) return null;
                 if (option.kind === "mantle") return { kind: "mantle", cost: this.TACTICAL_MANTLE_COST, height: option.to };
+                if (option.kind === "climb") return { kind: "climb", cost: this.climbCostFor(option.rise, settings), height: option.to };
                 if (option.kind === "ladder") return { kind: "ladder", cost: 1 + Math.ceil(Math.abs(option.rise) / this.TACTICAL_LADDER_TILES), height: option.to };
                 if (option.kind === "drop") {
-                    // A drop within the unit's own (one level further than it climbs) is the grid's; a longer one is taken while it is safe.
-                    if (option.fell <= hop + 1 + 0.01) return null;
-                    if (option.hurts || option.water || option.fell > settings.fallFrom) continue;
-                    return { kind: "drop", cost: 2, height: option.to };
+                    const drop = this.tacticalDrop(option, hop, settings);
+                    if (!drop) continue;
+                    // A short drop that does not hurt is the grid's.
+                    if (drop.own && !(drop.harm > 0)) return null;
+                    return { kind: "drop", cost: drop.cost, height: option.to, harm: drop.harm };
                 }
             }
         } catch (error) {
@@ -1581,9 +1658,9 @@
     /**
      * Every way on for a unit, for a grid that keeps more than one height on a
      * cell (the ground under an eave and the eave over it; a room and the
-     * roof over it): `[{ kind, cost, height }]`, a walk and a hop at 1, the
-     * rest as `tacticalEdge` costs them, a fall that hurts left out. Empty
-     * where nothing can be done.
+     * roof over it): `[{ kind, cost, height, harm }]`, a walk and a hop at 1,
+     * the rest as `tacticalEdge` costs them, a drop `battleFall` does not
+     * allow left out. Empty where nothing can be done.
      */
     ReactorPhysics.tacticalEdges = function(x, y, d, height, jump) {
         const out = [];
@@ -1595,9 +1672,13 @@
             const rules = this.tacticalRules(hop, settings);
             for (const option of this.edges($dataMap, x, y, d, height, rules)) {
                 if (option.kind === "blocked") continue;
-                if (option.kind === "drop" && (option.hurts || option.water || option.fell > Math.max(hop + 1, settings.fallFrom))) continue;
-                const cost = option.kind === "mantle" ? this.TACTICAL_MANTLE_COST : option.kind === "ladder" ? 1 + Math.ceil(Math.abs(option.rise) / this.TACTICAL_LADDER_TILES)
-                    : option.kind === "drop" && option.fell > hop + 1 + 0.01 ? 2 : 1;
+                if (option.kind === "drop") {
+                    const drop = this.tacticalDrop(option, hop, settings);
+                    if (drop) out.push({ kind: "drop", cost: drop.cost, height: option.to, harm: drop.harm });
+                    continue;
+                }
+                const cost = option.kind === "mantle" ? this.TACTICAL_MANTLE_COST : option.kind === "climb" ? this.climbCostFor(option.rise, settings)
+                    : option.kind === "ladder" ? 1 + Math.ceil(Math.abs(option.rise) / this.TACTICAL_LADDER_TILES) : 1;
                 out.push({ kind: option.kind, cost, height: option.to });
             }
         } catch (error) {
@@ -1606,16 +1687,153 @@
         return out;
     };
 
-    /** Play a grid step that is a climb: a mantle up, a ladder up or down. Other kinds are the grid's (false). */
+    /** Play a grid step that is a climb: a mantle up, a wall climbed, a ladder up or down, a grapple. Other kinds are the grid's (false). */
     ReactorPhysics.playStep = function(character, step) {
         const R = world();
-        if (!R || !character || !step || character._reactorMantle || !this.DIRS[step.d]) return false;
-        if (step.kind !== "mantle" && step.kind !== "ladder") return false;
+        if (!R || !character || !step || character._reactorMantle || character._reactorGrapple || !this.DIRS[step.d]) return false;
+        if (step.kind === "grapple") return this.startGrapple(character, step);
+        if (step.kind !== "mantle" && step.kind !== "ladder" && step.kind !== "climb") return false;
         const from = Number.isFinite(character._reactorAlt) ? character._reactorAlt : character._reactorGround || 0;
         if (!Number.isFinite(step.height) || Math.abs(step.height - from) < 1e-3) return false;
         const rise = Math.abs(step.height - from);
-        this.startMantle(character, step.d, step.x, step.y, from, step.height, step.kind === "ladder" ? rise / (this.LADDER_SPEED * 2) : undefined);
+        const frames = step.kind === "ladder" ? rise / (this.LADDER_SPEED * 2) : step.kind === "climb" ? rise * this.CLIMB_FRAMES_PER_TILE : undefined;
+        this.startMantle(character, step.d, step.x, step.y, from, step.height, frames);
         return true;
+    };
+
+    //-------------------------------------------------------------------------
+    // Grapple: a line from the hand to a roof's edge or a ledge, the pull up
+    // to it, and the climb over onto the top (a mantle from where the body
+    // hangs). Plain data on the character (`_reactorGrapple`), as a mantle is.
+
+    /** Frames the line flies before the pull; tiles a frame the pull carries the body; how far under the edge it hangs. */
+    ReactorPhysics.GRAPPLE_SHOT = 16;
+    ReactorPhysics.GRAPPLE_SPEED = 0.22;
+    ReactorPhysics.GRAPPLE_HANG = 2.4;
+    /** The lowest top worth a grapple, over the feet: anything lower is hopped or mantled. */
+    ReactorPhysics.GRAPPLE_LEAST = 2;
+
+    /**
+     * Every edge a grapple from cell (x, y) at `from` takes hold of: tops a body
+     * stands on (level, or a roof's pitch), no further than `range` tiles
+     * (cell middle to cell middle), whose edge toward the climber stands more
+     * than `least` and no more than `most` over the feet. The hook is caught
+     * on the edge of the top itself, or of an eave or a verge that hangs out
+     * past it, with open sky under the hook down to ground well below it,
+     * where the body hangs. Each is `{ x, y, d, to, lip, bx, by, hx, hy }`:
+     * the top's cell and height, the way the body comes onto it, the edge's
+     * height, the cell the body hangs over, and where the hook holds (across
+     * the map). The map's data only: who stands where, tiles and the line of
+     * sight are the caller's.
+     */
+    ReactorPhysics.grappleTargets = function(mapData, x, y, from, range, most, least = this.GRAPPLE_LEAST) {
+        const R = world(), out = [];
+        if (!R || !mapData || !(range > 0) || !(most > 0)) return out;
+        const r = Math.floor(range), limit = R.TERRAIN_SLOPE_LIMIT || 0.75;
+        const inside = (cx, cy) => cx >= 0 && cy >= 0 && cx < mapData.width && cy < mapData.height;
+        // Open sky over a cell's ground near `from` up to `top`, the ground well under it: somewhere a body hangs.
+        const hangsOver = (cx, cy, top) => {
+            if (!inside(cx, cy)) return null;
+            const below = R.groundHeightAt(mapData, cx + 0.5, cy + 0.5, from);
+            return top - below > 1 + limit && this.ceilingAbove(mapData, cx, cy, below) >= top - 1e-3 ? below : null;
+        };
+        for (let ty = y - r; ty <= y + r; ty++) {
+            for (let tx = x - r; tx <= x + r; tx++) {
+                if ((tx === x && ty === y) || !inside(tx, ty)) continue;
+                const far = Math.hypot(tx - x, ty - y);
+                if (far > range + 1e-6) continue;
+                for (const level of this.levelsAt(mapData, tx, ty)) {
+                    if (!level.stand || !(level.level || level.roof) || level.ceiling - level.top < this.BODY_HEIGHT - 1e-6) continue;
+                    if (level.top - from < least) continue;
+                    let best = null;
+                    for (const d of [2, 4, 6, 8]) {
+                        const step = this.DIRS[d];
+                        // The top's own edge over the cell beside it, or an eave or a verge on that cell (no more than
+                        // a step and a half under the top) over the cell beyond.
+                        for (let out = 1; out <= 2; out++) {
+                            const bx = tx - step[0] * out, by = ty - step[1] * out, near = Math.hypot(bx - x, by - y);
+                            if (near >= far || !inside(bx, by)) break;
+                            // Where the hook holds: the side of the next cell in from where the body hangs.
+                            const hx = bx + 0.5 + step[0] * 0.51, hy = by + 0.5 + step[1] * 0.51;
+                            const lip = Math.min(level.top + 0.5, R.groundHeightAt(mapData, hx, hy, level.top));
+                            if (out === 2) {
+                                // Only past an overhang: open air under the cell between, and something over it there.
+                                const mid = tx - step[0], mz = ty - step[1], under = R.groundHeightAt(mapData, mid + 0.5, mz + 0.5, from);
+                                if (!(lip > level.top - 1.5) || !(level.top - under > 1 + limit) || !(this.ceilingAbove(mapData, mid, mz, under) < level.top)) break;
+                            }
+                            if (lip - from > most + 1e-6 || lip - from < least) break;
+                            if (hangsOver(bx, by, lip) === null) continue;
+                            if (!best || near < best.near) best = { x: tx, y: ty, d, to: level.top, lip, bx, by, hx, hy, near };
+                            break;
+                        }
+                    }
+                    if (best) { delete best.near; out.push(best); }
+                }
+            }
+        }
+        return out;
+    };
+
+    /**
+     * Begin a grapple step `{ x, y, d, height }` (the top's cell, the way onto it, its height), hanging over `bx`, `by`
+     * with the hook at `hx`, `hy` and `lip` where the target gave them (else over the cell beside the top, at its edge).
+     * False when there is no edge there.
+     */
+    ReactorPhysics.startGrapple = function(character, step) {
+        const R = world(), dir = this.DIRS[step.d];
+        if (!R || !dir || typeof $dataMap === "undefined" || !$dataMap || !Number.isFinite(step.height)) return false;
+        const from = Number.isFinite(character._reactorAlt) ? character._reactorAlt : character._reactorGround || 0;
+        const bx = Number.isFinite(step.bx) ? step.bx : step.x - dir[0], by = Number.isFinite(step.by) ? step.by : step.y - dir[1];
+        const hx = Number.isFinite(step.hx) ? step.hx : bx + 0.5 + dir[0] * 0.51, hy = Number.isFinite(step.hy) ? step.hy : by + 0.5 + dir[1] * 0.51;
+        const lip = Number.isFinite(step.lip) ? step.lip : Math.min(step.height, R.groundHeightAt($dataMap, hx, hy, step.height));
+        const sx = Number.isFinite(character._realX) ? character._realX : character.x, sy = Number.isFinite(character._realY) ? character._realY : character.y;
+        const hang = Math.max(from, lip - this.GRAPPLE_HANG);
+        const pull = Math.max(12, Math.round(Math.hypot(bx - sx, by - sy, hang - from) / this.GRAPPLE_SPEED));
+        character._reactorGrapple = { x: step.x, y: step.y, d: step.d, bx, by, hx, hy, sx, sy, from, to: step.height, lip, hang, t: 0, shot: this.GRAPPLE_SHOT, pull };
+        character._reactorVz = 0; character._reactorLeap = false; character._reactorOnLadder = false; character._reactorSwim = false; character._reactorPeak = undefined;
+        if (character.setDirection) character.setDirection(Math.abs(hx - 0.5 - sx) > Math.abs(hy - 0.5 - sy) ? (hx - 0.5 > sx ? 6 : 4) : (hy - 0.5 > sy ? 2 : 8));
+        return true;
+    };
+
+    /** Whether a character is on a grapple's line: it flies, or the body is pulled. */
+    ReactorPhysics.isGrappling = function(character) {
+        return !!(character && character._reactorGrapple);
+    };
+
+    /** Where a grapple's hook is now, in tiles (`x`, `y` across the map, `z` up), and how much of the line is out (0 to 1); null off one. */
+    ReactorPhysics.grappleHook = function(character, out) {
+        const g = character && character._reactorGrapple;
+        if (!g) return null;
+        out = out || {};
+        out.x = g.hx; out.y = g.hy; out.z = g.lip;
+        out.out = Math.min(1, g.t / Math.max(1, g.shot));
+        return out;
+    };
+
+    /** One frame of a grapple: the line flies, the body is pulled to hang under the edge, then it climbs over (a mantle). */
+    ReactorPhysics.updateGrapple = function(character) {
+        const R = world(), g = character._reactorGrapple;
+        g.t++;
+        let height = g.from;
+        if (g.t > g.shot) {
+            if (g.t === g.shot + 1) { character._x = g.bx; character._y = g.by; }
+            const k = Math.min(1, (g.t - g.shot) / g.pull), e = k * k * (3 - 2 * k);
+            character._realX = g.sx + (g.bx - g.sx) * e;
+            character._realY = g.sy + (g.by - g.sy) * e;
+            height = g.from + (g.hang - g.from) * e + Math.sin(k * Math.PI) * 0.35;
+            if (k >= 1) {
+                character._reactorGrapple = null;
+                character._realX = g.bx; character._realY = g.by;
+                this.startMantle(character, g.d, g.x, g.y, g.hang, g.to, this.mantleFrames(g.to - g.hang) + 6);
+                return;
+            }
+        }
+        const point = this.groundPoint(character);
+        const ground = R ? R.groundHeightAt($dataMap, point[0], point[1], Math.min(height, g.from)) : height;
+        character._reactorGround = Math.min(ground, height);
+        character._reactorAlt = height;
+        character._reactorVz = 0;
+        character._reactorAir = Math.max(0, height - character._reactorGround);
     };
 
     /** Give the Tactical grid its vertical movement, once it exists and nobody else has. */
@@ -1624,7 +1842,7 @@
         if (!grid) return false;
         if (!grid.edge) grid.edge = (x, y, d, height, jump) => ReactorPhysics.tacticalEdge(x, y, d, height, jump);
         if (!grid.playStep) grid.playStep = (character, step) => ReactorPhysics.playStep(character, step);
-        if (!grid.isStepping) grid.isStepping = character => ReactorPhysics.isMantling(character);
+        if (!grid.isStepping) grid.isStepping = character => ReactorPhysics.isMantling(character) || ReactorPhysics.isGrappling(character);
         this._fightSeams = true;
         return true;
     };
@@ -1671,7 +1889,7 @@
         // A limp body goes nowhere.
         const _canMove = Game_Player.prototype.canMove;
         Game_Player.prototype.canMove = function() {
-            return !this._reactorRagdoll && !this._reactorMantle && _canMove.apply(this, arguments);
+            return !this._reactorRagdoll && !this._reactorMantle && !this._reactorGrapple && _canMove.apply(this, arguments);
         };
         const _updateP = Game_Player.prototype.update;
         Game_Player.prototype.update = function(sceneActive) {

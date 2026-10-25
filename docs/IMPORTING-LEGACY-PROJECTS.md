@@ -67,9 +67,87 @@ as they are when installed; no table maps their names yet.
 
 **The game font.** RPG Maker's installer put `RM2000.fon` / `RMG2000.fon` in the
 system's fonts, so most games do not ship it. The importer takes it from the game,
-then `--font <file or folder>`, the RTP folder and the folder above it, then the
+then `--font <file or folder>`, selected and installed RTP folders (even when
+the game already includes all its graphics), then the
 fonts of Windows, Wine (`~/.wine/drive_c/windows/Fonts`), Linux
 (`~/.local/share/fonts`, `~/.fonts`, `/usr/share/fonts`) and macOS.
+Both available families are converted; Change System Graphics can switch
+them during play, and saves preserve the selection. A runtime update cannot
+add font files missing from an older conversion: import again into a new
+destination to obtain them while keeping your edited project.
+
+**Choosing the destination.** The project name is a folder name inside
+**Create in**; **Destination** shows the full path before import. Suggested
+names automatically choose a free suffix when another copy already exists.
+Changing the parent folder recalculates the suggestion; a name you type stays
+as entered. There is no global reservation of deleted project names.
+
+A project that is open in this editor or another instance must be closed
+before importing into its folder, even if that folder was deleted while the
+editor kept its data in memory. An existing closed folder can be replaced
+after the overwrite prompt identifies its full path. A lock copied from a
+different project does not block the new copy. Startup opens the last project's
+actual folder; deleting a different copy does not remove that destination.
+
+During import, the stage, percentage and progress bar stay above the action
+buttons while the settings and log scroll. The bar keeps its full height in
+short windows, including 1024×600, and remains visible on completion or error.
+
+**Artwork restoration.** The desktop import dialog defaults to **Dither
+cleanup** for RPG Maker 2000/2003; choose **Original artwork** for unchanged
+converted pixels. The command line accepts `--graphics remaster|original`.
+Restoration looks for low-contrast repeated or scattered dither in large
+panoramas, backgrounds and pictures, reconstructing intermediate true-colour
+shades. It preserves the original dimensions, alpha and strong outlines,
+protects transparent edges, and leaves unmatched regions unchanged. Fonts,
+System graphics, character/face sheets, title art and small pictures keep
+their original pixels. This is conservative colour cleanup, not a generated
+redraw or recovery of detail absent from the source.
+
+Processing runs once in the import worker, with no gameplay filter. Converted
+originals for processed assets are retained at
+`legacy/original-graphics/img/<same relative path>`; `import-report.json`
+records the mode, algorithm version and changed-pixel counts. Assets outside
+the processing budget stay unchanged. All layers retain their original pixel
+positions; cleanup does not resize the images or compensate for camera bugs.
+
+**Sharp legacy text.** Pixelated Rendering keeps 2000/2003 text on whole
+pixels and rasterizes it with hard glyph edges before nearest-neighbour
+enlargement. This also keeps the fallback font sharp when the old `.fon`
+file is missing; the Import Report identifies that substitution. Matching
+the original typeface still requires its `RM2000.fon` / `RMG2000.fon`:
+put it with the game or RTP, or import with `--font <file or folder>`.
+An omitted old font setting means Gothic, as in the original engine.
+Turning Pixelated Rendering off restores smooth text. Modern projects
+retain their normal font rendering.
+
+**Original windows.** The initial System graphic and every graphic selected
+by Change System Graphics become window skins, including custom save/menu
+skins. The active skin and stretch/tile setting survive saves. Authored
+transparent messages remain transparent; the importer does not add a window
+behind dialogue the original deliberately drew over pictures. These settings
+follow the [original command semantics documented by EasyRPG's interpreter](https://github.com/EasyRPG/Player/blob/master/src/game_interpreter.cpp).
+
+**Panoramas, lighting and scene changes.** The legacy camera uses the old
+whole-tile centre, including the 8 px horizontal difference at 320×240.
+A cold panorama change waits for the replacement image while retaining the
+current background. Same-image loop changes keep their phase, literal `!`
+filenames remain ordinary filenames, and a map transfer cancels an unfinished
+camera return while retaining its lock setting. Screen and picture tones use
+the old hard-light/saturation calculation; picture movement and colour start
+together before a blocking wait.
+
+Teleport transition defaults and event changes are retained in the imported
+project and saved game. Fade, player-centred zoom, cut and none have their own
+timing. An instant cut waits for the incoming map's initial picture/parallax
+loads rather than revealing a partially loaded scene. Other legacy wipes
+currently fall back to a fade and are reported as approximate; battle/menu
+transition slots are not implemented by this teleport support.
+
+Existing imports get the legacy camera, tone and image-readiness fixes when
+their runtime refreshes. New converted event commands, original transition
+defaults and event-selected skin mappings require importing again into a new
+destination; retain the previous import if you have already edited it.
 
 `<source>` is the game's folder. Text is read in the code
 page `RPG_RT.ini` names, or guessed (Shift_JIS for Japanese games,
@@ -112,8 +190,9 @@ back underneath the new import.
 | Enemies, troops, states | The matching MZ records; troop pages with their conditions and commands | Basic attack and defend are skills 1 and 2; transform actions are noted |
 | Battle animations | MV-style sheet animations; the sheets are scaled to MZ's 192 px cells and the cells scaled back | Cell tones and screen shake timings have no MZ field |
 | Terms and system | Terms, element, skill, weapon, armor and equipment type names, vehicles, battle and title music, system sounds | Battle system is TPB active for 2003 and turn-based for 2000 |
-| System graphic | Window.png: background, frame (kept at its 8 px thickness inside MZ's 24 px frame cell), cursor, the pause arrow and text colours laid over the stock skin; windows are opaque as 2003 drew them | The parts 2003 had no equivalent of stay stock |
-| Game font (`RM2000.fon` or `RMG2000.fon`, whichever the game picked, when the project ships it) | `fonts/RM2000.ttf`, a TrueType file whose outlines are the bitmap's pixels at the engine's 6 px and 12 px pitch, set as the main and number font at its pixel size (13) | Without the file the template font stands in |
+| System graphic | Window.png plus event-selected skins: original backgrounds, 8 px frames, cursor, pause arrow and text colours; Change System Graphics keeps its saved selection and stretch or native 32 px tiling | The parts 2000/2003 had no equivalent of stay stock; MZ's background pattern does not overlay the imported art |
+| Game fonts (`RM2000.fon` and `RMG2000.fon`) | TrueType outlines reproduce the original glyph pixels, native 6 px Latin advance and font ascent; initial and event-selected families retain their own metrics (usually 13 px height) | Without the files the template font stands in with hard glyph edges when Pixelated Rendering is on |
+| Text colors and shadow | Each glyph uses its original System graphic's color gradient and shadow mask; palette-index-zero black stays opaque | Custom CSS text colors remain supported; smoothing-enabled text uses normal canvas rendering |
 | Text metrics | `advanced.lineHeight` 16, `windowPadding` 8, `windowMargin` 0, `textOutlineWidth` 1: 2003's 16 px lines, 8 px window borders, no outer margin and a 1 px shadow; the runtime reads all four from System.json | An MZ project keeps 36, 12, 4 and 3 |
 | Scaling | System 2's **Pixelated Rendering** is on: the 320×240 frame scales up with nearest-neighbour sampling | Off, the stock smoothing blurs every pixel |
 | Terms the author never touched | RPG Maker's Japanese defaults, read through a Western code page, are mojibake; MZ's stock word stays for those | |
@@ -194,8 +273,9 @@ fast-forward: hold F for 3× speed, G for 10× (plugin parameters).
 - **Animated tiles.** The three animated chipset tiles are placed as their
   first frame in sheet B. They do not animate.
 - **Commands with no equivalent** become comments naming the original:
-  Tile Substitution, Teleport and Escape targets, Change System Graphics,
-  Change Screen Transitions, Change Battle Commands, the video options.
+  Teleport and Escape targets, Change Battle Commands and the video options.
+  Change System Graphics and teleport transition settings have runtime
+  equivalents; unsupported wipe styles and non-teleport slots remain approximate.
   Pictures fixed to the map, looping flashes and shakes, the second timer
   and the pan lock are noted in the report.
 
@@ -210,15 +290,66 @@ a desktop capture of it beside the harness's screenshot of the imported
 project settled the picture keying, the wave length, the text alignment,
 the sprite layers and turning directions and the independent tweens above.
 
+Verification against **Sunset over Imdahl** (2026-10-18): the shipped
+RPG_RT executable ran from an isolated disposable copy through maps
+11→22→21→23→10, with held Hello and controlled camera fixtures. On the real
+Map7→Map2(28,10) entrance, the original uses panorama crop(304,48) and roof
+left/top(−304,−48); MZ's half-tile centre used crop(296,48), producing the
+reported eight-pixel mismatch. The corrected native WebGL composite matches
+all sampled converted-source pixels at entry and after five tiles of scroll.
+Map10's horizontal registration already matched; no special roof offset was
+added. Cold panorama loading, zoom's last frames, authored cuts, tone shader
+pixels and the original Meny picture plate were checked without graphics
+errors. Evidence is under ignored `scratchpad/rm2000-{reference,pictures,text}/`.
+The fresh default-cleanup import also completes the five-map opening with
+914 recorded held-Hello frames, zero graphics errors and the Meny plate
+present. Its entry/scroll GPU composites match the restored PNGs exactly.
+Evidence: `scratchpad/rm2000-remaster-game/`. This covers the opening and
+controlled fixtures, not a full65-map playthrough.
+With the RTP fonts installed in the private Wine reference, native glyph
+positions, 6 px advances, 16 px line spacing, gradients and source shadows
+are verified against the original. RGB comparisons account for its RGB565
+output. The natural opening selects `SaveMeny`: pale text with black shadows.
+A direct Map10 start retains `System`: black text with gray shadows. Keep
+that distinction when comparing fixtures. Legacy dialogue also omits MZ's
+extra 4 px inset after the original 8 px window padding.
+Shadows use the original one-pixel right/down offset. Each glyph's shadow
+and body draw together before the next glyph, including fast text and menus;
+painting every shadow before every letter incorrectly changes overlap at
+wide glyphs such as `%`, `@` and `&`. Custom CSS and smoothing retain their
+existing rendering paths.
+Runtime 20261018.12 follow-up fixtures match all 1,271 RMG2000 and 1,416
+RM2000 original text pixels, including overhangs, in both whole-line and
+characterwise rendering. Native UI checks cover three window sizes in dark
+and light themes, scrolling, failure/retry, completion and a real import
+with 162 sampled progress states. The combined legacy/UI/runtime checks
+pass 358 cases; one absent installer fixture is skipped. Progress evidence:
+`scratchpad/import-progress-{before,final}/`; the reusable UI smoke is
+`editor/tests/smoke/nw-legacy-import-progress.cjs` on an isolated display.
+The unmodified five-map original opening confirms the `SaveMeny` glyph,
+gradient and shadow oracle at all 247 checked pixels. The controlled four-line
+reference covers 1,592 pixels, including punctuation and the glyphs stored
+at accented character codes. Follow-up automation: 295 checks pass; one Don Miguel
+installer test is skipped because its `RTPE.exe` fixture is absent.
+Final Reactor captures match all 247 opening and 1,592 controlled text pixels
+after RGB565 comparison. Runtime 20261018.11 completes the five-map opening
+with 435 recorded reveal frames, every incoming layer ready, roof/screen tones
+in step and no graphics errors. Evidence: `scratchpad/rm2000-font-palette-final/`.
+A Show Picture initial tint now applies immediately, before a
+following Move Picture can replace its target; the opening roofs and ground
+therefore both fade from white. Existing ordinary picture commands receive
+the same correction on runtime refresh; older variable-ID script sequences
+need a fresh import. Old RPG_RT minor versions also differ in whether Move Picture
+can reposition an already map-fixed image; that version distinction remains
+unresolved for imports lacking reliable minor-version metadata.
+
 ## Still to come
 
 Editor commands on the Reactor tab for the runtime equivalents and the
 screen features, so an author can see and edit them without a Script
 command. On Deep 8, the playthrough has reached the landing scene and the
 first dialogue; the spaceship scenes, the first walkable map and the
-picture-built battle system are untested, and `Change System Graphics`
-is still a comment. The 2003 text colours are vertical gradients sampled
-per glyph row; the runtime draws the cell's middle colour flat.
+picture-built battle system are untested.
 
 ## RPG Maker VX Ace
 

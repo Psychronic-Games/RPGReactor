@@ -2,9 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const PickerIndex = require(path.join(repoRoot, 'src', 'utils', 'PickerIndex.js'));
+const previous = require('./perf/picker-index.cjs');
 
 test('picker index groups Unicode graphemes with audio-compatible sections', () => {
     const groups = PickerIndex.group([
@@ -112,4 +114,51 @@ test('asset-image pickers opt into recursive folder rendering', () => {
         assert.match(source, /RRPickerIndex\.createBrowser\(\{[\s\S]*?folders: true,/,
             relativePath);
     }
+});
+
+test('cached sorting preserves the old Unicode, numeric, variant and stable tie ordering exactly', () => {
+    const names = ['Hero10', 'Hero2', 'Hero02', 'Hero1', 'hero2', 'Héro2', 'café', 'cafe\u0301',
+        'Ångström', 'A\u030angström', 'äther', 'Alpha', 'alpha', 'İpek', 'Ipek', 'ıpek',
+        'Straße', 'STRASSE', 'Ωmega', 'Жук', '不知火', 'あかり', '한나', '한나', 'क्षत्र',
+        '👩‍💻 Work', '🇺🇸 Actor', '😀 Smile', '123 Hero', '#effect', '', 'Hero2'];
+    for (const a of names) for (const b of names) {
+        assert.equal(Math.sign(PickerIndex.compareNames(a, b)), Math.sign(previous.compareNames(a, b)), JSON.stringify([a, b]));
+    }
+    assert.deepEqual(PickerIndex.group(names), previous.group(names));
+    assert.deepEqual(PickerIndex.group(['Hero10', 'Hero2', 'Hero1'])[0].names, ['Hero1', 'Hero2', 'Hero10']);
+    assert.deepEqual(PickerIndex.group(['Hero02', 'Hero2'])[0].names, ['Hero02', 'Hero2'], 'equal numeric spellings keep input order');
+    assert.deepEqual(PickerIndex.group(['Hero2', 'Hero02'])[0].names, ['Hero2', 'Hero02']);
+    const paths = names.filter(Boolean).map((name, i) => (i % 3 ? ['Actors', 'Actórs', '敵'][i % 3] + '/' : '') + name);
+    assert.deepEqual(PickerIndex.buildFolderTree(paths), previous.buildFolderTree(paths));
+});
+
+test('group and tree work reuse Intl helpers and segment each name only once per operation', () => {
+    let constructions = 0, segments = 0, collators = 0;
+    const trackingIntl = {
+        Segmenter: class { constructor(...args) { constructions++; this.actual = new Intl.Segmenter(...args); } segment(value) { segments++; return this.actual.segment(value); } },
+        Collator: class { constructor(...args) { collators++; this.compare = new Intl.Collator(...args).compare; } }
+    };
+    const sandbox = { module: { exports: {} }, Intl: trackingIntl };
+    vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/utils/PickerIndex.js'), 'utf8'), sandbox);
+    const fresh = sandbox.module.exports, names = Array.from({ length: 100 }, (_, i) => (i % 2 ? 'Hero' : 'Áctor') + (100 - i));
+    assert.equal(constructions, 0, 'loading the helper does no eager Intl work');
+    assert.equal(collators, 0);
+    fresh.group(names);
+    assert.equal(constructions, 1);
+    assert.equal(segments, names.length, 'grouping does not segment again per comparison or per row');
+    assert.equal(collators, 4, 'two section and two numeric name comparators');
+    fresh.buildFolderTree(names.map(name => 'People/' + name));
+    assert.equal(segments, names.length * 2, 'a second operation owns a fresh bounded metadata cache');
+    assert.equal(constructions, 1);
+    assert.equal(collators, 4);
+});
+
+test('sorting still works without Intl.Segmenter or exposed Intl.Collator', () => {
+    const sandbox = { module: { exports: {} }, Intl: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/utils/PickerIndex.js'), 'utf8'), sandbox);
+    const fallback = sandbox.module.exports;
+    assert.equal(fallback.sectionKey('e\u0301lan'), 'É');
+    assert.equal(fallback.sectionKey('👩‍💻 Work'), '#');
+    assert.deepEqual(Array.from(fallback.group(['Hero10', 'Hero2', 'Hero1'])[0].names), ['Hero1', 'Hero2', 'Hero10']);
+    assert.equal(Math.sign(fallback.compareNames('Alpha', 'alpha')), Math.sign(previous.compareNames('Alpha', 'alpha')));
 });

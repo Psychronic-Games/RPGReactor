@@ -701,6 +701,25 @@
             cursor: pointer;
         }
 
+        /* Storeys: the 3D view cut at a storey (All shows everything); lit while a cut is on. */
+        .map-storey-cut { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; user-select: none; }
+        .map-storey-cut select { font-size: 11px; padding: 0 2px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; }
+        .map-storey-cut.is-on select { border-color: var(--color-accent-bright); color: var(--color-text-strong); }
+
+        /* Import Project on a short window: the help lines move to the fields' tooltips, so the
+           settings and the log fit without scrolling. */
+        @media (max-height: 719px) {
+            #rr-legacy-import-dialog .rr-import-hint { display: none !important; }
+            #rr-legacy-import-dialog .rr-import-fields { row-gap: 5px !important; }
+            #rr-legacy-import-dialog #rr-legacy-import-log { flex-basis: 60px !important; min-height: 60px !important; }
+        }
+
+        #map-info-left .map-info-warning {
+            color: var(--color-warning-text);
+            font-weight: 600;
+            cursor: help;
+        }
+
         .map-info-value {
             color: var(--color-text);
             font-weight: 500;
@@ -784,6 +803,33 @@
             border-radius: 0;
             background-color: var(--color-bg-deep);
         }
+        .media-surfaces-panel .rr-modal-header { gap: 8px; padding: 10px 12px; border-left: 3px solid var(--color-accent); }
+        .media-surfaces-icon { width: 20px; height: 20px; flex: 0 0 auto; }
+        .media-surfaces-panel .rr-modal-title { flex: 1; min-width: 0; font-size: 13px; }
+        .media-surfaces-body { flex: 1; min-height: 0; padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+        .media-surfaces-body > * { flex-shrink: 0; }
+        .media-surfaces-help { margin: 0; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; }
+        .media-surfaces-empty { margin: 0; padding: 24px 12px; text-align: center; color: var(--color-text-muted); font-size: 12px; border: 1px dashed var(--color-border-input); border-radius: var(--radius-lg); }
+        .media-surface-card { min-width: 0; overflow: hidden; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+        .media-surface-card:hover, .media-surface-card:focus-within { border-color: var(--color-accent-border-strong); }
+        .media-surface-open.rr-button { width: 100%; min-width: 0; display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; padding: 8px; text-align: start; white-space: normal; border: 0; border-radius: 0; background: transparent; color: var(--color-text); }
+        .media-surface-open.rr-button:hover { background: var(--color-bg-hover); }
+        .media-surface-open:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; }
+        .media-surface-thumbnail { position: relative; display: grid; place-items: center; width: 88px; height: 64px; overflow: hidden; border-radius: var(--radius-sm); color: var(--color-accent-bright); background-color: var(--color-bg-deep); background-image: linear-gradient(45deg, var(--color-bg-hover) 25%, transparent 25%, transparent 75%, var(--color-bg-hover) 75%), linear-gradient(45deg, var(--color-bg-hover) 25%, transparent 25%, transparent 75%, var(--color-bg-hover) 75%); background-size: 12px 12px; background-position: 0 0, 6px 6px; }
+        .media-surface-thumbnail > svg { width: 28px; height: 28px; }
+        .media-surface-thumbnail > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+        .media-surface-thumbnail.is-loaded > svg { visibility: hidden; }
+        .media-surface-thumbnail.is-unavailable > svg { color: var(--color-text-muted); }
+        .media-surface-info { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; min-width: 0; }
+        .media-surface-name { color: var(--color-text-strong); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+        .media-surface-meta { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+        .media-surface-id { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+        .media-surface-kind { padding: 1px 6px; border-radius: 3px; color: var(--color-accent-bright); background: var(--color-accent-tint-15); }
+        .media-surface-position { color: var(--color-text-muted); font-size: 10px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .media-surface-actions { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); }
+        .media-surface-actions > button { padding: 3px 8px; font-size: 11px; }
+        .media-surfaces-history { display: flex; flex: 0 0 auto; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--color-border); background: var(--color-bg-toolbar); }
+        .media-surfaces-history > button { flex: 1; }
         #canvas-container {
             flex: 1;
             background-color: var(--color-bg-panel);
@@ -1072,8 +1118,9 @@
         }
 
         .database-nav-item {
-            /* 8px keeps all 22 categories on screen in a 1080p window, with room for platform font metrics. */
-            padding: 8px 10px;
+            /* 7px keeps all 24 pages and their five section headings on screen in a 1080p window, with room for
+               platform font metrics. */
+            padding: 7px 10px;
             border-radius: 3px;
             cursor: pointer;
             border-bottom: 1px solid var(--color-bg-menubar);
@@ -1084,6 +1131,23 @@
 
         .database-nav-item:hover {
             background-color: var(--color-bg-button);
+        }
+
+        /* A section of the sidebar: a ruled heading over its pages, as the Database menu lists them. */
+        .database-nav-section {
+            padding: 10px 10px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            border-bottom: 1px solid var(--color-border);
+            margin-bottom: 2px;
+            user-select: none;
+        }
+
+        .database-nav-section:first-child {
+            padding-top: 4px;
         }
 
         .database-nav-item.active {
@@ -1410,6 +1474,8 @@
             background: var(--color-selection-deep);
             color: var(--color-text-strong);
         }
+
+        .rr-types-row.selected .rr-types-id { color: var(--color-text); }
 
         .rr-types-id {
             align-self: stretch;
@@ -1820,6 +1886,7 @@
 
         .system-checkbox {
             appearance: none;
+            flex: 0 0 auto;
             width: 16px;
             height: 16px;
             background-color: var(--color-bg-deep);
@@ -2397,6 +2464,18 @@
         .rr-types-panel.is-collapsed .rr-types-panel-body {
             height: auto;
         }
+        /* Five lists need 973px; narrower, three share the first row and two the second. */
+        @container database-detail (max-width: 980px) {
+            html:not(.rr-web) .rr-types-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                grid-template-rows: repeat(2, minmax(0, 1fr));
+            }
+            html:not(.rr-web) .rr-types-grid > .rr-types-panel { grid-column: span 2; }
+            html:not(.rr-web) .rr-types-grid > .rr-types-panel:nth-child(n+4) { grid-column: span 3; }
+            html:not(.rr-web) .rr-types-list { min-height: 70px; }
+            html:not(.rr-web) .rr-types-grid:has(> .rr-types-panel.is-collapsed) { display: grid; }
+            html:not(.rr-web) .rr-types-grid:has(> .rr-types-panel.is-collapsed) > .rr-types-panel { min-width: 0; }
+        }
 
         /* Terms. Beside a folded panel the other takes the row; with the
          * messages folded, the panels on the left take the page. */
@@ -2409,6 +2488,14 @@
         }
         .rr-terms-workspace:has(> .rr-terms-messages-panel.is-collapsed) > .rr-terms-left {
             flex: 0 1 auto;
+        }
+        /* Command fields stay wide enough for an icon code and a word or two. */
+        @container database-detail (max-width: 1300px) {
+            .rr-terms-fields-four { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @container database-detail (max-width: 900px) {
+            .rr-terms-top-grid { grid-template-columns: minmax(0, 1fr); }
+            .rr-terms-fields-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
 
         .database-preview {
@@ -3441,6 +3528,105 @@
             color: var(--color-text);
         }
 
+        /* Help > About shares the editor's fixed header/footer frame. */
+        #about-modal .rr-about-dialog {
+            width: min(760px, calc(100vw - 32px));
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 32px);
+            overflow: hidden;
+            background: var(--color-bg-base);
+            border-color: var(--color-accent-tint-40);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-modal);
+        }
+        #about-modal .rr-modal-header,
+        #about-modal .rr-modal-footer {
+            flex: 0 0 auto;
+            background: var(--color-bg-deep);
+        }
+        #about-modal .rr-modal-header {
+            gap: 16px;
+            padding: 14px 20px;
+            border-inline-start: 3px solid var(--color-accent);
+        }
+        #about-modal .rr-modal-close:hover { color: var(--color-accent-bright); }
+        #about-modal .rr-about-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            gap: 20px;
+            padding: 20px 24px;
+            overflow-y: auto;
+        }
+        .rr-about-overview {
+            display: grid;
+            grid-template-columns: 112px minmax(0, 1fr);
+            gap: 24px;
+            align-items: center;
+        }
+        .rr-about-logo { display: block; width: 112px; height: auto; max-width: 100%; }
+        .rr-about-summary { min-width: 0; }
+        .rr-about-summary h3 {
+            margin: 0 0 10px;
+            color: var(--color-accent-bright);
+            font-size: var(--font-size-lg);
+        }
+        .rr-about-summary p { margin: 0; line-height: 1.55; overflow-wrap: anywhere; }
+        .rr-about-summary .rr-about-compatibility {
+            margin-top: 10px;
+            color: var(--color-text-muted);
+            font-size: var(--font-size-sm);
+        }
+        .rr-about-links h3 {
+            margin: 0 0 10px;
+            color: var(--color-text-strong);
+            font-size: var(--font-size-base);
+        }
+        .rr-about-link-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .rr-about-link-grid a {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            min-height: 42px;
+            padding: 10px 12px;
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            color: var(--color-accent-bright);
+            font-size: var(--font-size-sm);
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+            text-decoration: none;
+            transition: background var(--ease-fast), border-color var(--ease-fast);
+        }
+        .rr-about-link-grid a:visited { color: var(--color-accent-bright); }
+        .rr-about-link-grid a:hover {
+            background: var(--color-accent-tint-10);
+            border-color: var(--color-accent);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+        .rr-about-link-grid a:focus-visible,
+        .rr-about-footer button:focus-visible {
+            outline: 2px solid var(--color-accent-bright);
+            outline-offset: 2px;
+        }
+        #about-modal .rr-about-footer { align-items: center; padding: 12px 20px; }
+        .rr-about-footer span { margin-inline-end: auto; color: var(--color-text-muted); font-size: var(--font-size-sm); }
+        .rr-about-footer button { min-width: 88px; }
+        @media (max-width: 600px) {
+            #about-modal .rr-about-body { padding: 16px; gap: 16px; }
+            .rr-about-overview { grid-template-columns: 72px minmax(0, 1fr); gap: 16px; align-items: start; }
+            .rr-about-logo { width: 72px; }
+            .rr-about-link-grid { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 380px) {
+            .rr-about-overview { grid-template-columns: minmax(0, 1fr); }
+        }
+
         /* ── Map Properties modal buttons ─────────────────────────────
            Footer buttons match the header strip (toolbar tone) with the
            primary action carried by the theme accent — no hardcoded blue. */
@@ -3946,6 +4132,7 @@
             font-size: 11px;
             white-space: nowrap;
             pointer-events: none;
+            user-select: none;
             opacity: 1;
             transition: opacity 1.2s ease 4s;
         }
@@ -4147,10 +4334,19 @@
         .rr-save-structure-error { min-height: 1em; font-size: 12px; color: var(--color-danger-bright); }
         @media (max-width: 520px) { .rr-save-structure-top { flex-direction: column; align-items: flex-start; } }
         .rr-build-subhead { font-size: 11px; color: var(--color-text-muted); padding: 6px 6px 2px; }
+        /* A selection's parts (Materials): each part's name and how many pieces it has, over its material tile. */
+        .rr-build-parts { display: flex; flex-direction: column; gap: 6px; }
+        .rr-build-part-name { display: flex; align-items: baseline; gap: 8px; width: 100%; box-sizing: border-box; padding: 2px 2px 3px; border: 0; background: transparent; color: var(--color-text-muted); font-size: 11px; text-align: left; }
+        button.rr-build-part-name { cursor: pointer; }
+        button.rr-build-part-name:hover { color: var(--color-text-strong); }
+        button.rr-build-part-name[aria-pressed="true"] { color: var(--color-accent-bright); }
+        .rr-build-part-count { margin-left: auto; font-variant-numeric: tabular-nums; }
         .rr-build-field { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 6px; color: var(--color-text-muted); }
         .rr-build-field input { width: 100%; box-sizing: border-box; }
-        /* A door's and a window frame's rows: a wider field for a choice or a name, on the same label|field grid. */
         .rr-build-field.rr-build-wide { grid-template-columns: 1fr 128px; }
+        /* A door's and a window frame's rows: a short name, the field taking the rest of the row; in a narrow panel the name sits over its field. */
+        .rr-build-field.rr-build-setting { grid-template-columns: 64px minmax(0, 1fr); }
+        .rr-build-panel.is-narrow .rr-build-field.rr-build-setting { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
         .rr-build-field select, .rr-build-field input[type="text"] { width: 100%; min-width: 0; box-sizing: border-box; }
         .rr-build-field.rr-build-sound { grid-template-columns: 56px 1fr; }
         .rr-build-sound-row { display: flex; gap: 4px; min-width: 0; }
@@ -4220,6 +4416,8 @@
         /* The prop panel inside the side panel: it scrolls with the panel, not in its own box. */
         .rr-build-models-body { padding: 0; }
         .rr-build-models-body .mp-panel { height: auto; flex: 1 1 auto; background: transparent; padding: 8px; }
+        /* Models > Select with nothing selected: the hint alone. */
+        .mp-panel.is-select-idle > :not(.mp-select-hint) { display: none; }
         /* Build | Terrain: which group the slots are, at the bar's left end. */
         .rr-build-groups { display: flex; flex-direction: column; gap: 3px; margin-right: 6px; padding-right: 8px; border-right: 1px solid var(--color-border); }
         .rr-build-group { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: transparent; color: var(--color-text-muted); font-size: 11px; cursor: pointer; white-space: nowrap; }
@@ -4337,6 +4535,18 @@
             padding-inline: 12px;
             white-space: nowrap;
         }
+        .rr-ui-unbound {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            color: var(--color-warning-text, var(--color-text));
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .rr-ui-unbound[hidden] { display: none; }
+        .rr-ui-unbound > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .rr-ui-role-combobox {
             position: relative;
             min-width: 0;
@@ -4382,6 +4592,12 @@
             min-height: 32px;
             box-sizing: border-box;
             margin-bottom: 5px;
+            appearance: none;
+        }
+        .rr-ui-interface-settings[aria-pressed="true"] {
+            background: var(--color-accent-tint-25);
+            border-color: var(--color-accent-border-strong);
+            color: var(--color-text-strong);
         }
         .rr-ui-role-list {
             max-height: 230px;
@@ -4445,7 +4661,7 @@
                 display: none;
                 position: absolute;
                 z-index: 8;
-                top: 0;
+                top: var(--rr-ui-drawer-top, 0px);
                 right: 0;
                 bottom: 0;
                 width: min(390px, calc(100% - 42px));
@@ -4455,7 +4671,7 @@
             .rr-ui-workspace > .database-section.rr-ui-props-panel.is-open {
                 display: flex;
             }
-            .rr-ui-inspector-close { display: block; }
+            .rr-ui-inspector-header > .rr-ui-inspector-close { display: block; }
         }
         @container database-detail (max-width: 620px) {
             .rr-ui-editor > .rr-ui-workspace {
@@ -5595,6 +5811,26 @@
 .r3d-face-save { width:100%; margin-top:8px; padding:5px 8px; }
 .r3d-face-help { margin-top:8px; font-size:11px; line-height:1.45; color:var(--color-text-muted); }
 
+/* Rig panel over the preview: the kind beside its title, the marker tools on an even
+   two-column grid, one line of help, and Close | Save at its foot. */
+.r3d-rig-bar { position:absolute; top:8px; left:50%; transform:translateX(-50%); width:min(360px, calc(100% - 140px)); box-sizing:border-box;
+    flex-direction:column; gap:8px; padding:8px 10px 10px; background:var(--color-bg-panel); border:1px solid var(--color-accent); border-radius:6px;
+    box-shadow:0 4px 18px rgba(0,0,0,0.35); font-size:12px; color:var(--color-text); }
+.r3d-rig-head { display:grid; grid-template-columns:auto minmax(0, 1fr); align-items:center; column-gap:10px; }
+.r3d-rig-title { font-weight:700; }
+.r3d-rig-kind { height:26px; min-width:0; box-sizing:border-box; padding:0 6px; background:var(--color-bg-surface); color:var(--color-text);
+    border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; }
+.r3d-rig-tools { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+.r3d-rig-bar button { min-width:0; min-height:26px; box-sizing:border-box; padding:3px 10px; font-size:12px; line-height:1.2; text-transform:none; }
+.r3d-rig-bar button:disabled { opacity:0.5; cursor:not-allowed; }
+.r3d-rig-hint { color:var(--color-text-muted); line-height:1.4; }
+.r3d-rig-hint.is-warning { color:var(--color-warning-text, var(--color-text)); }
+.r3d-rig-foot { display:flex; justify-content:flex-end; gap:6px; padding-top:8px; border-top:1px solid var(--color-border); }
+.r3d-rig-foot button { min-width:84px; }
+/* The specifications card's header: one line of title, one header-sized action. */
+.r3d-stats-title { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.r3d-stats-card .r3d-optimize { flex:0 0 auto; height:22px; box-sizing:border-box; padding:0 10px; font-size:11px; line-height:1; text-transform:none; }
+
 .rr-speech-overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); }
 .rr-speech-modal { display:flex; flex-direction:column; width:min(560px,92vw); max-height:90vh; overflow:hidden; background:var(--color-bg-surface); color:var(--color-text); border:1px solid var(--color-border); border-radius:8px; font-size:13px; box-shadow:0 8px 32px rgba(0,0,0,0.4); }
 .rr-speech-modal .rr-modal-header { padding:14px 18px; background:var(--color-bg-panel); border-bottom:1px solid var(--color-border); font-size:16px; font-weight:600; }
@@ -5658,6 +5894,10 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-battle-room-dialog .rr-battle-inspector { min-height:0;overflow-y:auto;padding-right:4px; }
 .rr-battle-room-dialog .rr-battle-inspector > * { flex-shrink:0; }
 .rr-battle-room-dialog .rr-battle-toolbar { flex-shrink:0;margin-bottom:0; }
+.rr-battle-room-dialog .rr-battle-room-footer { justify-content:flex-end;padding-top:8px;border-top:1px solid var(--color-border); }
+.rr-battle-camera-numbers > summary { cursor:pointer;color:var(--color-text-muted);font-size:12px;user-select:none; }
+.rr-battle-camera-numbers[open] > summary { margin-bottom:10px; }
+.rr-battle-camera-numbers > .rr-battle-field + .rr-battle-field { margin-top:10px; }
 .rr-battle-navigation-hint { position:absolute;bottom:8px;left:8px;right:8px;z-index:1;padding:6px 8px;background:#111c;color:#eee;font-size:11px;line-height:1.5;pointer-events:none; }
 .rr-battle-markers:focus-visible { outline:2px solid var(--color-accent);outline-offset:-2px; }
 .rr-battle-room-settings { display:flex;flex-direction:column;gap:8px;margin-top:8px; }
@@ -6249,32 +6489,33 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 }
 .map-props-card > .map-props-card-header .map-props-btn { text-transform: none; letter-spacing: 0; }
 
-/* 3D Models: the Motion editor, one motion on one timeline, docked over the viewport's foot. */
+/* The timeline gets its own row across the 3D workspace: preview controls and model
+   specifications keep their own space above it, even after the window is resized. */
+.r3d-model-workspace { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; container: model-workspace / inline-size; }
+.r3d-model-columns { overflow: hidden; }
 .r3d-motion {
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    z-index: 5;
+    position: relative;
+    flex: 0 1 260px;
+    min-height: 170px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    max-height: 44%;
+    max-height: 48%;
     background-color: var(--color-bg-surface);
     border: 1px solid var(--color-border);
-    border-radius: 6px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    border-radius: 0;
     overflow: hidden;
     font-size: 12px;
     color: var(--color-text);
 }
-.r3d-motion .r3d-motion-head { flex-wrap: wrap; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.r3d-motion .r3d-motion-head { flex: 0 0 auto; flex-wrap: wrap; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 500; }
 .r3d-motion-name { width: 140px; font-weight: 600 !important; }
 .r3d-motion-length { width: 68px; }
 .r3d-motion-field { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--color-text-muted); }
 .r3d-motion-play { min-width: 34px; padding: 2px 8px; }
 .r3d-motion-close { background: none; border: none; color: var(--color-text-muted); font-size: 16px; cursor: pointer; padding: 0 4px; }
 .r3d-motion-close:hover { color: var(--color-text); }
-.r3d-motion-body { display: flex; min-height: 0; flex: 1; }
+.r3d-motion-body { display: flex; min-height: 0; flex: 1; overflow: hidden; }
 .r3d-motion-tracks {
     flex: 0 0 150px;
     display: flex;
@@ -6342,9 +6583,16 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .r3d-motion-pose-title em { font-weight: 400; font-style: normal; color: var(--color-text-muted); }
 .r3d-motion-slider { display: grid; grid-template-columns: 34px 1fr 60px; align-items: center; gap: 6px; }
 .r3d-motion-slider > span { color: var(--color-text-muted); }
+.r3d-motion-slider input[type="range"] { width: 100%; min-width: 0; }
 .r3d-motion-slider input[type="number"] { width: 100%; box-sizing: border-box; }
 .r3d-motion-pose-actions { display: flex; gap: 6px; margin-top: 4px; }
 .r3d-motion-pose-actions > button { flex: 1; font-size: 11px; padding: 3px 6px; }
+@container model-workspace (max-width: 1000px) {
+    .r3d-browser-column { width: 170px !important; flex-basis: 170px !important; }
+    .r3d-record-column { width: 250px !important; flex-basis: 250px !important; }
+    .r3d-motion-tracks { flex-basis: 120px; }
+    .r3d-motion-pose { flex-basis: 200px; min-width: 0; box-sizing: border-box; }
+}
 
 /* RRContextMenu: right-click menus for models and built pieces (the event menu's look). */
 .rr-context-menu { position: fixed; z-index: 10001; min-width: 190px; padding: 4px 0; background-color: var(--color-bg-menubar); border: 1px solid var(--color-border); border-radius: 4px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); font-size: 13px; color: var(--color-text); }
@@ -6462,11 +6710,20 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .system-battle-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
 .system-battle-setup-why { color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
 
-/* The battle cards of a Database record page (Tactical Battles; Action and First Person Battles): the title line
-   with what the record does, the fields, and the picture beside them or, in a narrow card, under them. */
-.rr-tactics-section > .rr-tactics-header { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; container-type: inline-size; }
+/* The Combat section of a Database record page: one card, its groups (targeting or behavior; Tactical Battles;
+   Action and First Person Battles) under ruled headings. A group's title line says what the record does and holds
+   its Automatic chip; the fields, and the picture beside them or, in a narrow card, under them. */
+.rr-combat-header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rr-combat-title { flex: 0 1 auto; min-width: 0; }
+/* Folded, the section's title line says what the record sets; open, each group says it. */
+.rr-combat-summary { flex: 1 1 0; min-width: 0; font-weight: 400; font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-combat-section:not(.is-collapsed) .rr-combat-summary, .rr-combat-summary:empty { display: none; }
+.rr-combat-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rr-tactics-section { min-width: 0; }
+.rr-tactics-section + .rr-tactics-section { padding-top: 12px; border-top: 1px solid var(--color-border); }
+.rr-tactics-section > .rr-tactics-header { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-bottom: 8px; min-height: 22px; container-type: inline-size; }
 /* The title keeps its words; the summary takes the room that is left and is cut short before the title is. */
-.rr-tactics-title { flex: 0 1 auto; min-width: 0; }
+.rr-tactics-title { flex: 0 1 auto; min-width: 0; color: var(--color-text-strong); font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
 .rr-tactics-summary { flex: 1 1 0; min-width: 0; font-weight: 400; font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rr-tactics-reset { flex: 0 0 auto; font-weight: 400; }
 /* Nothing to say (equipment that changes nothing): no line is kept for it. */
@@ -6476,9 +6733,8 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 @container (max-width: 480px) {
     .rr-tactics-summary { order: 1; flex: 0 0 100%; }
     .rr-tactics-reset { margin-inline-start: auto; }
-    .rr-tactics-section > .rr-tactics-header[aria-expanded]::before { top: 12.5px; }
 }
-.database-section.rr-tactics-section > .database-section-content.rr-tactics-body { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 14px; }
+.rr-tactics-section > .rr-tactics-body { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 14px; }
 .rr-tactics-scope { flex: 0 0 100%; min-width: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
 .rr-tactics-form > [hidden] { display: none; }
 /* The picture stands beside the fields while they keep 280px, what their rows take with every unit on one line;
@@ -6629,13 +6885,13 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 /* A narrow view: the name over its field, as the sliders are. */
 .rr-build-panel.is-narrow .rr-build-sgrid { grid-template-columns: minmax(0, 1fr); }
 .rr-build-panel.is-narrow .rr-build-sgrid > .rr-build-field.rr-build-sfield { row-gap: 2px; }
-/* The one slot named in three words: on two lines, its icon and first line level with its neighbors'; the second line has 4px of the row's own padding under the slot. */
-.rr-build-slot[data-slot="surround"] { width: auto; min-width: 62px; height: 62px; margin-bottom: -4px; justify-content: flex-start; padding-top: 9.5px; padding-bottom: 0; }
-.rr-build-slot[data-slot="surround"] svg { flex: 0 0 auto; }
-.rr-build-slot[data-slot="surround"] .rr-build-slot-label { flex: 0 0 auto; white-space: normal; text-align: center; line-height: 1; max-width: 64px; text-wrap: balance; overflow: visible; }
-.rr-build-hotbar.is-compact .rr-build-slot[data-slot="surround"] { width: auto; min-width: 46px; height: 50px; padding-top: 7.5px; }
-.rr-build-hotbar.is-compact .rr-build-slot[data-slot="surround"] .rr-build-slot-label { max-width: 58px; line-height: 1; }
-.rr-build-hotbar.is-short .rr-build-slot[data-slot="surround"] { width: 38px; min-width: 0; height: 36px; margin-bottom: 0; justify-content: center; padding: 4px 2px 3px; }
+/* The slots named in three words (Beyond the Border, Room and Sky): on two lines, their icon and first line level with their neighbors'; the second line has 4px of the row's own padding under the slot. */
+.rr-build-slot[data-slot="surround"], .rr-build-slot[data-slot="sky"] { width: auto; min-width: 62px; height: 62px; margin-bottom: -4px; justify-content: flex-start; padding-top: 9.5px; padding-bottom: 0; }
+.rr-build-slot[data-slot="surround"] svg, .rr-build-slot[data-slot="sky"] svg { flex: 0 0 auto; }
+.rr-build-slot[data-slot="surround"] .rr-build-slot-label, .rr-build-slot[data-slot="sky"] .rr-build-slot-label { flex: 0 0 auto; white-space: normal; text-align: center; line-height: 1; max-width: 64px; text-wrap: balance; overflow: visible; }
+.rr-build-hotbar.is-compact .rr-build-slot[data-slot="surround"], .rr-build-hotbar.is-compact .rr-build-slot[data-slot="sky"] { width: auto; min-width: 46px; height: 50px; padding-top: 7.5px; }
+.rr-build-hotbar.is-compact .rr-build-slot[data-slot="surround"] .rr-build-slot-label, .rr-build-hotbar.is-compact .rr-build-slot[data-slot="sky"] .rr-build-slot-label { max-width: 58px; line-height: 1; }
+.rr-build-hotbar.is-short .rr-build-slot[data-slot="surround"], .rr-build-hotbar.is-short .rr-build-slot[data-slot="sky"] { width: 38px; min-width: 0; height: 36px; margin-bottom: 0; justify-content: center; padding: 4px 2px 3px; }
 
 /* ==========================================================================
    Small screens (1024x600 to 1366x768). Layout only: nothing here changes a
@@ -6656,6 +6912,18 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 @container database-detail (max-width: 620px) {
     .rr-ui-editor { overflow-y: auto; }
     .rr-ui-editor > .rr-ui-workspace { flex: 0 0 auto; grid-template-rows: minmax(280px, 46vh) minmax(320px, auto); overflow: visible; }
+}
+/* Narrow and short (1024x600): the page does not scroll as a whole. The Layers stay a column beside the canvas,
+   each scrolling within itself, and the Inspector is the drawer over the canvas. */
+@media (max-height: 700px) {
+    @container database-detail (max-width: 620px) {
+        .rr-ui-editor { overflow: hidden; }
+        .rr-ui-editor > .rr-ui-workspace { flex: 1 1 auto; grid-template-columns: minmax(190px, 42%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; gap: 8px; }
+        .rr-ui-canvas-panel { order: 0; }
+        /* A narrow Layers column keeps each layer's name: its kind gives way first. */
+        .rr-ui-tree-type { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .rr-ui-tree-label { min-width: 56px; }
+    }
 }
 /* Database > Action Sequences on a narrow window: the steps keep the left column and the inspector goes under
    the preview, so the preview is not squeezed to a sliver between two fixed columns. */
@@ -6906,20 +7174,13 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-image-layer-screen.is-down { background-repeat: repeat-y; }
 /* End of the Image Layers tool. */
 
-/* Database battle cards: Tactical Battles with Action and First Person Battles under it, the two in the place of one
-   card (weapons, skills, items). An open card takes the height its row has to spare; the cards keep the gap the
-   page's own cards have. */
-.rr-battle-cards { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-/* In the right column with a card open, the two stand beside both the card of their row and the open card after
-   them (Weapons: Traits and Note; Skills: Effects and Note), which share that height: the list card does not grow
-   as tall as the two cards together. With the card after them folded there is nothing to share with, and the list
+/* Database Combat section: open in the right column, it stands beside both the card of its row and the open card
+   after it (Weapons: Traits and Note; Skills: Effects and Note), which share that height: the list card does not
+   grow as tall as the Combat section. With the card after it folded there is nothing to share with, and the list
    card keeps its own height at the top of the row, as wide as its column. */
-.database-sections-grid > .rr-battle-cards:nth-child(even):not(.rr-section-solo):has(+ .database-section:not(.is-collapsed)) { grid-row: span 2; }
-.database-sections-grid > .database-section:has(+ .rr-battle-cards:nth-child(even):not(.rr-section-solo) + .database-section.is-collapsed) { place-self: start stretch; }
-.rr-battle-cards > .database-section { flex: 1 1 auto; display: flex; flex-direction: column; }
-.rr-battle-cards > .database-section > .database-section-content { flex: 1 1 auto; }
-.database-item-column > .rr-battle-cards > .database-section { margin-bottom: 0; }
-/* End of the Database battle cards. */
+.database-sections-grid > .rr-combat-section:nth-child(even):not(.rr-section-solo):not(.is-collapsed):has(+ .database-section:not(.is-collapsed)) { grid-row: span 2; }
+.database-sections-grid > .database-section:has(+ .rr-combat-section:nth-child(even):not(.rr-section-solo):not(.is-collapsed) + .database-section.is-collapsed) { place-self: start stretch; }
+/* End of the Database Combat section. */
 /* Database > Terms: the words of battles on the map. */
 .rr-terms-battle-panel { flex-shrink: 0; }
 .rr-terms-battle-hint { padding: 5px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-text-muted); background: var(--color-bg-surface); font-size: 10px; line-height: 1.4; }
@@ -7053,3 +7314,505 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .vehicle-detail .vehicle-effects-details { font-size:11px; margin-top:9px; }
 .vehicle-detail .vehicle-effects-details summary { cursor:pointer; color:var(--color-text-muted); }
 .vehicle-detail .vehicle-effect-rows { margin-top:8px; }
+
+/* Show Text and Comment lines in the event list: in light themes, normal text takes the list's
+   text color and \C[n] colors carry a dark outline, as the game draws message text. */
+:root:is([data-theme="light"], [data-theme="bubblegum-light"], [data-theme="ocean-light"], [data-theme="cascadia-light"], [data-theme="underworld-light"], [data-theme="creamsicle-light"], [data-theme="royalty-light"]) {
+    --rr-message-normal-color: var(--color-text-strong);
+}
+:root:is([data-theme="light"], [data-theme="bubblegum-light"], [data-theme="ocean-light"], [data-theme="cascadia-light"], [data-theme="underworld-light"], [data-theme="creamsicle-light"], [data-theme="royalty-light"]) .rr-message-code-color {
+    text-shadow: -1px 0 rgba(0, 0, 0, 0.6), 1px 0 rgba(0, 0, 0, 0.6), 0 -1px rgba(0, 0, 0, 0.6), 0 1px rgba(0, 0, 0, 0.6);
+}
+
+/* The event editor floats over a live map: no backdrop, the map takes clicks around it, the
+   title bar drags it (EventEditorWindow.js) and the corner resizes it. */
+#event-editor-modal.rr-event-editor-floating {
+    background: transparent;
+    pointer-events: none;
+}
+#event-editor-modal.rr-event-editor-floating > .rr-modal {
+    pointer-events: auto;
+    position: fixed;
+    margin: 0;
+    max-width: none !important;
+    max-height: none !important;
+    min-width: 860px;
+    min-height: 480px;
+    resize: both;
+    overflow: hidden;
+}
+#event-editor-modal.rr-event-editor-floating > .rr-modal > .rr-modal-header {
+    cursor: move;
+    user-select: none;
+}
+/* The accent strip on the left of its title bar, as the app's section headers carry it. */
+#event-editor-modal > .rr-modal > .rr-modal-header {
+    border-left: 3px solid var(--color-accent);
+}
+
+/* Popped out into a window of its own: the editor fills it, and that window's frame moves and sizes it. */
+#event-editor-modal.rr-event-editor-popped {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    pointer-events: auto;
+}
+#event-editor-modal.rr-event-editor-popped > .rr-modal {
+    position: static;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-sizing: border-box;
+    box-shadow: none;
+}
+/* A window with no frame: its own header moves it, as a title bar would; its controls stay clickable. */
+#event-editor-modal.rr-event-editor-popped > .rr-modal > .rr-modal-header {
+    cursor: default;
+    -webkit-app-region: drag;
+}
+#event-editor-modal.rr-event-editor-popped > .rr-modal > .rr-modal-header :is(button, input, select, a) {
+    -webkit-app-region: no-drag;
+}
+.rr-event-editor-grip,
+.rr-database-grip,
+.rr-forge-grip,
+.rr-plugin-grip {
+    position: fixed;
+    right: 2px;
+    bottom: 2px;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    z-index: 10001;
+    background: linear-gradient(135deg, transparent 0 50%, var(--color-border-input) 50% 58%, transparent 58% 70%, var(--color-border-input) 70% 78%, transparent 78%);
+}
+
+/* The Database floats beside a live map as the event editor does (DatabaseWindow.js): no backdrop,
+   the map takes clicks around it, the header drags it and the corner resizes it. */
+#database-viewer.rr-database-floating {
+    background: transparent;
+    pointer-events: none;
+}
+#database-viewer.rr-database-floating > .database-window {
+    pointer-events: auto;
+    position: fixed;
+    margin: 0;
+    min-width: 900px;
+    min-height: 560px;
+    resize: both;
+    border-radius: var(--radius-lg);
+}
+#database-viewer.rr-database-floating > .database-window > .database-header {
+    cursor: move;
+    user-select: none;
+}
+#database-viewer > .database-window > .database-header {
+    border-left: 3px solid var(--color-accent);
+}
+html.rr-web #database-viewer.rr-database-floating {
+    padding: 0;
+}
+
+/* In a window of its own: the Database fills it, and that window's frame moves and sizes it. */
+#database-viewer.rr-database-popped {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    pointer-events: auto;
+}
+#database-viewer.rr-database-popped > .database-window {
+    position: static;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border-radius: var(--radius-lg);
+    box-sizing: border-box;
+    box-shadow: none;
+}
+#database-viewer.rr-database-popped > .database-window > .database-header {
+    cursor: default;
+    -webkit-app-region: drag;
+}
+#database-viewer.rr-database-popped > .database-window > .database-header :is(button, input, select, a) {
+    -webkit-app-region: no-drag;
+}
+/* Forge uses the same persistent frame as the Database and event editor. */
+#forge-workspace {
+    position: fixed; inset: 0; align-items: center; justify-content: center;
+    z-index: 1000; background: transparent; pointer-events: none;
+}
+#forge-workspace > .rr-forge-window {
+    pointer-events: auto; position: fixed; margin: 0; width: 95vw; height: 95vh;
+    min-width: 900px; min-height: 560px; max-width: none; max-height: none;
+    display: flex; flex-direction: column; resize: both; overflow: hidden;
+    background: var(--color-bg-surface); border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg); box-sizing: border-box; box-shadow: var(--shadow-modal);
+}
+#forge-workspace > .rr-forge-window > .rr-modal-header {
+    display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+    padding: 12px 18px; border-bottom: 1px solid var(--color-border-subtle);
+    border-left: 3px solid var(--color-accent); background: var(--color-bg-toolbar);
+    cursor: move; user-select: none;
+}
+.rr-forge-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rr-forge-brand { color: var(--color-accent-bright); line-height: 1; display: inline-flex; }
+#forge-workspace .rr-modal-title { font-size: 15px; font-weight: 700; color: var(--color-text-strong); }
+.rr-forge-close { background: none; border: none; color: var(--color-text-muted); font-size: 22px; cursor: pointer; line-height: 1; }
+.rr-forge-close:hover { color: var(--color-text-strong); }
+.rr-forge-workspace-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); flex: 1; min-height: 0; }
+#forge-workspace.rr-forge-popped { pointer-events: auto; }
+#forge-workspace.rr-forge-popped > .rr-forge-window {
+    position: static; width: 100% !important; height: 100% !important;
+    min-width: 0; min-height: 0; resize: none; box-shadow: none;
+}
+#forge-workspace.rr-forge-popped > .rr-forge-window > .rr-modal-header { cursor: default; -webkit-app-region: drag; }
+#forge-workspace.rr-forge-popped > .rr-forge-window > .rr-modal-header :is(button, input, select, a) { -webkit-app-region: no-drag; }
+
+/* Plugin settings share the same transparent, rounded floating frame. */
+#plugin-manager-modal.rr-plugin-floating { position: fixed; inset: 0; background: transparent; pointer-events: none; z-index: 1000; align-items: center; justify-content: center; }
+#plugin-manager-modal > .rr-plugin-window {
+    position: fixed; pointer-events: auto; display: flex; flex-direction: column;
+    width: 95vw; height: 95vh; min-width: 800px; min-height: 480px;
+    box-sizing: border-box; resize: both; overflow: hidden;
+    background: var(--color-bg-surface); border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-modal);
+}
+.rr-plugin-header { border-left: 3px solid var(--color-accent); }
+#plugin-manager-modal.rr-plugin-popped { pointer-events: auto; }
+#plugin-manager-modal.rr-plugin-popped > .rr-plugin-window {
+    position: static; width: 100% !important; height: 100% !important;
+    min-width: 0; min-height: 0; resize: none; box-shadow: none;
+}
+#plugin-manager-modal.rr-plugin-popped .rr-plugin-header { -webkit-app-region: drag; }
+#plugin-manager-modal.rr-plugin-popped .rr-plugin-header :is(button, input, select, a) { -webkit-app-region: no-drag; }
+
+/* Clip the complete native document too: composited canvases, header strips and
+   the body-level resize grip all stay inside the same transparent rounded edge. */
+html.rr-detached-window {
+    width: 100%; height: 100%; overflow: hidden;
+    clip-path: inset(0 round var(--radius-lg));
+}
+/* In-page floating frames need the same clipping as native frames. */
+#event-editor-modal.rr-event-editor-floating > .rr-modal,
+#database-viewer.rr-database-floating > .database-window,
+#forge-workspace > .rr-forge-window,
+#plugin-manager-modal > .rr-plugin-window,
+#event-editor-modal.rr-event-editor-popped > .rr-modal,
+#database-viewer.rr-database-popped > .database-window,
+#forge-workspace.rr-forge-popped > .rr-forge-window,
+#plugin-manager-modal.rr-plugin-popped > .rr-plugin-window {
+    clip-path: inset(0 round var(--radius-lg));
+    isolation: isolate;
+}
+
+.plugin-details-header, .plugin-help-section {
+    margin: 10px 10px 0; border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg); overflow: hidden; background: var(--color-bg-surface);
+}
+.plugin-details-title, .plugin-help-heading { padding: 10px 12px; }
+.plugin-details-description { padding: 10px 12px; font-size: 12px; line-height: 1.5; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.plugin-details-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 9px 12px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); }
+.plugin-meta-item { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; font-size: 12px; }
+.plugin-meta-label { color: var(--color-text-muted); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.plugin-meta-value { color: var(--color-text-strong); overflow-wrap: anywhere; }
+.plugin-meta-url { color: var(--color-text-strong); text-decoration: underline; text-decoration-color: var(--color-accent); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.plugin-meta-url:hover { color: var(--color-accent-bright); }
+.plugin-help-heading { margin: 0; font-size: 12px; text-transform: none; letter-spacing: 0; list-style: none; }
+.plugin-help-heading::-webkit-details-marker { display: none; }
+.plugin-help-heading::before { content: ''; flex: 0 0 6px; width: 6px; height: 6px; margin-right: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); }
+.plugin-help-section[open] > .plugin-help-heading::before { transform: rotate(45deg); }
+.plugin-help-heading:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; }
+.rr-plugin-dialog-header { border-left: 3px solid var(--color-accent); }
+.rr-plugin-group-description { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* Forge › 3D Character Builder */
+.rr-c3d-empty { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px; }
+.rr-c3d { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.rr-c3d-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px 16px; background: var(--color-bg-panel); border-bottom: 1px solid var(--color-border-subtle); flex-shrink: 0;
+}
+.rr-c3d-toolbar .rr-btn-chip { padding: 6px 14px; }
+.rr-c3d-name { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-muted); }
+.rr-c3d-name-input { width: 180px; padding: 4px 8px; font-size: 12px; }
+.rr-c3d-open { max-width: 180px; }
+.rr-c3d-spacer { flex: 1 1 auto; }
+.rr-c3d-status { font-size: 11px; color: var(--color-text-muted); }
+.rr-c3d-status[data-kind="ok"] { color: var(--color-success); }
+.rr-c3d-status[data-kind="error"] { color: var(--color-danger); }
+.rr-c3d-save { color: var(--color-accent-bright); font-weight: 600; }
+.rr-c3d-body { display: grid; grid-template-columns: 360px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+.rr-c3d-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); }
+.rr-c3d-tabs { display: flex; flex-wrap: wrap; gap: 0; padding: 6px 6px 0; border-bottom: 1px solid var(--color-border-subtle); }
+.rr-c3d-tab {
+    padding: 5px 6px; font-size: 11px; color: var(--color-text-muted); background: transparent; border: 0;
+    border-bottom: 2px solid transparent; cursor: pointer;
+}
+.rr-c3d-tab:hover { color: var(--color-text); }
+.rr-c3d-tab.is-active { color: var(--color-accent-bright); border-bottom-color: var(--color-accent-bright); }
+.rr-c3d-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 14px 16px; }
+.rr-c3d-section {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 12px 0 4px; padding-bottom: 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--color-accent-bright); border-bottom: 1px solid var(--color-border-subtle);
+}
+.rr-c3d-more { padding: 0 4px; font-size: 10px; text-transform: none; letter-spacing: 0; color: var(--color-text-muted); background: none; border: 0; cursor: pointer; }
+.rr-c3d-more:hover { color: var(--color-accent-bright); }
+.rr-c3d-subhead { margin: 8px 0 4px; font-size: 10px; color: var(--color-text-muted); }
+.rr-c3d-note { margin: 4px 0 8px; font-size: 11px; line-height: 1.4; color: var(--color-text-muted); }
+.rr-c3d-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.rr-c3d-tile {
+    padding: 6px 4px; font-size: 11px; color: var(--color-text); background: var(--color-bg-input);
+    border: 1px solid var(--color-border-input); border-radius: var(--radius-sm, 3px); cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rr-c3d-tile:hover { border-color: var(--color-accent-border-strong); }
+.rr-c3d-tile.is-active { border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+.rr-c3d-card-sec { margin: 8px 0 0; }
+.rr-c3d-sechead { cursor: pointer; }
+.rr-c3d-sechead:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; }
+.rr-c3d-sechead .r3d-sec-toggle { flex: 0 0 10px; font-size: 10px; color: var(--color-text-muted); }
+.rr-c3d-sechead .rr-c3d-more { margin-left: auto; }
+.rr-c3d-secbody { gap: 0; padding: 4px 8px 6px; }
+.rr-c3d-card-sec.is-collapsed .rr-c3d-secbody { display: none; }
+.rr-c3d-card-sec.is-collapsed .rr-c3d-sechead { border-bottom-color: transparent; }
+.rr-c3d-thumbtile { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 3px 3px 4px; }
+.rr-c3d-thumb {
+    display: block; width: 100%; aspect-ratio: 1; border-radius: 2px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--color-bg-deep) 70%, #5a5e68) 0%, var(--color-bg-deep) 75%);
+}
+.rr-c3d-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.rr-c3d-thumb:empty::after { content: ''; display: block; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-text-muted) 12%, transparent), transparent); background-size: 200% 100%; animation: rr-c3d-shimmer 1.2s linear infinite; }
+@keyframes rr-c3d-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.rr-c3d-tile-label { font-size: 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-c3d-pickrow { grid-template-columns: 96px minmax(0, 1fr); }
+.rr-c3d-pickcurrent {
+    display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 8px 3px 3px; font-size: 11px; color: var(--color-text);
+    background: var(--color-bg-input); border: 1px solid var(--color-border-input); border-radius: var(--radius-sm, 3px); cursor: pointer; text-align: left;
+}
+.rr-c3d-pickcurrent:hover, .rr-c3d-pickcurrent.is-open { border-color: var(--color-accent-bright); }
+.rr-c3d-pickcurrent .rr-c3d-thumb { width: 40px; flex: 0 0 40px; }
+.rr-c3d-pickcurrent > span:nth-child(2) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-caret { color: var(--color-text-muted); }
+.rr-c3d-pickgrid { margin: 2px 0 8px; padding: 6px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); background: color-mix(in srgb, var(--color-bg-deep) 50%, var(--color-bg-panel)); }
+.rr-c3d-addbtn { width: 100%; margin: 4px 0 6px; }
+.rr-c3d-addbtn.is-active { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }
+.rr-c3d-plan { display: flex; gap: 4px; margin: 8px 0 2px; }
+.rr-c3d-plan .rr-btn-chip { flex: 1 1 0; }
+.rr-c3d-plan .rr-btn-chip.is-active, .rr-c3d-pose.is-active { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }
+.rr-c3d-extreme { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 11px; color: var(--color-text); cursor: pointer; }
+.rr-c3d-switches { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; }
+.rr-c3d-switches .rr-c3d-extreme { margin: 0; }
+.rr-c3d-choice select { grid-column: 2 / 4; min-width: 0; }
+.rr-c3d-check input { grid-column: 3; justify-self: end; }
+.rr-c3d-colorrow { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rr-c3d-colorpick { display: flex; align-items: center; gap: 2px; }
+.rr-c3d-color {
+    width: 32px; height: 22px; padding: 0; cursor: pointer; border-radius: var(--radius-sm, 3px);
+    border: 1px solid var(--color-border-input); background: var(--rr-c3d-swatch, transparent);
+    box-shadow: inset 0 0 0 2px var(--color-bg-input);
+}
+.rr-c3d-color:hover, .rr-c3d-color:focus-visible { border-color: var(--color-accent-bright); }
+.rr-c3d-color[data-empty] { background: repeating-linear-gradient(45deg, var(--color-bg-input) 0 4px, var(--color-border-input) 4px 5px); }
+.rr-color-popover {
+    position: fixed; z-index: 10020; width: 216px; padding: 10px; box-sizing: border-box;
+    background: var(--color-bg-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md, 6px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 8px;
+}
+.rr-color-popover-sv { position: relative; height: 130px; border-radius: var(--radius-sm, 3px); cursor: crosshair; outline: none; touch-action: none; }
+.rr-color-popover-sv:focus-visible, .rr-color-popover-hue:focus-visible { box-shadow: 0 0 0 2px var(--color-accent-bright); }
+.rr-color-popover-knob, .rr-color-popover-hueknob {
+    position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); pointer-events: none;
+}
+.rr-color-popover-hue {
+    position: relative; height: 12px; border-radius: 6px; cursor: ew-resize; outline: none; touch-action: none;
+    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.rr-color-popover-hueknob { top: 50%; }
+.rr-color-popover-row { display: flex; gap: 6px; align-items: center; }
+.rr-color-popover-now { width: 28px; height: 24px; border-radius: var(--radius-sm, 3px); border: 1px solid var(--color-border-input); }
+.rr-color-popover-hex { flex: 1 1 auto; min-width: 0; padding: 3px 6px; font-size: 12px; font-family: var(--font-mono, monospace); }
+.rr-color-popover-recent { display: flex; flex-wrap: wrap; gap: 4px; }
+.rr-color-popover-recent:empty { display: none; }
+.rr-color-popover-swatch { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--color-border-input); cursor: pointer; }
+.rr-color-popover-swatch:hover { outline: 2px solid var(--color-accent-bright); outline-offset: 1px; }
+.rr-c3d-clear, .rr-c3d-remove { padding: 0 4px; font-size: 11px; color: var(--color-text-muted); background: none; border: 0; cursor: pointer; }
+.rr-c3d-clear:hover, .rr-c3d-remove:hover { color: var(--color-danger); }
+.rr-c3d-add { display: flex; gap: 4px; margin: 4px 0 8px; }
+.rr-c3d-add select { flex: 1 1 auto; min-width: 0; }
+.rr-c3d-card { margin: 6px 0; padding: 4px 8px 6px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); background: var(--color-bg-input); }
+.rr-c3d-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--color-text); padding-bottom: 2px; }
+.rr-c3d-group { display: inline-flex; gap: 2px; align-items: center; }
+.rr-c3d-random-scope { max-width: 120px; }
+.rr-c3d-viewbar { position: absolute; top: 8px; right: 10px; display: flex; gap: 4px; }
+/* Searchable poses stay compact under the framing buttons. */
+.rr-c3d-poses {
+    position: absolute; top: 44px; right: 10px; width: 210px; max-width: calc(100% - 20px); box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; padding: 6px;
+    background: color-mix(in srgb, var(--color-bg-panel) 82%, transparent); border: 1px solid var(--color-border-subtle);
+    border-left: 3px solid var(--color-accent); border-radius: var(--radius-md, 6px);
+}
+.rr-c3d-poses-title { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-dim); padding: 0 2px 3px; }
+.rr-c3d-poses .rr-c3d-pose { width: 100%; justify-content: flex-start; text-align: left; }
+.rr-c3d-poses .rr-c3d-pose[hidden] { display: none; }
+.rr-c3d-pose-picker { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.rr-c3d-poses .rr-shim-wrapper { width: 100%; max-width: 100%; }
+.rr-c3d-pose-list { display: flex; flex-direction: column; gap: 3px; }
+.rr-prop-motion { width: 142px; }
+.rr-c3d-gallery {
+    position: absolute; inset: 24px; display: flex; flex-direction: column; min-height: 0; padding: 10px 12px;
+    background: var(--color-bg-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md, 6px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.rr-c3d-gallery[hidden] { display: none; }
+.rr-c3d-gallery-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--color-text); margin-bottom: 8px; }
+.rr-c3d-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; overflow-y: auto; align-content: start; }
+.rr-c3d-saved { display: flex; flex-direction: column; gap: 4px; padding: 6px; font-size: 11px; color: var(--color-text); background: var(--color-bg-input); border: 1px solid var(--color-border-input); border-radius: var(--radius-sm, 3px); cursor: pointer; }
+.rr-c3d-saved:hover { border-color: var(--color-accent-bright); }
+.rr-c3d-saved img, .rr-c3d-nothumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 2px; background: var(--color-bg-deep); }
+.rr-c3d-nothumb { display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--color-text-muted); }
+.rr-c3d-import-preset { position: relative; min-width: 0; }
+.rr-c3d-import-preset > .rr-c3d-tile { width: 100%; height: 100%; }
+.rr-c3d-import-delete { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1px solid var(--color-border-input); color: var(--color-text); background: var(--color-bg-panel); cursor: pointer; }
+.rr-c3d-import-add { min-width: 0; }
+.rr-c3d-import-add .rr-c3d-nothumb { aspect-ratio: auto; height: 44px; }
+.rr-c3d-import-search { width: 100%; min-width: 0; margin-bottom: 8px; }
+.rr-c3d-import-parts { display: flex; flex-wrap: wrap; gap: 4px 12px; border: 1px solid var(--color-border-subtle); margin: 0 0 8px; padding: 4px 8px 8px; font-size: 11px; }
+.rr-c3d-import-parts label { display: flex; align-items: center; gap: 4px; }
+.rr-c3d-import-model { min-width: 0; }
+.rr-c3d-import-model > span:last-child { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-import-model[hidden], .rr-c3d-import-progress[hidden], .rr-c3d-import-actions[hidden] { display: none; }
+.rr-c3d-import-progress { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 11px; }
+.rr-c3d-import-progress progress { flex: 1; min-width: 0; }
+.rr-c3d-import-actions { display: flex; gap: 8px; }
+.rr-c3d-import-ready { inset: auto 12px 12px; }
+.rr-c3d-import-ready .rr-c3d-gallery-grid, .rr-c3d-import-ready .rr-c3d-import-search, .rr-c3d-import-ready .rr-c3d-import-parts { display: none; }
+.rr-c3d-importer .rr-c3d-gallery-head > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-emblem-row { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rr-c3d-emblem-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-emblem-row > [data-outfit-emblem-clear] { grid-column: 3; }
+.rr-c3d-row {
+    display: grid; grid-template-columns: 96px minmax(0, 1fr) 56px; align-items: center; gap: 2px 8px;
+    padding: 3px 0; font-size: 11px; color: var(--color-text);
+}
+.rr-c3d-label { color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-c3d-value { text-align: right; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.rr-c3d-ends { grid-column: 2; display: flex; justify-content: space-between; font-size: 9px; color: var(--color-text-muted); margin-top: -2px; }
+.rr-c3d-row input[type="range"] {
+    appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; height: 14px; margin: 0; padding: 0;
+    border: 0; background: transparent; outline: none; cursor: pointer;
+}
+.rr-c3d-row input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px; border-radius: 3px; border: 1px solid var(--color-border-input);
+    background:
+        linear-gradient(to right, var(--color-accent) 0, var(--color-accent) var(--rr-fill, 0%), transparent var(--rr-fill, 0%)),
+        linear-gradient(to right, var(--color-bg-input) 0, var(--color-bg-input) var(--rr-nat-lo, 0%),
+            color-mix(in srgb, var(--color-bg-input) 70%, var(--color-text-muted)) var(--rr-nat-lo, 0%),
+            color-mix(in srgb, var(--color-bg-input) 70%, var(--color-text-muted)) var(--rr-nat-hi, 100%),
+            var(--color-bg-input) var(--rr-nat-hi, 100%));
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.rr-c3d-row input[type="range"]::-webkit-slider-thumb {
+    appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+    background: var(--color-accent-bright); border: 2px solid var(--color-bg-input);
+    box-shadow: 0 0 0 1px var(--color-accent-border-strong), 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.rr-c3d-row input[type="range"]:hover::-webkit-slider-thumb,
+.rr-c3d-row input[type="range"]:focus-visible::-webkit-slider-thumb { background: var(--color-accent-hover); }
+.rr-c3d-skin { grid-template-columns: 96px minmax(0, 1fr) 36px; }
+.rr-c3d-swatches { display: flex; gap: 4px; flex-wrap: wrap; }
+.rr-c3d-swatch { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--color-border-input); cursor: pointer; }
+.rr-c3d-swatch:hover, .rr-c3d-swatch:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 1px; }
+.rr-c3d-skin-input { width: 32px; height: 22px; padding: 0; border: 1px solid var(--color-border-input); background: none; cursor: pointer; }
+.rr-c3d-view {
+    position: relative; min-width: 0; min-height: 0; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 38%, color-mix(in srgb, var(--color-bg-deep) 70%, #5a5e68) 0%, var(--color-bg-deep) 72%);
+}
+.rr-c3d-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.rr-c3d-canvas:active { cursor: grabbing; }
+.rr-c3d-readout, .rr-c3d-hint {
+    position: absolute; left: 12px; font-size: 11px; color: var(--color-text-muted); pointer-events: none;
+    background: color-mix(in srgb, var(--color-bg-panel) 70%, transparent); padding: 3px 8px; border-radius: var(--radius-sm, 3px);
+}
+.rr-c3d-readout { top: 10px; }
+.rr-c3d-hint { bottom: 10px; }
+/* Export sprite sheet: a small panel at the view's top left, on the builder's row grid. */
+.rr-c3d-export {
+    position: absolute; top: 40px; left: 12px; width: 360px; max-height: calc(100% - 56px); overflow-y: auto; overflow-x: hidden; box-sizing: border-box;
+    display: flex; flex-direction: column; padding: 8px 10px; z-index: 2;
+    background: var(--color-bg-panel); border: 1px solid var(--color-border-subtle); border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-md, 6px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.rr-c3d-export-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--color-text); padding-bottom: 4px; margin-bottom: 2px; border-bottom: 1px solid var(--color-border-subtle); }
+.rr-c3d-export .rr-c3d-row > select, .rr-c3d-export .rr-c3d-row > .rr-shim-wrapper { grid-column: 2 / 4; min-width: 0; width: 100%; }
+.rr-c3d-export .rr-c3d-row > input[type="number"] { min-width: 0; width: 100%; box-sizing: border-box; }
+.rr-c3d-export .rr-c3d-colorrow { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rr-c3d-export .rr-c3d-colorrow > select, .rr-c3d-export .rr-c3d-colorrow > .rr-shim-wrapper { grid-column: 2; }
+.rr-c3d-export .rr-c3d-colorrow:has(> .rr-c3d-color[hidden]) > select, .rr-c3d-export .rr-c3d-colorrow:has(> .rr-c3d-color[hidden]) > .rr-shim-wrapper { grid-column: 2 / 4; }
+.rr-c3d-export-faces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 2px 0 4px; }
+.rr-c3d-export-faces select, .rr-c3d-export-faces .rr-shim-wrapper { min-width: 0; width: 100%; font-size: 10px; }
+.rr-c3d-export-faces .rr-shim-trigger { padding-left: 6px !important; padding-right: 18px !important; }
+.rr-c3d-export-file { grid-column: 2 / 4; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); font-family: var(--font-mono, monospace); font-size: 10px; }
+.rr-c3d-export-progress { height: 4px; margin: 6px 0 2px; border-radius: 2px; background: var(--color-bg-input); overflow: hidden; }
+.rr-c3d-export-progress[hidden], .rr-c3d-export-preview[hidden] { display: none; }
+.rr-c3d-export-progress > div { width: 0; height: 100%; background: var(--color-accent-bright); transition: width 0.1s linear; }
+.rr-c3d-export-preview { display: block; width: 100%; margin: 6px 0 0; image-rendering: pixelated; border-radius: 2px; background: repeating-conic-gradient(var(--color-bg-input) 0 25%, var(--color-bg-deep) 0 50%) 0 0 / 12px 12px; }
+.rr-c3d-export-foot { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+.rr-c3d-export-status { margin-top: 6px; font-size: 10px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.rr-c3d-export-status:empty { display: none; }
+.rr-c3d-export-status[data-kind="ok"] { color: var(--color-success, var(--color-text)); }
+.rr-c3d-export-status[data-kind="error"] { color: var(--color-danger); }
+.rr-c3d.is-exporting .rr-c3d-side, .rr-c3d.is-exporting .rr-c3d-toolbar, .rr-c3d.is-exporting .rr-c3d-poses, .rr-c3d.is-exporting .rr-c3d-viewbar { pointer-events: none; opacity: 0.6; }
+
+/* Forge › Prop Builder (laid out on the 3D Character Builder's classes) */
+.rr-prop .rr-c3d-pose.is-active { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }
+.rr-prop-tiles2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rr-prop .rr-prop-mini { aspect-ratio: 8 / 5; }
+.rr-prop .rr-prop-mini img { object-fit: fill; }
+.rr-prop-picturerow { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rr-prop-picturename { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
+.rr-prop-motion[hidden] { display: none; }
+.rr-prop-picturename { display: flex; align-items: center; gap: 6px; }
+.rr-prop-pictureimg { width: 32px; height: 32px; object-fit: contain; border-radius: 2px; background: var(--color-bg-deep); flex: 0 0 32px; }
+.rr-prop-profile { display: flex; justify-content: center; padding: 4px 0 6px; }
+.rr-prop-profile-canvas { width: 100%; max-width: 300px; aspect-ratio: 1; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); background: var(--color-bg-deep); cursor: crosshair; touch-action: none; }
+/* Prop Builder: what to make, in a column of categories at the left */
+.rr-prop-body { grid-template-columns: clamp(170px, 14vw, 220px) clamp(300px, 26vw, 360px) minmax(0, 1fr); }
+.rr-prop-types { display: flex; flex-direction: column; min-height: 0; gap: 6px; padding: 8px; border-right: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); }
+.rr-prop-search { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 12px; }
+.rr-prop-typelist { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.rr-prop-cathead { cursor: pointer; }
+.rr-prop-cathead:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; }
+.rr-prop-cathead .r3d-sec-toggle { flex: 0 0 10px; font-size: 10px; color: var(--color-text-muted); }
+.rr-prop-cat.is-collapsed .rr-prop-catbody { display: none; }
+.rr-prop-catbody { gap: 1px; padding: 4px; }
+.rr-prop-type {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 5px 8px; font-size: 12px; text-align: left;
+    color: var(--color-text); background: transparent; border: 0; border-left: 2px solid transparent; border-radius: var(--radius-sm, 3px); cursor: pointer;
+}
+.rr-prop-type svg { flex: 0 0 16px; color: var(--color-text-muted); }
+.rr-prop-type span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-prop-type:hover { background: var(--color-bg-hover); }
+.rr-prop-type.is-active { color: var(--color-accent-bright); background: var(--color-bg-hover); border-left-color: var(--color-accent-bright); }
+.rr-prop-type.is-active svg { color: var(--color-accent-bright); }
+.rr-prop-none { padding: 0 4px; }
+.rr-prop-subhead { padding: 6px 8px 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-muted); }
+.rr-prop-subhead:first-child { padding-top: 2px; }
+.rr-prop-randomgroup[hidden], .rr-prop-random-scope[hidden] { display: none; }
+.rr-prop-tiles5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.rr-prop-tiles5 .rr-c3d-tile { padding: 2px; }
+.rr-prop-layers { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.rr-prop-layer { display: flex; align-items: center; gap: 6px; padding: 3px 4px; font-size: 11px; color: var(--color-text); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); background: var(--color-bg-input); cursor: pointer; }
+.rr-prop-layer.is-active { border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+.rr-prop-layer img { width: 32px; height: 20px; border-radius: 2px; flex: 0 0 32px; }
+.rr-prop-layer span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-prop-layer button[disabled] { opacity: 0.3; cursor: default; }
+.rr-prop-which { display: flex; gap: 4px; margin: 8px 0 0; }
+.rr-prop-which .rr-btn-chip { flex: 1 1 0; }
+.rr-prop-which .rr-btn-chip.is-active { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }

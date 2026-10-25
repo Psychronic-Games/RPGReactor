@@ -1924,7 +1924,7 @@ Game_Actor.prototype.setup = function(actorId) {
     this._nickname = actor.nickname;
     this._profile = actor.profile;
     this._classId = actor.classId;
-    const maximumLevel = Math.max(1, Math.min(999, Math.floor(Number(actor.maxLevel) || 99)));
+    const maximumLevel = Math.max(1, Math.min(9999, Math.floor(Number(actor.maxLevel) || 99)));
     this._level = Math.max(1, Math.min(maximumLevel, Math.floor(Number(actor.initialLevel) || 1)));
     this.initImages();
     this.initExp();
@@ -2044,7 +2044,7 @@ Game_Actor.prototype.nextRequiredExp = function() {
 };
 
 Game_Actor.prototype.maxLevel = function() {
-    return Math.max(1, Math.min(999, Math.floor(Number(this.actor().maxLevel) || 99)));
+    return Math.max(1, Math.min(9999, Math.floor(Number(this.actor().maxLevel) || 99)));
 };
 
 Game_Actor.prototype.isMaxLevel = function() {
@@ -2366,7 +2366,7 @@ Game_Actor.prototype.bareHandsElementId = function() {
 Game_Actor.prototype.classParamAtLevel = function(classData, paramId, level) {
     const values = classData?.params?.[paramId];
     if (!Array.isArray(values) || values.length === 0) return 0;
-    const requestedLevel = Math.max(1, Math.min(999, Math.floor(Number(level) || 1)));
+    const requestedLevel = Math.max(1, Math.min(9999, Math.floor(Number(level) || 1)));
     const exact = Number(values[requestedLevel]);
     if (Number.isFinite(exact)) return exact;
 

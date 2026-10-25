@@ -14,6 +14,9 @@ class MediaSurfacePreviewManager {
         this.domOwners = new Map();
         this.authoring = null;
         this.destroyed = false;
+        const activity = typeof window !== 'undefined' ? window.RRDetachedWindow : null;
+        this._previewActivityPaused = activity?.previewActive?.() === false;
+        this._previewActivityOff = activity?.onPreviewActivity?.(() => this._syncPreviewPlayback());
         this._onEventsChanged = () => this.rescan();
         if (typeof document !== 'undefined') {
             document.addEventListener('rr-events-changed', this._onEventsChanged);
@@ -277,16 +280,28 @@ class MediaSurfacePreviewManager {
     _keepPlaying(owner, video) {
         if (!video?.src) return;
         const resume = () => {
-            if (owner.destroyed || !video.paused) return;
+            if (owner.destroyed || this.destroyed || this._previewActivityPaused || !video.paused) return;
             video.play?.().catch?.(() => {});
         };
         video.addEventListener('canplay', resume);
         video.addEventListener('loadeddata', resume);
+        owner.resumePreviewPlayback = resume;
         owner.listeners.push(() => {
             video.removeEventListener('canplay', resume);
             video.removeEventListener('loadeddata', resume);
         });
         resume();
+    }
+
+    _syncPreviewPlayback() {
+        this._previewActivityPaused = window.RRDetachedWindow?.previewActive?.() === false;
+        for (const owners of [this.pixiOwners, this.threeOwners, this.domOwners]) {
+            for (const owner of owners.values()) {
+                if (owner.source && 'autoPlay' in owner.source) owner.source.autoPlay = !this._previewActivityPaused;
+                if (this._previewActivityPaused) owner.video?.pause?.();
+                else owner.resumePreviewPlayback?.();
+            }
+        }
     }
 
     _placeholderCanvas(state) {
@@ -342,6 +357,7 @@ class MediaSurfacePreviewManager {
             owner.source = new PIXI.VideoSource({
                 resource: video, autoLoad: false, autoPlay: true, updateFPS: 0
             });
+            owner.source.autoPlay = !this._previewActivityPaused;
             owner.texture = new PIXI.Texture({ source: owner.source, dynamic: true });
             owner.source.load?.().catch?.(() => {});
             const showVideo = () => {
@@ -1885,6 +1901,8 @@ class MediaSurfacePreviewManager {
 
     destroy() {
         if (this.destroyed) return;
+        this._previewActivityOff?.();
+        this._previewActivityOff = null;
         this.beforeMapChange();
         this.destroyed = true;
         if (typeof document !== 'undefined') {

@@ -578,12 +578,14 @@
     function pastBorder(R, x, z, r, w, h) {
         // (Its own length, so that its middle reaches the border however long it is: a tank's nose is ten tiles ahead of it.)
         const N = R.Neighbors, out = Math.max(BORDER_OVER, SHAPE.front + SHAPE.rear + SHAPE.radius);
-        if (x < r && !(N && x > -out && N.stands("west"))) return true;
-        if (z < r && !(N && z > -out && N.stands("north"))) return true;
-        if (x > w - r && !(N && x < w + out && N.stands("east"))) return true;
-        if (z > h - r && !(N && z < h + out && N.stands("south"))) return true;
+        // `pastSide` keeps the direction of the border that refused, for the ride to leave by that one only.
+        if (x < r && !(N && x > -out && N.stands("west"))) { pastSide = 4; return true; }
+        if (z < r && !(N && z > -out && N.stands("north"))) { pastSide = 8; return true; }
+        if (x > w - r && !(N && x < w + out && N.stands("east"))) { pastSide = 6; return true; }
+        if (z > h - r && !(N && z < h + out && N.stands("south"))) { pastSide = 2; return true; }
         return false;
     }
+    let pastSide = 0;
     /** How far past an open border a circle of the vehicle may be, in tiles, at the least (a vehicle longer than this, its own length). */
     const BORDER_OVER = 4;
 
@@ -1168,7 +1170,7 @@
                 if (code === 1 && typeof player.leaveByBorder === "function") {
                     const out = (fx < 0 ? -fx : fx) > (fz < 0 ? -fz : fz) ? (fx > 0 ? 6 : 4) : (fz > 0 ? 2 : 8);
                     const square = (out === 6 || out === 4 ? (fx < 0 ? -fx : fx) : (fz < 0 ? -fz : fz)) > 0.5;
-                    if (square && player.leaveByBorder(out, Math.ceil(SHAPE.front + SHAPE.rear + SHAPE.radius))) break;
+                    if (square && pastSide === out && player.leaveByBorder(out, Math.ceil(SHAPE.front + SHAPE.rear + SHAPE.radius))) break;
                 }
                 // Walked into an event's body: its touch trigger, once per contact.
                 if (code === 9 && (hitX !== touchX || hitY !== touchY)) {

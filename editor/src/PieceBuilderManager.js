@@ -763,7 +763,42 @@ class PieceBuilderManager {
     turnSelected(steps = 1) {
         const piece = this.selectedPiece();
         if (!piece) return false;
-        return this.isShape(piece.kind) ? this.updateSelected({ angle: (((piece.angle || 0) + 90 * steps) % 360 + 360) % 360 }) : this.updateSelected({ rot: ((piece.rot + steps) % 4 + 4) % 4 });
+        const turned = this.isShape(piece.kind) ? this.updateSelected({ angle: (((piece.angle || 0) + 90 * steps) % 360 + 360) % 360 }) : this.updateSelected({ rot: ((piece.rot + steps) % 4 + 4) % 4 });
+        if (turned && piece.kind === 'stair') this.warnStairFoot([this.selectedPiece()]);
+        return turned;
+    }
+
+    /**
+     * Whether a stair's foot faces a wall: the cell before its bottom step, at that step's level, is
+     * solid (a wall, a block, a window's sill, a bank) or off the map, so the stair cannot be walked onto.
+     */
+    stairFootBlocked(piece) {
+        const map = this.currentMap();
+        if (!map || !piece || piece.kind !== 'stair') return false;
+        const flight = this.stairFlight(piece), foot = flight ? flight.foot : piece;
+        const [dx, dy] = PieceBuilderManager.stepOf(foot.rot);
+        const fx = foot.x - dx, fy = foot.y - dy;
+        if (fx < 0 || fy < 0 || fx >= map.width || fy >= map.height) return true;
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        if (R && R.pieceSolidAt && R.pieceBaseAt) {
+            const base = R.pieceBaseAt(map, foot.x, foot.y) + (foot.z || 0);
+            if (R.pieceSolidAt(map, fx + 0.5, base + 0.5, fy + 0.5)) return true;
+            return !!(R.groundHeightAt && R.groundHeightAt(map, fx + 0.5, fy + 0.5, base) > base + 1);
+        }
+        const tall = { wall: 5, glass: 5, pillar: 5, window: 1.5, fence: 1.5, block: 1 };
+        return (this.elevation()?.pieces(map) || []).some(p => p.x === fx && p.y === fy && tall[p.kind] && p.z <= foot.z && foot.z < p.z + tall[p.kind]);
+    }
+
+    /** Said once when a stair just laid or turned has its foot against a wall. */
+    warnStairFoot(pieces) {
+        if ((pieces || []).some(piece => piece && this.stairFootBlocked(piece))) {
+            const text = window.I18n?.tText ? window.I18n.tText("This stair's foot faces a wall: turn it with R, or clear the cell in front of it.") : "This stair's foot faces a wall: turn it with R, or clear the cell in front of it.";
+            const status = this.panel?.querySelector('.rr-pieces-status');
+            if (status) status.textContent = text;
+            window.reactor?.buildHotbar?.flash?.(text);
+            return true;
+        }
+        return false;
     }
 
     removeSelected() {
@@ -1128,6 +1163,7 @@ class PieceBuilderManager {
         const group = elevation.nextPieceGroup(map);
         if (!this._lay(map, plan, { group, plan: this.structure, x: Math.floor(x), y: Math.floor(y), rot: this.rot || 0, scale: 1 })) return this._tooBig(map, plan, this.rot || 0, 1);
         saved.propMoves = this._propMoves(map, places);
+        this._warnPropMoves(map, saved.propMoves, group);
         saved.foliage = this._clearFoliage(map, piece => piece.group === group);
         this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
@@ -1215,6 +1251,7 @@ class PieceBuilderManager {
         const places = this._propPlaces(map);
         if (!this._lay(map, plan, Object.assign(record, change))) return this._tooBig(map, plan, record.rot, record.scale);
         saved.propMoves = this._propMoves(map, places);
+        this._warnPropMoves(map, saved.propMoves, record.group);
         saved.foliage = this._clearFoliage(map, piece => piece.group === record.group);
         this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this.announce(true); this.refreshStatus(); this._ghostChanged();
@@ -1298,6 +1335,7 @@ class PieceBuilderManager {
         if (!elevation.movePieceGroup(map, this.selectedGroup, X0, Y0)) return false;
         elevation.relocatePropsOff(map, X0, Y0, W, H);
         saved.propMoves = this._propMoves(map, places);
+        this._warnPropMoves(map, saved.propMoves, this.selectedGroup);
         // What grew where it now stands goes; where it stood stays bare (nothing regrows).
         const moved = this.selectedGroup;
         saved.foliage = this._clearFoliage(map, piece => piece.group === moved);
@@ -1308,6 +1346,19 @@ class PieceBuilderManager {
         this.announce(true);
         this.refreshStatus();
         this._ghostChanged();
+        return true;
+    }
+
+    /** Models a building's footprint pushed off are said, not moved silently. */
+    _warnPropMoves(map, moves, group) {
+        // (The building's own models are laid again with it, under numbers that may repeat: they are not counted.)
+        const own = new Set((this.elevation()?.props?.(map) || []).filter(prop => group && Number(prop.structure) === group).map(prop => prop.id));
+        const count = (moves || []).filter(move => !own.has(move.id)).length;
+        if (!count) return false;
+        const text = (window.I18n?.tText ? window.I18n.tText('Models moved off the plot: {count}.') : 'Models moved off the plot: {count}.').split('{count}').join(String(count));
+        const status = this.panel?.querySelector('.rr-pieces-status');
+        if (status) status.textContent = text;
+        window.reactor?.buildHotbar?.flash?.(text);
         return true;
     }
 
@@ -1489,6 +1540,9 @@ class PieceBuilderManager {
         const plot = this.currentMap()?.rrWorkshop;
         const max = plot ? plot.maxLevel : this.elevation()?.PIECE_MAX_LEVEL ?? 240;
         this.level = Math.max(0, Math.min(max, Math.floor(Number(level)) || 0));
+        // With the view cut at a storey, the cut follows the level built at: the storey in hand is the one shown.
+        const view = window.reactor?.mapEditor3D, S = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_STOREY) || 5;
+        if (view?.storeyCut > 0 && view.setStoreyCut) view.setStoreyCut(Math.floor(this.level / S) + 1, 'keep');
         this._syncPanel();
         this._ghostChanged();
     }
@@ -1677,8 +1731,8 @@ class PieceBuilderManager {
      * drag on the plane of the first piece, so a run of walls stays a run
      * and never climbs onto the wall it just laid. A rectangle stroke
      * (Ctrl held) lays the rectangle between the first cell and the
-     * pointer instead: a floor or a block fills it, anything else lines
-     * its edge, and every move lays it again from the stroke's start so
+     * pointer instead: a floor, a block or a roof fills it, anything else
+     * lines its edge, and every move lays it again from the stroke's start so
      * the rectangle follows the pointer.
      */
     beginStroke(target, mode = this.mode, options = {}) {
@@ -1702,7 +1756,7 @@ class PieceBuilderManager {
     }
 
     /** Kinds that fill a rectangle; the rest line its edge. */
-    static fillsRectangle(kind) { return kind === 'floor' || kind === 'block'; }
+    static fillsRectangle(kind) { return kind === 'floor' || kind === 'block' || kind === 'roof'; }
 
     /** The cells of the rectangle between the stroke's anchor and `target`, at the anchor's level. */
     rectangleCells(target) {
@@ -1779,6 +1833,7 @@ class PieceBuilderManager {
                 if (elevation.setPiece(map, step) && this._changedSince(map)) changed = true;
             }
         } else changed = !!elevation.setPiece(map, piece) && this._changedSince(map);
+        if (changed && piece.kind === 'stair' && this._stroke.mode !== 'erase') this.warnStairFoot([elevation.pieceAt(map, piece.x, piece.y, piece.z)]);
         // The rock laid: the next one is another rock (its own variation; the ghost follows).
         if (rock && changed) { this._stroke.lastRock = { x: target.x, y: target.y }; this.rockSeed++; this._ghostChanged(); }
         if (changed && group && elevation.structureOf(map, group)) {
@@ -1990,7 +2045,9 @@ class PieceBuilderManager {
         if (event.altKey) return;
         if (this.mode === 'select' && this.selected && key === 'r') { event.preventDefault(); this.turnSelection(event.shiftKey ? -1 : 1); }
         else if (this.mode === 'select' && this.selected && (key === 'delete' || key === 'backspace')) { event.preventDefault(); this.removeSelection(); }
-        else if (this.mode === 'select' && this.selected && key === 'escape') { event.preventDefault(); this.clearSelection(); }
+        else if (this.mode === 'select' && (this.selected || this.selectedIds.length) && key === 'escape') { event.preventDefault(); this.clearSelection(); }
+        // Escape in Select with nothing selected leaves Build.
+        else if (this.mode === 'select' && key === 'escape') { event.preventDefault(); this.leaveBuild(); }
         else if (key === 'r' && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.turn(event.shiftKey ? -1 : 1); }
         else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + 1); }
         else if (key === 'q') { event.preventDefault(); this.setLevel(this.level - 1); }
@@ -2007,6 +2064,13 @@ class PieceBuilderManager {
         else if ((key === 'delete' || key === 'backspace') && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.removeSelectedGroup(); }
         else if (key === 'escape' && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.selectedGroup = 0; this.refreshStatus(); this._syncPanel(); this._ghostChanged(); }
         else if (key === 'escape' && this.mode !== 'place') { event.preventDefault(); this.setMode('place'); }
+    }
+
+    /** Close the Build bar (the map goes back to painting), as its toolbar button does. */
+    leaveBuild() {
+        const bar = window.reactor?.buildHotbar;
+        if (bar?.visible) bar.hide(); else this.deactivate();
+        window.reactor?.syncMapToolButtons?.();
     }
 
     undo() { this._endGesture(); this._swap(this.undoStack, this.redoStack); this.syncHistoryButtons(); }

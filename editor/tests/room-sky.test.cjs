@@ -74,12 +74,13 @@ test('the dome follows the camera, drifts, and both frame loops tick it; a paral
     assert.match(read('editor/src/MapEditor3D.js'), /this\.mapScene\.updateSky\?\.\(this\.camera, now \/ \(1000 \/ 60\)\);/);
     const controller = read('editor/src/ProjectController.js');
     assert.match(controller, /if \(roomChanged \|\| was3D !== wants3D \|\| parallaxChanged\) this\.refreshMap3DView\(\);/);
-    assert.match(controller, /sky: value\('map-3d-sky-select'\),\s*skyScrollX: parseFloat\(value\('map-3d-sky-sx-input'\)\) \|\| 0/);
+    // The sky and the room are set on the map, in Build › Terrain › Room and Sky (live, one undo step a drag): Map Properties keeps them as they are.
+    assert.match(controller, /readMap3DForm\(\) \{\s*const elevation = this\.mapElevation\(\), map = this\.currentEditingMap;/);
+    const bar = read('editor/src/BuildHotbar.js');
+    assert.match(bar, /range\('rr-build-skysx', tt\('Drift X'\), room\.skyScrollX, -8, 8, 0\.05,/, 'the drift steps by a twentieth of a pixel');
+    assert.match(bar, /tile\('sky', 'Picture'\)/);
     const html = read('editor/index.html');
-    assert.match(html, /id="map-3d-sky-sx-input" min="-32" max="32" step="0\.05"/, 'the field steps by a twentieth of a pixel');
-    for (const id of ['map-3d-sky-select', 'map-3d-sky-browse-btn', 'map-3d-sky-sx-input', 'map-3d-sky-sy-input']) assert.ok(html.includes(`id="${id}"`), id);
-    const manager = read('editor/src/I18nManager.js');
-    for (const key of ['mapProps.parallaxSky', 'mapProps.skyScrollX', 'mapProps.skyScrollY', 'mapProps.pickSky']) assert.equal((manager.match(new RegExp(`'${key.replace('.', '\\.')}': `, 'g')) || []).length, 18, key);
+    for (const id of ['map-3d-sky-select', 'map-3d-sky-browse-btn', 'map-3d-sky-sx-input', 'map-3d-sky-sy-input']) assert.ok(!html.includes(`id="${id}"`), id);
 });
 
 test('the scrollbar corner stacks above the 3D view like the bars do', () => {

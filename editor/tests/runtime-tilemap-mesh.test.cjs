@@ -30,14 +30,10 @@ function meshLayer(context) {
     layer._v8SpritePool = [];
     layer._v8TileRoot = new PIXI.Container();
     layer.addChild(layer._v8TileRoot);
-    layer._v8Atlas = {
-        texture: PIXI.Texture.EMPTY,
-        width: 4096,
-        height: 3072,
-        shadowX: 3072,
-        shadowY: 2048,
-        refs: 1
-    };
+    // The fixed-slot layout (Tilemap.Layer.v8AtlasPacked off): one 1024px slot per sheet.
+    Tilemap.Layer.v8AtlasPacked = false;
+    layer._v8Atlas = Object.assign({ texture: PIXI.Texture.EMPTY, refs: 1 },
+        Tilemap.Layer._v8AtlasLayout(new Array(11).fill(null), 4096));
     layer._v8Geometry = new PIXI.MeshGeometry({
         positions: new Float32Array(8),
         uvs: new Float32Array(8),
@@ -57,14 +53,16 @@ test('the PIXI 8 runtime backend merges ordered tile commands into one mesh', ()
 
     assert.equal(layer._v8TileRoot.children.length, 1);
     assert.equal(layer._v8Mesh.visible, true);
-    assert.deepEqual(Array.from(layer._v8Geometry.positions), [
+    // The arrays keep room for later paints; the quads in use come first.
+    assert.deepEqual(Array.from(layer._v8Geometry.positions.slice(0, 16)), [
         10, 20, 58, 20, 58, 68, 10, 68,
         22, 32, 46, 32, 46, 56, 22, 56
     ]);
-    assert.deepEqual(Array.from(layer._v8Geometry.indices), [
+    assert.deepEqual(Array.from(layer._v8Geometry.indices.slice(0, 12)), [
         0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7
     ]);
-    const shadowUvs = Array.from(layer._v8Geometry.uvs.slice(8));
+    assert.ok(layer._v8Geometry.positions.slice(16).every(v => v === 0), 'unused quads have no area');
+    const shadowUvs = Array.from(layer._v8Geometry.uvs.slice(8, 16));
     assert.equal(new Set(shadowUvs.filter((_, index) => index % 2 === 0)).size, 1);
     assert.equal(new Set(shadowUvs.filter((_, index) => index % 2 === 1)).size, 1);
     assert.equal(context.$reactorTilemapStats.backend, 'pending');
@@ -118,7 +116,8 @@ test('a render-time camera repaint synchronizes every mesh before returning', ()
                 layer.addRect(0, 0, 0, 0, 0, 48, 48);
             }
         },
-        _sortChildren() {}
+        _sortChildren() {},
+        _rrChunkBlocker() { return 'a plugin paints this map'; }
     });
 
     tilemap.updateTransform();

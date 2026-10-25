@@ -57,6 +57,15 @@ class DatabaseSystem2Editor {
         col1.appendChild(this.createMenuCommandsSection(system));
         col1.appendChild(this.createItemCategoriesSection(system));
         col1.appendChild(this.createMagicSkillsSection(system));
+        // Jumping, gravity, falls and swimming on 3D maps: game rules, drawn and kept by the Controls page's editor.
+        const physics = this.parentEditor?.controlsEditor;
+        if (physics && typeof physics.showPhysicsIn === 'function') {
+            const host = document.createElement('div');
+            host.className = 'system2-physics';
+            host.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
+            col1.appendChild(host);
+            physics.showPhysicsIn(host);
+        }
         columnsGrid.appendChild(col1);
 
         // Col 2: Attack Motions, Editor Settings

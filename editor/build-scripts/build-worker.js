@@ -16,6 +16,8 @@ const webPack = require('./web-pack.cjs');
 const assetOptimizer = require('./asset-optimizer');
 const appImage = require('./appimage-utils');
 const nativeDownload = require('./native-download');
+const gameIdentity = require('./game-identity');
+const assetEncryption = require('./asset-encryption');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -58,6 +60,7 @@ const {
     includeProprietaryCodecs = false,
     runtimeLocales = null,
     assetOptimization = { png: false, ogg: false, oggQuality: 5 },
+    assetEncryption: encryption = { images: false, audio: false, keyText: '' },
     createLinuxAppImage = false,
     packWebFiles = false,   // a Web build's files go into a few archives (web-pack.cjs)
     appImageToolPath,
@@ -131,6 +134,8 @@ const EXCLUDED = new Set([
 function isStagingExcluded(relPath) {
     if (EXCLUDED.has(relPath)) return true;
     if (/^rpgmaker-runtime-backup(-\d+)?\.zip$/.test(relPath)) return true;
+    // The Character Generator's recipe beside each sheet it saved: the editor's, not the game's.
+    if (relPath.startsWith('img' + path.sep) && /\.character\.json$/i.test(relPath)) return true;
     return relPath === path.join('data', path.basename(relPath))
         && /^Test_.*\.json$/.test(path.basename(relPath));
 }
@@ -202,7 +207,7 @@ function validateProjectRuntime(root) {
     const required = [
         'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_core_display.js', 'reactor_core_io.js', 'reactor_3d.js', 'reactor_3d_lighting.js', 'reactor_3d_models.js', 'reactor_3d_effects.js', 'reactor_3d_world.js', 'reactor_3d_speech.js', 'reactor_3d_foliage.js', 'reactor_3d_doors.js', 'reactor_3d_surround.js', 'reactor_3d_vehicles.js', 'reactor_3d_rider.js', 'reactor_managers.js',
         'reactor_objects.js', 'reactor_objects_actions.js', 'reactor_objects_battlers.js', 'reactor_objects_map.js', 'reactor_objects_interpreter.js', 'reactor_objects_followers.js', 'reactor_objects_legacy.js',
-        'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
+        'reactor_hdr_overlay.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
         'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
             'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_hints.js', 'reactor_vehicles_mount.js',
         'reactor_windows.js', 'reactor_ui_victory.js', 'reactor_ui_fight.js', 'reactor_ui_action.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
@@ -499,6 +504,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     logInfo(`NW.js runtime locales: ${runtimeLocales ? runtimeLocales.join(', ') : 'all'}`);
     logInfo(`Asset optimization: PNG ${assetOptimization.png ? 'enabled' : 'disabled'}, audio ${assetOptimization.audio ? `quality ${assetOptimization.audioQuality}` : 'disabled'}`);
     logInfo(`Linux AppImage: ${createLinuxAppImage ? 'enabled' : 'disabled'}`);
+    logInfo(`Encryption: images ${encryption.images ? 'on' : 'off'}, audio ${encryption.audio ? 'on' : 'off'}`);
     logInfo('');
 
     if (createLinuxAppImage && (!platforms.includes('linux') || !appImage.supportsHost())) {
@@ -541,6 +547,17 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
         const saved = Math.max(0, summary.before - summary.after);
         const convertedNote = summary.converted ? ` (${summary.converted} converted to OGG)` : '';
         logGood(`Asset optimization complete: ${summary.png} PNG, ${summary.audio} audio updated${convertedNote}; ${(saved / 1024 / 1024).toFixed(2)} MiB saved.`);
+    }
+    // After optimization, which reads the plain files.
+    if (encryption.images || encryption.audio) {
+        logInfo('Encrypting assets...');
+        progress(9, 'Encrypting assets...');
+        const encrypted = assetEncryption.encryptStagedAssets(stagingDir, {
+            images: !!encryption.images, audio: !!encryption.audio, keyText: encryption.keyText || '', gameTitle,
+        }, (kind, filePath, index, total) => {
+            if (index === total || index % 200 === 0) progress(9, `Encrypting ${kind} ${index}/${total}`);
+        });
+        logGood(`Encrypted ${encrypted.images} image and ${encrypted.audio} audio files (key in data/System.json).`);
     }
     logGood('Staging complete.');
     progress(10, 'Staging complete');
@@ -616,7 +633,9 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 // A packaged or local runtime may already contain a codec overlay. For an
                 // unchecked build, use a clean official runtime rather than guessing whether
                 // its native codec is stock.
-                const canUseBundled = hasBundledRuntime && localVersionMatches &&
+                // The editor may run on the SDK build (DevTools, chromedriver, nwjc); a game ships the normal one.
+                const localIsSdk = hasBundledRuntime && nwRuntime.isSdkRuntime(localRuntimeRoot);
+                const canUseBundled = hasBundledRuntime && !localIsSdk && localVersionMatches &&
                     includeProprietaryCodecs && localRuntimeVersion;
                 if (runtimeSource === 'bundled' && canUseBundled) {
                     // Copy the local NW.js runtime before applying optional codec overlays.
@@ -638,7 +657,8 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                     }
                 } else {
                     if (runtimeSource === 'bundled') {
-                        logWarn(hasBundledRuntime
+                        if (localIsSdk) logInfo(`Bundled NW.js for ${label} is the SDK build; a game ships the normal build, from the cache or dl.nwjs.io.`);
+                        else logWarn(hasBundledRuntime
                             ? `Bundled NW.js cannot satisfy the selected version/codec policy for ${label}; using the exact official runtime/cache.`
                             : `Bundled NW.js not found for ${label} — falling back to download`);
                     }
@@ -766,6 +786,10 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                         fs.renameSync(oldApp, newApp);
                         logInfo('  App bundle: Game.app');
                     }
+                    const bundleId = gameIdentity.macBundleId(pkg.name, gameTitle);
+                    if (gameIdentity.applyMacGameIdentity(newApp, { name: gameTitle, bundleId, version: pkg.version })) {
+                        logInfo(`  Bundle: ${gameTitle} (${bundleId})`);
+                    }
                 }
 
                 // ── Replace icon ────────────────────────────────
@@ -808,7 +832,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                         outputPath,
                         executable: 'Game',
                         displayName: gameTitle,
-                        appId: `rpg-reactor-${pkg.name || gameTitle}`,
+                        appId: `rpg-reactor-${gameIdentity.gameSlug(pkg.name, gameTitle)}`,
                         iconPath: appImageIcon,
                         version: pkg.version || '1.0.0',
                         comment: pkg.description || `${gameTitle} game`,

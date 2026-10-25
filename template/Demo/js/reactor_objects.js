@@ -405,14 +405,27 @@ Game_System.prototype.saveWalkingBgm2 = function() {
 };
 
 Game_System.prototype.mainFontFace = function() {
+    if (this.legacyFontInfo()) return "rmmz-legacy-font-" + this.legacyFontId() + ", " + $dataSystem.advanced.fallbackFonts;
     return "rmmz-mainfont, " + $dataSystem.advanced.fallbackFonts;
 };
 
 Game_System.prototype.numberFontFace = function() {
+    if (this.legacyFontInfo()) return this.mainFontFace();
     return "rmmz-numberfont, " + this.mainFontFace();
 };
 
+Game_System.prototype.legacyFontId = function() {
+    return Number(this._rrFontId ?? this._rrWindowSkin?.font ?? $dataSystem.rrLegacyFontId) === 1 ? 1 : 0;
+};
+
+Game_System.prototype.legacyFontInfo = function() {
+    const fonts = $dataSystem.rrLegacyFonts;
+    return fonts && fonts[this.legacyFontId()] || null;
+};
+
 Game_System.prototype.mainFontSize = function() {
+    const font = this.legacyFontInfo && this.legacyFontInfo();
+    if (font && font.height > 0) return font.height;
     const advanced = $dataSystem.advanced || {};
     return "fontSize" in advanced ? advanced.fontSize : 26;
 };
@@ -431,6 +444,15 @@ Game_System.prototype.windowOpacity = function() {
     // Older MZ data (and MV data given an advanced block) has no entry.
     const advanced = $dataSystem.advanced || {};
     return "windowOpacity" in advanced ? advanced.windowOpacity : 192;
+};
+
+/** Saved 2000/2003 Change System Graphics selection; ordinary projects use Window. */
+Game_System.prototype.windowSkinName = function() {
+    return $dataSystem.rrLegacyWindows && this._rrWindowSkin ? this._rrWindowSkin.name : "Window";
+};
+
+Game_System.prototype.windowBackgroundMode = function() {
+    return this._rrWindowSkin ? this._rrWindowSkin.stretch : ($dataSystem.rrLegacyWindowStretch || 0);
 };
 
 //-----------------------------------------------------------------------------

@@ -191,20 +191,24 @@
      * font size equal to the bitmap height reproduces the bitmap.
      */
     /**
-     * The advance of each glyph. RPG Maker's fonts store every glyph in one
-     * wide cell and the engine draws half-width characters 6 px apart and
-     * full-width ones 12 px apart; a font with real per-glyph widths keeps them.
-     * A cell wider than a full-width glyph is not a width (one copy of RM2000.fon
-     * gives 'B' and 'e' 15 px cells), so such a font is drawn at the engine's pitch.
+     * The advance of each glyph. Western RM2000/RMG2000 fonts have broken
+     * padded cells; RPG_RT advances all their encoded glyphs by 6 px, including
+     * overhanging symbols. Other fixed-cell fonts use 6/12 px half/full-width
+     * pitch; fonts with real per-glyph widths retain those widths.
      */
     function advances(font, pitch) {
         const widths = new Set(Array.from(font.glyphs.values(), g => g.width));
         const fixedCell = widths.size === 1 || Math.max(...widths) > pitch * 2;
+        // These Western FONs contain broken 15 px cells and a few overhanging
+        // symbols. RPG_RT still advances every encoded character by 6 px;
+        // ink width (notably %, &, @ and Æ) must not turn them into wide text.
+        const rmPitch = /^RMG?2000$/i.test(font.face || '') ||
+            [[104, 6], [108, 4], [73, 15], [32, 15]].every(([code, width]) => font.glyphs.get(code)?.width === width);
         const out = new Map();
         for (const [code, g] of font.glyphs) {
             let ink = 0;
             for (const row of g.rows) for (let x = row.length - 1; x >= ink; x--) if (row[x]) { ink = x + 1; break; }
-            out.set(code, fixedCell ? (ink > pitch ? pitch * 2 : pitch) : g.width);
+            out.set(code, rmPitch ? pitch : fixedCell ? (ink > pitch ? pitch * 2 : pitch) : g.width);
         }
         return out;
     }

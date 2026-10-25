@@ -163,9 +163,17 @@ test('number-array uniforms are sent once per program until their values change;
     const sent = [];
     const uniform = (id, type, size) => ({ id, type, size, cache: [], setValue(gl, v) { sent.push([id, Array.from(v)]); } });
     const lights = uniform('rrLightPos', 0x8B52, 2), shadow = uniform('rrLightShadow', 0x1406, 2), samplers = uniform('rrMaps', 0x8B5E, 2);
-    const program = { getUniforms: () => ({ seq: [lights, shadow, { seq: [samplers] }] }) };
+    let reads = 0;
+    const program = { getUniforms: () => { reads++; return { seq: [lights, shadow, { seq: [samplers] }] }; } };
     const renderer = { info: { programs: [program] } };
     R.cacheUniformArrays(renderer);
+    // Not read here (a wait on the GPU process per new program): taken in at three's own first read.
+    assert.equal(reads, 0, 'the uniforms are not read for the cache');
+    program.getUniforms();
+    assert.equal(reads, 1);
+    R.cacheUniformArrays(renderer);
+    program.getUniforms();
+    assert.equal(reads, 2, 'and the program reads as three\'s own afterwards');
     const pos = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
     lights.setValue(null, pos); lights.setValue(null, pos);
     assert.equal(sent.length, 1, 'the same values again are not sent');
@@ -178,8 +186,10 @@ test('number-array uniforms are sent once per program until their values change;
     assert.equal(sent.filter(([id]) => id === 'rrMaps').length, 2, 'sampler arrays are never held back');
     // Another program holds its own values: its first bind is always sent.
     const other = uniform('rrLightPos', 0x8B52, 2);
-    renderer.info.programs.push({ getUniforms: () => ({ seq: [other] }) });
+    const second = { getUniforms: () => ({ seq: [other] }) };
+    renderer.info.programs.push(second);
     R.cacheUniformArrays(renderer);
+    second.getUniforms();
     other.setValue(null, pos);
     assert.equal(sent.filter(([id]) => id === 'rrLightPos').length, 3);
     // The kill switch sends every time.

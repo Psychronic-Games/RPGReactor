@@ -29,7 +29,7 @@ function loadShortcutHandler(eventManager, options = {}) {
         }
     };
     const UIManager = vm.runInNewContext(`${source}\nUIManager;`, {
-        console, document, window,
+        console, document, window, ...options.globals,
     });
     new UIManager({ getEventManager: () => eventManager }).setupKeyboardShortcuts();
     return keydownHandler;
@@ -222,11 +222,11 @@ test('object delete shortcuts leave form fields and modal editors alone', () => 
     }
 });
 
-test('modal Delete and Ctrl+X cannot remove a selected prop', () => {
+test('Plugin Manager Delete and Ctrl+X cannot remove a selected prop', () => {
     let removed = 0;
     const reactor = { modelPropsManager: { active: true, selectedId: 1, remove() { removed++; } } };
     const modalHandler = loadShortcutHandler({}, { reactor,
-        getElementById: id => id === 'plugin-manager-modal' ? { style: { display: 'block' } } : null
+        globals: { RRPluginManagerWindow: { ownsKeys: () => true } }
     });
     modalHandler(keyEvent('Delete'));
     const handler = loadShortcutHandler({}, { reactor });
