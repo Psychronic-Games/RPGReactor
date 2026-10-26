@@ -160,15 +160,33 @@ test('pruning a copy removes the same files encrypted or converted, and the fold
     assert.match(Unused.describe(a), /unused files \([\d.]+ MB\) left out/);
 });
 
-test('the deploy choice is off, web or all, Web builds by default, remembered apart for the editor distribution', () => {
+test('Don\'t bundle unused files is a box remembered on or off: a game\'s off until ticked, the editor\'s by package (on for Web)', () => {
     const store = new Map();
     const storage = { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) };
-    assert.equal(Prefs.loadUnusedFiles(storage), 'web');
-    Prefs.saveUnusedFiles('all', storage);
-    assert.equal(Prefs.loadUnusedFiles(storage), 'all');
-    assert.equal(Prefs.loadUnusedFiles(storage, Prefs.DIST_UNUSED_FILES_KEY), 'web');
-    assert.equal(Prefs.normalizeUnusedFiles('nonsense'), 'web');
-    assert.equal(Prefs.normalizeUnusedFiles('off'), 'off');
+    assert.equal(Prefs.loadUnusedFiles(storage), false);
+    Prefs.saveUnusedFiles(true, storage);
+    assert.equal(Prefs.loadUnusedFiles(storage), true);
+    const web = Prefs.distUnusedFilesKey('web'), desktop = Prefs.distUnusedFilesKey('platform');
+    assert.notEqual(web, desktop);
+    assert.equal(Prefs.loadUnusedFiles(storage, web, true), true, 'Web packages start on');
+    assert.equal(Prefs.loadUnusedFiles(storage, desktop, false), false, 'desktop packages start off');
+    Prefs.saveUnusedFiles(false, storage, web);
+    assert.equal(Prefs.loadUnusedFiles(storage, web, true), false, 'and keep what was chosen');
+    // A choice saved by the earlier dropdown carries over.
+    for (const [old, expected] of [['all', true], ['off', false], ['web', true]]) {
+        store.set('old', old);
+        assert.equal(Prefs.loadUnusedFiles(storage, 'old', true), expected, old);
+    }
+});
+
+test('both dialogs show one box, and a ticked box leaves unused files out of everything that build makes', () => {
+    for (const file of ['BuildManager.js', 'DistEditorManager.js']) {
+        const source = fs.readFileSync(path.join(editor, 'src', file), 'utf8');
+        assert.match(source, /id="(build|dist)-unused-files" type="checkbox"/, file);
+        assert.match(source, /tt\("Don't bundle unused files"\)/, file);
+        assert.match(source, /\? 'all' : 'off'/, file);
+        assert.doesNotMatch(source, /Unused files, in Web builds/, file);
+    }
 });
 
 test('both deployments prune with the analysis, and never ship the record or the list', () => {

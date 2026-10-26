@@ -173,14 +173,10 @@ class BuildManager {
 
                             <div style="margin-top: 20px;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Unused Files')}</h3>
-                                <div style="display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
-                                    <label for="build-unused-files" style="color: var(--color-text-muted); font-size: 11px;">${tt('Leave out')}</label>
-                                    <select id="build-unused-files" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
-                                        <option value="off">${tt('Nothing: ship every file')}</option>
-                                        <option value="web">${tt('Unused files, in Web builds')}</option>
-                                        <option value="all">${tt('Unused files, in every build')}</option>
-                                    </select>
-                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                    <input id="build-unused-files" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt("Don't bundle unused files")}</span>
+                                </label>
                                 <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('A picture, sound, movie, effect, model or font is left out only when nothing names it: the database, maps and events, plugin parameters, the code of the plugins switched on, and what playtests loaded.')}</div>
                                 <button id="build-unused-review" class="graphic-selector-button" style="margin-top: 8px; padding: 6px 14px; font-size: 12px;">${tt('Review unused files...')}</button>
                                 <div id="build-unused-panel" style="display: none; margin-top: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px;">
@@ -371,11 +367,11 @@ class BuildManager {
         audio.addEventListener('change', save);
     }
 
-    /** Leave out unused files: off, web (Web builds only) or all; remembered between deployments. */
+    /** Don't bundle unused files: every platform of the build, remembered between deployments. */
     setupUnusedFileOptions() {
-        const select = document.getElementById('build-unused-files');
-        select.value = DeploymentAssetPreferences.loadUnusedFiles();
-        select.addEventListener('change', () => DeploymentAssetPreferences.saveUnusedFiles(select.value));
+        const box = document.getElementById('build-unused-files');
+        box.checked = DeploymentAssetPreferences.loadUnusedFiles();
+        box.addEventListener('change', () => DeploymentAssetPreferences.saveUnusedFiles(box.checked));
         document.getElementById('build-unused-review').addEventListener('click', () => {
             const panel = document.getElementById('build-unused-panel');
             const opening = panel.style.display === 'none';
@@ -787,8 +783,7 @@ class BuildManager {
         const assetEncryption = this.encryptionSettings();
         const createLinuxAppImage = document.getElementById('build-create-linux-appimage').checked;
         const packWebFiles = platforms.includes('web') && document.getElementById('build-pack-files').checked;
-        const unusedChoice = document.getElementById('build-unused-files')?.value;
-        const unusedFiles = unusedChoice === 'off' || unusedChoice === 'all' ? unusedChoice : 'web';
+        const unusedFiles = document.getElementById('build-unused-files')?.checked ? 'all' : 'off';
 
         this.isBuilding = true;
         document.getElementById('build-start-btn').style.display = 'none';

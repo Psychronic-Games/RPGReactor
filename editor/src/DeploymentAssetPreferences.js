@@ -45,21 +45,24 @@ class DeploymentAssetPreferences {
 
     static get UNUSED_FILES_KEY() { return 'rpg-reactor.deployUnusedFiles'; }
 
-    /** Which builds leave out unused files: 'off', 'web' (Web builds only, the default) or 'all'. */
-    static normalizeUnusedFiles(value) {
-        return value === 'off' || value === 'all' ? value : 'web';
+    /** The editor's own distribution remembers its choice for each kind of package (web, platform, minimal). */
+    static distUnusedFilesKey(packageType) { return 'rpg-reactor.distUnusedFiles.' + (packageType || 'platform'); }
+
+    /**
+     * Don't bundle unused files: on or off, `fallback` until chosen. A choice saved by the earlier
+     * dropdown carries over: "every build" is on, "nothing" off, "Web builds" the fallback.
+     */
+    static loadUnusedFiles(storage = localStorage, key = this.UNUSED_FILES_KEY, fallback = false) {
+        try {
+            const value = storage.getItem(key);
+            if (value === '1' || value === 'all') return true;
+            if (value === '0' || value === 'off') return false;
+            return !!fallback;
+        } catch { return !!fallback; }
     }
 
-    /** The editor's own distribution (its bundled Demo) remembers its choice apart from a game's. */
-    static get DIST_UNUSED_FILES_KEY() { return 'rpg-reactor.distUnusedFiles'; }
-
-    static loadUnusedFiles(storage = localStorage, key = this.UNUSED_FILES_KEY) {
-        try { return this.normalizeUnusedFiles(storage.getItem(key)); }
-        catch { return 'web'; }
-    }
-
-    static saveUnusedFiles(value, storage = localStorage, key = this.UNUSED_FILES_KEY) {
-        try { storage.setItem(key, this.normalizeUnusedFiles(value)); return true; }
+    static saveUnusedFiles(on, storage = localStorage, key = this.UNUSED_FILES_KEY) {
+        try { storage.setItem(key, on ? '1' : '0'); return true; }
         catch { return false; }
     }
 
