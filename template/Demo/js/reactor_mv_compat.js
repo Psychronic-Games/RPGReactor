@@ -5817,6 +5817,230 @@
                 return base301.call(this, params);
             });
         }
+
+        // Braver 1.6.5's rpg_managers.js and rpg_windows.js edits, and the rest
+        // of its rpg_objects.js and rpg_scenes.js ones. Its plugins extend these
+        // and expect the edit underneath; without it a feature quietly does
+        // nothing (permanent states, the MP cost hook) or the game stops
+        // (DataManager.encode at the challenge hut's passcode counter).
+        var braverGame = function() { return !!global.Braver; };
+
+        // A SHA-256 hex digest of a string of 8-bit characters (BraverRNG's
+        // passcodes are stored hashed). Undefined for wider characters, as
+        // the original returned.
+        if (global.DataManager && typeof DataManager.encode !== "function") {
+            var K = [];
+            (function() {
+                var found = 0;
+                for (var n = 2; found < 64; n++) {
+                    var prime = true;
+                    for (var d = 2; d * d <= n; d++) if (n % d === 0) { prime = false; break; }
+                    if (prime) K[found++] = (Math.pow(n, 1 / 3) % 1) * 4294967296 | 0;
+                }
+            })();
+            DataManager.encode = mark(function(message) {
+                message = String(message);
+                if (/[^\x00-\xff]/.test(message)) return undefined;
+                var h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+                var bytes = [];
+                for (var i = 0; i < message.length; i++) bytes.push(message.charCodeAt(i));
+                var bitLength = bytes.length * 8;
+                bytes.push(0x80);
+                while (bytes.length % 64 !== 56) bytes.push(0);
+                for (var s = 56; s >= 0; s -= 8) bytes.push(s >= 32 ? Math.floor(bitLength / 4294967296) >>> (s - 32) & 255 : bitLength >>> s & 255);
+                var w = new Array(64);
+                var rotr = function(x, n) { return x >>> n | x << (32 - n); };
+                for (var block = 0; block < bytes.length; block += 64) {
+                    for (var t = 0; t < 16; t++) w[t] = bytes[block + t * 4] << 24 | bytes[block + t * 4 + 1] << 16 | bytes[block + t * 4 + 2] << 8 | bytes[block + t * 4 + 3];
+                    for (t = 16; t < 64; t++) {
+                        var s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ w[t - 15] >>> 3;
+                        var s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ w[t - 2] >>> 10;
+                        w[t] = w[t - 16] + s0 + w[t - 7] + s1 | 0;
+                    }
+                    var a = h[0], b = h[1], c = h[2], dd = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+                    for (t = 0; t < 64; t++) {
+                        var t1 = hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + (e & f ^ ~e & g) + K[t] + w[t] | 0;
+                        var t2 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + (a & b ^ a & c ^ b & c) | 0;
+                        hh = g; g = f; f = e; e = dd + t1 | 0; dd = c; c = b; b = a; a = t1 + t2 | 0;
+                    }
+                    h[0] = h[0] + a | 0; h[1] = h[1] + b | 0; h[2] = h[2] + c | 0; h[3] = h[3] + dd | 0;
+                    h[4] = h[4] + e | 0; h[5] = h[5] + f | 0; h[6] = h[6] + g | 0; h[7] = h[7] + hh | 0;
+                }
+                return h.map(function(x) { return ("00000000" + (x >>> 0).toString(16)).slice(-8); }).join("");
+            });
+        }
+
+        // A data file a plugin adds with loadWithoutPrefix (GS_QuestSystem)
+        // loads under its own name in a battle or event test too.
+        if (global.DataManager && !DataManager.loadDatabase.__mvModdedCore) {
+            var baseLoadDatabase = DataManager.loadDatabase;
+            DataManager.loadDatabase = mark(function() {
+                var unprefixed = (this._databaseFiles || []).filter(function(file) { return file && file.loadWithoutPrefix; });
+                if (!unprefixed.length) return baseLoadDatabase.apply(this, arguments);
+                var all = this._databaseFiles;
+                this._databaseFiles = all.filter(function(file) { return !(file && file.loadWithoutPrefix); });
+                try { baseLoadDatabase.apply(this, arguments); } finally { this._databaseFiles = all; }
+                for (var i = 0; i < unprefixed.length; i++) this.loadDataFile(unprefixed[i].name, unprefixed[i].src);
+            });
+        }
+
+        // F5 restarts only when the game's own option allows it
+        // (BraverOptionsMenu's optEnableF5ToReload), and always on the error
+        // screen, which tells the player to press it.
+        if (global.SceneManager && !SceneManager.onKeyDown.__mvModdedCore) {
+            var baseKeyDown = SceneManager.onKeyDown;
+            SceneManager.onKeyDown = mark(function(event) {
+                if (event && event.keyCode === 116 && !event.ctrlKey && !event.altKey
+                    && global.ConfigManager && ConfigManager.optEnableF5ToReload === false) {
+                    var crashed = (global.$gameTemp && $gameTemp._gameCrashed)
+                        || (global.Graphics && Graphics._errorPrinter && Graphics._errorPrinter.innerHTML);
+                    if (!crashed) return;
+                }
+                return baseKeyDown.apply(this, arguments);
+            });
+        }
+
+        if (global.Game_BattlerBase) {
+            var GBB = Game_BattlerBase.prototype;
+            // States a plugin grants permanently (BraverPermanentStates) come first.
+            if (!marked(GBB, "states")) {
+                var baseStates = GBB.states;
+                GBB.states = mark(function() {
+                    if (typeof this.addPermanentStatesToBattler !== "function") return baseStates.apply(this, arguments);
+                    var states = [];
+                    this.addPermanentStatesToBattler(states);
+                    for (var i = 0; i < this._states.length; i++) states.push($dataStates[this._states[i]]);
+                    return states;
+                });
+            }
+            // A skill's MP and TP costs are checked apart, so a plugin can change one (BraverMiscFixes).
+            if (typeof GBB.canPaySkillMpCost !== "function") GBB.canPaySkillMpCost = mark(function(skill) { return this._mp >= this.skillMpCost(skill); });
+            if (typeof GBB.canPaySkillTpCost !== "function") GBB.canPaySkillTpCost = mark(function(skill) { return this._tp >= this.skillTpCost(skill); });
+            if (!marked(GBB, "canPaySkillCost")) {
+                var baseCanPay = GBB.canPaySkillCost;
+                GBB.canPaySkillCost = mark(function(skill) {
+                    // The stock check, unless a plugin replaced one of the two.
+                    var mp = this.canPaySkillMpCost, tp = this.canPaySkillTpCost;
+                    if (mp && mp.__mvModdedCore && tp && tp.__mvModdedCore) return baseCanPay.apply(this, arguments);
+                    return this.canPaySkillTpCost(skill) && this.canPaySkillMpCost(skill);
+                });
+            }
+            // The battle's item list keeps items a battler that cannot move could use (Braver).
+            if (!marked(GBB, "meetsUsableItemConditions")) {
+                var baseUsable = GBB.meetsUsableItemConditions;
+                GBB.meetsUsableItemConditions = mark(function(item) {
+                    if (global.$gameTemp && $gameTemp._skip_canMoveCheck) return this.isOccasionOk(item);
+                    return baseUsable.apply(this, arguments);
+                });
+            }
+            // HP, MP and TP stay whole numbers: Braver's formulas give fractions.
+            var whole = function(proto, name) {
+                if (!proto || typeof proto[name] !== "function" || marked(proto, name)) return;
+                var base = proto[name];
+                proto[name] = mark(function(value) {
+                    if (braverGame() && typeof value === "number") arguments[0] = Math.trunc(value);
+                    return base.apply(this, arguments);
+                });
+            };
+            ["setHp", "setMp", "setTp"].forEach(function(name) { whole(GBB, name); });
+            if (global.Game_Battler) ["gainHp", "gainMp", "gainTp", "gainSilentTp"].forEach(function(name) { whole(Game_Battler.prototype, name); });
+            if (global.Game_Action && !marked(Game_Action.prototype, "executeDamage")) {
+                var baseExecuteDamage = Game_Action.prototype.executeDamage;
+                Game_Action.prototype.executeDamage = mark(function(target, value) {
+                    if (braverGame() && typeof value === "number") value = Math.trunc(value);
+                    return baseExecuteDamage.call(this, target, value);
+                });
+            }
+        }
+        if (global.Window_BattleItem && !marked(Window_BattleItem.prototype, "includes")) {
+            var baseIncludes = Window_BattleItem.prototype.includes;
+            Window_BattleItem.prototype.includes = mark(function(item) {
+                if (!braverGame() || !global.$gameTemp) return baseIncludes.apply(this, arguments);
+                $gameTemp._skip_canMoveCheck = true;
+                try { return baseIncludes.apply(this, arguments); } finally { $gameTemp._skip_canMoveCheck = undefined; }
+            });
+        }
+        // An actor's base parameter reads the level through level(), which plugins scale (Braver).
+        if (global.Game_Actor && !marked(Game_Actor.prototype, "paramBase")) {
+            var baseParamBase = Game_Actor.prototype.paramBase;
+            Game_Actor.prototype.paramBase = mark(function(paramId) {
+                if (!braverGame()) return baseParamBase.apply(this, arguments);
+                return this.currentClass().params[paramId][this.level];
+            });
+        }
+        // A spawn item used up stays listed at none (BraverSort's spawn items menu).
+        if (global.Game_Party && !marked(Game_Party.prototype, "gainItem")) {
+            var baseGainItem = Game_Party.prototype.gainItem;
+            Game_Party.prototype.gainItem = mark(function(item) {
+                var container = item && this.itemContainer(item);
+                var had = !!container && Object.prototype.hasOwnProperty.call(container, item.id);
+                baseGainItem.apply(this, arguments);
+                if (had && container && !Object.prototype.hasOwnProperty.call(container, item.id)
+                    && typeof DataManager.isSpawnItem === "function" && DataManager.isSpawnItem(item)) {
+                    container[item.id] = 0;
+                }
+            });
+        }
+        // A troop page that starts running marks the battle as scripted (BraverCTBRoundIndicator).
+        if (global.Game_Troop && !marked(Game_Troop.prototype, "setupBattleEvent")) {
+            var baseSetupBattleEvent = Game_Troop.prototype.setupBattleEvent;
+            Game_Troop.prototype.setupBattleEvent = mark(function() {
+                var wasRunning = this._interpreter && this._interpreter.isRunning();
+                var result = baseSetupBattleEvent.apply(this, arguments);
+                if (!wasRunning && this._interpreter && this._interpreter.isRunning() && global.BattleManager) BattleManager._troopScriptedEvent = true;
+                return result;
+            });
+        }
+        // Leaving the map for Battle Prep is leaving it for a battle: the encounter flash and the battle start.
+        if (global.Scene_Map && global.SceneManager && !marked(Scene_Map.prototype, "update")) {
+            var prepAsBattle = 0;
+            var baseIsNextScene = SceneManager.isNextScene;
+            SceneManager.isNextScene = function(sceneClass) {
+                if (prepAsBattle && sceneClass === global.Scene_Battle && typeof global.Scene_BattlePrep === "function"
+                    && baseIsNextScene.call(this, global.Scene_BattlePrep)) return true;
+                return baseIsNextScene.apply(this, arguments);
+            };
+            ["update", "stop"].forEach(function(name) {
+                var base = Scene_Map.prototype[name];
+                Scene_Map.prototype[name] = mark(function() {
+                    prepAsBattle++;
+                    try { return base.apply(this, arguments); } finally { prepAsBattle--; }
+                });
+            });
+        }
+        // An item used on the whole party reaches its user last (Braver).
+        if (global.Scene_ItemBase && !marked(Scene_ItemBase.prototype, "applyItem")) {
+            var baseApplyItem = Scene_ItemBase.prototype.applyItem;
+            Scene_ItemBase.prototype.applyItem = mark(function() {
+                if (!braverGame()) return baseApplyItem.apply(this, arguments);
+                var user = this.user(), targets = this.itemTargetActors;
+                this.itemTargetActors = function() {
+                    return targets.call(this).slice().sort(function(a, b) { return (a === user) - (b === user); });
+                };
+                try { return baseApplyItem.apply(this, arguments); } finally { delete this.itemTargetActors; }
+            });
+        }
+        // Braver's battle skill command goes back to its skill list on cancel.
+        if (global.Scene_Battle && !marked(Scene_Battle.prototype, "onEnemyCancel")) {
+            var baseEnemyCancel = Scene_Battle.prototype.onEnemyCancel;
+            Scene_Battle.prototype.onEnemyCancel = mark(function() {
+                if (this._actorCommandWindow && this._actorCommandWindow.currentSymbol() === "battleSkills" && this._skillWindow) {
+                    this._enemyWindow.hide();
+                    this._skillWindow.show();
+                    this._skillWindow.activate();
+                    return;
+                }
+                return baseEnemyCancel.apply(this, arguments);
+            });
+        }
+        // A window whose cursor covers every item (_cursorAll) takes a touch anywhere on it as the item chosen.
+        if (global.Window_Selectable && !marked(Window_Selectable.prototype, "hitTest")) {
+            var baseHitTest = Window_Selectable.prototype.hitTest;
+            Window_Selectable.prototype.hitTest = mark(function(x, y) {
+                if (this._cursorAll && this.innerRect && this.innerRect.contains(x, y) && this.index() >= 0) return this.index();
+                return baseHitTest.apply(this, arguments);
+            });
+        }
     }
 
     function installPromiseRejectionCompatibility() {
