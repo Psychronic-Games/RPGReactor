@@ -3,6 +3,7 @@
 // the same way, nothing ends up in the skin, the turned hem follows the draped edge, skin weights stay whole,
 // the outfit stays in budget, and the builder's preview stays quick.
 const test = require('node:test'), assert = require('node:assert/strict'), path = require('node:path');
+const { withinBudget } = require('./helpers/timing.cjs');
 const dir = path.resolve(__dirname, '../src/forge/Character3D');
 const Body = require(path.join(dir, 'HumanBody.js')), Outfit = require(path.join(dir, 'CharacterOutfit.js'));
 const Wardrobe = require(path.join(dir, 'CharacterWardrobe.js')), Model = require(path.join(dir, 'CharacterModel.js'));
@@ -118,7 +119,7 @@ test('skin weights stay whole and the builds stay in budget', () => {
     }
 });
 
-test('the builder\'s preview drapes quickly, and again quicker while sliders move', () => {
+test('the builder\'s preview drapes quickly, and again quicker while sliders move', t => {
     fresh();
     const cache = {}, times = [];
     for (let k = 0; k < 3; k++) {
@@ -129,5 +130,6 @@ test('the builder\'s preview drapes quickly, and again quicker while sliders mov
         Drape.trace = null;
     }
     // Generous for slow test machines: a garment's preview drape is ~40-120 ms on a desktop.
-    assert.ok(times[0] < 1500 && times[2] < 900, 'preview drape time ' + times.map(Math.round).join(', ') + ' ms');
+    withinBudget(t, times[0], 1500, 'first preview drape time ' + times.map(Math.round).join(', ') + ' ms');
+    withinBudget(t, times[2], 900, 'later preview drape time ' + times.map(Math.round).join(', ') + ' ms');
 });

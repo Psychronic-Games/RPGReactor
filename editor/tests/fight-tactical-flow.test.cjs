@@ -95,6 +95,8 @@ test('the pace by size and setting: a ten against ten battle is watched unit by 
     const lineup = n => Array.from({ length: n }, (_, i) => unit(i + 1, 8 + (i % 3), 1 + (i % 13), 'enemy 1'));
     const phase = (n, pace) => {
         const w = world({ events: lineup(n), system: pace ? { reactorBattle: { pace } } : {} });
+        // The pace is the subject, not the machine: each unit's thinking finishes in its frame on any computer.
+        w.ReactorFight.AI_BUDGET_MS = 1000;
         w.$dataSkills[1].note = '<range: 1-9>';
         w.$dataSkills[1].damage.formula = '3';
         w.$dataEnemies[1].params[0] = 9000;
