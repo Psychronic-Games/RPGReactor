@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 const vm = require('node:vm');
 const { loadRuntimeTilemap, makeTilemap, PIXI } = require('./helpers/runtime-tilemap.cjs');
 
@@ -656,13 +657,13 @@ test('judging UltraMode7 hooks costs well under a frame', t => {
     const { chunked, b } = pair(testMap(), [['UltraMode7', UM7]]);
     step(chunked, b, 0, 0);
     const C = chunked.Tilemap.ChunkPaint;
-    const started = performance.now();
+    const started = cpuMicros();
     const rounds = 20;
     for (let i = 0; i < rounds; i++) {
         C._verdicts.clear();
         assert.equal(b._rrChunkBlocker(), null);
     }
-    const ms = (performance.now() - started) / rounds;
+    const ms = (cpuMicros() - started) / 1000 / rounds;
     t.diagnostic(`one judgment of the UltraMode7 hooks: ${ms.toFixed(3)} ms`);
-    assert.ok(ms < 8, `${ms} ms`);
+    withinBudget(t, ms, 8, `${ms} ms`);
 });

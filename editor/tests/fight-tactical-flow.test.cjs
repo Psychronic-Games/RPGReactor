@@ -138,6 +138,8 @@ test('the pace by size and setting: a ten against ten battle is watched unit by 
 test('the normal pace: units that only close in far from the party walk together off to the side, the view stays theirs only while no turn is watched; a walk near the party is watched', () => {
     const far = [unit(1, 17, 2, 'enemy 1'), unit(2, 17, 4, 'enemy 1'), unit(3, 17, 6, 'enemy 1'), unit(4, 17, 8, 'enemy 1')];
     let w = world({ events: far });
+    // The pace is the subject, not the machine: each unit's thinking finishes in its frame on any computer.
+    w.ReactorFight.AI_BUDGET_MS = 1000;
     let fight = begin(w);
     const F = w.ReactorFight;
     let aside = 0, movers = 0, shown = 0, followed = true;

@@ -67,6 +67,7 @@ test('an enemy whose watched walk the battle\'s end cuts short keeps neither the
 test('a battle that ends while actions play side by side tells the stage every one of them is over', () => {
     const lineup = Array.from({ length: 16 }, (_, i) => unit(i + 1, 8 + (i % 2), 1 + (i % 13), 'enemy 1'));
     const w = world({ events: lineup, system: { reactorBattle: { pace: 'fast' } } }), F = w.ReactorFight;
+    F.AI_BUDGET_MS = 1000; // the pace is the subject, not the machine
     w.$dataSkills[1].note = '<range: 1-9>';
     w.$dataSkills[1].damage.formula = '5';
     const begun = new Set(), ended = new Set();

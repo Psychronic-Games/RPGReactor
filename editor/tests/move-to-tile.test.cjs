@@ -61,6 +61,8 @@ test('an event walks to the tile round a wall; the route waits on the step and t
     // A wall 30 tiles long between the event and its goal, 40 tiles away as the crow flies.
     const w = followerWorld({ width: 70, height: 50, walls: [[30, 5, 30, 34]], start: [2, 2], events: [still(1, 10, 20)] });
     const walker = w.$gameMap.event(1);
+    // The walk's frames are the subject: the search opens its fixed count of tiles a frame, not what fits in 1.5 ms.
+    w.Game_Character.WALK_SLICE_MS = 0;
     const searches = countSearches(w);
     let walled = 0, early = false, steps = 0, last = '10,20';
     const frames = runList(w, [setRoute(1, [moveTo(50, 20), { code: 27, parameters: [3] }, { code: 16 }]), switchOn(4)], {

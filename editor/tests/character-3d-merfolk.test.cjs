@@ -326,9 +326,10 @@ test('budgets: triangles, pictures, clip keys and build time stay small', t => {
     }
     const keys = result.clips.reduce((s, c) => s + c.tracks.reduce((q, t) => q + t.values.length, 0), 0);
     assert.ok(keys * 4 < 1.5e6, 'clip data ' + Math.round(keys * 4 / 1024) + ' KB');
-    const t2 = Date.now();
+    const t2 = cpuMicros();
     Mer.clips(result.bones, result.recipe, result.built, pack, 0.3);
-    assert.ok(Date.now() - t2 < 400, 'baking every clip takes ' + (Date.now() - t2) + ' ms');
+    const bakeMs = Math.round((cpuMicros() - t2) / 1000);
+    withinBudget(t, bakeMs, 400, 'baking every clip takes ' + bakeMs + ' ms');
 });
 
 test('every label the merfolk controls and poses show is translated into all 17 languages', () => {

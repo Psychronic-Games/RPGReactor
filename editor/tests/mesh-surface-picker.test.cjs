@@ -2,6 +2,7 @@
 // inside/outside, and "the middle of the flesh under this ray" quickly enough
 // to snap a dragged rig marker on every pointer move.
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 const assert = require('node:assert');
 const path = require('node:path');
 
@@ -56,7 +57,7 @@ test('inside answers by crossing parity along three axes, so a stray open seam d
     assert.ok(!both.inside(0.3, 0.2, 1), 'outside despite the sheet');
 });
 
-test('a skinned mesh is read as posed and the tree stays fast on a large mesh', () => {
+test('a skinned mesh is read as posed and the tree stays fast on a large mesh', tc => {
     // A tall box skinned to one bone, then the bone slid sideways.
     const geometry = new THREE.BoxGeometry(0.2, 1, 0.2, 1, 40, 1);
     const count = geometry.getAttribute('position').count;
@@ -74,15 +75,15 @@ test('a skinned mesh is read as posed and the tree stays fast on a large mesh', 
     assert.ok(picker.inside(2, 0, 0), 'the box moved with its bone');
     assert.ok(!picker.inside(0, 0, 0), 'and left its rest place');
     const big = new THREE.Mesh(new THREE.SphereGeometry(1, 400, 200));
-    const started = performance.now();
+    const started = cpuMicros();
     const large = build(big, THREE);
-    const built = performance.now() - started;
+    const built = (cpuMicros() - started) / 1000;
     assert.ok(large.count > 150000, `${large.count} triangles`);
-    const t = performance.now();
+    const t = cpuMicros();
     for (let i = 0; i < 200; i++) large.raycast(-3, 0.001 * i, 0.002 * i, 1, 0, 0);
-    const perRay = (performance.now() - t) / 200;
-    assert.ok(perRay < 2, `a ray through ${large.count} triangles took ${perRay.toFixed(2)}ms`);
-    assert.ok(built < 3000, `built in ${built.toFixed(0)}ms`);
+    const perRay = (cpuMicros() - t) / 1000 / 200;
+    withinBudget(tc, perRay, 2, `a ray through ${large.count} triangles took ${perRay.toFixed(2)}ms`);
+    withinBudget(tc, built, 3000, `built in ${built.toFixed(0)}ms`);
 });
 
 test('an empty object yields no picker and an empty tree answers nothing', () => {
