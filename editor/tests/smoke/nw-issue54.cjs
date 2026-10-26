@@ -51,10 +51,17 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
         const result = await driver.executeAsync(setup, [{ theme: option('theme') || 'dark', language: option('language') || 'en' }]);
         if (!process.argv.includes('--probe')) {
             for (const count of [4, 40]) {
-                await driver.executeAsync(`const done=arguments[arguments.length-1],host=document.createElement('div');
+                await driver.execute(`const host=document.createElement('div');
                     host.id='physical-dropdown';host.style.cssText='position:fixed;top:24px;left:24px;z-index:99999;width:250px;';
                     host.innerHTML='<select>'+Array.from({length:arguments[0]},(_,i)=>'<option value="'+i+'"'+(i===1?' disabled':'')+'>'+i+'</option>').join('')+'</select>';
-                    document.body.appendChild(host);setTimeout(()=>{host.querySelector('.rr-shim-trigger').click();setTimeout(()=>done(true),50);},50);`, [count]);
+                    document.body.appendChild(host);`, [count]);
+                // Waited for, not timed: on a runner drawing in software the shim wraps the select and the popup
+                // takes its focus later than 50 ms, and an arrow key that reaches the page first scrolls it,
+                // which closes the popup.
+                await driver.waitForScript('return !!document.querySelector("#physical-dropdown .rr-shim-trigger");', [], { timeout: 10000, description: 'the dropdown wrapped' });
+                await driver.execute('document.querySelector("#physical-dropdown .rr-shim-trigger").click();');
+                await driver.waitForScript('const popup=document.querySelector(".rr-shim-popup");return !!popup&&popup.contains(document.activeElement);', [], { timeout: 10000, description: 'the dropdown open with the focus' });
+                await driver.executeAsync('const done=arguments[arguments.length-1];setTimeout(()=>done(true),0);');
                 const down = async value => driver.sessionRequest('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [
                     { type: 'keyDown', value }, { type: 'keyUp', value }
                 ] }] });
