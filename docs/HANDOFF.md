@@ -7,7 +7,7 @@ An entry holds only what the next session needs and cannot find elsewhere: what 
 ## Where things stand (2026-10-26)
 
 - **0.99.2** shipped 2026-10-25 (runtime 20261025.11); the release commit and `v0.99.2` were made by hand on the 26th after `cut-release.cjs` refused on local failures. **0.99.3** is open at runtime **20261026.2**.
-- **CI:** branch `ci-shards` (sharded suite, six-way preset sweep, CPU-time budgets, Tactical pacing tests, WebDriver script timeout, the dropdown smoke). Run 2: every Node part green, the GUI job failed once (fixed). Merge into `main` only after a fully green run; never call CI fixed before GitHub shows it.
+- **CI:** green on GitHub for the `ci-shards` branch twice running (runs 40393131259, 40394416177), merged into `main` on 2026-10-26; `main` with today's other commits has not run on GitHub yet. New tests that time work, count what fits in a frame or wait on async work follow the patterns in STATUS › CI, or CI goes red again on the runner's speed.
 - **Unused files** (deploy option, game and editor) and the **playtest record** are in; the Demo's web build is under itch's limits without hand trimming. Follow-up: a Demo playtest with the record on, so the record is committed with the Demo.
 - **Braver** (template/Project4): its edited `rpg_managers.js` and the rest of `rpg_objects`/`rpg_scenes`/`rpg_windows` are ported in `reactor_mv_compat.js`. Other imported MV games may carry core edits too: comparing a project's `rpgmaker-runtime-backup.zip` against stock MV is how this one was found.
 - **Uncommitted:** the face expressions toned toward natural (`CharacterExpressions.js` and its test), not yet rendered for the owner.
