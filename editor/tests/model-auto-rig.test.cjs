@@ -6,6 +6,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const ModelRigger = require(path.join(__dirname, '..', 'src', 'database', 'ModelRigger.js'));
 global.ModelRigger = ModelRigger;
@@ -178,14 +179,14 @@ function figure() {
     return { triangles: Float32Array.from(t), joints };
 }
 
-test('a figure without a skeleton: its limbs, hands and every finger from its shape, the thumb told apart', () => {
+test('a figure without a skeleton: its limbs, hands and every finger from its shape, the thumb told apart', tc => {
     const { triangles, joints } = figure();
-    const started = Date.now();
+    const started = cpuMicros();
     const result = Auto.autoMarkers({ triangles, joints: [], size: { x: 1.8, y: 1.8, z: 0.34 } });
-    const took = Date.now() - started;
+    const took = Math.round((cpuMicros() - started) / 1000);
     assert.equal(result.humanoid, true);
     assert.equal(result.fromSkeleton, false);
-    assert.ok(took < 1500, `fast enough (${took} ms)`);
+    withinBudget(tc, took, 1500, `fast enough (${took} ms)`);
     const m = result.markers, H = 1.8;
     for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
         const want = joints[s];

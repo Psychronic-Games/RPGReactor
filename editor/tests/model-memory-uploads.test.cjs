@@ -311,7 +311,8 @@ test('the finger skin is worked out in a worker, the same skin the main thread m
         R.applyModelRig(model.root, model.rig);
         assert.ok(skinOf(model.root)[0].every(v => v <= 1), 'until the worker answers: the hand\'s own skin');
         assert.equal(fake.made.length, 1);
-        await sleep(20);
+        // Until the worker answers: on a slow runner later than any fixed wait.
+        for (const end = Date.now() + 5000; Date.now() < end && !skinOf(model.root)[0].some(v => v > 1);) await sleep(10);
         assert.deepEqual(skinOf(model.root), expected, 'then the skin the main thread would have made');
         // A second copy of the same rig takes the worked-out skin with no new job.
         const twin = fingerModel(); twin.rig.weights[0] = model.rig.weights[0];

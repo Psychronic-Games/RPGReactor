@@ -4,6 +4,9 @@ const done = arguments[arguments.length - 1];
     const checks = [], failures = [];
     const check = (name, ok, detail) => { checks.push(name); if (!ok) failures.push({ name, detail }); };
     const wait = (ms = 50) => new Promise(resolve => setTimeout(resolve, ms));
+    // Waits for a state, up to a limit: a popup opens and takes its focus a tick after the key that asked,
+    // later than a fixed wait on a runner drawing in software.
+    const until = async (condition, ms = 3000) => { const end = performance.now() + ms; while (!condition() && performance.now() < end) await wait(16); return condition(); };
     const key = (target, name) => {
         const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
         target.dispatchEvent(event); return event.defaultPrevented;
@@ -156,8 +159,10 @@ const done = arguments[arguments.length - 1];
     await section('shared dropdowns', async () => {
         const host = document.createElement('div'); host.style.cssText = 'position:fixed;top:30px;left:30px;z-index:99999;width:280px;';
         host.innerHTML = '<select id="issue54-select"><option>A</option><option disabled>B</option><option>C</option><option>D</option></select>';
-        document.body.appendChild(host); await wait();
-        host.querySelector('.rr-shim-trigger').click(); await wait();
+        document.body.appendChild(host); await until(() => host.querySelector('.rr-shim-trigger'));
+        host.querySelector('.rr-shim-trigger').click();
+        await until(() => document.querySelector('.rr-shim-popup')?.contains(document.activeElement));
+        await wait(0); // the popup arms its keys a tick after it takes the focus
         const popup = document.querySelector('.rr-shim-popup');
         check('short dropdown owns keyboard focus', popup.contains(document.activeElement));
         check('dropdown arrow is consumed', key(document.activeElement, 'ArrowDown'));
@@ -165,9 +170,11 @@ const done = arguments[arguments.length - 1];
         check('dropdown skips disabled options', popup.querySelector('[aria-selected="true"]')?.dataset.optionIndex === '2');
         key(document.activeElement, 'Enter');
         check('Enter commits dropdown choice', host.querySelector('select').value === 'C' && !popup.isConnected);
-        host.querySelector('select').focus(); key(document.activeElement, 'ArrowDown'); await wait();
-        check('keyboard can reopen themed dropdown', !!document.querySelector('.rr-shim-popup'));
-        key(document.activeElement, 'Escape'); check('Escape restores select focus', document.activeElement === host.querySelector('select'));
+        host.querySelector('select').focus(); key(document.activeElement, 'ArrowDown');
+        check('keyboard can reopen themed dropdown', await until(() => document.querySelector('.rr-shim-popup')?.contains(document.activeElement)));
+        await wait(0);
+        key(document.activeElement, 'Escape');
+        check('Escape restores select focus', await until(() => document.activeElement === host.querySelector('select')));
         const search = RRSearchSelect.create({ groups: [{ label: 'Choices', items: [{ id: 'a', label: 'Alpha' }, { id: 'b', label: 'Beta' }] }], value: 'a', onChange: id => host.dataset.picked = id });
         host.appendChild(search.element); search.element.querySelector('button').click(); await wait();
         key(document.activeElement, 'ArrowDown'); key(document.activeElement, 'ArrowDown'); key(document.activeElement, 'Enter');

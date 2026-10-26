@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 const vm = require('node:vm');
 
 const editorRoot = path.resolve(__dirname, '..');
@@ -162,21 +163,21 @@ test('the index rebuilds only stale groups and narrows a growing query', () => {
     assert.equal(index.search('innkeeper').length, 0);
 });
 
-test('index and search speed on a large project', () => {
+test('index and search speed on a large project', tc => {
     const bigMap = { events: [null] };
     for (let id = 1; id <= 400; id++) {
         bigMap.events.push({ id, name: `NPC ${id}`, x: 0, y: 0, pages: [{ list: [...message(`Line ${id} of the story`, ['more text', 'and more']), end] }] });
     }
     const index = new GS.SearchIndex();
     for (let m = 1; m <= 50; m++) index.set(`map:${m}`, GS.mapEventEntries(m, `Map ${m}`, bigMap));
-    const t0 = performance.now();
+    const t0 = cpuMicros();
     index.search('story');
-    const t1 = performance.now();
+    const t1 = cpuMicros();
     index.search('story of');
-    const t2 = performance.now();
+    const t2 = cpuMicros();
     assert.ok(index.size >= 40000);
-    assert.ok(t1 - t0 < 250, `full search took ${t1 - t0}ms`);
-    assert.ok(t2 - t1 < 250, `narrowed search took ${t2 - t1}ms`);
+    withinBudget(tc, (t1 - t0) / 1000, 250, `full search took ${(t1 - t0) / 1000}ms`);
+    withinBudget(tc, (t2 - t1) / 1000, 250, `narrowed search took ${(t2 - t1) / 1000}ms`);
 });
 
 /** The editor half, in a context with stand-ins for the window and the editor's managers. */

@@ -6,6 +6,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const root = path.join(__dirname, '..');
 const dir = path.join(root, 'src', 'forge', 'Character3D');
@@ -178,11 +179,12 @@ test('switching to and from Slimefolk leaves nothing of the other behind', () =>
     assert.equal(Model.random(4, { species: 'slimefolk' }).plan, 'slime');
 });
 
-test('a color, the translucency or the glow make no new mesh', () => {
+test('a color, the translucency or the glow make no new mesh', tc => {
     const a = Model.build(pack, { plan: 'slime', form: 0.3 }, {}, { quality: 'preview' });
-    const t0 = Date.now();
+    const t0 = cpuMicros();
     const b = Model.build(pack, { plan: 'slime', form: 0.3, color: '#e8a030', core: '#fff2a0', translucency: 0.9, glow: 1 }, {}, { quality: 'preview' });
-    assert.ok(Date.now() - t0 < 200, 'a recolor is quick');
+    const recolorMs = Math.round((cpuMicros() - t0) / 1000);
+    withinBudget(tc, recolorMs, 200, 'a recolor is quick: ' + recolorMs + ' ms');
     const ga = a.parts.find(p => p.name === 'Goo'), gb = b.parts.find(p => p.name === 'Goo');
     assert.deepEqual(Array.from(gb.positions.slice(0, 300)), Array.from(ga.positions.slice(0, 300)));
     assert.notDeepEqual(Array.from(b.textures['goo.png'].data.slice(0, 64)), Array.from(a.textures['goo.png'].data.slice(0, 64)));
@@ -301,9 +303,9 @@ test('Talk opens the mouth on each syllable, the goo swelling with it; the melt 
     }
 });
 
-test('while a slider is dragged a coarse goo is quick; once let go the whole one comes, and a draft never replaces what the view has', () => {
-    const draftT = Date.now(), draft = Model.build(pack, { plan: 'slime', form: 0.77 }, {}, { quality: 'preview', draft: true });
-    const draftMs = Date.now() - draftT;
+test('while a slider is dragged a coarse goo is quick; once let go the whole one comes, and a draft never replaces what the view has', tc => {
+    const draftT = cpuMicros(), draft = Model.build(pack, { plan: 'slime', form: 0.77 }, {}, { quality: 'preview', draft: true });
+    const draftMs = Math.round((cpuMicros() - draftT) / 1000);
     const full = Model.build(pack, { plan: 'slime', form: 0.77 }, {}, { quality: 'preview' });
     assert.ok(triangles(draft) < triangles(full) * 0.6, 'coarser ' + triangles(draft) + ' / ' + triangles(full));
     assertSound(draft, 'draft');
@@ -312,5 +314,5 @@ test('while a slider is dragged a coarse goo is quick; once let go the whole one
     // The whole shape known: a draft build (a color dragged) uses it.
     const again = Model.build(pack, { plan: 'slime', form: 0.77, color: '#3c78e8' }, {}, { quality: 'preview', draft: true });
     assert.equal(triangles(again), triangles(full));
-    assert.ok(draftMs < 400, 'draft ' + draftMs + ' ms');
+    withinBudget(tc, draftMs, 400, 'draft ' + draftMs + ' ms');
 });

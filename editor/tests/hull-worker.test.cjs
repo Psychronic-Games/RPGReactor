@@ -180,8 +180,11 @@ test('a worker that never answers is waited for no longer than WAIT_MS: the heig
     heldWorkers(w);
     const spec = { model: 'tank', size: 3 };
     w.Reactor3D._glbCache.tank = { template: MODELS['boxes, a nested group and a mesh with no index']() };
-    A.HullWorker.WAIT_MS = 0;
+    // Asked with a wait it is inside of (the check runs as the job is made: a limit of 0 was passed by the
+    // millisecond a slow runner takes to make it), then the limit is gone.
+    A.HullWorker.WAIT_MS = 60000;
     assert.equal(A.hullOf(w.Reactor3D, spec), A.HULL_PENDING);
+    A.HullWorker.WAIT_MS = 0;
     const until = Date.now() + 5; while (Date.now() < until) { /* past the wait */ }
     assert.equal(A.hullsPending(), 0);
     assert.ok(A.hullOf(w.Reactor3D, spec) && A.hullOf(w.Reactor3D, spec) !== A.HULL_PENDING);

@@ -6,6 +6,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
+const { withinBudget } = require('./helpers/timing.cjs');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 global.self = global; global.window = global;
@@ -746,12 +747,12 @@ test('the point inside the tile is the picked one, for a tile named through a ro
     assert.ok(Math.abs(tile.localX - 12) < 0.5 && Math.abs(tile.localY - 36) < 0.5, `a quarter in, three quarters down (got ${tile.localX}, ${tile.localY})`);
 });
 
-test('a ray that is no ray ends the walk at once', () => {
+test('a ray that is no ray ends the walk at once', t => {
     const map = mapOf(200, 200);
     const started = process.hrtime.bigint();
     assert.equal(MapEditor3D.standCrossing(map, new THREE.Vector3(NaN, 5, 5), new THREE.Vector3(0.6, -0.5, 0.6).normalize(), 0), null);
     assert.equal(MapEditor3D.standCrossing(map, new THREE.Vector3(5, 5, 5), new THREE.Vector3(NaN, NaN, NaN), 0), null);
-    assert.ok(Number(process.hrtime.bigint() - started) / 1e6 < 100, 'within the cells a map can hold');
+    withinBudget(t, Number(process.hrtime.bigint() - started) / 1e6, 100, 'within the cells a map can hold');
 });
 
 test('something whose top stands over the height read for its cell is still the cell under the pointer', () => {

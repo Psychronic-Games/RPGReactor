@@ -63,6 +63,7 @@ class WebDriverClient {
         this.driverArgs = options.driverArgs || [];
         this.process = null;
         this.sessionId = null;
+        this.scriptTimeout = 30000;
         this.output = '';
         this.spawnError = null;
     }
@@ -96,7 +97,7 @@ class WebDriverClient {
         return this;
     }
 
-    request(method, endpoint, body) {
+    request(method, endpoint, body, waitMs = 0) {
         return new Promise((resolve, reject) => {
             const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
             const request = http.request({
@@ -131,7 +132,10 @@ class WebDriverClient {
             });
             request.once('error', reject);
             // RR_WEBDRIVER_REQUEST_MS: a longer limit for one request (a profile that samples for a minute).
-            request.setTimeout(Number(process.env.RR_WEBDRIVER_REQUEST_MS) || 30000, () => request.destroy(new Error('WebDriver request timed out')));
+            // A script request waits as long as the page may run it: a CI runner drawing in software takes
+            // longer than 30 s to open a project, and the script timeout, not the socket, should decide.
+            const limit = Math.max(Number(process.env.RR_WEBDRIVER_REQUEST_MS) || 30000, waitMs + 15000);
+            request.setTimeout(limit, () => request.destroy(new Error(`WebDriver ${method} ${endpoint} got no answer in ${limit} ms`)));
             if (payload) request.write(payload);
             request.end();
         });
@@ -175,7 +179,8 @@ class WebDriverClient {
 
     sessionRequest(method, endpoint, body) {
         if (!this.sessionId) throw new Error('No WebDriver session is active');
-        return this.request(method, `/session/${encodeURIComponent(this.sessionId)}${endpoint}`, body);
+        const waitMs = /^\/execute\//.test(endpoint) ? this.scriptTimeout : 0;
+        return this.request(method, `/session/${encodeURIComponent(this.sessionId)}${endpoint}`, body, waitMs);
     }
 
     navigate(url) {
@@ -190,8 +195,9 @@ class WebDriverClient {
         return this.sessionRequest('POST', '/execute/async', { script, args });
     }
 
-    setScriptTimeout(milliseconds) {
-        return this.sessionRequest('POST', '/timeouts', { script: milliseconds });
+    async setScriptTimeout(milliseconds) {
+        await this.sessionRequest('POST', '/timeouts', { script: milliseconds });
+        this.scriptTimeout = milliseconds;
     }
 
     async waitForScript(script, args = [], options = {}) {

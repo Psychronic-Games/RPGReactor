@@ -95,6 +95,8 @@ test('the pace by size and setting: a ten against ten battle is watched unit by 
     const lineup = n => Array.from({ length: n }, (_, i) => unit(i + 1, 8 + (i % 3), 1 + (i % 13), 'enemy 1'));
     const phase = (n, pace) => {
         const w = world({ events: lineup(n), system: pace ? { reactorBattle: { pace } } : {} });
+        // The pace is the subject, not the machine: each unit's thinking finishes in its frame on any computer.
+        w.ReactorFight.AI_BUDGET_MS = 1000;
         w.$dataSkills[1].note = '<range: 1-9>';
         w.$dataSkills[1].damage.formula = '3';
         w.$dataEnemies[1].params[0] = 9000;
@@ -136,6 +138,8 @@ test('the pace by size and setting: a ten against ten battle is watched unit by 
 test('the normal pace: units that only close in far from the party walk together off to the side, the view stays theirs only while no turn is watched; a walk near the party is watched', () => {
     const far = [unit(1, 17, 2, 'enemy 1'), unit(2, 17, 4, 'enemy 1'), unit(3, 17, 6, 'enemy 1'), unit(4, 17, 8, 'enemy 1')];
     let w = world({ events: far });
+    // The pace is the subject, not the machine: each unit's thinking finishes in its frame on any computer.
+    w.ReactorFight.AI_BUDGET_MS = 1000;
     let fight = begin(w);
     const F = w.ReactorFight;
     let aside = 0, movers = 0, shown = 0, followed = true;

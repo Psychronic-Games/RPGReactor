@@ -6,6 +6,7 @@
  * procedural motions are left for the states the library has none for (idle, riding).
  */
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -200,7 +201,7 @@ test('the file\'s other joints hold their rest through a library motion, and the
     assert.ok(top.quaternion.angleTo(rest) < 1e-4);
 });
 
-test('a jump keeps its time in the air and leaves the flight to the game; the library is cheap to make', () => {
+test('a jump keeps its time in the air and leaves the flight to the game; the library is cheap to make', tc => {
     const object = plainModel();
     const skeleton = libraryClips(object)[0].__reactorLibrary.skeleton;
     const bones = skeleton.joints.map(joint => ({ name: joint.name, parent: joint.parent, head: joint.head }));
@@ -211,9 +212,9 @@ test('a jump keeps its time in the air and leaves the flight to the game; the li
     const hips = jump.tracks.find(track => track.path === 'translation');
     const rise = Math.max(...Array.from({ length: hips.values.length / 3 }, (_, f) => hips.values[f * 3 + 1])) - bones[0].head[1];
     assert.ok(rise < 0.1, `the hips stay near their height: ${rise.toFixed(3)}`);
-    const started = performance.now();
+    const started = cpuMicros();
     for (const motion of Library.STATE_MOTIONS) assert.ok(Library.stateClip(bones, motion.id), motion.id);
-    assert.ok(performance.now() - started < 400, 'six motions made in well under half a second');
+    withinBudget(tc, (cpuMicros() - started) / 1000, 400, 'six motions made in well under half a second');
 });
 
 test('a 17-bone humanoid without toe markers keeps its walking feet forward', () => {

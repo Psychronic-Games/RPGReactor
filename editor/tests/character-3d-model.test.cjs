@@ -47,26 +47,7 @@ test.before(async () => {
     eyeSource = { width: png.width, height: png.height, data: new Uint8Array(png.data) };
 });
 
-/** Every part well formed: finite numbers, skin indices in range, weights summing to one. */
-function assertSound(result, label) {
-    assert.ok(result.parts.length > 0, label + ' has parts');
-    for (const p of result.parts) {
-        const n = p.positions.length / 3;
-        assert.ok(n > 0 && p.index.length > 0, `${label}: ${p.name} has geometry`);
-        for (let i = 0; i < p.positions.length; i++) assert.ok(Number.isFinite(p.positions[i]), `${label}: ${p.name} position ${i}`);
-        for (let i = 0; i < p.index.length; i++) assert.ok(p.index[i] < n, `${label}: ${p.name} index ${i}`);
-        assert.equal(p.joints.length, n * 4, `${label}: ${p.name} joints`);
-        for (let v = 0; v < n; v++) {
-            let sum = 0;
-            for (let k = 0; k < 4; k++) { assert.ok(p.joints[v * 4 + k] < result.bones.length, `${label}: ${p.name} joint`); sum += p.weights[v * 4 + k]; }
-            assert.ok(Math.abs(sum - 1) < 0.02, `${label}: ${p.name} weights at ${v} sum to ${sum}`);
-        }
-        // Tiled finish maps (repeat) take physical coordinates past 0..1; a part with a picture of its own stays inside it.
-        const maps = [p.texture, p.normalTexture, p.metallicRoughnessTexture, p.emissiveTexture, p.iridescenceThicknessTexture].filter(Boolean);
-        const tiled = maps.length > 0 && maps.every(name => result.textures && result.textures[name] && result.textures[name].repeat);
-        if (p.uvs && !tiled) for (let i = 0; i < p.uvs.length; i++) assert.ok(p.uvs[i] >= -1e-6 && p.uvs[i] <= 1 + 1e-6, `${label}: ${p.name} uv in the picture`);
-    }
-}
+const { assertSound } = require('./helpers/character-preset-sweep.cjs');
 
 /** Independent visibility probe: a ray from skin must cross fabric before reaching the viewer. */
 function garmentHit(parts, origin, direction, reach = 0.5) {
@@ -170,14 +151,8 @@ test('beastfolk wear a real animal head: the creature\'s head on the neck, the h
     assert.ok(bird.parts.some(p => p.name === 'Head Body') && !bird.parts.some(p => p.name === 'Beak'), 'a bird\'s own head and beak, not a beak on a face');
 });
 
-test('every outfit preset and every accessory builds on an average and an extreme body', () => {
-    const bodies = [{}, { gender: 1, weight: 3, muscle: 2.2, headSize: 1.6 }, { gender: 0, weight: -0.3, height: -0.5, cup: 4 }];
-    for (const body of bodies) {
-        const cache = {};
-        for (const preset of Wardrobe.PRESETS) assertSound(Model.build(pack, Object.assign({}, body, { outfit: preset.items }), cache, { quality: 'preview' }), preset.id + ' on ' + JSON.stringify(body));
-        assertSound(Model.build(pack, Object.assign({}, body, { props: Props.PROPS.map(p => ({ id: p.id })) }), cache, { quality: 'preview' }), 'accessories on ' + JSON.stringify(body));
-    }
-});
+// Every outfit preset and every accessory on an average and two extreme bodies: dealt across
+// character-3d-model-presets-*.test.cjs, which run side by side (helpers/character-preset-sweep.cjs).
 
 test('garments stay outside the skin, however far the sliders go', () => {
     for (const body of [{}, { gender: 1, weight: 2.5, muscle: 1.5 }]) {

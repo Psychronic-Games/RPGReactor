@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const root = path.join(__dirname, '..');
 const dir = path.join(root, 'src', 'forge', 'Character3D');
@@ -307,27 +308,28 @@ test('the saved GLB carries the tail\'s bones, every clip, the scale and fin pic
     for (const state of ['idle', 'walking', 'swimming', 'treading']) assert.ok(named(state), state + ' has its clip');
 });
 
-test('budgets: triangles, pictures, clip keys and build time stay small', () => {
+test('budgets: triangles, pictures, clip keys and build time stay small', t => {
     const r = merfolk({ gender: 1, merfolk: { armFins: true, hipFins: true, backFin: true, finEars: true, fin: 'veil' } });
     Model.build(pack, r, {}, { quality: 'preview', hairBudget: 0.3 });
-    const t0 = Date.now();
+    const t0 = cpuMicros();
     const result = Model.build(pack, r, {}, { quality: 'preview', hairBudget: 0.3 });
-    const merMs = Date.now() - t0;
-    const t1 = Date.now();
+    const merMs = Math.round((cpuMicros() - t0) / 1000);
+    const t1 = cpuMicros();
     Model.build(pack, Model.withSpecies(r, 'human'), {}, { quality: 'preview', hairBudget: 0.3 });
-    const humanMs = Date.now() - t1;
+    const humanMs = Math.round((cpuMicros() - t1) / 1000);
     const added = tris(result, ['Tail', 'Fins', 'Scale line']);
     assert.ok(added < 16000, 'tail, fins and scale line: ' + added + ' triangles');
-    assert.ok(merMs < humanMs + 600, `a merfolk builds in ${merMs} ms, a human in ${humanMs} ms`);
+    withinBudget(t, merMs - humanMs, 600, `a merfolk builds in ${merMs} ms, a human in ${humanMs} ms`);
     for (const name of ['merscales.png', 'merscales_n.png', 'merfin.png', 'merscatter.png']) {
         const t = result.textures[name];
         assert.ok(t && t.width * t.height <= 512 * 2048, name + ' ' + (t && t.width) + 'x' + (t && t.height));
     }
     const keys = result.clips.reduce((s, c) => s + c.tracks.reduce((q, t) => q + t.values.length, 0), 0);
     assert.ok(keys * 4 < 1.5e6, 'clip data ' + Math.round(keys * 4 / 1024) + ' KB');
-    const t2 = Date.now();
+    const t2 = cpuMicros();
     Mer.clips(result.bones, result.recipe, result.built, pack, 0.3);
-    assert.ok(Date.now() - t2 < 400, 'baking every clip takes ' + (Date.now() - t2) + ' ms');
+    const bakeMs = Math.round((cpuMicros() - t2) / 1000);
+    withinBudget(t, bakeMs, 400, 'baking every clip takes ' + bakeMs + ' ms');
 });
 
 test('every label the merfolk controls and poses show is translated into all 17 languages', () => {

@@ -1007,6 +1007,8 @@ test('the other side moves together when it only moves, one at a time where some
     const phase = (watch, near) => {
         // The fast pace: walking together is how it plays a phase of units closing in.
         const w = world({ events: far, system: { reactorBattle: { pace: 'fast' } } });
+        // The pace is the subject, not the machine: each unit's thinking finishes in its frame on any computer.
+        w.ReactorFight.AI_BUDGET_MS = 1000;
         w.$dataSkills[1].note = watch ? '<range: 1-3>' : '';
         if (watch) w.$dataSkills[1].damage.formula = '1';                           // the reaction shot scratches: all four still stand
         const starts = [], ends = [];
@@ -1148,6 +1150,8 @@ test('in a big battle the other side acts side by side: results land as they hap
     const phase = (n, setup) => {
         // The fast pace: above F.OVERLAP standing units its actions play side by side.
         const w = seeded({ events: lineup(n), system: { reactorBattle: { pace: 'fast' } } }, 5);
+        // The pace is the subject, not the machine: each unit's thinking finishes in its frame on any computer.
+        w.ReactorFight.AI_BUDGET_MS = 1000;
         w.$dataSkills[1].note = '<range: 1-6>';
         w.$dataSkills[1].damage.formula = '5';
         if (setup) setup(w);

@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const root = path.join(__dirname, '..');
 const repoRoot = path.join(root, '..');
@@ -155,12 +156,12 @@ test('neutral is the face exactly as built, in data and on a view', () => {
     assert.equal(view.expressionOverlays.length, 0);
 });
 
-test('an expression costs a few milliseconds once a face is measured, and is kept', () => {
+test('an expression costs a few milliseconds once a face is measured, and is kept', t => {
     const result = face('man');
     X.pose(pack, result, 'neutral', 1);
     let worst = 0;
-    for (const id of X.EXPRESSIONS.map(e => e.id)) { const t = performance.now(); X.pose(pack, result, id, 0.7); worst = Math.max(worst, performance.now() - t); }
-    assert.ok(worst < 60, 'worst ' + worst.toFixed(1) + ' ms');
+    for (const id of X.EXPRESSIONS.map(e => e.id)) { const start = cpuMicros(); X.pose(pack, result, id, 0.7); worst = Math.max(worst, (cpuMicros() - start) / 1000); }
+    withinBudget(t, worst, 60, 'worst ' + worst.toFixed(1) + ' ms');
     assert.equal(X.pose(pack, result, 'happy', 0.7), X.pose(pack, result, 'happy', 0.7), 'cached');
 });
 
