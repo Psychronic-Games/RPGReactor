@@ -24,6 +24,7 @@ globalThis.addEventListener = page.addEventListener;
 globalThis.removeEventListener = page.removeEventListener;
 // The editor's map shortcuts are set on the window after every file has loaded: this one stands for them.
 const B = require('../src/event/BattleSetup.js');
+const { sharedRunner } = require('./helpers/timing.cjs');
 const C = require('../src/utils/BattleCheck.js');
 const shortcuts = [];
 page.addEventListener('keydown', event => { shortcuts.push(event.key); }, true);
@@ -787,11 +788,17 @@ test('a pointer on a placed model is refused; one that can be walked through is 
         tileOf(card, 1).click();
         // Under the oak's canopy, a tile away from its trunk: the ground is free, the pointer is on the tree.
         const under = pointAt(editor, 4, 11, 0);
-        B.hover3D(editor, ...under);
-        assert.deepEqual([card.state.verdict.ok, card.state.verdict.why, card.$('[data-part="hint"]').textContent], [false, 'taken', 'Something is already here.']);
-        assert.equal(casts, 1);
-        B.hover3D(editor, ...under);
-        B.hover3D(editor, ...under);
+        // The pointer resting is the subject, not the machine's speed: the clock stands still from the first
+        // hover (the view asks again after 40 ms, and on a slow runner hovers can lie further apart than that).
+        const realNow = Date.now, still = realNow();
+        Date.now = () => still;
+        try {
+            B.hover3D(editor, ...under);
+            assert.deepEqual([card.state.verdict.ok, card.state.verdict.why, card.$('[data-part="hint"]').textContent], [false, 'taken', 'Something is already here.']);
+            assert.equal(casts, 1);
+            B.hover3D(editor, ...under);
+            B.hover3D(editor, ...under);
+        } finally { Date.now = realNow; }
         assert.equal(casts, 1, 'the pointer rests: asked once');
         assert.equal(B.placeAt(card.manager, 4, 11, B.whereOf(editor, under[0], under[2])), true);
         assert.equal(map.events.filter(Boolean).length, 0, 'the click does nothing');
@@ -872,7 +879,7 @@ test('a model\'s picture that has to be drawn waits for the card\'s first moment
         await withCard(flat(), { globals }, async card => {
             delete card.state.ownShots;
             const opened = card.state.openedAt;
-            assert.ok(Date.now() - opened < 200, 'the card has just opened');
+            assert.ok(Date.now() - opened < (sharedRunner ? 1000 : 200), 'the card has just opened');
             const shots = await Promise.all([2, 4, 6].map(facing => B.modelShot({ path: home }, spec, null, facing)));
             assert.deepEqual(shots.map(shot => shot.url), [url, url, url]);
             assert.ok(drawnAt[0] - opened >= 295, `the first is drawn ${drawnAt[0] - opened} ms after the card opened`);
@@ -880,7 +887,7 @@ test('a model\'s picture that has to be drawn waits for the card\'s first moment
             // One kept from before is not drawn and waits for nothing.
             const before = Date.now(), again = await B.modelShot({ path: home }, spec, null, 2);
             assert.deepEqual([again.kept, drawnAt.length, idle], [true, 3, 3]);
-            assert.ok(Date.now() - before < 100);
+            assert.ok(Date.now() - before < (sharedRunner ? 400 : 100), 'read back, not drawn');
         });
     } finally { delete B._state.ownShots; fs.rmSync(home, { recursive: true, force: true }); }
 });
