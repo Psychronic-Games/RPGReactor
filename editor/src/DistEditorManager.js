@@ -64,6 +64,15 @@ class DistEditorManager {
                                         </span>
                                     </label>
                                 </div>
+                                <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
+                                    <label for="dist-unused-files" style="color: var(--color-text-muted); font-size: 11px;">${tt('Bundled project')}</label>
+                                    <select id="dist-unused-files" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                        <option value="off">${tt('Nothing: ship every file')}</option>
+                                        <option value="web">${tt('Unused files, in Web builds')}</option>
+                                        <option value="all">${tt('Unused files, in every build')}</option>
+                                    </select>
+                                </div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 4px;">${tt("Leaves out the bundled project's pictures, sounds, models and effects its game never uses. Its Always include list is set when deploying a game.")}</div>
                             </div>
 
                             <!-- Platform Selection (for platform type) -->
@@ -244,6 +253,8 @@ class DistEditorManager {
         document.getElementById('dist-nw-section').style.display = web ? 'none' : 'block';
         document.getElementById('dist-pack-option').style.display = web ? 'flex' : 'none';
         document.getElementById('dist-pack-files').checked = web && !!window.WebPackPreference?.load();
+        const prefs = window.DeploymentAssetPreferences;
+        if (prefs) document.getElementById('dist-unused-files').value = prefs.loadUnusedFiles(localStorage, prefs.DIST_UNUSED_FILES_KEY);
         const codec = document.getElementById('dist-include-proprietary-codecs');
         const codecOption = document.getElementById('dist-codec-option');
         const disabled = type === 'minimal' || web;
@@ -416,6 +427,9 @@ class DistEditorManager {
         const createLinuxAppImage = document.getElementById('dist-create-linux-appimage').checked;
         const packWebFiles = packageType === 'web' && document.getElementById('dist-pack-files').checked;
         if (packageType === 'web') window.WebPackPreference?.save(packWebFiles);
+        const prefs = window.DeploymentAssetPreferences;
+        const unusedFiles = prefs ? prefs.normalizeUnusedFiles(document.getElementById('dist-unused-files').value) : 'web';
+        prefs?.saveUnusedFiles(unusedFiles, localStorage, prefs.DIST_UNUSED_FILES_KEY);
 
         // Determine platforms
         let platforms;
@@ -497,6 +511,7 @@ class DistEditorManager {
                     includeProprietaryCodecs,
                     createLinuxAppImage,
                     packWebFiles,
+                    unusedFiles,
                     releaseBuild: false,
                     releaseHashManifestPath: process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
                         pathModule.join(appRoot, 'build-scripts', 'release-hashes.json'),

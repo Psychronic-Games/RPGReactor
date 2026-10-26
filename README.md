@@ -31,7 +31,7 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 </tr>
 </table>
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.99.2](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.2).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.3 and is not published yet; the latest tagged source release is [0.99.2](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.2).
 
 ## What's new in 0.99.2
 
@@ -99,7 +99,7 @@ RPGReactor/
   - **Effekseer Animation Generator**: create native Effekseer particle effects (`.efkefc`) from 106 recipes across nine categories without the external Effekseer editor: 21 sci-fi interface instruments with user-typed text, physical battle hits, 15 energy recipes, elements, a custom-effect Composer, and more; wireframe or solid-textured rendering with custom texture upload; layers, keyframes with texture cross-fades, live in-editor preview through the game's own Effekseer runtime, and one-click export. The tracked suite validates generated format/model round trips, every recipe at default/extreme/swept values, composition, and real-WASM playback.
   - **Character Generator**: bundled Psychronic and Looseleaf styles plus procedural Outfit Forge and Hair Forge tools that generate RPG Maker-style walking-sheet parts, with live 4-direction walk previews, multiple hair styles, palette systems, and save-to-library output. Psychronic remains the default style.
   - **Sound Effect Generator**: procedural sfxr-style sound design on Web Audio, baked to WAV, OGG or MP3 in the project's `audio/se/`. 29 archetypes across RPG SFX and tuned instruments, six waveforms including a physically modelled Karplus-Strong pluck, 27 parameters, live waveform/envelope/pitch visualizers, and a 16-step sequencer for jingles and stingers.
-- **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web, where a Web build can pack its files into a few zip archives read on demand, for hosts that limit file count and size; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/audio optimization; and an editor distribution builder with SHA-256 checksums. Eligible full desktop packages default to an exact-NW.js-version H.264/AAC codec overlay verified by a trusted archive hash plus extracted-binary validation; users can disable it, and Web/Minimal packages never include it. Every overlay carries machine-readable provenance, recorded archive/binary hashes, the complete LGPL text, corresponding-source/build references, and a patent notice.
+- **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web, where a Web build can pack its files into a few zip archives read on demand, for hosts that limit file count and size; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/audio optimization; builds that leave out the files a game never uses, plugins and playtests included, for Web only or every platform; and an editor distribution builder with SHA-256 checksums. Eligible full desktop packages default to an exact-NW.js-version H.264/AAC codec overlay verified by a trusted archive hash plus extracted-binary validation; users can disable it, and Web/Minimal packages never include it. Every overlay carries machine-readable provenance, recorded archive/binary hashes, the complete LGPL text, corresponding-source/build references, and a patent notice.
 - **Source-audited 18-language localization** across editor-generated interface text, with locale-key and placeholder validation, Arabic right-to-left direction, and project-authored game content deliberately left untouched; plus a theme system with multiple color palettes in light and dark modes.
 
 ## Development Launchers
@@ -201,17 +201,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.99.2 changes have been committed:
+`main` worktree after all 0.99.3 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.99.2 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.2
+node editor/build-scripts/cut-release.cjs 0.99.3 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.3
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.99.2` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.99.3` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

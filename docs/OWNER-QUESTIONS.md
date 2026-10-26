@@ -10,7 +10,7 @@ None open.
 
 ## B. Decisions (recommendation in bold)
 
-1. The web bundle before the next itch upload (owner: decide at the end-of-weekend release): the Demo ships 1,011 files and 438 MB, over both limits with the editor. The proposal (`scratchpad/owner-answers-2026-10-23/web-trim-proposal.md`) drops 61 files (52 MB), keeps the Psychronic BGM, and lists lossy shrinks of two videos and the icon separately. **Approve the drop list; decide the lossy shrinks by eye.**
+None open.
 
 ## C. Only the owner can do these
 

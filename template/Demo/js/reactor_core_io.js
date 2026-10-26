@@ -1374,6 +1374,7 @@ Video.resize = function(width, height) {
  * @param {string} src - The url of the video.
  */
 Video.play = function(src) {
+    Utils.noteAssetUse(src);
     this._element.src = src;
     this._element.onloadeddata = this._onLoad.bind(this);
     this._element.onerror = this._onError.bind(this);

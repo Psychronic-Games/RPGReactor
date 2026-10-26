@@ -90,6 +90,9 @@ const EXCLUDED = new Set([
     path.join('legacy', 'Scripts'),
     // The Forge tools' own project data (generator settings, character part sources): the game never reads it.
     'forge',
+    // Unused files: the project's Always include list and what its playtests loaded (unused-assets.cjs).
+    'deploy.rpgreactor.json',
+    'asset-usage.rpgreactor.json',
 ]);
 
 // Battle Test writes a full Test_-prefixed copy of every database file into

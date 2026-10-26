@@ -172,6 +172,27 @@ class BuildManager {
                             </div>
 
                             <div style="margin-top: 20px;">
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Unused Files')}</h3>
+                                <div style="display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
+                                    <label for="build-unused-files" style="color: var(--color-text-muted); font-size: 11px;">${tt('Leave out')}</label>
+                                    <select id="build-unused-files" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                        <option value="off">${tt('Nothing: ship every file')}</option>
+                                        <option value="web">${tt('Unused files, in Web builds')}</option>
+                                        <option value="all">${tt('Unused files, in every build')}</option>
+                                    </select>
+                                </div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('A picture, sound, movie, effect, model or font is left out only when nothing names it: the database, maps and events, plugin parameters, the code of the plugins switched on, and what playtests loaded.')}</div>
+                                <button id="build-unused-review" class="graphic-selector-button" style="margin-top: 8px; padding: 6px 14px; font-size: 12px;">${tt('Review unused files...')}</button>
+                                <div id="build-unused-panel" style="display: none; margin-top: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px;">
+                                    <div id="build-unused-summary" style="color: var(--color-text); font-size: 12px; line-height: 1.4;"></div>
+                                    <div id="build-unused-list" style="margin-top: 6px; max-height: 220px; overflow: auto; font-size: 11px; border-top: 1px solid var(--color-border-subtle);"></div>
+                                    <label for="build-unused-keep" style="display: block; margin-top: 8px; color: var(--color-text-muted); font-size: 11px;">${tt('Always include: one file, folder or pattern per line (* matches any name). Saved with the project.')}</label>
+                                    <textarea id="build-unused-keep" class="rr-input" rows="3" spellcheck="false" style="width: 100%; box-sizing: border-box; margin-top: 4px; font-size: 12px; font-family: monospace; resize: vertical;" placeholder="audio/bgm/Bonus*"></textarea>
+                                    <button id="build-unused-keep-save" class="graphic-selector-button" style="margin-top: 6px; padding: 6px 14px; font-size: 12px;">${tt('Save and check again')}</button>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 20px;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Encryption')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
@@ -238,6 +259,7 @@ class BuildManager {
         this.setupLocaleOptions();
         this.setupAssetOptimizationOptions();
         this.setupEncryptionOptions();
+        this.setupUnusedFileOptions();
         this.versionPicker = new NwVersionPicker(
             document.getElementById('build-nw-version-exact'),
             document.getElementById('build-nw-version-list'));
@@ -347,6 +369,90 @@ class BuildManager {
         const save = () => DeploymentAssetPreferences.saveEncryption(this.encryptionSettings());
         images.addEventListener('change', save);
         audio.addEventListener('change', save);
+    }
+
+    /** Leave out unused files: off, web (Web builds only) or all; remembered between deployments. */
+    setupUnusedFileOptions() {
+        const select = document.getElementById('build-unused-files');
+        select.value = DeploymentAssetPreferences.loadUnusedFiles();
+        select.addEventListener('change', () => DeploymentAssetPreferences.saveUnusedFiles(select.value));
+        document.getElementById('build-unused-review').addEventListener('click', () => {
+            const panel = document.getElementById('build-unused-panel');
+            const opening = panel.style.display === 'none';
+            panel.style.display = opening ? 'block' : 'none';
+            if (opening) this.reviewUnusedFiles();
+        });
+        document.getElementById('build-unused-keep-save').addEventListener('click', () => {
+            const project = window.reactor?.projectController?.getCurrentProject();
+            if (!project || !project.path) return;
+            this.unusedAssets().writeSettings(project.path, { keep: document.getElementById('build-unused-keep').value.split('\n') });
+            this.reviewUnusedFiles();
+        });
+    }
+
+    unusedAssets() {
+        const path = require('path'), fs = require('fs');
+        // Found as the build worker is: beside the page, one folder up, or in the working folder.
+        const file = [__dirname, path.resolve(__dirname, '..'), process.cwd()]
+            .map(root => path.join(root, 'build-scripts', 'unused-assets.cjs')).find(candidate => fs.existsSync(candidate));
+        return require(file || path.join(__dirname, 'build-scripts', 'unused-assets.cjs'));
+    }
+
+    /** The files a deploy would leave out, by folder, each with a Keep button that adds it to Always include. */
+    reviewUnusedFiles() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const summary = document.getElementById('build-unused-summary');
+        const list = document.getElementById('build-unused-list');
+        const keep = document.getElementById('build-unused-keep');
+        list.replaceChildren();
+        const project = window.reactor?.projectController?.getCurrentProject();
+        if (!project || !project.path) { summary.textContent = tt('Open a project to see its unused files.'); return; }
+        let analysis;
+        try {
+            const unused = this.unusedAssets();
+            keep.value = unused.readSettings(project.path).keep.join('\n');
+            analysis = unused.analyze(project.path);
+        } catch (error) {
+            summary.textContent = `${tt('The project could not be checked:')} ${error.message}`;
+            return;
+        }
+        const mb = bytes => `${(bytes / 1048576).toFixed(1)} MB`;
+        summary.textContent = tt('{count} files ({size}) would be left out; {kept} asset files ship.')
+            .replace('{count}', analysis.unused.length).replace('{size}', mb(analysis.unusedBytes)).replace('{kept}', analysis.keptCount)
+            + (analysis.playtestRecord ? '' : ` ${tt('No playtest record yet: play the game once from the editor and what it loads is kept too.')}`);
+        const folders = new Map();
+        for (const file of analysis.unused) {
+            const folder = file.path.split('/').slice(0, -1).join('/');
+            if (!folders.has(folder)) folders.set(folder, []);
+            folders.get(folder).push(file);
+        }
+        for (const [folder, files] of [...folders].sort((a, b) => a[0].localeCompare(b[0]))) {
+            const heading = document.createElement('div');
+            heading.textContent = `${folder}/ · ${files.length} · ${mb(files.reduce((sum, f) => sum + f.size, 0))}`;
+            heading.style.cssText = 'margin-top: 6px; color: var(--color-text); font-weight: 600;';
+            list.appendChild(heading);
+            for (const file of files) {
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 1px 0 1px 10px; color: var(--color-text-muted);';
+                const name = document.createElement('span');
+                name.textContent = file.path.slice(folder.length + 1);
+                name.title = `${tt(file.reason)} · ${mb(file.size)}`;
+                name.style.cssText = 'flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                const button = document.createElement('button');
+                button.className = 'graphic-selector-button';
+                button.style.cssText = 'padding: 1px 8px; font-size: 10px;';
+                button.textContent = tt('Keep');
+                button.title = tt('Always include this file');
+                button.addEventListener('click', () => {
+                    const lines = keep.value.split('\n').map(line => line.trim()).filter(Boolean);
+                    lines.push(file.path.replace(/\.[^./]*$/, ''));
+                    this.unusedAssets().writeSettings(project.path, { keep: lines });
+                    this.reviewUnusedFiles();
+                });
+                row.append(name, button);
+                list.appendChild(row);
+            }
+        }
     }
 
     encryptionSettings() {
@@ -681,6 +787,8 @@ class BuildManager {
         const assetEncryption = this.encryptionSettings();
         const createLinuxAppImage = document.getElementById('build-create-linux-appimage').checked;
         const packWebFiles = platforms.includes('web') && document.getElementById('build-pack-files').checked;
+        const unusedChoice = document.getElementById('build-unused-files')?.value;
+        const unusedFiles = unusedChoice === 'off' || unusedChoice === 'all' ? unusedChoice : 'web';
 
         this.isBuilding = true;
         document.getElementById('build-start-btn').style.display = 'none';
@@ -713,6 +821,7 @@ class BuildManager {
                     assetEncryption,
                     createLinuxAppImage,
                     packWebFiles,
+                    unusedFiles,
                     appRoot: appRoot,
                     editorExecPath: process.execPath,
                 }

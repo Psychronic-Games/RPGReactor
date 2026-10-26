@@ -71,7 +71,7 @@ test('a vehicle-only model survives web distribution asset pruning', t => {
     }
     const worker = fs.readFileSync(path.join(editor, 'build-scripts/dist-editor-worker.js'), 'utf8');
     const code = worker.slice(worker.indexOf('function trimWebProject('), worker.indexOf('function refreshStarterRuntime('));
-    const trim = vm.runInNewContext(code + '\ntrimWebProject;', {fs, path, walkWebFiles: () => [{type:'file'}]});
+    const trim = vm.runInNewContext(code + '\ntrimWebProject;', {fs, path, unusedAssets: require(path.join(editor, 'build-scripts/unused-assets.cjs'))});
     trim(dir, () => {});
     assert.equal(fs.existsSync(path.join(dir, '3d/Vehicles/Bike/source/model.glb')), true);
     assert.equal(fs.existsSync(path.join(dir, '3d/Vehicles/Unused')), false);

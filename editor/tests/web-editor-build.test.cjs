@@ -76,11 +76,14 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
             editorRoot, '..', 'template', 'Demo', 'js', 'reactor_plugins.js'), 'utf8'));
         const metadata = JSON.parse(execFileSync('unzip', ['-p', archive, 'project/project.rpgreactor'], { encoding: 'utf8' }));
         assert.equal(metadata.name, 'Reactor One');
+        // Music the Demo plays ships (its title theme); library tracks nothing plays stay out (unused-assets.cjs).
         assert.ok(execFileSync(
             'unzip',
-            ['-p', archive, 'project/audio/bgm/Psychronic - Acoustic Circuits.ogg'],
-            { maxBuffer: 4 * 1024 * 1024 }
+            ['-p', archive, 'project/audio/bgm/Psychronic - Forest Trek.ogg'],
+            { maxBuffer: 16 * 1024 * 1024 }
         ).length > 0);
+        assert.ok(!execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+            .split('\n').includes('project/audio/bgm/Psychronic - Acoustic Circuits.ogg'), 'a track nothing plays is left out');
         // Some browser-game storefronts cap uploads at 1000 files. The
         // build never blocks on the count — it reports it and warns past
         // 1000 — while the trim keeps dead library weight out of the zip.
@@ -92,8 +95,9 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
         assert.match(workerSource, /warn, never block/i, 'file count warns instead of blocking');
         assert.ok(entries.some(line => line === 'project/img/battlehud/Face_1.png'),
             'faces for defined actors survive the trim');
-        assert.ok(!entries.some(line => line === 'project/img/battlehud/Face_286.png'),
-            'faces for undefined actors are trimmed');
+        // The runtime's interface portraits build Face_{id} names, so every Face_ picture is kept (unused-assets.cjs):
+        // which numbers a built name reaches is not known before the game runs.
+        assert.ok(!entries.some(line => /^project\/img\/battlehud\/[^/]+\.psd$/i.test(line)), 'working files of art programs are trimmed');
         // Tileset pictures no tileset names, and plugin files the plugin list does not name, stay out too.
         const demoRoot = path.resolve(editorRoot, '..', 'template', 'Demo');
         const tilesetNames = new Set(JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'Tilesets.json'), 'utf8'))
@@ -221,7 +225,7 @@ test('the web zip stays under a storefront\'s entry cap: no folder entries, no p
     assert.match(worker, /createFlatZip\(webRoot, outputPath\);/, 'the web archive is written flat');
     assert.match(worker, /execFileSync\('zip', \['-qrXD', destPath, '\.'\]/, 'zip -D: itch counted 88 folder entries against its 1000');
     assert.match(worker, /'--no-recursion', '-T', list\]/, 'and on Windows only the listed files');
-    assert.match(worker, /trimDir\('data', file => !\/\^Test_\.\*\\\.json\$\/i\.test\(file\)\);/, 'a playtest\'s Test_ data is written afresh before each test');
+    assert.match(worker, /if \(\/\^Test_\.\*\\\.json\$\/i\.test\(file\)\) fs\.rmSync/, 'a playtest\'s Test_ data is written afresh before each test');
     for (const name of ['icon-undo.png', 'icon-L1.png', 'icon-database.png']) {
         assert.equal(fs.existsSync(path.join(__dirname, '..', 'images', name)), false, name + ': the editor draws the SVG');
     }

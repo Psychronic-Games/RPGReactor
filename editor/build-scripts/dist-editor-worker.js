@@ -18,6 +18,7 @@ const nativeDownload = require('./native-download');
 const nativeRelease = require('./native-release.cjs');
 const webFileIndex = require('./web-file-index.cjs');
 const webPack = require('./web-pack.cjs');
+const unusedAssets = require('./unused-assets.cjs');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -60,6 +61,7 @@ const {
     includeProprietaryCodecs = false,
     createLinuxAppImage = false,
     packWebFiles = false,   // the Web build's project goes into a few archives (web-pack.cjs)
+    unusedFiles = 'web',    // the bundled Demo leaves out files its game never uses: 'off', 'web' (the Web build) or 'all'
     appImageToolPath,
     appImageRuntimePath,
     releaseBuild = false,
@@ -874,129 +876,19 @@ function copyWebProject(source, destination, relativePath = '') {
 }
 
 /**
- * Trim the bundled web project's asset library to what its own data
- * actually references. Browser-game storefronts cap uploads at 1000
- * files, and the bulk of the zip was library stock the demo never touches: MOG
- * battle-hud face skins for 280 actors when the project defines eight,
- * a hundred enemy battlers behind five referenced ones, and three audio
- * folders of unreferenced tracks. The desktop editor keeps the full
- * library; only the web bundle slims, and pickers list what exists.
+ * The bundled web project without what its game never uses (unused-assets.cjs): library stock the Demo
+ * keeps for later (music, fogs, models, effect textures), plugin files the plugin list never names, and a
+ * playtest's Test_ data. Browser-game storefronts cap an upload's files and size; the desktop packages
+ * keep the whole library unless the build asks for them to be trimmed too (unusedFiles 'all').
  */
-function trimWebProject(projectRoot, log) {
-    const dataRoot = path.join(projectRoot, 'data');
-    let blob = '';
-    for (const file of fs.readdirSync(dataRoot)) {
-        if (file.endsWith('.json')) blob += fs.readFileSync(path.join(dataRoot, file), 'utf8');
-    }
-    const pluginsPath = path.join(projectRoot, 'js', 'reactor_plugins.js');
-    if (fs.existsSync(pluginsPath)) blob += fs.readFileSync(pluginsPath, 'utf8');
-    const referenced = name =>
-        blob.includes('"' + name + '"') || blob.includes("'" + name + "'");
-    let removed = 0;
-    const trimDir = (relative, keep) => {
-        const dir = path.join(projectRoot, relative);
-        if (!fs.existsSync(dir)) return;
-        for (const file of fs.readdirSync(dir)) {
-            const full = path.join(dir, file);
-            if (!fs.statSync(full).isFile()) continue;
-            if (keep(file)) continue;
-            fs.rmSync(full);
-            removed++;
-        }
-    };
-    // Only provably dead weight goes: hud faces for actors the project
-    // does not define, source .psd files, and stock enemy battlers nothing
-    // references. Audio and fog libraries stay — they are the browsing
-    // palette (and the soundtrack) of the web sandbox.
-    const actors = JSON.parse(fs.readFileSync(path.join(dataRoot, 'Actors.json'), 'utf8'));
-    const actorIds = new Set(actors.filter(Boolean).map(actor => String(actor.id)));
-    trimDir('img/battlehud', file => {
-        if (/\.psd$/i.test(file)) return false;
-        const face = /^Face_(\d+)\.png$/i.exec(file);
-        return face ? actorIds.has(face[1]) : true;
-    });
-    trimDir('img/enemies', file => referenced(path.parse(file).name));
-    // Tileset pictures no tileset names are library stock as well.
-    try {
-        const tilesets = JSON.parse(fs.readFileSync(path.join(dataRoot, 'Tilesets.json'), 'utf8'));
-        const named = new Set();
-        for (const tileset of tilesets) for (const name of (tileset && tileset.tilesetNames) || []) if (name) named.add(name);
-        if (named.size) trimDir('img/tilesets', file => named.has(path.parse(file).name));
-    } catch (error) { /* an unreadable list trims nothing */ }
-    // Plugin files the project's plugin list does not name (old copies, debug helpers) cannot be switched on.
-    if (fs.existsSync(pluginsPath)) {
-        const pluginList = fs.readFileSync(pluginsPath, 'utf8');
-        trimDir(path.join('js', 'plugins'), file => !/\.js$/i.test(file) || pluginList.includes('"' + path.parse(file).name + '"'));
-    }
+function trimWebProject(projectRoot, log, leaveOutUnused = true) {
     // A playtest's battle and event test data: written afresh before every test.
-    trimDir('data', file => !/^Test_.*\.json$/i.test(file));
-    // 3D model folders the maps never place are library stock too — and by
-    // far the heaviest kind. Collect every model name the map sidecars
-    // reference and drop the rest of 3d/ from the web bundle.
-    const modelsRoot = path.join(projectRoot, '3d');
-    if (fs.existsSync(modelsRoot)) {
-        const usedModels = new Set();
-        const noteSpec = spec => {
-            if (spec && spec.name) usedModels.add(String(spec.name));
-        };
-        // A vehicle type supplies its model without a map-sidecar binding.
-        const systemPath = path.join(dataRoot, 'System.json');
-        if (fs.existsSync(systemPath)) {
-            const system = JSON.parse(fs.readFileSync(systemPath, 'utf8'));
-            for (const key of ['boat','ship','airship']) noteSpec(system[key]?.reactorVehicle?.model);
-        }
-        const vehiclesPath = path.join(dataRoot, 'ReactorVehicles.json');
-        if (fs.existsSync(vehiclesPath)) {
-            const vehicles = JSON.parse(fs.readFileSync(vehiclesPath, 'utf8'));
-            if (!Array.isArray(vehicles)) throw new Error('ReactorVehicles.json must be an array');
-            for (const vehicle of vehicles) noteSpec(vehicle && vehicle.model);
-        }
-        for (const file of fs.readdirSync(dataRoot)) {
-            if (!file.endsWith('.r3d.json')) continue;
-            try {
-                const sidecar = JSON.parse(fs.readFileSync(path.join(dataRoot, file), 'utf8'));
-                for (const pages of Object.values(sidecar && sidecar.events || {})) {
-                    for (const spec of Object.values(pages || {})) noteSpec(spec);
-                }
-                // Props placed straight on the map reference models too.
-                for (const prop of (sidecar && sidecar.props || [])) noteSpec(prop);
-                // Database bindings place models too: actors bind per
-                // slot (character/face/battler), the other sections flat.
-                for (const section of ['actors', 'enemies', 'weapons', 'armors', 'items']) {
-                    for (const entry of Object.values(sidecar && sidecar[section] || {})) {
-                        if (!entry || typeof entry !== 'object') continue;
-                        if (entry.name) noteSpec(entry);
-                        else for (const slot of Object.values(entry)) noteSpec(slot);
-                    }
-                }
-            } catch (error) { /* an unreadable sidecar trims nothing */ }
-        }
-        // Models nest in organization folders: a directory holding a
-        // source/ subfolder is a model, named by its path under 3d/.
-        // Unreferenced models go; folders that still hold a referenced
-        // model stay.
-        const trimModels = (dir, relative, depth) => {
-            if (depth > 6) return;
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                if (!entry.isDirectory() || entry.name === 'source' || entry.name === 'textures') continue;
-                const child = path.join(dir, entry.name);
-                const name = relative ? relative + '/' + entry.name : entry.name;
-                const isModel = fs.existsSync(path.join(child, 'source'));
-                if (isModel && !usedModels.has(name)) {
-                    removed += walkWebFiles(child).filter(item => item.type === 'file').length;
-                    fs.rmSync(child, { recursive: true, force: true });
-                    continue;
-                }
-                trimModels(child, name, depth + 1);
-                // An organization folder emptied by the trim goes too.
-                if (!isModel && !fs.readdirSync(child).length) {
-                    fs.rmSync(child, { recursive: true, force: true });
-                }
-            }
-        };
-        trimModels(modelsRoot, '', 0);
-    }
-    log(`Trimmed ${removed} unreferenced library files from the bundled web project.`);
+    const dataRoot = path.join(projectRoot, 'data');
+    for (const file of fs.readdirSync(dataRoot)) if (/^Test_.*\.json$/i.test(file)) fs.rmSync(path.join(dataRoot, file));
+    if (!leaveOutUnused) return;
+    const analysis = unusedAssets.analyze(projectRoot);
+    const removed = unusedAssets.prune(projectRoot, analysis);
+    log(`Left out ${removed} unused files (${(analysis.unusedBytes / 1048576).toFixed(1)} MB) from the bundled web project.`);
 }
 
 function refreshStarterRuntime(runtimeRoot, projectRoot) {
@@ -1093,7 +985,7 @@ function buildWeb(stageRoot, stagingDir) {
     fs.copyFileSync(path.join(stageRoot, 'LICENSE'), path.join(webRoot, 'LICENSE'));
     fs.copyFileSync(path.join(stageRoot, 'runtime', 'libs', 'pixi.js'), path.join(webRoot, 'libs', 'pixi.js'));
     copyWebProject(templateRoot, path.join(webRoot, 'project'));
-    trimWebProject(path.join(webRoot, 'project'), log);
+    trimWebProject(path.join(webRoot, 'project'), log, unusedFiles !== 'off');
     refreshStarterRuntime(path.join(stageRoot, 'runtime'), path.join(webRoot, 'project'));
     patchWebProject(path.join(webRoot, 'project'));
     // The playtest runs the project in a browser, which corrects filename casing from this index.
@@ -1250,6 +1142,11 @@ function buildWeb(stageRoot, stagingDir) {
         // playtest saves behind; neither belongs in a shipped template.
         fs.rmSync(path.join(stageRoot, dir, '.rpgreactor.lock'), { force: true });
         fs.rmSync(path.join(stageRoot, dir, 'save'), { recursive: true, force: true });
+        if (unusedFiles === 'all') {
+            const analysis = unusedAssets.analyze(src);
+            const removed = unusedAssets.prune(path.join(stageRoot, dir), analysis);
+            log(`Left out ${removed} unused files (${(analysis.unusedBytes / 1048576).toFixed(1)} MB) from the bundled ${path.basename(dir)} project.`);
+        }
     }
 
     // Copy whitelisted top-level files

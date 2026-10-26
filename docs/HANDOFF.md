@@ -6,8 +6,11 @@ An entry holds only what the next session needs and cannot find elsewhere: what 
 
 ## Where things stand (2026-10-26)
 
-- **0.99.2** shipped 2026-10-25 at runtime **20261025.11**: binaries on itch that night; `cut-release.cjs` refused on the suite's local failures, so the release commit and the `v0.99.2` tag were made by hand on 2026-10-26 with the script's own edits (changelogs, README, editor README). The builders are at Preview 48 with visual acceptance open: [character coverage](CHARACTER-QUALITY.md), [remaining issues](CLAUDE-QUALITY-TRACKER.md), [props](PROP-BUILDER.md).
-- **Owner questions:** [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md).
+- **0.99.2** shipped 2026-10-25 (runtime 20261025.11); the release commit and `v0.99.2` were made by hand on the 26th after `cut-release.cjs` refused on local failures. **0.99.3** is open at runtime **20261026.2**.
+- **CI:** branch `ci-shards` (sharded suite, six-way preset sweep, CPU-time budgets, Tactical pacing tests, WebDriver script timeout, the dropdown smoke). Run 2: every Node part green, the GUI job failed once (fixed). Merge into `main` only after a fully green run; never call CI fixed before GitHub shows it.
+- **Unused files** (deploy option, game and editor) and the **playtest record** are in; the Demo's web build is under itch's limits without hand trimming. Follow-up: a Demo playtest with the record on, so the record is committed with the Demo.
+- **Braver** (template/Project4): its edited `rpg_managers.js` and the rest of `rpg_objects`/`rpg_scenes`/`rpg_windows` are ported in `reactor_mv_compat.js`. Other imported MV games may carry core edits too: comparing a project's `rpgmaker-runtime-backup.zip` against stock MV is how this one was found.
+- **Uncommitted:** the face expressions toned toward natural (`CharacterExpressions.js` and its test), not yet rendered for the owner.
 - **Editor windows:** the Event Editor, Database, Forge and Plugin Manager each open in a frameless window of their own (`utils/DetachedWindow.js`). Native Linux transparency still needs a look on the real desktop.
 - **Savior & Religion** (`template/Savior & Religion`, not in git, an encrypted MV game the owner is trying as a template) boots, plays its opening and draws its ULDS maps 2, 5 and 19.
-- **Next:** CI, reproduced in a clean clone on Node 22 and four cores (the suite outgrew the 45-minute job; timing budgets not routed through `tests/helpers/timing.cjs`; a WebDriver socket limit shorter than the script timeout); then the face expressions (uncommitted, toned down toward natural), the builders deep dive with the owner, and keeping the map scene across a seamless crossing.
+- **Owner questions:** [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md).

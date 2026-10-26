@@ -18,6 +18,7 @@ const appImage = require('./appimage-utils');
 const nativeDownload = require('./native-download');
 const gameIdentity = require('./game-identity');
 const assetEncryption = require('./asset-encryption');
+const unusedAssets = require('./unused-assets.cjs');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -63,6 +64,7 @@ const {
     assetEncryption: encryption = { images: false, audio: false, keyText: '' },
     createLinuxAppImage = false,
     packWebFiles = false,   // a Web build's files go into a few archives (web-pack.cjs)
+    unusedFiles = 'off',    // leave out files nothing uses: 'off', 'web' (Web builds only) or 'all' (unused-assets.cjs)
     appImageToolPath,
     appImageRuntimePath,
     releaseBuild = false,
@@ -125,6 +127,9 @@ const EXCLUDED = new Set([
     path.join('legacy', 'Scripts'),
     // The Forge tools' own project data (generator settings, character part sources): the game never reads it.
     'forge',
+    // Unused files: the project's Always include list and what its playtests loaded (unused-assets.cjs).
+    'deploy.rpgreactor.json',
+    'asset-usage.rpgreactor.json',
 ]);
 
 // Battle Test writes a full Test_-prefixed copy of every database file into
@@ -138,6 +143,21 @@ function isStagingExcluded(relPath) {
     if (relPath.startsWith('img' + path.sep) && /\.character\.json$/i.test(relPath)) return true;
     return relPath === path.join('data', path.basename(relPath))
         && /^Test_.*\.json$/.test(path.basename(relPath));
+}
+
+/** The files left out, each with its size and why, beside the builds (never inside one). */
+function writeUnusedReport(analysis, folderName) {
+    const lines = [`Unused files left out of ${folderName}: ${analysis.unused.length} (${(analysis.unusedBytes / 1048576).toFixed(1)} MB).`,
+        'Add a line to Deployment > Unused Files > Always include to ship one anyway.', ''];
+    for (const file of analysis.unused) lines.push(`${file.path}\t${(file.size / 1024).toFixed(0)} KB\t${file.reason}`);
+    try {
+        fs.mkdirSync(outputDir, { recursive: true });
+        const report = path.join(outputDir, `${folderName}-unused-files.txt`);
+        fs.writeFileSync(report, lines.join('\n') + '\n');
+        logInfo(`The list of files left out: ${report}`);
+    } catch (error) {
+        logWarn(`Could not write the list of unused files: ${error.message}`);
+    }
 }
 
 function copyDirFiltered(src, dest, relBase) {
@@ -505,6 +525,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     logInfo(`Asset optimization: PNG ${assetOptimization.png ? 'enabled' : 'disabled'}, audio ${assetOptimization.audio ? `quality ${assetOptimization.audioQuality}` : 'disabled'}`);
     logInfo(`Linux AppImage: ${createLinuxAppImage ? 'enabled' : 'disabled'}`);
     logInfo(`Encryption: images ${encryption.images ? 'on' : 'off'}, audio ${encryption.audio ? 'on' : 'off'}`);
+    logInfo(`Unused files: ${unusedFiles === 'all' ? 'left out of every build' : unusedFiles === 'web' ? 'left out of the Web build' : 'shipped'}`);
     logInfo('');
 
     if (createLinuxAppImage && (!platforms.includes('linux') || !appImage.supportsHost())) {
@@ -523,6 +544,17 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     progress(2, 'Staging game files...');
     validateProjectRuntime(projectPath);
     copyDirFiltered(projectPath, stagingDir, '');
+    // Worked out once from the project itself; each build that leaves them out removes the same files.
+    const unusedAnalysis = unusedFiles === 'all' || (unusedFiles === 'web' && platforms.includes('web'))
+        ? unusedAssets.analyze(projectPath) : null;
+    if (unusedAnalysis) {
+        logInfo(unusedAssets.describe(unusedAnalysis));
+        writeUnusedReport(unusedAnalysis, safeFolderName);
+    }
+    if (unusedAnalysis && unusedFiles === 'all') {
+        // Before optimization and encryption, which then only work on what ships.
+        logGood(`Left out ${unusedAssets.prune(stagingDir, unusedAnalysis)} unused files.`);
+    }
     await ensureNwVersion();
     normalizeStagedPackage(stagingDir, gameTitle, nwVersion);
     if (assetOptimization.png || assetOptimization.audio) {
@@ -598,6 +630,10 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 progress(Math.round(pCopy), 'Copying game files...');
                 copyDirRecursive(stagingDir, platformOutDir);
                 logGood('Game files copied.');
+                if (unusedAnalysis && unusedFiles === 'web') {
+                    // Before the file index and the packing, which then only hold what ships.
+                    logGood(`Left out ${unusedAssets.prune(platformOutDir, unusedAnalysis)} unused files from the Web build.`);
+                }
                 for (const name of applyBrowserFallbacks(platformOutDir)) logInfo(`Browser fallback applied to ${name} (it reads files with Node at load).`);
                 // A browser cannot list its files; the runtime corrects filename casing from this index.
                 const indexed = webFileIndex.writeWebFileIndex(platformOutDir);

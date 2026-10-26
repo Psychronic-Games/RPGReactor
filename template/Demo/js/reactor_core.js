@@ -605,6 +605,106 @@ Utils.localAssetExists = function(url) {
     }
 };
 
+/**
+ * The playtest record: every asset file a test play loads (pictures, sounds,
+ * movies, effects and their textures, models, fonts), kept in the project's
+ * asset-usage.rpgreactor.json. A deployment that leaves out unused files
+ * always ships these, so a file only a plugin's own code reaches is kept once
+ * the game has been played that far. Every way a page fetches a file is
+ * watched (fetch, XMLHttpRequest, an image's or a sound's or a movie's src, a
+ * FontFace), whoever asks: the runtime, Three.js, Effekseer or a plugin. The
+ * browser's resource timing would be simpler, but NW.js keeps none for a game
+ * served from its app folder. Desktop test play only; the file never ships.
+ */
+Utils.ASSET_USAGE_FILE = "asset-usage.rpgreactor.json";
+Utils.ASSET_USAGE_ROOTS = /^(img|audio|movies|effects|3d|fonts)\//;
+
+Utils.startAssetUseRecord = function(force) {
+    if (this._assetUse || typeof window === "undefined" || typeof location === "undefined") return;
+    try {
+        if (!this.isNwjs() || !(force || this.isOptionValid("test"))) return;
+    } catch (e) {
+        return;
+    }
+    this._assetUse = { seen: new Set(), fresh: new Set() };
+    const note = url => this.noteAssetUse(url);
+    try {
+        const fetchFile = window.fetch;
+        if (fetchFile) {
+            window.fetch = function(input) {
+                note(typeof input === "string" ? input : input && input.url);
+                return fetchFile.apply(this, arguments);
+            };
+        }
+        const open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            note(url);
+            return open.apply(this, arguments);
+        };
+        for (const proto of [HTMLImageElement.prototype, HTMLMediaElement.prototype]) {
+            const src = Object.getOwnPropertyDescriptor(proto, "src");
+            if (!src || !src.set) continue;
+            Object.defineProperty(proto, "src", {
+                configurable: true, enumerable: src.enumerable, get: src.get,
+                set(value) { note(value); src.set.call(this, value); }
+            });
+        }
+        const Font = window.FontFace;
+        if (Font) {
+            window.FontFace = class extends Font {
+                constructor(family, source, descriptors) {
+                    if (typeof source === "string") for (const m of source.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) note(m[1]);
+                    super(family, source, descriptors);
+                }
+            };
+        }
+    } catch (e) {
+        // A page that refuses a wrapper records what the others see.
+    }
+    setInterval(() => this.saveAssetUse(), 5000);
+    window.addEventListener("beforeunload", () => this.saveAssetUse());
+};
+
+Utils.noteAssetUse = function(url) {
+    const record = this._assetUse;
+    if (!record || !url) return;
+    let rel = String(url);
+    try {
+        const base = new URL(".", window.location.href).href;
+        const full = new URL(rel, window.location.href).href;
+        if (!full.startsWith(base)) return;
+        rel = decodeURIComponent(full.slice(base.length).split(/[?#]/)[0]);
+    } catch (e) {
+        return;
+    }
+    if (!this.ASSET_USAGE_ROOTS.test(rel) || record.seen.has(rel)) return;
+    record.seen.add(rel);
+    record.fresh.add(rel);
+};
+
+Utils.saveAssetUse = function() {
+    const record = this._assetUse;
+    if (!record || !record.fresh.size) return;
+    try {
+        const fs = require("fs");
+        const path = require("path");
+        const file = path.join(path.dirname(process.mainModule.filename), this.ASSET_USAGE_FILE);
+        let files = [];
+        try { files = JSON.parse(fs.readFileSync(file, "utf8")).files || []; } catch (e) { /* the first record */ }
+        const merged = new Set(files);
+        const before = merged.size;
+        for (const rel of record.fresh) merged.add(rel);
+        record.fresh.clear();
+        if (merged.size === before) return;
+        const sorted = [...merged].sort();
+        fs.writeFileSync(file, JSON.stringify({ about: "Asset files test play loaded; deployment keeps them. RPG Reactor writes this file.", files: sorted }, null, 1) + "\n");
+    } catch (e) {
+        // A read-only project folder records nothing.
+    }
+};
+
+Utils.startAssetUseRecord();
+
 Utils.resolveFileCase = function(url, suffix) {
     const corrected = this.correctFileCase(url + suffix);
     if (!corrected) return url;

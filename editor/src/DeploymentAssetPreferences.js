@@ -43,6 +43,26 @@ class DeploymentAssetPreferences {
         }
     }
 
+    static get UNUSED_FILES_KEY() { return 'rpg-reactor.deployUnusedFiles'; }
+
+    /** Which builds leave out unused files: 'off', 'web' (Web builds only, the default) or 'all'. */
+    static normalizeUnusedFiles(value) {
+        return value === 'off' || value === 'all' ? value : 'web';
+    }
+
+    /** The editor's own distribution (its bundled Demo) remembers its choice apart from a game's. */
+    static get DIST_UNUSED_FILES_KEY() { return 'rpg-reactor.distUnusedFiles'; }
+
+    static loadUnusedFiles(storage = localStorage, key = this.UNUSED_FILES_KEY) {
+        try { return this.normalizeUnusedFiles(storage.getItem(key)); }
+        catch { return 'web'; }
+    }
+
+    static saveUnusedFiles(value, storage = localStorage, key = this.UNUSED_FILES_KEY) {
+        try { storage.setItem(key, this.normalizeUnusedFiles(value)); return true; }
+        catch { return false; }
+    }
+
     static load(storage = localStorage) {
         try { return this.normalize(JSON.parse(storage.getItem(this.STORAGE_KEY))); }
         catch { return this.normalize(null); }

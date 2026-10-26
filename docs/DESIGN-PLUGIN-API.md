@@ -28,7 +28,7 @@ Status: **proposal, 2026-09-29.** Nothing here is built yet. It answers the need
 ```js
 /*:
  * @target MZ Reactor
- * @reactorVersion 0.99.2
+ * @reactorVersion 0.99.3
  * @base RR_ShazMultiFog
  * @orderAfter RR_ShazMultiFog
  * @plugindesc Fog layers that follow the camera.
@@ -56,7 +56,7 @@ The runtime gains `Utils.REACTOR_VERSION` (the engine version, bumped with the o
 One global, defined in `reactor_core.js` (it loads before every plugin):
 
 ```js
-Reactor.version        // "0.99.2"
+Reactor.version        // "0.99.3"
 Reactor.revision       // "20260930.12"
 Reactor.requires(version, pluginName)
 Reactor.events         // the existing ReactorEvents
