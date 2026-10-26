@@ -10,7 +10,7 @@ permissions:
 jobs:
   clean-checkout:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -23,14 +23,39 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Check every tracked JavaScript file
         run: node .github/scripts/check-syntax.cjs
-      - name: Run full test suite
-        working-directory: editor
-        run: npm test
       - name: Run full dependency audit
         working-directory: editor
         run: npm audit
       - name: Verify patch hygiene
         run: git diff --check
+
+  # The Node suite in eight parts, each a runner of its own. A GitHub runner
+  # does the suite's work about 3.5 times slower than four desktop cores (a
+  # clean clone pinned to four cores: 25 minutes; the runner reached a
+  # seventh of it in that time), so one job no longer finishes inside its
+  # limit. Files are dealt round the parts; the slowest file alone (the
+  # Character Builder cloth clips) takes about 26 minutes on a runner.
+  node-suite:
+    name: node-suite (${{ matrix.shard }}/8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - name: Install exact dependencies without lifecycle scripts
+        working-directory: editor
+        run: npm ci --ignore-scripts
+      - name: Run part ${{ matrix.shard }} of the test suite
+        working-directory: editor
+        run: npm test -- --test-shard=${{ matrix.shard }}/8
       - name: Reject generated changes and untracked test output
         shell: bash
         run: |

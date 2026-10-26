@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const root = path.join(__dirname, '..');
 const C3 = path.join(root, 'src', 'forge', 'Character3D');
@@ -162,12 +163,12 @@ test('the saved GLB carries the pattern, the scale tile on its second coordinate
     assert.deepEqual(json.animations.map(a => a.name), ['Idle', 'Walk', 'Run', 'Turn', 'Attack']);
 });
 
-test('a preview build is quick enough for a live slider', () => {
+test('a preview build is quick enough for a live slider', t => {
     for (const [kind, key, type] of [['snake', 'snakeType', 'python'], ['lizard', 'lizardType', 'greenLizard'], ['frog', 'frogType', 'treeFrog']]) {
         const r = recipeOf(kind, key, type); Creature.build(r, { quality: 'preview' });
-        const t0 = process.hrtime.bigint(); Creature.build({ ...r, girth: 1.1 }, { quality: 'preview' });
-        const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-        assert.ok(ms < 1500, kind + ' preview ' + ms.toFixed(0) + ' ms');
+        const start = cpuMicros(); Creature.build({ ...r, girth: 1.1 }, { quality: 'preview' });
+        const ms = (cpuMicros() - start) / 1000;
+        withinBudget(t, ms, 1500, kind + ' preview ' + ms.toFixed(0) + ' ms');
     }
 });
 
