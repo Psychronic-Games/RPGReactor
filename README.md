@@ -31,18 +31,19 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 </tr>
 </table>
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.2 and is not published yet; the latest tagged source release is [0.99.1](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.1).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.99.2](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.2).
 
-## What's new in 0.99.1
+## What's new in 0.99.2
 
-- **3D Character Builder:** make a character with sliders and pickers (dozens of species, any build, hair, clothing and armor) and save it as a rigged 3D model that walks, runs and fights in your game. Animals, birds, insects and sea creatures too.
-- **3D Prop Builder:** furniture, appliances, electronics, sci-fi interiors, weapons, tools and nine vehicles, built and saved the same way.
-- **Windows of their own:** the Database, the event editor, the Forge and plugin settings open beside the map, on a second monitor too.
-- **Battles:** battlers climb walls, jump down roofs (with fall damage you can see coming) and grapple up to ledges with a Grappler accessory. Troop pages run in battles on the map, and Effekseer effects match RPG Maker MZ's size.
-- **The world:** crossing between maps has no stall, the editor shows neighboring maps past a 2D map's edge, and self switches run from A to Z.
-- **Faster on weak hardware:** big 3D maps draw far less, 2D maps walk smoother, and high refresh rate screens get smooth motion.
+- **Reactor Features:** Reactor's own additions to MZ in one list (Database › System), each with a switch, so a plugin that does the same job can take over and the game behaves as MZ.
+- **Search:** the new toolbar Search (Ctrl+Shift+F) finds maps, events, event commands, common events, every Database record and Reactor's own pages, one click away.
+- **Sprite sheets from 3D:** the Character and Prop Builders export walking characters, props and swaying trees with 1 to 12 frames and 1, 4 or 8 directions.
+- **New looks:** a centaur, insectfolk, the two-headed Hydrata, catfolk and werewolves; sci-fi suits, cyberware, wasteland gear, body art and clothing that hangs and folds; rebuilt birds, bats, big cats and sea creatures.
+- **More to build:** rebuilt vehicles with body styles and moving doors and wheels, bows, staffs, axes and painted shields, instruments, and a Nature family of trees, plants and rocks that change with the seasons.
+- **3D maps:** paint dirt roads, cobblestone and paving along the hills with Path, 64 ground types a map, foliage you can recolor and pick, and fences, windows and doors that fit into walls.
+- **Database and events:** items that can't be sold, enemy stat variance and random drops, random ranges for Change Gold and Items, Slot Layouts, Resource Pools, HDR effects, and Set Movement Route's Rotate, Mirror, Flip and Frequency.
 
-Read the [0.99.1 release notes](docs/posts/release-notes-0.99.1.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+Read the [0.99.2 release notes](docs/posts/release-notes-0.99.2.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -61,7 +62,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.1.md): features, fixes, and compatibility limits for 0.99.1.
+- [Latest release notes](docs/posts/release-notes-0.99.2.md): features, fixes, and compatibility limits for 0.99.2.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Authoring a world](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
