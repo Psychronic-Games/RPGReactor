@@ -8004,18 +8004,127 @@
         const live = spriteset._reactor3d || null, scene = live && live.scene;
         const fight = typeof $gameFight !== "undefined" ? $gameFight : null, P = root.ReactorPhysics;
         let used = 0;
+        const fired = Rope.fired || (Rope.fired = new Set()), still = new Set();
         if (scene && scene.modelsGroup && typeof THREE !== "undefined" && fight && fight.isActive() && P && P.grappleHook) {
-            if (Rope.scene !== scene) { Rope.lines.length = 0; Rope.scene = scene; }
+            if (Rope.scene !== scene) { Rope.lines.length = 0; Rope.heads.length = 0; Rope.scene = scene; }
             for (const unit of fight._units) {
                 const character = unit.gone ? null : fight.character(unit), hook = character ? P.grappleHook(character, Rope.hook) : null;
                 if (!hook) continue;
                 const line = Rope.lines[used] || (Rope.lines[used] = Rope.make(scene));
+                const head = Rope.heads[used] || (Rope.heads[used] = Rope.makeHead(scene));
                 if (!line.parent) scene.modelsGroup().add(line);
-                Rope.place(line, character, hook);
+                if (!head.parent) scene.modelsGroup().add(head);
+                const loaded = Rope.place(line, character, hook, head);
+                // A grappler's own harpoon leaves its barrel while it is out on the line.
+                if (loaded) { loaded.visible = false; fired.add(loaded); still.add(loaded); }
                 used++;
             }
         }
         for (let i = used; i < Rope.lines.length; i++) Rope.lines[i].visible = false;
+        for (let i = used; i < Rope.heads.length; i++) if (Rope.heads[i]) Rope.heads[i].visible = false;
+        // Wound back: the harpoon is in the barrel again.
+        for (const mesh of fired) if (!still.has(mesh)) { mesh.visible = true; fired.delete(mesh); }
+    };
+
+    // The harpoon on the line's end: a steel shaft and a four-faced head, made once and shared, stretched to the
+    // length of the wearer's own (or a hand's length without a grappler) and turned along the line.
+    Rope.heads = [];
+    Rope.HEAD_LENGTH = 0.28;
+    Rope.makeHead = function(scene) {
+        const T = THREE, shared = Rope.headShared || (Rope.headShared = {});
+        if (!shared.geometry) {
+            const shaft = new T.CylinderGeometry(0.022, 0.022, 0.72, 6).translate(0, -0.36 + 0.08, 0);
+            const point = new T.ConeGeometry(0.075, 0.28, 4).translate(0, 0.08 + 0.14, 0);
+            const flukes = new T.ConeGeometry(0.06, 0.12, 3).rotateX(Math.PI).translate(0, 0.1, 0);
+            const parts = [shaft, point, flukes].map(g => g.toNonIndexed());
+            const count = parts.reduce((n, g) => n + g.attributes.position.count, 0), position = new Float32Array(count * 3);
+            let at = 0;
+            for (const g of parts) { position.set(g.attributes.position.array, at); at += g.attributes.position.array.length; }
+            const geometry = new T.BufferGeometry();
+            geometry.setAttribute("position", new T.BufferAttribute(position, 3));
+            // Along +z, the point first, so lookAt turns it to the edge; one unit long.
+            geometry.rotateX(Math.PI / 2);
+            geometry.computeVertexNormals();
+            shared.geometry = geometry;
+            shared.material = new T.MeshStandardMaterial({ color: 0x9aa3ab, metalness: 0.9, roughness: 0.3 });
+        }
+        const mesh = new T.Mesh(shared.geometry, shared.material);
+        mesh.frustumCulled = false;
+        mesh.visible = false;
+        scene.modelsGroup().add(mesh);
+        return mesh;
+    };
+
+    /**
+     * A wearer's grappler (the Character Builder's 'Grapple spike' part): the mesh, and which of its vertices are the
+     * point and the tail, found once from its shape (the two ends of the shaft; the point is the end the barbs crowd).
+     */
+    Rope.grapplerOf = function(holder) {
+        if (!holder || !holder.object) return null;
+        if (holder._reactorGrappler !== undefined) return holder._reactorGrappler;
+        let mesh = null;
+        holder.object.traverse(child => { if (!mesh && child.isMesh && /^grapple[\s_]?spike/i.test(child.name || "")) mesh = child; });
+        let found = null;
+        const P = mesh && mesh.geometry && mesh.geometry.attributes.position;
+        if (P && P.count > 4) {
+            const v = new THREE.Vector3(), w = new THREE.Vector3(), c = new THREE.Vector3();
+            for (let i = 0; i < P.count; i++) c.add(v.fromBufferAttribute(P, i));
+            c.multiplyScalar(1 / P.count);
+            const farthest = from => { let best = 0, index = 0; for (let i = 0; i < P.count; i++) { const d = v.fromBufferAttribute(P, i).distanceToSquared(from); if (d > best) { best = d; index = i; } } return index; };
+            const a = farthest(c), b = farthest(w.fromBufferAttribute(P, a));
+            const ends = [a, b].map(i => new THREE.Vector3().fromBufferAttribute(P, i)), span = ends[0].distanceTo(ends[1]);
+            const crowd = end => { let n = 0; for (let i = 0; i < P.count; i++) if (v.fromBufferAttribute(P, i).distanceTo(end) < span * 0.25) n++; return n; };
+            const pointFirst = crowd(ends[0]) >= crowd(ends[1]);
+            found = { mesh, tip: pointFirst ? a : b, tail: pointFirst ? b : a };
+        }
+        holder._reactorGrappler = found;
+        return found;
+    };
+
+    /**
+     * The line from a grappler's muzzle (a hand without one: the right hand, or the chest without a rigged model)
+     * to the hook, as much of it as is out, and the harpoon on its end. Returns the wearer's loaded harpoon mesh,
+     * to be hidden while the shot is out, or null.
+     */
+    Rope.place = function(line, character, hook, head) {
+        const S = F.Stage, View = root.ReactorBattleRoomView, holder = S && S.holderOf ? S.holderOf(character) : null;
+        const from = Rope.from || (Rope.from = new THREE.Vector3()), to = Rope.to || (Rope.to = new THREE.Vector3());
+        const grappler = Rope.grapplerOf(holder);
+        let length = Rope.HEAD_LENGTH;
+        if (grappler) {
+            // The muzzle: a fifth of the harpoon back from its point, where it sits loaded.
+            const tip = Rope.tip || (Rope.tip = new THREE.Vector3()), tail = Rope.tail || (Rope.tail = new THREE.Vector3());
+            grappler.mesh.getVertexPosition(grappler.tip, tip); grappler.mesh.localToWorld(tip);
+            grappler.mesh.getVertexPosition(grappler.tail, tail); grappler.mesh.localToWorld(tail);
+            length = tip.distanceTo(tail);
+            from.lerpVectors(tip, tail, 0.21);
+        } else {
+            let hand = null;
+            try { hand = holder && View && View.attachmentWorld ? View.attachmentWorld(holder, "rightHand") : null; } catch (error) { hand = null; }
+            if (hand) from.set(hand.x, hand.y, hand.z);
+            else {
+                const tall = S && S.heightOf ? S.heightOf(character) : 3, ground = S && S.groundOf ? S.groundOf(character) : 0;
+                from.set(character._realX + 0.5, ground + tall * 0.75, character._realY + 0.5);
+            }
+        }
+        to.set(hook.x, hook.z, hook.y);
+        if (hook.out < 1) to.lerpVectors(from, to, hook.out);
+        const span = from.distanceTo(to);
+        if (!(span > 0.05)) { line.visible = false; if (head) head.visible = false; return null; }
+        line.position.lerpVectors(from, to, 0.5);
+        line.lookAt(to);
+        const R = Reactor3D, camera = R.viewport && R.viewport() && R.viewport().camera ? R.viewport().camera() : null;
+        const width = camera ? Math.max(Rope.WIDTH, camera.position.distanceTo(line.position) * Rope.THIN) : Rope.WIDTH;
+        line.scale.set(width, width, span);
+        line.visible = true;
+        if (head) {
+            // The harpoon rides the line's end, its point at the end, turned along the line.
+            head.position.copy(to);
+            head.lookAt(to.x * 2 - from.x, to.y * 2 - from.y, to.z * 2 - from.z);
+            head.scale.setScalar(Math.max(length, 0.05));
+            head.visible = true;
+        }
+        return grappler ? grappler.mesh : null;
     };
 
     Rope.make = function(scene) {
@@ -8026,29 +8135,6 @@
         mesh.visible = false;
         scene.modelsGroup().add(mesh);
         return mesh;
-    };
-
-    /** From the right hand (the chest without a rigged model) to the hook, as much of the line as is out. */
-    Rope.place = function(line, character, hook) {
-        const S = F.Stage, View = root.ReactorBattleRoomView, holder = S && S.holderOf ? S.holderOf(character) : null;
-        let hand = null;
-        try { hand = holder && View && View.attachmentWorld ? View.attachmentWorld(holder, "rightHand") : null; } catch (error) { hand = null; }
-        const from = Rope.from || (Rope.from = new THREE.Vector3()), to = Rope.to || (Rope.to = new THREE.Vector3());
-        if (hand) from.set(hand.x, hand.y, hand.z);
-        else {
-            const tall = S && S.heightOf ? S.heightOf(character) : 3, ground = S && S.groundOf ? S.groundOf(character) : 0;
-            from.set(character._realX + 0.5, ground + tall * 0.75, character._realY + 0.5);
-        }
-        to.set(hook.x, hook.z, hook.y);
-        if (hook.out < 1) to.lerpVectors(from, to, hook.out);
-        const length = from.distanceTo(to);
-        if (!(length > 0.05)) { line.visible = false; return; }
-        line.position.lerpVectors(from, to, 0.5);
-        line.lookAt(to);
-        const R = Reactor3D, camera = R.viewport && R.viewport() && R.viewport().camera ? R.viewport().camera() : null;
-        const width = camera ? Math.max(Rope.WIDTH, camera.position.distanceTo(line.position) * Rope.THIN) : Rope.WIDTH;
-        line.scale.set(width, width, length);
-        line.visible = true;
     };
 
     if (typeof Spriteset_Map !== "undefined") {

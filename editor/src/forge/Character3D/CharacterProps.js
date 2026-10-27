@@ -393,6 +393,10 @@
         { id: 'utilityHarness', label: 'Utility harness', slot: 'harness', group: 'Back', finish: 'leather', defaults: { color: '#343d36', color2: '#a1a69b', size: 1 }, make: (m,L,o) => utilityHarness(m,L,o) },
         { id: 'quiver', label: 'Quiver', slot: 'back', group: 'Back', defaults: { color: '#6a4426', color2: '#e8e0d0', size: 1 }, make: (m, L, o) => quiver(m, L, o) },
         { id: 'jetpack', label: 'Jetpack', slot: 'back', group: 'Back', defaults: { color: '#9aa0a8', color2: '#ff8a20', size: 1, vents:5 }, options:{vents:[2,8]}, make: (m, L, o) => jetpack(m, L, o) },
+        // A launcher on the right forearm. Its harpoon is a part of its own ('Grapple spike'): a battle's grapple
+        // fires it from the barrel on the line and the barrel stands empty until it is wound back.
+        { id: 'grappler', label: 'Grappler', slot: 'grappler', group: 'Bags and tools', defaults: { color: '#3d434a', color2: '#c4762a', shape: 'tactical', size: 1 },
+            shapes: [['tactical', 'Tactical'], ['brass', 'Brass'], ['salvaged', 'Salvaged']], make: (m, L, o) => grappler(m, L, o) },
         { id: 'bowtie', label: 'Bow tie', slot: 'tie', group: 'Jewelry', defaults: { color: '#141416' }, make: (m, L, o) => bowtie(m, L, o) },
         { id: 'necktie', label: 'Tie', slot: 'tie', group: 'Jewelry', defaults: { color: '#6a1a2a', color2: '#2a1018', shape: 'straight', length: 1 },
             shapes: [['straight', 'Straight'], ['bow', 'Bow tie'], ['cravat', 'Cravat']], make: (m, L, o) => necktie(m, L, o) },
@@ -1160,6 +1164,159 @@
             m.tube([[0,y+.13*s,back-.015*s],[side*.035*s,y+.15*s,back-.09*s],[side*.07*s,y+.09*s,back-.09*s]],.005*s,8,linear('#393f43'),skin);
         }
         return [];
+    }
+
+    /**
+     * The grappler: a bracer fitted round the right forearm (the skin, or the sleeve over it), a launcher on its
+     * back with a barrel past the wrist, a winch drum wound with line, and the harpoon loaded in the barrel, its
+     * head out of the muzzle. Styles: tactical (gunmetal, panel lines), brass (riveted, leather straps), salvaged
+     * (pitted plates, mismatched bolts). Everything rides the forearm bone, so the barrel follows the arm and the
+     * hand moves free under it.
+     */
+    function grappler(m, L, o) {
+        const s = o.size || 1, style = o.shape || 'tactical';
+        const fore = L.bone('RightForeArm'), hand = L.bone('RightHand'), foreIndex = L.boneIndex('RightForeArm');
+        const skin = rigid(foreIndex), a0 = fore.head, a1 = hand.head, length = len(sub(a1, a0)), d = norm(sub(a1, a0));
+        // The back of the hand: across the knuckles against along the hand, turned away from the palm.
+        const across = sub(L.bone('RightHandIndex1').head, L.bone('RightHandPinky1').head), along = sub(L.bone('RightHandMiddle1').head, a1);
+        let back = norm(cross(along, across));
+        if (dot(back, [-0.6, 1, 0]) < 0) back = mul(back, -1);
+        const U = norm(sub(back, mul(d, dot(back, d)))), S = cross(d, U);
+        // The forearm's surface round the bone: the bare arm. A sleeve is drawn in under the shell (below), as a
+        // strapped bracer gathers the cloth, rather than the shell swelling round a loose sleeve.
+        // Sampled every few centimetres along the arm, each from the skin within a short reach of it, so a ring
+        // follows the arm where it is (a bulging forearm makes no bell of the shell at the elbow).
+        // The forearm's skin: what rides the forearm and the hand (the elbow's bend, on the upper arm, would swell
+        // the shell's end into a bell).
+        const armBones = new Set(['RightForeArm', 'RightHand'].map(n => L.boneIndex(n)));
+        const sleeveBones = new Set(['RightArm', 'RightForeArm', 'RightHand'].map(n => L.boneIndex(n)));
+        const arm = [], P0 = L.bodyPart.positions, J0 = L.bodyPart.joints, W0 = L.bodyPart.weights;
+        for (let v = 0; v < P0.length / 3; v++) {
+            let best = 0, bone = -1;
+            for (let k = 0; k < 4; k++) if (W0[v * 4 + k] > best) { best = W0[v * 4 + k]; bone = J0[v * 4 + k]; }
+            if (!armBones.has(bone)) continue;
+            const q = [P0[v * 3] - a0[0], P0[v * 3 + 1] - a0[1], P0[v * 3 + 2] - a0[2]], t = dot(q, d) / length;
+            if (t < 0.15 || t > 1.05) continue;
+            const r = sub(q, mul(d, dot(q, d))), x = dot(r, S), y = dot(r, U);
+            if (Math.hypot(x, y) < 0.09) arm.push(t, x, y);
+        }
+        // Each sample: the ellipse through the arm's four extremes there, grown until every point of the skin near
+        // it is inside (a muscled forearm is square in section, and pokes through an ellipse at its corners).
+        const samples = 40, CX = [], CY = [], RX = [], RY = [];
+        for (let i = 0; i < samples; i++) {
+            const t = 0.15 + i / (samples - 1) * 0.87, near = [];
+            for (let reach = 0.03; !near.length && reach < 0.2; reach *= 2) for (let k = 0; k < arm.length; k += 3) if (Math.abs(arm[k] - t) <= reach) near.push(arm[k + 1], arm[k + 2]);
+            let mt = 0.022, ml = 0.022, mx = 0.022, mr = 0.022;
+            for (let k = 0; k < near.length; k += 2) { mx = Math.max(mx, near[k]); mr = Math.max(mr, -near[k]); mt = Math.max(mt, near[k + 1]); ml = Math.max(ml, -near[k + 1]); }
+            const cx = (mx - mr) / 2, cy = (mt - ml) / 2;
+            let rx = (mx + mr) / 2, ry = (mt + ml) / 2, grow = 1, round = 0;
+            for (let k = 0; k < near.length; k += 2) {
+                grow = Math.max(grow, Math.hypot((near[k] - cx) / rx, (near[k + 1] - cy) / ry));
+                round = Math.max(round, Math.hypot(near[k] - cx, near[k + 1] - cy));
+            }
+            // Whichever holds the skin in less: the grown ellipse, or the circle through the farthest point.
+            if (round * round < rx * ry * grow * grow) { rx = ry = round; grow = 1; }
+            CX.push(cx); CY.push(cy); RX.push(rx * grow); RY.push(ry * grow);
+        }
+        const at = (arr, t) => { const f = Math.min(samples - 1.001, Math.max(0, (t - 0.15) / 0.87 * (samples - 1))), i = Math.floor(f); return arr[i] + (arr[i + 1] - arr[i]) * (f - i); };
+        // The sleeve's vertices about the forearm: garment cloth riding the right arm's bones.
+        const T0 = 0.34, T1 = 0.9;
+        const sleeve = [];
+        for (const part of L.outfitParts || []) {
+            if (!part || !part.positions || !part.joints) continue;
+            const P = part.positions, J = part.joints, W = part.weights;
+            for (let v = 0; v < P.length / 3; v++) {
+                let best = 0, bone = -1;
+                for (let k = 0; k < 4; k++) if (W[v * 4 + k] > best) { best = W[v * 4 + k]; bone = J[v * 4 + k]; }
+                if (!sleeveBones.has(bone)) continue;
+                const q = [P[v * 3] - a0[0], P[v * 3 + 1] - a0[1], P[v * 3 + 2] - a0[2]], t = dot(q, d) / length;
+                if (t > T0 - 0.08 && t < T1 + 0.08 && len(sub(q, mul(d, dot(q, d)))) < 0.13) sleeve.push([P, v, t]);
+            }
+        }
+        const clear = (sleeve.length ? 0.011 : 0.005) * s;
+        const ring = t => ({ center: add(add(add(a0, mul(d, t * length)), mul(S, at(CX, t))), mul(U, at(CY, t))), rx: at(RX, t) + clear, ry: at(RY, t) + clear });
+        // Under the shell the sleeve is held just inside it; past each rim the hold lets go over a few centimetres,
+        // so the cloth bunches out of the cuffs.
+        for (const [P, v, t] of sleeve) {
+            const hold = t < T0 ? 1 - (T0 - t) / 0.08 : t > T1 ? 1 - (t - T1) / 0.08 : 1;
+            if (hold <= 0) continue;
+            const R = ring(Math.max(T0, Math.min(T1, t))), axisAt = add(a0, mul(d, t * length));
+            const c = add(axisAt, sub(R.center, add(a0, mul(d, Math.max(T0, Math.min(T1, t)) * length))));
+            const off = sub([P[v * 3], P[v * 3 + 1], P[v * 3 + 2]], c), x = dot(off, S), y = dot(off, U), e = Math.hypot(x / R.rx, y / R.ry);
+            const inside = 1 - 0.0035 * s / Math.min(R.rx, R.ry);
+            if (e <= inside) continue;
+            const k = 1 + (inside / e - 1) * hold, moved = add(add(c, mul(d, dot(off, d))), add(mul(S, x * k), mul(U, y * k)));
+            P[v * 3] = moved[0]; P[v * 3 + 1] = moved[1]; P[v * 3 + 2] = moved[2];
+        }
+        const pal = {
+            tactical: { metal: o.color, dark: '#1c1f23', strap: '#202326', trim: o.color2 },
+            brass: { metal: o.color === '#3d434a' ? '#a8823c' : o.color, dark: '#3a2a1a', strap: '#5a3a22', trim: o.color2 === '#c4762a' ? '#6a4a2a' : o.color2 },
+            salvaged: { metal: o.color === '#3d434a' ? '#6c5f50' : o.color, dark: '#2a2622', strap: '#3d3a2c', trim: o.color2 === '#c4762a' ? '#8a4a2a' : o.color2 }
+        }[style] || {};
+        const metal = linear(pal.metal), dark = linear(pal.dark), trim = linear(pal.trim), steel = linear('#9aa3ab');
+        const straps = new Mesh(), spike = new Mesh();
+        // The bracer: an armored shell, a little flared at both ends, its rims rolled.
+        m.loft(12, (i, t) => {
+            const tt = T0 + (T1 - T0) * t, R = ring(tt), flare = 1 + 0.06 * Math.max(0, Math.abs(t - 0.5) * 2 - 0.6) / 0.4;
+            return { center: R.center, x: S, y: U, rx: R.rx * flare, ry: R.ry * flare };
+        }, 28, (t, a) => style === 'salvaged' && Math.sin(a * 3 + t * 9) > 0.7 ? mul(metal, 0.78) : metal, skin, false);
+        for (const tt of [T0, T1]) {
+            const R = ring(tt), path = Array.from({ length: 29 }, (_, k) => { const a = k / 28 * Math.PI * 2; return add(R.center, add(mul(S, Math.cos(a) * (R.rx * 1.06 + 0.0015)), mul(U, Math.sin(a) * (R.ry * 1.06 + 0.0015)))); });
+            m.tube(path, 0.0035 * s, 8, style === 'brass' ? trim : dark, skin);
+        }
+        // Two straps under the shell's lower half, buckled on the inside of the arm.
+        for (const tt of [0.42, 0.78]) {
+            const R = ring(tt), path = Array.from({ length: 25 }, (_, k) => { const a = Math.PI + k / 24 * Math.PI; return add(R.center, add(mul(S, Math.cos(a) * (R.rx + 0.003)), mul(U, Math.sin(a) * (R.ry + 0.003)))); });
+            straps.tube(path, 0.006 * s, 6, linear(pal.strap), skin);
+            straps.roundedBox(add(R.center, mul(U, -(R.ry + 0.006))), [d, S, U], [0.008 * s, 0.011 * s, 0.003 * s], 0.002 * s, style === 'brass' ? trim : steel, skin, 1);
+        }
+        // The launcher on the back of the arm, and the barrel along it to past the wrist.
+        // On the shell's top: its center at that point of the arm, out by its height there.
+        const onTop = (t, h) => { const R = ring(Math.min(t, T1)); return add(add(R.center, mul(d, (t - Math.min(t, T1)) * length)), mul(U, R.ry - 0.003 * s + h)); };
+        const hh = 0.015 * s;
+        m.roundedBox(onTop(0.62, hh), [d, S, U], [0.20 * length, 0.021 * s, hh], 0.006 * s, metal, skin, 3);
+        m.roundedBox(onTop(0.62, hh * 2 + 0.003 * s), [d, S, U], [0.16 * length, 0.012 * s, 0.003 * s], 0.002 * s, dark, skin, 1);
+        const bore = 0.0095 * s, barrelUp = hh * 2 + 0.002 * s + bore * 0.8;
+        const barrelAt = t => onTop(t, barrelUp);
+        m.tube([barrelAt(0.5), barrelAt(0.8), barrelAt(1.05)], bore, 14, dark, skin);
+        m.tube([barrelAt(0.98), barrelAt(1.06)], bore * 1.28, 14, style === 'brass' ? trim : metal, skin);
+        m.disk(add(barrelAt(1.06), mul(d, 0.0005)), d, bore * 0.72, linear('#050506'), skin, 14);
+        for (const t of [0.56, 0.86]) m.tube([barrelAt(t - 0.015), barrelAt(t + 0.015)], bore * 1.18, 14, style === 'brass' ? trim : metal, skin);
+        // The winch drum on the outer side, wound with line, and the line into the breech.
+        const drum = add(onTop(0.44, hh), mul(S, -(0.021 * s + 0.011 * s)));
+        m.tube([add(drum, mul(S, 0.01 * s)), add(drum, mul(S, -0.01 * s))], 0.016 * s, 16, metal, skin);
+        for (let k = 0; k < 5; k++) {
+            const off = (k - 2) * 0.0036 * s, path = Array.from({ length: 25 }, (_, j) => { const a = j / 24 * Math.PI * 2; return add(add(drum, mul(S, off)), add(mul(d, Math.cos(a) * 0.0125 * s), mul(U, Math.sin(a) * 0.0125 * s))); });
+            m.tube(path, 0.0017 * s, 6, trim, skin);
+        }
+        m.tube([add(drum, mul(U, 0.0125 * s)), onTop(0.5, barrelUp - 0.004 * s), barrelAt(0.52)], 0.0016 * s, 6, trim, skin);
+        // Style details: panel lines and a warning band, rivets, or mismatched bolts.
+        if (style === 'tactical') {
+            for (const t of [0.5, 0.74]) m.roundedBox(onTop(t, hh * 2 + 0.0004), [d, S, U], [0.0016 * s, 0.019 * s, 0.0006 * s], 0.0004 * s, dark, skin, 1);
+            m.roundedBox(add(onTop(0.62, hh), mul(S, 0.0215 * s)), [d, S, U], [0.05 * length, 0.0008 * s, hh * 0.45], 0.0004 * s, trim, skin, 1);
+        } else {
+            const rivets = style === 'brass' ? 6 : 4;
+            for (let k = 0; k < rivets; k++) for (const side of [-1, 1]) {
+                const t = 0.46 + k / (rivets - 1) * 0.32;
+                m.sphere(add(onTop(t, hh), mul(S, side * 0.0212 * s)), 0.0022 * s * (style === 'salvaged' && k % 2 ? 1.5 : 1), style === 'brass' ? trim : steel, skin, 4, 8);
+            }
+        }
+        // The harpoon: a shaft in the barrel, a faceted head out of the muzzle, three barbs swept back.
+        const tipT = 1.18, headT = 1.09;
+        spike.tube([barrelAt(0.6), barrelAt(headT)], 0.0042 * s, 8, steel, skin);
+        spike.loft(5, (i, t) => {
+            const tt = headT + (tipT - headT) * t, r = [0.0055, 0.0105, 0.0085, 0.0045, 0.0003][i] * s;
+            return { center: barrelAt(tt), x: S, y: U, rx: r, ry: r };
+        }, 4, steel, skin, true);
+        for (let k = 0; k < 3; k++) {
+            const a = k / 3 * Math.PI * 2 + Math.PI / 6, out = add(mul(S, Math.cos(a)), mul(U, Math.sin(a)));
+            const base = add(barrelAt(headT + 0.02), mul(out, 0.008 * s)), tip = add(add(barrelAt(headT - 0.02), mul(out, 0.016 * s)), mul(d, -0.004 * s));
+            spike.tube([base, lerp(base, tip, 0.5), tip], [0.0026 * s, 0.0018 * s, 0.0004 * s], 4, steel, skin);
+        }
+        return [
+            { mesh: straps, extra: { name: 'Grappler straps', roughness: 0.62, metalness: 0 } },
+            { mesh: spike, extra: { name: 'Grapple spike', roughness: 0.24, metalness: 0.92 } }
+        ];
     }
 
     function bowtie(m, L, o) {

@@ -8333,3 +8333,10 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  };
  for(const [locale,values]of Object.entries(rows)){if(values.length!==keys.length)throw Error('Unused files translation count: '+locale+' '+values.length+'/'+keys.length);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 })();
+
+// Forge › the grappler accessory (2026-10-26). A machine-assisted first pass, flagged for review.
+(() => {
+ const keys=['Grappler','Brass'];
+ const rows={ja:'グラップラー|真鍮','zh-Hant':'鉤索發射器|黃銅','zh-Hans':'钩索发射器|黄铜',ko:'그래플러|황동',es:'Lanzagarfios|Latón',pt:'Lança-arpão|Latão',fr:'Grappin|Laiton',de:'Enterhaken-Werfer|Messing',it:'Lanciarampini|Ottone',ru:'Гарпунная перчатка|Латунь',pl:'Wyrzutnia kotwiczki|Mosiądz',el:'Εκτοξευτής αρπάγης|Ορείχαλκος',ar:'قاذف الخطاف|نحاس أصفر',tr:'Kanca atar|Pirinç',id:'Pelontar kait|Kuningan',vi:'Súng móc|Đồng thau',th:'เครื่องยิงตะขอ|ทองเหลือง'};
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Grappler translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();
