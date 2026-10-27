@@ -156,7 +156,30 @@ test('codec exactly round-trips JSON-looking scalar strings and nested RPG Maker
     assert.equal(codec.serializeComplex(decoded, schema, definitions), raw);
 });
 
-test('codec materializes omitted and legacy blank boolean and number struct fields', () => {
+test('codec materializes blank boolean and number struct fields that declare a default', () => {
+    const definitions = {
+        Settings: {
+            Enabled: { type: 'boolean', default: 'true' },
+            Count: { type: 'number', default: '5' }
+        }
+    };
+    const schema = { type: 'struct<Settings>' };
+
+    assert.deepEqual(codec.deserializeComplex('{}', schema, definitions), {
+        Enabled: 'true', Count: '5'
+    });
+    // A blank stored for a field that HAS a default is a legacy row, and is
+    // still normalised to the type's own empty value rather than left blank.
+    const legacy = codec.deserializeComplex('{"Enabled":"","Count":""}', schema, definitions);
+    assert.deepEqual(legacy, { Enabled: 'false', Count: '0' });
+    assert.equal(codec.serializeComplex(legacy, schema, definitions),
+        '{"Enabled":"false","Count":"0"}');
+});
+
+test('codec leaves a struct field that declares no default unset', () => {
+    // Materialising one destroys the only thing a plugin has to go on: an
+    // author who wrote no @default meant the field to be optional, and an
+    // invented 0 is indistinguishable from a typed one once it is saved.
     const definitions = {
         Settings: {
             Enabled: { type: 'boolean', default: null },
@@ -166,15 +189,16 @@ test('codec materializes omitted and legacy blank boolean and number struct fiel
     const schema = { type: 'struct<Settings>' };
 
     assert.deepEqual(codec.deserializeComplex('{}', schema, definitions), {
-        Enabled: 'false', Count: '0'
+        Enabled: '', Count: ''
     });
     assert.deepEqual(codec.createDefaultStructValue(definitions.Settings, definitions), {
-        Enabled: 'false', Count: '0'
+        Enabled: '', Count: ''
     });
-    const legacy = codec.deserializeComplex('{"Enabled":"","Count":""}', schema, definitions);
-    assert.deepEqual(legacy, { Enabled: 'false', Count: '0' });
-    assert.equal(codec.serializeComplex(legacy, schema, definitions),
-        '{"Enabled":"false","Count":"0"}');
+    assert.equal(codec.serializeComplex({ Enabled: '', Count: '' }, schema, definitions),
+        '{"Enabled":"","Count":""}');
+    // A value actually entered still survives, including a real zero.
+    assert.deepEqual(codec.deserializeComplex('{"Enabled":"false","Count":"0"}', schema, definitions),
+        { Enabled: 'false', Count: '0' });
 });
 
 test('malformed arrays and structs remain raw instead of becoming empty containers', () => {

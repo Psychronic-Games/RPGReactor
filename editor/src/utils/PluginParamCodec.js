@@ -45,6 +45,12 @@
             return Array.isArray(entries) ? entries : rawValue ?? '';
         }
         if (rawValue === null || rawValue === undefined || rawValue === '') {
+            // A field with no @default is optional, so leave it unset rather
+            // than inventing a value the plugin cannot tell from a deliberate
+            // one. What is invented here is written straight back out on the
+            // next save, so a struct row meant to be mostly empty arrived
+            // carrying a zero in every numeric field it had not named.
+            if (fieldSchema && fieldSchema.default === null) return '';
             if (type === 'boolean') return 'false';
             if (type === 'number') return '0';
             return '';

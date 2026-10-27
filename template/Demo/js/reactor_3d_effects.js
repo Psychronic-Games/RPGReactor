@@ -783,11 +783,13 @@ Reactor3D.spawnAnchoredAnimation = function(effect, character, holder) {
     // entry of the spriteset's own list.
     const list = spriteset._animationSprites || [];
     const count = list.length;
-    const previousContext = this._spawningEffectContext;
+    const previousContext = this._spawningEffectContext, previousAnchored = this._spawningAnchored;
     try {
         this._spawningEffectContext = animation.effectName ? this.GpuEffects.forViewport(spriteset._reactor3d?.viewport) : null;
+        // Anchored in the world: not a screen animation for Sprite_Animation.SceneLayer to take.
+        this._spawningAnchored = true;
         spriteset.createAnimationSprite([character], animation, false, 0);
-    } finally { this._spawningEffectContext = previousContext; }
+    } finally { this._spawningEffectContext = previousContext; this._spawningAnchored = previousAnchored; }
     const sprite = list.length > count ? list[list.length - 1] : null;
     if (!sprite) {
         spriteset._effectsContainer.removeChild(standIn);

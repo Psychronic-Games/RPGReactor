@@ -1473,7 +1473,12 @@ class PluginManager {
         if (type === 'number') {
             const input = document.createElement('input');
             input.type = 'number';
-            input.value = value || 0;
+            // An optional field is left empty and says so, rather than reading
+            // as a 0 somebody typed -- see deserializeStructFieldValue.
+            const optional = fieldSchema.default === null;
+            const empty = value === '' || value === null || value === undefined;
+            input.value = empty ? (optional ? '' : 0) : value;
+            if (optional) input.placeholder = this._tt('(unset)');
             if (fieldSchema.min !== null) input.min = fieldSchema.min;
             if (fieldSchema.max !== null) input.max = fieldSchema.max;
             input.style.cssText = `
@@ -1573,6 +1578,9 @@ class PluginManager {
         const input = document.createElement('input');
         input.type = 'text';
         input.value = typeof value === 'object' ? JSON.stringify(value) : String(value || '');
+        // Same as the number field above: no @default means the author made the
+        // field optional, so an empty box is deliberate and should say so.
+        if (fieldSchema.default === null && !input.value) input.placeholder = this._tt('(unset)');
         input.style.cssText = `
             width: 100%;
             padding: 4px 8px;

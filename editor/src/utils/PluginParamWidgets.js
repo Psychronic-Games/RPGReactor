@@ -375,13 +375,19 @@
         return row;
     };
 
-    const createColor = ({ value, onChange, inputStyle, context = {} }) => {
+    const createColor = ({ value, onChange, inputStyle, context = {}, schema = null }) => {
         const row = root.document.createElement('div');
         row.className = 'rr-plugin-color';
         row.style.cssText = 'display:flex;gap:6px;align-items:center;min-width:0;width:100%;';
         const raw = root.document.createElement('input');
         raw.type = 'text';
         raw.value = String(value ?? '');
+        // A field with no @default is optional, and its empty box says so --
+        // otherwise only the disabled swatch beside it hints at anything, and a
+        // disabled swatch still paints itself black.
+        if (schema && schema.default === null && !raw.value) {
+            raw.placeholder = text('(unset)', context.tt);
+        }
         raw.className = 'rr-plugin-color-raw';
         raw.style.cssText = `${inputCss(inputStyle)}flex:1;min-width:0;`;
         const swatch = root.document.createElement('input');

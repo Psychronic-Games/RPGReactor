@@ -25,6 +25,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [Reactor plugin API](DESIGN-PLUGIN-API.md): proposal for `@target Reactor` headers, named and ordered hooks in place of raw aliasing, and a plugin reference generated from the runtime. Not built yet.
 - [Runtime events](RUNTIME-EVENTS.md): the `ReactorEvents` feed a plugin can observe instead of wrapping battle methods; the test holds the page to the source.
 - [HDR effect overlay](HDR-EFFECT-OVERLAY.md): opt-in HDR rendering for Effekseer effects: the sidecar file, the normally graded twin, tuning, and what it does not cover.
+- [Effekseer effects in the scene](EFFEKSEER-IN-SCENE.md): screen animations drawn inside PIXI 8's scene instead of on the overlay canvas: what changes for a game (windows above effects, tint and filters, distortion), when it applies, how to switch it off, and what plugins see.
 - [Performance checks](PERFORMANCE.md): reproducible CPU/GPU profiling and image comparisons, with measured results per pass.
 - [Importing older RPG Maker projects](IMPORTING-LEGACY-PROJECTS.md): RPG Maker 2000, 2003, XP, VX and VX Ace games into a new project; the report, the import, what converts exactly, what the MZ format cannot hold, and what is still to come.
 - [Demo: assets not on disk](demo-missing-se.md): art the bundled Demo references but does not ship, kept current while originals are authored.

@@ -18,18 +18,18 @@ function RR_isValidHdrSidecar(s) {
         && s.bloom.sizes.every(x => finite(x) && x > 0)
         && s.bloom.tints.every(x => finite(x) && x >= 0)
         && finite(s.bloom.intensity) && s.bloom.intensity >= 0
-        && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0);
+        && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0
+        && (s.bloom.threshold === undefined || finite(s.bloom.threshold)));
 }
 
 /**
- * The editor's previews have no HDR pipeline (it lives in the game runtime),
- * so an HDR effect would play here as raw, ungraded light. Resolve it the way
- * the game does when it cannot render HDR: a valid `<effect>.hdr.json` names a
- * normally graded twin, and that is what the preview plays. Where the game
- * refuses an effect, so does the preview: a `-hdr` effect with no sidecar, or
- * a sidecar that cannot be read or is invalid.
+ * Read an effect's HDR sidecar the way the game does. A valid
+ * `<effect>.hdr.json` names a normally graded twin, which is what a preview
+ * plays when it cannot draw HDR (RRHdrPreview decides). Where the game
+ * refuses an effect, so does the preview: a `-hdr` effect with no sidecar,
+ * or a sidecar that cannot be read or is invalid.
  *
- * @returns null for an ordinary effect, else { twinPath, twinName, sidecarPath }
+ * @returns null for an ordinary effect, else { twinPath, twinName, sidecarPath, sidecar }
  * @throws an Error with `rrHdrRefused` set when the game would not play it
  */
 function RR_resolveHdrPreviewTwin(effectPath) {
@@ -61,7 +61,7 @@ function RR_resolveHdrPreviewTwin(effectPath) {
         }
     }
     const twinPath = path.join(root, ...sidecar.fallback.split('/')) + '.efkefc';
-    return { twinPath, twinName: sidecar.fallback, sidecarPath };
+    return { twinPath, twinName: sidecar.fallback, sidecarPath, sidecar };
 }
 
 /**
@@ -82,6 +82,9 @@ function RR_resolveHdrPreviewTwin(effectPath) {
  *
  * An HDR effect is loaded as its normally graded twin (see
  * RR_resolveHdrPreviewTwin), and the returned effect carries `rrHdrTwin`.
+ * A preview that draws HDR loads through RRHdrPreview.load instead. Given
+ * `hdrSource`, the HDR effect this file is loaded for, the sidecar is not
+ * consulted again.
  *
  * @returns the effekseer effect handle from context.loadEffect
  * @throws if the effect file itself cannot be read, or (with `rrHdrRefused`)
@@ -761,6 +764,10 @@ class DatabaseAnimationEditor {
                                 <label style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--color-text); cursor: pointer; margin-left: 4px;">
                                     <input type="checkbox" id="animation-repeat-checkbox" style="cursor: pointer;">
                                     <span>${tt('Repeat')}</span>
+                                </label>
+                                <label id="animation-hdr-toggle-label" style="display: none; align-items: center; gap: 4px; font-size: 10px; color: var(--color-text); cursor: pointer; margin-left: 4px;">
+                                    <input type="checkbox" id="animation-hdr-toggle" style="cursor: pointer;">
+                                    <span>${tt('HDR')}</span>
                                 </label>
                                 ` : ''}
                                 <div style="flex: 1; text-align: right; font-size: 9px; color: var(--color-text-muted); min-width: 100px;">
@@ -1730,6 +1737,15 @@ class DatabaseAnimationEditor {
      * every row names the exact array entries it edits. `soundIndex`,
      * `flashIndex` and `timingIndex` are -1 when the row has no such entry.
      */
+    /** Whether the viewer has switched the Database preview's HDR off; remembered per editor. */
+    static _hdrPreviewOff() {
+        try { return localStorage.getItem('rr-animation-preview-hdr') === 'off'; } catch (e) { return false; }
+    }
+
+    static _setHdrPreviewOff(off) {
+        try { localStorage.setItem('rr-animation-preview-hdr', off ? 'off' : 'on'); } catch (e) {}
+    }
+
     static timingRows(animation) {
         if (DatabaseAnimationEditor.isSpriteAnimation(animation)) {
             // Sprite timings are already one entry per row.
@@ -4121,6 +4137,8 @@ class DatabaseAnimationEditor {
         let effect = null;
         let handle = null;
         let isPlaying = false;
+        // Set when the HDR toggle reloads a playing effect: play again once it loads.
+        let playAfterLoad = false;
         let gl = null;
         let animationFrameId = null;
         let startTime = 0;
@@ -4194,6 +4212,8 @@ class DatabaseAnimationEditor {
                 console.debug('Effekseer effect loaded successfully');
                 playBtn.disabled = false;
                 playBtn.style.opacity = '1';
+                // onLoad can fire inside the load call, before `effect` is set.
+                if (playAfterLoad) { playAfterLoad = false; setTimeout(() => { if (effekseerContext) play(); }, 0); }
             };
 
             const onError = (message, path) => {
@@ -4204,7 +4224,7 @@ class DatabaseAnimationEditor {
                 playBtn.style.opacity = '0.5';
             };
 
-            // An HDR effect previews as its graded twin, or not at all; say which.
+            // An HDR effect previews in HDR, as its graded twin, or not at all; say which.
             const hdrNote = document.getElementById('animation-hdr-note');
             const showHdrNote = (text, warning = false) => {
                 if (!hdrNote) return;
@@ -4213,10 +4233,25 @@ class DatabaseAnimationEditor {
                 hdrNote.style.color = warning ? 'var(--color-warning)' : 'var(--color-text-muted)';
             };
             showHdrNote('');
+            // The HDR toggle shows for an effect the preview can draw in HDR,
+            // and switches it to the twin the game falls back to and back.
+            const hdrOff = DatabaseAnimationEditor._hdrPreviewOff();
+            const hdrToggle = document.getElementById('animation-hdr-toggle');
+            const hdrToggleLabel = document.getElementById('animation-hdr-toggle-label');
+            const showHdrToggle = shown => {
+                if (!hdrToggle || !hdrToggleLabel) return;
+                hdrToggleLabel.style.display = shown ? 'flex' : 'none';
+                hdrToggle.checked = !hdrOff;
+            };
+            showHdrToggle(false);
 
             try {
-                effect = RR_loadEffekseerEffectFromFile(effekseerContext, effectPath, 1.0, onLoad, onError);
-                if (effect?.rrHdrTwin) {
+                effect = RRHdrPreview.load(effekseerContext, gl, effectPath, 1.0, onLoad, onError,
+                    { width: canvas.width, height: canvas.height }, { off: hdrOff });
+                showHdrToggle(!!(effect?.rrHdr || (effect?.rrHdrTwin && hdrOff)));
+                if (effect?.rrHdr) {
+                    showHdrNote(tt('HDR effect: previewed in HDR, with its bloom and grade.'));
+                } else if (effect?.rrHdrTwin) {
                     showHdrNote(tt('HDR effect: the preview plays its normally graded twin, {twin}.')
                         .replace('{twin}', effect.rrHdrTwin.twinName));
                 }
@@ -4336,8 +4371,10 @@ class DatabaseAnimationEditor {
                 console.debug('[Effekseer Render] Matrices set as arrays');
             }
 
-            // Draw effects
-            effekseerContext.beginDraw();
+            // Draw effects. An HDR effect draws into its light buffer, which is
+            // then bloomed, graded and screened over the backdrop copied above.
+            const hdr = effect && effect.rrHdr;
+            if (!hdr) effekseerContext.beginDraw();
             let effectFinished = false;
             let pictureEnded = false;
             try {
@@ -4347,7 +4384,16 @@ class DatabaseAnimationEditor {
                         console.debug('[Effekseer Render] Handle location:',
                             handle.location ? handle.location : 'not available');
                     }
-                    effekseerContext.drawHandle(handle);
+                    if (hdr) {
+                        RRHdrPreview.draw(gl, hdr, { width: canvas.width, height: canvas.height,
+                            bloomWidth: RRHdrPreview.bloomWidth(canvas.height) }, () => {
+                            effekseerContext.beginDraw();
+                            effekseerContext.drawHandle(handle);
+                            effekseerContext.endDraw();
+                        });
+                    } else {
+                        effekseerContext.drawHandle(handle);
+                    }
 
                     // Check for GL errors on the first frame only: it is the
                     // only one reported, and getError waits for the GPU to
@@ -4361,7 +4407,7 @@ class DatabaseAnimationEditor {
                     effectFinished = true;
                 }
             } finally {
-                effekseerContext.endDraw();
+                if (!hdr) effekseerContext.endDraw();
             }
             if (handle && handle.exists) {
                 // Looked for while the first play measures the picture's length only: each look reads the
@@ -4544,6 +4590,7 @@ class DatabaseAnimationEditor {
                     handle = null;
                 }
                 if (gl && gl.getExtension) {
+                    RRHdrPreview.release(gl);
                     const lose = gl.getExtension('WEBGL_lose_context');
                     if (lose) { try { lose.loseContext(); } catch (e) {} }
                     gl = null;
@@ -4565,7 +4612,24 @@ class DatabaseAnimationEditor {
         playBtn.addEventListener('click', play);
         stopBtn.addEventListener('click', stop);
 
-        // Set up Effekseer parameter controls
+        // Switching HDR reloads the effect as itself or as its twin, and plays
+        // it again if it was playing.
+        const hdrToggle = document.getElementById('animation-hdr-toggle');
+        if (hdrToggle) hdrToggle.addEventListener('change', () => {
+            DatabaseAnimationEditor._setHdrPreviewOff(!hdrToggle.checked);
+            if (!effekseerContext) return;
+            const resume = isPlaying;
+            stop();
+            effekseerContext._makeContextCurrent?.();
+            try { if (effect) effekseerContext.releaseEffect(effect); } catch (e) {}
+            effect = null;
+            playBtn.disabled = true;
+            playBtn.style.opacity = '0.5';
+            playAfterLoad = resume;
+            loadEffect();
+        });
+
+        // Store stop function for cleanup when switching animations
         const editorSelf2 = this;
         const setupEffekseerControls = () => {
             const scaleInput = document.getElementById('effekseer-scale');
@@ -5262,17 +5326,29 @@ class DatabaseAnimationEditor {
                         0, 0, -10, 1
                     ]);
 
-                    // Draw
-                    previewEffekseerContext.beginDraw();
-                    if (previewHandle && previewHandle.exists) {
-                        previewEffekseerContext.drawHandle(previewHandle);
+                    // Draw (an HDR effect through its light buffer, screened over the backdrop)
+                    const hdr = previewEffect && previewEffect.rrHdr;
+                    if (previewHandle && previewHandle.exists && hdr) {
+                        RRHdrPreview.draw(previewGL, hdr, { width: previewCanvas.width, height: previewCanvas.height,
+                            bloomWidth: RRHdrPreview.bloomWidth(previewCanvas.height) }, () => {
+                            previewEffekseerContext.beginDraw();
+                            previewEffekseerContext.drawHandle(previewHandle);
+                            previewEffekseerContext.endDraw();
+                            if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(previewEffekseerContext);
+                        });
                         previewAnimationFrameId = requestAnimationFrame(render);
                     } else {
-                        // Effect finished — replay the already-loaded effect
-                        startPlayback();
+                        previewEffekseerContext.beginDraw();
+                        if (previewHandle && previewHandle.exists) {
+                            previewEffekseerContext.drawHandle(previewHandle);
+                            previewAnimationFrameId = requestAnimationFrame(render);
+                        } else {
+                            // Effect finished — replay the already-loaded effect
+                            startPlayback();
+                        }
+                        previewEffekseerContext.endDraw();
+                        if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(previewEffekseerContext);
                     }
-                    previewEffekseerContext.endDraw();
-                    if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(previewEffekseerContext);
                 };
 
                 render();
@@ -5323,8 +5399,9 @@ class DatabaseAnimationEditor {
             };
 
             try {
-                pending = RR_loadEffekseerEffectFromFile(
-                    previewEffekseerContext, effectPath, 1.0, onLoad, handleError
+                pending = RRHdrPreview.load(
+                    previewEffekseerContext, previewGL, effectPath, 1.0, onLoad, handleError,
+                    { width: previewCanvas.width, height: previewCanvas.height }
                 );
                 if (pending) pendingEffects.add(pending);
             } catch (e) {
@@ -5366,6 +5443,7 @@ class DatabaseAnimationEditor {
                 previewEffekseerContext = null;
             }
             if (previewGL) {
+                RRHdrPreview.release(previewGL);
                 const lose = previewGL.getExtension && previewGL.getExtension('WEBGL_lose_context');
                 if (lose) { try { lose.loseContext(); } catch (e) {} }
                 previewGL = null;

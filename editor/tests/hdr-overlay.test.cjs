@@ -88,9 +88,30 @@ test('zero intensity skips all nineteen bloom passes',async()=>{
     e.api.configure({bloomIntensity:0});e.api.canStart(s);e.api.render({},[s]);
     assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,1,'only the final grade/composite draws');
 });
+test('a bloom threshold runs the setup pass once, at level log2(radiusScale) (2.4 -> the first downsample)',async()=>{
+    const e=environment({...side,bloom:{...side.bloom,threshold:0.15}}),s=e.sprite();await e.ready(s);
+    e.api.canStart(s);e.api.render({},[s]);
+    assert.deepEqual(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===0.15).length,1);
+    assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,20,'7 downsamples (1 setup), 12 blurs, 1 grade');
+});
+test('an effect drawn at the game size thresholds at full resolution before the first downsample',async()=>{
+    const e=environment({...side,bloom:{...side.bloom,radiusScale:1,threshold:0.15}}),s=e.sprite();await e.ready(s);
+    e.api.canStart(s);e.api.render({},[s]);
+    assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===0.15).length,1);
+    assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,21,'1 full-resolution setup, 7 downsamples, 12 blurs, 1 grade');
+});
+test('without a threshold every downsample is a plain average',async()=>{
+    const e=environment(),s=e.sprite();await e.ready(s);e.api.canStart(s);e.api.render({},[s]);
+    assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===0.15).length,0);
+    assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,20);
+});
+test('a non-numeric bloom threshold fails closed',async()=>{
+    const e=environment({...side,bloom:{...side.bloom,threshold:'0.15'}}),s=e.sprite();await e.ready(s);
+    assert.equal(e.api.canStart(s),false);assert.equal(s._playing,false);
+});
 test('a grade compilation failure selects the safe twin',async()=>{
     const e=environment(),s=e.sprite();await e.ready(s);let shaders=0;
-    e.gl.getShaderParameter=()=>++shaders<=4; // downsample and blur compile; the grade fails
+    e.gl.getShaderParameter=()=>++shaders<=6; // downsample, setup and blur compile; the grade fails
     assert.equal(e.api.canStart(s),true);assert.equal(s._hdrActive,false);assert.equal(s._effect,'Nested/Twin');
     assert.ok(e.calls.some(c=>c[0]==='deleteProgram'));
 });
@@ -139,4 +160,36 @@ test('Graphics context events invalidate the native resources',()=>{
     const event={preventDefault(){prevented=true;}};
     for(const fn of listeners.webglcontextlost)fn(event);
     assert.equal(prevented,true);assert.equal(invalidated,true);
+});
+test('an in-scene sprite is chosen against the scene renderer and takes its twin from the scene layer',async()=>{
+    // No float targets: the twin, loaded into the scene's context, not the overlay's.
+    const e=environment(side,false),sceneLoads=[];
+    e.c.Graphics._app={renderer:{gl:e.gl}};e.c.Graphics.width=128;e.c.Graphics.height=72;
+    e.c.Sprite_Animation={SceneLayer:{load:n=>{sceneLoads.push(n);return 'scene:'+n;},guard:fn=>fn(e.gl,{})}};
+    const s=e.sprite();s._effekseerInScene=true;await e.ready(s);
+    assert.equal(e.api.canStart(s),true);assert.equal(s._hdrActive,false);
+    assert.equal(s._effect,'scene:Nested/Twin');assert.deepEqual(sceneLoads,['Nested/Twin']);assert.deepEqual(e.loads,[]);
+    // Float targets: HDR, drawn by the scene layer, nothing loaded.
+    const f=environment(side,true);
+    f.c.Graphics._app={renderer:{gl:f.gl}};f.c.Graphics.width=128;f.c.Graphics.height=72;
+    f.c.Sprite_Animation={SceneLayer:{load:()=>{throw Error('no load');},guard:fn=>fn(f.gl,{})}};
+    const t=f.sprite();t._effekseerInScene=true;await f.ready(t);
+    assert.equal(f.api.canStart(t),true);assert.equal(t._hdrActive,true);
+    // An overlay context loss leaves in-scene animations playing.
+    f.api.contextLost();assert.equal(t._hdrActive,true);assert.notEqual(t._playing,false);
+    // A failed in-scene pass hands it to the twin, through the scene layer.
+    const twins=[];f.c.Sprite_Animation.SceneLayer.load=n=>{twins.push(n);return 'scene:'+n;};
+    f.api.scene.fallBack(t);assert.equal(t._hdrActive,false);assert.equal(t._effect,'scene:Nested/Twin');assert.equal(t._handle.stopped,true);
+});
+test('the composite lands in the framebuffer the caller names',()=>{
+    const e=environment(),R=e.c.ReactorHdrRenderer.create(e.gl,{});
+    assert.equal(R.ensure(16,16),true);
+    e.calls.length=0;
+    R.post({bloom:0,bloomScale:1,framebuffer:'pixi-target'},side,{x:3,y:4,w:16,h:16});
+    const draws=e.calls.map((c,i)=>[c,i]).filter(([c])=>c[0]==='drawArrays');
+    const before=e.calls.slice(0,draws.at(-1)[1]);
+    assert.equal(before.filter(c=>c[0]==='bindFramebuffer').at(-1)[2],'pixi-target');
+    assert.deepEqual(before.filter(c=>c[0]==='viewport').at(-1).slice(1),[3,4,16,16]);
+    e.calls.length=0;R.post({bloom:0,bloomScale:1},side);
+    assert.equal(e.calls.filter(c=>c[0]==='bindFramebuffer').at(-1)[2],null,'unnamed: the default framebuffer, as before');
 });
