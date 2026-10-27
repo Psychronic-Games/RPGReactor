@@ -685,8 +685,10 @@ class AnimationPicker {
         // Loaded via Node fs + data-URL resources (RR_loadEffekseerEffectFromFile,
         // defined in DatabaseAnimationEditor.js): chrome-extension:// URLs cannot
         // reach project files outside the app package.
+        // An HDR effect draws through its light buffer (RRHdrPreview).
         try {
-            effect = RR_loadEffekseerEffectFromFile(effekseerContext, effectPath, 1.0, onLoad, onError);
+            effect = RRHdrPreview.load(effekseerContext, gl, effectPath, 1.0, onLoad, onError,
+                { width: canvas.width, height: canvas.height });
         } catch (e) {
             onError(e.message, effectPath);
         }
@@ -730,17 +732,28 @@ class AnimationPicker {
                 0, 0, -10, 1
             ]);
 
-            effekseerContext.beginDraw();
-            if (handle && handle.exists) {
-                effekseerContext.drawHandle(handle);
-            } else if (currentFrame > 1) {
-                // Effect finished, restart (loop)
-                stop();
-                setTimeout(() => { if (gen === this._loadGeneration) play(); }, 100);
-                return;
+            const hdr = effect && effect.rrHdr;
+            if (hdr && handle && handle.exists) {
+                RRHdrPreview.draw(gl, hdr, { width: canvas.width, height: canvas.height,
+                    bloomWidth: RRHdrPreview.bloomWidth(canvas.height) }, () => {
+                    effekseerContext.beginDraw();
+                    effekseerContext.drawHandle(handle);
+                    effekseerContext.endDraw();
+                    if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(effekseerContext);
+                });
+            } else {
+                effekseerContext.beginDraw();
+                if (handle && handle.exists) {
+                    effekseerContext.drawHandle(handle);
+                } else if (currentFrame > 1) {
+                    // Effect finished, restart (loop)
+                    stop();
+                    setTimeout(() => { if (gen === this._loadGeneration) play(); }, 100);
+                    return;
+                }
+                effekseerContext.endDraw();
+                if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(effekseerContext);
             }
-            effekseerContext.endDraw();
-            if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(effekseerContext);
 
             this._animFrameId = requestAnimationFrame(render);
         };
@@ -856,6 +869,7 @@ class AnimationPicker {
         // Force-lose the GL context instead of waiting for GC — live WebGL
         // contexts are capped per page (~16 in Chromium).
         if (this._gl) {
+            RRHdrPreview.release(this._gl);
             const lose = this._gl.getExtension && this._gl.getExtension('WEBGL_lose_context');
             if (lose) { try { lose.loseContext(); } catch (e) {} }
         }

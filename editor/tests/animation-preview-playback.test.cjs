@@ -227,7 +227,8 @@ test('modal loading is synchronous-safe, standalone output is opaque, and scene 
     const modal = read('src', 'database', 'AnimationPickerModal.js');
     const database = read('src', 'database', 'DatabaseAnimationEditor.js');
     assert.match(modal, /let effect = null;\s*let syncLoaded = false;/);
-    assert.match(modal, /effect = RR_loadEffekseerEffectFromFile/);
+    // Through the HDR adapter, which hands an ordinary effect to RR_loadEffekseerEffectFromFile.
+    assert.match(modal, /effect = RRHdrPreview\.load\(/);
     assert.match(modal, /if \(syncLoaded\) install\(\)/);
     assert.match(modal, /getContext\('webgl', \{ premultipliedAlpha: false, alpha: false \}\)/);
     assert.match(modal, /gl\.clearColor\(backdropRgb\[0\], backdropRgb\[1\], backdropRgb\[2\], 1\)/);
