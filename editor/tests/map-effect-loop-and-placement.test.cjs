@@ -107,6 +107,9 @@ function loadLayer({ life, litTo = life, readback = false, jitter = false }) {
         cancelAnimationFrame: () => {},
         effekseer: { createContext: () => ctx },
         RR_loadEffekseerEffectFromFile: (c, file, scale, onload) => { const effect = { isLoaded: true }; setImmediate(onload); return effect; },
+        // Ordinary effects only: the HDR adapter hands them straight to the loader.
+        RRHdrPreview: { load: (c, gl, file, scale, onload, onerror) => context.RR_loadEffekseerEffectFromFile(c, file, scale, onload, onerror),
+            draw: () => false, release() {}, bloomWidth: () => undefined },
         require: () => ({ join: (...p) => p.join('/') }),
         setTimeout, clearTimeout, setImmediate
     };

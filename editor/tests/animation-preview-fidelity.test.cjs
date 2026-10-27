@@ -117,7 +117,10 @@ test('renderer source applies blend modes, anchored interaction, crisp strips, a
 test('Effekseer preview consumes target flashes and always balances beginDraw/endDraw', () => {
     assert.match(source, /for \(const timing of animation\.flashTimings \|\| \[\]\)/);
     assert.match(source, /_firePreviewFlashTiming\(\{\s*flashScope: 1,/);
-    assert.match(source, /effekseerContext\.beginDraw\(\);[\s\S]*try \{[\s\S]*finally \{\s*effekseerContext\.endDraw\(\)/);
+    // An ordinary effect draws between the frame's beginDraw and the finally's
+    // endDraw; an HDR one balances its own pair inside the light-buffer pass.
+    assert.match(source, /if \(!hdr\) effekseerContext\.beginDraw\(\);[\s\S]*try \{[\s\S]*finally \{\s*if \(!hdr\) effekseerContext\.endDraw\(\)/);
+    assert.match(source, /RRHdrPreview\.draw\(gl, hdr,[\s\S]{0,200}?effekseerContext\.beginDraw\(\);\s*effekseerContext\.drawHandle\(handle\);\s*effekseerContext\.endDraw\(\);/);
     assert.match(source, /lastTime = Date\.now\(\);\s*accumulator = 0;\s*editorSelf\._resetPreviewFlash\(\)/);
     assert.match(source, /currentFrame > maxTimingFrames\s*&& !editorSelf\._previewFlashActive\(\)/);
     assert.match(source, /const redrawBackground = advanceEffekseerTick\(\);[\s\S]*render\(\)/);
