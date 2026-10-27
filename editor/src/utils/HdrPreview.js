@@ -93,6 +93,7 @@
      *   { mode: 'twin', twin, reason }           its graded twin, and why
      * Throws, with `rrHdrRefused`, where the game would not play it.
      * `sceneOwned`: the 3D scene draws it, which no HDR path covers, in the game either.
+     * `off`: the viewer has switched HDR off, to see the twin the game falls back to.
      */
     function choose(gl, effectPath, width, height, options = {}) {
         const twin = RR_resolveHdrPreviewTwin(effectPath);
@@ -102,6 +103,7 @@
             return { mode: 'twin', twin, reason };
         };
         if (options.sceneOwned) return fallback('drawn by the 3D scene');
+        if (options.off) return fallback('HDR is switched off in this preview');
         const renderer = rendererFor(gl);
         if (!renderer) return fallback(runtimeState === 'loading' ? 'the HDR renderer is still loading' : 'the HDR renderer is not available');
         if (!renderer.ensure(Math.max(1, width | 0), Math.max(1, height | 0))) return fallback('this WebGL context has no float render targets');

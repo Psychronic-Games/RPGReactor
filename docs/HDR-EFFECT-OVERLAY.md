@@ -190,6 +190,11 @@ the following happened.
 - **Not at all.** What the game refuses to play - a `-hdr` effect with no
   sidecar, or a sidecar that cannot be read or is invalid - the preview refuses.
 
+Database › Animations has an **HDR** checkbox beside Repeat for an effect it can
+draw in HDR. Clearing it plays the twin instead, as a computer without float
+targets would see the effect; a playing preview reloads and carries on. The
+choice is remembered for the next HDR effect.
+
 The preview shows the sidecar's own settings; `REACTOR_HDR` overrides and the
 legacy plugin parameters are the game's, and do not apply in the editor. The
 sidecar is read again each time an effect loads.

@@ -8271,3 +8271,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  const values={ja:'HDRエフェクト：ブルームとグレーディングを含めてHDRでプレビューしています。','zh-Hant':'HDR 特效：以 HDR 預覽，包含其光暈與調色。','zh-Hans':'HDR 特效：以 HDR 预览，包含其泛光与调色。',ko:'HDR 이펙트: 블룸과 그레이딩을 포함해 HDR로 미리보기합니다.',es:'Efecto HDR: vista previa en HDR, con su resplandor y gradación.',pt:'Efeito HDR: pré-visualizado em HDR, com o seu brilho e gradação.',fr:'Effet HDR : aperçu en HDR, avec son bloom et son étalonnage.',it:'Effetto HDR: anteprima in HDR, con bloom e gradazione.',de:'HDR-Effekt: Vorschau in HDR, mit Bloom und Grading.',ru:'HDR-эффект: предпросмотр в HDR, с бликами и цветокоррекцией.',pl:'Efekt HDR: podgląd w HDR, z poświatą i korekcją barwną.',tr:'HDR efekti: parlama ve renk derecelendirmesiyle HDR olarak önizleniyor.',el:'Εφέ HDR: προεπισκόπηση σε HDR, με τη λάμψη και τη διαβάθμισή του.',ar:'تأثير HDR: معاينة بتقنية HDR، مع التوهج والتدرج اللوني.',id:'Efek HDR: dipratinjau dalam HDR, dengan bloom dan grading-nya.',vi:'Hiệu ứng HDR: xem trước ở chế độ HDR, kèm hiệu ứng bloom và chỉnh màu.',th:'เอฟเฟกต์ HDR: แสดงตัวอย่างแบบ HDR พร้อมแสงฟุ้งและการปรับสี'};
  for(const [locale,value]of Object.entries(values))globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=value;
 })();
+
+// The Database animation preview's HDR toggle. The abbreviation is kept as is
+// in every locale, as the other HDR strings keep it.
+(() => {
+ for (const locale of ["ar","de","el","es","fr","id","it","ja","ko","pl","pt","ru","th","tr","vi","zh-Hans","zh-Hant"]) globalThis.RR_REVIEWED_TRANSLATIONS.text[locale]['HDR'] = 'HDR';
+})();

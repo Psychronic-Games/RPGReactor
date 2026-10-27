@@ -765,6 +765,10 @@ class DatabaseAnimationEditor {
                                     <input type="checkbox" id="animation-repeat-checkbox" style="cursor: pointer;">
                                     <span>${tt('Repeat')}</span>
                                 </label>
+                                <label id="animation-hdr-toggle-label" style="display: none; align-items: center; gap: 4px; font-size: 10px; color: var(--color-text); cursor: pointer; margin-left: 4px;">
+                                    <input type="checkbox" id="animation-hdr-toggle" style="cursor: pointer;">
+                                    <span>${tt('HDR')}</span>
+                                </label>
                                 ` : ''}
                                 <div style="flex: 1; text-align: right; font-size: 9px; color: var(--color-text-muted); min-width: 100px;">
                                     <span id="animation-frame-counter">${tt('Frame:')} 0 / ${animation.frames ? animation.frames.length : 0}</span>
@@ -1733,6 +1737,15 @@ class DatabaseAnimationEditor {
      * every row names the exact array entries it edits. `soundIndex`,
      * `flashIndex` and `timingIndex` are -1 when the row has no such entry.
      */
+    /** Whether the viewer has switched the Database preview's HDR off; remembered per editor. */
+    static _hdrPreviewOff() {
+        try { return localStorage.getItem('rr-animation-preview-hdr') === 'off'; } catch (e) { return false; }
+    }
+
+    static _setHdrPreviewOff(off) {
+        try { localStorage.setItem('rr-animation-preview-hdr', off ? 'off' : 'on'); } catch (e) {}
+    }
+
     static timingRows(animation) {
         if (DatabaseAnimationEditor.isSpriteAnimation(animation)) {
             // Sprite timings are already one entry per row.
@@ -4124,6 +4137,8 @@ class DatabaseAnimationEditor {
         let effect = null;
         let handle = null;
         let isPlaying = false;
+        // Set when the HDR toggle reloads a playing effect: play again once it loads.
+        let playAfterLoad = false;
         let gl = null;
         let animationFrameId = null;
         let startTime = 0;
@@ -4197,6 +4212,8 @@ class DatabaseAnimationEditor {
                 console.debug('Effekseer effect loaded successfully');
                 playBtn.disabled = false;
                 playBtn.style.opacity = '1';
+                // onLoad can fire inside the load call, before `effect` is set.
+                if (playAfterLoad) { playAfterLoad = false; setTimeout(() => { if (effekseerContext) play(); }, 0); }
             };
 
             const onError = (message, path) => {
@@ -4216,10 +4233,22 @@ class DatabaseAnimationEditor {
                 hdrNote.style.color = warning ? 'var(--color-warning)' : 'var(--color-text-muted)';
             };
             showHdrNote('');
+            // The HDR toggle shows for an effect the preview can draw in HDR,
+            // and switches it to the twin the game falls back to and back.
+            const hdrOff = DatabaseAnimationEditor._hdrPreviewOff();
+            const hdrToggle = document.getElementById('animation-hdr-toggle');
+            const hdrToggleLabel = document.getElementById('animation-hdr-toggle-label');
+            const showHdrToggle = shown => {
+                if (!hdrToggle || !hdrToggleLabel) return;
+                hdrToggleLabel.style.display = shown ? 'flex' : 'none';
+                hdrToggle.checked = !hdrOff;
+            };
+            showHdrToggle(false);
 
             try {
                 effect = RRHdrPreview.load(effekseerContext, gl, effectPath, 1.0, onLoad, onError,
-                    { width: canvas.width, height: canvas.height });
+                    { width: canvas.width, height: canvas.height }, { off: hdrOff });
+                showHdrToggle(!!(effect?.rrHdr || (effect?.rrHdrTwin && hdrOff)));
                 if (effect?.rrHdr) {
                     showHdrNote(tt('HDR effect: previewed in HDR, with its bloom and grade.'));
                 } else if (effect?.rrHdrTwin) {
@@ -4573,7 +4602,24 @@ class DatabaseAnimationEditor {
         playBtn.addEventListener('click', play);
         stopBtn.addEventListener('click', stop);
 
-        // Set up Effekseer parameter controls
+        // Switching HDR reloads the effect as itself or as its twin, and plays
+        // it again if it was playing.
+        const hdrToggle = document.getElementById('animation-hdr-toggle');
+        if (hdrToggle) hdrToggle.addEventListener('change', () => {
+            DatabaseAnimationEditor._setHdrPreviewOff(!hdrToggle.checked);
+            if (!effekseerContext) return;
+            const resume = isPlaying;
+            stop();
+            effekseerContext._makeContextCurrent?.();
+            try { if (effect) effekseerContext.releaseEffect(effect); } catch (e) {}
+            effect = null;
+            playBtn.disabled = true;
+            playBtn.style.opacity = '0.5';
+            playAfterLoad = resume;
+            loadEffect();
+        });
+
+        // Store stop function for cleanup when switching animations
         const editorSelf2 = this;
         const setupEffekseerControls = () => {
             const scaleInput = document.getElementById('effekseer-scale');

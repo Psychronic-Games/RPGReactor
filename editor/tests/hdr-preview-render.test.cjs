@@ -235,6 +235,43 @@ test('the bloom threshold runs at the game\'s setup level, scaled as the preview
     } finally { p.done(); }
 });
 
+test('the Database preview\'s HDR toggle plays the twin when off, and remembers the choice', () => {
+    const p = project();
+    try {
+        const w = editor();
+        const off = w.RRHdrPreview.choose(fakeGl().gl, p.file('Fire-hdr'), 960, 540, { off: true });
+        assert.equal(off.mode, 'twin');
+        assert.match(off.reason, /switched off/);
+        assert.equal(w.RRHdrPreview.choose(fakeGl().gl, p.file('Plain'), 960, 540, { off: true }).mode, 'plain', 'an ordinary effect is untouched');
+        const a = effekseer();
+        const twin = w.RRHdrPreview.load(a.context, fakeGl().gl, p.file('Fire-hdr'), 1, null, null, view, { off: true });
+        assert.deepEqual(a.loaded, ['TWIN-BYTES']);
+        assert.match(twin.rrHdrTwin.reason, /switched off/);
+    } finally { p.done(); }
+
+    const store = new Map();
+    const context = {
+        console: { log() {}, debug() {}, warn() {}, error() {} },
+        localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) }
+    };
+    const Editor = vm.runInNewContext(`${animationEditor}\nDatabaseAnimationEditor;`, context);
+    assert.equal(Editor._hdrPreviewOff(), false, 'on until switched off');
+    Editor._setHdrPreviewOff(true);
+    assert.equal(Editor._hdrPreviewOff(), true);
+    Editor._setHdrPreviewOff(false);
+    assert.equal(Editor._hdrPreviewOff(), false);
+    context.localStorage = { getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); } };
+    assert.doesNotThrow(() => Editor._setHdrPreviewOff(true));
+    assert.equal(Editor._hdrPreviewOff(), false, 'unreadable storage: HDR stays on');
+
+    // The preview loads with the remembered choice, shows the toggle only where
+    // switching means something, and a change reloads the effect and replays it.
+    assert.match(animationEditor, /RRHdrPreview\.load\(effekseerContext, gl, effectPath, 1\.0, onLoad, onError,\s*\{ width: canvas\.width, height: canvas\.height \}, \{ off: hdrOff \}\)/);
+    assert.match(animationEditor, /showHdrToggle\(!!\(effect\?\.rrHdr \|\| \(effect\?\.rrHdrTwin && hdrOff\)\)\)/);
+    assert.match(animationEditor, /_setHdrPreviewOff\(!hdrToggle\.checked\);[\s\S]{0,200}?const resume = isPlaying;\s*stop\(\);[\s\S]{0,120}?releaseEffect\(effect\)[\s\S]{0,200}?playAfterLoad = resume;\s*loadEffect\(\);/);
+    assert.match(animationEditor, /if \(playAfterLoad\) \{ playAfterLoad = false; setTimeout\(\(\) => \{ if \(effekseerContext\) play\(\); \}, 0\); \}/);
+});
+
 test('releasing a context frees its targets, and the next preview starts fresh', () => {
     const p = project();
     try {
