@@ -9,6 +9,12 @@ a display grade into one floating-point target, adds reduced-resolution bloom,
 and applies that grade once to the sum. Output is display SDR; this does not
 enable HDR monitors, change the game's lighting, or grade the entire scene.
 
+On PIXI 8's WebGL2 renderer, HDR animations draw inside PIXI's scene with the
+other screen animations (runtime 20261027.3, [EFFEKSEER-IN-SCENE.md](EFFEKSEER-IN-SCENE.md)):
+the same light buffer, bloom and grade, screened into the scene where the
+animation sits. The overlay this guide describes is the fallback, and what a
+`Graphics.effekseerInScene = false` game uses.
+
 ## Updating Reactor and existing projects
 
 The canonical module is `runtime/reactor_hdr_overlay.js`. `reactor_main.js` loads
@@ -16,6 +22,13 @@ it automatically. New projects inherit it through the normal runtime copy.
 The editor's existing runtime refresh installs it in older Reactor projects when
 their runtime revision changes. Game and editor distribution preflights require
 the module, and the bundled Demo carries the same runtime.
+
+The file defines two globals. `ReactorHdrRenderer` is the light pipeline itself
+(float targets, bloom, one grade, the composite), one instance per WebGL1
+context and free of game state. `ReactorHdrOverlay` is the game's adapter:
+sidecar requests, animation selection, the fallback twin and the overlay
+canvas. The editor loads the same file for its previews and keeps only the
+renderer (see Editor previews).
 
 Use the complete runtime from the same Reactor build. Mixing a new module with
 old core/manager/sprite files does not install the native hooks. To update a
@@ -81,6 +94,19 @@ intensity nonnegative, radiusScale positive. `tints` are scalar bloom weights.
 The six sizes follow UE 4.27's width-relative bloom radii; Gaussian sigma is
 `viewWidth * size * 0.04 * 0.5 / sqrt(33.4) * radiusScale`.
 
+`bloom.threshold` (optional, runtime 20261027.1) is UE 4's bloom setup threshold.
+When it is a number, the light is multiplied by
+`clamp((dot(rgb, (0.3, 0.59, 0.11)) - threshold) * 0.5, 0, 1)` before any blur, as
+`PostProcessBloomSetup` does. UE runs that setup at half its screen resolution; an
+effect drawn `radiusScale` times larger than in the source game covers that pixel
+with `radiusScale` overlay pixels, so the setup runs at pyramid level
+`round(log2(radiusScale))` (level 0 is an extra full-resolution pass), and every
+Gaussian reads that level or a coarser one: light whose exposed luminance is at or below the
+threshold does not bloom, and bloom reaches full strength 2 units above it. A
+negative threshold blooms dark light partly (-0.8 passes 40 % at zero). Without it
+every pixel blooms, as before. Like the other bloom settings, it is taken from the
+first sidecar of a grade group.
+
 ## Authoring and tuning
 
 An HDR asset's materials output exposed linear light, not display-graded colour,
@@ -98,7 +124,9 @@ window.REACTOR_HDR = { bloom: 0.675, bloomScale: 2.4 };
 ```
 
 `bufferType` is `auto`, `half`, or `float`: auto tries half first, then float.
-It requires renderable, linearly filtered targets in the overlay's WebGL1 context.
+It requires renderable, linearly filtered targets in the overlay's WebGL1 context,
+or in the scene in PIXI's WebGL2 context (RGBA16F with `EXT_color_buffer_float`,
+the light buffer multisampled 4x where the format allows).
 Legacy plugin parameters `bloomIntensity`, `bloomRadiusScale`, `bufferType`, and
 `debug` are accepted by `configure`; global `REACTOR_HDR` overrides their tuning.
 Without overrides, each grade group's first sidecar supplies bloom settings.
@@ -115,7 +143,11 @@ complete `ReactorHdrOverlay.overrides[effectName]` entry, including fallback.
 
 ## Rendering limits
 
-- All ordinary animations draw in their original order, then HDR groups composite
+- In the scene, each animation draws at its own place in the scene graph; HDR
+  animations of one grade in one container share a light pass at the first
+  one's place. When PIXI's context is lost, in-scene animations end and new
+  ones play on the overlay until it is restored.
+- On the overlay, all ordinary animations draw in their original order, then HDR groups composite
   in first-appearance order. Animations sharing a grade add before grading even
   when ordinary animations occur between them. Interleaved scene/HDR occlusion
   and light accumulation between different grades are not supported.
@@ -137,13 +169,55 @@ complete `ReactorHdrOverlay.overrides[effectName]` entry, including fallback.
   be excluded from HDR assets. A future authoring approach can start a separate
   ordinary refraction twin alongside the HDR effect; Effekseer cannot filter
   individual nodes during a draw. That synchronized twin is not implemented here.
-- The editor's animation previews have no HDR pipeline. They play the sidecar's
-  normally graded twin instead, and refuse what the game refuses; Database ›
-  Animations says which, under the preview. The HDR look shows only in the game.
+
+## Editor previews
+
+The editor's animation previews draw an HDR effect through the same renderer
+the game uses: Database › Animations and its effect file picker, the
+Skills/Items animation picker, Show Animation's picker, and the effect layers
+of Action Sequences, the 3D database and the map's 3D view. Each preview's
+WebGL context gets a renderer of its own; the sidecar's bloom and grade apply
+as they do in battle. Database › Animations says under the preview which of
+the following happened.
+
+- **In HDR.** The two pickers and Database › Animations clear their canvas to
+  the backdrop (or copy it in) before drawing, so the graded light is screened
+  over it as the game screens it over the scene. The effect layers draw on a
+  transparent, premultiplied canvas the page lays over the 3D view; there the
+  composite writes alpha from the graded colour, so the page's own blend comes
+  close to the game's screen. A cropped view keeps a light buffer the size of
+  the full view, so bloom is not cut at the box's edge. An overlay layer's
+  buffer is its own square: light a grade spreads past it (a wide wash that
+  covers the whole screen in battle) stops at the square's edge. Bloom radii are
+  fractions of the game screen's width as each preview draws it (System's
+  screen size against the preview's scale), so a glow is the same size against
+  an effect as in battle. The same scale places `bloom.threshold`'s setup
+  level: a preview drawing a game pixel as `k` of its own runs the setup at
+  `round(log2(radiusScale * k))`, the game's own level when `k` is 1.
+- **As its twin.** When the context has no float targets, the grade does not
+  compile, or the runtime file cannot be loaded, the preview plays the
+  sidecar's normally graded twin, as the game does. So does an effect drawn
+  by the 3D scene itself (a GPU effect on a model), which no HDR path covers
+  in the game either. The reason goes to the console.
+- **Not at all.** What the game refuses to play - a `-hdr` effect with no
+  sidecar, or a sidecar that cannot be read or is invalid - the preview refuses.
+
+Database › Animations has an **HDR** checkbox beside Repeat for an effect it can
+draw in HDR. Clearing it plays the twin instead, as a computer without float
+targets would see the effect; a playing preview reloads and carries on. The
+choice is remembered for the next HDR effect.
+
+The preview shows the sidecar's own settings; `REACTOR_HDR` overrides and the
+legacy plugin parameters are the game's, and do not apply in the editor. The
+sidecar is read again each time an effect loads.
 
 ## Verification
 
 Run `node --test editor/tests/hdr-overlay.test.cjs` for metadata, safe fallback,
-shared grading, resize/restoration, ordinary draw order, and plugin migration.
-Manifest and template tests cover loading and distribution. Unit tests do not
-establish GPU rendering or appearance; check those in a running game.
+in-scene selection and the composite's framebuffer,
+shared grading, resize/restoration, ordinary draw order, and plugin migration;
+`hdr-preview-render.test.cjs` and `hdr-preview-twin.test.cjs` for the editor
+previews' choices, loading, draw order and cleanup;
+`effekseer-in-scene.test.cjs` for the in-scene light pass and its grouping. Manifest and template tests
+cover loading and distribution. Unit tests do not establish GPU rendering or
+appearance; check those on screen.
