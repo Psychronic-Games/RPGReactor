@@ -263,6 +263,8 @@ class AnimationPickerModal {
             const begin = (effect) => {
                 if (playbackGeneration !== generation) return;
                 caption.textContent = `Effekseer: ${anim.effectName}`;
+                // An HDR effect draws through its light buffer (RRHdrPreview).
+                const hdr = effect && effect.rrHdr;
                 let aliveTicks = 0;
                 let deadTicks = 0;
                 let failedStarts = 0;
@@ -310,21 +312,32 @@ class AnimationPickerModal {
                     const screenHeight = Number(databaseManager?.getSystem?.()?.advanced?.screenHeight) || fxCanvas.height;
                     fx.ctx.setProjectionMatrix(ReactorBattleData.effekseerProjection(fxCanvas.width, fxCanvas.height, screenHeight, fxCanvas.height / screenHeight));
                     fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
-                    fx.ctx.beginDraw();
-                    if (fx.handle && fx.handle.exists) {
-                        fx.ctx.drawHandle(fx.handle);
-                    } else if (failedStarts < 5) {
-                        // Effect finished — loop it after a short pause. An effect
-                        // that never stays alive a few ticks is broken; give up
-                        // after a handful of attempts instead of spinning.
-                        deadTicks++;
-                        if (deadTicks >= 20) {
-                            if (aliveTicks < 3) failedStarts++; else failedStarts = 0;
-                            startHandle();
+                    const settle = () => { if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(fx.ctx); };
+                    if (hdr && fx.handle && fx.handle.exists) {
+                        RRHdrPreview.draw(gl, hdr, { width: fxCanvas.width, height: fxCanvas.height,
+                            bloomWidth: RRHdrPreview.bloomWidth(fxCanvas.height) }, () => {
+                            fx.ctx.beginDraw();
+                            fx.ctx.drawHandle(fx.handle);
+                            fx.ctx.endDraw();
+                            settle();
+                        });
+                    } else {
+                        fx.ctx.beginDraw();
+                        if (fx.handle && fx.handle.exists) {
+                            fx.ctx.drawHandle(fx.handle);
+                        } else if (failedStarts < 5) {
+                            // Effect finished — loop it after a short pause. An effect
+                            // that never stays alive a few ticks is broken; give up
+                            // after a handful of attempts instead of spinning.
+                            deadTicks++;
+                            if (deadTicks >= 20) {
+                                if (aliveTicks < 3) failedStarts++; else failedStarts = 0;
+                                startHandle();
+                            }
                         }
+                        fx.ctx.endDraw();
+                        settle();
                     }
-                    fx.ctx.endDraw();
-                    if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(fx.ctx);
                     fx.raf = requestAnimationFrame(loop);
                 };
                 fx.raf = requestAnimationFrame(loop);
@@ -373,9 +386,10 @@ class AnimationPickerModal {
             };
             try {
                 fx.ctx._makeContextCurrent?.();
-                effect = RR_loadEffekseerEffectFromFile(fx.ctx, effectPath, 1.0,
+                effect = RRHdrPreview.load(fx.ctx, fx.gl, effectPath, 1.0,
                     onLoaded,
-                    onError);
+                    onError,
+                    { width: fxCanvas.width, height: fxCanvas.height });
                 if (effect && !loadFailed) fx.effects.set(anim.effectName, effect);
                 else if (effect && loadFailed) {
                     try { fx.ctx?._makeContextCurrent?.(); fx.ctx?.releaseEffect(effect); } catch (error) {}
@@ -480,6 +494,7 @@ class AnimationPickerModal {
                 fx.ready = false;
             }
             if (fx.gl) {
+                RRHdrPreview.release(fx.gl);
                 const lose = fx.gl.getExtension('WEBGL_lose_context');
                 if (lose) { try { lose.loseContext(); } catch (e) {} }
                 fx.gl = null;

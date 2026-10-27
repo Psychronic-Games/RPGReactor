@@ -231,6 +231,30 @@
             this.wrap.style.display = 'none';
         }
 
+        /**
+         * The HDR light buffer for this layer: the full view (the box's
+         * canvas shows a shifted window onto it), the canvas, or the overlay
+         * square. The canvas is premultiplied with nothing behind it in GL.
+         * The overlay draws an effect unit q * size / 26 pixels tall where the
+         * game draws it 2048 * h / (h + 40960) (ReactorBattleData), which sets
+         * how wide the game's screen - and so its bloom - is here.
+         */
+        _hdrView() {
+            const rect = this.world && this.world.rect;
+            if (rect) {
+                const s = rect.scale || 1;
+                const width = Math.max(1, Math.round(this.world.viewWidth * s));
+                const height = Math.max(1, Math.round(this.world.viewHeight * s));
+                return { width, height, premultiplied: true,
+                    out: { x: -Math.round(rect.x * s), y: -Math.round(rect.y * s), w: width, h: height } };
+            }
+            if (this.world) return { width: this.fxCanvas.width, height: this.fxCanvas.height, premultiplied: true };
+            const h = this.screenHeight;
+            const pixelsPerGamePixel = ((this.span / OVERLAY_TILES) * this.size / 26) / (2048 * h / (h + 40960));
+            return { width: this.size, height: this.size, premultiplied: true,
+                bloomWidth: RRHdrPreview.bloomWidth(this.size, pixelsPerGamePixel) };
+        }
+
         dispose() {
             this._activityOff?.();
             this._activityOff = null;
@@ -247,6 +271,7 @@
             // and sixteen edits evicted the oldest live contexts, the map
             // view's among them ("Too many active WebGL contexts").
             if (this.fx.legacyGl || (!this.fx.gpu && this.fx.gl)) {
+                if (this.fx.gl && !this.fx.gpu) RRHdrPreview.release(this.fx.gl);
                 try { (this.fx.legacyGl || this.fx.gl).getExtension('WEBGL_lose_context')?.loseContext(); } catch (_) {}
             }
             this.fx = { gl: null, ctx: null, ready: false, handle: null, raf: null, effects: new Map(), waiters: new Map() };
@@ -536,10 +561,17 @@
                         fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
                     }
                     const drawn = !!(fx.handle && fx.handle.exists);
-                    fx.ctx.beginDraw();
-                    if (drawn) fx.ctx.drawHandle(fx.handle);
-                    fx.ctx.endDraw();
-                    if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(fx.ctx);
+                    const hdr = effect && effect.rrHdr;
+                    const drawHandle = () => {
+                        fx.ctx.beginDraw();
+                        if (drawn) fx.ctx.drawHandle(fx.handle);
+                        fx.ctx.endDraw();
+                        if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(fx.ctx);
+                    };
+                    // An HDR effect draws into a light buffer the size of the
+                    // full view, so its bloom is not cut at the box's edge.
+                    if (hdr && drawn) RRHdrPreview.draw(gl, hdr, this._hdrView(), drawHandle);
+                    else drawHandle();
                     // Where the picture ends is learned from the first two
                     // plays; the readback that finds it stalls the GPU, so
                     // it is not repeated once known.
@@ -603,7 +635,9 @@
             const gpuLoad = fx.gpu;
             if (gpuLoad) gpuLoad.loading++;
             try {
-                const effect = RR_loadEffekseerEffectFromFile(fx.ctx, effectPath, 1.0, () => {
+                // The 3D scene draws a GPU effect itself, which no HDR path
+                // covers (in the game either): that one plays its twin.
+                const effect = RRHdrPreview.load(fx.ctx, fx.gl, effectPath, 1.0, () => {
                     for (const waiter of fx.waiters.get(animation.effectName) || []) waiter(effect);
                     fx.waiters.delete(animation.effectName);
                     if (gpuLoad) Reactor3D.GpuEffects.loaded(gpuLoad);
@@ -611,7 +645,7 @@
                     fx.effects.delete(animation.effectName);
                     fx.waiters.delete(animation.effectName);
                     if (gpuLoad) Reactor3D.GpuEffects.loaded(gpuLoad);
-                });
+                }, this._hdrView(), { sceneOwned: !!gpuLoad });
                 fx.effects.set(animation.effectName, effect);
                 fx.waiters.set(animation.effectName, [begin]);
             } catch (error) {
