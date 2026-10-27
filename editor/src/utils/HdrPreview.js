@@ -170,13 +170,16 @@
      * `view`: { width, height } of the light buffer; `out` { x, y, w, h }, the
      * composite's viewport when it is not the buffer's own (a cropped view);
      * `premultiplied` for a premultiplied canvas with nothing behind it in GL;
-     * `bloomWidth` (see bloomWidth), the buffer's width when absent.
+     * `bloomWidth` (see bloomWidth), the buffer's width when absent. The
+     * sidecar's bloom threshold acts on the game's setup pixels, which the
+     * same width converts into the preview's.
      * False when this context can no longer render HDR; nothing was drawn.
      */
     function draw(gl, choice, view, drawEffect) {
         const renderer = choice && choice.renderer;
         if (!renderer || gl.isContextLost() || !renderer.ensure(Math.max(1, view.width | 0), Math.max(1, view.height | 0))) return false;
         const sidecar = choice.sidecar;
+        const game = screen();
         try {
             renderer.begin();
             drawEffect();
@@ -184,7 +187,9 @@
                 bloom: sidecar.bloom.intensity,
                 bloomScale: sidecar.bloom.radiusScale,
                 alphaFromColor: !!view.premultiplied,
-                bloomWidth: view.bloomWidth
+                bloomWidth: view.bloomWidth,
+                threshold: sidecar.bloom.threshold,
+                pixelScale: view.bloomWidth > 0 && game.width ? view.bloomWidth / game.width : undefined
             }, sidecar, view.out);
             return true;
         } catch (error) {

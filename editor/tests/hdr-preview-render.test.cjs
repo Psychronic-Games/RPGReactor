@@ -208,6 +208,33 @@ test('bloom radii follow the game screen\'s width as the preview draws it, not t
     } finally { p.done(); }
 });
 
+test('the bloom threshold runs at the game\'s setup level, scaled as the preview draws a game pixel', () => {
+    const p = project();
+    try {
+        const w = editor();
+        w.reactor = { databaseManager: { data: { system: { advanced: { screenWidth: 960, screenHeight: 540 } } } } };
+        const { gl, calls } = fakeGl();
+        const choice = w.RRHdrPreview.choose(gl, p.file('Fire-hdr'), 960, 540);
+        choice.sidecar = { ...sidecar, bloom: { ...sidecar.bloom, threshold: 1 } };
+        // The texel step the setup pass samples with names its level: 0 for
+        // the extra full-size pass, else 1 / the width of the level above.
+        const setupTexel = pixelsPerGamePixel => {
+            calls.length = 0;
+            w.RRHdrPreview.draw(gl, choice, { width: 960, height: 540, bloomWidth: w.RRHdrPreview.bloomWidth(540, pixelsPerGamePixel) }, () => {});
+            const at = calls.findIndex(c => c[0] === 'uniform1f' && c[1]?.name === 'uThreshold');
+            assert.equal(calls[at][2], 1);
+            return calls.slice(0, at).findLast(c => c[0] === 'uniform2f' && c[1]?.name === 'uTexel')[2];
+        };
+        assert.equal(setupTexel(1), 1 / 960, 'radiusScale 2.4 at the game\'s scale: level 1, as in battle');
+        assert.equal(setupTexel(0.5), 0, 'half the game\'s scale: level 0, the extra full-size pass');
+        assert.equal(setupTexel(2), 1 / 480, 'twice the game\'s scale: level 2');
+        choice.sidecar = sidecar;
+        calls.length = 0;
+        w.RRHdrPreview.draw(gl, choice, view, () => {});
+        assert.ok(!calls.some(c => c[0] === 'uniform1f' && c[1]?.name === 'uThreshold'), 'no threshold: every pixel blooms');
+    } finally { p.done(); }
+});
+
 test('releasing a context frees its targets, and the next preview starts fresh', () => {
     const p = project();
     try {

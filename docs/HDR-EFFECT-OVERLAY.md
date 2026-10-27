@@ -88,6 +88,19 @@ intensity nonnegative, radiusScale positive. `tints` are scalar bloom weights.
 The six sizes follow UE 4.27's width-relative bloom radii; Gaussian sigma is
 `viewWidth * size * 0.04 * 0.5 / sqrt(33.4) * radiusScale`.
 
+`bloom.threshold` (optional, runtime 20261025.2) is UE 4's bloom setup threshold.
+When it is a number, the light is multiplied by
+`clamp((dot(rgb, (0.3, 0.59, 0.11)) - threshold) * 0.5, 0, 1)` before any blur, as
+`PostProcessBloomSetup` does. UE runs that setup at half its screen resolution; an
+effect drawn `radiusScale` times larger than in the source game covers that pixel
+with `radiusScale` overlay pixels, so the setup runs at pyramid level
+`round(log2(radiusScale))` (level 0 is an extra full-resolution pass), and every
+Gaussian reads that level or a coarser one: light whose exposed luminance is at or below the
+threshold does not bloom, and bloom reaches full strength 2 units above it. A
+negative threshold blooms dark light partly (-0.8 passes 40 % at zero). Without it
+every pixel blooms, as before. Like the other bloom settings, it is taken from the
+first sidecar of a grade group.
+
 ## Authoring and tuning
 
 An HDR asset's materials output exposed linear light, not display-graded colour,
@@ -166,7 +179,9 @@ the following happened.
   covers the whole screen in battle) stops at the square's edge. Bloom radii are
   fractions of the game screen's width as each preview draws it (System's
   screen size against the preview's scale), so a glow is the same size against
-  an effect as in battle.
+  an effect as in battle. The same scale places `bloom.threshold`'s setup
+  level: a preview drawing a game pixel as `k` of its own runs the setup at
+  `round(log2(radiusScale * k))`, the game's own level when `k` is 1.
 - **As its twin.** When the context has no float targets, the grade does not
   compile, or the runtime file cannot be loaded, the preview plays the
   sidecar's normally graded twin, as the game does. So does an effect drawn
