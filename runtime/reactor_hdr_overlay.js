@@ -59,11 +59,11 @@
             for (const p of H.programs.values()) gl.deleteProgram(p.p);
             for (const p of [H.down, H.setup, H.blur]) if (p) gl.deleteProgram(p.p);
             if (H.buf) gl.deleteBuffer(H.buf);
-            H.resources = []; H.programs.clear(); H.probe = null; H.pre = null; H.msaa = H.out = null; H.ok = null;
+            H.resources = []; H.programs.clear(); H.probe = null; H.pre = null; H.msaa = null; H.ok = null;
         }
         // The context is gone: nothing to delete, and nothing left to use.
         function lost() {
-            H.probe = null; H.pre = null; H.msaa = H.out = null; H.resources = []; H.programs.clear();
+            H.probe = null; H.pre = null; H.msaa = null; H.resources = []; H.programs.clear();
             H.down = H.setup = H.blur = H.buf = null; H.ok = false;
         }
         function compile(vs, fs) {
@@ -217,10 +217,11 @@
             }
         }
 
-        // `out` is where the composite lands: the default framebuffer at
-        // (x, y, w, h). Absent, it covers the light buffer from the origin.
+        // `out` is where the composite lands: H.target (the default framebuffer
+        // unless post() was given one) at (x, y, w, h). Absent, it covers the
+        // light buffer from the origin.
         function quad(prog, dst, out) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : null);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : H.target || null);
             if (dst) gl.viewport(0, 0, dst.w, dst.h);
             else if (out) gl.viewport(out.x, out.y, out.w, out.h);
             else gl.viewport(0, 0, H.w, H.h);
@@ -243,10 +244,11 @@
             gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         }
         // Bloom the light buffer, grade it once, and screen it over the default
-        // framebuffer. `s` is { bloom, bloomScale, threshold, coverage, debugScale,
-        // measureGpu, alphaFromColor, bloomWidth, pixelScale }; the game sets none
-        // of the last three.
+        // framebuffer, or s.framebuffer. `s` is { bloom, bloomScale, threshold, coverage,
+        // debugScale, measureGpu, alphaFromColor, bloomWidth, pixelScale, framebuffer };
+        // the overlay sets none of the last four.
         function post(s, sc, out) {
+            H.target = s.framebuffer || null;
             if (s.measureGpu) gl.finish();
             const start = performance.now();
             const SIZES = sc.bloom.sizes, TINTS = sc.bloom.tints;
@@ -327,7 +329,7 @@
             gl.enable(gl.BLEND);
             gl.blendEquation(gl.FUNC_ADD);
             gl.blendFunc(gl.ONE, s.coverage ? gl.ONE_MINUS_SRC_ALPHA : gl.ONE_MINUS_SRC_COLOR);
-            quad(H.comp, s.output ? outputTarget() : null, out);
+            quad(H.comp, null, out);
             gl.disable(gl.BLEND);
             gl.activeTexture(gl.TEXTURE0);
             if (s.measureGpu) gl.finish();
@@ -336,23 +338,6 @@
             if (s.measureGpu) { (stats.postSamples || (stats.postSamples = [])).push(performance.now() - start); }
         }
 
-        // An RGBA8 target the composite screens into instead of the default framebuffer
-        // (s.output): the in-scene path shows it as a PIXI sprite. clearOutput() starts a frame.
-        function outputTarget() {
-            if (!H.out) {
-                H.out = target(H.w, H.h, gl.UNSIGNED_BYTE, false);
-                if (!H.out) throw Error("HDR output target incomplete");
-            }
-            return H.out;
-        }
-        function clearOutput() {
-            const out = outputTarget();
-            gl.bindFramebuffer(gl.FRAMEBUFFER, out.f);
-            gl.viewport(0, 0, out.w, out.h);
-            gl.disable(gl.SCISSOR_TEST); gl.colorMask(true, true, true, true);
-            gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-            return out;
-        }
         // Debug readback through an RGBA8 staging target: WebGL1 cannot portably read half-float pixels.
         // Values are reported as quantized lower bounds, with the divisor recorded. Never used for normal playback.
         function probe(scale) {
@@ -373,8 +358,7 @@
         }
 
         return {
-            gl, stats, ensure, begin, post, probe, gradeProgram, dispose, lost, clearOutput,
-            get output() { return H.out; },
+            gl, stats, ensure, begin, post, probe, gradeProgram, dispose, lost,
             // A failed pass: drop everything and refuse further HDR on this context.
             fail() { dispose(); H.ok = false; },
             restored() { H.ok = null; },
@@ -438,12 +422,16 @@
         const a = sprite._animation || {}, e = sprite._hdrEntry;
         return e && e.sidecar || (forced(sprite) && api.overrides[a.effectName]) || null;
     }
+    // The context an effect is loaded into: the scene's for an in-scene sprite, the overlay's otherwise.
+    function load(sprite, name) {
+        return sprite._effekseerInScene ? Sprite_Animation.SceneLayer.load(name) : EffectManager.load(name);
+    }
     function fallbackName(sprite, sc) {
         const name = sprite._animation.effectName;
         return sc.fallback.includes('/') ? sc.fallback : name.slice(0, name.lastIndexOf('/') + 1) + sc.fallback;
     }
     api.setup = function(sprite, animation) {
-        if (!sprite._effectContext && animation.effectName) {
+        if ((!sprite._effectContext || sprite._effekseerInScene) && animation.effectName) {
             sprite._hdrEntry = request(animation.effectName);
             sprite._hdrSelected = false;
         }
@@ -454,7 +442,8 @@
     function select() {
         if (this._hdrEntry && !this._hdrSelected) {
             if (!this._hdrEntry.ready) return false;
-            if (Graphics._effekseerGL?.isContextLost()) return false;
+            const inScene = !!this._effekseerInScene;
+            if ((inScene ? scene.gl() : Graphics._effekseerGL)?.isContextLost()) return false;
             let sc = sidecarFor(this);
             try {
                 if (sc) sc = valid(sc);
@@ -466,13 +455,16 @@
                 // Malformed metadata cannot safely identify an HDR asset or its fallback. Fail closed.
                 this._playing = false; return false;
             }
-            if (sc && scene.adopt(this, sc)) { this._hdrSelected = true; return true; }
-            const gl = Graphics._effekseerGL, canvas = Graphics._effekseerCanvas;
-            this._hdrActive = !!(sc && gl && canvas && !gl.isContextLost() && ensure(gl, canvas.width, canvas.height));
-            if (this._hdrActive) {
-                try { R.gradeProgram(sc.grade); } catch (e) { this._hdrActive = false; console.warn("[ReactorHdrOverlay] " + e); }
+            if (inScene) {
+                this._hdrActive = !!(sc && scene.ready(sc));
+            } else {
+                const gl = Graphics._effekseerGL, canvas = Graphics._effekseerCanvas;
+                this._hdrActive = !!(sc && gl && canvas && !gl.isContextLost() && ensure(gl, canvas.width, canvas.height));
+                if (this._hdrActive) {
+                    try { R.gradeProgram(sc.grade); } catch (e) { this._hdrActive = false; console.warn("[ReactorHdrOverlay] " + e); }
+                }
             }
-            if (sc && !this._hdrActive) this._effect = EffectManager.load(fallbackName(this, sc));
+            if (sc && !this._hdrActive) this._effect = load(this, fallbackName(this, sc));
             if (this._hdrActive) active.add(this);
             this._hdrSelected = true;
         }
@@ -481,15 +473,17 @@
     api.contextLost = function() {
         // Old WASM handles cannot be resumed in the replacement Effekseer context.
         // End active HDR animations so a battle cannot wait on a stranded handle.
+        // In-scene ones live on PIXI's context, which this loss does not touch.
         for (const sprite of active) {
+            if (sprite._effekseerInScene) continue;
             sprite._handle?.stop();
             sprite._hdrActive = false; sprite._playing = false; sprite._started = false;
+            active.delete(sprite);
         }
-        active.clear();
         R?.lost();
     };
     api.contextRestored = function() { R?.restored(); };
-    api.release = function(sprite) { active.delete(sprite); scene.release(sprite); };
+    api.release = function(sprite) { active.delete(sprite); };
     api.configure = function(options) {
         Object.assign(params, options);
     };
@@ -538,170 +532,53 @@
         }
     };
 
-    // ---- Prototype: HDR inside PIXI's scene (opt-in) -----------------------
-    // REACTOR_HDR.inScene, or the inScene parameter, draws an HDR animation on
-    // PIXI's own WebGL2 context instead of the Effekseer overlay: its own
-    // Effekseer context there (as Reactor3D.GpuEffects runs one), the light
-    // drawn, bloomed and graded into a texture before PIXI renders, and that
-    // texture screened into the scene by a sprite inside the animation. So the
-    // effect sits at the animation's layer (under the windows, inside the
-    // spriteset's tone and filters), the light buffer can be multisampled, and
-    // no scene copy is made for it. Off, nothing here runs.
-    const scene = api.scene = { ctx: null, entry: null, R: null, effects: new Map(), queue: new Set(),
-        sprite: null, handle: null, failed: false, stats: { groups: 0, draws: 0, postMs: 0, passes: 0, passMs: 0 } };
-    function sceneWanted() {
-        return params.inScene === true || params.inScene === "true" || !!(window.REACTOR_HDR && window.REACTOR_HDR.inScene);
-    }
-    function pixi() { return typeof Graphics !== "undefined" && Graphics._app && Graphics._app.renderer; }
-    scene.available = function() {
-        const r = pixi();
-        return !scene.failed && !!(r && r.gl && r.context && r.context.webGLVersion === 2 && typeof r.resetState === "function"
-            && typeof effekseer !== "undefined" && typeof PIXI !== "undefined" && PIXI.TextureSource
-            && typeof Reactor3D !== "undefined" && typeof Reactor3D.adoptGlTexture === "function");
-    };
-    // PIXI's caches after another engine has driven its context (as Reactor3D's viewport does).
-    function resetPixi(r) {
-        r.resetState();
-        if (r.texture && Array.isArray(r.texture._boundTextures)) r.texture._boundTextures.fill(null);
-    }
-    function restoreOverlay() { Graphics.effekseer?._makeContextCurrent?.(); }
-    function sceneContext() {
-        if (scene.ctx) return scene.ctx;
-        const r = pixi(), gl = r.gl;
-        try {
-            gl.bindVertexArray(null);
-            const ctx = effekseer.createContext();
-            ctx.init(gl);
-            // The pass resets PIXI's caches itself, and Effekseer re-asserts its own state per draw.
-            ctx.setRestorationOfStatesFlag(false);
-            scene.ctx = ctx;
-            scene.entry = { context: ctx, disposed: false };
-            scene.R = createRenderer(gl, Object.assign({ samples: 4 }, params), scene.stats);
-            install();
-        } finally { restoreOverlay(); resetPixi(r); }
-        return scene.ctx;
-    }
-    function sceneEffect(name) {
-        if (scene.effects.has(name)) return scene.effects.get(name);
-        const ctx = sceneContext();
-        ctx._makeContextCurrent();
-        try {
-            const url = EffectManager.makeUrl(name);
-            const effect = ctx.loadEffect(url, 1, () => {}, () => EffectManager.onError(url));
-            scene.effects.set(name, effect);
-            return effect;
-        } finally { restoreOverlay(); }
-    }
-    // An HDR animation plays in the scene context from here on; false leaves it to the overlay.
-    scene.adopt = function(sprite, sc) {
-        if (!sceneWanted() || !scene.available()) return false;
-        const r = pixi();
-        try {
-            sceneContext();
-            r.gl.bindVertexArray(null);
-            scene.R.gradeProgram(sc.grade);
-            sprite._effect = sceneEffect(sprite._animation.effectName);
-            sprite._effectContext = scene.entry;
-            sprite._hdrInScene = true;
-            sprite._hdrActive = false;
-            return true;
-        } catch (e) {
-            console.warn("[ReactorHdrOverlay] in-scene HDR unavailable, using the overlay:", e);
-            scene.failed = true;
-            return false;
-        } finally { resetPixi(r); }
-    };
-    scene.release = function(sprite) {
-        scene.queue.delete(sprite);
-        // Sprite.destroy takes its children and their textures with it; the light is shared.
-        if (scene.sprite && scene.sprite.parent === sprite) sprite.removeChild(scene.sprite);
-        if (sprite._hdrInScene && sprite._handle && scene.ctx) {
-            try { scene.ctx._makeContextCurrent(); sprite._handle.stop(); } finally { restoreOverlay(); }
-            sprite._handle = null;
-        }
-    };
-    let installed = false;
-    function install() {
-        if (installed) return;
-        installed = true;
-        // Advanced with the overlay's context, once per game frame.
-        const updateEffekseer = SceneManager.updateEffekseer;
-        SceneManager.updateEffekseer = function() {
-            updateEffekseer.call(this);
-            if (scene.ctx && Graphics.effekseer && this.isGameActive()) {
-                try { scene.ctx._makeContextCurrent(); scene.ctx.update(); } finally { restoreOverlay(); }
+    // ---- In-scene support -------------------------------------------------
+    // Screen animations drawn inside PIXI's scene (Sprite_Animation.SceneLayer,
+    // reactor_sprites.js) draw their HDR light through a renderer of their own
+    // on PIXI's WebGL2 context, and composite it into whatever PIXI is drawing
+    // to at the time. The layer owns the GL state around those calls; this
+    // part chooses HDR or the twin and lends the sidecar's settings.
+    let RS = null;
+    const scene = api.scene = {
+        stats: { groups: 0, draws: 0, postMs: 0 },
+        gl() { return typeof Graphics !== "undefined" && Graphics._app && Graphics._app.renderer ? Graphics._app.renderer.gl : null; },
+        // The renderer for PIXI's context: replaced when the context is.
+        renderer(gl) {
+            if (!RS || RS.gl !== gl) {
+                if (RS && !RS.gl.isContextLost()) RS.dispose();
+                RS = createRenderer(gl, Object.assign({ samples: 4 }, params), scene.stats);
             }
-        };
-        // Drawn by the pass below, not queued for the overlay (which would copy the scene for it).
-        const render = Sprite_Animation.prototype._render;
-        Sprite_Animation.prototype._render = function(renderer) {
-            if (!this._hdrInScene) return render.call(this, renderer);
-            if (this._targets.length > 0 && this._handle && this._handle.exists) scene.queue.add(this);
-        };
-        Graphics._reactorBeforeRender.add(scenePass);
-    }
-    // The light for this frame, before PIXI renders: the animations that rendered last frame.
-    function scenePass() {
-        const queue = Array.from(scene.queue).filter(sp => sp._handle && sp._handle.exists && sp.parent);
-        scene.queue.clear();
-        if (!queue.length) { if (scene.sprite) scene.sprite.visible = false; return; }
-        const r = pixi(), gl = r.gl, canvas = Graphics._effekseerCanvas;
-        const start = performance.now();
-        try {
-            gl.bindVertexArray(null);
-            // The overlay's size: the projection and viewport arithmetic are written against it.
-            if (!scene.R.ensure(canvas.width, canvas.height)) throw Error("no HDR targets on PIXI's context");
-            const groups = new Map();
-            for (const sprite of queue) {
-                const sc = sidecarFor(sprite);
-                if (!groups.has(sc.grade)) groups.set(sc.grade, { sc, sprites: [] });
-                groups.get(sc.grade).sprites.push(sprite);
+            return RS;
+        },
+        // Whether an in-scene sprite with this sidecar can be drawn in HDR here: float targets
+        // and a grade that compiles, tried at the game's own size (what the light is drawn at).
+        ready(sc) {
+            const layer = Sprite_Animation.SceneLayer;
+            try {
+                return !!layer.guard(gl => {
+                    const R = scene.renderer(gl);
+                    if (!R.ensure(Math.max(1, Graphics.width | 0), Math.max(1, Graphics.height | 0))) return false;
+                    R.gradeProgram(sc.grade);
+                    return true;
+                });
+            } catch (e) {
+                console.warn("[ReactorHdrOverlay] " + e);
+                return false;
             }
-            scene.R.clearOutput();
-            scene.ctx._makeContextCurrent();
-            for (const group of groups.values()) {
-                scene.R.begin();
-                for (const sprite of group.sprites) {
-                    scene.ctx.setProjectionMatrix(Sprite_Animation.effekseerProjection(canvas.height, Sprite_Animation.effekseerViewportSide(), sprite._mirror));
-                    scene.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
-                    const rect = sprite.effekseerViewportRect(r);
-                    gl.viewport(rect.x, rect.y, rect.side, rect.side);
-                    scene.ctx.beginDraw(); scene.ctx.drawHandle(sprite._handle); scene.ctx.endDraw();
-                    scene.stats.draws++;
-                }
-                scene.R.post(Object.assign(settings(group.sc), { output: true }), group.sc);
-            }
-            show(queue[0], r);
-        } catch (e) {
-            console.warn("[ReactorHdrOverlay] in-scene pass failed:", e);
-            if (scene.sprite) scene.sprite.visible = false;
-        } finally {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            restoreOverlay();
-            resetPixi(r);
-            scene.stats.passes++;
-            scene.stats.passMs += performance.now() - start;
-        }
-    }
-    // The output texture as a screen-blended sprite at the animation's place in the scene,
-    // stretched over the whole screen whatever the animation's parents do.
-    function show(host, r) {
-        const out = scene.R.output;
-        if (!scene.sprite || scene.handle !== out.t) {
-            const source = new PIXI.TextureSource({ width: out.w, height: out.h, resolution: 1, scaleMode: "linear",
-                alphaMode: "premultiplied-alpha", autoGarbageCollect: false, label: "reactor-hdr-in-scene" });
-            Reactor3D.adoptGlTexture(r, source, out.t);
-            const texture = new PIXI.Texture({ source, rotate: PIXI.groupD8.MIRROR_VERTICAL, label: "reactor-hdr-in-scene" });
-            if (scene.sprite) scene.sprite.texture = texture;
-            else { scene.sprite = new PIXI.Sprite(texture); scene.sprite.blendMode = "screen"; scene.sprite.label = "reactor-hdr-in-scene"; }
-            scene.handle = out.t;
-        }
-        const sprite = scene.sprite;
-        if (sprite.parent !== host) host.addChild(sprite);
-        const a = host.toLocal(new PIXI.Point(0, 0)), b = host.toLocal(new PIXI.Point(Graphics.width, Graphics.height));
-        sprite.position.set(a.x, a.y);
-        sprite.width = b.x - a.x;
-        sprite.height = b.y - a.y;
-        sprite.visible = true;
-    }
+        },
+        sidecar: sidecarFor,
+        settings,
+        // A pass that failed: this sprite plays its twin from here on.
+        fallBack(sprite) {
+            active.delete(sprite);
+            try { sprite._handle?.stop(); } catch (e) { /* a lost context */ }
+            sprite._started = false; sprite._hdrActive = false;
+            sprite._effect = load(sprite, fallbackName(sprite, sidecarFor(sprite)));
+        },
+        lost() {
+            for (const sprite of active) if (sprite._effekseerInScene) active.delete(sprite);
+            RS?.lost();
+        },
+        restored() { RS?.restored(); }
+    };
 })();

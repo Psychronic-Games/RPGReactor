@@ -2391,12 +2391,13 @@ Graphics._createCanvas = function() {
     this._canvas.id = "gameCanvas";
     this._updateCanvas();
     document.body.appendChild(this._canvas);
-    // Overlay canvas for Effekseer's own WebGL1 context. Effekseer's drawHandle
-    // is a silent no-op on v8's WebGL2 context (proven via full-canvas pixel
-    // diff: zero pixels written, zero GL errors). Giving Effekseer its own
-    // WebGL1 context — same recipe the editor's AnimationPicker uses — bypasses
-    // the v8/WebGL2 incompatibility. The browser compositor layers this
-    // transparent canvas over the game canvas naturally.
+    // Overlay canvas for Effekseer's own WebGL1 context, which the browser
+    // compositor layers over the game canvas. Screen animations draw on v8's
+    // WebGL2 context during its render instead (Sprite_Animation.SceneLayer):
+    // Effekseer drew nothing there only when called from v8's onRender, which
+    // runs before v8's own draws. This overlay is the fallback (a WebGL1 or
+    // WebGPU renderer, Graphics.effekseerInScene = false), and the surface
+    // effects a 3D map anchors are drawn on.
     this._effekseerCanvas = document.createElement("canvas");
     this._effekseerCanvas.id = "effekseerOverlay";
     this._effekseerCanvas.style.pointerEvents = "none";
