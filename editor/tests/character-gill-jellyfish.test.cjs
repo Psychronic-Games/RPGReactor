@@ -50,9 +50,11 @@ test('arthropod leg roots stay within the measured shell and front-body joints c
 test('swimmer markings and strength controls change the actual skin instead of leaving identical presets',()=>{
  for(const kind of ['shark','fish','dolphin']){
   const r=Q.Creature.kindRecipe(kind),colors=new Set();
-  for(const pattern of ['solid','countershade','stripes','spots','rosettes','piebald','scales']){const b=Q.Model.build(null,{...r,pattern},{},{quality:'preview'});colors.add(hash(b.parts.find(p=>p.name==='Body').colors));}
+  // Swimmer coloration is painted on the body's own chart since 2026-10-24: hash the chart with the vertex colors.
+  const skin=b=>{const p=b.parts.find(p=>p.name==='Body');return hash(p.colors)+':'+hash(b.textures[p.texture].data);};
+  for(const pattern of ['solid','countershade','stripes','spots','rosettes','piebald','scales']){const b=Q.Model.build(null,{...r,pattern},{},{quality:'preview'});colors.add(skin(b));}
   assert.equal(colors.size,7,kind+' supports distinct editable markings');
-  const muted=Q.Model.build(null,{...r,pattern:'stripes',patternAmount:0},{},{quality:'preview'}),marked=Q.Model.build(null,{...r,pattern:'stripes',patternAmount:1},{},{quality:'preview'});assert.notEqual(hash(muted.parts[0].colors),hash(marked.parts[0].colors));
+  const muted=Q.Model.build(null,{...r,pattern:'stripes',patternAmount:0},{},{quality:'preview'}),marked=Q.Model.build(null,{...r,pattern:'stripes',patternAmount:1},{},{quality:'preview'});assert.notEqual(skin(muted),skin(marked));
  }
 });
 

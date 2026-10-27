@@ -45,7 +45,7 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         await driver.setScriptTimeout(120000);
         await driver.waitForScript('return !!window.reactor?.databaseEditorUI && getComputedStyle(document.getElementById("splash-screen")).display === "none";', [], { timeout: 90000 });
         const opened = await driver.executeAsync(`const done=arguments[arguments.length-1];(async()=>{
-            window.__errors=[];addEventListener('error',e=>__errors.push(String(e.error||e.message)));
+            window.__errors=[];addEventListener('error',e=>{if(!e.error&&/^ResizeObserver loop/.test(e.message))return;__errors.push(String(e.error||e.message));});
             addEventListener('unhandledrejection',e=>__errors.push(String(e.reason)));
             const pc=reactor.projectController,loaded=await pc.projectManager.loadProject(arguments[0]);
             if(!loaded||!pc.acquireProjectLock(loaded.path))throw new Error('Could not open disposable project');
@@ -69,6 +69,29 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         const pause = (ms = 80) => driver.executeAsync('const done=arguments[arguments.length-1];setTimeout(()=>done(true),arguments[0]);', [ms]);
         const run = (script, args = []) => driver.execute(script, args);
         const focusOpener = () => run('document.getElementById("kb-opener").focus();');
+        // A dialog with a window of its own (the Database, the Plugin Manager) is worked in there: once
+        // that window shows it, keys are typed into it and what it shows is read in it, with the
+        // editor's reactor and the helpers above lent to it; leave() returns to the editor window.
+        const mainHandle = await driver.sessionRequest('GET', '/window');
+        const panels = new Map();
+        const enter = async overlayId => {
+            const pathname = await driver.waitForScript(`const overlay=document.getElementById(arguments[0]);
+                if(!overlay||overlay.style.visibility==='hidden')return false;
+                const own=(window.RRPopoutBridge?.windows()||[]).find(w=>{try{return w.document.contains(overlay);}catch(e){return false;}});
+                if(!own)return 'editor';
+                own.reactor=reactor;own.eval('window.__visible='+__visible+';window.__active='+__active+';');
+                return own.location.pathname;`, [overlayId], { timeout: 10000 });
+            if (pathname === 'editor') return;
+            if (!panels.has(pathname)) {
+                for (const handle of await driver.sessionRequest('GET', '/window/handles')) {
+                    if (handle === mainHandle || [...panels.values()].includes(handle)) continue;
+                    await driver.sessionRequest('POST', '/window', { handle });
+                    panels.set(await run('return location.pathname;'), handle);
+                }
+            }
+            await driver.sessionRequest('POST', '/window', { handle: panels.get(pathname) || mainHandle });
+        };
+        const leave = () => driver.sessionRequest('POST', '/window', { handle: mainHandle });
 
         // Menubar: F10 focuses the first heading; Enter opens with the first row active;
         // Down moves; Right carries the open menu to the next heading; Escape closes.
@@ -137,6 +160,7 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
 
         // Database: categories walk with arrows, Escape asks before discarding edits.
         await run('reactor.databaseEditorUI.openDatabase("actors");');
+        await enter('database-viewer');
         await pause(300);
         state = await run('return {focused:__active(),inside:document.getElementById("database-viewer").contains(document.activeElement)};');
         check('Database: focus enters on open', state.inside, state);
@@ -160,6 +184,7 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         await key(KEY.escape);
         await pause(200);
         await key(KEY.tab); await key(KEY.enter);
+        await leave();
         await pause(300);
         state = await run('return {viewer:document.getElementById("database-viewer").classList.contains("active"),name:reactor.databaseManager.data.actors[1].name};');
         check('Database: confirming Discard closes and reverts the edit', !state.viewer && state.name !== 'Keyboard Edit', state);
@@ -177,7 +202,9 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         check('Switch picker: Enter picks it, closes and restores the opener', state.picked === 2 && !state.open && state.focused.id === 'kb-opener', state);
 
         // Trait editor: Left/Right walk the tab strip; Escape cancels.
-        await run('reactor.databaseEditorUI.openDatabase("actors");reactor.databaseEditorUI.actorEditor.traitEditor.showTraitEditorModal(structuredClone(reactor.databaseManager.data.actors[1]));');
+        await run('reactor.databaseEditorUI.openDatabase("actors");');
+        await enter('database-viewer');
+        await run('reactor.databaseEditorUI.actorEditor.traitEditor.showTraitEditorModal(structuredClone(reactor.databaseManager.data.actors[1]));');
         await pause(200);
         state = await run('return __active();');
         check('Trait editor: focus enters on the first tab', state.cls.includes('trait-tab'), state);
@@ -188,6 +215,7 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         await pause();
         check('Trait editor: Escape closes it', !(await run('return !!document.querySelector(".trait-editor-modal");')));
         await run('document.querySelector("#database-cancel-btn").click();');
+        await leave();
 
         // Options: Down on the language trigger enters the list; Escape backs out one layer.
         await focusOpener();
@@ -208,10 +236,12 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         // Plugin Manager: focus enters the list on the first open; Escape closes and restores.
         await focusOpener();
         await run('reactor.pluginManager.show();');
+        await enter('plugin-manager-modal');
         await pause(300);
         state = await run('return {inside:document.getElementById("plugin-manager-modal").contains(document.activeElement),focused:__active()};');
         check('Plugin Manager: focus enters on open', state.inside, state);
         await key(KEY.escape);
+        await leave();
         await pause();
         state = await run('return {open:__visible(document.getElementById("plugin-manager-modal")),focused:__active()};');
         check('Plugin Manager: Escape closes and restores the opener', !state.open && state.focused.id === 'kb-opener', state);

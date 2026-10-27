@@ -712,9 +712,15 @@
         return pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture) || null;
     }
 
-    /** Whether the runtime draws a map in this slot (`normalTexture`, `emissiveTexture`): one on the base color map's own coordinates. */
+    /**
+     * Whether the runtime draws a map in this slot (`normalTexture`,
+     * `emissiveTexture`): one on the base color map's own coordinates, or a
+     * normal map on the second coordinates (a Character Builder cloth's
+     * repeating weave), which the runtime draws on its own.
+     */
     function keepsBeside(material, slot) {
         const base = sampledTexture(material), info = material[slot];
+        if (slot === 'normalTexture' && info && info.texCoord === 1) return true;
         return !!(base && info && !(info.texCoord > 0) && !(base.texCoord > 0));
     }
 

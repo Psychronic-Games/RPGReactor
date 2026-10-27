@@ -11,6 +11,7 @@ const Glb = require(path.join(root, 'src', 'forge', 'Character3D', 'CharacterGlb
 const Optimizer = require(path.join(root, 'src', 'utils', 'GlbOptimizer.js'));
 const Rigger = require(path.join(root, 'src', 'database', 'ModelRigger.js'));
 const Presets = require(path.join(root, 'src', 'database', 'RigMotionPresets.js'));
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const bounds = parts => {
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -130,26 +131,28 @@ test('the saved creature is a skinned GLB with vertex colors and an Idle clip, a
     assert.deepEqual(JSON.parse(JSON.stringify(side)), side);
 });
 
-test('a preview build is quick enough for a live slider', () => {
-    // CPU time, not the clock: the suite runs many files at once, and waiting on them is not the build's cost.
-    const start = process.cpuUsage();
+test('a preview build is quick enough for a live slider', t => {
+    const start = cpuMicros();
     for (const kind of ['dog', 'horse', 'drake']) Creature.build(Creature.kindRecipe(kind), { quality: 'preview' });
-    const used = process.cpuUsage(start), ms = (used.user + used.system) / 1000 / 3;
-    assert.ok(ms < 400, 'preview ' + Math.round(ms) + ' ms');
+    const ms = (cpuMicros() - start) / 1000 / 3;
+    withinBudget(t, ms, 400, 'preview ' + Math.round(ms) + ' ms');
 });
 
 test('while a slider is dragged the coat picture is half size and quicker; the whole picture on release and on save', () => {
     const Model = require(path.join(root, 'src', 'forge', 'Character3D', 'CharacterModel.js'));
     const coat = built => built.textures['creaturecoat.png'].width;
+    // Each build's CPU time, the least of three taken in turn: the two are compared in one run, on one machine.
+    const timed = options => { const start = cpuMicros(); const built = Model.build(null, options.recipe, {}, options.build); return { built, ms: (cpuMicros() - start) / 1000 }; };
     for (const kind of ['dog', 'cat']) {
         const r = { plan: 'quadruped', ...Creature.kindRecipe(kind) };
         Model.build(null, r, {}, { quality: 'preview' });
-        let start = Date.now();
-        const full = Model.build(null, r, {}, { quality: 'preview' }), fullMs = Date.now() - start;
-        start = Date.now();
-        const draft = Model.build(null, r, {}, { quality: 'preview', draft: true }), draftMs = Date.now() - start;
+        let full = null, draft = null, fullMs = Infinity, draftMs = Infinity;
+        for (let round = 0; round < 3; round++) {
+            const f = timed({ recipe: r, build: { quality: 'preview' } }), d = timed({ recipe: r, build: { quality: 'preview', draft: true } });
+            full = f.built; draft = d.built; fullMs = Math.min(fullMs, f.ms); draftMs = Math.min(draftMs, d.ms);
+        }
         assert.equal(coat(draft) * 2, coat(full), kind + ' draft coat ' + coat(draft) + ' / ' + coat(full));
-        assert.ok(draftMs < fullMs, kind + ' draft ' + draftMs + ' ms, full ' + fullMs + ' ms');
+        assert.ok(draftMs < fullMs, kind + ' draft ' + Math.round(draftMs) + ' ms, full ' + Math.round(fullMs) + ' ms');
         assert.deepEqual(draft.bones.map(b => b.name), full.bones.map(b => b.name), 'the same skeleton');
     }
     assert.equal(coat(Creature.build(Creature.kindRecipe('dog'), { quality: 'save', draft: true })), 1536, 'a save is never a draft');
@@ -369,4 +372,71 @@ test('head-only source keeps eyes and head features without carrying the quadrup
         const again = Creature.build(recipe, { quality: 'preview', hairBudget: 0 });
         assert.deepEqual(again.parts.find(p => p.name === 'Body').positions, a.positions, kind + ' regular creature unaffected');
     }
+});
+
+// 2026-10-25b review: the armadillo's carapace is one high dome low over the legs, banded at mid-body.
+test('an armadillo wears a domed banded carapace low over short legs, a head shield and a long snout', () => {
+    const b = Creature.build(Creature.kindRecipe('armadillo'), { quality: 'preview' }), horns = b.parts.find(p => p.name === 'Horns'), body = b.parts.find(p => p.name === 'Body');
+    const box = p => { const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (let i = 0; i < p.positions.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p.positions[i + k]); hi[k] = Math.max(hi[k], p.positions[i + k]); } return { lo, hi }; };
+    const shell = box(horns), whole = box(body);
+    // The dome is the animal's top, wider than the body, its rim down at a third of its height.
+    assert.ok(shell.hi[1] >= whole.hi[1] - 1e-3, 'shell is the top');
+    assert.ok(shell.hi[0] > whole.hi[0] * 0.98, 'shell as wide as the body');
+    assert.ok(shell.lo[1] < shell.hi[1] * 0.42, 'rim low over the legs');
+    // Its profile arches: the middle stands higher than the shields' ends.
+    const heightAt = (z0, z1) => { let h = -1e9; for (let i = 0; i < horns.positions.length; i += 3) if (horns.positions[i + 2] > z0 && horns.positions[i + 2] < z1 && Math.abs(horns.positions[i]) < 0.01) h = Math.max(h, horns.positions[i + 1]); return h; };
+    const zs = (shell.lo[2] + shell.hi[2]) / 2, span = shell.hi[2] - shell.lo[2];
+    assert.ok(heightAt(zs - span * .1, zs + span * .1) > heightAt(zs - span * .62, zs - span * .38) + 0.01, 'arched over the hips');
+    // The flexible bands: alternating ridges and grooves along the back at mid-body (nine of them).
+    let ridges = 0, prev = null, rising = false;
+    for (let k = 0; k <= 160; k++) { const z = zs - span * .18 + span * .36 * k / 160, h = heightAt(z - span * .004, z + span * .004); if (prev != null) { if (h > prev + 1e-5 && !rising) { rising = true; ridges++; } else if (h < prev - 1e-5) rising = false; } prev = h; }
+    assert.ok(ridges >= 6, 'bands ' + ridges);
+});
+
+// The armadillo's tail leaves the body under the hip shield's rear rim and sways only past it.
+test('an armadillo\'s tail root holds still under its hip shield; it sways only past the rim', () => {
+    const recipe = Creature.kindRecipe('armadillo'), b = Creature.build(recipe, { quality: 'preview' });
+    const clips = [b.clips.find(c => /idle/i.test(c.name)), Creature.poseClip(b.bones, 'walk', recipe)].filter(Boolean);
+    assert.equal(clips.length, 2);
+    const index = new Map(b.bones.map((x, i) => [x.name, i]));
+    for (const clip of clips) {
+        let tail3 = 0;
+        for (const tr of clip.tracks) {
+            const name = typeof tr.bone === 'number' ? b.bones[tr.bone]?.name : tr.bone;
+            for (let i = 0; i < tr.values.length; i += 4) {
+                const turn = 2 * Math.acos(Math.min(1, Math.abs(tr.values[i + 3])));
+                if (name === 'Tail' || name === 'Tail2') assert.ok(turn < 1e-3, clip.name + ' ' + name + ' held still');
+                if (name === 'Tail3') tail3 = Math.max(tail3, turn);
+            }
+        }
+        assert.ok(tail3 > 0.05, clip.name + ' tail still sways past the rim');
+    }
+    // The shell's rear (behind the last tail bone's root) stands over the tail there: a notch, not a wall through it.
+    const horns = b.parts.find(p => p.name === 'Horns'), tail = b.bones[index.get('Tail3')].head;
+    let over = 0, through = 0;
+    for (let i = 0; i < horns.positions.length; i += 3) {
+        const x = horns.positions[i], y = horns.positions[i + 1], z = horns.positions[i + 2];
+        if (Math.abs(z - tail[2]) < 0.03 && Math.abs(x) < 0.012) { if (y > tail[1]) over++; else through++; }
+    }
+    assert.ok(over > 0, 'the rim arches over the tail');
+    assert.equal(through, 0, 'no shell below the tail\'s centre where it leaves');
+});
+
+// Whiskers fan in rows and columns that spread apart: no two on a side ever come closer than a few root widths.
+test('whiskers stand in staggered rows on the pads and never cross, for every whiskered animal', () => {
+    const seg = (a, b, c, d) => { let m = Infinity; for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) { const p = a.map((v, q) => v + (b[q] - v) * i / 8), r = c.map((v, q) => v + (d[q] - v) * j / 8); m = Math.min(m, Math.hypot(p[0] - r[0], p[1] - r[1], p[2] - r[2])); } return m; };
+    for (const kind of ['cat', 'lion', 'tiger', 'dog', 'wolf', 'fox', 'rabbit']) {
+        const L = Creature.build(Creature.kindRecipe(kind), { quality: 'preview' }).whiskerLines;
+        assert.ok(L && L.length >= 12, kind + ' has whiskers');
+        let min = Infinity;
+        for (let x = 0; x < L.length; x++) for (let y = x + 1; y < L.length; y++) if (L[x].side === L[y].side)
+            for (let i = 0; i + 1 < L[x].pts.length; i++) for (let j = 0; j + 1 < L[y].pts.length; j++) min = Math.min(min, seg(L[x].pts[i], L[x].pts[i + 1], L[y].pts[j], L[y].pts[j + 1]));
+        assert.ok(min > L[0].radius * 3, kind + ' whiskers keep apart: ' + (min / L[0].radius).toFixed(1) + ' root widths');
+    }
+});
+test('a tiger has no neck mane, only cheek ruffs, and stripes that are not one repeating wave', () => {
+    const r = Creature.kindRecipe('tiger');
+    assert.equal(r.mane, 'none');
+    const b = Creature.build(r, { quality: 'preview' });
+    assert.ok(b.parts.length > 0);
 });

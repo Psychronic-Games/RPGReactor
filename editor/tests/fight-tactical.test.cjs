@@ -1126,8 +1126,12 @@ test('armies: no cap on units, a party size from System, the rest of a turn hand
     for (let i = 0; i < 28; i++) fight.spawn({ record: 'enemy', id: 1, team: 'ally', x: 1 + (i % 4), y: 1 + Math.floor(i / 4) * 2 % 14 });
     for (let i = 0; i < 30; i++) fight.spawn({ record: 'enemy', id: 1, team: 'enemy', x: 15 + (i % 4), y: Math.floor(i / 4) * 2 % 14 });
     assert.equal(fight.units().length, 60);
+    // The thinking's share of a frame is measured by the frame's own clock: a slow or busy machine thinks as many units a frame as a quick one.
+    let clock = 0;
+    w.performance = { now: () => clock };
     let most = 0, frames = 0, phaseFrames = 0, longest = 0, team = '';
     while (frames < 200000 && fight.isActive()) {
+        clock += 1000 / 60;
         w.run(1); frames++;
         if (!fight._tac) break;
         most = Math.max(most, (fight._tac.movers || []).length);

@@ -12,7 +12,8 @@
  *                             anchor (feet on the baseline, centered)
  *   fitFace(eye, cell, h)     a portrait's scale and anchor (eyes on one line)
  *   downsample / outline / blit   pixel helpers
- *   fileName(id, name)        the file the sheet is written as
+ *   fileName(id, name, n)     the file the sheet is written as
+ *   FRAME_CHOICES             frames per row a character sheet may have
  *   openPanel(builder)        the export panel over the builder's view
  *   render(builder, settings, progress)   the sheet as { width, height, data }
  *
@@ -27,6 +28,15 @@
  *   block 6 (cols 7-9, rows 5-8)   attack, four directions
  *   block 7 (cols 10-12, rows 5-8) poses facing down: jump, guard, cast, down
  * Each walk row is MZ's three frames: one step, standing, the other step.
+ *
+ * With n frames per row other than three ('8d' and 'mz' only), the sheet is
+ * an [NF] sheet ($Name[8D][6F], $Name[6F]; frameTag): every block is n frames
+ * wide, in the order the game plays them, 0 to n - 1 round again, resting on
+ * 0. A walk or carry row stands on frame 0 and walks the clip's cycle over the
+ * rest in even steps from its passing frame, so the loop comes back round to
+ * standing; a dash row is the run's cycle the same way, frame 0 its passing
+ * frame. Attack and the poses spread their motion over the n frames. A [1F]
+ * sheet is one frame a row: standing, the run's passing frame, each pose's key.
  * The side-view sheet is MZ's 9 × 6 cells, 18 motions down three columns in
  * Sprite_Actor.MOTIONS order; the face sheet MZ's 4 × 2 portraits.
  */
@@ -106,30 +116,55 @@
     const LOOP = [0, 0.25, 0.5];
     const frames = (clip, times) => times.map(at => ({ clip, at }));
 
-    /** The top-left frame of an eight-block sheet's block (0-7). */
-    const blockOrigin = block => ({ col: (block % 4) * 3, row: Math.floor(block / 4) * 4 });
+    /** Frames per row a character sheet ('8d', 'mz') may have; 3 is MZ's own. */
+    const FRAME_CHOICES = [1, 3, 4, 6, 8, 10, 12];
+    /** The file-name tag for n frames per row: `[6F]`, number first like [8D]; none for MZ's 3 (RRAssetFiles.frameTag). */
+    const frameTag = n => (root.RRAssetFiles && root.RRAssetFiles.frameTag ? root.RRAssetFiles.frameTag(n) : (Number(n) >= 1 && Number(n) !== 3 ? `[${Math.round(Number(n))}F]` : ''));
+    /** A layout's frames per row: n where the layout takes a choice, else 3. */
+    const framesOf = (id, n) => ((id === '8d' || id === 'mz') && FRAME_CHOICES.includes(Number(n)) ? Number(n) : 3);
+    /** A layout's columns at n frames per row: every block n wide. */
+    const columnsOf = (id, n) => { const l = layout(id), f = framesOf(id, n); return f === 3 ? l.columns : l.columns / 3 * f; };
+    // n-frame rows ([NF] order: 0 to n - 1, resting on 0). `to` and `u` mean a time u of the way from `at` to `to`;
+    // `shift` a time that much further round the clip.
+    const cycleRow = (n, clip, stand) => Array.from({ length: n }, (_, i) => (i === 0 && stand ? { clip: 'idle', at: 0 } : { clip, at: 'pass', shift: i / n }));
+    const spreadRow = (n, clip, from, to) => Array.from({ length: n }, (_, i) => ({ clip, at: from, to, u: n > 1 ? i / (n - 1) : 0.5 }));
+    /** A one-time motion over n frames: from its start up to the key pose by the middle frame, then on after it. */
+    const onceRow = (n, clip) => {
+        if (n === 1) return [{ clip, at: 'key' }];
+        const key = Math.max(1, Math.round((n - 1) / 2));
+        return Array.from({ length: n }, (_, i) => (i <= key ? { clip, at: 'start', to: 'key', u: i / key } : { clip, at: 'key', to: 'after', u: (i - key) / (n - 1 - key) }));
+    };
+
+    /** The top-left frame of an eight-block sheet's block (0-7), blocks n frames wide (3 unless given). */
+    const blockOrigin = (block, n = 3) => ({ col: (block % 4) * n, row: Math.floor(block / 4) * 4 });
 
     function plan(id, options = {}) {
-        const cells = [];
+        const cells = [], n = framesOf(id, options.frames), three = n === 3;
+        const walk = three ? WALK : cycleRow(n, 'walk', true), run = three ? RUN : cycleRow(n, 'run', false);
         const block = (b, dirs, row, kind, extra) => {
-            const o = blockOrigin(b);
+            const o = blockOrigin(b, n);
             dirs.forEach((d, r) => row.forEach((f, c) => cells.push(Object.assign({ col: o.col + c, row: o.row + r, yaw: YAW[d], dir: d, kind }, f, extra))));
         };
-        if (id === 'mz') block(0, CARDINAL, WALK, 'move');
+        if (id === 'mz') block(0, CARDINAL, walk, 'move');
         else if (id === '8d') {
-            block(0, CARDINAL, WALK, 'move');
-            block(1, DIAGONAL, WALK, 'move');
-            block(2, CARDINAL, RUN, 'move');
-            block(3, DIAGONAL, RUN, 'move');
-            block(4, CARDINAL, WALK, 'move', { upper: 'lift', upperAt: 'overhead' });
-            block(5, DIAGONAL, WALK, 'move', { upper: 'lift', upperAt: 'overhead' });
-            block(6, CARDINAL, frames('attack', ONCE), 'pose');
-            const o = blockOrigin(7);
-            const rows = [
+            block(0, CARDINAL, walk, 'move');
+            block(1, DIAGONAL, walk, 'move');
+            block(2, CARDINAL, run, 'move');
+            block(3, DIAGONAL, run, 'move');
+            block(4, CARDINAL, walk, 'move', { upper: 'lift', upperAt: 'overhead' });
+            block(5, DIAGONAL, walk, 'move', { upper: 'lift', upperAt: 'overhead' });
+            block(6, CARDINAL, three ? frames('attack', ONCE) : onceRow(n, 'attack'), 'pose');
+            const o = blockOrigin(7, n);
+            const rows = three ? [
                 frames('jump', [0.45, 0.6, 0.72]),
                 frames('guard', HOLD),
                 frames('cast', ONCE),
                 [{ clip: 'hit', at: 0.4 }, { clip: 'dead', at: 0.45 }, { clip: 'dead', at: 0.97 }]
+            ] : [
+                spreadRow(n, 'jump', 0.45, 0.72),
+                spreadRow(n, 'guard', 'keyBefore', 'keyAfter'),
+                onceRow(n, 'cast'),
+                n === 1 ? [{ clip: 'dead', at: 0.97 }] : [{ clip: 'hit', at: 0.4 }].concat(spreadRow(n - 1, 'dead', 0.45, 0.97))
             ];
             rows.forEach((row, r) => row.forEach((f, c) => cells.push(Object.assign({ col: o.col + c, row: o.row + r, yaw: 0, dir: 2, kind: 'pose' }, f))));
         } else if (id === 'sv') {
@@ -152,6 +187,18 @@
         if (name === 'idle') return 'idle';
         for (const id of CLIPS[name] || [name]) if (has(id)) return id;
         return 'idle';
+    }
+
+    /**
+     * The character sheets' world scale (pixels a metre): a 1.68 m character
+     * standing in a `tile`-wide cell with its outline, as the 'mz' sheet
+     * draws one (a 48 px cell: 44 px of room, about 26 px a metre). Props
+     * drawn at it stand beside exported characters at their true size.
+     */
+    const STANDARD_HEIGHT = 1.68;
+    function pixelsPerMeter(tile = 48) {
+        const m = cellMetrics(tile, tile, true);
+        return (m.baseline - m.top) / STANDARD_HEIGHT;
     }
 
     /** Where the feet stand and how much room a frame has in a cell w × h (pixels). */
@@ -239,7 +286,9 @@
     }
 
     /** A one-pixel dark line round the figure, in a darker shade of what it borders. */
-    function outline(px, w, h) {
+    /** `dark`: how dark the ring is against the pixel inside it (0.28; a prop's foliage takes a lighter one). */
+    function outline(px, w, h, dark) {
+        const k = Number.isFinite(dark) ? dark : null;
         const src = px.slice();
         for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
             const o = (y * w + x) * 4;
@@ -252,7 +301,7 @@
                 if (src[n + 3] >= 96 && src[n + 3] > ba) { ba = src[n + 3]; best = n; }
             }
             if (best < 0) continue;
-            px[o] = src[best] * 0.28; px[o + 1] = src[best + 1] * 0.25; px[o + 2] = src[best + 2] * 0.28; px[o + 3] = 255;
+            px[o] = src[best] * (k ?? 0.28); px[o + 1] = src[best + 1] * (k ?? 0.25); px[o + 2] = src[best + 2] * (k ?? 0.28); px[o + 3] = 255;
         }
         return px;
     }
@@ -345,9 +394,13 @@
      * sheets): the darks opened up so a dark outfit keeps its folds, then
      * more contrast and color. Straight-alpha RGBA, in place.
      */
-    function grade(px) {
+    /** `soft`: lift the darks without the contrast (a prop: dark foliage would go black). */
+    function grade(px, soft) {
         const lut = new Uint8ClampedArray(256);
-        for (let v = 0; v < 256; v++) { const x = Math.pow(v / 255, 0.82); lut[v] = Math.round(255 * Math.min(1, Math.max(0, (x - 0.36) * 1.38 + 0.36))); }
+        for (let v = 0; v < 256; v++) {
+            const x = Math.pow(v / 255, soft ? 0.72 : 0.82);
+            lut[v] = Math.round(255 * Math.min(1, Math.max(0, soft ? x : (x - 0.36) * 1.38 + 0.36)));
+        }
         for (let i = 0; i < px.length; i += 4) {
             if (!px[i + 3]) continue;
             const r = lut[px[i]], g = lut[px[i + 1]], b = lut[px[i + 2]], y = 0.299 * r + 0.587 * g + 0.114 * b;
@@ -412,10 +465,10 @@
         return String(name || '').trim().replace(/[\\/:*?"<>|$!\[\]]+/g, '').replace(/\s+/g, ' ').slice(0, 48);
     }
 
-    /** The sheet's file name: `$Name[8D].png`, `$Name.png`, `Name.png`. */
-    function fileName(id, name) {
+    /** The sheet's file name: `$Name[8D].png`, `$Name.png`, `Name.png`; at n frames other than 3, `$Name[8D][6F].png`, `$Name[6F].png`. */
+    function fileName(id, name, n) {
         const l = layout(id);
-        return l.prefix + safeName(name) + l.tag + '.png';
+        return l.prefix + safeName(name) + l.tag + frameTag(framesOf(l.id, n)) + '.png';
     }
 
     // ── rendering (in the builder, on its own view) ───────────────────────
@@ -491,15 +544,20 @@
             view.group.rotation.y = yaw;
             if (found.overhead < 0) found.overhead = found.key;
             found.rise = found.key * 0.55;
+            found.start = found.key * 0.2;
             found.after = Math.min(0.97, found.key + (1 - found.key) * 0.35);
             found.keyBefore = Math.max(0, found.key - 0.05);
             found.keyAfter = Math.min(0.97, found.key + 0.05);
             steps.set(id, found);
             return found;
         };
-        return (id, t, yawDeg) => {
+        const timeOf = (id, t) => (typeof t === 'number' ? t : marksOf(id)[t]);
+        // `more` (a cell): `to` and `u`, a time u of the way on to `to`; `shift`, that much further round the clip.
+        return (id, t, yawDeg, more) => {
             view.group.rotation.y = (yawDeg || 0) * Math.PI / 180;
-            const time = typeof t === 'number' ? t : marksOf(id)[t];
+            let time = timeOf(id, t);
+            if (more && more.to !== undefined) time += (timeOf(id, more.to) - time) * (more.u || 0);
+            if (more && more.shift) time = (time + more.shift) % 1;
             apply(id, time);
         };
     }
@@ -619,7 +677,7 @@
         const restore = settings.style === 'chibi' && settings.layout !== 'face' ? showChibi(builder) : null;
         const shrink = restore ? enlarge(view, builder._result) : null;
         const elevation = settings.layout === 'face' ? l.elevation : Math.max(0, Math.min(75, Number.isFinite(settings.elevation) ? settings.elevation : l.elevation));
-        const cells = plan(settings.layout, { expressions: settings.expressions, view: settings.view });
+        const cells = plan(settings.layout, { expressions: settings.expressions, view: settings.view, frames: settings.frames });
         const poses = view.plan === 'quadruped' ? (root.RRCreatureBody && root.RRCreatureBody.POSES) : (root.RRCharacterPoses && root.RRCharacterPoses.POSES);
         const ids = new Set((poses || []).map(p => p.id));
         const has = id => id === 'idle' || (ids.has(id) && !!builder._poseAction(id));
@@ -645,10 +703,10 @@
             if (c.upperId && c.upperId !== 'idle') {
                 pose(c.upperId, c.upperAt, c.yaw);
                 const held = upperBones.map(b => b.quaternion.clone());
-                pose(c.clipId, c.at, c.yaw);
+                pose(c.clipId, c.at, c.yaw, c);
                 upperBones.forEach((b, i) => b.quaternion.copy(held[i]));
                 view.group.updateMatrixWorld(true);
-            } else pose(c.clipId, c.at, c.yaw);
+            } else pose(c.clipId, c.at, c.yaw, c);
         };
         const total = cells.length * 2;
         let done = 0, budget = performance.now();
@@ -656,12 +714,13 @@
             done++;
             if (performance.now() - budget > 14) { if (progress) progress(done, total); await new Promise(r => setTimeout(r, 0)); budget = performance.now(); }
         };
-        const width = l.columns * size, height = l.rows * size, sheet = new Uint8ClampedArray(width * height * 4);
+        const width = columnsOf(l.id, settings.frames) * size, height = l.rows * size, sheet = new Uint8ClampedArray(width * height * 4);
         try {
             // Measure every frame first: one scale holds for the whole sheet.
             let fitted, faceSpan = 0;
             if (settings.layout === 'face') {
-                faceSpan = 0.46 * (view.bodyHeight || view.height || 1.7) / 1.7;
+                // About 33 cm of the face down the cell, as an RPG Maker face sheet frames it: brow to chin fill it, so an expression reads at 144 px.
+                faceSpan = 0.33 * (view.bodyHeight || view.height || 1.7) / 1.7;
                 done += cells.length;
             } else {
                 const bounds = [];
@@ -750,21 +809,23 @@
         const old = host.querySelector('.rr-c3d-export');
         if (old) { old.remove(); return null; }
         const t = (text, params) => builder._t(text, params);
-        const state = builder._exportSettings || (builder._exportSettings = { layout: '8d', frame: 100, elevation: 30, outline: true, view: 'three', preset: 'everyday', background: '', style: 'realistic', look: 'smooth' });
+        const state = builder._exportSettings || (builder._exportSettings = { layout: '8d', frame: 100, frames: 3, elevation: 30, outline: true, view: 'three', preset: 'everyday', background: '', style: 'realistic', look: 'smooth' });
         const panel = document.createElement('div');
         panel.className = 'rr-c3d-export';
         panel.setAttribute('role', 'dialog');
-        panel.setAttribute('aria-label', t('Export sprite sheet'));
+        panel.setAttribute('aria-label', t('Export Sprite Sheet'));
         host.appendChild(panel);
         const draw = () => {
             const l = layout(state.layout), face = l.id === 'face', exprs = expressionList();
             const name = safeName(builder.name) || t('Villager');
             const presets = facePresets();
+            const frames = framesOf(l.id, state.frames), cols = columnsOf(l.id, frames), file = fileName(l.id, name, frames);
             const presetOptions = presets.map(p => `<option value="${p.id}"${p.id === state.preset ? ' selected' : ''}>${esc(t(p.label))}</option>`).join('');
             panel.innerHTML = `
-                <div class="rr-c3d-export-head"><span>${esc(t('Export sprite sheet'))}</span><button class="rr-c3d-clear" data-x="close" title="${esc(t('Close'))}">✕</button></div>
+                <div class="rr-c3d-export-head"><span>${esc(t('Export Sprite Sheet'))}</span><button class="rr-c3d-clear" data-x="close" title="${esc(t('Close'))}">✕</button></div>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Sheet'))}</span><select class="rr-select" data-x="layout">${LAYOUTS.map(o => `<option value="${o.id}"${o.id === l.id ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
-                <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Frame size'))}</span><input type="number" class="rr-input" data-x="frame" min="16" max="512" step="1" value="${state.frame}"><span class="rr-c3d-value">${l.columns * state.frame} × ${l.rows * state.frame}</span></label>
+                <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Frame size'))}</span><input type="number" class="rr-input" data-x="frame" min="16" max="512" step="1" value="${state.frame}"><span class="rr-c3d-value">${cols * state.frame} × ${l.rows * state.frame}</span></label>
+                ${l.id === '8d' || l.id === 'mz' ? `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Frames'))}</span><select class="rr-select" data-x="frames">${FRAME_CHOICES.map(n => `<option value="${n}"${n === frames ? ' selected' : ''}>${esc(n === 3 ? t('3 (RPG Maker MZ)') : String(n))}</option>`).join('')}</select></label>` : ''}
                 ${face ? `
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('View'))}</span><select class="rr-select" data-x="view"><option value="three"${state.view === 'three' ? ' selected' : ''}>${esc(t('Three-quarter'))}</option><option value="front"${state.view === 'front' ? ' selected' : ''}>${esc(t('Front'))}</option></select></label>
                 ${exprs.length > 1 ? `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Expressions'))}</span><select class="rr-select" data-x="preset">${presetOptions}</select></label>
@@ -775,7 +836,7 @@
                 <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Camera angle'))}</span><input type="range" data-x="elevation" min="0" max="60" step="1" value="${state.elevation}"><span class="rr-c3d-value">${state.elevation}°</span></label>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Look'))}</span><select class="rr-select" data-x="look">${LOOKS.map(o => `<option value="${o.id}"${o.id === state.look ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
                 <label class="rr-c3d-row rr-c3d-check"><span class="rr-c3d-label">${esc(t('Outline'))}</span><input type="checkbox" data-x="outline"${state.outline ? ' checked' : ''}></label>`}
-                <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('File'))}</span><span class="rr-c3d-export-file" title="img/${l.folder}/${esc(fileName(l.id, name))}">img/${l.folder}/${esc(fileName(l.id, name))}</span></div>
+                <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('File'))}</span><span class="rr-c3d-export-file" title="img/${l.folder}/${esc(file)}">img/${l.folder}/${esc(file)}</span></div>
                 <div class="rr-c3d-export-progress" hidden><div></div></div>
                 <img class="rr-c3d-export-preview" alt="" hidden>
                 <div class="rr-c3d-export-status" aria-live="polite"></div>
@@ -787,7 +848,7 @@
         panel.addEventListener('input', e => {
             const x = e.target.dataset.x;
             if (x === 'elevation') { state.elevation = Number(e.target.value); e.target.style.setProperty('--rr-fill', (state.elevation / 60 * 100) + '%'); e.target.parentElement.querySelector('.rr-c3d-value').textContent = state.elevation + '°'; }
-            if (x === 'frame') { const v = Math.round(Number(e.target.value)); if (v >= 16 && v <= 512) { state.frame = v; const l = layout(state.layout); e.target.parentElement.querySelector('.rr-c3d-value').textContent = `${l.columns * v} × ${l.rows * v}`; } }
+            if (x === 'frame') { const v = Math.round(Number(e.target.value)); if (v >= 16 && v <= 512) { state.frame = v; const l = layout(state.layout); e.target.parentElement.querySelector('.rr-c3d-value').textContent = `${columnsOf(l.id, state.frames) * v} × ${l.rows * v}`; } }
         });
         panel.addEventListener('change', e => {
             const x = e.target.dataset.x;
@@ -805,6 +866,7 @@
             else if (x === 'expr') { state.expressions = (state.expressions || facePresets()[0].expressions).slice(); state.expressions[Number(e.target.dataset.i)] = e.target.value; }
             else if (x === 'bgmode') { state.background = e.target.value ? (state.background || '#3a3f4b') : ''; draw(); }
             else if (x === 'frame') draw();
+            else if (x === 'frames') { state.frames = Number(e.target.value); draw(); }
         });
         panel.addEventListener('click', e => {
             const b = e.target.closest('[data-x]');
@@ -825,6 +887,22 @@
         return Number.isInteger(n) && n >= 16 && n <= 512 ? n : 144;
     }
 
+    /**
+     * An [NF] sheet plays its n frames only while the project has multi-frame
+     * sheets on (Reactor Features › Multi-Frame Character Sheets): switched on
+     * in the open Database as that page does it, so it is saved with the
+     * project and shows ticked there. Returns whether it was off and is on now.
+     */
+    function turnOnMultiFrames() {
+        const reactor = root.reactor, manager = reactor && reactor.databaseManager, features = root.ReactorFeatures;
+        const system = manager && manager.data && manager.data.system;
+        if (!system || !features || features.on('multiFrames', system)) return false;
+        const page = reactor.databaseEditorUI && reactor.databaseEditorUI.featuresEditor;
+        if (page && typeof page.apply === 'function') page.apply(system, 'multiFrames', true);
+        else if (features.set('multiFrames', true, system)) manager.mutationGeneration = (manager.mutationGeneration || 0) + 1;
+        return features.on('multiFrames', system);
+    }
+
     async function exportNow(builder, panel, state, preview) {
         const t = (text, params) => builder._t(text, params);
         const project = builder._project && builder._project();
@@ -832,15 +910,16 @@
         if (!project) return;
         let name = safeName(builder.name);
         if (!name) {
-            name = safeName(await root.RRDialog.prompt(t('Name this character:'), { title: t('Export sprite sheet'), value: t('Villager') }));
+            name = safeName(await root.RRDialog.prompt(t('Name this character:'), { title: t('Export Sprite Sheet'), value: t('Villager') }));
             if (!name) return;
             builder.name = name;
             const input = builder.root.querySelector('.rr-c3d-name-input');
             if (input) input.value = name;
         }
         const fs = require('fs'), path = require('path'), l = layout(state.layout);
-        const file = path.join(project.path, 'img', l.folder, fileName(l.id, name));
-        if (fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export sprite sheet'), ok: t('Replace'), danger: true })) return;
+        const frames = framesOf(l.id, state.frames);
+        const file = path.join(project.path, 'img', l.folder, fileName(l.id, name, frames));
+        if (fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export Sprite Sheet'), ok: t('Replace'), danger: true })) return;
         const bar = panel.querySelector('.rr-c3d-export-progress'), go = panel.querySelector('.rr-c3d-export-go');
         panel.dataset.busy = '1';
         builder.root.classList.add('is-exporting');
@@ -849,14 +928,15 @@
         status.dataset.kind = '';
         const started = performance.now();
         try {
-            const settings = { layout: l.id, frame: state.frame, elevation: state.elevation, outline: state.outline, view: state.view, background: state.background || '', expressions: state.expressions, style: state.style, look: state.look };
+            const settings = { layout: l.id, frame: state.frame, frames, elevation: state.elevation, outline: state.outline, view: state.view, background: state.background || '', expressions: state.expressions, style: state.style, look: state.look };
             const sheet = await render(builder, settings, (done, total) => { bar.firstElementChild.style.width = Math.round(done / total * 100) + '%'; });
             const png = await toPng(sheet);
             const atomic = root.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
             fs.mkdirSync(path.dirname(file), { recursive: true });
             atomic(fs, file, png);
             const seconds = ((performance.now() - started) / 1000).toFixed(1);
-            status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds });
+            status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds })
+                + (frames !== 3 && turnOnMultiFrames() ? ' ' + t('Multi-frame sheets turned on in Reactor Features.') : '');
             status.dataset.kind = 'ok';
             const img = preview(panel);
             img.src = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
@@ -875,8 +955,8 @@
 
     const api = {
         LAYOUTS, CLIPS, SV_MOTIONS, SV_CLIPS, FACE_PRESETS, YAW, SV_YAW, CARDINAL, DIAGONAL,
-        STYLES, LOOKS, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
-        downsample, outline, grade, skinLike, threshold, quantize, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, render, openPanel, expressionList
+        STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, columnsOf, turnOnMultiFrames, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
+        downsample, outline, grade, skinLike, threshold, quantize, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
     };
     root.RRCharacterSpriteSheet = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -12,6 +12,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const { realWorld } = require('./helpers/fight-real-world.cjs');
 const { runtimeRoot } = require('./helpers/runtime-source.cjs');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const read = name => fs.readFileSync(path.join(runtimeRoot, name), 'utf8');
 const feelSource = read('reactor_vehicles_feel.js');
@@ -1353,21 +1354,23 @@ test('the tick and the wrapper make no object: no literal, no closure, no constr
     assert.ok(!/THREE\./.test(feelSource));
 });
 
-test('what it costs: the tick, the first and the second camera call of a drawn tick, and the camera call on foot', () => {
+test('what it costs: the tick, the first and the second camera call of a drawn tick, and the camera call on foot', t => {
     const w = world();
     w.look.yaw = 0;
     w.board({ heading: 0, v: 20 });
     w.frame(200, () => { w.$gamePlayer._rrDrive.yaw += 1 * DEG; });
-    // Timed inside the game's own realm, so no call crosses a realm. `calls` camera calls after each tick.
-    const time = vm.runInContext(`(function(update, spriteset, type, input, ticks, calls, rounds) {
+    // Timed inside the game's own realm, so no call in the loop crosses a realm; the main thread's CPU time
+    // (read once before and once after) in microseconds a round. `calls` camera calls after each tick.
+    const timeIn = vm.runInContext(`(function(clock, update, spriteset, type, input, ticks, calls, rounds) {
         const player = $gamePlayer, Feel = ReactorVehicles.Feel, camera = Reactor3D.Camera;
-        const from = performance.now();
+        const from = clock();
         for (let i = 0; i < rounds; i++) {
             if (ticks) { Graphics.frameCount++; player._rrDrive.yaw += 0.0174; Feel.advance(player._rrDrive, type, input); }
             for (let c = 0; c < calls; c++) update.call(camera, spriteset);
         }
-        return (performance.now() - from) * 1000 / rounds;
+        return (clock() - from) / rounds;
     })`, w);
+    const time = (...args) => timeIn(cpuMicros, ...args);
     const best = run => { run(3000); return Math.min(run(20000), run(20000), run(20000)); };
     const feel = w.Reactor3D.Camera.update;
     const advance = best(rounds => time(feel, w.spriteset, w.type, w.input, 1, 0, rounds));
@@ -1383,9 +1386,9 @@ test('what it costs: the tick, the first and the second camera call of a drawn t
     // Budgets on the desktop: a tick 2 us, the first call 8 us, the second 4 us (1.5, 5.5 and 2.5 measured alone; twice
     // that with the whole suite running beside it). Ten times the budget fails: a slow or busy machine passes, a
     // question to the world or an object made per call does not.
-    assert.ok(advance < 20, 'advance: ' + advance.toFixed(3) + ' us');
-    assert.ok(first < 80, 'the first call of a tick: ' + first.toFixed(3) + ' us');
-    assert.ok(second < 40, 'the second: ' + second.toFixed(3) + ' us');
+    withinBudget(t, advance, 20, 'advance: ' + advance.toFixed(3) + ' us');
+    withinBudget(t, first, 80, 'the first call of a tick: ' + first.toFixed(3) + ' us');
+    withinBudget(t, second, 40, 'the second: ' + second.toFixed(3) + ' us');
     // (A difference of two timings of 6 to 11 us each: the rule itself is pinned by the on-foot test's read count.)
-    assert.ok(foot < 6, 'on foot the wrapper is a compare and a flag: ' + foot.toFixed(3) + ' us');
+    withinBudget(t, foot, 6, 'on foot the wrapper is a compare and a flag: ' + foot.toFixed(3) + ' us');
 });

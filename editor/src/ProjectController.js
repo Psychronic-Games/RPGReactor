@@ -837,8 +837,12 @@ class ProjectController {
                     : (this._databaseViewer = document.getElementById('database-viewer'));
                 new MapRenderScheduler(this.app, {
                     // The Database over the map (not beside it), or a playtest in front: nothing to draw for.
+                    // Nor while a window of its own is the one worked in (the Forge turning a model), as the
+                    // 3D view parks then: a map with water or a video drew every frame behind it, and on
+                    // NVIDIA the two windows' frames took turns, so the Forge showed every other one.
                     isCovered: () => (!!databaseViewer()?.classList?.contains('active') && !databaseViewer().classList.contains('rr-database-floating'))
                         || !!window.reactor?.playtestManager?.ownsGpu?.()
+                        || window.RRDetachedWindow?.previewActive?.() === false
                 }).install({ inputElement: container });
             }
 

@@ -527,6 +527,7 @@ class DatabaseSystem1Editor {
         `;
         const optionsSection = this.keyedSection('options', tt('Options'), options);
         column.appendChild(optionsSection);
+        for (const section of this.poolsAndTraitsSections(system, tt, optionsSection)) column.appendChild(section);
 
         return column;
     }
@@ -1189,6 +1190,69 @@ class DatabaseSystem1Editor {
     }
 
     /** A card that is named for the folding of the page's sections: `key` is the same in every language. */
+    /**
+     * Resource Pools (turn MP or TP off for the whole project: System.json rrPoolsOff) and
+     * Trait List (the traits the trait picker offers: System.json rrHiddenTraits). Both
+     * wire themselves; ResourcePools.js keeps the format the runtime reads.
+     */
+    poolsAndTraitsSections(system, tt, optionsSection = null) {
+        const pools = globalThis.ResourcePools;
+        if (!pools) return [];
+        const row = 'display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;';
+        const poolRows = pools.POOLS.map(pool => {
+            const term = pools.term(system, pool.key);
+            const named = term !== pool.fallback ? ` <span style="color: var(--color-text-muted);">(${rrEscapeHtml(term)})</span>` : '';
+            return `<label style="${row}"><input type="checkbox" class="rr-pool-toggle" data-pool="${pool.key}" ${pools.isOff(system, pool.key) ? '' : 'checked'}> ${rrEscapeHtml(tt(pool.label))}${named}</label>`;
+        }).join('');
+        const poolSection = this.keyedSection('resource-pools', tt('Resource Pools'), `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">${poolRows}</div>
+            <div style="color: var(--color-text-muted); font-size: 11px; margin-top: 8px;">${rrEscapeHtml(tt('A pool that is off is hidden in menus and battles, and skills priced in it cost nothing. HP is always on; rename any pool in Terms.'))}</div>`);
+        const displayTp = () => optionsSection?.querySelector('[data-field="optDisplayTp"]');
+        const syncDisplayTp = () => {
+            const box = displayTp();
+            if (box) { box.disabled = pools.isOff(system, 'tp'); box.closest('label').style.opacity = box.disabled ? '0.5' : ''; }
+        };
+        syncDisplayTp();
+        poolSection.querySelectorAll('.rr-pool-toggle').forEach(box => box.addEventListener('change', () => {
+            pools.setOff(system, box.dataset.pool, !box.checked);
+            syncDisplayTp();
+            this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
+        }));
+
+        const hidden = pools.hiddenTraits(system);
+        const groups = pools.TRAIT_TABS.map(tab => {
+            const none = tab.traits.every(([code]) => hidden.has(code));
+            const traits = tab.traits.map(([code, label]) =>
+                `<label style="${row}"><input type="checkbox" class="rr-trait-shown" data-trait="${code}" ${hidden.has(code) ? '' : 'checked'}> ${rrEscapeHtml(tt(label))}</label>`).join('');
+            return `<div class="rr-trait-list-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="${row} font-weight: 600;"><input type="checkbox" class="rr-trait-tab-shown" data-trait-tab="${tab.id}" ${none ? '' : 'checked'}> ${rrEscapeHtml(tt(tab.label))}</label>
+                <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px;">${traits}</div></div>`;
+        }).join('');
+        const traitSection = this.keyedSection('trait-list', tt('Trait List'), `
+            <div style="color: var(--color-text-muted); font-size: 11px; margin-bottom: 8px;">${rrEscapeHtml(tt("Untick the traits this game doesn't use: the trait picker leaves them out. Traits already on a record are kept."))}</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">${groups}</div>`);
+        const syncTabs = () => traitSection.querySelectorAll('.rr-trait-tab-shown').forEach(box => {
+            const codes = (pools.TRAIT_TABS.find(tab => tab.id === box.dataset.traitTab) || { traits: [] }).traits.map(([code]) => code);
+            const shown = codes.filter(code => !pools.isTraitHidden(system, code)).length;
+            box.checked = shown > 0;
+            box.indeterminate = shown > 0 && shown < codes.length;
+        });
+        syncTabs();
+        const touched = () => { this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1; };
+        traitSection.querySelectorAll('.rr-trait-shown').forEach(box => box.addEventListener('change', () => {
+            pools.setTraitsHidden(system, [Number(box.dataset.trait)], !box.checked);
+            syncTabs(); touched();
+        }));
+        traitSection.querySelectorAll('.rr-trait-tab-shown').forEach(box => box.addEventListener('change', () => {
+            const tab = pools.TRAIT_TABS.find(t => t.id === box.dataset.traitTab);
+            if (!tab) return;
+            pools.setTraitsHidden(system, tab.traits.map(([code]) => code), !box.checked);
+            box.closest('.rr-trait-list-group').querySelectorAll('.rr-trait-shown').forEach(item => { item.checked = box.checked; });
+            syncTabs(); touched();
+        }));
+        return [poolSection, traitSection];
+    }
+
     keyedSection(key, title, content) {
         return this.createSection(title, content, key);
     }

@@ -1278,7 +1278,7 @@ class RPGReactor {
         this.databaseEditorUI.setupDatabaseNavigation();
     }
 
-    openDatabase(type) {
+    openDatabase(type, options) {
         if (!this.projectController.isProjectLoaded()) {
             RRDialog.alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.', {
                 title: window.I18n ? window.I18n.t('menu.database') : 'Database'
@@ -1306,7 +1306,7 @@ class RPGReactor {
         this.databaseEditorUI.playtestManager = this.playtestManager;
 
         // Delegate to DatabaseEditorUI
-        this.databaseEditorUI.openDatabase(type);
+        this.databaseEditorUI.openDatabase(type, options);
     }
 
     showTypesEditor() {

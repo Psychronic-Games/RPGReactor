@@ -17,8 +17,11 @@ test('fish have overlapping scale relief and varying polish; Goauld folds and pe
    if(name==='fish'){assert.ok(p.iridescence>0&&p.iridescence<.6);assert.equal(p.iridescenceThicknessTexture,p.metallicRoughnessTexture);}
   }
  }
- // Sharks and cetaceans do not acquire bony-fish scales or rainbow metal skin.
- for(const kind of ['shark','dolphin','whale']){const b=Q.Model.build(null,Q.Creature.kindRecipe(kind),{},{quality:'preview'});assert.equal(b.parts[0].iridescence,undefined);assert.ok(span(b.textures[b.parts[0].texture].data,0)<10);}
+ // Sharks and cetaceans do not acquire bony-fish scales or rainbow metal skin. Since the
+ // 2026-10-24 realism pass their coloration is a painted chart (crisp countershading), and
+ // their fine skin relief tiles on the second coordinates instead of the scale picture.
+ const scales=hash(Forms.surfacePictures('scales',512)['creature-surface-normal.png'].data);
+ for(const kind of ['shark','dolphin','whale']){const b=Q.Model.build(null,Q.Creature.kindRecipe(kind),{},{quality:'preview'}),p=b.parts[0];assert.equal(p.iridescence,undefined);assert.equal(p.texture,'creature-markings.png');assert.equal(p.normalTexCoord,1);assert.equal(p.uvs1.length,p.uvs.length);assert.notEqual(hash(b.textures[p.normalTexture].data),scales);}
 });
 
 test('surface map derivatives retain their strength at save resolution',()=>{

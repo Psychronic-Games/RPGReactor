@@ -94,6 +94,23 @@ test('a native workspace first appears themed, clipped and at its final size', a
     assert.deepEqual(f.calls.filter(call => call[0] === 'show').at(-1), ['show', 1400, 900], 'reopening keeps the chosen size');
 });
 
+test('a dialog first opened while its window was being made takes the focus as the window shows it', async () => {
+    const f = opening();
+    const inside = { id: 'first field' };
+    let refocused = 0;
+    f.overlay.contains = node => node === inside;
+    f.overlay._rrModalKeys = { refocus() { refocused++; f.doc.activeElement = inside; } };
+    f.doc.activeElement = f.doc.body;
+    f.api.open(f.overlay);
+    f.created(); f.loaded(); await f.styled();
+    assert.equal(refocused, 0, 'not while it is hidden');
+    f.tick(50);
+    assert.equal(refocused, 1, 'shown: the focus goes into it');
+    f.api.hidePopout();
+    f.api.open(f.overlay);
+    assert.equal(refocused, 1, 'opened again with the focus already inside: left alone');
+});
+
 test('closing before the native handle arrives prevents a late reveal', async () => {
     const f = opening();
     f.api.open(f.overlay);

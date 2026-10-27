@@ -71,7 +71,10 @@
     function savedModel(result, set) {
         if (!result || !result.bones || !result.bones.some(b => b.name === 'LeftArm')) return null;
         const body = (result.parts || []).find(p => p.name === 'Body');
-        const clips = api.gameClips(result.bones, body, set);
+        // Centaur hook (RRCharacterCentaur): the horse stands under the humanoid motions; its own gaits are the build's clips.
+        // Looked up when called (CharacterModel has loaded it by the time a centaur is built), so load order does not matter.
+        const Centaur = result.recipe && result.recipe.species === 'centaur' ? root.RRCharacterCentaur || null : null;
+        const clips = Centaur ? Centaur.adaptClips(result.bones, api.gameClips(result.bones, body, set)) : api.gameClips(result.bones, body, set);
         const names = new Set(['Idle'].concat(clips.map(c => c.name)));
         const animations = Library.SLOTS.filter(([, , clip]) => names.has(clip)).map(([name, trigger, clip]) => ({ name, type: 'clip', trigger, clip }));
         if (result.recipe && result.recipe.species === 'merfolk' && (result.clips || []).some(c => c.name === 'Tread')) {
@@ -79,7 +82,7 @@
             if (tread) tread.clip = 'Tread';
             else animations.push({ name: 'Tread Water', type: 'clip', trigger: 'treading', clip: 'Tread' });
         }
-        const rigged = humanoidRig(result.bones, result.parts);
+        const rigged = Centaur ? null : humanoidRig(result.bones, result.parts);
         const sidecar = { animations };
         if (rigged) sidecar.rig = rigged.rig;
         return { clips, sidecar, rigBinary: rigged ? rigged.binary : null };

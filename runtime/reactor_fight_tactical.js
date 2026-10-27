@@ -5723,7 +5723,7 @@
         if (kind === "floor") return piece.z + (R.PIECE_FLOOR_THICKNESS || 0.1);
         if (R.isShapeKind(kind)) return R.shapeFrame(piece).narrow < View.OPEN_THIN ? -1e9 : piece.z + R.shapeSize(piece)[1];
         if (kind === "door") return piece.z + R.PIECE_STOREY;
-        return piece.z + R.pieceHeight(kind);
+        return piece.z + R.pieceHeight(kind, piece);
     }
 
     /** The map's tiles that carry something tall enough to hide a unit, and the buildings they make up (found as they are met). Made once per map. */
@@ -5767,7 +5767,7 @@
             if (kind === "doorway") { if (h >= piece.z + R.PIECE_STOREY - R.DOORWAY_LINTEL && h <= piece.z + R.PIECE_STOREY) return true; continue; }
             if (kind === "door") { if (R.doorSolidAt(piece, h, false)) return true; continue; }
             if (R.isShapeKind(kind)) { if (R.shapeHolds($dataMap, piece, wx, wy, wz, base, View.OPEN_THIN)) return true; continue; }
-            if (h < piece.z || h > piece.z + R.pieceHeight(kind)) continue;
+            if (h < piece.z || h > piece.z + R.pieceHeight(kind, piece)) continue;
             if ((kind === "stair" || kind === "ramp") && h > R.pieceTop(piece, wx - x, wz - y)) continue;
             return true;
         }
@@ -6364,7 +6364,7 @@
                 let taken = false;
                 if (stack) for (const piece of stack) {
                     if (!kinds.includes(piece.kind)) continue;
-                    const foot = base + piece.z, head = foot + R.pieceHeight(piece.kind);
+                    const foot = base + piece.z, head = foot + R.pieceHeight(piece.kind, piece);
                     if (head > here + 1e-3) taken = true;
                     if (!(foot < here - 1e-3 && head > here + 1e-3)) continue;
                     const top = here - 0.01;
@@ -6382,7 +6382,7 @@
                     const ground = grid.top[beside] > -1e8 ? grid.base[beside] : R.pieceBaseAt($dataMap, nx, ny);
                     for (const piece of other) {
                         if (!kinds.includes(piece.kind)) continue;
-                        const lo = Math.max(here - 0.01, ground + piece.z), hi = Math.min(there >= 1e8 ? Infinity : there - 0.01, ground + piece.z + R.pieceHeight(piece.kind));
+                        const lo = Math.max(here - 0.01, ground + piece.z), hi = Math.min(there >= 1e8 ? Infinity : there - 0.01, ground + piece.z + R.pieceHeight(piece.kind, piece));
                         if (!(hi > lo + 0.02)) continue;
                         const list = listOf(piece.material);
                         // Inside the standing wall by as far as the low wall's cut reaches into it and a hair, so its face is asked as the wall's.

@@ -1,0 +1,10 @@
+[
+  {"file": "01-character-builder.jpg", "title": "Ready-to-wear looks", "caption": "Dress your hero in one click: a space marine with a sealed visor, an astronaut, starship crew, a neon Glow runner and a street samurai."},
+  {"file": "02-species.jpg", "title": "Centaurs and more", "caption": "Meet the new centaur, plus insectfolk with compound eyes, the two-headed Hydrata, catfolk and werewolves, all wearing the same outfits as everyone else."},
+  {"file": "03-creatures.jpg", "title": "Eagles, bats and big cats", "caption": "The rebuilt bald eagle glides on spread wings with a feathered head and hooked beak, joined by rebuilt bats, lions and tigers."},
+  {"file": "04-vehicles.jpg", "title": "Rebuilt vehicles", "caption": "Motorcycles and trucks come with real wheels, doors and headlights, and body styles you can tune with a few sliders."},
+  {"file": "05-nature.jpg", "title": "Trees in bloom", "caption": "Plant oaks, cherry blossoms and weeping willows that change with the seasons and sway in the wind."},
+  {"file": "06-sprite-sheets.jpg", "title": "Sprite sheets from 3D", "caption": "Export a walking character with six frames per step, or a tree that sways in eight frames, ready for your 2D maps."},
+  {"file": "07-terrain.jpg", "title": "Paint roads on 3D maps", "caption": "Drag the Path tool to lay dirt roads, cobblestone or paving that follow the hills through your village."},
+  {"file": "08-editor.jpg", "title": "Search everything", "caption": "Type a word in the new toolbar Search to find structures, maps, switches and event text, grouped and one click away."}
+]

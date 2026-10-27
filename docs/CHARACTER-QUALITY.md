@@ -447,3 +447,108 @@ Transferred Captain and other source outfits can still fold and self-intersect o
 The initial moving modeled/transferred sweep found 220 unsupported normal rays in 92 cases. These are coverage risks, rather than a count of visible holes: some directions change across a posed surface. Fabric backing repairs the confirmed large exposed islands; modeled pieces alone improved from 214 unsupported rays to 15 across 5,440 probes, with 2,448 additional interior-face probes passing. Single-point boundary/fold risks remain. Dense clothing and combined extreme body proportions still need visual checks beyond finite-number tests; very large bodies also retain the base mesh's visible faceting.
 
 Software sheets help expose silhouette and coverage defects; they do not reproduce the editor's smooth shading, translucent materials or environment reflections. Grey was also inspected front/three-quarter/side/back in an isolated hardware-backed NW.js editor. Screenshots and generated reports live under ignored `scratchpad/species-quality/`; source-transfer audit evidence is under `/tmp/rr-transfer-quality/`.
+
+
+## Open plans (2026-10-24)
+
+Copied here from the session's scratch notes so they survive; the scratch renders and tools stay under `scratchpad/quality-uplift-20261024/` (gitignored) and can be deleted.
+
+**Shipped 2026-10-24 night:** hair at about half its triangles (before/after renders of all 44 hair and 18 facial styles read the same; the shag close-up shows one small zigzag lock), and the round-4 three-view heads for wolf, dog, fox, horse and bear only. Lion, tiger, deer and the cat breeds keep their round-3 heads (round 4 read worse: a mask-like band on the tiger, boxy lion, tube-muzzled deer). `CharacterSimplify.fitBudget`/`lightenPart`/`countTriangles` are committed as an unused draft; wire them in only with before/after renders.
+
+### Bald eagle rebuild (not started; the owner finds the current eagle ugly)
+
+```
+Eagle rebuild: where it stands (2026-10-24 night). No source files changed yet.
+
+TOOLS (tools/, run with TMPDIR=$HOME/.cache/rpg-reactor-tmp/eagle)
+  node build.cjs <tag> eagle[,owl,...] [save|preview]   -> glb/<tag>-<id>.glb + .json stats (tris, bones, build ms)
+  node plan.cjs <tag> eagle matrix|head|big|birds ["Clip,t,yaw,pitch;..."]  then  node drive.cjs plan-<tag>-<mode>.json
+      matrix = sheets/<tag>-matrix-{idle,walk,fly}.png (3 frames x 10 views: 8 around + top + below)
+  node pen.cjs <out.json> [bird] [quality]  -> wing-into-Body signed penetration per frame (Idle/Walk/Run/Attack every
+      keyframe + the Idle->Fly crossfade at 21 weights; supports translation and scale tracks). Uses exact ray parity
+      inside test; ~2.5 s.
+  NW editor viewport renders are NOT done yet (template: scratchpad/quality-uplift-20261024/cyberwear/tools/nw-cyberwear.cjs).
+
+BASELINE (penetration-before.json): 41-43 mm max in every idle/walk/run frame (2696 of 4012 wing vertices inside the
+  body), 12-41 mm in attack, 14-34 mm across the fold crossfade.
+
+DESIGN DECIDED (not implemented)
+ 1 Folded wing = its own closed shell per side on a bone 'Folded wing s' (child of Hips), built from body.sample(s,a):
+   inner surface = body surface + gap, outer = + thickness(u,v); top and front edges taper onto the back and breast
+   (scapulars blend), rounded, scalloped lower edge; the rear blade leaves the body at s~0.1 and runs over the closed tail
+   (tips about 1.2 cm from the midline, 1.5 cm above the tail). Painted per bird into a colored wing atlas
+   ('bird-wing.png' + normal map): primaries, secondaries, tertials, greater/median/lesser coverts, scapulars, with drop
+   shadows and pale fringes. Skip contour cards under the shell.
+ 2 Rest pose stays spread (static thumbnails and 'Still' unchanged). The folded shell's bind geometry is stored at 1/1000
+   scale around Pc = a point inside the humerus leading edge near the elbow (about 12 cm out, about 20 deg up from the
+   flank: this point sees the whole shell, so a uniform shrink toward it never crosses the convex trunk). Perched clips:
+   translation to its pivot and scale 1000. Fly/glide: translation follows Pc through the flap (speck hidden in the wing).
+   The spread wing is hidden in perched clips by translating the humerus to Pc with scale 1e-4. A crossfade then reads
+   as both wings opening from or closing into the same point beside the shoulder.
+   Needs: scale-aware FK in Flyers.poseClip floor lift; uniform-scale support in CharacterCloth.pose/skin (only
+   translation is supported there today: a scale track would be read as a quaternion); the attack clip as a lunge with
+   folded wings (no partial mantle).
+ 3 Spread wing = one closed airfoil plate (rounded leading edge, straight secondary trailing edge, upper and lower
+   regions of the same atlas), skinned 100% to arm bones (no Hips weights, or the hidden wing would stretch); its root
+   is seated 1.5 cm inside the trunk (pen.cjs should treat rest-inside vertices as the junction). 6-7 fingered primaries
+   as thin closed blades (geometric emarginated outline) on their own bones; no secondary-group bones.
+ 4 Tail = 12 closed blades, about 0.24 x length wide, each on its own stacking layer (bend as a function of distance from
+   the tail base, no cup, so fanning about U never crosses layers); perched tail sway at most 0.02 rad.
+ 5 Raptor head = lofted sections (flat crown, superellipse top, brow shelf with a sharp lower edge over the eye, orbit
+   recess, narrowing face into the cere). Head about 0.13-0.14 m bill-tip to occiput (now about 0.2 m: too big). New
+   raptor bill: culmen arc into an overhanging hook, depth at base about 0.45-0.5 x length, narrow wedge from the front,
+   paler swollen cere with an oval nostril, gape running back under the eye. Drop most head cards (they made the
+   ragged patch at the occiput); keep a neat row of nape hackles.
+ 6 Legs: slimmer trousers to mid-tarsus, talons curving down to the ground.
+ Then: tests in character-creature-realism-20261024.test.cjs (penetration <= 2 mm over idle/walk/fold frames via the
+ pen.cjs method, no cutout cards on the wings, tail feather width, head and bill ratios; fly-pose span instead of rest
+ span if the rest pose changes), check the other ten birds, and capture before/after NW viewport shots.
+```
+
+### Quadruped heads, round 4 notes
+
+```
+Round-4 quadruped heads: handoff (2026-10-24, wrap-up called about 6 minutes in; nothing was edited)
+
+STATE
+- I made no edits. CreatureBody.js is still exactly the previous agent's uncommitted round 4.
+- glb-r3/ is a new round-3 baseline: the current tree with only CreatureBody.js taken from HEAD.
+  Built with: RR_EDITOR=<copy> node tools/build.cjs tools/jobs-r3.json ../glb-r3
+  It covers tiger, lion, wolf, dog, fox, bear, horse, deer, cat, cat-persian, cat-maineCoon, cat-siamese.
+- No round-4 re-render was done. The verdicts below come from the existing r4-pair-*.png sheets only
+  (side, 3/4, front and top at idle). The 8-direction and walk review was NOT done.
+
+PROVISIONAL VERDICT (pair sheets only)
+- Ship round 4:
+  - bear: clearly better. Round 3 read like a dog; round 4 has a broad skull and a proper bear muzzle.
+- Probably ship, after the brow fix:
+  - dog: the skull is better, but the front view shows lumpy brow bumps.
+  - wolf: same brow bumps in the front view.
+  - fox: same brow bumps.
+  - horse: marginally better. A faint ridge line shows on the face.
+- Revert to the old head:
+  - lion: round 4 is worse. Boxy face block, lumps at the brow ends, a weaker pale muzzle, ear tips through the mane.
+  - tiger: round 4 is worse. A hard horizontal band across the front view; the face reads as a mask.
+  - deer: round 4 is worse. Tube muzzle and a smaller nose.
+- Cats (all breeds): no clear win. Round 3 has fuller cheeks and reads as well or better. Lean revert.
+
+GOTCHAS FOR REVERTING
+- headProfileOf does NOT fully restore tiger and lion. Round 4 also changed their KINDS entries:
+  - tiger: headSize 1.18 -> 1.42 and mane 'ruff'/0.35 -> 'none'/0.
+  - lion: snoutLength 0.72 -> 0.86, snoutWidth 1.22 -> 1.2.
+  Restore those too when reverting (see git diff c98db9a8).
+- The cat-breed change in catHeadShapes is unconditional (the profileSolid block, the zygomatic capsule,
+  and the removed cheek and jaw ellipsoids). Reverting cats needs a guard or the HEAD code restored.
+  headProfileOf does not control it.
+- To revert one species: make headProfileOf return null for it, e.g. drop deer, and bigcat for lion and tiger.
+
+STILL TO DO
+1. Canid brow fix: in anatomicalHead the 'brow' capsule uses blend 0.05. Raise it to about 0.12, cut the
+   radii, and sink it lower. Do the same for bigcat (blend 0.08) if big cats are kept.
+2. If the lion is kept: ear base [0.55, 0.64, -0.3] (in front of the mane, as in round 3).
+3. If the tiger is kept: shrink the wB vs wT step (wB 1.06 vs wT 0.80 at t 0.55 makes a shelf), soften
+   the cheek arch, and make the whisker and jaw ellipsoids flatter.
+4. Re-render the round 3 vs round 4 pairs and tools/review.cjs sheets (8 directions + top, idle, walk 0.3 and 0.7).
+   Check for clipping.
+5. Run the 7 creature tests (concurrency 2 or less) and check the preview build stays under 400 ms.
+```

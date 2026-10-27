@@ -169,9 +169,9 @@ test('dragging an event needs the event tool and an empty hand', () => {
 });
 
 test('a drag only starts on an event', () => {
-    // Starting anywhere else has to keep orbiting, or the camera is lost.
-    // A vehicle's starting position is a Database record, not an event to move.
-    assert.match(source, /const mesh = this\.eventAt\(event\.clientX, event\.clientY\);\n\s*if \(mesh && !mesh\.userData\.event\?\._rrDatabaseVehicle\) \{\n\s*this\.pointer\.drag = mesh;/);
+    // Starting anywhere else has to keep orbiting, or the camera is lost. A Database vehicle's placement is
+    // dragged too: dragEventTo moves its start in the Database (vehicles-starting-position.test.cjs).
+    assert.match(source, /const mesh = this\.eventAt\(event\.clientX, event\.clientY\);\n\s*if \(mesh\) \{\n\s*this\.pointer\.drag = mesh;/);
     assert.match(source, /!this\.pointer\.paint && !this\.pointer\.propHold && this\.canDragEvents\(\)/,
         'and never while a stroke is being painted or a prop is being held');
 });

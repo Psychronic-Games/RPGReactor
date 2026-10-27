@@ -206,7 +206,39 @@
         return pic;
     }
 
-    const api = { wood, hex, random, noise, fractal, pointInPolygon, starPolygon, EMBLEMS, EAGLE, paint, sampleImage, weaveHeight, normalMap };
+    /**
+     * Flat-sawn wood for stocks, grip panels and instrument bodies, its grain running along v: growth rings
+     * warped by slow figure and bowing into arches now and then, darker latewood at each ring's end, pores
+     * drawn out along the grain, and broad shifts of tone (a darker heart, a redder streak) so no two places
+     * look the same. `o.rings` rings across a tile (14; spruce is tighter). 256 across, 512 along, repeating.
+     */
+    function grainWood(base, seed, name, o) {
+        const c = hex(base), red = [c[0] * 1.08 + 8, c[1] * 0.86, c[2] * 0.78], dark = c.map(v => v * 0.42), rings = (o && o.rings) || 14;
+        seed = seed || 3;
+        const hash = (i, j, k) => { const v = Math.sin(i * 127.1 + j * 311.7 + k * 74.7 + seed * 19.3) * 43758.5453; return v - Math.floor(v); };
+        // Value noise repeating every px cells across and py along.
+        const vn = (x, y, px, py, k) => {
+            const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+            const h = (i, j) => hash(((i % px) + px) % px, ((j % py) + py) % py, k);
+            return (h(ix, iy) * (1 - sx) + h(ix + 1, iy) * sx) * (1 - sy) + (h(ix, iy + 1) * (1 - sx) + h(ix + 1, iy + 1) * sx) * sy;
+        };
+        const pic = paint(256, 512, (u, v, out) => {
+            // The rings meander along the grain and bow into long arches (flat-sawn figure) every so often.
+            const arch = 0.9 * Math.pow(0.5 + 0.5 * Math.sin(Math.PI * 2 * (v + u)), 3) + 0.25 * Math.sin(Math.PI * 2 * (v * 2 - u) + 1.3);
+            const figure = vn(u * 3, v * 3, 3, 3, 1) * 1.1 + vn(u * 6, v * 8, 6, 8, 2) * 0.22 + vn(u * 2, v * 20, 2, 20, 7) * 0.05 + arch;
+            const ring = ((u * rings + figure) % 1 + 1) % 1;
+            const late = Math.pow(Math.max(0, (ring - 0.7) / 0.3), 2.4) * (1 - Math.pow(Math.max(0, (ring - 0.95) / 0.05), 2));
+            const pores = Math.pow(vn(u * 128, v * 10, 128, 10, 3), 5), fleck = Math.pow(vn(u * 48, v * 4, 48, 4, 4), 9);
+            const broad = vn(u * 2, v * 1, 2, 1, 5), streak = Math.pow(vn(u * 4, v * 1, 4, 1, 6), 3);
+            const k = 0.95 + 0.3 * (broad - 0.5) - 0.36 * late - 0.2 * pores - 0.12 * fleck;
+            const mixR = 0.45 * streak, mixD = 0.25 * Math.max(0, 0.5 - broad) + 0.25 * late;
+            for (let i = 0; i < 3; i++) { const col = c[i] * (1 - mixR - mixD) + red[i] * mixR + dark[i] * mixD; out[i] = Math.max(0, Math.min(255, col * k)); }
+            out[3] = 255;
+        }, 1);
+        pic.name = name || 'wood.png'; pic.repeat = true;
+        return pic;
+    }
+    const api = { wood, grainWood, hex, random, noise, fractal, pointInPolygon, starPolygon, EMBLEMS, EAGLE, paint, sampleImage, weaveHeight, normalMap };
     root.RRPropPaint = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

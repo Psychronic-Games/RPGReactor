@@ -12,7 +12,7 @@ const root = path.join(__dirname, '..');
 global.THREE = require(path.join(root, 'node_modules', 'three'));
 global.rrEscapeHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const props = path.join(root, 'src', 'forge', 'Props');
-const FILES = ['PropCloth', 'PropPaint', 'PropMesh', 'PropRandom', 'PropCatalog', 'FlagDesign', 'FlagProp', 'PropModel', 'SpanProp', 'FramedProp', 'PictureProp', 'AccessoryProp', 'SwordProp', 'GunProp', 'ContainerProp', 'FurnitureProp', 'VehicleProp'];
+const FILES = ['PropCloth', 'PropPaint', 'PropMesh', 'PropRandom', 'PropCatalog', 'FlagDesign', 'FlagProp', 'PropModel', 'SpanProp', 'FramedProp', 'PictureProp', 'AccessoryProp', 'SwordProp', 'GunProp', 'ContainerProp', 'FurnitureProp', 'VehicleProp', 'WeaponKit', 'HaftedProp', 'StaffProp', 'RangedProp', 'ShieldProp', 'InstrumentProp', 'CableProp', 'SpeakerProp'];
 const present = FILES.filter(f => fs.existsSync(path.join(props, f + '.js')));
 for (const f of present) require(path.join(props, f + '.js'));
 const Catalog = require(path.join(props, 'PropCatalog.js'));
@@ -26,7 +26,7 @@ test.before(async () => { await Accessory.prepare(); });
 
 const startOf = type => Model.normalize(type.start(Model.normalize({ kind: type.kind })));
 const CLOTH = new Set(['flag', 'span']);
-const budgetOf = kind => kind==='vehicle'?180000:kind==='furniture'?180000:kind==='accessory'?80000:kind==='sword'?50000:kind==='gun'?45000:12000;
+const budgetOf = kind => kind==='cable'?40000:kind==='speaker'?30000:kind==='vehicle'?180000:kind==='furniture'?180000:kind==='accessory'?80000:kind==='sword'?50000:kind==='gun'?45000:['hafted','staff','bow','shield','instrument'].includes(kind)?25000:12000;
 
 /**
  * Every part welded together and split into connected shells. A shell is
@@ -55,16 +55,19 @@ function shells(parts, weld = 1e-4) {
     const out = new Map();
     for (const t of tris) {
         const r = find(t.v[0]);
-        if (!out.has(r)) out.set(r, { list: [], edges: new Map(), vol: 0 });
-        const s = out.get(r), [a, b, c] = t.p;
+        // Volume is taken about the shell's first corner, not the world origin: a 2 mm light on a head 1.6 m up,
+        // its seams welded within 0.1 mm, otherwise sums to float noise of either sign.
+        if (!out.has(r)) out.set(r, { list: [], edges: new Map(), vol: 0, area: 0, o: t.p[0] });
+        const s = out.get(r), [a, b, c] = t.p.map(p => [p[0] - s.o[0], p[1] - s.o[1], p[2] - s.o[2]]);
         s.list.push(t);
+        s.area += Math.hypot(a[1] * (b[2] - c[2]) + b[1] * (c[2] - a[2]) + c[1] * (a[2] - b[2]), a[2] * (b[0] - c[0]) + b[2] * (c[0] - a[0]) + c[2] * (a[0] - b[0]), a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])) / 2;
         s.vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
         for (let e = 0; e < 3; e++) { const x = t.v[e], y = t.v[(e + 1) % 3], k = Math.min(x, y) + ':' + Math.max(x, y), u = s.edges.get(k) || [0, 0]; u[x < y ? 0 : 1]++; s.edges.set(k, u); }
     }
     return [...out.values()].map(s => {
         let open = 0, flipped = 0;
         for (const [f, b] of s.edges.values()) { if (f + b === 1) open++; else if (f !== b) flipped++; }
-        return { list: s.list, vol: s.vol, open, flipped, ratio: open / s.edges.size, names: [...new Set(s.list.map(t => parts[t.part].name))] };
+        return { list: s.list, vol: s.vol, area: s.area, open, flipped, ratio: open / s.edges.size, names: [...new Set(s.list.map(t => parts[t.part].name))] };
     });
 }
 function rayHit(o, d, t) {
@@ -104,7 +107,9 @@ function winding(parts, sheets = true) {
         // A densely tessellated, explicitly two-sided sheet can have fewer
         // than 8% boundary edges. Its open edges still make volume undefined.
         if (s.ratio < 0.08 && !(s.open && s.list.every(t=>parts[t.part].doubleSided))) {
-            if (s.vol < 0) problems.push(`${s.names.join('+')}: closed shell of ${s.list.length} faces turned inside out`);
+            // A flat card closed on itself (its two faces split along different diagonals) holds no volume:
+            // its sign is float noise, not a facing. A cube turned inside out has -area^1.5 / 15.
+            if (s.vol < -1e-4 * s.area ** 1.5) problems.push(`${s.names.join('+')}: closed shell of ${s.list.length} faces turned inside out`);
             if (sheets && s.flipped) problems.push(`${s.names.join('+')}: ${s.flipped} edges wound against their neighbors`);
         } else if (sheets) {
             const single = s.list.filter(t => !parts[t.part].doubleSided);

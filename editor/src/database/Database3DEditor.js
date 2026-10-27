@@ -15,6 +15,9 @@
  * model's ambient animations stand still so nothing fights the hand.
  */
 class Database3DEditor {
+    /** The runtime's name for a library motion's clip (Reactor3D.LIBRARY_CLIP_PREFIX). */
+    static get LIBRARY_PREFIX() { return '__reactor_motion_'; }
+
     _writeFileAtomic(fs, filePath, data, options) {
         const atomic = typeof globalThis.RRWriteFileAtomicSync === 'function'
             ? globalThis.RRWriteFileAtomicSync
@@ -321,7 +324,7 @@ class Database3DEditor {
         search.addEventListener('blur', () => {
             search.style.borderColor = 'var(--color-border-input)';
         });
-        detailEl.querySelector('.r3d-motions').addEventListener('click', () => this.showMotionPresets());
+        detailEl.querySelector('.r3d-motions').addEventListener('click', () => (this._libraryMotions().length ? this.showMotionPicker() : this.showMotionPresets()));
         detailEl.querySelector('.r3d-rule-add').addEventListener('click', () => this._afterEffectWork(() => this.addRule()));
         detailEl.querySelector('.r3d-effect-add').addEventListener('click', () => this.addModelEffect());
         detailEl.querySelector('.r3d-look-add').addEventListener('click', () => this.variantsPanel.add());
@@ -983,9 +986,12 @@ class Database3DEditor {
             }
         }
         if (!this._thumbRenderer) {
+            // Drawn as large as a thumbnail is ever shown (an actor's graphic box, about 128 px, on a
+            // 2x screen) and no larger: 512 px was four times the pixels for a 20 px list icon, and on
+            // a software renderer each model took that long to draw and to give back.
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = Database3DEditor.THUMBNAIL_PIXELS;
+            canvas.height = Database3DEditor.THUMBNAIL_PIXELS;
             this._thumbRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
             if (typeof RRModelRelease !== 'undefined') RRModelRelease.track(this._thumbRenderer, 'model-thumbnails');
             this._thumbRenderer.setClearColor(0x000000, 0);
@@ -1037,6 +1043,9 @@ class Database3DEditor {
         for (let i = 3; i < data.length; i += 4) if (data[i] >= 2) return true;
         return false;
     }
+
+    /** The size a model's thumbnail is drawn at, square. */
+    static THUMBNAIL_PIXELS = 256;
 
     /** The largest a 64x64 PNG of nothing comes to; a real thumbnail is several times that. */
     static EMPTY_THUMBNAIL_BYTES = 320;
@@ -1803,6 +1812,10 @@ class Database3DEditor {
         if (this._hoverBox && this._hoverName) {
             fit(this._hoverBox, this._matchedMeshes(this._hoverName), false);
         }
+        if (this._motionPartBox && this._motionPart !== null) {
+            // The whole model as every part spans it (a skinned body's own bounds are its rest at the origin).
+            fit(this._motionPartBox, this._motionPart ? this._matchedMeshes(this._motionPart) : ((this._binding && this._binding.meshes) || []), false);
+        }
         // The fulcrum rides its part every frame — a marker placed once
         // froze at whatever pose the part held at that instant.
         if (this._pivotMarker && this._pivotAnchor && this._pivotAnchor.mesh.parent
@@ -2091,6 +2104,7 @@ class Database3DEditor {
                 this._updateEffectPreview();
                 this._updateHover();
                 this._updateBoxes();
+                this._syncMotionGizmo();
                 {
                     // Exponential ease toward the input goal (~70ms time
                     // constant, frame-rate independent).
@@ -2752,6 +2766,20 @@ class Database3DEditor {
         }
     }
 
+    /** The part the motion editor bends, boxed on the model (the whole model for ''); null takes the box away. */
+    _markMotionPart(part) {
+        const name = part === undefined ? null : part;
+        if (this._motionPart === name && (name === null || (this._motionPartBox && this._motionPartBox.parent === this._scene))) return;
+        this._motionPart = name;
+        if (this._motionPartBox && this._scene) this._scene.remove(this._motionPartBox);
+        this._motionPartBox = null;
+        this._previewDirty = true;
+        if (name === null || !this._scene || !this._object || typeof THREE === 'undefined') return;
+        this._motionPartBox = new THREE.Box3Helper(new THREE.Box3(), 0x5cc8ff);
+        this._scene.add(this._motionPartBox);
+        this._updateBoxes();
+    }
+
     /** Boxes for the hovered and the chosen part, plus the pivot axes. */
     _refreshPartVisuals() {
         if (!this._scene || typeof THREE === 'undefined') return;
@@ -2768,7 +2796,8 @@ class Database3DEditor {
             const matched = this._matchedMeshes(name);
             if (!matched.length) return null;
             const box = new THREE.Box3();
-            for (const entry of matched) box.expandByObject(entry.mesh);
+            // (A bone has no geometry of its own: _expandEntry spans it to its children.)
+            for (const entry of matched) this._expandEntry(box, entry);
             return box.isEmpty() ? null : box;
         };
         if (this._hoverName && this._hoverName !== this.selectedPartName) {
@@ -3227,7 +3256,9 @@ class Database3DEditor {
             values.amount = work.amount;
             values.period = work.period;
         } else if (work.motion === 'clip') {
-            values.clip = work.clip;
+            const library = Database3DEditor.libraryIdOf(work.clip);
+            if (library) values.library = library;
+            else values.clip = work.clip;
             if (work.rate && work.rate !== 1) values.rate = work.rate;
         }
         if (values.trigger === 'action' && (work.effects || []).length) {
@@ -3505,7 +3536,7 @@ class Database3DEditor {
         ];
         const motions = [['pose', this._t('Pose')], ['swing', this._t('Swing')],
             ['spin', this._t('Spin')], ['bob', this._t('Bob')]]
-            .concat((this.embeddedClips || []).length || work.motion === 'clip'
+            .concat((this.embeddedClips || []).length || this._libraryMotions().length || work.motion === 'clip'
                 ? [['clip', this._t('Clip')]] : []);
         const sliderRow = (cls, color, label, min, max, step, value, shown) => `
             <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
@@ -3568,8 +3599,14 @@ class Database3DEditor {
             const clips = this.embeddedClips || [];
             const clipOptions = clips.map(name =>
                 `<option value="${escape(name)}"${name === work.clip ? ' selected' : ''}>${escape(name)}</option>`).join('');
-            const stray = work.clip && clips.indexOf(work.clip) < 0
-                ? `<option value="${escape(work.clip)}" selected>${escape(work.clip)} ?</option>` : '';
+            const library = this._libraryMotions();
+            const libraryOptions = library.length ? `<optgroup label="${escape(this._t('Motion library'))}">` + library.map(pose => {
+                const value = Database3DEditor.LIBRARY_PREFIX + pose.id;
+                return `<option value="${escape(value)}"${value === work.clip ? ' selected' : ''}>${escape(pose.label)}</option>`;
+            }).join('') + '</optgroup>' : '';
+            const known = clips.indexOf(work.clip) >= 0 || library.some(pose => Database3DEditor.LIBRARY_PREFIX + pose.id === work.clip);
+            const stray = (work.clip && !known
+                ? `<option value="${escape(work.clip)}" selected>${escape(Database3DEditor.libraryIdOf(work.clip) || work.clip)} ?</option>` : '') + libraryOptions;
             body = row(this._t('Clip'), `<select class="r3d-card-clip" ${selectStyle}>${clipOptions}${stray}</select>`)
                 + sliderRow('r3d-card-rate', '', this._t('Speed'),
                     25, 300, 5, Math.round((work.rate || 1) * 100), Math.round((work.rate || 1) * 100) + '%');
@@ -3810,6 +3847,8 @@ class Database3DEditor {
             this._work.motion = event.target.value;
             if (this._work.motion === 'clip' && !this._work.clip && (this.embeddedClips || []).length) {
                 this._work.clip = this.embeddedClips[0];
+            } else if (this._work.motion === 'clip' && !this._work.clip && this._libraryMotions().length) {
+                this._work.clip = Database3DEditor.LIBRARY_PREFIX + this._libraryMotions()[0].id;
             }
             this._syncWorkRule();
             this._commitUndo();
@@ -5684,6 +5723,207 @@ class Database3DEditor {
     /** The rings are created this big and grown to their size on screen. */
     get EFFECT_RING_BASE() { return 0.5; }
 
+    /**
+     * Where a part's pose turns and slides it, as the runtime composes it: `at` the pivot in the world, `turn`
+     * the frame's axes (a rotate's X, Y and Z, the move's too), `unit` how far one unit of move goes in the
+     * world. The whole model turns in its parent's frame about its origin; a part the file's clips drive, in
+     * the model's frame; any other part, in its own rest frame. Null when the part is not on the model.
+     * `rest`: the frame with every part above it at rest, not as the pose at the playhead turns them.
+     */
+    _motionPartFrame(part, rest = false) {
+        if (typeof THREE === 'undefined' || !this._binding || !this._object) return null;
+        const root = this._binding.root;
+        // A move is in tiles and the preview draws a body 1.6 units tall where the game draws 3 tiles.
+        const moveScale = ((Reactor3D.EFFECT_PREVIEW_SPAN || 1.6) / 3) / (this._scale || 1);
+        if (part === '') {
+            const parent = root.parent || root;
+            parent.updateWorldMatrix(true, false);
+            root.updateWorldMatrix(true, false);
+            return { at: root.getWorldPosition(new THREE.Vector3()), turn: parent.getWorldQuaternion(new THREE.Quaternion()),
+                unit: parent.getWorldScale(new THREE.Vector3()).x * moveScale };
+        }
+        const lower = String(part).toLowerCase();
+        let found = null;
+        for (const entry of this._binding.meshes) {
+            const depth = entry.parts.findIndex(p => String(p.name).toLowerCase() === lower);
+            if (depth >= 0 && (!found || depth < found.depth)) found = { entry, depth };
+            if (found && found.depth === 0) break;
+        }
+        if (!found) return null;
+        const { entry, depth } = found;
+        entry.mesh.updateWorldMatrix(true, false);
+        const at = entry.mesh.localToWorld(new THREE.Vector3().fromArray(entry.parts[depth].pivot || [0, 0, 0]));
+        // The model's frame: at rest the root is unturned (each frame starts it there), so its parent's.
+        root.updateWorldMatrix(true, false);
+        const modelTurn = rest && root.parent ? root.parent.getWorldQuaternion(new THREE.Quaternion()) : root.getWorldQuaternion(new THREE.Quaternion());
+        if (entry.clipBase) return { at, turn: modelTurn, unit: root.getWorldScale(new THREE.Vector3()).x * moveScale };
+        const parent = entry.mesh.parent;
+        let turn;
+        if (rest) {
+            // Up the chain to the model, each posed part at its rest turn.
+            turn = entry.baseQuaternion.clone();
+            for (let node = parent; node && node !== root; node = node.parent) {
+                const own = this._binding.meshes.find(other => other.mesh === node);
+                turn.premultiply(own ? own.baseQuaternion : node.quaternion);
+            }
+            turn.premultiply(modelTurn);
+        } else {
+            turn = parent ? parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+            turn.multiply(entry.baseQuaternion);
+        }
+        return { at, turn, unit: entry.mesh.getWorldScale(new THREE.Vector3()).x * moveScale };
+    }
+
+    /**
+     * A part's pose (`{ rotate, move }`, in its own frame) seen in a mirror across the model's middle and put on
+     * `to` (its other side, or itself): turned into the world, reflected left for right in the model's frame,
+     * and turned into `to`'s frame. Where the angles come out the plain swap (X kept, Y and Z negated), those
+     * numbers are kept, so keys stay the ones a person would type. Null when either part is not on the model.
+     */
+    _mirrorPartValue(from, to, value) {
+        if (typeof THREE === 'undefined' || !this._binding) return null;
+        const a = this._motionPartFrame(from, true), b = this._motionPartFrame(to, true);
+        if (!a || !b) return null;
+        const rad = Math.PI / 180;
+        const root = this._binding.root;
+        const model = root.parent ? root.parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+        const inModel = q => model.clone().invert().multiply(q).multiply(model);
+        const outModel = q => model.clone().multiply(q).multiply(model.clone().invert());
+        const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(value.rotate[0] * rad, value.rotate[1] * rad, value.rotate[2] * rad, 'XYZ'));
+        const world = a.turn.clone().multiply(turn).multiply(a.turn.clone().invert());
+        const m = inModel(world);
+        const mirrored = outModel(new THREE.Quaternion(m.x, -m.y, -m.z, m.w));
+        const local = b.turn.clone().invert().multiply(mirrored).multiply(b.turn);
+        const plain = [value.rotate[0], -value.rotate[1], -value.rotate[2]];
+        const plainQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(plain[0] * rad, plain[1] * rad, plain[2] * rad, 'XYZ'));
+        let rotate = plain;
+        if (Math.abs(plainQ.dot(local)) < 0.9999) {
+            const e = new THREE.Euler().setFromQuaternion(local, 'XYZ');
+            rotate = [e.x, e.y, e.z].map(v => Math.round(v / rad * 10) / 10);
+        }
+        // A slide likewise: into the model's frame, left for right, into the other part's frame.
+        const slide = new THREE.Vector3().fromArray(value.move).multiplyScalar(a.unit || 1).applyQuaternion(a.turn).applyQuaternion(model.clone().invert());
+        slide.x = -slide.x;
+        slide.applyQuaternion(model).applyQuaternion(b.turn.clone().invert()).divideScalar(b.unit || 1);
+        const move = slide.toArray().map(v => Math.round(v * 1000) / 1000 + 0);
+        return { rotate: rotate.map(v => v + 0), move };
+    }
+
+    /**
+     * The handles on the part the motion editor bends, both at once: three rings (red X, green Y, blue Z) that
+     * turn it as Bend, Turn and Tilt do, nested as the turn composes so each ring turns just its own number,
+     * and three arrows that slide it, reaching past the rings. Whichever is grabbed brings its sliders up
+     * beside the storyboard. They show the pose at the playhead and stay one size on screen.
+     */
+    _syncMotionGizmo() {
+        const editor = this.motionEditor;
+        const track = editor && editor.active && editor.bending() ? editor.motion.tracks[editor.track] : null;
+        const canvas = this._detail && this._detail.querySelector('.r3d-db-canvas');
+        const frame = track && !track.other && track.keys && canvas && this._camera && this._scene
+            && typeof RRPoseRings3D !== 'undefined' && typeof RRAxisArrows3D !== 'undefined' && typeof RRSizeHandles3D !== 'undefined'
+            ? this._motionPartFrame(track.part) : null;
+        if (!frame) { this._hideMotionGizmo(); return; }
+        if (!this._motionGizmo) {
+            const rings = RRPoseRings3D.create(THREE, this.EFFECT_RING_BASE, 'motion-rings');
+            const arrows = RRAxisArrows3D.create(THREE, 1, 'motion-arrows');
+            const turn = new THREE.Group();
+            turn.name = 'motion-turn-frame';
+            turn.add(rings.root);
+            turn.add(arrows.root);
+            turn.traverse(node => { node.userData.__reactorOverlay = true; });
+            this._motionGizmo = { rings, arrows, turn };
+        }
+        const gizmo = this._motionGizmo;
+        if (gizmo.turn.parent !== this._scene) this._scene.add(gizmo.turn);
+        const rect = canvas.getBoundingClientRect();
+        const unit = RRSizeHandles3D.pixelWorld(THREE, this._camera, rect, frame.at);
+        const pose = editor.sampleTrack(track, editor.playhead);
+        gizmo.frame = frame;
+        gizmo.turn.position.copy(frame.at);
+        gizmo.turn.quaternion.copy(frame.turn);
+        gizmo.turn.visible = true;
+        gizmo.rings.radius = unit * 62;
+        gizmo.rings.root.scale.setScalar(gizmo.rings.radius / this.EFFECT_RING_BASE);
+        gizmo.rings.root.visible = true;
+        // X outermost: the X ring stays in the frame, Y turns with X, Z with X and Y (Euler XYZ).
+        const rad = Math.PI / 180;
+        gizmo.rings.pitch.group.rotation.set(0, 0, 0);
+        gizmo.rings.yaw.group.rotation.set(pose.rotate[0] * rad, 0, 0);
+        gizmo.rings.roll.group.rotation.order = 'XYZ';
+        gizmo.rings.roll.group.rotation.set(pose.rotate[0] * rad, pose.rotate[1] * rad, 0);
+        gizmo.arrows.length = unit * 88;
+        gizmo.arrows.root.scale.setScalar(gizmo.arrows.length);
+        gizmo.arrows.root.position.set(0, 0, 0);
+        gizmo.arrows.root.visible = true;
+        if (!this._motionGizmoHold) {
+            const over = this._motionGizmoHover;
+            RRPoseRings3D.emphasize(gizmo.rings, over && over.kind === 'ring' ? over.axis : null, false);
+            RRAxisArrows3D.emphasize(gizmo.arrows, over && over.kind === 'arrow' ? over.axis : null, false);
+        }
+    }
+
+    _hideMotionGizmo() {
+        if (this._motionGizmo) this._motionGizmo.turn.visible = false;
+        this._motionGizmoHold = null;
+    }
+
+    _disposeMotionGizmo() {
+        if (!this._motionGizmo) return;
+        RRPoseRings3D.dispose(this._motionGizmo.rings);
+        RRAxisArrows3D.dispose(this._motionGizmo.arrows);
+        this._motionGizmo.turn.parent?.remove(this._motionGizmo.turn);
+        this._motionGizmo = null;
+        this._motionGizmoHold = null;
+    }
+
+    /** The motion handle under the pointer, as a hold (`{ kind, axis, grab, ... }`), or null. */
+    _pickMotionGizmo(clientX, clientY) {
+        const gizmo = this._motionGizmo, editor = this.motionEditor;
+        if (!gizmo || !gizmo.turn.visible || !gizmo.frame || !editor || !editor.active || !this._camera) return null;
+        const track = editor.motion.tracks[editor.track];
+        if (!track || track.other) return null;
+        const rect = this._detail.querySelector('.r3d-db-canvas').getBoundingClientRect();
+        const pose = editor.sampleTrack(track, editor.playhead);
+        const ringHold = () => {
+            const ring = gizmo.rings.root.visible && RRPoseRings3D.pick(THREE, gizmo.rings, this._camera, rect, clientX, clientY,
+                { pitch: pose.rotate[0], yaw: pose.rotate[1], roll: pose.rotate[2] });
+            return ring ? { kind: 'ring', axis: ring.axis, grab: ring, index: { pitch: 0, yaw: 1, roll: 2 }[ring.axis] } : null;
+        };
+        const arrowHold = () => {
+            const arrow = gizmo.arrows.root.visible && RRAxisArrows3D.pick(THREE, gizmo.arrows, this._camera, rect, clientX, clientY);
+            return arrow ? { kind: 'arrow', axis: arrow.axis, grab: arrow, index: { x: 0, y: 1, z: 2 }[arrow.axis], start: pose.move[{ x: 0, y: 1, z: 2 }[arrow.axis]] } : null;
+        };
+        // Both show at once: past the rings an arrow is what is there to grab, within them a ring is.
+        const centre = RRSizeHandles3D.screen(THREE, this._camera, rect, gizmo.frame.at);
+        const outside = centre && Math.hypot(clientX - centre[0], clientY - centre[1]) > 62 * 0.92;
+        return outside ? (arrowHold() || ringHold()) : (ringHold() || arrowHold());
+    }
+
+    _dragMotionGizmo(hold, clientX, clientY) {
+        const gizmo = this._motionGizmo, editor = this.motionEditor;
+        if (!hold || !gizmo || !editor || !editor.active) return;
+        const rect = this._detail.querySelector('.r3d-db-canvas').getBoundingClientRect();
+        if (hold.kind === 'ring') {
+            const value = RRPoseRings3D.drag(THREE, hold.grab, this._camera, rect, clientX, clientY);
+            if (value !== null) editor.setPartValue('rotate', hold.index, Math.round(value), false);
+        } else {
+            // The arrows lie along the frame's axes: the distance along one, in move units.
+            const travel = hold.grab.travel(clientX, clientY);
+            const unit = gizmo.frame.unit || 1;
+            editor.setPartValue('move', hold.index, Math.round((hold.start + travel / unit) * 1000) / 1000, false);
+        }
+        this._lastInputAt = performance.now();
+    }
+
+    _endMotionGizmoDrag() {
+        if (this._motionGizmo) {
+            RRPoseRings3D.emphasize(this._motionGizmo.rings, null, false);
+            RRAxisArrows3D.emphasize(this._motionGizmo.arrows, null, false);
+        }
+        this._motionGizmoHold = null;
+        if (this.motionEditor && this.motionEditor.active) this.motionEditor.setPartValue(null, 0, 0, true);
+    }
+
     /** The handle of the selected effect under the pointer, for lighting it: { kind, axis | index }, or null. */
     _effectGizmoUnder(clientX, clientY) {
         const gizmo = this._fxGizmo, work = this._effectWork;
@@ -6534,10 +6774,13 @@ class Database3DEditor {
             const isLight = raw && raw.type === 'light';
             const playable = raw && (raw.type === 'video' ? !!(raw.video && raw.video.file)
                 : isLight ? true : Number(raw.animation) > 0);
-            if (!raw || !trigger || trigger === 'action' || !playable) return;
+            // A media surface played on demand (a picture a map's model calls by name) shows too: it is
+            // part of how the model looks. Skipped, it was a placement outline with nothing in it.
+            const onDemandSurface = raw && raw.type === 'video' && (!trigger || trigger === 'action');
+            if (!raw || !playable || (!onDemandSurface && (!trigger || trigger === 'action'))) return;
             // Only what the variant in view wears; the effect in hand always shows.
             if (this.variantsPanel && index !== this.selectedEffect && !this.variantsPanel.shows(raw)) return;
-            const active = trigger === 'always'
+            const active = onDemandSurface || trigger === 'always'
                 || (trigger === 'moving' && moving)
                 || (trigger === 'walking' && moving && !dashing)
                 || (trigger === 'dashing' && dashing)
@@ -6828,6 +7071,22 @@ class Database3DEditor {
                     return;
                 }
             }
+            // A motion's handles on the part being bent come first: they sit on it, over the model.
+            if (event.button === 0 && !event.ctrlKey && this._motionGizmo && this.motionEditor && this.motionEditor.active) {
+                const hold = this._pickMotionGizmo(event.clientX, event.clientY);
+                if (hold) {
+                    mode = 'motiongizmo';
+                    this._motionGizmoHold = hold;
+                    // The sliders for what was grabbed come up beside the storyboard.
+                    const handle = hold.kind === 'ring' ? 'turn' : 'move';
+                    if (this.motionEditor.handle !== handle) { this.motionEditor.handle = handle; this.motionEditor.render(); }
+                    if (hold.kind === 'ring') RRPoseRings3D.emphasize(this._motionGizmo.rings, hold.axis, true);
+                    else RRAxisArrows3D.emphasize(this._motionGizmo.arrows, hold.axis, true);
+                    canvas.style.cursor = 'grabbing';
+                    event.preventDefault();
+                    return;
+                }
+            }
             // The pivot gizmo is drag-and-drop from any tool: a press on
             // its axes starts sliding the fulcrum in the camera plane.
             if (event.button === 0 && !event.ctrlKey && this._pivotMarker
@@ -6898,6 +7157,16 @@ class Database3DEditor {
         canvas.addEventListener('pointermove', event => {
             this._pointer = { x: event.clientX, y: event.clientY };
             this._pointerMovedAt = performance.now();
+            // A motion's handle lights under the pointer too.
+            if (this._motionGizmo && this._motionGizmo.turn.visible && !mode) {
+                const hold = this._pickMotionGizmo(event.clientX, event.clientY);
+                const over = hold ? { kind: hold.kind, axis: hold.axis } : null;
+                if (JSON.stringify(over) !== JSON.stringify(this._motionGizmoHover || null)) {
+                    this._motionGizmoHover = over;
+                    this._lastInputAt = performance.now();
+                }
+                canvas.style.cursor = over ? 'pointer' : '';
+            }
             // An effect's handle lights under the pointer, so it is plain which one a press will take.
             if (this._cardMode === 'effect' && this._fxGizmo && !mode) {
                 const over = this._effectGizmoUnder(event.clientX, event.clientY);
@@ -6935,6 +7204,8 @@ class Database3DEditor {
                 this._slideEffectAnchor(event.clientX, event.clientY);
             } else if (mode === 'fxgizmo' && this._fxGizmoHold) {
                 this._dragEffectGizmo(this._fxGizmoHold, event.clientX, event.clientY);
+            } else if (mode === 'motiongizmo' && this._motionGizmoHold) {
+                this._dragMotionGizmo(this._motionGizmoHold, event.clientX, event.clientY);
             }
             lastX = event.clientX;
             lastY = event.clientY;
@@ -6971,6 +7242,8 @@ class Database3DEditor {
                 if (!stationary) this._afterEffectEdit(true);
             } else if (mode === 'fxgizmo') {
                 this._endEffectGizmoDrag();
+            } else if (mode === 'motiongizmo') {
+                this._endMotionGizmoDrag();
             } else if (mode === 'pivot' && stationary) {
                 this._placePivot(event);
             } else if (mode === 'fxanchor' && stationary) {
@@ -7079,7 +7352,8 @@ class Database3DEditor {
         const found = this._partUnderPointer(event.clientX, event.clientY);
         // With a motion open, a click on the model picks that part's track.
         if (this.motionEditor && this.motionEditor.active) {
-            if (found) this.motionEditor.pickPart(found.name);
+            // A step (the time between two poses) picked bends nothing: there is no one pose to bend.
+            if (found && this.motionEditor.bending()) this.motionEditor.pickPart(found.name);
             return;
         }
         if (found) {
@@ -7112,7 +7386,9 @@ class Database3DEditor {
             canvas.style.cursor = 'move';
             return;
         }
-        const found = inside ? this._partUnderPointer(this._pointer.x, this._pointer.y) : null;
+        // With a step of a motion picked no part is there to pick, so none lights under the pointer.
+        const picking = !(this.motionEditor && this.motionEditor.active && !this.motionEditor.bending());
+        const found = inside && picking ? this._partUnderPointer(this._pointer.x, this._pointer.y) : null;
         const name = found ? found.name : '';
         if (name !== this._hoverName) {
             this._hoverName = name;
@@ -9096,7 +9372,14 @@ class Database3DEditor {
         return sim.riding ? 'riding' : sim.climbing ? 'climbing' : sim.swimming ? (sim.walking ? 'swimming' : 'treading') : sim.jumping ? 'jumping' : sim.dashing ? 'dashing' : sim.walking ? 'walking' : 'standing';
     }
 
-    setPreviewState(state) {
+    setPreviewState(state, options = {}) {
+        // With a motion open on the timeline the preview stands at its playhead: a state button shows that
+        // state instead (the motion's own state plays it through, the editor staying open).
+        const editor = this.motionEditor;
+        if (editor && editor.active && !options.keepEditor) {
+            if (editor.motion.trigger === state) { editor.playing = true; editor._playFrom = null; editor.renderPlayButton(); }
+            else { editor.commit(); editor.close(); }
+        }
         // Swimming is moving through deep water; treading is floating still in it.
         this._sim.walking = state === 'walking' || state === 'dashing' || state === 'swimming';
         this._sim.dashing = state === 'dashing';
@@ -9181,7 +9464,8 @@ class Database3DEditor {
             : raw.trigger === 'climbing' ? this._t('While climbing')
             : raw.trigger === 'riding' ? this._t('While riding')
             : raw.trigger === 'action' ? this._t('On demand') : this._t('Always');
-        const subject = type === 'clip' ? (raw.clip || '?') : (raw.part || this._t('Whole model'));
+        const subject = type === 'clip' ? (raw.library ? this._t('Motion library') + ': ' + this._libraryLabel(raw.library) : raw.clip || '?')
+            : (raw.part || this._t('Whole model'));
         return `${raw.name || '?'} — ${label} · ${subject} · ${trigger}`;
     }
 
@@ -9213,7 +9497,9 @@ class Database3DEditor {
             const group = this.motionGroup(index);
             if (group && group[0] !== index) return;
             shown++;
-            const summary = group ? this.motionSummary(raw, group.length) : this.ruleSummary(raw);
+            let summary = group ? this.motionSummary(raw, group.length) : this.ruleSummary(raw);
+            // A hand-keyed motion in a state the rig plays motion capture in takes that capture's place: said so.
+            if (!raw.library && ['walking', 'dashing', 'jumping', 'swimming', 'treading', 'climbing'].includes(raw.trigger) && this._libraryMotions().length) summary += ' · ' + this._t('in place of the motion capture');
             const actions = [];
             // On-demand motions play from their own row: one button per name (a preset's parts play together).
             if (raw.trigger === 'action' && this.rawAnimations.findIndex(other => other.trigger === 'action' && other.name === raw.name) === index) {
@@ -9226,6 +9512,8 @@ class Database3DEditor {
             });
             row.dataset.modelRecordIndex = String(index);
             row.addEventListener('click', () => this._afterEffectWork(() => {
+                // A motion that plays in a state is seen in it: the preview turns to that state.
+                if (raw.trigger && this.previewStates().includes(raw.trigger) && this.previewState() !== raw.trigger) this.setPreviewState(raw.trigger, { keepEditor: true });
                 if (group && this.motionEditor) {
                     this.deselectPart();
                     this.selectedRule = index;
@@ -9242,6 +9530,7 @@ class Database3DEditor {
             list.appendChild(row);
         });
         this._renderEmbeddedClipRows(list);
+        this._renderLibraryRows(list);
         // The rig's own default motions for the states this model has none for, and the switch.
         if (this.customRig) {
             const defaults = [...new Set((this.playRules || []).filter(rule => rule.defaultMotion).map(rule => rule.name))];
@@ -9296,6 +9585,68 @@ class Database3DEditor {
         }
     }
 
+    /**
+     * The shared motion library's motions (the 3D Character Builder's motion capture) a rigged humanoid's
+     * clip rule can name with `library`; none for any other model, or before the library is in.
+     */
+    _libraryMotions() {
+        if (!this.customRig || (this.customRig.template || 'humanoid') !== 'humanoid' || typeof Reactor3D === 'undefined' || !Reactor3D.motionLibrary) return [];
+        const library = Reactor3D.motionLibrary();
+        return library && Array.isArray(library.POSES) ? library.POSES : [];
+    }
+
+    _libraryLabel(id) {
+        const pose = this._libraryMotions().find(entry => entry.id === id);
+        return pose ? pose.label : String(id);
+    }
+
+    /** The library motion a clip name stands for (the runtime's LIBRARY_CLIP_PREFIX), or ''. */
+    static libraryIdOf(clip) {
+        const text = String(clip || '');
+        return text.startsWith(Database3DEditor.LIBRARY_PREFIX) ? text.slice(Database3DEditor.LIBRARY_PREFIX.length) : '';
+    }
+
+    /**
+     * The battle motions a character from the 3D Character Builder carries (the library's SLOTS: attack,
+     * guard, damage, dead, victory...), each as the library motion it plays: [{ name, id, label }].
+     */
+    _libraryBattleSet() {
+        const library = typeof Reactor3D !== 'undefined' && Reactor3D.motionLibrary ? Reactor3D.motionLibrary() : null;
+        if (!library || !this._libraryMotions().length) return [];
+        const byName = new Map((library.GAME_CLIPS || []).map(clip => [clip.name, clip.id]));
+        return (library.SLOTS || []).filter(([, trigger, clip]) => trigger === 'action' && byName.has(clip))
+            .map(([name, , clip]) => ({ name, id: byName.get(clip), label: clip }));
+    }
+
+    /** Below the file's clips: the motion library, and one Add for the whole battle set. */
+    _renderLibraryRows(list) {
+        const set = this._libraryBattleSet();
+        if (!set.length) return;
+        const header = document.createElement('div');
+        header.className = 'r3d-sec-sub';
+        header.textContent = this._t('Motion library');
+        list.appendChild(header);
+        const missing = set.filter(entry => !this.rawAnimations.some(raw => raw && raw.name === entry.name));
+        const row = this._row({ icon: 'clip', name: this._t('Motion-capture battle motions'),
+            note: set.map(entry => entry.name + ': ' + entry.label).join(', '), actions: [
+                { icon: missing.length ? 'add' : 'check', title: this._t('Add the battle motions this model has none of'),
+                    disabled: !missing.length, run: () => this.addLibraryBattleSet() }
+            ] });
+        row.style.cursor = 'default';
+        row.classList.add('is-plain');
+        list.appendChild(row);
+    }
+
+    /** Add a library clip rule for each battle motion the model has no animation of that name for. */
+    addLibraryBattleSet() {
+        const missing = this._libraryBattleSet().filter(entry => !this.rawAnimations.some(raw => raw && raw.name === entry.name));
+        if (!missing.length) return;
+        for (const entry of missing) this.rawAnimations.push({ name: entry.name, type: 'clip', trigger: 'action', library: entry.id });
+        this.saveRules();
+        this.rebuildPlayback();
+        this.renderRuleList();
+    }
+
     /** Play a baked clip straight from the list, no rule required. */
     playEmbeddedClip(clipName) {
         if (typeof Reactor3D === 'undefined' || !this._binding) return;
@@ -9323,10 +9674,118 @@ class Database3DEditor {
         this.renderRuleList();
     }
 
-    /** Add opens the card on a fresh, motionless animation. */
+    /**
+     * Add: a rigged humanoid picks from the motion capture first (the picker); any other model opens a
+     * fresh motion to key by hand.
+     */
     addRule() {
+        if (this._libraryMotions().length) { this.showMotionPicker(); return; }
         if (this.motionEditor) { this.deselectPart(); this.motionEditor.open(null); return; }
         this.addSingleRule();
+    }
+
+    /** The state a library motion plays in by itself (Jumping plays while jumping), else on demand. */
+    static libraryTrigger(id) {
+        return { walk: 'walking', run: 'dashing', jump: 'jumping', fall: 'jumping', swim: 'swimming', tread: 'treading', climbLadder: 'climbing', climbWall: 'climbing' }[id] || 'action';
+    }
+
+    /** The saved animations that play in a state (every rule of that trigger), by name, once each. */
+    _motionsIn(trigger) {
+        if (!trigger || trigger === 'action' || trigger === 'always') return [];
+        return [...new Set(this.rawAnimations.filter(raw => raw && raw.trigger === trigger).map(raw => raw.name || '?'))];
+    }
+
+    /** Put a library motion on the model, in a state (replacing what played there) or on demand. */
+    addLibraryMotion(id, trigger) {
+        const pose = this._libraryMotions().find(entry => entry.id === id);
+        if (!pose) return null;
+        const replaced = this._motionsIn(trigger);
+        if (this.motionEditor && this.motionEditor.active) this.motionEditor.close();
+        if (replaced.length) this.rawAnimations = this.rawAnimations.filter(raw => !(raw && raw.trigger === trigger));
+        // A name of its own: the library's label, numbered when another animation has it.
+        const taken = new Set(this.rawAnimations.map(raw => raw && raw.name));
+        let name = this._t(pose.label);
+        for (let n = 2; taken.has(name); n++) name = `${this._t(pose.label)} ${n}`;
+        this.rawAnimations.push({ name, type: 'clip', trigger, library: id });
+        this.selectedRule = this.rawAnimations.length - 1;
+        this.saveRules();
+        this.rebuildPlayback();
+        this.renderRuleList();
+        // Seen at once: its state in the preview, or played.
+        if (trigger !== 'action' && trigger !== 'always' && this.previewStates().includes(trigger)) this.setPreviewState(trigger);
+        else if (trigger === 'action') this.playRuleAction(name);
+        return { name, replaced };
+    }
+
+    /**
+     * Add a motion: the motion capture of Forge › 3D Character Builder first, by its groups, each with
+     * when it plays (its state, suggested) and a ▶ that shows it on the model beside the panel; using one
+     * for a state replaces what played there. Then what to make by hand: the keyed starting points and a
+     * blank motion of key poses.
+     */
+    showMotionPicker() {
+        const motions = this._libraryMotions();
+        if (!motions.length) { this.showMotionPresets(); return; }
+        const library = Reactor3D.motionLibrary();
+        const groups = (library && library.GROUPS) || [{ id: '', label: '' }];
+        const escape = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const triggers = typeof RRMotionEditor !== 'undefined' ? RRMotionEditor.TRIGGERS() : [['action', 'On demand']];
+        const overlay = document.createElement('div');
+        // No dimming, and to the side: the model stays in view to show what ▶ plays.
+        overlay.className = 'rr-modal-overlay r3d-picker-overlay';
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal r3d-picker';
+        const card = pose => {
+            const when = Database3DEditor.libraryTrigger(pose.id);
+            return `<div class="r3d-picker-card" data-id="${escape(pose.id)}">
+                <div class="r3d-picker-name">${escape(this._t(pose.label))}</div>
+                <button type="button" class="r3d-picker-whenlabel" title="${escape(this._t('Change when it plays'))}" data-rr-i18n-skip="1"></button>
+                <select class="database-field-value r3d-picker-when" hidden title="${escape(this._t('Play when'))}">${triggers.map(([v, l]) => `<option value="${v}"${v === when ? ' selected' : ''}>${escape(this._t(l))}</option>`).join('')}</select>
+                <div class="r3d-picker-actions"><button type="button" class="rr-btn-chip r3d-picker-play" title="${escape(this._t('Play'))}">▶</button>
+                <button type="button" class="rr-btn-chip r3d-picker-add" data-rr-i18n-skip="1"></button></div></div>`;
+        };
+        modal.innerHTML = `
+            <div class="rr-modal-header"><div class="rr-modal-title">${escape(this._t('Add a motion'))}</div><button class="rr-modal-close r3d-picker-close" type="button">×</button></div>
+            <div class="rr-modal-body">
+                <div class="r3d-picker-lead">${escape(this._t('Motion capture, as Forge › 3D Character Builder uses it: fitted to this character, nothing to animate. ▶ shows it on the model.'))}</div>
+                ${groups.map(group => {
+                    const list = motions.filter(pose => (pose.group || '') === group.id || (!group.id));
+                    return list.length ? `<div class="lit-section r3d-picker-group"><div class="lit-section-header">${escape(this._t(group.label || 'Motions'))}</div><div class="r3d-picker-grid">${list.map(card).join('')}</div></div>` : '';
+                }).join('')}
+                <div class="lit-section r3d-picker-group"><div class="lit-section-header">${escape(this._t('Make your own'))}</div><div class="lit-section-body r3d-picker-own">
+                    <button type="button" class="rr-btn-chip r3d-picker-blank">${escape(this._t('+ Pose it yourself'))}</button>
+                    <div class="r3d-picker-note">${escape(this._t('Bend the body into a pose, add the next: the motion moves from one to the next.'))}</div>
+                </div></div>
+            </div>
+            <div class="rr-modal-footer"><button class="rr-btn-secondary r3d-picker-done">${escape(this._t('Close'))}</button></div>`;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        const keys = typeof RRKeyboardNavigation !== 'undefined' && RRKeyboardNavigation.modal ? RRKeyboardNavigation.modal(overlay, { onEscape: () => close() }) : null;
+        const close = () => { keys?.leave?.(); overlay.remove(); };
+        modal.querySelector('.r3d-picker-close').addEventListener('click', close);
+        modal.querySelector('.r3d-picker-done').addEventListener('click', close);
+        // What Add does, for the state chosen: added, used in a state, or replacing what plays there.
+        const label = el => {
+            const id = el.dataset.id, select = el.querySelector('.r3d-picker-when'), when = select.value, button = el.querySelector('.r3d-picker-add');
+            // When it plays, said in a line (a click on it gives the choice): no field to fill in for the usual case.
+            el.querySelector('.r3d-picker-whenlabel').textContent = select.options[select.selectedIndex]?.textContent || '';
+            const added = this.rawAnimations.some(raw => raw && raw.library === id && raw.trigger === when);
+            const replaced = this._motionsIn(when);
+            button.disabled = added;
+            button.textContent = added ? `✓ ${this._t('Added')}` : replaced.length ? this._t('Use instead of {names}', { names: replaced.join(', ') }) : this._t('Add');
+        };
+        modal.querySelectorAll('.r3d-picker-card').forEach(el => {
+            label(el);
+            el.querySelector('.r3d-picker-when').addEventListener('change', () => { el.querySelector('.r3d-picker-when').hidden = true; el.querySelector('.r3d-picker-whenlabel').hidden = false; label(el); });
+            el.querySelector('.r3d-picker-whenlabel').addEventListener('click', () => { el.querySelector('.r3d-picker-whenlabel').hidden = true; const select = el.querySelector('.r3d-picker-when'); select.hidden = false; select.focus(); });
+            el.querySelector('.r3d-picker-play').addEventListener('click', () => this.playEmbeddedClip(Database3DEditor.LIBRARY_PREFIX + el.dataset.id));
+            el.querySelector('.r3d-picker-add').addEventListener('click', () => {
+                this.addLibraryMotion(el.dataset.id, el.querySelector('.r3d-picker-when').value);
+                modal.querySelectorAll('.r3d-picker-card').forEach(label);
+            });
+        });
+        modal.querySelector('.r3d-picker-blank').addEventListener('click', () => { close(); if (this.motionEditor) { this.deselectPart(); this.motionEditor.open(null); } else this.addSingleRule(); });
+        keys?.enter?.();
     }
 
     /** A lone spin, swing or bob (or a pose) on the classic card. */

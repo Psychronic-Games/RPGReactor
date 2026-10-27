@@ -203,3 +203,33 @@ test('live forehead slider dragging matches a fresh model without retaining the 
         meshes.forEach(m => m.geometry.dispose());
     }
 });
+
+test('Cardassian neck cords stand out along the sides of the neck, behind the jaw down to the shoulders, on every build', () => {
+    const F = Q.Body.headFields(pack), ear = Q.Body.earMask(pack), verts = [...new Set(pack.body.source)];
+    const mean = (P, ids) => [0, 1, 2].map(k => ids.reduce((s, v) => s + P[v * 3 + k], 0) / ids.length);
+    for (const [gender, patch] of [[0, {}], [1, {}], [1, { weight: 1.6, muscle: 1.5, height: 0.8 }], [0, { weight: -0.6, height: -0.6 }]]) {
+        const r = Object.assign(Q.Model.withSpecies({ gender }, 'cardassian'), patch);
+        const label = gender + JSON.stringify(patch);
+        // The shape with its webbing but without the cords, then the cords laid on it.
+        const plain = Q.Body.shape(pack, { ...r, morph: { ...r.morph, neckWebbing: 0 } }), P = Float32Array.from(plain);
+        Q.Body.neckCords(pack, P, r.morph.neckWebbing);
+        const N = Q.Body.vertexNormals(pack, plain), neck = mean(plain, pack.bones.find(b => b.name === 'Neck').head), head = mean(plain, pack.bones[F.head].head);
+        const lift = v => [0, 1, 2].reduce((s, k) => s + (P[v * 3 + k] - plain[v * 3 + k]) * N[v * 3 + k], 0);
+        // On each side, at the top, the middle and the foot of the neck, the cord raises the skin by half a centimeter or more.
+        for (const side of [-1, 1]) for (const t of [0.15, 0.45, 0.7]) {
+            const y = neck[1] + (head[1] - neck[1]) * t;
+            const band = verts.filter(v => Math.abs(plain[v * 3 + 1] - y) < 0.012 && plain[v * 3] * side > 0.03);
+            const peak = Math.max(...band.map(lift));
+            assert.ok(peak > 0.005, label + ' side ' + side + ' at ' + t + ': ' + peak);
+        }
+        // Mirrored, outward only where it rises, and the throat's middle, the face, the eyes and the ears stay put.
+        let worst = 0;
+        for (const v of verts) {
+            const d = Math.hypot(P[v * 3] - plain[v * 3], P[v * 3 + 1] - plain[v * 3 + 1], P[v * 3 + 2] - plain[v * 3 + 2]);
+            if (Math.abs(plain[v * 3]) < 0.012 || ear[v] > 0.65 || (F.w[v] > 0.9 && plain[v * 3 + 2] > head[2])) worst = Math.max(worst, d);
+            assert.ok(d < 0.03, 'bounded');
+        }
+        assert.ok(worst < 0.0015, label + ' throat and face unmoved: ' + worst);
+        for (const v of F.eyeIds) assert.deepEqual(P.subarray(v * 3, v * 3 + 3), plain.subarray(v * 3, v * 3 + 3));
+    }
+});

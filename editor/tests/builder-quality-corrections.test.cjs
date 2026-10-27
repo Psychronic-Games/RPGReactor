@@ -44,7 +44,8 @@ test('bird wings have separate manus articulation and standing feathers stay abo
    assert.ok(n>0&&sum/n>0,'mirrored wing airfoil points inward: '+p.name);
   }
   for(const pose of ['idle','walk','run','fly','glide']){
-   const clip=Forms.poseClip(r.bones,pose,recipe);assert.ok(clip);
+   // Birds fold with their own feather-group rig (Creature.poseClip routes to RRCreatureFlyers).
+   const clip=Creature.poseClip(r.bones,pose,recipe);assert.ok(clip);
    for(const u of [.1,.5,.8]){
     const ps=Cloth.pose(r.bones,clip,clip.times.at(-1)*u),feathers=r.parts.filter(p=>/Flight feathers|Wing shoulder|Wing coverts/.test(p.name));
     for(const p of feathers){const pos=Cloth.skin(p,r.bones,ps);assert.ok(pos.every(Number.isFinite));}

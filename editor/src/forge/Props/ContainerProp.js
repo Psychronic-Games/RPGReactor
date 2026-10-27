@@ -1495,8 +1495,25 @@
         const TAB_OLD = [['shape', 'Shape'], ['look', 'Look'], ['markings', 'Markings']];
         const TAB_NEW = TAB_OLD.concat([['lights', 'Lights']]);
         const pictureRow = function(label, name, act) {
-            return `<div class="rr-c3d-row rr-prop-picturerow"><span class="rr-c3d-label">${this._t(label)}</span><span class="rr-prop-picturename">${rrEscapeHtml(name || this._t('None'))}</span>`
+            const img = name && this._images && this._images[name], app = root.PropBuilder;
+            const thumb = img && app && app.imagePicture ? this._mini('picture:' + name, () => app.imagePicture(img, 80)) : '';
+            return `<div class="rr-c3d-row rr-prop-picturerow"><span class="rr-c3d-label">${this._t(label)}</span><span class="rr-prop-picturename">${thumb ? `<img class="rr-prop-pictureimg" src="${thumb}" alt="">` : ''}${rrEscapeHtml(name || this._t('None'))}</span>`
                 + `<button class="rr-btn-chip" data-act="${act}">${this._t('Choose…')}</button>${name ? `<button class="rr-btn-chip" data-act="${act}-none">${this._t('Remove')}</button>` : ''}</div>`;
+        };
+        /** A symbol's tile picture (64 x 40): the symbol on the container's own paint (None: the paint alone). */
+        const symbolPicture = (id, paint) => {
+            const w = 64, h = 40, c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const g = c.getContext('2d'), img = g.createImageData(w, h), bg = Paint.hex(paint), ink = [0, 0, 0, 0], r = h * 0.42;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                let col = bg;
+                const sx = (x + 0.5 - w / 2) / r, sy = (y + 0.5 - h / 2) / r;
+                if (id !== 'none' && Math.abs(sx) <= 1.05 && Math.abs(sy) <= 1.05 && CP.symbolAt(id, sx, sy, ink, 1.5 / r)) col = bg.map((v, k) => v + (ink[k] * 255 - v) * ink[3]);
+                const o = (y * w + x) * 4;
+                img.data[o] = col[0]; img.data[o + 1] = col[1]; img.data[o + 2] = col[2]; img.data[o + 3] = 255;
+            }
+            g.putImageData(img, 0, 0);
+            return c.toDataURL('image/png');
         };
         const textRow = function(path, label, max) {
             return `<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t(label)}</span><input type="text" class="rr-input rr-prop-text" data-path="${path}" maxlength="${max}" value="${rrEscapeHtml(this._get(path) || '')}" spellcheck="false"></label>`;
@@ -1549,7 +1566,7 @@
                     const m = r.marks;
                     let html = this._section('Words') + textRow.call(this, 'marks.text', 'Text', 24) + (m.text.trim()?this._select('marks.style', 'Style', MARK_STYLES)
                         + (m.style !== 'burned' ? this._color('marks.color', 'Ink', ['#f2efe6', '#1d1b19', '#e8d27a', '#a3221b', '#2a2e33']) : ''):'');
-                    html += this._section('Symbol') + this._tiles('mark-symbol', SYMBOL_ICONS.map(([id, label]) => ({ id, label })), m.symbol, 2);
+                    html += this._section('Symbol') + this._tiles('mark-symbol', SYMBOL_ICONS.map(([id, label]) => ({ id, label, picture: typeof document === 'undefined' ? undefined : this._mini('symbol:' + id + r.color, () => symbolPicture(id, r.color)) })), m.symbol, 2);
                     if (f === 'drum' || f === 'canister' || f === 'cargo') html += this._check('marks.hazard', 'Hazard stripes');
                     html += this._section('Picture') + pictureRow.call(this, 'Picture', m.image, 'mark-image');
                     return html;

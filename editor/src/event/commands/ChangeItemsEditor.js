@@ -26,11 +26,14 @@ class ChangeItemsEditor {
             this.operation = params[1] || 0;
             this.operandType = params[2] || 0;
             this.operand = params[3] || 1;
+            // Random (operand type 2): params[4] is the top of the range.
+            this.operandMax = params[4] ?? this.operand;
         } else {
             this.itemId = 1;
             this.operation = 0;
             this.operandType = 0;
             this.operand = 1;
+            this.operandMax = 1;
         }
 
         if (!this.modal) {
@@ -206,7 +209,8 @@ class ChangeItemsEditor {
 
         const operandTypes = [
             { value: 0, label: 'Constant' },
-            { value: 1, label: 'Variable' }
+            { value: 1, label: 'Variable' },
+            { value: 2, label: 'Random' }
         ];
 
         operandTypes.forEach(({ value, label }) => {
@@ -263,7 +267,7 @@ class ChangeItemsEditor {
             const operandInput = document.createElement('input');
             operandInput.type = 'number';
             operandInput.min = 1;
-            operandInput.max = 99;
+            operandInput.max = 9999;
             operandInput.value = this.operand;
             operandInput.style.cssText = `
                 padding: 6px 10px;
@@ -280,6 +284,29 @@ class ChangeItemsEditor {
 
             operandRow.appendChild(operandLabel);
             operandRow.appendChild(operandInput);
+            operandSection.appendChild(operandRow);
+        } else if (this.operandType === 2) {
+            // Random: a whole number between the two ends, rolled when the command runs.
+            const operandRow = document.createElement('div');
+            operandRow.className = 'rr-random-range';
+            operandRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+            const operandLabel = document.createElement('span');
+            operandLabel.textContent = tt('Amount:');
+            operandLabel.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 80px;';
+            operandRow.appendChild(operandLabel);
+            const field = (value, onInput) => {
+                const input = document.createElement('input');
+                input.type = 'number'; input.min = 1; input.max = 9999; input.value = value;
+                input.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:80px;';
+                input.addEventListener('input', onInput);
+                return input;
+            };
+            operandRow.appendChild(field(this.operand, e => { this.operand = parseInt(e.target.value) || 1; }));
+            const dash = document.createElement('span');
+            dash.textContent = '–';
+            dash.style.cssText = 'color: var(--color-text-muted);';
+            operandRow.appendChild(dash);
+            operandRow.appendChild(field(this.operandMax, e => { this.operandMax = parseInt(e.target.value) || 1; }));
             operandSection.appendChild(operandRow);
         } else {
             // Variable
@@ -362,12 +389,11 @@ class ChangeItemsEditor {
         return {
             code: 126,
             indent: 0,
-            parameters: [
-                this.itemId,
-                this.operation,
-                this.operandType,
-                this.operand
-            ]
+            // Random (operand type 2) adds the top of the range; any other
+            // amount keeps RPG Maker MZ's own parameter list.
+            parameters: this.operandType === 2
+                ? [this.itemId, this.operation, this.operandType, this.operand, this.operandMax]
+                : [this.itemId, this.operation, this.operandType, this.operand]
         };
     }
 

@@ -63,3 +63,20 @@ test('tapeworm and leech suckers are joined skin regions with shared posed bound
         for(const p of patches){let shared=0;for(let i=0;i<p.positions.length/3;i++){const j=vertices.get(key(p,i));if(j===undefined)continue;shared++;for(let k=0;k<4;k++){assert.equal(p.joints[i*4+k],base.joints[j*4+k]);assert.equal(p.weights[i*4+k],base.weights[j*4+k]);}}assert.ok(shared>4,p.name+' shares a continuous skin boundary');}
     }
 });
+
+test('a worm\'s band color and its pattern show on the body', () => {
+    // The band was dropped by normalizeRecipe's color list, and the shared pattern painter measured
+    // spots and stripes in body lengths: on a worm a fiftieth as wide as it is long they barely showed.
+    const body = r => Q.Model.build(null, r, {}, { quality: 'preview' }).parts.find(p => p.name === 'Body').colors;
+    const change = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
+    for (const type of ['earthworm', 'leech']) {
+        const r = Q.Creature.withVariant(Q.Creature.kindRecipe('worm'), 'wormType', type);
+        assert.equal(Q.Creature.normalizeRecipe({ ...r, colors: { ...r.colors, band: '#2050FF' } }).colors.band, '#2050ff');
+        assert.ok(change(body(r), body({ ...r, colors: { ...r.colors, band: '#2050ff' } })) > 0.005, type + ' band recolors the body');
+    }
+    const earth = Q.Creature.withVariant(Q.Creature.kindRecipe('worm'), 'wormType', 'earthworm');
+    assert.equal(Q.Creature.withVariant(earth, 'wormType', 'leech').colors.band, '#b8642c', 'a new worm type brings its own band color');
+    const plain = body({ ...earth, pattern: 'solid' });
+    for (const pattern of ['stripes', 'spots', 'countershade', 'piebald'])
+        assert.ok(change(plain, body({ ...earth, pattern })) > 0.04, pattern + ' shows on an earthworm');
+});

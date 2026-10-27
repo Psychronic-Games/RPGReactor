@@ -67,6 +67,8 @@
             const nh = down ? -1 : 1, center = P.length / 3;
             P.push(base[0] + d[0] * h, base[1] + d[1] * h, base[2] + d[2] * h); N.push(d[0] * nh, d[1] * nh, d[2] * nh); T.push(0.5, 0.5);
             const start = ring(r, h, 0, nh, 0);
+            // Planar uvs round the center (a disc), so a normal map has a tangent frame at the middle of the cap too.
+            for (let s = 0; s <= seg; s++) { const a = phase + (s / seg) * Math.PI * 2; T[(start + s) * 2] = 0.5 + 0.5 * Math.cos(a); T[(start + s) * 2 + 1] = 0.5 + (down ? -0.5 : 0.5) * Math.sin(a); }
             for (let s = 0; s < seg; s++) { if (down) I.push(center, start + s + 1, start + s); else I.push(center, start + s, start + s + 1); }
         };
         if (o.caps !== false) { cap(profile[0][0], profile[0][1], true); cap(profile[profile.length - 1][0], profile[profile.length - 1][1], false); }
@@ -312,12 +314,39 @@
     }
     function Mesh_disc(center, normal, r, seg) {
         const [u, v] = basis(normal), P = [center[0], center[1], center[2]], N = [normal[0], normal[1], normal[2]], T = [0.5, 0.5], I = [];
-        for (let s = 0; s <= seg; s++) { const a = s / seg * Math.PI * 2; P.push(center[0] + (u[0] * Math.cos(a) + v[0] * Math.sin(a)) * r, center[1] + (u[1] * Math.cos(a) + v[1] * Math.sin(a)) * r, center[2] + (u[2] * Math.cos(a) + v[2] * Math.sin(a)) * r); N.push(normal[0], normal[1], normal[2]); T.push(0.5, 0.5); }
+        // Planar uvs across the disc (not one point), so a normal map has a tangent frame on it.
+        for (let s = 0; s <= seg; s++) { const a = s / seg * Math.PI * 2; P.push(center[0] + (u[0] * Math.cos(a) + v[0] * Math.sin(a)) * r, center[1] + (u[1] * Math.cos(a) + v[1] * Math.sin(a)) * r, center[2] + (u[2] * Math.cos(a) + v[2] * Math.sin(a)) * r); N.push(normal[0], normal[1], normal[2]); T.push(0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a)); }
         for (let s = 1; s <= seg; s++) I.push(0, s, s + 1);
         return make(P, N, T, I);
     }
 
-    const api = { planarUv, polyTube, lathe, tube, sphere, box, extrude, inset, transform, merge, computeNormals, basis, shade };
+    /**
+     * Uvs for a wooden part with its grain along its length: the part's long axis in the side view found
+     * from its points (a stock lies along the bore, a grip panel down the grip), v along it, u across it on
+     * the side faces and round the edges; end grain where the face looks along the axis. In meters / tile.
+     */
+    function grainUv(mesh) {
+        const P = mesh.positions, N = mesh.normals, n = P.length / 3;
+        if (!n) return mesh;
+        let mx = 0, my = 0;
+        for (let i = 0; i < n; i++) { mx += P[i * 3]; my += P[i * 3 + 1]; }
+        mx /= n; my /= n;
+        let xx = 0, yy = 0, xy = 0;
+        for (let i = 0; i < n; i++) { const dx = P[i * 3] - mx, dy = P[i * 3 + 1] - my; xx += dx * dx; yy += dy * dy; xy += dx * dy; }
+        const th = 0.5 * Math.atan2(2 * xy, xx - yy), ax = Math.cos(th), ay = Math.sin(th), ACROSS = 0.11, ALONG = 0.42;
+        const uv = new Float32Array(n * 2);
+        for (let i = 0; i < n; i++) {
+            const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2], nx = N[i * 3], ny = N[i * 3 + 1], nz = N[i * 3 + 2];
+            const along = x * ax + y * ay, across = -x * ay + y * ax, nAlong = Math.abs(nx * ax + ny * ay), nAcross = Math.abs(-nx * ay + ny * ax);
+            if (Math.abs(nz) >= nAcross && Math.abs(nz) >= nAlong) { uv[i * 2] = across / ACROSS; uv[i * 2 + 1] = along / ALONG; }
+            else if (nAcross >= nAlong) { uv[i * 2] = z / ACROSS + across / ACROSS; uv[i * 2 + 1] = along / ALONG; }
+            else { uv[i * 2] = z / ACROSS; uv[i * 2 + 1] = across / ACROSS * 0.3; }
+        }
+        mesh.uvs = uv;
+        return mesh;
+    }
+
+    const api = { grainUv, planarUv, polyTube, lathe, tube, sphere, box, extrude, inset, transform, merge, computeNormals, basis, shade };
     root.RRPropMesh = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

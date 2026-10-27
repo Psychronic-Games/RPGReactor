@@ -677,6 +677,64 @@ Sprite_Character.prototype.update = function() {
     this._reactor3dStand = held;
 };
 
+/**
+ * The character's image turn (Mirror, Flip, Rotate about its middle; see
+ * Game_CharacterBase.reactorMirror): applied last, around everything above,
+ * so a 3D map's stand scale and lean are in the numbers. Mirror and flip are
+ * the scale's signs, kept whatever a plugin assigned; a sign this set is put
+ * back once the turn is gone, and a sprite never turned is left alone (a
+ * plugin's own negative zoom stays its own). The sprite stays on its tile:
+ * a flip turns over about the frame's middle, not its feet, and the move
+ * that takes is added to the position updatePosition gives every frame.
+ */
+Sprite_Character.prototype.reactorApplyImage = function() {
+    const character = this._character;
+    if (!character) return;
+    const mirror = !!character._rrMirror, flip = !!character._rrFlip;
+    const center = character._rrSpinPivot === "center" && !!this.rotation;
+    const held = this._rrImageHeld;
+    if (!mirror && !flip && !center && !held) return;
+    const scale = this.scale;
+    if (mirror) scale.x = -Math.abs(scale.x);
+    else if (held && held.mirror) scale.x = Math.abs(scale.x);
+    if (flip) scale.y = -Math.abs(scale.y);
+    else if (held && held.flip) scale.y = Math.abs(scale.y);
+    // The frame's middle, from the anchor, and where each transform puts it (PIXI's matrix: scale, skew, rotation).
+    const frame = this._frame, anchor = this.anchor;
+    const lx = frame ? frame.width * (0.5 - (anchor ? anchor.x : 0.5)) : 0;
+    const ly = frame ? frame.height * (0.5 - (anchor ? anchor.y : 1)) : 0;
+    const kx = this.skew ? this.skew.x : 0, ky = this.skew ? this.skew.y : 0;
+    const at = (r, sx, sy) => [Math.cos(r + ky) * sx * lx - Math.sin(r - kx) * sy * ly,
+        Math.sin(r + ky) * sx * lx + Math.cos(r - kx) * sy * ly];
+    const rot = this.rotation || 0;
+    const upright = at(0, Math.abs(scale.x), Math.abs(scale.y));
+    let dx, dy;
+    if (center) {
+        const turned = at(rot, scale.x, scale.y);
+        dx = upright[0] - turned[0]; dy = upright[1] - turned[1];
+    } else {
+        // Over in place, then turned about the feet with the rest of it.
+        const over = at(0, scale.x, scale.y);
+        const cx = upright[0] - over[0], cy = upright[1] - over[1];
+        dx = cx * Math.cos(rot) - cy * Math.sin(rot);
+        dy = cx * Math.sin(rot) + cy * Math.cos(rot);
+    }
+    this.x += dx;
+    this.y += dy;
+    if (mirror || flip || center) {
+        const record = held || (this._rrImageHeld = { mirror: false, flip: false });
+        record.mirror = mirror; record.flip = flip;
+    } else {
+        this._rrImageHeld = null;
+    }
+};
+
+const _rrImageUpdate = Sprite_Character.prototype.update;
+Sprite_Character.prototype.update = function() {
+    _rrImageUpdate.call(this);
+    this.reactorApplyImage();
+};
+
 Sprite_Character.prototype.updateOther = function() {
     this.opacity = this._character.opacity();
     if (this._reactor3dBehindCamera) this.opacity = 0;
@@ -2536,6 +2594,7 @@ Sprite_Animation.prototype.initMembers = function() {
 
 Sprite_Animation.prototype.destroy = function(options) {
     globalThis.ReactorHdrOverlay?.release(this);
+    Sprite_Animation.SceneLayer.release(this);
     Sprite.prototype.destroy.call(this, options);
     if (this._handle) {
         this._handle.stop();
@@ -2556,7 +2615,13 @@ Sprite_Animation.prototype.setup = function(
     this._delay = delay;
     this._previous = previous;
     this._effectContext = typeof Reactor3D !== "undefined" ? Reactor3D._spawningEffectContext || null : null;
-    this._effect = this._effectContext ? Reactor3D.GpuEffects.load(this._effectContext, animation.effectName) : EffectManager.load(animation.effectName);
+    // A screen animation plays inside PIXI's scene where the renderer allows
+    // (Sprite_Animation.SceneLayer); the overlay keeps the rest.
+    if (!this._effectContext && animation.effectName && Sprite_Animation.SceneLayer.adopt(this)) {
+        this._effect = Sprite_Animation.SceneLayer.load(animation.effectName);
+    } else {
+        this._effect = this._effectContext ? Reactor3D.GpuEffects.load(this._effectContext, animation.effectName) : EffectManager.load(animation.effectName);
+    }
     this._playing = true;
     globalThis.ReactorHdrOverlay?.setup(this, animation);
     const timings = animation.soundTimings.concat(animation.flashTimings);
@@ -2811,10 +2876,413 @@ Sprite_Animation.renderActive = function(renderer) {
     list.length = 0;
 };
 
+//-----------------------------------------------------------------------------
+// Sprite_Animation.SceneLayer
+//
+// Screen animations drawn inside PIXI's scene. On PIXI 8's WebGL2 renderer an
+// animation plays in an Effekseer context of its own on PIXI's context (as
+// Reactor3D.GpuEffects already runs one) and is drawn by a PIXI.RenderContainer
+// child of the animation, which PIXI executes in scene order during its own
+// render. So an effect sits where its animation sits: under the windows,
+// inside the spriteset's colour filters, and over exactly what PIXI has drawn
+// beneath it, which is also what a distortion layer captures. HDR animations
+// of one grade in one container share a light pass (ReactorHdrOverlay.scene).
+//
+// The overlay canvas keeps everything else: Graphics.effekseerInScene = false,
+// a WebGL1 or WebGPU renderer, a lost context, and the effects a 3D map
+// anchors in its world. Effekseer drew nothing on PIXI's context only when it
+// drew from onRender, which v8 runs before its own draws.
+//
+// Every call that touches GL from here leaves PIXI's state as it found it:
+// the framebuffer, viewport and scissor are put back and PIXI's caches reset,
+// as Reactor3D's shared viewport does.
+Graphics.effekseerInScene = true;
+
+Sprite_Animation.SceneLayer = {
+    context: null,
+    entry: null,
+    cache: new Map(),
+    deadlines: new Map(),
+    live: new Set(),
+    frame: [],
+    drawn: new Set(),
+    cleared: new Set(),
+    depth: null,
+    dirty: false,
+    warned: false,
+    installed: false,
+    stats: { draws: 0, hdrPasses: 0, ms: 0 },
+    camera: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1],
+
+    renderer() {
+        return typeof Graphics !== "undefined" && Graphics._app ? Graphics._app.renderer : null;
+    },
+    /** Whether screen animations play in the scene now. */
+    active() {
+        if (Graphics.effekseerInScene === false || typeof effekseer === "undefined" || !PIXI.RenderContainer) return false;
+        const r = this.renderer();
+        return !!(r && r.gl && r.context && r.context.webGLVersion === 2 && typeof r.resetState === "function" && !r.gl.isContextLost());
+    },
+    /** PIXI's caches after another engine has driven its context. */
+    resetPixi(renderer) {
+        renderer.resetState();
+        // resetState believes the empty texture is bound everywhere; nulls force a real bind.
+        if (renderer.texture && Array.isArray(renderer.texture._boundTextures)) renderer.texture._boundTextures.fill(null);
+    },
+    /** GL work on PIXI's context outside a draw (allocation, compiles): PIXI is reset after. */
+    guard(fn) {
+        const r = this.renderer();
+        try {
+            r.gl.bindVertexArray(null);
+            return fn(r.gl, r);
+        } finally {
+            Graphics.effekseer?._makeContextCurrent?.();
+            this.resetPixi(r);
+        }
+    },
+    ensureContext() {
+        if (this.context) return this.context;
+        this.install();
+        this.guard(gl => {
+            const context = effekseer.createContext();
+            context.init(gl);
+            // Each draw sets what it needs; PIXI's caches are reset after it.
+            context.setRestorationOfStatesFlag(false);
+            this.context = context;
+            this.entry = { context, disposed: false, inScene: true };
+        });
+        return this.context;
+    },
+    /** Take a screen animation into the scene; false leaves it to the overlay. */
+    adopt(sprite) {
+        if (!this.active()) return false;
+        // A 3D map's anchored effect draws in its world, from the overlay's context.
+        if (typeof Reactor3D !== "undefined" && Reactor3D._spawningAnchored) return false;
+        try {
+            this.ensureContext();
+        } catch (e) {
+            if (!this.warned) { this.warned = true; console.warn("[Sprite_Animation] in-scene Effekseer unavailable; using the overlay:", e); }
+            Graphics.effekseerInScene = false;
+            return false;
+        }
+        sprite._effectContext = this.entry;
+        sprite._effekseerInScene = true;
+        if (!sprite._effekseerDraw) {
+            const drawer = new PIXI.RenderContainer({
+                render: renderer => this.draw(renderer, sprite),
+                // The whole screen: an effect's reach is not known ahead, and a
+                // filtered parent sizes its pass from its children's bounds.
+                addBounds: bounds => {
+                    const a = drawer.toLocal(new PIXI.Point(0, 0)), b = drawer.toLocal(new PIXI.Point(Graphics.width, Graphics.height));
+                    bounds.addFrame(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y));
+                }
+            });
+            drawer.label = "effekseer";
+            sprite._effekseerDraw = drawer;
+            sprite.addChild(drawer);
+        }
+        this.live.add(sprite);
+        return true;
+    },
+    release(sprite) {
+        this.live.delete(sprite);
+        this.drawn.delete(sprite);
+    },
+    /** An effect in the scene's context, loaded once. */
+    load(name) {
+        if (this.cache.has(name)) return this.cache.get(name);
+        const context = this.ensureContext();
+        const url = EffectManager.makeUrl(name);
+        context._makeContextCurrent?.();
+        try {
+            // Its textures upload when their images arrive, outside any draw: PIXI is reset before the next render.
+            const effect = context.loadEffect(url, 1, () => { this.dirty = true; Graphics.effekseer?._makeContextCurrent?.(); }, () => {
+                this.cache.delete(name);
+                this.dirty = true;
+                EffectManager.onError(url);
+            });
+            if (effect && typeof effect._update === "function") {
+                const update = effect._update, layer = this;
+                effect._update = function(...args) {
+                    try { return update.apply(this, args); } finally { layer.dirty = true; }
+                };
+            }
+            this.cache.set(name, effect);
+            return effect;
+        } finally {
+            Graphics.effekseer?._makeContextCurrent?.();
+        }
+    },
+    /** EffectManager.preload's in-scene counterpart: the scene waits for it, up to PRELOAD_WAIT_MS. */
+    preload(name) {
+        if (!name || this.cache.has(name)) return false;
+        const effect = this.load(name);
+        if (!effect) return false;
+        this.deadlines.set(name, performance.now() + EffectManager.PRELOAD_WAIT_MS);
+        return true;
+    },
+    isReady() {
+        const now = performance.now();
+        for (const [name, effect] of this.cache) {
+            if (effect.isLoaded) continue;
+            const deadline = this.deadlines.get(name);
+            if (deadline === undefined || now < deadline) return false;
+        }
+        return true;
+    },
+    /** Steps the scene's effects with `step`: the overlay context's update, battle slow motion included. */
+    update(step) {
+        if (!this.context || typeof step !== "function") return;
+        try { this.context._makeContextCurrent?.(); step.call(this.context); } finally { Graphics.effekseer?._makeContextCurrent?.(); }
+    },
+    stopAll() {
+        if (this.context) this.context.stopAll();
+    },
+    install() {
+        if (this.installed) return;
+        this.installed = true;
+        if (Graphics._reactorBeforeRender) {
+            Graphics._reactorBeforeRender.add(() => {
+                this.frame.length = 0;
+                this.drawn.clear();
+                this.cleared.clear();
+                if (this.dirty) {
+                    this.dirty = false;
+                    const r = this.renderer();
+                    if (r && r.gl && !r.gl.isContextLost()) this.resetPixi(r);
+                }
+            });
+        }
+        const canvas = Graphics._canvas;
+        if (canvas && canvas.addEventListener) {
+            canvas.addEventListener("webglcontextlost", () => this.lost());
+            canvas.addEventListener("webglcontextrestored", () => this.restored());
+        }
+    },
+    /**
+     * PIXI's context is gone, and the scene's Effekseer context with it. Its
+     * animations end (a battle must not wait on a stranded handle); the next
+     * ones play on the overlay until the context is back, then here again.
+     */
+    lost() {
+        for (const sprite of this.live) {
+            try { sprite._handle?.stop(); } catch (e) { /* nothing left to stop */ }
+            sprite._handle = null;
+            sprite._playing = false;
+            sprite._started = false;
+            sprite._hdrActive = false;
+        }
+        this.live.clear();
+        if (this.entry) this.entry.disposed = true;
+        if (this.context) {
+            try { effekseer.releaseContext(this.context); } catch (e) { /* its GL objects went with the context */ }
+        }
+        this.context = null;
+        this.entry = null;
+        this.cache.clear();
+        this.deadlines.clear();
+        this.depth = null;
+        globalThis.ReactorHdrOverlay?.scene?.lost();
+    },
+    restored() {
+        globalThis.ReactorHdrOverlay?.scene?.restored();
+    },
+
+    /**
+     * Where PIXI is drawing now: `project` maps a global point to the
+     * target's GL pixels. Inside a filter the target is the filter's texture,
+     * offset to the filter's bounds and stored upside down (`flipped`).
+     */
+    view(renderer) {
+        const data = renderer.globalUniforms.globalUniformData;
+        const vp = renderer.renderTarget.viewport;
+        return Sprite_Animation.SceneLayer.mapping(data.projectionMatrix, data.offset, vp);
+    },
+    mapping(projection, offset, viewport) {
+        const P = projection, ox = offset ? offset.x : 0, oy = offset ? offset.y : 0;
+        const vp = { x: viewport.x, y: viewport.y, w: viewport.width, h: viewport.height };
+        return {
+            vp,
+            // Target pixels per global unit.
+            ppu: Math.abs(P.a) * vp.w / 2,
+            flipped: P.d > 0,
+            project(gx, gy) {
+                const x = gx - ox, y = gy - oy;
+                const cx = P.a * x + P.c * y + P.tx, cy = P.b * x + P.d * y + P.ty;
+                return { x: vp.x + (cx + 1) / 2 * vp.w, y: vp.y + (cy + 1) / 2 * vp.h };
+            }
+        };
+    },
+    /**
+     * What PIXI has bound, from PIXI's own records: reading it back from GL
+     * waits for the GPU to catch up (1.4 ms a draw measured on a busy map).
+     * The canvas's framebuffer is null; a texture's is its GlRenderTarget's.
+     */
+    save(gl, renderer) {
+        const system = renderer.renderTarget, target = system.renderTarget;
+        const gpu = target && typeof system.getGpuRenderTarget === "function" ? system.getGpuRenderTarget(target) : null;
+        const vp = system.viewport;
+        return { framebuffer: gpu && gpu.framebuffer || null, viewport: [vp.x, vp.y, vp.width, vp.height], lent: false };
+    },
+    restore(gl, saved, renderer) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, saved.framebuffer);
+        if (saved.lent) gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, null);
+        gl.frontFace(gl.CCW);
+        gl.viewport(saved.viewport[0], saved.viewport[1], saved.viewport[2], saved.viewport[3]);
+        // PIXI 8 never scissors; its stencil masks say whether the test is on.
+        gl.disable(gl.SCISSOR_TEST);
+        const stencil = renderer.stencil && renderer.stencil._stencilCache;
+        if (stencil && stencil.enabled) gl.enable(gl.STENCIL_TEST); else gl.disable(gl.STENCIL_TEST);
+        Graphics.effekseer?._makeContextCurrent?.();
+        this.resetDrawState(renderer);
+    },
+    /**
+     * PIXI's caches of what a draw changes, in the middle of PIXI's render:
+     * blend and depth state, textures, the program, the vertex array and
+     * buffers, and the colour mask. resetState() would also forget the render
+     * target PIXI is drawing to, which the framebuffer and viewport put back
+     * above still match.
+     */
+    resetDrawState(renderer) {
+        for (const name of ["state", "texture", "shader", "geometry", "buffer"]) {
+            if (renderer[name] && typeof renderer[name].resetState === "function") renderer[name].resetState();
+        }
+        if (renderer.texture && Array.isArray(renderer.texture._boundTextures)) renderer.texture._boundTextures.fill(null);
+        const mask = renderer.colorMask ? renderer.colorMask._colorMaskCache : 15;
+        renderer.gl.colorMask(!!(mask & 8), !!(mask & 4), !!(mask & 2), !!(mask & 1));
+    },
+    /**
+     * A depth buffer for Effekseer's depth-tested layers, cleared once per
+     * target per frame as the overlay's was. The canvas has one; a filter's
+     * texture does not, so one is lent for the draw.
+     */
+    withDepth(gl, renderer, saved) {
+        const target = renderer.renderTarget.renderTarget;
+        const key = target ? target.uid : 0;
+        if (saved.framebuffer) {
+            const type = name => gl.getFramebufferAttachmentParameter(gl.FRAMEBUFFER, name, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
+            if (type(gl.DEPTH_ATTACHMENT) === gl.NONE && type(gl.DEPTH_STENCIL_ATTACHMENT) === gl.NONE) {
+                const w = target.pixelWidth, h = target.pixelHeight;
+                if (!this.depth) this.depth = { rb: gl.createRenderbuffer(), w: 0, h: 0 };
+                if (this.depth.w !== w || this.depth.h !== h) {
+                    gl.bindRenderbuffer(gl.RENDERBUFFER, this.depth.rb);
+                    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+                    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+                    this.depth.w = w; this.depth.h = h;
+                    this.cleared.clear();
+                }
+                gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depth.rb);
+                saved.lent = true;
+            }
+        }
+        if (!this.cleared.has(key)) {
+            this.cleared.add(key);
+            gl.depthMask(true);
+            gl.clear(gl.DEPTH_BUFFER_BIT);
+        }
+    },
+    /**
+     * Draw `sprites`' handles through `view`, into a buffer `scale` times
+     * the target's pixels whose origin is the target viewport's (the HDR
+     * light), or into the target itself (scale 1, `inTarget`).
+     */
+    drawHandles(gl, renderer, view, sprites, scale, inTarget) {
+        const context = this.context;
+        const height = Graphics.height * view.ppu * scale;
+        const side = Sprite_Animation.effekseerViewportSide(Graphics.height) * view.ppu * scale;
+        gl.frontFace(view.flipped ? gl.CW : gl.CCW);
+        for (const sprite of sprites) {
+            const pos = sprite.effekseerScreenPosition(renderer);
+            const at = view.project(pos.x, pos.y);
+            const cx = inTarget ? at.x : (at.x - view.vp.x) * scale, cy = inTarget ? at.y : (at.y - view.vp.y) * scale;
+            const rect = { x: Math.round(cx - side / 2), y: Math.round(cy - side / 2), side: Math.round(side) };
+            const projection = Sprite_Animation.effekseerProjection(height, rect.side, sprite._mirror).slice();
+            // A target stored upside down: the effect is drawn upside down into it (its winding with it).
+            if (view.flipped) for (const i of [1, 5, 9, 13]) projection[i] = -projection[i];
+            // The scene beneath the effect, for its distortion layers: what this target holds now.
+            if (inTarget && context.captureBackground) context.captureBackground(rect.x, rect.y, rect.side, rect.side);
+            context.setProjectionMatrix(projection);
+            context.setCameraMatrix(this.camera);
+            gl.viewport(rect.x, rect.y, rect.side, rect.side);
+            context.beginDraw();
+            context.drawHandle(sprite._handle);
+            context.endDraw();
+            this.stats.draws++;
+        }
+    },
+    /** One animation's draw, from its RenderContainer during PIXI's render. */
+    draw(renderer, sprite) {
+        if (!this.context || sprite._reactorInScene || !sprite._handle || !sprite._handle.exists || !sprite._targets.length) return;
+        if (sprite._hdrActive) return this.drawHdr(renderer, sprite);
+        const gl = renderer.gl, saved = this.save(gl, renderer), start = performance.now();
+        try {
+            const view = this.view(renderer);
+            gl.bindVertexArray(null);
+            this.withDepth(gl, renderer, saved);
+            this.context._makeContextCurrent?.();
+            this.drawHandles(gl, renderer, view, [sprite], 1, true);
+        } catch (e) {
+            this.warnOnce(e);
+        } finally {
+            this.restore(gl, saved, renderer);
+            this.stats.ms += performance.now() - start;
+        }
+    },
+    /**
+     * The HDR animations of one grade in this animation's container, drawn
+     * once into the light buffer at the game's own size (as the overlay draws
+     * it), bloomed, graded and screened into the target where they sit.
+     */
+    drawHdr(renderer, sprite) {
+        if (this.drawn.has(sprite)) return;
+        const hdr = globalThis.ReactorHdrOverlay.scene;
+        const sc = hdr.sidecar(sprite);
+        const group = this.frame.filter(other => other !== sprite && other._hdrActive && other.parent === sprite.parent
+            && other._handle && other._handle.exists && hdr.sidecar(other) && hdr.sidecar(other).grade === sc.grade);
+        group.unshift(sprite);
+        for (const member of group) this.drawn.add(member);
+        const gl = renderer.gl, saved = this.save(gl, renderer), start = performance.now();
+        try {
+            const view = this.view(renderer);
+            const scale = 1 / Math.max(1, renderer.resolution || 1);
+            const R = hdr.renderer(gl);
+            gl.bindVertexArray(null);
+            if (!R.ensure(Math.max(1, Math.round(view.vp.w * scale)), Math.max(1, Math.round(view.vp.h * scale)))) throw Error("no HDR targets on PIXI's context");
+            R.begin();
+            this.context._makeContextCurrent?.();
+            this.drawHandles(gl, renderer, view, group, scale, false);
+            R.post(Object.assign(hdr.settings(sc), {
+                framebuffer: saved.framebuffer,
+                // The bloom's radii are fractions of the game screen's width, in the light's pixels.
+                bloomWidth: Graphics.width * view.ppu * scale,
+                pixelScale: view.ppu * scale
+            }), sc, { x: view.vp.x, y: view.vp.y, w: view.vp.w, h: view.vp.h });
+            this.stats.hdrPasses++;
+        } catch (e) {
+            console.warn("[Sprite_Animation] in-scene HDR pass failed; playing the twin:", e);
+            for (const member of group) hdr.fallBack(member);
+        } finally {
+            this.restore(gl, saved, renderer);
+            this.stats.ms += performance.now() - start;
+        }
+    },
+    warnOnce(e) {
+        if (Sprite_Animation._effekseerDrawWarned) return;
+        Sprite_Animation._effekseerDrawWarned = true;
+        console.warn("[Sprite_Animation] in-scene Effekseer draw threw; effects will not render until this is fixed:", e);
+    }
+};
+
 Sprite_Animation.prototype._render = function(renderer) {
     // v8 onRender callbacks can run for hidden sprites. This handle already
     // renders at its world anchor; the screen overlay would draw it twice.
     if (this._reactorInScene) return;
+    // Drawn by its own RenderContainer during PIXI's render; noted for this
+    // frame so HDR animations of one grade can share a light pass.
+    if (this._effekseerInScene) {
+        if (this._targets.length > 0 && this._handle && this._handle.exists) Sprite_Animation.SceneLayer.frame.push(this);
+        return;
+    }
     if (this._targets.length > 0 && this._handle && this._handle.exists) {
         if (PIXI.TextureSource) {
             // v8: defer to post-render flush; just queue self. Actual Effekseer
@@ -2881,7 +3349,8 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
 // Square per-effect viewport side. Distortion is zero at the viewport
 // center regardless of size; the side only bounds how far an effect can
 // extend from its target before clipping at the viewport edge (±ch here).
-Sprite_Animation.effekseerViewportSide = function() {
+Sprite_Animation.effekseerViewportSide = function(height) {
+    if (height > 0) return height * 2;
     const canvas = Graphics._effekseerCanvas;
     // Twice the screen's height: an effect reaches a screen's height from its
     // target before the viewport's edge cuts it (a bigger one costs a bigger
@@ -6108,9 +6577,11 @@ Spriteset_Map.prototype.updateReactorLighting2D = function() {
     if (typeof Reactor3D === "undefined" || !Reactor3D.lightingEnabled) return;
     // The 3D light pass renders these same lights when it exists; the flat
     // composite covers every other case, including a 3D map that fell back.
+    // Database > Reactor Features can leave 2D lighting to a lighting plugin.
     const active = !this._reactor3dLights
         && !(this._reactor3dBelow && Reactor3D.lightModeFor($dataMap) === "volume")
-        && typeof $dataMap !== "undefined" && Reactor3D.lightingEnabled($dataMap);
+        && typeof $dataMap !== "undefined" && Reactor3D.lightingEnabled($dataMap)
+        && (typeof ReactorFeatures === "undefined" || ReactorFeatures.on("mapLighting2D"));
     if (!active) {
         if (this._reactorFlatLights) this.destroyReactorLighting2D();
         return;
@@ -6883,11 +7354,13 @@ Spriteset_Map.prototype.update = function() {
 })();
 
 //-----------------------------------------------------------------------------
-// Character sheets with their own frame count, named "Name[f8]" (the VX Ace
-// Victor Engine Multi Frames convention). Only when System.json sets
-// rrMultiFrames, which an import from such a game writes: an MV or MZ project
-// keeps three frames whatever its files are called. A [fN] sheet has N frames
-// per row, cycles 0..N-1 and rests on frame 0.
+// Character sheets with their own frame count, named "Name[8F]" (as the 3D
+// Character Builder exports them) or "Name[F8]" (the VX Ace Victor Engine
+// Multi Frames convention). Only when System.json sets rrMultiFrames, which an
+// import from such a game or such an export writes: an MV or MZ project keeps
+// three frames whatever its files are called. An [NF] sheet has N frames per
+// row, cycles 0..N-1 and rests on frame 0; with [8D] too, each of its eight
+// blocks is N frames wide.
 //-----------------------------------------------------------------------------
 
 const _rrMultiPatternWidth = Sprite_Character.prototype.patternWidth;
@@ -6906,7 +7379,7 @@ Sprite_Character.prototype.characterBlockX = function() {
 
 //-----------------------------------------------------------------------------
 // Character sheets tagged "[8D]" (ImageManager.isEightDirCharacter): eight
-// blocks of 3 frames x 4 rows, cut as an eight-character sheet whatever the
+// blocks of 3 frames x 4 rows (N frames with [NF]), cut as an eight-character sheet whatever the
 // "$" says. Blocks 0, 2 and 4 face down, left, right and up; the block to the
 // right of each holds its diagonals, rows down-left, down-right, up-left and
 // up-right. A character on block 0 shows block 2 while it dashes; on block 0,
@@ -6959,7 +7432,7 @@ Sprite_Character.prototype.updateCharacterFrame = function() {
 
 const _rr8DBlockX = Sprite_Character.prototype.characterBlockX;
 Sprite_Character.prototype.characterBlockX = function() {
-    return this._rr8D ? (this._rr8D.block % 4) * 3 : _rr8DBlockX.call(this);
+    return this._rr8D ? (this._rr8D.block % 4) * (Game_CharacterBase.rrFramesOf(this._characterName) || 3) : _rr8DBlockX.call(this);
 };
 
 const _rr8DBlockY = Sprite_Character.prototype.characterBlockY;
@@ -6970,6 +7443,41 @@ Sprite_Character.prototype.characterBlockY = function() {
 const _rr8DPatternY = Sprite_Character.prototype.characterPatternY;
 Sprite_Character.prototype.characterPatternY = function() {
     return this._rr8D && this._rr8D.row >= 0 ? this._rr8D.row : _rr8DPatternY.call(this);
+};
+
+//-----------------------------------------------------------------------------
+// Character sheets tagged "[1D]" (ImageManager.isOneDirCharacter): one row per
+// character, shown whichever way the character faces: a prop that looks the
+// same from every side (a tree in the wind, a lamp). A "$" sheet is that one
+// row; otherwise eight characters, four across and two down, a row each. With
+// [NF] the row has N frames. [8D] wins over [1D].
+//-----------------------------------------------------------------------------
+
+/** Whether a sprite shows a [1D] sheet (and no [8D] one). */
+Sprite_Character.prototype.rrOneDir = function() {
+    if (this._rr1DName !== this._characterName) {
+        this._rr1DName = this._characterName;
+        this._rr1DSheet = !!this._characterName && !!ImageManager.isOneDirCharacter && ImageManager.isOneDirCharacter(this._characterName)
+            && !ImageManager.isEightDirCharacter(this._characterName);
+    }
+    return this._tileId > 0 ? false : this._rr1DSheet;
+};
+
+const _rr1DPatternHeight = Sprite_Character.prototype.patternHeight;
+Sprite_Character.prototype.patternHeight = function() {
+    if (!this.bitmap || !this.rrOneDir()) return _rr1DPatternHeight.call(this);
+    return this._isBigCharacter ? this.bitmap.height : this.bitmap.height / 2;
+};
+
+const _rr1DBlockY = Sprite_Character.prototype.characterBlockY;
+Sprite_Character.prototype.characterBlockY = function() {
+    if (!this.rrOneDir()) return _rr1DBlockY.call(this);
+    return this._isBigCharacter ? 0 : Math.floor(this._character.characterIndex() / 4);
+};
+
+const _rr1DPatternY = Sprite_Character.prototype.characterPatternY;
+Sprite_Character.prototype.characterPatternY = function() {
+    return this.rrOneDir() ? 0 : _rr1DPatternY.call(this);
 };
 
 //-----------------------------------------------------------------------------

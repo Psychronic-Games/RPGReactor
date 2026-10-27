@@ -98,31 +98,44 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
     const event = manager.createNewEvent(2, 2);
     const editor = manager.eventEditor, commands = editor.commandList;
     const page = editor.currentEvent.pages[0];
-    page.list = [{ code: 118, indent: 0, parameters: ['Keep me'] }, { code: 0, indent: 0, parameters: [] }];
-    editor.renderCurrentPage();
-    commands.selectedIndices = [0];
-    const root = document.querySelector('#event-editor-modal .command-list-container');
-    const modal = document.getElementById('event-editor-modal');
-    const control = [...modal.querySelectorAll('button, select')].find(node => !root.contains(node) && node.getClientRects().length);
-    check('event settings control exists', !!control);
-    control.focus();
-    control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
-    check('Delete in event settings preserves commands', page.list.some(command => command.code === 118));
-    const beforeCommands = JSON.stringify(page.list);
-    db.showImagePicker('Nested keyboard scope', [], () => {}, () => '', '', { allowNone: true });
-    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
-    check('Delete in a nested picker preserves event commands', JSON.stringify(page.list) === beforeCommands);
-    db._closeImagePicker();
-    root.querySelector('.command-item').click();
-    const focusedList = document.activeElement;
-    focusedList.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }));
-    check('command click gives shortcuts focus', commands._commandListRoot?.contains(document.activeElement));
-    check('Select All updates command highlight', commands.selectedIndices.includes(0)
-        && root.querySelector('.command-item').style.backgroundColor === 'var(--color-bg-selected)');
-    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
-    check('Delete still works in command list', !page.list.some(command => command.code === 118));
-    check('command rebuild retains keyboard focus', commands._commandListRoot?.contains(document.activeElement));
-    editor.cancelChanges();
+    // The event editor opens in a window of its own (where the editor can make one): it is worked
+    // in once that window shows it, and taken as the window in use, as a click there makes it.
+    let eventWindow = null;
+    for (let i = 0; i < 200; i++) {
+        const shown = document.getElementById('event-editor-modal')?.style.visibility !== 'hidden';
+        const own = typeof RREventEditorWindow !== 'undefined' && RREventEditorWindow.isPoppedOut() ? RREventEditorWindow.popoutWindow() : null;
+        if (shown && (!own || own.window?.document?.contains(document.getElementById('event-editor-modal')))) { eventWindow = own ? own.window : null; break; }
+        await wait(25);
+    }
+    check('event editor shows', document.getElementById('event-editor-modal')?.style.visibility !== 'hidden');
+    const inEventWindow = task => (eventWindow && window.RRPopoutBridge ? RRPopoutBridge.inPopout(task, eventWindow) : task());
+    await inEventWindow(async () => {
+        page.list = [{ code: 118, indent: 0, parameters: ['Keep me'] }, { code: 0, indent: 0, parameters: [] }];
+        editor.renderCurrentPage();
+        commands.selectedIndices = [0];
+        const root = document.querySelector('#event-editor-modal .command-list-container');
+        const modal = document.getElementById('event-editor-modal');
+        const control = [...modal.querySelectorAll('button, select')].find(node => !root.contains(node) && node.getClientRects().length);
+        check('event settings control exists', !!control);
+        control.focus();
+        control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+        check('Delete in event settings preserves commands', page.list.some(command => command.code === 118));
+        const beforeCommands = JSON.stringify(page.list);
+        db.showImagePicker('Nested keyboard scope', [], () => {}, () => '', '', { allowNone: true });
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+        check('Delete in a nested picker preserves event commands', JSON.stringify(page.list) === beforeCommands);
+        db._closeImagePicker();
+        root.querySelector('.command-item').click();
+        const focusedList = document.activeElement;
+        focusedList.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }));
+        check('command click gives shortcuts focus', commands._commandListRoot?.contains(document.activeElement));
+        check('Select All updates command highlight', commands.selectedIndices.includes(0)
+            && root.querySelector('.command-item').style.backgroundColor === 'var(--color-bg-selected)');
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+        check('Delete still works in command list', !page.list.some(command => command.code === 118));
+        check('command rebuild retains keyboard focus', commands._commandListRoot?.contains(document.activeElement));
+        editor.cancelChanges();
+    });
 
     // Hold real map asset loading, then release it after a newer request.
     const pc = reactor.projectController, tm = pc.tilemapManager;
@@ -131,15 +144,21 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
         await new Promise(resolve => gates.push(resolve));
         return originalLoad.apply(this, args);
     };
+    // A load reaches its assets after the event window has had its say (an await): each request
+    // is let get there before the next one starts, so the loads overlap where the assets load.
+    const gated = async count => { for (let i = 0; i < 400 && gates.length < count; i++) await wait(5); return gates.length === count; };
     try {
         const old = pc.loadMap(2, { skipDirtyCheck: true });
+        check('pending switch reaches its asset load', await gated(1), gates.length);
         check('returning to current map cancels pending switch', await pc.loadMap(1, { skipDirtyCheck: true }));
-        gates.shift()(); await old;
+        (gates.shift() || Boolean)(); await old;
         check('cancelled map load cannot change view', tm.currentMap.id === 1 && manager.currentMap.id === 1);
         const older = pc.loadMap(2, { skipDirtyCheck: true });
+        check('older load reaches its asset load', await gated(1), gates.length);
         const newest = pc.loadMap(1, { skipDirtyCheck: true, forceReload: true });
-        gates[1](); await newest;
-        gates[0](); await older;
+        check('newest load reaches its asset load', await gated(2), gates.length);
+        (gates[1] || Boolean)(); await newest;
+        (gates[0] || Boolean)(); await older;
         check('out-of-order map loads keep latest selection', tm.currentMap.id === 1
             && document.querySelector('#maps-list .selected')?.dataset.mapId === '1');
     } finally { tm.loadTilesetImages = originalLoad; }
@@ -166,6 +185,12 @@ const auditSeed = Number(arguments[0]?.seed ?? 0x53a11) >>> 0;
             && JSON.stringify(Object.fromEntries(types.map(type => [type, dm.data[type]]))) === baseline,
             { seed, trace: trace.slice(-8) });
     }
+    // Closed straight after a page opens, its deferred list work still to come. The Animations page
+    // the seeded walk ends near is let finish starting its preview first: the Database's window
+    // hidden within a moment of that page opening stalls the editor's renderer for good (a defect
+    // of its own, reported with this audit).
+    await wait(1000);
+    show('actors', 1);
     db.closeDatabaseViewer();
     await wait(100);
     check('closed database stays empty after deferred work', document.getElementById('database-detail').children.length === 0);

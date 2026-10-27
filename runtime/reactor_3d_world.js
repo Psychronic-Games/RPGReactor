@@ -404,7 +404,7 @@ Reactor3D.shapeSolidAt = function(kind, lx, lz, hw, hd, slack, sweep, thick) {
 Reactor3D.shapeSize = function(piece) {
     const size = Array.isArray(piece.size) ? piece.size : null;
     const n = (v, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fallback);
-    return size ? [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))] : [1, this.pieceHeight(piece.kind), 1];
+    return size ? [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))] : [1, this.pieceHeight(piece.kind, piece), 1];
 };
 /** The cells a piece's footprint covers: one for a cell piece, w by d round the middle for a shape. */
 Reactor3D.pieceFootprint = function(piece) {
@@ -510,9 +510,26 @@ Reactor3D.PIECE_FLOOR_THICKNESS = 0.1;
  * walls, steps and anything built up by hand.
  */
 Reactor3D.PIECE_STOREY = 5;
-Reactor3D.pieceHeight = function(kind) {
+Reactor3D.pieceHeight = function(kind, piece) {
+    // A wall, a pane of glass and a pillar may be given a height of their own (a garden wall, a tall hall).
+    if (piece && piece.height > 0 && this.SIZED_KINDS.includes(kind)) return piece.height;
+    // A roof's ridge over its eaves: steeper or flatter than the 45-degree gable.
+    if (kind === "roof" && piece && piece.rise > 0) return piece.rise;
     return kind === "wall" || kind === "doorway" || kind === "window" || kind === "pillar" || kind === "glass" ? this.PIECE_STOREY : 1;
 };
+/** The cell pieces that take a `height` of their own (pieceHeight), in tiles from MIN to MAX_PIECE_HEIGHT. */
+Reactor3D.SIZED_KINDS = ["wall", "glass", "pillar", "doorway", "window", "fence"];
+/** How thick a pillar is across, in tiles (0.4 when it says nothing; 0.1 a pole to 1 a tile-wide column). */
+Reactor3D.pillarThick = function(piece) {
+    const t = Number(piece && piece.thick);
+    return Number.isFinite(t) && t > 0 ? Math.max(0.1, Math.min(1, t)) : 0.4;
+};
+/** A roof's rise when it has none, and how far it goes either way, in tiles. */
+Reactor3D.ROOF_RISE = { min: 0.25, max: 6 };
+/** A fence's own height when it is given none, in tiles (its posts; it blocks a walker to 1). */
+Reactor3D.FENCE_HEIGHT = 1.5;
+Reactor3D.MIN_PIECE_HEIGHT = 0.5;
+Reactor3D.MAX_PIECE_HEIGHT = 40;
 
 /**
  * The finishes a built piece can wear over its material, as model surfaces
@@ -535,12 +552,17 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
     if (mapData && (x >= mapData.width || y >= mapData.height)) return null;
     const shape = this.isShapeKind(kind);
-    // A shape stands at any quarter tile; a cell piece at a whole level.
-    const z = Math.max(0, Math.min(this.PIECE_MAX_LEVEL, shape ? Math.round((Number(raw.z) || 0) * 4) / 4 : Math.floor(Number(raw.z)) || 0));
+    // A shape, a floor and a block stand at any quarter tile (a raised dais, a slab under a lifted fountain); the rest at a whole level.
+    const quarter = shape || raw.kind === "floor" || raw.kind === "block";
+    const z = Math.max(0, Math.min(this.PIECE_MAX_LEVEL, quarter ? Math.round((Number(raw.z) || 0) * 4) / 4 : Math.floor(Number(raw.z)) || 0));
+    // A wall's, glass's or pillar's own height, to the quarter tile; the storey it stands when it has none.
+    const tall = this.SIZED_KINDS.includes(raw.kind) && Number(raw.height) > 0
+        ? Math.max(this.MIN_PIECE_HEIGHT, Math.min(this.MAX_PIECE_HEIGHT, Math.round(Number(raw.height) * 4) / 4)) : 0;
     const rot = ((Math.floor(Number(raw.rot)) || 0) % 4 + 4) % 4;
     const material = typeof raw.material === "string" ? raw.material.trim() : "";
     const id = Number(raw.id);
     const piece = { id: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0, kind, x, y, z, rot, material };
+    if (tall && tall !== this.PIECE_STOREY) piece.height = tall;
     const group = Number(raw.group);
     if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
     if (typeof raw.finish === "string" && Object.prototype.hasOwnProperty.call(this.PIECE_FINISHES, raw.finish)) piece.finish = raw.finish;
@@ -585,11 +607,13 @@ Reactor3D.normalizePiece = function(raw, mapData) {
         const frame = this.normalizeWindowFrame(raw.frame);
         if (frame) piece.frame = frame;
     }
-    // A rock's top (`cap`: a material, or "ground" for the map's own floor) and its tint.
-    if (kind === "rock") {
-        if (typeof raw.cap === "string" && raw.cap.trim()) piece.cap = raw.cap.trim();
-        if (typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint) && raw.tint.toLowerCase() !== "#ffffff") piece.tint = raw.tint.toLowerCase();
-    }
+    // A pillar's thickness across, and a roof's rise, when they are not their own.
+    if (kind === "pillar" && Number(raw.thick) > 0 && Math.abs(Number(raw.thick) - 0.4) > 1e-6) piece.thick = Math.round(Math.max(0.1, Math.min(1, Number(raw.thick))) * 100) / 100;
+    if (kind === "roof" && Number(raw.rise) > 0 && Math.abs(Number(raw.rise) - 1) > 1e-6) piece.rise = Math.round(Math.max(this.ROOF_RISE.min, Math.min(this.ROOF_RISE.max, Number(raw.rise))) * 4) / 4;
+    // A rock's top (`cap`: a material, or "ground" for the map's own floor).
+    if (kind === "rock" && typeof raw.cap === "string" && raw.cap.trim()) piece.cap = raw.cap.trim();
+    // Any piece's `tint`: a colour laid over its material (a red-painted wall without a red material).
+    if (typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint) && raw.tint.toLowerCase() !== "#ffffff") piece.tint = raw.tint.toLowerCase();
     return piece;
 };
 
@@ -749,7 +773,7 @@ Reactor3D.pieceTop = function(piece, u, v) {
                 for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) top = Math.max(top, at(u, y, v)[1]);
                 return top;
             }
-            return piece.z + this.pieceHeight(piece.kind);
+            return piece.z + this.pieceHeight(piece.kind, piece);
     }
 };
 
@@ -1470,13 +1494,17 @@ Reactor3D.MapScene.prototype.updateTerrain = function(mapData, region) {
  */
 Reactor3D.pieceShapes = function(kind, piece) {
     const box = (x0, y0, v0, x1, y1, v1) => ({ box: [x0, y0, v0, x1, y1, v1] });
-    const S = this.PIECE_STOREY;
+    const S = this.PIECE_STOREY, H = this.pieceHeight(kind, piece);
     const params = this.shapeParams(piece || { kind });
     switch (kind) {
-        case "wall": return [box(0, 0, 0, 1, S, 1)];
+        case "wall": return [box(0, 0, 0, 1, H, 1)];
         case "block": return [box(0, 0, 0, 1, 1, 1)];
         case "floor": return [box(0, 0, 0, 1, this.PIECE_FLOOR_THICKNESS, 1)];
-        case "pillar": return [box(0.24, 0, 0.24, 0.76, 0.12, 0.76), { column: [0.5, 0.5, 0.2, 0.12, S - 0.12] }, box(0.24, S - 0.12, 0.24, 0.76, S, 0.76)];
+        case "pillar": {
+            // `thick` across (0.1-1 of a tile, 0.4 when none): the column, and its plinth and cap a little wider.
+            const r = this.pillarThick(piece) / 2, b = Math.min(0.5, r + 0.06);
+            return [box(0.5 - b, 0, 0.5 - b, 0.5 + b, 0.12, 0.5 + b), { column: [0.5, 0.5, r, 0.12, H - 0.12] }, box(0.5 - b, H - 0.12, 0.5 - b, 0.5 + b, H, 0.5 + b)];
+        }
         case "stair": {
             const steps = [0, 1, 2, 3].map(i => box(0, 0, i * 0.25, 1, (i + 1) * 0.25, 1));
             // A step above what it stands on has a solid down to it: a plan lays no slab under a stair,
@@ -1487,7 +1515,8 @@ Reactor3D.pieceShapes = function(kind, piece) {
             return drop > 0 ? steps.concat([box(0, -drop, 0, 1, 0, 1)]) : steps;
         }
         case "ramp": return [{ wedge: true }];
-        case "roof": return [{ gable: true }];
+        // Its ridge `rise` tiles over its eaves (1 when none: the 45-degree gable plans lay).
+        case "roof": return [{ gable: true, rise: H }];
         // A level of ladder against the side it climbs toward (+v): two rails, two rungs.
         case "ladder": {
             // Beside another level of ladder (a wide ladder), the shared side has no rail and the
@@ -1505,13 +1534,30 @@ Reactor3D.pieceShapes = function(kind, piece) {
         // two tiles wide — 1.2 m, a door a person walks through — and one
         // alone is a narrow 60 cm gap. A window is the same with a sill
         // under the hole and a header over it.
-        case "doorway": return [box(0, S - 0.6, 0, 1, S, 1)];
-        case "window": return [box(0, 0, 0, 1, 1.5, 1), box(0, S - 1.4, 0, 1, S, 1)];
+        // A doorway's or a window's opening keeps its size in a taller wall: the wall above it reaches the wall's top.
+        // In a wall of another height a doorway's and a window's opening keeps its size (a lower wall's comes down
+        // with it): the wall above the opening reaches the wall's top.
+        case "doorway": return [box(0, Math.min(S, H) - 0.6, 0, 1, H, 1)];
+        case "window": return [box(0, 0, 0, 1, 1.5, 1), box(0, Math.min(S, H) - 1.4, 0, 1, H, 1)];
         // A pane the height of a wall, thin, in the middle of the cell: a viewport, or
         // the glass a plan sets in every window's hole.
-        case "glass": return [box(0, 0, 0.45, 1, S, 0.55)];
+        case "glass": return [box(0, 0, 0.45, 1, H, 0.55)];
         // Waist high on a three-tile character; it still blocks a cell.
-        case "fence": return [box(0.05, 0, 0.42, 0.15, 1.5, 0.58), box(0.85, 0, 0.42, 0.95, 1.5, 0.58), box(0, 0.5, 0.45, 1, 0.62, 0.55), box(0, 1.15, 0.45, 1, 1.27, 0.55)];
+        case "fence": {
+            // Joined to the fences (and walls) beside it (fenceJoin, worked out by pieceGeometry): a post in the
+            // middle and two rails toward each, to the cell's edge or, for a diagonal neighbour, its corner.
+            // Its `height` (1.5 when none) stretches the posts and spaces the rails: a low rail to a palisade.
+            const k = piece && piece.height > 0 ? piece.height / Reactor3D.FENCE_HEIGHT : 1;
+            if (piece && Array.isArray(piece.fenceJoin) && piece.fenceJoin.length) {
+                const out = [box(0.42, 0, 0.42, 0.58, 1.5 * k, 0.58)];
+                for (const [dx, dz] of piece.fenceJoin) {
+                    const ex = 0.5 + dx * 0.5, ez = 0.5 + dz * 0.5;
+                    out.push({ beam: [0.5, 0.5, ex, ez, 0.5 * k, 0.5 * k + 0.12, 0.05] }, { beam: [0.5, 0.5, ex, ez, 1.15 * k, 1.15 * k + 0.12, 0.05] });
+                }
+                return out;
+            }
+            return [box(0.05, 0, 0.42, 0.15, 1.5 * k, 0.58), box(0.85, 0, 0.42, 0.95, 1.5 * k, 0.58), box(0, 0.5 * k, 0.45, 1, 0.5 * k + 0.12, 0.55), box(0, 1.15 * k, 0.45, 1, 1.15 * k + 0.12, 0.55)];
+        }
         // The shapes fill the unit cell; their size stretches the cell.
         case "box": return [box(0, 0, 0, 1, 1, 1)];
         case "wedge": return [{ wedge: true }];
@@ -1569,7 +1615,8 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
         const side = 0.62 + 0.16 * (nx * 0.5 + 0.5) + 0.12 * (nz * 0.5 + 0.5);
         return ny > 0 ? side + (1 - side) * ny : side;
     };
-    // A box may carry its own colour over the material (a shutter's paint, a flower): [r, g, b], 0-1.
+    // A box may carry its own colour over the material (a shutter's paint, a flower): [r, g, b], 0-1; else the piece's tint.
+    const own = piece.tint ? [1, 3, 5].map(i => parseInt(piece.tint.slice(i, i + 2), 16) / 255) : null;
     let tint = null;
     const tri = (a, b, c) => {
         const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
@@ -1594,7 +1641,7 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
     let boxTop = 0;
     for (const shape of shapes) if (shape.box) boxTop = Math.max(boxTop, shape.box[4]);
     for (const shape of shapes) {
-        tint = shape.tint || null;
+        tint = shape.tint || own;
         if (shape.box) {
             const [x0, y0, v0, x1, y1, v1] = shape.box;
             const p = (x, y, v) => place(x, y, v);
@@ -1608,6 +1655,22 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             side(skip.north, v0 <= 1e-6, (a, b) => quad(p(x1, a, v0), p(x0, a, v0), p(x0, b, v0), p(x1, b, v0))); // north
             side(skip.east, x1 >= 1 - 1e-6, (a, b) => quad(p(x1, a, v1), p(x1, a, v0), p(x1, b, v0), p(x1, b, v1))); // east
             side(skip.west, x0 <= 1e-6, (a, b) => quad(p(x0, a, v0), p(x0, a, v1), p(x0, b, v1), p(x0, b, v0))); // west
+        } else if (shape.beam) {
+            // A box laid along a line on the ground (a fence's rail to a diagonal neighbour): the box's faces in
+            // the beam's own frame, turned onto the line (a turn keeps their winding).
+            const [ax, av, bx, bv, y0, y1, w] = shape.beam;
+            const len = Math.hypot(bx - ax, bv - av);
+            if (len > 1e-6) {
+                const c = (bx - ax) / len, s = (bv - av) / len;
+                const p = (x, y, v) => place(ax + x * c - v * s, y, av + x * s + v * c);
+                const x0 = 0, x1 = len, v0 = -w, v1 = w;
+                quad(p(x0, y1, v0), p(x0, y1, v1), p(x1, y1, v1), p(x1, y1, v0)); // top
+                quad(p(x0, y0, v0), p(x1, y0, v0), p(x1, y0, v1), p(x0, y0, v1)); // bottom
+                quad(p(x0, y0, v1), p(x1, y0, v1), p(x1, y1, v1), p(x0, y1, v1));
+                quad(p(x1, y0, v0), p(x0, y0, v0), p(x0, y1, v0), p(x1, y1, v0));
+                quad(p(x1, y0, v1), p(x1, y0, v0), p(x1, y1, v0), p(x1, y1, v1));
+                quad(p(x0, y0, v0), p(x0, y0, v1), p(x0, y1, v1), p(x0, y1, v0));
+            }
         } else if (shape.wedge) {
             // Flat at v 0, a full level at v 1.
             const p = place;
@@ -1618,11 +1681,12 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             tri(p(0, 0, 0), p(0, 0, 1), p(0, 1, 1)); // west
         } else if (shape.gable) {
             const p = place;
-            quad(p(0, 0, 0), p(0, 1, 0.5), p(1, 1, 0.5), p(1, 0, 0)); // north slope
-            quad(p(0, 1, 0.5), p(0, 0, 1), p(1, 0, 1), p(1, 1, 0.5)); // south slope
+            const r = shape.rise > 0 ? shape.rise : 1;
+            quad(p(0, 0, 0), p(0, r, 0.5), p(1, r, 0.5), p(1, 0, 0)); // north slope
+            quad(p(0, r, 0.5), p(0, 0, 1), p(1, 0, 1), p(1, r, 0.5)); // south slope
             quad(p(0, 0, 0), p(1, 0, 0), p(1, 0, 1), p(0, 0, 1)); // bottom
-            tri(p(1, 0, 0), p(1, 1, 0.5), p(1, 0, 1)); // east gable
-            tri(p(0, 0, 0), p(0, 0, 1), p(0, 1, 0.5)); // west gable
+            tri(p(1, 0, 0), p(1, r, 0.5), p(1, 0, 1)); // east gable
+            tri(p(0, 0, 0), p(0, 0, 1), p(0, r, 0.5)); // west gable
         } else if (shape.column) {
             // Round the circle, or round an arc of it centred on +v with flat faces at the ends.
             const [ccx, ccv, r, y0, y1, segs, sweep] = shape.column;
@@ -1853,7 +1917,7 @@ Reactor3D.visibleSpans = function(y0, y1, covered) {
 };
 Reactor3D.hiddenFacesOf = function(piece, mapData) {
     if (!this.HIDDEN_FACE_KINDS.includes(piece.kind) && piece.kind !== "floor") return null;
-    const height = this.pieceHeight(piece.kind);
+    const height = this.pieceHeight(piece.kind, piece);
     // What a neighbouring cell covers of a shared face, as height ranges from
     // the piece's base: a wall or block all of it (true); a window its sill
     // and header, a doorway its header, and the hole between stays open, so
@@ -1863,7 +1927,7 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
         if (!stack) return false;
         let ranges = [];
         for (const other of stack) {
-            if (!this.HIDDEN_FACE_KINDS.includes(other.kind) || other.z !== z || this.pieceHeight(other.kind) !== h) continue;
+            if (!this.HIDDEN_FACE_KINDS.includes(other.kind) || other.z !== z || this.pieceHeight(other.kind, other) !== h) continue;
             if (other.kind === "wall" || other.kind === "block") return true;
             for (const shape of this.pieceShapes(other.kind, other)) {
                 if (!shape.box) continue;
@@ -1873,9 +1937,14 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
         }
         return ranges.length ? this.mergeRanges(ranges) : false;
     };
-    const stoneAt = (x, y, z, h) => {
+    // A wall or block standing at a level (whatever its height), and one whose top is at a level.
+    const stoneAt = (x, y, z) => {
         const stack = mapData ? this.piecesAt(mapData, x, y) : null;
-        return !!stack && stack.some(other => (other.kind === "wall" || other.kind === "block") && other.z === z && this.pieceHeight(other.kind) === h);
+        return !!stack && stack.some(other => (other.kind === "wall" || other.kind === "block") && Math.abs(other.z - z) < 1e-6);
+    };
+    const stoneUnder = (x, y, z) => {
+        const stack = mapData ? this.piecesAt(mapData, x, y) : null;
+        return !!stack && stack.some(other => (other.kind === "wall" || other.kind === "block") && Math.abs(other.z + this.pieceHeight(other.kind, other) - z) < 1e-6);
     };
     const here = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : 0;
     const level = (x, y) => !!mapData && Math.abs(this.pieceBaseAt(mapData, x, y) - here) < 0.02;
@@ -1900,7 +1969,7 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
             south: enclosed || (level(piece.x, piece.y + 1) && covered(piece.x, piece.y + 1)),
             north: enclosed || (level(piece.x, piece.y - 1) && covered(piece.x, piece.y - 1)),
             top: enclosed,
-            bottom: piece.z === 0 || stoneAt(piece.x, piece.y, piece.z - 1, 1) || stoneAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
+            bottom: piece.z === 0 || stoneUnder(piece.x, piece.y, piece.z)
         };
     }
     // Rotation does not change a cube, so the faces are named in world terms and the cube is emitted unturned.
@@ -1909,13 +1978,29 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
         west: level(piece.x - 1, piece.y) && solidAt(piece.x - 1, piece.y, piece.z, height),
         south: level(piece.x, piece.y + 1) && solidAt(piece.x, piece.y + 1, piece.z, height),
         north: level(piece.x, piece.y - 1) && solidAt(piece.x, piece.y - 1, piece.z, height),
-        top: stoneAt(piece.x, piece.y, piece.z + height, 1) || stoneAt(piece.x, piece.y, piece.z + height, this.PIECE_STOREY),
+        top: stoneAt(piece.x, piece.y, piece.z + height),
         // The bottom stays on the ground too: it is what a cut wall shows from above, else the ground.
-        bottom: stoneAt(piece.x, piece.y, piece.z - 1, 1) || stoneAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
+        bottom: stoneUnder(piece.x, piece.y, piece.z)
     };
 };
 
 /** A geometry of the given pieces, each on its own cell's ground. */
+/** The ways a fence joins its neighbours (see pieceShapes): [dx, dz] world steps, the four sides first. */
+Reactor3D.FENCE_JOINS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+Reactor3D.fenceJoins = function(piece, index) {
+    const at = (dx, dz) => index.cells.get((piece.y + dz) * 65536 + piece.x + dx) || [];
+    const fenceAt = (dx, dz) => at(dx, dz).some(other => other.kind === "fence" && Math.abs(other.z - piece.z) < 0.01);
+    const solidAt = (dx, dz) => at(dx, dz).some(other => (other.kind === "wall" || other.kind === "pillar" || other.kind === "glass" || other.kind === "window")
+        && other.z <= piece.z + 0.01 && other.z + this.pieceHeight(other.kind, other) > piece.z + 0.5);
+    const out = [];
+    for (const [dx, dz] of this.FENCE_JOINS) {
+        if (dx && dz) { if (fenceAt(dx, dz) && !fenceAt(dx, 0) && !fenceAt(0, dz)) out.push([dx, dz]); }
+        else if (fenceAt(dx, dz) || solidAt(dx, dz)) out.push([dx, dz]);
+    }
+    // Joined only to walls, it stands as it was laid.
+    return out.some(([dx, dz]) => fenceAt(dx, dz)) ? out : [];
+};
+
 Reactor3D.pieceGeometry = function(pieces, mapData) {
     const out = { positions: [], uvs: [], colors: [] };
     const index = mapData ? this.pieceIndex(mapData) : null;
@@ -1939,6 +2024,12 @@ Reactor3D.pieceGeometry = function(pieces, mapData) {
                 if (stack.some(other => other.kind === "ladder" && other.rot === piece.rot && other.z === piece.z)) join[local.u > 0.5 ? "hi" : "lo"] = true;
             }
             if (join.lo || join.hi) piece = Object.assign({}, piece, { ladderJoin: join });
+        }
+        // A fence joins what stands beside it at its level: a fence on any of its four sides, a wall, pane or pillar
+        // it runs into, and a fence on a diagonal when neither cell between them is fence (a run laid corner to corner).
+        if (piece.kind === "fence" && index) {
+            const join = this.fenceJoins(piece, index);
+            if (join.length) piece = Object.assign({}, piece, { fenceJoin: join, rot: 0 });
         }
         // A raised stair's support stops on the highest piece top under it in its cell.
         if (piece.kind === "stair" && piece.z > 0 && index) {
@@ -3053,7 +3144,7 @@ Reactor3D.MapScene.prototype.updateCutCaps = function(mapData, cutTop, box) {
         if (!Reactor3D.CAPPED_KINDS.includes(piece.kind)) continue;
         if (piece.x + 1 < box[0] || piece.x > box[2] || piece.y + 1 < box[1] || piece.y > box[3]) continue;
         const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z;
-        if (!(base < cutTop - 1e-6 && base + Reactor3D.pieceHeight(piece.kind) > cutTop + 1e-6)) continue;
+        if (!(base < cutTop - 1e-6 && base + Reactor3D.pieceHeight(piece.kind, piece) > cutTop + 1e-6)) continue;
         let list = byMaterial.get(piece.material);
         if (!list) byMaterial.set(piece.material, list = []);
         list.push(piece);
@@ -5221,10 +5312,16 @@ Reactor3D.MapScene.prototype.updateWaterSheets = function(mapData, load) {
 // three at 9, one at 5; trailing none left off). A later type lies over an
 // earlier one. A map without `ground` draws exactly as it did.
 
-Reactor3D.GROUND_TYPES_MAX = 8;
+/**
+ * How many ground types a map draws. The paint of four types is one layer of an array texture, and each type's
+ * tint, scale and maps one column of a small data texture, so the floor's samplers and uniforms are the same however
+ * many there are; types of one material share its picture. What a type costs is a fourth of a splat read where
+ * anything is painted, and a picture's memory per material (GROUND_ARRAY_SIZE squared).
+ */
+Reactor3D.GROUND_TYPES_MAX = 64;
 /** Tiles one repeat of a ground type's image covers, unless the type or its material says. */
 Reactor3D.GROUND_TYPE_SCALE = 4;
-/** The side each ground type's image is kept at on the GPU (they share one array texture), by tier. */
+/** The side each ground material's image is kept at on the GPU (they share one array texture), by tier. */
 Reactor3D.GROUND_ARRAY_SIZE = { full: 512, weak: 256 };
 /** A cell wears a type from this level up (what grows, what lies past the map's edge). */
 Reactor3D.GROUND_SOLID_LEVEL = 5;
@@ -5332,9 +5429,11 @@ Reactor3D.groundMaterialNames = function(mapData) {
 
 /**
  * The ground types as the floor's shader reads them, made once per scene: the
- * paint as one or two RGBA textures (a type a channel, a texel a cell), the
- * types' images as the layers of one array texture and their normal and
- * roughness maps as another, so the floor costs three or four samplers however
+ * paint as an array texture of RGBA layers (four types a layer, a channel each,
+ * a texel a cell), each type's tint, scale, picture and maps as a column of a
+ * small float texture (`info`), the materials' images as the layers of one
+ * array texture and their normal and roughness maps as another (types of one
+ * material share a layer), so the floor costs four or five samplers however
  * many types a map has. A layer is grey until its image arrives.
  */
 Reactor3D.MapScene.prototype.groundLayers = function(mapData) {
@@ -5342,18 +5441,35 @@ Reactor3D.MapScene.prototype.groundLayers = function(mapData) {
     if (!ground || typeof THREE === "undefined" || !THREE.DataArrayTexture || typeof document === "undefined" || !document) return null;
     const W = mapData.width, H = mapData.height, count = ground.types.length, load = this._cliffLoad, build = this._build;
     const side = Reactor3D.GROUND_ARRAY_SIZE[Reactor3D.isWeakGpu && Reactor3D.isWeakGpu() ? "weak" : "full"];
+    // Each material once: the types that wear it read the same layer.
+    const materials = Array.from(new Set(ground.types.map(type => type.material))), layerOf = ground.types.map(type => materials.indexOf(type.material));
+    const groups = Math.ceil(count / 4);
     const splat = () => {
-        const texture = new THREE.DataTexture(new Uint8Array(W * H * 4), W, H, THREE.RGBAFormat);
+        const texture = new THREE.DataArrayTexture(new Uint8Array(W * H * 4 * groups), W, H, groups);
+        texture.format = THREE.RGBAFormat;
+        texture.type = THREE.UnsignedByteType;
         texture.magFilter = THREE.LinearFilter;
         texture.minFilter = THREE.LinearFilter;
         texture.generateMipmaps = false;
+        texture.needsUpdate = true;
+        this._textures.push(texture);
+        return texture;
+    };
+    // A column a type: its tint and repeat; whether its picture is in, which layer, whether it has maps; the maps' settings.
+    const info = () => {
+        const texture = new THREE.DataTexture(new Float32Array(count * 3 * 4), count, 3, THREE.RGBAFormat, THREE.FloatType);
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        texture.needsUpdate = true;
         this._textures.push(texture);
         return texture;
     };
     const layers = (srgb, kept) => {
-        const data = new Uint8Array(side * side * 4 * count);
+        const depth = materials.length;
+        const data = new Uint8Array(side * side * 4 * depth);
         if (srgb) data.fill(128); else for (let i = 0; i < data.length; i += 4) { data[i] = 128; data[i + 1] = 128; data[i + 2] = 255; }
-        const texture = new THREE.DataArrayTexture(data, side, side, count);
+        const texture = new THREE.DataArrayTexture(data, side, side, depth);
         texture.format = THREE.RGBAFormat;
         texture.type = THREE.UnsignedByteType;
         texture.wrapS = THREE.RepeatWrapping;
@@ -5370,24 +5486,35 @@ Reactor3D.MapScene.prototype.groundLayers = function(mapData) {
     // same set: a map, and each neighboring map shown past its borders (Reactor3D.Neighbors).
     Reactor3D.releaseGroundArrays(this);
     const sharing = !!this._materialProbe && !this._materialSettingsLoad;
-    const key = side + "|" + ground.types.map(type => type.material).join("|");
+    const key = side + "|" + materials.join("|");
     let shared = sharing ? Reactor3D._groundArrays.get(key) : null;
     const first = !shared;
     if (first) {
-        shared = { key, array: layers(true, sharing), detail: null, on: new Float32Array(count), detailOn: new Array(count).fill(0), users: new Set(), refs: 0 };
+        shared = { key, array: layers(true, sharing), detail: null, on: new Float32Array(materials.length), detailOn: new Array(materials.length).fill(0), users: new Set(), refs: 0 };
         if (sharing) Reactor3D._groundArrays.set(key, shared);
     }
     if (sharing) { shared.refs++; this._groundShared = shared; }
     const g = this._ground = {
-        count, width: W, height: H,
-        materials: ground.types.map(type => type.material),
+        count, groups, width: W, height: H,
+        materials: ground.types.map(type => type.material), layerOf,
         size: new THREE.Vector2(W, H),
-        splat: splat(), splatB: count > 4 ? splat() : null,
+        splat: splat(), info: info(),
         array: shared.array, detail: shared.detail,
         types: ground.types.map(() => new THREE.Vector4(1, 1, 1, 1 / Reactor3D.GROUND_TYPE_SCALE)),
         on: shared.on,
-        detailParams: ground.types.map((type, index) => new THREE.Vector4(1, 0, 0.5, shared.detailOn[index])),
-        settings: ground.types.map(() => null)
+        detailParams: ground.types.map((type, index) => new THREE.Vector4(1, 0, 0.5, shared.detailOn[layerOf[index]])),
+        settings: ground.types.map(() => null),
+        /** The info texture written again from the types' tints and repeats, which pictures are in and the maps' settings. */
+        sync() {
+            const data = this.info.image.data, n = this.count;
+            for (let i = 0; i < n; i++) {
+                const t = this.types[i], d = this.detailParams[i], layer = this.layerOf[i];
+                data.set([t.x, t.y, t.z, t.w], i * 4);
+                data.set([this.on[layer] || 0, layer, d.w, 0], (n + i) * 4);
+                data.set([d.x, d.y, d.z, d.w], (2 * n + i) * 4);
+            }
+            this.info.needsUpdate = true;
+        }
     };
     shared.users.add(g);
     let canvas = null, context = null;
@@ -5419,36 +5546,40 @@ Reactor3D.MapScene.prototype.groundLayers = function(mapData) {
         if (!bitmap) return;
         if (ready(bitmap)) then(); else if (typeof bitmap.addLoadListener === "function") bitmap.addLoadListener(() => { if (live() && ready(bitmap)) then(); });
     };
-    ground.types.forEach((type, index) => {
-        if (first) {
-            let bitmap = null;
-            try { bitmap = typeof load === "function" ? load(type.material) : null; } catch (error) { bitmap = null; }
-            whenRead(bitmap, () => {
-                try {
-                    const pixels = read(imageOf(bitmap));
-                    store(shared.array, index, (data, to, from) => { data[to] = pixels[from]; data[to + 1] = pixels[from + 1]; data[to + 2] = pixels[from + 2]; data[to + 3] = 255; });
-                    shared.on[index] = 1;
-                } catch (error) {
-                    console.warn(`Reactor3D: ground material "${type.material}" could not be read.`, error);
-                }
-            });
-            const normal = companion(type.material + Reactor3D.MATERIAL_NORMAL), rough = companion(type.material + Reactor3D.MATERIAL_ROUGH);
-            if (normal || rough) {
-                if (!shared.detail) { shared.detail = layers(false, sharing); for (const user of shared.users) user.detail = shared.detail; }
-                const pack = () => {
-                    if (![normal, rough].filter(Boolean).every(ready)) return;
-                    try {
-                        const n = normal ? read(imageOf(normal)).slice() : null, r = rough ? read(imageOf(rough)).slice() : null;
-                        store(shared.detail, index, (data, to, from) => { data[to] = n ? n[from] : 128; data[to + 1] = n ? n[from + 1] : 128; data[to + 2] = n ? n[from + 2] : 255; data[to + 3] = r ? r[from] : 0; });
-                        shared.detailOn[index] = 1;
-                        for (const user of shared.users) user.detailParams[index].w = 1;
-                    } catch (error) {
-                        console.warn(`Reactor3D: the maps of ground material "${type.material}" could not be read.`, error);
-                    }
-                };
-                whenRead(normal, pack); if (rough && rough !== normal) whenRead(rough, pack);
+    // Every scene wearing these pictures learns a layer has come in.
+    const tell = () => { for (const user of shared.users) if (typeof user.sync === "function") user.sync(); };
+    if (first) materials.forEach((name, layer) => {
+        let bitmap = null;
+        try { bitmap = typeof load === "function" ? load(name) : null; } catch (error) { bitmap = null; }
+        whenRead(bitmap, () => {
+            try {
+                const pixels = read(imageOf(bitmap));
+                store(shared.array, layer, (data, to, from) => { data[to] = pixels[from]; data[to + 1] = pixels[from + 1]; data[to + 2] = pixels[from + 2]; data[to + 3] = 255; });
+                shared.on[layer] = 1;
+                tell();
+            } catch (error) {
+                console.warn(`Reactor3D: ground material "${name}" could not be read.`, error);
             }
+        });
+        const normal = companion(name + Reactor3D.MATERIAL_NORMAL), rough = companion(name + Reactor3D.MATERIAL_ROUGH);
+        if (normal || rough) {
+            if (!shared.detail) { shared.detail = layers(false, sharing); for (const user of shared.users) user.detail = shared.detail; }
+            const pack = () => {
+                if (![normal, rough].filter(Boolean).every(ready)) return;
+                try {
+                    const n = normal ? read(imageOf(normal)).slice() : null, r = rough ? read(imageOf(rough)).slice() : null;
+                    store(shared.detail, layer, (data, to, from) => { data[to] = n ? n[from] : 128; data[to + 1] = n ? n[from + 1] : 128; data[to + 2] = n ? n[from + 2] : 255; data[to + 3] = r ? r[from] : 0; });
+                    shared.detailOn[layer] = 1;
+                    for (const user of shared.users) user.layerOf.forEach((at, i) => { if (at === layer) user.detailParams[i].w = 1; });
+                    tell();
+                } catch (error) {
+                    console.warn(`Reactor3D: the maps of ground material "${name}" could not be read.`, error);
+                }
+            };
+            whenRead(normal, pack); if (rough && rough !== normal) whenRead(rough, pack);
         }
+    });
+    ground.types.forEach((type, index) => {
         // The material's own settings: its repeat when the type gives none, and how its relief and sheen read.
         const apply = raw => {
             const s = g.settings[index] = Reactor3D.normalizeMaterialSettings(raw);
@@ -5492,32 +5623,33 @@ Reactor3D.MapScene.prototype.updateGround = function(mapData, region) {
     const W = g.width, H = g.height;
     const x0 = region ? Math.max(0, Math.floor(region.x0)) : 0, x1 = region ? Math.min(W - 1, Math.ceil(region.x1)) : W - 1;
     const y0 = region ? Math.max(0, Math.floor(region.y0)) : 0, y1 = region ? Math.min(H - 1, Math.ceil(region.y1)) : H - 1;
+    const data = g.splat.image.data;
     ground.types.forEach((type, index) => {
-        const texture = index < 4 ? g.splat : g.splatB, data = texture.image.data, channel = index % 4, paint = type.paint;
-        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) data[(y * W + x) * 4 + channel] = Math.round(paint[y * W + x] * 255 / 9);
+        const base = (index >> 2) * W * H * 4, channel = index & 3, paint = type.paint;
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) data[base + (y * W + x) * 4 + channel] = Math.round(paint[y * W + x] * 255 / 9);
         const tint = type.tint, settings = g.settings[index];
         g.types[index].set(tint ? parseInt(tint.slice(1, 3), 16) / 255 : 1, tint ? parseInt(tint.slice(3, 5), 16) / 255 : 1, tint ? parseInt(tint.slice(5, 7), 16) / 255 : 1,
             1 / (type.scale || (settings && settings.scale) || Reactor3D.GROUND_TYPE_SCALE));
     });
     g.splat.needsUpdate = true;
-    if (g.splatB) g.splatB.needsUpdate = true;
+    if (typeof g.sync === "function") g.sync();
     return true;
 };
 
 /** The shader's declarations for a scene's ground types (groundSlopeMaterial splices them in). */
 Reactor3D.groundTypesHeaderGLSL = function(g) {
+    const groups = g.groups || Math.ceil(g.count / 4);
     return [
         "#define RR_GROUND_COUNT " + g.count,
+        "#define RR_GROUND_GROUPS " + groups,
         g.detail ? "#define RR_GROUND_DETAIL" : "",
         "precision highp sampler2DArray;",
-        "uniform sampler2D rrGroundSplat;",
-        g.splatB ? "uniform sampler2D rrGroundSplatB;" : "",
+        "uniform sampler2DArray rrGroundSplat;",
         "uniform sampler2DArray rrGroundArray;",
+        "uniform highp sampler2D rrGroundInfo;",
         "uniform vec2 rrGroundSize;",
-        "uniform vec4 rrGroundType[RR_GROUND_COUNT];",
-        "uniform float rrGroundOn[RR_GROUND_COUNT];",
         "uniform vec4 rrGroundKey;",
-        g.detail ? "uniform sampler2DArray rrGroundDetail;\nuniform vec4 rrGroundDetailParams[RR_GROUND_COUNT];\n" + Reactor3D.DETAIL_FUNCTIONS_GLSL : ""
+        g.detail ? "uniform sampler2DArray rrGroundDetail;\n" + Reactor3D.DETAIL_FUNCTIONS_GLSL : ""
     ].filter(Boolean).join("\n");
 };
 
@@ -5526,38 +5658,49 @@ Reactor3D.groundTypesHeaderGLSL = function(g) {
  * between cells, so a border is soft; it is then drawn in with a wandering edge,
  * and a half-strength paint reads as patches, not as a wash. A type's image is laid
  * from above and, where the ground leans, from the sides, as the floor itself is.
+ * Its tint and repeat (row 0 of rrGroundInfo), whether its picture is in and which
+ * layer it is (row 1) and its maps' settings (row 2) are read only where it is painted.
  */
 Reactor3D.groundTypesBodyGLSL = function(g) {
     return [
         "\t{",
         "\t\tvec2 rrSuv = rrGroundIn.xz / rrGroundSize;",
-        "\t\tvec4 rrWA = texture2D(rrGroundSplat, rrSuv);",
-        g.splatB ? "\t\tvec4 rrWB = texture2D(rrGroundSplatB, rrSuv);" : "",
-        "\t\tif (rrWA.x + rrWA.y + rrWA.z + rrWA.w" + (g.splatB ? " + rrWB.x + rrWB.y + rrWB.z + rrWB.w" : "") + " > 0.004) {",
+        "\t\tvec4 rrWs[RR_GROUND_GROUPS];",
+        "\t\tfloat rrWT = 0.0, rrWE = 0.0;",
         // The wandering edge moves a weight only between none and whole (its term is rrW * (1 - rrW)), so the noise
         // is worked out only where some type is part-way: the inside of a painted ground skips it, to the same picture.
-        "\t\t\tvec4 rrWE = rrWA * (1.0 - rrWA);",
-        g.splatB ? "\t\t\trrWE += rrWB * (1.0 - rrWB);" : "",
+        "\t\tfor (int k = 0; k < RR_GROUND_GROUPS; k++) {",
+        "\t\t\tvec4 rrWk = texture(rrGroundSplat, vec3(rrSuv, float(k)));",
+        "\t\t\trrWs[k] = rrWk;",
+        "\t\t\trrWT += rrWk.x + rrWk.y + rrWk.z + rrWk.w;",
+        "\t\t\tvec4 rrWEk = rrWk * (1.0 - rrWk);",
+        "\t\t\trrWE += rrWEk.x + rrWEk.y + rrWEk.z + rrWEk.w;",
+        "\t\t}",
+        "\t\tif (rrWT > 0.004) {",
         "\t\t\tfloat rrWn = 0.5;",
-        "\t\t\tif (rrWE.x + rrWE.y + rrWE.z + rrWE.w > 0.0) rrWn = rrGroundNoise(rrGroundAt.xz * 0.9) * 0.65 + rrGroundNoise(rrGroundAt.xz * 3.7) * 0.35;",
+        "\t\t\tif (rrWE > 0.0) rrWn = rrGroundNoise(rrGroundAt.xz * 0.9) * 0.65 + rrGroundNoise(rrGroundAt.xz * 3.7) * 0.35;",
         // A painted ground is shaded by how it faces the key light, leaning a little to one side so a slope
         // reads under a sun straight overhead (a dune's slip face is darker than its back); level ground is as it was.
         "\t\t\tvec3 rrGL = normalize((rrGroundKey.w > 0.5 ? normalize(rrGroundKey.xyz - vRRGroundPos) : normalize(rrGroundKey.xyz)) + vec3(0.45, 0.0, 0.35));",
         "\t\t\tfloat rrGShade = clamp((0.35 + 0.65 * max(dot(rrGN, rrGL), 0.0)) / (0.35 + 0.65 * max(rrGL.y, 0.05)), 0.5, 1.25);",
         "\t\t\tfor (int i = 0; i < RR_GROUND_COUNT; i++) {",
-        g.splatB ? "\t\t\t\tfloat rrW = i < 4 ? rrWA[i] : rrWB[i - 4];" : "\t\t\t\tfloat rrW = rrWA[i];",
-        "\t\t\t\tif (rrW < 0.004 || rrGroundOn[i] < 0.5) continue;",
+        "\t\t\t\tfloat rrW = rrWs[i >> 2][i & 3];",
+        "\t\t\t\tif (rrW < 0.004) continue;",
+        "\t\t\t\tvec4 rrGI = texelFetch(rrGroundInfo, ivec2(i, 1), 0);",
+        "\t\t\t\tif (rrGI.x < 0.5) continue;",
         "\t\t\t\trrW = smoothstep(0.38, 0.62, rrW + (rrWn - 0.5) * 1.6 * rrW * (1.0 - rrW));",
         "\t\t\t\tif (rrW < 0.004) continue;",
-        "\t\t\t\tfloat rrTS = rrGroundType[i].w, rrTL = float(i);",
+        "\t\t\t\tvec4 rrGT = texelFetch(rrGroundInfo, ivec2(i, 0), 0);",
+        "\t\t\t\tfloat rrTS = rrGT.w, rrTL = rrGI.y;",
         "\t\t\t\tvec3 rrTP = rrGroundAt * rrTS, rrTdx = rrGdx * rrTS, rrTdy = rrGdy * rrTS;",
         "\t\t\t\tvec4 rrTC = textureGrad(rrGroundArray, vec3(rrTP.xz, rrTL), rrTdx.xz, rrTdy.xz);",
         "\t\t\t\tif (rrGW.x + rrGW.z > 0.01) rrTC = textureGrad(rrGroundArray, vec3(rrTP.zy, rrTL), rrTdx.zy, rrTdy.zy) * rrGW.x + rrTC * rrGW.y + textureGrad(rrGroundArray, vec3(rrTP.xy, rrTL), rrTdx.xy, rrTdy.xy) * rrGW.z;",
-        "\t\t\t\trrTC.rgb *= rrGroundType[i].rgb * rrGShade;",
+        "\t\t\t\trrTC.rgb *= rrGT.rgb * rrGShade;",
         g.detail ? [
-            "\t\t\t\tif (rrGroundDetailParams[i].w > 0.5) {",
+            "\t\t\t\tif (rrGI.z > 0.5) {",
+            "\t\t\t\t\tvec4 rrGD = texelFetch(rrGroundInfo, ivec2(i, 2), 0);",
             "\t\t\t\t\tvec4 rrTD = textureGrad(rrGroundDetail, vec3(rrTP.xz, rrTL), rrTdx.xz, rrTdy.xz);",
-            "\t\t\t\t\trrTC.rgb = rrDetailShade(rrTC.rgb, rrGN, normalize(rrDetailAxis(rrTD, rrGN, 1, rrGroundDetailParams[i].x)), rrTD.a, vRRGroundPos, rrGroundDetailParams[i]);",
+            "\t\t\t\t\trrTC.rgb = rrDetailShade(rrTC.rgb, rrGN, normalize(rrDetailAxis(rrTD, rrGN, 1, rrGD.x)), rrTD.a, vRRGroundPos, rrGD);",
             "\t\t\t\t}"
         ].join("\n") : "",
         "\t\t\t\tsampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, rrTC.rgb, rrW);",
@@ -5570,18 +5713,13 @@ Reactor3D.groundTypesBodyGLSL = function(g) {
 /** A ground's uniforms on a compiled floor shader. */
 Reactor3D.groundTypesUniforms = function(shader, g) {
     shader.uniforms.rrGroundSplat = { value: g.splat };
-    if (g.splatB) shader.uniforms.rrGroundSplatB = { value: g.splatB };
     shader.uniforms.rrGroundArray = { value: g.array };
+    shader.uniforms.rrGroundInfo = { value: g.info };
     shader.uniforms.rrGroundSize = { value: g.size };
-    shader.uniforms.rrGroundType = { value: g.types };
-    shader.uniforms.rrGroundOn = { value: g.on };
     // The key light the lit materials share (the map's sun, else a direction from above), under this shader's own name.
     const lights = Reactor3D.lightUniforms ? Reactor3D.lightUniforms() : null;
     shader.uniforms.rrGroundKey = { value: lights && lights.rrKeyLight ? lights.rrKeyLight.value : new Float32Array(Reactor3D.KEY_LIGHT_DEFAULT || [0.35, 1, 0.3, 0]) };
-    if (g.detail) {
-        shader.uniforms.rrGroundDetail = { value: g.detail };
-        shader.uniforms.rrGroundDetailParams = { value: g.detailParams };
-    }
+    if (g.detail) shader.uniforms.rrGroundDetail = { value: g.detail };
 };
 
 //-----------------------------------------------------------------------------
@@ -5749,7 +5887,7 @@ Reactor3D.lineIndex = function(mapData) {
 
 /** The solids of one cell piece, added to `list`. */
 Reactor3D.lineCellPiece = function(mapData, piece, stack, list) {
-    const S = this.PIECE_STOREY, kind = piece.kind;
+    const S = this.PIECE_STOREY, kind = piece.kind, H = this.pieceHeight(kind, piece);
     const glass = this.materialLook(piece.material).glass;
     // A rock's column over this cell: from the mass's foot here to its top (a height over its own cell's ground).
     if (kind === "rock") {
@@ -5769,14 +5907,16 @@ Reactor3D.lineCellPiece = function(mapData, piece, stack, list) {
     };
     const add = (x0, y0, v0, x1, y1, v1, code, a, b) => { const solid = this.lineSolid(place, x0, y0, v0, x1, y1, v1, code, a, b); solid.glass = glass; list.push(solid); return solid; };
     switch (kind) {
-        case "wall": add(0, 0, 0, 1, S, 1); break;
+        case "wall": add(0, 0, 0, 1, H, 1); break;
         case "block": add(0, 0, 0, 1, 1, 1); break;
         case "floor": add(0, 0, 0, 1, this.PIECE_FLOOR_THICKNESS, 1); break;
-        case "pillar":
-            add(0.24, 0, 0.24, 0.76, 0.12, 0.76);
-            add(0.3, 0.12, 0.3, 0.7, S - 0.12, 0.7, LINE_ROUND, 0, 360);
-            add(0.24, S - 0.12, 0.24, 0.76, S, 0.76);
+        case "pillar": {
+            const r = this.pillarThick(piece) / 2, b = Math.min(0.5, r + 0.06), c = Math.max(r, 0.2);
+            add(0.5 - b, 0, 0.5 - b, 0.5 + b, 0.12, 0.5 + b);
+            add(0.5 - c, 0.12, 0.5 - c, 0.5 + c, H - 0.12, 0.5 + c, LINE_ROUND, 0, 360);
+            add(0.5 - b, H - 0.12, 0.5 - b, 0.5 + b, H, 0.5 + b);
             break;
+        }
         case "stair": {
             for (let i = 0; i < 4; i++) add(0, 0, i * 0.25, 1, (i + 1) * 0.25, 1);
             // A raised stair stands on a solid down to what is under it, as it is drawn.
@@ -5789,19 +5929,39 @@ Reactor3D.lineCellPiece = function(mapData, piece, stack, list) {
             break;
         }
         case "ramp": add(0, 0, 0, 1, 1, 1, LINE_WEDGE); break;
-        case "roof": add(0, 0, 0, 1, 1, 1, LINE_GABLE); break;
-        case "doorway": add(0, S - 0.6, 0, 1, S, 1); break;
+        case "roof": add(0, 0, 0, 1, H, 1, LINE_GABLE); break;
+        case "doorway": add(0, Math.min(S, H) - 0.6, 0, 1, H, 1); break;
         case "window":
             add(0, 0, 0, 1, 1.5, 1);
-            add(0, S - 1.4, 0, 1, S, 1);
+            add(0, Math.min(S, H) - 1.4, 0, 1, H, 1);
             // Shutters drawn shut fill the hole, on the cell's outer face where they hang.
-            if (piece.frame && piece.frame.closed) add(0, 1.5, 0.94, 1, S - 1.4, 1).glass = false;
+            if (piece.frame && piece.frame.closed) add(0, 1.5, 0.94, 1, Math.min(S, H) - 1.4, 1).glass = false;
             break;
-        case "glass": add(0, 0, 0.45, 1, S, 0.55).glass = true; break;
-        case "fence":
-            add(0.05, 0, 0.42, 0.15, 1.5, 0.58); add(0.85, 0, 0.42, 0.95, 1.5, 0.58);
-            add(0, 0.5, 0.45, 1, 0.62, 0.55); add(0, 1.15, 0.45, 1, 1.27, 0.55);
+        case "glass": add(0, 0, 0.45, 1, H, 0.55).glass = true; break;
+        case "fence": {
+            // Joined (fenceJoins), as it is drawn: a post in the middle, rails toward each neighbour (a diagonal
+            // rail as a few short pieces along it); else the rails across the cell as it was laid.
+            const index = this.pieceIndex(mapData), join = index ? this.fenceJoins(piece, index) : [];
+            const k = piece.height > 0 ? piece.height / Reactor3D.FENCE_HEIGHT : 1;
+            if (join.length) {
+                const at = (u, y, v) => [piece.x + u, oy + y, piece.y + v];
+                const solid = (x0, y0, v0, x1, y1, v1) => { const one = this.lineSolid(at, x0, y0, v0, x1, y1, v1); one.glass = glass; list.push(one); };
+                solid(0.42, 0, 0.42, 0.58, 1.5 * k, 0.58);
+                for (const [dx, dz] of join) {
+                    for (let i = 0; i < (dx && dz ? 4 : 1); i++) {
+                        const t0 = dx && dz ? i / 4 : 0, t1 = dx && dz ? (i + 1) / 4 : 1;
+                        const ua = 0.5 + dx * 0.5 * t0, ub = 0.5 + dx * 0.5 * t1, va = 0.5 + dz * 0.5 * t0, vb = 0.5 + dz * 0.5 * t1;
+                        const u0 = Math.min(ua, ub) - (dx ? 0 : 0.05), u1 = Math.max(ua, ub) + (dx ? 0 : 0.05);
+                        const v0 = Math.min(va, vb) - (dz ? 0 : 0.05), v1 = Math.max(va, vb) + (dz ? 0 : 0.05);
+                        solid(u0, 0.5 * k, v0, u1, 0.5 * k + 0.12, v1); solid(u0, 1.15 * k, v0, u1, 1.15 * k + 0.12, v1);
+                    }
+                }
+                break;
+            }
+            add(0.05, 0, 0.42, 0.15, 1.5 * k, 0.58); add(0.85, 0, 0.42, 0.95, 1.5 * k, 0.58);
+            add(0, 0.5 * k, 0.45, 1, 0.5 * k + 0.12, 0.55); add(0, 1.15 * k, 0.45, 1, 1.15 * k + 0.12, 0.55);
             break;
+        }
         // The leaf across this cell of the doorway, counted only while it stands shut (see worldRay).
         case "door": add(0, 0, 0.44, 1, this.doorLeafHeight ? this.doorLeafHeight(piece) : 3.6, 0.56).door = piece; break;
         // A ladder's rails and rungs stop nothing.

@@ -8087,6 +8087,31 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  for (const [locale, row] of Object.entries(rows)) row.split('|').forEach((value,i) => { globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][keys[i]] = value; });
 }
 
+// Character Builder creature catalog: the flying-animals group, the turkey, the pig (Chicken and Duck are reviewed above).
+{
+ const keys = ['Flying animals', 'Turkey', 'Pig', 'Armadillo'];
+ const rows = {
+  "ja": "飛ぶ動物|七面鳥|ブタ|アルマジロ",
+  "es": "Animales voladores|Pavo|Cerdo|Armadillo",
+  "zh-Hant": "飛行動物|火雞|豬|犰狳",
+  "zh-Hans": "飞行动物|火鸡|猪|犰狳",
+  "ru": "Летающие животные|Индейка|Свинья|Броненосец",
+  "pt": "Animais voadores|Peru|Porco|Tatu",
+  "de": "Flugtiere|Truthahn|Schwein|Gürteltier",
+  "fr": "Animaux volants|Dinde|Cochon|Tatou",
+  "el": "Ιπτάμενα ζώα|Γαλοπούλα|Γουρούνι|Αρμαδίλος",
+  "ko": "날아다니는 동물|칠면조|돼지|아르마딜로",
+  "it": "Animali volanti|Tacchino|Maiale|Armadillo",
+  "pl": "Zwierzęta latające|Indyk|Świnia|Pancernik",
+  "ar": "حيوانات طائرة|ديك رومي|خنزير|مدرع",
+  "id": "Hewan terbang|Kalkun|Babi|Armadilo",
+  "vi": "Động vật bay|Gà tây|Lợn|Con tatu",
+  "th": "สัตว์บินได้|ไก่งวง|หมู|อาร์มาดิลโล",
+  "tr": "Uçan hayvanlar|Hindi|Domuz|Armadillo"
+ };
+ for (const [locale, row] of Object.entries(rows)) if (globalThis.RR_REVIEWED_TRANSLATIONS.text[locale]) row.split('|').forEach((value, i) => { globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][keys[i]] = value; });
+}
+
 // Cat breed choices and the paired dragon humanoid.
 {
  const keys='Cat type|Domestic shorthair|Ragamuffin|Ragdoll|Persian|Maine Coon|Siamese|British shorthair|Hydrata'.split('|');
@@ -8262,6 +8287,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  const keys=['HDR effect: the preview plays its normally graded twin, {twin}.','HDR effect without a valid .hdr.json file: the game will not play it, so the preview does not either.'];
  const rows={ja:'HDRエフェクト：プレビューでは通常のグレーディング版 {twin} を再生します。|有効な .hdr.json ファイルがないHDRエフェクトです：ゲームでは再生されないため、プレビューでも再生しません。','zh-Hant':'HDR 特效：預覽會播放其一般調色版本 {twin}。|HDR 特效缺少有效的 .hdr.json 檔案：遊戲不會播放它，因此預覽也不會播放。','zh-Hans':'HDR 特效：预览会播放其常规调色版本 {twin}。|HDR 特效缺少有效的 .hdr.json 文件：游戏不会播放它，因此预览也不会播放。',ko:'HDR 이펙트: 미리보기에서는 일반 그레이딩 버전 {twin}을(를) 재생합니다.|유효한 .hdr.json 파일이 없는 HDR 이펙트: 게임에서 재생되지 않으므로 미리보기에서도 재생하지 않습니다.',es:'Efecto HDR: la vista previa reproduce su gemelo con gradación normal, {twin}.|Efecto HDR sin un archivo .hdr.json válido: el juego no lo reproducirá, así que la vista previa tampoco.',pt:'Efeito HDR: a pré-visualização reproduz a sua versão com gradação normal, {twin}.|Efeito HDR sem um arquivo .hdr.json válido: o jogo não o reproduzirá, então a pré-visualização também não.',fr:'Effet HDR : l’aperçu lit son jumeau à étalonnage normal, {twin}.|Effet HDR sans fichier .hdr.json valide : le jeu ne le lira pas, l’aperçu non plus.',it:'Effetto HDR: l’anteprima riproduce la sua versione con gradazione normale, {twin}.|Effetto HDR senza un file .hdr.json valido: il gioco non lo riprodurrà, quindi nemmeno l’anteprima.',de:'HDR-Effekt: Die Vorschau spielt seinen normal gegradeten Zwilling, {twin}.|HDR-Effekt ohne gültige .hdr.json-Datei: Das Spiel spielt ihn nicht ab, daher auch die Vorschau nicht.',ru:'HDR-эффект: в предпросмотре воспроизводится его обычная версия с цветокоррекцией, {twin}.|HDR-эффект без корректного файла .hdr.json: игра его не воспроизведёт, поэтому предпросмотр тоже.',pl:'Efekt HDR: podgląd odtwarza jego zwykłą wersję z korekcją barwną, {twin}.|Efekt HDR bez prawidłowego pliku .hdr.json: gra go nie odtworzy, więc podgląd też nie.',tr:'HDR efekti: önizleme, normal renk derecelendirmeli ikizini oynatır, {twin}.|Geçerli bir .hdr.json dosyası olmayan HDR efekti: oyun onu oynatmaz, bu yüzden önizleme de oynatmaz.',el:'Εφέ HDR: η προεπισκόπηση αναπαράγει το κανονικά διαβαθμισμένο δίδυμό του, {twin}.|Εφέ HDR χωρίς έγκυρο αρχείο .hdr.json: το παιχνίδι δεν θα το αναπαράγει, οπότε ούτε η προεπισκόπηση.',ar:'تأثير HDR: تعرض المعاينة نسخته ذات التدرج اللوني العادي، {twin}.|تأثير HDR بدون ملف .hdr.json صالح: لن تشغّله اللعبة، لذا لن تشغّله المعاينة أيضًا.',id:'Efek HDR: pratinjau memutar kembarannya dengan grading normal, {twin}.|Efek HDR tanpa berkas .hdr.json yang valid: game tidak akan memutarnya, jadi pratinjau juga tidak.',vi:'Hiệu ứng HDR: bản xem trước phát bản song sinh được chỉnh màu thông thường, {twin}.|Hiệu ứng HDR không có tệp .hdr.json hợp lệ: trò chơi sẽ không phát nó, nên bản xem trước cũng không.',th:'เอฟเฟกต์ HDR: ตัวอย่างจะเล่นเวอร์ชันคู่ที่ปรับสีตามปกติ {twin}|เอฟเฟกต์ HDR ที่ไม่มีไฟล์ .hdr.json ที่ถูกต้อง: เกมจะไม่เล่น ดังนั้นตัวอย่างก็จะไม่เล่นเช่นกัน'};
  for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('HDR preview translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();
+
+// Vehicle motion preview (2026-10-25b). A machine-assisted first pass, flagged for review.
+(() => {
+ const keys=['Vehicle motion preview','Parked (still)','Doors swinging open','Wheels rolling','Landing gear folding','Fans and rotors spinning'];
+ const rows={ja:'乗り物の動きのプレビュー|駐車中（静止）|ドアが開く|車輪の回転|着陸脚の格納|ファンとローターの回転','zh-Hant':'載具動作預覽|停放（靜止）|車門開啟|車輪滾動|起落架收起|風扇與旋翼旋轉','zh-Hans':'载具动作预览|停放（静止）|车门开启|车轮滚动|起落架收起|风扇与旋翼旋转',ko:'탈것 동작 미리보기|주차 (정지)|문이 열림|바퀴 굴러감|착륙 장치 접힘|팬과 로터 회전',es:'Vista previa del movimiento del vehículo|Estacionado (quieto)|Puertas abriéndose|Ruedas rodando|Tren de aterrizaje plegándose|Ventiladores y rotores girando',fr:'Aperçu du mouvement du véhicule|Garé (immobile)|Portes qui s’ouvrent|Roues qui roulent|Train d’atterrissage qui se replie|Ventilateurs et rotors qui tournent',de:'Fahrzeugbewegung (Vorschau)|Geparkt (still)|Türen schwenken auf|Räder rollen|Fahrwerk klappt ein|Lüfter und Rotoren drehen sich',it:'Anteprima del movimento del veicolo|Parcheggiato (fermo)|Portiere che si aprono|Ruote che girano|Carrello che si ritrae|Ventole e rotori in rotazione',pt:'Pré-visualização do movimento do veículo|Estacionado (parado)|Portas abrindo|Rodas rodando|Trem de pouso recolhendo|Ventoinhas e rotores girando',ru:'Предпросмотр движения транспорта|Стоит (неподвижно)|Двери открываются|Колёса катятся|Шасси убирается|Вентиляторы и роторы вращаются',pl:'Podgląd ruchu pojazdu|Zaparkowany (nieruchomy)|Drzwi otwierają się|Koła toczą się|Podwozie chowa się|Wentylatory i wirniki obracają się',tr:'Araç hareketi önizlemesi|Park hâlinde (durgun)|Kapılar açılıyor|Tekerlekler dönüyor|İniş takımı katlanıyor|Fanlar ve rotorlar dönüyor',el:'Προεπισκόπηση κίνησης οχήματος|Σταθμευμένο (ακίνητο)|Πόρτες που ανοίγουν|Τροχοί που κυλούν|Σύστημα προσγείωσης που αναδιπλώνεται|Ανεμιστήρες και ρότορες σε περιστροφή',ar:'معاينة حركة المركبة|متوقفة (ثابتة)|الأبواب تنفتح|العجلات تدور|جهاز الهبوط ينطوي|المراوح والدوّارات تدور',id:'Pratinjau gerak kendaraan|Diparkir (diam)|Pintu mengayun terbuka|Roda berputar|Roda pendarat terlipat|Kipas dan rotor berputar',vi:'Xem trước chuyển động của phương tiện|Đang đỗ (đứng yên)|Cửa mở ra|Bánh xe lăn|Càng đáp gập lại|Quạt và cánh quạt quay',th:'ตัวอย่างการเคลื่อนไหวของยานพาหนะ|จอดอยู่ (นิ่ง)|ประตูเปิดออก|ล้อหมุน|ฐานล้อลงจอดพับเก็บ|พัดลมและใบพัดหมุน'};
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Vehicle motion translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 })();
 
 // The Database animation preview draws an HDR effect in HDR when it can.

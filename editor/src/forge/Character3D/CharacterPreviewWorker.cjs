@@ -156,8 +156,8 @@ class PreviewWorker {
     }
 }
 
-const PART_FIELDS = ['name', 'kind', 'color', 'texture', 'keepColors', 'normalTexture', 'normalScale', 'metallicRoughnessTexture', 'iridescence', 'iridescenceIOR', 'iridescenceThicknessRange', 'iridescenceThicknessTexture', 'emissive', 'emissiveIntensity', 'emissiveTexture', 'roughness', 'metalness', 'doubleSided', 'opacity', 'cutout', 'alphaCutoff', 'onSkin', 'envMapIntensity', 'wet'];
-const GEOMETRY_FIELDS = ['positions', 'normals', 'uvs', 'colors', 'index'];
+const PART_FIELDS = ['name', 'kind', 'color', 'texture', 'keepColors', 'normalTexture', 'normalScale', 'normalTexCoord', 'metallicRoughnessTexture', 'metallicRoughnessTexCoord', 'occlusionTexture', 'occlusionTexCoord', 'occlusionStrength', 'sheen', 'fabric', 'iridescence', 'iridescenceIOR', 'iridescenceThicknessRange', 'iridescenceThicknessTexture', 'emissive', 'emissiveIntensity', 'emissiveTexture', 'roughness', 'metalness', 'doubleSided', 'opacity', 'cutout', 'alphaCutoff', 'onSkin', 'envMapIntensity', 'wet'];
+const GEOMETRY_FIELDS = ['positions', 'normals', 'uvs', 'uvs1', 'colors', 'index'];
 
 function renderPayload(result, options = {}) {
     const transfers = [];
@@ -174,7 +174,7 @@ function renderPayload(result, options = {}) {
         for (const key of GEOMETRY_FIELDS) if (part[key]) out[key] = copy(part[key]);
         return out;
     });
-    const used = options.static ? new Set(parts.flatMap(part => [part.texture, part.emissiveTexture, part.normalTexture, part.metallicRoughnessTexture, part.iridescenceThicknessTexture]).filter(Boolean)) : null;
+    const used = options.static ? new Set(parts.flatMap(part => [part.texture, part.emissiveTexture, part.normalTexture, part.metallicRoughnessTexture, part.occlusionTexture, part.iridescenceThicknessTexture]).filter(Boolean)) : null;
     const textures = Object.fromEntries(Object.entries(result.textures || {}).filter(([name]) => !used || used.has(name)).map(([name, source]) => {
         const texture = options.static ? PreviewTextures.thumbnail(source, options.atlasSize || 256) : source;
         return [name, { name: texture.name, width: texture.width, height: texture.height, ...(texture.repeat ? { repeat: true } : {}), data: copy(texture.data) }];
@@ -185,7 +185,7 @@ function renderPayload(result, options = {}) {
 async function serve() {
     // All modules and filesystem-backed lazy assets are loaded in the worker, never by the client.
     require('../../utils/QuadricDecimator.js');
-    for (const name of ['HumanTargets', 'HumanBody', 'CharacterOutfit', 'CharacterAtlas', 'CharacterClothes', 'CharacterSimplify', 'CharacterOutfitTransfer', 'CharacterPowerArmor', 'ConstructionSurface', 'ConstructionPatterns', 'CharacterProps', 'CharacterGarmentDetails', 'CharacterReconConstruction', 'CharacterWardrobe', 'CharacterSpecies', 'CharacterSkin', 'CharacterHair', 'CreatureGear', 'CreatureArthropods', 'CreatureFlyers', 'CreatureForms', 'CreatureBody', 'CharacterGlb', 'CharacterShading', 'CharacterDetail', 'CharacterPoses', 'MerfolkBody', 'CharacterCloth', 'CharacterExpressions', 'SlimeBody']) require('./' + name + '.js');
+    for (const name of ['HumanTargets', 'HumanBody', 'CharacterDrape', 'CharacterOutfit', 'CharacterFabric', 'CharacterWear', 'CharacterAtlas', 'CharacterClothes', 'CharacterSimplify', 'CharacterOutfitTransfer', 'CharacterPowerArmor', 'CharacterWasteland', 'ConstructionSurface', 'ConstructionPatterns', 'CharacterCyberGear', 'CharacterProps', 'CharacterGarmentDetails', 'CharacterReconConstruction', 'CharacterWardrobe', 'CharacterSpecies', 'CharacterBodyArtMotifs', 'CharacterBodyArt', 'CharacterSkin', 'CharacterBodyMods', 'CharacterHair', 'CreatureGear', 'CreatureArthropods', 'CreatureFlyers', 'CreatureReptiles', 'CreatureForms', 'CreatureBody', 'CharacterGlb', 'CharacterShading', 'CharacterDetail', 'CharacterPoses', 'MerfolkBody', 'CharacterCentaur', 'CharacterCloth', 'CharacterExpressions', 'SlimeBody']) require('./' + name + '.js');
     const Model = require('./CharacterModel.js'), Body = require('./HumanBody.js');
     const Wardrobe = require('./CharacterWardrobe.js'), Taken = require('./CharacterOutfitTransfer.js');
     if (workerData.dataDir) Body.dataFolder = () => require('node:path').resolve(workerData.dataDir);

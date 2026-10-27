@@ -102,7 +102,9 @@ test('the capture is taken after the shadow maps, in the game and in the editor'
     // A face left for a refresh with no update is taken the same way, after three forgets its state.
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8'), /const probe = mapScene\.reflectionProbe\(owed\.camera\);\n\s*if \(!probe\) return;\n\s*renderer\.resetState\(\);\n\s*this\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
-    assert.match(editor, /reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
+    // From the camera (p is its position), every other face the one behind it.
+    assert.match(editor, /const p = this\.camera\.position, q = this\.camera\.quaternion;/);
+    assert.match(editor, /reflections\.update\(this\.renderer, scene, p, this\.mapScene\.reflectionHidden\?\.\(\), behind\)/);
 });
 
 test('nothing reflects until its model says so; the capture leaves out the shadow sentinel and the characters', () => {
@@ -389,7 +391,7 @@ test('the reflection capture waits while nothing shiny is on screen, and goes on
     assert.match(core, /const capture = wanted && \(/);
     // The editor waits the same way.
     const editor = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'MapEditor3D.js'), 'utf8');
-    assert.match(editor, /if \(reflections\.enabled\(\)\) reflections\._frame\+\+;\n[^\n]*\n[^\n]*\n\s*if \(!reflections\.idle\(\) &&/);
+    assert.match(editor, /if \(reflections\.enabled\(\)\) reflections\._frame\+\+;[\s\S]{0,1400}?if \(!reflections\.idle\(\) && \(!moving \|\| this\._probeTurn\)\) \{/);
     F.reset();
 });
 

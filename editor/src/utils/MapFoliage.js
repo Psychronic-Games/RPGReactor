@@ -14,6 +14,8 @@
     const KINDS = ['grass', 'flowers', 'fern', 'reeds', 'bulbs', 'tendrils', 'crystals'];
     /** The kinds whose heads take a list of colors. */
     const PALETTE_KINDS = ['flowers', 'bulbs'];
+    /** The kinds whose pieces may each take one of a list of colors (none unless given): mixed crystals. */
+    const MIXED_KINDS = ['crystals'];
     const runtime = () => {
         if (root.Reactor3D && root.Reactor3D.decodeFoliageDensity) return root.Reactor3D;
         if (typeof require === 'function' && typeof module !== 'undefined') {
@@ -87,11 +89,19 @@
     /** A layer's settings as the panel and the script give them; only what differs from the kind's own look is kept. */
     const layerSettings = (kind, settings = {}) => {
         const out = {};
-        for (const key of ['height', 'vary', 'seed', 'glow']) if (Number.isFinite(Number(settings[key])) && settings[key] !== '' && settings[key] !== null && settings[key] !== undefined) out[key] = Math.round(Number(settings[key]) * 100) / 100;
+        for (const key of ['height', 'vary', 'seed', 'glow', 'width', 'lean']) if (Number.isFinite(Number(settings[key])) && settings[key] !== '' && settings[key] !== null && settings[key] !== undefined) out[key] = Math.round(Number(settings[key]) * 100) / 100;
         for (const key of ['colour', 'tip']) if (typeof settings[key] === 'string' && /^#[0-9a-f]{6}$/i.test(settings[key])) out[key] = settings[key].toLowerCase();
-        if (PALETTE_KINDS.includes(kind) && Array.isArray(settings.colours)) out.colours = settings.colours.filter(c => /^#[0-9a-f]{6}$/i.test(c)).map(c => c.toLowerCase());
+        if ((PALETTE_KINDS.includes(kind) || MIXED_KINDS.includes(kind)) && Array.isArray(settings.colours)) {
+            const colours = settings.colours.filter(c => /^#[0-9a-f]{6}$/i.test(c)).map(c => c.toLowerCase());
+            if (colours.length || PALETTE_KINDS.includes(kind)) out.colours = colours;
+        }
         return out;
     };
+
+    /** Whether a layer is the one a kind's settings paint: the same look in every way an author sets (petal colors too). */
+    const LOOK_KEYS = ['height', 'colour', 'tip', 'vary', 'glow', 'width', 'lean'];
+    const sameLook = (layer, kind, settings) => layer.kind === kind && LOOK_KEYS.every(key => (layer[key] ?? null) === (settings[key] ?? null))
+        && JSON.stringify(layer.colours ?? null) === JSON.stringify(settings.colours ?? null);
 
     /**
      * Paint a kind round a point (tiles; the cell's middle is x + 0.5): density
@@ -107,8 +117,7 @@
         const data = foliage(mapData);
         data.layers = Array.isArray(data.layers) ? data.layers : [];
         const settings = layerSettings(kind, options.settings || {});
-        const same = layer => layer.kind === kind && ['height', 'colour', 'tip', 'vary', 'glow'].every(key => (layer[key] ?? null) === (settings[key] ?? null));
-        let layer = data.layers.find(same);
+        let layer = data.layers.find(l => sameLook(l, kind, settings));
         if (!layer && !options.erase) { layer = Object.assign({ kind }, settings, { density: '' }); data.layers.push(layer); }
         const targets = options.erase ? data.layers.filter(l => l.kind === kind) : [layer];
         let touched = null;
@@ -137,6 +146,61 @@
         return touched;
     };
 
+    /**
+     * Recolor a kind round a point: every plant of that kind within the radius takes the settings' look (moved into
+     * the layer those settings paint, a new one if none), as dense as it was. Other places keep their own look.
+     * Returns the cells touched, or null.
+     */
+    const recolor = (mapData, kind, cx, cy, options = {}) => {
+        if (!mapData || !KINDS.includes(kind)) return null;
+        const W = mapData.width, H = mapData.height, size = W * H;
+        const radius = Math.max(0.5, Number(options.radius) || 3);
+        const data = foliage(mapData);
+        data.layers = Array.isArray(data.layers) ? data.layers : [];
+        const settings = layerSettings(kind, options.settings || {});
+        const sources = data.layers.filter(l => l.kind === kind && !sameLook(l, kind, settings));
+        if (!sources.length) return null;
+        let target = data.layers.find(l => sameLook(l, kind, settings)), made = false;
+        if (!target) { target = Object.assign({ kind }, settings, { density: '' }); made = true; }
+        const into = decode(target.density, size);
+        let touched = null;
+        for (const source of sources) {
+            const levels = decode(source.density, size);
+            let changed = false;
+            for (let y = Math.max(0, Math.floor(cy - radius)); y <= Math.min(H - 1, Math.floor(cy + radius)); y++) {
+                for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(W - 1, Math.floor(cx + radius)); x++) {
+                    const i = y * W + x;
+                    if (!levels[i] || Math.hypot(x + 0.5 - cx, y + 0.5 - cy) > radius) continue;
+                    into[i] = Math.max(into[i], levels[i]); levels[i] = 0; changed = true;
+                    touched = touched ? { x0: Math.min(touched.x0, x), y0: Math.min(touched.y0, y), x1: Math.max(touched.x1, x), y1: Math.max(touched.y1, y) } : { x0: x, y0: y, x1: x, y1: y };
+                }
+            }
+            if (changed) source.density = encode(levels);
+        }
+        if (!touched) return null;
+        target.density = encode(into);
+        if (made) data.layers.push(target);
+        write(mapData, data);
+        return touched;
+    };
+
+    /** The look of the kind's plants growing on a cell (the densest layer there): its settings, or null when none grows there. */
+    const lookAt = (mapData, kind, x, y) => {
+        const data = raw(mapData);
+        if (!data || !Array.isArray(data.layers) || x < 0 || y < 0 || x >= mapData.width || y >= mapData.height) return null;
+        let best = null, most = 0;
+        for (const layer of data.layers) {
+            if (layer.kind !== kind) continue;
+            const level = decode(layer.density, mapData.width * mapData.height)[y * mapData.width + x];
+            if (level > most) { most = level; best = layer; }
+        }
+        if (!best) return null;
+        const look = {};
+        for (const key of LOOK_KEYS) if (best[key] !== undefined) look[key] = best[key];
+        if (Array.isArray(best.colours)) look.colours = best.colours.slice();
+        return look;
+    };
+
     /** Fill cells with a kind where a test says so (the script's rule fills), at a level. Returns the count. */
     const fill = (mapData, kind, test, level, settings = {}) => {
         if (!mapData || !KINDS.includes(kind)) return 0;
@@ -144,7 +208,7 @@
         const data = foliage(mapData);
         data.layers = Array.isArray(data.layers) ? data.layers : [];
         const own = layerSettings(kind, settings);
-        let layer = data.layers.find(l => l.kind === kind && ['height', 'colour', 'tip', 'vary', 'glow'].every(key => (l[key] ?? null) === (own[key] ?? null)));
+        let layer = data.layers.find(l => sameLook(l, kind, own));
         if (!layer) { layer = Object.assign({ kind }, own, { density: '' }); data.layers.push(layer); }
         const levels = decode(layer.density, W * H);
         let count = 0;
@@ -187,6 +251,34 @@
         if (data.bushes.length === before) return 0;
         write(mapData, data);
         return before - data.bushes.length;
+    };
+
+    /** Give the bushes within a radius of a point another leaf and blossom color (bloom '' takes the blossom off); how many changed. */
+    const recolorBushes = (mapData, cx, cy, radius, look = {}) => {
+        const data = foliage(mapData);
+        if (!Array.isArray(data.bushes) || !data.bushes.length) return 0;
+        const colour = /^#[0-9a-f]{6}$/i.test(look.colour || '') ? look.colour.toLowerCase() : null;
+        const bloom = /^#[0-9a-f]{6}$/i.test(look.bloom || '') ? look.bloom.toLowerCase() : '';
+        let count = 0;
+        for (const bush of data.bushes) {
+            if (Math.hypot(bush.x - cx, bush.y - cy) > Math.max(radius, (Number(bush.size) || 1.6) * 0.5)) continue;
+            const was = JSON.stringify(bush);
+            if (colour) bush.colour = colour; else delete bush.colour;
+            if (bloom) bush.bloom = bloom; else delete bush.bloom;
+            if (JSON.stringify(bush) !== was) count++;
+        }
+        if (count) write(mapData, data);
+        return count;
+    };
+
+    /** The bush nearest a point within a radius, as written, or null. */
+    const bushAt = (mapData, cx, cy, radius) => {
+        let best = null, near = Infinity;
+        for (const bush of bushes(mapData)) {
+            const d = Math.hypot(bush.x - cx, bush.y - cy);
+            if (d <= Math.max(radius, (Number(bush.size) || 1.6) * 0.5) && d < near) { near = d; best = bush; }
+        }
+        return best ? clone(best) : null;
     };
 
     const wind = mapData => {
@@ -259,7 +351,7 @@
     };
 
     // A layer by everything that makes it look as it does: the same layer before and after a clear.
-    const layerKey = layer => JSON.stringify([layer.kind, layer.height ?? null, layer.colour ?? null, layer.tip ?? null, layer.vary ?? null, layer.seed ?? null, layer.colours ?? null]);
+    const layerKey = layer => JSON.stringify([layer.kind, layer.height ?? null, layer.colour ?? null, layer.tip ?? null, layer.vary ?? null, layer.seed ?? null, layer.colours ?? null, layer.glow ?? null, layer.width ?? null, layer.lean ?? null]);
     const bushOver = (bush, cells) => {
         const r = (Number(bush.size) || 1.6) * 0.4;
         for (let y = Math.floor(bush.y - r); y <= Math.floor(bush.y + r); y++) for (let x = Math.floor(bush.x - r); x <= Math.floor(bush.x + r); x++) {
@@ -307,7 +399,7 @@
         for (const entry of record.layers) {
             let layer = data.layers.find(l => layerKey(l) === entry.key);
             if (!layer) {
-                const [kind, height, colour, tip, vary, seed, colours] = JSON.parse(entry.key);
+                const [kind, height, colour, tip, vary, seed, colours, glow = null, width = null, lean = null] = JSON.parse(entry.key);
                 layer = { kind };
                 if (height !== null) layer.height = height;
                 if (colour !== null) layer.colour = colour;
@@ -315,6 +407,9 @@
                 if (vary !== null) layer.vary = vary;
                 if (seed !== null) layer.seed = seed;
                 if (colours !== null) layer.colours = colours;
+                if (glow !== null) layer.glow = glow;
+                if (width !== null) layer.width = width;
+                if (lean !== null) layer.lean = lean;
                 layer.density = '';
                 data.layers.push(layer);
             }
@@ -356,7 +451,7 @@
         return box;
     };
 
-    const api = { KINDS, PALETTE_KINDS, decode, encode, foliage, hasFoliage, snapshot, restore, layerSettings, paint, fill, bushes, addBush, removeBushes, wind, setWind, stats, resize, coveredCells, clearCells, clearUnderPieces, uncover, recover, clearedRegion };
+    const api = { KINDS, PALETTE_KINDS, MIXED_KINDS, decode, encode, foliage, hasFoliage, snapshot, restore, layerSettings, paint, recolor, lookAt, fill, bushes, addBush, removeBushes, recolorBushes, bushAt, wind, setWind, stats, resize, coveredCells, clearCells, clearUnderPieces, uncover, recover, clearedRegion };
     root.RRMapFoliage = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

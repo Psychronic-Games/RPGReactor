@@ -29,7 +29,7 @@ test('a wait inside a loop runs as a generator the interpreter steps, a frame co
     assert.equal(js('wait(30)'), 'this.wait(30);');
     // The runtime side, on a stub interpreter.
     const runtime = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects_legacy.js'), 'utf8');
-    const part = runtime.slice(runtime.indexOf('Game_Interpreter.prototype.rrRunScript'), runtime.indexOf('// [fN] character sheets'));
+    const part = runtime.slice(runtime.indexOf('Game_Interpreter.prototype.rrRunScript'), runtime.indexOf('// [NF] character sheets'));
     function Game_Interpreter() { this._waitCount = 0; }
     Game_Interpreter.prototype.wait = function(n) { this._waitCount = n; };
     Game_Interpreter.prototype.updateWait = function() { if (this._waitCount > 0) { this._waitCount--; return true; } return false; };

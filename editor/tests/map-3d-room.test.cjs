@@ -99,7 +99,8 @@ test('the editor loads the room images; Map Properties edits the switch, the Bui
     for (const key of ['mapProps.roomHeight', 'mapProps.parallaxFloor', 'mapProps.parallaxWalls', 'mapProps.parallaxCeiling', 'mapProps.roomHint']) {
         assert.equal(html.includes(`data-i18n="${key}"`), false, key);
     }
-    assert.match(read('editor/src/BuildHotbar.js'), /tile\('floor', 'Floor'\) \+ tile\('walls', 'Walls'\) \+ tile\('ceiling', 'Ceiling'\)/);
+    // The floor, its tint and scale, then the walls and the ceiling.
+    assert.match(read('editor/src/BuildHotbar.js'), /tile\('floor', 'Floor'\)[\s\S]{0,900}?rr-build-floortint[\s\S]{0,600}?rr-build-floorscale[\s\S]{0,300}?tile\('walls', 'Walls'\) \+ tile\('ceiling', 'Ceiling'\)/);
 });
 
 test('the map audio choice goes through the audio picker', () => {

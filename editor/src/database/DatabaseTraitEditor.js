@@ -29,6 +29,9 @@ class DatabaseTraitEditor {
      * them - explains the same thing.
      */
     _rowHTML(trait, { code, label, control = '', prefix = '', value = '', unit = '' }) {
+        // A trait the project hides (System.json rrHiddenTraits, Database > System 1 > Trait List) has no row,
+        // unless it is the trait being edited.
+        if (trait.code !== code && globalThis.ResourcePools?.isTraitHidden(this.databaseManager?.getSystem?.(), code)) return '';
         if (!control && value) {
             control = `<span class="rr-trait-lone-value">${value}<span class="rr-trait-unit">${unit}</span></span>`;
             value = '';
@@ -92,7 +95,10 @@ class DatabaseTraitEditor {
         this.onSaveCallback = onSave;
 
         // Get existing trait data or create new
-        const trait = traitIndex >= 0 ? { ...entry.traits[traitIndex] } : { code: 11, dataId: 1, value: 1.0 };
+        const system = this.databaseManager?.getSystem?.();
+        const pools = globalThis.ResourcePools;
+        const firstCode = pools ? pools.firstShownCode(system) : 11;
+        const trait = traitIndex >= 0 ? { ...entry.traits[traitIndex] } : { code: firstCode, dataId: firstCode === 11 ? 1 : 0, value: 1.0 };
 
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -120,17 +126,18 @@ class DatabaseTraitEditor {
             background: var(--color-bg-panel);
         `;
 
-        const tabs = [
+        // The project's tabs: one whose every trait is hidden is left out (ResourcePools.visibleTraitTabs).
+        const tabs = pools ? pools.visibleTraitTabs(system, traitIndex >= 0 ? trait.code : null) : [
             { id: 'rates', label: 'Rates', codes: [11, 12, 15, 13, 14] },
             { id: 'param', label: 'Param', codes: [21, 22, 23] },
-            { id: 'attack', label: 'Attack', codes: [31, 32, 33, 34] },
+            { id: 'attack', label: 'Attack', codes: [31, 32, 33, 34, 35] },
             { id: 'skill', label: 'Skill', codes: [41, 42, 43, 44] },
             { id: 'equip', label: 'Equip', codes: [51, 52, 53, 54, 55] },
             { id: 'other', label: 'Other', codes: [61, 62, 63, 64] }
         ];
 
         // Determine initial active tab based on trait code
-        let activeTab = 'rates';
+        let activeTab = tabs[0].id;
         for (const tab of tabs) {
             if (tab.codes.includes(trait.code)) {
                 activeTab = tab.id;
@@ -444,13 +451,39 @@ class DatabaseTraitEditor {
             }),
             this._rowHTML(trait, {
                 code: 55, label: this._t('Slot Type'),
-                control: this._selectHTML('slottype-select', 55, this._hintedOptions(55, trait,
-                    ['Normal', 'Dual Wield'].map(label => this._t(label)),
-                    globalThis.TraitHelp ? globalThis.TraitHelp.slotTypes() : []))
+                control: this._selectHTML('slottype-select', 55, this._slotTypeOptions(system, trait))
             })
         ].join('');
 
         this.setupRadioInputs(container, trait);
+    }
+
+    /**
+     * Slot Type: Normal and Dual Wield, then the project's slot layouts (Database > Types), stored as
+     * dataId 2 for the first layout, 3 for the second, and so on. A saved id past the last layout
+     * stays listed, by number, so opening the trait does not change it.
+     */
+    _slotTypeOptions(system, trait) {
+        const plain = name => String(name || '').replace(/\\[iI]\[\d+\]\s*/g, '').trim();
+        const types = (system && system.equipTypes) || [];
+        // Equipment Slot Layouts off (Database › Reactor Features): no layout is offered; one a trait
+        // already picks stays listed by number below, so opening the trait does not change it.
+        const features = globalThis.ReactorFeatures;
+        const layoutsOn = !features || features.on('equipSlotLayouts', system || {});
+        const layouts = (layoutsOn && system && Array.isArray(system.rrSlotLayouts)) ? system.rrSlotLayouts : [];
+        const labels = ['Normal', 'Dual Wield'].map(label => this._t(label));
+        const hints = globalThis.TraitHelp ? globalThis.TraitHelp.slotTypes().slice() : ['', ''];
+        layouts.forEach((layout, index) => {
+            labels.push(plain(layout && layout.name) || `${this._t('Slot Layout')} ${index + 1}`);
+            const slots = ((layout && layout.slots) || []).map(id => plain(types[id]) || `#${id}`);
+            hints.push(slots.length ? slots.join(', ') : this._t('No slots'));
+        });
+        const saved = trait.code === 55 ? Number(trait.dataId) || 0 : 0;
+        for (let id = labels.length; id <= saved; id++) {
+            labels.push(`${this._t('Slot Layout')} ${id - 1}`);
+            hints.push('');
+        }
+        return this._hintedOptions(55, trait, labels, hints);
     }
 
     createOtherTab(container, trait) {
@@ -468,12 +501,12 @@ class DatabaseTraitEditor {
                     ['Auto Battle', 'Guard', 'Substitute', 'Preserve TP'].map(label => this._t(label)),
                     help ? help.specialFlags() : []))
             }),
-            this._rowHTML(trait, {
+            [this._rowHTML(trait, {
                 code: 63, label: this._t('Collapse Effect'),
                 control: this._selectHTML('collapse-select', 63, this._hintedOptions(63, trait,
                     ['Normal', 'Boss', 'Instant', 'No Disappear', 'Ash', 'Ember', 'Wisp', 'Shatter', 'Corpse'].map(label => this._t(label)),
                     help ? help.collapseEffects() : []))
-            }) + this._collapseSoundHTML(),
+            })].map(row => row ? row + this._collapseSoundHTML() : '')[0],
             this._rowHTML(trait, {
                 code: 64, label: this._t('Party Ability'),
                 control: this._selectHTML('party-select', 64, this._hintedOptions(64, trait,

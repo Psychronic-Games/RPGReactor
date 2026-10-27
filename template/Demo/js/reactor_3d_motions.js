@@ -643,6 +643,9 @@
      */
     /** The most a foot points out from the hips' facing on an upright body (degrees), and in. */
     const TOE_OUT = 18, TOE_IN = 6;
+    /** The most a walking or running foot points out (degrees, read along its pitched ankle-to-ball line, as TOE_OUT):
+     * 10 lands the sole's own centerline 5 to 12 out once the sole is level. */
+    const STRIDE_TOE_OUT = 10;
     function limitLegs(index, names, world, steps, turnAt, bones, upright, once, toeOut = TOE_OUT) {
         const clampTo = (v, r) => {
             const [lo, hi] = r.x, d = DEG;
@@ -736,6 +739,149 @@
             const q = quat(...axis, hi * sign);
             for (const suffix of ['UpLeg', 'Leg', 'Foot', 'ToeBase']) { const k = names.indexOf(S + suffix); if (k >= 0) world[k][f] = mul(q, world[k][f]); }
         }
+    }
+
+    // ── soles level across ─────────────────────────────────────────────
+    /**
+     * The capture's feet carry a sideways roll their markers never pinned
+     * down: each captured foot frame's "up" leans out, so the soles face
+     * each other, about 14 degrees standing, 25 to 35 through a walk or run
+     * and 50 on a run's kicked-up heel. LEG_RANGE (the ankle against the
+     * shin) and the toe-out rule (a turn about the leg) never see it. Each
+     * sole is brought square to the floor's left-right line on an upright
+     * body (its pitch, heel strike to toe-off, kept), or to face the floor
+     * where a resting body's foot stands on it: first the ankle tilting the
+     * sole (about the shin's front line, as far as LEG_RANGE lets an ankle
+     * tilt and SOLE_TURN turn it, or no further past it than the capture had it), the
+     * rest, on a resting body, from the thigh turning in or out with the
+     * knee bent (within the hip's roll); a stride's legs keep their path. A foot turned sideways, a body lying or upside down, or a foot
+     * hanging in the air is left as it is.
+     */
+    /** How far the ankle turns the foot in or out as it rolls the sole level (degrees): rolling a sole (eversion,
+     * inversion) brings the foot's turn with it (pronation, supination), past LEG_RANGE's 12 for the capture's own
+     * turn. */
+    const SOLE_TURN = 18;
+    const ANKLE_TILT = LEG_RANGE.Foot.z, ANKLE_TURN = SOLE_TURN, THIGH_ROLL = LEG_RANGE.UpLeg.y, LEVEL_MOST = 60;
+    /** Motions that set the feet on holds or kick them in the water: their feet are left as they are. */
+    const FREE_FEET = new Set(['climbLadder', 'climbWall', 'swim', 'tread']);
+    const smooth = (lo, hi, v) => { const u = Math.max(0, Math.min(1, (v - lo) / (hi - lo))); return u * u * (3 - 2 * u); };
+    /** The rest heel-to-toe line of a foot (its ankle-to-ball line along the floor). */
+    const footLine = (bones, foot, toe) => { const d = sub(bones[toe].head, bones[foot].head); return unit([d[0], 0, d[2]]); };
+    /** The smallest turn about `axis` (within `most`) bringing `lean(turn)` to nothing, or 0 when none does. */
+    function zeroLean(lean, most) {
+        const l0 = lean(0);
+        if (Math.abs(l0) < 1e-5) return 0;
+        let best = null;
+        for (const end of [most, -most]) {
+            if (Math.sign(lean(end)) === Math.sign(l0)) continue;
+            let lo = 0, hi = end;
+            for (let i = 0; i < 18; i++) { const m = (lo + hi) / 2; if (Math.sign(lean(m)) === Math.sign(l0)) lo = m; else hi = m; }
+            if (best === null || Math.abs(hi) < Math.abs(best)) best = hi;
+        }
+        // Out of reach either way: as far as it goes the way that helps.
+        if (best === null) best = Math.abs(lean(most)) < Math.abs(lean(-most)) ? (Math.abs(lean(most)) < Math.abs(l0) ? most : 0) : (Math.abs(lean(-most)) < Math.abs(l0) ? -most : 0);
+        return best;
+    }
+    function levelSoles(bones, index, names, world, steps, place, heights, scale, once) {
+        const hips = names.indexOf('Hips');
+        for (const S of ['Left', 'Right']) {
+            const fi = index.get(S + 'Foot'), ti = index.get(S + 'ToeBase'), si = index.get(S + 'Leg'), ui = index.get(S + 'UpLeg');
+            const kf = names.indexOf(S + 'Foot'), kt = names.indexOf(S + 'ToeBase'), ks = names.indexOf(S + 'Leg'), ku = names.indexOf(S + 'UpLeg');
+            if ([fi, ti, si, ui].some(i => i === undefined) || kf < 0 || ks < 0 || ku < 0) continue;
+            const along = footLine(bones, fi, ti), thighDir = unit(sub(bones[si].head, bones[ui].head));
+            const sole = [[fi, SOLE.Foot[0]], [ti, SOLE.ToeBase[0]], [ti, SOLE.ToeBase[1]]].map(([i, o]) => [i, o.map(v => v * scale)]);
+            for (let f = 0; f < steps; f++) {
+                const Wf = world[kf][f], Ws = world[ks][f], a = rotate(Wf, along), n = rotate(Wf, [0, -1, 0]);
+                // `side`: the line along the floor the sole should have no lean along.
+                let side, w;
+                if (heights) {
+                    // Resting on the body: a foot standing on the floor (its lowest sole point within a few centimeters
+                    // of it, its sole facing down more than not) faces it.
+                    const { rot, pos } = place(f);
+                    let low = Infinity;
+                    for (const [i, o] of sole) low = Math.min(low, pos[i][1] + rotate(rot[i], o)[1] + heights[f] - (bones[i].head[1] + o[1]));
+                    w = (1 - smooth(0.04 * scale, 0.09 * scale, low)) * smooth(0.35, 0.6, -n[1]);
+                    side = unit([a[2], 0, -a[0]]);
+                } else {
+                    // Upright: the hips' left-right line along the floor; not on a foot pointing along it.
+                    const hq = hips >= 0 ? world[hips][f] : [0, 0, 0, 1], x = rotate(hq, [1, 0, 0]);
+                    side = unit([x[0], 0, x[2]]);
+                    w = smooth(0.55, 0.8, rotate(hq, [0, 1, 0])[1]) * (1 - smooth(0.6, 0.85, Math.abs(dot(a, side))));
+                }
+                if (w <= 0) continue;
+                const leanAfter = (axis, base) => u => dot(rotate(mul(quat(...axis, u), base), [0, -1, 0]), side);
+                // The ankle rolls the foot about its own heel-to-toe line (where it points kept), within its reach.
+                const front = a, was = logOf(mul(conj(Ws), Wf));
+                let tilt = zeroLean(leanAfter(front, Wf), LEVEL_MOST * DEG) * w;
+                const [lo, hi] = LEG_RANGE.Foot.x.map(v => v * DEG), over = u => {
+                    const v = logOf(mul(conj(Ws), mul(quat(...front, tilt * u), Wf)));
+                    return Math.abs(v[2]) > Math.max(ANKLE_TILT * DEG, Math.abs(was[2])) + 1e-6 || Math.abs(v[1]) > Math.max(ANKLE_TURN * DEG, Math.abs(was[1])) + 1e-6
+                        || v[0] < Math.min(lo, was[0]) - 1e-6 || v[0] > Math.max(hi, was[0]) + 1e-6;
+                };
+                if (over(1)) { let a0 = 0, a1 = 1; for (let i = 0; i < 14; i++) { const m = (a0 + a1) / 2; if (over(m)) a1 = m; else a0 = m; } tilt *= a0; }
+                if (Math.abs(tilt) > 1e-5) {
+                    const q = quat(...front, tilt);
+                    world[kf][f] = mul(q, world[kf][f]);
+                    if (kt >= 0) world[kt][f] = mul(q, world[kt][f]);
+                }
+                // On a resting body the rest comes from the leg turning in or out at the hip, about the thigh (a seated
+                // shin leaning brought upright over its foot), the knee and ankle as they are: only with the knee bent (a
+                // straight leg turned at the hip swings the toes, not the sole) and within the hip's roll. Never on an
+                // upright body: a thigh turned through a stride kicks the swinging foot out and the knee with it, and a
+                // foot in the air may stay a little rolled.
+                if (!heights) continue;
+                const thighAt = world[ku][f], axis = rotate(thighAt, thighDir), shinDir = rotate(world[ks][f], unit(sub(bones[fi].head, bones[si].head)));
+                const bend = smooth(25 * DEG, 50 * DEG, Math.acos(Math.max(-1, Math.min(1, dot(axis, shinDir)))));
+                if (once || bend <= 0) continue;
+                let roll = zeroLean(leanAfter(axis, world[kf][f]), THIGH_ROLL * DEG) * w * bend;
+                const hq = hips >= 0 ? world[hips][f] : [0, 0, 0, 1], hipWas = logOf(mul(conj(hq), thighAt));
+                const past = u => Math.abs(logOf(mul(conj(hq), mul(quat(...axis, roll * u), thighAt)))[1]) > Math.max(LEG_RANGE.UpLeg.y * DEG, Math.abs(hipWas[1])) + 1e-6;
+                if (past(1)) { let lo = 0, hi = 1; for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2; if (past(m)) hi = m; else lo = m; } roll *= lo; }
+                if (Math.abs(roll) < 1e-5) continue;
+                const turn = quat(...axis, roll);
+                for (const k of [ku, ks, kf, kt]) if (k >= 0) world[k][f] = mul(turn, world[k][f]);
+            }
+        }
+    }
+
+    /**
+     * Each foot's sideways roll in a clip, frame by frame: `roll` how far
+     * its sole faces toward the other foot (degrees, + inward: the sole's
+     * lean along the hips' left-right line, along the floor), `heading` how
+     * far its heel-to-toe line points out from the hips' facing (degrees,
+     * + out), `across` how far it points along that left-right line (0
+     * ahead, 1 sideways), `pitch` how steeply it points up or down (0..1)
+     * and `down` how far its sole turns from facing straight down. The
+     * measure the soles are levelled by.
+     */
+    function soleRolls(bones, clip) {
+        const index = new Map(bones.map((b, i) => [b.name, i])), out = { Left: null, Right: null }, hips = bones.findIndex(b => b.parent < 0);
+        const local = new Map(clip.tracks.filter(t => !t.path).map(t => [t.bone, t])), steps = clip.times.length;
+        // A track keyed on its own times (a saved or game clip's reduced keys) read between its keys.
+        const at = (t, f) => {
+            const keys = t.times || clip.times, time = clip.times[f], v = t.values;
+            let i = 0;
+            while (i + 1 < keys.length && keys[i + 1] <= time + 1e-6) i++;
+            const j = Math.min(keys.length - 1, i + 1), u = keys[j] > keys[i] ? Math.max(0, Math.min(1, (time - keys[i]) / (keys[j] - keys[i]))) : 0;
+            return slerp4([v[i * 4], v[i * 4 + 1], v[i * 4 + 2], v[i * 4 + 3]], [v[j * 4], v[j * 4 + 1], v[j * 4 + 2], v[j * 4 + 3]], u);
+        };
+        const worlds = [];
+        for (let f = 0; f < steps; f++) {
+            const W = [];
+            bones.forEach((b, i) => { const t = local.get(i), q = t ? at(t, f) : [0, 0, 0, 1]; W[i] = b.parent >= 0 ? mul(W[b.parent], q) : q; });
+            worlds.push(W);
+        }
+        for (const [S, m] of [['Left', 1], ['Right', -1]]) {
+            const foot = index.get(S + 'Foot'), toe = index.get(S + 'ToeBase');
+            if (foot === undefined || toe === undefined) continue;
+            const along = footLine(bones, foot, toe);
+            out[S] = worlds.map(W => {
+                const a = rotate(W[foot], along), n = rotate(W[foot], [0, -1, 0]), x = rotate(W[hips], [1, 0, 0]), s = unit([x[0], 0, x[2]]), front = [-s[2], 0, s[0]];
+                const h = Math.atan2(a[0], a[2]) - Math.atan2(front[0], front[2]);
+                return { roll: Math.asin(Math.max(-1, Math.min(1, -dot(n, s) * m))) / DEG, heading: Math.atan2(Math.sin(h), Math.cos(h)) / DEG * m, across: Math.abs(dot(a, s)), pitch: Math.abs(a[1]), down: Math.acos(Math.max(-1, Math.min(1, -n[1]))) / DEG };
+            });
+        }
+        return out;
     }
 
     // ── hands set where a pose needs them: an aim, a grip with both hands ──
@@ -1229,7 +1375,9 @@
         }
         const stride = id === 'walk' || id === 'run' || id === 'crouchWalk';
         if (stride) separateStride(bones, index, names, world, steps, place, scale);
-        limitLegs(index, names, world, steps, turnAt, bones, !cap.hang, cap.once, stride ? 12 : TOE_OUT);
+        // A stride's feet point a little out (STRIDE_TOE_OUT); a stance's may turn further (TOE_OUT).
+        limitLegs(index, names, world, steps, turnAt, bones, !cap.hang, cap.once, stride ? STRIDE_TOE_OUT : TOE_OUT);
+        if (!(options && options.rawFeet) && !FREE_FEET.has(id)) levelSoles(bones, index, names, world, steps, place, cap.skin ? stand() : null, scale, !!cap.once);
         const heights = stand();
         const tracks = names.map((n, k) => {
             const i = index.get(n), values = new Float32Array(steps * 4);
@@ -1464,7 +1612,7 @@
     }
     const frameOf = bones => handFrames(bones, new Map(bones.map((b, i) => [b.name, i])));
     const api = {
-        POSES, GROUPS, clip, gameClips, GAME_CLIPS, SLOTS, STATE_MOTIONS, stateClip, LEG_RANGE, TOE_OUT, load, loadAsync, open, ready: () => !!DATA, dataPath: null, HAND_SHAPES, FINGER_RANGE, handFrames: frameOf,
+        POSES, GROUPS, clip, soleRolls, SOLE_TURN, gameClips, GAME_CLIPS, SLOTS, STATE_MOTIONS, stateClip, LEG_RANGE, TOE_OUT, load, loadAsync, open, ready: () => !!DATA, dataPath: null, HAND_SHAPES, FINGER_RANGE, handFrames: frameOf,
         /** One still frame of both hands in a shape: the finger tracks. */
         handShape: (bones, shape) => handTracks(frameOf(bones), both(shape), [0])
     };

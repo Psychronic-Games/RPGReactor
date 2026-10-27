@@ -4587,7 +4587,7 @@ class DatabaseUserInterfaceEditor {
             const skills = (data.skills || []).filter(skill => skill && skill.name && skill.stypeId > 0);
             const shown = skills.filter(skill => known.has(skill.id));
             return (shown.length ? shown : skills).slice(0, 16).map(skill => ({ text: `\\I[${skill.iconIndex || 0}]${skill.name}`,
-                right: skill.tpCost > 0 ? `\\C[29]${skill.tpCost}\\C[0]` : skill.mpCost > 0 ? `\\C[23]${skill.mpCost}\\C[0]` : '', enabled: true }));
+                right: this.previewSkillCost(skill), enabled: true }));
         }
         if (node.battleWindow === 'item') {
             // Items usable in battle (Occasion Always or Battle Screen), as Window_BattleItem lists them.
@@ -4681,6 +4681,14 @@ class DatabaseUserInterfaceEditor {
     }
 
     /** Skills an actor knows at their starting level: learned by their class, or added by a trait (43). */
+    /** A skill's cost as the game's skill list prints it: TP first, then MP; a pool the project turned off costs nothing. */
+    previewSkillCost(skill) {
+        const system = this.databaseManager && this.databaseManager.data ? this.databaseManager.data.system : null;
+        const off = key => !!globalThis.ResourcePools && globalThis.ResourcePools.isOff(system, key);
+        const tp = off('tp') ? 0 : Number(skill.tpCost) || 0, mp = off('mp') ? 0 : Number(skill.mpCost) || 0;
+        return tp > 0 ? `\\C[29]${tp}\\C[0]` : mp > 0 ? `\\C[23]${mp}\\C[0]` : '';
+    }
+
     previewKnownSkills(actor) {
         const data = (this.databaseManager && this.databaseManager.data) || {};
         const klass = actor && data.classes ? data.classes[actor.classId] : null;
@@ -5835,7 +5843,7 @@ class DatabaseUserInterfaceEditor {
             rows = (data.skills || []).filter(skill => skill && ids.has(skill.id) && (node.filterContext || !node.skillTypeId || skill.stypeId === node.skillTypeId)).slice(0, 12)
                 .map(skill => row('skill', skill.id, skill.id, skill.name, { description: skill.description || '', icon: skill.iconIndex || 0,
                     iconIndex: skill.iconIndex || 0, price: skill.mpCost || 0, level,
-                    cost: skill.tpCost > 0 ? `\\C[29]${skill.tpCost}\\C[0]` : skill.mpCost > 0 ? `\\C[23]${skill.mpCost}\\C[0]` : '' }));
+                    cost: this.previewSkillCost(skill) }));
         } else if (node.dataSource === 'actorParameters') {
             const actor = this.startingActor(node);
             const names = (data.system && data.system.terms && data.system.terms.params) || ['Max HP', 'Max MP', 'ATK', 'DEF', 'MAT', 'MDF', 'AGI', 'LUK'];

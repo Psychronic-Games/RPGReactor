@@ -829,7 +829,7 @@ test('the Quests tab is wired like every other Reactor tab, with its own file th
     assert.match(manager, /if \(key === 'quests' && !this\.hasQuests\(\)\n\s*&& !this\.fs\.existsSync/);
     for (const method of ['getQuests()', 'getQuest(id)', 'hasQuests()', 'addQuest(record)', 'updateQuest(id, data)']) assert.ok(manager.includes(`    ${method} {`), method);
     const ui = read('editor/src/DatabaseEditorUI.js');
-    assert.match(ui, /\{ name: 'Quests', type: 'quests' \},/);
+    assert.match(ui, /\{ name: 'Quests', type: 'quests'(, feature: 'quests')? \},/);
     assert.match(ui, /case 'quests':\n\s*data = this\.databaseManager\.getQuests\(\);/);
     assert.match(ui, /else if \(type === 'quests' && this\.questEditor\) \{\n\s*this\.questEditor\.showQuestDetail\(detailEl, entry\);/);
     assert.match(ui, /quests: \{ name: 'New Quest', key: '', category: ''/);

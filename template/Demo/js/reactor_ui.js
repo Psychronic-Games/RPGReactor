@@ -223,6 +223,13 @@
         return raw ? this.normalizeInterface(raw) : null;
     };
 
+    // Whether the shop refuses to buy an item back: no price, or the database's "Can't be sold" (rrNoSell)
+    // while Database > Reactor Features keeps that addition on (Window_ShopSell asks the same).
+    function cannotSell(item) {
+        if (!item || !((item.price || 0) > 0)) return true;
+        return !!item.rrNoSell && (typeof ReactorFeatures === "undefined" || ReactorFeatures.on("unsellableItems"));
+    }
+
     function finite(value, fallback) {
         const number = Number(value);
         return Number.isFinite(number) ? number : fallback;
@@ -366,7 +373,37 @@
         return result;
     };
 
+    /** Whether `key` is a resource pool the project turned off (System.json rrPoolsOff, Database > System 1 > Options): its gauge is not drawn. HP is never off. */
+    ReactorUI.isPoolHidden = function(key) {
+        const system = typeof $dataSystem !== 'undefined' ? $dataSystem : null;
+        return !!system && Array.isArray(system.rrPoolsOff) && key !== 'hp' && system.rrPoolsOff.includes(key);
+    };
+
     ReactorUI.actorPanelLayout = function(node, width, height, fontSize) {
+        // A pool the project turned off (System.json rrPoolsOff) is laid out as before, then taken out with
+        // its label and number, and what sat below it in that column moves up by its row - unless the panel
+        // is drawn over a picture of its own, whose slots are painted in and stay where they are.
+        const hidden = (node.actorFields || ['portrait','name','class','level','hp','mp','exp','states']).filter(key => ['mp','tp'].includes(key) && ReactorUI.isPoolHidden(key));
+        const result = ReactorUI.actorPanelLayoutAll(node, width, height, fontSize);
+        const pictured = Object.values(node.actorElements || {}).some(element => element && element.kind === 'image');
+        for (const key of hidden) {
+            const parts = [key, key + 'Label', key + 'Value'];
+            const band = parts.filter(part => result[part] && result[part].visible !== false).map(part => result[part]);
+            for (const part of parts) delete result[part];
+            if (!band.length || pictured) continue;
+            const top = Math.min(...band.map(r => r.y)), bottom = Math.max(...band.map(r => r.y + r.height));
+            const left = Math.min(...band.map(r => r.x)), right = Math.max(...band.map(r => r.x + r.width));
+            const below = Object.values(result).filter(r => r.y >= bottom - 1 && r.x < right && r.x + r.width > left);
+            const next = below.length ? Math.min(...below.map(r => r.y)) : bottom;
+            for (const r of below) r.y -= next - top;
+        }
+        for (const [key, element] of Object.entries(result)) {
+            if (key.startsWith('custom_') && ['gauge','value','label'].includes(element.kind) && ReactorUI.isPoolHidden(element.gauge)) delete result[key];
+        }
+        return result;
+    };
+
+    ReactorUI.actorPanelLayoutAll = function(node, width, height, fontSize) {
         const fields = new Set(node.actorFields || ['portrait','name','class','level','hp','mp','exp','states']);
         const pad = node.actorPadding ?? 12, gap = node.actorGap ?? 4;
         const size = Math.max(0, Math.min(node.portraitSize || 144, height - pad * 2, (width - pad * 2) / 3));
@@ -2150,7 +2187,7 @@
                     const price = Math.floor((item.price || 0) / 2);
                     add({ key: kind + ":" + item.id, kind, id: item.id, value: item.id, name: item.name,
                         description: item.description || "", iconIndex: item.iconIndex || 0, count: party.numItems(item),
-                        price, data: item, enabled: (item.price || 0) > 0,
+                        price, data: item, enabled: !cannotSell(item),
                         defaultText: "\\I[" + (item.iconIndex || 0) + "]{name}  x{count}" });
                 }
                 break;
@@ -4078,6 +4115,7 @@
         }
         const authored = this._authoredNodes;
         const shown = node => {
+            if (node && node.type === "gauge" && ReactorUI.isPoolHidden(node.gauge)) return false;
             for (let depth = 0; node && depth <= authored.size; depth++) {
                 if (!ReactorUI.evaluateCondition(node.visible, this)) return false;
                 const parent = authored.get(node.parent);
@@ -4775,7 +4813,7 @@
         } else {
             max = $gameParty.numItems(item);
         }
-        if (!item || max < 1 || (!buying && !(item.price > 0))) { SoundManager.playBuzzer(); window.activate(); return; }
+        if (!item || max < 1 || (!buying && cannotSell(item))) { SoundManager.playBuzzer(); window.activate(); return; }
         SoundManager.playOk();
         const rect = new Rectangle(window.x, window.y, Math.max(window.width, 360), Math.max(window.height, this.calcWindowHeight(4, true)));
         const quantity = new Window_ShopNumber(rect);
@@ -5093,7 +5131,7 @@
                 if (unit) {
                     const before = this._fightView.id === unit.id ? (this._fightView.hpShown >= 0 ? this._fightView.hpShown : this._fightView.hp) : -1;
                     // The forecast is for a unit the aimed action would land on: never the acting unit under its own cursor.
-                    const view = hud.fillUnitView(this._fightView, reader, unit, typeof $dataSystem === "undefined" || !$dataSystem || $dataSystem.optDisplayTp !== false,
+                    const view = hud.fillUnitView(this._fightView, reader, unit, typeof $dataSystem === "undefined" || !$dataSystem || ($dataSystem.optDisplayTp !== false && !ReactorUI.isPoolHidden("tp")),
                         node.fightUnit === "focused" ? hud.previewFor(reader, unit) : null);
                     // The same unit with other HP: the bar runs to it over the next frames. Another unit: its bar as it is.
                     view.hpShown = before >= 0 && before !== view.hp ? before : -1;

@@ -16,7 +16,7 @@ test('crab and lobster forearms share exact claw socket pivots throughout locomo
         const r=Q.Creature.withVariant(Q.Creature.kindRecipe(kind),kind+'Type',type[0]);if(r.lobsterType==='spinyLobster')continue;
         const b=Q.Creature.build(r,{quality:'preview'}),body=b.parts.find(p=>p.name==='Body');
         for(const s of [-1,1]){
-            const wrist=b.bones.find(x=>x.name==='Chela'+s).head,forearm=b.parts.find(p=>p.name==='Cheliped forearm '+s),socket=b.parts.find(p=>p.name==='Palm socket '+s);
+            const wrist=b.bones.find(x=>x.name==='Chela'+s).head,forearm=b.parts.find(p=>p.name==='Cheliped arm '+s),socket=b.parts.find(p=>p.name==='Claw palm '+s); // 2026-10-24: merus+carpus share one arm mesh; the flattened palm starts on the carpal pivot
             const ia=anchor(forearm,wrist),ib=anchor(socket,wrist),palm=b.parts.find(p=>p.name==='Claw palm '+s),end=b.bones.find(x=>x.name==='Chela'+s).tail;
             assert.ok(inside(palm,end),'socket ends inside the claw palm');
             assert.ok(inside(body,b.bones.find(x=>x.name==='Leg'+s+'_0_0').head),'upper arm starts inside carapace');

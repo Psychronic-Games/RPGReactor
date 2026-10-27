@@ -56,6 +56,8 @@
         tendrils: { height: 1.3, colour: "#3a2a70", tip: "#c48cf0", vary: 0.25, perLevel: 0.26, glow: 0.3 },
         crystals: { height: 0.7, colour: "#5a4a9a", tip: "#d8c8ff", vary: 0.35, perLevel: 0.3, glow: 0.45 }
     };
+    /** The kinds whose pieces may each take one of a list of colours (`colours`), none by default: a field of mixed crystals. */
+    R.FOLIAGE_MIXED = ["crystals"];
     /** The kinds a ground marked bare still takes: mineral, not grown. */
     R.FOLIAGE_ON_BARE = ["crystals"];
     /** How bright a glowing tip is beside its colour in full light. */
@@ -63,7 +65,7 @@
     R.BUSH_LOOK = { colour: "#3f6b2b", size: 1.6 };
     /** A bush this wide or wider stops a walker; smaller ones are walked through. */
     R.BUSH_BLOCK_SIZE = 1.4;
-    R.FOLIAGE_MAX_HEIGHT = 6;
+    R.FOLIAGE_MAX_HEIGHT = 12;
     R.WIND_DEFAULT = { dir: 30, strength: 0.6, gust: 1 };
 
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -115,12 +117,14 @@
             tip: hex(raw.tip, look.tip),
             vary: clamp(num(raw.vary, look.vary), 0, 1),
             glow: clamp(num(raw.glow, look.glow || 0), 0, 1),
+            // How thick each blade, frond or shard is, and how far it leans, beside the kind's own (1).
+            width: clamp(num(raw.width, 1), 0.2, 5),
+            lean: clamp(num(raw.lean, 1), 0, 3),
             seed: Math.floor(num(raw.seed, 1)) | 0
         };
-        if (look.colours) {
-            const colours = Array.isArray(raw.colours) ? raw.colours.map(c => hex(c, null)).filter(Boolean) : [];
-            layer.colours = colours.length ? colours : look.colours.slice();
-        }
+        const colours = Array.isArray(raw.colours) ? raw.colours.map(c => hex(c, null)).filter(Boolean) : [];
+        if (look.colours) layer.colours = colours.length ? colours : look.colours.slice();
+        else if (colours.length && R.FOLIAGE_MIXED.includes(raw.kind)) layer.colours = colours;
         return layer;
     };
 
@@ -270,7 +274,7 @@
                     items.push({
                         rank: random(),
                         base: [wx, ground, wz, random() * Math.PI * 2],
-                        shape: [layer.height * size * (open > 0 ? 1 + open : 1), width * (0.75 + random() * 0.5), lean * (0.3 + random() * 1.5), 0],
+                        shape: [layer.height * size * (open > 0 ? 1 + open : 1), width * (layer.width || 1) * (0.75 + random() * 0.5), lean * (layer.lean ?? 1) * (0.3 + random() * 1.5), 0],
                         tint: [tint[0], tint[1], tint[2], random() * 6.2832]
                     });
                 }
@@ -508,6 +512,7 @@
         "uniform vec3 rrFolRoot;",
         "uniform vec3 rrFolTip;",
         "uniform float rrFolGlow;",
+        "uniform float rrFolMix;",
         "varying float vRRGlow;",
         "varying vec3 vRRFoliage;",
         "varying float vRRSide;",
@@ -612,7 +617,8 @@
         "else if (aFolPart > 1.5) rrCol = vec3(0.09, 0.05, 0.025);",
         kind === "bulbs" ? "else {" : kind === "tendrils" ? "else {\n\t\trrCol *= aFolTint.rgb;" : kind === "crystals"
             // Each face of a shard its own brightness.
-            ? "else {\n\t\trrCol *= aFolTint.rgb * (rrCross < 0.5 ? 1.0 : 0.6) * (1.25 + 0.5 * rrShadeT);"
+            // Mixed, each shard is one of the layer's colours, dark at its root and pale at its point.
+            ? "else {\n\t\tvec3 rrShard = pow(aFolTint.rgb, vec3(2.2));\n\t\trrCol = rrFolMix > 0.5 ? mix(rrShard * 0.45, mix(rrShard, vec3(1.0), 0.4), rrShadeT) : rrCol * aFolTint.rgb;\n\t\trrCol *= (rrCross < 0.5 ? 1.0 : 0.6) * (1.25 + 0.5 * rrShadeT);"
             : "else {\n\t\trrCol *= aFolTint.rgb;",
         // Now and then an Earth blade gone dry, straw at its tip.
         kind === "bulbs" || kind === "tendrils" || kind === "crystals" ? "}"
@@ -637,7 +643,8 @@
         const own = {
             rrFolRoot: { value: new THREE.Color().setRGB(...linear(layer.colour)) },
             rrFolTip: { value: new THREE.Color().setRGB(...linear(layer.tip)) },
-            rrFolGlow: { value: layer.glow || 0 }
+            rrFolGlow: { value: layer.glow || 0 },
+            rrFolMix: { value: R.FOLIAGE_MIXED.includes(layer.kind) && layer.colours ? 1 : 0 }
         };
         // A glowing layer shows its own colour over the light: drawn lit in place, not with the light laid on afterwards.
         const glow = (layer.glow || 0) > 0;
@@ -649,6 +656,7 @@
             shader.uniforms.rrFolRoot = own.rrFolRoot;
             shader.uniforms.rrFolTip = own.rrFolTip;
             shader.uniforms.rrFolGlow = own.rrFolGlow;
+            shader.uniforms.rrFolMix = own.rrFolMix;
             shader.vertexShader = FOLIAGE_VERTEX + "\n" + shader.vertexShader.replace("#include <begin_vertex>", foliageBody(layer.kind));
             // A blade is lighter along its middle than at its edges.
             shader.fragmentShader = "varying vec3 vRRFoliage;\nvarying float vRRSide;\nvarying float vRRGlow;\n" + shader.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n\tdiffuseColor.rgb *= vRRFoliage * (0.8 + 0.2 * (1.0 - abs(vRRSide)));" + (glow ? "\n\tvec3 rrFolSelf = diffuseColor.rgb;" : ""));
@@ -910,9 +918,10 @@
                 jobs.push([cx, cy]);
             }
         }
-        // Old layer materials are dropped when the layer list changed (another colour, another kind).
+        // Old layer materials are dropped when the layer list changed (another colour, glow or mix, another kind).
         const live = this._foliageLayers || [];
-        if (!keys || live.length !== foliage.layers.length || live.some((layer, i) => layer.kind !== foliage.layers[i].kind || layer.colour !== foliage.layers[i].colour || layer.tip !== foliage.layers[i].tip)) {
+        const differs = (a, b) => a.kind !== b.kind || a.colour !== b.colour || a.tip !== b.tip || a.glow !== b.glow || String(a.colours || "") !== String(b.colours || "");
+        if (!keys || live.length !== foliage.layers.length || live.some((layer, i) => differs(layer, foliage.layers[i]))) {
             this.disposeFoliageMaterials();
             if (keys) { this.removeFoliage(null); return this.addFoliage(mapData, null); }
         } else {

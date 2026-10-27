@@ -13,7 +13,7 @@
  *                 "where": { "rect": [x0, y0, x1, y1] } | { "polygon": [[x, y], ...] } | { "all": true },
  *                 "rules": { "maxSlope": 0.5, "awayFromPieces": 2, "nearPieces": 4, "awayFromWater": 1, "nearWater": 3,
  *                            "noise": 0.5, "noiseScale": 9, "minLevel": 1 },
- *                 "height": 0.8, "colour": "#4a7a30", "tip": "#b9c862", "glow": 0, "seed": 1 } ],
+ *                 "height": 0.8, "colour": "#4a7a30", "tip": "#b9c862", "glow": 0, "width": 1, "lean": 1, "seed": 1 } ],
  *     "bushes": [ { "x": 41.5, "y": 30.2, "size": 2 },
  *                 { "where": { "rect": [...] }, "count": 30, "size": [1.2, 2.4], "spacing": 3,
  *                   "rules": { "awayFromPieces": 2 }, "colour": "#3f6b2b", "bloom": "#f2c4d8", "seed": 4 } ] }
@@ -151,7 +151,7 @@ function paint(map, spec, { Reactor3D: R, F }) {
             const n = noise(x, y), amount = Math.max(0, Math.min(1, Number(rules.noise)));
             const v = Math.round(level * (1 - amount + amount * Math.min(1, n * 1.6)));
             return v >= Math.max(1, minLevel) ? v : 0;
-        }, level, { height: job.height, colour: job.colour, tip: job.tip, vary: job.vary, seed: job.seed, colours: job.colours, glow: job.glow });
+        }, level, { height: job.height, colour: job.colour, tip: job.tip, vary: job.vary, seed: job.seed, colours: job.colours, glow: job.glow, width: job.width, lean: job.lean });
         report.push(`${job.kind}: ${count} cell(s) set (level ${level}${noise ? `, patchy ${rules.noise}` : ''})`);
     }
     let stood = 0;

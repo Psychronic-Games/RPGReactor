@@ -4296,6 +4296,14 @@ class DatabaseAnimationEditor {
                 return;
             }
 
+            // Held, not drawn, while another window is the one worked in (the editor's own previews do
+            // the same): it picks up where it was when this window is used again.
+            if (typeof window !== 'undefined' && window.RRDetachedWindow?.previewActive?.(canvas) === false) {
+                lastTime = Date.now();
+                animationFrameId = requestAnimationFrame(render);
+                return;
+            }
+
             const now = Date.now();
             const deltaTime = now - lastTime;
             lastTime = now;
@@ -4402,7 +4410,9 @@ class DatabaseAnimationEditor {
                 if (!hdr) effekseerContext.endDraw();
             }
             if (handle && handle.exists) {
-                if ((currentFrame === 3 || currentFrame % 10 === 0) && anythingLit()) lastLitFrame = currentFrame;
+                // Looked for while the first play measures the picture's length only: each look reads the
+                // picture back from the GPU, which waits for it to finish, and the repeats know the length.
+                if (!visibleFrames && (currentFrame === 3 || currentFrame % 10 === 0) && anythingLit()) lastLitFrame = currentFrame;
                 if (repeatCheckbox && repeatCheckbox.checked && visibleFrames > 0 && currentFrame >= visibleFrames
                         && currentFrame > maxTimingFrames && !editorSelf._previewFlashActive()) {
                     pictureEnded = true;

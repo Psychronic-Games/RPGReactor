@@ -72,3 +72,43 @@ test('a view that does not turn with the mouse gives the pointer back (a Tactica
         Object.assign(globalThis, saved);
     }
 });
+
+test('losing the mouse reads as Escape only with the window still focused a moment later, and goes where the key would', async () => {
+    const saved = { Scene_Map: globalThis.Scene_Map, SceneManager: globalThis.SceneManager, document: globalThis.document, Input: globalThis.Input, $gameMap: globalThis.$gameMap, $dataMap: globalThis.$dataMap };
+    function Scene_Map() {}
+    const scene = new Scene_Map();
+    const pressed = [];
+    let focused = true;
+    globalThis.Scene_Map = Scene_Map;
+    globalThis.SceneManager = { _scene: scene };
+    globalThis.document = { hasFocus: () => focused, visibilityState: 'visible' };
+    globalThis.Input = { virtualClick: name => pressed.push(name) };
+    globalThis.$dataMap = { width: 20, height: 20, reactor3d: { mode: '3d' } };
+    globalThis.$gameMap = { _reactorCamera3d: cameras.normalizeState({ mode: 'thirdPerson' }), _reactorCamera3dTween: null };
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+        cameras.look.suppressMenuUntil = 0;
+        cameras.look.escapeAt = 0;
+        cameras.lockReleased();
+        assert.deepEqual(pressed, [], 'nothing at once: a blur may still be on its way');
+        await wait(200);
+        assert.deepEqual(pressed, ['escape'], 'Escape is pressed, not the menu called: a rider gets off, a message closes');
+        assert.equal(scene.menuCalling, undefined);
+
+        // Another window takes the focus: the lock goes, and so does the focus.
+        cameras.lockReleased();
+        focused = false;
+        await wait(200);
+        assert.deepEqual(pressed, ['escape'], 'a focus loss is not Escape');
+
+        // The page heard the Escape itself: Input has it already.
+        focused = true;
+        cameras.look.escapeAt = Date.now();
+        cameras.lockReleased();
+        await wait(200);
+        assert.deepEqual(pressed, ['escape'], 'the same press is not made twice');
+    } finally {
+        cameras.look.escapeAt = 0;
+        Object.assign(globalThis, saved);
+    }
+});

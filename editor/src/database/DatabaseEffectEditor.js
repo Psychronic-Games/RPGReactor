@@ -245,11 +245,16 @@ class DatabaseEffectEditor {
                 ${this._numberHTML(code, 'value2', rrEscapeHtml(effect.code === code ? effect.value2 : 0))}
             </span>`;
 
+        // A pool the project turned off (System 1 > Resource Pools) has no row, unless it is the effect being edited;
+        // each row names its pool by the project's term.
+        const pools = globalThis.ResourcePools, system = this.databaseManager?.getSystem?.();
+        const pool = (key, code, label) => pools && pools.isOff(system, key) && effect.code !== code ? null : (pools ? pools.label(system, key, tt(label)) : tt(label));
+        const hp = pool('hp', 11, 'HP Recovery'), mp = pool('mp', 12, 'MP Recovery'), tp = pool('tp', 13, 'TP Gain');
         container.innerHTML = [
-            this._rowHTML(effect, { code: 11, label: tt('HP Recovery'), control: recoveryGroup(11) }),
-            this._rowHTML(effect, { code: 12, label: tt('MP Recovery'), control: recoveryGroup(12) }),
-            this._rowHTML(effect, {
-                code: 13, label: tt('TP Gain'),
+            this._rowHTML(effect, { code: 11, label: hp, control: recoveryGroup(11) }),
+            mp === null ? '' : this._rowHTML(effect, { code: 12, label: mp, control: recoveryGroup(12) }),
+            tp === null ? '' : this._rowHTML(effect, {
+                code: 13, label: tp,
                 value: this._numberHTML(13, 'value1', rrEscapeHtml(effect.code === 13 ? effect.value1 : 0))
             })
         ].join('');

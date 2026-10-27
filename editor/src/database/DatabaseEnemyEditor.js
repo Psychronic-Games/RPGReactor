@@ -78,13 +78,19 @@ class DatabaseEnemyEditor {
                     <div class="db-row-cols">
                         <span class="db-col">
                             <label>${tt('EXP')}</label>
-                            <input type="number" class="database-field-value" value="${this.escapeHTML(enemy.exp || 0)}" min="0" data-field="exp" data-enemy-id="${enemy.id}">
+                            ${this.rewardRangeHTML(enemy, 'exp', 'rrExpMax')}
                         </span>
                         <span class="db-col">
                             <label>${tt('Gold')}</label>
-                            <input type="number" class="database-field-value" value="${this.escapeHTML(enemy.gold || 0)}" min="0" data-field="gold" data-enemy-id="${enemy.id}">
+                            ${this.rewardRangeHTML(enemy, 'gold', 'rrGoldMax')}
                         </span>
                     </div>
+                    ${this.rangesOn() ? `<div class="db-row-cols">
+                        <span class="db-col">
+                            <label>${tt('Stat Variance %')}</label>
+                            <input type="number" class="database-field-value enemy-stat-variance" value="${this.escapeHTML(enemy.rrStatVariance || 0)}" min="0" max="50" step="1" data-field="rrStatVariance" data-enemy-id="${enemy.id}" title="${this.escapeHTML(tt('Each enemy in battle rolls its parameters within this percentage of the values here (0 = exact)'))}">
+                        </span>
+                    </div>` : ''}
                 </div>
             </div>
         `;
@@ -370,6 +376,21 @@ class DatabaseEnemyEditor {
                     const dropField = e.target.dataset.dropField;
                     const value = e.target.value;
                     this.updateEnemyField(enemyId, fieldName, value, paramIndex, dropIndex, dropField);
+                    // Show what was stored when the box was clamped or paired.
+                    const stored = this.databaseManager.getEnemy(enemyId);
+                    if (stored && fieldName === 'rrStatVariance') e.target.value = String(stored.rrStatVariance || 0);
+                    // A blank maximum shows the base it falls back to.
+                    if (stored && (fieldName === 'exp' || fieldName === 'gold')) {
+                        const top = e.target.parentElement?.querySelector(`input[data-field="${fieldName === 'exp' ? 'rrExpMax' : 'rrGoldMax'}"]`);
+                        if (top) top.placeholder = String(stored[fieldName] || 0);
+                    }
+                    if (stored && (dropField === 'rrQtyMin' || dropField === 'rrQtyMax' || dropField === 'kind')) {
+                        const qty = DatabaseEnemyEditor.dropQuantity(stored.dropItems && stored.dropItems[parseInt(dropIndex)]);
+                        for (const [key, shown] of [['rrQtyMin', qty.min], ['rrQtyMax', qty.max]]) {
+                            const box = container.querySelector(`input[data-drop-index="${dropIndex}"][data-drop-field="${key}"][data-enemy-id="${enemyId}"]`);
+                            if (box) box.value = String(shown);
+                        }
+                    }
                 });
             });
             // Setup drop kind change listeners for show/hide behavior
@@ -398,6 +419,37 @@ class DatabaseEnemyEditor {
     }
 
     /**
+     * A reward and its optional top: EXP or Gold, then a "Maximum" box. Left
+     * blank (or no higher than the first), the enemy gives exactly the first
+     * value, as in RPG Maker MZ; above it, each defeated enemy rolls a whole
+     * number between the two (Game_Enemy.rrRoll).
+     */
+    rewardRangeHTML(enemy, field, maxField) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const max = enemy[maxField];
+        // Enemy Ranges off (Database › Reactor Features): the one MZ value; a stored maximum stays, unused.
+        if (!this.rangesOn()) {
+            return `<input type="number" class="database-field-value" value="${this.escapeHTML(enemy[field] || 0)}" min="0" data-field="${field}" data-enemy-id="${enemy.id}">`;
+        }
+        return `<span class="enemy-reward-range" style="display: flex; align-items: center; gap: 4px; min-width: 0;">
+            <input type="number" class="database-field-value" style="flex: 1 1 0; min-width: 0;" value="${this.escapeHTML(enemy[field] || 0)}" min="0" data-field="${field}" data-enemy-id="${enemy.id}">
+            <span style="color: var(--color-text-muted);">–</span>
+            <input type="number" class="database-field-value" style="flex: 1 1 0; min-width: 0;" value="${Number.isFinite(max) ? this.escapeHTML(max) : ''}" min="0" placeholder="${this.escapeHTML(enemy[field] || 0)}" aria-label="${this.escapeHTML(tt('Maximum'))}" title="${this.escapeHTML(tt('Maximum'))}" data-field="${maxField}" data-enemy-id="${enemy.id}">
+        </span>`;
+    }
+
+    /**
+     * Whether the Enemy Ranges addition is on (Database › Reactor Features):
+     * Stat Variance, an EXP or Gold maximum, and a drop's quantity range. Off,
+     * their fields are hidden; what was entered stays saved and the game
+     * ignores it (Game_Enemy.rrRoll, rrDropCount).
+     */
+    rangesOn() {
+        const features = typeof window !== 'undefined' ? window.ReactorFeatures : null;
+        return !features || features.on('enemyRanges', this.databaseManager.getSystem?.() || {});
+    }
+
+    /**
      * An enemy that was never given a Max TP has no `maxTp` key, and the
      * runtime falls back to Game_BattlerBase's 100 for it; the box shows
      * that same 100 and writes nothing until the value is changed.
@@ -421,6 +473,7 @@ class DatabaseEnemyEditor {
 
     buildDropItemsHTML(enemy) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const qtyOn = this.rangesOn();
         if (!enemy.dropItems) {
             enemy.dropItems = [
                 { kind: 0, dataId: 1, denominator: 1 },
@@ -468,6 +521,16 @@ class DatabaseEnemyEditor {
                             <span class="database-field-label" id="enemy-drop-rate-${enemy.id}-${i}" data-rr-i18n-skip
                                   style="font-size: 11px; color: var(--color-text-muted); min-width: 46px;">${this.formatDropRate(drop.denominator)}</span>
                         </div>
+                        ${qtyOn ? `<div class="enemy-drop-qty" style="display: ${drop.kind === 0 ? 'none' : 'flex'}; align-items: center; gap: 4px;" id="enemy-drop-qty-wrapper-${enemy.id}-${i}">
+                            <label class="database-field-label" style="font-size: 11px;">${tt('Qty')}</label>
+                            <input type="number" class="database-field-value database-field-value-small" style="width: 48px; min-width: 0; font-size: 11px;"
+                                   value="${DatabaseEnemyEditor.dropQuantity(drop).min}" min="1" max="9999" aria-label="${this.escapeHTML(tt('Qty'))}"
+                                   data-field="dropItems" data-drop-index="${i}" data-drop-field="rrQtyMin" data-enemy-id="${enemy.id}">
+                            <span style="font-size: 11px; color: var(--color-text-muted);">–</span>
+                            <input type="number" class="database-field-value database-field-value-small" style="width: 48px; min-width: 0; font-size: 11px;"
+                                   value="${DatabaseEnemyEditor.dropQuantity(drop).max}" min="1" max="9999" aria-label="${this.escapeHTML(tt('Maximum'))}" title="${this.escapeHTML(tt('Maximum'))}"
+                                   data-field="dropItems" data-drop-index="${i}" data-drop-field="rrQtyMax" data-enemy-id="${enemy.id}">
+                        </div>` : ''}
                     </div>
                 </div>
             `;
@@ -528,16 +591,19 @@ class DatabaseEnemyEditor {
 
                 const dataIdWrapper = document.getElementById(`enemy-drop-dataid-wrapper-${enemy.id}-${dropIndex}`);
                 const denomWrapper = document.getElementById(`enemy-drop-denom-wrapper-${enemy.id}-${dropIndex}`);
+                const qtyWrapper = document.getElementById(`enemy-drop-qty-wrapper-${enemy.id}-${dropIndex}`);
                 const dataIdSelect = document.getElementById(`enemy-drop-dataid-${enemy.id}-${dropIndex}`);
 
                 if (newKind === 0) {
                     if (dataIdWrapper) dataIdWrapper.style.display = 'none';
                     if (denomWrapper) denomWrapper.style.display = 'none';
+                    if (qtyWrapper) qtyWrapper.style.display = 'none';
                 } else {
                     // 'flex', not '': clearing the inline display drops the
                     // row to block and re-flows the controls it holds.
                     if (dataIdWrapper) dataIdWrapper.style.display = 'flex';
                     if (denomWrapper) denomWrapper.style.display = 'flex';
+                    if (qtyWrapper) qtyWrapper.style.display = 'flex';
                     if (dataIdSelect) {
                         dataIdSelect.innerHTML = this.getDropDataIdOptions(newKind, 1);
                     }
@@ -1760,7 +1826,14 @@ class DatabaseEnemyEditor {
                 enemy.dropItems[idx].dataId = parseInt(value) || 1;
             } else if (dropField === 'denominator') {
                 enemy.dropItems[idx].denominator = Math.max(1, parseInt(value) || 1);
+            } else if (dropField === 'rrQtyMin' || dropField === 'rrQtyMax') {
+                const current = DatabaseEnemyEditor.dropQuantity(enemy.dropItems[idx]);
+                current[dropField === 'rrQtyMin' ? 'min' : 'max'] = Math.min(9999, Math.max(1, parseInt(value) || 1));
+                if (dropField === 'rrQtyMin' && current.max < current.min) current.max = current.min;
+                if (dropField === 'rrQtyMax' && current.max < current.min) current.min = current.max;
+                DatabaseEnemyEditor.setDropQuantity(enemy.dropItems[idx], current.min, current.max);
             }
+            if (dropField === 'kind' && enemy.dropItems[idx].kind === 0) DatabaseEnemyEditor.setDropQuantity(enemy.dropItems[idx], 1, 1);
             console.log(`Updated enemy ${enemyId} dropItems[${idx}].${dropField} to:`, value);
         }
         // Handle numeric fields
@@ -1768,6 +1841,16 @@ class DatabaseEnemyEditor {
             // Beside exp and gold, never in params: that array is indexed by
             // paramId and has exactly eight entries.
             enemy.maxTp = Math.max(0, parseInt(value) || 0);
+        }
+        // The top of an EXP or Gold range. A blank box stores nothing, and a
+        // top no higher than the base gives the base: the stock fixed reward.
+        else if (fieldName === 'rrExpMax' || fieldName === 'rrGoldMax') {
+            const max = value === '' || value === null ? NaN : parseInt(value, 10);
+            if (Number.isFinite(max) && max >= 0) enemy[fieldName] = max; else delete enemy[fieldName];
+        }
+        else if (fieldName === 'rrStatVariance') {
+            const pct = Math.min(50, Math.max(0, parseInt(value, 10) || 0));
+            if (pct > 0) enemy.rrStatVariance = pct; else delete enemy.rrStatVariance;
         }
         else if (fieldName === 'battlerHue' || fieldName === 'exp' || fieldName === 'gold') {
             enemy[fieldName] = parseInt(value) || 0;
@@ -1972,3 +2055,17 @@ class DatabaseEnemyEditor {
 // What Game_BattlerBase.prototype.maxTp returns for an enemy that carries no
 // maxTp of its own.
 DatabaseEnemyEditor.DEFAULT_MAX_TP = 100;
+
+// A drop slot's quantity range. RPG Maker MZ always drops one; a slot that
+// says more carries rrQtyMin / rrQtyMax (Game_Enemy.rrDropCount), and a 1–1
+// slot stores neither, so stock data stays stock.
+DatabaseEnemyEditor.dropQuantity = function(drop) {
+    const min = Math.max(1, Math.floor(Number(drop && drop.rrQtyMin)) || 1);
+    const max = Math.max(min, Math.floor(Number(drop && drop.rrQtyMax)) || min);
+    return { min, max };
+};
+DatabaseEnemyEditor.setDropQuantity = function(drop, min, max) {
+    if (!drop) return;
+    if (min > 1) drop.rrQtyMin = min; else delete drop.rrQtyMin;
+    if (max > min) drop.rrQtyMax = max; else delete drop.rrQtyMax;
+};

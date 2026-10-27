@@ -161,16 +161,16 @@ class CommonEventEditor {
             if (this.designation === 'direct') {
                 content.appendChild(this._createCommonEventRow());
             } else {
-                content.appendChild(this._createNumberRow(tt('Common Event ID Variable:'),
+                content.appendChild(this._createVariableRow(tt('Common Event ID Variable:'),
                     this.commonEventVariableId, value => { this.commonEventVariableId = value; }));
             }
         } else if (this.designation === 'direct') {
             content.appendChild(this._createMapEventRow());
             content.appendChild(this._createPageRow());
         } else {
-            content.appendChild(this._createNumberRow(tt('Event ID Variable:'),
+            content.appendChild(this._createVariableRow(tt('Event ID Variable:'),
                 this.mapEventVariableId, value => { this.mapEventVariableId = value; }));
-            content.appendChild(this._createNumberRow(tt('Page Variable:'),
+            content.appendChild(this._createVariableRow(tt('Page Variable:'),
                 this.mapPageVariableId, value => { this.mapPageVariableId = value; }));
         }
 
@@ -243,6 +243,45 @@ class CommonEventEditor {
             if (!Number.isNaN(parsed)) onChange(parsed);
         });
         return this._createRow(labelText, input);
+    }
+
+    /** A game variable by name (0005: Gold), with the editor's variable browser beside it: the bare number said nothing of what it held. */
+    _createVariableRow(labelText, value, onChange) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const names = this.databaseManager?.data?.system?.variables || [];
+        const select = this._styleControl(document.createElement('select'));
+        select.style.flex = '1';
+        const count = Math.max(names.length - 1, value || 1);
+        for (let id = 1; id <= count; id++) {
+            const option = document.createElement('option');
+            option.value = String(id);
+            option.textContent = `${String(id).padStart(4, '0')}: ${names[id] || ''}`;
+            select.appendChild(option);
+        }
+        select.value = String(value || 1);
+        select.addEventListener('change', () => onChange(parseInt(select.value, 10) || 1));
+        const browse = document.createElement('button');
+        browse.textContent = '...';
+        browse.className = 'rr-btn-browse';
+        browse.title = tt('Variable');
+        browse.addEventListener('click', () => {
+            if (typeof SwitchVariablePicker === 'undefined') return;
+            new SwitchVariablePicker(this.databaseManager, this.projectController).show('variable', parseInt(select.value, 10) || 1, id => {
+                if (!id) return;
+                if (!select.querySelector(`option[value="${id}"]`)) {
+                    const option = document.createElement('option');
+                    option.value = String(id); option.textContent = `${String(id).padStart(4, '0')}: ${names[id] || ''}`;
+                    select.appendChild(option);
+                }
+                select.value = String(id);
+                onChange(id);
+            });
+        });
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display: flex; gap: 6px; flex: 1; min-width: 0;';
+        wrap.appendChild(select);
+        wrap.appendChild(browse);
+        return this._createRow(labelText, wrap);
     }
 
     _createCommonEventRow() {

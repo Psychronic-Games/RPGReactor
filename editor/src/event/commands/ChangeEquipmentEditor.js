@@ -114,7 +114,11 @@ class ChangeEquipmentEditor {
             option.selected = (this.actorId === i);
             actorSelect.appendChild(option);
         }
-        actorSelect.addEventListener('change', (e) => { this.actorId = parseInt(e.target.value); });
+        actorSelect.addEventListener('change', (e) => {
+            this.actorId = parseInt(e.target.value);
+            // An actor whose Slot Type picks a slot layout lists that layout's types.
+            if (ChangeEquipmentEditor.layoutTypes(this.databaseManager, this.actorId) || this._layoutListed) this.renderContent();
+        });
 
         actorRow.appendChild(actorLabel);
         actorRow.appendChild(actorSelect);
@@ -131,7 +135,8 @@ class ChangeEquipmentEditor {
         const slotSelect = document.createElement('select');
         slotSelect.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
 
-        ChangeEquipmentEditor.equipTypes(this.databaseManager, this.equipSlot).forEach(slot => {
+        this._layoutListed = !!ChangeEquipmentEditor.layoutTypes(this.databaseManager, this.actorId);
+        ChangeEquipmentEditor.equipTypes(this.databaseManager, this.equipSlot, this.actorId).forEach(slot => {
             const option = document.createElement('option');
             option.value = slot.value;
             option.textContent = slot.label;
@@ -220,9 +225,11 @@ class ChangeEquipmentEditor {
 
     /**
      * The project's equipment types as { value: id, label }, ids from 1 (Weapon), with the
-     * stock five when System has none. A saved id the list lacks stays selectable.
+     * stock five when System has none. A saved id the list lacks stays selectable. For an actor
+     * whose Slot Type picks a slot layout, only the types that layout has a slot of (the command
+     * changes the first slot of its type).
      */
-    static equipTypes(databaseManager, current) {
+    static equipTypes(databaseManager, current, actorId = 0) {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         let names = null;
         try {
@@ -232,8 +239,22 @@ class ChangeEquipmentEditor {
         const types = names && names.length > 1
             ? names.slice(1).map((name, index) => ({ value: index + 1, label: String(name || '') || `#${index + 1}` }))
             : ['Weapon', 'Shield', 'Head', 'Body', 'Accessory'].map((name, index) => ({ value: index + 1, label: tt(name) }));
-        if (current > 0 && !types.some(type => type.value === current)) types.push({ value: current, label: `#${current}` });
-        return types;
+        const own = ChangeEquipmentEditor.layoutTypes(databaseManager, actorId);
+        const listed = own ? types.filter(type => own.has(type.value) || type.value === current) : types;
+        if (current > 0 && !listed.some(type => type.value === current)) listed.push({ value: current, label: `#${current}` });
+        return listed;
+    }
+
+    /** The equipment types of the slot layout an actor's Slot Type picks, or null (no layout). */
+    static layoutTypes(databaseManager, actorId) {
+        const slots = typeof globalThis !== 'undefined' ? globalThis.RREquipSlots : null;
+        if (!slots || !slots.layoutFor || !(actorId > 0)) return null;
+        try {
+            const actor = databaseManager.data && databaseManager.data.actors ? databaseManager.data.actors[actorId] : null;
+            const actorClass = actor && typeof databaseManager.getClass === 'function' ? databaseManager.getClass(actor.classId) : null;
+            const layout = actor ? slots.layoutFor(databaseManager.getSystem(), actor, actorClass) : null;
+            return layout ? new Set(layout.slots) : null;
+        } catch (error) { return null; }
     }
 
     buildCommand() {

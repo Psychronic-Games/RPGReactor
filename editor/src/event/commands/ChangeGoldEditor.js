@@ -25,10 +25,13 @@ class ChangeGoldEditor {
             this.operation = params[0] || 0;
             this.operandType = params[1] || 0;
             this.operand = params[2] || 0;
+            // Random (operand type 2): params[3] is the top of the range.
+            this.operandMax = params[3] ?? this.operand;
         } else {
             this.operation = 0;
             this.operandType = 0;
             this.operand = 0;
+            this.operandMax = 0;
         }
 
         if (!this.modal) {
@@ -174,16 +177,35 @@ class ChangeGoldEditor {
         variableLabel.textContent = tt('Variable');
         variableLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
+        const randomRadio = document.createElement('input');
+        randomRadio.type = 'radio';
+        randomRadio.name = 'gold-operand-type';
+        randomRadio.id = 'random-gold';
+        randomRadio.checked = (this.operandType === 2);
+        randomRadio.addEventListener('change', () => {
+            this.operandType = 2;
+            this.renderContent();
+        });
+
+        const randomLabel = document.createElement('label');
+        randomLabel.htmlFor = 'random-gold';
+        randomLabel.textContent = tt('Random');
+        randomLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
+
         operandTypeRow.appendChild(constantRadio);
         operandTypeRow.appendChild(constantLabel);
         operandTypeRow.appendChild(variableRadio);
         operandTypeRow.appendChild(variableLabel);
+        operandTypeRow.appendChild(randomRadio);
+        operandTypeRow.appendChild(randomLabel);
         content.appendChild(operandTypeRow);
 
         // Operand input
         if (this.operandType === 0) {
             // Constant
             content.appendChild(this.createConstantInput());
+        } else if (this.operandType === 2) {
+            content.appendChild(this.createRandomInput());
         } else {
             // Variable
             content.appendChild(this.createVariableInput());
@@ -225,7 +247,7 @@ class ChangeGoldEditor {
         const input = document.createElement('input');
         input.type = 'number';
         input.min = 0;
-        input.max = 99999999;
+        input.max = 9999999999;
         input.value = this.operand;
         input.style.cssText = `
             padding: 6px 10px;
@@ -243,6 +265,37 @@ class ChangeGoldEditor {
         section.appendChild(label);
         section.appendChild(input);
 
+        return section;
+    }
+
+    /**
+     * Random: a whole number of gold between the two ends, rolled when the
+     * command runs (Game_Interpreter.operateValue, operand type 2).
+     */
+    createRandomInput() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const section = document.createElement('div');
+        section.className = 'rr-random-range';
+        section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+
+        const label = document.createElement('span');
+        label.textContent = tt('Amount:');
+        label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
+        section.appendChild(label);
+
+        const field = (value, onInput) => {
+            const input = document.createElement('input');
+            input.type = 'number'; input.min = 0; input.max = 9999999999; input.value = value;
+            input.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:110px;';
+            input.addEventListener('input', onInput);
+            return input;
+        };
+        section.appendChild(field(this.operand, e => { this.operand = parseInt(e.target.value) || 0; }));
+        const dash = document.createElement('span');
+        dash.textContent = '–';
+        dash.style.cssText = 'color: var(--color-text-muted);';
+        section.appendChild(dash);
+        section.appendChild(field(this.operandMax, e => { this.operandMax = parseInt(e.target.value) || 0; }));
         return section;
     }
 
@@ -310,11 +363,11 @@ class ChangeGoldEditor {
             indent: 0,
             // MZ command 125 contract: [operation, operandType, operand] —
             // the runtime calls operateValue(params[0], params[1], params[2])
-            parameters: [
-                this.operation,
-                this.operandType,
-                this.operand
-            ]
+            // Random (operand type 2) adds the top of the range; any other
+            // amount keeps RPG Maker MZ's own parameter list.
+            parameters: this.operandType === 2
+                ? [this.operation, this.operandType, this.operand, this.operandMax]
+                : [this.operation, this.operandType, this.operand]
         };
     }
 

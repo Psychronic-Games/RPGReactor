@@ -240,19 +240,42 @@
         findImage,
         imageReference,
         /**
-         * Frames per character row: 3, or N for a "Name[fN]" sheet when the project's
-         * System.json turns multi-frame sheets on (rrMultiFrames, set by imports of
-         * games that used them). A stock project is always 3.
+         * The frame count a file name carries: "Name[6F]", as Reactor writes it (number
+         * first, like [8D]), or "Name[F6]", the Victor Engine Multi Frames spelling that
+         * imported games use; either case, and beside [8D] ("$Name[8D][6F]"). 0 without one.
+         */
+        framesTagged(name) {
+            const m = /\[(?:(\d+)F|F(\d+))\]/i.exec(normalizeRelative(name).split('/').pop() || '');
+            return m ? Math.max(1, Number(m[1] || m[2])) : 0;
+        },
+        /** The tag for n frames per row, as Reactor names its sheets: "[6F]"; none for MZ's 3. */
+        frameTag(n) {
+            const f = Math.round(Number(n));
+            return Number.isFinite(f) && f >= 1 && f !== 3 ? `[${f}F]` : '';
+        },
+        /**
+         * Frames per character row: 3, or N for a "Name[6F]" (or "Name[F6]") sheet when the
+         * project's System.json turns multi-frame sheets on (rrMultiFrames: Database ›
+         * Reactor Features, an import of a game that used them, or an exported [NF] sheet).
+         * A stock project is always 3.
          */
         characterFrameCount(name, system) {
             const sys = system || (typeof window !== 'undefined' ? window.reactor?.databaseManager?.data?.system : null);
             if (!sys || sys.rrMultiFrames !== true) return 3;
-            const m = /\[F(\d+)\]/i.exec(String(name || ''));
-            return m ? Math.max(1, Number(m[1])) : 3;
+            return this.framesTagged(name) || 3;
         },
-        /** A "[8D]" sheet: eight blocks of 3 x 4 frames, cut as an eight-character sheet whatever its "$" says. */
+        /** A "[8D]" sheet: eight blocks of 3 x 4 frames (N x 4 with [NF]), cut as an eight-character sheet whatever its "$" says. */
         isEightDirCharacter(name) {
             return /\[8D\]/i.test(normalizeRelative(name).split('/').pop() || '');
+        },
+        /** A "[1D]" sheet: one row per character, shown whichever way it faces ([8D] wins over it). */
+        isOneDirCharacter(name) {
+            const base = normalizeRelative(name).split('/').pop() || '';
+            return /\[1D\]/i.test(base) && !/\[8D\]/i.test(base);
+        },
+        /** Rows per character of a sheet: 1 for a [1D] sheet, else MZ's 4 (down, left, right, up). */
+        characterRows(name) {
+            return this.isOneDirCharacter(name) ? 1 : 4;
         },
         isBigCharacter(name) {
             const basename = normalizeRelative(name).split('/').pop() || '';

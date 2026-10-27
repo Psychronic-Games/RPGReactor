@@ -26,6 +26,8 @@ class DatabaseArmorEditor {
         wrapper.style.position = 'relative';
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        // "Can't be sold", unless Database › Reactor Features leaves selling to a plugin (the flag stays saved).
+        const noSell = !window.ReactorFeatures || window.ReactorFeatures.on('unsellableItems', this.databaseManager.getSystem?.() || {});
 
         // Get armor types and equip types from system data
         const armorTypeNames = this.databaseManager.getSystem()?.armorTypes || [];
@@ -70,7 +72,12 @@ class DatabaseArmorEditor {
                         </span>
                         <span class="db-col">
                             <label>${tt('Price')}</label>
-                            <input type="number" class="database-field-value" value="${rrEscapeHtml(armor.price || 0)}" data-field="price" data-armor-id="${armor.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(armor.price || 0)}" min="0" data-field="price" data-armor-id="${armor.id}">
+                            ${noSell ? `
+                            <span class="db-no-sell" style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--color-text-muted);">
+                                <input type="checkbox" class="system-checkbox" id="armor-no-sell-${armor.id}" ${armor.rrNoSell ? 'checked' : ''} data-field="rrNoSell" data-armor-id="${armor.id}">
+                                <label for="armor-no-sell-${armor.id}" style="margin: 0; cursor: pointer;">${tt("Can't be sold")}</label>
+                            </span>` : ''}
                         </span>
                     </div>
                 </div></div>
@@ -229,7 +236,7 @@ class DatabaseArmorEditor {
                     const fieldName = e.target.dataset.field;
                     const armorId = parseInt(e.target.dataset.armorId);
                     const paramIndex = e.target.dataset.paramIndex;
-                    const value = e.target.value;
+                    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
                     this.updateArmorField(armorId, fieldName, value, paramIndex);
                 });
             });
@@ -245,6 +252,10 @@ class DatabaseArmorEditor {
             if (!armor.params) armor.params = [0,0,0,0,0,0,0,0];
             armor.params[parseInt(paramIndex)] = parseInt(value) || 0;
             console.debug(`Updated armor ${armorId} param[${paramIndex}] to:`, value);
+        }
+        // Can't be sold: stored only when on, so a stock record stays stock.
+        else if (fieldName === 'rrNoSell') {
+            if (value === true) armor.rrNoSell = true; else delete armor.rrNoSell;
         }
         // Handle numeric fields
         else if (fieldName === 'price' || fieldName === 'atypeId' || fieldName === 'etypeId') {

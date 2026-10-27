@@ -801,7 +801,7 @@
             return { rules, settings, signature: JSON.stringify([rules, settings, map.width, map.height, !!physics]) };
         },
 
-        /** The time, in milliseconds: what a stroke's rest is measured by. */
+        /** The time, in milliseconds: what a stroke's rest and a frame's share of the work are measured by. */
         now() {
             return performance.now();
         },
@@ -1220,7 +1220,7 @@
             const field = state.field, focus = this.focus(editor, state);
             // While a stroke is under way its chunks are worked out as they come; what they reach is found once, when it rests.
             field.hold = now - (state.editedAt === undefined ? -Infinity : state.editedAt) < SETTLE_MS;
-            if (field.pending()) field.work(BUDGET_MS, focus);
+            if (field.pending()) field.work(BUDGET_MS, focus, () => this.now());
             if (field.changed.size && this.remesh(state, focus)) editor.requestRender?.();
             const stats = state.stats;
             if (stats) {

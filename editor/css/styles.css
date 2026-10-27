@@ -1118,9 +1118,10 @@
         }
 
         .database-nav-item {
-            /* 7px keeps all 24 pages and their five section headings on screen in a 1080p window, with room for
-               platform font metrics. */
-            padding: 7px 10px;
+            /* 5px keeps all 24 pages and their five section headings on screen without scrolling in the
+               Database window's first-open size on a 1080p screen with a taskbar, with room for platform
+               font metrics. */
+            padding: 5px 10px;
             border-radius: 3px;
             cursor: pointer;
             border-bottom: 1px solid var(--color-bg-menubar);
@@ -1133,21 +1134,25 @@
             background-color: var(--color-bg-button);
         }
 
-        /* A section of the sidebar: a ruled heading over its pages, as the Database menu lists them. */
+        /* A section of the sidebar, as the Database menu lists them: the editor's section heading, an accent
+           strip on a toolbar band (.lit-section-header, the panel headers). */
         .database-nav-section {
-            padding: 10px 10px 4px;
+            margin: 6px 0 2px;
+            padding: 4px 8px 4px 7px;
+            border-left: 3px solid var(--color-accent);
+            border-bottom: 1px solid var(--color-border);
+            border-radius: 3px;
+            background-color: var(--color-bg-toolbar);
             font-size: 11px;
             font-weight: 600;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: var(--color-text-muted);
-            border-bottom: 1px solid var(--color-border);
-            margin-bottom: 2px;
+            color: var(--color-text);
             user-select: none;
         }
 
         .database-nav-section:first-child {
-            padding-top: 4px;
+            margin-top: 0;
         }
 
         .database-nav-item.active {
@@ -4369,6 +4374,7 @@
         .rr-material-option:hover, .rr-material-option:focus-visible { border-color: var(--color-border-input); background: var(--color-bg-hover); outline: none; }
         .rr-material-option[aria-selected="true"] { border-color: var(--color-accent); }
         .rr-material-option-face { width: 58px; height: 58px; }
+        .rr-material-add-face { display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 300; color: var(--color-accent-bright, var(--color-text)); border-color: var(--color-accent-border, var(--color-border-input)) !important; }
         .rr-material-option-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .rr-material-popup-note { max-width: 364px; padding-top: 6px; font-size: 11px; color: var(--color-text-muted); }
         .rr-build-facing { display: flex; align-items: center; gap: 4px; }
@@ -4423,7 +4429,9 @@
         .rr-build-group { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: transparent; color: var(--color-text-muted); font-size: 11px; cursor: pointer; white-space: nowrap; }
         .rr-build-group[aria-checked="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
         .rr-build-group:hover { color: var(--color-text); }
-        .rr-build-range { display: grid; grid-template-columns: 64px 1fr 40px; align-items: center; gap: 6px; color: var(--color-text-muted); }
+        /* Room for a label of two words (Wind direction, Reflection) before it wraps. */
+        .rr-build-range { display: grid; grid-template-columns: 76px 1fr 40px; align-items: center; gap: 6px; color: var(--color-text-muted); }
+        .rr-build-range > span { line-height: 1.15; overflow-wrap: anywhere; }
         .rr-build-range > b { font-weight: 500; color: var(--color-text); text-align: right; }
         .rr-build-panel-foot > .rr-build-icon-btn { flex: 0 0 auto; width: 34px; padding: 4px 0; }
         .rr-build-chip {
@@ -4458,7 +4466,8 @@
         .rr-build-note { font-size: 11px; color: var(--color-text-muted); padding: 0 6px; white-space: nowrap; }
         /* A note meant to wrap does, whatever order the two rules come in. */
         .rr-build-note.rr-build-wrap { white-space: normal; overflow-wrap: anywhere; padding: 0; }
-        .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+        /* Two lines at most, wrapped rather than cut: a laptop-width window still shows every shortcut. */
+        .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: normal; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
         .rr-build-hint b { color: var(--color-text-strong); font-weight: 600; }
         .rr-build-flash {
             font-size: 12px;
@@ -6424,6 +6433,13 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-footer { align-items:center;flex-wrap:wrap;gap:8px 14px; }
 .rr-sequence-footer > .rr-battle-field { flex:0 0 auto;flex-direction:row;align-items:center;gap:6px; }
 .rr-sequence-footer > .rr-battle-help { flex:1;min-width:200px;margin:0; }
+/* Used by, and the Action source's list: a record that plays this sequence; a click previews as it, the one previewed is lit. */
+.rr-sequence-footer > .rr-battle-help { display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px; }
+.rr-sequence-reference { padding:2px 8px;border:1px solid var(--color-border);border-radius:3px;background:var(--color-bg-input);color:var(--color-text);font-size:11px;line-height:1.5;cursor:pointer;text-align:start; }
+.rr-sequence-reference:hover:not(:disabled) { border-color:var(--color-accent);background:var(--color-accent-tint-15); }
+.rr-sequence-reference.active { border-color:var(--color-accent);border-inline-start:3px solid var(--color-accent);background:var(--color-accent-tint-15); }
+.rr-sequence-reference:disabled { cursor:default;opacity:.75; }
+.rr-sequence-action-animations { display:flex;flex-direction:column;gap:4px; }
 .rr-sequence-header > .rr-battle-field > span { display:none; }
 .rr-sequence-header > select { max-width:150px; }
 .rr-battle-assignment-help { color:var(--color-text-muted);font-size:12px; }
@@ -6581,7 +6597,7 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 }
 .r3d-motion-pose-title { font-weight: 600; margin-bottom: 2px; }
 .r3d-motion-pose-title em { font-weight: 400; font-style: normal; color: var(--color-text-muted); }
-.r3d-motion-slider { display: grid; grid-template-columns: 34px 1fr 60px; align-items: center; gap: 6px; }
+.r3d-motion-slider { display: grid; grid-template-columns: 56px 1fr 60px; align-items: center; gap: 6px; }
 .r3d-motion-slider > span { color: var(--color-text-muted); }
 .r3d-motion-slider input[type="range"] { width: 100%; min-width: 0; }
 .r3d-motion-slider input[type="number"] { width: 100%; box-sizing: border-box; }
@@ -6689,6 +6705,34 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .event-page-button:hover, .event-page-button:active { background-color: var(--color-bg-deep); border-color: var(--color-accent-border-strong, var(--color-accent)); }
 .event-fight-hook { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--color-border); font-size: 12px; }
 .event-fight-hook-label { flex-shrink: 0; }
+/* A page condition's switch, variable and value: the theme's field while its box is ticked, greyed while not. */
+.conditions-section .switch-picker-btn,
+.conditions-section .variable-picker-btn,
+.conditions-section .condition-input {
+    box-sizing: border-box; background: var(--color-bg-panel); color: var(--color-text-strong); font-weight: 600;
+    border: 1px solid var(--color-accent-border); border-radius: var(--radius-md); cursor: pointer;
+    transition: border-color var(--ease-base), background-color var(--ease-base);
+}
+.conditions-section .condition-input { cursor: text; font-variant-numeric: tabular-nums; }
+.conditions-section .switch-picker-btn:hover:not(:disabled),
+.conditions-section .variable-picker-btn:hover:not(:disabled),
+.conditions-section .condition-input:hover:not(:disabled) { border-color: var(--color-accent-bright); }
+.conditions-section .switch-picker-btn:focus-visible,
+.conditions-section .variable-picker-btn:focus-visible,
+.conditions-section .condition-input:focus {
+    outline: none; border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-bright);
+}
+.conditions-section .switch-picker-btn:disabled,
+.conditions-section .variable-picker-btn:disabled,
+.conditions-section .condition-input:disabled {
+    background: var(--color-bg-surface); color: var(--color-text-dim); font-weight: normal;
+    border-color: var(--color-border-input); cursor: default; box-shadow: none;
+}
+.conditions-section .rr-shim-wrapper:has(> select:disabled) .rr-shim-trigger {
+    background: var(--color-bg-surface) !important; border-color: var(--color-border-input) !important; cursor: default !important;
+}
+/* The event page's picture controls (Direction, Frame, Mirror, Flip, Rotation) share one row: compact dropdowns. */
+.image-turn-rows .rr-shim-trigger { min-width: 0 !important; height: 22px !important; min-height: 0 !important; padding: 0 20px 0 6px !important; line-height: 20px; font-size: 11px !important; }
 .event-fight-hook-note { flex-basis: 100%; font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
 .event-fight-hook-note[hidden] { display: none; }
 .event-fight-hook select, .event-fight-hook input { padding: 3px; font-size: 11px; min-width: 0; }
@@ -6881,6 +6925,18 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-slot-number { color: var(--color-text-muted); font-size: 12px; text-align: end; }
 .rr-slot-row .rr-shim-wrapper, .rr-slot-row select { width: 100%; }
 .rr-slot-remove { min-width: 28px; padding-inline: 0; font-size: 15px; line-height: 1; }
+/* Database > Types: Slot Layouts, under the type lists. A card per layout, side by side. */
+.rr-slot-layouts { flex: 0 0 auto; display: flex; flex-direction: column; margin: 0 8px 8px; max-height: 45%; }
+.rr-slot-layouts-body { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 6px 8px 8px; overflow: auto; }
+.rr-slot-layouts.is-collapsed .rr-slot-layouts-body { display: none; }
+.rr-slot-layouts-hint { margin: 0; color: var(--color-text-muted); font-size: 11px; }
+.rr-slot-layouts-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.rr-slot-layout { display: flex; flex-direction: column; gap: 6px; width: 220px; padding: 6px; border: 1px solid var(--color-border-subtle); border-radius: 4px; background: var(--color-bg-deep); }
+.rr-slot-layout-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.rr-slot-layout-head input { width: 100%; min-width: 0; box-sizing: border-box; }
+.rr-slot-layout .rr-slot-list { margin-bottom: 0; }
+.rr-slot-layout-delete { min-width: 28px; padding-inline: 0; font-size: 15px; line-height: 1; }
+.rr-slot-layout-add { align-self: flex-start; }
 .rr-build-field.rr-build-sfield .rr-number-stepper { width: 100% !important; }
 /* A narrow view: the name over its field, as the sliders are. */
 .rr-build-panel.is-narrow .rr-build-sgrid { grid-template-columns: minmax(0, 1fr); }
@@ -7274,10 +7330,11 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .vehicle-detail .vehicle-handling { margin-top:8px; }
 .vehicle-detail .vehicle-medium-settings { margin-top:8px; }
 .vehicle-detail .vehicle-stock-bgm { margin-top:8px; width:100%; }
-.vehicle-detail .vehicle-location-row { display:flex; gap:6px; margin-bottom:8px; }
-.vehicle-detail .vehicle-location-row { align-items:center; }
-.vehicle-detail .vehicle-location-row .vehicle-location-browse { flex:1; min-width:0; }
-.vehicle-detail .vehicle-location-row .vehicle-start-direction { width:auto; flex:none; }
+/* Starting positions: one grid, so every row's number, place, direction and Delete line up whatever their text. */
+.vehicle-detail .vehicle-location-row { display:grid; grid-template-columns:1.6em minmax(0,1fr) 92px 80px; gap:6px; align-items:center; margin-bottom:6px; }
+.vehicle-detail .vehicle-location-row > * { box-sizing:border-box; height:30px; margin:0; }
+.vehicle-detail .vehicle-location-row .vehicle-start-direction { width:100%; }
+.vehicle-detail .vehicle-location-row .vehicle-location-clear { width:100%; padding:0 6px; }
 /* The map picker's 3D view (MapPicker3D): a viewport, dark in every theme as the map preview beside it is. */
 .map-picker-view { margin-left:auto; gap:4px; align-items:center; }
 .map-picker-view button { padding:4px 12px; font-size:12px; }
@@ -7288,8 +7345,8 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .map-picker-3d-coords { position:absolute; top:8px; right:8px; box-sizing:border-box; min-width:132px; padding:6px 8px; background-color:rgba(0,0,0,.8); color:#fff; font:12px/16px monospace; text-align:center; border-radius:3px; pointer-events:none; }
 .map-picker-3d-hint { position:absolute; left:8px; bottom:8px; max-width:calc(100% - 16px); padding:4px 8px; background-color:rgba(0,0,0,.7); color:#ddd; font-size:11px; border-radius:3px; pointer-events:none; }
 .map-picker-3d-note { padding:16px; color:#ddd; font-size:13px; }
-.vehicle-detail .vehicle-start-number { flex:none; min-width:1.2em; text-align:right; color:var(--color-text-muted); }
-.vehicle-detail .vehicle-location-browse { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vehicle-detail .vehicle-start-number { display:flex; align-items:center; justify-content:flex-end; color:var(--color-text-muted); }
+.vehicle-detail .vehicle-location-browse { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .vehicle-detail .traits-table { table-layout:auto; width:100%; }
 .vehicle-detail .traits-table td { overflow-wrap:anywhere; }
 .vehicle-detail .trait-action-buttons, .vehicle-detail .learning-action-buttons { flex-wrap:wrap; gap:4px; }
@@ -7498,6 +7555,9 @@ html.rr-detached-window {
     width: 100%; height: 100%; overflow: hidden;
     clip-path: inset(0 round var(--radius-lg));
 }
+/* Toggled after the window moves or is sized (DetachedWindow's repaint): a clip a hair different is a whole
+   new paint of the window, its transparent corners included. */
+html.rr-detached-window.rr-repaint { clip-path: inset(0 round calc(var(--radius-lg) + 0.01px)); }
 /* In-page floating frames need the same clipping as native frames. */
 #event-editor-modal.rr-event-editor-floating > .rr-modal,
 #database-viewer.rr-database-floating > .database-window,
@@ -7549,7 +7609,19 @@ html.rr-detached-window {
 .rr-c3d-save { color: var(--color-accent-bright); font-weight: 600; }
 .rr-c3d-body { display: grid; grid-template-columns: 360px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
 .rr-c3d-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); }
-.rr-c3d-tabs { display: flex; flex-wrap: wrap; gap: 0; padding: 6px 6px 0; border-bottom: 1px solid var(--color-border-subtle); }
+.rr-c3d-tabs { display: flex; flex-direction: column; border-bottom: 1px solid var(--color-border-subtle); }
+/* The groups: Species, Body, Outfit, as raised tabs on the panel's edge; the chosen one joins the row under it.
+   The others are the theme's deepest background (darker on a dark theme, paler on a light one), apart from the panel. */
+.rr-c3d-groups { display: flex; gap: 4px; padding: 8px 8px 0; background: var(--color-bg-toolbar); border-bottom: 1px solid var(--color-border-subtle); }
+.rr-c3d-group-tab {
+    flex: 1 1 0; min-width: 0; padding: 7px 6px 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+    color: var(--color-text-muted); background: var(--color-bg-deep); border: 1px solid var(--color-border-subtle); border-bottom: 0;
+    border-radius: 6px 6px 0 0; cursor: pointer; margin-bottom: -1px; box-shadow: inset 0 3px 0 transparent;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rr-c3d-group-tab:hover { color: var(--color-text); }
+.rr-c3d-group-tab.is-active { color: var(--color-accent-bright); background: var(--color-bg-panel); border-color: var(--color-border); box-shadow: inset 0 3px 0 var(--color-accent-bright); }
+.rr-c3d-subtabs { display: flex; flex-wrap: wrap; gap: 0; padding: 4px 6px 0; }
 .rr-c3d-tab {
     padding: 5px 6px; font-size: 11px; color: var(--color-text-muted); background: transparent; border: 0;
     border-bottom: 2px solid transparent; cursor: pointer;
@@ -7672,7 +7744,21 @@ html.rr-detached-window {
 }
 .rr-c3d-gallery[hidden] { display: none; }
 .rr-c3d-gallery-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--color-text); margin-bottom: 8px; }
-.rr-c3d-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; overflow-y: auto; align-content: start; }
+.rr-c3d-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; }
+.rr-c3d-gallery-scroll { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+.rr-c3d-group-pick select { max-width: 150px; }
+.rr-random-icon { display: inline-block; vertical-align: -2px; }
+.rr-c3d-gallery-grid > .rr-c3d-note { grid-column: 1 / -1; margin: 0; }
+.rr-c3d-gallery-sub { margin: 4px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-muted); }
+.rr-c3d-gallery-grid + .rr-c3d-gallery-sub { margin-top: 14px; }
+.rr-c3d-saved-card { position: relative; display: flex; }
+.rr-c3d-saved-card > .rr-c3d-saved { flex: 1 1 auto; min-width: 0; }
+.rr-c3d-saved-delete {
+    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; font-size: 11px; line-height: 18px;
+    color: var(--color-text); background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 50%; cursor: pointer; opacity: 0;
+}
+.rr-c3d-saved-card:hover .rr-c3d-saved-delete, .rr-c3d-saved-delete:focus-visible { opacity: 1; }
+.rr-c3d-saved-delete:hover { color: var(--color-danger); border-color: var(--color-danger); }
 .rr-c3d-saved { display: flex; flex-direction: column; gap: 4px; padding: 6px; font-size: 11px; color: var(--color-text); background: var(--color-bg-input); border: 1px solid var(--color-border-input); border-radius: var(--radius-sm, 3px); cursor: pointer; }
 .rr-c3d-saved:hover { border-color: var(--color-accent-bright); }
 .rr-c3d-saved img, .rr-c3d-nothumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 2px; background: var(--color-bg-deep); }
@@ -7695,7 +7781,9 @@ html.rr-detached-window {
 .rr-c3d-import-ready .rr-c3d-gallery-grid, .rr-c3d-import-ready .rr-c3d-import-search, .rr-c3d-import-ready .rr-c3d-import-parts { display: none; }
 .rr-c3d-importer .rr-c3d-gallery-head > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rr-c3d-emblem-row { grid-template-columns: 96px minmax(0, 1fr) auto; }
-.rr-c3d-emblem-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-emblem-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rr-c3d-emblem-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-emblem-thumb { width: 28px; height: 28px; flex: 0 0 28px; object-fit: contain; border-radius: 2px; background: var(--color-bg-deep); }
 .rr-c3d-emblem-row > [data-outfit-emblem-clear] { grid-column: 3; }
 .rr-c3d-row {
     display: grid; grid-template-columns: 96px minmax(0, 1fr) 56px; align-items: center; gap: 2px 8px;
@@ -7807,6 +7895,8 @@ html.rr-detached-window {
 .rr-prop-randomgroup[hidden], .rr-prop-random-scope[hidden] { display: none; }
 .rr-prop-tiles5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .rr-prop-tiles5 .rr-c3d-tile { padding: 2px; }
+.rr-prop-ownmark { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 18px; color: var(--color-text-muted); background: #3a3d44; }
+.rr-prop-owntile:hover .rr-prop-ownmark { color: var(--color-accent-bright); }
 .rr-prop-layers { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
 .rr-prop-layer { display: flex; align-items: center; gap: 6px; padding: 3px 4px; font-size: 11px; color: var(--color-text); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); background: var(--color-bg-input); cursor: pointer; }
 .rr-prop-layer.is-active { border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
@@ -7816,3 +7906,193 @@ html.rr-detached-window {
 .rr-prop-which { display: flex; gap: 4px; margin: 8px 0 0; }
 .rr-prop-which .rr-btn-chip { flex: 1 1 0; }
 .rr-prop-which .rr-btn-chip.is-active { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }
+
+/* The map's events list: the Database's vehicles below the map's own events, in the vehicle markers' orange. */
+.event-list-vehicles-head { margin:8px 0 2px; padding:4px 8px 4px 7px; border-left:3px solid #f0a040; border-bottom:1px solid var(--color-border); background:var(--color-bg-toolbar); color:var(--color-text); font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; user-select:none; }
+.event-list-item.event-list-vehicle { padding:6px 8px 6px 9px; margin:2px 0; border-left:3px solid #f0a040; border-radius:3px; font-size:13px; cursor:pointer; }
+
+/* Build: the key behind a button, shown on it (a slot's number, the Eraser's X, Q and E, Ctrl), and the Rectangle chip lit while Ctrl is held. */
+.rr-build-slot { position: relative; }
+.rr-build-levelrow kbd, .rr-build-chip kbd { margin-left: 5px; padding: 0 3px; border: 1px solid var(--color-border); border-radius: 3px; font: 600 9px/14px var(--font-mono, monospace); color: var(--color-text-muted); }
+.rr-build-levelrow { display: flex; align-items: center; gap: 6px; }
+.rr-build-levelrow .rr-build-level-value { width: 70px; text-align: center; }
+.rr-build-levelrow .rr-build-level-step { min-width: 46px; font-weight: 700; }
+.rr-build-position { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.rr-build-chip.rr-build-draw.is-held { border-color: var(--color-accent); background: var(--color-accent-tint-25); color: var(--color-text); }
+.rr-build-rectfills { margin-top: 6px; }
+.rr-build-draws .rr-build-chip, .rr-build-rectfills .rr-build-chip, .rr-build-diagonals .rr-build-chip { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 4px; }
+.rr-build-draws .rr-build-chip svg, .rr-build-rectfills .rr-build-chip svg, .rr-build-diagonals .rr-build-chip svg { flex: none; }
+/* The Foliage panel's Paint, Recolor, Pick and Erase: one row of four. */
+.rr-build-finishes.rr-build-factions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rr-build-factions .rr-build-chip { justify-content: center; padding-left: 2px; padding-right: 2px; }
+.rr-build-diagonals { margin-top: 6px; }
+
+/* The Blueprint panel: each plan as its picture, name and size; the stamp's size; nudging a building picked up. */
+.rr-build-plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 260px; overflow-y: auto; }
+.rr-build-plan-tile { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 4px; border: 1px solid var(--color-border-input); border-radius: var(--radius-md, 4px); background: var(--color-bg-deep); color: var(--color-text); cursor: pointer; text-align: left; min-width: 0; }
+.rr-build-plan-tile:hover { border-color: var(--color-accent-bright); }
+.rr-build-plan-tile[aria-pressed="true"] { border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-bright); }
+.rr-build-plan-face { display: flex; align-items: center; justify-content: center; height: 64px; border-radius: 3px; background-color: var(--color-bg-panel); background-size: contain; background-repeat: no-repeat; background-position: center; color: var(--color-text-muted); }
+.rr-build-plan-face.is-plain { border: 1px dashed var(--color-border-input); }
+.rr-build-plan-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-build-plan-size { font-size: 10px; color: var(--color-text-muted); }
+.rr-build-stampsize { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rr-build-nudges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.rr-build-nudges .rr-btn-secondary { padding: 4px 0; font-size: 14px; }
+.rr-build-handles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rr-build-handles .rr-build-chip { justify-content: center; }
+/* A saved biome: its chip and the button that takes it out, side by side. */
+.rr-build-ownbiome { display: inline-flex; align-items: center; gap: 2px; }
+.rr-build-ownbiome .rr-build-icon-btn { width: 22px; padding: 2px 0; }
+
+/* Every slot's name wraps onto two lines rather than being cut ("Beyond the Border", a long word in German), at a
+   size that reads; a narrow window keeps 10px names in slightly taller slots. Icons alone only when the view is short. */
+.rr-build-slot .rr-build-slot-label, .rr-build-slot[data-slot="surround"] .rr-build-slot-label, .rr-build-slot[data-slot="sky"] .rr-build-slot-label {
+    white-space: normal; text-align: center; line-height: 1.05; max-width: 60px; text-wrap: balance; overflow-wrap: break-word;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: clip;
+}
+.rr-build-hotbar.is-compact .rr-build-slot { font-size: 10px; height: 52px; }
+.rr-build-hotbar.is-compact .rr-build-slot .rr-build-slot-label { max-width: 46px; }
+/* A colour row with its None chip beside the swatch: the chip takes the room it needs, not the value column's 40px. */
+.rr-build-range:has(> .rr-build-chip) { grid-template-columns: 64px auto minmax(0, 1fr); }
+.rr-build-range:has(> .rr-build-chip) > .rr-color-swatch-btn { width: 72px; }
+.rr-build-range > .rr-build-chip { justify-self: start; padding-left: 6px; padding-right: 6px; }
+/* The Models panel's scatter settings, shut while Scatter is off. */
+.mp-scatter-fields[hidden] { display: none !important; }
+
+/* Database › 3D Models › Add a motion: to the right, no dimming, so the model it plays on stays in view. */
+.rr-modal-overlay.r3d-picker-overlay { background: transparent; justify-content: flex-end; align-items: stretch; padding: 60px 16px 70px 0; pointer-events: none; }
+.r3d-picker { pointer-events: auto; width: min(430px, calc(100vw - 24px)); max-height: 100%; display: flex; flex-direction: column; }
+.r3d-picker .rr-modal-body { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.r3d-picker-lead, .r3d-picker-note { font-size: 11px; color: var(--color-text-muted); line-height: 1.35; }
+.r3d-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 8px; }
+.r3d-picker-card { display: flex; flex-direction: column; gap: 4px; padding: 7px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-panel); min-width: 0; }
+.r3d-picker-name { font-weight: 600; font-size: 12px; color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-picker-whenlabel { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--color-text-muted); font-size: 10px; cursor: pointer; text-align: left; text-decoration: underline dotted; text-underline-offset: 2px; }
+.r3d-picker-whenlabel:hover { color: var(--color-accent-bright); }
+.r3d-picker-actions { display: flex; gap: 4px; }
+.r3d-picker-actions .r3d-picker-play { flex: 0 0 30px; padding: 3px 0; }
+.r3d-picker-add:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent-bright); }
+.r3d-picker-add:disabled { opacity: 1; border-color: transparent; background: none; color: var(--color-text-muted); cursor: default; }
+.r3d-picker-add:disabled:hover { border-color: transparent; color: var(--color-text-muted); }
+.r3d-picker-card:hover { border-color: var(--color-border-input); }
+.r3d-picker-actions .r3d-picker-add { flex: 1 1 auto; min-width: 0; padding: 3px 6px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-picker-own { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.r3d-picker-blank { border-color: var(--color-accent); color: var(--color-accent-bright); }
+
+/* Motion editor › storyboard: the motion's poses as cards in a row, the seconds between them, a few buttons for the pose shown. */
+.r3d-motion-posebody { display: flex; min-height: 0; flex: 1; overflow: hidden; }
+.r3d-motion-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 0; background: var(--color-bg-panel); overflow-y: auto; }
+.r3d-motion-board { display: flex; align-items: center; gap: 4px; padding: 0 10px 2px; overflow-x: auto; flex: 0 0 auto; }
+.r3d-motion-card {
+    flex: 0 0 auto; width: 58px; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    border: 1px solid var(--color-border-input); border-radius: var(--radius-md); background: var(--color-bg-deep); color: var(--color-text);
+    cursor: pointer; font: inherit; transition: border-color var(--ease-base), color var(--ease-base), background var(--ease-base);
+}
+.r3d-motion-card > b { font-size: 18px; line-height: 1; }
+.r3d-motion-card > span { font-size: 10px; color: var(--color-text-muted); }
+.r3d-motion-card:hover:not(:disabled) { border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+.r3d-motion-card.on { border-color: var(--color-accent); background: var(--color-accent-tint-25); color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent) inset; }
+.r3d-motion-card-add { border-style: dashed; color: var(--color-accent-bright); }
+.r3d-motion-card-add:disabled { opacity: 0.4; cursor: not-allowed; }
+.r3d-motion-step {
+    flex: 0 0 auto; width: 64px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    border: 1px solid var(--color-accent-tint-35); border-radius: var(--radius-md); background: var(--color-accent-tint-10); color: var(--color-text);
+    cursor: pointer; font: inherit; padding: 2px 4px; transition: border-color var(--ease-base), color var(--ease-base), background var(--ease-base);
+}
+.r3d-motion-step > b { font-size: 12px; line-height: 1.1; }
+.r3d-motion-step .r3d-motion-curve { color: var(--color-accent); }
+.r3d-motion-step > span { font-size: 9.5px; color: var(--color-text-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-motion-step:hover { border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+.r3d-motion-step.on { border-color: var(--color-accent); background: var(--color-accent-tint-25); color: var(--color-accent-bright); }
+.r3d-motion-step.r3d-motion-tail { margin-left: 4px; border-style: dashed; }
+.r3d-motion-curve { width: 30px; height: 16px; flex: 0 0 auto; }
+.r3d-motion-curve path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.r3d-motion-timing { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 10px; }
+.r3d-motion-seconds { display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-muted); font-size: 11px; }
+.r3d-motion-seconds > input { width: 64px; text-align: center; }
+.r3d-motion-seconds > .rr-btn-chip { padding: 2px 8px; }
+.r3d-motion-eases { display: flex; flex-wrap: wrap; gap: 4px; }
+.r3d-motion-ease {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; width: 74px; padding: 4px 2px; font: inherit; font-size: 10px; cursor: pointer;
+    background: var(--color-bg-deep); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
+}
+.r3d-motion-ease .r3d-motion-curve { width: 34px; height: 20px; color: var(--color-text-muted); }
+.r3d-motion-ease:hover { border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+.r3d-motion-ease:hover .r3d-motion-curve, .r3d-motion-ease.on .r3d-motion-curve { color: var(--color-accent-bright); }
+.r3d-motion-ease.on { border-color: var(--color-accent); background: var(--color-accent-tint-25); color: var(--color-accent-bright); }
+.r3d-motion-strip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px; }
+.r3d-motion-strip-actions > .rr-btn-chip { font-size: 11px; padding: 3px 10px; }
+.r3d-motion-spacer { flex: 1; }
+.r3d-motion-link { background: none; border: 0; padding: 2px 0; color: var(--color-text-muted); font: inherit; font-size: 11px; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.r3d-motion-link:hover { color: var(--color-accent-bright); }
+.r3d-motion-hint { padding: 0 10px; font-size: 11px; color: var(--color-text-muted); line-height: 1.35; }
+.r3d-motion-handles { display: flex; gap: 0; margin-bottom: 2px; }
+.r3d-motion-handle {
+    flex: 1; padding: 3px 6px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+    background: var(--color-bg-deep); color: var(--color-text-muted); border: 1px solid var(--color-border-input);
+}
+.r3d-motion-handle:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.r3d-motion-handle:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; border-left: 0; }
+.r3d-motion-handle:hover { color: var(--color-accent-bright); }
+.r3d-motion-handle.on { background: var(--color-accent-tint-25); color: var(--color-accent-bright); border-color: var(--color-accent); }
+.r3d-motion-handle.on + .r3d-motion-handle { border-left: 0; }
+.r3d-motion-handle + .r3d-motion-handle.on { border-left: 1px solid var(--color-accent); }
+/* An axis's slider wears its ring's or arrow's colour: X red, Y green, Z blue. */
+.r3d-motion-slider.axis-x > span { color: #ff5c5c; }
+.r3d-motion-slider.axis-y > span { color: #3ddc84; }
+.r3d-motion-slider.axis-z > span { color: #5ca8ff; }
+.r3d-motion-slider.axis-x { --rr-axis: #ff5c5c; }
+.r3d-motion-slider.axis-y { --rr-axis: #3ddc84; }
+.r3d-motion-slider.axis-z { --rr-axis: #5ca8ff; }
+.r3d-motion-slider[class*="axis-"] input[type="range"]::-webkit-slider-thumb { background: var(--rr-axis); border-color: var(--rr-axis); }
+.r3d-motion-slider[class*="axis-"] input[type="range"]::-moz-range-thumb { background: var(--rr-axis); border-color: var(--rr-axis); }
+.r3d-motion-pose-empty { margin: auto 0; text-align: center; color: var(--color-text-muted); line-height: 1.4; }
+.r3d-motion-pose-actions > .rr-btn-chip { flex: 1; font-size: 11px; padding: 3px 6px; }
+.r3d-motion-backtoposes { position: absolute; right: 10px; top: 22px; z-index: 2; font-size: 11px; padding: 2px 8px; }
+
+/* Randomize › which parts: a button naming what is ticked, and its list of boxes. */
+.rr-random-parts { position: relative; display: inline-flex; }
+.rr-random-parts[hidden] { display: none; }
+.rr-random-parts-toggle { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-random-parts-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; min-width: 160px; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px;
+    background: var(--color-bg-panel); border: 1px solid var(--color-border-input); border-radius: var(--radius-md); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.rr-random-parts-menu[hidden] { display: none; }
+.rr-random-parts-menu label { display: flex; align-items: center; gap: 6px; padding: 3px 2px; font-size: 12px; color: var(--color-text); cursor: pointer; white-space: nowrap; }
+.rr-random-parts-menu label:hover { color: var(--color-accent-bright); }
+.rr-random-parts-menu .rr-random-parts-all { border-bottom: 1px solid var(--color-border-subtle, var(--color-border)); padding-bottom: 5px; margin-bottom: 2px; font-weight: 600; }
+
+
+/* A search field's clear button in the theme's colours: the browser's own is a blue X that ignores the theme. */
+input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-left: 4px; cursor: pointer;
+    background-color: var(--color-text-muted);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover { background-color: var(--color-accent-bright); }
+
+/* Global search (GlobalSearch.js): a palette under the toolbar, results grouped by kind. */
+/* A popover, not a modal: the editor around it stays usable, and the toolbar button or Escape closes it. */
+.rr-global-search-overlay { position: fixed; inset: 0; z-index: 10050; display: flex; justify-content: center; align-items: flex-start; padding-top: 72px; pointer-events: none; }
+.rr-global-search { pointer-events: auto; width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 120px); display: flex; flex-direction: column; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 8px; box-shadow: var(--shadow-popup); overflow: hidden; }
+.rr-global-search-field { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--color-border); }
+.rr-global-search-icon { width: 20px; height: 20px; flex: none; }
+.rr-global-search-field input { flex: 1; min-width: 0; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 7px 9px; font-size: 14px; outline: none; }
+.rr-global-search-field input:focus { border-color: var(--color-accent-bright); }
+.rr-global-search-results { overflow-y: auto; padding: 0 0 6px; }
+.rr-global-search-head { padding: 8px 12px; border-left: 3px solid var(--color-accent); }
+.rr-global-search-head .rr-modal-title { font-size: 14px; }
+.rr-global-search-group.lit-section-header { margin: 6px 0 2px; }
+.rr-global-search-group.lit-section-header:first-child { margin-top: 0; }
+.rr-global-search-count { font-weight: 400; color: var(--color-text-muted); }
+.rr-global-search-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 14px; cursor: pointer; font-size: 13px; }
+.rr-global-search-row.active { background: var(--color-bg-selected); color: var(--color-text-strong); }
+.rr-global-search-name { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-global-search-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
+.rr-global-search-sub { margin-left: auto; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text-muted); }
+.rr-global-search-row.active .rr-global-search-text, .rr-global-search-row.active .rr-global-search-sub { color: var(--color-text); }
+.rr-global-search-row mark { background: none; color: var(--color-accent-bright); font-weight: 700; }
+.rr-global-search-empty { padding: 18px 14px; text-align: center; font-size: 13px; color: var(--color-text-muted); }
+.rr-global-search-hint.rr-modal-footer { padding: 7px 12px; justify-content: flex-start; font-size: 11px; color: var(--color-text-muted); }
+.rr-global-search-flash { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; transition: outline-color 0.3s; }

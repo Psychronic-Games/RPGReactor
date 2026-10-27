@@ -191,9 +191,9 @@ test('the game uses a class\'s slots: two of a type, the first one for Change Eq
     const Game_Item = function() { this.item = null; };
     Game_Item.prototype.object = function() { return this.item; };
     new Function('Game_Actor', 'Game_Item', '$dataSystem', '$dataWeapons', '$dataArmors',
-        ['classEquipSlots', 'equipSlots', 'fitEquipSlots', 'changeEquipById'].map(grab).join('\n'))(
+        ['classEquipSlots', 'ownEquipSlots', 'equipSlots', 'fitEquipSlots', 'changeEquipById'].map(grab).join('\n'))(
         Game_Actor, Game_Item, { equipTypes: ['', 'Weapon', 'Shield', 'Head', 'Body', 'Accessory'] }, [null, 'sword'], [null, 'helm', 'cap']);
-    const actor = (cls, dual = false) => Object.assign(new Game_Actor(), { currentClass: () => cls, isDualWield: () => dual, changed: [], given: [],
+    const actor = (cls, dual = false) => Object.assign(new Game_Actor(), { currentClass: () => cls, isDualWield: () => dual, slotLayout: () => null, changed: [], given: [],
         changeEquip(slot, item) { this.changed.push([slot, item]); }, tradeItemWithParty(a, item) { this.given.push(item); } });
     const twoHeads = actor({ rrEquipSlots: [1, 3, 3, 4] });
     assert.deepEqual(twoHeads.equipSlots(), [1, 3, 3, 4]);
@@ -230,7 +230,7 @@ test('Classes has the slot list; Vehicles and Traits carry nothing for it', () =
     assert.match(classes, /class="database-field-value rr-slot-type" data-index="\$\{index\}" data-rr-search="always"/);
     assert.match(classes, /slots\.setClassSlots\(this\.databaseManager\.data, classEntry, next, slotsOf\);/);
     // The list being edited is a copy: changed in place, nobody's starting equipment would move with its slot.
-    assert.match(classes, /const current = \(\) => slots\.classSlots\(classEntry\)\?\.slice\(\) \|\| slots\.resolve\(/);
+    assert.match(classes, /const current = \(\) => slots\.classSlots\(classEntry, system\)\?\.slice\(\) \|\| slots\.resolve\(/);
     assert.doesNotMatch(vehicles, /rr-equip-slot|vehicle-equipment-types|rr-slot-/);
     assert.doesNotMatch(classes + vehicles + read('src/utils/EquipSlots.js'), /code: (SEAL|54), dataId|rrEquipTypes/);
     assert.match(read('src/utils/SelectThemingShim.js'), /optionCount > 15 \|\| selectEl\.dataset\.rrSearch === 'always'/);

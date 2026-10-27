@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { driveWorld, floor, event, page, demoData, hasDemo, DEG } = require('./helpers/vehicles-drive-world.cjs');
+const { cpuMicros, withinBudget } = require('./helpers/timing.cjs');
 
 const STEP = 0.75, RADIUS = 0.45, AXLE = 3.5 * 0.35;
 const near = (a, b, eps) => Math.abs(a - b) <= eps;
@@ -1811,11 +1812,11 @@ test('North Haven: 36 minutes of seeded random keys: no height pops up, no jump 
     w.ReactorEvents.on('vehicleLand', () => sum.lands++);
     w.ReactorEvents.on('vehicleSplash', () => { sum.splashes++; splashed = true; });
     w.ReactorEvents.on('vehicleBump', () => sum.bumps++);
-    // The tick alone is timed: what the map's events and the followers cost is not the ride's.
-    let spent = 0n;
+    // The tick alone is timed, in the main thread's CPU time: what the map's events and the followers cost is not the ride's.
+    let spent = 0;
     const tick = w.Drive.tick;
-    w.Drive.tick = function(active) { const a = process.hrtime.bigint(); tick.call(this, active); spent = process.hrtime.bigint() - a; };
-    let plain = 0n, plainN = 0, busy = 0n, busyN = 0;
+    w.Drive.tick = function(active) { const a = cpuMicros(); tick.call(this, active); spent = cpuMicros() - a; };
+    let plain = 0, plainN = 0, busy = 0, busyN = 0;
     for (const s of starts) for (const seed of [11, 22, 33]) {
         w.mount(s[0], s[1], s[2]);
         w.Drive.board(w.vehicle());
@@ -1862,7 +1863,7 @@ test('North Haven: 36 minutes of seeded random keys: no height pops up, no jump 
         }
     }
     w.Drive.tick = tick;
-    const plainUs = Number(plain) / plainN / 1000, busyUs = Number(busy) / busyN / 1000;
+    const plainUs = plain / plainN, busyUs = busy / busyN;
     t.diagnostic(sum.ticks + ' ticks, ' + sum.tiles.toFixed(0) + ' tiles, ' + (sum.tiles / (sum.ticks / 60)).toFixed(1) + ' tiles a second; ' + sum.bumps + ' hits, ' + sum.slides + ' slide ticks, '
         + sum.lands + ' landings, ' + sum.splashes + ' splashes; the most the height rose in a tick: ' + sum.maxRise.toFixed(3) + ' (' + sum.riseAt + ')');
     t.diagnostic('per tick: ' + plainUs.toFixed(1) + ' microseconds on a tick that enters no tile and touches nothing (' + plainN + ' ticks; budget 60), '
@@ -1875,8 +1876,8 @@ test('North Haven: 36 minutes of seeded random keys: no height pops up, no jump 
     assert.equal(sum.drySplashes, 0, 'a splash with its middle over dry ground');
     assert.ok(sum.lands > 50 && sum.slides > 1000 && sum.entered > 3000, 'the ride met the map: ' + JSON.stringify(sum));
     // Three times the budget of 11.1: a slow test machine passes, an order of magnitude does not.
-    assert.ok(plainUs < 180, 'a plain tick took ' + plainUs.toFixed(1) + ' microseconds');
-    assert.ok(busyUs < 450, 'a tick that enters a tile or scrapes took ' + busyUs.toFixed(1) + ' microseconds');
+    withinBudget(t, plainUs, 180, 'a plain tick took ' + plainUs.toFixed(1) + ' microseconds');
+    withinBudget(t, busyUs, 450, 'a tick that enters a tile or scrapes took ' + busyUs.toFixed(1) + ' microseconds');
 });
 
 test('standing still with no key: no step and no probe of the world', () => {

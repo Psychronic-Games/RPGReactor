@@ -65,6 +65,8 @@ class DatabaseEditorUI {
         };
         this.system1Editor = new DatabaseSystem1Editor(databaseManager, system1ProjectManager, this.commonUI, this);
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.featuresEditor = typeof DatabaseFeaturesEditor !== 'undefined'
+            ? new DatabaseFeaturesEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
         this.controlsEditor = typeof DatabaseControlsEditor !== 'undefined' ? new DatabaseControlsEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
         this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, eventProjectManager, this.commonUI, this);
         this.userInterfaceEditor = new DatabaseUserInterfaceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
@@ -102,6 +104,12 @@ class DatabaseEditorUI {
 
     _tt(text) {
         return window.I18n ? window.I18n.tText(text) : text;
+    }
+
+    /** Whether a Reactor feature is on in this project (Database › Reactor Features); on when the registry is absent. */
+    featureOn(id) {
+        const features = typeof window !== 'undefined' ? window.ReactorFeatures : null;
+        return !features || features.on(id, this.databaseManager?.getSystem?.() || {});
     }
 
     _dbTitle(type, fallback = type) {
@@ -919,6 +927,13 @@ class DatabaseEditorUI {
                 const { detailEl } = this.prepareDatabaseSection('system1', this._dbTitle('system1', 'System 1'), { showListPanel: false });
 
                 this.system1Editor.showSystem1Detail(detailEl);
+                this.refreshDatabaseSections();
+                return;
+            }
+            case 'reactorFeatures': {
+                // Reactor's additions a plugin may also provide, each switched on or off (ReactorFeatures).
+                const { detailEl } = this.prepareDatabaseSection('reactorFeatures', this._dbTitle('reactorFeatures', 'Reactor Features'), { showListPanel: false });
+                this.featuresEditor?.showFeaturesDetail(detailEl);
                 this.refreshDatabaseSections();
                 return;
             }
@@ -2123,11 +2138,12 @@ class DatabaseEditorUI {
                 { name: 'Tilesets', type: 'tilesets' }, { name: '3D Models', type: 'reactor3d' },
                 { name: 'Structures', type: 'structures' }, { name: 'Vehicles', type: 'vehicles' }] },
             { name: 'Events and Interfaces', pages: [
-                { name: 'Common Events', type: 'commonEvents' }, { name: 'Quests', type: 'quests' },
+                { name: 'Common Events', type: 'commonEvents' }, { name: 'Quests', type: 'quests', feature: 'quests' },
                 { name: 'User Interfaces', type: 'userInterfaces' }, { name: 'Music Sequences', type: 'musicSequences' }] },
             { name: 'System', pages: [
                 { name: 'System 1', type: 'system1' }, { name: 'System 2', type: 'system2' }, { name: 'Types', type: 'types' },
-                { name: 'Terms', type: 'terms' }, { name: 'Controls', type: 'controls' }] }
+                { name: 'Terms', type: 'terms' }, { name: 'Controls', type: 'controls' },
+                { name: 'Reactor Features', type: 'reactorFeatures' }] }
         ];
     }
 
@@ -2152,6 +2168,8 @@ class DatabaseEditorUI {
             heading.textContent = this._tt(title);
             navEl.appendChild(heading);
             for (const category of section.pages) {
+                // A page of a feature turned off in Database › Reactor Features is left out (its data is kept).
+                if (category.feature && !this.featureOn(category.feature)) continue;
                 const item = document.createElement('div');
                 item.className = 'database-nav-item';
                 if (category.type === activeType) item.classList.add('active');
@@ -3627,6 +3645,7 @@ class DatabaseEditorUI {
                         </section>
                     `).join('')}
                 </div>
+                ${typeof window === 'undefined' || !window.ReactorFeatures || window.ReactorFeatures.on('equipSlotLayouts', system) ? '<section class="rr-types-panel rr-slot-layouts rr-db-fold" data-section-key="slotLayouts"></section>' : ''}
             </div>
         `;
 
@@ -3955,6 +3974,20 @@ class DatabaseEditorUI {
         detailEl.querySelector('.rr-types-clear').addEventListener('click', clearSelected);
         categories.forEach(renderPanel);
         setActiveCategory(activeCategory);
+        // Slot Layouts (System rrSlotLayouts): picked by the Slot Type trait. Its slot lists name the
+        // equipment types, so a type renamed above is shown there once its name is entered.
+        const layoutsHost = detailEl.querySelector('.rr-slot-layouts');
+        const renderLayouts = () => {
+            if (!layoutsHost || typeof RRSlotLayoutsSection === 'undefined') return;
+            RRSlotLayoutsSection.render(layoutsHost, system, {
+                data: this.databaseManager.data, tt,
+                confirm: message => RRDialog.confirm(message, { title: tt('Delete Layout'), ok: tt('Delete'), danger: true })
+            });
+        };
+        renderLayouts();
+        panelFor('equipTypes')?.addEventListener('change', event => {
+            if (event.target.closest('.rr-types-name-editor')) renderLayouts();
+        });
         this.refreshDatabaseSections();
     }
 

@@ -1848,6 +1848,9 @@ class EventCommandList {
                 if (operandType === 1) {
                     // Variable
                     description = `${operation}${this._fmtVarBracket(operand)} ${tt('gold')}`;
+                } else if (operandType === 2) {
+                    // Random between two ends (params[3] the top)
+                    description = `${operation}${operand}–${params[3] || 0} ${tt('gold')}`;
                 } else {
                     // Constant
                     description = `${operation}${operand} ${tt('gold')}`;
@@ -1873,6 +1876,8 @@ class EventCommandList {
                 if (operandType === 1) {
                     // Variable
                     description = `${itemName} ${operation}${this._fmtVarBracket(operand)}`;
+                } else if (operandType === 2) {
+                    description = `${itemName} ${operation}${operand}–${params[4] || 1}`;
                 } else {
                     // Constant
                     description = `${itemName} ${operation}${operand}`;
@@ -1899,6 +1904,8 @@ class EventCommandList {
                 if (operandType === 1) {
                     // Variable
                     description = `${weaponName} ${operation}${this._fmtVarBracket(operand)}`;
+                } else if (operandType === 2) {
+                    description = `${weaponName} ${operation}${operand}–${params[5] || 1}`;
                 } else {
                     // Constant
                     description = `${weaponName} ${operation}${operand}`;
@@ -1928,6 +1935,8 @@ class EventCommandList {
                 if (operandType === 1) {
                     // Variable
                     description = `${armorName} ${operation}${this._fmtVarBracket(operand)}`;
+                } else if (operandType === 2) {
+                    description = `${armorName} ${operation}${operand}–${params[5] || 1}`;
                 } else {
                     // Constant
                     description = `${armorName} ${operation}${operand}`;
@@ -2159,15 +2168,8 @@ class EventCommandList {
                             const step = typeof SetMovementRouteEditor !== 'undefined' && SetMovementRouteEditor.parseRouteCommand
                                 ? SetMovementRouteEditor.parseRouteCommand(params[0]) : null;
                             if (step) {
-                                if (step.op === 'rise') description = tt('Rise');
-                                else if (step.op === 'descend') description = tt('Descend');
-                                else if (step.op === 'faceceiling') description = tt('Face Ceiling');
-                                else if (step.op === 'faceground') description = tt('Face Ground');
-                                else if (step.op === 'standup') description = tt('Stand Up');
-                                else if (step.op === 'rotate') description = `${tt('Rotate')}: ${step.n}°`;
-                                // Move to Tile: "Move to (14, 9)".
-                                else if (step.op === 'moveto') description = SetMovementRouteEditor.moveToText(step, tt);
-                                else description = `${tt('Set Height')}: ${step.n}`;
+                                // "Rise", "Mirror ON", "Rotate: 90°", "Move to (14, 9)"...
+                                description = SetMovementRouteEditor.stepText(step, tt);
                             } else {
                                 description += `: ${String(mp[0] || '').substring(0, 30)}`;
                             }

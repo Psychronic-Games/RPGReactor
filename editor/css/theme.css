@@ -3809,9 +3809,8 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch {
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.3px;
-    /* Use mix-blend-mode so the text reads on any background color */
-    color: #fff;
-    mix-blend-mode: difference;
+    /* Black or white, whichever reads on the swatch (RRColorPopup.ink). */
+    color: var(--rr-swatch-ink, #fff);
     pointer-events: none;
 }
 

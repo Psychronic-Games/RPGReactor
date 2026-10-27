@@ -149,7 +149,8 @@ test('an event page keeps its graphic, movement and conditions', () => {
     assert.deepEqual(notes, {});
     assert.equal(page.conditions.rrVariableOp, undefined, '>= is MZ\'s own');
     const other = K.eventPage({ condition: { flags: 0x24, variable_id: 156, compare_operator: 3 }, move_type: 5 }, notes);
-    assert.deepEqual(notes, { moveType: 1, timerCondition: 1 });
+    assert.deepEqual(notes, { moveType: 1 }, 'a timer condition converts (rrTimerSec); only the 2003 second timer is noted');
+    assert.equal(other.conditions.rrTimerSec, 0);
     assert.equal(other.conditions.rrVariableOp, 3, 'Deep 8 map 1: variable 156 > 0 keeps its >');
     const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /\[value === n, value >= n, value <= n, value > n, value < n, value !== n\]\[c\.rrVariableOp\]/);

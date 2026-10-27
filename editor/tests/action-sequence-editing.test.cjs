@@ -156,3 +156,16 @@ test('a click picks a part of a posed skinned model: neither its rest sphere nor
  assert.match(preview,/o\.boundingSphere=new THREE\.Sphere\(new THREE\.Vector3\(\),1e6\);o\.boundingBox=null;/);
  assert.match(preview,/finally\{for\(const \[o,sphere,box\] of skinned\)\{o\.boundingSphere=sphere;o\.boundingBox=box;\}\}/,'and both are put back');
 });
+
+test('a record that uses the sequence previews it as that record uses it: its skill or item, its weapon\'s attack, its battler',()=>{
+ const e=editor({});e.sequence={id:35,name:'Sniper Shot',steps:[]};e.db={data:{skills:[null,{id:1,name:'Attack',animationId:-1},{id:2,name:'Headshot',animationId:129}],items:[],weapons:[null,{id:1,name:'Rifle',animationId:111}],actors:[null,{id:1,name:'Fleagus'}],enemies:[],states:[]}};
+ e.cast={user:2,target:1};e.castKinds={user:'enemies',target:'enemies'};e.sampleAction='skills:1';e.sampleWeapon=0;
+ const calls=[];for(const name of ['clearPreviewMedia','savePrefs','castSummarize','updateReferences','drawInspector','loadCast','paint'])e[name]=()=>calls.push(name);
+ e.sampleActionSelect={value:''};e.sampleWeaponSelect={value:''};e.castSelects={user:{value:''}};
+ e.previewAs({kind:'skills',id:2});assert.equal(e.sampleAction,'skills:2');assert.equal(e.sampleActionSelect.value,'skills:2');assert.ok(e.previewingAs({kind:'skills',id:2}));assert.equal(e.frame,0);
+ e.previewAs({kind:'weapons',id:1});assert.equal(e.sampleAction,'skills:1','A weapon previews its attack');assert.equal(e.sampleWeapon,1);assert.equal(e.sampleWeaponSelect.value,'1');
+ assert.ok(!e.previewingAs({kind:'skills',id:2}),'Only the record previewed is lit');
+ calls.length=0;e.previewAs({kind:'actors',id:1});assert.deepEqual([e.castKinds.user,e.cast.user],['actors',1]);assert.equal(e.castSelects.user.value,'actors:1');assert.ok(calls.includes('loadCast'),'A new user is loaded');
+ assert.equal(e.previewAsChoice({kind:'states',id:4}),null,'A state reaction has nothing the preview can stand in for');
+ assert.equal(e.previewAsChoice({kind:'skills',id:99}),null,'A missing record is not offered');
+});

@@ -342,3 +342,63 @@ test('a model event sizes itself: the tiles its body covers, kept for the editor
     const page = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventPageEditor.js'), 'utf8');
     assert.match(page, /this\.parentEditor\.refreshAutoSize\?\.\(\);/, 'again when the model, its size or its facing changes');
 });
+
+test('an event with the Vehicle field and no picture of its own measures its vehicle\'s model for Auto', () => {
+    const EventEditor = require(path.join(editorRoot, 'src', 'event', 'EventEditor.js'));
+    const previous = global.RRVehicles;
+    global.RRVehicles = require(path.join(editorRoot, 'src', 'event', 'VehicleSetup.js'));
+    try {
+        const model = { name: 'Vehicles/kawashaki_ninja_h2', file: 'kawashaki_ninja_h2', size: 4 };
+        const editor = Object.create(EventEditor.prototype);
+        editor.databaseManager = { data: { vehicles: [null, { id: 1, name: 'Motorcycle', model, graphic3d: true }] } };
+        editor.pendingModels = [null];
+        editor.currentEvent = { id: 3, rrVehicle: { type: 1 }, pages: [{ image: { characterName: '', tileId: 0, direction: 4 } }] };
+        const sized = editor._sizeModel();
+        assert.equal(sized && sized.spec.name, model.name, 'Auto has the vehicle\'s model to measure');
+        assert.equal(sized.direction, 4, 'facing the way its page faces');
+        assert.equal(sized.vehicle, true);
+        assert.deepEqual(EventEditor.vehicleFront({ vehicle: { forward: '-x' } }), [-1, 0, 0], 'the front the model file names, as the game reads it');
+        assert.equal(EventEditor.vehicleFront({}), null);
+        // A picture on the page is what the event shows: no vehicle model, nothing to measure.
+        editor.currentEvent.pages[0].image.characterName = 'Vehicle';
+        assert.equal(editor._sizeModel(), null);
+        // A model of the page's own wins over the vehicle's.
+        editor.currentEvent.pages[0].image.characterName = '';
+        editor.pendingModels = [{ name: 'Actors/Fleagus' }];
+        assert.equal(editor._sizeModel().spec.name, 'Actors/Fleagus');
+    } finally { global.RRVehicles = previous; }
+});
+
+test('a map\'s model events take their Auto size when drawn, without the Event Editor, and a clean map stays clean', async () => {
+    const EventManager = require(path.join(editorRoot, 'src', 'EventManager.js'));
+    const EventEditor = require(path.join(editorRoot, 'src', 'event', 'EventEditor.js'));
+    const saved = { RRMapElevation: global.RRMapElevation, RREventPreviewModels: global.RREventPreviewModels, EventEditor: global.EventEditor, Reactor3D: global.Reactor3D, RRVehicles: global.RRVehicles, window: global.window };
+    global.RRMapElevation = require(path.join(editorRoot, 'src', 'utils', 'MapElevation.js'));
+    global.RRVehicles = require(path.join(editorRoot, 'src', 'event', 'VehicleSetup.js'));
+    global.EventEditor = EventEditor;
+    global.window = { THREE: {}, reactor: {} };
+    const template = { userData: { reactorSidecar: { vehicle: { forward: '-x' } } } };
+    global.RREventPreviewModels = { templateFor: async () => template };
+    const measured = [];
+    global.Reactor3D = { extensionsLoaded: () => true, eventModelSpec: () => null, normalizeModelSpec: spec => ({ ...spec }),
+        blockedTilesFor: (t, sidecar, spec, direction) => { measured.push(spec.faces && spec.faces.front); return [{ x: 0, y: -2 }, { x: 0, y: 2 }]; } };
+    try {
+        const map = { id: 1, width: 20, height: 20, events: [null, { id: 1, x: 5, y: 5, rrVehicle: { type: 1 }, pages: [{ image: { characterName: '', tileId: 0, direction: 2 } }] }] };
+        const manager = Object.create(EventManager.prototype);
+        manager.currentMap = map;
+        manager.databaseManager = { data: { vehicles: [null, { id: 1, name: 'Motorcycle', model: { name: 'Vehicles/bike', size: 4 } }] } };
+        let dirty = false, captured = 0, drawn = 0;
+        manager.tilemapManager = { savedMapState: '{}', isMapDirty: () => dirty, captureSavedMapState: () => captured++ };
+        manager.renderEvents = () => drawn++;
+        assert.equal(await manager.refreshAutoSizes(), true);
+        assert.deepEqual(map.reactor3d.eventSizeAuto['1'], [1, 5, 0, -2], 'the vehicle event covers its bike, along the way it faces');
+        assert.deepEqual(measured[0], [-1, 0, 0], 'turned by the front its model file names');
+        assert.equal(captured, 1, 'a map with no edits of its own does not read as changed');
+        assert.equal(drawn, 1);
+        assert.equal(await manager.refreshAutoSizes(), false, 'measured once: nothing to draw again');
+        // A size set by hand is the user's: never measured over.
+        map.reactor3d.eventSize = { '1': [2, 2] }; delete map.reactor3d.eventSizeAuto;
+        assert.equal(await manager.refreshAutoSizes(), false);
+        assert.equal(map.reactor3d.eventSizeAuto, undefined);
+    } finally { Object.assign(global, saved); }
+});

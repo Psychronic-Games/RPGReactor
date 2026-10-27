@@ -1098,6 +1098,10 @@ void main() {
         const pending = $dataSystem && $dataSystem.rrLegacyParallax && name
             && this._parallaxName !== name && !legacyBitmapReady(ImageManager.loadParallax(name));
         if (!pending) _Spriteset_Map_updateParallax.call(this);
+        this.rrPlaceLegacyParallax();
+    };
+    // Also placed for the frames drawn between ticks (Graphics.FramePacing.draw), from the blended camera.
+    Spriteset_Map.prototype.rrPlaceLegacyParallax = function() {
         const bitmap = this._parallax && this._parallax.bitmap;
         if (!bitmap || !bitmap.isReady() || !$dataSystem || !$dataSystem.rrLegacyParallax || $gameMap._parallaxZero) return;
         const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight();

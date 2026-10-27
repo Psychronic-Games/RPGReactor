@@ -75,35 +75,41 @@
     // Units named without a side move both sides. `gaze` is [across, up] in radians (+across: the character's left);
     // `blush` and `tears` are 0..1.
 
+    // Each is drawn to read at a glance on a 144-pixel face sheet: the brows, the lids and the mouth's corners
+    // carry it, each well past MakeHuman's own measure where a portrait needs it (Expressiveness scales them all).
     const EXPRESSIONS = [
         { id: 'neutral', label: 'Normal', units: {} },
-        // Duchenne smile: the corners pulled up, the cheeks raised, the lower lids lifted.
-        { id: 'happy', label: 'Happy', units: { smile: 1, grin: 0.3, lipsPart: 0.25, cheekRaise: 0.9, eyeSquint: 0.35, browUp: 0.05 } },
-        { id: 'laugh', label: 'Laughing', units: { smile: 1, grin: 0.45, jawDrop: 0.42, lipsPart: 0.35, upperLipRaise: 0.3, cheekRaise: 1, eyeSquint: 0.55, browUp: 0.12 } },
-        // The inner brows drawn up and together, the corners down, the lids heavy, the eyes lowered.
-        { id: 'sad', label: 'Sad', units: { browInnerUp: 0.95, browDown: 0.25, frown: 0.75, pout: 0.3, eyeClose: 0.22, eyeSquint: 0.1 }, gaze: [0, -0.18] },
-        // The brows down and together, the upper lids raised and the lower tightened, the lips pressed.
-        { id: 'angry', label: 'Angry', units: { browDown: 1.25, eyeWide: 0.35, eyeSquint: 0.4, lipPress: 0.8, sneer: 0.3, nostrilFlare: 0.8, frown: 0.2 } },
-        { id: 'surprised', label: 'Surprised', units: { browUp: 1, eyeWide: 1, jawDrop: 0.42, lipsPart: 0.5 } },
-        // Brows raised and drawn together, the eyes wide, the lips stretched back.
-        { id: 'scared', label: 'Scared', units: { browInnerUp: 0.85, browUp: 0.45, browDown: 0.3, eyeWide: 1, stretch: 0.55, grimaceOpen: 0.4, jawDrop: 0.18, neckTense: 0.3 } },
-        // The nose wrinkled and the upper lip raised, the brows lowered.
-        { id: 'disgusted', label: 'Disgusted', units: { sneer: 1, upperLipRaise: 0.65, frown: 0.35, browDown: 0.55, eyeSquint: 0.45, pout: 0.25, cheekRaise: 0.3 } },
-        // One corner up, a little of the cheek on that side.
-        { id: 'smirk', label: 'Smirk', units: { smileL: 0.8, cheekRaiseL: 0.35, eyeSquintL: 0.2, lipPress: 0.2, browOuterUpR: 0.15 }, gaze: [0.06, 0] },
-        { id: 'determined', label: 'Determined', units: { browDown: 0.6, eyeSquint: 0.35, lipPress: 0.55, pout: 0.3, nostrilFlare: 0.3 } },
-        { id: 'worried', label: 'Worried', units: { browInnerUp: 0.8, browDown: 0.45, stretch: 0.3, lipPress: 0.25, eyeWide: 0.15 } },
-        // A shy smile, the eyes lowered and aside, the cheeks colored.
-        { id: 'embarrassed', label: 'Embarrassed', units: { smile: 0.4, lipPress: 0.25, browInnerUp: 0.35, eyeClose: 0.2, cheekRaise: 0.3 }, gaze: [0.22, -0.22], blush: 1 },
-        { id: 'sleepy', label: 'Sleepy', units: { eyeClose: 0.72, browInnerUp: 0.15, lipsPart: 0.25, jawDrop: 0.05 }, gaze: [0, -0.1] },
+        // Duchenne smile: the corners pulled up, the cheeks raised, the lower lids lifted, the brows lifted a little.
+        { id: 'happy', label: 'Happy', units: { smile: 1.25, grin: 0.4, lipsPart: 0.45, cheekRaise: 1.2, eyeSquint: 0.55, eyeClose: 0.12, browUp: 0.45, browInnerUp: 0.2 } },
+        // The eyes squeezed nearly shut, the mouth open wide, the brows up.
+        { id: 'laugh', label: 'Laughing', units: { smile: 1.3, grin: 0.6, jawDrop: 0.5, lipsPart: 0.45, upperLipRaise: 0.35, cheekRaise: 1.4, eyeSquint: 0.8, eyeClose: 0.5, browUp: 0.55, browInnerUp: 0.3 } },
+        // The inner brows drawn up and together, the corners well down, the lids heavy, the eyes lowered.
+        { id: 'sad', label: 'Sad', units: { browInnerUp: 1.8, browDown: 0.4, frown: 1.25, pout: 0.15, eyeClose: 0.32, eyeSquint: 0.1 }, gaze: [0, -0.22] },
+        // The brows down hard and together (the outer ends up, a V), the upper lids raised, the teeth bared.
+        { id: 'angry', label: 'Angry', units: { browDown: 1.9, browOuterUp: 0.45, browInnerUp: -0.25, eyeWide: 0.55, eyeSquint: 0.65, lipPress: 0.3, frown: 0.75, sneer: 0.6, upperLipRaise: 0.35, nostrilFlare: 1.2 } },
+        // The brows high, the eyes wide, the mouth dropped open in an O.
+        { id: 'surprised', label: 'Surprised', units: { browUp: 1.8, browInnerUp: 0.35, eyeWide: 1.5, jawDrop: 0.7, lipsPart: 0.3, funnel: 0.3 } },
+        // Brows raised and drawn together, the eyes wide, the lips stretched back off the teeth.
+        { id: 'scared', label: 'Scared', units: { browInnerUp: 1.5, browUp: 0.8, browDown: 0.35, eyeWide: 1.5, stretch: 1, grimaceOpen: 0.7, jawDrop: 0.22, neckTense: 0.5 } },
+        // The nose wrinkled and the upper lip raised, more on one side; the brows lowered.
+        { id: 'disgusted', label: 'Disgusted', units: { sneer: 1.4, sneerL: 0.4, upperLipRaise: 1, frown: 0.7, browDown: 1, browInnerUp: 0.2, eyeSquint: 0.75, pout: 0.3, cheekRaise: 0.5, noseCompress: 1 }, gaze: [0.06, -0.04] },
+        // One corner up, the cheek on that side; lids half down, one brow raised.
+        { id: 'smirk', label: 'Smirk', units: { smileL: 1.8, grinL: 0.35, cheekRaiseL: 0.9, eyeSquintL: 0.5, eyeClose: 0.3, lipPress: 0.3, browOuterUpR: 1.3, browUpR: 0.8, browDownL: 0.6 }, gaze: [0.08, 0] },
+        // The brows set low, the eyes narrowed, the mouth firm with the corners held level.
+        { id: 'determined', label: 'Determined', units: { browDown: 1.25, browOuterUp: 0.35, eyeSquint: 0.7, eyeWide: 0.2, lipPress: 0.6, smile: 0.35, stretch: 0.2, nostrilFlare: 0.6 } },
+        { id: 'worried', label: 'Worried', units: { browInnerUp: 2, browDown: 0.35, eyeWide: 0.7, stretch: 0.85, frown: 0.75, lipPress: 0.2, grimaceOpen: 0.2 }, gaze: [0.12, -0.08] },
+        // A shy smile, the brows up in the middle, the eyes lowered and aside, the cheeks colored.
+        { id: 'embarrassed', label: 'Embarrassed', units: { smile: 0.75, lipPress: 0.35, browInnerUp: 1, browDown: 0.2, eyeClose: 0.3, cheekRaise: 0.5 }, gaze: [0.3, -0.26], blush: 1 },
+        // The lids most of the way down, the brows slack, the mouth a little open.
+        { id: 'sleepy', label: 'Sleepy', units: { eyeClose: 0.82, browInnerUp: 0.35, browOuterUp: -0.3, lipsPart: 0.35, jawDrop: 0.08 }, gaze: [0, -0.12] },
         // Brows up in the middle, the eyes screwed up, the corners down, the lips parted; tears and a flushed face.
-        { id: 'crying', label: 'Crying', units: { browInnerUp: 1, browDown: 0.4, eyeSquint: 0.6, eyeClose: 0.2, cheekRaise: 0.55, frown: 0.85, grimaceOpen: 0.35, pout: 0.15, neckTense: 0.25 }, tears: 1, blush: 0.45 },
+        { id: 'crying', label: 'Crying', units: { browInnerUp: 1.8, browDown: 0.5, eyeSquint: 0.9, eyeClose: 0.45, cheekRaise: 0.9, frown: 1.2, grimaceOpen: 0.6, jawDrop: 0.18, neckTense: 0.35 }, tears: 1, blush: 0.6 },
         // The jaw dropped wide, the lips stretched, the upper lip raised, the brows down, the neck tensed.
-        { id: 'shouting', label: 'Shouting', units: { browDown: 0.85, eyeWide: 0.45, jawDrop: 0.7, stretchOpen: 0.55, upperLipRaise: 0.45, neckTense: 0.25, nostrilFlare: 0.7, lipsPart: 0.3 } },
-        // One brow down, the other a little up, the lips pressed to one side, the eyes up and aside.
-        { id: 'thinking', label: 'Thinking', units: { browDownR: 0.45, browOuterUpL: 0.35, lipPress: 0.35, pout: 0.3, smileL: 0.2, eyeSquint: 0.15, jawSide: 0.5 }, gaze: [-0.28, 0.24] },
-        // The brows lowered, the eyes screwed shut, the cheeks raised, the nose wrinkled, the lips stretched off the teeth.
-        { id: 'pain', label: 'Pain', units: { browDown: 0.85, browInnerUp: 0.45, eyeClose: 0.5, eyeSquint: 0.75, cheekRaise: 0.7, sneer: 0.55, upperLipRaise: 0.4, stretch: 0.5, grimaceOpen: 0.35 } }
+        { id: 'shouting', label: 'Shouting', units: { browDown: 1.5, browOuterUp: 0.35, eyeWide: 0.8, eyeSquint: 0.3, jawDrop: 0.75, stretchOpen: 0.75, upperLipRaise: 0.6, neckTense: 0.5, nostrilFlare: 1.2, lipsPart: 0.35 } },
+        // One brow down, the other well up, the lips pressed and pushed to one side, the eyes up and aside.
+        { id: 'thinking', label: 'Thinking', units: { browDownR: 1, browOuterUpL: 1, browUpL: 0.6, eyeSquintR: 0.45, lipPress: 0.4, smileL: 0.4, frownR: 0.3, jawSide: 0.9 }, gaze: [-0.32, 0.3] },
+        // The brows lowered, the eyes screwed shut, the cheeks raised, the nose wrinkled, the teeth bared in a grimace.
+        { id: 'pain', label: 'Pain', units: { browDown: 1.3, browInnerUp: 0.9, eyeClose: 0.85, eyeSquint: 1, cheekRaise: 1.1, sneer: 0.9, upperLipRaise: 0.65, stretch: 1, grimaceOpen: 0.75 } }
     ];
     const BY_ID = new Map(EXPRESSIONS.map(e => [e.id, e]));
 
@@ -150,6 +156,42 @@
     /** Other names an expression is asked for by. */
     const ALIASES = { smile: 'happy', laughing: 'laugh', shy: 'embarrassed', tired: 'sleepy', smug: 'smirk', defeated: 'sad', hurt: 'pain', afraid: 'scared', fear: 'scared', anger: 'angry', joy: 'happy', blush: 'embarrassed', yell: 'shouting', cry: 'crying' };
 
+    // ── a character's own emotion (recipe.emotion) ─────────────────────────
+
+    /**
+     * How strongly a character's face moves and colors: `strength` scales
+     * every expression (0.3 subtle … 1 a portrait's … 2 anime), `blush` the
+     * flush (0 none … 2), `blushColor` its tint. Visemes and the blink keep
+     * their own measure, so speech reads the same on every face.
+     */
+    const EMOTION = { strength: 1, blush: 1, blushColor: '#ee8a8a' };
+    const EMOTION_RANGE = { strength: [0.3, 2], blush: [0, 2] };
+
+    function normalizeEmotion(e) {
+        const o = e || {}, out = {};
+        for (const k of ['strength', 'blush']) out[k] = Number.isFinite(+o[k]) && o[k] !== '' && o[k] != null ? Math.min(EMOTION_RANGE[k][1], Math.max(EMOTION_RANGE[k][0], +o[k])) : EMOTION[k];
+        out.blushColor = /^#[0-9a-f]{6}$/i.test(o.blushColor || '') ? o.blushColor.toLowerCase() : EMOTION.blushColor;
+        return out;
+    }
+
+    /** The units of an expression at a character's strength: the jaw and the lips' opening grow half as fast, a lid never past shut. */
+    const SLOW = new Set(['jawDrop', 'stretchOpen', 'funnel', 'pucker', 'lipsPart', 'neckTense']);
+    /** Past these a unit folds the face instead of moving it further: weights beyond them grow at a third of the rate. */
+    const KNEE = { browDown: 1.9, browInnerUp: 2.2, browOuterUp: 1.8, browUp: 2, pout: 0.35, frown: 1.2, sneer: 1.6, lipPress: 1.1, noseCompress: 1.2, upperLipRaise: 1.3, eyeWide: 1.8, smile: 2, grin: 0.9, cheekRaise: 1.6 };
+    function strengthen(b, emotion) {
+        const e = normalizeEmotion(emotion), s = e.strength;
+        const units = {};
+        for (const [k, w] of Object.entries(b.units)) {
+            let v = w * (SLOW.has(k) ? 1 + (s - 1) * 0.5 : s);
+            const knee = KNEE[k.replace(/[LR]$/, '')];
+            if (knee && Math.abs(v) > knee) v = Math.sign(v) * (knee + (Math.abs(v) - knee) / 3);
+            units[k] = v;
+        }
+        for (const sd of ['L', 'R']) if (units['eyeClose' + sd] > 0.92) units['eyeClose' + sd] = 0.92;
+        const g = 1 + (s - 1) * 0.5;
+        return { units, gaze: [b.gaze[0] * g, b.gaze[1] * g], blush: b.blush * e.blush, tears: b.tears, blushColor: e.blushColor };
+    }
+
     /** A face by name: an expression, `viseme_<id>`, `blink`, or a weight map of units. */
     function definition(name) {
         if (name && typeof name === 'object') return { units: name.units || name, gaze: name.gaze, blush: name.blush, tears: name.tears };
@@ -159,6 +201,9 @@
         if (id.startsWith('expression_')) return BY_ID.get(id.slice(11)) || EXPRESSIONS[0];
         return BY_ID.get(id) || VISEME_BY_ID.get(id) || EXPRESSIONS[0];
     }
+
+    /** A recipe's emotion settings, defaults filled in. */
+    function emotionOf(recipe) { return normalizeEmotion(recipe && recipe.emotion); }
 
     /** Unit weights of a face at a strength, sides spelled out: { browDownL: 0.6, … }. */
     function weights(name, weight = 1) {
@@ -380,11 +425,13 @@
      * offset (meters) from where the body stands, the lids kept out of the
      * eyeballs. `spec` is a name, a weight map, or blend() output.
      */
-    function field(pack, result, spec, weight = 1) {
+    function field(pack, result, spec, weight = 1, emotion) {
         const M = measure(pack, result);
-        const b = spec && spec.units && spec.gaze ? spec : blend([[spec, weight]]);
+        let b = spec && spec.units && spec.gaze ? spec : blend([[spec, weight]]);
+        // A character's own strength (an expression's; a viseme or the blink is asked for without it).
+        if (emotion) b = strengthen(b, emotion);
         const delta = new Float32Array(pack.vertexCount * 3);
-        const out = { delta, units: b.units, gaze: b.gaze, blush: b.blush, tears: b.tears, moved: false };
+        const out = { delta, units: b.units, gaze: b.gaze, blush: b.blush, tears: b.tears, blushColor: b.blushColor || EMOTION.blushColor, moved: false };
         if (!M || !M.ok) return out;
         // The tongue rides on the jaw (fitted to the lower teeth), its own moves added: MakeHuman's units move
         // it for its own tongue's rest, not for where it lies here.
@@ -499,11 +546,12 @@
         for (let i = 0; i < tpos.length; i += 3) { tf = Math.max(tf, tpos[i + 2]); tb = Math.min(tb, tpos[i + 2]); }
         for (let i = 0; i < tpos.length; i += 3) { const t = smooth(0.4, 1, (tpos[i + 2] - tb) / Math.max(1e-4, tf - tb)); tpos[i + 1] -= 0.005 + 0.003 * t; tpos[i + 2] -= 0.0075 * t; }
         const tn = tg.source.length, tcol = new Float32Array(tn * 3);
-        for (let i = 0; i < tn; i++) { tcol[i * 3] = 0.42; tcol[i * 3 + 1] = 0.1; tcol[i * 3 + 2] = 0.1; }
+        // Deep in the mouth and in its shadow: a dull, dark red (a glossy one lit up as a pale ball in an open mouth).
+        for (let i = 0; i < tn; i++) { tcol[i * 3] = 0.3; tcol[i * 3 + 1] = 0.07; tcol[i * 3 + 2] = 0.075; }
         parts.push({
             name: 'Tongue', positions: tpos, index: Uint32Array.from(tg.index), colors: tcol, keepColors: true, normals: normalsOf(tpos, tg.index),
             joints: new Uint8Array(tn * 4).map((_, i) => (i % 4 === 0 ? head : 0)), weights: new Float32Array(tn * 4).map((_, i) => (i % 4 === 0 ? 1 : 0)),
-            source: Int32Array.from(tg.source), roughness: 0.35, kind: 'teeth', mouth: true, noShade: true
+            source: Int32Array.from(tg.source), roughness: 0.7, kind: 'teeth', mouth: true, noShade: true
         });
         return parts;
     }
@@ -736,6 +784,8 @@
             if (part.name === 'Teeth') return { mode: 'teeth' };
             if (part.name === 'Tongue' && part.source && part.source.length === n) return { mode: 'tongue', map: part.source };
             if ((part.name === 'Forehead detail' || part.chestDetail) && part.interpolation) return { mode: 'interpolation', map: part.interpolation };
+            // Cyberware (RRCharacterCyberGear): per vertex, still, riding the skin under it, or swinging with the jaw.
+            if (part.faceFollow && part.faceFollow.mode.length === n) return { mode: 'follow', map: part.faceFollow };
             if (part.source && part.source.length === n && (part.name === 'Tongue' || part.name === 'Brows' || part.decal || part.onSkin)) return { mode: 'source', map: part.source };
             // Facial hair and the features on the face (tusks, a muzzle's whiskers): each strand or piece by its root.
             if (part.name === 'Facial hair' || part.kind === 'feature') return rigid(part, nearest, o);
@@ -800,12 +850,12 @@
      * part, null for a part that does not move; and the overlays (blush,
      * tears) as parts of their own. Kept per character and face.
      */
-    function pose(pack, result, name, weight = 1) {
-        const key = (typeof name === 'string' ? name : JSON.stringify(name)) + '@' + weight;
+    function pose(pack, result, name, weight = 1, emotion) {
+        const key = (typeof name === 'string' ? name : JSON.stringify(name)) + '@' + weight + (emotion ? JSON.stringify(normalizeEmotion(emotion)) : '');
         const M = measure(pack, result);
         if (!M) return null;
         if (M.cache.has(key)) return M.cache.get(key);
-        const f = field(pack, result, name, weight);
+        const f = field(pack, result, name, weight, emotion);
         const out = posePartsWith(pack, result, M, f);
         if (M.cache.size > 48) M.cache.delete(M.cache.keys().next().value);
         M.cache.set(key, out);
@@ -838,6 +888,23 @@
                 }
                 positions.push(any ? P : null);
                 normals.push(null);
+            } else if (m.mode === 'follow') {
+                const fit = jawFit(M, D), P = Float32Array.from(base), o = M.offset, F = m.map;
+                let any = false;
+                for (let i = 0; i < n; i++) {
+                    const k = F.mode[i];
+                    if (k === 1) {
+                        const v = F.source[i];
+                        if (v < 0) continue;
+                        const dx = D[v * 3], dy = D[v * 3 + 1], dz = D[v * 3 + 2];
+                        if (dx || dy || dz) { P[i * 3] += dx; P[i * 3 + 1] += dy; P[i * 3 + 2] += dz; any = true; }
+                    } else if (k === 2 && fit) {
+                        const p = [base[i * 3] - o[0] - fit.c[0], base[i * 3 + 1] - o[1] - fit.c[1], base[i * 3 + 2] - o[2] - fit.c[2]];
+                        for (let a = 0; a < 3; a++) P[i * 3 + a] += fit.A[a][0] * p[0] + fit.A[a][1] * p[1] + fit.A[a][2] * p[2] + fit.t[a];
+                        any = true;
+                    }
+                }
+                positions.push(any ? P : null); normals.push(null);
             } else if (m.mode === 'teeth') {
                 const fit = jawFit(M, D);
                 if (!fit) { positions.push(null); normals.push(null); return; }
@@ -909,8 +976,8 @@
     }
 
     /** The character's parts with a face: copies where the face moved, the overlays after them. */
-    function posedParts(pack, result, name, weight = 1) {
-        const p = pose(pack, result, name, weight);
+    function posedParts(pack, result, name, weight = 1, emotion) {
+        const p = pose(pack, result, name, weight, emotion);
         if (!p) return result.parts.slice();
         const parts = result.parts.map((part, k) => (p.positions[k] ? Object.assign({}, part, { positions: p.positions[k], normals: p.normals[k] || part.normals }) : part));
         return parts.concat(p.overlays);
@@ -967,10 +1034,12 @@
                 });
                 M.unitCache.set(key, pt);
             }
-            const strength = Math.min(1, f.blush);
-            // A flush: the skin's own color multiplied a little toward red (green and blue held back), so light skin
-            // pinks and deep skin darkens a touch; never paint over it.
-            out.push(make('Blush', Object.assign({}, pt, { alpha: pt.alpha.map(a => a * 0.42 * strength) }), [0.96, 0.68, 0.66], 0.0004, { blend: 'multiply', roughness: 0.6 }));
+            const strength = Math.min(2, f.blush);
+            // A flush: the skin's own color multiplied toward the character's blush tint (green and blue held back),
+            // so light skin pinks and deep skin darkens a touch; never paint over it, never brighten it.
+            const hex = parseInt(String(f.blushColor || EMOTION.blushColor).slice(1), 16);
+            const tint = [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
+            out.push(make('Blush', Object.assign({}, pt, { alpha: pt.alpha.map(a => Math.min(0.9, a * 0.5 * strength)) }), tint, 0.0004, { blend: 'multiply', roughness: 0.6 }));
         }
         if (f.tears > 0.01) {
             const key = 'tears';
@@ -1012,7 +1081,9 @@
         const list = names || MORPH_NAMES;
         const out = [];
         for (const name of list) {
-            const p = posePartsWith(pack, result, measure(pack, result), field(pack, result, name, 1));
+            // The expressions at the character's own strength and blush; the mouth shapes as they are.
+            const own = String(name).startsWith('expression_') ? emotionOf(result.recipe) : undefined;
+            const p = posePartsWith(pack, result, measure(pack, result), field(pack, result, name, 1, own));
             const parts = [];
             p.positions.forEach((P, k) => {
                 if (!P) return;
@@ -1042,9 +1113,9 @@
      * geometry, the overlays as meshes of their own in view.group. The
      * neutral face puts every mesh back as built.
      */
-    function applyToView(view, result, pack, name, weight, THREE) {
+    function applyToView(view, result, pack, name, weight, THREE, emotion) {
         if (!view || !result || !view.meshes || view.meshes.length !== result.parts.length) return false;
-        const p = supports(pack, result) ? pose(pack, result, name || 'neutral', weight ?? 1) : null;
+        const p = supports(pack, result) ? pose(pack, result, name || 'neutral', weight ?? 1, emotion || emotionOf(result.recipe)) : null;
         result.parts.forEach((part, k) => {
             const g = view.meshes[k].geometry, pos = g.getAttribute('position'), nrm = g.getAttribute('normal');
             const P = (p && p.positions[k]) || part.positions, N = (p && p.normals[k]) || part.normals;
@@ -1060,12 +1131,16 @@
             g.setAttribute('position', new THREE.BufferAttribute(o.positions, 3));
             g.setAttribute('normal', new THREE.BufferAttribute(o.normals, 3));
             const multiply = o.blend === 'multiply';
-            // Multiplied overlays are unlit: what is under them is kept at (1 - a) + a·tint of its own color,
-            // lit as it already is (the tint premultiplied by its alpha, blended DstColor + OneMinusSrcAlpha).
+            // Multiplied overlays are unlit: what is under them is kept at (1 - a) + a·tint of its own color, lit as it
+            // already is (blended DstColor + Zero). The factor is what the screen shows, so it is written in linear
+            // light: the renderer's sRGB output turns it back into the factor itself (written as it is, a faint
+            // factor came out over 1 and the cheeks glowed).
+            const lin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
             const rgba = new Float32Array(o.alpha.length * 4);
             for (let i = 0; i < o.alpha.length; i++) {
-                const a = o.alpha[i], k = multiply ? a : 1;
-                rgba[i * 4] = o.colors[i * 3] * k; rgba[i * 4 + 1] = o.colors[i * 3 + 1] * k; rgba[i * 4 + 2] = o.colors[i * 3 + 2] * k; rgba[i * 4 + 3] = a;
+                const a = o.alpha[i];
+                for (let c = 0; c < 3; c++) rgba[i * 4 + c] = multiply ? lin(1 - a + a * o.colors[i * 3 + c]) : o.colors[i * 3 + c];
+                rgba[i * 4 + 3] = multiply ? 1 : a;
             }
             g.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
             g.setIndex(new THREE.BufferAttribute(o.index, 1));
@@ -1073,7 +1148,11 @@
             g.setAttribute('skinWeight', new THREE.BufferAttribute(o.weights, 4));
             const common = { vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
             const mat = multiply ? new THREE.MeshBasicMaterial(Object.assign(common, { toneMapped: false })) : new THREE.MeshStandardMaterial(Object.assign(common, { roughness: o.roughness ?? 0.5, metalness: 0 }));
-            if (multiply) { mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.DstColorFactor; mat.blendDst = THREE.OneMinusSrcAlphaFactor; }
+            if (multiply) {
+                mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.DstColorFactor; mat.blendDst = THREE.ZeroFactor;
+                // The picture's own alpha (a sprite's edge) is kept as it was.
+                mat.blendEquationAlpha = THREE.AddEquation; mat.blendSrcAlpha = THREE.ZeroFactor; mat.blendDstAlpha = THREE.OneFactor;
+            }
             const body = view.meshes[0];
             const add = material => {
                 const mesh = body.isSkinnedMesh ? new THREE.SkinnedMesh(g, material) : new THREE.Mesh(g, material);
@@ -1136,7 +1215,8 @@
     function apply(builder, name, weight = 1) {
         const THREE = root.THREE;
         if (!builder || !builder._view || !builder._result) return false;
-        return applyToView(builder._view, builder._result, builder.pack, name || 'neutral', weight, THREE);
+        // The builder's own settings, as edited (the built result's recipe may be a step behind).
+        return applyToView(builder._view, builder._result, builder.pack, name || 'neutral', weight, THREE, emotionOf(builder.recipe));
     }
 
     // ── text-driven speech ────────────────────────────────────────────────
@@ -1217,8 +1297,10 @@
         BASE_UNITS, OWN_UNITS, EXPRESSIONS, BY_ID, VISEMES, VISEME_BY_ID, LETTER_VISEMES, SHEETS, MORPH_NAMES,
         openUnits, units, preload, definition, weights, blend, measure, supports, field, pose, posedParts,
         mouthParts, tintMouth, mouthCovered, mouthInside, hideMouth, morphTargets, applyToView, attachViewMorphs, detachViewMorphs, lineVisemes, eyeBalls,
-        ALIASES, apply, talk, SAMPLE_LINE
+        ALIASES, apply, talk, SAMPLE_LINE, EMOTION, EMOTION_RANGE, normalizeEmotion, emotionOf, strengthen
     };
     root.RRCharacterExpressions = api;
+    // The body's resting mouth closes the lips with these units (HumanBody's closeLips).
+    if (Body && Body.useExpressions) Body.useExpressions(api);
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -77,7 +77,7 @@ test('the dome follows the camera, drifts, and both frame loops tick it; a paral
     // The sky and the room are set on the map, in Build › Terrain › Room and Sky (live, one undo step a drag): Map Properties keeps them as they are.
     assert.match(controller, /readMap3DForm\(\) \{\s*const elevation = this\.mapElevation\(\), map = this\.currentEditingMap;/);
     const bar = read('editor/src/BuildHotbar.js');
-    assert.match(bar, /range\('rr-build-skysx', tt\('Drift X'\), room\.skyScrollX, -8, 8, 0\.05,/, 'the drift steps by a twentieth of a pixel');
+    assert.match(bar, /range\('rr-build-skysx', tt\('Drift X'\), room\.skyScrollX, -32, 32, 0\.05,/, 'the drift steps by a twentieth of a pixel, as far as the data allows');
     assert.match(bar, /tile\('sky', 'Picture'\)/);
     const html = read('editor/index.html');
     for (const id of ['map-3d-sky-select', 'map-3d-sky-browse-btn', 'map-3d-sky-sx-input', 'map-3d-sky-sy-input']) assert.ok(!html.includes(`id="${id}"`), id);

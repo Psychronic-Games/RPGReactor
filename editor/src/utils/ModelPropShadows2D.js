@@ -34,11 +34,16 @@ class ModelPropShadows2D {
             if (entry.wasMoving && entry.paintedFrame !== entry.driver?.previewFrame) preview.expand(entry);
         }
         const active = new Set();
-        for (const light of lights) {
+        // Shadows owed only for a pose are drawn a few a frame, oldest first, so no frame redraws them all.
+        let poseBudget = ModelPropShadows2D.POSE_PAINTS_PER_FRAME;
+        const ordered = lights.slice().sort((a, b) => (this.states.get(a.id)?.at || 0) - (this.states.get(b.id)?.at || 0));
+        for (const light of ordered) {
             if (!light.shadow) continue;
-            const radius = light.priorityRadius ?? light.radius;
+            // The reach rounded up to half a tile: a flicker swells and shrinks the radius every frame,
+            // and the shadow past the glow's edge is never seen, so a flickering light keeps its shadow.
+            const radius = Math.ceil((light.priorityRadius ?? light.radius) * 2) / 2;
             const source = FlatLightField2D.source(light);
-            const bounds = FlatLightField2D.bounds(light, map, true);
+            const bounds = FlatLightField2D.bounds({ ...light, radius, priorityRadius: radius }, map, true);
             if (source.y <= 0.05 || !bounds) continue;
             active.add(light.id);
             let state = this.states.get(light.id);
@@ -46,12 +51,25 @@ class ModelPropShadows2D {
             const casters = [...preview.entries.values()].filter(entry => entry.object && entry.prop.id !== light.sourcePropId
                 && Math.hypot(entry.prop.x + 0.5 - source.x, entry.prop.y + 0.5 - source.z) < radius + entry.radius
                 && this.intersects(entry, source, bounds));
-            const key = JSON.stringify([source, radius, light.type, light.yaw, light.pitch, light.angle, light.width, map.width, map.height,
-                casters.map(entry => [entry.object.uuid, entry.prop.x, entry.prop.y, entry.prop.z, entry.wasMoving ? entry.driver?.previewFrame : 0])]);
-            if (key !== state.key && (!state.at || now - state.at >= 1000 / 30)) {
+            // Every shadow of every light drew each moving model again thirty times a second: nine draw
+            // calls in ten on a busy map, and the editor could not keep up on a slow GPU. What an edit changes: the light as placed (a lamp on a model, its model's place), its reach
+            // and shape, and where every model in reach stands. Everything else sways on its own (a
+            // flicker, a lamp on a model in its idle, which models a swaying lamp reaches, each model's
+            // pose) and is followed at POSE_MS, close enough to look right for a fraction of the work.
+            const carrier = light.sourcePropId !== undefined ? preview.entries.get(light.sourcePropId) : null;
+            const stand = carrier ? ['on', carrier.prop.x, carrier.prop.y, carrier.prop.z]
+                : [[source.x, source.y, source.z].map(v => Math.round(v * 4)), Math.round((light.yaw || 0) / 5), Math.round((light.pitch || 0) / 5)];
+            const near = [...preview.entries.values()].filter(entry => entry.object && entry.prop.id !== light.sourcePropId
+                && Math.hypot(entry.prop.x + 0.5 - source.x, entry.prop.y + 0.5 - source.z) < radius + entry.radius + 2);
+            const place = JSON.stringify([stand, radius, light.type, light.angle, light.width,
+                map.width, map.height, near.map(entry => [entry.object.uuid, entry.prop.x, entry.prop.y, entry.prop.z])]);
+            const key = place + JSON.stringify([source, light.yaw, light.pitch, casters.map(entry => [entry.object.uuid, entry.wasMoving ? entry.driver?.previewFrame : 0])]);
+            const moved = place !== state.place;
+            const wait = moved ? 1000 / 30 : ModelPropShadows2D.POSE_MS;
+            if (key !== state.key && (!state.at || now - state.at >= wait) && (moved || poseBudget-- > 0)) {
                 state.empty = casters.length === 0;
                 if (!state.empty) this.paint(state, { ...light, radius }, source, casters, map, bounds);
-                state.key = key; state.at = now;
+                state.key = key; state.place = place; state.at = now;
             }
         }
         for (const [id, state] of this.states) if (!active.has(id)) {
@@ -166,4 +184,7 @@ class ModelPropShadows2D {
         }
     }
 }
+/** How often a shadow follows a caster's pose when nothing has moved: twice a second, and at most two such a frame. */
+ModelPropShadows2D.POSE_MS = 500;
+ModelPropShadows2D.POSE_PAINTS_PER_FRAME = 2;
 if (typeof module !== 'undefined' && module.exports) module.exports = ModelPropShadows2D;

@@ -10,7 +10,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const { runtimeSource } = require('./helpers/runtime-source.cjs');
 
-const core = runtimeSource('reactor_core.js'), managers = runtimeSource('reactor_managers.js');
+const core = runtimeSource('reactor_core.js'), managers = runtimeSource('reactor_managers.js'), fx = runtimeSource('reactor_screen_fx.js');
 const between = (source, from, to) => {
     const start = source.indexOf(from), end = source.indexOf(to, start);
     assert.ok(start >= 0 && end > start, 'found ' + from);
@@ -25,7 +25,7 @@ const quaternion = () => ({ x: 0, y: 0, z: 0, w: 1, set(a, b, c, d) { this.x = a
  * placed from `_realX` by the sync, and a camera following it; refreshed at
  * `hz` for `seconds`. Returns what each composite showed and when.
  */
-function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map3d = true } = {}) {
+function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map3d = true, panorama = false } = {}) {
     let now = 0;
     const shown = [];
     const camera = { position: vector(0, 10, 10), quaternion: quaternion(), updateMatrixWorld() {} };
@@ -36,7 +36,8 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
     let updatesRun = 0, worldDrawnInUpdate = 0;
     const tilemap = { origin: { x: 0, y: 0 } };
     const spriteset = {
-        _reactor3d: state, _characterSprites: [], _tilemap: tilemap, _parallax: null,
+        _reactor3d: state, _characterSprites: [], _tilemap: tilemap,
+        _parallax: panorama ? { bitmap: { width: 1920, height: 1440, isReady: () => true }, origin: { x: 0, y: 0 } } : null,
         drawReactor3D() { shown.push({ t: now, model: model.position.x, camera: camera.position.x }); },
         // The final update's sync: places the model and aims the camera from the game's state.
         sync() {
@@ -49,11 +50,17 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
     const sceneObject = Object.assign(new Scene_Map(), { _spriteset: spriteset, isStarted: () => true });
     const $gameMap = {
         mapId: () => 5, _events: [], _vehicles: [], _displayX: 0, _displayY: 0,
-        displayX() { return this._displayX; }, displayY() { return this._displayY; }, tileWidth: () => 48, tileHeight: () => 48
+        displayX() { return this._displayX; }, displayY() { return this._displayY; }, tileWidth: () => 48, tileHeight: () => 48,
+        width: () => 40, height: () => 30, isLoopHorizontal: () => false, isLoopVertical: () => false,
+        _parallaxX: 0, _parallaxY: 0, parallaxOx: () => 0, parallaxOy: () => 0
     };
     const composites = [];
-    const app = { stage: { renderGroup: { childrenToUpdate: {}, renderGroupChildren: [] } }, renderer: {}, render() { composites.push(now); } };
-    const Graphics = { _app: app, _fpsCounter: { startTick() {}, endTick() {} }, _canRender() { return true; }, _lastWatchdogSweep: Infinity, frameCount: 0 };
+    const app = { stage: { renderGroup: { childrenToUpdate: {}, renderGroupChildren: [] } }, renderer: {}, render() {
+        composites.push(now);
+        if (spriteset._parallax) panoramas.push({ t: now, display: tilemap.origin.x / 48, origin: spriteset._parallax.origin.x });
+    } };
+    const panoramas = [];
+    const Graphics = { width: 960, height: 720, _app: app, _fpsCounter: { startTick() {}, endTick() {} }, _canRender() { return true; }, _lastWatchdogSweep: Infinity, frameCount: 0 };
     const SceneManager = {
         _scene: sceneObject, _smoothDeltaTime: 1, _elapsedTime: 0, trueSpeed: true,
         isSceneChanging: () => false, catchException(e) { throw e; },
@@ -74,6 +81,14 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
     vm.runInNewContext(between(core, 'Graphics._reactorBeforeRender = ', '\n//-----------------------------------------------------------------------------\n/**\n * The in-game frame profiler'), context);
     vm.runInNewContext(between(managers, 'SceneManager.update = function', 'SceneManager.terminate = function'), context);
     vm.runInNewContext(between(managers, 'SceneManager.updateMain = function', 'SceneManager.updateInputData = function'), context);
+    if (panorama) {
+        // The 2000/2003 panorama placement, run as the runtime runs it.
+        function Game_Map() {}
+        function Spriteset_Map() {}
+        Object.assign(context, { Game_Map, Spriteset_Map, $dataSystem: { rrLegacyParallax: true }, ImageManager: { loadParallax: () => spriteset._parallax.bitmap } });
+        vm.runInNewContext(between(fx, '    const legacyPanorama =', '    // A loaded save or a re-entered map scene'), context);
+        spriteset.rrPlaceLegacyParallax = Spriteset_Map.prototype.rrPlaceLegacyParallax;
+    }
     Graphics.FramePacing.enabled = pacing;
     Graphics._tickHandler = dt => SceneManager.update(dt);
     const interval = 1000 / hz;
@@ -88,7 +103,7 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
         assert.equal(model.position.x, player._realX + 0.5, 'the model is the game\'s again after the composite');
         assert.equal(camera.position.x, player._realX);
     }
-    return { shown, composites, updatesRun, worldDrawnInUpdate, player, Graphics };
+    return { shown, composites, panoramas, updatesRun, worldDrawnInUpdate, player, Graphics };
 }
 
 /** Of the pictures from `from` ms on: the spread of speed between consecutive pictures, as a share of the mean. */
@@ -209,4 +224,14 @@ test('the hooks are where the frame runs', () => {
     assert.match(managers, /SceneManager\.updateMain = function\(\) \{\n[^\n]*\n\s+if \(Graphics\.FramePacing && Graphics\.FramePacing\._active\) Graphics\.FramePacing\.beforeUpdate\(\);\n\s+this\.updateFrameCount\(\);/);
     const sprites = runtimeSource('reactor_sprites.js');
     assert.match(sprites, /if \(typeof Graphics !== "undefined" && Graphics\.FramePacing && Graphics\.FramePacing\.drawsWorld\(this\)\) return;\n\s+if \(this\.reactor3DKeepsLastPicture\(state\)\) return;\n\s+this\.drawReactor3D\(state\);/);
+});
+
+test('144 Hz, a 2D map with a 2000/2003 panorama: every picture shows the panorama where the camera is', () => {
+    // Sunset over Imdahl's town square: a map-sized panorama that follows the camera. The paced
+    // pictures between updates put it at its top-left corner, a flash and a snap back.
+    const run = play(144, { map3d: false, panorama: true, speed: 0.05 });
+    const walking = run.panoramas.filter(p => p.t >= 2500);
+    assert.ok(walking.length > 100);
+    assert.ok(walking.some(p => Math.abs(p.display / 0.05 - Math.round(p.display / 0.05)) > 0.01), 'pictures between updates were drawn');
+    for (const p of walking) assert.equal(p.origin, Math.floor(48 * p.display), 'panorama at ' + p.origin + ' for a camera at ' + p.display);
 });

@@ -339,7 +339,10 @@ test('every leg joint stays within its reach in every clip: hip, knee a hinge ne
                     for (const n of ['UpLeg', 'Leg', 'Foot', 'ToeBase']) {
                         const v = logOf(mul(conj(W[at(parentOf[n])]), W[at(S + n)])), r = R[n], label = `${pose.id} on ${name}: ${S}${n} at frame ${f}`;
                         assert.ok(v[0] >= r.x[0] - slack && v[0] <= r.x[1] + slack, `${label} bends ${v[0].toFixed(0)}`);
-                        assert.ok(Math.abs(v[1]) <= r.y + slack && Math.abs(v[2]) <= r.z + slack, `${label} turns ${v[1].toFixed(0)}, tilts ${v[2].toFixed(0)}`);
+                        // An ankle rolling its sole level brings the foot's turn with it (eversion with abduction, inversion
+                        // with adduction): up to the library's SOLE_TURN (18) there; LEG_RANGE's 12 bounds the capture's own.
+                        const turn = n === 'Foot' ? Math.max(r.y, Poses.SOLE_TURN) : r.y;
+                        assert.ok(Math.abs(v[1]) <= turn + slack && Math.abs(v[2]) <= r.z + slack, `${label} turns ${v[1].toFixed(0)}, tilts ${v[2].toFixed(0)}`);
                     }
                     // The foot against the knee: both read square to the shin, on a level foot.
                     const leg = at(S + 'Leg'), foot = at(S + 'Foot'), shin = rot(W[leg], sub(bones[foot].head, bones[leg].head)).map(v => v / Math.hypot(...sub(bones[foot].head, bones[leg].head)));
@@ -384,13 +387,36 @@ test('Save to Project builds a humanoid rig sidecar and maps the saved mocap cli
     assert.equal(none.sidecar.rig.template, 'humanoid', 'rigging remains automatic with motion export disabled');
 });
 
+/**
+ * A foot's sole centerline at rest, along the floor: from the middle of its heel to the middle of its ball, each the
+ * midpoint of the sole's outermost and innermost skin across it (as the visible-sole test below samples them).
+ */
+function soleLine(body, foot, toe, side) {
+    const length = toe.head[2] - foot.head[2];
+    const middle = fraction => {
+        const z = foot.head[2] + length * fraction, xs = [];
+        for (let v = 0; v < body.positions.length / 3; v++) {
+            if (body.positions[v * 3 + 1] < foot.head[1] * .7 && Math.sign(body.positions[v * 3]) === side && Math.abs(body.positions[v * 3 + 2] - z) < length * .08) xs.push(body.positions[v * 3]);
+        }
+        xs.sort((a, b) => a - b);
+        const n = Math.max(1, Math.floor(xs.length * .1)), edge = list => list.reduce((s, x) => s + x, 0) / list.length;
+        return [(edge(xs.slice(0, n)) + edge(xs.slice(-n))) / 2, z];
+    };
+    const heel = middle(.18), ball = middle(.88);
+    return [ball[0] - heel[0], 0, ball[1] - heel[1]];
+}
+
 test('walking and running feet face forward through the stride on every body', () => {
     for (const [name] of BODIES) {
         const { bones, body } = bodyOf(name), at = n => bones.findIndex(b => b.name === n);
         for (const id of ['walk', 'run']) {
             const clip = Poses.clip(bones, id, body);
             for (const [S, side] of [['Left', 1], ['Right', -1]]) {
-                const foot = at(S + 'Foot'), toe = at(S + 'ToeBase'), along = sub(bones[toe].head, bones[foot].head), headings = [];
+                // The foot's true heel-to-toe line: its sole's centerline at rest, from the middle of the heel to the
+                // middle of the ball (as the skin test below finds them), carried by the foot bone. The pitched
+                // ankle-to-ball line read here before runs 6 to 9 degrees outside it, read several degrees less
+                // while the capture rolled the soles in, and swings sideways once a pitched foot levels its sole.
+                const foot = at(S + 'Foot'), toe = at(S + 'ToeBase'), along = soleLine(body, bones[foot], bones[toe], side), headings = [];
                 for (let f = 0; f < clip.times.length; f++) {
                     const { W } = posed(bones, clip, f), direction = rot(W[foot], along), front = rot(W[at('Hips')], [0, 0, 1]);
                     // A pitched foot pushing off or swinging vertically has no meaningful horizontal heading.
@@ -398,14 +424,17 @@ test('walking and running feet face forward through the stride on every body', (
                     const a = Math.atan2(direction[0], direction[2]) - Math.atan2(front[0], front[2]);
                     const outward = Math.atan2(Math.sin(a), Math.cos(a)) * DEG * side;
                     headings.push(outward);
-                    // The ankle→ball marker sits about six degrees outside the sole's centerline. The
-                    // skin contour test below checks the visible heading, including that difference.
-                    assert.ok(outward > (id === 'walk' ? -1.5 : -3.5) && outward < 24.5, `${id} on ${name}: ${S} points ${outward.toFixed(1)} degrees outward at frame ${f}`);
+                    // Along the sole's centerline: a walk's foot never turns in past 1.5; a run's swinging foot may pass
+                    // 4.5 in on its way through, the bound the visible-sole test below holds this same line to (this was
+                    // 3.5 on the ankle-to-ball line, which reads 6 to 9 further out); none out past 24.5.
+                    assert.ok(outward > (id === 'walk' ? -1.5 : -4.5) && outward < 24.5, `${id} on ${name}: ${S} points ${outward.toFixed(1)} degrees outward at frame ${f}`);
                 }
                 assert.ok(headings.length > clip.times.length / 4, `${id}: enough level-foot frames`);
                 headings.sort((a, b) => a - b);
                 const neutral = headings[headings.length >> 1];
-                assert.ok(neutral > 2 && neutral < 14, `${id} on ${name}: ${S}'s neutral heading is ${neutral.toFixed(1)} degrees outward`);
+                // A stride's soles land 5 to 12 degrees out, a natural toe-out. This was 2 to 14 when it read the
+                // ankle-to-ball line of a sole rolled in (a reading 6 to 9 off the sole's own line either way).
+                assert.ok(neutral >= 5 && neutral <= 12, `${id} on ${name}: ${S}'s neutral heading is ${neutral.toFixed(1)} degrees outward`);
             }
         }
     }
@@ -448,7 +477,9 @@ test('walking visible heel-to-ball soles face forward without curling inward', (
             headings.sort((a, b) => a - b);
             assert.ok(headings.length > clip.times.length / 4, `${name} ${S}: level sole samples`);
             const median = headings[headings.length >> 1];
-            assert.ok(median > 2 && median < 10, `${name} ${S}: visible sole neutral heading ${median.toFixed(1)}`);
+            // The same natural toe-out as the bones' test above, 5 to 12 out (was 2 to 10 while the soles rolled in:
+            // a rolled foot carries its sole's line several degrees further in than a level one).
+            assert.ok(median >= 5 && median <= 12, `${name} ${S}: visible sole neutral heading ${median.toFixed(1)}`);
         }
     }
 });

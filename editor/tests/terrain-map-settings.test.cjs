@@ -486,7 +486,7 @@ test('Steep Ground with no material: the tint and the angle are off', () => {
     assert.doesNotMatch(rock, /is-off|disabled/);
     // The editor's own swatch takes the same switch.
     const popup = require(path.join(repoRoot, 'editor/src/utils/ColorPopup.js'));
-    assert.match(popup.swatch('rr-build-ctint', '#a99f93', true), /style="background:#a99f93;" disabled>/);
+    assert.match(popup.swatch('rr-build-ctint', '#a99f93', true), /style="background:#a99f93;--rr-swatch-ink:#000000;" disabled>/, 'its label in black or white, whichever reads on it');
     assert.doesNotMatch(popup.swatch('rr-build-ctint', '#a99f93'), /disabled/);
 });
 

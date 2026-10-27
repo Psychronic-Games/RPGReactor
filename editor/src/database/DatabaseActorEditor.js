@@ -187,6 +187,7 @@ class DatabaseActorEditor {
         const allowedWtypes = this.getActorAllowedWtypeIds(actor);
         const allowedAtypes = this.getActorAllowedAtypeIds(actor);
         const sealedEtypes = this.getActorSealedEtypeIds(actor);
+        this.followSlotLayout(actor);
         const equipSlots = this.getActorEquipSlotBindings(actor)
             // Hide slots whose equipType has no name (unnamed/placeholder rows in System.equipTypes).
             .filter(s => typeof equipTypes[s.etypeId] === 'string' && equipTypes[s.etypeId].trim() !== '')
@@ -819,6 +820,28 @@ class DatabaseActorEditor {
             actor,
             this.isDualWield(actor)
         );
+    }
+
+    /**
+     * The actor's slots changed since its equipment was last drawn, and nothing else moved its starting
+     * equipment meanwhile (a Slot Type trait put on, changed or taken off here): each slot's equipment
+     * moves with its type, so a ring stays a ring when a slot layout drops the Shield and Head slots.
+     * (A class's own list moves its actors' equipment itself, in a new array, which is left as it is.)
+     */
+    followSlotLayout(actor) {
+        if (!actor || typeof RREquipSlots === 'undefined' || !RREquipSlots.remapEquips) return;
+        const now = this.getActorEquipSlots(actor);
+        const system = this.databaseManager.getSystem() || {};
+        const layout = !!RREquipSlots.layoutFor?.(system, actor, this.databaseManager.getClass(actor.classId));
+        this._slotsSeen = this._slotsSeen || new WeakMap();
+        const seen = this._slotsSeen.get(actor);
+        const equips = Array.isArray(actor.equips) ? actor.equips : null;
+        // Only where a layout is involved: a class picked or Dual Wield alone keeps MZ's places.
+        if (seen && equips && seen.equips === equips && (seen.layout || layout) && seen.slots.join(',') !== now.join(',')) {
+            actor.equips = RREquipSlots.remapEquips(seen.slots, now, equips);
+            this.databaseManager.updateActor?.(actor.id, actor);
+        }
+        this._slotsSeen.set(actor, { slots: now.slice(), equips: actor.equips, layout });
     }
 
     getActorEquipSlotBindings(actor) {

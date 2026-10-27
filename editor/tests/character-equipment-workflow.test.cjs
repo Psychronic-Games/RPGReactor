@@ -51,7 +51,8 @@ test('armor presets include the matching helmet and conceal hair and facial hair
         const outfit=Wardrobe.PRESETS.find(p=>p.id===id).items;
         assert.ok(outfit.some(i=>i.id==='powerhelm'));
         const result=Character.build(pack,{outfit,hair:{style:'long',facial:{style:'fullBeard'}}},{},{quality:'preview',skinSize:64,atlasSize:128});
-        assert.ok(result.parts.some(p=>p.name==='Power armor plating'));
+        // (2026-10-25: the space marine wears the sleek cyber armor set over a compression suit, not power armor.)
+        assert.ok(result.parts.some(p=>p.name===(id==='marine'?'Cyber chest armor plates':'Power armor plating')));
         assert.ok(result.parts.some(p=>p.name==='Power helmet plating'));
         assert.ok(!result.parts.some(p=>/^(Hair|Beard)/.test(p.name)));
         assert.ok(result.parts.reduce((n,p)=>n+p.index.length/3,0)<40000);

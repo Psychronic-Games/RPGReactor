@@ -14,6 +14,8 @@ class ResourceManager {
             image('characters', 'Characters', 'img/characters'),
             image('enemies', 'Enemies', 'img/enemies'),
             image('faces', 'Faces', 'img/faces'),
+            // The 3D builder's materials: walls, floors, grounds, roads and rocks wear them (`<Name>_normal`, `<Name>_rough` go with one).
+            image('materials', 'Materials', 'img/materials'),
             image('parallaxes', 'Parallaxes', 'img/parallaxes'),
             image('pictures', 'Pictures', 'img/pictures'),
             image('sv-actors', 'SV Actors', 'img/sv_actors'),
@@ -1464,6 +1466,56 @@ class ResourceManager {
         } catch (error) {
             this.setStatus(error.message, true);
         }
+    }
+
+    /**
+     * One picture chosen from the computer, copied into img/materials as a new material (the 3D builder's
+     * "+ Your own picture"): its name, or null when nothing was chosen. A name already taken gets a number.
+     * Its normal and roughness maps (`<name>_normal`, `<name>_rough` beside it) come along when they are there.
+     */
+    importMaterialPicture() {
+        const folder = this.folders.find(entry => entry.id === 'materials');
+        const ownership = this.projectController?.captureProjectOwnership?.();
+        if (!folder || !ownership?.projectPath) return Promise.resolve(null);
+        return new Promise((resolve, reject) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = ['.png', '.jpg', '.jpeg', '.webp'].join(',');
+            input.style.display = 'none';
+            let settled = false;
+            const done = (value, error) => { if (settled) return; settled = true; input.remove(); if (error) reject(error); else resolve(value); };
+            input.addEventListener('cancel', () => done(null));
+            input.addEventListener('change', () => {
+                const file = (input.files || [])[0];
+                if (!file || !file.path) { done(null); return; }
+                try {
+                    const path = this.path, fs = this.fs, extension = path.extname(file.name);
+                    const stem = path.basename(file.name, extension).replace(/[^\w\- ]+/g, '').trim() || 'Material';
+                    const base = { fs, path, assetFiles: this.assetFiles, encryptedAssets: this.encryptedAssets, projectRoot: ownership.projectPath, folder,
+                        project: this.project?.(), system: this.projectController.databaseManager?.data?.system || {}, writeAtomic: window.RRWriteFileAtomicSync,
+                        verifyOwnership: () => this.projectController.verifyProjectOwnership(ownership, { requireWrite: true }) };
+                    // A free name: the picture's own, else with a number after it.
+                    let name = stem, result = null;
+                    for (let n = 2; n < 100; n++) {
+                        result = ResourceManager.importBytes(Object.assign({}, base, { sourceName: name + extension.toLowerCase(), sourceBytes: this.readImportFile(file.path) }));
+                        if (!result.collision) break;
+                        name = `${stem} ${n}`;
+                    }
+                    if (!result || result.collision) throw new Error(this.text('Could not find a free name for {name}.', { name: stem }));
+                    // Its maps, named after it, when they sit beside the picture.
+                    const directory = path.dirname(file.path);
+                    for (const suffix of ['_normal', '_rough']) {
+                        const companion = ['.png', '.jpg', '.jpeg', '.webp'].map(ext => path.join(directory, path.basename(file.name, extension) + suffix + ext)).find(candidate => fs.existsSync(candidate));
+                        if (!companion) continue;
+                        try { ResourceManager.importBytes(Object.assign({}, base, { sourceName: name + suffix + path.extname(companion).toLowerCase(), sourceBytes: this.readImportFile(companion) })); }
+                        catch (error) { console.warn('A material map could not be copied.', error); }
+                    }
+                    done(name);
+                } catch (error) { done(null, error); }
+            });
+            document.body.appendChild(input);
+            input.click();
+        });
     }
 
     readImportFile(filePath) {

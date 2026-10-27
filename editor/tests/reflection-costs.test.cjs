@@ -214,5 +214,5 @@ test('the viewport hands a refresh with no update the owed face, once, and the e
     assert.match(coreJs, /this\._fpsCounter\.startTick\(\);\n[^\n]*\n\s*this\.refreshCount\+\+;/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /static PROBE_HALF_WHILE_MOVING = true;/);
-    assert.match(editor, /const moving = this\._drawActive && MapEditor3D\.PROBE_HALF_WHILE_MOVING;\n\s*if \(moving\) this\._probeTurn = !this\._probeTurn;\n\s*if \(!reflections\.idle\(\) && \(!moving \|\| this\._probeTurn\)\)/);
+    assert.match(editor, /const moving = this\._drawActive && MapEditor3D\.PROBE_HALF_WHILE_MOVING;\n\s*if \(moving\) this\._probeTurn = !this\._probeTurn;[\s\S]{0,1200}?if \(!reflections\.idle\(\) && \(!moving \|\| this\._probeTurn\)\)/);
 });

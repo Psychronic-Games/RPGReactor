@@ -760,7 +760,7 @@ test('animal skulls keep their closed source shape and join the actual moving ne
         const visible = new Map();
         const key = (p, v) => Array.from(p.positions.subarray(v * 3, v * 3 + 3), x => Math.round(x * 1e6)).join(',');
         for (const v of body.index) visible.set(key(body, v), v);
-        const cols = neck.positions.length / 3 / 13;
+        const cols = neck.positions.length / 3 / ((neck.neckRows || 12) + 1);
         for (let v = 0; v < cols; v++) {
             const source = visible.get(key(neck, v));
             assert.notEqual(source, undefined, id + ' neck starts exactly on retained skin');

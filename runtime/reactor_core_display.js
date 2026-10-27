@@ -4394,10 +4394,15 @@ Window.prototype._refreshCursor = function() {
     for (const child of this._cursorSprite.children) {
         child.bitmap = this._windowskin;
     }
-    this._setRectPartsGeometry(this._cursorSprite, srect, drect, m);
+    // A 2000/2003 cursor keeps 8 px corners and stretches only between them. The import lays its 32 px
+    // cell in at 1.5x, so its corners are the cell's outer 12 px, drawn back at 8. Cut at MZ's 4 px, a
+    // game's corner marks fell in the stretched middle and ran across the whole choice as lines.
+    if (typeof $dataSystem !== "undefined" && $dataSystem?.rrLegacyWindows) this._setRectPartsGeometry(this._cursorSprite, srect, drect, 12, 8);
+    else this._setRectPartsGeometry(this._cursorSprite, srect, drect, m);
 };
 
-Window.prototype._setRectPartsGeometry = function(sprite, srect, drect, m) {
+/** `dm`: the corners' size on screen when it differs from their `m` in the skin. */
+Window.prototype._setRectPartsGeometry = function(sprite, srect, drect, m, dm = m) {
     const sx = srect.x;
     const sy = srect.y;
     const sw = srect.width;
@@ -4408,8 +4413,9 @@ Window.prototype._setRectPartsGeometry = function(sprite, srect, drect, m) {
     const dh = drect.height;
     const smw = sw - m * 2;
     const smh = sh - m * 2;
-    const dmw = dw - m * 2;
-    const dmh = dh - m * 2;
+    const dmw = dw - dm * 2;
+    const dmh = dh - dm * 2;
+    const k = dm / m;
     const children = sprite.children;
     sprite.setFrame(0, 0, dw, dh);
     sprite.move(dx, dy);
@@ -4419,26 +4425,27 @@ Window.prototype._setRectPartsGeometry = function(sprite, srect, drect, m) {
     children[2].setFrame(sx, sy + sw - m, m, m);
     children[3].setFrame(sx + sw - m, sy + sw - m, m, m);
     children[0].move(0, 0);
-    children[1].move(dw - m, 0);
-    children[2].move(0, dh - m);
-    children[3].move(dw - m, dh - m);
+    children[1].move(dw - dm, 0);
+    children[2].move(0, dh - dm);
+    children[3].move(dw - dm, dh - dm);
+    for (let i = 0; i < 4; i++) children[i].scale.set(k, k);
     // edge
-    children[4].move(m, 0);
-    children[5].move(m, dh - m);
-    children[6].move(0, m);
-    children[7].move(dw - m, m);
+    children[4].move(dm, 0);
+    children[5].move(dm, dh - dm);
+    children[6].move(0, dm);
+    children[7].move(dw - dm, dm);
     children[4].setFrame(sx + m, sy, smw, m);
     children[5].setFrame(sx + m, sy + sw - m, smw, m);
     children[6].setFrame(sx, sy + m, m, smh);
     children[7].setFrame(sx + sw - m, sy + m, m, smh);
-    children[4].scale.x = dmw / smw;
-    children[5].scale.x = dmw / smw;
-    children[6].scale.y = dmh / smh;
-    children[7].scale.y = dmh / smh;
+    children[4].scale.set(dmw / smw, k);
+    children[5].scale.set(dmw / smw, k);
+    children[6].scale.set(k, dmh / smh);
+    children[7].scale.set(k, dmh / smh);
     // center
     if (children[8]) {
         children[8].setFrame(sx + m, sy + m, smw, smh);
-        children[8].move(m, m);
+        children[8].move(dm, dm);
         children[8].scale.x = dmw / smw;
         children[8].scale.y = dmh / smh;
     }

@@ -16,9 +16,12 @@ function fixture(defaults=[20,19],inheritedFade=false){
  const src=runtimeSource('reactor_screen_fx.js'),start=src.indexOf('    // Legacy teleport erase/show defaults'),end=src.indexOf('    // RPG Maker 2000/2003 panoramas',start);assert.ok(start>=0&&end>start);vm.runInNewContext(src.slice(start,end),box);
  return{box,state,scene:new Scene()};
 }
-test('Sunset imports its authored no-erase/cut-show defaults and preserves Change Screen Transitions',()=>{
- const root=path.join(__dirname,'../..','template/Sunset over Imdahl');const db=L.readDatabase(fs.readFileSync(path.join(root,'RPG_RT.LDB'))),tree=L.readMapTree(fs.readFileSync(path.join(root,'RPG_RT.LMT')));
+const sunset=path.join(__dirname,'../..','template/Sunset over Imdahl');
+test('Sunset imports its authored no-erase/cut-show defaults',{skip:!fs.existsSync(path.join(sunset,'RPG_RT.LDB'))&&'Sunset over Imdahl is not on disk'},()=>{
+ const db=L.readDatabase(fs.readFileSync(path.join(sunset,'RPG_RT.LDB'))),tree=L.readMapTree(fs.readFileSync(path.join(sunset,'RPG_RT.LMT')));
  const out=K.systemJson({advanced:{},sounds:[]},db,tree,{});assert.deepEqual(out.rrLegacyTransitions,[20,19]);
+});
+test('Change Screen Transitions is preserved and saved with the game',()=>{
  const {list}=C.convertList([{code:10690,parameters:[0,16],string:'',indent:0}],{actors:{},notes:{}});assert.match(list[0].parameters[0],/rrChangeScreenTransition\(0, 16\)/);
  const{box,scene}=fixture();vm.runInNewContext(list[0].parameters[0],Object.assign(Object.create(box),box,{rrChangeScreenTransition:box.Game_Interpreter.prototype.rrChangeScreenTransition}));
  assert.equal(box.$gameSystem._rrLegacyTransitions[0],16);assert.deepEqual(JSON.parse(JSON.stringify(box.$gameSystem))._rrLegacyTransitions,[16]);

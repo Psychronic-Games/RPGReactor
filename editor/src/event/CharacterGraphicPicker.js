@@ -25,14 +25,15 @@ class CharacterGraphicPicker {
     static get FRAME_GAP() { return 1; }
 
     /**
-     * How a sheet is cut: `single` is a "$" sheet (one character), `frames` the walking frames per direction.
+     * How a sheet is cut: `single` is a "$" sheet (one character), `frames` the walking frames per direction,
+     * `directions` the rows per character (4, or 1 for a [1D] sheet, its one row shown whichever way it faces).
      * Sizes are in the picture's own pixels and may be fractions when the picture does not divide evenly.
      */
-    static sheetLayout(width, height, single, frames = 3) {
-        const count = Math.max(1, Math.floor(Number(frames) || 3));
+    static sheetLayout(width, height, single, frames = 3, directions = 4) {
+        const count = Math.max(1, Math.floor(Number(frames) || 3)), facing = Number(directions) === 1 ? 1 : 4;
         const charactersAcross = single ? 1 : 4, charactersDown = single ? 1 : 2;
-        const columns = charactersAcross * count, rows = charactersDown * 4;
-        return { width, height, single: !!single, frames: count, charactersAcross, charactersDown, columns, rows,
+        const columns = charactersAcross * count, rows = charactersDown * facing;
+        return { width, height, single: !!single, frames: count, directions: facing, charactersAcross, charactersDown, columns, rows,
             frameWidth: width / columns, frameHeight: height / rows };
     }
 
@@ -40,9 +41,9 @@ class CharacterGraphicPicker {
     static frameAt(layout, column, row) {
         return {
             column, row,
-            characterIndex: layout.single ? 0 : Math.floor(row / 4) * 4 + Math.floor(column / layout.frames),
+            characterIndex: layout.single ? 0 : Math.floor(row / (layout.directions || 4)) * 4 + Math.floor(column / layout.frames),
             pattern: column % layout.frames,
-            direction: (row % 4) * 2 + 2,
+            direction: (row % (layout.directions || 4)) * 2 + 2,
             x: column * layout.frameWidth,
             y: row * layout.frameHeight
         };
@@ -53,14 +54,15 @@ class CharacterGraphicPicker {
         const index = Number(characterIndex) || 0, step = Number(pattern) || 0, facing = Number(direction) || 2;
         const characters = layout.charactersAcross * layout.charactersDown;
         if (index < 0 || index >= characters || step < 0 || step >= layout.frames || ![2, 4, 6, 8].includes(facing)) return null;
-        return { column: (index % 4) * layout.frames + step, row: Math.floor(index / 4) * 4 + (facing / 2 - 1) };
+        const rows = layout.directions || 4;
+        return { column: (index % 4) * layout.frames + step, row: Math.floor(index / 4) * rows + (rows === 1 ? 0 : facing / 2 - 1) };
     }
 
     /** The pixels the sheet takes beyond its frames: the gaps between characters, the line around each, the hairlines. */
     static sheetChrome(layout) {
         const gap = CharacterGraphicPicker.CHARACTER_GAP, line = CharacterGraphicPicker.CHARACTER_BORDER * 2, hair = CharacterGraphicPicker.FRAME_GAP;
         return { width: (layout.charactersAcross - 1) * gap + layout.charactersAcross * (line + (layout.frames - 1) * hair),
-            height: (layout.charactersDown - 1) * gap + layout.charactersDown * (line + 3 * hair) };
+            height: (layout.charactersDown - 1) * gap + layout.charactersDown * (line + ((layout.directions || 4) - 1) * hair) };
     }
 
     /** What the sheet measures on screen at a zoom. A frame is a whole number of pixels, never wider than its share. */
@@ -373,7 +375,8 @@ class CharacterGraphicPicker {
         img.onload = () => {
             if (this._previewGeneration !== previewGeneration || previewArea.dataset.selectedFile !== baseName) return;
             const frames = RRAssetFiles.characterFrameCount ? RRAssetFiles.characterFrameCount(baseName) : 3;
-            const layout = CharacterGraphicPicker.sheetLayout(img.width, img.height, isSingleCharacter, frames);
+            const rows = RRAssetFiles.characterRows ? RRAssetFiles.characterRows(baseName) : 4;
+            const layout = CharacterGraphicPicker.sheetLayout(img.width, img.height, isSingleCharacter, frames, rows);
             this._layout = layout;
 
             const kindText = isSingleCharacter
@@ -430,8 +433,8 @@ class CharacterGraphicPicker {
             block.style.borderWidth = CharacterGraphicPicker.CHARACTER_BORDER + 'px';
             block.style.gap = CharacterGraphicPicker.FRAME_GAP + 'px';
             const firstColumn = (character % layout.charactersAcross) * layout.frames;
-            const firstRow = Math.floor(character / layout.charactersAcross) * 4;
-            for (let row = 0; row < 4; row++) {
+            const firstRow = Math.floor(character / layout.charactersAcross) * layout.directions;
+            for (let row = 0; row < layout.directions; row++) {
                 for (let pattern = 0; pattern < layout.frames; pattern++) {
                     const cell = CharacterGraphicPicker.frameAt(layout, firstColumn + pattern, firstRow + row);
                     const frame = this.createFrame(img, cell, layout);

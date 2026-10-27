@@ -370,7 +370,9 @@ test('character billboards keep the canvas texture upright', () => {
     // sheet keeps three's default flipY, and the frame's v is measured from
     // the bottom accordingly.
     assert.match(body, /Reactor3D\.sheetTextureFor\(bitmap\)/);
-    assert.match(body, /view\.offset\.set\(mirrored \? u0 \+ uw : u0, 1 - \(frame\.y \+ frame\.height\) \/ H\);/);
+    assert.match(body, /const v0 = 1 - \(frame\.y \+ frame\.height\) \/ H, vh = frame\.height \/ H;/);
+    // (Flipped upside down, it reads its rows the other way, in the same place.)
+    assert.match(body, /view\.offset\.set\(mirrored \? u0 \+ uw : u0, flipped \? v0 \+ vh : v0\);/);
     assert.doesNotMatch(core3d.slice(core3d.indexOf('Reactor3D.sheetTextureFor = function'), at), /flipY\s*=\s*false/);
     assert.doesNotMatch(body, /drawImage\(/, 'no per-frame pixel copies for billboards');
 });

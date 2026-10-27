@@ -28,12 +28,15 @@ class ChangeArmorsEditor {
             this.operation = params[1] || 0;
             this.operandType = params[2] || 0;
             this.operand = params[3] || 1;
+            // Random (operand type 2): params[5] is the top of the range.
+            this.operandMax = params[5] ?? this.operand;
             this.includeEquipment = params[4] !== undefined ? params[4] : true;
         } else {
             this.armorId = 1;
             this.operation = 0;
             this.operandType = 0;
             this.operand = 1;
+            this.operandMax = 1;
             this.includeEquipment = true;
         }
 
@@ -210,7 +213,8 @@ class ChangeArmorsEditor {
 
         const operandTypes = [
             { value: 0, label: 'Constant' },
-            { value: 1, label: 'Variable' }
+            { value: 1, label: 'Variable' },
+            { value: 2, label: 'Random' }
         ];
 
         operandTypes.forEach(({ value, label }) => {
@@ -267,7 +271,7 @@ class ChangeArmorsEditor {
             const operandInput = document.createElement('input');
             operandInput.type = 'number';
             operandInput.min = 1;
-            operandInput.max = 99;
+            operandInput.max = 9999;
             operandInput.value = this.operand;
             operandInput.style.cssText = `
                 padding: 6px 10px;
@@ -284,6 +288,29 @@ class ChangeArmorsEditor {
 
             operandRow.appendChild(operandLabel);
             operandRow.appendChild(operandInput);
+            operandSection.appendChild(operandRow);
+        } else if (this.operandType === 2) {
+            // Random: a whole number between the two ends, rolled when the command runs.
+            const operandRow = document.createElement('div');
+            operandRow.className = 'rr-random-range';
+            operandRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+            const operandLabel = document.createElement('span');
+            operandLabel.textContent = tt('Amount:');
+            operandLabel.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 80px;';
+            operandRow.appendChild(operandLabel);
+            const field = (value, onInput) => {
+                const input = document.createElement('input');
+                input.type = 'number'; input.min = 1; input.max = 9999; input.value = value;
+                input.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:80px;';
+                input.addEventListener('input', onInput);
+                return input;
+            };
+            operandRow.appendChild(field(this.operand, e => { this.operand = parseInt(e.target.value) || 1; }));
+            const dash = document.createElement('span');
+            dash.textContent = '–';
+            dash.style.cssText = 'color: var(--color-text-muted);';
+            operandRow.appendChild(dash);
+            operandRow.appendChild(field(this.operandMax, e => { this.operandMax = parseInt(e.target.value) || 1; }));
             operandSection.appendChild(operandRow);
         } else {
             // Variable
@@ -395,13 +422,11 @@ class ChangeArmorsEditor {
         return {
             code: 128,
             indent: 0,
-            parameters: [
-                this.armorId,
-                this.operation,
-                this.operandType,
-                this.operand,
-                this.includeEquipment
-            ]
+            // Random (operand type 2) adds the top of the range; any other
+            // amount keeps RPG Maker MZ's own parameter list.
+            parameters: this.operandType === 2
+                ? [this.armorId, this.operation, this.operandType, this.operand, this.includeEquipment, this.operandMax]
+                : [this.armorId, this.operation, this.operandType, this.operand, this.includeEquipment]
         };
     }
 

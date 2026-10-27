@@ -15,6 +15,8 @@
     'use strict';
 
     const Outfit = root.RRCharacterOutfit || (typeof require === 'function' ? require('./CharacterOutfit.js') : null);
+    // Body art hook (RRCharacterBodyArt): tattoos, paint, scars and implant lines painted into the skin.
+    const BodyArt = () => root.RRCharacterBodyArt || (typeof require === 'function' ? (() => { try { return require('./CharacterBodyArt.js'); } catch (_) { return null; } })() : null);
     const toByte = c => Math.max(0, Math.min(255, Math.round((c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255)));
     const srgb = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
     const fract = x => x - Math.floor(x);
@@ -57,7 +59,7 @@
         return { c, p: [x, y, z], d1: Math.sqrt(d1), d2: Math.sqrt(d2) };
     }
 
-    const PATTERNS = [['none', 'None'], ['freckles', 'Freckles'], ['scales', 'Scales'], ['stripes', 'Stripes'], ['spots', 'Spots'], ['fur', 'Fur'], ['feathers', 'Feathers'], ['decay', 'Decay'], ['panels', 'Panels'], ['tribal', 'Tribal marks'], ['vitiligo', 'Patches'], ['moles', 'Moles'], ['scars', 'Scars'], ['veins', 'Veins'], ['stone', 'Stone'], ['marble', 'Marble'], ['lava', 'Lava cracks']];
+    const PATTERNS = [['none', 'None'], ['freckles', 'Freckles'], ['scales', 'Scales'], ['stripes', 'Stripes'], ['spots', 'Spots'], ['fur', 'Fur'], ['feathers', 'Feathers'], ['decay', 'Decay'], ['panels', 'Panels'], ['chitin', 'Chitin plates'], ['tribal', 'Tribal marks'], ['vitiligo', 'Patches'], ['moles', 'Moles'], ['scars', 'Scars'], ['veins', 'Veins'], ['stone', 'Stone'], ['marble', 'Marble'], ['lava', 'Lava cracks']];
     const LOOKS = [
         { id: 'freckled', label: 'Freckled', skin: '#d9ad91', settings: { type: 'freckles', color: '#8e5032', amount: 0.7 } },
         { id: 'moles', label: 'Beauty marks', skin: '#a8795a', settings: { type: 'moles', color: '#4b2c24', amount: 0.8 } },
@@ -504,6 +506,81 @@
         const d=Math.hypot((fract(u)-.5)*1.75,(fract(v)-.43)*1.65),edge=1-smooth(.70,.94,d);
         return {edge,height:edge*(.3+.7*Math.max(0,1-d*d))*.00055};
     }
+    /**
+     * An insect's armor, laid out on the resting body (so it runs on across
+     * the shoulders whichever body part a patch of skin is reckoned to): a
+     * shield over each side of the chest and of the upper back, split by a
+     * suture down the middle and another toward the armpit; a cap over each
+     * shoulder and a lame round it; below, overlapping bands round the belly
+     * and the lower back, arched to the middle. Round the limbs, plates
+     * between joints, the joints ringed in narrow segments. `pos` runs 0..1
+     * down each plate (its lower edge the one that overlaps the next),
+     * `groove` marks the sutures, `height` is the relief: each plate swells in
+     * its middle, its edge raised in a lip, and the plate under it tucks in.
+     */
+    function chitinPlate(p, scale) {
+        let pos = 0.5, seam = 9, id = 0;
+        const [x, y, z] = p.rest, ax = Math.abs(x), k = scale || 1, side = x < 0 ? 1 : 0;
+        const dS = Math.hypot(ax - 0.188, (y - 1.338) * 1.15, z - 0.012);
+        const torso = p.fam === 0 || (y > 1.2 && ax < 0.2);
+        if (dS < 0.104 && y > 1.2) {
+            // The shoulder: a round cap and two lames stepping down under it, each overlapping the next and the
+            // last the arm's first plate, like a beetle's or a pauldron's.
+            const rings = [0, 0.05, 0.078, 0.104];
+            let ring = 0; while (ring < 2 && dS >= rings[ring + 1]) ring++;
+            const r0 = rings[ring], r1 = rings[ring + 1];
+            pos = ring ? (dS - r0) / (r1 - r0) : 0.35 + 0.65 * dS / r1;
+            seam = Math.min(ring ? dS - r0 : 9, r1 - dS) / 0.0035; id = 10 + ring * 2 + side;
+        } else if (torso && y > 0.86) {
+            // Where the shields end: lower at the middle, rising toward the sides.
+            const low = 1.165 + 0.55 * x * x, front = z > -0.02;
+            if (y > low) {
+                pos = Math.max(0, Math.min(1, (1.43 - y) / (1.43 - low)));
+                const lateralAt = 0.105 + (1.42 - y) * 0.42, lateral = Math.abs(ax - lateralAt);
+                seam = Math.min(ax / 0.0032, (y - low) / 0.0045, lateral / 0.003);
+                id = 20 + side * 2 + (ax > lateralAt ? 1 : 0) + (front ? 0 : 4);
+                if (!front) pos = 1 - pos * 0.6;
+            } else {
+                const v = (low - y) / 0.048 * k;
+                pos = fract(v); seam = Math.min(pos, 1 - pos) / 0.07;
+                id = 40 + Math.floor(v) * 2 + (front ? 0 : 1);
+                if (!front) { seam = Math.min(seam, ax / 0.003); id += side * 100; }
+            }
+        } else if (p.fam !== 0) {
+            const joints = p.fam <= 2 ? [2.0, 2.9] : [1.0, 1.95];
+            const near = Math.min(...joints.map(j => Math.abs(p.s - j)));
+            const step = near < 0.16 ? 0.07 : 0.42;
+            pos = fract(p.s / step * k); seam = Math.min(pos, 1 - pos) / (near < 0.16 ? 0.12 : 0.04);
+            seam = Math.min(seam, Math.abs(Math.abs(p.ang) - Math.PI / 2) / 0.02);
+            id = 200 + p.fam * 50 + Math.floor(p.s / step * k) * 2 + (Math.abs(p.ang) > Math.PI / 2 ? 1 : 0);
+        }
+        const groove = seam < 0.7 ? 1 : 0;
+        // The recess between plates: narrow, deepest at the suture.
+        const recess = 1 - smooth(0.15, 1.6, seam);
+        // Each plate domes in its middle; its lower edge stands proud in a lip; under the edge above, it tucks in.
+        const dome = Math.sin(Math.PI * Math.min(1, pos)), lip = smooth(0.78, 0.95, pos) * (1 - smooth(0.96, 1, pos)), tuck = 1 - smooth(0, 0.2, pos);
+        const height = ((0.55 * dome + 0.7 * lip - 0.45 * tuck) * (1 - recess) - 0.9 * recess + 0.9) * 0.0022;
+        const tint = Math.sin(id * 12.9898 + 4.1) * 43758.5453;
+        return { pos, groove, height, lip, tuck, recess, dome, tint: tint - Math.floor(tint) - 0.5 };
+    }
+    /** How much paler the front is at a point of a body part (`fam`), at `s` along it, facing `n`. */
+    function paleAt(fam, s, n) {
+        return fam === 0 ? smooth(0.35, 0.85, n[2]) * smooth(-0.4, 0.2, s) * (1 - smooth(4.4, 4.9, s)) : smooth(0.2, 0.9, -n[1]) * 0.8;
+    }
+    /** paleAt per skin vertex, eased over its neighbours so its edge runs smooth across the body parts. */
+    function paleFront(pack, F, famOf) {
+        if (pack._paleFront) return pack._paleFront;
+        const Body = root.RRHumanBody || require('./HumanBody.js'), an = F.an, N = F.normals, n = an.rest.length / 3;
+        let a = new Float32Array(n);
+        for (let v = 0; v < n; v++) { const fam = famOf(v); a[v] = paleAt(fam, an.s[v * 5 + fam], [N[v * 3], N[v * 3 + 1], N[v * 3 + 2]]); }
+        const { offsets, flat } = Body.neighbors(pack);
+        let b = new Float32Array(n);
+        for (let pass = 0; pass < 6; pass++) {
+            for (let v = 0; v < n; v++) { const s0 = offsets[v], e = offsets[v + 1]; let sum = 0; for (let i = s0; i < e; i++) sum += a[flat[i]]; b[v] = e > s0 ? 0.5 * a[v] + 0.5 * sum / (e - s0) : a[v]; }
+            [a, b] = [b, a];
+        }
+        return (pack._paleFront = a);
+    }
     /** A texel's skin color (linear) from the skin settings and where it lies. */
     function shadeSkin(s, base, p) {
         const accent = s.accent || Outfit.linear(s.color || '#5a4030'), belly = s.bellyRgb || (s.belly ? Outfit.linear(s.belly) : null);
@@ -551,9 +628,11 @@
             }
         }
         // A paler front: the belly, the throat, the insides of the limbs.
+        let paler = 0;
         if (belly) {
-            const front = p.fam === 0 ? smooth(0.35, 0.85, p.n[2]) * smooth(-0.4, 0.2, p.s) * (1 - smooth(4.4, 4.9, p.s)) : smooth(0.2, 0.9, -p.n[1]) * 0.8;
-            rgb = mix(rgb, belly, front * s.amount);
+            const front = p.belly != null ? p.belly : paleAt(p.fam, p.s, p.n);
+            paler = front * s.amount;
+            rgb = mix(rgb, belly, paler);
         }
         const k = s.scale;
         let t = 0;
@@ -613,11 +692,17 @@
                 break;
             }
             case 'stripes': {
-                const along = p.fam === 0 ? y * 9 : p.s * 2.2;
+                // A tabby's: on the body the stripes run from the spine down and forward round the flanks, dipping
+                // a little as they leave the back (a chevron down the spine), broadest across the back and breaking
+                // up and narrowing toward the chest and belly; a dark line down the spine. Round the limbs, rings.
+                const front = p.fam === 0 ? smooth(-0.2, 0.85, p.n[2]) : 0;
+                const along = p.fam === 0 ? y * 9 + Math.abs(x) * 2.6 * (1 - front) : p.s * 2.2;
                 const wob = noise3(x * 8, y * 8, z * 8) * 0.9;
                 const v = Math.abs(Math.sin((along * k + wob) * Math.PI));
-                const side = p.fam === 0 ? 1 - smooth(0.4, 0.9, p.n[2]) * 0.8 : 1;
-                t = smooth(0.82, 0.92, v) * side;
+                const broken = smooth(0.25, 0.55, noise3(x * 22 + 3.1, y * 6, z * 22));
+                const side = p.fam === 0 ? (1 - front * 0.85) * (1 - front * (1 - broken)) : 1;
+                t = smooth(0.86 - 0.14 * (1 - front), 0.94 - 0.1 * (1 - front), v) * side;
+                if (p.fam === 0 && p.n[2] < -0.4) t = Math.max(t, (1 - smooth(0.012, 0.03, Math.abs(x))) * smooth(-0.4, -0.75, p.n[2]) * 0.9);
                 break;
             }
             case 'spots': {
@@ -635,6 +720,18 @@
                 const blot = noise3(x * 11, y * 11, z * 11) + noise3(x * 31, y * 31, z * 31) * 0.5;
                 const vein = Math.abs(noise3(x * 45, y * 45, z * 45) - 0.5) < 0.025 ? 1 : 0;
                 t = Math.max(smooth(0.85, 1.15, blot), vein * 0.8);
+                break;
+            }
+            case 'chitin': {
+                // The sutures dark, the edge tucked under the plate above in its shadow, the raised lip catching light.
+                // Each plate a little lighter in its glossy middle, and a shade of its own.
+                // Each plate a convex shell lit from above: lightest along its upper face, darkening down to the
+                // shadow under its lower lip; the top tucked under the plate above in that plate's shadow; a thin,
+                // soft suture between; a shade of its own.
+                const plate = chitinPlate(p, k), q = Math.min(1, plate.pos);
+                const shell = 1.16 - 0.34 * smooth(0.15, 1, q) - 0.12 * smooth(0.9, 1, q) - 0.22 * plate.tuck;
+                rgb = rgb.map(c => c * (shell * (1 - 0.25 * plate.recess) + 0.1 * plate.tint));
+                t = Math.min(1, plate.recess * 0.55);
                 break;
             }
             case 'panels': {
@@ -655,7 +752,8 @@
                 break;
             }
         }
-        if (s.type !== 'none') rgb = mix(rgb, s.type === 'vitiligo' ? Outfit.linear('#f2e6dc') : accent, Math.max(0, Math.min(1, t)) * s.amount);
+        const marked = s.type !== 'none' ? Math.max(0, Math.min(1, t)) * s.amount : 0;
+        if (s.type !== 'none') rgb = mix(rgb, s.type === 'vitiligo' ? Outfit.linear('#f2e6dc') : accent, marked);
         // A small oval recess with an upper hood. Its landmark is on the rest skin, so
         // pigment stays registered with the modeled navel as the abdomen changes shape.
         if (s.navel && p.fam === 0 && Math.abs(z - s.navel[2]) < 0.025) {
@@ -696,7 +794,12 @@
             const bh = s.bodyHair, here = p.hair ?? hairDensity(bh.regions, p);
             // The hair itself is strands over the skin (RRCharacterDetail). Under fur the skin takes the fur's
             // color, so none shows between the tufts; under thick hair it darkens a little toward the hair's.
-            if (bh.fur > 0.05) rgb = mix(rgb, bh.rgb, Math.min(1, here * Math.max(bh.amount, bh.fur)) * Math.min(1, bh.fur * 1.4) * 0.95);
+            // A patterned coat keeps its pattern in the fur: the pale front and the markings (a tabby's stripes)
+            // laid over the fur's color as they are over the skin's.
+            let coat = bh.rgb;
+            if (paler) coat = mix(coat, belly, paler);
+            if (marked && s.type !== 'vitiligo') coat = mix(coat, accent, marked);
+            if (bh.fur > 0.05) rgb = mix(rgb, coat, Math.min(1, here * Math.max(bh.amount, bh.fur)) * Math.min(1, bh.fur * 1.4) * 0.95);
             // Under the locks, as on a scalp, the skin takes on the hair's color in fine streaks along its
             // lie: what thick hair reads as from across a room, where single hairs are too fine to see.
             if (bh.amount > 0.01) {
@@ -784,28 +887,8 @@
     function rasterPlan(pack, size) {
         let sizes = rasterCache.get(pack);
         if (sizes?.has(size)) return sizes.get(size);
-        const body = pack.body, owners = new Int32Array(size * size), inside = new Uint8Array(size * size);
-        for (let triangle = 0; triangle < body.index.length; triangle += 3) {
-            const vertices = [body.index[triangle], body.index[triangle + 1], body.index[triangle + 2]];
-            const horizontal = vertices.map(vertex => body.uv[vertex * 2] * size);
-            const vertical = vertices.map(vertex => body.uv[vertex * 2 + 1] * size);
-            const area = (horizontal[1] - horizontal[0]) * (vertical[2] - vertical[0]) - (horizontal[2] - horizontal[0]) * (vertical[1] - vertical[0]);
-            if (Math.abs(area) < 1e-9) continue;
-            const left = Math.max(0, Math.floor(Math.min(...horizontal)) - 1), right = Math.min(size - 1, Math.ceil(Math.max(...horizontal)) + 1);
-            const top = Math.max(0, Math.floor(Math.min(...vertical)) - 1), bottom = Math.min(size - 1, Math.ceil(Math.max(...vertical)) + 1);
-            const tolerance = -0.75 / Math.sqrt(Math.abs(area));
-            for (let row = top; row <= bottom; row++) for (let column = left; column <= right; column++) {
-                const pixel = row * size + column;
-                if (inside[pixel]) continue;
-                const horizontalCenter = column + 0.5, verticalCenter = row + 0.5;
-                const first = ((horizontal[1] - horizontalCenter) * (vertical[2] - verticalCenter) - (horizontal[2] - horizontalCenter) * (vertical[1] - verticalCenter)) / area;
-                const second = ((horizontal[2] - horizontalCenter) * (vertical[0] - verticalCenter) - (horizontal[0] - horizontalCenter) * (vertical[2] - verticalCenter)) / area;
-                const third = 1 - first - second;
-                if (first < tolerance || second < tolerance || third < tolerance) continue;
-                owners[pixel] = triangle + 1;
-                inside[pixel] = first >= 0 && second >= 0 && third >= 0 ? 1 : 0;
-            }
-        }
+        const body = pack.body;
+        const owners = rasterOwners(body.index.length / 3, (k, c) => body.uv[body.index[k * 3 + c] * 2], (k, c) => body.uv[body.index[k * 3 + c] * 2 + 1], size, size, k => k * 3);
         const result = { owners, noise: size <= 256 ? new Float64Array(size * size * 3).fill(NaN) : null };
         if (size <= 256) {
             if (!sizes) { sizes = new Map(); rasterCache.set(pack, sizes); }
@@ -813,6 +896,31 @@
             sizes.set(size, result);
         }
         return result;
+    }
+    /** Which triangle paints each texel (its id + 1): `u(k, corner)`, `v(k, corner)` its picture coordinates, `id(k)` what is stored. */
+    function rasterOwners(count, u, v, width, height, id) {
+        const owners = new Int32Array(width * height), inside = new Uint8Array(width * height);
+        for (let k = 0; k < count; k++) {
+            const horizontal = [u(k, 0) * width, u(k, 1) * width, u(k, 2) * width];
+            const vertical = [v(k, 0) * height, v(k, 1) * height, v(k, 2) * height];
+            const area = (horizontal[1] - horizontal[0]) * (vertical[2] - vertical[0]) - (horizontal[2] - horizontal[0]) * (vertical[1] - vertical[0]);
+            if (Math.abs(area) < 1e-9) continue;
+            const left = Math.max(0, Math.floor(Math.min(...horizontal)) - 1), right = Math.min(width - 1, Math.ceil(Math.max(...horizontal)) + 1);
+            const top = Math.max(0, Math.floor(Math.min(...vertical)) - 1), bottom = Math.min(height - 1, Math.ceil(Math.max(...vertical)) + 1);
+            const tolerance = -0.75 / Math.sqrt(Math.abs(area));
+            for (let row = top; row <= bottom; row++) for (let column = left; column <= right; column++) {
+                const pixel = row * width + column;
+                if (inside[pixel]) continue;
+                const horizontalCenter = column + 0.5, verticalCenter = row + 0.5;
+                const first = ((horizontal[1] - horizontalCenter) * (vertical[2] - verticalCenter) - (horizontal[2] - horizontalCenter) * (vertical[1] - verticalCenter)) / area;
+                const second = ((horizontal[2] - horizontalCenter) * (vertical[0] - verticalCenter) - (horizontal[0] - horizontalCenter) * (vertical[2] - verticalCenter)) / area;
+                const third = 1 - first - second;
+                if (first < tolerance || second < tolerance || third < tolerance) continue;
+                owners[pixel] = id(k) + 1;
+                inside[pixel] = first >= 0 && second >= 0 && third >= 0 ? 1 : 0;
+            }
+        }
+        return owners;
     }
 
     /** External anatomical landmarks in the source frame; shared by shape, pigment and relief. */
@@ -868,17 +976,25 @@
         const furRgb = fur ? Outfit.linear(fur.color || '#2a1d15') : null;
         const size = (options && options.size) || 1024;
         const F = fields(pack), an = F.an, R = an.rest, N = F.normals;
+        // Body art: its layers prepared once for this picture; `layout` paints the art's own finer charts instead of the skin's.
+        const layout = options && options.layout;
+        const Art = BodyArt(), artLayers = options && options.bodyArt;
+        const art = Art && artLayers && artLayers.length && !(options && options.fur) ? Art.prepare(pack, artLayers, options.bodyArtPictures instanceof Map ? options.bodyArtPictures : new Map(Object.entries(options.bodyArtPictures || {}))) : null;
+        const artOut = art ? { height: 0, glow: [0, 0, 0] } : null;
+        const artRelief = !!layout && options?.relief !== false, artGlow = !!(art && art.glow);
         const base = Outfit.linear(skinHex || '#c69c7f');
         const data = new Uint8Array(size * size * 4), filled = new Uint8Array(size * size);
         const body = pack.body;
-        const raster = rasterPlan(pack, size), owners = raster.owners;
+        const raster = layout ? { owners: rasterOwners(layout.tris.length, (k, c) => layout.uv[k * 6 + c * 2], (k, c) => layout.uv[k * 6 + c * 2 + 1], size, size, k => k), noise: null } : rasterPlan(pack, size), owners = raster.owners;
         const p = { rest: [0, 0, 0], n: [0, 0, 0], s: 0, ang: 0, fam: 0, lips: 0, innerLip: 0, lids: 0, bags: 0, seam: 0, beardD: 0, scalpD: 0, cheeks: 0, nose: 0, noseTip: 0, ears: 0, jaw: 0 };
         p.noise = raster.noise;
         s.beard = Math.max(0, Math.min(1, (options && options.beard) || 0));
         s.genitalDetail = options && options.genitalDetail;
         const detailProfile = s.genitalDetail ? genitalProfile : null;
-        const scaleRelief=s.type==='scales'&&!fur;
-        const relief = (detailProfile||scaleRelief) && options?.relief !== false ? new Float32Array(size * size) : null;
+        const scaleRelief=(s.type==='scales'||s.type==='chitin')&&!fur;
+        const relief = ((detailProfile||scaleRelief) && options?.relief !== false) || artRelief ? new Float32Array(size * size) : null;
+        const glowMap = artGlow ? new Float32Array(size * size * 3) : null;
+        const texelMap = artRelief ? new Float32Array(size * size).fill(layout.texel) : null;
         const canonical = detailProfile ? pack.positions : null;
         const genitalPoint = [0, 0, 0];
         s.earHoles = !!(options && options.earHoles);
@@ -913,13 +1029,25 @@
             s.crotch = A.female ? [R0[AF.low * 3], R0[AF.low * 3 + 1], R0[AF.low * 3 + 2]] : null;
         }
         const famOf = v => { let best = 0; for (let fi = 1; fi < 5; fi++) if (an.member[v * 5 + fi] > an.member[v * 5 + best]) best = fi; return best; };
-        for (let t = 0; t < body.index.length; t += 3) {
+        // The paler front per vertex, smoothed over the skin: a triangle takes one body part's measures, so
+        // reckoned per triangle its edge would step from triangle to triangle where the chest meets the arms.
+        const bellyField = s.bellyRgb ? paleFront(pack, F, famOf) : null;
+        const triCount = layout ? layout.tris.length : body.index.length / 3;
+        for (let k = 0; k < triCount; k++) {
+            const t = layout ? layout.tris[k] : k * 3, own = layout ? k : t;
             const r = [body.index[t], body.index[t + 1], body.index[t + 2]];
             const v = r.map(i => body.source[i]);
             const fam = famOf(v[0]);
-            const px = r.map(i => body.uv[i * 2] * size), py = r.map(i => body.uv[i * 2 + 1] * size);
+            const px = layout ? [0, 1, 2].map(c => layout.uv[k * 6 + c * 2] * size) : r.map(i => body.uv[i * 2] * size), py = layout ? [0, 1, 2].map(c => layout.uv[k * 6 + c * 2 + 1] * size) : r.map(i => body.uv[i * 2 + 1] * size);
             const area = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
             if (Math.abs(area) < 1e-9) continue;
+            // The triangle's texel on the skin (meters): soft edges for the art a texel wide wherever the picture is coarser or finer.
+            let texel = s.texel;
+            if (art) {
+                const e1 = [0, 1, 2].map(c => R[v[1] * 3 + c] - R[v[0] * 3 + c]), e2 = [0, 1, 2].map(c => R[v[2] * 3 + c] - R[v[0] * 3 + c]);
+                const a3 = Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]) / 2;
+                texel = Math.min(0.004, Math.sqrt(a3 / (Math.abs(area) / 2)));
+            }
             let angs = v.map(q => an.angle[q * 5 + fam]);
             if (Math.max(...angs) - Math.min(...angs) > Math.PI) angs = angs.map(a => (a < 0 ? a + Math.PI * 2 : a));
             const x0 = Math.max(0, Math.floor(Math.min(...px)) - 1), x1 = Math.min(size - 1, Math.ceil(Math.max(...px)) + 1);
@@ -927,7 +1055,7 @@
             const tol = -0.75 / Math.sqrt(Math.abs(area));
             for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
                 const o = y * size + x;
-                if (owners[o] !== t + 1) continue;
+                if (owners[o] !== own + 1) continue;
                 p.noiseOffset = o * 3;
                 const cx = x + 0.5, cy = y + 0.5;
                 let w0 = ((px[1] - cx) * (py[2] - cy) - (px[2] - cx) * (py[1] - cy)) / area;
@@ -952,8 +1080,9 @@
                 p.s = W.reduce((sum, w, k) => sum + w * an.s[v[k] * 5 + fam], 0);
                 p.ang = W.reduce((sum, w, k) => sum + w * angs[k], 0);
                 p.cu=p.ang*an.radius[fam];p.cv=p.s*an.unit[fam];
-                if(scaleRelief&&relief)relief[o]=skinScale(p,s.scale).height;
+                if(scaleRelief&&relief)relief[o]=s.type==='chitin'?chitinPlate(p,s.scale).height:skinScale(p,s.scale).height;
                 p.lips = W.reduce((sum, w, k) => sum + w * F.lips[v[k]], 0);
+                p.belly = bellyField ? W.reduce((sum, w, k) => sum + w * bellyField[v[k]], 0) : undefined;
                 p.lids = W.reduce((sum, w, k) => sum + w * F.lids[v[k]], 0);
                 p.cheeks = W.reduce((sum, w, k) => sum + w * F.cheeks[v[k]], 0);
                 p.bags = W.reduce((sum, w, k) => sum + w * F.bags[v[k]], 0);
@@ -975,6 +1104,19 @@
                     alpha = Math.round(Math.min(1, cover * 1.15) * 255);
                     rgb = furRgb.map(c => c * (0.75 + strand * 0.35));
                 } else rgb = shadeSkin(s, base, p);
+                if (art) {
+                    p.texel = texel;
+                    rgb = Art.shade(art, rgb, p, artOut);
+                    if (relief && artRelief) {
+                        // The art's relief, and on the fine charts the skin's own grain (pores the coarse picture cannot hold).
+                        relief[o] += artOut.height + (noise3(p.rest[0] * 2400, p.rest[1] * 2400, p.rest[2] * 2400) - 0.5) * 0.000022;
+                        texelMap[o] = texel;
+                    }
+                    if (glowMap) { glowMap[o * 3] = artOut.glow[0]; glowMap[o * 3 + 1] = artOut.glow[1]; glowMap[o * 3 + 2] = artOut.glow[2]; }
+                } else if (relief && artRelief) {
+                    relief[o] += (noise3(p.rest[0] * 2400, p.rest[1] * 2400, p.rest[2] * 2400) - 0.5) * 0.000022;
+                    texelMap[o] = texel;
+                }
                 data[o * 4] = toByte(rgb[0]); data[o * 4 + 1] = toByte(rgb[1]); data[o * 4 + 2] = toByte(rgb[2]); data[o * 4 + 3] = alpha;
                 filled[o] = inside ? 2 : 1;
             }
@@ -982,11 +1124,11 @@
         // Empty texels take the skin color, so filtering at a seam never reads black.
         const fill = (furRgb || base).map(toByte);
         for (let o = 0; o < size * size; o++) if (!filled[o]) { data[o * 4] = fill[0]; data[o * 4 + 1] = fill[1]; data[o * 4 + 2] = fill[2]; data[o * 4 + 3] = fur ? 0 : 255; }
-        const picture = { width: size, height: size, data, name: (options && options.name) || 'skin.png' };
+        const picture = { width: size, height: size, data, name: (options && options.name) || (layout ? 'bodyart.png' : 'skin.png') };
         if (relief) {
-            const pixels = new Uint8Array(size * size * 4), texel = (scaleRelief?1.8:s.genitalDetail.female ? 0.16 : 0.12) / size;
+            const pixels = new Uint8Array(size * size * 4), fixed = (scaleRelief?1.8:s.genitalDetail?(s.genitalDetail.female ? 0.16 : 0.12):1.8) / size;
             for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-                const o = y * size + x, center = relief[o];
+                const o = y * size + x, center = relief[o], texel = texelMap ? texelMap[o] : fixed;
                 const sample = (x, y) => { const i = y * size + x; return filled[i] ? relief[i] : center; };
                 const dx = (sample(Math.min(size - 1, x + 1), y) - sample(Math.max(0, x - 1), y)) / (2 * texel);
                 const dy = (sample(x, Math.min(size - 1, y + 1)) - sample(x, Math.max(0, y - 1))) / (2 * texel);
@@ -995,7 +1137,21 @@
                 pixels[at + 1] = Math.round((0.5 + dy / length * 0.5) * 255);
                 pixels[at + 2] = Math.round((0.5 + 0.5 / length) * 255); pixels[at + 3] = 255;
             }
-            picture.normal = { width: size, height: size, data: pixels, name: scaleRelief?'skin-scales-normal.png':'genital_n.png' };
+            picture.normal = { width: size, height: size, data: pixels, name: layout ? 'bodyart-relief.png' : scaleRelief?'skin-scales-normal.png':'genital_n.png' };
+        }
+        if (glowMap) {
+            const pixels = new Uint8Array(size * size * 4);
+            for (let o = 0; o < size * size; o++) { pixels[o * 4] = toByte(Math.min(1, glowMap[o * 3])); pixels[o * 4 + 1] = toByte(Math.min(1, glowMap[o * 3 + 1])); pixels[o * 4 + 2] = toByte(Math.min(1, glowMap[o * 3 + 2])); pixels[o * 4 + 3] = 255; }
+            picture.emissive = { width: size, height: size, data: pixels, name: layout ? 'bodyart-glow.png' : 'skin-glow.png' };
+        }
+        // The art's finer charts, painted the same way (RRCharacterModel lays them on a part of their own).
+        if (art && !layout && options.detail && options.detail.size) {
+            const L = Art.detailLayout(pack, artLayers, options.bodyArtPictures instanceof Map ? options.bodyArtPictures : new Map(Object.entries(options.bodyArtPictures || {})), options.detail.size);
+            if (L) {
+                const d = paint(pack, skinHex, settings, Object.assign({}, options, { size: L.size, layout: L, detail: null, name: 'bodyart.png' }));
+                d.layout = L;
+                picture.detail = d;
+            }
         }
         return picture;
     }

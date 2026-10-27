@@ -19,7 +19,6 @@ class PropBuilder {
         this.tab = null;
         this.motion = 'live';
         this.folded = {};
-        this.randomScope = 'all';
         try { for (const k of JSON.parse(sessionStorage.getItem(PropBuilder.FOLDED_KEY) || '[]')) this.folded[k] = true; } catch (e) { /* nothing remembered */ }
         this._undo = [];
         this._redo = [];
@@ -136,14 +135,17 @@ class PropBuilder {
                     <button class="rr-btn-chip rr-prop-undo" title="${this._t('Undo')}" disabled>↶</button>
                     <button class="rr-btn-chip rr-prop-redo" title="${this._t('Redo')}" disabled>↷</button>
                     <span class="rr-c3d-group rr-prop-randomgroup">
-                        <button class="rr-btn-chip rr-prop-random" title="${this._t('Roll something new for the part chosen beside it')}">🎲 ${this._t('Randomize')}</button>
-                        <select class="rr-c3d-random-scope rr-prop-random-scope rr-select" title="${this._t('What Randomize changes')}"></select>
+                        <button class="rr-btn-chip rr-prop-random" title="${this._t('Roll something new for the parts ticked beside it')}">${RRRandomPartsMenu.icon()} ${this._t('Randomize')}</button>
+                        ${RRRandomPartsMenu.html(t => this._t(t))}
                     </span>
                     <button class="rr-btn-chip rr-prop-reset">↻ ${this._t('Reset')}</button>
-                    <button class="rr-btn-chip rr-prop-open">${this._t('Open…')}</button>
+                    <button class="rr-btn-chip rr-prop-open">${this._t('Open')}</button>
+                    <label class="rr-c3d-name rr-c3d-group-pick"><span>${this._t('Group')}</span><select class="rr-select rr-prop-design-group" title="${this._t('Where Save Design keeps this prop')}"></select></label>
+                    <button class="rr-btn-chip rr-prop-keep" title="${this._t('Keep this prop\'s settings in the Forge to open and change later. No model is made.')}">${this._t('Save Design')}</button>
                     <span class="rr-c3d-spacer"></span>
                     <span class="rr-c3d-status" aria-live="polite"></span>
-                    <button class="rr-btn-chip rr-c3d-save rr-prop-save">${this._t('Save to Project')}</button>
+                    <button class="rr-btn-chip rr-prop-sheet">${this._t('Export Sprite Sheet')}</button>
+                    <button class="rr-btn-chip rr-c3d-save rr-prop-save">${this._t('Export Model To Project')}</button>
                 </div>
                 <div class="rr-c3d-body rr-prop-body">
                     <div class="rr-prop-types">
@@ -178,10 +180,23 @@ class PropBuilder {
         q('.rr-prop-undo').addEventListener('click', () => this._history(-1));
         q('.rr-prop-redo').addEventListener('click', () => this._history(1));
         q('.rr-prop-random').addEventListener('click', () => this._randomize());
-        q('.rr-prop-random-scope').addEventListener('change', e => { this.randomScope = e.target.value; });
+        // Which parts Randomize rolls: any mix, ticked (RRRandomPartsMenu); remembered per kind of prop.
+        RRRandomPartsMenu.bind(this.root.querySelector('.rr-random-parts'), chosen => {
+            this.randomParts = chosen;
+            const kind = RRPropModel.kindOf(this.recipe);
+            RRRandomPartsMenu.save('prop-' + kind.id, chosen, (kind.randomScopes || []).filter(s => s[0] !== 'all'));
+            this.root.querySelector('.rr-prop-random').disabled = !chosen.size;
+        });
         q('.rr-prop-reset').addEventListener('click', () => this._replace(this._ui().reset(this.recipe)));
         q('.rr-prop-open').addEventListener('click', () => this._showGallery());
+        q('.rr-prop-keep').addEventListener('click', () => this.saveDesign());
+        q('.rr-prop-design-group').addEventListener('change', async e => {
+            this.designGroup = await RRForgeDesigns.chooseGroup(e.target.value, this.designGroup, (s, v) => this._t(s, v));
+            this._renderDesignGroups();
+        });
+        this._renderDesignGroups();
         q('.rr-prop-save').addEventListener('click', () => this.save());
+        q('.rr-prop-sheet').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) RRPropSpriteSheet.openPanel(this); });
         q('.rr-prop-motion').addEventListener('click', e => { const b = e.target.closest('[data-motion]'); if (b) this._setMotion(b.dataset.motion); });
         this.root.querySelectorAll('.rr-c3d-frame').forEach(b => b.addEventListener('click', () => this._frame(b.dataset.frame)));
         q('.rr-c3d-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { this.tab = b.dataset.tab; this._renderPanel(); } });
@@ -244,8 +259,9 @@ class PropBuilder {
         const ui = this._ui(), tabs = ui.tabs;
         if (!tabs.some(t => t[0] === this.tab)) this.tab = tabs[0][0];
         this._renderTypes();
-        this.root.querySelector('.rr-c3d-tabs').innerHTML = tabs.map(([id, label]) =>
-            `<button class="rr-c3d-tab${id === this.tab ? ' is-active' : ''}" role="tab" aria-selected="${id === this.tab}" data-tab="${id}">${this._t(label)}</button>`).join('');
+        // The kind's pages as the Character Builder's raised tabs, side by side on the panel's edge.
+        this.root.querySelector('.rr-c3d-tabs').innerHTML = `<div class="rr-c3d-groups">${tabs.map(([id, label]) =>
+            `<button class="rr-c3d-group-tab${id === this.tab ? ' is-active' : ''}" role="tab" aria-selected="${id === this.tab}" data-tab="${id}" title="${rrEscapeHtml(this._t(label))}">${this._t(label)}</button>`).join('')}</div>`;
         const panel = this.root.querySelector('.rr-c3d-panel'), top = panel.scrollTop;
         panel.innerHTML = ui.panel.call(this, this.tab);
         this._cardify(panel);
@@ -256,11 +272,11 @@ class PropBuilder {
         const kind = RRPropModel.kindOf(this.recipe), group = this.root.querySelector('.rr-prop-randomgroup');
         if (group) {
             group.hidden = !kind.random;
-            const scopes = kind.randomScopes || [['all', 'Everything']];
-            if (!scopes.some(s => s[0] === this.randomScope)) this.randomScope = 'all';
-            const select = group.querySelector('select');
-            select.innerHTML = scopes.map(([id, label]) => `<option value="${id}"${id === this.randomScope ? ' selected' : ''}>${this._t(label)}</option>`).join('');
-            select.hidden = scopes.length < 2;
+            const parts = (kind.randomScopes || []).filter(s => s[0] !== 'all'), menu = group.querySelector('.rr-random-parts');
+            if (this._randomFor !== kind.id) { this.randomParts = RRRandomPartsMenu.load('prop-' + kind.id, parts); this._randomFor = kind.id; }
+            RRRandomPartsMenu.render(menu, parts, this.randomParts, t => this._t(t));
+            menu.hidden = parts.length < 2;
+            this.root.querySelector('.rr-prop-random').disabled = parts.length > 1 && !this.randomParts.size;
         }
         const type = RRPropCatalog.typeOf(this.recipe), input = this.root.querySelector('.rr-c3d-name-input');
         if (input) input.placeholder = this._t(type ? type.label : ui.placeholder);
@@ -324,8 +340,17 @@ class PropBuilder {
         return `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${this._t(label)}</span><select class="rr-select" data-path="${path}">${opts}</select></label>`;
     }
 
+    /** The color a control shows: the recipe's own, else what the kind says it currently draws (`effectiveColor`), so an unset color still shows. */
+    _shownColor(path) {
+        const own = this._get(path);
+        if (own) return own;
+        const hook = this._ui().effectiveColor;
+        const v = hook ? hook.call(this, path) : '';
+        return /^#[0-9a-f]{6}$/i.test(v || '') ? v : '';
+    }
+
     _color(path, label, swatches) {
-        const v = this._get(path) || '';
+        const v = this._shownColor(path);
         const sw = (swatches || []).map(c => `<button class="rr-c3d-swatch" data-act="swatch" data-path="${path}" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('');
         return `<div class="rr-c3d-row rr-c3d-colorrow"><span class="rr-c3d-label">${this._t(label)}</span>
             <div class="rr-c3d-swatches">${sw}</div>
@@ -373,7 +398,7 @@ class PropBuilder {
         if (act === 'color') {
             const path = b.dataset.path;
             RRColorPopover.open(b, {
-                value: this._get(path) || '#808080',
+                value: this._shownColor(path) || '#808080',
                 onInput: hex => { this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); this._quick = true; this._queueRebuild(); },
                 onChange: hex => { this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; this._commit(); this._quick = false; this._renderPanel(); this._queueRebuild(); }
             });
@@ -396,9 +421,15 @@ class PropBuilder {
         });
     }
 
+    /** Roll the parts ticked beside Randomize: all of them at once, or each ticked part in turn. */
     _randomize() {
         const kind = RRPropModel.kindOf(this.recipe);
-        if (kind.random) this._replace(kind.random((Math.random() * 4294967296) >>> 0, this.recipe, this.randomScope || 'all'));
+        if (!kind.random) return;
+        const parts = (kind.randomScopes || []).filter(s => s[0] !== 'all');
+        const scopes = parts.length < 2 ? ['all'] : RRRandomPartsMenu.scopesFor(parts, this.randomParts || new Set(parts.map(p => p[0])));
+        let r = this.recipe;
+        for (const scope of scopes) r = kind.random((Math.random() * 4294967296) >>> 0, r, scope);
+        if (scopes.length) this._replace(r);
     }
 
     _status(text, kind) {
@@ -539,11 +570,30 @@ class PropBuilder {
         return true;
     }
 
+    /**
+     * A build's own preview pose (a gun stands up in the view, its right side
+     * to the camera, and saves lying down): the view turns and lifts the
+     * model's group only; parts, the GLB and model.json keep the build's frame.
+     */
+    _pose(result) {
+        const view = this._view, pose = result && result.preview;
+        if (!view || !view.group) return;
+        view.group.rotation.set(...(pose && pose.turn ? pose.turn : [0, 0, 0]));
+        view.group.position.set(0, pose && pose.lift ? pose.lift : 0, 0);
+        view.group.updateMatrixWorld(true);
+    }
+
+    /** The bounds of a build as the view shows it (posed). */
+    _shownBox(result) {
+        const box = new THREE.Box3(), v = new THREE.Vector3(), group = this._view && this._view.group, m = group ? group.matrixWorld : null;
+        for (const p of result.parts) for (let i = 0; i < p.positions.length; i += 3) { v.set(p.positions[i], p.positions[i + 1], p.positions[i + 2]); box.expandByPoint(m ? v.applyMatrix4(m) : v); }
+        return box;
+    }
+
     _frame(which) {
         const view = this._view;
         if (!view || !this._result) return;
-        const box = new THREE.Box3();
-        for (const p of this._result.parts) for (let i = 0; i < p.positions.length; i += 3) box.expandByPoint(new THREE.Vector3(p.positions[i], p.positions[i + 1], p.positions[i + 2]));
+        const box = this._shownBox(this._result);
         const moving = this._result.parts.filter(p => p.moves && p.kind === 'cloth');
         if (which === 'close' && moving.length) {
             const c = new THREE.Box3();
@@ -755,6 +805,8 @@ class PropBuilder {
         const view = this._view;
         this._clearModel();
         view.structure = structure;
+        // Bind with the group unposed: the skins then follow whatever pose _stage gives the group.
+        this._pose(null);
         const bones = result.bones.map(b => { const bone = new THREE.Bone(); bone.name = b.name; return bone; });
         result.bones.forEach((b, i) => {
             const parent = b.parent >= 0 ? result.bones[b.parent].head : [0, 0, 0];
@@ -801,7 +853,8 @@ class PropBuilder {
         const h = result.height || 2, extent = Math.max(h, result.recipe.cloth ? result.recipe.cloth.width * 1.5 : 0);
         const type=RRPropCatalog.typeOf(result.recipe)?.id || result.kind;
         const selected=view.stagedType!==type;
-        if(selected){view.pitch=['gun','sword'].includes(result.kind)?.92:.22;view.stagedType=type;}
+        if(selected){view.pitch=result.previewPitch??(result.kind==='sword'?.92:.22);if(result.preview)view.yaw=.35;view.stagedType=type;}
+        this._pose(result);
         const first = selected || !view.framedFor || Math.abs(Math.log(extent / view.framedFor)) > 0.3;
         view.extent = extent;
         view.minDistance = Math.max(.01, Math.min(.4, extent * .25));
@@ -821,8 +874,7 @@ class PropBuilder {
             else { mesh.rotation.set(0, 0, 0); mesh.position.set(0, tall / 2, w.at - 0.002); }
         });
         view.blob.scale.setScalar(Math.max(0.3, extent * 0.12));
-        const box = new THREE.Box3();
-        for (const p of result.parts) for (let i = 0; i < p.positions.length; i += 3) box.expandByPoint(new THREE.Vector3(p.positions[i], p.positions[i + 1], p.positions[i + 2]));
+        const box = this._shownBox(result);
         const mid = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() * 0.6 + 0.5;
         view.floor.position.y = result.kind === 'accessory' ? box.min.y - .001 : 0;
         view.blob.position.y = view.floor.position.y + .002;
@@ -843,7 +895,8 @@ class PropBuilder {
      */
     _playClip(result) {
         const view = this._view;
-        const clip = !RRPropModel.moves(result) && result.clips && result.clips[0];
+        // A vehicle's previewClips: the motion its Details tab picks, played here only (the game plays its rules).
+        const clips = result.previewClips || result.clips, clip = !RRPropModel.moves(result) && clips && clips[0];
         const key = clip ? view.structure + '|' + clip.tracks.map(t => t.bone + t.path + Array.from(t.times || clip.times).join(',')).join('|') : null;
         if (view.clipKey === key && (view.clipAction || !clip)) return;
         if (view.clipAction) { view.clipAction.stop(); view.clipAction = null; }
@@ -1004,41 +1057,107 @@ class PropBuilder {
         return fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'prop.json'))).map(e => e.name).sort((a, b) => a.localeCompare(b));
     }
 
+    /** Designs kept in the Forge (RRForgeDesigns): a prop's settings and its picture, no model, under forge/prop_3d/props/. */
+    _designsDir() {
+        const project = this._project();
+        return project ? require('path').join(project.path, 'forge', 'prop_3d', 'props') : null;
+    }
+
+    _renderDesignGroups() {
+        RRForgeDesigns.renderGroups(this.root && this.root.querySelector('.rr-prop-design-group'), this._designsDir(), this.designGroup, s => this._t(s));
+    }
+
+    /** Keep the prop's settings in the Forge under its name, in the chosen group: opened again from Open, nothing built. */
+    async saveDesign() {
+        if (!this._project()) return;
+        let name = this._folderName(this.name);
+        if (!name) {
+            name = this._folderName(await RRDialog.prompt(this._t('Name this prop:'), { title: this._t('Save Design'), value: this._t(this._ui().placeholder) }));
+            if (!name) return;
+            this.name = name;
+            const input = this.root.querySelector('.rr-c3d-name-input');
+            if (input) input.value = name;
+        }
+        const group = this.designGroup || '';
+        try {
+            const kept = await RRForgeDesigns.save(this._designsDir(), group, name, { builder: 'prop3d', version: 1, recipe: this.recipe },
+                this._thumbnail(), this._openedDesign, (s, v) => this._t(s, v));
+            if (!kept) return;
+            this._openedDesign = { group, name };
+            this._renderDesignGroups();
+            this._status(this._t('Design {name} saved.', { name }), 'ok');
+        } catch (error) {
+            console.error('[PropBuilder] save design', error);
+            this._status(this._t('{name} could not be saved.', { name }), 'error');
+        }
+    }
+
+    _openDesign(group, name) {
+        try {
+            const data = RRForgeDesigns.read(this._designsDir(), group, name);
+            this._openRecord(name, data);
+            this._openedDesign = { group, name };
+            this.designGroup = group;
+            this._renderDesignGroups();
+        } catch (error) {
+            console.error('[PropBuilder] open design', error);
+            this._status(this._t('{name} could not be opened.', { name }), 'error');
+        }
+    }
+
+    /** Saved props as pictures to pick from: the designs kept in the Forge by group, then the models exported to the project. */
     _showGallery() {
-        const fs = require('fs'), path = require('path');
+        const path = require('path'), t = (s, v) => this._t(s, v);
         const box = this.root.querySelector('.rr-c3d-gallery');
-        const cards = this._savedNames().map(name => {
-            const thumb = path.join(this._propsDir(), name, 'thumbnail.png');
-            const src = fs.existsSync(thumb) ? 'data:image/png;base64,' + fs.readFileSync(thumb).toString('base64') : '';
-            return `<button class="rr-c3d-saved" data-name="${rrEscapeHtml(name)}">${src ? `<img src="${src}" alt="">` : '<span class="rr-c3d-nothumb">?</span>'}<span>${rrEscapeHtml(name)}</span></button>`;
-        }).join('');
+        const models = this._savedNames().map(name => RRForgeDesigns.card(name, RRForgeDesigns.picture(path.join(this._propsDir(), name, 'thumbnail.png')), 'model', '', t)).join('');
         box.innerHTML = `<div class="rr-c3d-gallery-head"><span>${this._t('Open a saved prop')}</span><button class="rr-c3d-remove" data-close title="${this._t('Close')}">✕</button></div>
-            <div class="rr-c3d-gallery-grid">${cards || `<p class="rr-c3d-note">${this._t('No props saved in this project yet. Save to Project puts one here.')}</p>`}</div>`;
+            <div class="rr-c3d-gallery-scroll">${RRForgeDesigns.gallery(this._designsDir(), models, {
+                noDesigns: this._t('No designs yet. Save Design keeps a prop here without making a model.'),
+                noModels: this._t('No props exported from this project yet. Export Model To Project puts one here.')
+            }, t)}</div>`;
         box.hidden = false;
         const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); };
         const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
         document.addEventListener('keydown', onKey, true);
         box.onclick = e => {
             if (e.target.closest('[data-close]')) { close(); return; }
+            const remove = e.target.closest('[data-delete]');
+            if (remove) {
+                const group = remove.dataset.group || '', name = remove.dataset.delete;
+                RRForgeDesigns.remove(this._designsDir(), group, name, t).then(done => {
+                    if (!done) return;
+                    if (this._openedDesign && this._openedDesign.group === group && this._openedDesign.name === name) this._openedDesign = null;
+                    this._showGallery();
+                });
+                return;
+            }
             const card = e.target.closest('.rr-c3d-saved');
-            if (card) { close(); this._openSaved(card.dataset.name); }
+            if (!card) return;
+            close();
+            if (card.dataset.kind === 'design') this._openDesign(card.dataset.group || '', card.dataset.name);
+            else this._openSaved(card.dataset.name);
         };
     }
 
     _openSaved(name) {
         const fs = require('fs'), path = require('path');
         try {
-            const data = JSON.parse(fs.readFileSync(path.join(this._propsDir(), name, 'prop.json'), 'utf8'));
-            this.name = name;
-            const input = this.root.querySelector('.rr-c3d-name-input');
-            if (input) input.value = name;
-            this.tab = null;
-            this._replace(data.recipe || data);
-            this._status(this._t('Opened {name}.', { name }), 'ok');
+            this._openRecord(name, JSON.parse(fs.readFileSync(path.join(this._propsDir(), name, 'prop.json'), 'utf8')));
+            this._openedDesign = null;
         } catch (error) {
             console.error('[PropBuilder] open', error);
             this._status(this._t('{name} could not be opened.', { name }), 'error');
         }
+    }
+
+    /** A saved prop or design in the builder: its name and its recipe. */
+    _openRecord(name, data) {
+        this.name = name;
+        const input = this.root.querySelector('.rr-c3d-name-input');
+        if (input) input.value = name;
+        this.tab = null;
+        this._replace(data.recipe || data);
+        this._status(this._t('Opened {name}.', { name }), 'ok');
     }
 
     _png(tex) {
@@ -1064,7 +1183,7 @@ class PropBuilder {
         if (!project) return;
         let name = this._folderName(this.name);
         if (!name) {
-            name = this._folderName(await RRDialog.prompt(this._t('Name this prop:'), { title: this._t('Save to Project'), value: this._t(this._ui().placeholder) }));
+            name = this._folderName(await RRDialog.prompt(this._t('Name this prop:'), { title: this._t('Export Model To Project'), value: this._t(this._ui().placeholder) }));
             if (!name) return;
             this.name = name;
             const input = this.root.querySelector('.rr-c3d-name-input');
@@ -1072,7 +1191,7 @@ class PropBuilder {
         }
         const fs = require('fs'), path = require('path');
         const folder = path.join(this._propsDir(), name), file = path.join(folder, 'source', name + '.glb');
-        if (fs.existsSync(file) && !await RRDialog.confirm(this._t('Replace the saved prop {name}?', { name }), { title: this._t('Save to Project'), ok: this._t('Replace'), danger: true })) return;
+        if (fs.existsSync(file) && !await RRDialog.confirm(this._t('Replace the saved prop {name}?', { name }), { title: this._t('Export Model To Project'), ok: this._t('Replace'), danger: true })) return;
         this._status(this._t('Saving…'));
         try {
             const recipe = JSON.parse(JSON.stringify(this.recipe));
@@ -1364,30 +1483,42 @@ PropBuilder.prototype._profileEditor = function() {
  * A design's controls (RRFlagDesign) for the design at `path`: presets, the
  * field and its colors, and the emblems as a short list with the chosen
  * one's settings under it. Its buttons are answered by _designAct.
+ * `opts`: `field` false shows the emblems only (a face that paints no
+ * field); `picture(design, w, h, images)` draws the preset and background
+ * tiles (a data URL; a shield draws them on its own face), its tiles kept
+ * under `key`.
  */
-PropBuilder.prototype._designPanel = function(path) {
+PropBuilder.prototype._designPanel = function(path, opts) {
     this.designPath = path;
-    const D = RRFlagDesign, g = this._get(path), f = g.field;
+    const D = RRFlagDesign, g = this._get(path), f = g.field, o = opts || {};
     const mini = (key, design) => this._mini(key, () => PropBuilder.designPicture(design, 64, 40, this._images));
-    let html = this._section('Presets') + this._tiles('design-preset', D.PRESETS.map(p => ({ id: p.id, label: p.label, picture: mini('preset:' + p.id, p.design) })), null);
-    html += this._section('Background pattern') + this._tiles('field', D.LAYOUTS.map(l => ({ id: l.id, label: l.label, picture: l.id === 'image' ? '' : mini('field:' + l.id, { field: Object.assign({}, f, { layout: l.id }), layers: [] }) })), f.layout);
-    const orient = this._select(`${path}.field.orient`, 'Direction', [['h', 'Horizontal'], ['v', 'Vertical']]);
-    if (f.layout === 'image') html += `<div class="rr-c3d-row rr-prop-picturerow"><span class="rr-c3d-label">${this._t('Picture')}</span><span class="rr-prop-picturename">${rrEscapeHtml(g.image || this._t('None'))}</span><button class="rr-btn-chip" data-act="field-image">${this._t('Choose…')}</button></div>`;
-    if (f.layout === 'bands') {
-        html += this._slider({ path: `${path}.field.count`, label: 'Bands', range: [2, 5], step: 1, format: 'int' }) + orient;
-        for (let k = 0; k < f.count; k++) html += this._slider({ path: `${path}.field.sizes.${k}`, label: this._t('Band {n} size', { n: k + 1 }), range: [0.2, 5], step: 0.1, format: 'x' });
+    const face = (key, design) => (o.picture ? this._mini((o.key || 'face') + ':' + key, () => o.picture(design, 64, 40, this._images)) : mini(key, design));
+    const pictureRow = (name, act) => {
+        const img = name && this._images[name], thumb = img ? this._mini('picture:' + name, () => PropBuilder.imagePicture(img, 80)) : '';
+        return `<div class="rr-c3d-row rr-prop-picturerow"><span class="rr-c3d-label">${this._t('Picture')}</span><span class="rr-prop-picturename">${thumb ? `<img class="rr-prop-pictureimg" src="${thumb}" alt="">` : ''}${rrEscapeHtml(name || this._t('None'))}</span><button class="rr-btn-chip" data-act="${act}">${this._t('Choose…')}</button></div>`;
+    };
+    let html = '';
+    if (o.field !== false) {
+        html += this._section('Presets') + this._tiles('design-preset', D.PRESETS.map(p => ({ id: p.id, label: p.label, picture: face('preset:' + p.id, p.design) })), null);
+        html += this._section('Background pattern') + this._tiles('field', D.LAYOUTS.map(l => ({ id: l.id, label: l.label, picture: l.id === 'image' ? '' : face('field:' + l.id, { field: Object.assign({}, f, { layout: l.id }), layers: [] }) })), f.layout);
+        const orient = this._select(`${path}.field.orient`, 'Direction', [['h', 'Horizontal'], ['v', 'Vertical']]);
+        if (f.layout === 'image') html += pictureRow(g.image, 'field-image');
+        if (f.layout === 'bands') {
+            html += this._slider({ path: `${path}.field.count`, label: 'Bands', range: [2, 5], step: 1, format: 'int' }) + orient;
+            for (let k = 0; k < f.count; k++) html += this._slider({ path: `${path}.field.sizes.${k}`, label: this._t('Band {n} size', { n: k + 1 }), range: [0.2, 5], step: 0.1, format: 'x' });
+        }
+        if (f.layout === 'stripes') html += this._slider({ path: `${path}.field.count`, label: 'Stripes', range: [2, 13], step: 1, format: 'int' }) + orient;
+        if (f.layout === 'cross' || f.layout === 'saltire' || f.layout === 'bend') html += this._slider({ path: `${path}.field.arm`, label: 'Arm width', range: [0.04, 0.45], step: 0.01 });
+        if (f.layout === 'cross') html += this._select(`${path}.field.offset`, 'Upright arm', [['center', 'Centered'], ['nordic', 'Toward the hoist']]) + this._slider({ path: `${path}.field.outline`, label: 'Outline', range: [0, 0.12], step: 0.005 });
+        if (f.layout === 'checker') html += this._slider({ path: `${path}.field.cols`, label: 'Squares across', range: [2, 12], step: 1, format: 'int' });
+        if (f.layout === 'canton') html += this._slider({ path: `${path}.field.canton`, label: 'Canton size', range: [0.2, 0.7], step: 0.01 }) + this._select(`${path}.field.corner`, 'Corner', D.CORNERS)
+            + this._slider({ path: `${path}.field.rows`, label: 'Star rows', range: [0, 9], step: 1, format: 'int' }) + (f.rows ? this._slider({ path: `${path}.field.cols`, label: 'Stars across', range: [1, 12], step: 1, format: 'int' }) : '');
+        if (f.layout === 'triangle') html += this._slider({ path: `${path}.field.depth`, label: 'Depth', range: [0.15, 1], step: 0.01 });
+        if (f.layout === 'border') html += this._slider({ path: `${path}.field.border`, label: 'Border width', range: [0.02, 0.3], step: 0.005 });
+        const regions = (D.LAYOUT_BY_ID.get(f.layout).regions || []).slice(0, f.layout === 'bands' ? f.count : 5).filter((_, k) => !(f.layout === 'canton' && k === 2 && !f.rows));
+        const swatches = ['#8c1c1c', '#1f3c78', '#1d5c34', '#f2efe6', '#d9b23c', '#1b1b1f', '#5a2a6e', '#c8501e'];
+        if (regions.length) html += this._section('Colors') + regions.map((label, k) => this._color(`${path}.field.colors.${k}`, label, swatches)).join('');
     }
-    if (f.layout === 'stripes') html += this._slider({ path: `${path}.field.count`, label: 'Stripes', range: [2, 13], step: 1, format: 'int' }) + orient;
-    if (f.layout === 'cross' || f.layout === 'saltire' || f.layout === 'bend') html += this._slider({ path: `${path}.field.arm`, label: 'Arm width', range: [0.04, 0.45], step: 0.01 });
-    if (f.layout === 'cross') html += this._select(`${path}.field.offset`, 'Upright arm', [['center', 'Centered'], ['nordic', 'Toward the hoist']]) + this._slider({ path: `${path}.field.outline`, label: 'Outline', range: [0, 0.12], step: 0.005 });
-    if (f.layout === 'checker') html += this._slider({ path: `${path}.field.cols`, label: 'Squares across', range: [2, 12], step: 1, format: 'int' });
-    if (f.layout === 'canton') html += this._slider({ path: `${path}.field.canton`, label: 'Canton size', range: [0.2, 0.7], step: 0.01 }) + this._select(`${path}.field.corner`, 'Corner', D.CORNERS)
-        + this._slider({ path: `${path}.field.rows`, label: 'Star rows', range: [0, 9], step: 1, format: 'int' }) + (f.rows ? this._slider({ path: `${path}.field.cols`, label: 'Stars across', range: [1, 12], step: 1, format: 'int' }) : '');
-    if (f.layout === 'triangle') html += this._slider({ path: `${path}.field.depth`, label: 'Depth', range: [0.15, 1], step: 0.01 });
-    if (f.layout === 'border') html += this._slider({ path: `${path}.field.border`, label: 'Border width', range: [0.02, 0.3], step: 0.005 });
-    const regions = (D.LAYOUT_BY_ID.get(f.layout).regions || []).slice(0, f.layout === 'bands' ? f.count : 5).filter((_, k) => !(f.layout === 'canton' && k === 2 && !f.rows));
-    const swatches = ['#8c1c1c', '#1f3c78', '#1d5c34', '#f2efe6', '#d9b23c', '#1b1b1f', '#5a2a6e', '#c8501e'];
-    if (regions.length) html += this._section('Colors') + regions.map((label, k) => this._color(`${path}.field.colors.${k}`, label, swatches)).join('');
     // The emblems: a short list, the chosen one's settings under it.
     const layers = g.layers, sel = Math.max(0, Math.min(layers.length - 1, this.layer || 0));
     this.layer = sel;
@@ -1400,8 +1531,11 @@ PropBuilder.prototype._designPanel = function(path) {
     if (layers.length) {
         const l = layers[sel], base = `${path}.layers.${sel}`;
         html += this._section('Emblem') + this._select(`${base}.source`, 'Source', [['shape', 'Shape'], ['picture', 'Picture']]);
-        if (l.source === 'shape') html += `<div class="rr-c3d-tiles rr-prop-tiles5">${D.SHAPES.map(([id, label]) => `<button class="rr-c3d-tile rr-c3d-thumbtile${id === l.shape ? ' is-active' : ''}" data-act="layer-shape" data-id="${id}" title="${rrEscapeHtml(this._t(label))}"><span class="rr-c3d-thumb"><img src="${mini('shape:' + id + l.color, { field: { layout: 'solid', colors: ['#3a3d44'] }, layers: [{ shape: id, color: l.color, size: 0.9 }] })}" alt=""></span></button>`).join('')}</div>`;
-        else html += `<div class="rr-c3d-row rr-prop-picturerow"><span class="rr-c3d-label">${this._t('Picture')}</span><span class="rr-prop-picturename">${rrEscapeHtml(l.image || this._t('None'))}</span><button class="rr-btn-chip" data-act="layer-picture">${this._t('Choose…')}</button></div>` + this._check(`${base}.recolor`, 'One color');
+        // The shapes as pictures, and last a project picture of your own (the one chosen, or a frame to choose one).
+        const own = l.image && this._images[l.image] ? mini('own:' + l.image, { field: { layout: 'solid', colors: ['#3a3d44'] }, layers: [Object.assign({}, l, { source: 'picture', place: 'center', size: 0.9, repeat: 'none', rotate: 0, mirror: false })] }) : '';
+        html += `<div class="rr-c3d-tiles rr-prop-tiles5">${D.SHAPES.map(([id, label]) => `<button class="rr-c3d-tile rr-c3d-thumbtile${l.source === 'shape' && id === l.shape ? ' is-active' : ''}" data-act="layer-shape" data-id="${id}" title="${rrEscapeHtml(this._t(label))}"><span class="rr-c3d-thumb"><img src="${mini('shape:' + id + l.color, { field: { layout: 'solid', colors: ['#3a3d44'] }, layers: [{ shape: id, color: l.color, size: 0.9 }] })}" alt=""></span></button>`).join('')}`
+            + `<button class="rr-c3d-tile rr-c3d-thumbtile rr-prop-owntile${l.source === 'picture' ? ' is-active' : ''}" data-act="layer-picture" title="${rrEscapeHtml(this._t('Choose a picture'))}"><span class="rr-c3d-thumb">${own ? `<img src="${own}" alt="">` : '<span class="rr-prop-ownmark">＋</span>'}</span></button></div>`;
+        if (l.source === 'picture') html += pictureRow(l.image, 'layer-picture') + this._check(`${base}.recolor`, 'One color');
         if (l.source === 'shape' || l.recolor) html += this._color(`${base}.color`, 'Color', ['#d9b23c', '#f2efe6', '#1b1b1f', '#8c1c1c', '#1f3c78', '#1d5c34']);
         html += this._select(`${base}.place`, 'Place', D.PLACES);
         if (l.place === 'free') html += this._slider({ path: `${base}.x`, label: 'Across', range: [0, 1] }) + this._slider({ path: `${base}.y`, label: 'Down', range: [0, 1] });

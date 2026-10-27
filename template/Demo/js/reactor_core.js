@@ -1444,7 +1444,10 @@ Graphics.FramePacing = {
         const tilemap = spriteset._tilemap, parallax = spriteset._parallax;
         this._origin = { tx: tilemap ? tilemap.origin.x : 0, ty: tilemap ? tilemap.origin.y : 0, px: parallax ? parallax.origin.x : 0, py: parallax ? parallax.origin.y : 0, tilemap, parallax };
         if (tilemap) { tilemap.origin.x = map.displayX() * map.tileWidth(); tilemap.origin.y = map.displayY() * map.tileHeight(); }
-        if (parallax && parallax.bitmap && parallax.bitmap.width) { parallax.origin.x = map.parallaxOx() % parallax.bitmap.width; parallax.origin.y = map.parallaxOy() % parallax.bitmap.height; }
+        // MZ's parallaxOx reads _parallaxX, which a tick sets and this pass does not blend, so the
+        // tick's origin stands. Recomputing it here put every 2000/2003 panorama, which follows the
+        // camera instead, at its top-left corner for the frames between ticks: a flash and a snap back.
+        if (parallax && parallax.bitmap && spriteset.rrPlaceLegacyParallax) spriteset.rrPlaceLegacyParallax();
         this.swapCharacters(alpha, false);
         map._displayX = dx; map._displayY = dy;
     },
@@ -2388,12 +2391,13 @@ Graphics._createCanvas = function() {
     this._canvas.id = "gameCanvas";
     this._updateCanvas();
     document.body.appendChild(this._canvas);
-    // Overlay canvas for Effekseer's own WebGL1 context. Effekseer's drawHandle
-    // is a silent no-op on v8's WebGL2 context (proven via full-canvas pixel
-    // diff: zero pixels written, zero GL errors). Giving Effekseer its own
-    // WebGL1 context — same recipe the editor's AnimationPicker uses — bypasses
-    // the v8/WebGL2 incompatibility. The browser compositor layers this
-    // transparent canvas over the game canvas naturally.
+    // Overlay canvas for Effekseer's own WebGL1 context, which the browser
+    // compositor layers over the game canvas. Screen animations draw on v8's
+    // WebGL2 context during its render instead (Sprite_Animation.SceneLayer):
+    // Effekseer drew nothing there only when called from v8's onRender, which
+    // runs before v8's own draws. This overlay is the fallback (a WebGL1 or
+    // WebGPU renderer, Graphics.effekseerInScene = false), and the surface
+    // effects a 3D map anchors are drawn on.
     this._effekseerCanvas = document.createElement("canvas");
     this._effekseerCanvas.id = "effekseerOverlay";
     this._effekseerCanvas.style.pointerEvents = "none";

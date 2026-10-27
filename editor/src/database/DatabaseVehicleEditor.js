@@ -184,7 +184,7 @@ class DatabaseVehicleEditor {
             const mapName = mapId => { const info = this.databaseManager.getMapInfos?.()?.find(map => map && Number(map.id) === mapId); return info?.name || '#' + mapId; };
             const renderStarts = () => {
                 const starts = RRVehicles.startsOf(live);
-                host.innerHTML = starts.map((start, at) => `<div class="vehicle-location-row" data-copy="${start.copy}">${starts.length > 1 ? `<span class="vehicle-start-number" data-rr-i18n-skip>${at + 1}</span>` : ''}<button type="button" class="rr-btn-secondary vehicle-location-browse" data-rr-i18n-skip>${rrEscapeHtml(start.mapId > 0 ? `${mapName(start.mapId)} (${start.x}, ${start.y})` : this.tt('(None)'))}</button><select class="vehicle-start-direction" title="${rrEscapeHtml(this.tt('Direction'))}">${[[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']].map(([dir,label]) => `<option value="${dir}" ${dir === start.direction ? 'selected' : ''}>${this.tt(label)}</option>`).join('')}</select><button type="button" class="rr-btn-secondary vehicle-location-clear" ${start.copy === 1 && !start.mapId ? 'disabled' : ''}>${this.tt(start.copy === 1 ? 'Clear' : 'Delete')}</button></div>`).join('');
+                host.innerHTML = starts.map((start, at) => `<div class="vehicle-location-row" data-copy="${start.copy}"><span class="vehicle-start-number" data-rr-i18n-skip>${at + 1}</span><button type="button" class="rr-btn-secondary vehicle-location-browse" data-rr-i18n-skip>${rrEscapeHtml(start.mapId > 0 ? `${mapName(start.mapId)} (${start.x}, ${start.y})` : this.tt('(None)'))}</button><select class="vehicle-start-direction" title="${rrEscapeHtml(this.tt('Direction'))}">${[[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']].map(([dir,label]) => `<option value="${dir}" ${dir === start.direction ? 'selected' : ''}>${this.tt(label)}</option>`).join('')}</select><button type="button" class="rr-btn-secondary vehicle-location-clear" ${starts.length === 1 && !start.mapId ? 'disabled' : ''}>${this.tt('Delete')}</button></div>`).join('');
                 host.querySelectorAll('.vehicle-location-row').forEach(row => {
                     const start = starts.find(entry => entry.copy === Number(row.dataset.copy)), location = start.source;
                     row.querySelector('.vehicle-location-browse').onclick = () => {
@@ -200,9 +200,18 @@ class DatabaseVehicleEditor {
                         if (dialog?.modal) this.parentEditor.registerDetailModal(dialog.modal, dialog.close);
                     };
                     row.querySelector('.vehicle-start-direction').onchange = event => { location.startDirection = Number(event.target.value); save(); };
+                    // Every row deletes its vehicle. The first is the record's own place: the next row's vehicle moves up into it
+                    // (its number, like any deleted one's, is never given again), and with no other row it is left unplaced.
                     row.querySelector('.vehicle-location-clear').onclick = () => {
-                        if (start.copy === 1) location.startMapId = 0;
-                        else { live.copies = (live.copies || []).filter(entry => entry !== location); if (!live.copies.length) delete live.copies; }
+                        const copies = live.copies || [];
+                        if (start.copy === 1 && copies.length) {
+                            const next = copies[0];
+                            Object.assign(live, {startMapId:next.startMapId || 0, startX:next.startX || 0, startY:next.startY || 0, startDirection:next.startDirection || 2});
+                            live.copyCount = Math.max(Number(live.copyCount) || 0, Number(next.id) || 0);
+                            live.copies = copies.slice(1);
+                        } else if (start.copy === 1) location.startMapId = 0;
+                        else live.copies = copies.filter(entry => entry !== location);
+                        if (live.copies && !live.copies.length) delete live.copies;
                         save(); renderStarts();
                     };
                 });

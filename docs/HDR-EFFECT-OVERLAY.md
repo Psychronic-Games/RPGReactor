@@ -1,6 +1,6 @@
 # HDR effect overlay
 
-RPG Reactor 0.99.2 (runtime revision **20261027.1**) includes HDR effect rendering.
+RPG Reactor 0.99.2 (runtime revision **20261025.1**) includes HDR effect rendering.
 There is no plugin to install or enable. An effect opts in through a sidecar next
 to its `.efkefc`; ordinary effects retain their existing draw path.
 
@@ -8,6 +8,12 @@ HDR materials emit exposed linear light. The overlay adds the animations sharing
 a display grade into one floating-point target, adds reduced-resolution bloom,
 and applies that grade once to the sum. Output is display SDR; this does not
 enable HDR monitors, change the game's lighting, or grade the entire scene.
+
+On PIXI 8's WebGL2 renderer, HDR animations draw inside PIXI's scene with the
+other screen animations (runtime 20261027.3, [EFFEKSEER-IN-SCENE.md](EFFEKSEER-IN-SCENE.md)):
+the same light buffer, bloom and grade, screened into the scene where the
+animation sits. The overlay this guide describes is the fallback, and what a
+`Graphics.effekseerInScene = false` game uses.
 
 ## Updating Reactor and existing projects
 
@@ -88,7 +94,7 @@ intensity nonnegative, radiusScale positive. `tints` are scalar bloom weights.
 The six sizes follow UE 4.27's width-relative bloom radii; Gaussian sigma is
 `viewWidth * size * 0.04 * 0.5 / sqrt(33.4) * radiusScale`.
 
-`bloom.threshold` (optional, runtime 20261025.2) is UE 4's bloom setup threshold.
+`bloom.threshold` (optional, runtime 20261027.1) is UE 4's bloom setup threshold.
 When it is a number, the light is multiplied by
 `clamp((dot(rgb, (0.3, 0.59, 0.11)) - threshold) * 0.5, 0, 1)` before any blur, as
 `PostProcessBloomSetup` does. UE runs that setup at half its screen resolution; an
@@ -118,7 +124,9 @@ window.REACTOR_HDR = { bloom: 0.675, bloomScale: 2.4 };
 ```
 
 `bufferType` is `auto`, `half`, or `float`: auto tries half first, then float.
-It requires renderable, linearly filtered targets in the overlay's WebGL1 context.
+It requires renderable, linearly filtered targets in the overlay's WebGL1 context,
+or in the scene in PIXI's WebGL2 context (RGBA16F with `EXT_color_buffer_float`,
+the light buffer multisampled 4x where the format allows).
 Legacy plugin parameters `bloomIntensity`, `bloomRadiusScale`, `bufferType`, and
 `debug` are accepted by `configure`; global `REACTOR_HDR` overrides their tuning.
 Without overrides, each grade group's first sidecar supplies bloom settings.
@@ -135,7 +143,11 @@ complete `ReactorHdrOverlay.overrides[effectName]` entry, including fallback.
 
 ## Rendering limits
 
-- All ordinary animations draw in their original order, then HDR groups composite
+- In the scene, each animation draws at its own place in the scene graph; HDR
+  animations of one grade in one container share a light pass at the first
+  one's place. When PIXI's context is lost, in-scene animations end and new
+  ones play on the overlay until it is restored.
+- On the overlay, all ordinary animations draw in their original order, then HDR groups composite
   in first-appearance order. Animations sharing a grade add before grading even
   when ordinary animations occur between them. Interleaved scene/HDR occlusion
   and light accumulation between different grades are not supported.
@@ -202,8 +214,10 @@ sidecar is read again each time an effect loads.
 ## Verification
 
 Run `node --test editor/tests/hdr-overlay.test.cjs` for metadata, safe fallback,
+in-scene selection and the composite's framebuffer,
 shared grading, resize/restoration, ordinary draw order, and plugin migration;
 `hdr-preview-render.test.cjs` and `hdr-preview-twin.test.cjs` for the editor
-previews' choices, loading, draw order and cleanup. Manifest and template tests
+previews' choices, loading, draw order and cleanup;
+`effekseer-in-scene.test.cjs` for the in-scene light pass and its grouping. Manifest and template tests
 cover loading and distribution. Unit tests do not establish GPU rendering or
 appearance; check those on screen.

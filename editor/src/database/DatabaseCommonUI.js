@@ -105,7 +105,12 @@ class DatabaseCommonUI {
             const equipTypeName = equipTypes[trait.dataId] || `${tt('Equip')} ${trait.dataId}`;
             return `${tt('Seal')} ${equipTypeName}`;
         } else if (trait.code === 55) { // Slot Type
-            return trait.dataId === 0 ? tt('Normal Slot') : tt('Dual Wield');
+            if (trait.dataId === 0) return tt('Normal Slot');
+            if (trait.dataId === 1) return tt('Dual Wield');
+            // A slot layout (Database > Types): 2 the first, 3 the second, ...
+            const layout = (this.databaseManager.getSystem()?.rrSlotLayouts || [])[trait.dataId - 2];
+            const name = String(layout?.name || '').replace(/\\[iI]\[\d+\]\s*/g, '').trim();
+            return name || `${tt('Slot Layout')} ${trait.dataId - 1}`;
         } else if (trait.code === 61) { // Action Times
             return `${tt('Action Times +')}${Math.round(trait.value * 100)}%`;
         } else if (trait.code === 62) { // Special Flag

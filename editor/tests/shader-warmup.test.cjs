@@ -176,3 +176,18 @@ test('a material compiled as two programs waits for both', async () => {
     await new Promise(res => setTimeout(res, 25));
     assert.equal(W.hide(r, scene, {}), null);
 });
+
+test('a new material in a game that has run a while is compiled once and shows once its program is ready', async () => {
+    // The clock reads the time since the page opened: a material never drawn is new, not one coming back after time away.
+    const real = performance.now, clock = { t: 600000 }, r = fakeRenderer();
+    performance.now = () => clock.t;
+    try {
+        const scene = new THREE.Scene(), mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+        scene.add(mesh);
+        for (let draw = 0; draw < 4; draw++) { W.show(W.hide(r, scene, {}) || []); clock.t += 16; }
+        assert.equal(r.compiles.length, 1, 'not started over while it compiles');
+        assert.equal(W._materials.get(mesh.material).started, 600000, 'the wait counted from its first ask');
+        r.finishCompiles(); await tick();
+        assert.equal(W.hide(r, scene, {}), null, 'ready: drawn');
+    } finally { performance.now = real; r.finishCompiles(); }
+});

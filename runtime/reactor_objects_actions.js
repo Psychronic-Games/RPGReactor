@@ -1243,6 +1243,7 @@ Game_Action.prototype.makeSuccess = function(target) {
 };
 
 Game_Action.prototype.applyItemUserEffect = function(/*target*/) {
+    if (typeof Game_BattlerBase !== "undefined" && Game_BattlerBase.isPoolOn && !Game_BattlerBase.isPoolOn("tp")) return;
     const value = Math.floor(this.item().tpGain * this.subject().tcr);
     this.subject().gainSilentTp(value);
 };

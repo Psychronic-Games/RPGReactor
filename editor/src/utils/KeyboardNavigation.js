@@ -420,10 +420,22 @@
                 const target = initial || resolveInitial();
                 if (target) target.focus?.({ preventScroll: true });
                 else { if (!overlay.hasAttribute?.('tabindex')) overlay.tabIndex = -1; overlay.focus?.(); }
+                // Refused while the dialog is hidden (its own window still being made): refocus() gives it once shown.
+                const focused = target || overlay;
+                state.refused = (focused.ownerDocument || doc).activeElement !== focused;
+                return target;
+            },
+            /** The focus enter() was refused, given now, the opener kept; null when enter() was not refused. */
+            refocus() {
+                if (!state.refused) return null;
+                state.refused = false;
+                const target = resolveInitial();
+                if (target) target.focus?.({ preventScroll: true });
                 return target;
             },
             /** Give focus back to the opener if the dialog still holds it. */
             leave() {
+                state.refused = false;
                 const opener = state.opener;
                 state.opener = null;
                 if (opener) restoreFocus(opener, overlay);
