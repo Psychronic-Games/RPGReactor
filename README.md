@@ -9,33 +9,41 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 <table>
 <tr>
 <td width="50%" align="center"><img src="docs/media/releases/0.99.1/08-north-haven-night.jpg" alt="A lamplit 3D village at night"><br><sub>Walk a lamplit 3D village at night, in worlds whose maps join with no loading.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.2/07-terrain.jpg" alt="Painting a road through a 3D village"><br><sub>Drag the Path tool to lay dirt roads, cobblestone or paving that follow the hills through your village.</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/media/releases/0.99.2/01-character-builder.jpg" alt="Sci-fi looks from the 3D Character Builder"><br><sub>Dress your hero in one click: a space marine with a sealed visor, an astronaut, starship crew, a neon Glow runner and a street samurai.</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/media/releases/0.99.2/02-species.jpg" alt="New species: centaur, insectfolk, Hydrata, catfolk, werewolf"><br><sub>Meet the new centaur, plus insectfolk with compound eyes, the two-headed Hydrata, catfolk and werewolves, all wearing the same outfits as everyone else.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.2/03-creatures.jpg" alt="A bald eagle, lion, tiger and bat"><br><sub>The rebuilt bald eagle glides on spread wings with a feathered head and hooked beak, joined by rebuilt bats, lions and tigers.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.2/04-vehicles.jpg" alt="A motorcycle and a pickup truck"><br><sub>Motorcycles and trucks come with real wheels, doors and headlights, and body styles you can tune with a few sliders.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.2/05-nature.jpg" alt="An oak, a cherry blossom and a willow"><br><sub>Plant oaks, cherry blossoms and weeping willows that change with the seasons and sway in the wind.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.2/06-sprite-sheets.jpg" alt="Sprite sheets exported from 3D"><br><sub>Export a walking character with six frames per step, or a tree that sways in eight frames, ready for your 2D maps.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.2/08-editor.jpg" alt="Search results in the editor"><br><sub>Type a word in the new toolbar Search to find structures, maps, switches and event text, grouped and one click away.</sub></td>
 <td width="50%" align="center"><img src="docs/media/releases/0.99.1/06-tactical-climb.jpg" alt="A Tactical battle on the rooftops"><br><sub>Tactical battles on the map itself: climb, grapple and see the fall damage before you jump.</sub></td>
-</tr>
-<tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.1/07-effekseer-battle.jpg" alt="Effekseer effects in a battle on the map"><br><sub>Effekseer skill effects burst right where your party stands.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.1/05-windows.jpg" alt="The editor with the Database and event editor in their own windows"><br><sub>Map, Database and event editor side by side, on one screen or two.</sub></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><img src="docs/media/releases/0.99.1/02-character-lineup.jpg" alt="Characters made in the 3D Character Builder"><br><sub>Dozens of species, any build, clothing and armor: the 3D Character Builder saves rigged models that walk, run and fight.</sub></td>
-</tr>
-<tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.1/03-creatures.jpg" alt="A drake in the Character Builder"><br><sub>Dragons, wolves, horses, sharks, birds and insects, built the same way.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.1/04-prop-builder.jpg" alt="A walker in the Prop Builder"><br><sub>The 3D Prop Builder makes vehicles, furniture, weapons and props for your maps.</sub></td>
 </tr>
 </table>
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.2 and is not published yet; the latest tagged source release is [0.99.1](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.1).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.99.2](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.2).
 
-## What's new in 0.99.1
+## What's new in 0.99.2
 
-- **3D Character Builder:** make a character with sliders and pickers (dozens of species, any build, hair, clothing and armor) and save it as a rigged 3D model that walks, runs and fights in your game. Animals, birds, insects and sea creatures too.
-- **3D Prop Builder:** furniture, appliances, electronics, sci-fi interiors, weapons, tools and nine vehicles, built and saved the same way.
-- **Windows of their own:** the Database, the event editor, the Forge and plugin settings open beside the map, on a second monitor too.
-- **Battles:** battlers climb walls, jump down roofs (with fall damage you can see coming) and grapple up to ledges with a Grappler accessory. Troop pages run in battles on the map, and Effekseer effects match RPG Maker MZ's size.
-- **The world:** crossing between maps has no stall, the editor shows neighboring maps past a 2D map's edge, and self switches run from A to Z.
-- **Faster on weak hardware:** big 3D maps draw far less, 2D maps walk smoother, and high refresh rate screens get smooth motion.
+- **Reactor Features:** Reactor's own additions to MZ in one list (Database › System), each with a switch, so a plugin that does the same job can take over and the game behaves as MZ.
+- **Search:** the new toolbar Search (Ctrl+Shift+F) finds maps, events, event commands, common events, every Database record and Reactor's own pages, one click away.
+- **Sprite sheets from 3D:** the Character and Prop Builders export walking characters, props and swaying trees with 1 to 12 frames and 1, 4 or 8 directions.
+- **New looks:** a centaur, insectfolk, the two-headed Hydrata, catfolk and werewolves; sci-fi suits, cyberware, wasteland gear, body art and clothing that hangs and folds; rebuilt birds, bats, big cats and sea creatures.
+- **More to build:** rebuilt vehicles with body styles and moving doors and wheels, bows, staffs, axes and painted shields, instruments, and a Nature family of trees, plants and rocks that change with the seasons.
+- **3D maps:** paint dirt roads, cobblestone and paving along the hills with Path, 64 ground types a map, foliage you can recolor and pick, and fences, windows and doors that fit into walls.
+- **Database and events:** items that can't be sold, enemy stat variance and random drops, random ranges for Change Gold and Items, Slot Layouts, Resource Pools, HDR effects, and Set Movement Route's Rotate, Mirror, Flip and Frequency.
 
-Read the [0.99.1 release notes](docs/posts/release-notes-0.99.1.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+Read the [0.99.2 release notes](docs/posts/release-notes-0.99.2.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -54,7 +62,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.1.md): features, fixes, and compatibility limits for 0.99.1.
+- [Latest release notes](docs/posts/release-notes-0.99.2.md): features, fixes, and compatibility limits for 0.99.2.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Authoring a world](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
@@ -169,7 +177,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-29, local working-tree validation completed with **8336 passing tests**, zero failures or skips. This was not a clean release run. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-10-23, before the 0.99.1 cut, local validation completed with **8336 passing tests**, 9 skipped and no failures. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
 
 ## Trusted Projects
 

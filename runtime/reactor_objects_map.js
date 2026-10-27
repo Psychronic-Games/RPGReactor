@@ -1068,7 +1068,8 @@ Game_CharacterBase.LATE_FIELDS = [
     "_reactorJumped", "_reactorDir8", "_reactorWalk", "_reactorTurnStamp", "_reactorModelYaw", "_reactorModelYawAt", "_reactorLift",
     "_reactorChaseLater", "_reactorPosePitch", "_reactorFallYaw", "_reactorPush", "_reactorPushAlso", "_reactorPushDir",
     "_reactorPushFrames", "_reactorDriftX", "_reactorDriftY", "_rrSpin", "_rrSpinCount", "_rrVehicle", "_rrHome", "_rrYaw",
-    "_rrStage", "_rrFade", "_rrDrop", "_rrVehicleTransfer", "_borderArrival", "_destinationCheckCounter"
+    "_rrStage", "_rrFade", "_rrDrop", "_rrVehicleTransfer", "_borderArrival", "_destinationCheckCounter",
+    "_reactorSpin", "_rrMirror", "_rrFlip", "_rrSpinPivot", "_rrPageImage"
 ];
 
 /**
@@ -1162,6 +1163,56 @@ Game_CharacterBase.prototype.blendMode = function() {
 
 Game_CharacterBase.prototype.setBlendMode = function(blendMode) {
     this._blendMode = blendMode;
+};
+
+/**
+ * The drawn image's own turn, on top of the sheet: mirrored (it faces the
+ * other way), flipped (upside down), and turned by any angle about its feet
+ * or its middle. Held on the character, so a save keeps it; a field never
+ * set stays undefined and is not written, so a plain MZ game saves as before.
+ * Sprite_Character (and a 3D map's billboard) draws it; the sheet is untouched.
+ * With Sprite Transforms off in Database > Reactor Features (a plugin turns
+ * characters), none of these does anything: a route's Mirror, Flip and Rotate
+ * steps and a page's Image options are passed over, as RPG Maker MZ would.
+ */
+Game_CharacterBase.rrTransformsOn = function() {
+    return typeof ReactorFeatures === "undefined" || ReactorFeatures.on("spriteTransforms");
+};
+Game_CharacterBase.prototype.reactorMirror = function(on) {
+    if (!Game_CharacterBase.rrTransformsOn()) return;
+    this._rrMirror = on ? true : undefined;
+};
+Game_CharacterBase.prototype.reactorFlip = function(on) {
+    if (!Game_CharacterBase.rrTransformsOn()) return;
+    this._rrFlip = on ? true : undefined;
+};
+/** Turn the drawn character to `degrees` clockwise; 0 stands it straight. `pivot` "center" turns it in place about its middle, else about its feet. */
+Game_CharacterBase.prototype.reactorRotate = function(degrees, pivot) {
+    if (!Game_CharacterBase.rrTransformsOn()) return;
+    this._reactorSpin = Number(degrees) || 0;
+    this._rrSpinPivot = pivot === "center" ? "center" : undefined;
+};
+/** Turn the drawn character on by `degrees` from where it stands now (a relative Rotate). */
+Game_CharacterBase.prototype.reactorRotateBy = function(degrees, pivot) {
+    const angle = ((this._reactorSpin || 0) + (Number(degrees) || 0)) % 360;
+    this.reactorRotate(Math.round(angle * 100) / 100, pivot);
+};
+/** The image's turn as `{ mirror, flip, angle, pivot }`. */
+Game_CharacterBase.prototype.reactorImage = function() {
+    return { mirror: !!this._rrMirror, flip: !!this._rrFlip, angle: this._reactorSpin || 0, pivot: this._rrSpinPivot === "center" ? "center" : "feet" };
+};
+/** Set the whole turn at once (an event page's Image options); a missing image straightens it. */
+Game_CharacterBase.prototype.reactorSetImage = function(image) {
+    const img = image || {};
+    this.reactorMirror(img.mirror);
+    this.reactorFlip(img.flip);
+    this.reactorRotate(img.angle, img.pivot);
+};
+/** Reset Image: not mirrored, not flipped, standing straight up (a Face Ceiling / Face Ground pose too). */
+Game_CharacterBase.prototype.reactorResetImage = function() {
+    this.reactorSetImage(null);
+    if (this._reactorPosePitch) this._reactorPosePitch = 0;
+    if (this._reactorFallYaw != null) this._reactorFallYaw = null;
 };
 
 Game_CharacterBase.prototype.isNormalPriority = function() {
@@ -2448,6 +2499,22 @@ Game_Character.prototype.reactorMoveToTile = function(x, y, height, whole) {
  */
 Game_Character.prototype.reactorWalkTo = function(x, y, skippable = true) {
     this.forceMoveRoute(Game_Character.walkRoute(x, y, skippable));
+};
+
+/**
+ * A route's Teleport to Tile step: the character stands on the tile at once,
+ * no walk and no path needed, and the route goes straight on. Any walk under
+ * way ends; the player's camera and followers come along (Game_Player.locate).
+ */
+Game_Character.prototype.reactorTeleportTo = function(x, y) {
+    x = Math.floor(Number(x));
+    y = Math.floor(Number(y));
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !$gameMap.isValid(x, y)) {
+        return;
+    }
+    Game_Character._walkPaths.delete(this);
+    this._reactorWalk = null;
+    this.locate(x, y);
 };
 
 /** The one-step route that walks to a tile (`height` and `whole` as `reactorMoveToTile` takes them). */
@@ -4259,6 +4326,15 @@ Game_Event.prototype.findProperPageIndex = function() {
     return -1;
 };
 
+/** Whether a page of this map waits on the timer (rrTimerSec); worked out once per map's data, never saved. */
+Game_Map.prototype.rrHasTimerPages = function() {
+    if (typeof $dataMap === "undefined" || !$dataMap) return false;
+    if ($dataMap._rrTimerPages === undefined) {
+        $dataMap._rrTimerPages = ($dataMap.events || []).some(e => e && (e.pages || []).some(p => p && p.conditions && p.conditions.rrTimerSec !== undefined));
+    }
+    return $dataMap._rrTimerPages;
+};
+
 Game_Event.prototype.meetsConditions = function(page) {
     const c = page.conditions;
     if (c.switch1Valid) {
@@ -4278,6 +4354,11 @@ Game_Event.prototype.meetsConditions = function(page) {
         if (!met) {
             return false;
         }
+    }
+    // an imported 2000/2003 page may wait on the timer (rrTimerSec): met at that many whole seconds left or
+    // fewer, running or not, as EasyRPG's Game_Event::AreConditionsMet reads it
+    if (c.rrTimerSec !== undefined && $gameTimer.seconds() > c.rrTimerSec) {
+        return false;
     }
     if (c.selfSwitchValid) {
         const key = [this._mapId, this._eventId, c.selfSwitchCh];
@@ -4313,10 +4394,29 @@ Game_Event.prototype.setupPage = function() {
 
 Game_Event.prototype.clearPageSettings = function() {
     this.setImage("", 0);
+    this.reactorSetupPageImage(null);
     this._moveType = 0;
     this._trigger = null;
     this._interpreter = null;
     this.setThrough(true);
+};
+
+/**
+ * A page's Image options (`page.rrImage = { mirror, flip, angle, pivot }`):
+ * the page starts its picture turned that way. A page without them leaves a
+ * turn a route gave the event as it is, unless the page before set one: that
+ * turn was the page's and goes with it. Plain MZ pages never touch it.
+ */
+Game_Event.prototype.reactorSetupPageImage = function(page) {
+    if (!Game_CharacterBase.rrTransformsOn()) return;
+    const image = page && page.rrImage;
+    if (image && typeof image === "object") {
+        this.reactorSetImage(image);
+        this._rrPageImage = true;
+    } else if (this._rrPageImage) {
+        this.reactorSetImage(null);
+        this._rrPageImage = undefined;
+    }
 };
 
 Game_Event.prototype.setupPageSettings = function() {
@@ -4345,6 +4445,7 @@ Game_Event.prototype.setupPageSettings = function() {
     this.setDirectionFix(page.directionFix);
     this.setThrough(page.through);
     this.setMoveRoute(page.moveRoute);
+    this.reactorSetupPageImage(page);
     this._moveType = page.moveType;
     this._trigger = page.trigger;
     if (this._trigger === 4) {

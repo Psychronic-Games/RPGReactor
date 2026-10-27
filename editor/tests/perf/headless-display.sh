@@ -23,6 +23,8 @@ dbus-run-session -- kwin_wayland --virtual --width "${RR_DISPLAY_WIDTH:-1920}" -
     --no-lockscreen --no-global-shortcuts --socket "wayland-rr-$$" --xwayland &
 pid=$!
 trap 'pkill -P $pid 2>/dev/null; kill $pid 2>/dev/null' INT TERM EXIT
+# KWin opens two sockets: Xwayland's display and, one number up, an init
+# display that never answers a client. The lower new number is the one to use.
 made=
 for i in $(seq 1 100); do
     for name in $(list); do
@@ -30,7 +32,7 @@ for i in $(seq 1 100); do
 $before
 " in *"
 $name
-"*) ;; *) made=$name ;; esac
+"*) ;; *) if [ -z "$made" ] || [ "${name#X}" -lt "${made#X}" ]; then made=$name; fi ;; esac
     done
     [ -n "$made" ] && break
     kill -0 $pid 2>/dev/null || { echo "kwin_wayland --virtual did not start" >&2; exit 1; }

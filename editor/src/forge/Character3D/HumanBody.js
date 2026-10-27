@@ -180,10 +180,15 @@
      * jaw and brow softer, a man's jaw and chin firmer.
      */
     const APPEAL = {
-        female: { headWidth: -0.25, headFat: -0.1, cheeks: 0.1, cheekBones: 0.45, jaw: -0.4, chin: 0.25, chinWidth: -0.3, mouthHeight: 0.12, eyeSize: 0.35, eyeOpen: -0.45, eyeSlant: 0.2, eyeBags: -0.5, eyeSpacing: -0.1, headOval: 0.55,
-            browRidge: -0.7, browHeight: -0.1, underbite: -0.25, noseWidth: -0.45, noseVolume: -0.3, noseLength: -0.2, noseTip: 0.2, nostrils: -0.2, upperLip: 0.35, lowerLip: -0.2, mouthWidth: -0.1, mouthCorners: 0.3, neck: -0.3 },
-        male: { headWidth: -0.15, headFat: -0.05, cheeks: 0, cheekBones: 0.4, jaw: 0.4, chin: 0.3, chinWidth: 0.15, eyeOpen: -0.32, eyeBags: -0.5, headSquare: 0.35, headOval: 0.2, noseWidth: -0.15, noseHump: -0.1,
-            upperLip: 0.1, lowerLip: -0.15, mouthCorners: 0.15, browHeight: -0.15, browRidge: -0.35, temples: -0.3, underbite: -0.2, neck: 0.15 }
+        // The brows lowered onto the orbit's rim (MakeHuman's sit high, a surprised, homely look), the eyes larger
+        // and less hooded, higher cheekbones, a shorter, finer nose: the norm a good-looking face, every slider
+        // still free to take it anywhere. A woman's face narrower, its cheeks soft; MakeHuman's man's face is long
+        // and narrow, so his is shortened (the head, the chin, the nose) and broadened at the jaw's angle over a
+        // squarer chin.
+        female: { headWidth: -0.35, headFat: -0.1, cheeks: 0.3, cheekBones: 0.7, jaw: -0.4, chin: 0.25, chinWidth: -0.3, mouthHeight: 0.12, eyeSize: 0.5, eyeOpen: -0.15, eyeSlant: 0.2, eyeBags: -0.5, eyeSpacing: -0.1, headOval: 0.55,
+            browRidge: -0.7, browHeight: -0.5, underbite: -0.25, noseWidth: -0.6, noseVolume: -0.3, noseLength: -0.4, noseTip: 0.2, nostrils: -0.2, upperLip: 0.35, lowerLip: 0.15, mouthWidth: -0.05, mouthCorners: 0.3, neck: -0.3 },
+        male: { headWidth: -0.15, headHeight: -0.4, headFat: -0.05, cheeks: 0, cheekBones: 0.85, jaw: 1, chin: 0.35, chinWidth: 0.3, chinHeight: -0.45, eyeSize: 0.3, eyeOpen: -0.05, eyeSlant: 0.15, eyeBags: -0.5, headSquare: 0.55, headOval: 0.2, noseWidth: -0.45, noseLength: -0.65, noseHump: -0.1,
+            upperLip: 0.2, lowerLip: 0.2, mouthWidth: 0.15, mouthCorners: 0.15, browHeight: -0.5, browRidge: 0.3, temples: -0.3, underbite: -0.2, neck: 0.15 }
     };
     /** With them, by their own targets (appeal/…): a defined upper lip, the mouth drawn back, an upright forehead, a younger skull. */
     const APPEAL_MOUTH = { female: { cupidsBow: 0.6, mouthBack: 0.35, foreheadForward: 0.5, younger: 0.35 }, male: { cupidsBow: 0.3, mouthBack: 0.3, foreheadForward: 0.45, younger: 0.25 } };
@@ -525,9 +530,41 @@
      * extra displacement is relaxed over the mesh before it is added, so a
      * target carried three times as far swells smoothly instead of folding.
      */
+    /**
+     * MakeHuman's base mesh rests with its lips a little apart, the teeth
+     * showing between them: a slack, open-mouthed look. The rest face closes
+     * them, by its own expression unit (lips parted, run backward: as far as
+     * full lips meet without pressing into each other), blended by ancestry as the expressions are, laid on
+     * the base mesh before any target. Without the expression data (a page
+     * that has not loaded it) the mouth stays as MakeHuman made it.
+     */
+    const LIPS_AT_REST = { lipsPart: -0.35 };
+    // CharacterExpressions loads after this file and needs it; it hands itself over here when it loads (useExpressions).
+    let expressions = null;
+    function useExpressions(api) { expressions = api; }
+    function closeLips(pack, P, recipe) {
+        const X = expressions || root.RRCharacterExpressions;
+        const U = X && X.units ? X.units(pack) : null;
+        if (!U || !U.units) return;
+        const rest = root.__lipsAtRest || LIPS_AT_REST;
+        const ancestry = (recipe && recipe.ancestry) || DEFAULT_RECIPE.ancestry;
+        const races = (U.races || []).map(race => [race, Math.max(0, +ancestry[race] || 0)]);
+        const total = races.reduce((a, [, w]) => a + w, 0) || 1;
+        for (const name in rest) {
+            const byRace = U.units.get(name);
+            if (!byRace) continue;
+            for (const [race, w] of races) {
+                const t = byRace[race], k = rest[name] * w / total;
+                if (!t || !k) continue;
+                for (let i = 0; i < t.index.length; i++) for (let c = 0; c < 3; c++) P[t.index[i] * 3 + c] += t.delta[i * 3 + c] * t.scale * k;
+            }
+        }
+    }
+
     function shape(pack, recipe, out) {
         const positions = out && out.length === pack.positions.length ? out : new Float32Array(pack.positions.length);
         positions.set(pack.positions);
+        closeLips(pack, positions, recipe);
         const natural = targetWeights(recipe, true), full = targetWeights(recipe);
         const narrowing = {};
         for (const key of ['hips', 'shoulders']) {
@@ -1380,9 +1417,10 @@
 
     function foreheadSpoonAt(x, y, z, amount) {
         const radius = Math.hypot(x / 0.070, (y - 0.36) / 0.16);
-        const rim = 0.045 * Math.exp(-(((radius - 1) / 0.23) ** 2));
-        const bowl = -0.012 * Math.exp(-((radius / 0.75) ** 4));
-        const stem = 0.024 * Math.exp(-((x / 0.035) ** 2)) * smooth01(0.01, 0.10, y) * (1 - smooth01(0.20, 0.32, y));
+        // A crisp raised rim (steeper on its inner face) round a sunken bowl, on a ridged stem down to the brow.
+        const rim = 0.06 * Math.exp(-(((radius - 1) / (radius < 1 ? 0.13 : 0.2)) ** 2));
+        const bowl = -0.018 * Math.exp(-((radius / 0.78) ** 4));
+        const stem = 0.032 * Math.exp(-((x / 0.03) ** 2)) * smooth01(0.01, 0.10, y) * (1 - smooth01(0.20, 0.32, y));
         return amount * smooth01(-0.55, -0.05, z) * (rim + bowl + stem);
     }
 
@@ -1403,6 +1441,58 @@
             folds += Math.exp(-((x / (0.43 - k * 0.035)) ** 6)) * (0.014 * Math.exp(-(((y - line) / 0.02) ** 2)) - 0.004 * Math.exp(-(((y - line + 0.028) / 0.016) ** 2)));
         }
         return folds * amount * front;
+    }
+
+    /**
+     * The raised cords down the sides of a ridged neck: on each side a main
+     * cord from behind the jaw, under the ear, sweeping down and forward to
+     * the collarbone, ribbed along its length, with a thinner cord running
+     * beside it behind, both standing out along the skin's normal with a
+     * shallow trough at their edges. Measured from the neck and head pivots,
+     * so they follow any build; the face, the ears and the throat stay put.
+     */
+    function neckCords(pack, P, amount) {
+        const F = headFields(pack), h = meanOf(P, pack.bones[F.head].head), neck = meanOf(P, pack.bones.find(b => b.name === 'Neck').head);
+        let crown = -Infinity;
+        for (let v = 0; v < F.w.length; v++) if (F.w[v] > 0.9 && P[v * 3 + 1] > crown) crown = P[v * 3 + 1];
+        const H = crown - h[1], span = h[1] - neck[1];
+        if (!(amount > 0) || span < 1e-4 || !(H > 0)) return;
+        const N = vertexNormals(pack, P), lift = new Float32Array(F.w.length), ear = earMask(pack);
+        // Broad enough to hold on the body's neck rings (a vertex every centimeter or so) and stand clear in profile.
+        const a = H * 0.1 * Math.min(amount, 2.2);
+        // Each cord a path in (|x|, y, z) from its top behind the jaw to its foot on the shoulder.
+        const cords = [
+            { top: [H * 0.36, h[1] - span * 0.08, h[2] - H * 0.2], foot: [H * 0.42, neck[1] - span * 0.3, neck[2] + H * 0.3], w: H * 0.1, k: 1 },
+            { top: [H * 0.38, h[1] - span * 0.16, h[2] - H * 0.36], foot: [H * 0.62, neck[1] - span * 0.32, neck[2] + H * 0.05], w: H * 0.065, k: 0.6 }];
+        for (let v = 0; v < F.w.length; v++) {
+            // The ear itself (the head's ear field reaches down the neck under it, where the cord begins).
+            if (ear[v] > 0.4) continue;
+            const p = [Math.abs(P[v * 3]), P[v * 3 + 1], P[v * 3 + 2]];
+            if (p[1] > h[1] + span * 0.05 || p[1] < neck[1] - span * 0.45 || p[0] < H * 0.12) continue;
+            // Not the face: in front of the jaw's angle the head's skin keeps its shape.
+            if (F.w[v] > 0.6 && p[2] > h[2] - H * 0.1) continue;
+            let up = 0;
+            for (const c of cords) {
+                const d = [c.foot[0] - c.top[0], c.foot[1] - c.top[1], c.foot[2] - c.top[2]], dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+                const u = Math.max(0, Math.min(1, ((p[0] - c.top[0]) * d[0] + (p[1] - c.top[1]) * d[1] + (p[2] - c.top[2]) * d[2]) / dd));
+                // Bowed outward a little in its middle, as it rides over the neck's side.
+                const q = [c.top[0] + d[0] * u + H * 0.05 * Math.sin(Math.PI * u), c.top[1] + d[1] * u, c.top[2] + d[2] * u];
+                // Distance across the cord, measured on the skin (not through the neck): ignore how deep the point lies.
+                const off = [p[0] - q[0], p[1] - q[1], p[2] - q[2]], along = (off[0] * d[0] + off[1] * d[1] + off[2] * d[2]) / Math.sqrt(dd);
+                const n = [N[v * 3] * Math.sign(P[v * 3] || 1), N[v * 3 + 1], N[v * 3 + 2]], depth = off[0] * n[0] + off[1] * n[1] + off[2] * n[2];
+                const across = Math.sqrt(Math.max(0, off[0] ** 2 + off[1] ** 2 + off[2] ** 2 - along * along - depth * depth));
+                if (across > c.w * 2.6 || Math.abs(depth) > H * 0.25) continue;
+                const ends = smooth01(0, 0.32, u) * (1 - smooth01(0.8, 1, u)), rib = 0.82 + 0.18 * Math.cos(u * Math.PI * 2 * 7);
+                const profile = Math.exp(-((across / c.w) ** 2)) - 0.35 * Math.exp(-(((across - c.w * 1.6) / (c.w * 0.45)) ** 2));
+                up += a * c.k * ends * rib * profile;
+            }
+            lift[v] = up;
+        }
+        // Lightly eased over the skin, so a single vertex never stands alone.
+        const field = new Float32Array(P.length);
+        for (let v = 0; v < F.w.length; v++) if (lift[v]) for (let k = 0; k < 3; k++) field[v * 3 + k] = N[v * 3 + k] * lift[v];
+        const eased = relax(pack, field, 2);
+        for (let i = 0; i < P.length; i++) P[i] += eased[i];
     }
 
     /** Head morphs measured against the shaped eyes, head pivot and crown. */
@@ -1432,16 +1522,25 @@
             }
         }
         if (m.facialRidges) {
-            const eyes = new Set(F.eyeIds);
+            const eyes = new Set(F.eyeIds), N = vertexNormals(pack, P), lift = new Float32Array(F.w.length);
+            // Ridges with an edge: a narrow crest, a shallow trough just outside it. Raised along the skin's
+            // normal, so the temple and side ridges stand off the side of the head, not only forward.
+            const crest = (d, w) => Math.exp(-((d / w) ** 2)) - 0.3 * Math.exp(-(((Math.abs(d) - w * 1.6) / (w * 0.6)) ** 2));
             for (let v = 0; v < F.w.length; v++) {
                 if (F.w[v] < 0.8 || F.ear[v] > 0.3 || eyes.has(v)) continue;
                 const x = Math.abs(P[v * 3]) / H, y = (P[v * 3 + 1] - eye[1]) / H, z = (P[v * 3 + 2] - eye[2]) / H;
                 const orbit = Math.hypot((x - 0.21) / 0.17, (y + 0.035) / 0.15);
-                const rim = Math.exp(-(((orbit - 1.35) / 0.23) ** 2)) * smooth01(0.08, 0.18, x);
-                const temple = Math.exp(-(((x - 0.42 - y * 0.14) / 0.065) ** 2)) * smooth01(-0.42, -0.25, y) * (1 - smooth01(0.20, 0.38, y));
+                // The rim round the eye socket: brow above and outer cheek below.
+                const rim = crest(orbit - 1.32, 0.15) * smooth01(0.08, 0.18, x) * (1 - smooth01(0.26, 0.36, x));
+                // The temple ridge running up beside the eye, and from its foot a ridge swept back toward the ear.
+                const temple = crest(x - 0.42 - y * 0.14, 0.045) * smooth01(-0.42, -0.25, y) * (1 - smooth01(0.20, 0.38, y));
+                const sweep = crest(y + 0.06 + (z + 0.3) * 0.2, 0.035) * smooth01(0.36, 0.44, x) * smooth01(-0.8, -0.55, z) * (1 - smooth01(-0.4, -0.28, z));
                 const front = smooth01(-0.5, -0.10, z);
-                P[v * 3 + 2] += H * m.facialRidges * front * (rim * 0.035 + temple * 0.05);
+                // The rim stands forward (along the normal it would flare the cheeks out sideways); the side ridges outward.
+                P[v * 3 + 2] += H * m.facialRidges * front * rim * 0.05;
+                lift[v] = H * m.facialRidges * (front * temple * 0.06 + sweep * 0.04);
             }
+            for (let v = 0; v < F.w.length; v++) if (lift[v]) for (let k = 0; k < 3; k++) P[v * 3 + k] += N[v * 3 + k] * lift[v];
         }
         if (m.neckWebbing) {
             // The Head pivot sits inside the face, above the chin. Stop below
@@ -1463,6 +1562,7 @@
             }
             const eased = relax(pack, field, 8);
             for (let i = 0; i < P.length; i++) P[i] += eased[i];
+            neckCords(pack, P, m.neckWebbing);
         }
         if (m.cranialLobes) {
             const eyes = new Set(F.eyeIds);
@@ -1787,10 +1887,26 @@
     }
 
     /** A seeded random recipe within per-field ranges ({gender:[0,1], age:[18,60], ...}). */
+    /**
+     * A random face's own sliders: rolled over the full range but most often
+     * near the middle (the draw squared), so a random face differs from the
+     * norm without leaning to the odd; the directions that read homely
+     * (brows up the forehead, small or baggy eyes, an older face, a heavy
+     * nose, a long heavy chin under a small mouth) reached only a little way.
+     */
+    const FACE_ROLL = new Set(SLIDERS.filter(s => s.paired && (FACE_SECTIONS.has(s.section) || /^head(Width|Height|Depth|Age|Back)$/.test(s.key))).map(s => s.key));
+    const FACE_ROLL_LEAN = { browHeight: [1, 0.25], eyeSize: [0.4, 1], eyeOpen: [0.5, 1], eyeBags: [1, 0.3], headAge: [1, 0.4], eyeSpacing: [0.6, 0.6], noseVolume: [1, 0.5], noseDepth: [1, 0.5], noseWidth: [1, 0.6], noseLength: [1, 0.6], foreheadHeight: [0.7, 0.6], earOut: [1, 0.5],
+        // A long, heavy lower face: a chin rolled out, wide and tall over a small mouth set high.
+        chin: [1, 0.6], chinWidth: [1, 0.6], chinHeight: [1, 0.5], mouthHeight: [0.6, 0.5], mouthWidth: [0.5, 1], headHeight: [1, 0.5] };
+    function faceRoll(key, u, [lo, hi]) {
+        const x = 2 * u - 1, [down, up] = FACE_ROLL_LEAN[key] || [1, 1];
+        return x < 0 ? lo * x * x * down : hi * x * x * up;
+    }
+
     function randomRecipe(seed, ranges) {
         let s = (seed >>> 0) || 1;
         const rand = () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
-        const R = Object.assign({ gender: [0, 1], age: [18, 70], muscle: [0.2, 0.8], weight: [0.2, 0.8], height: [0.25, 0.75], cup: [0.3, 0.7], proportions: [0.4, 0.95], shapes: [-0.6, 0.6] }, ranges || {});
+        const R = Object.assign({ gender: [0, 1], age: [18, 70], muscle: [0.2, 0.8], weight: [0.2, 0.8], height: [0.25, 0.75], cup: [0.3, 0.7], proportions: [0.6, 1], shapes: [-0.6, 0.6] }, ranges || {});
         const pick = ([lo, hi]) => lo + (hi - lo) * rand();
         const gender = rand() < 0.5 ? pick([0, 0.15]) : pick([0.85, 1]);
         const r = {
@@ -1804,6 +1920,7 @@
         for (const a of ANCESTRY) r.ancestry[a] = Math.max(0, people.mix[a] + (rand() - 0.5) * 0.12);
         for (const s of SLIDERS) {
             if (!s.basic && rand() < 0.6) continue;
+            if (s.paired && FACE_ROLL.has(s.key)) { r.shapes[s.key] = faceRoll(s.key, rand(), R.shapes); continue; }
             r.shapes[s.key] = s.paired ? pick(R.shapes) * (s.key === 'belly' ? Math.max(0, r.weight - 0.3) * 1.5 : 1) : Math.max(0, pick(R.shapes)) * 0.5;
         }
         r.shapes.earsPointed = 0;
@@ -1822,7 +1939,7 @@
         return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0');
     }
 
-    const api = { PEOPLES, PEOPLE_BY_ID, withPeople, irisFor, earMask, noseFoldAt, cranialRidgeAt, foreheadSpoonAt, almondEye: { frame: almondFrame, half: almondHalf, at: almondAt }, VOLUME, maskOf, fatMask, volume, sexOf, anatomyFields, nippleSurface, MORPHS, morph, headFields, vertexNormals, gather, normals, fittedSkin, naturalRecipe, neighbors, relax, SLIDERS, SHAPES, SLIDER_BY_KEY, MACRO_RANGES, ANCESTRY, DEFAULT_RECIPE, MIN_AGE, MAX_AGE, DATA_PATH, dataFolder, normalizeRecipe, targetWeights, openPack, loadPack, shape, joints, fit, build, randomRecipe };
+    const api = { PEOPLES, PEOPLE_BY_ID, withPeople, irisFor, earMask, noseFoldAt, cranialRidgeAt, foreheadSpoonAt, neckCords, almondEye: { frame: almondFrame, half: almondHalf, at: almondAt }, VOLUME, maskOf, fatMask, volume, sexOf, anatomyFields, nippleSurface, MORPHS, morph, headFields, vertexNormals, gather, normals, fittedSkin, naturalRecipe, neighbors, relax, SLIDERS, SHAPES, SLIDER_BY_KEY, MACRO_RANGES, ANCESTRY, DEFAULT_RECIPE, MIN_AGE, MAX_AGE, DATA_PATH, dataFolder, normalizeRecipe, targetWeights, openPack, loadPack, shape, joints, fit, build, randomRecipe, useExpressions };
     root.RRHumanBody = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

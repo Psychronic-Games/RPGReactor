@@ -322,8 +322,16 @@
                 };
                 const ready = () => win.window && win.window.document && win.window.document.readyState === 'complete';
                 if (ready()) mount(); else win.on('loaded', mount);
-                win.on('move', () => { if (popped === state && state.ready) keepWindowRect(win); });
-                win.on('resize', () => { if (popped === state && state.ready) keepWindowRect(win); });
+                // Moved or sized, the whole window is drawn again on its next frame, its clear corners too: on Linux
+                // the compositor kept what those pixels last held, and the corners showed square or not by where it stood.
+                const repaint = () => {
+                    const view = win.window, html = view && view.document && view.document.documentElement;
+                    if (!html || !view.requestAnimationFrame) return;
+                    if (state.repaintFrame) view.cancelAnimationFrame(state.repaintFrame);
+                    state.repaintFrame = view.requestAnimationFrame(() => { state.repaintFrame = 0; html.classList.toggle('rr-repaint'); });
+                };
+                win.on('move', () => { if (popped === state && state.ready) { keepWindowRect(win); repaint(); } });
+                win.on('resize', () => { if (popped === state && state.ready) { keepWindowRect(win); repaint(); } });
                 stayInFrontOfEditor(main, win, state);
                 // Closing it another way than its × (Alt+F4, the taskbar) closes the dialog as its × does,
                 // asking first about unapplied edits; the window hides and waits for the next opening.
@@ -397,6 +405,12 @@
             if (!popped.win || !popped.ready) return;
             if (root.RRPopoutBridge && popped.child) root.RRPopoutBridge.setAsleep(popped.child, false);
             try { popped.win.show(); popped.win.focus(); } catch (error) { /* gone */ }
+            // A dialog first opened while its window was still being made had its focus refused there
+            // (hidden): the focus goes into it now that it shows.
+            const keys = popped.overlay && popped.overlay._rrModalKeys;
+            let active = null;
+            try { active = popped.child && popped.child.document ? popped.child.document.activeElement : null; } catch (error) { /* gone */ }
+            if (keys && typeof keys.refocus === 'function' && !(active && popped.overlay.contains(active))) keys.refocus();
         }
 
         /**

@@ -27,6 +27,29 @@ class DatabaseSkillEditor {
         return rows.join('');
     }
 
+    /**
+     * Label-and-number pairs, two to a row. A pair given as [pool, field, label] names its pool by the
+     * project's term, and is left out when the project turned that pool off (System 1 > Resource Pools)
+     * - unless the record still holds a value there, which then shows flagged as ignored.
+     */
+    static poolRowsHTML(system, record, tt, pairs, idAttribute = 'data-skill-id') {
+        const pools = globalThis.ResourcePools;
+        const cells = pairs.map(pair => {
+            if (typeof pair === 'string') return pair;
+            const [key, field, label] = pair;
+            const off = !!pools && pools.isOff(system, key);
+            const value = Number(record[field]) || 0;
+            if (off && !value) return '';
+            const name = pools ? pools.label(system, key, tt(label)) : tt(label);
+            const flag = off ? ` class="rr-pool-off" style="color: var(--color-warning, #d9a400);" title="${rrEscapeHtml(tt('This pool is turned off in System 1: the value is ignored.'))}"` : '';
+            return `<label${flag}>${rrEscapeHtml(name)}${off ? ` (${rrEscapeHtml(tt('off'))})` : ''}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(record[field] || 0)}" data-field="${field}" ${idAttribute}="${record.id}">`;
+        }).filter(Boolean);
+        const rows = [];
+        for (let i = 0; i < cells.length; i += 2) rows.push(`<div class="db-row-pair">${cells.slice(i, i + 2).join('')}</div>`);
+        return rows.join('');
+    }
+
     showSkillDetail(container, skill) {
         const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentSkill = skill;
@@ -129,18 +152,10 @@ class DatabaseSkillEditor {
             <div class="database-section-header" data-section-key="invocation">${tt('Invocation')}</div>
             <div class="database-section-content">
                 <div class="db-form">
-                    <div class="db-row-pair">
-                        <label>${tt('MP Cost')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.mpCost || 0)}" data-field="mpCost" data-skill-id="${skill.id}">
-                        <label>${tt('TP Cost')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.tpCost || 0)}" data-field="tpCost" data-skill-id="${skill.id}">
-                    </div>
-                    <div class="db-row-pair">
-                        <label>${tt('TP Gain')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.tpGain || 0)}" data-field="tpGain" data-skill-id="${skill.id}">
-                        <label>${tt('Speed')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.speed || 0)}" data-field="speed" data-skill-id="${skill.id}">
-                    </div>
+                    ${DatabaseSkillEditor.poolRowsHTML(this.databaseManager.getSystem(), skill, tt, [
+                        ['mp', 'mpCost', 'MP Cost'], ['tp', 'tpCost', 'TP Cost'], ['tp', 'tpGain', 'TP Gain'],
+                        `<label>${tt('Speed')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.speed || 0)}" data-field="speed" data-skill-id="${skill.id}">`])}
                     <div class="db-row-pair">
                         <label>${tt('Success %')}</label>
                         <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.successRate != null ? skill.successRate : 100)}" data-field="successRate" data-skill-id="${skill.id}">

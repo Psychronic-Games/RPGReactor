@@ -11,6 +11,17 @@
  * optionally `colors` (linear RGB per vertex), `color` (hex, when no
  * colors), `roughness`, `metalness`, `doubleSided`, `opacity` (below 1 is
  * blended), `cutout` and `texture` (a name in `images`).
+ *
+ * A cloth's repeating tiles (RRCharacterFabric) ride a second set of
+ * coordinates: `uvs1` is written as TEXCOORD_1, and `normalTexCoord`,
+ * `metallicRoughnessTexCoord`, `occlusionTexCoord` say which set a map is
+ * on; `occlusionTexture` (`occlusionStrength`) is usually the same picture
+ * as the metal-roughness one (red occlusion, green roughness, blue metal).
+ * `sheen` ({ strength, roughness, texture, color }) is KHR_materials_sheen,
+ * its color the part's own picture (`texture`) times `strength`.
+ *
+ * Parts that share their geometry (hair's blended twin of its cut-out core)
+ * share its accessors: identical vertex and index data is written once.
  */
 (function(root) {
     'use strict';
@@ -96,6 +107,25 @@
             json.accessors.push(Object.assign({ bufferView: view(typed, target), componentType, count: typed.length / ({ SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 }[type]), type }, extra || {}));
             return json.accessors.length - 1;
         };
+        // A mesh's vertex and index data, written once however many meshes carry the very same bytes.
+        const shared = new Map();
+        const sameBytes = (a, b) => {
+            if (a.length !== b.length) return false;
+            for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+            return true;
+        };
+        const meshAccessor = (typed, type, componentType, target, extra) => {
+            const bytes = new Uint8Array(typed.buffer, typed.byteOffset, typed.byteLength);
+            let h = 0x811c9dc5;
+            const step = Math.max(1, Math.floor(bytes.length / 4096));
+            for (let i = 0; i < bytes.length; i += step) h = Math.imul(h ^ bytes[i], 16777619);
+            const key = [type, componentType, target, bytes.length, h >>> 0].join(':');
+            const list = shared.get(key) || [];
+            for (const seen of list) if (sameBytes(seen.bytes, bytes)) return seen.index;
+            const index = accessor(typed, type, componentType, target, extra);
+            list.push({ bytes, index }); shared.set(key, list);
+            return index;
+        };
         const bounds = positions => {
             const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
             for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k++) {
@@ -142,15 +172,29 @@
                 pbrMetallicRoughness: { baseColorFactor: base, metallicFactor: part.metalness ?? 0, roughnessFactor: part.roughness ?? 0.6 }
             };
             if (texture !== null) material.pbrMetallicRoughness.baseColorTexture = { index: texture };
+            // A map on the second coordinates says so; only where the part has them.
+            const second = !!(part.uvs1 && part.uvs1.length === part.positions.length / 3 * 2);
+            const onSet = set => (set > 0 && second ? { texCoord: set } : {});
             const surface = part.metallicRoughnessTexture ? textureFor(part.metallicRoughnessTexture) : null;
-            if(surface !== null) material.pbrMetallicRoughness.metallicRoughnessTexture = {index:surface};
+            if(surface !== null) material.pbrMetallicRoughness.metallicRoughnessTexture = Object.assign({index:surface}, onSet(part.metallicRoughnessTexCoord));
+            const occlusion = part.occlusionTexture ? textureFor(part.occlusionTexture) : null;
+            if (occlusion !== null) material.occlusionTexture = Object.assign({ index: occlusion }, onSet(part.occlusionTexCoord), part.occlusionStrength != null ? { strength: part.occlusionStrength } : {});
+            // Cloth's soft sheen at grazing angles, in its own colors.
+            if (part.sheen) {
+                const tint = part.sheen.color || [1, 1, 1], k = part.sheen.strength ?? 0.5;
+                const extension = { sheenColorFactor: tint.map(c => c * k), sheenRoughnessFactor: part.sheen.roughness ?? 0.5 };
+                const sheenMap = part.sheen.texture ? textureFor(part.sheen.texture) : null;
+                if (sheenMap !== null) extension.sheenColorTexture = { index: sheenMap };
+                material.extensions = Object.assign(material.extensions || {}, { KHR_materials_sheen: extension });
+                if (!json.extensionsUsed?.includes('KHR_materials_sheen')) (json.extensionsUsed ||= []).push('KHR_materials_sheen');
+            }
             if(part.iridescence){
                 const extension={iridescenceFactor:part.iridescence,iridescenceIor:part.iridescenceIOR ?? 1.3,
                     iridescenceThicknessMinimum:part.iridescenceThicknessRange?.[0] ?? 100,
                     iridescenceThicknessMaximum:part.iridescenceThicknessRange?.[1] ?? 400};
                 const thickness=part.iridescenceThicknessTexture ? textureFor(part.iridescenceThicknessTexture) : null;
                 if(thickness !== null)extension.iridescenceThicknessTexture={index:thickness};
-                material.extensions={KHR_materials_iridescence:extension};
+                material.extensions=Object.assign(material.extensions||{},{KHR_materials_iridescence:extension});
                 if(!json.extensionsUsed?.includes('KHR_materials_iridescence'))(json.extensionsUsed ||= []).push('KHR_materials_iridescence');
             }
             if (part.cutout) { material.alphaMode = 'MASK'; material.alphaCutoff = part.alphaCutoff ?? 0.5; }
@@ -159,7 +203,7 @@
             if (part.doubleSided) material.doubleSided = true;
             // A relief picture (`normalTexture`, a name in `images`), at `normalScale`.
             const normal = part.normalTexture ? textureFor(part.normalTexture) : null;
-            if (normal !== null) material.normalTexture = Object.assign({ index: normal }, part.normalScale != null ? { scale: part.normalScale } : {});
+            if (normal !== null) material.normalTexture = Object.assign({ index: normal }, onSet(part.normalTexCoord), part.normalScale != null ? { scale: part.normalScale } : {});
             // A part that shines in its own light: `emissive` (hex), `emissiveTexture` (a name in `images`).
             if (part.emissive) {
                 const intensity = Number.isFinite(part.emissiveIntensity) ? Math.max(0,Math.min(1,part.emissiveIntensity)) : 1;
@@ -172,16 +216,17 @@
             const big = part.positions.length / 3 > 65535;
             const primitive = {
                 attributes: {
-                    POSITION: accessor(Float32Array.from(part.positions), 'VEC3', 5126, 34962, b),
-                    NORMAL: accessor(Float32Array.from(part.normals), 'VEC3', 5126, 34962),
-                    TEXCOORD_0: accessor(Float32Array.from(part.uvs || new Float32Array(part.positions.length / 3 * 2)), 'VEC2', 5126, 34962),
-                    JOINTS_0: accessor(Uint8Array.from(part.joints), 'VEC4', 5121, 34962),
-                    WEIGHTS_0: accessor(Float32Array.from(part.weights), 'VEC4', 5126, 34962)
+                    POSITION: meshAccessor(Float32Array.from(part.positions), 'VEC3', 5126, 34962, b),
+                    NORMAL: meshAccessor(Float32Array.from(part.normals), 'VEC3', 5126, 34962),
+                    TEXCOORD_0: meshAccessor(Float32Array.from(part.uvs || new Float32Array(part.positions.length / 3 * 2)), 'VEC2', 5126, 34962),
+                    JOINTS_0: meshAccessor(Uint8Array.from(part.joints), 'VEC4', 5121, 34962),
+                    WEIGHTS_0: meshAccessor(Float32Array.from(part.weights), 'VEC4', 5126, 34962)
                 },
-                indices: accessor(big ? Uint32Array.from(part.index) : Uint16Array.from(part.index), 'SCALAR', big ? 5125 : 5123, 34963),
+                indices: meshAccessor(big ? Uint32Array.from(part.index) : Uint16Array.from(part.index), 'SCALAR', big ? 5125 : 5123, 34963),
                 material: json.materials.length - 1
             };
-            if (part.colors) primitive.attributes.COLOR_0 = accessor(Float32Array.from(part.colors), 'VEC3', 5126, 34962);
+            if (second) primitive.attributes.TEXCOORD_1 = meshAccessor(Float32Array.from(part.uvs1), 'VEC2', 5126, 34962);
+            if (part.colors) primitive.attributes.COLOR_0 = meshAccessor(Float32Array.from(part.colors), 'VEC3', 5126, 34962);
             const mesh = { name: part.name, primitives: [primitive] };
             // Expressions hook: the face's named morph targets (built.morphs, RRCharacterExpressions.morphTargets) as
             // sparse position deltas; each mesh carries the targets that move it, named in its extras.targetNames.
@@ -247,7 +292,28 @@
         return out;
     }
 
-    const api = { toGlb, idleClip, axisAngle, multiply };
+    /**
+     * A built character's triangles as its file holds them: { total, drawn,
+     * outfit, hair, body }. A part that only draws another's geometry again
+     * (hair's blended twin, `soft`) shares its data and is counted once;
+     * `drawn` counts every draw. Outfit is cloth and metal parts, hair is hair.
+     */
+    function triangles(parts) {
+        const out = { total: 0, drawn: 0, outfit: 0, hair: 0, body: 0 };
+        for (const p of parts || []) {
+            const n = Math.round((p.index ? p.index.length : 0) / 3);
+            out.drawn += n;
+            const twin = p.soft && parts.some(q => q !== p && !q.soft && q.index && q.index.length === p.index.length && q.positions.length === p.positions.length);
+            if (twin) continue;
+            out.total += n;
+            if (p.kind === 'hair') out.hair += n;
+            else if (p.kind === 'cloth' || p.kind === 'metal') out.outfit += n;
+            else out.body += n;
+        }
+        return out;
+    }
+
+    const api = { toGlb, idleClip, axisAngle, multiply, triangles };
     root.RRCharacterGlb = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

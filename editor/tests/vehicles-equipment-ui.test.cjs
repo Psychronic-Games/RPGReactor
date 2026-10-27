@@ -121,6 +121,29 @@ test('a vehicle has a row for each copy of it: another is added unplaced, placed
     assert.deepEqual(record.copies.map(copy=>copy.id),[3,4]);
 });
 
+test('every row says Delete; deleting the first moves the next vehicle up, and its number is never given again', () => {
+    const record=bike();
+    const {container,pickers}=ui(record);
+    assert.equal(container.querySelector('.vehicle-location-clear').disabled,true,'one unplaced row: nothing to delete');
+    container.querySelector('.vehicle-location-browse').onclick();pickers[pickers.length-1].onConfirm({mapId:1,x:1,y:1});
+    container.querySelector('.vehicle-start-add').onclick();
+    let rows=container.querySelectorAll('.vehicle-location-row');
+    rows[1].querySelector('.vehicle-location-browse').onclick();pickers[pickers.length-1].onConfirm({mapId:1,x:7,y:8});
+    rows=container.querySelectorAll('.vehicle-location-row');
+    rows[1].querySelector('.vehicle-start-direction').value='6';rows[1].querySelector('.vehicle-start-direction').onchange({target:{value:'6'}});
+    assert.deepEqual(Array.from(rows,row=>row.querySelector('.vehicle-location-clear').textContent),['Delete','Delete']);
+    rows[0].querySelector('.vehicle-location-clear').onclick();
+    assert.deepEqual([record.startMapId,record.startX,record.startY,record.startDirection],[1,7,8,6],'the second vehicle takes the first row');
+    assert.equal(record.copies,undefined);
+    assert.equal(container.querySelectorAll('.vehicle-location-row').length,1);
+    container.querySelector('.vehicle-start-add').onclick();
+    assert.deepEqual(record.copies.map(copy=>copy.id),[3],'the moved-up number is not given again');
+    // The last row left clears to unplaced.
+    container.querySelectorAll('.vehicle-location-clear')[1].onclick();
+    container.querySelector('.vehicle-location-clear').onclick();
+    assert.equal(record.startMapId,0);
+});
+
 test('vehicle position reuses the map picker, only writes on confirmation, and can be cleared', () => {
     const record=bike(),before=structuredClone(record);
     const {container,view,manager,pickers,dialogs}=ui(record);

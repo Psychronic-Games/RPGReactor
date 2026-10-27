@@ -2913,6 +2913,7 @@
                 this.drawCurrentAndMax(actor.hp, actor.mhp, x, y, width, this.hpColor(actor), this.normalColor());
             });
             def(WB, "drawActorMp", function(actor, x, y, width) {
+                if (this.isPoolHidden && this.isPoolHidden("mp")) return;
                 width = width || 186;
                 var color1 = this.mpGaugeColor1();
                 var color2 = this.mpGaugeColor2();
@@ -2922,6 +2923,7 @@
                 this.drawCurrentAndMax(actor.mp, actor.mmp, x, y, width, this.mpColor(actor), this.normalColor());
             });
             def(WB, "drawActorTp", function(actor, x, y, width) {
+                if (this.isPoolHidden && this.isPoolHidden("tp")) return;
                 width = width || 96;
                 var color1 = this.tpGaugeColor1();
                 var color2 = this.tpGaugeColor2();
@@ -3022,7 +3024,7 @@
                 this.drawActorIcons(actor, rect.x + 156, rect.y, rect.width - 156);
             });
             def(WBS, "drawGaugeArea", function(rect, actor) {
-                if ($dataSystem.optDisplayTp) {
+                if ($dataSystem.optDisplayTp && !(this.isPoolHidden && this.isPoolHidden("tp"))) {
                     this.drawGaugeAreaWithTp(rect, actor);
                 } else {
                     this.drawGaugeAreaWithoutTp(rect, actor);
@@ -5728,7 +5730,10 @@
                     else if (di.denominator != null) denominator = di.denominator;
                     else return r;
                     if (di.kind > 0 && Math.random() * denominator < this.dropItemRate()) {
-                        return r.concat(this.itemObject(di.kind, di.dataId));
+                        var count = typeof this.rrDropCount === "function" ? this.rrDropCount(di) : 1;
+                        var item = this.itemObject(di.kind, di.dataId);
+                        for (var n = 1; n < count; n++) r = r.concat(item);
+                        return r.concat(item);
                     }
                     return r;
                 });

@@ -11,6 +11,20 @@ const done = arguments[arguments.length - 1];
     const show = (type, id = 1) => { db.openDatabase(type); db._activeDatabaseList?.selectIds([id], id); };
     const cancel = () => document.getElementById('database-cancel-btn').click();
     const section = async (name, fn) => { try { await fn(); } catch (error) { failures.push({ name, error: String(error.stack) }); } };
+    // A dialog with a window of its own (the Database, the Plugin Manager) is worked in once that window
+    // shows it, and taken as the window in use, as a click there makes it.
+    const inWindow = async (api, overlayId, task) => {
+        let own = null;
+        for (let i = 0; i < 200; i++) {
+            const overlay = document.getElementById(overlayId), win = api?.isPoppedOut?.() ? api.popoutWindow() : null;
+            if (overlay && overlay.style.visibility !== 'hidden' && (!win || win.window?.document?.contains(overlay))) { own = win ? win.window : null; break; }
+            await wait(25);
+        }
+        // Shown, its window takes the focus (a window made for it the first time takes a moment more).
+        for (let i = 0; own && i < 40 && !own.document.hasFocus(); i++) await wait(25);
+        check(overlayId + ' shows', document.getElementById(overlayId)?.style.visibility !== 'hidden');
+        return own && window.RRPopoutBridge ? RRPopoutBridge.inPopout(task, own) : task();
+    };
     I18n.setLanguage(arguments[0]?.language || 'en', { persist: false });
     reactor.optionsManager.applyTheme(arguments[0]?.theme || 'dark');
 
@@ -37,13 +51,17 @@ const done = arguments[arguments.length - 1];
             const entries = dm.data[type].filter(Boolean);
             if (entries.length < 2) continue;
             show(type, entries[0].id);
-            const list = document.getElementById('database-list'); list.focus();
-            check(type + ': arrows select without scrolling alone', key(list, 'ArrowDown'));
-            await wait(100);
-            check(type + ': focus remains in entries after deferred rendering', document.activeElement === list, document.activeElement?.outerHTML?.slice(0, 160));
-            check(type + ': second entry selected', db._activeDatabaseList.focusedId === entries[1].id);
-            const input = document.querySelector('#database-detail input:not([disabled]):not([type="checkbox"]):not([type="radio"])');
-            if (input) { input.focus(); const id = db._activeDatabaseList.focusedId; key(input, 'ArrowDown'); check(type + ': detail input keeps its own arrows', db._activeDatabaseList.focusedId === id); }
+            await inWindow(window.RRDatabaseWindow, 'database-viewer', async () => {
+                // Its rows, drawn once the window shows the page.
+                for (let i = 0; i < 40 && document.querySelectorAll('#database-list .database-list-item').length < 2; i++) await wait(25);
+                const list = document.getElementById('database-list'); list.focus();
+                check(type + ': arrows select without scrolling alone', key(list, 'ArrowDown'));
+                await wait(100);
+                check(type + ': focus remains in entries after deferred rendering', document.activeElement === list, document.activeElement?.outerHTML?.slice(0, 160));
+                check(type + ': second entry selected', db._activeDatabaseList.focusedId === entries[1].id);
+                const input = document.querySelector('#database-detail input:not([disabled]):not([type="checkbox"]):not([type="radio"])');
+                if (input) { input.focus(); const id = db._activeDatabaseList.focusedId; key(input, 'ArrowDown'); check(type + ': detail input keeps its own arrows', db._activeDatabaseList.focusedId === id); }
+            });
             cancel();
         }
     });
@@ -59,7 +77,8 @@ const done = arguments[arguments.length - 1];
             for (const tab of modal.querySelectorAll('[data-tab]')) {
                 tab.click(); await wait(); const rect = modal.getBoundingClientRect();
                 sizes.push([rect.width, rect.height]);
-                check(type + ': dialog stays in viewport on ' + tab.dataset.tab, rect.top >= 0 && rect.bottom <= innerHeight);
+                // The viewport of the window the dialog opened in.
+                check(type + ': dialog stays in viewport on ' + tab.dataset.tab, rect.top >= 0 && rect.bottom <= modal.ownerDocument.defaultView.innerHeight);
                 check(type + ': arrows do not close dialog on ' + tab.dataset.tab, (key(tab, 'ArrowDown'), modal.isConnected));
             }
             check(type + ': all tabs retain the same dimensions', sizes.length > 1 && sizes.every(size => Math.abs(size[0] - sizes[0][0]) < 1 && Math.abs(size[1] - sizes[0][1]) < 1), sizes);
@@ -111,11 +130,13 @@ const done = arguments[arguments.length - 1];
 
     await section('Plugins', async () => {
         const plugins = reactor.pluginManager; plugins.show(); await wait();
-        const before = JSON.stringify(plugins.plugins), list = plugins.pluginListContainer; list.focus();
-        key(list, 'Home'); key(list, 'ArrowDown'); await wait();
-        check('plugin arrows select the second plugin', plugins.selectedPluginIndex === 1);
-        check('plugin detail rebuild retains list focus', document.activeElement === list);
-        check('plugin selection does not change plugin data or order', JSON.stringify(plugins.plugins) === before);
+        await inWindow(window.RRPluginManagerWindow, 'plugin-manager-modal', async () => {
+            const before = JSON.stringify(plugins.plugins), list = plugins.pluginListContainer; list.focus();
+            key(list, 'Home'); key(list, 'ArrowDown'); await wait();
+            check('plugin arrows select the second plugin', plugins.selectedPluginIndex === 1);
+            check('plugin detail rebuild retains list focus', document.activeElement === list);
+            check('plugin selection does not change plugin data or order', JSON.stringify(plugins.plugins) === before);
+        });
         plugins.hide();
     });
 

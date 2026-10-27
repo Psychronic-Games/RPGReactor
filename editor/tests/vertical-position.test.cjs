@@ -111,7 +111,7 @@ test('Face Ceiling, Face Ground and Rotate reach the drawn character', () => {
 test('the event list names a route step; the dialog spreads them over its columns', () => {
     const list = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'), 'utf8');
     assert.match(list, /SetMovementRouteEditor\.parseRouteCommand\(params\[0\]\)/, 'the list asks the step what it is');
-    assert.match(list, /description = tt\('Rise'\);/, 'and says so instead of showing the marker script');
+    assert.match(list, /description = SetMovementRouteEditor\.stepText\(step, tt\);/, 'and says so instead of showing the marker script');
     const dialog = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'commands', 'SetMovementRouteEditor.js'), 'utf8');
     const columns = {};
     for (const name of ['column1', 'column2', 'column3']) {
@@ -120,8 +120,12 @@ test('the event list names a route step; the dialog spreads them over its column
     }
     assert.match(columns.column1, /reactor: 'rise'/, 'vertical steps sit under the moves');
     assert.match(columns.column2, /reactor: 'faceceiling'/, 'poses sit under the turns');
-    assert.match(columns.column3, /reactor: 'rotate'/, 'rotate sits with Script');
+    assert.match(columns.column2, /reactor: 'rotate'/, 'rotate sits with the turns');
+    assert.match(columns.column1, /reactor: 'teleport'/, 'teleport sits under Move to Tile');
     assert.doesNotMatch(columns.column3, /reactor: 'rise'/, 'no column carries them all');
+    const counts = Object.values(columns).map(c => (c.match(/\{ code:/g) || []).length);
+    assert.deepEqual(counts, [20, 19, 20], 'the columns come out even');
+    assert.match(columns.column3, /\{ code: 45, label: 'Script\.\.\.' \},\s*$/, 'Script is last, in the lower right');
 });
 
 test('the editor carries height: position fields, 3D placement, arrows, overlays', () => {

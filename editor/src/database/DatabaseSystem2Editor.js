@@ -73,6 +73,7 @@ class DatabaseSystem2Editor {
         col2.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
         col2.appendChild(this.createAttackMotionsSection(system));
         col2.appendChild(this.createEditorSettingsSection(system));
+        // (Higher Limits, once a Limits card here, is a tick on Database › Reactor Features.)
         col2.appendChild(this.createCompatibilitySection(system));
         columnsGrid.appendChild(col2);
 
@@ -328,7 +329,7 @@ class DatabaseSystem2Editor {
     createCompatibilitySection(system) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const fields = [
-            { label: 'Multi-frame Sheets ([fN])', path: 'rrMultiFrames', value: system.rrMultiFrames === true, type: 'checkbox' },
+            { label: 'Multi-frame Sheets ([NF])', path: 'rrMultiFrames', value: system.rrMultiFrames === true, type: 'checkbox' },
             { label: 'Skip Title Screen', path: 'rrSkipTitle', value: system.rrSkipTitle === true, type: 'checkbox' },
             { label: 'RPG Maker 2000/2003 Title Menu', path: 'rrLegacyTitle', value: system.rrLegacyTitle === true, type: 'checkbox' },
             { label: 'Erase Pictures on Map Change', path: 'rrPicturesEraseOnMapChange', value: system.rrPicturesEraseOnMapChange === true, type: 'checkbox' },

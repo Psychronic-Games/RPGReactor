@@ -21,6 +21,18 @@ class TerrainManager {
      * Grounds to start a type from: the material (img/materials), a tint and whether anything grows on it.
      * A project without the material's image still lists the type; it draws once the image is there.
      */
+    /**
+     * Roads and paths to start from: quick picks for the Path tool's look in hand. Whatever is painted becomes a ground
+     * type the first time that look is used (found again by its material, tint and scale): nothing grows on it.
+     */
+    static PATH_SURFACES = [
+        { name: 'Dirt road', material: 'Dirt', tint: '#8a6a4c', bare: true },
+        { name: 'Cobblestone', material: 'Cobble', tint: '', bare: true },
+        { name: 'Gravel path', material: 'Gravel', tint: '#8f8a82', bare: true },
+        { name: 'Sand path', material: 'Sand', tint: '', bare: true },
+        { name: 'Paving', material: 'Stone', tint: '', bare: true }
+    ];
+
     static GROUND_PRESETS = [
         { name: 'Sand', material: 'Sand', tint: '', bare: true },
         { name: 'Dirt', material: 'Dirt', tint: '#8a6a4c' },
@@ -79,14 +91,25 @@ class TerrainManager {
         this._stroke = null;
         // River: its channel's width and depth, and the course clicked so far.
         this.riverWidth = 3;
+        // Flatten: a brush, a Line (a level bed as wide as the brush) or a Rectangle (a pad); to the height under the
+        // first click, or to a height typed or picked from the ground. Lower: banks kept walkable unless steep.
+        this.flattenShape = 'brush';
+        this.flattenFrom = 'click';
+        this.flattenHeight = 0;
+        this.lowerSteep = false;
+        this._pickHeight = false;
+        // How fast a river laid runs (0 still, 1 a river's own, up to 4 a torrent).
+        this.riverFlow = 1;
         this.riverDepth = 1;
         this._river = null;
-        // Foliage: paint or erase, how thick, and each kind's look in hand.
-        this.foliageErase = false;
+        // Foliage: what a click does (paint, recolor what grows there, pick its look, erase), how thick, and each kind's look in hand.
+        this.foliageAction = 'paint';
         this.foliageLevel = 7;
         this.foliageLook = {};
         this.bushSize = 1.6;
         this.bushVary = true;
+        // How tall a bush stands beside its width (1 round, up to 2.5 a column, down to 0.5 a mound).
+        this.bushTall = 1;
         this.bushColour = '';
         this.bushBloom = '';
         this._foliageStroke = null;
@@ -95,8 +118,21 @@ class TerrainManager {
         this.groundErase = false;
         this.groundLevel = 9;
         this.groundSoft = 0.4;
-        // 'brush' paints under the pointer; 'rect' fills the rectangle a drag spans.
+        // 'brush' paints under the pointer, 'line' from where the drag began to the pointer, 'rect' the rectangle a drag
+        // spans: filled, or (groundRectFill 'edge') its outline as wide as the brush. Levelling the ground under the paint is off.
         this.groundShape = 'brush';
+        this.groundRectFill = 'fill';
+        this.groundLevelUnder = false;
+        // The Path tool: the road in hand (any material, a tint, a scale), how wide (tiles), a crisp or soft edge,
+        // a freehand stroke, a straight line or a curve.
+        this.pathLook = TerrainManager.pathLookOf(TerrainManager.PATH_SURFACES[0]);
+        this.pathWidth = 3;
+        this.pathEdge = 'soft';
+        this.pathShape = 'brush';
+        // Whether a road laid levels the ground under it: smooth along it, flat across it, a shoulder into the land.
+        this.pathLevel = true;
+        // A curved road being clicked out: the ground's paint before it, its points, the ground type it is laid as.
+        this._pathCurve = null;
         this._groundStroke = null;
         // Dunes: where the wind blows toward, a ridge to the next, a crest's height, which field.
         this.dunes = { dir: 30, size: 10, height: 1.6, seed: 1, walkable: true };
@@ -111,7 +147,7 @@ class TerrainManager {
     /** A kind's look in hand: what the runtime grows it as, with the author's changes over it. */
     foliageLookOf(kind) {
         const base = (typeof Reactor3D !== 'undefined' && Reactor3D.FOLIAGE_LOOKS && Reactor3D.FOLIAGE_LOOKS[kind]) || {};
-        return Object.assign({ height: base.height, colour: base.colour, tip: base.tip, glow: base.glow || 0 }, this.foliageLook[kind] || {});
+        return Object.assign({ height: base.height, colour: base.colour, tip: base.tip, glow: base.glow || 0, vary: base.vary ?? 0.25, width: 1, lean: 1 }, this.foliageLook[kind] || {});
     }
 
     _t(key, params) { return window.I18n ? window.I18n.t(key, params) : key; }
@@ -189,8 +225,10 @@ class TerrainManager {
     }
 
     setMode(mode) {
-        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && !['drain', 'fill', 'look', 'river', 'ground', 'dunes', 'biome', 'surround', 'sky'].includes(mode) && !this.isFoliageMode(mode)) return;
+        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && !['drain', 'fill', 'look', 'river', 'ground', 'path', 'dunes', 'biome', 'surround', 'sky'].includes(mode) && !this.isFoliageMode(mode)) return;
         if (mode !== 'river') this.cancelRiver();
+        if (mode !== 'flatten') this._pickHeight = false;
+        if (mode !== 'path') this.cancelPath();
         this.mode = mode;
         if (mode !== 'look' && this.selectedWater) this.selectWater(null);
         const look = this.panel?.querySelector('.rr-terrain-look');
@@ -258,6 +296,8 @@ class TerrainManager {
         this._groundStroke = null;
         this.groundType = 0;
         this.cancelRiver();
+        // (Another map is open: the curve's saved paint was the last map's, and is not put back here.)
+        this._pathCurve = null;
         this._groundSnapshot = null;
         this._lookSnapshot = null;
         this._cliffSnapshot = null;
@@ -277,6 +317,7 @@ class TerrainManager {
         if (this._stroke || this._foliageStroke || this._groundStroke) this.endStroke();
         this.active = false;
         this.cancelRiver();
+        this.cancelPath();
         this.selectedWater = null;
         window.reactor?.mapEditor3D?.showWaterSelection?.(null);
         // Pour's preview goes with the tool; picked up again, it shows at once.
@@ -304,19 +345,30 @@ class TerrainManager {
         if (this.mode === 'river') return this.riverPoint(point);
         if (this.isFoliageMode()) return this.beginFoliage(point);
         if (this.mode === 'ground') return this.beginGround(point);
+        if (this.mode === 'path') return this.beginPath(point);
         // The biome, the border and the room panels have no brush.
         if (this.mode === 'biome' || this.mode === 'surround' || this.mode === 'sky') return false;
         if (this.mode === 'drain') {
             const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
             return this.drain(saved => elevation.removeWaterAt(map, cell.x, cell.y));
         }
+        // Pick: the next click on the ground gives Flatten its height, and changes nothing.
+        if (this.mode === 'flatten' && this._pickHeight) {
+            this.flattenHeight = Math.round(elevation.terrainHeightAt(map, point.x + 0.5, point.y + 0.5) * 100) / 100;
+            this.flattenFrom = 'height';
+            this._pickHeight = false;
+            window.reactor?.buildHotbar?.renderTerrainPanel?.();
+            return false;
+        }
         this.undoStack.push(this.groundSnapshot(map));
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        // Flatten levels to the ground under the first touch.
-        // Dunes are laid on the ground as the stroke found it.
-        this._stroke = { reference: elevation.terrainHeightAt(map, point.x + 0.5, point.y + 0.5), moved: false, last: null,
-            base: this.mode === 'dunes' ? this.undoStack[this.undoStack.length - 1].terrain : null };
+        // Flatten levels to the ground under the first touch, or to the height set. Dunes are laid on the ground as the stroke found it.
+        const reference = this.mode === 'flatten' && this.flattenFrom === 'height' ? Number(this.flattenHeight) || 0 : elevation.terrainHeightAt(map, point.x + 0.5, point.y + 0.5);
+        const shaped = this.mode === 'flatten' && this.flattenShape !== 'brush';
+        this._stroke = { reference, moved: false, last: null,
+            base: this.mode === 'dunes' || shaped ? this.undoStack[this.undoStack.length - 1].terrain : null,
+            shape: shaped ? { kind: this.flattenShape, start: { x: point.x + 0.5, y: point.y + 0.5 } } : null };
         return this.dab(point);
     }
 
@@ -334,7 +386,7 @@ class TerrainManager {
         const standing = elevation.waterAt(map, cell.x, cell.y);
         if (standing && standing.level >= basin.level - 1e-6) { this._flash('terrain.waterFull'); return false; }
         const saved = elevation.waterSnapshot(map);
-        if (!elevation.fillWaterAt(map, cell.x, cell.y, this.waterMaterial)) return false;
+        if (!elevation.fillWaterAt(map, cell.x, cell.y, this.liquidMaterial())) return false;
         // Poured as the liquid in hand: tar pours as tar.
         const poured = elevation.waterAt(map, cell.x, cell.y);
         if (poured) elevation.styleWaterRegion(map, poured, this.waterLook);
@@ -346,7 +398,7 @@ class TerrainManager {
     /** A sheet's look as the panel shows it, its unset values filled with water's. */
     lookOf(region) {
         return { reflect: region.reflect ?? 0, gloss: region.gloss ?? 0.85, tint: region.tint || '#ffffff', colour: region.colour || '',
-            clear: region.clear ?? 0.6, waves: region.waves ?? 1, glow: region.glow ?? 0 };
+            clear: region.clear ?? 0.6, waves: region.waves ?? 1, glow: region.glow ?? 0, material: region.material || this.waterMaterial };
     }
 
     /**
@@ -389,6 +441,24 @@ class TerrainManager {
         }
         this.undoStack.push({ water: this._lookSnapshot }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this._lookSnapshot = null;
+        this.announce(null, true); this.refreshStatus();
+        window.reactor?.mapEditor3D?.showWaterSelection?.(this.selectedWater);
+        return true;
+    }
+
+    /**
+     * The selected sheet raised or lowered to `level` (no higher than its rim, where it would spill): filled again
+     * from its deepest cell, its look kept. One undo step; the sheet stays selected.
+     */
+    setWaterLevel(level) {
+        const map = this.currentMap(), elevation = this.elevation(), region = this.selectedRegion();
+        if (!map || !elevation?.setWaterLevel || !region || !Number.isFinite(Number(level))) return false;
+        if (this._lookSnapshot) this.editLook({}, 'commit');
+        const saved = elevation.waterSnapshot(map);
+        const sheet = elevation.setWaterLevel(map, region, Number(level));
+        if (!sheet) { this._flashText(this._tt('The water cannot stand that low here.')); return false; }
+        this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.selectedWater = { x0: sheet.x0, y0: sheet.y0, x1: sheet.x1, y1: sheet.y1, level: sheet.level };
         this.announce(null, true); this.refreshStatus();
         window.reactor?.mapEditor3D?.showWaterSelection?.(this.selectedWater);
         return true;
@@ -446,6 +516,19 @@ class TerrainManager {
         return true;
     }
 
+    /** The image a liquid poured or laid wears: the look in hand's, else water's. */
+    liquidMaterial() { return (this.waterLook && this.waterLook.material) || this.waterMaterial; }
+
+    /** The last point of the course clicked out taken off (Backspace, or the panel's button). */
+    undoRiverPoint() {
+        if (!this._river || !this._river.points.length) return false;
+        this._river.points.pop();
+        if (!this._river.points.length) this._river = null;
+        this._showRiver(null);
+        window.reactor?.buildHotbar?.renderTerrainPanel?.();
+        return true;
+    }
+
     /** Whether a course is being clicked out. */
     riverPending() { return !!(this._river && this._river.points.length); }
 
@@ -467,7 +550,8 @@ class TerrainManager {
         if (!map || !elevation?.carveRiver) return false;
         if (points.length < 2) { this._flash('terrain.riverShort'); return false; }
         const saved = this.groundSnapshot(map);
-        const laid = elevation.carveRiver(map, points, Object.assign({ width: this.riverWidth, depth: this.riverDepth, material: this.waterMaterial }, this._riverLook()));
+        const laid = elevation.carveRiver(map, points, Object.assign({ width: this.riverWidth, depth: this.riverDepth, material: this.liquidMaterial() },
+            Math.abs((Number(this.riverFlow) ?? 1) - 1) > 1e-6 ? { flow: Math.max(0, Math.min(4, Number(this.riverFlow) || 0)) } : {}, this._riverLook()));
         if (!laid) { this._flash('terrain.riverNone'); return false; }
         this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this._seal(saved);
@@ -504,6 +588,7 @@ class TerrainManager {
         if (this.mode !== 'river' || !this.riverPending()) return false;
         if (event.key === 'Enter') { this.finishRiver(); return true; }
         if (event.key === 'Escape') { this.cancelRiver(); return true; }
+        if (event.key === 'Backspace') { this.undoRiverPoint(); return true; }
         return false;
     }
 
@@ -511,6 +596,7 @@ class TerrainManager {
     hoverAt(point) {
         const view = window.reactor?.mapEditor3D;
         if (this.mode === 'river') { if (this.riverPending()) this._showRiver(point ? [point.x + 0.5, point.y + 0.5] : null); return; }
+        if (this.mode === 'path') { this.pathHover(point); return; }
         if (this.mode !== 'fill' || !point) { if (this._preview) { view?.hideWaterGhost?.(); this._preview = null; } return; }
         const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
         if (this._preview && this._preview.x === cell.x && this._preview.y === cell.y) return;
@@ -522,9 +608,40 @@ class TerrainManager {
     // ---- Foliage ------------------------------------------------------------
 
     /** A foliage stroke starts: one undo step for the whole of it; the first dab lands at once. */
+    /** Erasing with a foliage brush (the Erase action). */
+    get foliageErase() { return this.foliageAction === 'erase'; }
+    set foliageErase(on) { this.foliageAction = on ? 'erase' : this.foliageAction === 'erase' || !this.foliageAction ? 'paint' : this.foliageAction; }
+
+    /**
+     * Pick: the look of what grows under a point (a bush's colors for the Bush) taken into hand, to paint more of it
+     * or recolor others like it; then back to Paint. False when nothing of the kind grows there.
+     */
+    pickFoliage(point) {
+        const map = this.currentMap(), foliage = this.foliage();
+        if (!map || !foliage || !point) return false;
+        const cx = point.x + 0.5, cy = point.y + 0.5;
+        if (this.mode === 'bush') {
+            const bush = foliage.bushAt(map, cx, cy, Math.max(1, this.radius * 0.5));
+            if (!bush) { this._flashText(this._tt('No bush there to pick.')); return false; }
+            this.bushColour = bush.colour || '';
+            this.bushBloom = bush.bloom || '';
+            if (bush.size) this.bushSize = bush.size;
+            this.bushTall = bush.tall || 1;
+        } else {
+            const look = foliage.lookAt(map, this.mode, Math.floor(cx), Math.floor(cy));
+            if (!look) { this._flashText(this._tt('Nothing of this kind grows there to pick.')); return false; }
+            this.foliageLook[this.mode] = look;
+        }
+        this.foliagePalette = null;
+        this.foliageAction = 'paint';
+        window.reactor?.buildHotbar?.renderFoliagePanel?.();
+        return true;
+    }
+
     beginFoliage(point) {
         const map = this.currentMap(), foliage = this.foliage();
         if (!map || !foliage || !point) return false;
+        if (this.foliageAction === 'pick' && this.mode !== TerrainManager.FOLIAGE_ERASER) { this.pickFoliage(point); return false; }
         this._foliageStroke = { saved: foliage.snapshot(map), region: null, last: null, travelled: 0 };
         return this.foliageDab(point, true);
     }
@@ -544,6 +661,12 @@ class TerrainManager {
             }
             if (foliage.removeBushes(map, cx, cy, this.radius)) join({ x0: Math.floor(cx - this.radius), y0: Math.floor(cy - this.radius), x1: Math.ceil(cx + this.radius), y1: Math.ceil(cy + this.radius) });
             stroke.last = { x: cx, y: cy };
+        } else if (this.mode === 'bush' && this.foliageAction === 'recolor') {
+            // The bushes the brush passes over take the leaves and blossom in hand.
+            const last = stroke.last, spacing = Math.max(0.35, this.radius * 0.3);
+            if (!first && last && Math.hypot(cx - last.x, cy - last.y) < spacing) return false;
+            if (foliage.recolorBushes(map, cx, cy, this.radius, { colour: this.bushColour, bloom: this.bushBloom })) changed = { x0: Math.floor(cx - this.radius - 3), y0: Math.floor(cy - this.radius - 3), x1: Math.ceil(cx + this.radius + 3), y1: Math.ceil(cy + this.radius + 3) };
+            stroke.last = { x: cx, y: cy };
         } else if (this.mode === 'bush') {
             if (this.foliageErase) {
                 if (foliage.removeBushes(map, cx, cy, this.radius * 0.5)) changed = { x0: Math.floor(cx - this.radius), y0: Math.floor(cy - this.radius), x1: Math.ceil(cx + this.radius), y1: Math.ceil(cy + this.radius) };
@@ -555,7 +678,7 @@ class TerrainManager {
                 if (!first && last && Math.hypot(cx - last.x, cy - last.y) < step) return false;
                 const vary = this.bushVary, r = vary && !first ? Math.random() * this.radius * 0.5 : 0, a = Math.random() * Math.PI * 2;
                 const size = vary ? this.bushSize * (0.75 + Math.random() * 0.5) : this.bushSize;
-                const bush = foliage.addBush(map, { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, size, colour: this.bushColour || undefined, bloom: this.bushBloom || undefined, tall: vary ? 0.85 + Math.random() * 0.35 : 1 });
+                const bush = foliage.addBush(map, { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, size, colour: this.bushColour || undefined, bloom: this.bushBloom || undefined, tall: Math.max(0.5, Math.min(2.5, (this.bushTall || 1) * (vary ? 0.85 + Math.random() * 0.35 : 1))) });
                 if (bush) changed = { x0: Math.floor(bush.x - bush.size), y0: Math.floor(bush.y - bush.size), x1: Math.ceil(bush.x + bush.size), y1: Math.ceil(bush.y + bush.size) };
                 stroke.last = { x: cx, y: cy };
             }
@@ -563,7 +686,10 @@ class TerrainManager {
             const last = stroke.last, spacing = Math.max(0.35, this.radius * 0.3);
             if (!first && last && Math.hypot(cx - last.x, cy - last.y) < spacing) return false;
             const look = this.foliageLook[this.mode] || {};
-            changed = foliage.paint(map, this.mode, cx, cy, { radius: this.radius, strength: this.strength, level: this.foliageLevel, erase: this.foliageErase, settings: look });
+            // Recolor moves what already grows under the brush to the look in hand; Paint and Erase change how thick it grows.
+            changed = this.foliageAction === 'recolor'
+                ? foliage.recolor(map, this.mode, cx, cy, { radius: this.radius, settings: look })
+                : foliage.paint(map, this.mode, cx, cy, { radius: this.radius, strength: this.strength, level: this.foliageLevel, erase: this.foliageErase, settings: look });
             stroke.last = { x: cx, y: cy };
         }
         if (!changed) return false;
@@ -623,7 +749,7 @@ class TerrainManager {
     addGroundType(source) {
         const index = this._groundStep((map, ground) => ground.addType(map, source));
         if (index >= 0) { this.groundType = index; this.groundErase = false; }
-        else if (index === -1) this._flashText(this._tt('A map holds eight ground types.'));
+        else if (index === -1) this._flashText(this._tt('A map holds {count} ground types. Remove one under Ground › Edit this ground, or paint with one the map has.').replace('{count}', this.ground()?.MAX || 64));
         return index;
     }
 
@@ -649,6 +775,61 @@ class TerrainManager {
         return removed;
     }
 
+    /**
+     * The type in hand (or, erasing, none) wherever rules hold, as paint-ground.cjs fills by rule: `maxSlope` and
+     * `minSlope` (rise per tile), `minHeight` and `maxHeight` (tiles), `water` ('near' within `waterReach` cells,
+     * 'away' beyond it) and `patchy` (0-1: the edge broken into natural patches). One undo step; the cells changed.
+     */
+    fillGroundWhere(rules = this.groundRules || {}) {
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null, elevation = this.elevation();
+        return this._groundStep((map, ground) => {
+            if (!R) return null;
+            const W = map.width, H = map.height;
+            const num = key => (rules[key] === '' || rules[key] === null || rules[key] === undefined || !Number.isFinite(Number(rules[key])) ? null : Number(rules[key]));
+            const height = (x, y) => (R.elevationAt ? R.elevationAt(map, x, y) : 0) + R.terrainHeightAt(map, x + 0.5, y + 0.5);
+            const slope = (x, y) => {
+                const a = R.terrainHeightAt(map, x, y), b = R.terrainHeightAt(map, x + 1, y), c = R.terrainHeightAt(map, x, y + 1), d = R.terrainHeightAt(map, x + 1, y + 1);
+                return Math.max(Math.abs(b - a + d - c) / 2, Math.abs(c - a + d - b) / 2);
+            };
+            // Cells from the nearest water, out to the reach asked (a breadth-first walk from every wet cell).
+            let wet = null;
+            const reach = Math.max(1, Math.min(48, num('waterReach') ?? 3));
+            if (rules.water === 'near' || rules.water === 'away') {
+                wet = new Float32Array(W * H).fill(Infinity);
+                const queue = [];
+                for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (elevation.waterAt(map, x, y)) { wet[y * W + x] = 0; queue.push(y * W + x); }
+                for (let head = 0; head < queue.length; head++) {
+                    const i = queue[head], x = i % W, y = (i - x) / W, d = wet[i] + 1;
+                    if (d > reach + 2) continue;
+                    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+                        if (nx < 0 || ny < 0 || nx >= W || ny >= H || wet[ny * W + nx] <= d) continue;
+                        wet[ny * W + nx] = d; queue.push(ny * W + nx);
+                    }
+                }
+            }
+            const patchy = Math.max(0, Math.min(1, num('patchy') || 0)), seed = (Number(rules.seed) || 1) * 13.37;
+            const hash = (x, y) => { const v = Math.sin(x * 127.1 + y * 311.7 + seed) * 43758.5453; return v - Math.floor(v); };
+            const noise = (x, y) => { const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+                return (hash(ix, iy) * (1 - sx) + hash(ix + 1, iy) * sx) * (1 - sy) + (hash(ix, iy + 1) * (1 - sx) + hash(ix + 1, iy + 1) * sx) * sy; };
+            const count = ground.fill(map, this.groundErase ? -1 : this.groundType, (x, y) => {
+                const s = num('maxSlope') !== null || num('minSlope') !== null ? slope(x, y) : 0;
+                if (num('maxSlope') !== null && s > num('maxSlope')) return false;
+                if (num('minSlope') !== null && s < num('minSlope')) return false;
+                if (num('maxHeight') !== null || num('minHeight') !== null) {
+                    const h = height(x, y);
+                    if (num('maxHeight') !== null && h > num('maxHeight')) return false;
+                    if (num('minHeight') !== null && h < num('minHeight')) return false;
+                }
+                const wander = patchy ? (noise(x / 7, y / 7) - 0.5) * 2 * patchy : 0;
+                if (rules.water === 'near' && wet[y * W + x] > reach * (1 + wander * 0.6)) return false;
+                if (rules.water === 'away' && wet[y * W + x] <= reach) return false;
+                if (patchy && rules.water !== 'near' && wander < 0) return false;
+                return true;
+            }, this.groundLevel);
+            return count || null;
+        }, false);
+    }
+
     /** The type in hand over the whole map (or, erasing, every type off it). */
     fillGround() {
         return this._groundStep((map, ground) => ground.fill(map, this.groundErase ? -1 : this.groundType, null, this.groundLevel) || null, false);
@@ -659,19 +840,395 @@ class TerrainManager {
         if (!map || !ground || !point) return false;
         if (this._groundSnapshot) this.editGroundType({}, 'commit');
         if (!this.groundErase && !this.groundTypeInHand()) { this._flashText(this._tt('Add a ground type first.')); return false; }
-        this._groundStroke = { saved: ground.snapshot(map), region: null, last: null,
-            start: this.groundShape === 'rect' ? { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) } : null };
+        this._groundStroke = { saved: ground.snapshot(map), region: null, last: null, trail: [],
+            start: this.groundShape === 'rect' ? { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) } : null,
+            line: this.groundShape === 'line' ? { x: point.x + 0.5, y: point.y + 0.5 } : null };
         return this.groundDab(point, true);
+    }
+
+    /** The Ground brush's dabs as paintMany takes them. */
+    groundBrush() { return { radius: this.radius, strength: this.strength, level: this.groundLevel, soft: this.groundSoft, erase: this.groundErase }; }
+
+    /** A straight stroke of ground from where the drag began to the pointer, laid again from the paint as it was. */
+    groundLine(point) {
+        const map = this.currentMap(), ground = this.ground(), stroke = this._groundStroke;
+        const at = { x: point.x + 0.5, y: point.y + 0.5 }, from = stroke.line;
+        if (stroke.last && Math.hypot(at.x - stroke.last.x, at.y - stroke.last.y) < 0.25) return false;
+        const before = stroke.last || from;
+        stroke.last = at;
+        ground.restore(map, stroke.saved);
+        const spacing = Math.max(0.35, this.radius * 0.3);
+        const changed = ground.paintMany(map, this.groundType, [[from.x, from.y]].concat(TerrainManager.strokePoints(from, at, spacing)), this.groundBrush());
+        stroke.trail = [from, at];
+        const reach = this.radius + 1;
+        const box = { x0: Math.floor(Math.min(from.x, at.x, before.x) - reach), y0: Math.floor(Math.min(from.y, at.y, before.y) - reach),
+            x1: Math.ceil(Math.max(from.x, at.x, before.x) + reach), y1: Math.ceil(Math.max(from.y, at.y, before.y) + reach) };
+        const seen = stroke.region;
+        stroke.region = seen ? { x0: Math.min(seen.x0, box.x0), y0: Math.min(seen.y0, box.y0), x1: Math.max(seen.x1, box.x1), y1: Math.max(seen.y1, box.y1) } : box;
+        this.announceGround(box, false);
+        return !!changed;
     }
 
     groundDab(point, first) {
         const map = this.currentMap(), ground = this.ground(), stroke = this._groundStroke;
         if (!map || !ground || !stroke) return false;
         if (stroke.start) return this.groundRect(point);
+        if (stroke.line) return this.groundLine(point);
         const cx = point.x + 0.5, cy = point.y + 0.5, last = stroke.last, spacing = Math.max(0.35, this.radius * 0.3);
         if (!first && last && Math.hypot(cx - last.x, cy - last.y) < spacing) return false;
+        // Dabs all the way from the last one, however fast the pointer went: a stroke is never a dotted line.
+        const points = TerrainManager.strokePoints(first ? null : last, { x: cx, y: cy }, spacing);
         stroke.last = { x: cx, y: cy };
-        const changed = ground.paint(map, this.groundType, cx, cy, { radius: this.radius, strength: this.strength, level: this.groundLevel, soft: this.groundSoft, erase: this.groundErase });
+        if (stroke.trail) stroke.trail.push({ x: cx, y: cy });
+        const changed = ground.paintMany(map, this.groundType, points, this.groundBrush());
+        if (!changed) return false;
+        const seen = stroke.region;
+        stroke.region = seen ? { x0: Math.min(seen.x0, changed.x0), y0: Math.min(seen.y0, changed.y0), x1: Math.max(seen.x1, changed.x1), y1: Math.max(seen.y1, changed.y1) } : changed;
+        this.announceGround(changed, false);
+        return true;
+    }
+
+    /** The points from `a` (excluded; null for none) to `b`, `spacing` apart: [[x, y]...]. */
+    static strokePoints(a, b, spacing) {
+        if (!a) return [[b.x, b.y]];
+        const d = Math.hypot(b.x - a.x, b.y - a.y), steps = Math.max(1, Math.ceil(d / Math.max(0.1, spacing))), out = [];
+        for (let i = 1; i <= steps; i++) out.push([a.x + (b.x - a.x) * i / steps, a.y + (b.y - a.y) * i / steps]);
+        return out;
+    }
+
+    /** A smooth line through `points` ({x, y}, tiles), a point every `spacing`: a Catmull-Rom curve, its ends where clicked. */
+    static splinePoints(points, spacing = 0.4) {
+        if (!points.length) return [];
+        if (points.length === 1) return [[points[0].x, points[0].y]];
+        const out = [[points[0].x, points[0].y]];
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[Math.max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[Math.min(points.length - 1, i + 2)];
+            const steps = Math.max(1, Math.ceil(Math.hypot(p2.x - p1.x, p2.y - p1.y) / Math.max(0.1, spacing)));
+            for (let k = 1; k <= steps; k++) {
+                const t = k / steps, t2 = t * t, t3 = t2 * t;
+                const at = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+                out.push([at(p0.x, p1.x, p2.x, p3.x), at(p0.y, p1.y, p2.y, p3.y)]);
+            }
+        }
+        return out;
+    }
+
+    /** Whether a curved road is being clicked out. */
+    pathPending() { return !!(this._pathCurve && this._pathCurve.points.length); }
+
+    /** A click on the ground in Curve: the next point of the road; it is drawn through every point so far. */
+    pathCurvePoint(point) {
+        const map = this.currentMap(), ground = this.ground();
+        if (!map || !ground || !point) return false;
+        if (!this._pathCurve) {
+            const index = this.pathTypeIndex();
+            if (index < 0) return false;
+            this._pathCurve = { saved: ground.snapshot(map), points: [], index, region: null };
+        }
+        // Two clicks on one spot lay it, as a river's do.
+        const at = { x: point.x + 0.5, y: point.y + 0.5 }, now = Date.now(), last = this._pathCurve.points[this._pathCurve.points.length - 1];
+        if (last && now - (this._pathCurve.clickedAt || 0) < 400 && Math.hypot(at.x - last.x, at.y - last.y) < 0.75) return this.finishPath();
+        this._pathCurve.clickedAt = now;
+        if (!last || Math.hypot(at.x - last.x, at.y - last.y) >= 0.5) this._pathCurve.points.push(at);
+        this._pathCurve.hover = null;
+        this._drawPathCurve(null);
+        window.reactor?.buildHotbar?.renderTerrainPanel?.();
+        return true;
+    }
+
+    /** Paint the curve as it stands (and on to the pointer, `extra`, while it is clicked out), from the paint before it. */
+    _drawPathCurve(extra) {
+        const map = this.currentMap(), ground = this.ground(), curve = this._pathCurve;
+        if (!map || !ground || !curve) return;
+        ground.restore(map, curve.saved);
+        const points = extra ? curve.points.concat([extra]) : curve.points;
+        const changed = ground.paintMany(map, curve.index, TerrainManager.splinePoints(points, Math.max(0.3, this.pathBrush().radius * 0.4)), this.pathBrush());
+        const was = curve.region;
+        const now = changed || was;
+        curve.region = changed && was ? { x0: Math.min(was.x0, changed.x0), y0: Math.min(was.y0, changed.y0), x1: Math.max(was.x1, changed.x1), y1: Math.max(was.y1, changed.y1) } : now;
+        // What the last drawing covered is drawn again too, so a shorter curve leaves nothing of a longer one.
+        this.announceGround(curve.region || null, false);
+    }
+
+    /** The pointer over the ground while a curve is clicked out: the road drawn on to it. */
+    pathHover(point) {
+        const curve = this._pathCurve;
+        if (!curve || !curve.points.length || !point) return;
+        const at = { x: point.x + 0.5, y: point.y + 0.5 };
+        if (curve.hover && Math.hypot(at.x - curve.hover.x, at.y - curve.hover.y) < 0.5) return;
+        curve.hover = at;
+        this._drawPathCurve(at);
+    }
+
+    /** Lay the curve clicked out: one undo step, the ground levelled under it when asked. */
+    finishPath() {
+        const curve = this._pathCurve;
+        if (!curve) return false;
+        this._pathCurve = null;
+        if (!curve.points.length) return false;
+        this._pathCurve = curve; this._drawPathCurve(null); this._pathCurve = null;
+        const paintStep = { groundPaint: curve.saved, groundSet: true };
+        const levelStep = this.pathLevel ? this.levelUnderPath(TerrainManager.splinePoints(curve.points, 0.5).map(([x, y]) => ({ x, y })), this.pathWidth) : null;
+        this.undoStack.push(levelStep ? { steps: [paintStep, levelStep] } : paintStep); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.announceFoliage(curve.region);
+        this._relayGroundCaps();
+        this.syncHistoryButtons();
+        window.reactor?.buildHotbar?.renderTerrainPanel?.();
+        return true;
+    }
+
+    /** Drop the curve being clicked out: the ground's paint as it was. */
+    cancelPath() {
+        const curve = this._pathCurve;
+        if (!curve) return false;
+        this._pathCurve = null;
+        const map = this.currentMap(), ground = this.ground();
+        if (map && ground) { ground.restore(map, curve.saved); this.announceGround(curve.region || null, false); }
+        window.reactor?.buildHotbar?.renderTerrainPanel?.();
+        return true;
+    }
+
+    /** Take the last point off the curve being clicked out (the curve goes when none is left). */
+    undoPathPoint() {
+        const curve = this._pathCurve;
+        if (!curve) return false;
+        curve.points.pop();
+        if (!curve.points.length) return this.cancelPath();
+        this._drawPathCurve(null);
+        window.reactor?.buildHotbar?.renderTerrainPanel?.();
+        return true;
+    }
+
+    /** Enter lays the curve, Escape drops it, Backspace takes off its last point. */
+    handlePathKey(event) {
+        if (this.mode !== 'path' || !this.pathPending()) return false;
+        if (event.key === 'Enter') { this.finishPath(); return true; }
+        if (event.key === 'Escape') { this.cancelPath(); return true; }
+        if (event.key === 'Backspace') { this.undoPathPoint(); return true; }
+        return false;
+    }
+
+    /**
+     * Level the ground under a road (its middle through `trail`, {x, y} in tiles): along it the ground's own rise
+     * smoothed, so it still climbs a hill but has no bumps; across it flat, `width` wide, with a shoulder as wide
+     * again that eases into the land beside it. Returns the sealed ground step (for the road's undo), or null.
+     */
+    levelUnderPath(trail, width) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !Array.isArray(trail) || !trail.length) return null;
+        const step = this.groundSnapshot(map);
+        const grid = elevation.ensureTerrain(map);
+        if (!grid) return null;
+        const W = map.width, H = map.height, stride = W + 1;
+        const heightAt = (x, z) => {
+            const cx = Math.max(0, Math.min(W, x)), cz = Math.max(0, Math.min(H, z));
+            const x0 = Math.min(W - 1, Math.floor(cx)), z0 = Math.min(H - 1, Math.floor(cz)), fx = cx - x0, fz = cz - z0;
+            const g = (i, j) => Number(grid[(z0 + j) * stride + x0 + i]) || 0;
+            return (g(0, 0) * (1 - fx) + g(1, 0) * fx) * (1 - fz) + (g(0, 1) * (1 - fx) + g(1, 1) * fx) * fz;
+        };
+        // The middle every half tile, its heights, then smoothed along the road.
+        const line = [];
+        for (let i = 0; i < trail.length; i++) {
+            const a = trail[i], b = trail[i + 1];
+            line.push(a);
+            if (!b) break;
+            const steps = Math.floor(Math.hypot(b.x - a.x, b.y - a.y) / 0.5);
+            for (let k = 1; k < steps; k++) line.push({ x: a.x + (b.x - a.x) * k / steps, y: a.y + (b.y - a.y) * k / steps });
+        }
+        const raw = line.map(p => heightAt(p.x, p.y));
+        const reach = Math.max(2, Math.round(width * 1.5 / 0.5));
+        const sums = [0]; for (const h of raw) sums.push(sums[sums.length - 1] + h);
+        const smooth = raw.map((_, i) => { const a = Math.max(0, i - reach), b = Math.min(raw.length, i + reach + 1); return (sums[b] - sums[a]) / (b - a); });
+        const half = Math.max(0.5, width / 2), shoulder = Math.max(1, width / 2), far = half + shoulder;
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const p of line) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.y); z1 = Math.max(z1, p.y); }
+        const vx0 = Math.max(0, Math.floor(x0 - far)), vx1 = Math.min(W, Math.ceil(x1 + far)), vz0 = Math.max(0, Math.floor(z0 - far)), vz1 = Math.min(H, Math.ceil(z1 + far));
+        let moved = false;
+        for (let z = vz0; z <= vz1; z++) for (let x = vx0; x <= vx1; x++) {
+            // The nearest point of the road's middle: its smoothed height, and how far off it this corner is.
+            let best = Infinity, target = 0;
+            for (let i = 0; i < line.length; i++) { const d = (line[i].x - x) ** 2 + (line[i].y - z) ** 2; if (d < best) { best = d; target = smooth[i]; } }
+            const d = Math.sqrt(best);
+            if (d >= far) continue;
+            const t = d <= half ? 1 : 1 - (d - half) / shoulder, f = t * t * (3 - 2 * t);
+            const i = z * stride + x, was = Number(grid[i]) || 0, now = Math.round((was + (target - was) * f) * 1000) / 1000;
+            if (now !== was) { grid[i] = now; moved = true; }
+        }
+        if (!moved) return null;
+        if (!elevation.hasTerrain(map)) elevation.clearTerrain(map);
+        this._seal(step);
+        const region = { x0: vx0, x1: vx1, z0: vz0, z1: vz1 };
+        this.announce(region);
+        if (!this.refitWater() && this._reachesWater(region)) this.announce(null, true);
+        this._relayPieces(region);
+        return step;
+    }
+
+    /**
+     * Level the ground under a stroke of the Ground tool: a filled rectangle flat at its own average height, an outline
+     * or a line or brush stroke as a road along it (levelUnderPath). Returns the sealed step, or null.
+     */
+    levelUnderGround(stroke) {
+        if (stroke.rect) {
+            const r = stroke.rect, band = Math.max(1, Math.round(this.radius));
+            if (this.groundRectFill !== 'edge') return this.levelUnderArea(r);
+            // Round the edge's middle, closed.
+            const m = band / 2, a = { x: r.x0 + m, y: r.y0 + m }, b = { x: r.x1 + 1 - m, y: r.y0 + m }, c = { x: r.x1 + 1 - m, y: r.y1 + 1 - m }, d = { x: r.x0 + m, y: r.y1 + 1 - m };
+            return this.levelUnderPath([a, b, c, d, a], band);
+        }
+        return stroke.trail && stroke.trail.length ? this.levelUnderPath(stroke.trail, Math.max(1, this.radius * 2)) : null;
+    }
+
+    /** Level a rectangle of cells flat at its average height, easing back into the land over a shoulder. The sealed step, or null. */
+    levelUnderArea(rect, shoulder = 2) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !rect) return null;
+        const step = this.groundSnapshot(map);
+        const grid = elevation.ensureTerrain(map);
+        if (!grid) return null;
+        const W = map.width, H = map.height, stride = W + 1;
+        // Its corners run from x0 to x1 + 1: the target is their mean.
+        let sum = 0, n = 0;
+        for (let z = rect.y0; z <= rect.y1 + 1; z++) for (let x = rect.x0; x <= rect.x1 + 1; x++) { sum += Number(grid[z * stride + x]) || 0; n++; }
+        const target = n ? sum / n : 0;
+        const vx0 = Math.max(0, rect.x0 - shoulder), vx1 = Math.min(W, rect.x1 + 1 + shoulder), vz0 = Math.max(0, rect.y0 - shoulder), vz1 = Math.min(H, rect.y1 + 1 + shoulder);
+        let moved = false;
+        for (let z = vz0; z <= vz1; z++) for (let x = vx0; x <= vx1; x++) {
+            const dx = Math.max(rect.x0 - x, 0, x - (rect.x1 + 1)), dz = Math.max(rect.y0 - z, 0, z - (rect.y1 + 1)), d = Math.hypot(dx, dz);
+            if (d >= shoulder) continue;
+            const t = 1 - d / shoulder, f = t * t * (3 - 2 * t);
+            const i = z * stride + x, was = Number(grid[i]) || 0, now = Math.round((was + (target - was) * f) * 1000) / 1000;
+            if (now !== was) { grid[i] = now; moved = true; }
+        }
+        if (!moved) return null;
+        if (!elevation.hasTerrain(map)) elevation.clearTerrain(map);
+        this._seal(step);
+        const region = { x0: vx0, x1: vx1, z0: vz0, z1: vz1 };
+        this.announce(region);
+        if (!this.refitWater() && this._reachesWater(region)) this.announce(null, true);
+        this._relayPieces(region);
+        return step;
+    }
+
+    /**
+     * Flatten's Line and Rectangle: from the ground as the stroke found it, the corners in the shape (a Line as wide
+     * as the brush, a Rectangle between the cells dragged across) made level at the stroke's height, a shoulder
+     * half the brush wide easing into the land round it. Laid again as the pointer moves.
+     */
+    flattenShapeAt(point) {
+        const map = this.currentMap(), elevation = this.elevation(), stroke = this._stroke;
+        const at = { x: point.x + 0.5, y: point.y + 0.5 }, start = stroke.shape.start;
+        if (stroke.last && Math.abs(stroke.last.x - point.x) < 0.25 && Math.abs(stroke.last.y - point.y) < 0.25) return false;
+        stroke.last = { x: point.x, y: point.y };
+        elevation.restoreTerrain(map, stroke.base);
+        const grid = elevation.ensureTerrain(map);
+        if (!grid) return false;
+        const W = map.width, H = map.height, stride = W + 1, target = stroke.reference;
+        const shoulder = Math.max(1, this.radius / 2);
+        let distance, box;
+        if (stroke.shape.kind === 'rect') {
+            // Corner to corner of the cells under the two ends, whole cells.
+            const x0 = Math.floor(Math.min(start.x, at.x)), x1 = Math.floor(Math.max(start.x, at.x)) + 1, z0 = Math.floor(Math.min(start.y, at.y)), z1 = Math.floor(Math.max(start.y, at.y)) + 1;
+            distance = (x, z) => Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(z0 - z, 0, z - z1));
+            box = { x0, x1, z0, z1 };
+        } else {
+            const half = Math.max(0.5, this.radius), dx = at.x - start.x, dz = at.y - start.y, len2 = dx * dx + dz * dz;
+            distance = (x, z) => { const t = len2 ? Math.max(0, Math.min(1, ((x - start.x) * dx + (z - start.y) * dz) / len2)) : 0; return Math.max(0, Math.hypot(x - start.x - t * dx, z - start.y - t * dz) - half); };
+            box = { x0: Math.floor(Math.min(start.x, at.x) - half), x1: Math.ceil(Math.max(start.x, at.x) + half), z0: Math.floor(Math.min(start.y, at.y) - half), z1: Math.ceil(Math.max(start.y, at.y) + half) };
+        }
+        const vx0 = Math.max(0, Math.floor(box.x0 - shoulder)), vx1 = Math.min(W, Math.ceil(box.x1 + shoulder)), vz0 = Math.max(0, Math.floor(box.z0 - shoulder)), vz1 = Math.min(H, Math.ceil(box.z1 + shoulder));
+        for (let z = vz0; z <= vz1; z++) for (let x = vx0; x <= vx1; x++) {
+            const d = distance(x, z);
+            if (d >= shoulder) continue;
+            const t = 1 - d / shoulder, f = t * t * (3 - 2 * t), i = z * stride + x, was = Number(grid[i]) || 0;
+            grid[i] = Math.round((was + (target - was) * f) * 1000) / 1000;
+        }
+        const region = { x0: vx0, x1: vx1, z0: vz0, z1: vz1 }, seen = stroke.region;
+        stroke.region = seen ? { x0: Math.min(seen.x0, region.x0), x1: Math.max(seen.x1, region.x1), z0: Math.min(seen.z0, region.z0), z1: Math.max(seen.z1, region.z1) } : region;
+        stroke.moved = true;
+        this.announce(stroke.region);
+        return true;
+    }
+
+    /** A road's look as the Path tool holds it: `{ material, tint, scale, name }` (tint '' for none, scale null for the material's own). */
+    static pathLookOf(source) {
+        const tint = String(source && source.tint || '').toLowerCase();
+        const scale = Number(source && source.scale);
+        return { material: String(source && source.material || 'Dirt'), tint: /^#[0-9a-f]{6}$/.test(tint) && tint !== '#ffffff' ? tint : '',
+            scale: Number.isFinite(scale) && scale > 0 ? scale : null, name: String(source && source.name || '') };
+    }
+
+    /** Whether a ground type (or a preset) looks as the road in hand: the same material, tint and scale. */
+    static samePathLook(a, b) {
+        const x = TerrainManager.pathLookOf(a), y = TerrainManager.pathLookOf(b);
+        return x.material === y.material && x.tint === y.tint && x.scale === y.scale;
+    }
+
+    /** Take a road's look into hand: a preset, one of the map's grounds, or a change to the material, tint or scale. */
+    setPathLook(patch) {
+        this.pathLook = TerrainManager.pathLookOf(Object.assign({}, this.pathLook, patch || {}));
+        // A look changed by hand is no longer the preset or ground it came from: it is named after its material.
+        if (patch && !('name' in patch)) this.pathLook.name = '';
+        return this.pathLook;
+    }
+
+    /**
+     * The ground type the Path tool paints the road in hand as: a ground of the map that looks the same, else one made
+     * now (bare). Roads already laid keep their own look. -1 when it cannot be (the map holds as many grounds as it may).
+     */
+    pathTypeIndex() {
+        const look = this.pathLook || TerrainManager.pathLookOf(TerrainManager.PATH_SURFACES[0]);
+        const found = this.groundTypes().findIndex(type => TerrainManager.samePathLook(type, look));
+        if (found >= 0) return found;
+        const preset = TerrainManager.PATH_SURFACES.find(surface => TerrainManager.samePathLook(surface, look));
+        const taken = new Set(this.groundTypes().map(type => type.name || type.material));
+        let name = look.name || (preset ? preset.name : look.material + ' road');
+        for (let n = 2; taken.has(name); n++) name = (look.name || (preset ? preset.name : look.material + ' road')) + ' ' + n;
+        const before = this.groundType;
+        const index = this.addGroundType({ name, material: look.material, tint: look.tint, scale: look.scale, bare: true });
+        if (index < 0) this.groundType = before;
+        return index;
+    }
+
+    /** The Path tool's brush: half its width, a whole road (full strength and coverage), a crisp or a soft edge. */
+    pathBrush() { return { radius: Math.max(0.5, this.pathWidth / 2), strength: 1, level: 9, soft: this.pathEdge === 'crisp' ? 0.12 : 0.5 }; }
+
+    /**
+     * Paint a road: a freehand stroke laid continuously along the drag, or (Line) a straight one from where the drag
+     * began to the pointer, laid again from the ground as it was as the pointer moves. One undo step.
+     */
+    beginPath(point) {
+        const map = this.currentMap(), ground = this.ground();
+        if (!map || !ground || !point) return false;
+        if (!this.hasGroundFloor()) { this._flashText(this._tt('This map has no floor to paint over.')); return false; }
+        if (this.pathShape === 'curve') return this.pathCurvePoint(point);
+        const index = this.pathTypeIndex();
+        if (index < 0) return false;
+        const at = { x: point.x + 0.5, y: point.y + 0.5 };
+        this._groundStroke = { saved: ground.snapshot(map), region: null, last: null, path: { index, start: this.pathShape === 'line' ? at : null, trail: [at] } };
+        return this.pathDab(point, true);
+    }
+
+    pathDab(point, first) {
+        const map = this.currentMap(), ground = this.ground(), stroke = this._groundStroke;
+        if (!map || !ground || !stroke || !stroke.path) return false;
+        const at = { x: point.x + 0.5, y: point.y + 0.5 }, brush = this.pathBrush(), spacing = Math.max(0.3, brush.radius * 0.4);
+        let changed;
+        if (stroke.path.start) {
+            if (!first && stroke.last && Math.hypot(at.x - stroke.last.x, at.y - stroke.last.y) < 0.25) return false;
+            ground.restore(map, stroke.saved);
+            const from = stroke.path.start;
+            changed = ground.paintMany(map, stroke.path.index, [[from.x, from.y]].concat(TerrainManager.strokePoints(from, at, spacing)), brush);
+            const reach = brush.radius + 1, line = { x0: Math.floor(Math.min(from.x, at.x, stroke.last ? stroke.last.x : at.x) - reach), y0: Math.floor(Math.min(from.y, at.y, stroke.last ? stroke.last.y : at.y) - reach),
+                x1: Math.ceil(Math.max(from.x, at.x, stroke.last ? stroke.last.x : at.x) + reach), y1: Math.ceil(Math.max(from.y, at.y, stroke.last ? stroke.last.y : at.y) + reach) };
+            changed = changed ? { x0: Math.min(changed.x0, line.x0), y0: Math.min(changed.y0, line.y0), x1: Math.max(changed.x1, line.x1), y1: Math.max(changed.y1, line.y1) } : line;
+        } else {
+            if (!first && stroke.last && Math.hypot(at.x - stroke.last.x, at.y - stroke.last.y) < spacing) return false;
+            changed = ground.paintMany(map, stroke.path.index, TerrainManager.strokePoints(first ? null : stroke.last, at, spacing), brush);
+        }
+        stroke.last = at;
+        // The road's middle, for levelling the ground under it when it is laid: the line's two ends, or the drag.
+        if (stroke.path.start) stroke.path.trail = [stroke.path.start, at]; else stroke.path.trail.push(at);
         if (!changed) return false;
         const seen = stroke.region;
         stroke.region = seen ? { x0: Math.min(seen.x0, changed.x0), y0: Math.min(seen.y0, changed.y0), x1: Math.max(seen.x1, changed.x1), y1: Math.max(seen.y1, changed.y1) } : changed;
@@ -687,7 +1244,11 @@ class TerrainManager {
         stroke.end = end;
         const rect = { x0: Math.min(stroke.start.x, end.x), y0: Math.min(stroke.start.y, end.y), x1: Math.max(stroke.start.x, end.x), y1: Math.max(stroke.start.y, end.y) };
         ground.restore(map, stroke.saved);
-        const count = ground.fill(map, this.groundErase ? -1 : this.groundType, (x, y) => x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1, this.groundLevel);
+        // Filled, or its outline: a band along the edges as wide as the brush.
+        const band = Math.max(1, Math.round(this.radius));
+        const inside = (x, y) => x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1;
+        const onEdge = (x, y) => inside(x, y) && (x < rect.x0 + band || x > rect.x1 - band || y < rect.y0 + band || y > rect.y1 - band);
+        const count = ground.fill(map, this.groundErase ? -1 : this.groundType, this.groundRectFill === 'edge' ? onEdge : inside, this.groundLevel);
         const was = stroke.rect || rect;
         stroke.rect = rect;
         if (count || stroke.region) stroke.region = stroke.region
@@ -715,7 +1276,11 @@ class TerrainManager {
         const stroke = this._groundStroke;
         this._groundStroke = null;
         if (!stroke || !stroke.region) return;
-        this.undoStack.push({ groundPaint: stroke.saved, groundSet: true }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        const paintStep = { groundPaint: stroke.saved, groundSet: true };
+        // A road levels the ground under it, the same undo step as its paint.
+        const levelStep = stroke.path ? (this.pathLevel ? this.levelUnderPath(stroke.path.trail, this.pathWidth) : null)
+            : this.groundLevelUnder && !this.groundErase ? this.levelUnderGround(stroke) : null;
+        this.undoStack.push(levelStep ? { steps: [paintStep, levelStep] } : paintStep); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         // What grows follows the ground: a bare type clears the foliage drawn on it.
         this.announceFoliage(stroke.region);
         // Rocks capped with the ground wear what is painted under them.
@@ -749,11 +1314,15 @@ class TerrainManager {
      * map and in hand recolored, the water colored. One undo step. Heights are not touched.
      */
     applyBiome(key, replace = false) {
-        const biome = TerrainManager.BIOMES[key], map = this.currentMap(), ground = this.ground(), elevation = this.elevation(), foliage = this.foliage();
+        // What else a biome changes, as its panel's switches say: the plants already planted, the water, the cliffs.
+        const also = Object.assign({ plants: true, water: true, cliff: true }, this.biomeAlso || {});
+        // A built-in biome by its key, or one saved in the project ('custom:<name>').
+        const biome = TerrainManager.BIOMES[key] || this.customBiome(key), map = this.currentMap(), ground = this.ground(), elevation = this.elevation(), foliage = this.foliage();
         if (!biome || !map || !ground || !elevation) return false;
         this._settleGathered();
         const saved = { biome: true, ground: ground.snapshot(map), foliage: foliage ? foliage.snapshot(map) : null, room: map.reactor3d && map.reactor3d.room ? JSON.parse(JSON.stringify(map.reactor3d.room)) : null, water: elevation.waterSnapshot(map) };
-        const preset = name => TerrainManager.GROUND_PRESETS.find(entry => entry.name === name);
+        // A ground named from the presets, or (a saved biome's) given whole.
+        const preset = entry => (entry && typeof entry === 'object' ? entry : TerrainManager.GROUND_PRESETS.find(other => other.name === entry));
         let types = replace ? [] : ground.types(map);
         // A biome's own ground from an earlier pick gives way to this one's.
         types = types.filter(type => !type.biome);
@@ -761,18 +1330,18 @@ class TerrainManager {
         const wanted = [];
         if (biome.base) wanted.push(Object.assign({}, preset(biome.base), { paint: ground.encode(new Uint8Array(size).fill(9)), biome: true }));
         const list = wanted.concat(types);
-        for (const name of biome.grounds) {
+        for (const name of biome.grounds || []) {
             const entry = preset(name);
             if (entry && list.length < ground.MAX && !list.some(type => (type.name || type.material) === entry.name)) list.push(Object.assign({}, entry, { paint: '' }));
         }
         map.reactor3d = map.reactor3d || { version: 1, mode: '3d' };
         const records = list.map(type => { const record = ground.typeRecord(type); if (record && type.biome) record.biome = true; return record; }).filter(Boolean);
         if (records.length) map.reactor3d.ground = { types: records }; else delete map.reactor3d.ground;
-        if (map.reactor3d.room && typeof map.reactor3d.room === 'object') {
+        if (also.cliff && map.reactor3d.room && typeof map.reactor3d.room === 'object') {
             map.reactor3d.room = Object.assign({}, map.reactor3d.room);
             if (biome.cliffTint) map.reactor3d.room.cliffTint = biome.cliffTint; else delete map.reactor3d.room.cliffTint;
         }
-        this.applyFoliagePalette(biome.palette, false);
+        this.applyFoliagePalette(biome.palette, false, also.plants);
         // An alien biome's own plants, in patches, where that kind does not grow yet.
         if (foliage && biome.plants) {
             const hash = (x, y, seed) => { const v = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453; return v - Math.floor(v); };
@@ -787,11 +1356,93 @@ class TerrainManager {
                 }, level, this.foliageLook[kind] || {});
             });
         }
-        if (biome.water && elevation.hasWater?.(map)) for (const sheet of elevation.water(map)) elevation.styleWaterRegion(map, sheet, Object.assign(this.lookOf(sheet), { colour: biome.water }));
+        if (also.water && biome.water && elevation.hasWater?.(map)) for (const sheet of elevation.water(map)) elevation.styleWaterRegion(map, sheet, Object.assign(this.lookOf(sheet), { colour: biome.water }));
         this.groundType = 0;
         this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this._announceAll();
         return true;
+    }
+
+    // ---- Biomes of the author's own, saved in the project (data/Biomes.json) --
+
+    /** The file a project's own biomes are kept in, or null without a project. */
+    _biomeFile() {
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        if (!project?.path || typeof require !== 'function') return null;
+        return require('path').join(project.path, 'data', 'Biomes.json');
+    }
+
+    /** The project's own biomes, as saved: `[{ name, base, grounds, cliffTint, palette, water }]`. */
+    customBiomes() {
+        const file = this._biomeFile();
+        if (!file) return [];
+        if (this._biomesRead && this._biomesRead.file === file) return this._biomesRead.list;
+        let list = [];
+        try {
+            const fs = require('fs');
+            if (fs.existsSync(file)) { const data = JSON.parse(fs.readFileSync(file, 'utf8')); list = Array.isArray(data?.biomes) ? data.biomes.filter(b => b && typeof b.name === 'string') : []; }
+        } catch (error) { console.warn('data/Biomes.json could not be read.', error); }
+        this._biomesRead = { file, list };
+        return list;
+    }
+
+    /** A saved biome by its key ('custom:<name>'), or null. */
+    customBiome(key) {
+        if (typeof key !== 'string' || !key.startsWith('custom:')) return null;
+        return this.customBiomes().find(biome => biome.name === key.slice(7)) || null;
+    }
+
+    _writeBiomes(list) {
+        const file = this._biomeFile();
+        if (!file) return false;
+        const text = JSON.stringify({ biomes: list }, null, 2) + '\n';
+        try {
+            const write = typeof window !== 'undefined' && window.RRWriteFileAtomicSync;
+            if (write) write(file, text); else require('fs').writeFileSync(file, text);
+        } catch (error) { console.warn('data/Biomes.json could not be written.', error); return false; }
+        this._biomesRead = { file, list };
+        return true;
+    }
+
+    /**
+     * This map's look as a biome of the project's own, under `name` (a name already used is replaced): the ground
+     * laid over the whole floor, the grounds painted, the cliff's tint, each plant kind's colors as they grow here
+     * (else as in hand), the bushes' and the water's color. The key it is applied by, or null.
+     */
+    saveBiome(name) {
+        const map = this.currentMap(), ground = this.ground(), elevation = this.elevation(), foliage = this.foliage();
+        const title = String(name || '').trim().slice(0, 40);
+        if (!map || !ground || !elevation || !title) return null;
+        const strip = type => { const record = ground.typeRecord(Object.assign({}, type, { paint: '' })); if (record) { delete record.paint; delete record.biome; } return record; };
+        const types = ground.types(map);
+        const base = types.find(type => type.biome) || null;
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        const layers = (foliage && foliage.snapshot(map)?.layers) || [];
+        const palette = {};
+        for (const kind of TerrainManager.FOLIAGE_MODES) {
+            if (kind === 'bush') continue;
+            const grown = layers.find(layer => layer.kind === kind), own = this.foliageLookOf(kind), look = (R && R.FOLIAGE_LOOKS && R.FOLIAGE_LOOKS[kind]) || {};
+            palette[kind] = [(grown && grown.colour) || own.colour || look.colour || '#4a7a30', (grown && grown.tip) || own.tip || look.tip || '#b9c862'];
+            const colours = (grown && grown.colours) || (this.foliageLook[kind] && this.foliageLook[kind].colours);
+            if (kind === 'flowers' && colours) palette.petals = colours.slice();
+            if (kind === 'bulbs' && colours) palette.bulbPetals = colours.slice();
+        }
+        const bush = (foliage && foliage.bushes(map)[0]) || null;
+        palette.bush = [(bush && bush.colour) || this.bushColour || '', (bush && bush.bloom) || this.bushBloom || ''];
+        const sheet = elevation.water(map).find(region => region.colour);
+        const room = map.reactor3d && map.reactor3d.room;
+        const record = { name: title, base: base ? strip(base) : null, grounds: types.filter(type => !type.biome).map(strip).filter(Boolean),
+            cliffTint: (room && room.cliffTint) || '', palette, water: sheet ? sheet.colour : '' };
+        const list = this.customBiomes().filter(biome => biome.name !== title).concat([record]);
+        return this._writeBiomes(list) ? 'custom:' + title : null;
+    }
+
+    /** Take a saved biome out of the project. */
+    removeBiome(key) {
+        const own = this.customBiome(key);
+        if (!own) return false;
+        if (this.biome === key) this.biome = null;
+        return this._writeBiomes(this.customBiomes().filter(biome => biome !== own));
     }
 
     // ---- The steep ground and the land past the border ---------------------
@@ -849,7 +1500,8 @@ class TerrainManager {
     roomLook() {
         const map = this.currentMap(), elevation = this.elevation();
         const room = elevation && map ? elevation.room(map) : null;
-        return room ? { height: room.height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY } : null;
+        return room ? { height: room.height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY,
+            floorTint: room.floorTint || '', floorScale: room.floorScale || 1 } : null;
     }
 
     _writeRoomLook(map, look) {
@@ -882,7 +1534,7 @@ class TerrainManager {
     /** The room changed: a sky's drift alone moves at once in the view; a picture or the height builds the view again. */
     announceRoom(before) {
         this.syncHistoryButtons();
-        const after = this.roomLook(), only = before && after && ['height', 'floor', 'walls', 'ceiling', 'sky'].every(key => before[key] === after[key]);
+        const after = this.roomLook(), only = before && after && ['height', 'floor', 'walls', 'ceiling', 'sky', 'floorTint', 'floorScale'].every(key => before[key] === after[key]);
         const mapEditor = window.reactor?.mapEditor;
         if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
         if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
@@ -968,30 +1620,57 @@ class TerrainManager {
         if (typeof document !== 'undefined' && typeof CustomEvent === 'function') document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id } }));
     }
 
+    /** A palette's look for one kind (a bush: `{ colour, bloom }`), as a quick color: what is painted next, nothing already planted. */
+    static paletteLook(key, kind) {
+        const palette = TerrainManager.FOLIAGE_PALETTES[key];
+        if (!palette || !palette[kind]) return null;
+        if (kind === 'bush') return { colour: palette.bush[0], bloom: palette.bush[1] || '' };
+        const look = { colour: palette[kind][0], tip: palette[kind][1] };
+        if (kind === 'flowers') look.colours = palette.petals.slice();
+        if (kind === 'bulbs') look.colours = palette.bulbPetals.slice();
+        if (palette.glow) look.glow = palette.glow;
+        return look;
+    }
+
+    /** Take a palette's colors into hand for one kind only: the plants already on the map keep theirs. */
+    takePaletteLook(key, kind = this.mode) {
+        const look = TerrainManager.paletteLook(key, kind);
+        if (!look) return false;
+        if (kind === 'bush') { this.bushColour = look.colour; this.bushBloom = look.bloom; return true; }
+        // Height and the like stay as they were; the colors (and a glowing palette's glow) are the palette's.
+        const own = Object.assign({}, this.foliageLook[kind] || {});
+        delete own.colours; delete own.glow;
+        this.foliageLook[kind] = Object.assign(own, look);
+        return true;
+    }
+
     /**
      * A foliage palette: every kind's colors in hand, and (unless `step` is false, when a biome
      * gathers the step) the layers and bushes already on the map recolored as one undo step.
      */
-    applyFoliagePalette(key, step = true) {
-        const palette = TerrainManager.FOLIAGE_PALETTES[key], map = this.currentMap(), foliage = this.foliage();
+    applyFoliagePalette(key, step = true, existing = true) {
+        // A palette by its name, or one given whole (a saved biome's).
+        const palette = key && typeof key === 'object' ? key : TerrainManager.FOLIAGE_PALETTES[key], map = this.currentMap(), foliage = this.foliage();
         if (!palette) return false;
         // A palette that glows lights every kind's tips; any other leaves each kind its own glow.
         const dress = (kind, target) => {
             target.colour = palette[kind][0]; target.tip = palette[kind][1];
-            if (kind === 'flowers') target.colours = palette.petals.slice();
-            if (kind === 'bulbs') target.colours = palette.bulbPetals.slice();
+            if (kind === 'flowers' && Array.isArray(palette.petals)) target.colours = palette.petals.slice();
+            if (kind === 'bulbs' && Array.isArray(palette.bulbPetals)) target.colours = palette.bulbPetals.slice();
             if (palette.glow) target.glow = palette.glow; else delete target.glow;
             return target;
         };
         for (const kind of TerrainManager.FOLIAGE_MODES) if (palette[kind] && kind !== 'bush') this.foliageLook[kind] = dress(kind, Object.assign({}, this.foliageLook[kind] || {}));
-        this.bushColour = palette.bush[0];
-        this.bushBloom = palette.bush[1] || '';
-        this.foliagePalette = key;
-        if (!map || !foliage || !foliage.hasFoliage(map)) return true;
+        const bushLook = Array.isArray(palette.bush) ? palette.bush : ['', ''];
+        this.bushColour = bushLook[0] || '';
+        this.bushBloom = bushLook[1] || '';
+        this.foliagePalette = typeof key === 'string' ? key : null;
+        // `existing` false: the colours in hand only; what is planted keeps its own.
+        if (!existing || !map || !foliage || !foliage.hasFoliage(map)) return true;
         const saved = foliage.snapshot(map), data = foliage.snapshot(map);
         // Layers of one kind the palette has made alike are one layer again when next painted; here they only change color.
         for (const layer of data.layers || []) if (palette[layer.kind]) dress(layer.kind, layer);
-        for (const bush of data.bushes || []) { bush.colour = palette.bush[0]; if (palette.bush[1]) bush.bloom = palette.bush[1]; else delete bush.bloom; }
+        if (Array.isArray(palette.bush)) for (const bush of data.bushes || []) { if (palette.bush[0]) bush.colour = palette.bush[0]; else delete bush.colour; if (palette.bush[1]) bush.bloom = palette.bush[1]; else delete bush.bloom; }
         foliage.restore(map, data);
         if (step) {
             this.undoStack.push({ foliage: saved, foliageSet: true }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
@@ -1001,6 +1680,7 @@ class TerrainManager {
     }
 
     paintAt(point) {
+        if (this._groundStroke && this._groundStroke.path) return point ? this.pathDab(point, false) : false;
         if (this._groundStroke) return point ? this.groundDab(point, false) : false;
         if (this._foliageStroke) return point ? this.foliageDab(point, false) : false;
         if (!this._stroke || !point) return false;
@@ -1013,9 +1693,10 @@ class TerrainManager {
     dab(point) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !point || !this._stroke) return false;
+        if (this._stroke.shape) return this.flattenShapeAt(point);
         const changed = elevation.paintTerrain(map, point.x + 0.5, point.y + 0.5, {
             mode: this.mode, radius: this.radius, strength: this.strength, reference: this._stroke.reference,
-            base: this._stroke.base, dunes: this.dunes
+            base: this._stroke.base, dunes: this.dunes, steep: this.mode === 'lower' && this.lowerSteep
         });
         this._stroke.last = { x: point.x, y: point.y };
         if (changed) {
@@ -1143,6 +1824,21 @@ class TerrainManager {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !from.length) return;
         const entry = from.pop();
+        // A step made of steps (a road and the ground levelled under it): undone last first, redone first first.
+        if (entry && Array.isArray(entry.steps)) {
+            const undoing = this._undoing ?? (from === this.undoStack);
+            const order = undoing ? entry.steps.slice().reverse() : entry.steps.slice();
+            const done = [];
+            for (const step of order) {
+                const one = [step], back = [];
+                const outer = this._undoing;
+                this._undoing = undoing;
+                try { this._swap(one, back); } finally { this._undoing = outer; }
+                done.push(back[0]);
+            }
+            to.push({ steps: undoing ? done.reverse() : done });
+            return;
+        }
         if (entry && entry.biome) {
             const ground = this.ground(), foliage = this.foliage();
             const twin = { biome: true, ground: ground.snapshot(map), foliage: foliage ? foliage.snapshot(map) : null, room: map.reactor3d && map.reactor3d.room ? JSON.parse(JSON.stringify(map.reactor3d.room)) : null, water: elevation.waterSnapshot(map) };
@@ -1203,7 +1899,7 @@ class TerrainManager {
             return;
         }
         if (entry && entry.ground && (entry.changes || entry.after !== undefined)) {
-            const undoing = from === this.undoStack;
+            const undoing = this._undoing ?? (from === this.undoStack);
             if (entry.changes) this._applyChanges(map, entry.changes, undoing);
             else elevation.restoreTerrainChanges(map, undoing ? entry.after : entry.terrain, undoing ? entry.terrain : entry.after);
             elevation.restoreWater(map, undoing ? entry.water : entry.waterAfter);

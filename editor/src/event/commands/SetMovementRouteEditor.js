@@ -213,6 +213,7 @@ class SetMovementRouteEditor {
 
     renderLeftPanel(parent) {
         const panel = document.createElement('div');
+        panel.className = 'rr-accent-scrollbar';
         panel.style.cssText = `
             width: 320px;
             display: flex;
@@ -311,6 +312,7 @@ class SetMovementRouteEditor {
         parent.appendChild(title);
 
         this.commandListEl = document.createElement('div');
+        this.commandListEl.className = 'rr-accent-scrollbar';
         this.commandListEl.style.cssText = `
             background-color: var(--color-bg-list-item);
             border: 1px solid var(--color-border);
@@ -473,8 +475,40 @@ class SetMovementRouteEditor {
             section.appendChild(this._checkbox('Wait for Completion', this.moveRoute.wait,
                 (v) => this.moveRoute.wait = v));
         }
+        if (!this.autonomous && (this._legacyTiming() || this.moveRoute.rrFrequency > 0)) section.appendChild(this._frequencyRow());
 
         parent.appendChild(section);
+    }
+
+    /** Whether the project moves as RPG Maker 2000/2003 does (System › rrLegacyMotion), where a route keeps its own frequency. */
+    _legacyTiming() {
+        try { return !!(this.databaseManager && this.databaseManager.getSystem().rrLegacyMotion); } catch (e) { return false; }
+    }
+
+    /**
+     * Set Move Route's frequency, as RPG Maker 2000/2003 had it (route.rrFrequency, 1-8): the pause after each step
+     * and turn on this route (8 none). Not set runs every command in turn, as MZ does.
+     */
+    _frequencyRow() {
+        const row = document.createElement('label');
+        row.style.cssText = 'display: flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 12px; margin-top: 2px;';
+        row.title = this._t('How long the character pauses after each step and turn on this route (RPG Maker 2000/2003 timing)');
+        row.appendChild(document.createTextNode(this._t('Frequency:')));
+        const select = document.createElement('select');
+        select.className = 'movement-route-frequency';
+        select.style.cssText = 'flex: 1; padding: 3px 6px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;';
+        const current = this.moveRoute.rrFrequency > 0 ? Math.max(1, Math.min(8, Math.round(this.moveRoute.rrFrequency))) : 0;
+        select.appendChild(this._option('0', 'Not set', current === 0, true));
+        for (let f = 8; f >= 1; f--) {
+            const name = f === 8 ? `8: ${this._t('Highest')}` : f === 1 ? `1: ${this._t('Lowest')}` : String(f);
+            select.appendChild(this._option(String(f), name, current === f, false));
+        }
+        select.addEventListener('change', () => {
+            const f = Number(select.value);
+            if (f > 0) this.moveRoute.rrFrequency = f; else delete this.moveRoute.rrFrequency;
+        });
+        row.appendChild(select);
+        return row;
     }
 
     // ----------------------------------------------------------------
@@ -483,6 +517,8 @@ class SetMovementRouteEditor {
 
     renderRightPanel(parent) {
         const panel = document.createElement('div');
+        // The app's accent scrollbar, as the Database's lists wear it.
+        panel.className = 'rr-accent-scrollbar movement-route-commands';
         panel.style.cssText = `
             flex: 1;
             display: flex;
@@ -547,9 +583,9 @@ class SetMovementRouteEditor {
             if (btn.reactor === 'height') {
                 this._dlgHeight(null, (z) => this._addCommand(45, SetMovementRouteEditor.routeCommand('height', z).parameters));
             } else if (btn.reactor === 'rotate') {
-                this._dlgRotate(null, (deg) => this._addCommand(45, SetMovementRouteEditor.routeCommand('rotate', deg).parameters));
-            } else if (btn.reactor === 'moveto') {
-                this._dlgMoveTo(null, (tile) => this._addCommand(45, SetMovementRouteEditor.routeCommand('moveto', tile).parameters));
+                this._dlgRotate(null, (turn) => this._addCommand(45, SetMovementRouteEditor.routeCommand('rotate', turn).parameters));
+            } else if (btn.reactor === 'moveto' || btn.reactor === 'teleport') {
+                this._dlgMoveTo(null, (tile) => this._addCommand(45, SetMovementRouteEditor.routeCommand(btn.reactor, tile).parameters), btn.reactor);
             } else {
                 this._addCommand(45, SetMovementRouteEditor.routeCommand(btn.reactor, 1).parameters);
             }
@@ -562,6 +598,17 @@ class SetMovementRouteEditor {
         } else {
             this._addCommand(code);
         }
+    }
+
+    /** Rotate to a direction: the angle that points the picture's top that way. */
+    static get ROTATE_DIRECTIONS() {
+        return { 8: 0, 6: 90, 2: 180, 4: 270 };
+    }
+
+    /** The Reactor route steps a marked Script entry can be. */
+    static get ROUTE_OPS() {
+        return ['rise', 'descend', 'height', 'faceceiling', 'faceground', 'standup', 'rotate', 'moveto', 'teleport',
+            'mirroron', 'mirroroff', 'flipon', 'flipoff', 'resetimage'];
     }
 
     /**
@@ -577,25 +624,67 @@ class SetMovementRouteEditor {
         if (op === 'faceceiling') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(1);';
         if (op === 'faceground') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(-1);';
         if (op === 'standup') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(0);';
-        if (op === 'rotate') return `if (typeof this.reactorRotate === "function") this.reactorRotate(${Number(data.n) || 0});`;
+        // Rotate: to an angle (or a direction's angle), or `mode: 'by'` on from where it stands.
+        if (op === 'rotate') {
+            const call = data.mode === 'by' ? 'reactorRotateBy' : 'reactorRotate';
+            return `if (typeof this.${call} === "function") this.${call}(${Number(data.n) || 0}${data.pivot === 'center' ? ', "center"' : ''});`;
+        }
+        // Mirror (faces the other way), Flip (upside down) and Reset Image: the picture's own turn, kept with the game.
+        if (op === 'mirroron' || op === 'mirroroff') return `if (typeof this.reactorMirror === "function") this.reactorMirror(${op === 'mirroron'});`;
+        if (op === 'flipon' || op === 'flipoff') return `if (typeof this.reactorFlip === "function") this.reactorFlip(${op === 'flipon'});`;
+        if (op === 'resetimage') return 'if (typeof this.reactorResetImage === "function") this.reactorResetImage();';
         // Move to Tile: the character walks there by path finding, and the route waits on this step until it stands there.
         if (op === 'moveto') return `if (typeof this.reactorMoveToTile === "function") this.reactorMoveToTile(${Math.floor(Number(data.x) || 0)}, ${Math.floor(Number(data.y) || 0)});`;
+        // Teleport to Tile: there at once, no walk; the route goes straight on.
+        if (op === 'teleport') return `if (typeof this.reactorTeleportTo === "function") this.reactorTeleportTo(${Math.floor(Number(data.x) || 0)}, ${Math.floor(Number(data.y) || 0)});`;
         return '';
     }
 
-    /** A Reactor route step: `n` its number, or for Move to Tile the tile as `{ x, y }`. */
-    /** A Move to Tile step in a list: "Move to (14, 9)". */
+    /** A Move to Tile or Teleport to Tile step in a list: "Move to (14, 9)", "Teleport to (14, 9)". */
     static moveToText(step, translate) {
-        return `${translate ? translate('Move to') : 'Move to'} (${step.x}, ${step.y})`;
+        const word = step.op === 'teleport' ? 'Teleport to' : 'Move to';
+        return `${translate ? translate(word) : word} (${step.x}, ${step.y})`;
     }
+
+    /** The route steps that name a tile as `{ x, y }`. */
+    static isTileOp(op) {
+        return op === 'moveto' || op === 'teleport';
+    }
+
+    /** A Reactor route step: `n` its number, or for Move to Tile and Teleport to Tile the tile as `{ x, y }`. */
 
     static routeCommand(op, n) {
         const codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec
             : (typeof require === 'function' ? require('./ReactorEventCommandCodec.js') : null);
-        const data = op === 'moveto'
+        // Rotate takes its angle as a number or as `{ n, pivot, mode, dir }`: "center" turns it about its middle;
+        // mode 'by' turns it on by n from where it stands; mode 'dir' points its top at a direction (8 up 0°, 6 right 90°,
+        // 2 down 180°, 4 left 270°). 0 stands it straight.
+        const rotate = op === 'rotate' && n && typeof n === 'object';
+        const dir = rotate && n.mode === 'dir' ? SetMovementRouteEditor.ROTATE_DIRECTIONS[Number(n.dir)] : null;
+        const data = SetMovementRouteEditor.isTileOp(op)
             ? { op, x: Math.max(0, Math.floor(Number(n && n.x) || 0)), y: Math.max(0, Math.floor(Number(n && n.y) || 0)) }
-            : { op, n: Math.round((Number(n) || (op === 'height' ? 0 : 1)) * 100) / 100 };
+            : { op, n: dir != null ? dir : Math.round((Number(rotate ? n.n : n) || (op === 'height' || op === 'rotate' ? 0 : 1)) * 100) / 100 };
+        if (rotate && n.mode === 'by') data.mode = 'by';
+        if (dir != null) { data.mode = 'dir'; data.dir = Number(n.dir); }
+        if (rotate && n.pivot === 'center') data.pivot = 'center';
         return { code: 45, parameters: [codec.createText('route', data, SetMovementRouteEditor.routeBody(data))] };
+    }
+
+    /** A Reactor route step as a line in a list ("Rotate: 90° (about its middle)", "Mirror ON"); `translate` turns the words. */
+    static stepText(step, translate) {
+        const tt = translate || (text => text);
+        const words = { rise: 'Rise', descend: 'Descend', faceceiling: 'Face Ceiling', faceground: 'Face Ground', standup: 'Stand Up',
+            mirroron: 'Mirror ON', mirroroff: 'Mirror OFF', flipon: 'Flip ON', flipoff: 'Flip OFF', resetimage: 'Reset Image' };
+        if (words[step.op]) return tt(words[step.op]);
+        if (step.op === 'rotate') {
+            const about = step.pivot === 'center' ? ` (${tt('About Center')})` : '';
+            if (step.mode === 'by') return `${tt('Rotate by')} ${step.n >= 0 ? '+' : ''}${step.n}°${about}`;
+            const named = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' }[step.dir];
+            if (step.mode === 'dir' && named) return `${tt('Rotate to')} ${tt(named)} (${step.n}°)${about}`;
+            return `${tt('Rotate to')} ${step.n}°${about}`;
+        }
+        if (SetMovementRouteEditor.isTileOp(step.op)) return SetMovementRouteEditor.moveToText(step, tt);
+        return `${tt('Set Height')}: ${step.n}`;
     }
 
     /** The Reactor step a Script route entry is, or null for a plain script. */
@@ -607,7 +696,7 @@ class SetMovementRouteEditor {
         let parsed = null;
         try { parsed = codec.parseText(String(cmd.parameters[0] || ''), 'route'); } catch (_) { return null; }
         if (!parsed || !parsed.data
-            || !['rise', 'descend', 'height', 'faceceiling', 'faceground', 'standup', 'rotate', 'moveto'].includes(parsed.data.op)) return null;
+            || !SetMovementRouteEditor.ROUTE_OPS.includes(parsed.data.op)) return null;
         if (parsed.body !== SetMovementRouteEditor.routeBody(parsed.data)) return null;
         return parsed.data;
     }
@@ -626,17 +715,18 @@ class SetMovementRouteEditor {
         input.style.cssText = 'width: 100%; margin-top: 6px; padding: 5px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;';
         content.appendChild(label);
         content.appendChild(input);
-        okBtn.addEventListener('click', () => { callback(Number(input.value) || 0); });
-        cancelBtn.addEventListener('click', () => {});
+        okBtn.addEventListener('click', () => { callback(Number(input.value) || 0); this._closeDialog(); });
+        cancelBtn.addEventListener('click', () => this._closeDialog());
         setTimeout(() => input.focus(), 0);
     }
 
     /**
-     * Move to Tile: the tile's X and Y, typed or picked on the open map's
-     * picture (the picker Transfer Player uses, kept to this map).
+     * Move to Tile (walks there) or Teleport to Tile (`op` 'teleport': there at once): the tile's X and Y,
+     * typed or picked on the open map's picture (the picker Transfer Player uses, kept to this map).
      */
-    _dlgMoveTo(existing, callback) {
-        const { content, okBtn, cancelBtn } = this._createDialog('Move to Tile', 360);
+    _dlgMoveTo(existing, callback, op = 'moveto') {
+        const teleport = op === 'teleport';
+        const { content, okBtn, cancelBtn } = this._createDialog(teleport ? 'Teleport to Tile' : 'Move to Tile', 360);
         const grid = document.createElement('div');
         grid.style.cssText = 'display: grid; grid-template-columns: max-content 1fr; gap: 8px 10px; align-items: center;';
         const field = (text, value, id) => {
@@ -670,7 +760,8 @@ class SetMovementRouteEditor {
         content.appendChild(grid);
         const hint = document.createElement('div');
         hint.style.cssText = 'color: var(--color-text-muted); font-size: 11px;';
-        hint.textContent = this._t('Walks there by the shortest open way. The route waits until it arrives.');
+        hint.textContent = this._t(teleport ? 'Appears there at once, wherever it stands. The route goes straight on.'
+            : 'Walks there by the shortest open way. The route waits until it arrives.');
         content.appendChild(hint);
         const mapId = this._currentMapId();
         pickBtn.disabled = !(mapId > 0) || typeof TransferPlayerEditor === 'undefined';
@@ -698,7 +789,7 @@ class SetMovementRouteEditor {
         const list = (this.moveRoute && this.moveRoute.list) || [];
         for (let i = list.length - 1; i >= 0; i--) {
             const step = SetMovementRouteEditor.parseRouteCommand(list[i]);
-            if (step && step.op === 'moveto') return { x: step.x, y: step.y };
+            if (step && SetMovementRouteEditor.isTileOp(step.op)) return { x: step.x, y: step.y };
         }
         try {
             const editor = this.projectController.eventManager.eventEditor;
@@ -722,22 +813,99 @@ class SetMovementRouteEditor {
         }
     }
 
+    /**
+     * Rotate: to an angle (any, clockwise; 0 stands it straight), by a number
+     * of degrees from where it stands, or to a direction (the picture's top
+     * points down, left, right or up); quick 90° steps lay it on its side or
+     * stand it on its head; it turns about its feet or about its middle (in
+     * place). OK gives `{ n, pivot, mode, dir }` for routeCommand.
+     */
     _dlgRotate(existing, callback) {
-        const { content, okBtn, cancelBtn } = this._createDialog('Rotate', 320);
-        const label = document.createElement('span');
-        label.textContent = this._t('Rotation (degrees):');
-        label.style.cssText = 'color: var(--color-text); font-size: 12px;';
+        const { content, okBtn, cancelBtn } = this._createDialog('Rotate', 360);
+        const fieldCss = 'width: 100%; box-sizing: border-box; padding: 5px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;';
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display: grid; grid-template-columns: max-content 1fr; gap: 8px 10px; align-items: center; color: var(--color-text); font-size: 12px;';
+        // Each control in a holder of its own: the holder is what hides (a themed dropdown is more than its <select>).
+        const row = (text, control) => {
+            const label = document.createElement('span');
+            label.textContent = this._t(text);
+            const holder = document.createElement('div');
+            holder.appendChild(control);
+            grid.appendChild(label);
+            grid.appendChild(holder);
+            return [label, holder];
+        };
+        const mode = document.createElement('select');
+        mode.className = 'dlg-rotate-mode';
+        mode.style.cssText = fieldCss;
+        [['to', 'To an angle'], ['by', 'By degrees (relative)'], ['dir', 'To a direction']].forEach(([value, text]) => {
+            const o = document.createElement('option');
+            o.value = value;
+            o.textContent = this._t(text);
+            mode.appendChild(o);
+        });
+        mode.value = existing && (existing.mode === 'by' || existing.mode === 'dir') ? existing.mode : 'to';
+        row('Turn:', mode);
+        // An angle: typed, or one of the quick steps.
+        const angleBox = document.createElement('div');
         const input = document.createElement('input');
         input.type = 'number';
+        input.className = 'dlg-rotate-angle';
         input.min = '-360';
         input.max = '360';
         input.step = '5';
-        input.value = existing && existing.n != null ? String(existing.n) : '90';
-        input.style.cssText = 'width: 100%; margin-top: 6px; padding: 5px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;';
-        content.appendChild(label);
-        content.appendChild(input);
-        okBtn.addEventListener('click', () => { callback(Number(input.value) || 0); });
-        cancelBtn.addEventListener('click', () => {});
+        input.value = existing && existing.n != null && existing.mode !== 'dir' ? String(existing.n) : '90';
+        input.style.cssText = fieldCss;
+        const steps = document.createElement('div');
+        steps.style.cssText = 'display: flex; gap: 4px; margin-top: 4px;';
+        [0, 45, 90, 180, 270].forEach(deg => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'rr-btn-secondary dlg-rotate-step';
+            b.textContent = `${deg}°`;
+            b.style.cssText = 'flex: 1; padding: 3px 0; font-size: 11px;';
+            b.addEventListener('click', () => { input.value = String(deg); });
+            steps.appendChild(b);
+        });
+        angleBox.appendChild(input);
+        angleBox.appendChild(steps);
+        const angleRow = row('Rotation (degrees):', angleBox);
+        // A direction: the way the picture's top points.
+        const dir = document.createElement('select');
+        dir.className = 'dlg-rotate-dir';
+        dir.style.cssText = fieldCss;
+        [[8, 'Up'], [6, 'Right'], [2, 'Down'], [4, 'Left']].forEach(([value, text]) => {
+            const o = document.createElement('option');
+            o.value = String(value);
+            o.textContent = `${this._t(text)} (${SetMovementRouteEditor.ROTATE_DIRECTIONS[value]}°)`;
+            dir.appendChild(o);
+        });
+        dir.value = existing && existing.mode === 'dir' && existing.dir ? String(existing.dir) : '2';
+        dir.title = this._t('The top of the picture points that way');
+        const dirRow = row('Direction:', dir);
+        const pivotRow = document.createElement('label');
+        pivotRow.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--color-text); font-size: 12px;';
+        const pivot = document.createElement('input');
+        pivot.type = 'checkbox';
+        pivot.className = 'dlg-rotate-center';
+        pivot.checked = !!(existing && existing.pivot === 'center');
+        pivotRow.appendChild(pivot);
+        pivotRow.appendChild(document.createTextNode(this._t('About Center')));
+        pivotRow.title = this._t('Turn in place about the middle of the picture, not its feet');
+        const shown = () => {
+            const byDir = mode.value === 'dir';
+            for (const e of angleRow) e.style.display = byDir ? 'none' : '';
+            for (const e of dirRow) e.style.display = byDir ? '' : 'none';
+        };
+        mode.addEventListener('change', shown);
+        shown();
+        content.appendChild(grid);
+        content.appendChild(pivotRow);
+        okBtn.addEventListener('click', () => {
+            callback({ n: Number(input.value) || 0, pivot: pivot.checked ? 'center' : 'feet', mode: mode.value, dir: Number(dir.value) || 2 });
+            this._closeDialog();
+        });
+        cancelBtn.addEventListener('click', () => this._closeDialog());
         setTimeout(() => input.focus(), 0);
     }
 
@@ -892,11 +1060,18 @@ class SetMovementRouteEditor {
         if (!cmd || !this._needsParams(cmd.code)) return;
 
         const step = SetMovementRouteEditor.parseRouteCommand(cmd);
-        if (step && step.op === 'moveto') {
-            this._dlgMoveTo(step, (tile) => {
-                this.moveRoute.list[index].parameters = SetMovementRouteEditor.routeCommand('moveto', tile).parameters;
+        if (step && step.op === 'rotate') {
+            this._dlgRotate(step, (turn) => {
+                this.moveRoute.list[index].parameters = SetMovementRouteEditor.routeCommand('rotate', turn).parameters;
                 this.refreshCommandList();
             });
+            return;
+        }
+        if (step && SetMovementRouteEditor.isTileOp(step.op)) {
+            this._dlgMoveTo(step, (tile) => {
+                this.moveRoute.list[index].parameters = SetMovementRouteEditor.routeCommand(step.op, tile).parameters;
+                this.refreshCommandList();
+            }, step.op);
             return;
         }
 
@@ -1259,16 +1434,7 @@ class SetMovementRouteEditor {
             }
             case 45: {
                 const step = SetMovementRouteEditor.parseRouteCommand(cmd);
-                if (step) {
-                    if (step.op === 'rise') return this._t('Rise');
-                    if (step.op === 'descend') return this._t('Descend');
-                    if (step.op === 'faceceiling') return this._t('Face Ceiling');
-                    if (step.op === 'faceground') return this._t('Face Ground');
-                    if (step.op === 'standup') return this._t('Stand Up');
-                    if (step.op === 'rotate') return `${this._t('Rotate')}: ${step.n}°`;
-                    if (step.op === 'moveto') return SetMovementRouteEditor.moveToText(step, text => this._t(text));
-                    return `${this._t('Set Height')}: ${step.n}`;
-                }
+                if (step) return SetMovementRouteEditor.stepText(step, text => this._t(text));
                 const src = String(p[0] || '');
                 return `${name}: ${src.length > 30 ? src.substring(0, 30) + '...' : src}`;
             }
@@ -1277,10 +1443,32 @@ class SetMovementRouteEditor {
     }
 
     // ----------------------------------------------------------------
-    //  Button definitions (3 columns × 15 rows)
+    //  Button definitions: RPG Maker's 3 columns × 15 rows, then Reactor's steps under them (20 / 19 / 20, Script last)
     // ----------------------------------------------------------------
 
     _buttonDefs() {
+        const defs = this._allButtonDefs();
+        // Sprite Transforms off (Database › Reactor Features): no Rotate, Mirror, Flip or Reset Image to add.
+        // Steps already in a route stay listed and saved; the game passes over them.
+        if (!this._transformsOn()) {
+            for (const key of ['column1', 'column2', 'column3']) defs[key] = defs[key].filter(def => !SetMovementRouteEditor.TRANSFORM_OPS.includes(def.reactor));
+        }
+        return defs;
+    }
+
+    /** The route steps that turn the drawn image (the Sprite Transforms feature). */
+    static get TRANSFORM_OPS() {
+        return ['rotate', 'mirroron', 'mirroroff', 'flipon', 'flipoff', 'resetimage'];
+    }
+
+    _transformsOn() {
+        const features = typeof window !== 'undefined' ? window.ReactorFeatures : globalThis.ReactorFeatures;
+        let system = null;
+        try { system = this.databaseManager && this.databaseManager.getSystem ? this.databaseManager.getSystem() : null; } catch (e) { system = null; }
+        return !features || features.on('spriteTransforms', system || {});
+    }
+
+    _allButtonDefs() {
         return {
             column1: [
                 { code: 1,  label: 'Move Down' },
@@ -1302,6 +1490,7 @@ class SetMovementRouteEditor {
                 { code: 45, reactor: 'descend', label: 'Descend' },
                 { code: 45, reactor: 'height', label: 'Set Height...' },
                 { code: 45, reactor: 'moveto', label: 'Move to Tile...' },
+                { code: 45, reactor: 'teleport', label: 'Teleport to Tile...' },
             ],
             column2: [
                 { code: 16, label: 'Turn Down' },
@@ -1322,6 +1511,7 @@ class SetMovementRouteEditor {
                 { code: 45, reactor: 'faceceiling', label: 'Face Ceiling' },
                 { code: 45, reactor: 'faceground', label: 'Face Ground' },
                 { code: 45, reactor: 'standup', label: 'Stand Up' },
+                { code: 45, reactor: 'rotate', label: 'Rotate...' },
             ],
             column3: [
                 { code: 31, label: 'Walk Anim ON' },
@@ -1338,8 +1528,13 @@ class SetMovementRouteEditor {
                 { code: 42, label: 'Change Opacity...' },
                 { code: 43, label: 'Change Blend...' },
                 { code: 44, label: 'Play SE...' },
+                { code: 45, reactor: 'mirroron', label: 'Mirror ON' },
+                { code: 45, reactor: 'mirroroff', label: 'Mirror OFF' },
+                { code: 45, reactor: 'flipon', label: 'Flip ON' },
+                { code: 45, reactor: 'flipoff', label: 'Flip OFF' },
+                { code: 45, reactor: 'resetimage', label: 'Reset Image' },
+                // Last, in the lower right: the open-ended one.
                 { code: 45, label: 'Script...' },
-                { code: 45, reactor: 'rotate', label: 'Rotate...' },
             ],
         };
     }

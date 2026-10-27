@@ -1822,7 +1822,11 @@ Input._updateGamepadState = function(gamepad) {
     const newState = [];
     const buttons = gamepad.buttons;
     const axes = gamepad.axes;
-    const threshold = 0.5;
+    // A stick direction comes on past half way and goes off only back under 0.3. A flick springs back and
+    // wobbles about one line, which counted as two or three presses: a menu cursor jumped two or three rows.
+    const on = 0.5, off = 0.3, sticks = this._stickHeld || (this._stickHeld = []);
+    const stick = sticks[gamepad.index] || (sticks[gamepad.index] = [false, false, false, false]);
+    const held = (k, value) => (stick[k] = value > (stick[k] ? off : on));
     newState[12] = false;
     newState[13] = false;
     newState[14] = false;
@@ -1830,16 +1834,12 @@ Input._updateGamepadState = function(gamepad) {
     for (let i = 0; i < buttons.length; i++) {
         newState[i] = buttons[i].pressed;
     }
-    if (axes[1] < -threshold) {
-        newState[12] = true; // up
-    } else if (axes[1] > threshold) {
-        newState[13] = true; // down
-    }
-    if (axes[0] < -threshold) {
-        newState[14] = true; // left
-    } else if (axes[0] > threshold) {
-        newState[15] = true; // right
-    }
+    // The stick's own directions (up, down, left, right), remembered apart from the d-pad's buttons 12-15.
+    const up = held(0, -axes[1]), down = held(1, axes[1]) && !up, left = held(2, -axes[0]), right = held(3, axes[0]) && !left;
+    if (up) newState[12] = true;
+    if (down) newState[13] = true;
+    if (left) newState[14] = true;
+    if (right) newState[15] = true;
     this._gamepadStates[gamepad.index] = newState;
 };
 

@@ -152,7 +152,7 @@ test('3D placement activation opens Vehicles and clears ordinary event selection
     const previous={window:global.window,Reactor3D:global.Reactor3D,EventManager:global.EventManager};
     global.window={reactor:{databaseManager:{data:{vehicles:catalog}},openDatabase:type=>opened.push(type),
         databaseEditorUI:{navigateToDatabaseEntry:(type,id)=>opened.push([type,id])}}};
-    global.Reactor3D=R;global.EventManager=EventManager;
+    global.Reactor3D=R;global.EventManager=EventManager;previous.RRVehicles=global.RRVehicles;global.RRVehicles=setup;
     try {
         const picked=EventManager.startingVehicles(map)[0],view=Object.create(MapEditor3D.prototype);
         view.canSelectEvents=()=>true;view.canEditPieces=()=>false;view.canEditTerrain=()=>false;view.canEditProps=()=>false;
@@ -161,7 +161,47 @@ test('3D placement activation opens Vehicles and clears ordinary event selection
         view.onEventSelected=event=>assert.equal(event,null,'old event selection is cleared');
         view.handleClick(0,0);view.handleDoubleClick({clientX:0,clientY:0,preventDefault(){}});
         assert.deepEqual(opened,['vehicles',['vehicles',1]]);assert.deepEqual(map.events,[null]);
-        view.dragEventTo({userData:{event:picked}},{x:15,y:15});assert.equal(picked.x,10);
+        // Dragged in the 3D view, a placement moves its start in the Database, not any map data.
+        const manager=Object.create(EventManager.prototype);manager.currentMap=map;manager.saveState=()=>{};manager.selectTile=()=>{};
+        view.eventManager=()=>manager;view.placeEvent=()=>{};view.currentMap=()=>map;
+        view.dragEventTo({userData:{event:picked}},{x:15,y:15});
+        assert.deepEqual([picked.x,catalog[1].startX,catalog[1].startY],[15,15,15]);assert.deepEqual(map.events,[null]);
+    } finally { Object.assign(global,previous); }
+});
+
+test('a placement is named by its Database entry and unit, covers its Length along its heading, and moves and undoes through the Database', async () => {
+    const catalog=types(),map={id:1,width:40,height:30,events:[null,event(1,14,10)]},writes=[];
+    setup.addCopy(catalog[1]);Object.assign(catalog[1].copies[0],{startMapId:1,startX:30,startY:20,startDirection:2});
+    const previous={window:global.window,Reactor3D:global.Reactor3D,EventManager:global.EventManager,RRVehicles:global.RRVehicles};
+    const manager={data:{vehicles:catalog},saveJSON:async(dir,file,data)=>writes.push([file,JSON.parse(JSON.stringify(data))])};
+    global.window={reactor:{databaseManager:manager,projectController:{currentProject:{path:'/project'}}}};
+    global.Reactor3D=R;global.EventManager=EventManager;global.RRVehicles=setup;
+    try {
+        const [first,second]=EventManager.startingVehicles(map);
+        assert.equal(EventManager.vehicleLabel(first),'Vehicle 1 · '+catalog[1].name+' · Unit 1');
+        assert.equal(EventManager.vehicleLabel(second),'Vehicle 1 · '+catalog[1].name+' · Unit 2');
+        const size=catalog[1].model.size,length=size<=1?1:2*Math.ceil(size/2-0.6)+1;
+        // Facing right, its Length runs across the map; facing down, along it. Centred on its own tile.
+        assert.deepEqual(EventManager.vehicleFootprint(first),[10-Math.floor((length-1)/2),10,length,1]);
+        assert.deepEqual(EventManager.vehicleFootprint(second),[30,20-Math.floor((length-1)/2),1,length]);
+        const editor=Object.create(EventManager.prototype);editor.currentMap=map;
+        editor.undoStack=[];editor.redoStack=[];editor.maxUndoSteps=50;editor.notifyUndoStateChange=()=>{};
+        editor.renderEvents=()=>{};editor._restoreEventSelection=()=>{};
+        assert.equal(editor.getVehicleAt(10,10)._rrVehicleIdentity,first._rrVehicleIdentity);
+        assert.equal(editor.getVehicleAt(30,20+Math.floor(length/2))._rrVehicleIdentity,second._rrVehicleIdentity,'any tile of its footprint takes hold of it');
+        assert.equal(editor.canPlaceVehicle(first,14,10),false,'not over an event');
+        assert.equal(editor.canPlaceVehicle(first,30,21),false,'not over another vehicle');
+        assert.equal(editor.canPlaceVehicle(first,0,0),false,'not off the map');
+        editor.saveState();
+        assert.equal(editor.moveVehicleStart(first,20,5),true);
+        assert.deepEqual([catalog[1].startX,catalog[1].startY],[20,5]);
+        await editor.saveVehicleStarts();
+        assert.deepEqual([writes.at(-1)[0],writes.at(-1)[1][1].startX],['ReactorVehicles.json',20]);
+        editor.undo();await Promise.resolve();
+        assert.deepEqual([catalog[1].startX,catalog[1].startY],[10,10],'undo puts the Database start back');
+        assert.equal(writes.at(-1)[1][1].startX,10,'and saves it');
+        editor.redo();assert.deepEqual([catalog[1].startX,catalog[1].startY],[20,5]);await new Promise(resolve=>setImmediate(resolve));
+        assert.deepEqual(map.events.length,2,'no map event was made or changed');
     } finally { Object.assign(global,previous); }
 });
 

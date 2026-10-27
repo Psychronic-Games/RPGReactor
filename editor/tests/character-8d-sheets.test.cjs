@@ -37,6 +37,7 @@ function load() {
         ImageManager: { loadCharacter: () => ({ width: 1200, height: 800 }) },
         Sprite_Character: function() {},
         Game_Follower: function() {},
+        Game_CharacterBase: { rrFramesOf: () => 0 },
         $gamePlayer: { isDashing: () => false },
         Math, Object
     };

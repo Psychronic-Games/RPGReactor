@@ -721,6 +721,19 @@ Game_BattlerBase.prototype.isDualWield = function() {
     return this.slotType() === 1;
 };
 
+// Slot layouts ($dataSystem.rrSlotLayouts: [{ name, slots: [etypeId, ...] }]): a Slot Type of 2 picks the
+// first, 3 the second, and so on. Null for Normal, Dual Wield, or a layout the project does not have.
+// With Equipment Slot Layouts off in Database > Reactor Features the project has none: a Slot Type that
+// picked one is Normal, as RPG Maker MZ reads it.
+Game_BattlerBase.SLOT_LAYOUT_BASE = 2;
+Game_BattlerBase.prototype.slotLayout = function() {
+    const index = this.slotType() - Game_BattlerBase.SLOT_LAYOUT_BASE;
+    if (typeof ReactorFeatures !== "undefined" && !ReactorFeatures.on("equipSlotLayouts")) return null;
+    const list = typeof $dataSystem !== 'undefined' && $dataSystem ? $dataSystem.rrSlotLayouts : null;
+    const layout = index >= 0 && Array.isArray(list) ? list[index] : null;
+    return layout && Array.isArray(layout.slots) ? layout : null;
+};
+
 Game_BattlerBase.prototype.actionPlusSet = function() {
     return this.traits(Game_BattlerBase.TRAIT_ACTION_PLUS).map(
         trait => trait.value
@@ -946,12 +959,20 @@ Game_BattlerBase.prototype.isSkillWtypeOk = function(/*skill*/) {
     return true;
 };
 
+// Resource pools a project turned off (System.json rrPoolsOff: ["mp"], ["tp"] or both; set in
+// Database > System 1 > Options). A pool that is off is hidden on every window and HUD, costs
+// nothing (a skill priced in it stays usable) and, for TP, gains nothing. HP is never off.
+Game_BattlerBase.isPoolOn = function(key) {
+    const off = typeof $dataSystem !== "undefined" && $dataSystem ? $dataSystem.rrPoolsOff : null;
+    return !(Array.isArray(off) && key !== "hp" && off.includes(key));
+};
+
 Game_BattlerBase.prototype.skillMpCost = function(skill) {
-    return Math.floor(skill.mpCost * this.mcr);
+    return Game_BattlerBase.isPoolOn("mp") ? Math.floor(skill.mpCost * this.mcr) : 0;
 };
 
 Game_BattlerBase.prototype.skillTpCost = function(skill) {
-    return skill.tpCost;
+    return Game_BattlerBase.isPoolOn("tp") ? skill.tpCost : 0;
 };
 
 Game_BattlerBase.prototype.canPaySkillCost = function(skill) {
@@ -1695,7 +1716,7 @@ Game_Battler.prototype.gainSilentTp = function(value) {
 };
 
 Game_Battler.prototype.initTp = function() {
-    this.setTp(Math.randomInt(25));
+    this.setTp(Game_BattlerBase.isPoolOn("tp") ? Math.randomInt(25) : 0);
 };
 
 Game_Battler.prototype.clearTp = function() {
@@ -1703,6 +1724,7 @@ Game_Battler.prototype.clearTp = function() {
 };
 
 Game_Battler.prototype.chargeTpByDamage = function(damageRate) {
+    if (!Game_BattlerBase.isPoolOn("tp")) return;
     const value = Math.floor(50 * damageRate * this.tcr);
     this.gainSilentTp(value);
 };
@@ -1727,6 +1749,7 @@ Game_Battler.prototype.regenerateMp = function() {
 };
 
 Game_Battler.prototype.regenerateTp = function() {
+    if (!Game_BattlerBase.isPoolOn("tp")) return;
     const value = Math.floor(100 * this.trg);
     this.gainSilentTp(value);
 };
@@ -2080,13 +2103,22 @@ Game_Actor.prototype.initEquips = function(equips) {
 // type as many times as the class has slots of it. Null for a class with no list, which has one slot
 // per equipment type (and a second weapon in place of the second slot under Dual Wield).
 Game_Actor.prototype.classEquipSlots = function() {
+    // Database > Reactor Features can leave slots to a plugin (YEP_EquipCore, VisuStella's Items & Equips Core).
+    if (typeof ReactorFeatures !== "undefined" && !ReactorFeatures.on("classEquipSlots")) return null;
     const actorClass = this.currentClass();
     const slots = actorClass ? actorClass.rrEquipSlots : null;
     return Array.isArray(slots) ? slots : null;
 };
 
+// The slots an actor has a list of its own for: the layout its Slot Type picks, else its class's list.
+// Null for one with the stock slots.
+Game_Actor.prototype.ownEquipSlots = function() {
+    const layout = this.slotLayout();
+    return layout ? layout.slots : this.classEquipSlots();
+};
+
 Game_Actor.prototype.equipSlots = function() {
-    const own = this.classEquipSlots();
+    const own = this.ownEquipSlots();
     if (own) {
         return own.slice();
     }
@@ -2100,22 +2132,50 @@ Game_Actor.prototype.equipSlots = function() {
     return slots;
 };
 
-// Under a class's own list the equipment held is one place per slot: a slot the list gained is
-// empty, and what a slot it lost was holding goes back to the party.
+// Under a list of its own (a slot layout or the class's list) the equipment held is one place per
+// slot: a slot the list gained is empty, and what a slot it lost was holding goes back to the party.
+// In a project with slot layouts this holds for every actor, so one whose layout is gone (a state
+// worn off) is back to one place per stock slot.
 Game_Actor.prototype.fitEquipSlots = function(forcing) {
-    if (!this.classEquipSlots() || !this._equips) {
+    // (Equipment Slot Layouts off in Database > Reactor Features: the project has none.)
+    const layoutsOn = typeof ReactorFeatures === "undefined" || ReactorFeatures.on("equipSlotLayouts");
+    const layouts = layoutsOn && typeof $dataSystem !== 'undefined' && $dataSystem ? $dataSystem.rrSlotLayouts : null;
+    if (!this._equips || (!this.ownEquipSlots() && !(Array.isArray(layouts) && layouts.length > 0))) {
         return;
     }
-    const count = this.equipSlots().length;
-    while (this._equips.length < count) {
+    const slots = this.equipSlots();
+    const was = this._rrFittedSlots;
+    if (Array.isArray(was) && (was.length !== slots.length || was.some((etypeId, i) => etypeId !== slots[i]))) {
+        // The slots changed since they were last fitted (a layout put on or worn off, a new class list):
+        // each slot takes the first thing held not yet placed that is of its type, and what no slot is
+        // there for goes back to the party.
+        const held = this._equips.slice();
+        this._equips = slots.map(etypeId => {
+            const at = held.findIndex(entry => entry && entry.object() && entry.object().etypeId === etypeId);
+            if (at < 0) {
+                return new Game_Item();
+            }
+            const entry = held[at];
+            held[at] = null;
+            return entry;
+        });
+        for (const entry of held) {
+            const item = entry && entry.object();
+            if (item && !forcing) {
+                this.tradeItemWithParty(null, item);
+            }
+        }
+    }
+    while (this._equips.length < slots.length) {
         this._equips.push(new Game_Item());
     }
-    while (this._equips.length > count) {
+    while (this._equips.length > slots.length) {
         const item = this._equips.pop().object();
         if (item && !forcing) {
             this.tradeItemWithParty(null, item);
         }
     }
+    this._rrFittedSlots = slots.slice();
 };
 
 Game_Actor.prototype.equips = function() {
@@ -2172,8 +2232,8 @@ Game_Actor.prototype.tradeItemWithParty = function(newItem, oldItem) {
 };
 
 Game_Actor.prototype.changeEquipById = function(etypeId, itemId) {
-    // Under a class's own list: the first slot of that type (none: nothing to change).
-    const slotId = this.classEquipSlots() ? this.equipSlots().indexOf(etypeId) : etypeId - 1;
+    // Under a list of its own: the first slot of that type (none: nothing to change).
+    const slotId = this.ownEquipSlots() ? this.equipSlots().indexOf(etypeId) : etypeId - 1;
     if (slotId < 0) {
         return;
     }
@@ -2214,6 +2274,8 @@ Game_Actor.prototype.releaseUnequippableItems = function(forcing) {
         if (!changed) {
             break;
         }
+        // What came off may have given the layout: the slots are fitted to the one there is now.
+        this.fitEquipSlots(forcing);
     }
 };
 
@@ -2869,7 +2931,36 @@ Game_Enemy.prototype.setup = function(enemyId, x, y) {
     this._enemyId = enemyId;
     this._screenX = x;
     this._screenY = y;
+    this._rrRoll = null;
     this.recoverAll();
+};
+
+// The database's ranges (Enemies: Stat Variance %, an EXP or Gold maximum),
+// rolled once per enemy and kept, so its stats hold still through the battle.
+// Rolled again when the enemy becomes another one (Transform). An enemy with
+// none of these fields gets null and behaves exactly as in RPG Maker MZ, as
+// does every enemy while Database > Reactor Features has Enemy Ranges off.
+Game_Enemy.prototype.rrRoll = function() {
+    const enemy = this.enemy();
+    if (!enemy) return null;
+    if (typeof ReactorFeatures !== "undefined" && !ReactorFeatures.on("enemyRanges")) return null;
+    if (this._rrRoll && this._rrRoll.enemyId === this._enemyId) return this._rrRoll;
+    const variance = Math.min(50, Math.max(0, Number(enemy.rrStatVariance) || 0));
+    const between = (base, max) => {
+        base = Math.floor(Number(base) || 0);
+        max = Math.floor(Number(max));
+        return Number.isFinite(max) && max > base ? base + Math.randomInt(max - base + 1) : undefined;
+    };
+    const exp = between(enemy.exp, enemy.rrExpMax), gold = between(enemy.gold, enemy.rrGoldMax);
+    if (variance <= 0 && exp === undefined && gold === undefined) {
+        this._rrRoll = { enemyId: this._enemyId, none: true };
+        return this._rrRoll;
+    }
+    const rates = variance > 0
+        ? Array.from({ length: 8 }, () => 1 + (Math.random() * 2 - 1) * variance / 100)
+        : null;
+    this._rrRoll = { enemyId: this._enemyId, rates, exp, gold };
+    return this._rrRoll;
 };
 
 Game_Enemy.prototype.isEnemy = function() {
@@ -2905,7 +2996,10 @@ Game_Enemy.prototype.traitObjects = function() {
 };
 
 Game_Enemy.prototype.paramBase = function(paramId) {
-    return this.enemy().params[paramId];
+    const base = this.enemy().params[paramId];
+    const roll = this.rrRoll();
+    if (!roll || !roll.rates || roll.rates[paramId] === undefined) return base;
+    return Math.max(paramId === 0 ? 1 : 0, Math.round((Number(base) || 0) * roll.rates[paramId]));
 };
 
 // Max TP is per-enemy rather than the flat 100 every battler used to get. It
@@ -2930,22 +3024,37 @@ Game_Enemy.prototype.maxTp = function() {
 };
 
 Game_Enemy.prototype.exp = function() {
-    return this.enemy().exp;
+    const roll = this.rrRoll();
+    return roll && roll.exp !== undefined ? roll.exp : this.enemy().exp;
 };
 
 Game_Enemy.prototype.gold = function() {
-    return this.enemy().gold;
+    const roll = this.rrRoll();
+    return roll && roll.gold !== undefined ? roll.gold : this.enemy().gold;
 };
 
 Game_Enemy.prototype.makeDropItems = function() {
     const rate = this.dropItemRate();
     return this.enemy().dropItems.reduce((r, di) => {
         if (di.kind > 0 && Math.random() * di.denominator < rate) {
-            return r.concat(this.itemObject(di.kind, di.dataId));
+            const count = this.rrDropCount(di);
+            const item = this.itemObject(di.kind, di.dataId);
+            return count === 1 ? r.concat(item) : r.concat(Array.from({ length: count }, () => item));
         } else {
             return r;
         }
     }, []);
+};
+
+// How many of a drop fall: the database's quantity range (rrQtyMin to
+// rrQtyMax on the drop slot), or the 1 RPG Maker MZ always drops (also with
+// Enemy Ranges off in Database > Reactor Features).
+Game_Enemy.prototype.rrDropCount = function(di) {
+    if (di.rrQtyMin === undefined && di.rrQtyMax === undefined) return 1;
+    if (typeof ReactorFeatures !== "undefined" && !ReactorFeatures.on("enemyRanges")) return 1;
+    const min = Math.max(1, Math.floor(Number(di.rrQtyMin) || 1));
+    const max = Math.max(min, Math.floor(Number(di.rrQtyMax) || min));
+    return min + Math.randomInt(max - min + 1);
 };
 
 Game_Enemy.prototype.dropItemRate = function() {
@@ -3702,8 +3811,18 @@ Game_Party.prototype.loseGold = function(amount) {
     this.gainGold(-amount);
 };
 
+// Database > Reactor Features > Higher Limits ($dataSystem.rrHigherLimits, an
+// opt-in): 9,999 of each item and 9,999,999,999 gold. Off (and in any RPG
+// Maker MZ project) the stock 99 and 99,999,999 stand.
+Game_Party.RR_HIGHER_MAX_GOLD = 9999999999;
+Game_Party.RR_HIGHER_MAX_ITEMS = 9999;
+Game_Party.rrHigherLimits = function() {
+    if (typeof $dataSystem === "undefined" || !$dataSystem || $dataSystem.rrHigherLimits !== true) return false;
+    return typeof ReactorFeatures === "undefined" || ReactorFeatures.on("higherLimits");
+};
+
 Game_Party.prototype.maxGold = function() {
-    return 99999999;
+    return Game_Party.rrHigherLimits() ? Game_Party.RR_HIGHER_MAX_GOLD : 99999999;
 };
 
 Game_Party.prototype.steps = function() {
@@ -3720,7 +3839,7 @@ Game_Party.prototype.numItems = function(item) {
 };
 
 Game_Party.prototype.maxItems = function(/*item*/) {
-    return 99;
+    return Game_Party.rrHigherLimits() ? Game_Party.RR_HIGHER_MAX_ITEMS : 99;
 };
 
 Game_Party.prototype.hasMaxItems = function(item) {

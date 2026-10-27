@@ -391,8 +391,6 @@ test('the Event Editor keeps Options, Priority and Trigger out of the scrolling 
                 return section;
             };
         }
-        let empty = true;
-        view._imageIsEmpty = () => empty;
         const container = document.createElement('div');
         view.renderPageConfiguration(container, {}, 0);
         const settings = container.querySelector('.event-page-settings');
@@ -402,13 +400,9 @@ test('the Event Editor keeps Options, Priority and Trigger out of the scrolling 
         const fixed = container.querySelector('.event-priority-trigger');
         assert.ok(fixed && !settings.contains(fixed), 'Priority and Trigger sit below the scrolling part');
         assert.ok(fixed.textContent.includes('Priority') && fixed.textContent.includes('Trigger'));
-        const image = settings.children[1];
-        assert.equal(image.style.flex, '0 0 auto');
-        assert.equal(image.querySelector('.image-preview-box').style.height, '40px');
-        empty = false;
-        const full = document.createElement('div');
-        view.renderPageConfiguration(full, {}, 0);
-        const picture = full.querySelector('.event-page-settings').children[1];
+        // A page with no picture keeps the full box too (2026-10-25): no short strip with a gap below it.
+        const picture = settings.children[1];
+        assert.equal(picture.style.flex, '1 0 140px');
         assert.equal(picture.style.minHeight, '140px');
         assert.equal(picture.querySelector('.image-preview-box').style.minHeight, '88px');
     } finally {

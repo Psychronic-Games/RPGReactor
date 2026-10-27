@@ -37,8 +37,11 @@
     function connected(list, startId) {
         const start = (list || []).find(piece => piece && piece.id === startId);
         if (!start) return [];
-        if (start.group) return list.filter(piece => piece.group === start.group).map(piece => piece.id);
-        const loose = list.filter(piece => piece && !piece.group);
+        // Rocks are the ground's, not a building's: a building's walk passes them by (a wall built against a cliff
+        // took the cliff with it, and a finish given the building mirrored the rocks), and a rock's takes only rocks.
+        const kin = piece => (piece.kind === 'rock') === (start.kind === 'rock');
+        if (start.group) return list.filter(piece => piece.group === start.group && kin(piece)).map(piece => piece.id);
+        const loose = list.filter(piece => piece && !piece.group && kin(piece));
         const byCell = new Map();
         for (const piece of loose) for (const [x, y] of cellsOf(piece)) { const key = x + ',' + y; (byCell.get(key) || byCell.set(key, []).get(key)).push(piece); }
         const chosen = new Set([start.id]);

@@ -107,7 +107,8 @@ test('rolled garment edges stay on their fabric through rest draping, grounding 
   refs.set(p.fabricRefs[v*2]+':'+p.fabricRefs[v*2+1],[p,v]);
  }
  const raw=Poses.clip(result.bones,'sit',result.parts.find(p=>p.name==='Body')),clip=Cloth.bake(result,raw,{quality:'preview'}),pose=Cloth.pose(result.bones,clip,clip.times.at(-1)*.5),posed=Cloth.skin(trim,result.bones,pose),cache=new Map();let checked=0,moving=0;
- for(let v=0;v<trim.positions.length/3;v+=6){
+ // A contrast trim is a flat band, three points across per edge point, the rolled edge's point first.
+ for(let v=0;v<trim.positions.length/3;v+=3){
   const best=refs.get(trim.sewnRefs[v*2]+':'+trim.sewnRefs[v*2+1]);assert.ok(best,'exact owning fabric vertex exists');const[p,i]=best;
   const distance=Math.hypot(...[0,1,2].map(k=>trim.positions[v*3+k]-p.positions[i*3+k]));assert.ok(distance<.003,'rolled edge detached from fabric at rest: '+distance);
   if(!cache.has(p))cache.set(p,Cloth.skin(p,result.bones,pose));const target=cache.get(p),d=Math.hypot(...[0,1,2].map(k=>posed[v*3+k]-target[i*3+k]));

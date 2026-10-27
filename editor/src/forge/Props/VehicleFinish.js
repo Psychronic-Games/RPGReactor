@@ -2,7 +2,7 @@
  * All data is generated locally and exports through ordinary glTF materials. */
 (function(root){
     'use strict';
-    const need=(n,f)=>root[n]||(typeof require==='function'?require(f):null),CM=need('RRContainerMesh','./ContainerMesh.js'),Paint=need('RRPropPaint','./PropPaint.js'),CP=need('RRContainerPaint','./ContainerPaint.js'),Typeface=need('RRVehicleTypeface','./VehicleTypeface.js');
+    const need=(n,f)=>root[n]||(typeof require==='function'?require(f):null),CM=need('RRContainerMesh','./ContainerMesh.js'),Paint=need('RRPropPaint','./PropPaint.js'),CP=need('RRContainerPaint','./ContainerPaint.js'),Typeface=need('RRVehicleTypeface','./VehicleTypeface.js'),Panels=need('RRVehiclePanels','./VehiclePanels.js'),Design=need('RRFlagDesign','./FlagDesign.js');
     const {add,sub,scale,dot,norm,cross}=CM.vec,clamp=v=>Math.max(0,Math.min(1,v)),mix=(a,b,t)=>a+(b-a)*t,fract=v=>v-Math.floor(v),mapsCache=new Map();
     const hash=(x,y,z=0)=>fract(Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453),linear=c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4;
     const rgb=h=>Paint.hex(h).map(v=>v/255),lin=h=>rgb(h).map(linear);
@@ -80,11 +80,13 @@
         for(const [meshes,name,color,role]of [[steel,'Seated panel fasteners','#9ca5a8','metal'],[recesses,'Fastener hex sockets','#20272b','dark']])if(meshes.length){const p=CM.merge(meshes);CM.skin(p,0);parts.push({...p,name,color,surfaceRole:role,roughness:.38,metalness:role==='metal'?.80:0});}
     }
     function colorSurface(p,r){
-        const base=lin(p.color),dirt=lin('#625345'),primer=lin('#5c6468'),bare=lin('#8d979b'),b=bounds(p),extent=b.hi.map((v,k)=>v-b.lo[k]),P=p.positions,N=p.normals,C=new Float32Array(P.length),painted=['paint','secondary','armor','cargo'].includes(p.surfaceRole);
+        const own=lin(p.color),dirt=lin('#625345'),primer=lin('#5c6468'),bare=lin('#8d979b'),b=bounds(p),extent=b.hi.map((v,k)=>v-b.lo[k]),P=p.positions,N=p.normals,C=new Float32Array(P.length),painted=['paint','secondary','armor','cargo'].includes(p.surfaceRole);
         const welded=new Map(),key=i=>[0,1,2].map(k=>Math.round(P[i*3+k]*1e4)).join(',');
         if(painted)for(let i=0;i<P.length/3;i++){const k=key(i);let v=welded.get(k);if(!v){v=[0,0,0,0];welded.set(k,v);}for(let a=0;a<3;a++)v[a]+=N[i*3+a];v[3]++;}
         for(let i=0;i<P.length/3;i++){
             const x=P[i*3],y=P[i*3+1],z=P[i*3+2],n=Array.from(N.subarray(i*3,i*3+3)),axis=n.map(Math.abs).indexOf(Math.max(...n.map(Math.abs))),axes=[0,1,2].filter(a=>a!==axis&&extent[a]>.025),distance=Math.min(...axes.map(a=>Math.min(P[i*3+a]-b.lo[a],b.hi[a]-P[i*3+a]))),edge=clamp(1-distance/.018),v=painted?welded.get(key(i)):null,corner=v?clamp((1-Math.hypot(v[0],v[1],v[2])/v[3])*3):0;
+            // A part may carry zones (an armored shell's darker under-frame band).
+            const base=p.zone?p.zone(x,y,z)||own:own;
             const a=hash(Math.floor(x*170),Math.floor(y*170),Math.floor(z*170)+r.surfaceSeed),blotch=hash(Math.floor(x*13),Math.floor(y*13),Math.floor(z*13)+r.surfaceSeed),low=clamp(1-y/(r.height*.55)),grime=r.grime*(.08+low*.70+edge*.16)*( .45+.55*blotch),scuff=painted?r.wear*Math.max(corner,edge*.65)*clamp((a-.40)*2):0;
             for(let c=0;c<3;c++){
                 let value=base[c]*(1-r.wear*.05*(.3+blotch));
@@ -95,9 +97,9 @@
         }
         p.colors=C;
     }
-    const coatingKey=r=>JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!['markings','livery','windowOpacity','seatColor','trim','glass'].includes(k))));
+    const coatingKey=r=>JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!['markings','livery','windowOpacity','seatColor','trim','glass','insignia'].includes(k))));
     function apply(parts,textures,r,cache={},options={}){
-        const look=new Set(['paint','secondary','trim','accent','glass','roughness','finish','wear','grime','surfaceSeed','livery','markings','windowOpacity','seatColor']),geometryKey=JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!look.has(k))));
+        const look=new Set(['paint','secondary','trim','accent','glass','roughness','finish','wear','grime','surfaceSeed','livery','markings','windowOpacity','seatColor','insignia']),geometryKey=JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!look.has(k))));
         if(cache.vehicleGeometry?.key!==geometryKey)cache.vehicleGeometry={key:geometryKey,parts:new Map()};
         // A window, seat or marking edit can reuse the full coating even
         // while its input is being dragged; only changed paint needs rebaking.
@@ -107,7 +109,7 @@
             const material=p.surfaceRole;
             if(material==='glass'&&(/glass$|canopy|windscreen/i.test(p.name))&&r.interior)p.opacity=r.windowOpacity;
             if(['glass','light','red','glow'].includes(material))continue;
-            const role=['paint','secondary','armor','cargo'].includes(material)?r.finish:material==='metal'||material==='accent'?'metal':material==='seat'?'fabric':material==='rubber'?(/seat/i.test(p.name)?'fabric':'rubber'):'polymer',m=maps(role);
+            const role=['paint','secondary','armor','cargo'].includes(material)?r.finish:material==='frame'?'powder':material==='metal'||material==='accent'?'metal':material==='seat'?'fabric':material==='rubber'?(/seat/i.test(p.name)?'fabric':'rubber'):'polymer',m=maps(role);
             const geometryId=p.name+'|'+material,stored=cache.vehicleGeometry.parts.get(geometryId);
             if(stored){for(const [key,value]of Object.entries(stored))p[key]=key==='uvs'?Float32Array.from(value):value;}
             else{unwrap(p);cache.vehicleGeometry.parts.set(geometryId,Object.fromEntries(['positions','normals','uvs','index','joints','weights','_surfaceCharts'].map(k=>[k,p[k]])));p.uvs=Float32Array.from(p.uvs);}
@@ -120,9 +122,39 @@
         }
         bakePanels(parts,textures,r,cache,size);
     }
+    /** Panel kit for one painted part: what the panel layer may draw on it. */
+    function kitOf(p,r){
+        const n=p.name,style=r.bodyStyle||'rounded',f=r.form;
+        if(/wheel arch|divider|mullion|Turbine casings|Lift fan|Access door|Formed bonnet panel|Rear hatch$|Tailgate|Aero rear wing|Cargo|cargo/i.test(n))return null;
+        if(/armor plate|Bolted|Replaceable armor|Plate armor/i.test(n))return'plate';
+        if(n==='Sculpted body shell')return style==='armored'?'armor':style==='faceted'?'utility':'coach';
+        if(n==='Crowned roof panel')return style==='rounded'?null:'roof';
+        if(/Formed side equipment bays|Nose access panels/.test(n))return'bay';
+        if(['hover','shuttle'].includes(f)&&/hull|keel|spine|Canopy spine/i.test(n))return'hull';
+        if(['walker','drone'].includes(f))return'mech';
+        return null;
+    }
+    /** Lettering and artwork regions the panel layer leaves clean: [{o,u,v,n,hw,hh,depth}]. */
+    function keepouts(parts,r){
+        const out=[],L=r.length;
+        for(const s of markingSpecs(parts,r)){
+            let F=s.F,w=s.w,h=s.h;
+            if(s.type==='equipment'){F={...s.F,o:add(s.F.o,scale(s.F.v,s.h*.22))};w=s.w*.82;h=s.h*.40;
+                if(s.p.name==='Formed side equipment bays'){F.o=F.o.slice();F.o[2]=L*.16;w=Math.min(s.w*.42,L*.20);}
+                if(s.p.name==='Formed avionics shell'){F.o=F.o.slice();F.o[2]=L*.17;w=r.width*.20;h=L*.10;}
+                if(s.p.name==='Side fairings'){F={...s.F,o:add(s.F.o,scale(s.F.v,-s.h*.14))};h=s.h*.36;w=s.w*.78;}
+            }
+            out.push({o:F.o,u:F.u,v:F.v,n:F.n,hw:w/2+.05,hh:h/2+.04,depth:Math.max(s.depth,.12)});
+        }
+        for(const s of insigniaSpots(parts,r))out.push({o:s.F.o,u:s.F.u,v:s.F.v,n:s.F.n,hw:s.size/2+.04,hh:s.size/2+.04,depth:Math.max(s.depth,.12)});
+        return out;
+    }
     /** Bake large panels into individual surface charts. Material variation is
      * evaluated in world meters; opposite sides do not share a repeated stain.
-     * Charts get a bounded atlas, while small fittings retain shared micro maps. */
+     * Each chart also receives the panel layer (VehiclePanels): seams, rivets,
+     * vents, grilles, hatches and stencils as height, AO and roughness, with
+     * grime in the cavities and wear on what stands proud. Charts get a
+     * bounded atlas; small fittings retain shared micro maps. */
     function bakePanels(parts,textures,r,cache,size){
         const charts=[],chosen=[],slotNames=['vehicle-coating-albedo.png','vehicle-coating-normal.png','vehicle-coating-surface.png'];
         for(const p of parts){
@@ -131,21 +163,25 @@
             const byChart=new Map();
             for(let i=0;i<p._surfaceCharts.length;i++){
                 const id=p._surfaceCharts[i],axis=Math.floor(id/2),axes=axis===0?[2,1]:axis===1?[0,2]:[0,1];let c=byChart.get(id);
-                if(!c){c={p,id,axes,lo:[Infinity,Infinity],hi:[-Infinity,-Infinity],tris:[]};byChart.set(id,c);}
+                if(!c){c={p,id,axis,sign:id%2?1:-1,axes,lo:[Infinity,Infinity],hi:[-Infinity,-Infinity],tris:[]};byChart.set(id,c);}
                 for(let k=0;k<2;k++){const value=p.positions[i*3+axes[k]];c.lo[k]=Math.min(c.lo[k],value);c.hi[k]=Math.max(c.hi[k],value);}
             }
             for(let k=0;k<p.index.length;k+=3){const id=p._surfaceCharts[p.index[k]];byChart.get(id).tris.push(k);}
             const list=[...byChart.values()].filter(c=>c.hi[0]-c.lo[0]>1e-7&&c.hi[1]-c.lo[1]>1e-7);
-            if(!list.length)continue;for(const c of list){c.w=c.hi[0]-c.lo[0];c.h=c.hi[1]-c.lo[1];charts.push(c);}chosen.push({p,byChart,list});
+            if(!list.length)continue;
+            // Undersides are seldom seen: a third of the texel density.
+            for(const c of list){c.w=c.hi[0]-c.lo[0];c.h=c.hi[1]-c.lo[1];c.k=c.axis===1&&c.sign<0?.34:1;charts.push(c);}chosen.push({p,byChart,list});
         }
         if(!charts.length)return;
-        // Fixed maximum 1024×2048, with texel density reduced for very large
-        // recipes. Geometry, material controls and lettering retain their scale.
-        let density=size===512?85:180,layout;
-        for(let attempt=0;attempt<12;attempt++){
-            const a={width:size,height:size*2,shelfY:0,shelfH:0,cursorX:0,pad:4};let used=0;
-            for(const c of charts){const w=Math.max(12,Math.min(size-16,Math.ceil(c.w*density))),h=Math.max(12,Math.min(size-16,Math.ceil(c.h*density)));if(a.cursorX+w+8>a.width){a.shelfY+=a.shelfH;a.shelfH=0;a.cursorX=0;}c.rect={x:a.cursorX+4,y:a.shelfY+4,w,h};a.cursorX+=w+8;a.shelfH=Math.max(a.shelfH,h+8);used=Math.max(used,c.rect.y+h+4);if(used>size*2)break;}
-            if(used<=size*2){layout={width:size,height:used<=size?size:size*2};break;}density*=.78;
+        // Fixed maximum 2048×2048 (512×1024 for quick drags), texel density
+        // reduced for very large recipes; tallest charts are shelved first.
+        charts.sort((a,b)=>b.h*b.k-a.h*a.k||b.w*b.k-a.w*a.k);
+        const quick=size===512,maxW=quick?512:2048,maxH=quick?1024:2048;
+        let density=quick?95:330,layout;
+        for(let attempt=0;attempt<16;attempt++){
+            const a={width:maxW,shelfY:0,shelfH:0,cursorX:0};let used=0;
+            for(const c of charts){const w=Math.max(12,Math.min(maxW-16,Math.ceil(c.w*density*c.k))),h=Math.max(12,Math.min(maxH-16,Math.ceil(c.h*density*c.k)));if(a.cursorX+w+8>a.width){a.shelfY+=a.shelfH;a.shelfH=0;a.cursorX=0;}c.rect={x:a.cursorX+4,y:a.shelfY+4,w,h};a.cursorX+=w+8;a.shelfH=Math.max(a.shelfH,h+8);used=Math.max(used,c.rect.y+h+4);if(used>maxH)break;}
+            if(used<=maxH){layout={width:maxW,height:used<=maxH/2?maxH/2:maxH};break;}density*=.88;
         }
         if(!layout)throw Error('Vehicle coating atlas could not fit its bounded charts');
         const key=coatingKey(r),previous=cache.vehicleCoating;
@@ -155,35 +191,64 @@
             const {width,height}=layout,count=width*height,albedo=new Uint8Array(count*4),normal=new Uint8Array(count*4),surface=new Uint8Array(count*4);
             for(let i=0;i<count;i++){albedo.set([230,230,230,255],i*4);normal.set([128,128,255,255],i*4);surface.set([255,180,40,255],i*4);}
             const broad=Paint.noise(r.surfaceSeed,32),stain=Paint.noise(r.surfaceSeed+17,64),rgbLinear=lin('#62503b'),sRGB=v=>Math.round(255*clamp(v<=.0031308?v*12.92:1.055*v**(1/2.4)-.055));
-            const write=(c,x,y,pos,color,edge)=>{
-                const m=c.filtered,tx=((Math.floor(pos[c.axes[0]]*5*m.albedo.width)%m.albedo.width)+m.albedo.width)%m.albedo.width,ty=((Math.floor(pos[c.axes[1]]*5*m.albedo.height)%m.albedo.height)+m.albedo.height)%m.albedo.height,si=(ty*m.albedo.width+tx)*4,out=(y*width+x)*4;
-                const variation=broad(pos[0]*.11+pos[2]*.07,pos[1]*.10+pos[2]*.037),streak=stain(pos[0]*.27+pos[2]*.19,pos[1]*.025),low=clamp(1-pos[1]/(r.height*.72)),dust=r.grime*clamp(low*.75+(streak-.40)*1.3)*.72,chips=r.wear*edge*clamp((hash(Math.floor(pos[0]*200+pos[2]*71),Math.floor(pos[1]*220),r.surfaceSeed)-.55)*3),pigment=1-r.wear*(.12+variation*.24),gray=linear(m.albedo.data[si]/255);
-                for(let k=0;k<3;k++){let v=color[k]*gray*pigment;v=mix(v,linear(.47+k*.025),chips*.80);v=mix(v,rgbLinear[k]*(.55+streak*.35),dust);albedo[out+k]=sRGB(v);normal[out+k]=m.normal.data[si+k];}albedo[out+3]=normal[out+3]=255;
-                const roughness=Math.max(.18,Math.min(.96,r.roughness+(r.finish==='powder'?.22:r.finish==='composite'?-.08:0)+r.wear*.14+dust*.30+(variation-.5)*r.wear*.20)),metal=r.finish==='brushed'?.78:r.finish==='composite'?.18:.12;
-                surface.set([255,Math.round(clamp(roughness*m.surface.data[si+1]/255)*255),Math.round(mix(metal,.80,chips)*255),255],out);
-            };
+            const microScale=r.finish==='powder'?.65:r.finish==='composite'?.75:.40,boxes=keepouts(parts,r),style=r.bodyStyle||'rounded',density01=r.details===false?0:r.detailDensity??.6;
+            const baseRough=r.roughness+(r.finish==='powder'?.22:r.finish==='composite'?-.08:0),metal=r.finish==='brushed'?.78:r.finish==='composite'?.18:.12;
+            const inkLight=[.78,.79,.74].map(linear),inkDark=[.09,.11,.12].map(linear);
             for(const c of charts){
-                const p=c.p,q=c.rect,base=lin(p.color),mid=bounds(p).mid;c.filtered=filteredMaps(r.finish,512*5*Math.max(c.w/q.w,c.h/q.h));
+                const p=c.p,q=c.rect,base=lin(p.color),mid=bounds(p).mid,m=c.filtered=filteredMaps(r.finish,512*5*Math.max(c.w/q.w,c.h/q.h)),mw=m.albedo.width,mh=m.albedo.height,[A0,A1]=c.axes;
                 // Padded chart background carries the same paint, avoiding a
                 // bright border when mipmaps sample past a thin surface edge.
                 for(let y=q.y-4;y<q.y+q.h+4;y++)for(let x=q.x-4;x<q.x+q.w+4;x++){
-                    const u=clamp((x-q.x)/q.w),v=clamp((y-q.y)/q.h),pos=mid.slice();pos[c.axes[0]]=mix(c.lo[0],c.hi[0],u);pos[c.axes[1]]=mix(c.lo[1],c.hi[1],v);write(c,x,y,pos,base,0);
+                    const u=clamp((x-q.x)/q.w),v=clamp((y-q.y)/q.h),px=mid[0],tx=((Math.floor(mix(c.lo[0],c.hi[0],u)*5*mw)%mw)+mw)%mw,ty=((Math.floor(mix(c.lo[1],c.hi[1],v)*5*mh)%mh)+mh)%mh,si=(ty*mw+tx)*4,out=(y*width+x)*4,gray=linear(m.albedo.data[si]/255);
+                    for(let k=0;k<3;k++)albedo[out+k]=sRGB(base[k]*gray*(1-r.wear*.2));
+                    surface.set([255,Math.round(clamp(Math.max(.18,Math.min(.96,baseRough+r.wear*.14))*m.surface.data[si+1]/255)*255),Math.round(metal*255),255],out);void px;
                 }
+                // 1. Rasterize the surface: position, vertex color and facing per texel.
+                const f=new Panels.Field(q.w,q.h,c.w/q.w,c.h/q.h,c.lo[0],c.lo[1]),n=q.w*q.h,PX=new Float32Array(n),PY=new Float32Array(n),PZ=new Float32Array(n),CR=new Float32Array(n),CG=new Float32Array(n),CB=new Float32Array(n);
                 for(const k of c.tris){
-                    const ids=[p.index[k],p.index[k+1],p.index[k+2]],P=ids.map(i=>Array.from(p.positions.subarray(i*3,i*3+3))),C=ids.map(i=>Array.from(p.colors.subarray(i*3,i*3+3))),uv=P.map(v=>[(v[c.axes[0]]-c.lo[0])/c.w*q.w+q.x,(v[c.axes[1]]-c.lo[1])/c.h*q.h+q.y]),[a,b,d]=uv,den=(b[1]-d[1])*(a[0]-d[0])+(d[0]-b[0])*(a[1]-d[1]);if(Math.abs(den)<1e-7)continue;
-                    const x0=Math.max(q.x,Math.floor(Math.min(...uv.map(v=>v[0])))),x1=Math.min(q.x+q.w-1,Math.ceil(Math.max(...uv.map(v=>v[0])))),y0=Math.max(q.y,Math.floor(Math.min(...uv.map(v=>v[1])))),y1=Math.min(q.y+q.h-1,Math.ceil(Math.max(...uv.map(v=>v[1]))));
+                    const ids=[p.index[k],p.index[k+1],p.index[k+2]],P=ids.map(i=>Array.from(p.positions.subarray(i*3,i*3+3))),C=ids.map(i=>Array.from(p.colors.subarray(i*3,i*3+3))),Nn=ids.map(i=>Math.abs(p.normals[i*3+c.axis])),uv=P.map(v=>[(v[A0]-c.lo[0])/c.w*q.w,(v[A1]-c.lo[1])/c.h*q.h]),[a,b,d]=uv,den=(b[1]-d[1])*(a[0]-d[0])+(d[0]-b[0])*(a[1]-d[1]);if(Math.abs(den)<1e-7)continue;
+                    const x0=Math.max(0,Math.floor(Math.min(a[0],b[0],d[0]))),x1=Math.min(q.w-1,Math.ceil(Math.max(a[0],b[0],d[0]))),y0=Math.max(0,Math.floor(Math.min(a[1],b[1],d[1]))),y1=Math.min(q.h-1,Math.ceil(Math.max(a[1],b[1],d[1])));
                     for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-                        const u=((b[1]-d[1])*(x+.5-d[0])+(d[0]-b[0])*(y+.5-d[1]))/den,v=((d[1]-a[1])*(x+.5-d[0])+(a[0]-d[0])*(y+.5-d[1]))/den,w=1-u-v;if(Math.min(u,v,w)<-.00001)continue;
-                        const pos=[0,1,2].map(j=>P[0][j]*u+P[1][j]*v+P[2][j]*w),color=[0,1,2].map(j=>C[0][j]*u+C[1][j]*v+C[2][j]*w),edge=clamp(1-Math.min(x-q.x,q.x+q.w-x,y-q.y,q.y+q.h-y)/3);
-                        write(c,x,y,pos,color,edge);
+                        const u=((b[1]-d[1])*(x+.5-d[0])+(d[0]-b[0])*(y+.5-d[1]))/den,v=((d[1]-a[1])*(x+.5-d[0])+(a[0]-d[0])*(y+.5-d[1]))/den,w=1-u-v;if(u<-.00001||v<-.00001||w<-.00001)continue;
+                        const t=y*q.w+x;f.cover[t]=1;PX[t]=P[0][0]*u+P[1][0]*v+P[2][0]*w;PY[t]=P[0][1]*u+P[1][1]*v+P[2][1]*w;PZ[t]=P[0][2]*u+P[1][2]*v+P[2][2]*w;
+                        CR[t]=C[0][0]*u+C[1][0]*v+C[2][0]*w;CG[t]=C[0][1]*u+C[1][1]*v+C[2][1]*w;CB[t]=C[0][2]*u+C[1][2]*v+C[2][2]*w;f.face[t]=Nn[0]*u+Nn[1]*v+Nn[2]*w;
                     }
+                }
+                // 2. Lettering and artwork stay clean.
+                if(boxes.length)for(let t=0;t<n;t++){if(!f.cover[t])continue;const x=PX[t],y=PY[t],z=PZ[t];for(const B of boxes){const dx=x-B.o[0],dy=y-B.o[1],dz=z-B.o[2];if(Math.abs(dx*B.n[0]+dy*B.n[1]+dz*B.n[2])<B.depth&&Math.abs(dx*B.u[0]+dy*B.u[1]+dz*B.u[2])<B.hw&&Math.abs(dx*B.v[0]+dy*B.v[1]+dz*B.v[2])<B.hh){f.keep[t]=1;break;}}}
+                // 3. Panel layer. Mirrored sides share a layout.
+                const kit=kitOf(p,r);
+                if(kit&&density01>0&&c.k===1)Panels.detail(f,{kit,axis:c.axis,sign:c.sign,style,density:density01,seed:Panels.seedOf(p.name+'|'+c.axis+(c.axis===0?'':c.sign)+'|'+r.surfaceSeed%7)});
+                // 4. Cavity (blurred height minus height) and distance to the chart edge.
+                const H=f.H,blur=new Float32Array(n),tmp=new Float32Array(n),R=2;
+                for(let y=0;y<q.h;y++){let s=0,cnt=0;for(let x=-R;x<q.w+R;x++){if(x+R<q.w){s+=H[y*q.w+x+R];cnt++;}if(x-R-1>=0){s-=H[y*q.w+x-R-1];cnt--;}if(x>=0)tmp[y*q.w+x]=s/cnt;}}
+                for(let x=0;x<q.w;x++){let s=0,cnt=0;for(let y=-R;y<q.h+R;y++){if(y+R<q.h){s+=tmp[(y+R)*q.w+x];cnt++;}if(y-R-1>=0){s-=tmp[(y-R-1)*q.w+x];cnt--;}if(y>=0)blur[y*q.w+x]=s/cnt;}}
+                const edge=new Float32Array(n);for(let t=0;t<n;t++)edge[t]=f.cover[t]?9:0;
+                for(let y=0;y<q.h;y++)for(let x=0;x<q.w;x++){const t=y*q.w+x;if(!edge[t])continue;let v=edge[t];if(x>0)v=Math.min(v,edge[t-1]+1);if(y>0)v=Math.min(v,edge[t-q.w]+1);if(x===0||y===0)v=Math.min(v,1);edge[t]=v;}
+                for(let y=q.h-1;y>=0;y--)for(let x=q.w-1;x>=0;x--){const t=y*q.w+x;if(!edge[t])continue;let v=edge[t];if(x<q.w-1)v=Math.min(v,edge[t+1]+1);if(y<q.h-1)v=Math.min(v,edge[t+q.w]+1);if(x===q.w-1||y===q.h-1)v=Math.min(v,1);edge[t]=v;}
+                // 5. Write albedo, tangent-space normal and packed roughness/metal.
+                for(let y=0;y<q.h;y++)for(let x=0;x<q.w;x++){
+                    const t=y*q.w+x;if(!f.cover[t])continue;
+                    const px=PX[t],py=PY[t],pz=PZ[t],a0=c.axis===0?pz:px,a1=c.axis===1?pz:py;
+                    const tx=((Math.floor(a0*5*mw)%mw)+mw)%mw,ty=((Math.floor(a1*5*mh)%mh)+mh)%mh,si=(ty*mw+tx)*4,out=((q.y+y)*width+q.x+x)*4;
+                    const variation=broad(px*.11+pz*.07,py*.10+pz*.037),streak=stain(px*.27+pz*.19,py*.025),low=clamp(1-py/(r.height*.72));
+                    const cav=blur[t]-H[t],concave=clamp(cav/.0012),convex=clamp(-cav/.0010),rim=clamp(1-(edge[t]-1)/3);
+                    const dust=clamp(r.grime*(clamp(low*.75+(streak-.40)*1.3)*.72+concave*.65)),worn=Math.max(rim*.8,convex),chips=r.wear*worn*clamp((hash(Math.floor(px*200+pz*71),Math.floor(py*220),r.surfaceSeed)-.52)*3),pigment=(1-r.wear*(.12+variation*.24))*(1+f.T[t]),gray=linear(m.albedo.data[si]/255);
+                    const color=[CR[t],CG[t],CB[t]],luma=color[0]*.21+color[1]*.72+color[2]*.07,inkC=luma>.30?inkDark:inkLight,inkA=f.S[t]*.92*(1-r.wear*.5*clamp((streak+variation)-.6));
+                    for(let k=0;k<3;k++){let v=color[k]*gray*pigment;v=mix(v,inkC[k],inkA);v*=f.A[t];v=mix(v,linear(.47+k*.025),chips*.80);v=mix(v,rgbLinear[k]*(.55+streak*.35),dust);albedo[out+k]=sRGB(v);}
+                    albedo[out+3]=255;
+                    const gx=x>0&&x<q.w-1&&f.cover[t-1]&&f.cover[t+1]?(H[t+1]-H[t-1])/(2*f.m0):0,gy=y>0&&y<q.h-1&&f.cover[t-q.w]&&f.cover[t+q.w]?(H[t+q.w]-H[t-q.w])/(2*f.m1):0;
+                    const mx=(m.normal.data[si]-128)/127*microScale,my=(m.normal.data[si+1]-128)/127*microScale,nx=Math.max(-2.5,Math.min(2.5,-gx))+mx,ny=Math.max(-2.5,Math.min(2.5,-gy))+my,l=Math.hypot(nx,ny,1);
+                    normal[out]=Math.round(128+nx/l*127);normal[out+1]=Math.round(128+ny/l*127);normal[out+2]=Math.round(128+127/l);normal[out+3]=255;
+                    const roughness=Math.max(.16,Math.min(.97,baseRough+r.wear*.14+dust*.30+(variation-.5)*r.wear*.20+f.R[t]-inkA*.05));
+                    surface.set([255,Math.round(clamp(roughness*m.surface.data[si+1]/255)*255),Math.round(mix(metal,.80,Math.max(chips,f.M[t]*r.wear))*255),255],out);
                 }
             }
             resources=[albedo,normal,surface].map((data,i)=>({name:slotNames[i],width,height,data}));cache.vehicleCoating={key,size,layout:JSON.stringify(layout),resources};
         }
         for(const {p,byChart}of chosen){
             for(let i=0;i<p.positions.length/3;i++){const c=byChart.get(p._surfaceCharts[i]);if(!c.rect)continue;const q=c.rect;p.uvs[i*2]=(q.x+(p.positions[i*3+c.axes[0]]-c.lo[0])/c.w*q.w)/layout.width;p.uvs[i*2+1]=(q.y+(p.positions[i*3+c.axes[1]]-c.lo[1])/c.h*q.h)/layout.height;}
-            p.texture=slotNames[0];p.normalTexture=slotNames[1];p.metallicRoughnessTexture=slotNames[2];p.roughness=p.metalness=1;delete p.colors;
+            p.texture=slotNames[0];p.normalTexture=slotNames[1];p.metallicRoughnessTexture=slotNames[2];p.roughness=p.metalness=1;p.normalScale=1;delete p.colors;
         }
         for(const t of resources)textures[t.name]=t;
         for(const p of parts)delete p._surfaceCharts;
@@ -257,13 +322,15 @@
             out[0]=color[0]*(1-r.grime*.12);out[1]=color[1]*(1-r.grime*.12);out[2]=color[2]*(1-r.grime*.12);out[3]=alpha*(1-fade);
         };
     }
-    function decorate(parts,textures,r,cache={}){
+    /** Where paint-scheme artwork and lettering go: [{p, F, w, h, type, depth}].
+     * The panel layer reserves the same regions before the coating is baked. */
+    function markingSpecs(parts,r){
         const W=r.width,H=r.height,L=r.length,specs=[],find=name=>parts.find(p=>p.name===name);
         const addSpec=(name,F,w,h,type='side',depth=Math.max(W,H)*.20)=>{const p=find(name);if(p&&w>.005&&h>.005)specs.push({p,F,w,h,type,depth});};
         const place=(name,axis,sign,type,wf,hf)=>{
             const p=find(name);if(!p)return;const b=bounds(p),o=b.mid.slice(),u=axis===0?[0,0,-sign]:axis===1?[1,0,0]:[sign,0,0],v=axis===1?[0,0,-1]:[0,1,0];o[axis]=sign>0?b.hi[axis]:b.lo[axis];const a=axis===0?2:0,d=axis===1?2:1;addSpec(name,CM.frame(o,u,v),(b.hi[a]-b.lo[a])*wf,(b.hi[d]-b.lo[d])*hf,type);
         };
-        for(const s of [-1,1]){place('Access door',0,s,'side',.82,.72);place('Formed fuel tank',0,s,'side',.65,.46);place('Side fairings',0,s,'equipment',.73,.62);place('Formed side equipment bays',0,s,'equipment',.83,.73);}
+        for(const s of [-1,1]){place(find('Door armor plates')?'Door armor plates':'Access door',0,s,'side',.82,.72);place('Formed fuel tank',0,s,'side',.65,.46);place('Side fairings',0,s,'equipment',.73,.62);place('Formed side equipment bays',0,s,'equipment',.83,.73);}
         place('Formed bonnet panel',1,1,'hood',.96,.94);place('Nose access panels',1,1,'hood',.90,.90);place('Formed avionics shell',1,1,'equipment',.70,.67);if(r.form==='walker')addSpec('Sloped chest plate',CM.frame([0,H*.733,L*.33],[1,0,0],[0,1,0]),W*.42,H*.020,'nameplate',H*.08);
         if(r.form==='walker')for(const s of [-1,1]){
             const shoulder=find('Shoulder service plates'),shin=find('Tapered shin armor cover plates');
@@ -275,20 +342,72 @@
             addSpec('Turbine casings',CM.frame([x,H*.45+R,-L*.235],[1,0,0],[0,0,-1]),R*1.45,L*.12,'equipment',R*.7);
             const wings=find('Swept airfoil wings');if(wings){const b=bounds(wings);addSpec(wings.name,CM.frame([s*W*.30,H*.49,-L*.06],[1,0,0],[0,0,-1]),W*.12,L*.16,'hazard',H*.12);}
         }
-        const key=JSON.stringify([r.livery,r.markings,r.paint,r.secondary,r.accent,r.wear,r.grime,r.surfaceSeed,specs.map(s=>[s.type,Math.round(s.w/s.h*100),s.p.color])]);
+        return specs;
+    }
+    /** Where the insignia goes: under the name on each door (or fuel tank),
+     * ahead of the name on a flight craft's equipment bays, and on the
+     * shuttle's fins. [{p, F, size, depth}] */
+    function insigniaSpots(parts,r,specs=markingSpecs(parts,r)){
+        const out=[],H=r.height,L=r.length,rally=r.livery==='rally';
+        for(const s of specs){
+            if(s.type==='side'){const size=Math.min(s.h*(rally?.26:.34),s.w*.30);out.push({p:s.p,F:{...s.F,o:add(s.F.o,scale(s.F.v,-s.h*(rally?.36:.20)))},size,depth:s.depth});}
+            if(s.p.name==='Formed side equipment bays'){const o=s.F.o.slice();o[2]=-L*.05;out.push({p:s.p,F:{...s.F,o},size:Math.min(s.h*.62,L*.11),depth:s.depth});}
+        }
+        if(r.form==='shuttle'){const p=parts.find(p=>p.name==='Swept stabilizers');if(p){const b=bounds(p);for(const s of [-1,1])out.push({p,F:CM.frame([s>0?b.hi[0]:b.lo[0],H*.86,-L*.405],[0,0,-s],[0,1,0]),size:H*.15,depth:H*.05});}}
+        return out;
+    }
+    /** The insignia's emblems alone (no field): color and coverage at (u, v),
+     * from the design painted over black and over white. */
+    function insigniaArt(design,images,r){
+        const solid=c=>({...design,field:{...design.field,layout:'solid',colors:[c,c,c,c,c]}}),black=Design.prepare(solid('#000000'),1,images),white=Design.prepare(solid('#ffffff'),1,images),k=[0,0,0,255],w=[0,0,0,255];
+        return(u,v,out)=>{Design.colorAt(black,u,v,k);Design.colorAt(white,u,v,w);const a=Math.max(0,Math.min(1,1-(w[0]-k[0])/255));for(let i=0;i<3;i++)out[i]=a>.004?Math.min(1,k[i]/a/255)*(1-r.grime*.12):0;const nick=hash(Math.floor(u*90),Math.floor(v*90),r.surfaceSeed+5);out[3]=a*(1-r.wear*.4*(nick>.9?1:.08));};
+    }
+    // Hardware lettering and emblems must never be painted across: handles,
+    // latches, lamps, mirrors, vents and fasteners standing on the panel.
+    const FIXTURE=/handle|latch|lamp|light|mirror|vane|louver|fastener|socket|bolt|rib|grille|vent|filler|hinge|antenna|wiper|marker/i;
+    /** Moves (or narrows) a caption of `width` x `height` centred at F.o
+     * along F.u into the nearest stretch of the spec's panel that no fixture
+     * crosses at the caption's height. Returns the new frame and width. */
+    function clearSpan(parts,s,F,width,height,need=width){
+        const margin=height*.30,band=height*.62,blocked=[],reach=Math.max(.04,Math.min(s.depth*.5,Math.max(width,height)*.5));
+        for(const p of parts){
+            if(p===s.p||!FIXTURE.test(p.name))continue;const P=p.positions;
+            for(let k=0;k<p.index.length;k+=3){
+                let lo=Infinity,hi=-Infinity,vlo=Infinity,vhi=-Infinity,near=false;
+                for(let j=0;j<3;j++){const i=p.index[k+j],d=[P[i*3]-F.o[0],P[i*3+1]-F.o[1],P[i*3+2]-F.o[2]],u=dot(d,F.u),v=dot(d,F.v),n=dot(d,F.n);lo=Math.min(lo,u);hi=Math.max(hi,u);vlo=Math.min(vlo,v);vhi=Math.max(vhi,v);if(Math.abs(n)<reach)near=true;}
+                if(near&&vhi>-band&&vlo<band&&hi>-width&&lo<width)blocked.push([lo-margin,hi+margin]);
+            }
+        }
+        if(!blocked.length)return{F,width};
+        blocked.sort((a,b)=>a[0]-b[0]);const free=[];let at=-width/2-s.w*.04;const end=width/2+s.w*.04;
+        for(const [a,b]of blocked){if(a>at)free.push([at,Math.min(a,end)]);at=Math.max(at,b);if(at>=end)break;}
+        if(at<end)free.push([at,end]);
+        const spans=free.filter(([a,b])=>b-a>1e-6);if(!spans.length)return{F,width:0};
+        const fits=spans.filter(([a,b])=>b-a>=need),pick=fits.length?fits.sort((x,y)=>Math.abs(Math.max(x[0]+need/2,Math.min(x[1]-need/2,0)))-Math.abs(Math.max(y[0]+need/2,Math.min(y[1]-need/2,0))))[0]:spans.sort((x,y)=>(y[1]-y[0])-(x[1]-x[0]))[0];
+        const room=pick[1]-pick[0],w=Math.min(width,room),c=Math.max(pick[0]+Math.min(need,room)/2,Math.min(pick[1]-Math.min(need,room)/2,0));
+        return{F:{...F,o:add(F.o,scale(F.u,c))},width:w};
+    }
+    /** The width a caption really takes (lettering() scales to fit both limits). */
+    function captionWidth(text,width,height){const advance=Array.from(CP.cleanText(text,22)).reduce((n,ch)=>n+(Typeface[ch]||Typeface[' ']).advance,0);if(!advance)return 0;const size=Math.min(width/(advance+.12),height/1.10);return size*(advance+.12);}
+    function decorate(parts,textures,r,cache={},images={}){
+        const W=r.width,H=r.height,L=r.length,specs=markingSpecs(parts,r);
+        const insignia=r.insignia&&r.insignia.layers&&r.insignia.layers.length?r.insignia:null,named=insignia?Design.pictures(insignia):[];
+        const key=JSON.stringify([r.livery,r.markings,r.paint,r.secondary,r.accent,r.wear,r.grime,r.surfaceSeed,specs.map(s=>[s.type,Math.round(s.w/s.h*100),s.p.color]),insignia,named.map(n=>images[n]?[n,images[n].width,images[n].height,images[n].version||0]:n)]);
         let kept=cache.vehicleArtwork;
         if(!kept||kept.key!==key){
             const a=CP.atlas(1024,1024,[255,255,255,0]),regions=new Map();
             for(const s of specs){const id=s.type+'|'+Math.round(s.w/s.h*100)+'|'+s.p.color;if(regions.has(id))continue;const aspect=s.w/s.h,w=aspect>=1?512:Math.max(128,Math.round(384*aspect)),h=aspect>=1?Math.max(96,Math.round(512/aspect)):384,region=CP.region(a,w,h);CP.fill(a,region,artwork(s.type,w,h,{...r,paint:s.p.color}));regions.set(id,region);}
+            if(insignia){const region=CP.region(a,256,256);CP.fill(a,region,insigniaArt(insignia,images,r));regions.set('insignia',region);}
             kept={key,image:{name:'vehicle-markings.png',width:a.width,height:a.height,data:a.data},regions:[...regions].map(([id,q])=>[id,[(q.x+.5)/a.width,(q.y+.5)/a.height,(q.x+q.w-.5)/a.width,(q.y+q.h-.5)/a.height]])};cache.vehicleArtwork=kept;
         }
         const regions=new Map(kept.regions),meshes=[],offset=Math.min(W,H,L)*.0007;
         for(const s of specs){const uv=regions.get(s.type+'|'+Math.round(s.w/s.h*100)+'|'+s.p.color),m=project(s.p,s.F,s.w,s.h,s.depth,uv,offset);if(m.index.length)meshes.push(m);}
+        if(insignia&&regions.has('insignia'))for(const s of insigniaSpots(parts,r,specs)){const spec=specs.find(q=>q.p===s.p&&Math.abs(dot(sub(s.F.o,q.F.o),q.F.n))<1e-6)||{p:s.p,w:s.size,depth:s.depth},clear=clearSpan(parts,spec,s.F,s.size,s.size);if(clear.width<s.size*.999)continue;const m=project(s.p,clear.F,s.size,s.size,s.depth,regions.get('insignia'),offset*1.3);if(m.index.length)meshes.push(m);}
         if(meshes.length){const mesh=CM.merge(meshes);CM.skin(mesh,0);parts.push({...mesh,name:'Vehicle markings',surfaceRole:'ink',texture:kept.image.name,color:'#ffffff',roughness:.76,metalness:0,cutout:true,alphaCutoff:.5});textures[kept.image.name]=kept.image;}
         const letters=[];
         for(const s of specs){
             let text=r.markings,w=s.w*.82,h=s.h*.40,shift=s.h*.22;
-            if(r.livery==='rally'&&s.type==='side'){text=(text.match(/\d+/)||[text])[0];w=s.w*.56;h=s.h*.68;shift=0;}
+            if(r.livery==='rally'&&s.type==='side'){text=(text.match(/\d+/)||[text])[0];w=s.w*.56;h=s.h*(insignia?.50:.68);shift=insignia?s.h*.14:0;}
             if(s.type==='hood'){if(r.livery!=='rally')continue;text=(text.match(/\d+/)||[text])[0];w=s.w*.42;h=s.h*.30;shift=0;}
             if(s.type==='hazard'||s.p.name==='Turbine casings'){text=(text.match(/\d+/)||[])[0]||'';w=s.w*.70;h=s.h*.30;shift=s.h*.12;}
             if(s.type==='nameplate'){w=s.w*.96;h=s.h;shift=0;}
@@ -300,11 +419,12 @@
             // cooling ribs and wing root. A generic centered caption was not.
             if(s.p.name==='Formed side equipment bays'){F.o[2]=L*.16;w=Math.min(s.w*.42,L*.20);}
             if(s.p.name==='Formed avionics shell'){F.o[2]=L*.17;w=W*.20;h=L*.10;}
-            const m=lettering(s.p,F,text,w,h,offset*1.6);if(!m.index.length)continue;
+            const clear=clearSpan(parts,s,F,w,h,captionWidth(text,w,h));
+            const m=lettering(s.p,clear.F,text,clear.width,h,offset*1.6);if(!m.index.length)continue;
             const ink=rgb(s.p.color).reduce((n,v,i)=>n+v*[.21,.72,.07][i],0)>.58?'#202b31':'#e4e6dc',color=lin(ink);m.colors=Float32Array.from({length:m.positions.length},(_,i)=>color[i%3]);letters.push(m);
         }
         if(letters.length){const mesh=CM.merge(letters);mesh.colors=Float32Array.from(letters.flatMap(m=>Array.from(m.colors)));CM.skin(mesh,0);parts.push({...mesh,name:'Vehicle lettering',surfaceRole:'ink',color:'#ffffff',roughness:.8,metalness:0});}
 
     }
-    const api={maps,apply,bounds,project,lettering,decorate,fittings};root.RRVehicleFinish=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+    const api={maps,apply,bounds,project,lettering,decorate,fittings,markingSpecs,kitOf,keepouts};root.RRVehicleFinish=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

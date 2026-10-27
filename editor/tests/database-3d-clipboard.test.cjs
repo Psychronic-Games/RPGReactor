@@ -199,6 +199,17 @@ test('copied triggered animations preview together, track working anchors, and r
     e._stopEffectPreview();assert.equal(e._additionalEffectPreviews.size,0);assert.equal(disposed,2);
 });
 
+test('a media surface played on demand shows in the preview beside the always-on movie, selected or not',()=>{
+ // The Demo's monitor arm: its static movie always plays, its Psychronic logo is called by the map's model by name.
+ const e=fixture();e._object={};e._sim={};e._stopLightPreview=()=>{};e._disposeEffectQuad=()=>{};
+ e._stopVideoPreview=function(){this._fxVideo=null;};
+ e._playEffectPreview=function(raw){this._fxPreviewDef=raw;this._fxVideo={raw,file:raw.video.file};};
+ e.rawEffects=[{type:'video',trigger:'always',video:{file:'static.mp4'}},{type:'video',video:{file:'logo.png'}},{type:'video',trigger:'action',video:{file:'call.png'}}];
+ const shown=()=>[e._fxVideo&&e._fxVideo.file,...[...e._additionalEffectPreviews.values()].map(p=>p._fxVideo&&p._fxVideo.file)].sort();
+ e._updateTriggeredEffectPreview();assert.deepEqual(shown(),['call.png','logo.png','static.mp4']);
+ e.selectEffect(1);e._updateTriggeredEffectPreview();e._updateTriggeredEffectPreview();assert.deepEqual(shown(),['call.png','logo.png','static.mp4'],'the one in hand stays shown');
+});
+
 test('additional image surfaces appear immediately, keep independent playback and follow live edits',()=>{
  const e=fixture();e._object={};e._sim={};e._stopLightPreview=()=>{};e._disposeEffectQuad=()=>{};
  e._stopVideoPreview=function(){this._fxVideo=null;};

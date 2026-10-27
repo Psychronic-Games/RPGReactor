@@ -1,7 +1,7 @@
 //=============================================================================
 // reactor_objects_legacy.js v1.8.0
 //=============================================================================
-// Event commands of RPG Maker 2000/2003 that MZ lacks, [fN] character sheets,
+// Event commands of RPG Maker 2000/2003 that MZ lacks, [NF] character sheets,
 // and Script commands that wait inside a loop.
 // Part of reactor_objects.js; loads after reactor_objects_interpreter.js.
 
@@ -194,6 +194,192 @@
         }
     };
 
+    // RPG Maker 2000/2003 move-route timing, for routes whose frequency the import kept (route.rrFrequency from
+    // Set Move Route, page.rrFrequency for an event's own custom route; EasyRPG's Game_Character::UpdateMoveRoute,
+    // ForceMoveRoute, CancelMoveRoute and UpdateMovement). A character counts the frames it has stood still
+    // (_rrStop, zeroed by every frame of a step or jump) and runs its route's next command once that count reaches
+    // the wait the last one set (_rrMaxStop): 2^(9 - frequency) frames after a step or jump, 2^(8 - frequency)
+    // after a turn and 20 more after a Wait, none at frequency 8; every other command runs in the same frame. A
+    // forced route runs at its own frequency and gives the character's back when it ends or is cancelled; a new
+    // Set Move Route replaces an unfinished one outright, and its first command runs at once. A route whose last
+    // command is a step ends as that step is taken.
+    // Every character has these from the moment it is made, so all share one shape (followers made later too).
+    const _initMembersTiming = Game_CharacterBase.prototype.initMembers;
+    Game_CharacterBase.prototype.initMembers = function() {
+        _initMembersTiming.call(this);
+        this._rrFrequency = 0; this._rrOrigFrequency = 0; this._rrStop = 0; this._rrMaxStop = 0; this._rrRandomStop = 0;
+    };
+    const stepStop = (f) => (f >= 8 ? 0 : 1 << (9 - f));
+    const turnStop = (f) => (f >= 8 ? 0 : 1 << (8 - f));
+    const waitStop = (f) => 20 + turnStop(f);
+    const clampFrequency = (f) => Math.max(1, Math.min(8, Number(f) || 0));
+    const pageFrequency = (c) => {
+        const page = c instanceof Game_Event && c._pageIndex >= 0 && c.page ? c.page() : null;
+        if (!page || !(page.rrFrequency > 0)) return 0;
+        // a frequency changed in the editor since the import wins over the imported one
+        const f = clampFrequency(page.rrFrequency);
+        return Math.max(1, Math.min(5, Math.round(f * 5 / 8))) === page.moveFrequency ? f : 0;
+    };
+    Game_CharacterBase.prototype.rrMoveFrequency = function() {
+        return this._rrFrequency > 0 ? this._rrFrequency : pageFrequency(this) || 2;
+    };
+    // A route's Increase/Decrease Frequency: the old engine's 1-8 for the route timing, MZ's 1-5 for the rest.
+    Game_CharacterBase.prototype.rrStepFrequency = function(delta) {
+        this._rrFrequency = clampFrequency(this.rrMoveFrequency() + delta);
+        this.setMoveFrequency(Math.max(1, Math.min(5, this.moveFrequency() + delta)));
+    };
+    /** Whether this character's current route keeps the old engine's timing. */
+    Game_Character.prototype.rrTimedRoute = function() {
+        if (!legacyMotion() || !this._moveRoute) return false;
+        if (this._moveRouteForcing) return this._moveRoute.rrFrequency > 0;
+        return this instanceof Game_Event && this._moveType === 3 && pageFrequency(this) > 0;
+    };
+    Game_Character.prototype.rrUpdateTimedRoute = function() {
+        const route = this._moveRoute, list = route.list, forced = this._moveRouteForcing;
+        const start = this._moveRouteIndex;
+        for (let guard = 0; guard < 1024; guard++) {
+            if (!this.isStopping() || (this._rrStop | 0) < (this._rrMaxStop | 0)) break;
+            let command = list[this._moveRouteIndex];
+            if (!command || command.code === 0) {
+                if (!route.repeat) {
+                    if (forced) this.processRouteEnd();
+                    break;
+                }
+                this._moveRouteIndex = 0;
+                if (start === 0) break;
+                command = list[0];
+                if (!command || command.code === 0) break;
+            }
+            const code = command.code, f = this.rrMoveFrequency();
+            if (code >= 1 && code <= 14) {
+                const direction = this._direction;
+                this.setMovementSuccess(true);
+                this.processMoveCommand(command);
+                if (this.isStopping()) {
+                    if (!route.skippable) break;           // tried again next frame
+                    this._direction = direction;
+                }
+                this._rrMaxStop = stepStop(this.rrMoveFrequency());
+            } else if (code >= 16 && code <= 26) {
+                this.processMoveCommand(command);
+                this._rrMaxStop = turnStop(f);
+                this._rrStop = 0;
+            } else if (code === 15) {
+                this._rrMaxStop = waitStop(f);
+                this._rrStop = 0;
+            } else {
+                this.processMoveCommand(command);
+                // a switch, a script or a page change may have given the character another route
+                if (this._moveRoute !== route || this._moveRouteForcing !== forced) break;
+            }
+            this._moveRouteIndex++;
+            if (this._moveRouteIndex === start) break;
+        }
+        if (this.isStopping()) this._rrStop = (this._rrStop | 0) + 1;
+    };
+    const _updateRoutineMoveUntimed = Game_Character.prototype.updateRoutineMove;
+    Game_Character.prototype.updateRoutineMove = function() {
+        if (this.rrTimedRoute()) this.rrUpdateTimedRoute();
+        else _updateRoutineMoveUntimed.call(this);
+    };
+    const _forceMoveRoute = Game_Character.prototype.forceMoveRoute;
+    Game_Character.prototype.forceMoveRoute = function(moveRoute) {
+        const timed = legacyMotion() && moveRoute && moveRoute.rrFrequency > 0;
+        if (timed && !this._moveRouteForcing) this._rrOrigFrequency = this.rrMoveFrequency();
+        _forceMoveRoute.call(this, moveRoute);
+        if (!timed) return;
+        const f = clampFrequency(moveRoute.rrFrequency);
+        this._rrStop = 0xffff;
+        this._rrFrequency = f;
+        if (f !== this._rrOrigFrequency) this._rrMaxStop = stepStop(f);
+    };
+    /** Ends a forced route and gives the character back its frequency (EasyRPG's CancelMoveRoute). */
+    Game_Character.prototype.rrRestoreFrequency = function() {
+        if (this._rrOrigFrequency > 0) {
+            this._rrFrequency = this._rrOrigFrequency;
+            this._rrMaxStop = stepStop(this._rrFrequency);
+        }
+        this._rrOrigFrequency = 0;
+    };
+    Game_Character.prototype.rrCancelMoveRoute = function() {
+        if (!this._moveRouteForcing) return;
+        this._moveRouteForcing = false;
+        this.restoreMoveRoute();
+        this.setMovementSuccess(false);
+        this.rrRestoreFrequency();
+    };
+    const _processRouteEnd = Game_Character.prototype.processRouteEnd;
+    Game_Character.prototype.processRouteEnd = function() {
+        const forced = this._moveRouteForcing;
+        _processRouteEnd.call(this);
+        if (forced && !this._moveRouteForcing) this.rrRestoreFrequency();
+    };
+    const stepped = (c) => {
+        c._rrStop = 0;
+        // the last command of a forced route was this step or jump: the route ends as it lands
+        if (!c.isStopping() || !c._moveRouteForcing || !c.rrTimedRoute()) return;
+        const next = c._moveRoute.list[c._moveRouteIndex];
+        if ((!next || next.code === 0) && !c._moveRoute.repeat) c.rrCancelMoveRoute();
+    };
+    const _updateMove = Game_CharacterBase.prototype.updateMove;
+    Game_CharacterBase.prototype.updateMove = function() {
+        _updateMove.call(this);
+        if (legacyMotion() && this instanceof Game_Character) stepped(this);
+    };
+    const _updateJump = Game_CharacterBase.prototype.updateJump;
+    Game_CharacterBase.prototype.updateJump = function() {
+        _updateJump.call(this);
+        if (legacyMotion() && this instanceof Game_Character) stepped(this);
+    };
+    // A page change sets the frequency, the forced route's too, and the wait before the page's own movement.
+    const _setupPageSettingsTiming = Game_Event.prototype.setupPageSettings;
+    Game_Event.prototype.setupPageSettings = function() {
+        _setupPageSettingsTiming.call(this);
+        const f = legacyMotion() ? pageFrequency(this) : 0;
+        if (!f) return;
+        this._rrFrequency = f;
+        if (this._moveRouteForcing) this._rrOrigFrequency = f;
+        this._rrMaxStop = this._moveType === 3 ? turnStop(f) : stepStop(f);
+        this._rrRandomStop = null;
+    };
+    // An event's own movement: a custom route by the timing above, every frame it stands; a random or
+    // toward-the-player step once it has stood 2^(9 - frequency) frames, a random one 3/5 to 6/5 of that,
+    // drawn again after each (EasyRPG's Game_Event::UpdateNextMovementAction, SetMaxStopCountForRandom).
+    const _updateSelfMovement = Game_Event.prototype.updateSelfMovement;
+    Game_Event.prototype.updateSelfMovement = function() {
+        if (this._moveType === 3 && !this._locked && this.rrTimedRoute()) return this.updateRoutineMove();
+        _updateSelfMovement.call(this);
+    };
+    const _stopCountThreshold = Game_Event.prototype.stopCountThreshold;
+    Game_Event.prototype.stopCountThreshold = function() {
+        const f = legacyMotion() ? pageFrequency(this) : 0;
+        if (!f) return _stopCountThreshold.call(this);
+        const step = stepStop(this.rrMoveFrequency());
+        if (this._moveType !== 1) return step;
+        if (this._rrRandomStop == null) this._rrRandomStop = Math.floor(step * (Math.randomInt(4) + 3) / 5);
+        return this._rrRandomStop;
+    };
+    const _moveTypeRandom = Game_Event.prototype.moveTypeRandom;
+    Game_Event.prototype.moveTypeRandom = function() {
+        _moveTypeRandom.call(this);
+        this._rrRandomStop = null;
+    };
+
+    // Nothing on the map moves or runs between a Teleport and the new map (EasyRPG suspends the map update for
+    // the teleport): Sunset over Imdahl's barkeeper turns the hero and speeds him up by a route given just
+    // before the teleport, and the rat hunt's first route replaces it before the hero is updated again, so
+    // the speed-up never happens there; MZ ran it while the screen faded and the hero ran too fast for good.
+    const _Game_Map_update = Game_Map.prototype.update;
+    Game_Map.prototype.update = function(sceneActive) {
+        if (legacyMotion() && $gamePlayer && $gamePlayer.isTransferring()) return;
+        _Game_Map_update.call(this, sceneActive);
+    };
+    const _Game_Player_update = Game_Player.prototype.update;
+    Game_Player.prototype.update = function(sceneActive) {
+        if (legacyMotion() && this.isTransferring()) return;
+        _Game_Player_update.call(this, sceneActive);
+    };
+
     // A route's face and turn commands turn the character even when its facing is fixed; the lock only keeps
     // steps from turning it (EasyRPG's UpdateMoveRoute sets the facing outright). Deep 8's village mother is a
     // fixed-graphic page turned left by a route onto her left-facing cell.
@@ -327,8 +513,10 @@
         this.setWaitMode("rrAllMoves");
         return true;
     };
+    // Stop All Movement ends every forced route (EasyRPG's Game_Map::RemoveAllPendingMoves and CancelMoveRoute):
+    // each character takes up its own movement and frequency again.
     Game_Interpreter.prototype.rrHaltAllMoves = function() {
-        for (const c of [$gamePlayer, ...$gameMap.events()]) if (c.isMoveRouteForcing()) c.restoreMoveRoute();
+        for (const c of [$gamePlayer, ...$gameMap.events()]) if (c.isMoveRouteForcing()) c.rrCancelMoveRoute();
         return true;
     };
 
@@ -458,14 +646,15 @@ Game_Interpreter.prototype.clear = function() {
 };
 
 //-----------------------------------------------------------------------------
-// [fN] character sheets (see reactor_sprites.js): N frames, looping, resting on 0.
-// Off unless System.json sets rrMultiFrames.
+// [NF] character sheets (see reactor_sprites.js): N frames, looping, resting on 0.
+// Named "Name[6F]" as Reactor exports them, or "Name[F6]" as Victor Engine Multi
+// Frames did; either case. Off unless System.json sets rrMultiFrames.
 //-----------------------------------------------------------------------------
 
 Game_CharacterBase.rrFramesOf = function(name) {
     if (!$dataSystem || !$dataSystem.rrMultiFrames) return 0;
-    const m = /\[F(\d+)\]/i.exec(String(name || ""));
-    return m ? Math.max(1, Number(m[1])) : 0;
+    const m = /\[(?:(\d+)F|F(\d+))\]/i.exec(String(name || ""));
+    return m ? Math.max(1, Number(m[1] || m[2])) : 0;
 };
 
 const _rrMultiMaxPattern = Game_CharacterBase.prototype.maxPattern;

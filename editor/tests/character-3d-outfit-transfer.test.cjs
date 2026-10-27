@@ -326,7 +326,9 @@ test('Captain panels have real fabric backing with body skinning, confined to th
     const preset = STAR_SHIFT.find(p => p.id === 'ss_carol');
     const built = Body.build(pack, Body.normalizeRecipe({ gender: 1, extreme: true, weight: 4 }));
     const out = Wardrobe.build(pack, built, preset.items, {});
-    const lining = out.parts.filter(p => p.rrLining);
+    // The panel backing only: 'Garment linings' (RRCharacterWardrobe.garmentLinings, the dark inner face along open
+    // edges) is also rrLining but follows the cloth it lines, not the body's skin, and has no body source vertices.
+    const lining = out.parts.filter(p => p.rrLining && p.name !== 'Garment linings');
     assert.ok(lining.length, 'backing is a garment mesh');
     const authored = new Set(Transfer.load('carol').parts.find(p => p.id === 'uniform').hidden);
     const overlap = new Set(authored);

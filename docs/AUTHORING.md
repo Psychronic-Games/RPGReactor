@@ -16,7 +16,7 @@ project; a person can use it to find where anything lives.
 | 3D switch | `<3d>` in the map note | Map Properties › 3D | — |
 | Tile elevation (terraces, cliffs) | `MapNNN.r3d.json` › `elevation` (one whole number per tile) | — (by hand or generator) | — |
 | Terrain (rolling ground) | `MapNNN.r3d.json` › `terrain` ((w+1)×(h+1) corner heights), `terrainWidth` | Build bar › Terrain brushes | `editor/tests/terrain.test.cjs` rules |
-| Room (floor, walls, ceiling, sky) | `MapNNN.r3d.json` › `room` | Build bar › Terrain › Room and Sky | — |
+| Room (floor, its `floorTint` and `floorScale`, walls, ceiling, sky) | `MapNNN.r3d.json` › `room` | Build bar › Terrain › Room and Sky | — |
 | Steep ground (the material slopes turn to) | `MapNNN.r3d.json` › `room` › `cliff`, `cliffSlope`, `cliffTint` | Build bar › Terrain › Ground › Whole map › Steep Ground | `editor/tests/terrain-cliff.test.cjs` rules |
 | Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **Build** bar over the 3D view (the Build button in the toolbar); drawn as a plan on the flat map too | `validate-map.cjs` |
 | Buildings, built or described | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures › Build (the plot in the 3D view with the Build bar), Build bar › Blueprint or Use on the map stamps one | `build-structure.cjs --check`, and the page's own walk |
@@ -26,7 +26,7 @@ project; a person can use it to find where anything lives.
 | Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | Build bar › Terrain › Pour | `validate-map.cjs` |
 | Rivers and waterfalls | `MapNNN.r3d.json` › `water` (a sheet with a `path` of heights downstream and a `flow`) | Build bar › Terrain › River | `carve-river.cjs`, `validate-map.cjs` |
 | Foliage (grass, flowers, ferns, reeds, bushes) and wind | `MapNNN.r3d.json` › `foliage` (a density per cell per layer, bushes one by one) | Build bar › Foliage | `paint-foliage.cjs`, `validate-map.cjs` |
-| Placed models | `MapNNN.r3d.json` › `props` | Build bar › Models (Select there, or Build › Select, picks a placed one up) | — |
+| Placed models | `MapNNN.r3d.json` › `props` | Build bar › Models (Select there, or Build › Select, picks a placed one up; Placement › Scatter lays many along a drag, each turned and sized its own way) | — |
 | Physics (gravity, jump, fall damage, swimming; in battles `battleClimb`, `climbHeight`, `climbCost`, `battleFall`, `lethalFall`) | `System.json` › `reactorPhysics`; a map's own in `MapNNN.r3d.json` › `physics` | Database › System 2 › Physics (3D maps), Swimming (3D maps); Map Properties › Physics | — |
 | Keys and gamepad buttons | `System.json` › `reactorControls` (absent while stock) | Database › Controls | — |
 | Lights and time of day | `MapNNN.r3d.json` › `lights`, `lighting` (a sun follows the ambient unless `daylight: "fixed"`) | Lighting tool | — |
@@ -63,7 +63,10 @@ the top: its roof, and what stands above the top floor. **Build** opens the stru
 the map's 3D view with the same Build bar the map uses, for anything the
 plan cannot paint. The Build bar's Blueprint slot, or Use on the map,
 stamps a structure; **Rebuild from plan** re-lays a stamped one from its
-file.
+file. The Blueprint panel shows each plan as a picture with its size, a
+Direction and a Size (×1 to ×4) to stamp it at, and **Move a building** (M)
+picks one up on the map with buttons for what the keys do: Turn (R), Remove
+(Delete), Nudge (the arrows; Shift for 5) and its Size.
 
 The rules the engine applies to terrain, pieces and water (where the
 ground is, what blocks a step, how deep the water stands) are in
@@ -118,13 +121,18 @@ the previous assignments. Adjust movement and handling as needed. In
 **Starting Position**, click the location button, choose a map and tile
 with the shared map picker, then choose the facing. A 3D map stands in the
 picker (drag to turn, right-drag to move, scroll to zoom, click the place);
-**Top Down** is the flat view. **Clear** leaves it
-unplaced. The vehicle appears in both editor views without adding an event
-to the map or its event list; opening its marker selects the Vehicles entry.
-Vehicle starting coordinates follow anchored map resize offsets.
+**Top Down** is the flat view. The vehicle appears in both editor views
+without adding an event to the map: its orange marker covers its Length along
+the way it faces (one tile for a 2D vehicle), and the map's Events list shows
+it below the map's own events under **Vehicles (Database)**, named by its
+entry and row ("Vehicle 1 · Motorcycle · Unit 3"). Drag it on the map, in the
+2D or the 3D view, to move where it starts: the Database is written when it is
+dropped, and Undo puts it back. Double-click it, or its row, to open its
+Vehicles entry. Vehicle starting coordinates follow anchored map resize offsets.
 
 **Several of one vehicle.** Starting Position is a list: **+ Add Another** adds a copy of the vehicle with a starting
-position and facing of its own, and **Delete** on a copy's row takes it away. Each copy is a vehicle of its own
+position and facing of its own, and **Delete** takes a row away (the first row's vehicle is replaced by the next
+one's; with no other row it is left unplaced). Each copy is a vehicle of its own
 in the game (its own place, condition and equipment) and is named in commands as "Motorcycle 2". In the file a
 copy is an entry of the record's `copies` (`{ id, startMapId, startX, startY, startDirection }`); its identity is
 `0:<vehicle ID + 10000 * (id - 1)>`, the first copy's `0:<vehicle ID>`.
@@ -319,23 +327,80 @@ A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eig
   stacked: in the Build bar a drag lays a row and a Ctrl-drag fills an
   area, each rock varied a little unless Vary is off.
 - `x, y`: the cell. `z`: the level the piece's foot stands at, in tiles
-  above the ground, up to 240 (forty-eight storeys of five). `rot`: quarter
+  above the ground, up to 240 (forty-eight storeys of five): a whole level,
+  or any quarter tile for a `floor`, a `block` and a shape. `rot`: quarter
   turns clockwise seen from above; `0` rises or faces south.
+- `height`: a `wall`, `glass`, `pillar`, `doorway`, `window` or `fence` of its own
+  height, 0.5 to 40 tiles in quarters (a storey, 5, when absent; a fence 1.5): drawn,
+  stood against and cut away at that height. A doorway's or window's
+  opening keeps its size; the wall over it reaches the top. Setting the
+  height of a whole selected building lifts each storey's floors, the
+  storeys above and the roof with its walls.
 - `material`: a name under `img/materials` without extension, or `""` for
-  plain grey.
+  plain grey. Any material picker's last tile, **Your own picture…**, copies a
+  picture from the computer into `img/materials` (with `<name>_normal` and
+  `<name>_rough` beside it when they are there); the Resource Manager has the
+  folder too.
+- `thick`: a `pillar`'s thickness across, 0.1 (a pole) to 1 (a column a
+  tile wide), 0.4 when absent. `rise`: a `roof`'s ridge over its eaves,
+  0.25 to 6 tiles in quarters, 1 (a 45° gable) when absent; it is drawn,
+  stood on and walked under at that pitch. Both are on the panel.
+- `tint`: any piece's colour over its material (`#rrggbb`; white or none
+  leaves it as it is): a red-painted wall without a red material. The
+  panel's Tint sits under the material, for one piece, a part or a whole
+  selection.
 - `finish`: optional `mirror`, `chrome`, `polished`, `glossy` or `gold`,
   worn over the material; a `surface` (`reflect`, `gloss`, `metal`, `tint`,
   `texture`, as on a model) overrides it.
 - `group`: pieces of one building share a number. Optional.
 
-In the Build bar a click lays a piece, a drag a row and a Ctrl-drag a box:
-floors, blocks and roofs fill it, the rest line its edge. A right-click
-takes a piece off and a right-drag turns the view (Shift-drag or the middle
-button moves it); R turns the piece in hand, Q and E change the level, and
+The Build bar's **Eraser** has its own Draw card (Brush, Line, Rectangle)
+and an **Only** choice (Walls and openings, Floors and stairs, Roofs, Shapes,
+Rocks): take the roof off a house, or the walls and keep the floor. A
+selection's foot has **Duplicate** (Ctrl+D) beside Turn and Remove; a placed
+shape's **Handles** card shows all its handles or only the arrows, the rings
+or the size cubes; a shape in hand turns with Direction and steps Bigger or
+Smaller (] and [). A door's Width is set before it is placed (it is the
+opening it cuts), with a **Casing** material; a window frame takes a Frame
+material. A floor's Size goes to 9×9.
+
+In the Build bar a click lays a piece. The panel's **Draw** card says what
+a drag does: **Brush** lays one on every cell it passes, **Line** a
+straight run from where it began to where it ends, **Rectangle** the
+rectangle between (Ctrl-drag draws one whatever is chosen): **Auto** fills
+it with floors, blocks and roofs and lines its edge with the rest (a room of
+walls), **Filled** and **Outline** say which. A wall, glass or block line
+that runs off the grid's axes is one **Straight** wall from end to end (a
+turned box, a tile thick, as tall as the wall in hand) or, **Stepped**, a
+staircase of cells. The **Level** card (− and +, or Q and E) is where the
+next piece goes; selected, it raises and lowers what is selected, as Q and
+E do, and a placed piece's **Position** card moves it by typing. The
+**Size** card sets a wall's, glass's or pillar's height, of one in hand, one
+placed or every one in a selection. A **Window**, **Doorway**, **Glass** or
+**Door** pointed at a wall goes into it, in place of the piece of wall
+pointed at, keeping the wall's material, building and height: a window
+where it is aimed (on a wall taller than a storey the wall below it stays),
+a doorway from the wall's foot, a door with its doorway as wide as the door
+along the wall. It looks out of the building, whichever side it is laid
+from; dragged along a wall it goes into each piece passed. In a straight
+(slanting) wall the wall is cut either side of the opening and the sill,
+header and pane are turned as the wall is; a doorway there is two tiles
+wide at least (one leaves no way through on the grid), and a door's leaf
+hangs only in a wall along the grid. **Fences** join what is beside them:
+a post in the middle and rails to each neighbouring fence, to a wall,
+pane or pillar a run ends against, and to a fence on a diagonal when
+neither cell between is fence, so a run turns its corners itself and a
+Line of fence steps corner to corner. A fence laid by a drag turns to the
+way it runs; only a fence standing alone shows the way it was laid. A **Wall**
+pointed at a window, doorway or pane walls it up. Each slot shows its key
+(1 to 0, the Eraser X). A right-click takes a piece off and a right-drag turns the view
+(Shift-drag or the middle button moves it); R turns the piece in hand, and
 Escape in Select with nothing selected leaves Build. A stair laid or turned
-with its foot against a wall is said. The map bar's **Storeys** list shows
-the 3D view up to a storey, as the game cuts away a roof over the player;
-while building, the cut follows the level built at.
+with its foot against a wall is said. The map bar's **Floors** list shows
+the 3D view up to a floor (5 tiles each, counted from the ground), as the
+game cuts away a roof over the player; it lists as many floors as the
+map's tallest piece reaches, so a tower of 40 lists 40. While building,
+the cut follows the level built at.
 
 A material may have companions beside its image, each optional:
 `<Name>_normal.png` (a normal map, OpenGL convention, green up),
@@ -461,7 +526,7 @@ pieces.
 Anything built on a map can be kept as a structure and stamped again
 anywhere. In Build › Select, click a piece and **Select whole building**
 (or double-click the piece): a stamped building takes its whole group, a
-hand-built one every loose piece touching it; a box dragged on the ground
+hand-built one every loose piece touching it, rocks aside (a rock is the ground's; clicking one takes the rocks touching it); a box dragged on the ground
 selects everything in it. **Save as structure…** on the selection names
 it and writes `3d/Structures/<Name>.json` (with a `.png` picture of it),
 which Database › Structures and the Blueprint slot list at once. It holds
@@ -679,7 +744,12 @@ deeper than 0.45 tile cannot be walked into. So a lake is terrain lowered under 
 its rim, and a river is a long thin sheet over a trough. `material` is an
 image under `img/materials`; the runtime waves it, tints it by depth and
 fades it out at the shore. Optional `reflect` and `gloss` (0-1) and `tint` (`#rrggbb`) make it mirror the
-world through its waves: `reflect: 1, gloss: 0.92, tint: "#d8dde3"` is mercury.
+world through its waves: `reflect: 1, gloss: 0.92, tint: "#d8dde3"` is mercury. Pour and River show the
+liquid they lay (its kind, colour and image, any material) and set it; Look with no sheet selected sets it
+too, and with one selected changes that sheet, its image included. River takes a Flow (0 still to 4), and
+**Take off last point** (Backspace) steps back along the course. A pond selected in Look has a **Level**: lower it for
+a shallow pond (it is filled again from its deepest cell, its look kept), or **Fill to the rim**, the highest it
+holds before it spills.
 
 ### Rivers and waterfalls
 
@@ -729,7 +799,12 @@ cliff faces. Both add. A generator writing hills should write `terrain`
 and keep slopes under 0.75 tile per tile where characters must walk;
 `build-structure.cjs` levels a building's pad itself. The Lower brush digs
 no bank steeper than 0.7 tile per tile, so what it digs is walked into; a
-deeper hollow takes a wider brush.
+deeper hollow takes a wider brush, or untick **Keep banks walkable** for a
+moat, a pit or a canyon with sheer sides. **Flatten** levels under the brush,
+along a **Line** (a level bed as wide as the brush) or over a **Rectangle**
+(a pad for a building), to the height where the drag began, or to a height
+typed or taken from the ground with **Pick**. Radius goes to 32 and Strength
+to 2.
 
 On a shaped map the room floor is laid from the sides as well as from
 above where the ground leans, so slopes do not streak, and past a slope it
@@ -762,7 +837,24 @@ A character walks a rise of up to 0.75 tile, jumps onto anything up to its jump 
 "ground": { "types": [ { "name": "Beach", "material": "Sand", "tint": "#e8866a", "scale": 4, "bare": true, "paint": "0x812 9x3 5" } ] }
 ```
 
-The room's floor is the map's own ground; `ground.types` paints others over it, up to eight. A type is a `material` (an image under `img/materials`, with its `_normal`/`_rough` maps and `.json` when it has them), a `tint`, a `scale` (tiles to one repeat; absent: the material's own, else 4), `bare` (nothing grows on it) and `paint`: a level 0-9 per cell, row by row, as runs. A later type lies over an earlier one. Borders wander, and a half-strength paint reads as patches. On slopes a type turns to the room's cliff as the floor does. In the editor: Build bar › Terrain › **Ground** (Paint or Erase, + Add a ground, the material tile, Tint, Scale, Nothing grows here; Radius, Strength, Soft edge, Coverage; Fill the whole map). The Ground panel fills a rectangle by drag (Rectangle). A rock capped with `"ground"` wears the type painted under it, and bushes are not stood on bare ground by the brush. **Dunes** raises wind-shaped ridges (Wind direction, Ridge spacing, Height). **Biome** sets a map's ground, cliff tint, plant colors and water together. **Rock** is in the Terrain group. By rule:
+The room's floor is the map's own ground; `ground.types` paints others over it, up to 64 (types of one material share its picture on the GPU, so tints and scales of one material cost almost nothing). A type is a `material` (an image under `img/materials`, with its `_normal`/`_rough` maps and `.json` when it has them), a `tint`, a `scale` (tiles to one repeat; absent: the material's own, else 4), `bare` (nothing grows on it) and `paint`: a level 0-9 per cell, row by row, as runs. A later type lies over an earlier one. Borders wander, and a half-strength paint reads as patches. On slopes a type turns to the room's cliff as the floor does. In the editor, a road or a path is Build bar › Terrain › **Path**: drag
+along the way it goes (**Brush**) or from one end to the other (**Line**),
+or click points and it bends through them (**Curve**: click the last point
+again, press Enter or **Lay road** to lay it; Backspace or **Take off last
+point** steps back, Esc or **Cancel** drops it), choose its **Surface** (any of the project's materials, with a tint and a
+scale; Dirt road, Cobblestone, Gravel path, Sand path and Paving as quick
+picks, and the map's own grounds to paint more of one: a look is a ground
+type made, bare, the first time it is used, and roads already laid keep
+theirs when the look in hand changes) and its
+**Width** in tiles, with a soft or crisp edge. It follows the ground up and
+down hills and is laid all along the drag however fast the pointer moves.
+With **Level the ground under the road** (on by default) the ground under it
+is smoothed along its length and made flat across, easing back into the
+hills at its edges, and Ctrl+Z takes back the road and the levelling as one;
+the Eraser slot takes it away and Ground changes its look. A road of floor
+pieces instead: Build › Floor with a **Size** of 2×2 to 5×5 (a Line of
+floor is that wide), or one slab of any size from Shape › Box. Build bar ›
+Terrain › **Ground** (Paint or Erase, + Add a ground from any material or a preset, the material tile, Tint, Scale, Nothing grows here; Radius, Strength, Soft edge, Coverage; Fill the whole map, and **Fill where…** by height, slope, nearness to water and a patchy edge, as `paint-ground.cjs` does). Its **Draw** card paints under the brush, along a **Line**, or over a **Rectangle** filled or outlined (as wide as the brush), and **Level the ground under it** (off by default) flattens a filled rectangle at its own height or smooths a line or stroke as a road is, in the paint's undo step. A rock capped with `"ground"` wears the type painted under it, and bushes are not stood on bare ground by the brush. **Dunes** raises wind-shaped ridges (Wind direction, Ridge spacing, Height). **Biome** sets a map's ground, cliff tint, plant colors and water together (its switches leave the plants already planted, the water or the cliffs as they are); **Save this map's look as a biome…** keeps the map's grounds, cliff tint, plant and water colors in `data/Biomes.json` (`{ "biomes": [ { name, base, grounds, cliffTint, palette, water } ] }`), listed under Your biomes with a button to take each out. **Rock** is in the Terrain group. By rule:
 
 ```
 node editor/build-scripts/paint-ground.cjs <project> <mapId> <spec.json> [--check]
@@ -816,7 +908,9 @@ terrain. Nothing grows where a piece or a rock stands on the ground, under
 water (reeds stand in water up to about 0.9 tile deep), or on a slope the
 room draws as cliff. `height` is in tiles, `colour` the root and `tip` the
 tip (as they read in daylight), `vary` how much each clump differs, `seed`
-which scatter; `flowers` also takes `colours`, the petals to pick from.
+which scatter, `width` how thick each blade is and `lean` how far it leans
+(both 1 for the kind's own; height up to 12 tiles); `flowers` also takes
+`colours`, the petals to pick from.
 Leave a key out for the kind's own look. A bush is a seeded mass of leaves
 at `x`, `y` (tiles), `size` wide (0.4-8); `tall` makes it taller than wide,
 `bloom` gives it blossom. A bush 1.4 or more wide blocks the cells it
@@ -824,9 +918,13 @@ covers; smaller ones are walked through. `wind` blows toward `dir`
 degrees (0 east, 90 south) at `strength` (0-2), with `gust` rolling over
 it; whoever walks through the grass bends it.
 
-Three kinds are not Earth's: `bulbs` (a lit globe on a stalk; takes `colours` as flowers do), `tendrils` (fronds that curl and uncurl) and `crystals` (shards no wind moves, the one kind that stands on bare ground). Any layer takes `glow` (0-1): its own color shows whatever the light, strongest at the tip.
+Three kinds are not Earth's: `bulbs` (a lit globe on a stalk; takes `colours` as flowers do), `tendrils` (fronds that curl and uncurl) and `crystals` (shards no wind moves, the one kind that stands on bare ground; `colours` makes each shard one of the list, dark at its root and pale at its point). Any layer takes `glow` (0-1): its own color shows whatever the light, strongest at the tip.
 
-The **Colors** tab recolors every plant on the map and what is painted next from a palette; a flower layer's petals are a list of colors.
+Plants painted with another look are a layer of their own: what is already planted keeps its look. The Foliage panel's
+**Color** card (Color, Tips, Glow, petals or mixed shards, and quick colors from the palettes) and **Shape** card
+(Height, Thickness, Lean, Variety; a bush's Size and Tall or squat) are for what is painted next. **Recolor** brushes the
+look in hand onto plants already growing (as dense as they were; bushes take the leaves and blossom), **Pick** takes the
+look of the plants clicked into hand, and **Whole map** › Recolor everything recolors every plant on the map from a palette.
 
 In the editor the Build bar's **Foliage** group paints a kind with a brush
 (size, strength, density; Erase thins it), stands bushes by click or

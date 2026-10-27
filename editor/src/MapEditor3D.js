@@ -36,6 +36,8 @@ class MapEditor3D {
     static RELEASE_2D_GRAPHICS = true;
     /** While the view moves, the reflection capture takes a face every other draw; the draws after it stops fill the cube. */
     static PROBE_HALF_WHILE_MOVING = true;
+    /** Faces the reflection capture takes after the view last moved before the view may rest (every face twice over, the one behind the camera between). */
+    static PROBE_SETTLE_FACES = 12;
 
     constructor(projectController) {
         this.projectController = projectController;
@@ -2682,13 +2684,15 @@ class MapEditor3D {
         const manager = this.pieceManager();
         if (!mapData || !target || typeof Reactor3D === 'undefined') return null;
         if (manager?.mode === 'erase') return { erase: true };
+        // Windows, doorways, panes and doors dragged along a wall go into each piece of it under the pointer.
+        if (manager?.wallUnder && manager.wallUnder(target)) return { carve: true };
         return { z: target.z, planeY: Reactor3D.pieceBaseAt(mapData, target.x, target.y) + target.z };
     }
 
     /** Where a stroke in progress lands under the pointer: on its plane, at its level. */
     pieceStrokeTargetAt(clientX, clientY) {
         const stroke = this.pointer?.pieceStroke;
-        if (!stroke || stroke.erase) return this.pieceTargetAt(clientX, clientY);
+        if (!stroke || stroke.erase || stroke.carve) return this.pieceTargetAt(clientX, clientY);
         const mapData = this.currentMap();
         if (!mapData || !this.camera || !this.canvas) return null;
         const rect = this.canvas.getBoundingClientRect();
@@ -2804,7 +2808,7 @@ class MapEditor3D {
             for (const one of pieces) {
                 let c;
                 if (manager.isShape(one.kind)) c = this.shapeView(one).corners;
-                else { const base = Reactor3D.pieceBaseAt(mapData, one.x, one.y) + one.z, h = Reactor3D.pieceHeight(one.kind); c = []; for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) c.push([one.x + u, base + y * h, one.y + v]); }
+                else { const base = Reactor3D.pieceBaseAt(mapData, one.x, one.y) + one.z, h = Reactor3D.pieceHeight(one.kind, one); c = []; for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) c.push([one.x + u, base + y * h, one.y + v]); }
                 for (const [a, b] of [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]]) all.push(...c[a], ...c[b]);
             }
             if (!this.selectionOutline) {
@@ -2828,7 +2832,7 @@ class MapEditor3D {
         let corners;
         if (shape) corners = this.shapeView(piece).corners;
         else {
-            const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z, h = Reactor3D.pieceHeight(piece.kind);
+            const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z, h = Reactor3D.pieceHeight(piece.kind, piece);
             // Where it is drawn: a ladder's level shifted over, narrowed across its cell, its top cut short.
             const [ox, oy] = piece.offset || [0, 0];
             const [ax, ay] = Reactor3D.stairAxis(piece.rot || 0), across = piece.kind === 'ladder' ? 1 - (piece.span || 1) : 0;
@@ -2865,17 +2869,22 @@ class MapEditor3D {
         const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
         if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
         const turn = stamp && !bounds ? (manager.rot || 0) : 0;
+        // A window, doorway, pane or door pointed at a wall goes into it: the ghost is what will stand in the wall's place.
+        const into = !stamp && !erase && manager.wallUnder ? manager.wallUnder(target) : null;
+        const carved = into ? manager.carvedPieces(into) : null;
         // A door hangs across the doorway under the pointer: its ghost is the leaves' slab where it will hang.
-        const door = !stamp && !erase && manager.kind === 'door' ? manager.pieceFor(target) : null;
+        const door = !into && !stamp && !erase && manager.kind === 'door' ? manager.pieceFor(target) : null;
         const doorKey = door ? ':door:' + [door.x - target.x, door.y - target.y, door.rot, door.width, door.style].join(',') : '';
         // A building turned or grown while picked up has a new footprint: its slab is made again.
-        const key = doorKey + (stamp ? (bounds ? 'move:' + manager.selectedGroup + ':' + stamp.size.join('x') : 'stamp:' + manager.structure + ':' + turn) : (erase ? 'erase' : manager.kind) + ':' + (manager.kind === 'ladder' && manager.ladderRotFor ? manager.ladderRotFor(target) ?? manager.rot : manager.rot) + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? [manager.ladderHeight, manager.ladderWidth] : manager.kind === 'rock' ? [manager.rockVary && manager.rockSeed, manager.rockCap, manager.rockTint] : null]));
+        const intoKey = carved ? ':into:' + JSON.stringify(carved.map(p => [p.kind, p.x - into.wall.x, p.y - into.wall.y, p.z - into.wall.z, p.height || 5, p.rot, p.size, p.offset])) : '';
+        const key = intoKey + doorKey + (stamp ? (bounds ? 'move:' + manager.selectedGroup + ':' + stamp.size.join('x') : 'stamp:' + manager.structure + ':' + turn + ':' + (manager.stampScale || 1)) : (erase ? 'erase' : manager.kind) + ':' + (manager.kind === 'ladder' && manager.ladderRotFor ? manager.ladderRotFor(target) ?? manager.rot : manager.rot) + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? [manager.ladderHeight, manager.ladderWidth] : manager.kind === 'rock' ? [manager.rockVary && manager.rockSeed, manager.rockCap, manager.rockTint] : null, manager.heightFor ? manager.heightFor(manager.kind) : 5, manager.kind === 'floor' ? manager.floorBrush : 1, manager.tints ? manager.tints[manager.kind] || '' : '', manager.pillarThick, manager.roofRise]));
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected
             // building being moved shows its footprint as a slab.
-            const silhouette = stamp && !bounds ? manager.ghostGeometryFor(stamp, turn) : null;
+            const silhouette = stamp && !bounds ? manager.ghostGeometryFor(stamp, turn, manager.stampScale || 1) : null;
             const geometry = silhouette
+                || (carved ? Reactor3D.pieceGeometry(carved.map(p => Object.assign({ id: 0 }, p, { material: '', x: p.x - into.wall.x, y: p.y - into.wall.y, z: p.z - into.wall.z })), null) : null)
                 || (door ? Reactor3D.pieceGeometry([{ id: 0, kind: 'trim', material: '', x: door.x - target.x, y: door.y - target.y, z: 0, rot: door.rot,
                     boxes: [{ box: [0, 0, 0.42, door.width || 1, Reactor3D.doorLeafHeight ? Reactor3D.doorLeafHeight(door) : 3.6, 0.58] }] }], null) : null)
                 || (stamp
@@ -2884,7 +2893,9 @@ class MapEditor3D {
                         // A stair run shows whole: every step, as wide as it will be laid.
                         : (manager.kind === 'stair' && manager.stairRun ? manager.stairRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 })))
                             : manager.kind === 'ladder' && manager.ladderRun ? manager.ladderRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }), { rot: manager.ladderRotFor(target) ?? manager.rot }))
-                            : [Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }))]), null));
+                            : manager.kind === 'floor' && manager.floorBrush > 1 && manager.brushCells
+                                ? manager.brushCells({ x: 0, y: 0, z: 0 }).map(cell => Object.assign({ id: 0, material: '' }, manager.pieceFor(cell)))
+                                : [Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }))]), null));
             const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
             this.pieceGhost = new THREE.Mesh(geometry, material);
             this.pieceGhost.renderOrder = 998;
@@ -2892,7 +2903,8 @@ class MapEditor3D {
             this.mapScene.scene().add(this.pieceGhost);
         }
         const base = Reactor3D.pieceBaseAt(mapData, target.x, target.y);
-        if (stamp) {
+        if (carved) this.pieceGhost.position.set(into.wall.x, Reactor3D.pieceBaseAt(mapData, into.wall.x, into.wall.y) + into.wall.z, into.wall.y);
+        else if (stamp) {
             // A quarter turn swaps the footprint's sides.
             const [W, H] = turn % 2 ? [stamp.size[1], stamp.size[0]] : stamp.size;
             const x = Math.max(0, Math.min(mapData.width - W, target.x)), y = Math.max(0, Math.min(mapData.height - H, target.y));
@@ -2961,7 +2973,9 @@ class MapEditor3D {
         }
         if (!this.terrainRing) this.buildTerrainRing();
         if (!this.terrainRing) return;
-        const radius = this.terrainManager()?.radius || 3;
+        const terrain = this.terrainManager();
+        // The Path tool's ring is the road's own width.
+        const radius = terrain?.mode === 'path' && terrain.pathBrush ? terrain.pathBrush().radius : terrain?.radius || 3;
         const positions = this.terrainRing.geometry.attributes.position;
         const band = MapEditor3D.TERRAIN_RING, segments = band.segments;
         const cx = point.x + 0.5, cz = point.y + 0.5;
@@ -4383,7 +4397,7 @@ class MapEditor3D {
 
     /** The event's number and name, as the 2D map labels its squares. */
     eventLabel(event) {
-        if (event._rrDatabaseVehicle) return this.textLabel(event.name || 'Vehicle');
+        if (event._rrDatabaseVehicle) return this.textLabel(typeof EventManager !== 'undefined' && EventManager.vehicleLabel ? EventManager.vehicleLabel(event) : event.name || 'Vehicle');
         return this.textLabel(`${String(event.id).padStart(3, '0')}: ${event.name || ''}`.trim());
     }
 
@@ -5200,7 +5214,10 @@ class MapEditor3D {
                         if (this.canvas) this.canvas.style.cursor = 'grabbing';
                     } else {
                         const point = this.groundPointAt(event.clientX, event.clientY);
-                        if (point && manager.placing()) {
+                        if (point && manager.placing() && manager.scatter && manager.scatter.on) {
+                            // Scatter: this one, then more as the drag goes (one undo step).
+                            if (manager.scatterAt(point, true)) { this.pointer.propPlaced = true; this.pointer.propScatter = true; }
+                        } else if (point && manager.placing()) {
                             const id = manager.place(point.x, point.y);
                             if (id) this.pointer.propPlaced = true;
                         } else {
@@ -5235,7 +5252,7 @@ class MapEditor3D {
                     this.beginEventDrag();
                 } else {
                     const mesh = this.eventAt(event.clientX, event.clientY);
-                    if (mesh && !mesh.userData.event?._rrDatabaseVehicle) {
+                    if (mesh) {
                         this.pointer.drag = mesh;
                         // Where the event was taken hold of, in tiles from its own: a sized event's
                         // marker stands in the middle of its footprint, and stays under the pointer.
@@ -5341,6 +5358,9 @@ class MapEditor3D {
                         y: Math.round((point.y - this.pointer.propDrag.offsetY) * 100) / 100
                     });
                 }
+            } else if (this.pointer.propScatter) {
+                const point = this.groundPointAt(event.clientX, event.clientY);
+                if (point) this.propsManager()?.scatterAt(point, false);
             } else if (this.pointer.propHold) {
                 // A placement is a click; the drag that follows moves nothing.
             } else if (this.pointer.eventArrow) {
@@ -5687,7 +5707,6 @@ class MapEditor3D {
     }
 
     dragEventTo(mesh, tile) {
-        if (mesh?.userData?.event?._rrDatabaseVehicle) return;
         const mapData = this.currentMap();
         const event = mesh?.userData?.event;
         if (!mapData || !event) return;
@@ -5695,6 +5714,21 @@ class MapEditor3D {
         if (tile.x < 0 || tile.y < 0 || tile.x >= mapData.width || tile.y >= mapData.height) return;
 
         const manager = this.eventManager();
+        // A Database vehicle's placement moves its start in the Database (saved on the drop), as in the 2D view.
+        if (event._rrDatabaseVehicle) {
+            if (!manager?.canPlaceVehicle?.(event, tile.x, tile.y)) return;
+            if (!this._eventDragSaved) {
+                this._eventDragSaved = true;
+                manager.resetMapClickTracking?.();
+                manager.saveState?.();
+            }
+            manager.moveVehicleStart(event, tile.x, tile.y);
+            this._eventDragMoved = true;
+            this._eventDragVehicle = true;
+            this.placeEvent(mesh);
+            manager.selectTile?.(tile.x, tile.y);
+            return;
+        }
         // Two events cannot share a cell (a sized event's footprint counts), and the 2D drag refuses the same way.
         if (manager?.canPlaceEvent && !manager.canPlaceEvent(event, tile.x, tile.y)) return;
 
@@ -5719,9 +5753,11 @@ class MapEditor3D {
      */
     finishEventDrag() {
         if (this.canvas) this.canvas.style.cursor = 'default';
-        const moved = this._eventDragMoved;
+        const moved = this._eventDragMoved, vehicle = this._eventDragVehicle;
         this._eventDragSaved = false;
         this._eventDragMoved = false;
+        this._eventDragVehicle = false;
+        if (vehicle) this.eventManager()?.saveVehicleStarts?.();
         if (moved) this.eventManager()?.renderEvents?.();
     }
 
@@ -5730,6 +5766,7 @@ class MapEditor3D {
         if (!this.canSelectEvents()) return;
         const picked = this.select(this.eventAt(clientX, clientY));
         if (typeof this.onEventSelected === 'function') this.onEventSelected(picked?._rrDatabaseVehicle ? null : picked);
+        if (picked?._rrDatabaseVehicle) this.eventManager()?.selectVehicle?.(picked);
         if (!picked) {
             const tile = this.tileAt(clientX, clientY);
             // Battle Setup has a unit in hand: the click stands it where its preview stands, on the surface the pointer met.
@@ -6512,7 +6549,7 @@ class MapEditor3D {
         let top = 0;
         for (const piece of list) {
             if (!piece) continue;
-            const tall = Array.isArray(piece.size) && Number(piece.size[1]) > 0 ? Number(piece.size[1]) : R.pieceHeight ? R.pieceHeight(piece.kind) : 1;
+            const tall = Array.isArray(piece.size) && Number(piece.size[1]) > 0 ? Number(piece.size[1]) : R.pieceHeight ? R.pieceHeight(piece.kind, piece) : 1;
             top = Math.max(top, (Number(piece.z) || 0) + tall);
         }
         return Math.max(1, Math.ceil(top / S - 1e-6));
@@ -6578,7 +6615,7 @@ class MapEditor3D {
         return !!(data && (data.pieces || data.rrDoor)) && hit.point.y > this.storeyCutTop();
     }
 
-    /** The map bar's Storeys list: All, then one per storey the map stands. */
+    /** The map bar's Floors list: All, then one per storey (5 tiles) the map's tallest piece reaches, however many. */
     syncStoreyCutControl() {
         if (typeof document === 'undefined') return;
         const select = document.getElementById('map-storey-cut');
@@ -6593,8 +6630,8 @@ class MapEditor3D {
         }
         const tt = text => (typeof window !== 'undefined' && window.I18n?.tText ? window.I18n.tText(text) : text);
         const all = tt('All'), label = select.closest('.map-storey-cut');
-        if (label) label.title = tt('Show the 3D view up to this storey, as the game cuts away a roof over the player');
-        select.setAttribute('aria-label', tt('Storeys'));
+        if (label) label.title = tt('Show the 3D view up to this floor, as the game cuts away a roof over the player');
+        select.setAttribute('aria-label', tt('Floors'));
         const count = Math.max(MapEditor3D.storeyCount(this.currentMap()), this.storeyCut || 0);
         const want = ['0'].concat(Array.from({ length: count }, (_, i) => String(i + 1)));
         if ([...select.options].map(o => o.value + o.textContent).join() !== want.map(v => v + (v === '0' ? all : v)).join()) {
@@ -6621,7 +6658,21 @@ class MapEditor3D {
             if (reflections.enabled()) reflections._frame++;
             const moving = this._drawActive && MapEditor3D.PROBE_HALF_WHILE_MOVING;
             if (moving) this._probeTurn = !this._probeTurn;
-            if (!reflections.idle() && (!moving || this._probeTurn)) reflections.update(this.renderer, scene, this.camera.position, this.mapScene.reflectionHidden?.());
+            // The capture stands at the camera, so a turn of the view leaves every face it took before out of date:
+            // after one, the view keeps drawing until it has gone round them all (the editor draws on demand,
+            // and stopped with the faces half old: a mirror caught up late, or not at all).
+            const p = this.camera.position, q = this.camera.quaternion;
+            const key = [p.x, p.y, p.z, q.x, q.y, q.z, q.w].map(v => Math.round(v * 1000)).join(',');
+            if (key !== this._probeKey) { this._probeKey = key; this._probeOwed = MapEditor3D.PROBE_SETTLE_FACES; }
+            if (!reflections.idle() && (!moving || this._probeTurn)) {
+                // Every other face the one behind the camera: what a mirror ahead of it shows.
+                const behind = this._probeBehind || (this._probeBehind = new THREE.Vector3());
+                this.camera.getWorldDirection(behind);
+                behind.multiplyScalar(-10).add(p);
+                reflections.update(this.renderer, scene, p, this.mapScene.reflectionHidden?.(), behind);
+                if (this._probeOwed > 0) this._probeOwed--;
+            }
+            if (this._probeOwed > 0 && reflections.enabled() && !reflections.idle()) this.requestRender();
         }
         // Mirror pieces and reflective water show their sharp mirrors here as in the game.
         if (typeof Reactor3D !== 'undefined' && Reactor3D.Mirrors && this.camera && this.mapScene.mirrorCandidates) {

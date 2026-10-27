@@ -51,7 +51,7 @@ class EventPageEditor {
         // Image Section (full width): a picture takes the height there is; an empty box stays small.
         const imageSection = this.createImageSection(page, pageIndex);
         imageSection.style.overflow = 'hidden';
-        this._sizeImageSection(imageSection, page, pageIndex);
+        this._sizeImageSection(imageSection);
         settings.appendChild(imageSection);
 
         // Autonomous Movement Section (full width)
@@ -124,7 +124,7 @@ class EventPageEditor {
                 <button class="switch-picker-btn"
                         data-field="switch1Id"
                         data-page-index="${pageIndex}"
-                        style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); text-align: left; cursor: pointer; border-radius: 3px; min-height: 24px;"
+                        style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; text-align: left; min-height: 24px;"
                         ${!conditions.switch1Valid ? 'disabled' : ''}>
                     #${String(conditions.switch1Id || 1).padStart(4, '0')}: ${rrEscapeHtml(switches.find(s => s.id === (conditions.switch1Id || 1))?.name || `${tt('Switch')} 0001`)}
                 </button>
@@ -141,7 +141,7 @@ class EventPageEditor {
                 <button class="switch-picker-btn"
                         data-field="switch2Id"
                         data-page-index="${pageIndex}"
-                        style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); text-align: left; cursor: pointer; border-radius: 3px; min-height: 24px;"
+                        style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; text-align: left; min-height: 24px;"
                         ${!conditions.switch2Valid ? 'disabled' : ''}>
                     #${String(conditions.switch2Id || 1).padStart(4, '0')}: ${rrEscapeHtml(switches.find(s => s.id === (conditions.switch2Id || 1))?.name || `${tt('Switch')} 0001`)}
                 </button>
@@ -158,7 +158,7 @@ class EventPageEditor {
                 <button class="variable-picker-btn"
                         data-field="variableId"
                         data-page-index="${pageIndex}"
-                        style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); text-align: left; cursor: pointer; border-radius: 3px; min-height: 24px;"
+                        style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; text-align: left; min-height: 24px;"
                         ${!conditions.variableValid ? 'disabled' : ''}>
                     #${String(conditions.variableId || 1).padStart(4, '0')}: ${rrEscapeHtml(variables.find(v => v.id === (conditions.variableId || 1))?.name || `${tt('Variable')} 0001`)}
                 </button>
@@ -168,9 +168,7 @@ class EventPageEditor {
                        data-field="variableValue"
                        data-page-index="${pageIndex}"
                        value="${conditions.variableValue || 0}"
-                       style="width: 70px; flex-shrink: 0; padding: 4px 6px; font-size: 11px;
-                              background: var(--color-bg-surface); color: var(--color-text);
-                              border: 1px solid var(--color-border-input); border-radius: 3px;"
+                       style="width: 70px; flex-shrink: 0; padding: 4px 6px; font-size: 11px;"
                        ${!conditions.variableValid ? 'disabled' : ''}>
             </div>
 
@@ -342,7 +340,10 @@ class EventPageEditor {
         // Get direction name
         const directionNames = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' };
         const directionName = directionNames[image.direction] || 'Down';
-        const displayName = use3d ? model.name + (model.variant ? ' · ' + model.variant : '') : worn ? worn.name : (image.characterName || '');
+        // A sheet of eight characters names the one used beside the file, in brackets: not part of the file name.
+        const sheetCharacter = !use3d && !worn && image.characterName && !(typeof RRAssetFiles !== 'undefined' && RRAssetFiles.isBigCharacter && RRAssetFiles.isBigCharacter(image.characterName))
+            ? ` (${tt('Character')} ${(Number(image.characterIndex) || 0) + 1})` : '';
+        const displayName = use3d ? model.name + (model.variant ? ' · ' + model.variant : '') : worn ? worn.name : (image.characterName || '') + sheetCharacter;
         const title = use3d ? tt('3D Model') : worn ? tt('3D Model') : this._t('event.image');
 
         section.innerHTML = `
@@ -385,8 +386,9 @@ class EventPageEditor {
                                 return `<button type="button" class="image-dir-btn" data-dir="${dir}"
                                     style="margin-left:3px;padding:1px 5px;font-size:10px;border-radius:3px;cursor:pointer;border:1px solid ${on ? 'var(--color-accent-bright)' : 'var(--color-border-input)'};background:${on ? 'var(--color-accent-tint-30)' : 'var(--color-bg-surface)'};color:var(--color-text);">${tt(label)}</button>`;
                             }).join('')}`
-                        : `${image.characterName ? `<strong style="color: var(--color-text);">${rrEscapeHtml(this.frameWords(image, directionName))}</strong>` : ''}${image.tileId > 0 ? `${image.characterName ? ' | ' : ''}${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}`}
+                        : ''}
                 </div>
+                ${use3d || worn ? '' : this.imageTurnRow(page, pageIndex, directionName)}
             </div>
         `;
 
@@ -594,29 +596,96 @@ class EventPageEditor {
         img.src = imgPath;
     }
 
-    /** Whether the Image box has nothing to show: no picture, tile, model, vehicle or unit look. */
-    _imageIsEmpty(page, pageIndex) {
+    /**
+     * The controls under the page's picture, in one row that wraps where it is narrow: the frame it
+     * starts on (Direction, and Frame 1-3, or 1-N for an [NF] sheet; stored as MZ's pattern, 0-based), then
+     * the picture's own turn: Mirror (faces the other way), Flip (upside
+     * down) and Rotation (a listed angle or any typed one, in place about its
+     * middle). The turn is stored as `page.rrImage = { mirror, flip, angle, pivot }`;
+     * all off removes it, so a plain page stays plain MZ data. A page with no
+     * picture shows none of them.
+     */
+    imageTurnRow(page, pageIndex, directionName) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const image = page.image || {};
-        if (image.characterName || image.tileId > 0) return false;
-        const model = this.pageModelSpec(pageIndex);
-        if ((model && model.name) || this.vehicleModelSpec(pageIndex)) return false;
-        const event = this.parentEditor && this.parentEditor.currentEvent;
-        if (typeof RRVehicles !== 'undefined' && RRVehicles.vehicleOf(event)) return false;
-        return !this.unitLook(pageIndex);
+        if (!image.characterName && !(image.tileId > 0)) return '';
+        const turn = page.rrImage || {};
+        const field = 'padding:0 2px;height:20px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:11px;';
+        const option = (value, label, current) => `<option value="${value}"${Number(value) === Number(current) ? ' selected' : ''}>${rrEscapeHtml(label)}</option>`;
+        let first;
+        if (image.characterName) {
+            const frames = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.characterFrameCount ? RRAssetFiles.characterFrameCount(image.characterName) : 3;
+            const dirs = [[2, 'Down'], [4, 'Left'], [6, 'Right'], [8, 'Up']];
+            // (Which character of an eight-character sheet is shown with the file name above.)
+            first = `<label style="display:flex;align-items:center;gap:3px;">${rrEscapeHtml(tt('Direction'))}
+                    <select class="image-dir-select" data-page-index="${pageIndex}" style="${field}">${dirs.map(([d, label]) => option(d, tt(label), image.direction || 2)).join('')}</select></label>
+                <label style="display:flex;align-items:center;gap:3px;">${rrEscapeHtml(tt('Frame'))}
+                    <select class="image-pattern-select" data-page-index="${pageIndex}" style="${field}">${Array.from({ length: Math.max(1, frames) }, (_, i) => option(i, String(i + 1), image.pattern || 0)).join('')}</select></label>`;
+        } else {
+            first = `<span>${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong></span>`;
+        }
+        const box = (cls, on, text, hint) => `<label title="${rrEscapeHtml(tt(hint))}" style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+            <input type="checkbox" class="${cls}" data-page-index="${pageIndex}" ${on ? 'checked' : ''} style="margin:0;">${rrEscapeHtml(tt(text))}</label>`;
+        // The theme's dropdown for the usual angles; Custom opens a themed number field for any other.
+        // (A <datalist> showed the browser's own list, which no theme reaches.)
+        const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+        const angle = Number(turn.angle) || 0, preset = angles.includes(angle);
+        const words = image.characterName ? this.frameWords(image, directionName) : '';
+        // Sprite Transforms off (Database › Reactor Features): no Mirror, Flip or Rotation; a stored turn stays, unused.
+        const features = typeof window !== 'undefined' ? window.ReactorFeatures : null;
+        const turns = !features || features.on('spriteTransforms', this.databaseManager?.getSystem?.() || {});
+        // The two groups share one row (display: contents), wrapping only where the column is too narrow.
+        return `<div class="image-turn-rows" title="${rrEscapeHtml(words)}" style="display:flex;align-items:center;gap:3px 8px;flex-wrap:wrap;font-size:11px;color:var(--color-text);flex-shrink:0;">
+            <div class="image-frame-row" style="display:contents;">${first}</div>
+            ${turns ? `<div class="image-turn-row" style="display:contents;">
+                ${box('image-turn-mirror', turn.mirror, 'Mirror', 'Faces the other way (flipped left to right)')}
+                ${box('image-turn-flip', turn.flip, 'Flip', 'Upside down (flipped top to bottom)')}
+                <label title="${rrEscapeHtml(tt('Turned clockwise in place, about its middle; 90 lays it on its side'))}" style="display:flex;align-items:center;gap:3px;">
+                    ${rrEscapeHtml(tt('Rotation'))}
+                    <select class="image-turn-angle-pick" data-page-index="${pageIndex}" style="${field}">${angles.map(a => `<option value="${a}"${a === angle && preset ? ' selected' : ''}>${a}°</option>`).join('')}
+                        <option value="custom"${preset ? '' : ' selected'}>${rrEscapeHtml(tt('Custom'))}</option></select>
+                </label>
+                <span class="image-turn-angle-custom" style="display:${preset ? 'none' : 'flex'};align-items:center;gap:3px;">
+                    <input type="number" class="image-turn-angle" data-page-index="${pageIndex}" min="-360" max="360" step="1" value="${angle}" style="width:72px;height:22px;font-size:11px;">°
+                </span>
+            </div>` : ''}
+        </div>`;
     }
 
-    /** An empty Image box is a short strip; one with something to show grows into the height there is. */
-    _sizeImageSection(section, page, pageIndex) {
-        let empty = false;
-        // Only the box's size hangs on this: a look that cannot be worked out keeps the full box.
-        try { empty = this._imageIsEmpty(page, pageIndex); } catch (error) { empty = false; }
-        section.style.flex = empty ? '0 0 auto' : '1 0 140px';
-        section.style.minHeight = empty ? '0' : '140px';
+    /** Writes the Image options row back onto the page and turns the preview with it. */
+    static readImageTurn(page, section) {
+        const mirror = !!section.querySelector('.image-turn-mirror')?.checked;
+        const flip = !!section.querySelector('.image-turn-flip')?.checked;
+        const angle = Math.round((Number(section.querySelector('.image-turn-angle')?.value) || 0) * 100) / 100;
+        if (!mirror && !flip && !angle) delete page.rrImage;
+        else {
+            const turn = {};
+            if (mirror) turn.mirror = true;
+            if (flip) turn.flip = true;
+            if (angle) { turn.angle = angle; turn.pivot = 'center'; }
+            page.rrImage = turn;
+        }
+        EventPageEditor.turnPreview(section, page);
+    }
+
+    /** The preview drawn turned the way the page starts (CSS only; the picture itself is not redrawn). */
+    static turnPreview(section, page) {
+        const canvas = section && section.querySelector('.character-preview-canvas');
+        if (!canvas) return;
+        // Only a sprite or tile picture turns (a model page, or Sprite Transforms off, shows no turn controls and its preview stays as it is).
+        const turn = page && section.querySelector && section.querySelector('.image-turn-row') ? page.rrImage : null;
+        canvas.style.transform = turn ? `rotate(${Number(turn.angle) || 0}deg) scale(${turn.mirror ? -1 : 1}, ${turn.flip ? -1 : 1})` : '';
+    }
+
+    /** The Image box grows into the height there is, with or without a picture, so no gap opens below it. */
+    _sizeImageSection(section) {
+        section.style.flex = '1 0 140px';
+        section.style.minHeight = '140px';
         const box = section.querySelector('.image-preview-box');
         if (box) {
-            box.style.flex = empty ? '0 0 40px' : '1';
-            box.style.height = empty ? '40px' : '';
-            box.style.minHeight = empty ? '40px' : '88px';
+            box.style.flex = '1';
+            box.style.height = '';
+            box.style.minHeight = '88px';
         }
     }
 
@@ -626,7 +695,7 @@ class EventPageEditor {
         const editor = this.parentEditor;
         const page = editor && editor.currentEvent && editor.currentEvent.pages[editor.currentPageIndex];
         if (!section || !page) return;
-        this._sizeImageSection(section, page, editor.currentPageIndex);
+        this._sizeImageSection(section);
         // A canvas that drew a model cannot draw a picture afterwards: each look starts on a canvas of its own.
         const canvas = section.querySelector('.character-preview-canvas');
         if (canvas) {
@@ -1259,7 +1328,8 @@ class EventPageEditor {
     }
 
     _fitPreviewCanvas(canvas) {
-        const rect = canvas.getBoundingClientRect();
+        // The layout size, not the drawn box: a page's Rotation turns the canvas, and a turned box is another shape.
+        const rect = canvas.offsetWidth ? { width: canvas.offsetWidth, height: canvas.offsetHeight } : canvas.getBoundingClientRect();
         const width = Math.max(1, Math.round(rect.width));
         const height = Math.max(1, Math.round(rect.height));
         if (canvas.width !== width || canvas.height !== height) {
@@ -1427,6 +1497,39 @@ class EventPageEditor {
                 }
             });
         }
+
+        // The frame the page starts on, and its turn: mirror, flip, rotation. Each redraws the preview at once.
+        section.querySelectorAll('.image-turn-mirror, .image-turn-flip').forEach(input => {
+            input.addEventListener('change', () => EventPageEditor.readImageTurn(page, section));
+        });
+        section.querySelectorAll('.image-turn-angle').forEach(input => {
+            input.addEventListener('input', () => EventPageEditor.readImageTurn(page, section));
+            input.addEventListener('change', () => EventPageEditor.readImageTurn(page, section));
+        });
+        section.querySelectorAll('.image-turn-angle-pick').forEach(pick => {
+            pick.addEventListener('change', () => {
+                const custom = section.querySelector('.image-turn-angle-custom'), input = section.querySelector('.image-turn-angle');
+                if (custom) custom.style.display = pick.value === 'custom' ? 'flex' : 'none';
+                if (!input) return;
+                if (pick.value === 'custom') { input.focus(); input.select?.(); return; }
+                input.value = pick.value;
+                EventPageEditor.readImageTurn(page, section);
+            });
+        });
+        const frameSelect = (selector, key) => section.querySelectorAll(selector).forEach(select => {
+            select.addEventListener('change', () => {
+                if (!page.image) page.image = {};
+                page.image[key] = Number(select.value) || 0;
+                if (key === 'direction') page.image.direction = page.image.direction || 2;
+                this.renderCharacterPreview(section, page);
+                const rows = section.querySelector('.image-turn-rows');
+                const names = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' };
+                if (rows && page.image.characterName) rows.title = this.frameWords(page.image, names[page.image.direction] || 'Down');
+            });
+        });
+        frameSelect('.image-dir-select', 'direction');
+        frameSelect('.image-pattern-select', 'pattern');
+        EventPageEditor.turnPreview(section, page);
 
         // Browse button for character selection
         section.querySelectorAll('.image-dir-btn').forEach(btn => {

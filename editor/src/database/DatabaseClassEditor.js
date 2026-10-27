@@ -33,7 +33,9 @@ class DatabaseClassEditor {
         // SECOND COLUMN
         const rightColumn = document.createElement('div');
         rightColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px; min-width: 0;';
-        rightColumn.appendChild(this.createEquipSlotsSection(classEntry));
+        // The class's own slots, unless Database › Reactor Features leaves slots to a plugin.
+        const features = window.ReactorFeatures, system = this.databaseManager.getSystem?.() || {};
+        if (!features || features.on('classEquipSlots', system)) rightColumn.appendChild(this.createEquipSlotsSection(classEntry));
         rightColumn.appendChild(this.createTraitsSection(classEntry));
         const passiveSection = window.RRPassiveStates?.createSection({
             objectType: 'class', record: classEntry,
@@ -119,7 +121,7 @@ class DatabaseClassEditor {
         // The class's slots as they are now: its own list, else what it has without one (less a type named since the last save).
         const unsettled = this.databaseManager.unsettledEquipTypes?.(classEntry.id) || new Set();
         // (A copy: the class's own list changes only in setClassSlots, after everyone's slots as they were are noted.)
-        const current = () => slots.classSlots(classEntry)?.slice() || slots.resolve(this.databaseManager, project, { classId: classEntry.id }, slots.isDualWield(null, classEntry)).filter(id => String(types[id] || '').trim() && !unsettled.has(id));
+        const current = () => slots.classSlots(classEntry, system)?.slice() || slots.resolve(this.databaseManager, project, { classId: classEntry.id }, slots.isDualWield(null, classEntry)).filter(id => String(types[id] || '').trim() && !unsettled.has(id));
         const options = chosen => (names.some(type => type.id === chosen) ? '' : `<option value="${chosen}" selected>${rrEscapeHtml(plain(types[chosen]) || '#' + chosen)}</option>`)
             + names.map(type => `<option value="${type.id}"${type.id === chosen ? ' selected' : ''}>${rrEscapeHtml(type.name)}</option>`).join('');
         const list = current();
@@ -363,9 +365,13 @@ class DatabaseClassEditor {
         return section;
     }
 
-    /** Param-specific sane bounds. HP/MP go high; other stats stay smaller. */
-    _paramValueLimit(paramIdx) {
-        return paramIdx <= 1 ? 99999 : 9999;
+    /**
+     * The highest a curve value may be. RPG Maker MZ's runtime has no cap on
+     * parameters (Game_BattlerBase.paramMax is Infinity), so this is only a
+     * sane ceiling for the editor: 9,999,999 for every parameter.
+     */
+    _paramValueLimit(/*paramIdx*/) {
+        return DatabaseClassEditor.PARAM_VALUE_LIMIT;
     }
 
     /**
@@ -670,6 +676,10 @@ class DatabaseClassEditor {
 
         let lv1 = initialLv1;
         let lvMax = Math.max(1, Math.min(maxAllowed, initialLvMax));
+        // The sliders keep the old reach (99,999 HP/MP, 9,999 others) so they
+        // stay fine-grained; the number boxes go to maxAllowed, and a typed
+        // value past a slider's end stretches it.
+        const sliderMax = Math.min(maxAllowed, Math.max(paramIdx <= 1 ? 99999 : 9999, lv1 * 2, lvMax * 2));
         let exponent = initialExponent;
         let workingValues = current.slice();
 
@@ -694,7 +704,7 @@ class DatabaseClassEditor {
             <div class="rr-modal-body">
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 1 value')}</label>
-                    <input type="range" class="rr-pc-lv1-slider rr-range" min="1" max="${maxAllowed}" value="${lv1}">
+                    <input type="range" class="rr-pc-lv1-slider rr-range" min="1" max="${sliderMax}" value="${lv1}">
                     <input type="number" class="rr-pc-lv1-input database-field-value" min="1" max="${maxAllowed}" value="${lv1}">
                 </div>
 
@@ -705,7 +715,7 @@ class DatabaseClassEditor {
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Value at target level')}</label>
-                    <input type="range" class="rr-pc-lvmax-slider rr-range" min="1" max="${maxAllowed}" value="${lvMax}">
+                    <input type="range" class="rr-pc-lvmax-slider rr-range" min="1" max="${sliderMax}" value="${lvMax}">
                     <input type="number" class="rr-pc-lvmax-input database-field-value" min="1" max="${maxAllowed}" value="${lvMax}">
                 </div>
 
@@ -764,8 +774,9 @@ class DatabaseClassEditor {
         const lvMaxInput  = modal.querySelector('.rr-pc-lvmax-input');
         const shapeSlider = modal.querySelector('.rr-pc-shape-slider');
 
-        const syncLv1 = (v) => { lv1 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
-        const syncLvMax = (v) => { lvMax = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
+        const stretch = (slider, v) => { if (v > Number(slider.max)) slider.max = String(v); };
+        const syncLv1 = (v) => { lv1 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); stretch(lv1Slider, lv1); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
+        const syncLvMax = (v) => { lvMax = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); stretch(lvMaxSlider, lvMax); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
         const syncShape = (v) => { exponent = (parseInt(v) || 100) / 100; recompute(); };
 
         lv1Slider.addEventListener('input', e => syncLv1(e.target.value));
@@ -1992,6 +2003,9 @@ class DatabaseClassEditor {
         syncInputs();
     }
 }
+
+// The editor's ceiling for a parameter curve value (see _paramValueLimit).
+DatabaseClassEditor.PARAM_VALUE_LIMIT = 9999999;
 
 /**
  * Quick Setting A–E: five preset pairs of Lv1 and target-level values per

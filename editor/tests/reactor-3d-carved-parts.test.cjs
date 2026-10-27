@@ -557,7 +557,9 @@ test('the 3D section carries the tool strip, part picking, and the edit card', (
     // puts work on the card un-collapses it; Add starts motionless.
     assert.match(source, /this\.selectedRule = index;\s*\n\s*this\._cardCollapsed = false;/);
     assert.match(source, /this\.selectedRule = this\._editingRule;\s*\n\s*this\.renderRuleList\(\);/);
-    assert.match(source, /addRule\(\) \{[\s\S]{0,400}this\._cardCollapsed = false;/);
+    // Add: a rigged humanoid picks from the motion capture first; otherwise a fresh motion, or the card (addSingleRule) opened.
+    assert.match(source, /addRule\(\) \{\n\s*if \(this\._libraryMotions\(\)\.length\) \{ this\.showMotionPicker\(\); return; \}/);
+    assert.match(source, /addSingleRule\(\) \{[\s\S]{0,400}this\._cardCollapsed = false;/);
     assert.doesNotMatch(source, /_work\.motion = 'swing';/, 'Add no longer starts a surprise swing');
     // Releasing a hold also cancels its in-flight action — a long action
     // window otherwise re-latched the pose on the very next frame.

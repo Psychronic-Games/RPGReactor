@@ -46,20 +46,24 @@
     // `stats` is the object its counters go into.
     function createRenderer(gl, params = {}, stats = { groups: 0, draws: 0, postMs: 0 }) {
         const H = { ok: null, w: 0, h: 0, programs: new Map(), resources: [] };
+        // A WebGL2 context (PIXI's, for the in-scene path) has half-float targets in core
+        // and can multisample them; the WebGL1 overlay keeps its extension path.
+        const gl2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
         function dispose() {
             for (const r of H.resources) {
                 if (r.f) gl.deleteFramebuffer(r.f);
                 if (r.t) gl.deleteTexture(r.t);
                 if (r.rb) gl.deleteRenderbuffer(r.rb);
+                if (r.rb2) gl.deleteRenderbuffer(r.rb2);
             }
             for (const p of H.programs.values()) gl.deleteProgram(p.p);
             for (const p of [H.down, H.setup, H.blur]) if (p) gl.deleteProgram(p.p);
             if (H.buf) gl.deleteBuffer(H.buf);
-            H.resources = []; H.programs.clear(); H.probe = null; H.pre = null; H.ok = null;
+            H.resources = []; H.programs.clear(); H.probe = null; H.pre = null; H.msaa = null; H.ok = null;
         }
         // The context is gone: nothing to delete, and nothing left to use.
         function lost() {
-            H.probe = null; H.pre = null; H.resources = []; H.programs.clear();
+            H.probe = null; H.pre = null; H.msaa = null; H.resources = []; H.programs.clear();
             H.down = H.setup = H.blur = H.buf = null; H.ok = false;
         }
         function compile(vs, fs) {
@@ -109,7 +113,8 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, type, null);
+            const internal = !gl2 ? gl.RGBA : type === gl.HALF_FLOAT ? gl.RGBA16F : type === gl.FLOAT ? gl.RGBA32F : gl.RGBA8;
+            gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, type, null);
             return t;
         }
         function target(w, h, type, depth) {
@@ -130,6 +135,28 @@
             H.resources.push(r);
             return ok ? r : null;
         }
+        // The light buffer multisampled (WebGL2): Effekseer draws here, and post() resolves it
+        // into H.main. Null where the format cannot be multisampled.
+        function multisampled(w, h, type) {
+            const internal = type === gl.FLOAT ? gl.RGBA32F : gl.RGBA16F;
+            const supported = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, internal, gl.SAMPLES) || []);
+            const samples = supported.filter(n => n <= params.samples).sort((a, b) => b - a)[0];
+            if (!samples) return null;
+            const f = gl.createFramebuffer(), rb = gl.createRenderbuffer(), rb2 = gl.createRenderbuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+            gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, internal, w, h);
+            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, rb2);
+            gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT16, w, h);
+            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb2);
+            const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+            const r = { f, rb, rb2, w, h, samples };
+            H.resources.push(r);
+            return ok ? r : null;
+        }
         // Allocate (or resize) the targets for a w x h light buffer.
         // False when this context cannot render HDR; it stays false until restored.
         function ensure(w, h) {
@@ -137,11 +164,17 @@
             if (H.ok && H.w === w && H.h === h) return true;
             if (H.ok) dispose();
             try {
+                let type, probe;
+                if (gl2) {
+                    if (!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buffer_half_float")) throw Error("no float render target in this WebGL2 context");
+                    type = params.bufferType === "float" && gl.getExtension("OES_texture_float_linear") ? gl.FLOAT : gl.HALF_FLOAT;
+                    probe = target(4, 4, type, false);
+                } else {
                 const half = gl.getExtension("OES_texture_half_float");
                 gl.getExtension("EXT_color_buffer_half_float");
                 const halfLinear = gl.getExtension("OES_texture_half_float_linear");
-                let type = half && halfLinear && params.bufferType !== "float" ? half.HALF_FLOAT_OES : 0;
-                let probe = type && target(4, 4, type, false);
+                type = half && halfLinear && params.bufferType !== "float" ? half.HALF_FLOAT_OES : 0;
+                probe = type && target(4, 4, type, false);
                 if (!probe && params.bufferType !== "half") {
                     gl.getExtension("OES_texture_float");
                     if (!gl.getExtension("OES_texture_float_linear")) throw Error("float linear sampling unavailable");
@@ -149,10 +182,13 @@
                     type = gl.FLOAT;
                     probe = target(4, 4, type, false);
                 }
-                if (!probe) throw new Error("no float render target in this WebGL1 context");
+                }
+                if (!probe) throw new Error("no float render target in this WebGL context");
                 H.type = type;
                 H.main = target(w, h, type, true);
                 if (!H.main) throw Error("HDR depth target incomplete");
+                H.msaa = gl2 && params.samples > 0 ? multisampled(w, h, type) : null;
+                stats.samples = H.msaa ? H.msaa.samples : 0;
                 H.levels = [H.main];
                 for (let l = 1, lw = w, lh = h; l <= 7; l++) {
                     lw = Math.max(1, lw >> 1); lh = Math.max(1, lh >> 1);
@@ -181,10 +217,11 @@
             }
         }
 
-        // `out` is where the composite lands: the default framebuffer at
-        // (x, y, w, h). Absent, it covers the light buffer from the origin.
+        // `out` is where the composite lands: H.target (the default framebuffer
+        // unless post() was given one) at (x, y, w, h). Absent, it covers the
+        // light buffer from the origin.
         function quad(prog, dst, out) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : null);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : H.target || null);
             if (dst) gl.viewport(0, 0, dst.w, dst.h);
             else if (out) gl.viewport(out.x, out.y, out.w, out.h);
             else gl.viewport(0, 0, H.w, H.h);
@@ -201,16 +238,17 @@
         }
         // Bind and clear the light buffer for a grade group's draws.
         function begin() {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, H.main.f);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, (H.msaa || H.main).f);
             gl.viewport(0, 0, H.w, H.h);
             gl.disable(gl.SCISSOR_TEST); gl.colorMask(true, true, true, true); gl.depthMask(true);
             gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         }
         // Bloom the light buffer, grade it once, and screen it over the default
-        // framebuffer. `s` is { bloom, bloomScale, threshold, coverage, debugScale,
-        // measureGpu, alphaFromColor, bloomWidth, pixelScale }; the game sets none
-        // of the last three.
+        // framebuffer, or s.framebuffer. `s` is { bloom, bloomScale, threshold, coverage,
+        // debugScale, measureGpu, alphaFromColor, bloomWidth, pixelScale, framebuffer };
+        // the overlay sets none of the last four.
         function post(s, sc, out) {
+            H.target = s.framebuffer || null;
             if (s.measureGpu) gl.finish();
             const start = performance.now();
             const SIZES = sc.bloom.sizes, TINTS = sc.bloom.tints;
@@ -218,6 +256,12 @@
             gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.STENCIL_TEST);
             gl.colorMask(true, true, true, true);
             gl.disable(gl.BLEND);
+            if (H.msaa) {
+                gl.bindFramebuffer(gl.READ_FRAMEBUFFER, H.msaa.f);
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, H.main.f);
+                gl.blitFramebuffer(0, 0, H.w, H.h, 0, 0, H.w, H.h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            }
             // mip chain (skip all 19 bloom passes when intensity is zero)
             const weights = [];
             if (s.bloom > 0) {
@@ -352,9 +396,17 @@
         if (cache.has(name)) return cache.get(name);
         const entry = { ready: false, sidecar: null, error: null };
         cache.set(name, entry);
+        // On the desktop a missing file is not a 404 but a failed fetch: an effect without a sidecar
+        // (nearly all of them) is looked for on disk first, and is plainly not HDR.
+        const url = EffectManager.makeUrl(name).replace(/\.efkefc$/, ".hdr.json");
+        if (typeof Utils !== "undefined" && Utils.localAssetExists && Utils.localAssetExists(url) === false) {
+            entry.ready = true;
+            entry.promise = Promise.resolve();
+            return entry;
+        }
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 15000);
-        entry.promise = fetch(EffectManager.makeUrl(name).replace(/\.efkefc$/, ".hdr.json"), {signal: controller.signal})
+        entry.promise = fetch(url, {signal: controller.signal})
             .then(r => { if (r.status === 404) return null; if (!r.ok) throw Error("sidecar HTTP " + r.status); return r.json(); })
             .then(s => { entry.sidecar = s && valid(s); })
             .catch(e => { entry.error = String(e); console.warn("[ReactorHdrOverlay] " + name + ": " + e); })
@@ -370,12 +422,16 @@
         const a = sprite._animation || {}, e = sprite._hdrEntry;
         return e && e.sidecar || (forced(sprite) && api.overrides[a.effectName]) || null;
     }
+    // The context an effect is loaded into: the scene's for an in-scene sprite, the overlay's otherwise.
+    function load(sprite, name) {
+        return sprite._effekseerInScene ? Sprite_Animation.SceneLayer.load(name) : EffectManager.load(name);
+    }
     function fallbackName(sprite, sc) {
         const name = sprite._animation.effectName;
         return sc.fallback.includes('/') ? sc.fallback : name.slice(0, name.lastIndexOf('/') + 1) + sc.fallback;
     }
     api.setup = function(sprite, animation) {
-        if (!sprite._effectContext && animation.effectName) {
+        if ((!sprite._effectContext || sprite._effekseerInScene) && animation.effectName) {
             sprite._hdrEntry = request(animation.effectName);
             sprite._hdrSelected = false;
         }
@@ -386,7 +442,8 @@
     function select() {
         if (this._hdrEntry && !this._hdrSelected) {
             if (!this._hdrEntry.ready) return false;
-            if (Graphics._effekseerGL?.isContextLost()) return false;
+            const inScene = !!this._effekseerInScene;
+            if ((inScene ? scene.gl() : Graphics._effekseerGL)?.isContextLost()) return false;
             let sc = sidecarFor(this);
             try {
                 if (sc) sc = valid(sc);
@@ -398,12 +455,16 @@
                 // Malformed metadata cannot safely identify an HDR asset or its fallback. Fail closed.
                 this._playing = false; return false;
             }
-            const gl = Graphics._effekseerGL, canvas = Graphics._effekseerCanvas;
-            this._hdrActive = !!(sc && gl && canvas && !gl.isContextLost() && ensure(gl, canvas.width, canvas.height));
-            if (this._hdrActive) {
-                try { R.gradeProgram(sc.grade); } catch (e) { this._hdrActive = false; console.warn("[ReactorHdrOverlay] " + e); }
+            if (inScene) {
+                this._hdrActive = !!(sc && scene.ready(sc));
+            } else {
+                const gl = Graphics._effekseerGL, canvas = Graphics._effekseerCanvas;
+                this._hdrActive = !!(sc && gl && canvas && !gl.isContextLost() && ensure(gl, canvas.width, canvas.height));
+                if (this._hdrActive) {
+                    try { R.gradeProgram(sc.grade); } catch (e) { this._hdrActive = false; console.warn("[ReactorHdrOverlay] " + e); }
+                }
             }
-            if (sc && !this._hdrActive) this._effect = EffectManager.load(fallbackName(this, sc));
+            if (sc && !this._hdrActive) this._effect = load(this, fallbackName(this, sc));
             if (this._hdrActive) active.add(this);
             this._hdrSelected = true;
         }
@@ -412,11 +473,13 @@
     api.contextLost = function() {
         // Old WASM handles cannot be resumed in the replacement Effekseer context.
         // End active HDR animations so a battle cannot wait on a stranded handle.
+        // In-scene ones live on PIXI's context, which this loss does not touch.
         for (const sprite of active) {
+            if (sprite._effekseerInScene) continue;
             sprite._handle?.stop();
             sprite._hdrActive = false; sprite._playing = false; sprite._started = false;
+            active.delete(sprite);
         }
-        active.clear();
         R?.lost();
     };
     api.contextRestored = function() { R?.restored(); };
@@ -467,5 +530,55 @@
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             draws[draws.length - 1].resetViewport(renderer);
         }
+    };
+
+    // ---- In-scene support -------------------------------------------------
+    // Screen animations drawn inside PIXI's scene (Sprite_Animation.SceneLayer,
+    // reactor_sprites.js) draw their HDR light through a renderer of their own
+    // on PIXI's WebGL2 context, and composite it into whatever PIXI is drawing
+    // to at the time. The layer owns the GL state around those calls; this
+    // part chooses HDR or the twin and lends the sidecar's settings.
+    let RS = null;
+    const scene = api.scene = {
+        stats: { groups: 0, draws: 0, postMs: 0 },
+        gl() { return typeof Graphics !== "undefined" && Graphics._app && Graphics._app.renderer ? Graphics._app.renderer.gl : null; },
+        // The renderer for PIXI's context: replaced when the context is.
+        renderer(gl) {
+            if (!RS || RS.gl !== gl) {
+                if (RS && !RS.gl.isContextLost()) RS.dispose();
+                RS = createRenderer(gl, Object.assign({ samples: 4 }, params), scene.stats);
+            }
+            return RS;
+        },
+        // Whether an in-scene sprite with this sidecar can be drawn in HDR here: float targets
+        // and a grade that compiles, tried at the game's own size (what the light is drawn at).
+        ready(sc) {
+            const layer = Sprite_Animation.SceneLayer;
+            try {
+                return !!layer.guard(gl => {
+                    const R = scene.renderer(gl);
+                    if (!R.ensure(Math.max(1, Graphics.width | 0), Math.max(1, Graphics.height | 0))) return false;
+                    R.gradeProgram(sc.grade);
+                    return true;
+                });
+            } catch (e) {
+                console.warn("[ReactorHdrOverlay] " + e);
+                return false;
+            }
+        },
+        sidecar: sidecarFor,
+        settings,
+        // A pass that failed: this sprite plays its twin from here on.
+        fallBack(sprite) {
+            active.delete(sprite);
+            try { sprite._handle?.stop(); } catch (e) { /* a lost context */ }
+            sprite._started = false; sprite._hdrActive = false;
+            sprite._effect = load(sprite, fallbackName(sprite, sidecarFor(sprite)));
+        },
+        lost() {
+            for (const sprite of active) if (sprite._effekseerInScene) active.delete(sprite);
+            RS?.lost();
+        },
+        restored() { RS?.restored(); }
     };
 })();

@@ -68,8 +68,10 @@ test('swimming and crawling deform native rigs through finite looped motion and 
         assert.equal(Q.Creature.poseClip(b.bones, id === 'swim' ? 'crawl' : 'swim', r), null);
         for (const tr of clip.tracks) {
             assert.ok(tr.bone < b.bones.length && tr.values.every(Number.isFinite));
+            // Quaternion tracks hold 4 values a key; translation and scale tracks 3.
+            const n = tr.path === 'translation' || tr.path === 'scale' ? 3 : 4;
             let gap = 0;
-            for (let k = 0; k < 4; k++) gap = Math.max(gap, Math.abs(tr.values[k] - tr.values[tr.values.length - 4 + k]));
+            for (let k = 0; k < n; k++) gap = Math.max(gap, Math.abs(tr.values[k] - tr.values[tr.values.length - n + k]));
             assert.ok(gap < 1e-6, 'closed loop');
         }
         let changed = 0;
@@ -191,5 +193,20 @@ test('flexible roots, eyes and moving fins retain body attachments on default aq
     for (const part of fish.parts.filter(p => /^Fin|^Fluke/.test(p.name))) {
         const fin = fish.bones.findIndex(b => b.name === part.name);
         assert.ok(Array.from({length:part.positions.length/3}, (_, i) => i).some(i => { let onFin=0;for(let k=0;k<4;k++)if(part.joints[i*4+k]===fin)onFin+=part.weights[i*4+k];return onFin<.05; }), 'fin base follows the body skin rather than the fin rotation');
+    }
+});
+
+// 2026-10-25b: a centipede's venom claws grow from under its first segment; a dolphin's flippers from its flank.
+test('centipede forcipules and dolphin flippers are rooted in the body', () => {
+    const near = (part, body) => { let m = Infinity; for (let i = 0; i < part.positions.length; i += 3) for (let j = 0; j < body.positions.length; j += 3) m = Math.min(m, Math.hypot(part.positions[i] - body.positions[j], part.positions[i + 1] - body.positions[j + 1], part.positions[i + 2] - body.positions[j + 2])); return m; };
+    const c = Q.Model.build(null, Q.Creature.kindRecipe('centipede'), {}, { quality: 'preview' }), body = c.parts.find(p => p.name === 'Body'), claws = c.parts.find(p => p.name === 'Forcipules');
+    for (const side of [-1, 1]) {
+        const half = { positions: claws.positions.filter((_, i) => Math.sign(claws.positions[i - (i % 3)]) === side) };
+        assert.ok(near(half, body) < 0.006, 'forcipule ' + side + ' touches the body');
+    }
+    const d = Q.Model.build(null, Q.Creature.kindRecipe('dolphin'), {}, { quality: 'preview' }), dBody = d.parts.find(p => p.name === 'Body');
+    for (const name of ['Fin1_0', 'Fin-1_0', 'Fluke1', 'Fluke-1', 'Dorsal fin']) {
+        const fin = d.parts.find(p => p.name === name);
+        assert.ok(fin && near(fin, dBody) < 0.01, name + ' rooted in the body');
     }
 });

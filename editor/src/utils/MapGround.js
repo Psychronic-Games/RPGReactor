@@ -10,7 +10,8 @@
 (function(root) {
     'use strict';
 
-    const MAX = 8;
+    /** As many types as the runtime draws (Reactor3D.GROUND_TYPES_MAX). */
+    const MAX = 64;
     const runtime = () => {
         if (root.Reactor3D && root.Reactor3D.decodeGroundPaint) return root.Reactor3D;
         if (typeof require === 'function' && typeof module !== 'undefined') {
@@ -133,8 +134,10 @@
      * there by as much, so what is painted shows. `erase` thins every type, back
      * to the room's floor. Returns the cells touched, or null.
      */
-    const paint = (mapData, index, cx, cy, options = {}) => {
-        if (!mapData) return null;
+    const paint = (mapData, index, cx, cy, options = {}) => paintMany(mapData, index, [[cx, cy]], options);
+    /** `paint` at each of `points` ([x, y] each, tiles), read and written once: a stroke's dabs along a line together. */
+    const paintMany = (mapData, index, points, options = {}) => {
+        if (!mapData || !Array.isArray(points) || !points.length) return null;
         const list = types(mapData);
         if (!options.erase && !list[index]) return null;
         const W = mapData.width, H = mapData.height, size = W * H;
@@ -143,6 +146,7 @@
         const soft = Math.max(0, Math.min(1, options.soft === undefined ? 0.4 : Number(options.soft) || 0));
         const levels = list.map(type => decode(type.paint, size)), dirty = list.map(() => false);
         let touched = null;
+        for (const [cx, cy] of points)
         for (let y = Math.max(0, Math.floor(cy - radius)); y <= Math.min(H - 1, Math.floor(cy + radius)); y++) {
             for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(W - 1, Math.floor(cx + radius)); x++) {
                 const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
@@ -228,7 +232,7 @@
         return true;
     };
 
-    const api = { MAX, decode, encode, types, hasGround, hasPaint, materials, snapshot, restore, addType, updateType, removeType, paint, fill, levelsOf, typeAt, resize, typeRecord };
+    const api = { MAX, decode, encode, types, hasGround, hasPaint, materials, snapshot, restore, addType, updateType, removeType, paint, paintMany, fill, levelsOf, typeAt, resize, typeRecord };
     root.RRMapGround = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -26,6 +26,8 @@ class DatabaseItemEditor {
         wrapper.style.position = 'relative';
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        // "Can't be sold", unless Database › Reactor Features leaves selling to a plugin (the flag stays saved).
+        const noSell = !window.ReactorFeatures || window.ReactorFeatures.on('unsellableItems', this.databaseManager.getSystem?.() || {});
         const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
         const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
         const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
@@ -72,7 +74,12 @@ class DatabaseItemEditor {
                         </span>
                         <span class="db-col">
                             <label>${tt('Price')}</label>
-                            <input type="number" class="database-field-value" value="${rrEscapeHtml(item.price || 0)}" data-field="price" data-item-id="${item.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(item.price || 0)}" min="0" data-field="price" data-item-id="${item.id}">
+                            ${noSell ? `
+                            <span class="db-no-sell" style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--color-text-muted);">
+                                <input type="checkbox" class="system-checkbox" id="item-no-sell-${item.id}" ${item.rrNoSell ? 'checked' : ''} data-field="rrNoSell" data-item-id="${item.id}">
+                                <label for="item-no-sell-${item.id}" style="margin: 0; cursor: pointer;">${tt("Can't be sold")}</label>
+                            </span>` : ''}
                         </span>
                         <span class="db-col">
                             <label>${tt('Scope')}</label>
@@ -141,12 +148,9 @@ class DatabaseItemEditor {
                         <label>${tt('Success %')}</label>
                         <input type="number" class="database-field-value" value="${rrEscapeHtml(item.successRate != null ? item.successRate : 100)}" data-field="successRate" data-item-id="${item.id}">
                     </div>
-                    <div class="db-row-pair">
-                        <label>${tt('Repeats')}</label>
-                        ${ActionRepeats.minFieldHTML(item, 'data-item-id')}
-                        <label>${tt('TP Gain')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(item.tpGain || 0)}" data-field="tpGain" data-item-id="${item.id}">
-                    </div>
+                    ${DatabaseSkillEditor.poolRowsHTML(this.databaseManager.getSystem(), item, tt, [
+                        `<label>${tt('Repeats')}</label>
+                        ${ActionRepeats.minFieldHTML(item, 'data-item-id')}`, ['tp', 'tpGain', 'TP Gain']], 'data-item-id')}
                     ${ActionRepeats.maxRowHTML(item, 'data-item-id')}
                     <div class="db-row-pair">
                         <label>${tt('Hit Type')}</label>
@@ -355,6 +359,10 @@ class DatabaseItemEditor {
         else if (fieldName === 'consumable') {
             item[fieldName] = !!value;
             console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
+        }
+        // Can't be sold: stored only when on, so a stock record stays stock.
+        else if (fieldName === 'rrNoSell') {
+            if (value) item.rrNoSell = true; else delete item.rrNoSell;
         }
         // Either end of the hit-count range. A range that stops being one
         // deletes repeatsMax, so the field to show is not item[fieldName].

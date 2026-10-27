@@ -613,7 +613,9 @@ class DatabaseManager {
      */
     unsettledEquipTypes(classId) {
         const slots = this.equipSlots(), classEntry = this.getClass(classId), out = new Set();
-        if (!slots || (classEntry && slots.classSlots(classEntry))) return out;
+        if (!slots || (classEntry && Array.isArray(classEntry.rrEquipSlots))) return out;
+        // Class Equipment Slots off (Database › Reactor Features): a save gives no class a list, so nothing waits.
+        if (slots.featureOn && !slots.featureOn('classEquipSlots', this.data.system)) return out;
         const known = new Set(this.equipTypesKnown());
         for (const id of slots.named(this.data.system)) if (!known.has(id)) out.add(id);
         return out;

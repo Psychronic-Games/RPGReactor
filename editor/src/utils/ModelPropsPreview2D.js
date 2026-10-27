@@ -354,7 +354,10 @@ class ModelPropsPreview2D {
         if (!manager.currentMap || manager.container?.destroyed || this.app.stage.children.indexOf(manager.tilemapManager.container) < 0) {
             this.clear(); return;
         }
-        if (document.hidden || manager.mapEditor3D()?.isEnabled?.() || manager.mapEditor3D()?.suspended) {
+        // Nor while another window is the one worked in (the Database, the Forge), as the 3D view parks:
+        // the models' poses, shadows and lights were worked out and drawn every frame behind it.
+        if (document.hidden || manager.mapEditor3D()?.isEnabled?.() || manager.mapEditor3D()?.suspended
+            || (typeof window !== 'undefined' && window.RRDetachedWindow?.previewActive?.() === false)) {
             this._lastModelTick = now;
             this.suspend();
             this.lights = [];

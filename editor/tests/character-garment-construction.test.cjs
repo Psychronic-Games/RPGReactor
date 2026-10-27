@@ -61,7 +61,8 @@ test('hard armor has tiled surface relief and exports its finish maps',async()=>
     const r=make(outfit('trooper')),armor=r.parts.filter(p=>/^Power .*plating$/.test(p.name));
     assert.ok(armor.length>=2);
     for(const p of armor){assert.equal(p.normalTexture,'armor-grain-normal.png');assert.equal(p.metallicRoughnessTexture,'armor-finish.png');assert.equal(p.uvs.length,p.positions.length/3*2);}
-    for(const name of ['armor-grain-normal.png','armor-finish.png']){assert.equal(r.textures[name].width,128);assert.equal(r.textures[name].repeat,true);}
+    // Cast/painted plate tiles are 256 texels (orange peel and sanding marks; chips come from the form's edges).
+    for(const name of ['armor-grain-normal.png','armor-finish.png']){assert.equal(r.textures[name].width,256);assert.equal(r.textures[name].repeat,true);}
     const bytes=await Q.Model.toGlb(r,'Trooper',()=>new Uint8Array([137,80,78,71]));
     const length=new DataView(bytes.buffer,bytes.byteOffset).getUint32(12,true),json=JSON.parse(Buffer.from(bytes.subarray(20,20+length)).toString());
     assert.ok(json.materials.some(m=>m.normalTexture&&m.pbrMetallicRoughness.metallicRoughnessTexture),'PBR finish exported');

@@ -211,6 +211,36 @@ test('modal traps Tab at both ends, enters on open and restores the opener on le
     assert.equal(context.document.activeElement, opener, 'leave() restores the opener');
 });
 
+test('a dialog whose focus was refused while hidden takes it once shown, its opener kept', () => {
+    const context = createContext();
+    const opener = dom.createElement('button');
+    context.document.body.appendChild(opener);
+    opener.focus();
+    const overlay = dom.createElement('div');
+    context.document.body.appendChild(overlay);
+    const field = dom.createElement('input');
+    overlay.appendChild(field);
+    const trap = context.RRKeyboardNavigation.modal(overlay);
+    // Shown in a window of its own still being made: the focus stays where it was.
+    const focus = field.focus;
+    field.focus = () => {};
+    trap.enter();
+    assert.equal(context.document.activeElement, opener);
+    field.focus = focus;
+    // Its window shows it, with the focus now somewhere in that window.
+    context.document.activeElement = context.document.body;
+    assert.equal(trap.refocus(), field);
+    assert.equal(context.document.activeElement, field);
+    assert.equal(trap.opener, opener, 'the opener is the one before it opened');
+    trap.leave();
+    assert.equal(context.document.activeElement, opener);
+    // Entered with the focus given: nothing to give again.
+    trap.enter();
+    context.document.activeElement = context.document.body;
+    assert.equal(trap.refocus(), null);
+    assert.equal(context.document.activeElement, context.document.body);
+});
+
 test('roving list moves selection with arrows and keeps one Tab stop', () => {
     const context = createContext();
     const nav = dom.createElement('div');

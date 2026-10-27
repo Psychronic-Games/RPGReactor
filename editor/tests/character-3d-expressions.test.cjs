@@ -245,7 +245,7 @@ test('the saved GLB carries every expression and viseme as a named, sparse morph
     assert.ok(body, 'the body has every target');
     // Read back as written: the jaw's drop on the lower teeth.
     const teeth = [];
-    object.traverse(o => { if (o.isMesh && o.morphTargetDictionary && o.morphTargetDictionary.viseme_aa != null && o.morphTargetInfluences.length === 12) teeth.push(o); });
+    object.traverse(o => { if (o.isMesh && o.morphTargetDictionary && o.morphTargetDictionary.viseme_aa != null && /Teeth/.test(o.name + ' ' + (o.parent && o.parent.name))) teeth.push(o); });
     assert.ok(teeth.length >= 1);
     const drop = teeth[0].geometry.morphAttributes.position[teeth[0].morphTargetDictionary.viseme_aa].array;
     assert.ok(Math.min(...drop) < -0.004 && Math.max(...drop.map(Math.abs)) < 0.05, 'the lower teeth drop with the jaw');

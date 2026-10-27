@@ -329,7 +329,8 @@
         const anim = pg.animation_type ?? 0;
         const moveType = { 0: 0, 1: 1, 4: 2, 6: 3 }[pg.move_type ?? 0] ?? 0;
         if ([2, 3, 5].includes(pg.move_type)) notes.moveType = (notes.moveType || 0) + 1;
-        if (flags & 0x60) notes.timerCondition = (notes.timerCondition || 0) + 1;
+        // 2003's second timer runs on the one timer the runtime keeps (LegacyCommands' 10230), so its condition reads that.
+        if (flags & 0x40) notes.timerCondition = (notes.timerCondition || 0) + 1;
         return {
             conditions: {
                 actorId: c.actor_id || 1, actorValid: !!(flags & 0x10), itemId: c.item_id || 1, itemValid: !!(flags & 0x08),
@@ -337,7 +338,9 @@
                 switch2Id: c.switch_b_id || 1, switch2Valid: !!(flags & 0x02), variableId: c.variable_id || 1, variableValid: !!(flags & 0x04),
                 variableValue: c.variable_value || 0,
                 // 2003 compares a variable six ways (0 ==, 1 >=, 2 <=, 3 >, 4 <, 5 !=); MZ only >=, so others are kept for the runtime
-                ...((flags & 0x04) && (c.compare_operator ?? 1) !== 1 ? { rrVariableOp: Math.max(0, Math.min(5, c.compare_operator)) } : {})
+                ...((flags & 0x04) && (c.compare_operator ?? 1) !== 1 ? { rrVariableOp: Math.max(0, Math.min(5, c.compare_operator)) } : {}),
+                // "Timer at N seconds or less": MZ pages have no such condition, so the runtime reads rrTimerSec
+                ...(flags & 0x60 ? { rrTimerSec: Math.max(0, Math.min(flags & 0x20 ? c.timer_sec ?? 0 : Infinity, flags & 0x40 ? c.timer2_sec ?? 0 : Infinity)) } : {})
             },
             directionFix: anim === 2 || anim === 3 || anim === 4,
             // no charset name: the page shows upper-layer tile `character_index` (EasyRPG's HasTileSprite)
@@ -347,6 +350,8 @@
             moveFrequency: Math.max(1, Math.min(5, Math.round(((pg.move_frequency ?? 3) * 5) / 8))),
             moveRoute: Object.assign(convertRoute ? convertRoute(pg.move_route && pg.move_route.move_commands || []) : { list: [{ code: 0, parameters: [] }] }, { repeat: !!(pg.move_route && pg.move_route.repeat), skippable: !!(pg.move_route && pg.move_route.skippable), wait: false }),
             moveSpeed: Math.max(1, Math.min(6, pg.move_speed ?? 3)),
+            // the old engine's 1-8 frequency, for the runtime's move-route timing
+            rrFrequency: Math.max(1, Math.min(8, pg.move_frequency ?? 3)),
             moveType,
             priorityType: Math.max(0, Math.min(2, pg.layer ?? 0)),
             // read by the runtime for imports: a translucent page starts at transparency 3, a spinning one turns in place

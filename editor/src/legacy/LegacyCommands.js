@@ -385,6 +385,8 @@
                     const ch = charId(p[0]);
                     const route = decodeRoute(p.slice(4), ctx, c);
                     route.repeat = !!(p[2] & 1); route.skippable = !!p[3]; route.wait = false;
+                    // the route's frequency (1-8; others 6, as EasyRPG's CommandMoveEvent): the runtime's stop counts
+                    route.rrFrequency = p[1] >= 1 && p[1] <= 8 ? p[1] : 6;
                     if (ch === null) script(`${charExpr(p[0])}.forceMoveRoute(${JSON.stringify(route)})`, ind);
                     else push(205, [ch, route], ind);
                     break;
@@ -622,8 +624,9 @@
                 // speed and frequency step from the character's own, as the old engine does
                 case 28: list.push({ code: 45, parameters: ['this.setMoveSpeed(Math.min(6, this.moveSpeed() + 1))'] }); break;
                 case 29: list.push({ code: 45, parameters: ['this.setMoveSpeed(Math.max(1, this.moveSpeed() - 1))'] }); break;
-                case 30: list.push({ code: 45, parameters: ['this.setMoveFrequency(Math.min(5, this.moveFrequency() + 1))'] }); break;
-                case 31: list.push({ code: 45, parameters: ['this.setMoveFrequency(Math.max(1, this.moveFrequency() - 1))'] }); break;
+                // the frequency in the old engine's 1-8, which the route timing reads, and in MZ's 1-5
+                case 30: list.push({ code: 45, parameters: ['this.rrStepFrequency(1)'] }); break;
+                case 31: list.push({ code: 45, parameters: ['this.rrStepFrequency(-1)'] }); break;
                 case 32: list.push({ code: 27, parameters: [m.parameter_a] }); break;
                 case 33: list.push({ code: 28, parameters: [m.parameter_a] }); break;
                 // an empty name is a tile graphic: upper-layer tile parameter_a (MZ's C sheet starts at 256)

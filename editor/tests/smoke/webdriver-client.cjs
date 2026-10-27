@@ -146,12 +146,24 @@ class WebDriverClient {
      * (`--disable-gpu`) or trying a flag without editing a smoke. Sessions
      * are silent (`--mute-audio`) unless `RR_NW_AUDIO=1`: playback still
      * runs, nothing reaches the speakers.
+     *
+     * Video is decoded in software (`--disable-accelerated-video-decode`). On
+     * the headless KWin display (perf/headless-display.sh) with the NVIDIA
+     * card, the GPU process cannot import a hardware-decoded frame
+     * (`gbm_bo_import` returns null, "CreateSharedImage: could not create
+     * backing") and restarts as soon as a map plays a video: every WebGL
+     * context is lost, the editor's views go black, and after a few restarts
+     * Chromium blocks WebGL for the page ("Web page caused context loss and
+     * was blocked"). A real desktop imports those frames; harnesses don't need them.
      */
     async createSession(alwaysMatch) {
         const options = alwaysMatch && alwaysMatch['goog:chromeOptions'];
         if (options && Array.isArray(options.args)) {
-            const extra = ['--enable-unsafe-swiftshader', ...(process.env.RR_NW_AUDIO === '1' ? [] : ['--mute-audio']), ...String(process.env.RR_NW_ARGS || '').split(/\s+/).filter(Boolean)];
+            const extra = ['--enable-unsafe-swiftshader', '--disable-accelerated-video-decode', ...(process.env.RR_NW_AUDIO === '1' ? [] : ['--mute-audio']), ...String(process.env.RR_NW_ARGS || '').split(/\s+/).filter(Boolean)];
             for (const flag of extra) if (!options.args.includes(flag)) options.args.push(flag);
+            // The session's own profile folder: close() finds the browser's processes by it.
+            const profile = options.args.find(arg => /^-*user-data-dir=/.test(arg));
+            this.profileDir = profile ? profile.replace(/^-*user-data-dir=/, '') : null;
         }
         const result = await this.request('POST', '/session', {
             capabilities: { alwaysMatch, firstMatch: [{}] },
@@ -207,6 +219,28 @@ class WebDriverClient {
                 if (process.platform === 'win32') this.process.kill('SIGKILL');
                 else process.kill(-this.process.pid, 'SIGKILL');
             } catch {}
+        }
+        this.killProfileProcesses();
+    }
+
+    /**
+     * NW.js leaves chromedriver's process group, so a session whose page hung (DELETE timed out)
+     * left the editor and its GPU process running after the driver was gone: two gigabytes each
+     * with SwiftShader, until the machine ran short. Every process still carrying this session's own
+     * profile folder on its command line is ended. Linux only; read from /proc, never through a shell.
+     */
+    killProfileProcesses() {
+        if (process.platform !== 'linux' || !this.profileDir) return;
+        const fs = require('node:fs');
+        const mark = 'user-data-dir=' + this.profileDir;
+        let ids = [];
+        try { ids = fs.readdirSync('/proc').filter(name => /^\d+$/.test(name)).map(Number); } catch { return; }
+        for (const pid of ids) {
+            if (pid === process.pid) continue;
+            let command = '';
+            try { command = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').join(' '); } catch { continue; }
+            if (!(command.includes(mark + ' ') || command.endsWith(mark + ' ') || command.trimEnd().endsWith(mark))) continue;
+            try { process.kill(pid, 'SIGKILL'); } catch {}
         }
     }
 }

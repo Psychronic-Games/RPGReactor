@@ -3751,7 +3751,7 @@ Reactor3D._glbSparseAccessor = function(json, bin, accessor) {
 Reactor3D.carrySurfaceData = function(from, to) {
     const a = from && from.userData, b = to && to.userData;
     if (!a || !b) return to;
-    if (a.rrNormalMap && a.rrNormalMap.isTexture) { b.rrNormalMap = a.rrNormalMap; b.rrNormalScale = a.rrNormalScale && a.rrNormalScale.clone ? a.rrNormalScale.clone() : a.rrNormalScale; }
+    if (a.rrNormalMap && a.rrNormalMap.isTexture) { b.rrNormalMap = a.rrNormalMap; b.rrNormalScale = a.rrNormalScale && a.rrNormalScale.clone ? a.rrNormalScale.clone() : a.rrNormalScale; if (a.rrNormalUv1) b.rrNormalUv1 = true; }
     if (a.rrEmissiveMap && a.rrEmissiveMap.isTexture) b.rrEmissiveMap = a.rrEmissiveMap;
     if (a.rrEmissive && a.rrEmissive.isColor) b.rrEmissive = a.rrEmissive.clone();
     if (a.rrHair) b.rrHair = true;
@@ -3835,7 +3835,21 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         // Its normal map, where it shares the picture's coordinates: lit by which way each texel faces
         // (Reactor3D.MODEL_FACING). Kept linear; a block-compressed copy is left out (its format is a color's).
         const normalInfo = def.normalTexture;
-        if (map && normalInfo && !(normalInfo.texCoord > 0) && (!texInfo || !(texInfo.texCoord > 0))) {
+        // A normal map on the second coordinates (TEXCOORD_1): a fine repeating tile, a cloth's weave from the
+        // Character Builder. Its own coordinates make the frame, so it needs no picture beside it.
+        if (normalInfo && normalInfo.texCoord === 1) {
+            const normal = this._loadGlbTexture(json, bin, normalInfo, baseUrl, textures, bitmaps, usedBitmaps);
+            if (normal && !normal.isCompressedTexture) {
+                normal.colorSpace = THREE.NoColorSpace || "";
+                normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
+                normal.needsUpdate = true;
+                mat.userData.rrNormalMap = normal;
+                mat.userData.rrNormalUv1 = true;
+                // glTF's green points up the picture, against +v: the frame's v runs the other way.
+                const k = normalInfo.scale != null ? Number(normalInfo.scale) : 1;
+                mat.userData.rrNormalScale = new THREE.Vector2(k, -k);
+            }
+        } else if (map && normalInfo && !(normalInfo.texCoord > 0) && (!texInfo || !(texInfo.texCoord > 0))) {
             const normal = this._loadGlbTexture(json, bin, normalInfo, baseUrl, textures, bitmaps, usedBitmaps);
             if (normal && !normal.isCompressedTexture) {
                 normal.colorSpace = THREE.NoColorSpace || "";
@@ -3893,6 +3907,11 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
             if (prim.attributes.TEXCOORD_0 != null) {
                 geometry.setAttribute("uv", new THREE.BufferAttribute(
                     this._glbAccessor(json, bin, prim.attributes.TEXCOORD_0), 2));
+            }
+            // The second coordinates, where a material's normal map rides them.
+            if (prim.attributes.TEXCOORD_1 != null && materials[prim.material] && materials[prim.material].userData.rrNormalUv1) {
+                geometry.setAttribute("uv1", new THREE.BufferAttribute(
+                    this._glbAccessor(json, bin, prim.attributes.TEXCOORD_1), 2));
             }
             if (prim.attributes.COLOR_0 != null) {
                 const color = this._glbAccessor(json, bin, prim.attributes.COLOR_0);
@@ -5115,6 +5134,12 @@ Reactor3D.flattenModelWorld = function(root) {
  *       releases; an action pose plays in and out over its period),
  *       "drive" (turns `degrees` times an input of the state, -1 to 1,
  *       about `axisVector`: a steered part).
+ *       "glow" (a light that lives: the emissive of the part's materials —
+ *       or of materials named by `material` — breathes, flickers or
+ *       scrolls; `mode` "pulse" | "flicker" | "scroll", `period` frames,
+ *       `min`/`max` the share of the authored emissive intensity, `uv`
+ *       [u, v] emissive map turns per second for a scroll. Only uniforms
+ *       change: nothing is rebuilt or recompiled).
  * trigger: "always", "idle", "moving", or "action" — actions play on
  * demand by name (the Play Model Animation event command).
  * part: prefix of a named part recorded by the readers ("" = whole model);
@@ -5179,12 +5204,15 @@ Reactor3D.readModelAnimationRules = function(json, clips) {
         const keys = [];
         for (const raw of value) {
             if (!raw || typeof raw !== "object") continue;
-            keys.push({
+            const key = {
                 at: Math.min(1, Math.max(0, Number(raw.at) || 0)),
                 rotate: vec3(raw.rotate),
                 move: vec3(raw.move),
                 resize: vec3(raw.resize, 1)
-            });
+            };
+            // How the step into this key goes (Reactor3D.KEY_EASES); none flows smoothly through.
+            if (Reactor3D.KEY_EASES.includes(raw.ease)) key.ease = raw.ease;
+            keys.push(key);
         }
         keys.sort((a, b) => a.at - b.at);
         return keys;
@@ -5192,12 +5220,13 @@ Reactor3D.readModelAnimationRules = function(json, clips) {
     for (let i = 0; i < list.length; i++) {
         const raw = list[i] || {};
         const type = raw.type === "swing" || raw.type === "bob" || raw.type === "clip"
-            || raw.type === "pose" || raw.type === "drive" ? raw.type : "spin";
+            || raw.type === "pose" || raw.type === "drive" || raw.type === "glow" ? raw.type : "spin";
         const keys = readKeys(raw.keys);
         const rule = {
             name: String(raw.name || raw.part || type + "-" + i),
             part: String(raw.part || ""),
-            clip: String(raw.clip || ""),
+            // `library` names a motion of the shared motion library (attachLibraryMotions) in place of a clip in the file.
+            clip: raw.library ? Reactor3D.LIBRARY_CLIP_PREFIX + String(raw.library) : String(raw.clip || ""),
             // Playback-rate multiplier for embedded clips (1 = authored speed).
             rate: Number(raw.rate) > 0 ? Number(raw.rate) : 1,
             type,
@@ -5235,6 +5264,7 @@ Reactor3D.readModelAnimationRules = function(json, clips) {
         };
         // A clip in the model's file playing in the state its name says, not an animation of the sidecar's.
         if (raw.ownClip) rule.ownClip = true;
+        if (raw.library) rule.library = String(raw.library);
         // What a wheel and a steered part carry (a vehicle's rules), kept only on a rule that has them:
         // `exact` reaches the part by its whole name, not by prefix; `axisVector` is the line it turns
         // about (model space, kept at unit length) in place of `axis`; `radius` (model units) rolls a
@@ -5247,6 +5277,15 @@ Reactor3D.readModelAnimationRules = function(json, clips) {
         }
         if (Number.isFinite(Number(raw.radius)) && Number(raw.radius) > 0) rule.radius = Number(raw.radius);
         if (type === "drive") rule.input = String(raw.input || "");
+        if (type === "glow") {
+            rule.mode = raw.mode === "flicker" || raw.mode === "scroll" ? raw.mode : "pulse";
+            rule.material = String(raw.material || "");
+            const lo = Number.isFinite(Number(raw.min)) ? Number(raw.min) : 0.35, hi = Number.isFinite(Number(raw.max)) ? Number(raw.max) : 1;
+            rule.min = Math.max(0, Math.min(lo, hi));
+            rule.max = Math.max(rule.min, Math.max(lo, hi));
+            const uv = Array.isArray(raw.uv) ? raw.uv : [0, 0];
+            rule.uv = [Number(uv[0]) || 0, Number(uv[1]) || 0];
+        }
         rules.push(rule);
     }
     // A rigged model plays its template's default motion for every state it
@@ -5490,8 +5529,9 @@ Reactor3D.libraryRestSkeleton = function(root) {
 };
 
 /**
- * Gives a rigged humanoid (applyModelRig) the library's motions as clips,
- * one for each state the file's own clips are not named for. A clip holds
+ * Gives a rigged humanoid (applyModelRig) the library's motions as clips:
+ * one for each state the file's own clips are not named for, played there,
+ * and the rest for the model's own rules to name (`library` on a clip rule). A clip holds
  * no keys until it first plays (resolveLibraryMotion); readModelAnimationRules
  * plays each in its state where the model's own animations leave it open.
  */
@@ -5505,7 +5545,11 @@ Reactor3D.attachLibraryMotions = function(root, rig) {
         const match = clip && clip.name ? this.clipStateOf(clip.name) : null;
         if (match) named.add(match.state);
     }
-    const wanted = library.STATE_MOTIONS.filter(motion => !named.has(motion.state));
+    // The states the file leaves open play the library's motion for them; every other motion (Guard, Sword
+    // Swing, Hit, Death...) is there too, for a rule of the model's own to name (`library`). None holds keys until it plays.
+    const open = new Map(library.STATE_MOTIONS.filter(motion => !named.has(motion.state)).map(motion => [motion.id, motion]));
+    const wanted = Array.from(open.values());
+    for (const pose of library.POSES || []) if (!open.has(pose.id)) wanted.push({ id: pose.id, state: null, name: pose.label });
     if (!wanted.length) return;
     const skeleton = this.libraryRestSkeleton(root);
     if (!skeleton) return;
@@ -5527,7 +5571,7 @@ Reactor3D.libraryMotionRules = function(list, clips) {
     const out = [];
     for (const clip of clips) {
         const info = clip && clip.__reactorLibrary;
-        if (!info || covers(list || [], info.state) || out.some(rule => rule.trigger === info.state)) continue;
+        if (!info || !info.state || covers(list || [], info.state) || out.some(rule => rule.trigger === info.state)) continue;
         out.push({ name: info.name, type: "clip", clip: clip.name, trigger: info.state, defaultMotion: true });
     }
     return out;
@@ -7273,6 +7317,8 @@ Reactor3D.HandGrip = {
         return true;
     },
     update() {
+        // A chest turned for a long gun's stance (Held.blade) goes back when no hold laid it this frame.
+        if (Reactor3D.Held && Reactor3D.Held.stances.size) Reactor3D.Held.unblade(null);
         if (!this.hands.size) return;
         const now = this.now(), dt = now - this.last;
         this.last = now;
@@ -7443,10 +7489,37 @@ Reactor3D.Held = {
         }
         angle = Math.min(.96, angle);
         if (!angle) return 0;
+        const head = torso.head && torso.head.parent ? torso.head : null;
+        const stance = { owner: record, head, chestBase: torso.chest.quaternion.clone(), headBase: head ? head.quaternion.clone() : null, chestOut: null, headOut: null, fresh: true };
         q.setFromAxisAngle(up, sign * angle);
         this.turnJoint(torso.chest, q);
-        if (torso.head && torso.head.parent) this.turnJoint(torso.head, q.invert());
+        if (head) this.turnJoint(head, q.invert());
+        stance.chestOut = torso.chest.quaternion.clone();
+        if (head) stance.headOut = head.quaternion.clone();
+        this.stances.set(torso.chest, stance);
         return sign * angle;
+    },
+    /**
+     * The stance `blade` last put on a chest, by chest: the chest's and head's turns before it and after it. The
+     * chest it turns need not be a joint the model's own motion writes every frame (on a Mixamo body it is the file's
+     * Spine, between the rig's Chest and the shoulders, which only a walk or run clip moves), so the turn is taken
+     * off again before the next one is worked out, and when no hold has laid it for a frame, the way a wrist's grip
+     * turn is (HandGrip.turn, setTurn). Laid on top of the last one instead, the turns added up frame after frame:
+     * the shooter spun round with the gun, and stayed turned after putting it away.
+     */
+    stances: new Map(),
+    /**
+     * Takes stance turns off again, where nothing has posed those joints since they went on: `owner`'s before its
+     * next aim is worked out, or (no owner, once a frame from HandGrip.update) every one no hold laid this frame.
+     */
+    unblade(owner) {
+        for (const [chest, s] of this.stances) {
+            if (owner ? s.owner !== owner : s.fresh) { if (!owner) s.fresh = false; continue; }
+            this.stances.delete(chest);
+            if (chest.quaternion.equals(s.chestOut)) chest.quaternion.copy(s.chestBase);
+            if (s.head && s.head.quaternion.equals(s.headOut)) s.head.quaternion.copy(s.headBase);
+            chest.updateMatrixWorld(true);
+        }
     },
     /**
      * Holds a shown weapon the way its step asks: aimed, the shooting arm reaches down the line to `goal` so the
@@ -7455,6 +7528,8 @@ Reactor3D.Held = {
      */
     aim(owner, held, step, goal, note) {
         const T = THREE, R = Reactor3D, side = step.attachment === "leftHand" ? "left" : "right";
+        // The stance last laid on this body comes off first: the aim is worked out from the pose, not from the last aim.
+        if (this.stances.size) this.unblade(owner);
         const frame = this.frame(owner, step.attachment, step.bone);
         if (!frame || step.aim !== "target" || !goal) return frame;
         const hand = this.joint(owner, side + "Hand"), upper = hand && hand.parent && hand.parent.parent;
@@ -7561,6 +7636,7 @@ Reactor3D.Held = {
      */
     begin(owner, held, step, goal, placement, note) {
         const G = Reactor3D.HandGrip, inHand = this.HANDS.indexOf(step.attachment) >= 0 && !step.bone, thing = (held && held.object) || null;
+        if (this.stances.size) this.unblade(owner);
         // In the fist the thing goes where the hand is. The older hold leaves the hand as its pose has it and the thing where it
         // always was: only the fingers close, as far as they meet it. A wrist turn in progress eases off.
         if (owner && owner.object && placement.visible !== false && inHand) G.turn(this.joint(owner, step.attachment), null);
@@ -7942,6 +8018,8 @@ Reactor3D.MapHeld = {
             slot.node.quaternion.copy(slot.base);
             slot.out.copy(slot.base);
         }
+        // The map lays the stance itself (the chest's slot), over the motion each frame; the Battle Room's undo of it is not wanted here.
+        if (torso) H.stances.delete(torso.chest);
         main.add(object);
         object.position.copy(local.fromP); object.quaternion.copy(local.fromQ); object.scale.copy(local.fromS);
         this.unpin(state);
@@ -8763,8 +8841,28 @@ Reactor3D.modelRuleDuration = function(rule, clips) {
     // unless it holds, in which case the action only needs the way in and
     // the latch keeps it there.
     // A staying pose is never over while its action stands.
-    if (rule.type === "pose") return rule.stay ? Infinity : rule.hold ? rule.period : rule.period * 2 * rule.cycles;
+    // A keyed one that ends on its last pose eases back to rest after it.
+    if (rule.type === "pose") return rule.stay ? Infinity : rule.hold ? rule.period : rule.period * 2 * rule.cycles + (Reactor3D.poseSettles(rule) ? Reactor3D.POSE_SETTLE_FRAMES : 0);
     return rule.period * rule.cycles;
+};
+
+/** How many frames a one-off keyed motion that ends on a pose takes to ease back to rest after it. */
+Reactor3D.POSE_SETTLE_FRAMES = 12;
+
+/**
+ * Whether a keyed pose played once ends away from rest: its last key at the
+ * end and not at rest. Its timeline stops on that pose (the motion ends where
+ * its author left it), and the part eases back to rest over
+ * POSE_SETTLE_FRAMES after, rather than jumping there when the action ends.
+ */
+Reactor3D.poseSettles = function(rule) {
+    if (!rule || rule.type !== "pose" || rule.trigger !== "action" || rule.hold || rule.stay || rule.instant || rule.repeat) return false;
+    const keys = rule.keys;
+    if (!Array.isArray(keys) || !keys.length) return false;
+    const last = keys[keys.length - 1];
+    if (!last || !(last.at >= 1)) return false;
+    const off = (values, rest) => Array.isArray(values) && values.some(value => Math.abs((Number(value) || 0) - rest) > 1e-6);
+    return off(last.rotate, 0) || off(last.move, 0) || off(last.resize, 1);
 };
 
 /** How many frames a state's looping motion takes to fade in or out. */
@@ -8774,6 +8872,27 @@ Reactor3D.MOTION_FADE_FRAMES = 8;
 Reactor3D.poseEase = function(blend) {
     const b = Math.min(1, Math.max(0, blend));
     return b * b * (3 - 2 * b);
+};
+
+/**
+ * How a step into a key may go, by the key's `ease`: steady (one speed all
+ * the way), in (starts slow, ends fast), out (starts fast, ends slow), both
+ * (slow at both ends, stopping at the key), snap (there almost at once, in
+ * the first fifth of the step, then holding), overshoot (goes past the key and settles back). A key with none
+ * flows through on the timeline's curve.
+ */
+Reactor3D.KEY_EASES = ["steady", "in", "out", "both", "snap", "overshoot"];
+
+/** A step's progress (0..1) eased as `ease` says. */
+Reactor3D.keyEase = function(ease, t) {
+    switch (ease) {
+        case "in": return t * t * t;
+        case "out": { const u = 1 - t; return 1 - u * u * u; }
+        case "both": return t * t * (3 - 2 * t);
+        case "snap": { const u = 1 - Math.min(1, t * 5); return 1 - u * u * u; }
+        case "overshoot": { const c = 1.70158, u = t - 1; return 1 + (c + 1) * u * u * u + c * u * u; }
+        default: return t;
+    }
 };
 
 /**
@@ -8829,6 +8948,12 @@ Reactor3D.sampleModelKeys = function(rule, p) {
         const h0 = width(j - 1), h1 = width(j);
         return 3 * (h0 + h1) / ((2 * h1 + h0) / d0 + (h1 + 2 * h0) / d1);
     };
+    if (b.ease) {
+        // A step with its own ease goes straight from one key to the next at that pace.
+        const e = Reactor3D.keyEase(b.ease, t);
+        const line = name => [0, 1, 2].map(i => field(a, name, i) + (field(b, name, i) - field(a, name, i)) * e);
+        return { rotate: line("rotate"), move: line("move"), resize: line("resize") };
+    }
     const t2 = t * t, t3 = t2 * t;
     const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
     const curve = name => [0, 1, 2].map(i => {
@@ -8909,6 +9034,20 @@ Reactor3D._sampleModelKeysInto = function(rule, p, out) {
     }
     const t = Math.min(1, Math.max(0, (p - a.at) / span));
     line.loops = !!rule.trigger && rule.trigger !== "action";
+    if (b.ease) {
+        // A step with its own ease goes straight from one key to the next at that pace.
+        const e = Reactor3D.keyEase(b.ease, t);
+        for (let c = 0; c < 3; c++) {
+            const name = c === 0 ? "rotate" : c === 1 ? "move" : "resize";
+            const target = out[name];
+            for (let i = 0; i < 3; i++) {
+                const v0 = keyField(a, name, i), v1 = keyField(b, name, i);
+                target[i] = v0 + (v1 - v0) * e;
+            }
+        }
+        line.keys = null;
+        return;
+    }
     const t2 = t * t, t3 = t2 * t;
     const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
     for (let c = 0; c < 3; c++) {
@@ -9081,6 +9220,87 @@ Reactor3D.AnimationMatches = {
     }
 };
 
+/**
+ * A glow rule's frame: the share (min..max) of each reached material's own
+ * emissive intensity, or its emissive map's offset for a scroll. The
+ * materials are found once per binding and made the instance's own (a
+ * shallow clone: same program, same texture source), so one model's lights
+ * never drive another's; after that a frame writes two numbers per material.
+ * An inactive trigger puts the authored values back.
+ */
+Reactor3D.modelGlowValue = function(rule, frame) {
+    const period = Math.max(2, rule.period), t = frame / period;
+    if (rule.mode === "flicker") {
+        // Steps of a tenth of the period, eased into each other: a held value with quick changes, the same every run.
+        const step = Math.floor(t * 10), f = t * 10 - step;
+        const at = n => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+        const a = at(step), b = at(step + 1), k = f < 0.8 ? a : a + (b - a) * (f - 0.8) / 0.2;
+        return rule.min + (rule.max - rule.min) * k;
+    }
+    if (rule.mode === "scroll") return rule.max;
+    return rule.min + (rule.max - rule.min) * (0.5 - 0.5 * Math.cos(t * Math.PI * 2));
+};
+Reactor3D.applyModelGlow = function(binding, rule, index, state) {
+    const all = binding._glow || (binding._glow = []);
+    let glow = all[index];
+    if (!glow || glow.rule !== rule) {
+        const part = rule.part.toLowerCase(), named = rule.material.toLowerCase(), list = [], seen = new Map();
+        const answers = (object) => {
+            for (let node = object; node && node !== binding.root.parent; node = node.parent) {
+                const names = [node.name].concat((node.userData && node.userData.parts || []).map(p => p && p.name));
+                if (names.some(n => n && String(n).toLowerCase().indexOf(part) === 0)) return true;
+            }
+            return false;
+        };
+        binding.root.traverse(object => {
+            if (!object.isMesh || !object.material) return;
+            const many = Array.isArray(object.material), mats = many ? object.material.slice() : [object.material];
+            let changed = false;
+            for (let k = 0; k < mats.length; k++) {
+                const m = mats[k];
+                if (!m || !m.emissive) continue;
+                if (named ? String(m.name || "").toLowerCase().indexOf(named) !== 0 : (part && !answers(object))) continue;
+                let own = seen.get(m);
+                if (!own) {
+                    own = m.clone();
+                    if (rule.mode === "scroll" && own.emissiveMap) {
+                        own.emissiveMap = own.emissiveMap.clone();
+                        own.emissiveMap.wrapS = own.emissiveMap.wrapT = THREE.RepeatWrapping;
+                        own.emissiveMap.needsUpdate = true;
+                    }
+                    seen.set(m, own);
+                    list.push({ material: own, intensity: own.emissiveIntensity, offset: own.emissiveMap ? own.emissiveMap.offset.clone() : null });
+                }
+                mats[k] = own; changed = true;
+            }
+            if (changed) object.material = many ? mats : mats[0];
+        });
+        glow = all[index] = { rule, list, lit: false };
+    }
+    let active = rule.trigger === "always"
+        || (rule.trigger === "idle" && Reactor3D.isIdleState(state))
+        || Reactor3D.moveTriggerActive(rule.trigger, state) === true;
+    let t = state.frame || 0;
+    if (rule.trigger === "action") {
+        active = !!(state.action && state.action.name === rule.name && t - state.action.frame < this.modelRuleDuration(rule));
+        if (active) t -= state.action.frame;
+    }
+    if (!active) {
+        if (glow.lit) for (const g of glow.list) { g.material.emissiveIntensity = g.intensity; if (g.offset) g.material.emissiveMap.offset.copy(g.offset); }
+        glow.lit = false;
+        return;
+    }
+    glow.lit = true;
+    const k = this.modelGlowValue(rule, t), seconds = t / 60;
+    for (const g of glow.list) {
+        g.material.emissiveIntensity = g.intensity * k;
+        if (rule.mode === "scroll" && g.offset) {
+            const map = g.material.emissiveMap;
+            map.offset.set(((g.offset.x + rule.uv[0] * seconds) % 1 + 1) % 1, ((g.offset.y + rule.uv[1] * seconds) % 1 + 1) % 1);
+        }
+    }
+};
+
 Reactor3D.applyModelAnimation = function(binding, rules, state) {
     if (typeof THREE === "undefined" || !binding || !rules || !rules.length) return;
     binding.root.position.set(0, 0, 0);
@@ -9115,6 +9335,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         if (rule.type === "clip") continue;
+        if (rule.type === "glow") { this.applyModelGlow(binding, rule, i, state); continue; }
         let quat = null;
         let restWeight = 0;
         let slide = null;
@@ -9135,6 +9356,11 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                     if (rule.instant) progress = 1;
                     else if (t < duration) progress = t / duration;
                     else if (rule.stay) progress = 1;
+                    else if (t < duration + Reactor3D.POSE_SETTLE_FRAMES && Reactor3D.poseSettles(rule)) {
+                        // Ended on its last pose: from there back to rest, eased.
+                        progress = 1;
+                        weight = this.poseEase(1 - (t - duration) / Reactor3D.POSE_SETTLE_FRAMES);
+                    }
                 }
             } else {
                 const active = rule.trigger === "always"
@@ -11909,13 +12135,15 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     holder.object.visible = !!(ready && !hidden);
     if (!ready) return;
     const mirrored = !!(sprite.scale && sprite.scale.x < 0);
+    // Flip (upside down) reads its rows bottom to top: the picture turns over in its own place, as the 2D sprite does.
+    const flipped = !!(sprite.scale && sprite.scale.y < 0);
     // What the frame was cut from last time, field by field: joining them
     // into a string made one per billboard per frame to find nothing new.
     const url = bitmap.url || bitmap._url || "";
-    const stamp = holder.stampFields || (holder.stampFields = { url: null, bitmap: null, x: 0, y: 0, width: 0, height: 0, mirrored: false });
+    const stamp = holder.stampFields || (holder.stampFields = { url: null, bitmap: null, x: 0, y: 0, width: 0, height: 0, mirrored: false, flipped: false });
     // (The bitmap itself as well as its file: two drawn pictures of one size have no file to tell them apart.)
     if (stamp.url !== url || stamp.bitmap !== bitmap || stamp.x !== frame.x || stamp.y !== frame.y
-        || stamp.width !== frame.width || stamp.height !== frame.height || stamp.mirrored !== mirrored) {
+        || stamp.width !== frame.width || stamp.height !== frame.height || stamp.mirrored !== mirrored || stamp.flipped !== flipped) {
         stamp.url = url;
         stamp.bitmap = bitmap;
         stamp.x = frame.x;
@@ -11923,6 +12151,7 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
         stamp.width = frame.width;
         stamp.height = frame.height;
         stamp.mirrored = mirrored;
+        stamp.flipped = flipped;
         const sheet = Reactor3D.sheetTextureFor(bitmap);
         if (sheet && sheet.image) {
             const view = Reactor3D.billboardView(holder, sheet);
@@ -11933,8 +12162,9 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
             const H = sheet.image.height || 1;
             const u0 = frame.x / W;
             const uw = frame.width / W;
-            view.repeat.set(mirrored ? -uw : uw, frame.height / H);
-            view.offset.set(mirrored ? u0 + uw : u0, 1 - (frame.y + frame.height) / H);
+            const v0 = 1 - (frame.y + frame.height) / H, vh = frame.height / H;
+            view.repeat.set(mirrored ? -uw : uw, flipped ? -vh : vh);
+            view.offset.set(mirrored ? u0 + uw : u0, flipped ? v0 + vh : v0);
         }
     }
     const map = typeof $gameMap !== "undefined" ? $gameMap : null;
@@ -12060,6 +12290,24 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     }
     holder.object.position.set(baseX, baseY, baseZ);
     Reactor3D.aimCharacterBillboard(holder.object, camera);
+    Reactor3D.turnCharacterBillboard(holder.object, sprite.rotation, character._rrSpinPivot === "center");
+};
+
+/**
+ * The sprite's turn on its billboard (Rotate, Face Ceiling / Face Ground, a
+ * page's angle): rolled in the billboard's own plane, clockwise as the camera
+ * sees it, about its feet (the geometry's origin) or, `center`, about its
+ * middle, so it turns in place. Upright (0) leaves the aimed billboard alone.
+ */
+Reactor3D.turnCharacterBillboard = function(object, radians, center) {
+    const turn = Number(radians) || 0;
+    if (!object || !turn) return;
+    if (center) {
+        const half = (object.scale ? object.scale.y : 1) / 2;
+        object.translateX(-Math.sin(turn) * half);
+        object.translateY(half - Math.cos(turn) * half);
+    }
+    object.rotateZ(-turn);
 };
 
 Reactor3D.MapScene.prototype._clearCharacterBillboards = function() {
@@ -12471,9 +12719,12 @@ Reactor3D.installVerticalMotion = function() {
         this._reactorFallYaw = null;
         this._reactorPosePitch = pose > 0 ? 1 : pose < 0 ? -1 : 0;
     };
-    /** Turn the drawn character to `degrees` on screen; a model rolls the same way. 0 stands it straight. */
-    proto.reactorRotate = function(degrees) {
+    /** Turn the drawn character to `degrees` on screen; a model rolls the same way. 0 stands it straight. `pivot` "center": about its middle. */
+    proto.reactorRotate = function(degrees, pivot) {
+        // Sprite Transforms off (Database > Reactor Features): a Rotate step does nothing, as in MZ.
+        if (typeof ReactorFeatures !== "undefined" && !ReactorFeatures.on("spriteTransforms")) return;
         this._reactorSpin = Number(degrees) || 0;
+        this._rrSpinPivot = pivot === "center" ? "center" : undefined;
     };
     const baseIsMoving = proto.isMoving;
     proto.isMoving = function() {

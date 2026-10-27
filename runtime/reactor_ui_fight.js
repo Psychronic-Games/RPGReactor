@@ -39,6 +39,11 @@
     H.WINDOWS = { command: '_fightCommandWindow', skill: '_fightSkillWindow', item: '_fightItemWindow' };
     H.UNITS = ['active', 'focused'];
     H.UNIT_FIELDS = ['portrait', 'name', 'level', 'hp', 'mp', 'tp', 'states', 'stats', 'preview'];
+    /** Whether `key` is a resource pool the project turned off (System.json rrPoolsOff, Database > System 1 > Options): its gauge is not drawn. HP is never off. */
+    H.poolOff = function(key) {
+        const system = typeof $dataSystem !== 'undefined' ? $dataSystem : null;
+        return !!system && Array.isArray(system.rrPoolsOff) && key !== 'hp' && system.rrPoolsOff.includes(key);
+    };
     H.STATS = ['atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'move', 'jump'];
     H.DEFAULT_STATS = ['atk', 'def', 'mat', 'mdf', 'agi', 'move'];
     H.INFOS = ['objective', 'turn', 'phase', 'hint'];
@@ -854,7 +859,7 @@
 
     H.unitLayout = function(node, width, height, showTp, forecast, vehicle) {
         const fields = node.fightFields || H.UNIT_FIELDS;
-        const has = key => fields.includes(key);
+        const has = key => fields.includes(key) && !H.poolOff(key);
         const clipped = node.gaugeStyle !== 'bar';
         forecast = !!forecast && has('preview');
         // While an action is aimed the forecast is what the panel is for: HP stays, MP, TP and the parameters make room.

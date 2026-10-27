@@ -1772,7 +1772,7 @@ class DatabaseStructureEditor {
             ${remove('paths', index)}`).join('');
         more.innerHTML = fold('materials', tt('Materials'), null, row(...DatabaseStructureEditor.MATERIAL_ROLES.map(materialField)))
             + fold('building', tt('Building'), null, row(
-                this._field(tt('Storey (tiles)'), this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')),
+                this._field(tt('Floor height (tiles)'), this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')),
                 this._field(tt('Roof'), `<input type="checkbox" class="system-checkbox rr-structures-roof-on" ${plan.roof.pitch !== null ? 'checked' : ''}>`),
                 plan.roof.pitch !== null ? this._field(tt('Roof pitch (rows)'), this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')) : '',
                 this._field(tt('A window every (cells)'), this._numberHtml('rr-structures-field', plan.windows.every, 'data-path="windows.every" min="0" max="60"')),
@@ -2613,7 +2613,7 @@ class DatabaseStructureEditor {
                 const plan = this.current.plan;
                 drag = { handle, y: event.clientY, start: handle === 'pitch' ? (plan.roof.pitch || 0) : plan.storey, snapshot: JSON.stringify(plan), changed: false };
                 canvas.style.cursor = 'ns-resize';
-                this._showHandleLabel((handle === 'pitch' ? tt('Roof pitch') : tt('Storey')) + ': ' + drag.start, event.clientX, event.clientY);
+                this._showHandleLabel((handle === 'pitch' ? tt('Roof pitch') : tt('Floor height')) + ': ' + drag.start, event.clientX, event.clientY);
             } else {
                 drag = { x: event.clientX, y: event.clientY, downX: event.clientX, downY: event.clientY, moved: 0 };
             }
@@ -2644,7 +2644,7 @@ class DatabaseStructureEditor {
                 const steps = Math.round((drag.y - event.clientY) / PIXELS_PER_STEP);
                 const value = drag.handle === 'pitch' ? Math.max(0, Math.min(20, drag.start + steps)) : Math.max(3, Math.min(12, drag.start + steps));
                 const current = drag.handle === 'pitch' ? plan.roof.pitch : plan.storey;
-                this._showHandleLabel((drag.handle === 'pitch' ? tt('Roof pitch') : tt('Storey')) + ': ' + value, event.clientX, event.clientY);
+                this._showHandleLabel((drag.handle === 'pitch' ? tt('Roof pitch') : tt('Floor height')) + ': ' + value, event.clientX, event.clientY);
                 if (value !== current) {
                     if (drag.handle === 'pitch') plan.roof.pitch = value; else plan.storey = value;
                     drag.changed = true;

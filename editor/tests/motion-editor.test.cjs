@@ -175,5 +175,5 @@ test('Escape on the 3D Models page closes the Motion editor or a dialog over it,
 });
 
 test('the play button keeps its pause glyph while playing: the language pass leaves it alone', () => {
-    assert.match(read('src/database/MotionEditor.js'), /<button type="button" class="rr-btn-secondary r3d-motion-play" data-rr-i18n-skip="1"><\/button>/);
+    assert.match(read('src/database/MotionEditor.js'), /<button type="button" class="rr-btn-chip r3d-motion-play" data-rr-i18n-skip="1"><\/button>/);
 });

@@ -30,6 +30,8 @@ class DatabaseWeaponEditor {
 
         // Attack-animation picker: 0 = None; opens AnimationPickerModal
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        // "Can't be sold", unless Database › Reactor Features leaves selling to a plugin (the flag stays saved).
+        const noSell = !window.ReactorFeatures || window.ReactorFeatures.on('unsellableItems', this.databaseManager.getSystem?.() || {});
         const animations = this.databaseManager.getAnimations ? this.databaseManager.getAnimations() : [];
         const animationLabel = (current) => AnimationPickerModal.label(animations, current);
 
@@ -66,7 +68,12 @@ class DatabaseWeaponEditor {
                         </span>
                         <span class="db-col">
                             <label>${tt('Price')}</label>
-                            <input type="number" class="database-field-value" value="${rrEscapeHtml(weapon.price || 0)}" data-field="price" data-weapon-id="${weapon.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(weapon.price || 0)}" min="0" data-field="price" data-weapon-id="${weapon.id}">
+                            ${noSell ? `
+                            <span class="db-no-sell" style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--color-text-muted);">
+                                <input type="checkbox" class="system-checkbox" id="weapon-no-sell-${weapon.id}" ${weapon.rrNoSell ? 'checked' : ''} data-field="rrNoSell" data-weapon-id="${weapon.id}">
+                                <label for="weapon-no-sell-${weapon.id}" style="margin: 0; cursor: pointer;">${tt("Can't be sold")}</label>
+                            </span>` : ''}
                         </span>
                         <span class="db-col">
                             <label>${tt('Animation')}</label>
@@ -227,7 +234,7 @@ class DatabaseWeaponEditor {
                     const fieldName = e.target.dataset.field;
                     const weaponId = parseInt(e.target.dataset.weaponId);
                     const paramIndex = e.target.dataset.paramIndex;
-                    const value = e.target.value;
+                    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
                     this.updateWeaponField(weaponId, fieldName, value, paramIndex);
                 });
             });
@@ -243,6 +250,10 @@ class DatabaseWeaponEditor {
             if (!weapon.params) weapon.params = [0,0,0,0,0,0,0,0];
             weapon.params[parseInt(paramIndex)] = parseInt(value) || 0;
             console.debug(`Updated weapon ${weaponId} param[${paramIndex}] to:`, value);
+        }
+        // Can't be sold: stored only when on, so a stock record stays stock.
+        else if (fieldName === 'rrNoSell') {
+            if (value === true) weapon.rrNoSell = true; else delete weapon.rrNoSell;
         }
         // Handle numeric fields
         else if (fieldName === 'price' || fieldName === 'wtypeId' || fieldName === 'animationId') {

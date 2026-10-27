@@ -25,7 +25,16 @@
             roughness:clamp(r.roughness,.2,.95,.55),frameMaterial:['wood','metal','painted'].includes(r.frameMaterial)?r.frameMaterial:'wood',
             baseStyle:['feet','plinth'].includes(r.baseStyle)?r.baseStyle:'feet',screenStyle:['status','radar','landscape'].includes(r.screenStyle)?r.screenStyle:form==='tv'?'landscape':'status'};
     }
-    function fromPreset(id){const f=BY_ID.get(id)||FORMS[0],technical=['appliances','electronics','scifi-interiors'].includes(f[2]);return normalize({form:f[0],color:technical?'#b2bdc3':'#567a83',frame:technical?'#4a5662':'#765034',style:f[2]==='scifi-interiors'?'scifi':'modern'});}
+    /** Each style's own finish, set when the style is picked (every color stays editable after):
+     * modern teal fabric, walnut and steel; rustic oatmeal linen, dark oak and black iron, cream enamel
+     * on appliances; sci-fi slate fabric on white composite shells, gunmetal trim and cyan light. */
+    const LOOKS={
+        modern:{soft:{color:'#567a83',frame:'#765034',trim:'#272f36',accent:'#45bfd4',frameMaterial:'wood'},tech:{color:'#b2bdc3',frame:'#4a5662',trim:'#4c565f',accent:'#45bfd4',frameMaterial:'wood'}},
+        rustic:{soft:{color:'#a48a68',frame:'#5e3d24',trim:'#2e241c',accent:'#a87c3c',frameMaterial:'wood'},tech:{color:'#e6dac0',frame:'#6a4428',trim:'#4a3626',accent:'#b08440',frameMaterial:'wood'}},
+        scifi:{soft:{color:'#33404c',frame:'#dfe5ea',trim:'#1a2128',accent:'#3fd6ff',frameMaterial:'painted'},tech:{color:'#dfe5ea',frame:'#38434e',trim:'#11161b',accent:'#3fd6ff',frameMaterial:'painted'}}
+    };
+    function styleLook(form,style){const f=BY_ID.get(form)||FORMS[0],technical=['appliances','electronics','scifi-interiors'].includes(f[2]);return Object.assign({},(LOOKS[style]||LOOKS.modern)[technical?'tech':'soft']);}
+    function fromPreset(id){const f=BY_ID.get(id)||FORMS[0],style=f[2]==='scifi-interiors'?'scifi':'modern';return normalize(Object.assign({form:f[0],style},styleLook(f[0],style)));}
     /** A rounded cushion, keeping planar centers and soft corners rather
      * than inflating an ellipsoid. Normals follow its actual rounded surface. */
     function cushion(center,size,radius,upholstery='plain'){
@@ -90,12 +99,105 @@
             const F=frame('trim',o,u,v,w,h,.014,.018),m=CM.plate(F,0,0,w-.03,h-.03,.015);put('screen',m);
         };
         const bolt=(p,n=[0,0,1])=>{if(r.details){const F=CM.frame(p,n[0]?[0,0,-n[0]]:[n[2],0,0],[0,1,0]);put('metal',CM.revolveOn(F,0,0,[[0,0],[.005,0],[.005,.002],[.004,.003],[0,.003]],16));put('dark',CM.slab(CM.rect(0,0,.005,.0008),{...F,o:add(F.o,scale(F.n,.0031))},.0004,0,true));}};
-        const feet=(y=.07)=>{if(r.baseStyle==='plinth'){box('trim',[0,y/2,0],[W*.82,y,D*.78],.012);return;}for(const sx of [-1,1])for(const sz of [-1,1])box('trim',[sx*W*.40,y/2,sz*D*.38],[Math.min(.055,W*.10),y,Math.min(.055,D*.12)],.004);};
+        const feet=(y=.07)=>{
+            // Sci-fi floats on a dark recessed plinth ringed with light; rustic stands on turned bun feet.
+            if(r.style==='scifi'){box('dark',[0,y/2,0],[W*.84,y,D*.80],.01);box('light',[0,y*.2,D*.40+.003],[W*.80,.008,.004],.002);for(const sx of [-1,1])box('light',[sx*(W*.42+.003),y*.2,0],[.004,.008,D*.76],.002);return;}
+            if(r.style==='rustic'&&r.baseStyle!=='plinth'){const rad=Math.min(.045,W*.09,D*.10);for(const sx of [-1,1])for(const sz of [-1,1])put('frame',CM.revolveOn(CM.frame([sx*W*.40,0,sz*D*.38],[1,0,0],[0,0,-1]),0,0,[[0,0],[rad*.7,0],[rad,y*.3],[rad*.95,y*.6],[rad*.65,y*.85],[rad*.75,y],[0,y]],20));return;}
+            if(r.baseStyle==='plinth'){box('trim',[0,y/2,0],[W*.82,y,D*.78],.012);return;}for(const sx of [-1,1])for(const sz of [-1,1])box('trim',[sx*W*.40,y/2,sz*D*.38],[Math.min(.055,W*.10),y,Math.min(.055,D*.12)],.004);};
         const legs=(seatY)=>{if(r.style==='scifi')return;for(const sx of [-1,1])for(const sz of [-1,1]){
             const top=[sx*W*.37,seatY,sz*D*.34],bottom=[sx*W*.43,.018,sz*D*.40];if(r.style==='rustic'){const length=top[1]-bottom[1],rad=Math.min(.030,W*.06);put('frame',CM.revolveOn(CM.frame(bottom,[1,0,0],CM.vec.cross(norm(sub(top,bottom)),[1,0,0])),0,0,[[0,0],[rad*.70,0],[rad*.70,length*.09],[rad,length*.12],[rad*.80,length*.18],[rad*.65,length*.70],[rad,length*.77],[rad,length],[0,length]],32));}else bar('metal',bottom,top,Math.min(.023,W*.045));
             box('trim',[bottom[0],.009,bottom[2]],[.038,.018,.038],.004);
         }};
         const vent=(x,y,z,w,h,kind='dark')=>{if(r.details)for(let i=0;i<7;i++)box(kind,[x,y+(i-3)*h/8,z],[w,h/22,.006],.001);};
+        // Sci-fi appliances and electronics are built whole: rounded composite shells, floating
+        // bezel-less displays with a halo, thick light strips, seams, fins and pedestal or wall bases.
+        const sci=r.style==='scifi'&&['fridge','microwave','tv','computer','wallPanel','console','serverRack'].includes(r.form);
+        const L=(p,s)=>box('light',p,s,.003),seam=(p,s)=>box('dark',p,s,.0005);
+        const holo=(o,w,h,glow=true)=>{const F=CM.frame(o,[1,0,0],[0,1,0]);box('trim',[o[0],o[1],o[2]-.012],[w+.012,h+.012,.018],.008);put('screen',CM.plate(F,0,0,w,h,.0015));
+            if(glow){box('light',[o[0],o[1],o[2]-.024],[w*.92,h*.88,.004],.002);L([o[0],o[1]-h/2-.009,o[2]-.004],[w*.8,.012,.008]);}};
+        const fins=(x,y,z,w,h,n,axis='x')=>{for(let i=0;i<n;i++){const t=(i/(n-1)-.5);box('trim',axis==='x'?[x+t*w,y,z]:[x,y+t*h,z],axis==='x'?[.012,h,.02]:[w,.012,.02],.003);}};
+        const ring=(c,rad,y0,y1,kind='light')=>put(kind,CM.revolveOn(CM.frame(c,[1,0,0],[0,0,-1]),0,0,[[rad*.9,y0],[rad,y0],[rad,y1],[rad*.9,y1],[rad*.9,y0]],40));
+        const disc=(c,rad,h,kind='trim')=>put(kind,CM.revolveOn(CM.frame(c,[1,0,0],[0,0,-1]),0,0,[[0,0],[rad,0],[rad,h*.6],[rad*.85,h],[0,h]],40));
+        if(sci&&r.form==='fridge'){
+            // A rounded cryo cabinet: one tall door with a frosted viewport, a status display, a recessed lit grip.
+            feet(.05);box('paint',[0,H/2+.025,0],[W,H-.05,D],.09);
+            box('paint',[0,H*.5,D/2+.012],[W*.86,H*.86,.04],.06);
+            box('dark',[0,H*.6,D/2+.033],[W*.56,H*.34,.012],.05);box('glass',[0,H*.6,D/2+.04],[W*.5,H*.3,.008],.045);
+            for(const s of [-1,1]){L([s*W*.3,H*.6,D/2+.04],[.014,H*.34,.008]);}L([0,H*.6+H*.17+.012,D/2+.04],[W*.6,.014,.008]);L([0,H*.6-H*.17-.012,D/2+.04],[W*.6,.014,.008]);
+            holo([0,H*.86,D/2+.04],W*.5,H*.07,false);
+            box('dark',[W*.36,H*.5,D/2+.034],[.03,H*.36,.01],.006);L([W*.36,H*.5,D/2+.04],[.012,H*.32,.006]);
+            for(const s of [-1,1])L([s*W*.445,H*.5,D/2+.02],[.016,H*.82,.02]);
+            fins(0,H*.15,D/2+.04,W*.6,H*.08,9);
+            for(const s of [-1,1])for(const y of [H*.25,H*.5,H*.75])seam([s*(W/2+.001),y,0],[.003,.008,D*.84]);
+            seam([0,H-.001,0],[W*.84,.003,D*.6]);
+        }
+        if(sci&&r.form==='microwave'){
+            // A rounded pod: a lit round-cornered viewport, a vertical holo control strip, fins on top, skid feet.
+            for(const s of [-1,1])box('trim',[s*W*.34,.012,0],[W*.14,.024,D*.86],.008);
+            box('paint',[0,H/2+.02,0],[W,H-.03,D],.07);
+            box('dark',[-W*.1,H*.52,D/2+.004],[W*.66,H*.7,.012],.04);box('glass',[-W*.1,H*.52,D/2+.011],[W*.6,H*.62,.006],.035);
+            L([-W*.1,H*.52+H*.35+.008,D/2+.012],[W*.6,.012,.008]);L([-W*.1,H*.52-H*.35-.008,D/2+.012],[W*.6,.012,.008]);
+            holo([W*.34,H*.55,D/2+.016],W*.14,H*.5,false);L([W*.34,H*.2,D/2+.012],[W*.1,.012,.008]);
+            fins(0,H+.008,-D*.15,W*.6,.016,10);
+            for(const s of [-1,1])seam([s*(W/2+.001),H*.5,0],[.003,H*.6,.006]);
+        }
+        if(sci&&r.form==='tv'){
+            // A thin bezel-less panel floating over a light-ringed pedestal.
+            const sy=H*.6,sh=H*.68,bottom=sy-sh/2;holo([0,sy,0],W*.98,sh*.97);
+            disc([0,0,0],Math.min(W*.2,.24),.03);ring([0,0,0],Math.min(W*.2,.24)+.004,.006,.02);
+            box('trim',[0,(bottom-.05+.03)/2,-.02],[.05,bottom-.05-.03,.035],.012);
+            put('light',CM.revolveOn(CM.frame([0,bottom-.05,-.02],[1,0,0],[0,0,-1]),0,0,[[0,0],[.03,0],[.03,.012],[0,.012]],24));
+            box('trim',[0,bottom-.012,-.025],[W*.3,.016,.03],.006);
+        }
+        if(sci&&r.form==='computer'){
+            // A floating holo monitor on an arm, a sleek finned tower with a lit spine, a low keyboard slab.
+            const x=-W*.17,cy=H*.66,mw=W*.63,mh=H*.61;holo([x,cy,-D*.12],mw*.98,mh*.95);
+            disc([x,0,-D*.13],Math.min(.12,mw*.2),.022);bar('trim',[x,.02,-D*.15],[x,cy-mh/2-.03,-D*.15],.014);ring([x,0,-D*.13],Math.min(.12,mw*.2)+.004,.004,.016);
+            box('paint',[W*.35,H*.46,-D*.1],[W*.22,H*.86,D*.66],.05);L([W*.35,H*.46,D*.235],[.016,H*.74,.01]);
+            for(const s of [-1,1])fins(W*.35+s*W*.112,H*.46,-D*.1,.02,H*.6,8,'y');
+            for(let k=0;k<4;k++)seam([W*.35,H*(.15+k*.2),D*.231],[W*.2,.003,.003]);
+            box('trim',[-W*.16,.014,D*.32],[W*.59,.028,D*.27],.012);L([-W*.16,.004,D*.32+D*.135],[W*.55,.008,.008]);
+            if(r.details)textures['furniture-key-legends.png']=Keycaps.build(CM.frame([-W*.16,.028,D*.32],[1,0,0],[0,0,-1]),W*.57,D*.24,r.keyRows,put,.012);
+            put('trim',cushion([W*.20,.0275,D*.35],[.058,.055,.095],.025));L([W*.20,.056,D*.35],[.012,.004,.05]);
+        }
+        if(sci&&r.form==='wallPanel'){
+            // A chamfered wall-mounted hull plate, an inset holo screen, light rails, a finned vent, panel seams.
+            const c=Math.min(W,H)*.14,F=CM.frame([0,0,-D/2],[1,0,0],[0,1,0]),hw=W/2;
+            put('paint',CM.slab([-hw+c,0,hw-c,0,hw,c,hw,H-c,hw-c,H,-hw+c,H,-hw,H-c,-hw,c],F,D,.012,true));
+            box('trim',[0,H*.5,D/2+.006],[W*.82,H*.86,.014],.02);
+            holo([-W*.08,H*.64,D/2+.03],W*.58,H*.4);
+            for(let j=0;j<4;j++){box('dark',[W*.31,H*(.5+j*.1),D/2+.016],[W*.13,.03,.01],.006);L([W*.31,H*(.5+j*.1),D/2+.022],[W*.09,.012,.006]);}
+            fins(-W*.05,H*.22,D/2+.022,W*.6,H*.14,12);
+            for(const s of [-1,1])L([s*(W*.43),H*.5,D/2+.012],[.016,H*.7,.012]);
+            seam([0,H*.4,D/2+.014],[W*.8,.003,.003]);seam([W*.22,H*.62,D/2+.014],[.003,H*.4,.003]);
+        }
+        if(sci&&r.form==='serverRack'){
+            // A rounded rack on a floating plinth: glowing drive bays behind a smoked glass door frame, lit rails, roof fins.
+            feet(.05);box('trim',[0,H/2+.025,0],[W,H-.05,D],.05);
+            for(let j=0;j<7;j++){const y=H*(.14+j*.115);box('dark',[0,y,D/2+.003],[W*.8,H*.098,.02],.008);
+                for(let k=0;k<6;k++){const x=(k-2.5)*W*.12;box('paint',[x,y,D/2+.012],[W*.1,H*.084,.012],.004);L([x,y-H*.03,D/2+.02],[W*.06,.008,.004]);}
+                L([-W*.43,y,D/2+.02],[.012,H*.07,.006]);}
+            for(const s of [-1,1])box('glass',[s*W*.45,H*.53,D/2+.03],[.03,H*.9,.02],.008);for(const y of [H*.075,H*.98])box('glass',[0,y,D/2+.03],[W*.93,.03,.02],.008);
+            for(const s of [-1,1])L([s*W*.485,H*.53,D*.3],[.016,H*.86,.016]);
+            fins(0,H+.01,0,W*.7,.02,9);
+            for(const s of [-1,1])for(const y of [H*.33,H*.66])seam([s*(W/2+.001),y,0],[.003,.008,D*.9]);
+        }
+        if(sci&&r.form==='console'){
+            // A pedestal console: the angled deck on a waisted column, a light-ringed foot, floating holo screens on stems.
+            const angle=r.deckAngle*Math.PI/180,reach=Math.min(D*.65,H*.65),origin=[0,H*.62,D*.09],v=[0,Math.sin(angle),-Math.cos(angle)],normal=[0,Math.cos(angle),Math.sin(angle)],top=origin[1]+reach*.5*Math.sin(angle);
+            box('trim',[0,.03,-D*.04],[W*.7,.06,D*.62],.03);L([0,.03,-D*.04+D*.31+.004],[W*.62,.014,.008]);for(const s of [-1,1])L([s*(W*.35+.004),.03,-D*.04],[.008,.014,D*.55]);
+            box('paint',[0,H*.33,-D*.06],[W*.42,H*.52,D*.38],.07);
+            // Twin swept blades carry the deck's corners down to the foot, each with a lit seam.
+            for(const s of [-1,1]){box('paint',[s*W*.34,(.05+H*.56)/2,-D*.035],[.06,H*.56-.05,D*.6],.025);L([s*(W*.34+.031),H*.3,-D*.035],[.008,H*.4,.014]);}L([0,H*.33,-D*.06+D*.19+.004],[.018,H*.4,.01]);
+            for(const s of [-1,1])fins(s*(W*.21+.01),H*.33,-D*.06,.02,H*.36,7,'y');
+            box('paint',[0,H*.58,-D*.04],[W*.92,H*.06,D*.6],.03);L([0,H*.55,-D*.04+D*.3+.004],[W*.86,.014,.008]);
+            const Fd=frame('trim',origin,[1,0,0],v,W,reach,.022,.03);
+            put('dark',CM.slab(CM.rect(0,0,W-.045,reach-.045),Fd,.032,.004,true));
+            if(r.details)textures['furniture-key-legends.png']=Keycaps.build({...Fd,o:add(Fd.o,scale(normal,.031))},W*.74,reach*.48,r.keyRows,put,.009);
+            if(r.details)for(let j=0;j<r.hardware;j++)put('light',CM.revolveOn({...Fd,o:add(Fd.o,scale(normal,.032))},(j-(r.hardware-1)/2)*W*.10,reach*.37,[[.012,0],[.012,.006],[.010,.009],[0,.009]],12));
+            const sw=W*.92/r.screens,sh=Math.min(H*.27,sw*.62),sy=Math.max(H*.92,top+sh*.6);
+            for(let j=0;j<r.screens;j++){const x=(j-(r.screens-1)/2)*sw;bar('trim',[x,top-.02,-D*.28],[x,sy-sh/2-.02,-D*.28],.012);holo([x,sy,-D*.28],sw*.9,sh*.9);}
+        }
         if(['chair','bench','table','desk'].includes(r.form)){
             const seatY=r.form==='chair'?H*.47:r.form==='bench'?H-.07:H-.055;legs(seatY);
             box('wood',[0,seatY,0],[W,.045,D],.009);
@@ -140,7 +242,7 @@
                 if(r.details)for(let k=0;k<Math.round(7*r.bookFill);k++){const x=-W*.39+k*W*.12,bh=H/r.shelves*(.50+.12*Math.sin(k*2+j)**2);box(k%3===0?'accent':k%3===1?'frame':'fabric',[x,y+bh/2+.015,-D*.03],[W*.09,bh,D*.62],.002);}
             }
         }
-        if(r.form==='fridge'){
+        if(r.form==='fridge'&&!sci){
             feet(.045);box('paint',[0,H/2,0],[W,H-.025,D],.018);
             for(const [low,high]of [[.055,.69],[.70,.985]]){
                 const y=H*(low+high)/2,h=H*(high-low);box('dark',[0,y,D/2+.003],[W*.96,h,.015],.004);box('paint',[0,y,D/2+.023],[W*.94,h-.012,.04],.014);
@@ -148,7 +250,7 @@
             }vent(0,H*.10,-D/2-.003,W*.75,H*.12);
             if(r.details)box('trim',[W*.25,H*.83,D/2+.045],[W*.22,.018,.003],.002);
         }
-        if(r.form==='microwave'){
+        if(r.form==='microwave'&&!sci){
             feet(.02);box('paint',[0,H/2,0],[W,H-.02,D],.011);
             frame('trim',[-W*.08,H*.51,D/2+.006],[1,0,0],[0,1,0],W*.76,H*.79,.018,.018);
             box('glass',[-W*.08,H*.51,D/2+.025],[W*.65,H*.64,.004],.004);
@@ -157,11 +259,11 @@
             for(let j=0;j<3;j++)for(let k=0;k<2;k++)box('trim',[W*(.365+k*.065),H*(.27+j*.105),D/2+.014],[W*.043,H*.055,.009],.002);
             vent(0,H*.59,-D/2-.002,W*.70,H*.45);
         }
-        if(r.form==='tv'){
+        if(r.form==='tv'&&!sci){
             const sy=H*.62,sh=H*.69;box('trim',[0,sy,-.025],[W,sh,.065],.014);screen([0,sy,.013],[1,0,0],[0,1,0],W*.97,sh*.94);
             for(const s of [-1,1]){bar('metal',[s*W*.30,.018,D*.30],[s*W*.25,H*.28,0],.014);bar('metal',[s*W*.30,.018,D*.30],[s*W*.19,.018,-D*.30],.012);}vent(0,sy,-.061,W*.76,sh*.22);
         }
-        if(r.form==='computer'){
+        if(r.form==='computer'&&!sci){
             const x=-W*.17,cy=H*.66,mw=W*.63,mh=H*.61;
             box('trim',[x,cy,-D*.13],[mw,mh,.045],.012);screen([x,cy,-D*.13+.025],[1,0,0],[0,1,0],mw*.96,mh*.94);
             box('trim',[x,(.029+cy-mh/2+.04)/2,-D*.16],[.055,cy-mh/2+.04-.029,.05],.008);box('trim',[x,.018,-D*.13],[mw*.45,.036,D*.37],.01);
@@ -171,7 +273,7 @@
             if(r.details)textures['furniture-key-legends.png']=Keycaps.build(CM.frame([-W*.16,.034,D*.32],[1,0,0],[0,0,-1]),W*.57,D*.24,r.keyRows,put,.012);
             put('trim',cushion([W*.20,.0275,D*.35],[.058,.055,.095],.025));
         }
-        if(r.form==='console'){
+        if(r.form==='console'&&!sci){
             const angle=r.deckAngle*Math.PI/180,reach=Math.min(D*.65,H*.65),origin=[0,H*.62,D*.09],v=[0,Math.sin(angle),-Math.cos(angle)],normal=[0,Math.cos(angle),Math.sin(angle)],
                 rear=origin[2]-reach*.5*Math.cos(angle),top=origin[1]+reach*.5*Math.sin(angle),front=D*.34,frontY=origin[1]-(front-origin[2])*Math.tan(angle)-.003;
             // The cabinet's top is the underside of this very deck. Feet use
@@ -195,14 +297,14 @@
             vent(0,H*.30,front+.015,W*.65,H*.16);
             if(r.details){box('trim',[0,H*.27,front+.007],[W*.82,H*.35,.009],.008);for(const x of [-W*.37,W*.37])bolt([x,H*.40,front+.015]);}
         }
-        if(r.form==='wallPanel'){
+        if(r.form==='wallPanel'&&!sci){
             box('trim',[0,H/2,0],[W,H,D],.025);box('paint',[0,H/2,D*.51],[W*.91,H*.94,.018],.018);
             screen([-W*.12,H*.66,D*.60],[1,0,0],[0,1,0],W*.56,H*.43);
             for(let j=0;j<4;j++){box('trim',[W*.32,H*(.50+j*.10),D*.61],[W*.12,.025,.012],.004);box('accent',[W*.32,H*(.50+j*.10),D*.68],[W*.08,.008,.003],.002);}
             vent(-W*.03,H*.24,D*.61,W*.68,H*.16);
             for(const s of [-1,1])for(const y of [H*.05,H*.95])bolt([s*W*.43,y,D*.64]);
         }
-        if(r.form==='serverRack'){
+        if(r.form==='serverRack'&&!sci){
             feet(.05);box('trim',[0,H/2,0],[W,H-.02,D],.016);
             for(let j=0;j<7;j++){const y=H*(.13+j*.12);box('paint',[0,y,D/2+.004],[W*.86,H*.10,.035],.007);vent(-W*.08,y,D/2+.025,W*.51,H*.075);for(let k=0;k<3;k++)box(k===0?'accent':'keys',[W*.32,y+(k-1)*.012,D/2+.025],[.008,.006,.004],.001);}
             for(const s of [-1,1])bar('metal',[s*W*.45,H*.12,D/2+.055],[s*W*.45,H*.88,D/2+.055],.009);
@@ -232,9 +334,12 @@
             if(cache.screenKey!==screenKey){cache.screenPicture=screenPicture(r.screenStyle,r.screen,r.screenText);cache.screenKey=screenKey;}
             cache.surfaces['furniture-screen.png']=cache.screenPicture;
         }
-        const parts=[],materials={legends:{texture:'furniture-key-legends.png',cutout:true,alphaCutoff:.5,roughness:.82},wood:{texture:'furniture-wood.png',roughness:.67},fabric:{kind:'cloth',texture:'furniture-fabric.png',normalTexture:'furniture-fabric-normal.png',normalScale:.25,roughness:.94},seam:{color:r.color,roughness:.96},metal:{color:'#8d969e',roughness:.32,metalness:.75},trim:{color:r.trim,roughness:.52,metalness:.18},dark:{color:'#090f15',roughness:.78},paint:{color:r.color,roughness:.40,metalness:.23},frame:{texture:'furniture-wood.png',roughness:r.roughness},glass:{color:'#102129',roughness:.16,metalness:.18},keys:{color:'#343e46',roughness:.72},screen:{texture:'furniture-screen.png',emissive:'#ffffff',emissiveTexture:'furniture-screen.png',emissiveIntensity:r.screen?.45:0,roughness:.35},accent:{color:r.accent,roughness:.48,emissive:r.style==='scifi'?r.accent:null,emissiveIntensity:.25}};
+        const parts=[],materials={legends:{texture:'furniture-key-legends.png',cutout:true,alphaCutoff:.5,roughness:.82},wood:{texture:'furniture-wood.png',roughness:.67},fabric:{kind:'cloth',texture:'furniture-fabric.png',normalTexture:'furniture-fabric-normal.png',normalScale:.25,roughness:.94},seam:{color:r.color,roughness:.96},metal:{color:'#8d969e',roughness:.32,metalness:.75},trim:{color:r.trim,roughness:.52,metalness:.18},dark:{color:'#090f15',roughness:.78},paint:{color:r.color,roughness:.40,metalness:.23},frame:{texture:'furniture-wood.png',roughness:r.roughness},glass:{color:'#102129',roughness:.16,metalness:.18},keys:{color:'#343e46',roughness:.72},screen:{texture:'furniture-screen.png',emissive:'#ffffff',emissiveTexture:'furniture-screen.png',emissiveIntensity:r.screen?.45:0,roughness:.35},accent:{color:r.accent,roughness:.48,emissive:r.style==='scifi'?r.accent:null,emissiveIntensity:.25},light:{color:r.accent,roughness:.3,emissive:r.accent,emissiveIntensity:1.6},iron:{color:'#2f2b29',roughness:.6,metalness:.6}};
+        // Style finishes: sci-fi shells read as satin composite and polished alloy, rustic hardware as blackened iron.
+        if(r.style==='scifi'){materials.metal={color:'#c3ccd4',roughness:.18,metalness:.9};materials.trim.metalness=.55;}
+        if(r.style==='rustic')materials.metal={color:'#3a3431',roughness:.55,metalness:.65};
         if(r.frameMaterial!=='wood')materials.frame=materials.wood={color:r.frame,roughness:r.roughness,metalness:r.frameMaterial==='metal'?.7:.12};
-        materials.wood.roughness=r.roughness;materials.fabric.roughness=.75+r.roughness*.25;materials.paint.roughness=r.roughness;materials.paint.metalness=r.style==='scifi'?.45:r.style==='rustic'?0:.23;materials.trim.roughness=Math.min(.95,r.roughness+.10);
+        materials.wood.roughness=r.roughness;materials.fabric.roughness=.75+r.roughness*.25;materials.paint.roughness=r.roughness;materials.paint.metalness=r.style==='scifi'?.45:r.style==='rustic'?0:.23;materials.trim.roughness=r.style==='scifi'?Math.max(.22,r.roughness-.2):Math.min(.95,r.roughness+.10);if(r.style==='scifi'&&r.frameMaterial!=='metal'){materials.frame=materials.wood={color:r.frame,roughness:Math.max(.25,r.roughness-.15),metalness:.12};}
         for(const [kind,meshes]of groups){
             const m=CM.merge(meshes),material=materials[kind],density=kind==='fabric'?7:['wood','frame'].includes(kind)?1.8:1;
             if(['wood','frame','fabric'].includes(kind))CM.mapUv(m,(_,__,v)=>{const n=Array.from(m.normals.subarray(v*3,v*3+3),Math.abs),axis=n.indexOf(Math.max(...n)),A=axis===0?[2,1]:axis===1?[0,2]:[0,1];return A.map(k=>m.positions[v*3+k]*density);});
@@ -248,9 +353,9 @@
     function random(seed,recipe,scope='all'){
         const r=normalize(recipe),rand=Paint.random(seed),all=scope==='all';if(all||scope==='shape')for(const k of ['width','height','depth'])r[k]*=.85+rand()*.3;
         if(all||scope==='colors'){r.color=['#567a83','#a0886a','#536449','#9b5947','#b6bdc4'][Math.floor(rand()*5)];r.frame=['#765034','#49362b','#a48658'][Math.floor(rand()*3)];}
-        if(all||scope==='details'){r.details=rand()>.2;r.style=STYLES[Math.floor(rand()*STYLES.length)][0];r.seats=1+Math.floor(rand()*5);r.screens=1+Math.floor(rand()*3);r.shelves=2+Math.floor(rand()*6);r.drawers=1+Math.floor(rand()*5);r.hardware=Math.floor(rand()*7);r.deckAngle=20+rand()*25;r.padding=.8+rand()*.5;r.frameMaterial=['wood','metal','painted'][Math.floor(rand()*3)];r.baseStyle=rand()>.6?'plinth':'feet';r.screenStyle=['status','radar','landscape'][Math.floor(rand()*3)];}return normalize(r);
+        if(all||scope==='details'){r.details=rand()>.2;r.style=STYLES[Math.floor(rand()*STYLES.length)][0];if(all){const look=styleLook(r.form,r.style);if(rand()<.6)Object.assign(r,look);else Object.assign(r,{trim:look.trim,accent:look.accent,frameMaterial:look.frameMaterial});}r.seats=1+Math.floor(rand()*5);r.screens=1+Math.floor(rand()*3);r.shelves=2+Math.floor(rand()*6);r.drawers=1+Math.floor(rand()*5);r.hardware=Math.floor(rand()*7);r.deckAngle=20+rand()*25;r.padding=.8+rand()*.5;r.frameMaterial=['wood','metal','painted'][Math.floor(rand()*3)];r.baseStyle=rand()>.6?'plinth':'feet';r.screenStyle=['status','radar','landscape'][Math.floor(rand()*3)];}return normalize(r);
     }
-    const api={FORMS,STYLES,normalize,fromPreset,build,random};root.RRFurnitureProp=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+    const api={FORMS,STYLES,LOOKS,styleLook,normalize,fromPreset,build,random};root.RRFurnitureProp=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
     const Model=need('RRPropModel','./PropModel.js'),Catalog=need('RRPropCatalog','./PropCatalog.js');
     Model.register({id:'furniture',label:'Furniture',normalize,build,random,randomScopes:[['all','Everything'],['shape','Shape'],['colors','Colors'],['details','Details']]});
     for(const [id,label,order]of [['furniture','Furniture',50],['appliances','Appliances',51],['electronics','Electronics',52],['scifi-interiors','Sci-fi interiors',53]])Catalog.category({id,label,order});
@@ -273,5 +378,8 @@
         if(this.recipe.details&&['computer','console'].includes(f))out+=slider('keyRows','Keyboard rows',[3,6],1);
         if(['tv','computer','console','wallPanel','microwave'].includes(f))out+=this._check('screen','Screen')+(this.recipe.screen?this._select('screenStyle','Screen design',[['status','Status display'],['radar','Radar'],['landscape','Landscape']])+`<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t('Screen text')}</span><input type="text" class="rr-input rr-prop-text" data-path="screenText" maxlength="32" value="${this.recipe.screenText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}" spellcheck="false"></label>`:'');
         return out;
-    },reset:r=>fromPreset(r.form),moves:()=>false});
+    },
+    /** Picking a style also sets that style's finish; each color stays editable afterwards. */
+    choose(path,value){if(path!=='style')return false;this._set('style',value);for(const [k,v] of Object.entries(styleLook(this.recipe.form,value)))this._set(k,v);this._commit();this._renderPanel();this._queueRebuild();return true;},
+    reset:r=>fromPreset(r.form),moves:()=>false});
 })(typeof window!=='undefined'?window:globalThis);

@@ -2174,7 +2174,11 @@ Reactor3D.ShaderWarmup = {
         if (program && props.__version === material.version) return true;
         let state = this._materials.get(material);
         // Coming back into view with its program to change: held while it compiles, the wait counted from now.
-        const returning = !!program && this._viewKept && !(now - (material.__rrSeen || 0) <= this.SEEN_MS);
+        // A new material whose first compile began here and that has not been drawn since is still
+        // waiting for that compile: its program is the one being built, not one it comes back to.
+        const seen = material.__rrSeen || 0;
+        const waitingFirst = !!state && !state.returning && (!seen || seen < state.started);
+        const returning = !!program && this._viewKept && !waitingFirst && !(now - seen <= this.SEEN_MS);
         if (returning && state && state.version === material.version && state.returning) return state.ready || now - state.started > this.TIMEOUT_MS;
         // Drawn a moment ago (another variant, or a recompile): not held.
         if (!state && program && !returning) return true;
@@ -6926,7 +6930,10 @@ Reactor3D.roomFor = function(mapData) {
         skyScrollY: scroll(room.skyScrollY),
         cliff: typeof room.cliff === "string" ? room.cliff.trim() : this.GROUND_CLIFF,
         cliffSlope: this.clampCliffSlope(room.cliffSlope),
-        cliffTint: typeof room.cliffTint === "string" && /^#[0-9a-f]{6}$/i.test(room.cliffTint) ? room.cliffTint.toLowerCase() : ""
+        cliffTint: typeof room.cliffTint === "string" && /^#[0-9a-f]{6}$/i.test(room.cliffTint) ? room.cliffTint.toLowerCase() : "",
+        // The floor's tint over its picture, and how many times larger the picture is laid.
+        floorTint: typeof room.floorTint === "string" && /^#[0-9a-f]{6}$/i.test(room.floorTint) ? room.floorTint.toLowerCase() : "",
+        floorScale: Number(room.floorScale) > 0 ? Math.max(0.25, Math.min(8, Number(room.floorScale))) : 1
     };
     return parsed.floor || parsed.walls || parsed.ceiling || parsed.sky ? parsed : null;
 };
@@ -6970,6 +6977,7 @@ Reactor3D.MapScene.prototype.addRoom = function(room, load, tileSize, width, hei
     // A rock's "ground" cap wears the floor too (see groundLoader).
     this._roomFloor = room.floor || ""; this._roomLoad = load;
     this._roomCliff = { name: room.cliff, slope: room.cliffSlope, tint: room.cliffTint };
+    this._roomFloorLook = { tint: room.floorTint || "", scale: room.floorScale > 0 ? room.floorScale : 1 };
     if (!(width > 0) || !(height > 0)) return;
     const pieces = [
         ["floor", room.floor],
@@ -7003,8 +7011,10 @@ Reactor3D.MapScene.prototype.addRoomPiece = function(piece, bitmap, roomHeight, 
         return;
     }
     const size = tileSize || 48;
-    const imageWidth = (bitmap.width || 0) / size;
-    const imageHeight = (bitmap.height || 0) / size;
+    // The floor's picture laid at the scale the room asks (its own size when 1).
+    const grow = piece === "floor" && this._roomFloorLook ? this._roomFloorLook.scale : 1;
+    const imageWidth = (bitmap.width || 0) / size * grow;
+    const imageHeight = (bitmap.height || 0) / size * grow;
     if (!(imageWidth > 0) || !(imageHeight > 0)) return;
 
     const surfaces = [];
@@ -7074,6 +7084,7 @@ Reactor3D.MapScene.prototype.addRoomPiece = function(piece, bitmap, roomHeight, 
         });
         // Lit like the ground, so a dark corner of the room is dark.
         material.__reactorShaded = true;
+        if (piece === "floor" && this._roomFloorLook && this._roomFloorLook.tint) material.color.set(this._roomFloorLook.tint);
         Reactor3D.litMaterial(material);
         // Bent through terrain, the floor is laid from the sides on slopes and turns to rock on cliffs.
         if (piece === "floor" && (this._terrainMap || this._groundMap) && Reactor3D.GROUND_SLOPE) {
@@ -10487,18 +10498,38 @@ Reactor3D.renderBlocker = function(mapData) {
      * Escape releases the pointer lock, and the browser keeps that key
      * press to itself: the game never hears it, so the menu needed a second
      * Escape. Losing the lock with the window still focused is that key
-     * press; it calls the menu the way the key would have. Losing focus
-     * (another window) releases the lock too, and calls nothing.
+     * press, and is pressed for it (Input.virtualClick), so it goes where the
+     * key would: a rider gets off, a message closes, otherwise the menu opens.
+     * Losing focus (another window, an overlay) releases the lock too, and
+     * its blur can come just after the lock's change, so the press waits a
+     * moment (LOCK_RELEASE_WAIT) and a blur or a hidden page in that time
+     * calls nothing. Read as the menu at once, every focus loss with the
+     * window still counted as focused opened the menu by itself.
      */
+    const LOCK_RELEASE_WAIT = 150;
     function lockReleased() {
         // A fullscreen change (F4) drops the lock too; that is not Escape.
         if (Date.now() < (look.suppressMenuUntil || 0)) return;
-        const scene = typeof SceneManager !== "undefined" && SceneManager._scene;
-        if (!scene || typeof Scene_Map === "undefined" || !(scene instanceof Scene_Map)) return;
-        if (!isRelativeMode(currentState().mode)) return;
-        if (typeof scene.isMenuEnabled === "function" && !scene.isMenuEnabled()) return;
-        held.clear();
-        scene.menuCalling = true;
+        // An Escape the page heard itself has already gone to Input: the release is that same press.
+        if (Date.now() - (look.escapeAt || 0) < 500) return;
+        cancelLockRelease();
+        look.releaseTimer = setTimeout(() => {
+            look.releaseTimer = 0;
+            if (Date.now() < (look.suppressMenuUntil || 0)) return;
+            if (typeof document !== "undefined" && ((document.hasFocus && !document.hasFocus()) || document.visibilityState === "hidden")) return;
+            const scene = typeof SceneManager !== "undefined" && SceneManager._scene;
+            if (!scene || typeof Scene_Map === "undefined" || !(scene instanceof Scene_Map)) return;
+            if (!isRelativeMode(currentState().mode)) return;
+            held.clear();
+            if (typeof Input !== "undefined" && typeof Input.virtualClick === "function") Input.virtualClick("escape");
+            else if (typeof scene.isMenuEnabled !== "function" || scene.isMenuEnabled()) scene.menuCalling = true;
+        }, LOCK_RELEASE_WAIT);
+    }
+
+    /** A lock release waiting to be read as Escape (lockReleased) is dropped: the window lost focus. */
+    function cancelLockRelease() {
+        if (look.releaseTimer) clearTimeout(look.releaseTimer);
+        look.releaseTimer = 0;
     }
 
     /** The map direction (2/4/6/8, or a diagonal pair) the held keys ask for, relative to the camera. */
@@ -11089,6 +11120,7 @@ Reactor3D.renderBlocker = function(mapData) {
                     look.suppressMenuUntil = Date.now() + 1500;
                     return;
                 }
+                if (event.code === "Escape" || event.keyCode === 27) look.escapeAt = Date.now();
                 const key = KEYS[event.code];
                 if (!key) return;
                 held.add(key);
@@ -11102,7 +11134,8 @@ Reactor3D.renderBlocker = function(mapData) {
                 const key = KEYS[event.code];
                 if (key) held.delete(key);
             });
-            window.addEventListener("blur", () => held.clear());
+            window.addEventListener("blur", () => { held.clear(); cancelLockRelease(); });
+            document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") cancelLockRelease(); });
             // A click on the game takes the mouse in the relative modes;
             // Escape (the browser's own) gives it back.
             document.addEventListener("mousedown", event => {
@@ -11198,6 +11231,7 @@ Reactor3D.renderBlocker = function(mapData) {
         currentState: currentState,
         look: look,
         held: held,
+        lockReleased: lockReleased,
         relativeMove: relativeMove,
         requestLook: requestLook,
         releaseLook: releaseLook,

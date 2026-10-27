@@ -85,7 +85,7 @@ const defaultsOf = rules => [...new Set(rules.filter(rule => rule.defaultMotion)
 
 test('a rigged humanoid plays the library in every state it has no motion for; the rig keeps idle and riding', () => {
     const object = plainModel();
-    assert.deepEqual(libraryClips(object).map(clip => clip.__reactorLibrary.state), ['walking', 'dashing', 'jumping', 'swimming', 'treading', 'climbing']);
+    assert.deepEqual(libraryClips(object).filter(clip => clip.__reactorLibrary.state).map(clip => clip.__reactorLibrary.state), ['walking', 'dashing', 'jumping', 'swimming', 'treading', 'climbing']);
     const rules = R.readModelAnimationRules({ animations: [], rig: carol }, object.__reactorClips);
     const byState = Object.fromEntries(rules.filter(rule => rule.defaultMotion && rule.type === 'clip').map(rule => [rule.trigger, rule.name]));
     assert.deepEqual(byState, { walking: 'Walk', dashing: 'Run', jumping: 'Jump', swimming: 'Swim', treading: 'Tread Water', climbing: 'Climb' });
@@ -96,6 +96,22 @@ test('a rigged humanoid plays the library in every state it has no motion for; t
     assert.deepEqual(defaultsOf(R.readModelAnimationRules({ animations: [], rig: carol, defaultMotions: false }, object.__reactorClips)), []);
     // The clips hold nothing until they play.
     assert.ok(libraryClips(object).every(clip => clip.tracks.length === 0));
+});
+
+test('a rule of the model\'s own names any library motion: Guard plays the motion-capture Guard', () => {
+    const object = plainModel();
+    const library = RRMotionLibrary;
+    // Every library motion is there to name, not only the movement states; none holds keys yet.
+    const ids = libraryClips(object).map(clip => clip.__reactorLibrary.id);
+    for (const pose of library.POSES) assert.ok(ids.includes(pose.id), pose.id);
+    const rules = R.readModelAnimationRules({ animations: [{ name: 'guard', type: 'clip', trigger: 'action', library: 'defend' }], rig: carol }, object.__reactorClips);
+    const guard = rules.find(rule => rule.name === 'guard');
+    assert.equal(guard.library, 'defend');
+    assert.equal(guard.clip, R.LIBRARY_CLIP_PREFIX + 'defend');
+    // A motion with no state of its own never plays by itself.
+    assert.ok(!rules.some(rule => rule.defaultMotion && rule.clip === R.LIBRARY_CLIP_PREFIX + 'defend'));
+    const clip = R.resolveLibraryMotion(object.__reactorClips.find(c => c.name === guard.clip));
+    assert.ok(clip.tracks.length > 0 && clip.duration > 0, 'The motion is made for this skeleton when it first plays');
 });
 
 test('the model\'s own clips and animations win over the library', () => {

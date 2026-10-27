@@ -438,7 +438,7 @@
                 }
                 // Darker at the root; a tuft's tips catch the light, so a coat reads soft rather than speckled.
                 // A clump's hairs fan out from its root, so its card keeps its width.
-                const w = width * (single ? 1 - t * 0.65 : clump ? 0.8 + t * 0.2 : 1 - t * 0.5), tone = single || clump ? 0.85 + 0.15 * t : 0.78 + 0.45 * t * t;
+                const w = width * (single ? 1 - t * 0.65 : clump ? 0.8 + t * 0.2 : 1 - t * 0.5), tone = single || clump ? 0.85 + 0.15 * t : 0.9 + 0.2 * t * t;
                 for (let k = -1; k <= 1; k += 2) {
                     const o3 = vi * 3, o4 = vi * 4;
                     positions[o3] = px + sx * w * k; positions[o3 + 1] = py + sy * w * k; positions[o3 + 2] = pz + sz * w * k;
@@ -486,7 +486,7 @@
             [fx, fy, fz] = [fx * cs + ox * sn, fy * cs + oy * sn, fz * cs + oz * sn];
             const sx = N[1] * fz - N[2] * fy, sy = N[2] * fx - N[0] * fz, sz = N[0] * fy - N[1] * fx;
             const lane = s.lane ?? (2 + Math.floor(rand() * 2)), u0 = lane * 0.25, u1 = u0 + 0.25;
-            const shade = 0.84 + 0.32 * rand(), step = s.len / (SEG - 1), lift = s.lift ?? 0.4, droop = s.droop ?? 0;
+            const shade = 0.9 + 0.2 * rand(), step = s.len / (SEG - 1), lift = s.lift ?? 0.4, droop = s.droop ?? 0;
             const tip = s.tip || s.color;
             let px = s.p[0], py = s.p[1], pz = s.p[2];
             const base = vi;
@@ -498,7 +498,7 @@
                     const dl = Math.hypot(dx, dy, dz) || 1;
                     px += dx / dl * step; py += dy / dl * step; pz += dz / dl * step;
                 }
-                const w = s.width * (1 - t * 0.45), tone = (0.78 + 0.45 * t * t) * shade;
+                const w = s.width * (1 - t * 0.45), tone = (0.9 + 0.2 * t * t) * shade;
                 const c = mix(s.color, tip, t);
                 for (let k = -1; k <= 1; k += 2) {
                     const o3 = vi * 3, o4 = vi * 4;
@@ -553,8 +553,11 @@
                 }
             }
         }
+        // Each hair a little lighter or darker than the tint it is drawn in, about it on the whole (the picture is
+        // decoded as sRGB: its tones are set in linear light), so a strand shows the color it is given; at a
+        // straight 225-and-darker the strands drew a third darker than their tint, dark dashes on a short coat.
         for (let o = 0; o < size * size; o++) {
-            const l = Math.min(255, Math.round(225 * tone[o]));
+            const l = Math.min(255, Math.round(255 * Math.pow(0.8 + 0.2 * Math.min(1, Math.max(0, (tone[o] - 0.75) / 0.45)), 1 / 2.2)));
             data[o * 4] = data[o * 4 + 1] = data[o * 4 + 2] = l; data[o * 4 + 3] = Math.round(255 * Math.min(1, alpha[o]));
         }
         return { width: size, height: size, data, name: 'bodyhair.png' };

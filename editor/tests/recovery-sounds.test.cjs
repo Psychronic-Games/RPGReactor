@@ -41,6 +41,8 @@ function makeLog(overrides = {}) {
     log.makeHpDamageText = () => 'hp';
     log.makeMpDamageText = () => 'mp';
     log.makeTpDamageText = () => 'tp';
+    // Window_Base's: every pool in use (Database › System 1 › Resource Pools).
+    log.isPoolHidden = () => false;
     return Object.assign(log, overrides);
 }
 

@@ -21,6 +21,8 @@ class PieceBuilderManager {
         this.mode = 'select';
         this.structure = '';
         this.selectedGroup = 0;
+        // How big a plan is stamped (1-4 times its own size; a stamped one grows and shrinks in Move).
+        this.stampScale = 1;
         this.panel = null;
         this.undoStack = [];
         this.redoStack = [];
@@ -43,7 +45,11 @@ class PieceBuilderManager {
         this.rockVary = true;
         this.rockSeed = 1;
         this.rockCap = '';
-        this.rockTint = '';
+        // A colour over the material for each kind in hand ('' for none): a red wall without a red material.
+        this.tints = {};
+        // A pillar's thickness and a roof's rise in hand (their own when unset: 0.4 and 1).
+        this.pillarThick = 0.4;
+        this.roofRise = 1;
         // The next door's settings (its width and facing come from the doorway it is hung in), and
         // the frame the next window wears.
         this.door = { style: 'plank', hinge: 'left', swing: 'away', opens: 'auto', width: 2 };
@@ -51,6 +57,341 @@ class PieceBuilderManager {
         this.selected = 0;
         this.selectedIds = [];
         this.gizmoMode = 'all';          // every handle at once: arrows, rings and size cubes
+        // How a drag lays pieces, as the 2D map's pen, line and rectangle do: 'brush' (every cell the drag
+        // passes), 'line' (a straight run from where it began to where it is), 'rect' (the rectangle between).
+        // A rectangle fills or lines its edge as `rectFill` says ('auto': floors, blocks and roofs fill).
+        // The height new walls, panes and pillars are laid at, per kind (none: a storey).
+        this.heights = {};
+        // A floor laid this many tiles square at a click, and a floor line this wide.
+        this.floorBrush = 1;
+        this.drawShape = PieceBuilderManager.stored('rr-build-draw', ['brush', 'line', 'rect'], 'brush');
+        // The Eraser's own: how a drag takes pieces away, and which pieces only ('' for any).
+        this.eraseShape = PieceBuilderManager.stored('rr-build-erase-draw', ['brush', 'line', 'rect'], 'brush');
+        this.eraseOnly = '';
+        this.rectFill = PieceBuilderManager.stored('rr-build-rectfill', ['auto', 'fill', 'edge'], 'auto');
+        // A wall line off the grid's axes: one straight wall (a turned box) or a stepped run of cells.
+        this.diagonal = PieceBuilderManager.stored('rr-build-diagonal', ['straight', 'stepped'], 'straight');
+    }
+
+    setDiagonal(value) {
+        if (!['straight', 'stepped'].includes(value)) return;
+        this.diagonal = value;
+        try { localStorage.setItem('rr-build-diagonal', value); } catch (error) { /* a preference only */ }
+        this._syncPanel();
+    }
+
+    /** The kinds a Line can lay as one straight wall when it runs off the grid's axes. */
+    static DIAGONAL_KINDS = ['wall', 'glass', 'block'];
+
+    /**
+     * One straight wall from cell `a` to cell `b`: a box laid from the middle of the one to the middle of the
+     * other (a tile thick, ends included), as tall as the wall in hand, turned to the line. Null when the run is
+     * along a row or a column (the cells themselves are that wall) or the kind is no wall.
+     */
+    diagonalWall(a, b, z) {
+        if (this.diagonal !== 'straight' || !PieceBuilderManager.DIAGONAL_KINDS.includes(this.kind) || a.x === b.x || a.y === b.y) return null;
+        const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy) + 1;
+        const mx = (a.x + b.x) / 2 + 0.5, my = (a.y + b.y) / 2 + 0.5, cx = Math.floor(mx), cy = Math.floor(my);
+        const tall = this.kind === 'block' ? 1 : this.heightFor(this.kind);
+        const piece = { kind: 'box', x: cx, y: cy, z, rot: 0, material: this.material, size: [Math.min(60, Math.round(length * 100) / 100), tall, 1],
+            angle: ((Math.round(Math.atan2(dy, dx) * 180 / Math.PI) % 360) + 360) % 360 };
+        const offset = [Math.round((mx - cx - 0.5) * 100) / 100, Math.round((my - cy - 0.5) * 100) / 100];
+        if (offset[0] || offset[1]) piece.offset = offset;
+        if (this.kind === 'glass') piece.material = this.material || 'Glass';
+        if (this.finish) piece.finish = this.finish;
+        if (this.surface) piece.surface = Object.assign({}, this.surface);
+        return piece;
+    }
+
+    /** The cell pieces that take a height of their own (Reactor3D.SIZED_KINDS). */
+    static SIZED_KINDS = ['wall', 'glass', 'pillar', 'doorway', 'window'];
+    /** Every piece the panel gives a Height: the storey-tall ones, and a fence (1.5 when it has none). */
+    static HEIGHT_KINDS = PieceBuilderManager.SIZED_KINDS.concat(['fence']);
+    /** A kind's height when it is given none. */
+    static defaultHeight(kind) { return kind === 'fence' ? 1.5 : 5; }
+
+    /** The pieces laid into a wall rather than beside it, and the wall pieces they can be laid into. */
+    static OPENINGS = ['window', 'doorway', 'glass', 'door'];
+    static CARVABLE = ['wall', 'window', 'doorway', 'glass'];
+    /** The way a piece laid into a struck face looks: out of that face. */
+    static FACE_ROT = { south: 0, west: 1, north: 2, east: 3 };
+    /** The cell a face of each turn looks into: south, west, north, east. */
+    static FACE_STEP = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+
+    /**
+     * The wall a window, doorway, pane or door in hand is pointed at, to be laid into rather than beside or on top
+     * of: `{ wall, rel, rot }`, `rel` how high up the wall the pointer is (tiles from its foot), `rot` the way the
+     * struck face looks. Null when the pointer is on no wall (the piece is laid as any other).
+     */
+    wallUnder(target) {
+        // A wall in hand fills an opening it is pointed at; struck on plain wall it is laid beside it as ever.
+        if (!target || this.mode !== 'place' || !(PieceBuilderManager.OPENINGS.includes(this.kind) || this.kind === 'wall')) return null;
+        const map = this.currentMap(), E = this.elevation();
+        if (!map || !E) return null;
+        const cell = target.faceCell || { x: target.x, y: target.y };
+        const stack = E.pieces(map).filter(p => p.x === cell.x && p.y === cell.y && PieceBuilderManager.CARVABLE.includes(p.kind));
+        if (!stack.length) return this.kind === 'wall' ? null : this.straightWallUnder(target);
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        const baseOf = (x, y) => (R && R.pieceBaseAt ? R.pieceBaseAt(map, x, y) : 0);
+        const tall = piece => piece.height || 5;
+        // The pointer's height over the wall's cell: where a face was struck, else just under the top it rests on.
+        const rel = target.faceCell ? baseOf(target.x, target.y) + (Number(target.height) || 0) - baseOf(cell.x, cell.y)
+            : target.top ? target.z - 0.01 : null;
+        if (rel === null) return null;
+        const wall = stack.filter(p => rel >= p.z - 0.01 && rel <= p.z + tall(p) + 0.01).sort((a, b) => b.z - a.z)[0];
+        if (!wall) return null;
+        // A door goes into plain wall (a doorway already there takes it as before); a wall only into an opening.
+        if ((this.kind === 'door' || this.kind === 'wall') && (wall.kind === 'wall') !== (this.kind === 'door')) return null;
+        let rot = target.side && PieceBuilderManager.FACE_ROT[target.side] !== undefined ? PieceBuilderManager.FACE_ROT[target.side] : (wall.rot ?? this.rot);
+        // A window looks out of the building whichever side it is laid from: struck from inside (a floor or the
+        // building's pieces at its level on that side) with nothing on the other side, it turns to face out.
+        const [dx, dy] = PieceBuilderManager.FACE_STEP[rot];
+        const inside = (x, y) => E.pieces(map).some(p => p.x === x && p.y === y && p.z <= wall.z + 0.5 && (p.z >= wall.z - 0.01 || (p.z + (p.height || 5) > wall.z && PieceBuilderManager.CARVABLE.includes(p.kind))));
+        if (inside(wall.x + dx, wall.y + dy) && !inside(wall.x - dx, wall.y - dy)) rot = (rot + 2) % 4;
+        return { wall, rel: Math.max(0, rel - wall.z), rot };
+    }
+
+    /** A straight wall laid off the grid (diagonalWall): a box standing upright, a tile thick or less, taller and longer than a step. */
+    static isStraightWall(piece) {
+        return !!piece && piece.kind === 'box' && !piece.tilt && !piece.roll && Array.isArray(piece.size)
+            && piece.size[2] <= 1.05 && piece.size[1] >= 1.5 && piece.size[0] >= 1.5;
+    }
+
+    /** A straight wall's middle on the ground and the way it runs: { cx, cz, c, s } (c, s the run's direction). */
+    static straightFrame(box) {
+        const off = box.offset || [0, 0];
+        const a = ((Number(box.angle) || 0) + (Number(box.rot) || 0) * 90) * Math.PI / 180;
+        return { cx: box.x + 0.5 + (off[0] || 0), cz: box.y + 0.5 + (off[1] || 0), c: Math.cos(a), s: Math.sin(a) };
+    }
+
+    /** The straight wall under the pointer, for an opening: { wall, along, rel, straight: true } or null. */
+    straightWallUnder(target) {
+        if (!target || !target.point) return null;
+        const map = this.currentMap(), E = this.elevation();
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        const baseOf = (x, y) => (R && R.pieceBaseAt ? R.pieceBaseAt(map, x, y) : 0);
+        for (const box of E.pieces(map)) {
+            if (!PieceBuilderManager.isStraightWall(box)) continue;
+            const f = PieceBuilderManager.straightFrame(box), dx = target.point.x - f.cx, dz = target.point.z - f.cz;
+            const along = dx * f.c + dz * f.s, across = -dx * f.s + dz * f.c;
+            const [L, H, D] = box.size;
+            if (Math.abs(along) > L / 2 + 0.05 || Math.abs(across) > D / 2 + 0.15) continue;
+            const rel = (target.faceCell || !target.top ? baseOf(target.x, target.y) + (Number(target.height) || 0) : baseOf(target.x, target.y) + target.z) - baseOf(box.x, box.y) - box.z;
+            if (rel < -0.05 || rel > H + 0.05) continue;
+            return { wall: box, along, rel: Math.max(0, rel), straight: true, rot: 0 };
+        }
+        return null;
+    }
+
+    /**
+     * An opening in a straight wall: the wall cut either side of it, and over it a header (a doorway's), a sill and
+     * a header with a pane between (a window's), or a pane the height of the wall (glass); each a box turned as the
+     * wall is, its material, building and finish. The opening is a tile wide (a door's as wide as the door), where
+     * pointed along the wall.
+     */
+    straightCarved(found, kind = this.kind) {
+        const W = found.wall, [L, H, D] = W.size, f = PieceBuilderManager.straightFrame(W);
+        const S = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_STOREY) || 5;
+        // A doorway across a slanting wall is two tiles at least: one tile leaves no way through on the grid.
+        const wide = Math.min(L, kind === 'door' || kind === 'doorway' ? Math.max(2, this.door?.width || 1) : 1);
+        const mid = Math.max(-L / 2 + wide / 2, Math.min(L / 2 - wide / 2, Math.round(found.along * 4) / 4));
+        const quarter = v => Math.round(v * 4) / 4;
+        const part = (a0, a1, y0, y1, extra = {}) => {
+            if (a1 - a0 < 0.1 || y1 - y0 < 0.05) return null;
+            const centre = (a0 + a1) / 2, wx = f.cx + f.c * centre, wz = f.cz + f.s * centre;
+            const x = Math.floor(wx), y = Math.floor(wz);
+            const piece = { kind: 'box', x, y, z: W.z + y0, rot: 0, angle: W.angle || 0, material: W.material, size: [Math.round((a1 - a0) * 100) / 100, Math.round((y1 - y0) * 100) / 100, D],
+                offset: [Math.round((wx - x - 0.5) * 100) / 100, Math.round((wz - y - 0.5) * 100) / 100] };
+            if (W.group) piece.group = W.group;
+            if (W.finish) piece.finish = W.finish;
+            if (W.surface) piece.surface = Object.assign({}, W.surface);
+            return Object.assign(piece, extra);
+        };
+        const a0 = mid - wide / 2, a1 = mid + wide / 2;
+        const out = [part(-L / 2, a0, 0, H), part(a1, L / 2, 0, H)];
+        const glass = { material: this.material && kind === 'glass' ? this.material : 'Glass', size: null };
+        const pane = (y0, y1) => { const p = part(a0, a1, y0, y1); if (p) { p.material = glass.material; p.size[2] = Math.min(D, 0.1); } return p; };
+        if (kind === 'glass') out.push(pane(0, H));
+        else if (kind === 'window') {
+            const foot = H > S ? Math.max(0, Math.min(H - S, Math.round(found.rel - 2.55))) : 0;
+            const top = quarter(foot + Math.min(S, H - foot) - 1.4);
+            out.push(part(a0, a1, 0, foot + 1.5), pane(foot + 1.5, top), part(a0, a1, top, H));
+        } else out.push(part(a0, a1, quarter(Math.min(S, H) - 0.6), H));
+        return out.filter(Boolean);
+    }
+
+    /**
+     * What replaces a wall piece when an opening is laid into it: a doorway (or a door's doorway) from its foot, as
+     * tall as it; a pane the whole of it; a window where it was pointed at, the wall under it left standing when the
+     * wall is taller than a storey. The wall's material, building and finish are kept; the opening looks out of the
+     * face that was struck.
+     */
+    carvedPieces(found, kind = this.kind) {
+        if (found.straight) return this.straightCarved(found, kind);
+        const W = found.wall, H = W.height || 5;
+        const keep = { material: W.material, rot: found.rot };
+        if (W.group) keep.group = W.group;
+        if (W.finish) keep.finish = W.finish;
+        if (W.surface) keep.surface = Object.assign({}, W.surface);
+        const sized = (piece, height) => { if (height !== 5) piece.height = height; return piece; };
+        if (kind === 'glass') return [sized(Object.assign({}, keep, { kind: 'glass', x: W.x, y: W.y, z: W.z, material: this.material || keep.material }), H)];
+        // A wall fills an opening, as tall as it, the wall's own material when it was a pane.
+        if (kind === 'wall') return [sized(Object.assign({}, keep, { kind: 'wall', x: W.x, y: W.y, z: W.z, rot: W.rot, material: W.kind === 'glass' ? (this.material || '') : keep.material }), H)];
+        if (kind === 'doorway' || kind === 'door') return [sized(Object.assign({}, keep, { kind: 'doorway', x: W.x, y: W.y, z: W.z }), H)];
+        // A window's opening is two to four tiles up its piece: its foot is put where the pointer is in the middle of it.
+        const foot = H > 5 ? Math.max(W.z, Math.min(W.z + H - 5, W.z + Math.round(found.rel - 2.55))) : W.z;
+        const out = [];
+        if (foot > W.z) out.push(sized(Object.assign({}, keep, { kind: W.kind === 'window' ? 'wall' : W.kind, x: W.x, y: W.y, z: W.z, rot: W.rot }), foot - W.z));
+        const window = sized(Object.assign({}, keep, { kind: 'window', x: W.x, y: W.y, z: foot }), W.z + H - foot);
+        if (this.windowFrame && this.windowFrame.style) window.frame = Object.assign({}, this.windowFrame);
+        out.push(window);
+        return out;
+    }
+
+    /**
+     * Lay the piece in hand into the wall it is pointed at (wallUnder): a window, doorway or pane replaces that
+     * piece of the wall; a door makes its doorway there (as wide as the door, along the wall) and hangs in it.
+     */
+    carveInto(map, found, target) {
+        const E = this.elevation();
+        if (found.straight) {
+            const parts = this.straightCarved(found);
+            const list = E.pieces(map).filter(p => p.id !== found.wall.id);
+            let id = E.pieces(map).reduce((max, p) => Math.max(max, p.id || 0), 0);
+            for (const piece of parts) list.push(Object.assign(piece, { id: ++id }));
+            E.restorePieces(map, list);
+            if (this.kind === 'door') {
+                const text = 'A door hangs in a wall that runs along the grid; a doorway was opened here.';
+                window.reactor?.buildHotbar?.flash?.(window.I18n ? window.I18n.tText(text) : text);
+            }
+            return true;
+        }
+        const cells = [found.wall];
+        if (this.kind === 'door' && (this.door?.width || 1) > 1) {
+            // Along the wall, toward the side of the cell the pointer is on, as far as the wall reaches.
+            const along = found.rot % 2 === 0 ? [1, 0] : [0, 1];
+            const at = target.point ? (along[0] ? target.point.x - found.wall.x : target.point.z - found.wall.y) : 0.5;
+            const step = at < 0.5 ? -1 : 1;
+            for (let i = 1; cells.length < this.door.width && i < this.door.width + 2; i++) {
+                for (const dir of [step, -step]) {
+                    if (cells.length >= this.door.width) break;
+                    const x = found.wall.x + along[0] * i * dir, y = found.wall.y + along[1] * i * dir;
+                    const next = E.pieces(map).find(p => p.x === x && p.y === y && p.kind === 'wall' && p.z === found.wall.z && (p.height || 5) === (found.wall.height || 5));
+                    if (next && !cells.includes(next)) cells.push(next);
+                }
+            }
+        }
+        let changed = false;
+        for (const wall of cells) for (const piece of this.carvedPieces({ wall, rel: found.rel, rot: found.rot })) if (E.setPiece(map, piece)) changed = true;
+        if (this.kind === 'door') {
+            const door = this.pieceFor({ x: found.wall.x, y: found.wall.y, z: found.wall.z, point: target.point });
+            if (found.wall.group) door.group = found.wall.group;
+            if (E.setPiece(map, door)) changed = true;
+        }
+        return changed;
+    }
+
+    /** The cells a floor brush covers round a cell: `floorBrush` square, the cell in its middle (or just past it, even). */
+    brushCells(cell, across = null) {
+        const n = this.kind === 'floor' ? Math.max(1, Math.min(9, Math.round(this.floorBrush) || 1)) : 1;
+        if (n === 1) return [cell];
+        // `across` ('x' or 'y'): only that way, a line widened across itself and no longer than drawn.
+        const out = [], from = -Math.floor((n - 1) / 2), nx = across === 'y' ? 1 : n, ny = across === 'x' ? 1 : n;
+        for (let dy = 0; dy < ny; dy++) for (let dx = 0; dx < nx; dx++) out.push(Object.assign({}, cell, { x: cell.x + (nx > 1 ? from + dx : 0), y: cell.y + (ny > 1 ? from + dy : 0) }));
+        return out;
+    }
+
+    /** The height the next piece of `kind` is laid at, in tiles. */
+    heightFor(kind) { return this.heights[kind] > 0 ? this.heights[kind] : PieceBuilderManager.defaultHeight(kind); }
+
+    setHeight(kind, height) {
+        const tall = Math.max(0.5, Math.min(40, Math.round((Number(height) || 5) * 4) / 4));
+        this.heights[kind] = tall;
+        this._syncPanel(); this._ghostChanged();
+    }
+
+    /** A remembered choice of the Build panel, when it is one of `allowed`. */
+    static stored(key, allowed, fallback) {
+        try { const value = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null; return allowed.includes(value) ? value : fallback; }
+        catch (error) { return fallback; }
+    }
+
+    /** A rock's tint in hand (the tint of the kind, as every piece has). */
+    get rockTint() { return (this.tints && this.tints.rock) || ''; }
+    set rockTint(value) { this.tints = Object.assign({}, this.tints, { rock: value || '' }); }
+
+    /** What the Eraser takes, when not everything: each a set of kinds. */
+    static ERASE_ONLY = {
+        walls: ['wall', 'glass', 'doorway', 'window', 'pillar', 'fence', 'door'],
+        floors: ['floor', 'block', 'stair', 'ramp', 'ladder'],
+        roofs: ['roof'],
+        rocks: ['rock']
+    };
+
+    setEraseShape(shape) {
+        if (!['brush', 'line', 'rect'].includes(shape)) return;
+        this.eraseShape = shape;
+        try { localStorage.setItem('rr-build-erase-draw', shape); } catch (error) { /* a preference only */ }
+        this._syncPanel();
+    }
+
+    setEraseOnly(only) { this.eraseOnly = PieceBuilderManager.ERASE_ONLY[only] || only === 'shapes' ? only : ''; this._syncPanel(); }
+
+    /** Whether the Eraser may take a piece: every piece, or only those of the kinds it is set to (shapes: every shape but a rock). */
+    erasable(piece) {
+        const only = this.eraseOnly;
+        if (!only || !piece) return true;
+        if (only === 'shapes') return this.isShape(piece.kind) && piece.kind !== 'rock';
+        return (PieceBuilderManager.ERASE_ONLY[only] || []).includes(piece.kind);
+    }
+
+    setDrawShape(shape) {
+        if (!['brush', 'line', 'rect'].includes(shape)) return;
+        this.drawShape = shape;
+        try { localStorage.setItem('rr-build-draw', shape); } catch (error) { /* a preference only */ }
+        this._syncPanel();
+    }
+
+    setRectFill(fill) {
+        if (!['auto', 'fill', 'edge'].includes(fill)) return;
+        this.rectFill = fill;
+        try { localStorage.setItem('rr-build-rectfill', fill); } catch (error) { /* a preference only */ }
+        this._syncPanel();
+    }
+
+    /** Whether a rectangle of the piece in hand fills its inside or lines its edge (a room's walls). */
+    rectangleFills() {
+        return this.rectFill === 'fill' || (this.rectFill === 'auto' && PieceBuilderManager.fillsRectangle(this.kind));
+    }
+
+    /** The cells of a straight run from `a` to `b`, each touching the one before at a side or a corner (a fence's diagonal). */
+    static lineCells8(a, b) {
+        const cells = [];
+        const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y), sx = b.x > a.x ? 1 : -1, sy = b.y > a.y ? 1 : -1;
+        let x = a.x, y = a.y, err = dx - dy;
+        for (;;) {
+            cells.push({ x, y });
+            if (x === b.x && y === b.y) break;
+            const e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 < dx) { err += dx; y += sy; }
+        }
+        return cells;
+    }
+
+    /**
+     * The cells of a straight run from `a` to `b`, each sharing a side with the one before (a diagonal steps
+     * across and along, so a run of walls has no gap a character could squeeze through).
+     */
+    static lineCells(a, b) {
+        const cells = [{ x: a.x, y: a.y }];
+        const nx = Math.abs(b.x - a.x), ny = Math.abs(b.y - a.y), sx = b.x > a.x ? 1 : -1, sy = b.y > a.y ? 1 : -1;
+        // Step along whichever axis the true line crosses into first, one axis at a time.
+        for (let x = a.x, y = a.y, ix = 0, iy = 0; ix < nx || iy < ny;) {
+            if ((0.5 + ix) / nx < (0.5 + iy) / ny) { x += sx; ix++; } else { y += sy; iy++; }
+            cells.push({ x, y });
+        }
+        return cells;
     }
 
     // ---- A selection of many: a box dragged round them ----------------------
@@ -115,7 +456,7 @@ class PieceBuilderManager {
         const inside = (x, y, z) => { for (const q of at(x, y)) if (q.z > z || (q.z === z && WALLS.has(q.kind))) return true; return false; };
         const walled = role => role === 'wall' || role === 'inner';
         // The part of the wall a piece stands directly on, or of the block carried up from a wall; null on neither.
-        const onWall = piece => { for (const q of at(piece.x, piece.y)) { if (q.z >= piece.z) break; if (WALLS.has(q.kind) && q.z + S === piece.z) return part.get(q); } return null; };
+        const onWall = piece => { for (const q of at(piece.x, piece.y)) { if (q.z >= piece.z) break; if (WALLS.has(q.kind) && q.z + (q.height || S) === piece.z) return part.get(q); } return null; };
         const onBlock = piece => { for (const q of at(piece.x, piece.y)) { if (q.z >= piece.z) break; if (q.kind === 'block' && q.z + 1 === piece.z && walled(part.get(q))) return part.get(q); } return null; };
         // Nothing over it, and nothing but a slab standing at its own level.
         const open = piece => { for (const q of at(piece.x, piece.y)) if (q !== piece && (q.z > piece.z || (q.z === piece.z && q.kind !== 'floor'))) return false; return true; };
@@ -422,6 +763,73 @@ class PieceBuilderManager {
         this.announce(false, { x0: x0 - 4, y0: y0 - 4, x1: x1 + 4, y1: y1 + 4 });
         this._syncPanel(); this._ghostChanged();
         return true;
+    }
+
+    /** The levels a piece of `kind` stands at: whole tiles, a quarter for a floor, a block and a shape. */
+    levelStep(kind) { return kind === 'floor' || kind === 'block' || this.isShape(kind) ? 0.25 : 1; }
+
+    /** The selection (or the piece in hand) up or down by `delta` levels, never below the ground. */
+    raiseSelection(delta, record = true) {
+        const pieces = this.selectionPieces();
+        if (!pieces.length || !delta) return false;
+        const max = this.elevation()?.PIECE_MAX_LEVEL ?? 240;
+        const low = Math.min(...pieces.map(piece => piece.z));
+        const move = Math.max(-low, delta);
+        if (!move) return false;
+        return this.updateSelection(piece => {
+            const step = this.levelStep(piece.kind);
+            return { z: Math.max(0, Math.min(max, Math.round((piece.z + move) / step) * step)) };
+        }, record);
+    }
+
+    /**
+     * Every wall, pane, pillar, doorway and window of the selection to one height, and everything selected above
+     * them lifted with them: each storey's walls (the ones standing at one level) grow, and the floors, the next
+     * storey and the roof over their tops rise by as much, so a whole building made taller keeps its roof on.
+     * A storey's growth is whole tiles when anything stands above it, so the storeys over it stay at whole
+     * levels. Stairs and ladders keep their steps (said, when a storey they are in grew).
+     */
+    setSelectionHeight(height, record = true) {
+        const pieces = this.selectionPieces();
+        const walls = pieces.filter(piece => PieceBuilderManager.SIZED_KINDS.includes(piece.kind));
+        if (!walls.length) return false;
+        const tall = Math.max(0.5, Math.min(40, Math.round((Number(height) || 5) * 4) / 4));
+        // Each storey: the level its walls stand at, and how tall they stand now.
+        const storeys = new Map();
+        for (const wall of walls) storeys.set(wall.z, Math.max(storeys.get(wall.z) || 0, wall.height || 5));
+        // A storey is as tall as where the next one stands, or the lowest thing laid over its walls (the roof), when
+        // its walls reach past that: a building whose walls were made taller alone, through its roof, is measured
+        // as built, and setting its height again lifts the roof off the walls.
+        const bases = [...storeys.keys()].sort((a, b) => a - b);
+        const RESTS = ['floor', 'roof', 'ramp', 'block'];
+        const over = base => pieces.reduce((low, piece) => piece.z > base && RESTS.includes(piece.kind) ? Math.min(low, piece.z) : low, Infinity);
+        const bands = bases.map((base, i) => [base, Math.min(storeys.get(base), (i + 1 < bases.length ? bases[i + 1] : over(base)) - base)]);
+        const stacked = bands.some(([base, h]) => pieces.some(piece => piece.z >= base + h - 1e-6));
+        const grown = stacked ? Math.max(1, Math.round(tall)) : tall;
+        // What a storey's growth lifts: whatever stands at or over its walls' top, and a shape that starts just under it
+        // and reaches past it (an eave or a roof's edge tilted down over the wall), which is the roof's, not the wall's.
+        // A shape's top: its foot plus how tall its box stands once tilted and rolled.
+        const topOf = piece => {
+            const [w, h, d] = Array.isArray(piece.size) ? piece.size.map(Number) : [1, 1, 1];
+            const t = (Number(piece.tilt) || 0) * Math.PI / 180, r = (Number(piece.roll) || 0) * Math.PI / 180;
+            return piece.z + Math.abs(h * Math.cos(t) * Math.cos(r)) + Math.abs(d * Math.sin(t)) + Math.abs(w * Math.sin(r));
+        };
+        const EAVE = 1.5;
+        const above = (piece, top) => piece.z >= top - 1e-6 || (this.isShape(piece.kind) && piece.z > top - EAVE && topOf(piece) > top + 0.05);
+        const lift = piece => bands.reduce((sum, [base, h]) => sum + (above(piece, base + h) ? grown - h : 0), 0);
+        const max = this.elevation()?.PIECE_MAX_LEVEL ?? 240;
+        const done = this.updateSelection(piece => {
+            const z = Math.max(0, Math.min(max, piece.z + lift(piece)));
+            const patch = { z: this.levelStep(piece.kind) < 1 ? Math.round(z * 4) / 4 : Math.round(z) };
+            if (PieceBuilderManager.SIZED_KINDS.includes(piece.kind)) patch.height = grown === 5 ? undefined : grown;
+            return patch;
+        }, record);
+        // A stair or a ladder inside a storey that grew no longer reaches the floor above.
+        if (done && record && pieces.some(piece => (piece.kind === 'stair' || piece.kind === 'ladder') && bands.some(([base, h]) => piece.z >= base - 1e-6 && piece.z < base + h && h !== grown))) {
+            const text = 'Stairs and ladders keep their steps: make them longer to reach the floor above.';
+            window.reactor?.buildHotbar?.flash?.(window.I18n ? window.I18n.tText(text) : text);
+        }
+        return done;
     }
 
     /** The whole selection a number of cells across and along. */
@@ -756,7 +1164,7 @@ class PieceBuilderManager {
             return this.updateSelected(patch, record);
         }
         const patch = { x: clamp(Math.floor(cx), map.width - 1), y: clamp(Math.floor(cy), map.height - 1) };
-        if (Number.isFinite(z)) patch.z = Math.max(0, Math.floor(z));
+        if (Number.isFinite(z)) { const step = this.levelStep(piece.kind); patch.z = Math.max(0, step < 1 ? Math.round(z / step) * step : Math.floor(z)); }
         return this.updateSelected(patch, record);
     }
 
@@ -1161,14 +1569,15 @@ class PieceBuilderManager {
         const saved = this._snapshot(map, { ground: true, effects: true, events: true, props: this._bringsProps(plan) });
         const places = this._propPlaces(map);
         const group = elevation.nextPieceGroup(map);
-        if (!this._lay(map, plan, { group, plan: this.structure, x: Math.floor(x), y: Math.floor(y), rot: this.rot || 0, scale: 1 })) return this._tooBig(map, plan, this.rot || 0, 1);
+        const scale = Math.max(1, Math.min(4, Math.round(this.stampScale || 1)));
+        if (!this._lay(map, plan, { group, plan: this.structure, x: Math.floor(x), y: Math.floor(y), rot: this.rot || 0, scale })) return this._tooBig(map, plan, this.rot || 0, scale);
         saved.propMoves = this._propMoves(map, places);
         this._warnPropMoves(map, saved.propMoves, group);
         saved.foliage = this._clearFoliage(map, piece => piece.group === group);
         this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        this.announce(true);
+        this.announce(true, this._laid);
         this.refreshStatus();
         return true;
     }
@@ -1182,6 +1591,8 @@ class PieceBuilderManager {
         const X0 = Math.max(0, Math.min(map.width - W, record.x)), Y0 = Math.max(0, Math.min(map.height - H, record.y));
         if (W > map.width || H > map.height) return false;
         record.x = X0; record.y = Y0;
+        // The cells it covers: the 3D view lays only these again (announce).
+        this._laid = { x0: X0, y0: Y0, x1: X0 + W - 1, y1: Y0 + H - 1 };
         this._levelPad(map, X0, Y0, W, H);
         elevation.relocatePropsOff(map, X0, Y0, W, H, record.group);
         const kept = elevation.pieces(map).filter(piece => piece.group !== record.group && !(piece.x >= X0 && piece.x < X0 + W && piece.y >= Y0 && piece.y < Y0 + H));
@@ -1249,12 +1660,14 @@ class PieceBuilderManager {
         if (!plan) return false;
         const saved = this._snapshot(map, { ground: true, effects: true, events: true, props: this._bringsProps(plan) });
         const places = this._propPlaces(map);
+        // Where it stood as well as where it goes: both are laid again.
+        const was = elevation.pieceGroupBounds(map, record.group);
         if (!this._lay(map, plan, Object.assign(record, change))) return this._tooBig(map, plan, record.rot, record.scale);
         saved.propMoves = this._propMoves(map, places);
         this._warnPropMoves(map, saved.propMoves, record.group);
         saved.foliage = this._clearFoliage(map, piece => piece.group === record.group);
         this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-        this.announce(true); this.refreshStatus(); this._ghostChanged();
+        this.announce(true, PieceBuilderManager.unionRegion(was, this._laid)); this.refreshStatus(); this._ghostChanged();
         return true;
     }
 
@@ -1343,7 +1756,7 @@ class PieceBuilderManager {
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
         this._levelPad(map, X0, Y0, W, H);
-        this.announce(true);
+        this.announce(true, PieceBuilderManager.unionRegion(bounds, { x0: X0, y0: Y0, x1: X0 + W - 1, y1: Y0 + H - 1 }));
         this.refreshStatus();
         this._ghostChanged();
         return true;
@@ -1525,7 +1938,14 @@ class PieceBuilderManager {
     /** The bar over the 3D view follows the same state as the panel. */
     _syncBar() { window.reactor?.buildHotbar?.sync?.(); }
 
-    setKind(kind) { if (this.kinds().includes(kind)) { this.kind = kind; this.mode = 'place'; this._syncPanel(); this._ghostChanged(); } }
+    setKind(kind) {
+        if (!this.kinds().includes(kind)) return;
+        this.kind = kind; this.mode = 'place';
+        // A wall stands at a whole level: a floor's quarter level carried over comes down to the one under it.
+        const step = this.levelStep(kind);
+        if (this.level % step) this.level = Math.floor(this.level / step) * step;
+        this._syncPanel(); this._ghostChanged();
+    }
     setMode(mode) {
         if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'select') return;
         if (mode !== 'select') { this.selected = 0; this.selectedIds = []; }
@@ -1539,7 +1959,8 @@ class PieceBuilderManager {
         // The Structure workshop's plot is only so many floors tall.
         const plot = this.currentMap()?.rrWorkshop;
         const max = plot ? plot.maxLevel : this.elevation()?.PIECE_MAX_LEVEL ?? 240;
-        this.level = Math.max(0, Math.min(max, Math.floor(Number(level)) || 0));
+        const step = this.levelStep(this.kind);
+        this.level = Math.max(0, Math.min(max, Math.round((Number(level) || 0) / step) * step));
         // With the view cut at a storey, the cut follows the level built at: the storey in hand is the one shown.
         const view = window.reactor?.mapEditor3D, S = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_STOREY) || 5;
         if (view?.storeyCut > 0 && view.setStoreyCut) view.setStoreyCut(Math.floor(this.level / S) + 1, 'keep');
@@ -1662,6 +2083,9 @@ class PieceBuilderManager {
 
     pieceFor(target) {
         const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
+        // A wall, a pane or a pillar as tall as the panel says (a storey when it says nothing else).
+        const tall = this.heights[this.kind];
+        if (PieceBuilderManager.HEIGHT_KINDS.includes(this.kind) && tall > 0 && tall !== PieceBuilderManager.defaultHeight(this.kind)) piece.height = tall;
         if (this.finish) piece.finish = this.finish;
         if (this.surface) piece.surface = Object.assign({}, this.surface);
         if (this.kind === 'door') {
@@ -1690,9 +2114,11 @@ class PieceBuilderManager {
             const off = this.shapeOffsetFor(target);
             if (off && (off[0] || off[1])) piece.offset = off;
         }
+        if (this.tints && this.tints[this.kind]) piece.tint = this.tints[this.kind];
+        if (this.kind === 'pillar' && Math.abs(this.pillarThick - 0.4) > 1e-6) piece.thick = this.pillarThick;
+        if (this.kind === 'roof' && Math.abs(this.roofRise - 1) > 1e-6) piece.rise = this.roofRise;
         if (this.kind === 'rock') {
             if (this.rockCap) piece.cap = this.rockCap;
-            if (this.rockTint) piece.tint = this.rockTint;
             if (this.rockVary) {
                 const v = PieceBuilderManager.rockVariation(Number.isFinite(target.seed) ? target.seed : this.rockSeed);
                 const quarter = n => Math.max(0.5, Math.round(n * 4) / 4);
@@ -1743,13 +2169,23 @@ class PieceBuilderManager {
         this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        this._stroke = { mode, moved: false, last: null, anchor: { x: target.x, y: target.y, z: target.z }, snapshot: saved.pieces, entry: saved, rectangle: !!options.rectangle, seed: this.rockSeed };
-        return this.dab(target);
+        // Ctrl always draws a rectangle; otherwise the panel's drawing mode says. A shape or a rock is laid
+        // one per click as the brush lays it (a rock's rectangle is its own spacing).
+        // An opening started on a wall paints into the wall under the pointer, a piece at a time.
+        const carving = mode !== 'erase' && !!this.wallUnder(target);
+        // The Eraser draws as its own panel says, whatever the slot before it was set to.
+        const erasing = mode === 'erase';
+        const cellPiece = erasing || !this.isShape(this.kind) || this.kind === 'rock';
+        const shape = erasing ? this.eraseShape : this.drawShape;
+        const rectangle = !carving && (!!options.rectangle || (cellPiece && shape === 'rect'));
+        const line = !carving && !rectangle && cellPiece && shape === 'line';
+        this._stroke = { mode, moved: false, last: null, anchor: { x: target.x, y: target.y, z: target.z }, snapshot: saved.pieces, entry: saved, rectangle, line, carving, seed: this.rockSeed };
+        return rectangle || line ? this.layRectangle(target) : this.dab(target);
     }
 
     paintAt(target, options = {}) {
         if (!this._stroke || !target) return false;
-        if (options.rectangle || this._stroke.rectangle) return this.layRectangle(target);
+        if ((options.rectangle && !this._stroke.carving) || this._stroke.rectangle || this._stroke.line) return this.layRectangle(target);
         const last = this._stroke.last;
         if (last && last.x === target.x && last.y === target.y && last.z === target.z) return false;
         return this.dab(target);
@@ -1763,8 +2199,23 @@ class PieceBuilderManager {
         const a = this._stroke.anchor;
         const x0 = Math.min(a.x, target.x), x1 = Math.max(a.x, target.x);
         const y0 = Math.min(a.y, target.y), y1 = Math.max(a.y, target.y);
-        const fill = this._stroke.mode === 'erase' || PieceBuilderManager.fillsRectangle(this.kind);
+        const fill = this._stroke.mode === 'erase' || this.rectangleFills();
         const cells = [];
+        // A line: the straight run from the anchor, at its level.
+        if (this._stroke.line) {
+            // A fence joins corner to corner, so its line steps diagonally; anything else keeps a side to the next.
+            const erasing = this._stroke.mode === 'erase';
+            const run = this.kind === 'fence' && !erasing ? PieceBuilderManager.lineCells8(a, target) : PieceBuilderManager.lineCells(a, target);
+            if (erasing) return { cells: run.map(cell => ({ x: cell.x, y: cell.y, z: a.z })), x0, y0, x1, y1 };
+            // A floor line is as wide as the floor brush.
+            const seen = new Set();
+            const across = Math.abs(target.x - a.x) >= Math.abs(target.y - a.y) ? 'y' : 'x';
+            for (const cell of run) for (const wide of this.brushCells({ x: cell.x, y: cell.y, z: a.z }, across)) {
+                const key = wide.x + ',' + wide.y;
+                if (!seen.has(key)) { seen.add(key); cells.push(wide); }
+            }
+            return { cells, x0, y0, x1, y1 };
+        }
         // Rocks fill it on a grid of their spacing, each its own (seeded by its place, so the
         // rectangle keeps its rocks while it is dragged bigger).
         if (this.kind === 'rock' && this._stroke.mode !== 'erase') {
@@ -1782,14 +2233,21 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !target || !this._stroke) return false;
         const last = this._stroke.last;
-        if (this._stroke.rectangle && last && last.x === target.x && last.y === target.y) return false;
-        this._stroke.rectangle = true;
+        if ((this._stroke.rectangle || this._stroke.line) && last && last.x === target.x && last.y === target.y) return false;
+        if (!this._stroke.line) this._stroke.rectangle = true;
         this._stroke.last = { x: target.x, y: target.y, z: this._stroke.anchor.z };
         // From the stroke's start again, so a rectangle that shrinks leaves nothing behind.
         elevation.restorePieces(map, this._stroke.snapshot);
         const { cells, x0, y0, x1, y1 } = this.rectangleCells(target);
         const group = elevation.pieceGroupAt(map, this._stroke.anchor.x, this._stroke.anchor.y);
         let changed = false;
+        // A wall line off the axes, Straight: one turned wall from end to end in place of the stepped cells.
+        const straight = this._stroke.line && this._stroke.mode !== 'erase' ? this.diagonalWall(this._stroke.anchor, target, this._stroke.anchor.z) : null;
+        if (straight) {
+            if (group) straight.group = group;
+            if (elevation.setPiece(map, straight)) changed = true;
+            cells.length = 0;
+        }
         for (const cell of cells) {
             if (this._stroke.mode === 'erase') { if (this.eraseAt(map, cell)) changed = true; continue; }
             const piece = this.pieceFor(cell);
@@ -1821,6 +2279,19 @@ class PieceBuilderManager {
         // and the building stops following its plan (it would be built
         // again from the plan on the next move and lose the edit), while it
         // still moves and turns as one.
+        // A window, doorway, pane or door pointed at a wall goes into the wall, in place of the piece of it pointed at.
+        const into = this._stroke.mode !== 'erase' ? this.wallUnder(target) : null;
+        if (into) {
+            const changed = this.carveInto(map, into, target) && this._changedSince(map);
+            const g = into.wall.group;
+            if (changed && g && elevation.structureOf(map, g)) { elevation.removeStructure(map, g); this._flash('pieces.detached'); this._flashed = true; }
+            if (changed) {
+                this._stroke.moved = true;
+                const reach = 1 + (this.kind === 'door' ? (this.door?.width || 1) : 0);
+                this.announce(false, { x0: into.wall.x - reach, y0: into.wall.y - reach, x1: into.wall.x + reach, y1: into.wall.y + reach });
+            }
+            return changed;
+        }
         const group = elevation.pieceGroupAt(map, target.x, target.y);
         const piece = this.pieceFor(target);
         if (group) piece.group = group;
@@ -1831,6 +2302,15 @@ class PieceBuilderManager {
             for (const step of (piece.kind === 'ladder' ? this.ladderRun(piece) : this.stairRun(piece))) {
                 if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) continue;
                 if (elevation.setPiece(map, step) && this._changedSince(map)) changed = true;
+            }
+        } else if (piece.kind === 'floor' && this.floorBrush > 1) {
+            // A floor brush lays its square at once.
+            changed = false;
+            for (const cell of this.brushCells(target)) {
+                if (cell.x < 0 || cell.y < 0 || cell.x >= map.width || cell.y >= map.height) continue;
+                const one = this.pieceFor(cell);
+                if (group) one.group = group;
+                if (elevation.setPiece(map, one) && this._changedSince(map)) changed = true;
             }
         } else changed = !!elevation.setPiece(map, piece) && this._changedSince(map);
         if (changed && piece.kind === 'stair' && this._stroke.mode !== 'erase') this.warnStairFoot([elevation.pieceAt(map, piece.x, piece.y, piece.z)]);
@@ -1845,7 +2325,7 @@ class PieceBuilderManager {
         // (a hidden face between touching walls belongs to both).
         if (changed) {
             this._stroke.moved = true;
-            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps, this.stairWidth, piece.kind === 'ladder' ? this.ladderWidth : 1);
+            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps, this.stairWidth, piece.kind === 'ladder' ? this.ladderWidth : 1, piece.kind === 'floor' ? this.floorBrush : 1);
             this.announce(false, { x0: target.x - reach, y0: target.y - reach, x1: target.x + reach, y1: target.y + reach });
         }
         return changed;
@@ -1984,6 +2464,14 @@ class PieceBuilderManager {
     /** Take the piece at the level, else the top piece on the cell. */
     eraseAt(map, target) {
         const elevation = this.elevation();
+        // Only some kinds: every one of them standing in the cell, whatever its level; nothing else.
+        if (this.eraseOnly) {
+            const list = elevation.pieces(map), hit = this.pieceAtTarget(target);
+            const gone = hit && this.erasable(hit) ? [hit] : list.filter(piece => piece.x === target.x && piece.y === target.y && this.erasable(piece));
+            if (!gone.length) return false;
+            const ids = new Set(gone.map(piece => piece.id));
+            return elevation.restorePieces(map, list.filter(piece => !ids.has(piece.id)));
+        }
         // A door struck goes before the doorway it hangs in (the doorway is the wall's opening).
         const door = this.pieceAtTarget(target);
         if (door && door.kind === 'door') return elevation.restorePieces(map, elevation.pieces(map).filter(piece => piece.id !== door.id));
@@ -2006,7 +2494,34 @@ class PieceBuilderManager {
         return elevation.removePiece(map, top.x, top.y, top.z);
     }
 
+    /**
+     * Each fence that has fences beside it along one way only turns to run that way (east-west 0, north-south 1),
+     * so a fence is laid by dragging and never turned by hand. A fence's look follows its neighbours whatever its
+     * turn (Reactor3D.fenceJoins); the turn is what a lone fence and a gate go by.
+     */
+    orientFences(map) {
+        const E = this.elevation();
+        if (!map || !E) return false;
+        const list = E.pieces(map), fences = list.filter(p => p.kind === 'fence');
+        if (!fences.length) return false;
+        const at = new Set(fences.map(p => p.x + ',' + p.y + ',' + p.z));
+        let changed = false;
+        const next = list.map(piece => {
+            if (piece.kind !== 'fence') return piece;
+            const has = (dx, dy) => at.has((piece.x + dx) + ',' + (piece.y + dy) + ',' + piece.z);
+            const across = has(1, 0) || has(-1, 0), along = has(0, 1) || has(0, -1);
+            const axis = across && !along ? 0 : along && !across ? 1 : null;
+            if (axis === null || (piece.rot || 0) % 2 === axis) return piece;
+            changed = true;
+            return Object.assign({}, piece, { rot: axis });
+        });
+        if (changed) E.restorePieces(map, next);
+        return changed;
+    }
+
     endStroke() {
+        // Fences laid by a drag face the way they run.
+        if (this._stroke && this._stroke.moved && this._stroke.mode !== 'erase' && this.kind === 'fence') this.orientFences(this.currentMap());
         if (this._stroke && !this._stroke.moved) this.undoStack.pop();
         // What grew under the pieces the stroke laid on the ground goes with the stroke's own step.
         else if (this._stroke && this._stroke.mode !== 'erase' && this.undoStack[this.undoStack.length - 1] === this._stroke.entry) {
@@ -2049,8 +2564,15 @@ class PieceBuilderManager {
         // Escape in Select with nothing selected leaves Build.
         else if (this.mode === 'select' && key === 'escape') { event.preventDefault(); this.leaveBuild(); }
         else if (key === 'r' && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.turn(event.shiftKey ? -1 : 1); }
-        else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + 1); }
-        else if (key === 'q') { event.preventDefault(); this.setLevel(this.level - 1); }
+        // Q and E: a selection in Select goes down or up a step (a quarter for floors, blocks and shapes); else the level built at.
+        else if (this.mode === 'select' && (this.selected || this.selectedIds.length) && (key === 'e' || key === 'q')) {
+            event.preventDefault();
+            const step = this.selectionPieces().every(piece => this.levelStep(piece.kind) < 1) ? 0.25 : 1;
+            this.raiseSelection(key === 'e' ? step : -step);
+            window.reactor?.projectController?.buildHotbar?.renderPanel?.();
+        }
+        else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + this.levelStep(this.kind)); }
+        else if (key === 'q') { event.preventDefault(); this.setLevel(this.level - this.levelStep(this.kind)); }
         else if (key === 'x') { event.preventDefault(); this.setMode(this.mode === 'erase' ? 'place' : 'erase'); }
         else if ((key === ']' || key === '[') && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.shapeScale = Math.max(0.25, Math.min(8, Math.round((this.shapeScale * (key === ']' ? 1.25 : 0.8)) * 100) / 100)); this._syncPanel(); this._ghostChanged(); }
         else if (key === 'm') { event.preventDefault(); this.setMode(this.mode === 'move' ? 'place' : 'move'); }
@@ -2165,7 +2687,16 @@ class PieceBuilderManager {
         this.announce(); this.refreshStatus(); this._syncPanel();
     }
 
-    /** The pieces changed: the 3D view lays them down again in place, and the map is dirty. */
+    /** Two cell regions ({x0, y0, x1, y1}, inclusive) as one box holding both; null when either is unknown. */
+    static unionRegion(a, b) {
+        if (!a || !b) return null;
+        return { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+    }
+
+    /**
+     * The pieces changed: the 3D view lays them down again in place, and the map is dirty.
+     * `region` (cells, inclusive) is where: only the piece, ground and foliage chunks there are laid again.
+     */
     announce(terrainToo = false, region = null) {
         this.render2D();
         this.syncHistoryButtons();
@@ -2178,18 +2709,23 @@ class PieceBuilderManager {
         // A stamp levels the ground as well: the terrain goes first (in
         // place, the whole map), then the pieces are laid on it. `region`
         // is the cells an edit touched, so only their chunks are relaid.
-        if (terrainToo) document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, terrain: true, region: null } }));
+        // The terrain's region is in corners, one past the cells and a corner of margin round them.
+        const corners = region ? { x0: region.x0 - 1, x1: region.x1 + 2, z0: region.y0 - 1, z1: region.y1 + 2 } : null;
+        if (terrainToo) document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, terrain: true, region: corners } }));
         // Ponds follow levelled ground as they follow a terrain stroke, and the pieces that hold them back.
         window.reactor?.terrainManager?.piecesChanged?.(terrainToo ? null : region);
         // And the ponds it left, so its undo gives back only what it took from them.
         if (top && 'water' in top && top.waterAfter === undefined) top.waterAfter = JSON.stringify(this.elevation()?.waterSnapshot?.(this.currentMap()) || []);
         document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, pieces: true, region: region || null } }));
-        // Events came or went with a building: the event tool and the 3D
-        // view's markers are redrawn (a plain edit notice rebuilds the view).
+        // Events came or went with a building: the event tool redraws them and
+        // says so (`rr-events-changed`), and the 3D view builds only the events
+        // that changed. A plain edit notice would build the whole view again:
+        // the scene, its shaders and its textures, most of a second on North Haven.
         if (this._eventsChanged) {
             this._eventsChanged = false;
-            window.reactor?.eventManager?.renderEvents?.();
-            document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id } }));
+            const events = window.reactor?.eventManager;
+            if (typeof events?.renderEvents === 'function') events.renderEvents();
+            else document.dispatchEvent(new CustomEvent('rr-events-changed'));
         }
     }
 }

@@ -1709,6 +1709,9 @@
     function createSection(options) {
         const names = cardsFor(options.kind);
         if (!names.length) return null;
+        // Every card is about battles on the map: none while Database › Reactor Features has them off.
+        const system = options.databaseManager?.getSystem?.();
+        if (root.ReactorFeatures && system && !root.ReactorFeatures.on('mapBattles', system)) return null;
         const tt = t => (root.I18n ? root.I18n.tText(t) : t);
         const link = recordLink(options);
         const outer = document.createElement('div');

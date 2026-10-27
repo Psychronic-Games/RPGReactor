@@ -43,6 +43,15 @@ Window_Base.prototype.checkRectObject = function(rect) {
     }
 };
 
+/**
+ * Whether a resource pool is turned off for the project (System.json rrPoolsOff, Database >
+ * System 1 > Options): its gauge, value and battle-log line are not drawn. HP is never off.
+ */
+Window_Base.prototype.isPoolHidden = function(key) {
+    const off = typeof $dataSystem !== "undefined" && $dataSystem ? $dataSystem.rrPoolsOff : null;
+    return Array.isArray(off) && key !== "hp" && off.includes(key);
+};
+
 Window_Base.prototype.lineHeight = function() {
     return $gameSystem ? $gameSystem.lineHeight() : 36;
 };
@@ -1776,10 +1785,14 @@ Window_StatusBase.prototype.placeTimeGauge = function(actor, x, y) {
 };
 
 Window_StatusBase.prototype.placeBasicGauges = function(actor, x, y) {
-    this.placeGauge(actor, "hp", x, y);
-    this.placeGauge(actor, "mp", x, y + this.gaugeLineHeight());
-    if ($dataSystem.optDisplayTp) {
-        this.placeGauge(actor, "tp", x, y + this.gaugeLineHeight() * 2);
+    // A pool the project turned off leaves no gap: the gauges below it move up.
+    let row = 0;
+    this.placeGauge(actor, "hp", x, y + this.gaugeLineHeight() * row++);
+    if (!this.isPoolHidden("mp")) {
+        this.placeGauge(actor, "mp", x, y + this.gaugeLineHeight() * row++);
+    }
+    if ($dataSystem.optDisplayTp && !this.isPoolHidden("tp")) {
+        this.placeGauge(actor, "tp", x, y + this.gaugeLineHeight() * row++);
     }
 };
 
@@ -2283,13 +2296,18 @@ Window_ItemList.prototype.drawItem = function(index) {
     }
 };
 
+// Higher Limits (System 2 > Limits) holds up to 9,999 of an item: room for four digits.
+Window_ItemList.prototype.rrNumberDigits = function() {
+    return typeof Game_Party !== "undefined" && Game_Party.rrHigherLimits && Game_Party.rrHigherLimits() ? "0000" : "00";
+};
+
 Window_ItemList.prototype.numberWidth = function() {
-    return this.textWidth("000");
+    return this.textWidth("0" + this.rrNumberDigits());
 };
 
 Window_ItemList.prototype.drawItemNumber = function(item, x, y, width) {
     if (this.needsNumber()) {
-        this.drawText(":", x, y, width - this.textWidth("00"), "right");
+        this.drawText(":", x, y, width - this.textWidth(this.rrNumberDigits()), "right");
         this.drawText($gameParty.numItems(item), x, y, width, "right");
     }
 };
@@ -3454,7 +3472,10 @@ Window_ShopSell.prototype.initialize = function(rect) {
 };
 
 Window_ShopSell.prototype.isEnabled = function(item) {
-    return item && item.price > 0;
+    // rrNoSell (the database's "Can't be sold"): listed, but greyed out like a price-0 item. Off in
+    // Database > Reactor Features (a plugin decides), the flag is ignored and MZ's price rule stands.
+    const noSell = !!(item && item.rrNoSell) && (typeof ReactorFeatures === "undefined" || ReactorFeatures.on("unsellableItems"));
+    return !!item && item.price > 0 && !noSell;
 };
 
 //-----------------------------------------------------------------------------
@@ -3628,7 +3649,7 @@ Window_ShopNumber.prototype.cursorX = function() {
 };
 
 Window_ShopNumber.prototype.maxDigits = function() {
-    return 2;
+    return typeof Game_Party !== "undefined" && Game_Party.rrHigherLimits && Game_Party.rrHigherLimits() ? 4 : 2;
 };
 
 Window_ShopNumber.prototype.update = function() {
@@ -5928,6 +5949,7 @@ Window_BattleLog.prototype.displayHpDamage = function(target) {
 };
 
 Window_BattleLog.prototype.displayMpDamage = function(target) {
+    if (this.isPoolHidden("mp")) return;
     if (target.isAlive() && target.result().mpDamage !== 0) {
         this.pushMpRecoverySound(target);
         this.push("addText", this.makeMpDamageText(target));
@@ -5935,6 +5957,7 @@ Window_BattleLog.prototype.displayMpDamage = function(target) {
 };
 
 Window_BattleLog.prototype.displayTpDamage = function(target) {
+    if (this.isPoolHidden("tp")) return;
     if (target.isAlive() && target.result().tpDamage !== 0) {
         this.pushTpRecoverySound(target);
         this.push("addText", this.makeTpDamageText(target));
@@ -6337,7 +6360,7 @@ Window_BattleStatus.prototype.basicGaugesX = function(rect) {
 
 Window_BattleStatus.prototype.basicGaugesY = function(rect) {
     const bottom = rect.y + rect.height - this.extraHeight();
-    const numGauges = $dataSystem.optDisplayTp ? 3 : 2;
+    const numGauges = 1 + (this.isPoolHidden("mp") ? 0 : 1) + ($dataSystem.optDisplayTp && !this.isPoolHidden("tp") ? 1 : 0);
     return bottom - this.gaugeLineHeight() * numGauges;
 };
 
@@ -7039,8 +7062,10 @@ Window_NameBox.prototype.updateBackground = function() {
         const lines = $gameMessage.hasText() ? $gameMessage._texts.length : 0;
         if (!lines) mw.updatePlacement();
         const rows = Math.max(1, Math.min($gameMessage.choices().length, Math.max(1, Math.floor((mw.height - mw.padding * 2) / mw.lineHeight()) - lines)));
-        this.x = mw.x + (lines ? 12 : 0);
-        this.width = mw.width - (lines ? 12 : 0);
+        // The message's own width with the text indented in it: the cursor starts left of the text.
+        this.x = mw.x;
+        this.width = mw.width;
+        this._rrChoiceIndent = lines ? 12 : 0;
         this.y = mw.y + mw.padding + lines * mw.lineHeight() - this.padding - Math.max(0, (this.itemHeight() - mw.lineHeight()) / 2);
         this.height = lines ? this.fittingHeight(rows) : mw.height;
     };
@@ -7054,6 +7079,22 @@ Window_NameBox.prototype.updateBackground = function() {
     };
     Window_ChoiceList.prototype.rowSpacing = function() {
         return inMessage() ? 0 : base.rowSpacing.call(this);
+    };
+    // The cursor starts 10 px left of the choice text and ends 2 px inside the message's contents
+    // (EasyRPG's Window_Message::UpdateCursorRect), so a system graphic's corner marks sit before
+    // the text rather than over its first letters.
+    Window_ChoiceList.prototype.refreshCursor = function() {
+        base.refreshCursor.call(this);
+        const mw = this._messageWindow, index = this.index();
+        if (!inMessage() || !$dataSystem.rrLegacyWindows || !mw || index < 0 || this.cursorAll()) return;
+        const r = this._cursorRect, x = Math.max(0, this.itemLineRect(index).x - 10);
+        const right = mw.x + mw.padding + mw.innerWidth - 2 - (this.x + this.padding);
+        this.setCursorRect(x, r.y, Math.max(0, right - x), r.height);
+    };
+    Window_ChoiceList.prototype.itemLineRect = function(index) {
+        const rect = base.itemLineRect.call(this, index), indent = inMessage() && this._messageWindow ? this._rrChoiceIndent || 0 : 0;
+        rect.x += indent; rect.width -= indent;
+        return rect;
     };
     // the old engines draw no bar behind each choice, only the cursor
     Window_ChoiceList.prototype.drawItemBackground = function(index) {
@@ -7416,7 +7457,7 @@ Window_NameBox.prototype.updateBackground = function() {
         const digits = (actor.mhp >= 1000 || actor.mmp >= 1000) ? 4 : 3;
         const vx = x + 106 - (digits === 3 ? 0 : 12);
         this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, vx, y + line, digits, true);
-        this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, vx, y + line * 2, digits, false);
+        if (!this.isPoolHidden("mp")) this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, vx, y + line * 2, digits, false);
     });
     override(Window_MenuStatus.prototype, "refreshCursor", function() {
         if (this.index() < 0) { this.setCursorRect(0, 0, 0, 0); return; }
@@ -7498,7 +7539,7 @@ Window_NameBox.prototype.updateBackground = function() {
         this.drawLegacyState(actor, 124, 0, 60);
         const hx = 124 + 96 - hp * 6 - sp * 6;
         this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, hx, 0, hp, true);
-        this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, hx + 66 + hp * 6 - sp * 6, 0, sp, false);
+        if (!this.isPoolHidden("mp")) this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, hx + 66 + hp * 6 - sp * 6, 0, sp, false);
     });
     /** "L  1": the level term and the level right-aligned in the next 24 px. */
     Window_Base.prototype.drawLegacyLevel = function(actor, x, y) {
@@ -7592,7 +7633,7 @@ Window_NameBox.prototype.updateBackground = function() {
         const digits = (actor.mhp >= 1000 || actor.mmp >= 1000) ? 4 : 3;
         const vx = x + 46 + (digits === 3 ? 12 : 0);
         this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, vx, y + 16, digits, true);
-        this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, vx, y + 32, digits, false);
+        if (!this.isPoolHidden("mp")) this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, vx, y + 32, digits, false);
     };
     Window_MenuActor.prototype.refreshCursor = function() {
         if (!legacy()) return Window_MenuStatus.prototype.refreshCursor.call(this);
@@ -7739,7 +7780,7 @@ Window_NameBox.prototype.updateBackground = function() {
             const hp = actor.mhp >= 1000 ? 4 : 3, sp = actor.mmp >= 1000 ? 4 : 3;
             this.drawLegacyState(actor, hp < 4 && sp < 4 ? 82 : 76, y, 52);
             this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, 174 - hp * 6 - sp * 6, y, hp, true);
-            this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, 216 - sp * 6, y, sp, false, false);
+            if (!this.isPoolHidden("mp")) this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, 216 - sp * 6, y, sp, false, false);
         }
     });
     override(Window_BattleEnemy.prototype, "maxCols", () => 1);

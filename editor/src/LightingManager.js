@@ -1283,7 +1283,10 @@ class LightingManager {
             // Looked at first: a change it sees is a new revision, which the
             // animated check below is cached against.
             const watched = this._watchChanged(modelLights);
-            const animated = modelLights.length > 0 || this.hasAnimatedLights();
+            // A model's lights are made again every frame, so only lights that moved, flickered or
+            // changed count: any model with a lamp redrew the whole map sixty times a second, and on a
+            // software renderer the frames queued up until the editor stopped answering.
+            const animated = this._modelLightsChanged(modelLights) || this.hasAnimatedLights();
             if (animated || this._needsDraw || watched) {
                 this._needsDraw = false;
                 this._draw(this._frame);
@@ -1312,6 +1315,19 @@ class LightingManager {
      * in place each frame; true when any moved since the last look. A change
      * to the lights themselves also counts toward `revision`.
      */
+    /** Whether the models' lights differ from the last frame's: where they are, their reach, strength, colour and aim. */
+    _modelLightsChanged(lights) {
+        let stamp = lights.length;
+        for (let i = 0; i < lights.length; i++) {
+            const light = lights[i], k = i + 1;
+            stamp += k * ((Number(light.x) || 0) * 1009 + (Number(light.y) || 0) * 2003 + (Number(light.radius) || 0) * 3001
+                + (Number(light.intensity) || 0) * 4001 + (Number(light.colour) || 0) / 65536 + (Number(light.yaw) || 0) * 5003);
+        }
+        if (stamp === this._modelLightStamp) return false;
+        this._modelLightStamp = stamp;
+        return true;
+    }
+
     _watchChanged(modelLights) {
         const map = this.map();
         const sidecar = map?.reactor3d || null;

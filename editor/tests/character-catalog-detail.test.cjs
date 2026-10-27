@@ -18,11 +18,12 @@ test('new constructed garments and brooch fit both sexes and opposing body extre
 });
 
 test('shirt fasteners follow the fitted garment and disappear under a closed outer layer',()=>{
+ // (2026-10-24: a shirt is buttoned by the construction kit, RRCharacterGarmentDetails.construct.)
  const body=Q.Body.build(pack,{gender:1,age:30});
- const bare=W.build(pack,body,[{id:'shirt'}],{atlasSize:128}),part=bare.parts.find(p=>p.name==='Garment fasteners');
+ const bare=W.build(pack,body,[{id:'shirt'}],{atlasSize:128}),part=bare.parts.find(p=>p.name==='Garment buttons');
  assert.ok(part&&part.index.length>600,'separate button solids, holes and stitches');sound([part],body.bones);
  const covered=W.build(pack,body,[{id:'shirt'},{id:'leatherarmor'}],{atlasSize:128});
- const outer=covered.parts.find(p=>p.name==='Garment fasteners');
+ const outer=covered.parts.find(p=>p.name==='Garment buttons');
  assert.ok(!outer||outer.positions.length<part.positions.length,'buried shirt buttons are omitted');
 });
 
@@ -35,7 +36,10 @@ test('joined dresses include a fitted pelvis lining independent of the free skir
   for(let i=0;i<lining.positions.length;i+=3)if(lining.positions[i+1]<hip[1]+.06&&lining.positions[i+1]>hip[1]-.08&&lining.positions[i+2]<hip[2])seat.push(i);
   assert.ok(seat.length>12,id+' has actual rear fabric over the pelvis');sound([lining],body.bones);
  }
- const body=Q.Body.build(pack,{gender:1}),open=W.build(pack,body,[{id:'tabard'}],{atlasSize:128});assert.ok(!open.parts.some(p=>p.name.includes('lining')),'split tabards retain their open panels');
+ const body=Q.Body.build(pack,{gender:1}),open=W.build(pack,body,[{id:'tabard'}],{atlasSize:128});
+ // 'Garment linings' (RRCharacterWardrobe.garmentLinings) is the dark inner face along every open edge, cuffs, hems
+ // and the tabard's own split sides included; it is not a pelvis yoke, so it does not close the open panels.
+ assert.ok(!open.parts.some(p=>p.name.includes('lining')&&p.name!=='Garment linings'),'split tabards retain their open panels');
 });
 
 test('skirt prints stay continuous across the rear hip chart instead of stretching into a fan',()=>{
@@ -43,7 +47,9 @@ test('skirt prints stay continuous across the rear hip chart instead of stretchi
  for(const id of ['kilt','pleatedSkirt'])for(const shape of [body,Q.Body.build(pack,{gender:0,weight:2,shapes:{hips:2}})]){
   const out=W.build(pack,shape,[{id}],{atlasSize:256});
   for(const p of out.parts.filter(p=>p.texture==='outfit.png'))for(let t=0;t<p.index.length;t+=3){const u=[0,1,2].map(k=>p.uvs[p.index[t+k]*2]);assert.ok(Math.max(...u)-Math.min(...u)<.10,id+' has local UV edges around the rear seam');}
-  const edge=out.parts.find(p=>p.name==='Sewn garment edges');assert.ok(edge&&edge.hang?.some(v=>v>=0),'modeled binding shares the skirt cloth rig');sound([edge],shape.bones);
+  // The hem is the skirt's own turned cloth: it shares the skirt's cloth rig (a contrast band, when there is one, too).
+  const skirt=out.parts.find(p=>p.texture==='outfit.png'&&p.hang);assert.ok(skirt&&skirt.hang.some(v=>v>=0),'the turned hem shares the skirt cloth rig');sound([skirt],shape.bones);
+  const edge=out.parts.find(p=>p.name==='Sewn garment edges');if(edge){assert.ok(edge.hang?.some(v=>v>=0),'a trim band shares the skirt cloth rig');sound([edge],shape.bones);}
  }
 });
 
@@ -74,14 +80,16 @@ test('the Face view aims at Slimefolk eyes instead of zooming inside the goo',()
 
 test('quilted padding adds relief independently of the color map and survives GLB export',()=>{
  const body=Q.Body.build(pack,{gender:1,age:30}),built=W.build(pack,body,[{id:'gambeson'}],{atlasSize:1024});
- const normal=built.textures.find(t=>t.name==='outfit-normal.png');assert.ok(normal);
+ // The padding is the cloth's own repeating tile on the second coordinates (RRCharacterFabric), not the outfit picture's.
+ const padded=built.parts.find(p=>p.fabric==='quilted');assert.ok(padded&&padded.normalTexCoord===1&&padded.uvs1);
+ const normal=built.textures.find(t=>t.name===padded.normalTexture);assert.ok(normal&&normal.repeat);
  assert.ok(normal.data.some((v,i)=>i%4===0&&Math.abs(v-128)>25),'broad diagonal padding relief');
  const Glb=require('../src/forge/Character3D/CharacterGlb.js'),Opt=require('../src/utils/GlbOptimizer.js');
  const textures=Object.fromEntries(built.textures.map(t=>[t.name,t]));if(built.texture)textures[built.texture.name]=built.texture;
  const result={...body,plan:'human',parts:built.parts,textures};
  const {PNG}=require('pngjs'),images=Object.fromEntries(Object.entries(textures).map(([name,t])=>[name,PNG.sync.write({width:t.width,height:t.height,data:Buffer.from(t.data)})]));
  const parsed=Opt.parseGlb(Glb.toGlb(result,{name:'Padded coat',images}));
- assert.ok(parsed.json.materials.some(m=>m.normalTexture),'saved material retains padded relief');
+ assert.ok(parsed.json.materials.some(m=>m.normalTexture&&m.normalTexture.texCoord===1),'saved material retains padded relief on its tile coordinates');
 });
 
 test('bird and bat eye centers stay embedded in their head rather than floating outside',()=>{

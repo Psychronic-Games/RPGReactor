@@ -22,6 +22,8 @@ class ModelPropsManager {
         this.tool = 'place';            // what a click on the map does: 'select', 'place' or 'erase'
         this.recent = [];               // models chosen this session, newest first (the Build bar's slots)
         this.fields = { size: 2, scale: 1, direction: 2, z: 0, passable: false, yaw: 0, pitch: 0, roll: 0, animations: [], repeat: false, effects: [] };
+        // How a click lays the model in hand: one, or (scatter) many along a drag, each varied.
+        this.scatter = { on: false, spacing: 3, turn: true, size: 20 };
         this._undo = [];
         this._redo = [];
         this.preview2D = new ModelPropsPreview2D(this);
@@ -355,15 +357,25 @@ class ModelPropsManager {
     }
 
     /** Put a new prop at map coordinates (tiles, fractional allowed) from the chosen model. */
-    place(x, y) {
+    /** Whether a settings section is open: as last left, Placement open the first time. */
+    sectionOpen(key) {
+        const open = this._openSections || {};
+        return key in open ? !!open[key] : key === 'placement';
+    }
+
+    /**
+     * Put the model in hand down at (x, y) with the panel's fields; `options.yaw` and `options.size` over them (a
+     * scatter's own turn and size), `options.record` false when the step is already kept (a scatter's later ones).
+     */
+    place(x, y, options = {}) {
         const elevation = this.elevation();
         if (!elevation || !this.currentMap || !this.model) return 0;
-        this.pushUndo();
+        if (options.record !== false) this.pushUndo();
         const id = elevation.addProp(this.currentMap, {
             name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, variant: this.model.variant || '',
             x, y, z: this.fields.z, direction: this.fields.direction,
-            yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll,
-            size: this.fields.size, scale: this.fields.scale, passable: this.fields.passable,
+            yaw: options.yaw ?? this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll,
+            size: options.size ?? this.fields.size, scale: this.fields.scale, passable: this.fields.passable,
             animations: this.fields.animations.slice(), repeat: this.fields.repeat, effects: this.fields.effects.slice()
         });
         // What was put down is not selected: the fields stay the next placement's,
@@ -373,6 +385,24 @@ class ModelPropsManager {
             this._changed([id]);
         }
         return id;
+    }
+
+    /**
+     * Scatter: a drag lays the model in hand every `spacing` tiles, each turned at random (Vary turn) and sized up to
+     * `size` % either way, a little off the pointer's line: a wood, a field of stones. One undo step a drag.
+     * The first call (`first`) starts the step; the rest add to it. Returns the id laid, or 0.
+     */
+    scatterAt(point, first = false) {
+        const s = this.scatter;
+        if (!point || !this.placing()) return 0;
+        if (!first && this._scatterLast && Math.hypot(point.x - this._scatterLast.x, point.y - this._scatterLast.y) < Math.max(0.5, Number(s.spacing) || 3)) return 0;
+        this._scatterLast = { x: point.x, y: point.y };
+        const spread = Math.max(0.5, Number(s.spacing) || 3) * 0.35, a = Math.random() * Math.PI * 2, r = first ? 0 : Math.random() * spread;
+        const vary = Math.max(0, Math.min(90, Number(s.size) || 0)) / 100;
+        const size = Math.round(this.fields.size * (1 + (Math.random() * 2 - 1) * vary) * 100) / 100;
+        const yaw = s.turn ? Math.round(Math.random() * 360) : this.fields.yaw;
+        const x = Math.round((point.x + Math.cos(a) * r) * 100) / 100, y = Math.round((point.y + Math.sin(a) * r) * 100) / 100;
+        return this.place(x, y, { yaw, size: Math.max(0.1, size), record: first });
     }
 
     update(id, patch, options = {}) {
@@ -605,7 +635,7 @@ class ModelPropsManager {
                 </section>
                 </div>
                 <div class="mp-settings rr-accent-scrollbar">
-                <details class="mp-section" name="model-props-settings" data-props-section="placement"${!this._activeSection || this._activeSection === 'placement' ? ' open' : ''}>
+                <details class="mp-section" data-props-section="placement"${this.sectionOpen('placement') ? ' open' : ''}>
                     <summary class="mp-section-title">${escape(this._tx('Placement'))}</summary>
                     <div class="mp-section-body mp-field-grid">
                         <label class="mp-field">${escape(t('props.size'))}${stepper('model-props-size',0.1,64,0.5,2)}</label>
@@ -619,15 +649,21 @@ class ModelPropsManager {
                         </label>
                         <label class="mp-field">${escape(t('props.lift'))}${stepper('model-props-z',0,512,0.25,0)}</label>
                         <label class="mp-check"><input type="checkbox" id="model-props-passable">${escape(t('props.passable'))}</label>
+                        <label class="mp-check mp-field-wide"><input type="checkbox" id="model-props-scatter"${this.scatter.on ? ' checked' : ''}>${escape(this._tx('Scatter: drag to lay many'))}</label>
+                        <div class="mp-scatter-fields mp-field-wide mp-field-grid"${this.scatter.on ? '' : ' hidden'}>
+                            <label class="mp-field">${escape(this._tx('Every (tiles)'))}${stepper('model-props-scatter-spacing', 0.5, 32, 0.5, this.scatter.spacing)}</label>
+                            <label class="mp-field">${escape(this._tx('Vary size (%)'))}${stepper('model-props-scatter-size', 0, 90, 5, this.scatter.size)}</label>
+                            <label class="mp-check"><input type="checkbox" id="model-props-scatter-turn"${this.scatter.turn ? ' checked' : ''}>${escape(this._tx('Turn each one'))}</label>
+                        </div>
                     </div>
                 </details>
-                <details class="mp-section" id="model-props-card" name="model-props-settings" data-props-section="transform"${this._activeSection === 'transform' ? ' open' : ''}>
+                <details class="mp-section" id="model-props-card" data-props-section="transform"${this.sectionOpen('transform') ? ' open' : ''}>
                     <summary class="mp-section-title">${escape(this._tx('Transform'))}</summary>
                     <div class="mp-section-body">
                         <div id="model-props-card-tabs"></div><div id="model-props-card-body"></div>
                     </div>
                 </details>
-                <details class="mp-section" name="model-props-settings" data-props-section="playback"${this._activeSection === 'playback' ? ' open' : ''}>
+                <details class="mp-section" data-props-section="playback"${this.sectionOpen('playback') ? ' open' : ''}>
                     <summary class="mp-section-title">${escape(this._tx('Playback'))}</summary>
                     <div class="mp-section-body mp-field-grid mp-playback-fields">
                         ${dropdown('model-props-animations',t('menu.animations'))}
@@ -649,12 +685,10 @@ class ModelPropsManager {
 
             </div>`;
         this._bindChoiceDropdowns();
+        // Each section opens and shuts by itself, several open at once if wanted; remembered while the editor runs.
         container.querySelectorAll('[data-props-section]').forEach(section => section.addEventListener('toggle', () => {
-            if (!section.open) return;
-            this._activeSection = section.dataset.propsSection;
-            for (const other of container.querySelectorAll('[data-props-section]')) {
-                if (other !== section) other.open = false;
-            }
+            this._openSections = Object.assign({}, this._openSections, { [section.dataset.propsSection]: section.open });
+            if (section.open) this._activeSection = section.dataset.propsSection;
             this._closeChoiceDropdowns();
         }));
         const byId = id => container.querySelector('#' + id);
@@ -689,6 +723,15 @@ class ModelPropsManager {
         }
         byId('model-props-direction')?.addEventListener('change', readFields);
         byId('model-props-passable')?.addEventListener('change', readFields);
+        // Scatter: what a drag lays, kept with the tool (not with any model).
+        const scatterFields = () => {
+            this.scatter = { on: !!byId('model-props-scatter')?.checked, spacing: Math.max(0.5, Number(byId('model-props-scatter-spacing')?.value) || 3),
+                turn: !!byId('model-props-scatter-turn')?.checked, size: Math.max(0, Math.min(90, Number(byId('model-props-scatter-size')?.value) || 0)) };
+            const box = container.querySelector('.mp-scatter-fields');
+            if (box) box.hidden = !this.scatter.on;
+        };
+        for (const id of ['model-props-scatter', 'model-props-scatter-turn']) byId(id)?.addEventListener('change', scatterFields);
+        for (const id of ['model-props-scatter-spacing', 'model-props-scatter-size']) { byId(id)?.addEventListener('change', scatterFields); byId(id)?.addEventListener('input', scatterFields); }
         byId('model-props-animation')?.addEventListener('change', readFields);
         byId('model-props-repeat')?.addEventListener('change', readFields);
         for (const id of ['model-props-animations', 'model-props-effects']) byId(id)?.addEventListener('change', () => { readFields(); this._refreshChoiceDropdown(id); });

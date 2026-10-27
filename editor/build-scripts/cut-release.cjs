@@ -78,7 +78,7 @@ function changelogSection(version) {
 }
 
 /** Every place the version is written down, rolled together. */
-function rollVersionSurfaces(version, testCount) {
+function rollVersionSurfaces(version, testCount, skipCount) {
     const edits = [];
     const edit = (file, from, to) => {
         const full = path.join(repoRoot, file);
@@ -113,8 +113,10 @@ function rollVersionSurfaces(version, testCount) {
         /The (?:current development version is [\d.]+ and is not published yet; the )?latest tagged source release is \[[\d.]+\]\(https:\/\/github\.com\/[^)]+\)\./,
         `The latest tagged source release is [${version}]`
         + `(https://github.com/${REPO}/releases/tag/v${version}).`);
-    edit('README.md', /validation completed with \*\*\d+ passing tests/,
-        `validation completed with **${testCount} passing tests`);
+    // The date and skip count are rolled with the count, so the sentence cannot claim a stale run.
+    edit('README.md', /On \d{4}-\d{2}-\d{2}, [^*]*?validation completed with \*\*\d+ passing tests\*\*[^.]*\./,
+        `On ${today()}, before the ${version} cut, local validation completed with **${testCount} passing tests**,`
+        + ` ${skipCount} skipped and no failures.`);
 
     // package.json carries the version the editor reports.
     edit('editor/package.json', /"version":\s*"[\d.]+"/, `"version": "${version}"`);
@@ -213,10 +215,12 @@ function main() {
         || testOutput.match(/pass (\d+)/) || [])[1] || 0);
     const failed = Number((testOutput.match(/^# fail (\d+)$/m)
         || testOutput.match(/fail (\d+)/) || [])[1] || 0);
+    const skipped = Number((testOutput.match(/^# skipped (\d+)$/m)
+        || testOutput.match(/skipped (\d+)/) || [])[1] || 0);
     if (failed > 0) throw new Error(`${failed} tests failed; not releasing`);
-    say(`  ${passed} passing\n`);
+    say(`  ${passed} passing, ${skipped} skipped\n`);
 
-    const edits = rollVersionSurfaces(version, passed);
+    const edits = rollVersionSurfaces(version, passed, skipped);
     say(edits.length ? `Rolled: ${edits.join(', ')}\n` : 'Version surfaces already current\n');
 
     // The cycle's handoff entries go to the archive in the release commit, so

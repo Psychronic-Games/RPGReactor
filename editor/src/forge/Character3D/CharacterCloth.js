@@ -117,34 +117,39 @@
         return out;
     }
 
-    /** Every bone's turn (R) and place (P) in the model at time t of a clip; bones without a track keep their rest. */
+    /**
+     * Every bone's turn (R) and place (P) in the model at time t of a clip; bones without a track keep their rest.
+     * A 'scale' track scales a bone and its children uniformly about the bone's head (S, the world scale; its
+     * first component is used), as a glTF node scale does: a part bound small can grow, a limb can shrink away.
+     */
     function pose(bones, clip, t) {
-        const n = bones.length, L = new Array(n), T = new Array(n);
+        const n = bones.length, L = new Array(n), T = new Array(n), K = new Array(n).fill(1);
         for (let i = 0; i < n; i++) { L[i] = [0, 0, 0, 1]; T[i] = null; }
         if (clip) for (const tr of clip.tracks) {
             if (tr.bone >= n) continue;
             const times = tr.times || clip.times;
             if (tr.path === 'translation') T[tr.bone] = sampleTrack(times, tr.values, 3, t, [0, 0, 0]);
+            else if (tr.path === 'scale') K[tr.bone] = sampleTrack(times, tr.values, 3, t, [1, 1, 1])[0];
             else sampleTrack(times, tr.values, 4, t, L[tr.bone]);
         }
-        const R = new Array(n), P = new Array(n);
+        const R = new Array(n), P = new Array(n), S = new Array(n);
         for (let i = 0; i < n; i++) {
             const b = bones[i];
-            if (b.parent < 0) { R[i] = L[i]; P[i] = T[i] || b.head.slice(); continue; }
+            if (b.parent < 0) { R[i] = L[i]; P[i] = T[i] || b.head.slice(); S[i] = K[i]; continue; }
             const pb = bones[b.parent], off = T[i] || [b.head[0] - pb.head[0], b.head[1] - pb.head[1], b.head[2] - pb.head[2]];
-            R[i] = qmul(R[b.parent], L[i]);
-            const o = rotate(R[b.parent], off);
-            P[i] = [P[b.parent][0] + o[0], P[b.parent][1] + o[1], P[b.parent][2] + o[2]];
+            R[i] = qmul(R[b.parent], L[i]); S[i] = S[b.parent] * K[i];
+            const o = rotate(R[b.parent], off), sp = S[b.parent];
+            P[i] = [P[b.parent][0] + o[0] * sp, P[b.parent][1] + o[1] * sp, P[b.parent][2] + o[2] * sp];
         }
-        return { R, P };
+        return { R, P, S };
     }
 
     /** The pose at time t of a clip with only the share k of each turn (0 the rest pose, 1 the clip's own). */
     function poseShare(bones, clip, t, k) {
         const full = { times: clip.times, tracks: clip.tracks.map(tr => {
-            const times = tr.times || clip.times, n = tr.path === 'translation' ? 3 : 4, v = sampleTrack(times, tr.values, n, t, new Array(n));
+            const times = tr.times || clip.times, n = tr.path === 'translation' || tr.path === 'scale' ? 3 : 4, v = sampleTrack(times, tr.values, n, t, new Array(n));
             const b = bones[tr.bone], pb = b && b.parent >= 0 ? bones[b.parent] : null;
-            const rest = n === 4 ? [0, 0, 0, 1] : pb ? [b.head[0] - pb.head[0], b.head[1] - pb.head[1], b.head[2] - pb.head[2]] : b.head;
+            const rest = n === 4 ? [0, 0, 0, 1] : tr.path === 'scale' ? [1, 1, 1] : pb ? [b.head[0] - pb.head[0], b.head[1] - pb.head[1], b.head[2] - pb.head[2]] : b.head;
             const out = n === 4 ? nlerp(rest, v, k) : [0, 1, 2].map(c => rest[c] + (v[c] - rest[c]) * k);
             return { bone: tr.bone, path: tr.path, times: [0], values: out };
         }) };
@@ -164,8 +169,8 @@
                 if (!w) continue;
                 const b = J[v * 4 + k], h = bones[b].head;
                 v3[0] = X[v * 3] - h[0]; v3[1] = X[v * 3 + 1] - h[1]; v3[2] = X[v * 3 + 2] - h[2];
-                const o = rotate(ps.R[b], v3), p = ps.P[b];
-                x += w * (o[0] + p[0]); y += w * (o[1] + p[1]); z += w * (o[2] + p[2]);
+                const o = rotate(ps.R[b], v3), p = ps.P[b], sc = ps.S ? ps.S[b] : 1;
+                x += w * (o[0] * sc + p[0]); y += w * (o[1] * sc + p[1]); z += w * (o[2] * sc + p[2]);
             }
             out[i * 3] = x; out[i * 3 + 1] = y; out[i * 3 + 2] = z;
         }
@@ -1413,6 +1418,7 @@
             if (t.cloth) continue;
             const v = t.values;
             if (t.path === 'translation') { const n = (t.times || clip.times).length - 1; if (Math.hypot(v[0] - v[n * 3], v[1] - v[n * 3 + 1], v[2] - v[n * 3 + 2]) > 0.05) return false; continue; }
+            if (t.path === 'scale') { const n = (t.times || clip.times).length - 1; if (Math.abs(v[0] - v[n * 3]) > 1e-3 * Math.max(1, Math.abs(v[0]))) return false; continue; }
             const n = (t.times || clip.times).length - 1, d = Math.abs(v[0] * v[n * 4] + v[1] * v[n * 4 + 1] + v[2] * v[n * 4 + 2] + v[3] * v[n * 4 + 3]);
             if (2 * Math.acos(Math.min(1, d)) > tolerance) return false;
         }

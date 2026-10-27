@@ -824,7 +824,7 @@ test('a plan of plans: parts, paths and named spots stamp as one and walk as one
     const manager = read('editor/src/PieceBuilderManager.js');
     assert.match(manager, /ghostGeometryFor\(plan, rot = 0, scale = 1\)/);
     assert.match(manager, /record\.spots = SP\.spots\(shaped, X0, Y0, name => this\.resolvePlan\(name\)\);/);
-    assert.match(read('editor/src/MapEditor3D.js'), /const silhouette = stamp && !bounds \? manager\.ghostGeometryFor\(stamp, turn\) : null;/);
+    assert.match(read('editor/src/MapEditor3D.js'), /const silhouette = stamp && !bounds \? manager\.ghostGeometryFor\(stamp, turn, manager\.stampScale \|\| 1\) : null;/);
     const context = {}; context.window = context;
     vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
     const E = context.RRMapElevation;

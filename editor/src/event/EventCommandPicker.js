@@ -326,6 +326,10 @@ class EventCommandPicker {
         return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
     }
 
+    _text(text) {
+        return typeof window !== 'undefined' && window.I18n?.tText ? window.I18n.tText(text) : text;
+    }
+
     _commandName(name) {
         return typeof window !== 'undefined' && window.I18n?.tEventCommandName ? window.I18n.tEventCommandName(name) : name;
     }
@@ -347,6 +351,7 @@ class EventCommandPicker {
             });
         }
 
+        this.query = '';
         this.renderContent();
         this.modal.style.display = 'flex';
         const trap = window.RRKeyboardNavigation?.modal(this.modal, {
@@ -354,6 +359,7 @@ class EventCommandPicker {
             container: () => this.modal.querySelector('.command-picker-container') || this.modal
         });
         trap?.enter();
+        this.modal.querySelector('.command-picker-search')?.focus({ preventScroll: true });
     }
 
     /**
@@ -466,6 +472,22 @@ class EventCommandPicker {
             tabBar.appendChild(tab);
         });
 
+        // Find a command by name across every tab: the list has grown past a glance.
+        const search = document.createElement('input');
+        search.type = 'search';
+        search.className = 'command-picker-search rr-input';
+        search.placeholder = this._text('Search commands');
+        search.setAttribute('aria-label', this._text('Search commands'));
+        search.value = this.query || '';
+        search.style.cssText = 'margin-left: auto; width: 220px; padding: 6px 8px; font-size: 12px;';
+        search.addEventListener('input', () => { this.query = search.value; this._fillCommands(contentArea); });
+        search.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            const first = contentArea.querySelector('[data-command-pick]');
+            if (first) { e.preventDefault(); first.click(); }
+        });
+        tabBar.appendChild(search);
+
         container.appendChild(tabBar);
 
         // Content area with columns
@@ -478,25 +500,7 @@ class EventCommandPicker {
             gap: 12px;
         `;
 
-        const currentTabKey = tabs[this.currentTab];
-        const tabData = this.commandData[currentTabKey];
-
-        tabData.columns.forEach(column => {
-            const columnDiv = document.createElement('div');
-            columnDiv.style.cssText = `
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-            `;
-
-            column.sections.forEach(section => {
-                const sectionDiv = this.createSection(section);
-                columnDiv.appendChild(sectionDiv);
-            });
-
-            contentArea.appendChild(columnDiv);
-        });
+        this._fillCommands(contentArea);
 
         container.appendChild(contentArea);
 
@@ -514,6 +518,51 @@ class EventCommandPicker {
         container.appendChild(footer);
 
         footer.querySelector('.cancel-btn').addEventListener('click', () => this.close());
+    }
+
+    /** The commands a search matches, by section across every tab (English and shown names, and section names). */
+    matches(query) {
+        const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+        if (!words.length) return null;
+        const out = [];
+        for (const key of ['tab1', 'tab2', 'tab3', 'tab4']) {
+            for (const column of this.commandData[key].columns) for (const section of column.sections) {
+                const sectionText = (section.title + ' ' + this._sectionName(section.title)).toLowerCase();
+                const commands = section.commands.filter(command => {
+                    const text = (command.name + ' ' + this._commandName(command.name) + ' ' + sectionText).toLowerCase();
+                    return words.every(w => text.includes(w));
+                });
+                if (commands.length) out.push({ title: section.title, commands });
+            }
+        }
+        return out;
+    }
+
+    /** The current tab's columns, or with a search, every matching command grouped by its section. */
+    _fillCommands(contentArea) {
+        contentArea.innerHTML = '';
+        const found = this.matches(this.query);
+        const columns = found
+            ? [0, 1, 2].map(k => ({ sections: found.filter((_, i) => i % 3 === k) })).filter(c => c.sections.length)
+            : this.commandData[['tab1', 'tab2', 'tab3', 'tab4'][this.currentTab]].columns;
+        if (found && !found.length) {
+            const none = document.createElement('div');
+            none.textContent = this._text('No commands match.');
+            none.style.cssText = 'color: var(--color-text-muted); font-size: 12px; padding: 8px;';
+            contentArea.appendChild(none);
+            return;
+        }
+        columns.forEach(column => {
+            const columnDiv = document.createElement('div');
+            columnDiv.style.cssText = `
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            `;
+            column.sections.forEach(section => columnDiv.appendChild(this.createSection(section)));
+            contentArea.appendChild(columnDiv);
+        });
     }
 
     /**
@@ -562,6 +611,7 @@ class EventCommandPicker {
                 commandBtn.style.backgroundColor = 'var(--color-bg-surface)';
             });
 
+            commandBtn.dataset.commandPick = String(command.code);
             commandBtn.addEventListener('click', () => {
                 if (this.callback) {
                     this.callback(command);

@@ -27,7 +27,7 @@ class DatabaseActionSequenceEditor {
         const castFold=U.element('details','rr-sequence-disclosure rr-sequence-cast-fold');castFold.dataset.sequenceCastFold='';castFold.open=!!prefs.castOpen;this.castOpen=castFold.open;
         const castSummary=U.element('summary','rr-sequence-cast-summary'),castNames=U.element('span','rr-sequence-cast-names','',true);castNames.setAttribute('data-rr-i18n-skip','1');castSummary.append(U.element('span','','Preview'),castNames);castFold.append(castSummary);center.append(castFold);
         castFold.ontoggle=()=>{if(!castFold.isConnected)return;this.castOpen=castFold.open;this.savePrefs();};
-        this.castSummarize=()=>{const who=role=>(this.castKinds[role]==='actors'?this.db.getActor(this.cast[role]):this.db.getEnemy(this.cast[role]))?.name||'';const weapon=this.sampleWeapon?this.db.getWeapon(this.sampleWeapon)?.name:'';castNames.textContent=[who('user'),'→',who('target'),weapon?'· '+weapon:''].filter(Boolean).join(' ');};
+        this.castSummarize=()=>{const who=role=>(this.castKinds[role]==='actors'?this.db.getActor(this.cast[role]):this.db.getEnemy(this.cast[role]))?.name||'';const weapon=this.sampleWeapon?this.db.getWeapon(this.sampleWeapon)?.name:'',action=this.previewAction()?.name||'';castNames.textContent=[who('user'),'→',who('target'),action?'· '+action:'',weapon?'· '+weapon:''].filter(Boolean).join(' ');};
         const cast=U.element('div','rr-sequence-preview-grid rr-sequence-cast');cast.dataset.sequenceCast='';castFold.append(cast);
         const actors=this.db.getActors(),enemies=this.db.getEnemies();
         // The remembered cast stands only while those records still exist.
@@ -35,9 +35,9 @@ class DatabaseActionSequenceEditor {
         if(!exists('user')){this.castKinds.user='actors';this.cast.user=actors[0]?.id;}if(!exists('target')){this.castKinds.target='enemies';this.cast.target=enemies[0]?.id;}
         const choices=actors.map(a=>['actors:'+a.id,U.message('Actor: {name}',{name:a.name})]).concat(enemies.map(e=>['enemies:'+e.id,U.message('Enemy: {name}',{name:e.name})]));
         const castHint=U.text('Preview cast only. In battle, whichever battler uses this sequence plays it.');
-        for(const role of ['user','target']){const select=U.field(cast,role==='user'?'User':'Target',U.select(choices,this.castKinds[role]+':'+this.cast[role],value=>{const [kind,id]=value.split(':');this.castKinds[role]=kind;this.cast[role]=Number(id);this.savePrefs();this.castSummarize();this.loadCast();}));select.title=castHint;select.parentElement.title=castHint;}
-        U.field(cast,'Skill / Item',U.select(sampleActions,this.sampleAction,value=>{this.clearPreviewMedia();this.sampleAction=value;this.frame=0;this.playing=false;this.savePrefs();}));
-        U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.sampleWeaponChosen=true;this.weaponModels={};this.savePrefs();this.castSummarize();this.drawInspector();this.paint();}));
+        this.castSelects={};for(const role of ['user','target']){const select=this.castSelects[role]=U.field(cast,role==='user'?'User':'Target',U.select(choices,this.castKinds[role]+':'+this.cast[role],value=>{const [kind,id]=value.split(':');this.castKinds[role]=kind;this.cast[role]=Number(id);this.savePrefs();this.castSummarize();this.loadCast();}));select.title=castHint;select.parentElement.title=castHint;}
+        this.sampleActionSelect=U.field(cast,'Skill / Item',U.select(sampleActions,this.sampleAction,value=>{this.clearPreviewMedia();this.sampleAction=value;this.frame=0;this.playing=false;this.savePrefs();this.castSummarize();this.updateReferences();this.drawInspector();}));
+        this.sampleWeaponSelect=U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.sampleWeaponChosen=true;this.weaponModels={};this.savePrefs();this.castSummarize();this.updateReferences();this.drawInspector();this.paint();}));
         U.field(cast,'Targets',U.select([[1,'1'],[2,'2'],[3,'3'],[4,'4']],this.targetCount,value=>{this.targetCount=Number(value);this.savePrefs();this.controls.targetsChanged();this.drawInspector();}));
         const mirror=U.element('input');mirror.type='checkbox';mirror.checked=!!this.mirrored;mirror.onchange=()=>{this.mirrored=mirror.checked;this.savePrefs();};U.field(cast,'Swap Sides',mirror).parentElement.classList.add('rr-sequence-preview-check');
         // Scene is the backdrop: an empty grid, the project's battleback pair, or a Battle Room from Troops. Every choice is listed; one the project cannot offer is greyed and says why.
@@ -142,7 +142,33 @@ class DatabaseActionSequenceEditor {
     }
     /** Take a provided-but-empty phase away: it inherits again. */
     inheritPhase(phase){const B=ReactorBattleData,sequence=this.sequence;if(B.phaseSteps(sequence,phase).length)return;this.edit(()=>{sequence.phases=B.sequencePhases(sequence).filter(p=>p!==phase);});this.drawSteps();}
-    updateReferences(){const refs=ReactorBattleData.references(this.ui.settings(),this.sequence.id,this.db.data.actionSequences);this.ui.setText(this.references,refs.length?this.ui.message('Used by: {records}',{records:refs.map(r=>(window.I18n?.tDbType(r.kind)||r.kind)+' #'+r.id+(r.slot?' · '+r.slot:'')).join(', ')}):'Assign this sequence from a skill, item, weapon, actor or enemy. Previewing never applies damage or changes game state.');}
+    // Used by: each record that plays this sequence, by name; a click previews the sequence as that record uses it (its skill or item, its weapon's attack, its battler).
+    updateReferences(){const U=this.ui,refs=ReactorBattleData.references(U.settings(),this.sequence.id,this.db.data.actionSequences);
+        this.references.replaceChildren();this.references.removeAttribute('data-i18n-text-source');this.references.removeAttribute('data-i18n-text-params');
+        if(!refs.length){U.setText(this.references,'Assign this sequence from a skill, item, weapon, actor or enemy. Previewing never applies damage or changes game state.');return;}
+        this.references.append(U.element('span','','Used by:'));
+        for(const ref of refs){const record=this.db.data[ref.kind]?.[ref.id],named=record?.name||'#'+ref.id,label=named+' ('+(window.I18n?.tDbType(ref.kind)||ref.kind)+' #'+ref.id+(ref.slot?' · '+ref.slot:'')+')';
+            const button=U.element('button','rr-sequence-reference',label,true);button.type='button';button.dataset.sequenceReference=ref.kind+':'+ref.id;
+            const previewable=this.previewAsChoice(ref);button.disabled=!previewable;button.classList.toggle('active',!!previewable&&this.previewingAs(ref));
+            if(previewable){button.title=U.text(U.message('Preview as {name}',{name:named}));button.onclick=()=>this.previewAs(ref);}
+            this.references.append(' ',button);}
+    }
+    /** What previewing as a record sets: a skill or item is the action; a weapon is held for an attack; an actor or enemy is the user. Null for a record the preview can't stand in for. */
+    previewAsChoice(ref){const record=this.db.data[ref.kind]?.[ref.id];if(!record)return null;
+        if(ref.kind==='skills'||ref.kind==='items')return {action:ref.kind+':'+ref.id};
+        if(ref.kind==='weapons')return {action:'skills:1',weapon:ref.id};
+        if(ref.kind==='actors'||ref.kind==='enemies')return {user:[ref.kind,ref.id]};
+        return null;}
+    previewingAs(ref){const choice=this.previewAsChoice(ref);if(!choice)return false;
+        if(choice.user)return this.castKinds.user===choice.user[0]&&this.cast.user===choice.user[1];
+        return this.sampleAction===choice.action&&(!choice.weapon||this.sampleWeapon===choice.weapon);}
+    previewAs(ref){const choice=this.previewAsChoice(ref);if(!choice)return;
+        this.clearPreviewMedia();this.stepPlayback=null;this.frame=0;this.playing=false;
+        if(choice.action){this.sampleAction=choice.action;if(this.sampleActionSelect)this.sampleActionSelect.value=choice.action;}
+        if(choice.weapon){this.sampleWeapon=choice.weapon;this.sampleWeaponChosen=true;this.weaponModels={};if(this.sampleWeaponSelect)this.sampleWeaponSelect.value=String(choice.weapon);}
+        if(choice.user){[this.castKinds.user,this.cast.user]=choice.user;if(this.castSelects?.user)this.castSelects.user.value=choice.user.join(':');}
+        this.savePrefs();this.castSummarize();this.updateReferences();this.drawInspector();
+        if(choice.user)this.loadCast();else this.paint();}
     motionLabels(){return {...Object.fromEntries(ReactorBattleData.battlerStates),return:'Return',thrust:'Thrust',swing:'Swing',missile:'Missile',skill:'Skill',item:'Item',idle:'Idle',run:'Run',walk:'Walk',punch:'Punch',attack:'Attack',cast:'Cast',guard:'Guard',damage:'Damage',evade:'Evade',victory:'Victory',escape:'Escape'};}
     label(type){return {move:'Move / Position Key',motion:'Battler Motion',sound:'Play Sound',animation:'Show Animation',projectile:'Projectile',weapon:'Weapon',impact:'Apply Action Effect',wait:'Wait',camera:'Camera Key'}[type]||ReactorBattleData.commands[type]?.label||type;}
     pushUndo(){this.undo.push(JSON.stringify(this.sequence));if(this.undo.length>100)this.undo.shift();this.redo=[];}
@@ -334,7 +360,7 @@ class DatabaseActionSequenceEditor {
             title=t('Play Sound')+': '+(step.audio?.name||t('None'));details.push('SE');
         }else if(step.type==='animation'){
             const animation=step.animationId?this.db?.getAnimation?.(step.animationId):null;
-            title=role+': '+(step.animationSource==='action'?t('Current Action'):step.animationSource==='weapon'?t('Weapon Attack'):animation?.name||(step.animationId?t('Animation')+' #'+step.animationId:t('None')));details.push(t('Show Animation'));
+            title=role+': '+(step.animationSource==='action'?t('Each Action’s Own'):step.animationSource==='weapon'?t('Weapon Attack'):animation?.name||(step.animationId?t('Animation')+' #'+step.animationId:t('None')));details.push(t('Show Animation'));
         }else if(step.type==='weapon'){
             const mode=ReactorBattleData.weaponMode(step);title=t(mode==='hide'?'Hide':mode==='move'?'Move':'Show')+': '+t('Weapon');
             if(mode==='show')details.push(step.iconSource==='icon'?t('Icon')+' #'+(step.iconIndex||0):t(step.iconSource==='action'?'Skill / Item':'Equipped Weapon'));
@@ -579,7 +605,7 @@ class DatabaseActionSequenceEditor {
         if(['branch','elseIf'].includes(step.type)){const input=U.element('input');input.type='checkbox';input.checked=step.previewResult??true;input.onchange=()=>change('previewResult',input.checked);U.field(advanced,'Preview Condition Result',input);}
         if(step.type==='impact'){const input=U.element('input','database-field-value');input.value=step.rate??'100';input.onchange=()=>change('rate',input.value);U.field(this.inspector,'Damage Rate (%) / Expression',input);}
         if(step.type==='wait')U.field(this.inspector,'Wait Until',U.select(['frames','move','motion','popup','animation','effecting'].map(v=>[v,v]),step.waitFor||'frames',v=>change('waitFor',v)));
-        if(step.type==='animation')U.field(this.inspector,'Animation Source',U.select([['id','Selected Animation'],['action','Current Action'],['weapon','Weapon Attack']],step.animationSource||'id',v=>{change('animationSource',v);this.drawInspector();}));
+        if(step.type==='animation')U.field(this.inspector,'Animation Source',U.select([['id','Selected Animation'],['action','Each Action’s Own'],['weapon','Weapon Attack']],step.animationSource||'id',v=>{change('animationSource',v);this.drawInspector();}));
         if(['move','camera'].includes(step.type)){
             U.field(this.inspector,'Relative To',U.select([['home','Home'],['target','Target'],['approach','Approach Target']],step.anchor,v=>{change('anchor',v);this.drawInspector();}));
             // One card for where the step ends: its offset, and for a
@@ -627,6 +653,12 @@ class DatabaseActionSequenceEditor {
                 const action=this.previewAction(),weapon=this.previewBattler('user').equips()[0];
                 const note=step.animationSource==='action'&&action?.animationId>0?U.message('Plays {animation}, the action’s own.',{animation:animationName}):weapon?.animationId>0?U.message('Plays {animation}, from {weapon}.',{animation:animationName,weapon:weapon.name}):U.message('No weapon animation in hand: plays {animation}.',{animation:animationName});
                 const help=U.element('p','rr-battle-help',note);help.dataset.sequenceAnimationResolved='';this.inspector.append(help);
+                // A sequence shared by several skills shows each one's own animation: the step plays whichever action is being used, not the first.
+                const users=step.animationSource==='action'?ReactorBattleData.references(U.settings(),this.sequence.id,this.db.data.actionSequences).filter(r=>['skills','items','weapons'].includes(r.kind)&&this.db.data[r.kind]?.[r.id]):[];
+                if(users.length){const list=U.element('div','rr-sequence-action-animations');list.dataset.sequenceActionAnimations='';list.append(U.element('p','rr-battle-help','Each skill, item or weapon that uses this sequence plays its own animation:'));
+                    for(const ref of users){const record=this.db.data[ref.kind][ref.id],id=record.animationId,shown=id>0?(this.db.getAnimation(id)?.name||U.text('Animation')+' #'+id):id===-1?U.text('Weapon Attack'):U.text('None');
+                        const row=U.element('button','rr-sequence-reference',record.name+' — '+shown,true);row.type='button';row.classList.toggle('active',this.previewingAs(ref));row.title=U.text(U.message('Preview as {name}',{name:record.name}));row.onclick=()=>this.previewAs(ref);list.append(row);}
+                    this.inspector.append(list);}
             }
             for(const key of ['x','y','z','scale'])U.number(advanced,key==='scale'?'Scale':U.message('{axis} (tiles)',{axis:key.toUpperCase()}),step.animationTransform?.[key]??(key==='scale'?1:0),v=>change('animationTransform',{...step.animationTransform,[key]:Math.max(key==='scale'?.01:-1000,Math.min(key==='scale'?100:1000,v))}));
         }

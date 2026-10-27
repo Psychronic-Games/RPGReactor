@@ -452,3 +452,28 @@ test('a whole way of at most so many steps: a longer way round is not taken, a s
     w.run(3000, () => !q.isMoveRouteForcing());
     assert.deepEqual([q.x, q.y], [16, 5]);
 });
+
+test('Teleport to Tile: the character stands there at once, past a wall, and the route goes straight on', () => {
+    const teleport = (x, y) => SetMovementRouteEditor.routeCommand('teleport', { x, y });
+    const step = teleport(50, 20);
+    assert.deepEqual(SetMovementRouteEditor.parseRouteCommand(step), { op: 'teleport', x: 50, y: 20 });
+    assert.match(step.parameters[0], /\nif \(typeof this\.reactorTeleportTo === "function"\) this\.reactorTeleportTo\(50, 20\);$/);
+    assert.equal(SetMovementRouteEditor.stepText({ op: 'teleport', x: 50, y: 20 }), 'Teleport to (50, 20)');
+    const w = followerWorld({ width: 70, height: 50, walls: [[30, 5, 30, 34]], start: [2, 2], events: [still(1, 10, 20)] });
+    const walker = w.$gameMap.event(1);
+    const seen = [];
+    const frames = runList(w, [setRoute(1, [teleport(50, 20), { code: 27, parameters: [3] }])], {
+        eventId: 1, each: () => seen.push(walker.x + ',' + walker.y)
+    });
+    assert.deepEqual([walker.x, walker.y], [50, 20], 'it stands on the tile');
+    assert.deepEqual([walker._realX, walker._realY], [50, 20], 'drawn there too, with no slide');
+    assert.ok(seen.every(at => at === '10,20' || at === '50,20'), 'no tile in between');
+    assert.equal(w.$gameSwitches.value(3), true, 'the route went on');
+    assert.ok(frames < 10, `no wait for a walk (${frames} frames)`);
+    // Off the map: nothing happens.
+    runList(w, [setRoute(1, [teleport(500, 20)])], { eventId: 1 });
+    assert.deepEqual([walker.x, walker.y], [50, 20]);
+    // The player: the camera and followers come along.
+    runList(w, [setRoute(-1, [teleport(40, 40)])]);
+    assert.deepEqual([w.$gamePlayer.x, w.$gamePlayer.y], [40, 40]);
+});

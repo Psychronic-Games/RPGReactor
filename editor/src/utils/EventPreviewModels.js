@@ -353,7 +353,14 @@
         }
     }
 
-    const api = { templateFor, instance, animate, thumbnail, texturesDecoded, clear, nextMap, sweep, releaseGpu, sharedGeometry, disposeInstance, stats, THUMBNAILS_KEPT, get revision() { return revision; } };
+    /** The parsed model when it is already in (templateFor has finished for it); null while it loads or never asked for. */
+    function peek(project, spec) {
+        if (!project?.path || !spec?.name) return null;
+        const template = templates.get(`${project.path}|${keyFor(spec)}|${spec.texture || ""}`);
+        return template && typeof template.then !== 'function' ? template : null;
+    }
+
+    const api = { templateFor, peek, instance, animate, thumbnail, texturesDecoded, clear, nextMap, sweep, releaseGpu, sharedGeometry, disposeInstance, stats, THUMBNAILS_KEPT, get revision() { return revision; } };
     root.RREventPreviewModels = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

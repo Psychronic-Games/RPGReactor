@@ -33,7 +33,7 @@
             }
         }},
         {id:'walker-hydraulics-and-guards',when:{form:'walker'},controls:['details','stance'],build(c){
-            const {r,W,H,L,box,tube,put}=c;if(!r.details)return;
+            const {r,W,H,L,box,tube,put}=c;if(!r.details||(r.bodyStyle||'rounded')!=='rounded')return;
             const spread=W*.22*r.stance,hip=H*.43,knee=H*.25,ankle=H*.09;
             for(const s of [-1,1]){
                 const points=[[s*spread,hip,-L*.13],[s*spread*1.08,knee,-L*.02],[s*spread,ankle,-L*.15]];

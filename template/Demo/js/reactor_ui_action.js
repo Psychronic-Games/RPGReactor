@@ -240,7 +240,10 @@
         const size = node.showPortrait ? Math.min(height, Math.floor(width * 0.3)) : 0;
         const gap = size ? Math.round(height * 0.1) : 0;
         const x = size + gap, w = Math.max(1, width - x);
-        const minor = node.showMp || node.showTp;
+        // A pool the project turned off (System.json rrPoolsOff) is not shown, whatever the node asks.
+        const off = key => { const system = typeof $dataSystem !== 'undefined' ? $dataSystem : null; return !!system && Array.isArray(system.rrPoolsOff) && system.rrPoolsOff.includes(key); };
+        const showMp = node.showMp && !off('mp'), showTp = node.showTp && !off('tp');
+        const minor = showMp || showTp;
         const parts = (node.showName || node.showStates ? 0.8 : 0) + 1.25 + (minor ? 0.8 : 0);
         const unit = clamp(Math.floor(height / parts), 12, 48);
         const top = Math.max(0, Math.floor((height - Math.round(parts * unit)) / 2));
@@ -256,9 +259,9 @@
         layout.hp = { key: 'hp', x, y, width: w, height: Math.round(unit * 1.25) };
         y += layout.hp.height;
         if (minor) {
-            const h = Math.round(unit * 0.8), both = node.showMp && node.showTp, half = both ? Math.floor((w - 12) / 2) : w;
-            if (node.showMp) layout.mp = { key: 'mp', x, y, width: half, height: h };
-            if (node.showTp) layout.tp = { key: 'tp', x: both ? x + half + 12 : x, y, width: half, height: h };
+            const h = Math.round(unit * 0.8), both = showMp && showTp, half = both ? Math.floor((w - 12) / 2) : w;
+            if (showMp) layout.mp = { key: 'mp', x, y, width: half, height: h };
+            if (showTp) layout.tp = { key: 'tp', x: both ? x + half + 12 : x, y, width: half, height: h };
         }
         return layout;
     };

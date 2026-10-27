@@ -472,6 +472,7 @@ Game_Timer.prototype.initialize = function() {
 Game_Timer.prototype.update = function(sceneActive) {
     if (sceneActive && this._working && this._frames > 0) {
         this._frames--;
+        if (this._frames % 60 === 59) this.rrSecondsChanged();
         if (this._frames === 0) {
             this.onExpire();
         }
@@ -479,8 +480,16 @@ Game_Timer.prototype.update = function(sceneActive) {
 };
 
 Game_Timer.prototype.start = function(count) {
+    const before = this.seconds();
     this._frames = count;
     this._working = true;
+    if (this.seconds() !== before) this.rrSecondsChanged();
+};
+
+// Pages of an imported 2000/2003 map that wait on the timer (rrTimerSec) are looked at again when its whole
+// seconds change: a count down changes no switch or variable, all MZ refreshes pages for. Other maps pay nothing.
+Game_Timer.prototype.rrSecondsChanged = function() {
+    if (typeof $gameMap !== "undefined" && $gameMap && $gameMap.rrHasTimerPages && $gameMap.rrHasTimerPages()) $gameMap.requestRefresh();
 };
 
 Game_Timer.prototype.stop = function() {

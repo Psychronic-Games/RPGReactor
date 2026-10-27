@@ -194,6 +194,25 @@
             <div class="toolbar-separator"></div>
             <span class="toolbar-label" data-i18n="toolbar.forge">Forge:</span>
             <button class="tool-button" data-action="forge-launcher" title="Forge - Development Tool Suite" data-i18n-title="toolbar.title.forgeLauncher"><img src="images/icon-forge.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='FG';"></button>
+            <div class="toolbar-separator"></div>
+            <!-- Search everything (GlobalSearch.js): also Ctrl+Shift+F and Ctrl+P. A scanner lens: HUD ring, crosshair ticks, the Forge's spark. -->
+            <span class="toolbar-label" data-i18n="toolbar.search">Search:</span>
+            <button class="tool-button" id="global-search-btn" title="Search (Ctrl+Shift+F)" aria-label="Search">
+                <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="rr-gs-btn-gold" x1="5" y1="15" x2="51" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#fff3a0"/><stop offset=".3" stop-color="#ffd529"/><stop offset=".72" stop-color="#f08a0c"/><stop offset="1" stop-color="#a94d08"/></linearGradient>
+                        <radialGradient id="rr-gs-btn-glass" cx="22" cy="22" r="20" gradientUnits="userSpaceOnUse"><stop stop-color="#e9fdff"/><stop offset=".35" stop-color="#5fe0ff"/><stop offset=".8" stop-color="#1563d6"/><stop offset="1" stop-color="#0a2a7a"/></radialGradient>
+                        <radialGradient id="rr-gs-btn-spark"><stop stop-color="#fff"/><stop offset=".28" stop-color="#fffbd5"/><stop offset=".62" stop-color="#ffd529"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+                    </defs>
+                    <path d="M37 40l5-5 17 15c1.5 1.4 1.5 3.6 0 5l-1 1c-1.4 1.5-3.6 1.5-5 0z" fill="url(#rr-gs-btn-gold)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+                    <path d="M47 45l5 5" stroke="#072b95" stroke-width="2.6" stroke-linecap="round"/>
+                    <circle cx="24" cy="24" r="18" fill="url(#rr-gs-btn-glass)" stroke="#010718" stroke-width="4.5"/>
+                    <circle cx="24" cy="24" r="13" fill="none" stroke="#ffd529" stroke-width="3" stroke-dasharray="15.4 5" transform="rotate(-38 24 24)"/>
+                    <path d="M24 17v3M24 28v3M17 24h3M28 24h3" stroke="#e9fdff" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M14 18a11 11 0 0 1 6-6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <path d="M52 2c1.2 4.3 3 6.4 7 7.4-4 1-5.8 3.1-7 7.4-1.2-4.3-3-6.4-7-7.4 4-1 5.8-3.1 7-7.4z" fill="url(#rr-gs-btn-spark)" stroke="#d7318f" stroke-width="1.8" stroke-linejoin="round"/>
+                </svg>
+            </button>
         </div>
 
         <!-- Main Content -->
@@ -314,9 +333,9 @@
                                     <input id="map-surround-view" type="checkbox" checked aria-label="Show what lies past the map's border" data-i18n-aria="toolbar.title.surroundings">
                                     <span data-i18n="workspace.surroundings">Surroundings</span>
                                 </label>
-                                <label class="map-info-item map-storey-cut" title="Show the 3D view up to this storey, as the game cuts away a roof over the player">
-                                    <span data-i18n-text-source="Storeys">Storeys</span>
-                                    <select id="map-storey-cut" aria-label="Storeys"><option value="0">All</option></select>
+                                <label class="map-info-item map-storey-cut" title="Show the 3D view up to this floor, as the game cuts away a roof over the player">
+                                    <span data-i18n-text-source="Floors">Floors</span>
+                                    <select id="map-storey-cut" aria-label="Floors"><option value="0">All</option></select>
                                 </label>
                                 <span class="map-info-item"><span data-i18n="workspace.zoom">Zoom:</span> <span class="map-info-value" id="map-zoom">100%</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-coordinates">--,--</span>)</span>
@@ -939,6 +958,8 @@
     <script src="src/utils/VictoryHud.js"></script>
     <script src="src/utils/FightLook.js"></script>
     <script src="src/utils/StockInterfaces.js"></script>
+    <!-- Reactor's additions a plugin may also provide, and whether each is on (docs/REACTOR-FEATURES.md). -->
+    <script src="src/ReactorFeatures.js"></script>
     <script src="src/utils/EquipSlots.js"></script>
     <script src="src/utils/TilesetSheets.js"></script>
     <script src="src/utils/TileMetrics.js"></script>
@@ -1080,24 +1101,34 @@
     <script src="src/utils/ColorPopover.js"></script>
     <script src="src/forge/Character3D/HumanTargets.js"></script>
     <script src="src/forge/Character3D/HumanBody.js"></script>
+    <script src="src/forge/Character3D/CharacterDrape.js"></script>
     <script src="src/forge/Character3D/CharacterOutfit.js"></script>
+    <script src="src/forge/Character3D/CharacterFabric.js"></script>
+    <script src="src/forge/Character3D/CharacterWear.js"></script>
     <script src="src/forge/Character3D/CharacterAtlas.js"></script>
     <script src="src/forge/Character3D/CharacterSimplify.js"></script>
     <script src="src/forge/Character3D/CharacterOutfitTransfer.js"></script>
     <script src="src/forge/Character3D/CharacterClothes.js"></script>
     <script src="src/forge/Character3D/ConstructionSurface.js"></script>
     <script src="src/forge/Character3D/ConstructionPatterns.js"></script>
+    <script src="src/forge/Character3D/CharacterCyberGear.js"></script>
     <script src="src/forge/Character3D/CharacterProps.js"></script>
     <script src="src/forge/Character3D/CharacterGarmentDetails.js"></script>
     <script src="src/forge/Character3D/CharacterReconConstruction.js"></script>
     <script src="src/forge/Character3D/CharacterPowerArmor.js"></script>
+    <script src="src/forge/Character3D/CharacterWasteland.js"></script>
+    <script src="src/forge/Character3D/CharacterCyberwear.js"></script>
     <script src="src/forge/Character3D/CharacterWardrobe.js"></script>
+    <script src="src/forge/Character3D/CharacterBodyArtMotifs.js"></script>
+    <script src="src/forge/Character3D/CharacterBodyArt.js"></script>
     <script src="src/forge/Character3D/CharacterSkin.js"></script>
+    <script src="src/forge/Character3D/CharacterBodyMods.js"></script>
     <script src="src/forge/Character3D/CharacterSpecies.js"></script>
     <script src="src/forge/Character3D/CharacterHair.js"></script>
     <script src="src/forge/Character3D/CreatureGear.js"></script>
     <script src="src/forge/Character3D/CreatureArthropods.js"></script>
     <script src="src/forge/Character3D/CreatureFlyers.js"></script>
+    <script src="src/forge/Character3D/CreatureReptiles.js"></script>
     <script src="src/forge/Character3D/CreatureForms.js"></script>
     <script src="src/forge/Character3D/CreatureBody.js"></script>
     <script src="src/forge/Character3D/CharacterGlb.js"></script>
@@ -1105,12 +1136,16 @@
     <script src="src/forge/Character3D/CharacterDetail.js"></script>
     <script src="src/forge/Character3D/CharacterPoses.js"></script>
     <script src="src/forge/Character3D/MerfolkBody.js"></script>
+    <script src="src/forge/Character3D/CharacterCentaur.js"></script>
     <script src="src/forge/Character3D/CharacterCloth.js"></script>
     <script src="src/forge/Character3D/CharacterExpressions.js"></script>
     <script src="src/forge/Character3D/SlimeBody.js"></script>
     <script src="src/forge/Character3D/CharacterModel.js"></script>
     <script src="src/forge/Character3D/CharacterPreviewBrowser.js"></script>
+    <script src="src/forge/RandomPartsMenu.js"></script>
+    <script src="src/forge/ForgeDesigns.js"></script>
     <script src="src/forge/Character3D/Character3DBuilder.js"></script>
+    <script src="src/forge/Character3D/CharacterBodyArtPanel.js"></script>
     <script src="src/forge/Character3D/CharacterSpriteSheet.js"></script>
     <script src="src/forge/Props/PropCloth.js"></script>
     <script src="src/forge/Props/PropPaint.js"></script>
@@ -1126,19 +1161,39 @@
     <script src="src/forge/Props/AccessoryProp.js"></script>
     <script src="src/forge/Props/SwordProp.js"></script>
     <script src="src/forge/Props/ContainerMesh.js"></script>
+    <script src="src/forge/Props/HardSurface.js"></script>
     <script src="src/forge/Props/GunConstruction.js"></script>
     <script src="src/forge/Props/GunProp.js"></script>
+    <script src="src/forge/Props/WeaponKit.js"></script>
+    <script src="src/forge/Props/HaftedProp.js"></script>
+    <script src="src/forge/Props/StaffProp.js"></script>
+    <script src="src/forge/Props/RangedProp.js"></script>
+    <script src="src/forge/Props/ShieldProp.js"></script>
+    <script src="src/forge/Props/InstrumentProp.js"></script>
+    <script src="src/forge/Props/CableProp.js"></script>
+    <script src="src/forge/Props/SpeakerProp.js"></script>
     <script src="src/forge/Props/ContainerPaint.js"></script>
     <script src="src/forge/Props/ContainerProp.js"></script>
     <script src="src/forge/Props/PropKeycaps.js"></script>
     <script src="src/forge/Props/FurnitureConstruction.js"></script>
     <script src="src/forge/Props/FurnitureProp.js"></script>
     <script src="src/forge/Props/VehicleConstruction.js"></script>
+    <script src="src/forge/Props/VehicleHardware.js"></script>
     <script src="src/forge/Props/VehicleBodywork.js"></script>
     <script src="src/forge/Props/VehicleTypeface.js"></script>
+    <script src="src/forge/Props/VehiclePanels.js"></script>
     <script src="src/forge/Props/VehicleFinish.js"></script>
+    <script src="src/forge/Props/VehicleRig.js"></script>
     <script src="src/forge/Props/VehicleProp.js"></script>
+    <script src="src/forge/Props/NatureKit.js"></script>
+    <script src="src/forge/Props/NatureTexture.js"></script>
+    <script src="src/forge/Props/TreeConstruction.js"></script>
+    <script src="src/forge/Props/PlantConstruction.js"></script>
+    <script src="src/forge/Props/RockConstruction.js"></script>
+    <script src="src/forge/Props/AlienFlora.js"></script>
+    <script src="src/forge/Props/NatureProp.js"></script>
     <script src="src/forge/Props/PropBuilder.js"></script>
+    <script src="src/forge/Props/PropSpriteSheet.js"></script>
     <script src="src/forge/SoundEffectGenerator/AudioExport.js"></script>
     <script src="src/forge/SoundEffectGenerator/SoundEffectGenerator.js"></script>
     <!-- EffekseerGenerator: format + textures + recipe registry + recipes + class (order matters) -->
@@ -1340,6 +1395,7 @@
     <script src="src/database/AnimationPickerModal.js"></script>
     <script src="src/database/DatabaseCommonUI.js"></script>
     <script src="src/database/PassiveStatesSection.js"></script>
+    <script src="src/database/SlotLayoutsSection.js"></script>
     <script src="src/database/TacticsSection.js"></script>
     <script src="src/database/GrappleSection.js"></script>
     <script src="src/database/ActionScopes.js"></script>
@@ -1350,6 +1406,7 @@
     <script src="src/database/DatabaseQuestEditor.js"></script>
     <script src="src/database/DatabaseMusicSequenceEditor.js"></script>
     <script src="src/database/TraitHelp.js"></script>
+    <script src="src/database/ResourcePools.js"></script>
     <script src="src/database/DatabaseItemBaseEditor.js"></script>
     <script src="src/database/DatabaseRowClipboard.js"></script>
     <script src="src/database/DatabaseReferenceFinder.js"></script>
@@ -1396,6 +1453,7 @@
     <script src="src/event/commands/FollowerCommandEditor.js"></script>
     <script src="src/database/DatabaseSystem1Editor.js"></script>
     <script src="src/database/DatabaseSystem2Editor.js"></script>
+    <script src="src/database/DatabaseFeaturesEditor.js"></script>
     <script src="src/database/DatabaseControlsEditor.js"></script>
     <script src="src/database/DatabaseCommonEventEditor.js"></script>
     <script src="src/database/DatabaseUserInterfaceEditor.js"></script>
@@ -1403,6 +1461,7 @@
     <script src="src/database/ActionSequencePreview.js"></script>
     <script src="src/database/DatabaseActionSequenceEditor.js"></script>
     <script src="src/DatabaseEditorUI.js"></script>
+    <script src="src/GlobalSearch.js"></script>
     <!-- Build Manager -->
     <script src="src/DeploymentPathPreferences.js"></script>
     <script src="src/DeploymentLocalePreferences.js"></script>

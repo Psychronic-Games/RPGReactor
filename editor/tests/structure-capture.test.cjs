@@ -67,7 +67,9 @@ test('select whole building: a stamped group whole, else every loose piece touch
     const map = village(E);
     const list = E.pieces(map);
     const house = SC.connected(list, list.find(p => p.kind === 'door').id);
-    assert.equal(house.length, list.length - 1, 'the house, its rock and shape (touching it), not the wall across the map');
+    // Rocks are the ground's: the rock beside the house is not the house's (a finish given the house mirrored it).
+    assert.equal(house.length, list.length - 2, 'the house and its shape (touching it), not the rock beside it nor the wall across the map');
+    assert.ok(!house.includes(list.find(p => p.kind === 'rock').id));
     assert.ok(!house.includes(list.find(p => p.x === 30).id));
     // A grouped building: its group, however far its parts stand apart.
     const grouped = list.map(p => Object.assign({}, p, { group: p.x === 30 || p.kind === 'floor' ? 7 : 0 }));
@@ -171,7 +173,7 @@ test('Save as structure: the file, the Database record, overwrite only when aske
     // Made one building: a stamp of it where it stood, its villager now the building's (moved, not copied).
     const record = E.structures(map).find(entry => entry.plan === 'Little-House.json');
     assert.ok(record && record.x === 10 && record.y === 12, 'a building record at the corner');
-    assert.equal(E.pieces(map).filter(p => p.group === record.group).length, E.pieces(map).length - 1, 'every house piece is the building\'s');
+    assert.equal(E.pieces(map).filter(p => p.group === record.group).length, E.pieces(map).length - 2, 'every house piece is the building\'s (not the rock beside it)');
     const villagers = map.events.filter(e => e && e.name === 'Villager');
     assert.equal(villagers.length, 1, 'one villager, not two');
     assert.match(villagers[0].note, /<structure:\d+><spot:villager>/);

@@ -81,12 +81,19 @@
     };
 
     /** Every authored quest, in id order. */
+    /** Whether the game uses Reactor's quests (Database > Reactor Features; a quest plugin may do the job instead). */
+    ReactorQuests.featureOn = function() {
+        return typeof ReactorFeatures === "undefined" || ReactorFeatures.on("quests");
+    };
+
     ReactorQuests.quests = function() {
+        if (!ReactorQuests.featureOn()) return [];
         return (window.$dataReactorQuests || []).filter(quest => quest && quest.id > 0);
     };
 
     /** A quest by numeric id or by its key. */
     ReactorQuests.find = function(idOrKey) {
+        if (!ReactorQuests.featureOn()) return null;
         const list = window.$dataReactorQuests || [];
         const id = Number(idOrKey);
         if (id > 0 && list[id]) return list[id];

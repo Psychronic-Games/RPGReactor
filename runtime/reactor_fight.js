@@ -166,7 +166,12 @@
      * next-battle setting. A command for this map, else the map's own, else a command for the game, else System,
      * else Classic.
      */
+    F.mapBattlesOn = function() {
+        return typeof root.ReactorFeatures === "undefined" || root.ReactorFeatures.on("mapBattles");
+    };
+
     F.modeInForce = function() {
+        if (!F.mapBattlesOn()) return "classic";
         const o = F.overrides();
         const mapId = typeof $gameMap !== "undefined" && $gameMap ? $gameMap.mapId() : 0;
         if (o.maps && F.isMode(o.maps[mapId])) return o.maps[mapId];
@@ -179,6 +184,8 @@
 
     /** The mode of the next battle against a troop (0: none): the next-battle setting, then the troop's, then the mode in force. */
     F.resolveMode = function(troopId) {
+        // Database > Reactor Features can leave battles to the battle screen (or a plugin's on-map system).
+        if (!F.mapBattlesOn()) return "classic";
         const o = F.overrides();
         if (F.isMode(o.next)) return o.next;
         return F.troopMode(troopId) || F.modeInForce();

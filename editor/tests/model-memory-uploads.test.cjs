@@ -348,10 +348,13 @@ test('the import optimizer drops the pictures the game never samples and keeps t
     const view = json.bufferViews[json.images[0].bufferView];
     assert.deepEqual(Array.from(bin.subarray(view.byteOffset, view.byteOffset + view.byteLength)), [137, 80, 78, 71, 1, 2, 3, 4, 5, 6, 7, 8]);
     assert.ok(out.bytes.length < bytes.length - 2900, 'the unnamed picture is gone');
-    // A normal map on other coordinates than the picture's is not drawn, and goes.
+    // A normal map on the second coordinates (a Character Builder cloth's repeating tile) is drawn on its own: it stays.
     const second = await O.optimize(new Uint8Array(glbWithPictures(true, 1)), { dropUnsampledImages: true });
-    assert.equal(O.parseGlb(second.bytes).json.materials[0].normalTexture, undefined);
-    assert.equal(O.parseGlb(second.bytes).json.images.length, 1);
+    assert.deepEqual(O.parseGlb(second.bytes).json.materials[0].normalTexture, { index: 1, texCoord: 1 });
+    // On any other coordinates than those two it is not drawn, and goes.
+    const third = await O.optimize(new Uint8Array(glbWithPictures(true, 2)), { dropUnsampledImages: true });
+    assert.equal(O.parseGlb(third.bytes).json.materials[0].normalTexture, undefined);
+    assert.equal(O.parseGlb(third.bytes).json.images.length, 1);
 });
 
 test('the editor resamples a model sheet over the cap in the image worker, not on its main thread; its other pictures stay as they are', async () => {

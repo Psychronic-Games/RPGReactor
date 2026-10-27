@@ -37,9 +37,18 @@
     };
 
     const api = {
+        /** The text color that reads on a color: black on a light one, white on a dark one (by its relative luminance). */
+        ink(value) {
+            const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+            const [r, g, b] = hexToRgb(valid(value) ? value : '#ffffff').map(lin);
+            const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            // Where black and white read equally well against it: (L + 0.05) / 0.05 = 1.05 / (L + 0.05).
+            return L > 0.179 ? '#000000' : '#ffffff';
+        },
+
         swatch(cls, value, disabled = false) {
             const hex = valid(value) ? value.toLowerCase() : '#ffffff';
-            return `<button type="button" class="rr-color-swatch-btn ${escape(cls)}" data-value="${hex}" style="background:${hex};"${disabled ? ' disabled' : ''}><span class="rr-color-swatch-hex">${hex.toUpperCase()}</span></button>`;
+            return `<button type="button" class="rr-color-swatch-btn ${escape(cls)}" data-value="${hex}" style="background:${hex};--rr-swatch-ink:${api.ink(hex)};"${disabled ? ' disabled' : ''}><span class="rr-color-swatch-hex">${hex.toUpperCase()}</span></button>`;
         },
 
         /** Make a swatch button open the popup; `onInput(hex)` runs as the colour changes. */
@@ -51,6 +60,7 @@
                 api.open(button, button.dataset.value, hex => {
                     button.dataset.value = hex;
                     button.style.background = hex;
+                    button.style.setProperty('--rr-swatch-ink', api.ink(hex));
                     const label = button.querySelector('.rr-color-swatch-hex');
                     if (label) label.textContent = hex.toUpperCase();
                     onInput(hex);

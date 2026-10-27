@@ -129,6 +129,7 @@ test('a motion opens below the complete model workspace and closing returns that
     };
     const editor = new Motion(host);
     editor.bind = () => {};
+    editor.bindPoses = () => {};
     editor.open('New motion');
     assert.deepEqual(children, [panel], 'the panel is alongside the model columns, outside the preview overlays');
     assert.equal(canvas.style.height, '100%', 'the canvas fills its own row instead of being manually cropped');

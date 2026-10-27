@@ -44,8 +44,10 @@
     /**
      * The grid under (or over) `anchor`: `materials` as `[{ name, url }]`, `current` lit,
      * `blank` the name of the empty choice (left out when not given), `note` a line under the grid.
+     * `onAdd` (with `addLabel`) puts a last tile that adds a material of the author's own: it returns the new
+     * name (or a promise of it, null when nothing was added), which is then picked as a click on it would be.
      */
-    function open(anchor, { materials = [], current = '', blank = null, note = '', onPick, onHover = null } = {}) {
+    function open(anchor, { materials = [], current = '', blank = null, note = '', onPick, onHover = null, onAdd = null, addLabel = '+' } = {}) {
         close();
         const grid = document.createElement('div');
         grid.className = 'rr-material-popup';
@@ -54,7 +56,8 @@
             + `<span class="rr-material-option-face${name && url ? '' : ' is-plain'}"${name ? face(url) : ''}></span><span class="rr-material-option-name">${escape(label)}</span></button>`;
         // Every name and address is escaped in `option`.
         const options = (blank === null ? '' : option('', '', blank)) + materials.map(entry => option(entry.name, entry.url, entry.name)).join('');
-        grid.innerHTML = `<div class="rr-material-options">${options}</div>` + (note ? `<div class="rr-material-popup-note">${escape(note)}</div>` : '');
+        const add = onAdd ? `<button type="button" class="rr-material-option rr-material-add" title="${escape(addLabel)}"><span class="rr-material-option-face is-plain rr-material-add-face">+</span><span class="rr-material-option-name">${escape(addLabel)}</span></button>` : '';
+        grid.innerHTML = `<div class="rr-material-options">${options}${add}</div>` + (note ? `<div class="rr-material-popup-note">${escape(note)}</div>` : '');
         document.body.appendChild(grid);
         // Under the tile when there is room, else over it; never off the window.
         const rect = anchor.getBoundingClientRect(), box = grid.getBoundingClientRect();
@@ -65,7 +68,13 @@
         grid.style.top = Math.round(top) + 'px';
         anchor.setAttribute('aria-expanded', 'true');
         const popup = { grid, anchor, onHover, away: null, key: null };
+        grid.querySelector('.rr-material-add')?.addEventListener('click', () => {
+            close(true);
+            if (onHover) onHover(null);
+            Promise.resolve().then(() => onAdd()).then(name => { if (name && onPick) onPick(name); }, error => console.warn('A material could not be added.', error));
+        });
         for (const el of grid.querySelectorAll('.rr-material-option')) {
+            if (el.classList.contains('rr-material-add')) continue;
             el.addEventListener('click', () => { const name = el.dataset.name; close(true); if (onHover) onHover(null); if (onPick) onPick(name); });
             if (onHover) { el.addEventListener('pointerenter', () => onHover(el.dataset.name)); el.addEventListener('focus', () => onHover(el.dataset.name)); }
         }

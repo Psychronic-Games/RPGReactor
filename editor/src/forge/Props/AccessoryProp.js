@@ -45,6 +45,7 @@
         if (!reference) throw new Error('Accessory reference is not ready. Call prepare() first.');
         const recipe = normalize(input), {pack,built} = reference;
         const generated = Props.build(pack,built,[recipe.accessory],[]);
+        if(recipe.accessory.id==='ledMask')generated.parts=ledRegions(generated.parts);
         const low=[Infinity,Infinity,Infinity], high=[-Infinity,-Infinity,-Infinity];
         const angles=recipe.rotation.map(v=>v*Math.PI/180),offsets={};
         if(PAIRED.has(recipe.accessory.id)&&recipe.pivot!=='attachment'){
@@ -93,9 +94,37 @@
         for(const p of parts) for(let k=0;k<p.positions.length;k++)p.positions[k]=(p.positions[k]-pivot[k%3])*recipe.scale;
         const referenced=new Set(parts.flatMap(p=>[p.texture,p.normalTexture,p.metallicRoughnessTexture,p.emissiveTexture].filter(Boolean)));for(const name of Object.keys(textures))if(!referenced.has(name))delete textures[name];
         const extent=Math.max(...high.map((v,k)=>(v-low[k])*recipe.scale),.05);
-        return {kind:'accessory',recipe,parts,bones:[{name:'Prop',head:[0,0,0],parent:-1}],clips:[],textures,construction:generated.construction,
+        const sidecarExtra=recipe.accessory.id==='ledMask'?{animations:LED_RULES.filter(r=>parts.some(p=>p.name===r.part)).map(r=>Object.assign({},r))}:undefined;
+        return {kind:'accessory',recipe,parts,bones:[{name:'Prop',head:[0,0,0],parent:-1}],clips:[],textures,construction:generated.construction,sidecarExtra,
             height:extent, triangles:parts.reduce((n,p)=>n+p.index.length/3,0)};
     }
+    // The LED mask's lights, by where they sit on the face: the eyes, the nose and the mouth each a part of their own
+    // (the same material, its triangles split, nothing added), so a saved mask's `glow` rules light them apart.
+    const LED_AREAS=[['eyes','LED mask eyes'],['nose','LED mask nose'],['mouth','LED mask mouth']];
+    function ledRegions(parts) {
+        const L=reference.marks||(reference.marks=Props.landmarks(reference.pack,reference.built)),out=[];
+        const eyeY=L.eyeY,mouthY=L.mouth[1],noseY=L.noseTip[1];
+        const areaOf=(x,y)=>Math.abs(x)>.05?null:y>eyeY-.02&&y<eyeY+.024?'eyes':y<(noseY+mouthY)/2+.004&&y>mouthY-.06?'mouth':y<eyeY-.02&&y>=(noseY+mouthY)/2+.004&&Math.abs(x)<.024?'nose':null;
+        for(const p of parts){
+            if(p.name!=='LED mask'||!p.emissiveTexture){out.push(p);continue;}
+            const P=p.positions,I=p.index,n=P.length/3,groups={rest:[]};
+            for(let t=0;t<I.length;t+=3){const a=I[t],b=I[t+1],c=I[t+2],x=(P[a*3]+P[b*3]+P[c*3])/3,y=(P[a*3+1]+P[b*3+1]+P[c*3+1])/3,z=(P[a*3+2]+P[b*3+2]+P[c*3+2])/3;
+                const area=z>L.noseTip[2]-.05?areaOf(x-L.mouth[0],y):null;(groups[area||'rest']||(groups[area]=[])).push(a,b,c);}
+            for(const [key,name] of [['rest',p.name],...LED_AREAS]){
+                const idx=groups[key];if(!idx||!idx.length)continue;
+                const map=new Int32Array(n).fill(-1),keep=[];for(const v of idx)if(map[v]<0){map[v]=keep.length;keep.push(v);}
+                const q=Object.assign({},p,{name,index:Uint32Array.from(idx,v=>map[v])});
+                for(const [k,arr] of Object.entries(p)){if(!ArrayBuffer.isView(arr)||k==='index'||arr.length%n)continue;const w=arr.length/n,copy=new arr.constructor(keep.length*w);keep.forEach((v,j)=>{for(let d=0;d<w;d++)copy[j*w+d]=arr[v*w+d];});q[k]=copy;}
+                delete q.faceFollow;out.push(q);
+            }
+        }
+        return out;
+    }
+    /** The LED mask's lights as model rules: the eyes breathe, the nose glows slowly, the mouth flickers as if talking. */
+    const LED_RULES=[
+        {name:'LED eyes',type:'glow',part:'LED mask eyes',trigger:'always',mode:'pulse',period:150,min:.15,max:1.1},
+        {name:'LED nose',type:'glow',part:'LED mask nose',trigger:'always',mode:'pulse',period:95,min:.1,max:1},
+        {name:'LED mouth',type:'glow',part:'LED mask mouth',trigger:'always',mode:'flicker',period:36,min:.05,max:1.15}];
     /** A random take on the same accessory: 'shape' its style, fit, size and options; 'colors' colors that suit what it is made of. */
     function random(seed,recipe,scope) {
         const R=Rand.roll(seed),r=normalize(recipe),def=Props.BY_ID.get(r.accessory.id),d=def.defaults,a=r.accessory,has=part=>Rand.covers(scope,part);
@@ -118,14 +147,16 @@
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     Model.register({id:'accessory',label:'Equipment',...api});
     // Where each accessory is listed: a group in Wearables, Weapons or Tools & Gear. Swords and daggers
-    // are made by the Sword kind and books by Framed, so those stay unlisted (their saved recipes still open).
+    // are made by the Sword kind, books by Framed, and axes, spears, staffs, bows and shields by the
+    // weapon kinds (Hafted, Staff, Bow, Shield), so those stay unlisted (their saved recipes still open).
     const GROUPS={
         hats:['wearables','Hats',61],face:['wearables','Face',62],masks:['wearables','Masks',63],jewelry:['wearables','Jewelry & Ties',64],
         back:['wearables','Capes & Packs',65],hands:['wearables','Nails & Claws',66],melee:['weapons','Axes, Bows & Shields',44],
-        bags:['gear','Bags',71],tools:['gear','Tools',72],instruments:['gear','Instruments',73],sports:['gear','Sports',74],other:['gear','Other',79]
+        bags:['gear','Bags',71],tools:['gear','Tools',72],instruments:['gear','Instruments',73],sports:['gear','Sports',74],other:['gear','Other',79],
+        cyber:['wearables','Cyberware',67]
     };
-    const FROM_GROUP={Hats:'hats',Face:'face',Masks:'masks',Jewelry:'jewelry',Back:'back','Body details':'hands',Weapons:'melee',Performance:'instruments',Sports:'sports'};
-    const BAGS=new Set(['satchel','beltPouch','canteen','suitcase']),UNLISTED=new Set(['sword','dagger','book']);
+    const FROM_GROUP={Hats:'hats',Face:'face',Masks:'masks',Jewelry:'jewelry',Back:'back','Body details':'hands',Weapons:'melee',Performance:'instruments',Sports:'sports','Cyber faces':'cyber','Cyber masks':'cyber','HUD eyewear':'cyber',Implants:'cyber'};
+    const BAGS=new Set(['satchel','beltPouch','canteen','suitcase']),UNLISTED=new Set(['sword','dagger','book','axe','spear','staff','bow','shield']);
     const groupOf=def=>def.group==='Bags and tools'?(BAGS.has(def.id)?'bags':'tools'):(FROM_GROUP[def.group]||'other');
     for(const [id,[parent,label,order]] of Object.entries(GROUPS)) Catalog.category({id:'acc-'+id,label,order,parent});
     for(const def of Props.PROPS) Catalog.add({id:'accessory-'+def.id,category:'acc-'+groupOf(def),label:def.label,hidden:UNLISTED.has(def.id),
@@ -150,11 +181,17 @@
         }
         return accentCache.get(key);
     }
-    const OPTION_LABELS={charm:'Charm',studs:'Studs',thick:'Thickness',billLength:'Bill length',pockets:'Pockets',vents:'Vents'};
+    const OPTION_LABELS={charm:'Charm',studs:'Studs',thick:'Thickness',billLength:'Bill length',pockets:'Pockets',vents:'Vents',style:'Style',wear:'Wear',glow:'Glow',pattern:'Pattern',sides:'Sides',cables:'Cables'};
     api.slots=slots; api.usesAccent=usesAccent;
 
     Catalog.ui('accessory',{
         placeholder:'Equipment',tabs:[['equipment','Equipment']],reset:r=>normalize({accessory:{id:r.accessory.id}}),
+        // An unset color shows what the accessory draws: cyberware its style's plate and glow, the rest their defaults.
+        effectiveColor(path) {
+            const a=this.recipe.accessory,def=Props.BY_ID.get(a.id),key=path.split('.').pop(),Cyber=root.RRCharacterCyberGear;
+            if(def.cyber&&Cyber&&Cyber.paletteOf){const p=Cyber.paletteOf(a);return key==='color2'?p.glowHex:p.plateHex;}
+            return (def.defaults||{})[key]||'';
+        },
         panel() {
             const r=this.recipe,def=Props.BY_ID.get(r.accessory.id),d=def.defaults,worn=def.slot!=='held';
             let html=this._section('Shape')+this._slider({path:'scale',label:'Overall size',range:[.1,5],step:.05,format:'x'});
@@ -168,7 +205,8 @@
                 else html+=this._slider({path:'accessory.'+key,label,range:spec,step:key==='pockets'||key==='vents'?1:.05});
             }
             html+=this._section('Look')+this._color('accessory.color','Color');
-            if(d.color2&&usesAccent(r))html+=this._color('accessory.color2','Accent');
+            // Cyberware leaves its colors empty for its style's own; its second color is its glow.
+            if((d.color2||def.cyber)&&usesAccent(r))html+=this._color('accessory.color2',def.cyber?def.labels.color2:'Accent');
             const names=slots(r),plain=names.filter(n=>n!=='Lenses');
             if(!names.length)html+=this._select('material','Material',MATERIAL_CHOICES);
             for(const name of names) {

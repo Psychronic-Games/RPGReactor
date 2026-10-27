@@ -912,28 +912,32 @@ Game_Interpreter.prototype.command124 = function(params) {
 
 // Change Gold
 Game_Interpreter.prototype.command125 = function(params) {
-    const value = this.operateValue(params[0], params[1], params[2]);
+    // params[3]: the top of a Random amount (operand type 2), RPG Reactor only.
+    const value = this.operateValue(params[0], params[1], params[2], params[3]);
     $gameParty.gainGold(value);
     return true;
 };
 
 // Change Items
 Game_Interpreter.prototype.command126 = function(params) {
-    const value = this.operateValue(params[1], params[2], params[3]);
+    // params[4]: the top of a Random amount (operand type 2), RPG Reactor only.
+    const value = this.operateValue(params[1], params[2], params[3], params[4]);
     $gameParty.gainItem($dataItems[params[0]], value);
     return true;
 };
 
 // Change Weapons
 Game_Interpreter.prototype.command127 = function(params) {
-    const value = this.operateValue(params[1], params[2], params[3]);
+    // params[5]: the top of a Random amount (operand type 2), RPG Reactor only.
+    const value = this.operateValue(params[1], params[2], params[3], params[5]);
     $gameParty.gainItem($dataWeapons[params[0]], value, params[4]);
     return true;
 };
 
 // Change Armors
 Game_Interpreter.prototype.command128 = function(params) {
-    const value = this.operateValue(params[1], params[2], params[3]);
+    // params[5]: the top of a Random amount (operand type 2), RPG Reactor only.
+    const value = this.operateValue(params[1], params[2], params[3], params[5]);
     $gameParty.gainItem($dataArmors[params[0]], value, params[4]);
     return true;
 };

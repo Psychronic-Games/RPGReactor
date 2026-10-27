@@ -1346,6 +1346,11 @@ ImageManager.isEightDirCharacter = function(filename) {
     return /\[8D\]/i.test(Utils.extractFileName(filename || ""));
 };
 
+// A sheet tagged [1D] has one row per character, shown whichever way it faces (reactor_sprites.js).
+ImageManager.isOneDirCharacter = function(filename) {
+    return /\[1D\]/i.test(Utils.extractFileName(filename || ""));
+};
+
 ImageManager.isBigCharacter = function(filename) {
     if (ImageManager.isEightDirCharacter(filename)) return false;
     const sign = Utils.extractFileName(filename).match(/^[!$]+/);
@@ -1406,6 +1411,12 @@ EffectManager.onError = function(url) {
     this._errorUrls.push(url);
 };
 
+/** The in-scene layer when screen animations play there (Sprite_Animation.SceneLayer), else null. */
+EffectManager.sceneLayer = function() {
+    const layer = typeof Sprite_Animation !== "undefined" ? Sprite_Animation.SceneLayer : null;
+    return layer && layer.active() ? layer : null;
+};
+
 EffectManager.makeUrl = function(filename) {
     return "effects/" + Utils.encodeURI(filename) + ".efkefc";
 };
@@ -1424,6 +1435,8 @@ EffectManager.throwLoadError = function(url) {
 
 EffectManager.isReady = function() {
     this.checkErrors();
+    const layer = this.sceneLayer();
+    if (layer && !layer.isReady()) return false;
     for (const url in this._cache) {
         const effect = this._cache[url];
         if (!effect.isLoaded) {
@@ -1506,6 +1519,9 @@ EffectManager.mapAnimationIds = function(mapData) {
  * is the cached one by then.
  */
 EffectManager.preload = function(filename) {
+    // Screen animations play inside PIXI's scene: load there, not into the overlay's context.
+    const layer = this.sceneLayer();
+    if (layer) return layer.preload(filename);
     if (!filename || !Graphics.effekseer) return false;
     const url = this.makeUrl(filename), cache = this._cache;
     if (cache[url]) return false;
@@ -3481,6 +3497,8 @@ SceneManager.updateEffekseer = function() {
     if (Graphics.effekseer && this.isGameActive()) {
         Graphics.effekseer._makeContextCurrent?.();
         Graphics.effekseer.update();
+        // The in-scene context steps with the same update, battle slow motion included.
+        if (typeof Sprite_Animation !== "undefined") Sprite_Animation.SceneLayer?.update(Graphics.effekseer.update);
         if (typeof Reactor3D !== "undefined") Reactor3D.GpuEffects?.update();
     }
 };
@@ -3545,6 +3563,7 @@ SceneManager.onBeforeSceneStart = function() {
     if (Graphics.effekseer) {
         Graphics.effekseer.stopAll();
     }
+    if (typeof Sprite_Animation !== "undefined") Sprite_Animation.SceneLayer?.stopAll();
 };
 
 SceneManager.onSceneStart = function() {

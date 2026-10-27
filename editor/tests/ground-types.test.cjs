@@ -40,7 +40,7 @@ test('ground paint reads and writes as runs, and a map without ground has none',
     assert.deepEqual(R.groundAt(map, 1, 1), { type: -1, name: '', material: '!Grass-01', tint: '', scale: 0, bare: false, level: 0 });
 });
 
-test('the runtime normalizes the types: a material each, a tint, a scale in range, no more than eight, companions refused', () => {
+test('the runtime normalizes the types: a material each, a tint, a scale in range, no more than sixty-four, companions refused', () => {
     const map = flatMap(4, 3, { ground: { types: [
         { name: 'Beach', material: 'Sand', tint: '#E8D9A8', bare: true, scale: 99, paint: '0x4 9x2 5' },
         { material: 'Rock_normal', paint: '9' }, { paint: '9' }, null,
@@ -58,7 +58,8 @@ test('the runtime normalizes the types: a material each, a tint, a scale in rang
     assert.equal(R.groundAt(map, -4, 1).name, 'Beach', 'off the map answers for the nearest cell');
     assert.equal(R.groundBareAt(map, 0, 1), true);
     assert.equal(R.groundBareAt(map, 1, 1), false);
-    const many = flatMap(2, 2, { ground: { types: Array.from({ length: 12 }, (_, i) => ({ material: 'M' + i, paint: '9' })) } });
+    assert.equal(R.GROUND_TYPES_MAX, 64);
+    const many = flatMap(2, 2, { ground: { types: Array.from({ length: 70 }, (_, i) => ({ material: 'M' + i, paint: '9' })) } });
     assert.equal(R.groundOf(many).types.length, R.GROUND_TYPES_MAX);
 });
 
@@ -72,26 +73,35 @@ test('nothing grows on a bare ground', () => {
 test('the floor shader takes the ground types only when a map has them', () => {
     const none = R.GROUND_SLOPE_MAP_GLSL;
     assert.ok(none.includes('//RR_GROUND_TYPES'), 'the place they go');
-    const g = { count: 5, detail: {}, splatB: {} };
+    const g = { count: 5, groups: 2, detail: {} };
     const header = R.groundTypesHeaderGLSL(g), body = R.groundTypesBodyGLSL(g);
     assert.match(header, /#define RR_GROUND_COUNT 5/);
+    assert.match(header, /#define RR_GROUND_GROUPS 2/);
     assert.match(header, /uniform sampler2DArray rrGroundArray;/);
-    assert.match(header, /uniform sampler2D rrGroundSplatB;/);
+    // The paint is one array texture (four types a layer) and each type's look a column of one float texture,
+    // so a floor's samplers and uniforms stay the same however many types there are.
+    assert.match(header, /uniform sampler2DArray rrGroundSplat;/);
+    assert.match(header, /uniform highp sampler2D rrGroundInfo;/);
+    assert.doesNotMatch(header, /rrGroundSplatB|rrGroundType\[|rrGroundOn\[|rrGroundDetailParams\[/);
     assert.match(header, /#define RR_GROUND_DETAIL/);
-    assert.match(body, /i < 4 \? rrWA\[i\] : rrWB\[i - 4\]/);
+    assert.match(body, /float rrW = rrWs\[i >> 2\]\[i & 3\];/);
+    assert.match(body, /texelFetch\(rrGroundInfo, ivec2\(i, 1\), 0\)/);
+    assert.match(body, /textureGrad\(rrGroundArray, vec3\(rrTP\.xz, rrTL\)/, 'the layer is the material\'s, which types of one material share');
     assert.match(body, /rrDetailShade/);
     // The edge noise is worked out only where a type is part-way (its term is rrW * (1 - rrW)): solid paint skips it.
-    assert.match(body, /vec4 rrWE = rrWA \* \(1\.0 - rrWA\);\n\t\t\trrWE \+= rrWB \* \(1\.0 - rrWB\);\n\t\t\tfloat rrWn = 0\.5;\n\t\t\tif \(rrWE\.x \+ rrWE\.y \+ rrWE\.z \+ rrWE\.w > 0\.0\) rrWn = rrGroundNoise/);
+    assert.match(body, /vec4 rrWEk = rrWk \* \(1\.0 - rrWk\);/);
+    assert.match(body, /if \(rrWE > 0\.0\) rrWn = rrGroundNoise/);
     // A painted ground is shaded by its slope against the key light, level ground left as it was; the light comes in under the shader's own name.
     assert.match(header, /uniform vec4 rrGroundKey;/);
     assert.doesNotMatch(header, /uniform vec4 rrKeyLight;/, 'the lit material declares that one');
     assert.match(body, /float rrGShade = clamp\(\(0\.35 \+ 0\.65 \* max\(dot\(rrGN, rrGL\), 0\.0\)\) \/ \(0\.35 \+ 0\.65 \* max\(rrGL\.y, 0\.05\)\), 0\.5, 1\.25\);/);
     const shader = { uniforms: {} };
-    R.groundTypesUniforms(shader, { splat: 1, splatB: null, array: 2, size: 3, types: [], on: [], detail: null });
+    R.groundTypesUniforms(shader, { splat: 1, array: 2, info: 4, size: 3, detail: null });
     assert.equal(shader.uniforms.rrGroundKey.value, R.lightUniforms().rrKeyLight.value, 'the same numbers the lit materials read');
-    const few = { count: 2, detail: null, splatB: null };
-    assert.doesNotMatch(R.groundTypesHeaderGLSL(few), /rrGroundSplatB|RR_GROUND_DETAIL/);
-    assert.doesNotMatch(R.groundTypesBodyGLSL(few), /rrWB|rrDetailShade/);
+    assert.equal(shader.uniforms.rrGroundInfo.value, 4);
+    const few = { count: 2, groups: 1, detail: null };
+    assert.doesNotMatch(R.groundTypesHeaderGLSL(few), /RR_GROUND_DETAIL/);
+    assert.doesNotMatch(R.groundTypesBodyGLSL(few), /rrDetailShade/);
     // One program per shape of ground: the count and whether any type has maps.
     const source = read('runtime/reactor_3d.js');
     assert.match(source, /"\|ground" \+ types\.count \+ \(types\.detail \? "d" : ""\)/);
@@ -187,9 +197,9 @@ test('a ground stroke is one undo step; adding, editing and removing a type are 
     assert.equal(map.reactor3d.ground, undefined);
     terrain.undo(); terrain.undo();
     assert.equal(JSON.stringify(map.reactor3d.ground), painted);
-    // Eight is the most.
-    for (let i = 1; i < 8; i++) assert.equal(terrain.addGroundType({ material: 'M' + i }), i);
-    assert.equal(terrain.addGroundType({ material: 'M9' }), -1);
+    // Sixty-four is the most, as the runtime draws.
+    for (let i = 1; i < 64; i++) assert.equal(terrain.addGroundType({ material: 'M' + i }), i);
+    assert.equal(terrain.addGroundType({ material: 'M64' }), -1);
 });
 
 test('dunes: gentle on the windward side, steeper on the lee, and walkable unless told otherwise', () => {
@@ -231,7 +241,7 @@ test('dunes: gentle on the windward side, steeper on the lee, and walkable unles
 test('Rock is in the Terrain group, laid by the builder as before', () => {
     const BuildHotbar = require(path.join(repoRoot, 'editor/src/BuildHotbar.js'));
     assert.ok(BuildHotbar.TERRAIN.includes('rock') && !BuildHotbar.SLOTS.includes('rock'), 'out of Build, into Terrain');
-    assert.deepEqual(BuildHotbar.TERRAIN.slice(0, 8), ['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'rock']);
+    assert.deepEqual(BuildHotbar.TERRAIN.slice(0, 9), ['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'path', 'rock']);
     assert.equal(BuildHotbar.TERRAIN_MODE.rock, undefined, 'not a TerrainManager mode');
     const picked = [];
     const manager = { mode: 'select', kind: 'wall', activate() { picked.push('activate'); }, setKind(kind) { this.kind = kind; this.mode = 'place'; }, setMode(mode) { this.mode = mode; }, materials: () => [{ name: 'Rock', url: '' }] };

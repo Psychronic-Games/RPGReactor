@@ -902,18 +902,33 @@ Reactor3D.facesLight = function(material) {
  * normal, turned toward the eye (a double-sided leaf or cloth lights from the
  * side seen), bent by its normal map where it has one.
  */
-Reactor3D.faceGlsl = function(normalMap) {
+Reactor3D.faceGlsl = function(normalMap, uv1) {
     return [
         // A mesh without normals lights as before. No branch: the normal map's derivatives need every pixel.
         "{",
         "\tfloat rrFL = dot(vRRWorldNormal, vRRWorldNormal);",
         "\tvec3 rrFN = rrFL > 1e-8 ? vRRWorldNormal * inversesqrt(rrFL) : vec3(0.0, 1.0, 0.0);",
         "\tif (dot(rrFN, cameraPosition - vRRWorldPos) < 0.0) rrFN = -rrFN;",
-        normalMap ? "\trrFN = rrPerturbNormal(vRRWorldPos, rrFN, texture2D(rrNormalMap, vMapUv).xyz * 2.0 - 1.0, vMapUv);" : "",
+        normalMap ? (uv1 ? "\trrFN = rrPerturbNormal(vRRWorldPos, rrFN, texture2D(rrNormalMap, vRRUv1).xyz * 2.0 - 1.0, vRRUv1);"
+            : "\trrFN = rrPerturbNormal(vRRWorldPos, rrFN, texture2D(rrNormalMap, vMapUv).xyz * 2.0 - 1.0, vMapUv);") : "",
         "\trrFaceN = rrFN;",
         "\trrFace = rrFL > 1e-8 ? 1.0 : 0.0;",
         "}"
     ].filter(Boolean).join("\n\t") + "\n\t";
+};
+
+/** Whether a model material's normal map rides the second coordinates (TEXCOORD_1, geometry attribute uv1). */
+Reactor3D.normalOnUv1 = function(material) {
+    const data = material && material.userData;
+    return !!(data && data.rrNormalUv1 && data.rrNormalMap && data.rrNormalMap.isTexture);
+};
+
+/** The second coordinates handed to the fragment shader as vRRUv1 (three declares uv1 only when a map of its own uses it). */
+Reactor3D.injectUv1 = function(shader) {
+    if (shader.vertexShader.includes("varying vec2 vRRUv1;")) return;
+    shader.vertexShader = "#ifndef USE_UV1\nattribute vec2 uv1;\n#endif\nvarying vec2 vRRUv1;\n"
+        + shader.vertexShader.replace(/}\s*$/, "\tvRRUv1 = uv1;\n}");
+    shader.fragmentShader = "varying vec2 vRRUv1;\n" + shader.fragmentShader;
 };
 
 /** A normal map's normal on a surface with no tangents: the frame from the screen derivatives of place and uv. */
@@ -1005,13 +1020,16 @@ Reactor3D.injectLightShader = function(shader, renderer, material) {
     // self-lit material (a Glow) skips the loop outright: its term is 1.
     // A model: lit by which way its faces point (and its normal map, where it has one beside its picture).
     const faces = this.facesLight(material);
-    const normalMap = faces && !!(material.userData && material.userData.rrNormalMap && material.userData.rrNormalMap.isTexture) && !!material.map;
+    // A normal map on the second coordinates (rrNormalUv1, a cloth's tile) needs no picture beside it.
+    const normalUv1 = faces && Reactor3D.normalOnUv1(material);
+    const normalMap = faces && !!(material.userData && material.userData.rrNormalMap && material.userData.rrNormalMap.isTexture) && (!!material.map || normalUv1);
     let face = "", faceDecl = "";
     if (faces) {
         this.injectWorldNormal(shader);
         this.injectVertexFacing(shader);
         faceDecl = "#define RR_VERTEX_FACE\n";
-        face = this.faceGlsl(normalMap);
+        face = this.faceGlsl(normalMap, normalUv1);
+        if (normalMap && normalUv1) this.injectUv1(shader);
         // On the weak tier the loop does not weigh each light: the whole light takes the direct light's and the
         // sky's share of the facing (rrFaceShare), as a model lit in the quarter-size pass does.
         if (!this.facesPerLight()) face += "float rrFaceKeep = rrFace;\n\trrFace = 0.0;\n\t";
@@ -1648,7 +1666,7 @@ Reactor3D.pieceSolidAt = function(mapData, wx, wy, wz, cut, thin, doors) {
         if (Number.isFinite(piece.rockTop)) { if (h >= piece.z && h <= piece.rockTop) return true; continue; }
         if (this.isShapeKind(kind)) { if (this.shapeHolds(mapData, piece, wx, wy, wz, base, slim)) return true; continue; }
         if (slim && (kind === "pillar" || kind === "fence" || kind === "ladder")) continue;
-        if (h < piece.z || h > piece.z + this.pieceHeight(kind)) continue;
+        if (h < piece.z || h > piece.z + this.pieceHeight(kind, piece)) continue;
         if (kind === "stair" || kind === "ramp") { if (h > this.pieceTop(piece, u, v)) continue; }
         return true;
     }
@@ -3349,7 +3367,7 @@ Reactor3D.litMaterial = function(material) {
         return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "")
             + (Reactor3D.shineOf(this) ? "|shine" : "")
-            + (Reactor3D.facesLight(this) ? (this.userData && this.userData.rrNormalMap && this.userData.rrNormalMap.isTexture && this.map ? "|face-nmap" : "|face") + (Reactor3D.facesPerLight() ? "" : "-share") : "")
+            + (Reactor3D.facesLight(this) ? (Reactor3D.normalOnUv1(this) ? "|face-nmap1" : this.userData && this.userData.rrNormalMap && this.userData.rrNormalMap.isTexture && this.map ? "|face-nmap" : "|face") + (Reactor3D.facesPerLight() ? "" : "-share") : "")
             + (Reactor3D.glowKey ? Reactor3D.glowKey(this) : "")
             + (Reactor3D.lookOf && Reactor3D.lookOf(this) ? "|look" : "")
             + (Reactor3D.detailProgramKey ? Reactor3D.detailProgramKey(this) : "");

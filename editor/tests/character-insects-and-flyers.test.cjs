@@ -102,7 +102,9 @@ test('wing controls change geometry and fly/glide motions survive GLB export wit
         assert.ok(poses.some(p => p.id === 'fly'), kind);
         const clip = Q.Creature.poseClip(b.bones, 'fly', r);
         const wing = b.bones.findIndex(b => b.role === 'wing'), track = clip.tracks.find(t => t.bone === wing);
-        assert.ok(Math.abs(track.values[8 * 4 + 2] - track.values[24 * 4 + 2]) > .2, kind + ' wings flap');
+        // Fast flyers beat several times a loop (an insect's wings are a blur): the wing's turn swings through a wide range over the keys.
+        let lo = Infinity, hi = -Infinity; for (let i = 2; i < track.values.length; i += 4) { lo = Math.min(lo, track.values[i]); hi = Math.max(hi, track.values[i]); }
+        assert.ok(hi - lo > .2, kind + ' wings flap');
         for (const fraction of [0,.25,.5,.75,1]) {
             const t = clip.times.at(-1) * fraction, pose = Cloth.pose(b.bones, clip, t);
             let low = Infinity;

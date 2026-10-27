@@ -67,7 +67,8 @@
         // The plate sits in a textile envelope, supported by broad shoulder
         // webbing and a waist cummerbund. Front/back panels retain torso skin.
         for(const face of [1,-1]){
-            const rows=[],R=16,K=16,low=hip+span*.28,high=neck-span*.105;
+            // (12 by 12 follows the torso as closely as 16 by 16 did; the saving keeps the recon kit under its budget.)
+            const rows=[],R=12,K=12,low=hip+span*.28,high=neck-span*.105;
             for(let j=0;j<=R;j++){
                 const u=j/R,y=low+(high-low)*u,q=C.section(y),half=q.width*(.90-.03*Math.sin(u*Math.PI)),row=[];
                 for(let k=0;k<=K;k++){
@@ -110,7 +111,7 @@
         // The hip pivot sits behind some waist sections. Center each band
         // inside its own torso section, so radial rays cover the entire back.
         const waistOrigin=y=>{const q=C.section(y);return[q.cx,y,(q.front+q.back)/2];};
-        const beltRows=[],beltR=10,beltK=64;
+        const beltRows=[],beltR=5,beltK=64;
         for(let row=0;row<=beltR;row++){
             const y=hip+span*(.095+.20*row/beltR),origin=waistOrigin(y),ring=section(surfaces,origin,[X,Y,Z],waistSurface,s),ids=[];
             for(let j=0;j<=beltK;j++){const p=ring(j/beltK*Math.PI*2,.009*s);ids.push(fabric.vertex(p,norm(sub(p,origin)),clothColor,spineSkin));}beltRows.push(ids);

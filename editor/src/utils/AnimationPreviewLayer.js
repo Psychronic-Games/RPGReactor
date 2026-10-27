@@ -65,6 +65,14 @@
             this.screenHeight = projectScreenHeight();
             this.span = 1;
             this.workspaceActive = true;
+            // Drawn only while the window it is in is the one being worked in (RRDetachedWindow), as the
+            // map views are: a looping effect on the 2D map drew every frame behind the Database's own
+            // window, and on a software renderer it kept the GPU too busy for the editor to answer.
+            const activity = typeof window !== 'undefined' ? window.RRDetachedWindow : null;
+            this._followActivity = () => {
+                if (activity?.previewActive && this.wrap.isConnected) this.setWorkspaceActive(activity.previewActive(this.wrap) !== false);
+            };
+            this._activityOff = activity?.onPreviewActivity ? activity.onPreviewActivity(this._followActivity) : null;
             // The canvases' native size: SIZE at rest, grown with the
             // overlay (see moveTo) so a big effect is not a stretched thumbnail.
             this.size = SIZE;
@@ -161,6 +169,7 @@
             this.stop();
             if (!animation) return false;
             this.active = true;
+            this._followActivity();
             this.loop = !!options.loop;
             this.onSound = options.onSound;this.paused=false;this.mv.ready=false;
             if (animation !== this._lastPlayed) { this.visibleFrames = null; this.endFrames = 0; this._litPlays = 0; }
@@ -247,6 +256,8 @@
         }
 
         dispose() {
+            this._activityOff?.();
+            this._activityOff = null;
             this.stop();
             this._drawFrame = null;
             if (this.fx.gpu) Reactor3D.GpuEffects.release(this.fx.gpu);
