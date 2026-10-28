@@ -502,7 +502,7 @@ class DatabaseStructureEditor {
                     <div class="rr-structures-side rr-accent-scrollbar"></div>
                     <div class="rr-structures-planpane">
                         <canvas class="rr-structures-paint" tabindex="0" aria-label="${rrEscapeHtml(tt('Floor plan'))}"></canvas>
-                        <div class="rr-structures-paint-hint"></div>
+                        <div class="rr-structures-paint-hint" tabindex="0"></div>
                     </div>
                     <div class="rr-structures-3dpane">
                         <canvas class="rr-structures-3d" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></canvas>
@@ -551,7 +551,7 @@ class DatabaseStructureEditor {
         if (target === now) return;
         if (target < now && !F.isDescribed(plan)) {
             let lost = false;
-            for (let f = target; f < now; f++) if (F.hasPieces(plan, f)) lost = true;
+            for (let f = target; f < now; f++) if (F.hasPieces(Object.assign({}, plan, { pieces: this._builtPieces(plan) }), f)) lost = true;
             if (lost) {
                 const one = now - target === 1;
                 const action = one ? this._t('Remove Floor') : this._t('Remove Floors');
@@ -565,6 +565,7 @@ class DatabaseStructureEditor {
             }
         }
         this.pushHistory();
+        if ((plan.parts || []).length || (plan.shapes || []).length || (plan.paths || []).length) F.materialize(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
         F.setFloors(plan, target);
         this._paint.floor = Math.min(this._paint.floor, target - 1);
         this.markDirty();
@@ -591,8 +592,8 @@ class DatabaseStructureEditor {
         // Over the floors: the whole building from above, roof, tower and all (to look at, not to paint on).
         floors.unshift(`<button type="button" class="rr-structures-floor rr-structures-above${this._paint.above ? ' active' : ''}" data-above="1" aria-pressed="${!!this._paint.above}">${rrEscapeHtml(tt('Seen from above'))}</button>`);
         const toolNames = { select: 'Select', room: 'Room', floor: 'Floor', wall: 'Wall', door: 'Door', window: 'Window', stairs: 'Stairs', erase: 'Eraser' };
-        const toolIcons = { select: 'select', room: 'room', floor: 'room', wall: 'remove', door: 'door', window: 'window', stairs: 'stairs', erase: 'remove' };
-        const tools = DatabaseStructureEditor.PAINT_TOOLS.map(tool => `<button type="button" class="rr-structures-tool${tool === this._paint.tool ? ' active' : ''}" data-tool="${tool}" aria-pressed="${tool === this._paint.tool}" title="${rrEscapeHtml(tt(toolNames[tool]))}">${DatabaseStructureEditor.icon(toolIcons[tool])}<span>${rrEscapeHtml(tt(toolNames[tool]))}</span></button>`).join('');
+        const toolIcons = { select: 'select', room: 'drawRect', floor: 'floor', wall: 'wall', door: 'doorway', window: 'window', stairs: 'stair', erase: 'hammer' };
+        const tools = BuildHotbar.slotsHtml(DatabaseStructureEditor.PAINT_TOOLS.map(tool => ({ id: tool, label: tt(toolNames[tool]), icon: BuildHotbar.icon(toolIcons[tool]), className: 'rr-structures-tool' })), this._paint.tool);
         const dirNames = { north: 'North', east: 'East', south: 'South', west: 'West' };
         side.innerHTML = `
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
@@ -604,7 +605,7 @@ class DatabaseStructureEditor {
             ${this._materialTile('roof', tt('Roof'))}
             <button type="button" class="rr-btn-secondary rr-structures-roof" title="${rrEscapeHtml(tt('Lay the roof again over the top floor.'))}">${rrEscapeHtml(tt('Rebuild roof'))}</button>
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
-            <div class="rr-structures-toolgrid">${tools}</div>
+            <div class="rr-build-row rr-structures-toolgrid">${tools}</div>
             ${this._sel?.length ? `<div class="rr-structures-selbar"><span>${rrEscapeHtml(this._selLabel())}</span>${this._sel.some(p => p.kind === 'stair') ? `<button type="button" class="rr-btn-secondary rr-structures-selturn">${rrEscapeHtml(tt('Turn'))}</button>` : ''}<button type="button" class="rr-btn-secondary rr-structures-seldelete">${rrEscapeHtml(tt('Delete'))}</button></div>` : ''}
             <div class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Walls'))}</span>${this._materialTile('wall', tt('Walls'))}</div>
             <div class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Floors'))}</span>${this._materialTile('floor', tt('Floors'))}</div>
@@ -620,7 +621,7 @@ class DatabaseStructureEditor {
         side.querySelector('.rr-structures-roof').addEventListener('click', () => this.rebuildRoof());
         side.querySelector('.rr-structures-addfloor').addEventListener('click', async () => { await this.setFloorCount(count + 1); this._paint.floor = count; this._paint.above = false; this.renderSide(); this.drawPaint(); });
         // A tool is for a floor: picking one from the view from above goes back to the floor last looked at.
-        side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; this._paint.above = false; if (this._paint.tool !== 'select') this._sel = []; this.renderSide(); this.drawPaint(); }));
+        BuildHotbar.bindSlots(side, tool => { this._paint.tool = tool; this._paint.above = false; if (tool !== 'select') this._sel = []; this.renderSide(); this.drawPaint(); });
         // A material is chosen from its pictures; the building wears it as the pointer passes over, and keeps it on a click.
         for (const button of side.querySelectorAll('.rr-structures-mat')) button.addEventListener('click', () => {
             const role = button.dataset.role;
@@ -912,7 +913,7 @@ class DatabaseStructureEditor {
         if (!F || !plan) return;
         this.pushHistory();
         const pitch = this._roofPitch(plan), roof = this._roleMaterial('roof');
-        if (F.isDescribed(plan)) F.buildOut(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
+        if (F.needsMaterialize(plan)) F.materialize(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
         const style = (plan.roof && plan.roof.style) || 'gable';
         F.rebuildRoof(plan, Object.assign({ style, pitch }, roof ? { roof } : {}));
         this._sel = [];
@@ -938,10 +939,10 @@ class DatabaseStructureEditor {
     /** The plan as pieces, ready to pick up: a described plan is built out first (undoable). */
     _ensureBuilt() {
         const F = this.floorsApi(), plan = this.current?.plan;
-        if (!F || !plan || !F.isDescribed(plan)) return false;
+        if (!F || !plan || !F.needsMaterialize(plan)) return false;
         const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
         this.pushHistory();
-        F.buildOut(plan, SP, name => this.resolve(name));
+        F.materialize(plan, SP, name => this.resolve(name));
         this.markDirty();
         return true;
     }
@@ -990,7 +991,7 @@ class DatabaseStructureEditor {
         const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
         this.pushHistory();
         const wall = this._roleMaterial('wall'), slab = this._roleMaterial('floor');
-        if (F.isDescribed(plan)) F.buildOut(plan, SP, name => this.resolve(name));
+        if (F.needsMaterialize(plan)) F.materialize(plan, SP, name => this.resolve(name));
         const floor = this._paint.floor;
         if (tool === 'room') {
             F.paintFloor(plan, floor, F.rectCells(a.x, a.y, b.x, b.y), slab);

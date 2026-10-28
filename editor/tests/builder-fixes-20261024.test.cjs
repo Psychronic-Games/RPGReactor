@@ -53,7 +53,9 @@ test('no slot shows a key badge; the key is in its tooltip', () => {
     const bar = read('editor/src/BuildHotbar.js'), css = read('editor/css/styles.css');
     assert.doesNotMatch(bar, /rr-build-slot-key/);
     assert.doesNotMatch(css, /rr-build-slot-key/);
-    assert.match(bar, /title="\$\{escape\(this\.label\(slot\) \+ \(key \? ' \(' \+ key \+ '\)' : ''\)\)\}"/);
+    const BuildHotbar = require('../src/BuildHotbar.js');
+    const markup = BuildHotbar.slotsHtml([{ id: 'wall', label: 'Wall', key: '2', icon: '' }], 'wall');
+    assert.match(markup, /title="Wall \(2\)"/);
 });
 
 test('a detached window is drawn whole after it moves or is sized, its clear corners too', () => {

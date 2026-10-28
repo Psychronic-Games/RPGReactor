@@ -4,6 +4,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 
 ## Start here
 
+- [0.99.3 release notes](posts/release-notes-0.99.3.md): Builder exports, model previews, complete Structures editing, worn equipment and grappling.
 - [Current status](STATUS.md): the verified state of the tree, runtime defaults that supersede older notes, and open work. Read this before the handoff.
 - [Handoff](HANDOFF.md): dated notes for the cycle in progress: what is half-done, how to resume.
 - [Waiting on the owner](OWNER-QUESTIONS.md): the one list of questions for the owner, each with a recommendation.

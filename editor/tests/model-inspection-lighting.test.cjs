@@ -10,7 +10,8 @@ function fixture(t) {
     t.after(() => { for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete global[key]; else global[key] = value;
     } });
-    const shared = { rrAmbient: { value: new Float32Array([0.1, 0.2, 0.3]) }, rrLightCount: { value: 4 }, rrLightGridEnabled: { value: 1 } };
+    const shared = { rrAmbient: { value: new Float32Array([0.1, 0.2, 0.3]) }, rrLightCount: { value: 4 }, rrLightGridEnabled: { value: 1 },
+        rrKeyColor: { value: new Float32Array(3) }, rrSkyLight: { value: new Float32Array([0.01, 0.01, 0.01]) }, rrVolumeOn: { value: 1 } };
     let compiles = 0;
     const material = { __reactorLit: true, onBeforeCompile(shader) { compiles++; shader.uniforms = { ...shared }; }, customProgramCacheKey() { return 'original'; } };
     const object = { traverse(fn) { fn({ isMesh: true, userData: {}, material }); } };
@@ -26,6 +27,10 @@ test('inspection shaders stay fully illuminated when map ambient, lights and lig
     assert.equal(shader.uniforms.rrLightGridEnabled.value, 0);
     assert.equal(shader.uniforms.rrAmbient, own.rrAmbient);
     assert.notEqual(shader.uniforms.rrAmbient, f.shared.rrAmbient);
+    assert.notEqual(shader.uniforms.rrKeyColor, f.shared.rrKeyColor);
+    assert.ok(shader.uniforms.rrKeyColor.value[0] > 0.9, 'a night map cannot remove the studio highlight');
+    assert.deepEqual(Array.from(shader.uniforms.rrSkyLight.value), [1, 1, 1]);
+    assert.equal(shader.uniforms.rrVolumeOn.value, 0);
     const rebound = Preview.isolateLighting(f.object);
     const next = {}; f.material.onBeforeCompile(next);
     assert.equal(f.compiles(), 2, 'rebinding does not nest shader hooks');

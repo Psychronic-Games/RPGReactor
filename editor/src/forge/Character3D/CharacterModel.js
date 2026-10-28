@@ -1323,7 +1323,7 @@
         });
         // Every clip with its cloth worked out (RRCharacterCloth): the game only plays the keys.
         const clips = Cloth && result.cloth && result.clips ? await Cloth.bakeAllAsync(result, result.clips, { quality: 'save' }) : result.clips;
-        return Glb.toGlb({ parts, bones: result.bones, morphs: result.morphs }, { name, clips, images: files });
+        return Glb.toGlb({ parts, bones: result.bones, morphs: result.morphs }, { name, clips, images: files, characterMaterials: true });
     }
 
     /** A seeded random character: a body, then a fitting outfit, hair and maybe accessories. */

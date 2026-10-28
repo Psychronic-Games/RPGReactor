@@ -894,7 +894,7 @@ Reactor3D.facesPerLight = function() {
 
 /** Whether a material is lit by which way its faces point (a model's, see MODEL_FACING). */
 Reactor3D.facesLight = function(material) {
-    return !!(this.MODEL_FACING && material && material.__reactorModel && !material.__reactorSelfLit);
+    return !!(this.MODEL_FACING && material && material.__reactorModel && !material.__reactorSelfLit && !material.userData?.rrInspectionPbr);
 };
 
 /**
@@ -3167,6 +3167,14 @@ Reactor3D.shineOf = function(material) {
 Reactor3D.injectShine = function(material, shader) {
     const shine = this.shineOf(material);
     if (!shine) return;
+    const surface = material.userData?.rrSurfaceMap;
+    const surfaceUv1 = !!material.userData?.rrSurfaceUv1;
+    const surfaceMap = !!(surface?.isTexture && (surfaceUv1 || material.map));
+    if (surfaceMap) {
+        shader.uniforms.rrSurfaceMap = { value: surface };
+        if (surfaceUv1) this.injectUv1(shader);
+        shader.fragmentShader = "uniform sampler2D rrSurfaceMap;\n" + shader.fragmentShader;
+    }
     const env = this.Reflections.uniforms();
     shader.uniforms.rrEnvMap = env.rrEnvMap;
     shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod;
@@ -3202,7 +3210,9 @@ Reactor3D.injectShine = function(material, shader) {
         "#include <opaque_fragment>",
         [
             "{",
-            "\tvec3 rrN = normalize(vRRWorldNormal);",
+            this.facesLight(material) ? "\tvec3 rrN = rrFaceN;" : "\tvec3 rrN = normalize(vRRWorldNormal);",
+            "\tvec4 rrFinish = rrShine;",
+            surfaceMap ? "\tvec3 rrSurface = texture2D(rrSurfaceMap, " + (surfaceUv1 ? "vRRUv1" : "vMapUv") + ").rgb; rrFinish.y = clamp(rrFinish.y * rrSurface.g, 0.02, 1.0); rrFinish.z *= rrSurface.b;" : "",
             "\tvec3 rrV = normalize(cameraPosition - vRRWorldPos);",
             // Toward the eye whichever way the file wound it: an inward normal
             // reads as grazing everywhere and glazes the whole surface over.
@@ -3228,7 +3238,7 @@ Reactor3D.injectShine = function(material, shader) {
             // reads the level whose texel covers it (sigma = pi r^2 / (1 + r) of the face),
             // and never finer than REFLECTION_MIN_LOD, past which a point capture's near
             // detail (grass a tile below) only speckles a curved surface. The studio has one level.
-            "\tfloat rrLod = rrEnvMaxLod > 0.0 ? clamp(rrEnvMaxLod + log2(max(3.14159265 * rrShine.y * rrShine.y / (1.0 + rrShine.y), 1e-6)), "
+            "\tfloat rrLod = rrEnvMaxLod > 0.0 ? clamp(rrEnvMaxLod + log2(max(3.14159265 * rrFinish.y * rrFinish.y / (1.0 + rrFinish.y), 1e-6)), "
                 + (Reactor3D.REFLECTION_MIN_LOD || 0).toFixed(2) + ", rrEnvMaxLod) : 0.0;",
             "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrLod).rgb;",
             // A live capture holds sRGB (flip 1); the studio cube is decoded by the GPU (flip -1).
@@ -3238,7 +3248,7 @@ Reactor3D.injectShine = function(material, shader) {
             // On a mirror panel (facing the plane's way and lying on it) the mirror picture, sharp, at this
             // fragment's own place in the reflected view.
             Reactor3D.mirrorLookup("rrEnv", slot => "dot(rrN, rrMirrorPlane" + slot + ".xyz) > 0.92 && abs(dot(vRRWorldPos, rrMirrorPlane" + slot + ".xyz) - rrMirrorPlane" + slot + ".w) < rrMirrorTolerance", "", "1.0"),
-            "\tfloat rrF0 = mix(0.04, 1.0, rrShine.z);",
+            "\tfloat rrF0 = mix(0.04, 1.0, rrFinish.z);",
             "\tfloat rrFres = rrF0 + (1.0 - rrF0) * pow(1.0 - clamp(dot(rrN, rrV), 0.0, 1.0), 5.0);",
             // How much of the texture stays (w): the rest is mirrored over, and what stays
             // takes the reflection as a glaze (a screen blend) of its bright parts only
@@ -3255,7 +3265,7 @@ Reactor3D.injectShine = function(material, shader) {
             "\tif (rrKeyLight.w < 0.5 && dot(rrKeyColor, rrKeyColor) > 0.0) {",
             "\t\tvec3 rrKL = normalize(rrKeyLight.xyz), rrKH = normalize(rrKL + rrV);",
             "\t\tfloat rrKNL = max(dot(rrN, rrKL), 0.0), rrKNH = max(dot(rrN, rrKH), 0.0);",
-            "\t\tfloat rrKA = max(rrShine.y * rrShine.y, 0.002), rrKA2 = rrKA * rrKA, rrKD = rrKNH * rrKNH * (rrKA2 - 1.0) + 1.0;",
+            "\t\tfloat rrKA = max(rrFinish.y * rrFinish.y, 0.002), rrKA2 = rrKA * rrKA, rrKD = rrKNH * rrKNH * (rrKA2 - 1.0) + 1.0;",
             "\t\tfloat rrKGGX = min(rrKA2 / (3.14159265 * rrKD * rrKD) * rrKNL * 0.25, " + (Reactor3D.SHINE_HIGHLIGHT_MAX || 4).toFixed(2) + ");",
             "#ifdef RR_SHADOW_TAPS",
             "\t\trrKGGX *= 1.0 - clamp(rrSunShaded, 0.0, 1.0);",
@@ -3350,6 +3360,26 @@ Reactor3D.injectSurfaceGlow = function(material, shader) {
     shader.fragmentShader = decl.join("\n") + "\n" + shader.fragmentShader.replace("#include <opaque_fragment>", lines.join("\n") + "\n#include <opaque_fragment>");
 };
 
+Reactor3D.surfaceMapsKey = function(material) {
+    const d = material?.userData;
+    if (!d || d.rrInspectionPbr) return "";
+    const sampled = (map, uv1) => map?.isTexture && (uv1 || material.map);
+    return (sampled(d.rrSurfaceMap, d.rrSurfaceUv1) ? "|surface" + (d.rrSurfaceUv1 ? "1" : "0") : "")
+        + (sampled(d.rrOcclusionMap, d.rrOcclusionUv1) ? "|occlusion" + (d.rrOcclusionUv1 ? "1" : "0") : "");
+};
+
+/** Surface cavities shade the base before reflections and glow are added. */
+Reactor3D.injectSurfaceOcclusion = function(material, shader) {
+    const d = material?.userData;
+    if (!d || d.rrInspectionPbr || !d.rrOcclusionMap?.isTexture || !(d.rrOcclusionUv1 || material.map)) return;
+    shader.uniforms.rrOcclusionMap = { value: d.rrOcclusionMap };
+    shader.uniforms.rrOcclusionStrength = { value: d.rrOcclusionStrength ?? 1 };
+    if (d.rrOcclusionUv1) this.injectUv1(shader);
+    shader.fragmentShader = "uniform sampler2D rrOcclusionMap;\nuniform float rrOcclusionStrength;\n" + shader.fragmentShader.replace(
+        "#include <opaque_fragment>", "outgoingLight *= mix(1.0, texture2D(rrOcclusionMap, "
+            + (d.rrOcclusionUv1 ? "vRRUv1" : "vMapUv") + ").r, rrOcclusionStrength);\n#include <opaque_fragment>");
+};
+
 Reactor3D.litMaterial = function(material) {
     if (!material || material.__reactorLit) return material;
     material.__reactorLit = true;
@@ -3357,6 +3387,7 @@ Reactor3D.litMaterial = function(material) {
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
         Reactor3D.injectLightShader(shader, renderer, this);
+        Reactor3D.injectSurfaceOcclusion(this, shader);
         if (Reactor3D.injectMaterialDetail) Reactor3D.injectMaterialDetail(this, shader);
         // A self-lit material (a Glow) ignores the lights: its own uniform, one per material.
         shader.uniforms.rrSelfLit = { value: this.__reactorSelfLit ? 1 : 0 };
@@ -3375,6 +3406,7 @@ Reactor3D.litMaterial = function(material) {
         return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "")
             + (Reactor3D.shineOf(this) ? "|shine" : "")
+            + Reactor3D.surfaceMapsKey(this)
             + (Reactor3D.facesLight(this) ? (Reactor3D.normalOnUv1(this) ? "|face-nmap1" : this.userData && this.userData.rrNormalMap && this.userData.rrNormalMap.isTexture && this.map ? "|face-nmap" : "|face") + (Reactor3D.facesPerLight() ? "" : "-share") : "")
             + (Reactor3D.glowKey ? Reactor3D.glowKey(this) : "")
             + (Reactor3D.lookOf && Reactor3D.lookOf(this) ? "|look" : "")

@@ -39,7 +39,7 @@ test('a shiny material carries the reflection; a plain one compiles as before; a
     assert.doesNotMatch(plain.customProgramCacheKey(), /\|shine/);
     const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
     Reactor3D.injectShine(shiny, shader);
-    assert.match(shader.fragmentShader, /float rrLod = rrEnvMaxLod > 0\.0 \? clamp\(rrEnvMaxLod \+ log2\(max\(3\.14159265 \* rrShine\.y \* rrShine\.y \/ \(1\.0 \+ rrShine\.y\), 1e-6\)\), [0-9.]+, rrEnvMaxLod\) : 0\.0;\n\tvec3 rrEnv = textureLod\(rrEnvMap, rrR, rrLod\)\.rgb;/, 'rougher reads a blurrier level');
+    assert.match(shader.fragmentShader, /float rrLod = rrEnvMaxLod > 0\.0 \? clamp\(rrEnvMaxLod \+ log2\(max\(3\.14159265 \* rrFinish\.y \* rrFinish\.y \/ \(1\.0 \+ rrFinish\.y\), 1e-6\)\), [0-9.]+, rrEnvMaxLod\) : 0\.0;\n\tvec3 rrEnv = textureLod\(rrEnvMap, rrR, rrLod\)\.rgb;/, 'rougher reads a blurrier level');
     assert.ok(shader.uniforms.rrShine.value.isVector4);
     const clone = shiny.clone();
     clone.userData = JSON.parse(JSON.stringify(shiny.userData));

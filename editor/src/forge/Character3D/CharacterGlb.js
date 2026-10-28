@@ -40,6 +40,48 @@
         a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
     ];
 
+    /** The Character Builder's material choices, shared by its studio and GLB export. */
+    function materialLook(part, weak = false) {
+        const kind = part.kind || (part.metalness > 0.5 ? 'metal' : 'prop');
+        const look = { roughness: part.roughness ?? 0.6, metalness: part.metalness ?? 0,
+            alphaTest: part.cutout ? (part.alphaCutoff ?? 0.5) : 0 };
+        if (kind === 'hair') {
+            look.roughness = Math.max(0.78, look.roughness); look.metalness = 0;
+            look.envMapIntensity = part.onSkin ? 0.85 : 0.55;
+            if (part.cutout) look.alphaTest = Math.min(look.alphaTest, 0.3);
+        }
+        if (weak) {
+            if ((kind === 'eye' && !part.facetSurface) || kind === 'glass') look.roughness = 0.08;
+        } else if (kind === 'skin') {
+            Object.assign(look, { roughness: Math.max(0.52, look.roughness), sheen: 0.3,
+                sheenRoughness: 0.55, sheenColor: [0.9, 0.7, 0.62], specularIntensity: 0.4 });
+        } else if (kind === 'cloth' && part.fabric) {
+            if (part.sheen) Object.assign(look, { sheen: part.sheen.strength ?? 0.5,
+                sheenColor: part.sheen.color || [1, 1, 1], sheenRoughness: part.sheen.roughness ?? 0.5 });
+            look.specularIntensity = look.roughness > 0.8 ? 0.45 : 0.75;
+        } else if (kind === 'cloth') {
+            Object.assign(look, { roughness: Math.max(look.roughness, 0.8), sheen: 0.3,
+                sheenRoughness: 0.85, sheenColor: [0.8, 0.8, 0.8], specularIntensity: 0.12 });
+        } else if (kind === 'metal') {
+            Object.assign(look, { metalness: Math.max(0.85, look.metalness), roughness: Math.min(0.4, look.roughness), clearcoat: 0.3 });
+        } else if (kind === 'hair') {
+            const own = part.colors ? Array.from(part.colors.slice(0, 3)) : hexColor('#444444').slice(0, 3);
+            const head = !part.onSkin && part.name === 'Hair', white = head ? 0.25 : 0.35;
+            look.specularIntensity = part.envMapIntensity < 0.2 ? 0.025 : head ? 0.32 : 0.2;
+            look.specularColor = own.map(c => c + (1 - c) * white);
+            if (head) look.roughness = 0.62;
+        } else if (kind === 'eye' && part.facetSurface) {
+            Object.assign(look, { roughness: Math.max(0.38, look.roughness * 0.75), clearcoat: 0.35,
+                clearcoatRoughness: 0.35, envMapIntensity: 0.55 });
+        } else if (kind === 'eye') {
+            Object.assign(look, { roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.03 });
+        } else if (kind === 'glass') {
+            Object.assign(look, { roughness: 0.02, metalness: 0, clearcoat: 1, envMapIntensity: 2 });
+        }
+        if (part.envMapIntensity != null) look.envMapIntensity = part.envMapIntensity;
+        return look;
+    }
+
     /**
      * A breathing idle, three seconds round: the arms come down from the
      * modeling A-pose to `armAngle` off vertical (radians) and sway a little,
@@ -164,12 +206,13 @@
 
         let quantized = false;
         for (const part of built.parts) {
+            const look = settings.characterMaterials ? materialLook(part) : null;
             const texture = part.texture ? textureFor(part.texture) : null;
             const base = part.texture || part.colors ? [1, 1, 1, 1] : hexColor(part.color);
             if (part.opacity != null && part.opacity < 1) base[3] = part.opacity;
             const material = {
                 name: part.name,
-                pbrMetallicRoughness: { baseColorFactor: base, metallicFactor: part.metalness ?? 0, roughnessFactor: part.roughness ?? 0.6 }
+                pbrMetallicRoughness: { baseColorFactor: base, metallicFactor: look ? look.metalness : part.metalness ?? 0, roughnessFactor: look ? look.roughness : part.roughness ?? 0.6 }
             };
             if (texture !== null) material.pbrMetallicRoughness.baseColorTexture = { index: texture };
             // A map on the second coordinates says so; only where the part has them.
@@ -180,14 +223,25 @@
             const occlusion = part.occlusionTexture ? textureFor(part.occlusionTexture) : null;
             if (occlusion !== null) material.occlusionTexture = Object.assign({ index: occlusion }, onSet(part.occlusionTexCoord), part.occlusionStrength != null ? { strength: part.occlusionStrength } : {});
             // Cloth's soft sheen at grazing angles, in its own colors.
-            if (part.sheen) {
-                const tint = part.sheen.color || [1, 1, 1], k = part.sheen.strength ?? 0.5;
-                const extension = { sheenColorFactor: tint.map(c => c * k), sheenRoughnessFactor: part.sheen.roughness ?? 0.5 };
-                const sheenMap = part.sheen.texture ? textureFor(part.sheen.texture) : null;
+            const sheen = look && look.sheen ? { color: look.sheenColor, strength: look.sheen, roughness: look.sheenRoughness, texture: part.sheen?.texture || part.texture } : part.sheen;
+            if (sheen) {
+                const tint = sheen.color || [1, 1, 1], k = sheen.strength ?? 0.5;
+                const extension = { sheenColorFactor: tint.map(c => c * k), sheenRoughnessFactor: sheen.roughness ?? 0.5 };
+                const sheenMap = sheen.texture ? textureFor(sheen.texture) : null;
                 if (sheenMap !== null) extension.sheenColorTexture = { index: sheenMap };
                 material.extensions = Object.assign(material.extensions || {}, { KHR_materials_sheen: extension });
                 if (!json.extensionsUsed?.includes('KHR_materials_sheen')) (json.extensionsUsed ||= []).push('KHR_materials_sheen');
             }
+            const extension = (id, value) => {
+                (material.extensions ||= {})[id] = value;
+                if (!json.extensionsUsed?.includes(id)) (json.extensionsUsed ||= []).push(id);
+            };
+            if (look && (look.specularIntensity != null || look.specularColor)) extension('KHR_materials_specular', {
+                specularFactor: look.specularIntensity ?? 1, specularColorFactor: look.specularColor || [1, 1, 1]
+            });
+            if (look && look.clearcoat) extension('KHR_materials_clearcoat', {
+                clearcoatFactor: look.clearcoat, clearcoatRoughnessFactor: look.clearcoatRoughness ?? 0
+            });
             if(part.iridescence){
                 const extension={iridescenceFactor:part.iridescence,iridescenceIor:part.iridescenceIOR ?? 1.3,
                     iridescenceThicknessMinimum:part.iridescenceThicknessRange?.[0] ?? 100,
@@ -197,7 +251,7 @@
                 material.extensions=Object.assign(material.extensions||{},{KHR_materials_iridescence:extension});
                 if(!json.extensionsUsed?.includes('KHR_materials_iridescence'))(json.extensionsUsed ||= []).push('KHR_materials_iridescence');
             }
-            if (part.cutout) { material.alphaMode = 'MASK'; material.alphaCutoff = part.alphaCutoff ?? 0.5; }
+            if (part.cutout) { material.alphaMode = 'MASK'; material.alphaCutoff = look ? look.alphaTest : part.alphaCutoff ?? 0.5; }
             // `blend`: blended by its picture's own alpha (Slimefolk goo).
             else if (base[3] < 1 || part.blend) material.alphaMode = 'BLEND';
             if (part.doubleSided) material.doubleSided = true;
@@ -206,8 +260,9 @@
             if (normal !== null) material.normalTexture = Object.assign({ index: normal }, onSet(part.normalTexCoord), part.normalScale != null ? { scale: part.normalScale } : {});
             // A part that shines in its own light: `emissive` (hex), `emissiveTexture` (a name in `images`).
             if (part.emissive) {
-                const intensity = Number.isFinite(part.emissiveIntensity) ? Math.max(0,Math.min(1,part.emissiveIntensity)) : 1;
-                material.emissiveFactor = hexColor(part.emissive).slice(0, 3).map(c => c * intensity);
+                const intensity = Number.isFinite(part.emissiveIntensity) ? Math.max(0,part.emissiveIntensity) : 1;
+                material.emissiveFactor = hexColor(part.emissive).slice(0, 3).map(c => c * Math.min(1, intensity));
+                if (intensity > 1) extension('KHR_materials_emissive_strength', { emissiveStrength: intensity });
                 const glow = part.emissiveTexture ? textureFor(part.emissiveTexture) : null;
                 if (glow !== null) material.emissiveTexture = { index: glow };
             }
@@ -313,7 +368,7 @@
         return out;
     }
 
-    const api = { toGlb, idleClip, axisAngle, multiply, triangles };
+    const api = { toGlb, materialLook, idleClip, axisAngle, multiply, triangles };
     root.RRCharacterGlb = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

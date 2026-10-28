@@ -2,6 +2,10 @@
 
 Database › 3D Models › **Rig** fits a skeleton to a static model so motions and Pose Parts work on it. Models that ship their own skeleton (Mixamo, VRM) map the rig onto their bones instead.
 
+In ordinary model inspection, wheel zoom keeps the orbit centred on the model. Shift-drag or the middle button pans; rig mode can zoom toward a pointed marker as described below.
+
+The model list reads `3d/<model folder>/thumbnail.png` first. Saved pictures appear before missing pictures are rendered; a generated picture is saved there for the next session without replacing existing artwork. Worn variants use separate cached pictures.
+
 ## Markers
 
 Pick a template (Humanoid, Quadruped, and others), then drag each marker onto the joint it names. Left and right markers mirror. The yellow chain draws marker to marker so the skeleton reads as connected. **Save rig** writes the markers and, with a skeleton, computes skin weights so the bones become poseable parts; **Reset markers** and **Remove rig** do what they say. Unsaved markers, face points and effects are marked on their Save button and in the status line; OK and Apply save them, Cancel and leaving ask first.

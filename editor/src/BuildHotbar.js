@@ -162,6 +162,7 @@ class BuildHotbar {
         this.visible = false;
         this.root.style.display = 'none';
         this.panel.style.display = 'none';
+        this.root.parentElement?.style.removeProperty('--rr-build-bottom-space');
         document.removeEventListener('keydown', this._onKeyDown, true);
         document.removeEventListener('keyup', this._onCtrl, true);
         window.removeEventListener('blur', this._onCtrl);
@@ -313,7 +314,21 @@ class BuildHotbar {
 
     shapeKinds() { return (typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.SHAPE_KINDS : (this.manager()?.kinds() || []).filter(k => !BuildHotbar.PIECES.includes(k))).filter(k => k !== 'rock'); }
 
-    icon(name, size = 26) {
+    /** Shared tool buttons for the map builder and Database floor-plan editor.
+     * Each host supplies its own tools and behavior; appearance and activation stay here.
+     */
+    static slotsHtml(slots, active) {
+        const escape = text => String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return slots.map(slot => `<button type="button" class="rr-build-slot${slot.className ? ' ' + escape(slot.className) : ''}" data-slot="${escape(slot.id)}" aria-pressed="${slot.id === active}" title="${escape(slot.label + (slot.key ? ' (' + slot.key + ')' : ''))}">${slot.icon}<span class="rr-build-slot-label">${escape(slot.label)}</span></button>`).join('');
+    }
+
+    static bindSlots(root, pick) {
+        root.querySelectorAll('.rr-build-slot').forEach(button => button.addEventListener('click', () => pick(button.dataset.slot)));
+    }
+
+    icon(name, size = 26) { return BuildHotbar.icon(name, size); }
+
+    static icon(name, size = 26) {
         const M = typeof PieceBuilderManager !== 'undefined' ? PieceBuilderManager.ICONS : {};
         const own = {
             select: 'M5 3l14 9-6 1.5L10 20z',
@@ -401,7 +416,6 @@ class BuildHotbar {
         const active = this.activeSlot();
         const group = this.group(), terrain = group === 'terrain' && !this.rockInHand();
         const slots = this.slots();
-        const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         const face = slot => {
             if (!/^model\d+$/.test(slot)) return this.icon(slot === 'shape' && active === 'shape' ? manager.kind : slot);
             const url = this.modelThumb(this.props()?.libraryModels()[Number(slot.slice(5))]);
@@ -409,16 +423,15 @@ class BuildHotbar {
         };
         // The key that picks a slot (1 to 9, then 0; the Eraser's X) is in its tooltip: no badge on some slots and not the rest.
         const keyOf = (slot, index) => slot === 'hammer' ? 'X' : index < 10 ? String((index + 1) % 10) : '';
-        const button = (slot, index) => { const key = keyOf(slot, index); return `<button type="button" class="rr-build-slot${/^model\d+$/.test(slot) ? ' rr-build-slot-model' : ''}" data-slot="${slot}" aria-pressed="${slot === active}" title="${escape(this.label(slot) + (key ? ' (' + key + ')' : ''))}">
-            ${face(slot)}<span class="rr-build-slot-label">${escape(this.label(slot))}</span></button>`; };
+        const buttons = BuildHotbar.slotsHtml(slots.map((slot, index) => ({ id: slot, label: this.label(slot), icon: face(slot), key: keyOf(slot, index), className: /^model\d+$/.test(slot) ? 'rr-build-slot-model' : '' })), active);
         root.innerHTML = `
             ${this.is3D() ? '' : `<div class="rr-build-note">${this._t('build.needs3D')}</div>`}
             <div class="rr-build-row rr-build-slots">
                 <div class="rr-build-groups" role="radiogroup">${BuildHotbar.GROUPS.map(g => `<button type="button" class="rr-build-group" data-group="${g}" role="radio" aria-checked="${g === group}" title="${this._t('build.group.' + g)}">${this.icon(g, 18)}<span>${this._t('build.group.' + g)}</span></button>`).join('')}</div>
-                ${slots.map((slot, index) => button(slot, index)).join('')}</div>
-            <div class="rr-build-hint">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b><span class="rr-build-keys"> · ${this._tt(manager.mode === 'select' ? BuildHotbar.SELECT_HINT : manager.mode === 'erase' ? BuildHotbar.ERASE_HINT : BuildHotbar.KEYS_HINT)}</span>`}</div>`;
+                ${buttons}</div>
+            <div class="rr-build-hint" tabindex="0">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b><span class="rr-build-keys"> · ${this._tt(manager.mode === 'select' ? BuildHotbar.SELECT_HINT : manager.mode === 'erase' ? BuildHotbar.ERASE_HINT : BuildHotbar.KEYS_HINT)}</span>`}</div>`;
         this._slotsKey = slots.join('|');
-        root.querySelectorAll('.rr-build-slot').forEach(el => el.addEventListener('click', () => this.pick(el.dataset.slot)));
+        BuildHotbar.bindSlots(root, slot => this.pick(slot));
         root.querySelectorAll('.rr-build-group').forEach(el => el.addEventListener('click', () => {
             const to = el.dataset.group;
             if (to === group) return;
@@ -1005,6 +1018,7 @@ class BuildHotbar {
         panel.style.width = (width >= 1100 ? 300 : width >= 760 ? 268 : Math.max(200, Math.min(248, width - 40))) + 'px';
         // As tall as what it holds, never past the bar: a short panel leaves the view free under it.
         const bar = root.style.display === 'none' ? 0 : root.getBoundingClientRect().height;
+        container.style.setProperty('--rr-build-bottom-space', bar ? Math.ceil(bar + 12) + 'px' : '0px');
         panel.style.bottom = 'auto';
         panel.style.maxHeight = Math.max(120, Math.round((container.clientHeight || 0) - 12 - bar - 24)) + 'px';
     }

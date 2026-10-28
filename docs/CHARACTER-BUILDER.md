@@ -132,6 +132,10 @@ A Slimefolk's GLB carries its goo picture and glow picture (`goo.png`, `goo-glow
 
 The model shows in Database › 3D Models like an imported one. A humanoid's Rig tool places every marker from the bones.
 
+Builder models in the Database are inspected under the Builder's studio lighting, using the GLB's actual material maps. Metal, skin and cloth sheen, hair cutouts and bright emission carry the same material settings through export. The game retains normal, glow, roughness/metalness and occlusion maps and lights them with the map's own lights. Map lighting and the game's render resolution still affect the final picture. Re-export an older character to update its material settings; loading fixes also apply to existing GLBs.
+
+An export captures one design while textures and motion clips are prepared. Editing during that work applies to the next export. Closing the Builder or switching projects prevents an unfinished model from being published.
+
 Humanoids use the same shared motion library in the builder and game. Saved movement assignments select the exported clips; an imported model's own clips and authored Motion-editor animations retain priority. Loose garments carry baked cloth movement in their clips. Changing a preview pose prepares its cloth in a worker while the pose remains usable. Re-save an existing character to update its generated geometry or embedded motion keys after a builder improvement.
 
 ## Sprite sheets
@@ -146,6 +150,8 @@ Humanoids use the same shared motion library in the builder and game. Saved move
 | Face portraits | `img/faces/Name.png` | 4 × 2 portraits, the project's face size |
 
 **Frame size** sets the cell. **Style** is Realistic or RPG chibi (a big head, short limbs, big hands and feet; only the sheet changes, not the character). **Camera angle** is how far the camera looks down (30° by default; 15° for a battler). **Look** is Smooth or Pixel art (hard edges, a 32-color palette). **Outline** draws a one-pixel dark edge. Portraits are head and shoulders, front or three-quarter, eight expressions from a preset (Everyday, Battle, Story) or picked one by one, the eyes on one line in every cell, on a transparent or solid background. Every frame uses one scale, the largest at which all of them fit, centered, its feet on the same baseline.
+
+Chibi proportions stay in place for every frame while background preview builds wait. Finishing or interrupting an export restores the original character and viewport. Face portraits keep the studio exposure and colors; the brighter sprite grade applies only to sprite sheets.
 
 The [8D] sheet, by blocks of 3 frames × 4 rows (rows down, left, right, up; diagonal rows down-left, down-right, up-left, up-right):
 

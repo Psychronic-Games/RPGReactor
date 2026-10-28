@@ -1892,6 +1892,7 @@ class Character3DBuilder {
         const view = this._view = { renderer, scene, camera, floor, blob, group, key, meshes: [], bones: [], textures: new Map(), yaw: 0.35, pitch: 0.08, distance: 4.2, target: new THREE.Vector3(0, 0.9, 0), frame: 0, loop: 0, clock: new THREE.Clock() };
 
         const size = () => {
+            if (this._sheetExporting) { this._sheetResizeOwed = true; return; }
             const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
@@ -1899,6 +1900,7 @@ class Character3DBuilder {
             if (this._result) this._faceFrame(this._result);
             this._draw();
         };
+        view.resizeNow = size;
         view.resize = new ResizeObserver(size);
         view.resize.observe(host);
         size();
@@ -1981,7 +1983,7 @@ class Character3DBuilder {
         const view = this._view;
         if (!view) return;
         view.needsDraw = true;
-        if (this._previewPaused || view.frame || view.loop) return;
+        if (this._previewPaused || this._sheetExporting?.drawing || view.frame || view.loop) return;
         view.frame = requestAnimationFrame(() => { view.frame = 0; this._render(); });
     }
 
@@ -2008,6 +2010,7 @@ class Character3DBuilder {
      * Idle only); A-pose stands still, and the view draws only when asked.
      */
     _syncPose() {
+        if (this._sheetExporting?.drawing) return;
         const view = this._view;
         if (!this.root) return;
         // The poses the body plan has: a person's, or a four-legged creature's own (those its kind can take).
@@ -2087,7 +2090,7 @@ class Character3DBuilder {
                 this._render();
             };
             view.resumeAnimation = () => {
-                if (view.loop || this._previewPaused || this._view !== view) return;
+                if (view.loop || this._previewPaused || this._sheetExporting?.drawing || this._view !== view) return;
                 carried = 0; gaps.length = 0;
                 view.clock.getDelta();
                 view.loop = requestAnimationFrame(tick);
@@ -2125,6 +2128,10 @@ class Character3DBuilder {
 
     /** A pose's cloth is worked out: its action is made again with it, carrying on from the pose's own time. */
     _clothReady(id, result) {
+        if (this._sheetExporting?.drawing) {
+            (this._sheetExporting.clothReady ||= []).push({ id, result });
+            return;
+        }
         const view = this._view, entry = view && view.actions && view.actions.get(id);
         if (!entry || this._result !== result) return;
         const old = entry.action, playing = view.action === old;
@@ -2425,14 +2432,14 @@ class Character3DBuilder {
 
     _queueRebuild() {
         this._rebuildOwed = true;
-        if (this._previewPaused) return;
+        if (this._previewPaused || this._sheetExporting) return;
         this._lastChange = Date.now();
         if (this._pending) return;
         this._pending = requestAnimationFrame(() => { this._pending = 0; this._rebuild(); });
     }
 
     _rebuild() {
-        if (this._previewPaused) { this._rebuildOwed = true; return; }
+        if (this._previewPaused || this._sheetExporting) { this._rebuildOwed = true; return; }
         this._rebuildOwed = false;
         const view = this._view;
         if (!view || !this.pack) return;
@@ -2538,28 +2545,7 @@ class Character3DBuilder {
 
     /** A small studio, filtered into an environment light: two softboxes, a floor bounce, dark walls. */
     _studio(renderer) {
-        const room = new THREE.Scene();
-        const box = (w, h, d, color, x, y, z, intensity) => {
-            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.BackSide }));
-            m.position.set(x, y, z);
-            room.add(m);
-            return m;
-        };
-        box(14, 8, 14, '#2a2c32', 0, 3, 0, 1);
-        const soft = (w, h, x, y, z, intensity, color) => {
-            const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.DoubleSide }));
-            m.position.set(x, y, z);
-            m.lookAt(0, 1, 0);
-            room.add(m);
-        };
-        soft(3, 2, 3, 4, 4, 9, '#fff2e4');
-        soft(2, 3, -4, 2.5, 2, 3.5, '#dfe8ff');
-        soft(4, 1, -1, 3, -5, 6, '#e8eeff');
-        soft(8, 8, 0, -0.9, 0, 0.6, '#8a7a6a');
-        const pmrem = new THREE.PMREMGenerator(renderer);
-        const target = pmrem.fromScene(room, 0.03);
-        pmrem.dispose();
-        room.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+        const target = ModelPreview3D.studioEnvironment(renderer);
         (this._envTargets = this._envTargets || []).push(target);
         return target.texture;
     }
@@ -2632,37 +2618,18 @@ class Character3DBuilder {
         // Merfolk hook: a part's own relief picture (the tail's scales), as the saved file carries it; wet hair glossy.
         const merfolk = () => window.RRMerfolkBody && RRMerfolkBody.viewMaterial(m, part, result, (name, tex) => (textureFor ? textureFor(name, tex) : this._texture(name, tex)));
         merfolk();
-        if (this._weak) { if ((kind === 'eye' && !part.facetSurface) || kind === 'glass') m.roughness = 0.08; return ownRoom(); }
-        // Skin: a soft sheen in the skin's own color (from its picture), so it warms skin and stays dark on a
-        // painted scalp, stubble or markings.
-        if (kind === 'skin') {
-            m.roughness = Math.max(0.52, part.roughness ?? 0); m.sheen = 0.3; m.sheenRoughness = 0.55; m.sheenColor = new THREE.Color(0.9, 0.7, 0.62); if (m.map) m.sheenColorMap = m.map; m.specularIntensity = 0.4;
-            // Pores and fine lines, tiled small over the skin: the light breaks up on it as on real skin.
-            if (m.map && !m.normalMap) { m.normalMap = Character3DBuilder.skinDetail(); m.normalScale = new THREE.Vector2(0.3, 0.3); }
+        // The same factors are written to the GLB (including clearcoat, skin/cloth sheen,
+        // hair cutoffs and specular color); preview-only material tweaks must not change its look.
+        const look = RRCharacterGlb.materialLook(part, !!this._weak);
+        for (const [key, value] of Object.entries(look)) {
+            if (key === 'sheenColor' || key === 'specularColor') m[key].setRGB(...value);
+            else m[key] = value;
         }
-        // A cloth with its own tile: its roughness is the tile's, its sheen the saved file's (KHR_materials_sheen).
-        else if (kind === 'cloth' && part.fabric) {
-            if (part.sheen) { m.sheen = 1; m.sheenColor = new THREE.Color(1, 1, 1).multiplyScalar(part.sheen.strength ?? 0.5); m.sheenRoughness = part.sheen.roughness ?? 0.5; if (m.map) m.sheenColorMap = m.map; }
-            m.specularIntensity = (part.roughness ?? 0.9) > 0.8 ? 0.45 : 0.75;
+        if (this._weak) return ownRoom();
+        if (look.sheen && m.map) m.sheenColorMap = m.map;
+        if (kind === 'skin' && m.map && !m.normalMap) {
+            m.normalMap = Character3DBuilder.skinDetail(); m.normalScale = new THREE.Vector2(0.3, 0.3);
         }
-        // Cloth: a soft sheen in the cloth's own color at grazing angles (from its picture), so it reads as fabric
-        // without a white film washing its color out.
-        else if (kind === 'cloth') { m.sheen = 0.3; m.sheenRoughness = 0.85; m.sheenColor = new THREE.Color(0.8, 0.8, 0.8); if (m.map) m.sheenColorMap = m.map; m.roughness = Math.max(m.roughness, 0.8); m.specularIntensity = 0.12; }
-        else if (kind === 'metal') { m.metalness = Math.max(0.85, m.metalness); m.roughness = Math.min(0.4, m.roughness); m.clearcoat = 0.3; }
-        // Hair: matte, its soft highlight in its own color; no sheen and no anisotropic band, which both
-        // read as grey panels over dark hair.
-        else if (kind === 'hair') {
-            m.sheen = 0; m.specularIntensity = 0.2;
-            if(part.envMapIntensity<.2)m.specularIntensity=.025;
-            const own = part.colors ? new THREE.Color(part.colors[0], part.colors[1], part.colors[2]) : new THREE.Color(0x444444);
-            m.specularColor = own.clone().lerp(new THREE.Color(0xffffff), 0.35);
-            // A head of hair keeps a soft shine of its own color.
-            if (!part.onSkin && part.name === 'Hair') { m.roughness = 0.62; m.specularIntensity = 0.32; m.specularColor = own.clone().lerp(new THREE.Color(0xffffff), 0.25); }
-        }
-        // A compound eye: an even faceted surface with a soft sheen, not a wet lens mirroring the room.
-        else if (kind === 'eye' && part.facetSurface) { m.roughness = Math.max(0.38, m.roughness * 0.75); m.clearcoat = 0.35; m.clearcoatRoughness = 0.35; m.envMapIntensity = 0.55; }
-        else if (kind === 'eye') { m.roughness = 0.08; m.clearcoat = 1; m.clearcoatRoughness = 0.03; }
-        else if (kind === 'glass') { m.roughness = 0.02; m.metalness = 0; m.clearcoat = 1; m.envMapIntensity = 2; }
         merfolk();
         // A part may hold how much of the room it reflects (a grey's black lenses, the floor kept out of them).
         return ownRoom();
@@ -3199,7 +3166,7 @@ class Character3DBuilder {
     }
 
     /** Decode small emblem rasters once per project, shared by preview and save atlases. */
-    _loadOutfitEmblems() {
+    _loadOutfitEmblems(recipe = this.recipe) {
         const project = this._project(), assets = window.RRAssetFiles;
         if (!project || !assets) return Promise.resolve([]);
         if (this._emblemProject !== project.path) {
@@ -3223,7 +3190,7 @@ class Character3DBuilder {
         };
         share();
         const folder = require('path').join(project.path, 'img', 'pictures');
-        for (const item of this.recipe.outfit || []) {
+        for (const item of recipe.outfit || []) {
             const name = item.emblemPicture;
             if (item.pattern !== 'emblem' || typeof name !== 'string' || !name || pictures.has(name) || this._emblemPending.has(name) || this._emblemFailed.has(name)) continue;
             if (/^(?:[a-z]+:|[\\/])/i.test(name) || name.replace(/\\/g, '/').split('/').includes('..') || !assets.findImage(folder, name)) { this._emblemFailed.add(name); continue; }
@@ -3242,7 +3209,7 @@ class Character3DBuilder {
                     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
                     const context = canvas.getContext('2d'); context.drawImage(img, 0, 0, width, height);
                     pictures.set(name, { width, height, data: new Uint8Array(context.getImageData(0, 0, width, height).data.buffer) });
-                    const active = new Set((this.recipe.outfit || []).filter(i => i.pattern === 'emblem').map(i => i.emblemPicture));
+                    const active = new Set([...(this.recipe.outfit || []), ...(recipe.outfit || [])].filter(i => i.pattern === 'emblem').map(i => i.emblemPicture));
                     for (const ref of pictures.keys()) { if (pictures.size <= 16) break; if (!active.has(ref)) pictures.delete(ref); }
                     for (const cache of share()) delete cache.atlas;
                     this._queueRebuild();
@@ -3514,44 +3481,64 @@ class Character3DBuilder {
     }
 
     async save() {
+        if (this._savingModel || this._sheetExporting) return;
+        this._savingModel = true;
+        try { await this._saveModel(); }
+        finally { this._savingModel = false; }
+    }
+
+    async _saveModel() {
         const project = this._project();
         if (!project || !this.pack) return;
+        const root = this.root, view = this._view, directory = this._charactersDir();
+        const current = () => this.root === root && this._view === view && this._project()?.path === project.path;
         let name = this._folderName(this.name);
         if (!name) {
             name = this._folderName(await RRDialog.prompt(this._t('Name this character:'), { title: this._t('Export Model To Project'), value: this._t('Villager') }));
-            if (!name) return;
+            if (!name || !current()) return;
             this.name = name;
             const input = this.root.querySelector('.rr-c3d-name-input');
             if (input) input.value = name;
         }
         const fs = require('fs'), path = require('path');
-        const folder = path.join(this._charactersDir(), name);
+        const folder = path.join(directory, name);
         const file = path.join(folder, 'source', name + '.glb');
         if (fs.existsSync(file) && !await RRDialog.confirm(this._t('Replace the saved character {name}?', { name }), { title: this._t('Export Model To Project'), ok: this._t('Replace'), danger: true })) return;
+        if (!current()) return;
         this._status(this._t('Saving…'));
         try {
-            await this._loadOutfitEmblems?.();
-            await this._loadArtPictures?.();
-            // The file at full quality: its own build, the outfit's picture shared with the view's.
+            // One export describes one design, even if the controls change while
+            // skin painting, cloth baking or PNG encoding yields to the editor.
+            const recipe = JSON.parse(JSON.stringify(this.recipe)), motions = this.motions || 'useful';
+            const eyeSource = this.eyeSource, bodyArtPictures = new Map(this._artPictures || []);
+            const emblemPictures = new Map(this.cache?.wardrobe?.emblemPictures || []);
+            const thumb = this._thumbnail();
+            await this._loadOutfitEmblems?.(recipe);
+            await this._loadArtPictures?.(recipe);
+            if (!current()) return;
+            for (const [name, picture] of this._artPictures || []) bodyArtPictures.set(name, picture);
+            for (const [name, picture] of this.cache?.wardrobe?.emblemPictures || []) emblemPictures.set(name, picture);
+            const cache = { wardrobe: { emblemPictures } };
+            // A full-quality build in its own cache, independent of later preview edits.
             // The full-size skin painted off the page first, then the file built with it.
             let wanted = null;
-            const probe = { wardrobe: this.cache.wardrobe };
-            RRCharacterModel.build(this.pack, this.recipe, probe, { quality: 'save', eyeSource: this.eyeSource, bodyArtPictures: this._artPictures, paintSkin: (key, args) => { wanted = { key, args }; return null; } });
+            RRCharacterModel.build(this.pack, recipe, cache, { quality: 'save', eyeSource, bodyArtPictures, paintSkin: (key, args) => { wanted = { key, args }; return null; } });
             const skin = wanted ? await this._paintSkinNow(wanted.args) : null;
-            const result = RRCharacterModel.build(this.pack, this.recipe, { wardrobe: this.cache.wardrobe }, { quality: 'save', eyeSource: this.eyeSource, bodyArtPictures: this._artPictures, paintSkin: skin ? () => skin : undefined });
+            if (!current()) return;
+            const result = RRCharacterModel.build(this.pack, recipe, cache, { quality: 'save', eyeSource, bodyArtPictures, paintSkin: skin ? () => skin : undefined });
             // A person saved ready to use: its poses and motions as clips, rigged, each motion where the game plays it.
-            const ready = window.RRCharacterPoses && RRCharacterPoses.savedModel ? RRCharacterPoses.savedModel(result, this.motions || 'useful') : null;
+            const ready = window.RRCharacterPoses && RRCharacterPoses.savedModel ? RRCharacterPoses.savedModel(result, motions) : null;
             if (ready) {
                 const names = new Set((result.clips || []).map(clip => clip.name));
                 result.clips = (result.clips || []).concat(ready.clips.filter(clip => !names.has(clip.name)));
             }
             const glb = await RRCharacterModel.toGlb(result, name, tex => this._png(tex));
+            if (!current()) return;
             // Written whole or not at all: a save cut short leaves the last good file.
             const atomic = window.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
             fs.mkdirSync(path.dirname(file), { recursive: true });
             atomic(fs, file, glb);
-            atomic(fs, path.join(folder, 'character.json'), JSON.stringify({ builder: 'character3d', version: 2, recipe: this.recipe }, null, 2) + '\n');
-            const thumb = this._thumbnail();
+            atomic(fs, path.join(folder, 'character.json'), JSON.stringify({ builder: 'character3d', version: 2, recipe }, null, 2) + '\n');
             if (thumb) atomic(fs, path.join(folder, 'thumbnail.png'), thumb);
             if (result.sidecar || ready) {
                 // A creature's rig, or a person's rig and motions, go in its model.json; what else the 3D Models page
@@ -3572,7 +3559,7 @@ class Character3DBuilder {
             window.dispatchEvent(new CustomEvent('rr-models-changed', { detail: { name: 'Characters/' + name } }));
         } catch (error) {
             console.error('[Character3DBuilder] save', error);
-            this._status(this._t('{name} could not be saved.', { name }), 'error');
+            if (current()) this._status(this._t('{name} could not be saved.', { name }), 'error');
         }
     }
 }

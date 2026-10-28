@@ -2367,8 +2367,9 @@ function reactorSplitGlb(buffer) {
  * The part of a GLB's binary chunk the runtime reads: every accessor's view,
  * packed into a buffer of its own (each view keeps its offset's remainder by
  * 16, so every typed array over it stays aligned), and the pictures a
- * material draws with (its base color) as Blobs on their `images` entries
- * (`rrBlob`). Normal, roughness and occlusion maps and pictures nothing
+ * material names as Blobs on their `images` entries (`rrBlob`). This includes
+ * normal and emissive maps and extension textures: the model reader still
+ * needs their bytes after the original buffer is released. Pictures nothing
  * names are left behind, with the rest of the file. `json` is updated in
  * place to the new offsets. Returns the packed ArrayBuffer.
  */
@@ -2378,15 +2379,21 @@ function reactorCompactGlb(json, buffer, binOffset, binLength) {
         if (accessor.bufferView != null) read[accessor.bufferView] = true;
         if (accessor.sparse) { read[accessor.sparse.indices.bufferView] = true; read[accessor.sparse.values.bufferView] = true; }
     }
-    for (const material of json.materials || []) {
-        const pbr = material.pbrMetallicRoughness || {}, specgloss = material.extensions && material.extensions.KHR_materials_pbrSpecularGlossiness;
-        const info = pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture);
-        const texture = info && json.textures && json.textures[info.index];
-        if (texture && texture.source != null) drawn[texture.source] = true;
-        // And its block-compressed copy (KHR_texture_basisu).
-        const basisu = texture && texture.extensions && texture.extensions.KHR_texture_basisu;
-        if (basisu && basisu.source != null) drawn[basisu.source] = true;
-    }
+    const keepTextures = value => {
+        if (!value || typeof value !== "object") return;
+        for (const [key, info] of Object.entries(value)) {
+            if (/Texture$/.test(key) && info && Number.isInteger(info.index)) {
+                const texture = json.textures && json.textures[info.index];
+                if (!texture) continue;
+                if (texture.source != null) drawn[texture.source] = true;
+                // A compressed/alternate copy has the same lifetime as its fallback.
+                for (const extension of Object.values(texture.extensions || {})) {
+                    if (extension && extension.source != null) drawn[extension.source] = true;
+                }
+            } else keepTextures(info);
+        }
+    };
+    for (const material of json.materials || []) keepTextures(material);
     const source = new Uint8Array(buffer, binOffset, binLength), placed = [];
     let size = 0;
     for (let i = 0; i < views.length; i++) {
@@ -2647,22 +2654,22 @@ Reactor3D.readModelAsync = function(buffer, ext, baseUrl, texture, options) {
             }))
             .then(parsed => {
                 if (parsed && parsed.json) {
-                    return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, parsed.bitmaps);
+                    return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, parsed.bitmaps, options);
                 }
-                return this.readModel((parsed && parsed.buffer) || buffer, kind, baseUrl, texture);
+                return this.readModel((parsed && parsed.buffer) || buffer, kind, baseUrl, texture, options);
             });
     }
     return Promise.resolve(beforeBuild()).then(() => this.readModel(buffer, ext, baseUrl, texture));
 };
 
-Reactor3D.readModel = function(buffer, ext, baseUrl, texture) {
+Reactor3D.readModel = function(buffer, ext, baseUrl, texture, options) {
     const kind = String(ext || ".glb").toLowerCase();
     if (kind === ".glb") {
         const parsed = this.readGlb(buffer);
         if (this.GlbCompact && this.GlbCompact.enabled && parsed.bin) {
             parsed.bin = new Uint8Array(reactorCompactGlb(parsed.json, parsed.bin.buffer, parsed.bin.byteOffset, parsed.bin.byteLength));
         }
-        return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl);
+        return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, null, options);
     }
     if (kind === ".obj") return this.buildMeshTemplate(this.readObj(buffer), baseUrl, texture);
     if (kind === ".stl") return this.buildMeshTemplate(this.readStl(buffer), baseUrl, texture);
@@ -3766,6 +3773,7 @@ Reactor3D.carrySurfaceData = function(from, to) {
     if (!a || !b) return to;
     if (a.rrNormalMap && a.rrNormalMap.isTexture) { b.rrNormalMap = a.rrNormalMap; b.rrNormalScale = a.rrNormalScale && a.rrNormalScale.clone ? a.rrNormalScale.clone() : a.rrNormalScale; if (a.rrNormalUv1) b.rrNormalUv1 = true; }
     if (a.rrEmissiveMap && a.rrEmissiveMap.isTexture) b.rrEmissiveMap = a.rrEmissiveMap;
+    for (const key of ["rrSurfaceMap", "rrOcclusionMap"]) if (a[key]?.isTexture) b[key] = a[key];
     if (a.rrEmissive && a.rrEmissive.isColor) b.rrEmissive = a.rrEmissive.clone();
     if (a.rrHair) b.rrHair = true;
     return to;
@@ -3774,8 +3782,9 @@ Reactor3D.carrySurfaceData = function(from, to) {
 Reactor3D.cloneSurfaceMaterial = function(material) {
     const data = material.userData;
     material.userData = Object.assign({}, data);
-    if (data?.rrNormalMap?.isTexture) delete material.userData.rrNormalMap;
-    if (data?.rrEmissiveMap?.isTexture) delete material.userData.rrEmissiveMap;
+    for (const key of ["rrNormalMap", "rrEmissiveMap", "rrSurfaceMap", "rrOcclusionMap"]) {
+        if (data?.[key]?.isTexture) delete material.userData[key];
+    }
     let cloned;
     try {
         cloned = material.clone();
@@ -3811,7 +3820,7 @@ Reactor3D.hairStrandDirections = function(geometry) {
     return out;
 };
 
-Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
+Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps, options) {
     if (typeof THREE === "undefined") throw new Error("three.js is not loaded");
     const root = new THREE.Group();
     root.name = "glb";
@@ -3825,13 +3834,17 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
     const usedBitmaps = new Set();
     // The Character and Prop Builders choose each part's metal: theirs shows as it does in the Builder.
     const fromBuilder = Reactor3D.isBuilderGlb(json);
+    // Inspection can show the GLB's authored PBR appearance under a studio.
+    // A game continues to use its map-lighting materials and passes.
+    const studio = !!(options && options.studio && fromBuilder);
+    root.userData.inspectionStudio = studio;
     const materials = (json.materials || []).map((def, materialIndex) => {
         if (!usedMaterials.has(materialIndex)) return null;
         const specgloss = def.extensions && def.extensions.KHR_materials_pbrSpecularGlossiness;
         const pbr = def.pbrMetallicRoughness || {};
         const color = pbr.baseColorFactor || (specgloss && specgloss.diffuseFactor) || [1, 1, 1, 1];
         const blend = def.alphaMode === "BLEND" || color[3] < 1;
-        const mat = new THREE.MeshBasicMaterial({
+        const mat = new (studio ? THREE.MeshPhysicalMaterial : THREE.MeshBasicMaterial)({
             color: new THREE.Color(color[0], color[1], color[2]),
             transparent: blend,
             opacity: color[3],
@@ -3839,6 +3852,12 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
             side: def.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
             fog: false
         });
+        mat.name = def.name || "";
+        if (studio) {
+            mat.roughness = pbr.roughnessFactor ?? 1;
+            mat.metalness = pbr.metallicFactor ?? 1;
+            mat.userData.rrInspectionPbr = true;
+        }
         if (def.alphaMode === "MASK") mat.alphaTest = def.alphaCutoff != null ? def.alphaCutoff : 0.5;
         mat.__reactorModel = true;
         mat.userData.baseColor = mat.color.clone();
@@ -3890,17 +3909,74 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
             }
         }
         // Hair, as the Character Builder names it: a strand sheen over the light.
-        if (/^(Hair|Beard)\b/.test(String(def.name || ""))) mat.userData.rrHair = true;
+        if (!studio && /^(Hair|Beard)\b/.test(String(def.name || ""))) mat.userData.rrHair = true;
         // A file's own polished metal is remembered as a starting point for its
         // Surface; nothing reflects until the model's surface says so, but a
         // Builder's file, whose metal parts shine as they did there
         // (Reactor3D.applyModelSurface).
         const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
         const roughness = pbr.roughnessFactor != null ? pbr.roughnessFactor : 1;
+        const dataMap = info => {
+            const map = this._loadGlbTexture(json, bin, info, baseUrl, textures, bitmaps, usedBitmaps);
+            if (map) {
+                map.colorSpace = THREE.NoColorSpace;
+                map.channel = info.texCoord || 0;
+                if (map.channel === 1) map.wrapS = map.wrapT = THREE.RepeatWrapping;
+                if (map.image) map.needsUpdate = true;
+            }
+            return map;
+        };
+        // Fine surface maps carry the weave, scuffs and recesses which distinguish
+        // the Builder's materials. The game samples these with its own lighting;
+        // inspection passes the same images to the physical material.
+        if (pbr.metallicRoughnessTexture) {
+            mat.userData.rrSurfaceMap = dataMap(pbr.metallicRoughnessTexture);
+            mat.userData.rrSurfaceUv1 = pbr.metallicRoughnessTexture.texCoord === 1;
+        }
+        if (def.occlusionTexture) {
+            const same = pbr.metallicRoughnessTexture && def.occlusionTexture.index === pbr.metallicRoughnessTexture.index
+                && (def.occlusionTexture.texCoord || 0) === (pbr.metallicRoughnessTexture.texCoord || 0);
+            mat.userData.rrOcclusionMap = same ? mat.userData.rrSurfaceMap : dataMap(def.occlusionTexture);
+            mat.userData.rrOcclusionUv1 = def.occlusionTexture.texCoord === 1;
+            mat.userData.rrOcclusionStrength = def.occlusionTexture.strength ?? 1;
+        }
         if (metallic > 0.25 && roughness < 0.65) {
             const round = v => Math.round(v * 100) / 100;
             mat.userData.glbShine = { reflect: round(Math.max(0.2, metallic * (1 - roughness * 0.65))), gloss: round(1 - roughness), metal: round(metallic), tint: "#ffffff" };
-            if (fromBuilder) mat.userData.glbShineOwn = true;
+            if (fromBuilder && !studio) mat.userData.glbShineOwn = true;
+        }
+        if (studio) {
+            mat.normalMap = mat.userData.rrNormalMap || null;
+            if (mat.normalMap) {
+                mat.normalMap.channel = normalInfo.texCoord || 0;
+                mat.normalScale.copy(mat.userData.rrNormalScale);
+            }
+            mat.roughnessMap = mat.metalnessMap = mat.userData.rrSurfaceMap || null;
+            mat.aoMap = mat.userData.rrOcclusionMap || null;
+            mat.aoMapIntensity = mat.userData.rrOcclusionStrength ?? 1;
+            if (mat.userData.rrEmissive) {
+                mat.emissive.copy(mat.userData.rrEmissive);
+                mat.emissiveMap = mat.userData.rrEmissiveMap || null;
+                // Physical materials already add their emission.
+                delete mat.userData.rrEmissive;
+                delete mat.userData.rrEmissiveMap;
+            }
+            const extensions = def.extensions || {}, sheen = extensions.KHR_materials_sheen,
+                coat = extensions.KHR_materials_clearcoat, specular = extensions.KHR_materials_specular,
+                iridescence = extensions.KHR_materials_iridescence;
+            if (sheen) {
+                mat.sheen = 1; mat.sheenColor.fromArray(sheen.sheenColorFactor || [0, 0, 0]);
+                mat.sheenRoughness = sheen.sheenRoughnessFactor ?? 0;
+                if (sheen.sheenColorTexture) mat.sheenColorMap = texInfo && sheen.sheenColorTexture.index === texInfo.index
+                    ? mat.map : this._loadGlbTexture(json, bin, sheen.sheenColorTexture, baseUrl, textures, bitmaps, usedBitmaps);
+            }
+            if (coat) { mat.clearcoat = coat.clearcoatFactor ?? 0; mat.clearcoatRoughness = coat.clearcoatRoughnessFactor ?? 0; }
+            if (specular) { mat.specularIntensity = specular.specularFactor ?? 1; mat.specularColor.fromArray(specular.specularColorFactor || [1, 1, 1]); }
+            if (iridescence) {
+                mat.iridescence = iridescence.iridescenceFactor ?? 0; mat.iridescenceIOR = iridescence.iridescenceIor ?? 1.3;
+                mat.iridescenceThicknessRange = [iridescence.iridescenceThicknessMinimum ?? 100, iridescence.iridescenceThicknessMaximum ?? 400];
+                if (iridescence.iridescenceThicknessTexture) mat.iridescenceThicknessMap = dataMap(iridescence.iridescenceThicknessTexture);
+            }
         }
         return mat;
     });

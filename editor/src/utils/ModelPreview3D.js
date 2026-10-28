@@ -92,7 +92,7 @@ class ModelPreview3D {
         return !!(warmup && warmup.enabled !== false && (!warmup.supported || warmup.supported(renderer)) && warmup.lastHidden > 0);
     }
 
-    /** Inspection viewports own their light field; map lighting is never borrowed. */
+    /** Inspection viewports own their light field and studio reflections. */
     static isolateLighting(object, uniforms) {
         const count = Reactor3D.SHADER_LIGHTS;
         uniforms ||= {
@@ -101,7 +101,17 @@ class ModelPreview3D {
             rrLightColor: { value: new Float32Array(count * 4) },
             rrLightAim: { value: new Float32Array(count * 4) },
             rrLightShadow: { value: new Float32Array(count).fill(-1) },
-            rrLightGridEnabled: { value: 0 }
+            rrLightGridEnabled: { value: 0 }, rrVolumeOn: { value: 0 }, rrDynOn: { value: 0 },
+            rrWaterFarEdge: { value: 0 },
+            // Keeping only ambient made metal and hair inherit the map's key
+            // and night-time reflection tint. Their details vanished in the
+            // Database even though the model still contained them.
+            rrKeyLight: { value: new Float32Array([0.45, 0.8, 0.6, 0]) },
+            rrKeyColor: { value: new Float32Array([1, 0.95, 0.9]) },
+            rrEnvMap: { value: Reactor3D.studioEnvMap?.() || null },
+            rrEnvMaxLod: { value: 0 }, rrEnvFlip: { value: -1 },
+            rrEnvProbe: { value: new Float32Array(4) }, rrEnvProbeReach: { value: -1 },
+            rrSkyLight: { value: new Float32Array([1, 1, 1]) }
         };
         this._lightingBindings ||= new WeakMap();
         object.traverse(node => {
@@ -121,6 +131,66 @@ class ModelPreview3D {
             }
         });
         return uniforms;
+    }
+
+    static studioEnvironment(renderer) {
+        const room = new THREE.Scene();
+        const box = (w, h, d, color, x, y, z, intensity) => {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.BackSide }));
+            m.position.set(x, y, z);
+            room.add(m);
+            return m;
+        };
+        box(14, 8, 14, '#2a2c32', 0, 3, 0, 1);
+        const soft = (w, h, x, y, z, intensity, color) => {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.DoubleSide }));
+            m.position.set(x, y, z);
+            m.lookAt(0, 1, 0);
+            room.add(m);
+        };
+        soft(3, 2, 3, 4, 4, 9, '#fff2e4');
+        soft(2, 3, -4, 2.5, 2, 3.5, '#dfe8ff');
+        soft(4, 1, -1, 3, -5, 6, '#e8eeff');
+        soft(8, 8, 0, -0.9, 0, 0.6, '#8a7a6a');
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        const target = pmrem.fromScene(room, 0.03);
+        pmrem.dispose();
+        room.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+        return target;
+    }
+
+    /** Builder GLBs use their exported PBR materials under the Builder's studio. */
+    static configureStudio(renderer, scene, enabled) {
+        if (!renderer || !scene) return;
+        let studio = renderer.__rrInspectionStudio;
+        if (enabled && !studio) {
+            const target = this.studioEnvironment(renderer), lights = new THREE.Group();
+            lights.add(new THREE.HemisphereLight(0xfff4e8, 0x3a3430, 0.4));
+            for (const [color, intensity, position] of [[0xfff0e0, 2, [1.6, 3.2, 2.4]],
+                [0xdce8ff, 0.5, [-2.5, 1.4, 1.6]], [0xdfe6f2, 1.3, [-1.2, 2.4, -2.8]]]) {
+                const light = new THREE.DirectionalLight(color, intensity);
+                light.position.fromArray(position); light.target.position.set(0, 0.8, 0);
+                lights.add(light, light.target);
+            }
+            studio = renderer.__rrInspectionStudio = { target, lights };
+        }
+        renderer.toneMapping = enabled ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+        renderer.toneMappingExposure = enabled ? 1.05 : 1;
+        scene.environment = enabled ? studio.target.texture : null;
+        scene.environmentIntensity = enabled ? 0.8 : 1;
+        if (studio) {
+            if (enabled && studio.lights.parent !== scene) scene.add(studio.lights);
+            studio.lights.visible = enabled;
+        }
+    }
+
+    static disposeStudio(renderer) {
+        const studio = renderer?.__rrInspectionStudio;
+        if (!studio) return;
+        studio.lights.parent?.remove(studio.lights);
+        studio.lights.traverse(light => light.dispose?.());
+        studio.target.dispose();
+        delete renderer.__rrInspectionStudio;
     }
 
     /** Neutral backdrop follows the editor theme without changing the model's colors. */

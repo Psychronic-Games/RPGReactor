@@ -212,12 +212,12 @@
     };
 
     /** The layers' project pictures decoded (at most 512 on a side), shared by the view and Save. */
-    P._loadArtPictures = function() {
+    P._loadArtPictures = function(recipe = this.recipe) {
         const project = this._project(), assets = window.RRAssetFiles;
         if (!project || !assets) return Promise.resolve();
         if (this._artProject !== project.path) { this._artProject = project.path; this._artPictures = new Map(); this._artPending = new Map(); this._artFailed = new Set(); }
         const folder = require('path').join(project.path, 'img', 'pictures');
-        for (const l of (this.recipe.bodyArt && this.recipe.bodyArt.layers) || []) {
+        for (const l of (recipe.bodyArt && recipe.bodyArt.layers) || []) {
             const name = l.motif === 'picture' && l.picture;
             if (!name || this._artPictures.has(name) || this._artPending.has(name) || this._artFailed.has(name)) continue;
             if (!assets.findImage(folder, name)) { this._artFailed.add(name); continue; }

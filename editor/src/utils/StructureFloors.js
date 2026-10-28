@@ -39,6 +39,38 @@
         return (plan.floors || []).some(floor => Object.keys(floor.rooms || {}).length) || (plan.stairs || []).length > 0;
     }
 
+    function needsMaterialize(plan) {
+        return !!(isDescribed(plan) || (plan.parts || []).length || (plan.paths || []).length || (plan.shapes || []).length);
+    }
+
+    /** Expand the complete preview into editable data, including nested plans.
+     * Resolve everything before changing the plan so a failure cannot leave half a building.
+     */
+    function materialize(plan, SP, resolve) {
+        if (!SP || !needsMaterialize(plan)) return false;
+        const clean = row => { const out = Object.assign({}, row); delete out.id; delete out.group; delete out.structure; return out; };
+        const pieces = SP.build(plan, 0, 0, 1, 0, resolve).map(clean);
+        const effects = SP.effectsOf(plan, 0, 0, resolve);
+        const spots = SP.spots(plan, 0, 0, resolve);
+        const events = SP.eventsOf(plan, 0, 0, resolve).map(row => ({ spot: row.key, name: row.name, template: row.template, direction: row.direction }));
+        const scratch = { width: plan.size[0], height: plan.size[1], reactor3d: { version: 1 } };
+        SP.addEffects(scratch, effects.filter(fx => fx.type !== 'animation'), 0);
+        const sidecar = scratch.reactor3d;
+        plan.pieces = pieces;
+        plan.lights = (sidecar.lights || []).map(row => {
+            const out = clean(row); if (/^structure:\d+$/.test(String(out.tag))) delete out.tag; return out;
+        });
+        plan.surfaces = (sidecar.mediaSurfaces || []).map(clean);
+        plan.props = (sidecar.props || []).map(clean);
+        plan.water = (sidecar.water || []).map(clean);
+        plan.spots = spots; plan.events = events;
+        plan.effects = effects.filter(fx => fx.type === 'animation').map(fx => Object.assign({}, fx, { name: fx.key }));
+        plan.floors = []; plan.stairs = []; plan.shapes = []; plan.parts = []; plan.paths = [];
+        if (plan.roof) plan.roof.pitch = null;
+        plan.height = Math.max(floorsOf(plan), occupiedFloors(plan));
+        return true;
+    }
+
     /**
      * Build a described plan out into pieces, once: the rooms become their
      * walls, floors, doors, windows, stairs and roof, and the plan keeps
@@ -500,7 +532,7 @@
         return rectCells(x0, y0, x1, y1).filter(([x, y]) => x === Math.min(x0, x1) || x === Math.max(x0, x1) || y === Math.min(y0, y1) || y === Math.max(y0, y1));
     }
 
-    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
+    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, needsMaterialize, materialize, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
     root.RRStructureFloors = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

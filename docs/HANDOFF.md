@@ -6,9 +6,11 @@ An entry holds only what the next session needs and cannot find elsewhere: what 
 
 ## Where things stand (2026-10-28)
 
-- **0.99.2** shipped 2026-10-25 (runtime 20261025.11). **0.99.3** is open at runtime **20261028.10**; every change is in [the editor changelog](../editor/changelog/0.99.3.md).
+- **0.99.3 source release:** runtime **20261028.11**, [release notes](posts/release-notes-0.99.3.md) and [editor changelog](../editor/changelog/0.99.3.md). The next development cycle is 0.99.4 after the release push; binary publishing is separate.
 - **CI:** the eight-shard workflow is merged into the local `main`; GitHub's `main` has not run it yet.
-- **Today:** Tactical grapple (command, beats, rope, sounds, camera), worn equipment, height reach as a setting, the reach preview under the menu cursor, Q/E kept through a key config plugin, GL error fixes, Builder metal and texture filtering in game; Demo: Builder characters for heroes 7-10 with faces, raiders and militia.
-- **Open items and how to pick them up:** [OPEN-ITEMS.md](OPEN-ITEMS.md) (Builder characters less detailed in game; export missing detail; face export too bright; metal at night; height reach "no limit").
+- **Today:** Tactical grapple, worn equipment, height reach, Q/E through key config, GL fixes, Builder metal/filtering; Demo Builder heroes 7-10, raiders and militia.
+- **Builder/export audit:** GLB images/PBR settings survive loading; Database inspection shares the Builder studio. Orbit zoom keeps its centre; chibi sheets survive rebuilds; faces keep studio colors. Rhea's GLB and four face sheets are refreshed. Native: `smoke/nw-builder-export-parity.cjs`; evidence: `scratchpad/builder-parity-20261028/`.
+- **Database audit:** saved model thumbnails load first; only missing pictures render. Structures expand the complete preview into editable pieces and retain child content on save. Both builders share tool controls; help clears the bar. Native: `smoke/nw-database-assets.cjs`; evidence: `scratchpad/database-assets-20261028/`.
+- **Remaining work:** [OPEN-ITEMS.md](OPEN-ITEMS.md), including optional distance/night readability tuning; game and Builder lighting intentionally follow their own scene.
 - **Older threads:** Unused files and the playtest record (a Demo playtest with the record on is still owed); Braver's corescript port; the detached editor windows (Linux transparency); Savior & Religion (not in git) boots and plays.
 - **Owner questions:** [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md).

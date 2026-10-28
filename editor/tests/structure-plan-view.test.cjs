@@ -143,14 +143,14 @@ test('the floor plan is drawn from what the structure builds: a lot shows its ho
     assert.equal(hamlet.editor._floorCount(hamlet.plan), 1);
 });
 
-test('painting a described lot builds its rooms out and keeps its own pieces, paths and parts', () => {
+test('painting a described lot expands its whole geometry into editable pieces', () => {
     const { editor, plan } = openEditor(demoPlan('Lot-Cottage'));
-    const own = plan.pieces.length, paths = plan.paths.length;
+    const own = plan.pieces.length;
     const before = editor._builtPieces(plan).filter(p => !Array.isArray(p.size)).length;
     editor.applyPaint('wall', { x: 0, y: 0 }, { x: 0, y: 0 });
     assert.equal(plan.floors.length, 0, 'the rooms are pieces now');
     assert.ok(plan.pieces.length > own + 20, 'the house joined the lot\'s own pieces');
-    assert.equal(plan.paths.length, paths, 'the paving stays paving');
+    assert.equal(plan.paths.length, 0, 'paving becomes editable floor pieces with the building');
     const after = editor._builtPieces(plan).filter(p => !Array.isArray(p.size)).length;
     assert.ok(Math.abs(after - before) <= 2, 'and the plan builds what it built, plus the wall just painted');
     assert.equal(editor.undo(), true);

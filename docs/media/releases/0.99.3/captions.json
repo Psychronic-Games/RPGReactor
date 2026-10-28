@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01-character-builder.jpg",
+    "title": "Rhea Voss in the Character Builder",
+    "caption": "The Builder and export share their surface settings."
+  },
+  {
+    "file": "02-model-inspection.jpg",
+    "title": "Database model inspection",
+    "caption": "Saved thumbnails load first; exported materials retain their maps and studio appearance."
+  },
+  {
+    "file": "03-chibi-frames.jpg",
+    "title": "Chibi walking frames",
+    "caption": "The complete exported sheet keeps the chibi body in every frame."
+  },
+  {
+    "file": "04-face-portraits.jpg",
+    "title": "Face portraits",
+    "caption": "Exported faces keep their studio colors."
+  },
+  {
+    "file": "05-structures.jpg",
+    "title": "Compound Structures blueprint",
+    "caption": "Nested buildings remain available for editing."
+  },
+  {
+    "file": "06-mixed-blueprint.jpg",
+    "title": "A cottage and its lot",
+    "caption": "Rooms, paving and manually placed pieces stay together."
+  }
+]

@@ -135,8 +135,9 @@ class Database3DEditor {
      *    were cached under 1.
      * 3: render at 512px for sharp detail previews and high-density displays.
      * 4: inspection lighting is independent of the current map.
+     * 5: Builder models retain their PBR maps and are shown under a studio.
      */
-    static THUMBNAIL_CACHE_VERSION = 4;
+    static THUMBNAIL_CACHE_VERSION = 5;
 
     /** `worn` (ModelVariantsPanel.lookStamp): what the use wears; a picture of another look is another entry. */
     static thumbnailCacheName(sourcePath, size, mtimeMs, worn = '') {
@@ -171,8 +172,8 @@ class Database3DEditor {
         this._view = { yaw: 30, pitch: 20, distance: 4, pan: { x: 0, y: 0, z: 0 } };
         // Inputs steer the goal; the camera eases toward it every frame,
         // so wheel notches and pointer deltas glide instead of snapping.
-        // The pan slides the orbit centre off the model's middle: a wheel
-        // zooms toward the pointer, Shift-drag or the middle button pans.
+        // Shift-drag or the middle button pans. Ordinary wheel zoom keeps
+        // the model's orbit centre; rig editing can close on a pointed marker.
         this._viewGoal = { yaw: 30, pitch: 20, distance: 4, pan: { x: 0, y: 0, z: 0 } };
         this._sim = { walking: false, jumping: false, swimming: false, climbing: false, riding: false, action: null };
         this._tool = 'orbit';
@@ -642,6 +643,7 @@ class Database3DEditor {
     }
 
     renderModelList(fromSearch = false) {
+        this._thumbnailListRun = (this._thumbnailListRun || 0) + 1;
         const list = this._detail.querySelector('.r3d-model-list');
         const search = this._detail.querySelector('.r3d-model-search');
         const needle = search ? search.value.trim().toLowerCase() : '';
@@ -737,9 +739,9 @@ class Database3DEditor {
             visible.push(entry);
         }
         this.highlightModel();
-        // After the paint: thumbnail work must never sit between the
-        // toggle click and the rows appearing.
-        setTimeout(() => this._fillThumbnails(visible), 0);
+        // Read saved pictures before selecting/loading a model. Only missing
+        // pictures enter the deferred renderer queue.
+        this._fillThumbnails(visible);
         if (!fromSearch) {
             this.selectModel(initial);
         }
@@ -825,6 +827,7 @@ class Database3DEditor {
         this._thumbScene = null;
         this._thumbCamera = null;
         if (!renderer) return;
+        ModelPreview3D.disposeStudio(renderer);
         if (typeof RRModelRelease !== 'undefined') RRModelRelease.dropRenderer(renderer);
         else { try { renderer.dispose(); } catch (error) { /* gone */ } }
     }
@@ -832,52 +835,97 @@ class Database3DEditor {
     async _fillThumbnails(entries) {
         this._ensureProjectCaches();
         const generation = this._thumbnailGeneration;
+        const run = this._thumbnailListRun = (this._thumbnailListRun || 0) + 1;
         const project = this._project();
-        const current = () => generation === this._thumbnailGeneration && project === this._project()
+        const current = () => run === this._thumbnailListRun && generation === this._thumbnailGeneration && project === this._project()
             && this._detail?.isConnected;
         if (!this._thumbs) this._thumbs = {};
         const apply = (name, url) => {
             const icon = this._thumbRow(name);
             if (icon) icon.style.backgroundImage = `url("${url}")`;
         };
+        const missing = [];
         for (const entry of entries) {
-            const cached = this._thumbs[entry.name] || this._readCachedThumbnail(entry);
+            const saved = this._readProjectThumbnail(entry);
+            const cached = saved || this._thumbs[entry.name] || this._readCachedThumbnail(entry);
             if (cached) {
                 this._thumbs[entry.name] = cached;
                 apply(entry.name, cached);
+                // An older machine cache can supply a missing portable picture
+                // without loading the model again.
+                if (!saved && this._projectThumbnailPath(entry)) this._writeCachedThumbnail(entry, cached);
                 continue;
             }
-            // An uncached thumbnail loads and renders the whole model in
-            // one main-thread chunk. It waits for the list to paint and
-            // for the preview to be idle: rendering it under an orbit or
-            // a zoom was the stutter people felt in the first seconds.
-            await new Promise(resolve => setTimeout(resolve, 0));
-            await this._whenPreviewIdle();
-            if (!current()) return;
-            const url = await this._renderThumbnail(entry);
-            if (!current()) return;
-            if (!url) continue;
-            this._thumbs[entry.name] = url;
-            apply(entry.name, url);
-            const template = this._templates && this._templates[entry.name];
-            const decoded = Database3DEditor.texturesDecoded(template && template.userData.glbTextures);
-            if (decoded) {
-                this._writeCachedThumbnail(entry, url);
-                continue;
-            }
-            // Textures still decoding after the first draw: one late
-            // re-render trades a moment of gray silhouette for the
-            // coloured icon, and the coloured one is what gets cached.
-            setTimeout(async () => {
+            missing.push(entry);
+        }
+        // Finish the entire saved-picture pass before any WebGL work. Runs
+        // also share one queue when folders/search change during a render.
+        const previous = this._thumbnailWork || Promise.resolve();
+        const work = previous.catch(() => {}).then(async () => {
+            for (const entry of missing) {
+                // An uncached thumbnail loads and renders the whole model in
+                // one main-thread chunk. It waits for the list to paint and
+                // for the preview to be idle: rendering it under an orbit or
+                // a zoom was the stutter people felt in the first seconds.
+                await new Promise(resolve => setTimeout(resolve, 0));
                 await this._whenPreviewIdle();
                 if (!current()) return;
-                const again = await this._renderThumbnail(entry);
-                if (!current() || !again) return;
-                this._thumbs[entry.name] = again;
-                apply(entry.name, again);
-                this._writeCachedThumbnail(entry, again);
-            }, 1600);
-        }
+                let url;
+                try { url = await this._renderThumbnail(entry); }
+                catch (error) { console.warn('Could not render model thumbnail:', entry.name, error); continue; }
+                if (!current()) return;
+                if (!url) continue;
+                this._thumbs[entry.name] = url;
+                apply(entry.name, url);
+                const template = this._templates && this._templates[entry.name];
+                const decoded = Database3DEditor.texturesDecoded(template && template.userData.glbTextures);
+                if (decoded) {
+                    this._writeCachedThumbnail(entry, url);
+                    continue;
+                }
+                // Textures still decoding after the first draw: one late
+                // re-render trades a moment of gray silhouette for the
+                // coloured icon, and the coloured one is what gets cached.
+                setTimeout(() => {
+                    this._thumbnailWork = (this._thumbnailWork || Promise.resolve()).catch(() => {}).then(async () => {
+                        await this._whenPreviewIdle();
+                        if (!current()) return;
+                        const again = await this._renderThumbnail(entry);
+                        if (!current() || !again) return;
+                        this._thumbs[entry.name] = again;
+                        apply(entry.name, again);
+                        const template = this._templates && this._templates[entry.name];
+                        if (Database3DEditor.texturesDecoded(template && template.userData.glbTextures)) this._writeCachedThumbnail(entry, again);
+                    }).catch(error => console.warn('Could not retry model thumbnail:', entry.name, error));
+                }, 1600);
+            }
+        });
+        this._thumbnailWork = work;
+        await work;
+    }
+
+    /** A model folder owns its thumbnail; worn variants need their own cache. */
+    _projectThumbnailPath(entry) {
+        if (typeof require !== 'function' || entry.worn) return null;
+        try {
+            const fs = require('fs'), path = require('path');
+            const project = this._project();
+            if (!project?.path || !entry.name) return null;
+            const folder = path.resolve(project.path, '3d', entry.name);
+            const root = path.resolve(project.path, '3d') + path.sep;
+            if (!folder.startsWith(root) || !fs.existsSync(path.join(folder, 'source'))) return null;
+            return path.join(folder, 'thumbnail.png');
+        } catch (error) { return null; }
+    }
+
+    _readProjectThumbnail(entry) {
+        const file = this._projectThumbnailPath(entry);
+        if (!file) return null;
+        try {
+            const bytes = require('fs').readFileSync(file);
+            if (bytes.length < 24 || bytes.readUInt32BE(0) !== 0x89504e47 || bytes.readUInt32BE(4) !== 0x0d0a1a0a) return null;
+            return 'data:image/png;base64,' + bytes.toString('base64');
+        } catch (error) { return null; }
     }
 
     /**
@@ -939,14 +987,26 @@ class Database3DEditor {
 
     _writeCachedThumbnail(entry, dataUrl) {
         const cachePath = this._thumbnailCachePath(entry);
-        if (!cachePath || typeof dataUrl !== 'string') return;
+        if (typeof dataUrl !== 'string') return;
         const comma = dataUrl.indexOf(',');
         if (!dataUrl.startsWith('data:image/png;base64,') || comma < 0) return;
+        const bytes = Buffer.from(dataUrl.slice(comma + 1), 'base64');
+        const projectThumbnail = this._projectThumbnailPath(entry);
+        if (projectThumbnail) {
+            try {
+                const fs = require('fs');
+                // WebHost's filesystem ignores Node's write flags. The explicit
+                // check protects its artwork too; wx also guards desktop races.
+                if (!fs.existsSync(projectThumbnail)) fs.writeFileSync(projectThumbnail, bytes, { flag: 'wx' });
+            }
+            catch (error) { /* Never replace an existing project picture; read-only folders use the cache. */ }
+        }
+        if (!cachePath) return;
         try {
             const fs = require('fs');
             const path = require('path');
             fs.mkdirSync(path.dirname(cachePath), { recursive: true });
-            fs.writeFileSync(cachePath, Buffer.from(dataUrl.slice(comma + 1), 'base64'));
+            fs.writeFileSync(cachePath, bytes);
         } catch (error) {
             // The cache is a convenience; a read-only home just renders again next time.
         }
@@ -1003,6 +1063,7 @@ class Database3DEditor {
         const scale = 1.6 / span;
         object.scale.setScalar(scale);
         ModelPreview3D.isolateLighting(object);
+        ModelPreview3D.configureStudio(this._thumbRenderer, this._thumbScene, !!template.userData.inspectionStudio);
         this._thumbScene.add(object);
         // Templates stand feet-at-origin: aim mid-height, dead centre
         // (aimCamera adds +0.5 to x/z, so -0.5 targets the true origin).
@@ -1085,8 +1146,8 @@ class Database3DEditor {
             // is free; the worker parse itself never touches it.
             templates[entry.name] = Reactor3D.readModelAsync
                 ? await Reactor3D.readModelAsync(buffer, entry.ext || '.glb', baseUrl, entry.texture || '',
-                    { beforeBuild: options.beforeBuild })
-                : Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
+                    { beforeBuild: options.beforeBuild, studio: true })
+                : Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '', { studio: true });
             if (templates === this._templates) { this._touchTemplate(entry.name); this._trimTemplates(); }
             return templates[entry.name];
         } catch (error) {
@@ -2210,6 +2271,7 @@ class Database3DEditor {
             .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
         this._object = object;
         this._previewLighting = ModelPreview3D.isolateLighting(object);
+        ModelPreview3D.configureStudio(this._renderer, this._scene, !!template.userData.inspectionStudio);
         this._lastInputAt = performance.now();
         // A GLB's images decode after the first draw; their version numbers
         // tell a still preview when one has landed.
@@ -2318,6 +2380,7 @@ class Database3DEditor {
         this._releaseAllTemplates();
         this._dropThumbRenderer();
         if (this._renderer) {
+            ModelPreview3D.disposeStudio(this._renderer);
             if (typeof RRModelRelease !== 'undefined') RRModelRelease.dropRenderer(this._renderer);
             else {
                 this._renderer.dispose();
@@ -7043,6 +7106,7 @@ class Database3DEditor {
         let removing = false;
         canvas.addEventListener('contextmenu', event => event.preventDefault());
         canvas.addEventListener('pointerdown', event => {
+            this._wheelHit = null;
             // A click picks from the pose as it stands now; a hover uses the kept one.
             this._clickRefresh = true;
             // An open dropdown dismisses on this click and nothing else
@@ -7264,7 +7328,11 @@ class Database3DEditor {
             // camera stops a hand's width short of that point rather than
             // flying through it.
             const before = this._viewGoal.distance;
-            const centre = this._orbitCenterWorld(this._viewGoal.pan);
+            // Closing on a fingertip is useful while placing rig markers, but
+            // moving the orbit centre during an ordinary inspection leaves the
+            // model circling empty space after a zoom in/out. Only rig editing
+            // uses a pointed surface as its focus; inspection keeps its pivot.
+            const centre = this._rigMode ? this._orbitCenterWorld(this._viewGoal.pan) : null;
             const under = centre && this._pointUnderPointer(event.clientX, event.clientY, centre);
             // In proportion to the scroll: a notch (about 100) is 15%, and a
             // smooth-scrolling wheel's many small events add up to the same.

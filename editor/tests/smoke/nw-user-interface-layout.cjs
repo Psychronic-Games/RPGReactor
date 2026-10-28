@@ -134,7 +134,8 @@ async function main() {
     try {
         await driver.start();
         await driver.createSession({ browserName: 'chrome', 'goog:chromeOptions': { args: [
-            `nwapp=${editorRoot}`, `user-data-dir=${path.join(tempRoot, 'nw-profile')}`, 'no-first-run', 'no-default-browser-check'
+            `nwapp=${editorRoot}`, `user-data-dir=${path.join(tempRoot, 'nw-profile')}`, 'no-first-run', 'no-default-browser-check',
+            'js-flags=--max-old-space-size=1024'
         ] } });
         await driver.setScriptTimeout(90000);
         await driver.waitForScript('return Boolean(window.reactor?.projectController && window.reactor?.databaseManager);', [], {
@@ -158,11 +159,28 @@ async function main() {
         assert.equal(opened.error, undefined);
         assert.ok(opened.count >= 1);
 
+        // The Database now opens in its own native window. Resize and measure
+        // that window; shrinking the map window leaves the Database unchanged.
+        if (await driver.execute('return !!window.RRDatabaseWindow?.separateWindows();')) {
+            await driver.waitForScript('return !!window.RRDatabaseWindow?.popoutWindow()?.window?.document?.querySelector(".rr-ui-editor");', [], {
+                timeout: 30000, description: 'Database native window'
+            });
+            const handles = await driver.sessionRequest('GET', '/window/handles');
+            let found = false;
+            for (const handle of handles) {
+                await driver.sessionRequest('POST', '/window', { handle });
+                if (await driver.execute('return location.pathname.endsWith("/database-panel.html");')) { found = true; break; }
+            }
+            assert.equal(found, true, 'Database native window is available to the driver');
+        }
+
         const results = [];
         for (const target of [{ width: 1280, height: 720 }, { width: 1600, height: 900 }, { width: 1920, height: 1080 }, { width: 2560, height: 1440 }]) {
             await resize(driver, target.width, target.height);
             await new Promise(resolve => setTimeout(resolve, 220));
             const result = await measure(driver);
+            assert.equal(result.viewport.innerWidth, target.width, 'Database viewport reached the requested width');
+            assert.equal(result.viewport.innerHeight, target.height, 'Database viewport reached the requested height');
             assertCommon(result, target);
             if (target.width === 1280) {
                 assert.equal(result.inspectorTitle, 'Interface Settings', 'Inspector does not start in Interface Settings');
@@ -180,7 +198,7 @@ async function main() {
                 assert.equal(popup.hidden, false, 'Use As popup did not open');
                 assert.ok(popup.top < popup.toolbarBottom && popup.bottom > popup.toolbarBottom
                     && popup.bottom <= popup.viewportHeight && popup.right <= popup.viewportWidth, 'Use As popup is clipped or off-screen');
-                await driver.execute("window.reactor.databaseEditorUI.userInterfaceEditor.openReplacementRoles(false);");
+                await driver.execute("document.querySelector('.rr-ui-role-trigger').click();");
                 await driver.execute("document.querySelector('.rr-ui-tree-row[data-id]').click();");
                 const selected = await measure(driver);
                 assert.equal(selected.inspectorOpen, true, 'selecting a layer did not reveal the drawer');

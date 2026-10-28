@@ -61,7 +61,13 @@ and keeps it on a click (the selection only, when pieces are selected).
 **Seen from above**, over the floor list, shows the whole building from
 the top: its roof, and what stands above the top floor. **Build** opens the structure's plot in
 the map's 3D view with the same Build bar the map uses, for anything the
-plan cannot paint. The Build bar's Blueprint slot, or Use on the map,
+plan cannot paint. Opening Build expands the complete preview, including
+rooms, paving and nested buildings beside manually placed pieces. Saving
+keeps that expansion and its lights, screens, models, water, event markers
+and animation effects. Selecting or painting generated geometry in the
+floor plan also expands it into editable pieces, with Undo to restore the
+original description. The floor plan and map share tool-button rendering,
+icons and activation; their help remains visible below the controls. The Build bar's Blueprint slot, or Use on the map,
 stamps a structure; **Rebuild from plan** re-lays a stamped one from its
 file. The Blueprint panel shows each plan as a picture with its size, a
 Direction and a Size (×1 to ×4) to stamp it at, and **Move a building** (M)

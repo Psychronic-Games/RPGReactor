@@ -203,7 +203,9 @@ function main() {
     // The suite's report passed 1 MB (execFileSync's default buffer) at 0.99.1.
     let testOutput;
     try {
-        testOutput = execFileSync('node', ['--test', '--test-concurrency=8'], {
+        // Local release checks share the workstation with the editor. Keep
+        // suites serial; CI owns its separately bounded shard concurrency.
+        testOutput = execFileSync('node', ['--test', '--test-concurrency=1'], {
             cwd: path.join(repoRoot, 'editor'), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024
         });
     } catch (error) {

@@ -48,7 +48,9 @@ class StructureWorkshop {
      */
     plotMap(entry) {
         const E = this.elevation(), SP = this.plans();
-        const plan = entry.plan;
+        const plan = JSON.parse(JSON.stringify(entry.plan));
+        const F = typeof RRStructureFloors !== 'undefined' ? RRStructureFloors : null;
+        F?.materialize(plan, SP, name => this.resolve(name));
         const [W, D] = plan.size;
         const previous = this.tilemap()?.currentMap;
         const tilesets = this.database()?.getTilesets?.() || [];
@@ -59,26 +61,16 @@ class StructureWorkshop {
             battleback1Name: '', battleback2Name: '', disableDashing: false, encounterList: [], encounterStep: 30,
             parallaxName: '', parallaxLoopX: false, parallaxLoopY: false, parallaxShow: true, parallaxSx: 0, parallaxSy: 0,
             scrollType: 0, specifyBattleback: false,
-            rrWorkshop: { structureId: entry.id, file: entry.file, name: entry.name, maxLevel: Math.max(1, plan.height * (Number(plan.storey) || 5)) - 1 }
+            rrWorkshop: { structureId: entry.id, file: entry.file, name: entry.name, spots: plan.spots, events: plan.events, effects: plan.effects, maxLevel: Math.max(1, plan.height * (Number(plan.storey) || 5)) - 1 }
         };
         if (E) {
             E.addNote?.(mapData);
             E.ensure(mapData);
             if (mapData.reactor3d && E.MODE_3D) mapData.reactor3d.mode = E.MODE_3D;
-            let pieces = [];
-            if (plan.pieces && plan.pieces.length) pieces = plan.pieces.map((piece, i) => Object.assign({}, piece, { id: i + 1 }));
-            else if (SP) {
-                try { pieces = SP.build(plan, 0, 0, 1, 0, name => this.resolve(name)); } catch (error) { console.warn('Could not build the structure into pieces:', error); }
-            }
+            const pieces = SP ? SP.build(plan, 0, 0, 1, 0, name => this.resolve(name))
+                : (plan.pieces || []).map((piece, i) => Object.assign({}, piece, { id: i + 1 }));
             E.restorePieces(mapData, pieces);
-            const sidecar = mapData.reactor3d || (mapData.reactor3d = { version: 1 });
-            // Lights and screens: as saved, or the older effects placed the way a stamp places them.
-            if ((plan.lights && plan.lights.length) || (plan.surfaces && plan.surfaces.length)) {
-                if (plan.lights?.length) sidecar.lights = plan.lights.map((row, i) => Object.assign({}, row, { id: row.id || 'light' + (i + 1) }));
-                if (plan.surfaces?.length) sidecar.mediaSurfaces = plan.surfaces.map((row, i) => Object.assign({}, row, { id: i + 1 }));
-            } else if (SP && (plan.effects || []).length) {
-                try { SP.addEffects(mapData, SP.effectsOf(plan, 0, 0, name => this.resolve(name)).filter(fx => fx.type !== 'animation'), 0); } catch (error) { console.warn('Could not place the structure\'s effects:', error); }
-            }
+            if (SP) SP.addEffects(mapData, SP.effectsOf(plan, 0, 0, name => this.resolve(name)).filter(fx => fx.type !== 'animation'), 0);
         }
         return mapData;
     }
@@ -141,7 +133,12 @@ class StructureWorkshop {
         plan.lights = (sidecar.lights || []).filter(Boolean).map(row => { const out = Object.assign({}, row); if (!out.tag || /^structure:\d+$/.test(String(out.tag))) delete out.tag; delete out.structure; return out; });
         plan.surfaces = (sidecar.mediaSurfaces || []).filter(Boolean).map(row => { const out = Object.assign({}, row); delete out.structure; return out; });
         // What the pieces replace: a built structure is its pieces, not rooms described in words.
-        plan.floors = []; plan.stairs = []; plan.shapes = []; plan.parts = []; plan.paths = []; plan.effects = [];
+        plan.floors = []; plan.stairs = []; plan.shapes = []; plan.parts = []; plan.paths = [];
+        plan.props = (sidecar.props || []).filter(Boolean).map(row => { const out = Object.assign({}, row); delete out.structure; return out; });
+        plan.water = (sidecar.water || []).filter(Boolean).map(row => { const out = Object.assign({}, row); delete out.structure; return out; });
+        plan.spots = map.rrWorkshop.spots || plan.spots || {};
+        plan.events = map.rrWorkshop.events || plan.events || [];
+        plan.effects = (map.rrWorkshop.effects || plan.effects || []).filter(fx => fx.type === 'animation');
         if (plan.roof) plan.roof.pitch = null;
         if (!this.writeFile(entry)) return false;
         this.reactor()?.pieceBuilderManager?.structures?.(true);
