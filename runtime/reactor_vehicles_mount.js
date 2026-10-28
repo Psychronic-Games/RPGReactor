@@ -238,14 +238,31 @@
     //-------------------------------------------------------------------------
     // Getting on and off, as a unit's command.
 
+    /**
+     * How far a unit standing at (x, y) is from a vehicle, in tiles: from the nearest tile its body covers (a
+     * motorcycle lies five tiles long, and read from its middle only the three tiles beside that were in reach,
+     * often taken by another vehicle: no Mount was ever offered beside one).
+     */
+    M.gap = function(event, x, y) {
+        let gap = Math.hypot(event._realX - x, event._realY - y);
+        const R3 = root.Reactor3D;
+        if (!R3 || typeof R3.eventModelOccupies !== "function") return gap;
+        const cx = Math.round(event._realX), cy = Math.round(event._realY), span = 4;
+        for (let ty = cy - span; ty <= cy + span; ty++) for (let tx = cx - span; tx <= cx + span; tx++) {
+            const d = Math.hypot(tx - x, ty - y);
+            if (d < gap && R3.eventModelOccupies(event, tx, ty)) gap = d;
+        }
+        return gap;
+    };
+
     /** The free vehicle a unit on foot could get on from where it stands: the nearest in reach. */
     M.near = function(fight, unit) {
         const character = fight.character(unit);
         if (!character || !unit.party || unit.mount > 0) return null;
         let best = null, gap = M.REACH + 1e-6;
         for (const event of V.list()) {
-            if (!rideable(event)) continue;
-            const d = Math.hypot(event._realX - character._realX, event._realY - character._realY);
+            if (!rideable(event) || Math.hypot(event._realX - character._realX, event._realY - character._realY) > M.REACH + 6) continue;
+            const d = M.gap(event, character._realX, character._realY);
             if (d < gap) { best = event; gap = d; }
         }
         return best;

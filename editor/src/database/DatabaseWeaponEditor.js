@@ -221,6 +221,15 @@ class DatabaseWeaponEditor {
         `;
         gridWrapper.appendChild(noteSection);
 
+        // Two columns, each stacked on its own (as Items): a short section beside a tall one is no longer stretched
+        // to its height and left with an empty card under its fields. The record's look and stats on the left, what it
+        // does on the right.
+        gridWrapper.classList.add('database-item-columns');
+        const leftColumn = document.createElement('div'), rightColumn = document.createElement('div');
+        leftColumn.className = rightColumn.className = 'database-item-column';
+        leftColumn.append(generalSection, paramsSection, noteSection);
+        rightColumn.append(...[traitsSection, passiveSection, tacticsSection].filter(Boolean));
+        gridWrapper.append(leftColumn, rightColumn);
         wrapper.appendChild(gridWrapper);
         container.appendChild(wrapper);
 

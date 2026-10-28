@@ -553,6 +553,11 @@ class DatabaseSystem1Editor {
         'db.battles.paceFast': 'Fast',
         'db.battles.paceSkip': 'Skip to my turn',
         'db.battles.paceHint': 'What a new player starts with.',
+        'db.battles.heightReach': 'Height reach',
+        'db.battles.heightLevels': 'levels up per extra tile',
+        'db.battles.heightMost': 'Most extra reach',
+        'db.battles.heightTiles': 'tiles',
+        'db.battles.heightHint': 'A shot from higher ground reaches further. A weapon or skill can set its own in its Combat card.',
         'db.battles.revive': 'The fallen get up after a win',
         'db.battles.setup': 'Save and open Battle Setup',
         'db.battles.setupNoMap': 'Open a map first.'
@@ -748,6 +753,14 @@ class DatabaseSystem1Editor {
             && Object.keys(battle).every(key => key === 'mode' || key === 'turns');
     }
 
+    /** How height adds to a shot's reach, `{ levels, most }`: the stored `reactorBattle.heightReach` as the game reads it, else the game's own. */
+    static heightReach(battle) {
+        const held = battle && typeof battle === 'object' ? battle.heightReach : null;
+        const levels = Math.trunc(Number(held && held.levels)), most = Math.trunc(Number(held && held.most));
+        if (!Number.isFinite(levels) || !Number.isFinite(most)) return { levels: 2, most: 3 };
+        return { levels: Math.max(1, Math.min(10, levels)), most: Math.max(0, Math.min(10, most)) };
+    }
+
     /** A stored `reactorBattle.partySize` as the game reads it: 1 to 99, or 0 for none. */
     static storedPartySize(system) {
         const size = Math.floor(Number(system && system.reactorBattle && system.reactorBattle.partySize) || 0);
@@ -888,6 +901,7 @@ class DatabaseSystem1Editor {
         const keyed = key => ` data-i18n="${key}">${rrEscapeHtml(E.word(key))}`;
         const word = source => (Object.hasOwn(E.TEXT, source) ? keyed(source) : lit(source));
         const battle = system.reactorBattle || {};
+        const height = E.heightReach(battle);
         const mode = E.modeName(battle.mode) || 'classic';
         const used = this.battleModesInUse(mode);
         const tactical = used.has('tactical') ? '' : ' hidden', onMap = used.size ? '' : ' hidden';
@@ -934,6 +948,17 @@ class DatabaseSystem1Editor {
                     ${options([['normal', 'Normal'], ['fast', 'db.battles.paceFast'], ['skip', 'db.battles.paceSkip']], ['fast', 'skip'].includes(battle.pace) ? battle.pace : 'normal')}
                 </select>
                 <div class="system-battle-mode-hint" data-tactical${tactical}${keyed('db.battles.paceHint')}</div>
+                <label for="system-battle-height-levels" data-tactical${tactical}${keyed('db.battles.heightReach')}</label>
+                <span class="system-battle-inline" data-tactical${tactical}>
+                    <input type="number" id="system-battle-height-levels" class="database-field-value system-battle-height-levels" min="1" max="10" step="1" value="${height.levels}">
+                    <span${keyed('db.battles.heightLevels')}</span>
+                </span>
+                <label for="system-battle-height-most" data-tactical${tactical}${keyed('db.battles.heightMost')}</label>
+                <span class="system-battle-inline" data-tactical${tactical}>
+                    <input type="number" id="system-battle-height-most" class="database-field-value system-battle-height-most" min="0" max="10" step="1" value="${height.most}">
+                    <span${keyed('db.battles.heightTiles')}</span>
+                </span>
+                <div class="system-battle-mode-hint" data-tactical${tactical}${keyed('db.battles.heightHint')}</div>
                 <div class="system-battle-group" data-on-map${onMap}${lit('Battles on the Map')}</div>
                 <span data-on-map${onMap}></span>
                 <label class="system-battle-check" data-on-map${onMap}>
@@ -963,7 +988,8 @@ class DatabaseSystem1Editor {
             system.battleSystem = Math.max(0, Math.min(2, Math.floor(Number(event.target.value)) || 0));
             touched();
         });
-        for (const selector of ['.system-battle-mode', '.system-battle-turns', '.system-battle-view', '.system-battle-cinematic', '.system-battle-slowmo', '.system-battle-pace', '.system-battle-revive']) {
+        for (const selector of ['.system-battle-mode', '.system-battle-turns', '.system-battle-view', '.system-battle-cinematic', '.system-battle-slowmo', '.system-battle-pace', '.system-battle-revive',
+            '.system-battle-height-levels', '.system-battle-height-most']) {
             find(selector)?.addEventListener('change', () => {
                 this.writeBattleMode(container, system);
                 if (selector === '.system-battle-mode') this.refreshBattleRows(container);
@@ -1033,13 +1059,22 @@ class DatabaseSystem1Editor {
         // The pace the other side's turn starts at for a new player: stored only when it is not the normal one.
         const paceChoice = container.querySelector('.system-battle-pace')?.value;
         const pace = paceChoice === 'fast' || paceChoice === 'skip' ? paceChoice : '';
+        // How height adds to a shot's reach: stored only when it is not the game's own (a tile every two levels, up to three).
+        const number = (selector, low, high, fallback) => {
+            const raw = container.querySelector(selector)?.value;
+            const value = raw === undefined || String(raw).trim() === '' ? fallback : Math.trunc(Number(raw));
+            return Number.isFinite(value) ? Math.max(low, Math.min(high, value)) : fallback;
+        };
+        const height = { levels: number('.system-battle-height-levels', 1, 10, 2), most: number('.system-battle-height-most', 0, 10, 3) };
+        const ownHeight = height.levels !== 2 || height.most !== 3;
         // Those who fell in a battle won on the map get up unless the game keeps them down.
         const revive = container.querySelector('.system-battle-revive')?.checked !== false;
-        // The card owns mode, turns, view, cinematic, pace and reviveAfterBattle; whatever else is there (terms, a stored partySize, hand-written keys) is kept.
+        // The card owns mode, turns, view, cinematic, pace, heightReach and reviveAfterBattle; whatever else is there (terms, a stored partySize, hand-written keys) is kept.
         const battle = Object.assign({}, system.reactorBattle || {}, { mode, turns });
         if (view) battle.view = view; else delete battle.view;
         if (cinematic) battle.cinematic = cinematic; else delete battle.cinematic;
         if (pace) battle.pace = pace; else delete battle.pace;
+        if (ownHeight) battle.heightReach = height; else delete battle.heightReach;
         if (revive) delete battle.reviveAfterBattle; else battle.reviveAfterBattle = false;
         const plain = mode === 'classic' && turns === 'team' && Object.keys(battle).every(key => key === 'mode' || key === 'turns');
         if (plain) delete system.reactorBattle; else system.reactorBattle = battle;

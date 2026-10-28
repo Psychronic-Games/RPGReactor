@@ -1255,11 +1255,28 @@
         }[style] || {};
         const metal = linear(pal.metal), dark = linear(pal.dark), trim = linear(pal.trim), steel = linear('#9aa3ab');
         const straps = new Mesh(), spike = new Mesh();
-        // The bracer: an armored shell, a little flared at both ends, its rims rolled.
-        m.loft(12, (i, t) => {
+        // The bracer: an armored shell, a little flared at both ends, its rims rolled. It is a solid 2 mm thick: a wall
+        // inside facing the arm, and a flat ring closing each cuff between the two (an open shell's one side was culled
+        // from within, and a look into the cuff saw through the whole bracer).
+        const shell = inset => m.loft(12, (i, t) => {
             const tt = T0 + (T1 - T0) * t, R = ring(tt), flare = 1 + 0.06 * Math.max(0, Math.abs(t - 0.5) * 2 - 0.6) / 0.4;
-            return { center: R.center, x: S, y: U, rx: R.rx * flare, ry: R.ry * flare };
+            return { center: R.center, x: S, y: U, rx: R.rx * flare - inset, ry: R.ry * flare - inset };
         }, 28, (t, a) => style === 'salvaged' && Math.sin(a * 3 + t * 9) > 0.7 ? mul(metal, 0.78) : metal, skin, false);
+        const outside = shell(0), lining = m.i.length, inside = shell(0.002 * s);
+        for (let t = lining; t < m.i.length; t += 3) { const v = m.i[t + 1]; m.i[t + 1] = m.i[t + 2]; m.i[t + 2] = v; }
+        const point = v => [m.p[v * 3], m.p[v * 3 + 1], m.p[v * 3 + 2]];
+        for (const end of [0, outside.length - 1]) {
+            const facing = end ? d : mul(d, -1), o = outside[end].row, n = inside[end].row, count = o.length;
+            const cuff = o.map((v, k) => [m.vertex(point(v), facing, metal, skin), m.vertex(point(n[k]), facing, metal, skin)]);
+            for (let k = 0; k < count; k++) {
+                const [a, b] = cuff[k], [c, e] = cuff[(k + 1) % count];
+                for (const tri of [[a, c, b], [c, e, b]]) {
+                    const p0 = point(tri[0]), turn = cross(sub(point(tri[1]), p0), sub(point(tri[2]), p0));
+                    if (dot(turn, facing) < 0) m.tri(tri[0], tri[2], tri[1]); else m.tri(tri[0], tri[1], tri[2]);
+                }
+            }
+        }
+        m.computeNormals();
         for (const tt of [T0, T1]) {
             const R = ring(tt), path = Array.from({ length: 29 }, (_, k) => { const a = k / 28 * Math.PI * 2; return add(R.center, add(mul(S, Math.cos(a) * (R.rx * 1.06 + 0.0015)), mul(U, Math.sin(a) * (R.ry * 1.06 + 0.0015)))); });
             m.tube(path, 0.0035 * s, 8, style === 'brass' ? trim : dark, skin);

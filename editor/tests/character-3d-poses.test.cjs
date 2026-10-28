@@ -520,7 +520,9 @@ test('walk and run keep both knees and feet on their own side of the hips',()=>{
         const {bones,body}=bodyOf(name),idx=n=>bones.findIndex(b=>b.name===n);
         for(const id of ['walk','run']){
             const c=Poses.clip(bones,id,body);
-            for(const time of c.times){const p=Cloth.pose(bones,c,time),hip=p.P[idx('Hips')],axis=rot(p.R[idx('Hips')],[1,0,0]);
+            // Across the floor: the hips' left-right line made level. Read along the pelvis itself, its roll through a
+            // step counted a foot a leg's length below as crossing over, and the leg was swung out to suit it.
+            for(const time of c.times){const p=Cloth.pose(bones,c,time),hip=p.P[idx('Hips')],x=rot(p.R[idx('Hips')],[1,0,0]),l=Math.hypot(x[0],x[2]),axis=[x[0]/l,0,x[2]/l];
                 for(const [side,sign] of [['Left',1],['Right',-1]])for(const joint of ['Leg','Foot'])
                     assert.ok(sign*dot(sub(p.P[idx(side+joint)],hip),axis)>.005,name+'/'+id+'/'+side+joint+' crosses the stride center');
             }

@@ -164,6 +164,13 @@ test('an animation draws into the target PIXI is rendering to, then leaves PIXI 
     assert.deepEqual(e.calls.filter(c => name(c) === 'viewport').at(-1).slice(1), [0, 0, 800, 600]);
     assert.deepEqual(e.resets.sort(), ['buffer', 'geometry', 'shader', 'state', 'texture'], 'only the caches a draw changes; not the render target');
     assert.deepEqual(Array.from(e.renderer.texture._boundTextures), [null, null, null]);
+    // Every texture unit is emptied before Effekseer draws and again after, so GL holds what PIXI's cache says it
+    // holds (nothing): a texture left bound that PIXI next draws into would be a feedback loop it cannot undo.
+    const unbound = e.calls.filter(c => name(c) === 'bindTexture' && c[2] === null).length;
+    assert.equal(unbound, 2 * e.layer.UNITS);
+    const order = e.calls.map(name);
+    assert.ok(order.indexOf('bindTexture') < order.indexOf('bindVertexArray'), 'emptied before the draw');
+    assert.ok(order.lastIndexOf('bindTexture') > order.lastIndexOf('bindFramebuffer'), 'and after it, once PIXI\'s target is bound again');
 
     // A second draw into the same target in the same frame shares the cleared depth buffer.
     e.calls.length = 0;
@@ -182,6 +189,9 @@ test('on the canvas no depth buffer is lent and the effect is drawn the right wa
     assert.equal(e.calls.filter(c => c[0] === 'clear').length, 1, 'the canvas\'s own depth buffer, cleared once a frame');
     assert.deepEqual(e.projections[0].filter((_, i) => [1, 5, 9, 13].includes(i)), [2, 6, 10, 14]);
     assert.deepEqual(e.calls.filter(c => c[0] === 'frontFace').map(c => c[1]), [e.gl.CCW, e.gl.CCW]);
+    // The canvas has no alpha: its RGB pixels cannot be copied into Effekseer's RGBA background (GL refuses).
+    assert.deepEqual(e.captures, [], 'nothing captured from the canvas');
+    assert.deepEqual(e.drawn, ['Fire'], 'the effect is still drawn');
 });
 
 test('HDR animations of one grade in one container share a light pass, composited where they sit', () => {

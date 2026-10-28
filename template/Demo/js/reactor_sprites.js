@@ -3122,7 +3122,20 @@ Sprite_Animation.SceneLayer = {
         const system = renderer.renderTarget, target = system.renderTarget;
         const gpu = target && typeof system.getGpuRenderTarget === "function" ? system.getGpuRenderTarget(target) : null;
         const vp = system.viewport;
+        // PIXI's textures off every unit before Effekseer draws: a sampler it leaves unset would read whatever is
+        // there, the texture being drawn into among them.
+        this.clearUnits(gl);
         return { framebuffer: gpu && gpu.framebuffer || null, viewport: [vp.x, vp.y, vp.width, vp.height], lent: false };
+    },
+    // The texture units emptied around a draw: PIXI binds at most 16 (its batcher's limit), Effekseer fewer.
+    UNITS: 16,
+    /** Every texture unit emptied, the first left active. */
+    clearUnits(gl) {
+        for (let unit = 0; unit < this.UNITS; unit++) {
+            gl.activeTexture(gl.TEXTURE0 + unit);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+        gl.activeTexture(gl.TEXTURE0);
     },
     restore(gl, saved, renderer) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, saved.framebuffer);
@@ -3148,6 +3161,9 @@ Sprite_Animation.SceneLayer = {
             if (renderer[name] && typeof renderer[name].resetState === "function") renderer[name].resetState();
         }
         if (renderer.texture && Array.isArray(renderer.texture._boundTextures)) renderer.texture._boundTextures.fill(null);
+        // PIXI now takes every unit for empty, so the units are emptied too: a texture left bound that PIXI next
+        // draws into (a filter's) would otherwise stay bound under its draws, a feedback loop it cannot see to undo.
+        this.clearUnits(renderer.gl);
         const mask = renderer.colorMask ? renderer.colorMask._colorMaskCache : 15;
         renderer.gl.colorMask(!!(mask & 8), !!(mask & 4), !!(mask & 2), !!(mask & 1));
     },
@@ -3184,9 +3200,10 @@ Sprite_Animation.SceneLayer = {
     /**
      * Draw `sprites`' handles through `view`, into a buffer `scale` times
      * the target's pixels whose origin is the target viewport's (the HDR
-     * light), or into the target itself (scale 1, `inTarget`).
+     * light), or into the target itself (scale 1, `inTarget`); `capture`:
+     * the target is a texture, whose pixels distortion can copy.
      */
-    drawHandles(gl, renderer, view, sprites, scale, inTarget) {
+    drawHandles(gl, renderer, view, sprites, scale, inTarget, capture) {
         const context = this.context;
         const height = Graphics.height * view.ppu * scale;
         const side = Sprite_Animation.effekseerViewportSide(Graphics.height) * view.ppu * scale;
@@ -3199,8 +3216,10 @@ Sprite_Animation.SceneLayer = {
             const projection = Sprite_Animation.effekseerProjection(height, rect.side, sprite._mirror).slice();
             // A target stored upside down: the effect is drawn upside down into it (its winding with it).
             if (view.flipped) for (const i of [1, 5, 9, 13]) projection[i] = -projection[i];
-            // The scene beneath the effect, for its distortion layers: what this target holds now.
-            if (inTarget && context.captureBackground) context.captureBackground(rect.x, rect.y, rect.side, rect.side);
+            // The scene beneath the effect, for its distortion layers: what this target holds now. Only from a
+            // texture: the canvas has no alpha (Graphics: backgroundAlpha 1), and GL refuses to copy its RGB pixels
+            // into Effekseer's RGBA background.
+            if (capture && context.captureBackground) context.captureBackground(rect.x, rect.y, rect.side, rect.side);
             context.setProjectionMatrix(projection);
             context.setCameraMatrix(this.camera);
             gl.viewport(rect.x, rect.y, rect.side, rect.side);
@@ -3220,7 +3239,7 @@ Sprite_Animation.SceneLayer = {
             gl.bindVertexArray(null);
             this.withDepth(gl, renderer, saved);
             this.context._makeContextCurrent?.();
-            this.drawHandles(gl, renderer, view, [sprite], 1, true);
+            this.drawHandles(gl, renderer, view, [sprite], 1, true, !!saved.framebuffer);
         } catch (e) {
             this.warnOnce(e);
         } finally {

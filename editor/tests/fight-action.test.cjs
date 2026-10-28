@@ -670,8 +670,8 @@ test('a tactical battle\'s keys: named actions on the ordinary keys by default, 
     assert.equal(C.isTactical(), false);
     C.setTactical(true);
     assert.equal(C.isTactical(), true);
-    // The ordinary keys' actions, and the view's own keys on W A S D and E, which nothing else used.
-    assert.deepEqual({ ...ctx.Input.keyMapper }, { 33: 'viewLeft', 81: 'viewLeft', 34: 'viewRight', 69: 'viewRight', 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 17: 'level', 9: 'unit', 16: 'skip', 13: 'ok' });
+    // The ordinary keys' actions, the view's own keys on W A S D and E, and the grapple's on G, which nothing else used.
+    assert.deepEqual({ ...ctx.Input.keyMapper }, { 33: 'viewLeft', 81: 'viewLeft', 34: 'viewRight', 69: 'viewRight', 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 71: 'grapple', 17: 'level', 9: 'unit', 16: 'skip', 13: 'ok' });
     assert.deepEqual({ ...ctx.Input.gamepadMapper }, { 0: 'ok', 2: 'skip', 4: 'viewLeft', 5: 'viewRight', 10: 'unit', 11: 'level' }, 'the level and the unit take R3 and L3');
     assert.equal(ctx.Input._currentState.shift, false, 'a key held across the change is let go');
     ctx.Input.keyMapper[34] = 'changed meanwhile';

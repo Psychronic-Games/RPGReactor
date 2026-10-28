@@ -75,41 +75,44 @@
     // Units named without a side move both sides. `gaze` is [across, up] in radians (+across: the character's left);
     // `blush` and `tears` are 0..1.
 
-    // Each is drawn to read at a glance on a 144-pixel face sheet: the brows, the lids and the mouth's corners
-    // carry it, each well past MakeHuman's own measure where a portrait needs it (Expressiveness scales them all).
+    // Each is a believable face, the way a good portrait or an animated film draws it: both sides alike (a smirk and
+    // a thought are the one-sided ones), each unit near MakeHuman's own measure, and no two units fighting over one
+    // feature. The brows, the lids and the mouth's corners carry it; the teeth show only where a face would show them
+    // (a laugh, a shout, pain). Expressiveness scales them all.
     const EXPRESSIONS = [
         { id: 'neutral', label: 'Normal', units: {} },
-        // Duchenne smile: the corners pulled up, the cheeks raised, the lower lids lifted, the brows lifted a little.
-        { id: 'happy', label: 'Happy', units: { smile: 1.25, grin: 0.4, lipsPart: 0.45, cheekRaise: 1.2, eyeSquint: 0.55, eyeClose: 0.12, browUp: 0.45, browInnerUp: 0.2 } },
-        // The eyes squeezed nearly shut, the mouth open wide, the brows up.
-        { id: 'laugh', label: 'Laughing', units: { smile: 1.3, grin: 0.6, jawDrop: 0.5, lipsPart: 0.45, upperLipRaise: 0.35, cheekRaise: 1.4, eyeSquint: 0.8, eyeClose: 0.5, browUp: 0.55, browInnerUp: 0.3 } },
-        // The inner brows drawn up and together, the corners well down, the lids heavy, the eyes lowered.
-        { id: 'sad', label: 'Sad', units: { browInnerUp: 1.8, browDown: 0.4, frown: 1.25, pout: 0.15, eyeClose: 0.32, eyeSquint: 0.1 }, gaze: [0, -0.22] },
-        // The brows down hard and together (the outer ends up, a V), the upper lids raised, the teeth bared.
-        { id: 'angry', label: 'Angry', units: { browDown: 1.9, browOuterUp: 0.45, browInnerUp: -0.25, eyeWide: 0.55, eyeSquint: 0.65, lipPress: 0.3, frown: 0.75, sneer: 0.6, upperLipRaise: 0.35, nostrilFlare: 1.2 } },
-        // The brows high, the eyes wide, the mouth dropped open in an O.
-        { id: 'surprised', label: 'Surprised', units: { browUp: 1.8, browInnerUp: 0.35, eyeWide: 1.5, jawDrop: 0.7, lipsPart: 0.3, funnel: 0.3 } },
-        // Brows raised and drawn together, the eyes wide, the lips stretched back off the teeth.
-        { id: 'scared', label: 'Scared', units: { browInnerUp: 1.5, browUp: 0.8, browDown: 0.35, eyeWide: 1.5, stretch: 1, grimaceOpen: 0.7, jawDrop: 0.22, neckTense: 0.5 } },
-        // The nose wrinkled and the upper lip raised, more on one side; the brows lowered.
-        { id: 'disgusted', label: 'Disgusted', units: { sneer: 1.4, sneerL: 0.4, upperLipRaise: 1, frown: 0.7, browDown: 1, browInnerUp: 0.2, eyeSquint: 0.75, pout: 0.3, cheekRaise: 0.5, noseCompress: 1 }, gaze: [0.06, -0.04] },
-        // One corner up, the cheek on that side; lids half down, one brow raised.
-        { id: 'smirk', label: 'Smirk', units: { smileL: 1.8, grinL: 0.35, cheekRaiseL: 0.9, eyeSquintL: 0.5, eyeClose: 0.3, lipPress: 0.3, browOuterUpR: 1.3, browUpR: 0.8, browDownL: 0.6 }, gaze: [0.08, 0] },
-        // The brows set low, the eyes narrowed, the mouth firm with the corners held level.
-        { id: 'determined', label: 'Determined', units: { browDown: 1.25, browOuterUp: 0.35, eyeSquint: 0.7, eyeWide: 0.2, lipPress: 0.6, smile: 0.35, stretch: 0.2, nostrilFlare: 0.6 } },
-        { id: 'worried', label: 'Worried', units: { browInnerUp: 2, browDown: 0.35, eyeWide: 0.7, stretch: 0.85, frown: 0.75, lipPress: 0.2, grimaceOpen: 0.2 }, gaze: [0.12, -0.08] },
+        // Duchenne smile: the corners up, the cheeks raised, the lower lids lifted a little, the lips just parted.
+        { id: 'happy', label: 'Happy', units: { smile: 1, lipsPart: 0.15, cheekRaise: 0.85, eyeSquint: 0.28, browUp: 0.2 } },
+        // The eyes narrowed by the cheeks, the mouth open, the brows up a little.
+        { id: 'laugh', label: 'Laughing', units: { smile: 0.95, grin: 0.2, jawDrop: 0.32, lipsPart: 0.35, cheekRaise: 0.95, eyeSquint: 0.45, eyeClose: 0.2, browUp: 0.3, browInnerUp: 0.15 } },
+        // The inner brows drawn up, the corners gently down, the lids a little heavy, the eyes lowered.
+        { id: 'sad', label: 'Sad', units: { browInnerUp: 1.45, frown: 0.85, lipPress: 0.1, eyeClose: 0.12 }, gaze: [0, -0.12] },
+        // The brows down and drawn together, the eyes narrowed, the lips pressed.
+        { id: 'angry', label: 'Angry', units: { browDown: 1.2, eyeSquint: 0.45, eyeWide: 0.15, lipPress: 0.4, frown: 0.5, sneer: 0.15, nostrilFlare: 0.6 } },
+        // The brows high, the eyes wide, the jaw dropped into a soft oval.
+        { id: 'surprised', label: 'Surprised', units: { browUp: 1.25, browInnerUp: 0.2, eyeWide: 0.85, jawDrop: 0.42, lipsPart: 0.05, funnel: 0.3 } },
+        // The brows up and drawn together, the eyes wide, the mouth a little open and stretched.
+        { id: 'scared', label: 'Scared', units: { browInnerUp: 1.2, browUp: 0.5, browDown: 0.15, eyeWide: 1, stretch: 0.35, jawDrop: 0.24, lipsPart: 0.1 } },
+        // The nose wrinkled and the upper lip raised, the brows lowered, the eyes narrowed.
+        { id: 'disgusted', label: 'Disgusted', units: { sneer: 0.7, upperLipRaise: 0.45, noseCompress: 0.5, frown: 0.35, browDown: 0.6, eyeSquint: 0.4, cheekRaise: 0.3 }, gaze: [0.05, -0.03] },
+        // One corner up and the cheek on that side, the other brow raised a little, the lids lazy.
+        { id: 'smirk', label: 'Smirk', units: { smileL: 0.85, cheekRaiseL: 0.45, eyeSquintL: 0.2, eyeClose: 0.12, lipPress: 0.2, browOuterUpR: 0.5, browUpR: 0.3 }, gaze: [0.05, 0] },
+        // The brows set low and level, the eyes steady, the mouth firm with a hint of a smile: resolve, not anger.
+        { id: 'determined', label: 'Determined', units: { browDown: 0.7, eyeSquint: 0.2, lipPress: 0.7, smile: 0.25, stretch: 0.15, nostrilFlare: 0.3 } },
+        // The inner brows up, the eyes a little wide and aside, the mouth tight and its corners down.
+        { id: 'worried', label: 'Worried', units: { browInnerUp: 1.35, browDown: 0.2, eyeWide: 0.35, frown: 0.45, stretch: 0.25, lipPress: 0.2 }, gaze: [0.08, -0.05] },
         // A shy smile, the brows up in the middle, the eyes lowered and aside, the cheeks colored.
-        { id: 'embarrassed', label: 'Embarrassed', units: { smile: 0.75, lipPress: 0.35, browInnerUp: 1, browDown: 0.2, eyeClose: 0.3, cheekRaise: 0.5 }, gaze: [0.3, -0.26], blush: 1 },
+        { id: 'embarrassed', label: 'Embarrassed', units: { smile: 0.45, lipPress: 0.2, browInnerUp: 0.6, eyeClose: 0.1, cheekRaise: 0.35 }, gaze: [0.22, -0.16], blush: 1 },
         // The lids most of the way down, the brows slack, the mouth a little open.
-        { id: 'sleepy', label: 'Sleepy', units: { eyeClose: 0.82, browInnerUp: 0.35, browOuterUp: -0.3, lipsPart: 0.35, jawDrop: 0.08 }, gaze: [0, -0.12] },
+        { id: 'sleepy', label: 'Sleepy', units: { eyeClose: 0.6, browInnerUp: 0.2, lipsPart: 0.2, jawDrop: 0.05 }, gaze: [0, -0.08] },
         // Brows up in the middle, the eyes screwed up, the corners down, the lips parted; tears and a flushed face.
-        { id: 'crying', label: 'Crying', units: { browInnerUp: 1.8, browDown: 0.5, eyeSquint: 0.9, eyeClose: 0.45, cheekRaise: 0.9, frown: 1.2, grimaceOpen: 0.6, jawDrop: 0.18, neckTense: 0.35 }, tears: 1, blush: 0.6 },
-        // The jaw dropped wide, the lips stretched, the upper lip raised, the brows down, the neck tensed.
-        { id: 'shouting', label: 'Shouting', units: { browDown: 1.5, browOuterUp: 0.35, eyeWide: 0.8, eyeSquint: 0.3, jawDrop: 0.75, stretchOpen: 0.75, upperLipRaise: 0.6, neckTense: 0.5, nostrilFlare: 1.2, lipsPart: 0.35 } },
-        // One brow down, the other well up, the lips pressed and pushed to one side, the eyes up and aside.
-        { id: 'thinking', label: 'Thinking', units: { browDownR: 1, browOuterUpL: 1, browUpL: 0.6, eyeSquintR: 0.45, lipPress: 0.4, smileL: 0.4, frownR: 0.3, jawSide: 0.9 }, gaze: [-0.32, 0.3] },
-        // The brows lowered, the eyes screwed shut, the cheeks raised, the nose wrinkled, the teeth bared in a grimace.
-        { id: 'pain', label: 'Pain', units: { browDown: 1.3, browInnerUp: 0.9, eyeClose: 0.85, eyeSquint: 1, cheekRaise: 1.1, sneer: 0.9, upperLipRaise: 0.65, stretch: 1, grimaceOpen: 0.75 } }
+        { id: 'crying', label: 'Crying', units: { browInnerUp: 1.3, browDown: 0.3, eyeSquint: 0.5, eyeClose: 0.3, cheekRaise: 0.5, frown: 0.8, lipsPart: 0.3, jawDrop: 0.1, stretch: 0.2 }, tears: 1, blush: 0.6 },
+        // The jaw dropped, the lips open and stretched, the upper lip raised, the brows down.
+        { id: 'shouting', label: 'Shouting', units: { browDown: 1, eyeWide: 0.4, eyeSquint: 0.15, jawDrop: 0.55, stretchOpen: 0.4, upperLipRaise: 0.3, lipsPart: 0.3, neckTense: 0.3, nostrilFlare: 0.6 } },
+        // One brow a little up and the other a little down, the lips pressed and drawn aside, the eyes up and aside.
+        { id: 'thinking', label: 'Thinking', units: { browDownR: 0.5, browOuterUpL: 0.7, browUpL: 0.35, eyeSquintR: 0.15, lipPress: 0.35, jawSide: 0.5 }, gaze: [-0.2, 0.16] },
+        // The brows lowered and drawn up in the middle, the eyes screwed shut, the cheeks raised, the teeth bared.
+        { id: 'pain', label: 'Pain', units: { browDown: 0.8, browInnerUp: 0.7, eyeClose: 0.55, eyeSquint: 0.6, cheekRaise: 0.6, sneer: 0.35, upperLipRaise: 0.3, stretch: 0.5, grimaceOpen: 0.3 } }
     ];
     const BY_ID = new Map(EXPRESSIONS.map(e => [e.id, e]));
 
@@ -177,7 +180,7 @@
     /** The units of an expression at a character's strength: the jaw and the lips' opening grow half as fast, a lid never past shut. */
     const SLOW = new Set(['jawDrop', 'stretchOpen', 'funnel', 'pucker', 'lipsPart', 'neckTense']);
     /** Past these a unit folds the face instead of moving it further: weights beyond them grow at a third of the rate. */
-    const KNEE = { browDown: 1.9, browInnerUp: 2.2, browOuterUp: 1.8, browUp: 2, pout: 0.35, frown: 1.2, sneer: 1.6, lipPress: 1.1, noseCompress: 1.2, upperLipRaise: 1.3, eyeWide: 1.8, smile: 2, grin: 0.9, cheekRaise: 1.6 };
+    const KNEE = { browDown: 1.5, browInnerUp: 1.9, browOuterUp: 1.2, browUp: 1.7, pout: 0.35, frown: 1.1, sneer: 1, lipPress: 1, noseCompress: 1, upperLipRaise: 0.8, eyeWide: 1.3, eyeSquint: 0.9, smile: 1.6, grin: 0.5, cheekRaise: 1.3, stretch: 0.8, grimaceOpen: 0.5 };
     function strengthen(b, emotion) {
         const e = normalizeEmotion(emotion), s = e.strength;
         const units = {};

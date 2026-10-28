@@ -119,7 +119,10 @@ test('in a battle the line leaves the grappler\'s muzzle, the harpoon flies on i
     assert.equal(loaded.visible, false, 'the loaded harpoon left the barrel');
     // The muzzle: a fifth of the way back from the point (0.14 along +x) toward the tail (0), in the world.
     const from = new THREE.Vector3(5 + 0.14 * 0.79, 1, 7);
-    const lineStart = line.position.clone().multiplyScalar(2).sub(head.position);
+    // The cord's first ring is round its start, its last round its end (Rope.shape).
+    const ringMiddle = (mesh, ring) => { const P = mesh.geometry.attributes.position, sides = Rope.SIDES, c = new THREE.Vector3(); for (let k = 0; k < sides; k++) c.add(new THREE.Vector3().fromBufferAttribute(P, ring * sides + k)); return c.multiplyScalar(1 / sides); };
+    const lineStart = ringMiddle(line, 0);
+    assert.ok(ringMiddle(line, Rope.SEGMENTS).distanceTo(head.position) < 0.002, 'and ends at the harpoon');
     assert.ok(lineStart.distanceTo(from) < 0.002, 'the line starts at the muzzle: ' + lineStart.toArray().map(v => v.toFixed(3)));
     // Half the line is out: the harpoon is halfway to the edge.
     assert.ok(head.position.distanceTo(from.clone().lerp(new THREE.Vector3(8, 4, 7), 0.5)) < 0.002);
@@ -139,6 +142,56 @@ test('without a grappler the line leaves the hand (the chest without a rigged mo
     const [line, head] = group.children.filter(c => c.isMesh);
     assert.ok(line.visible && head.visible);
     assert.equal(head.scale.x, Rope.HEAD_LENGTH);
-    const start = line.position.clone().multiplyScalar(2).sub(head.position);
+    const P = line.geometry.attributes.position, start = new THREE.Vector3();
+    for (let k = 0; k < Rope.SIDES; k++) start.add(new THREE.Vector3().fromBufferAttribute(P, k));
+    start.multiplyScalar(1 / Rope.SIDES);
     assert.ok(start.distanceTo(new THREE.Vector3(5, 2.25, 7)) < 1e-6, 'from the chest: ' + start.toArray());
+});
+
+test('looked at from inside the cuff, the bracer has a wall: nothing in it is seen through', () => {
+    // The shell was one open loft facing out, so from inside every face was a back face, culled: a look into the
+    // cuff (the Prop Builder shows it off the arm) saw through the whole bracer. Rays from the forearm's axis out
+    // through the shell meet a face turned toward them first.
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    for (const shape of ['tactical', 'brass', 'salvaged']) {
+        const result = Model.build(pack, { props: [{ id: 'grappler', shape }] }, {}, { quality: 'preview' });
+        const parts = result.parts.filter(p => p.name === 'Accessories' || /^Grappl/.test(p.name));
+        const fore = result.bones.find(b => b.name === 'RightForeArm').head, hand = result.bones.find(b => b.name === 'RightHand').head;
+        const d = unit(sub(hand, fore)), side = unit(cross(d, [0, 1, 0])), up = cross(side, d);
+        for (const t of [0.45, 0.6, 0.75]) for (let k = 0; k < 12; k++) {
+            const a = k / 12 * Math.PI * 2, o = fore.map((v, i) => v + (hand[i] - v) * t), dir = side.map((v, i) => v * Math.cos(a) + up[i] * Math.sin(a));
+            let best = Infinity, facing = 0;
+            for (const p of parts) {
+                const P = p.positions, I = p.index, at = v => [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]];
+                for (let q = 0; q < I.length; q += 3) {
+                    const A = at(I[q]), e1 = sub(at(I[q + 1]), A), e2 = sub(at(I[q + 2]), A), h = cross(dir, e2), det = dot(e1, h);
+                    if (Math.abs(det) < 1e-12) continue;
+                    const s = sub(o, A), u = dot(s, h) / det, qv = cross(s, e1), v = dot(dir, qv) / det, dist = dot(e2, qv) / det;
+                    if (u < 0 || v < 0 || u + v > 1 || dist <= 0 || dist >= best) continue;
+                    best = dist; facing = dot(cross(e1, e2), dir);
+                }
+            }
+            assert.ok(best < Infinity, `${shape}: the ray at ${t} ${k} meets the bracer`);
+            assert.ok(facing < 0, `${shape}: from inside at ${t}, ray ${k}, the first face of the bracer is turned away (culled)`);
+        }
+    }
+});
+
+test('the line hangs slack as it flies and as the hook bites, and stands straight when drawn taut', () => {
+    const { Rope, spriteset, group, setHook } = ropeWorld({ withGrappler: false });
+    const middle = line => { const P = line.geometry.attributes.position, ring = Rope.SEGMENTS / 2, c = new THREE.Vector3(); for (let k = 0; k < Rope.SIDES; k++) c.add(new THREE.Vector3().fromBufferAttribute(P, ring * Rope.SIDES + k)); return c.multiplyScalar(1 / Rope.SIDES); };
+    const end = line => { const P = line.geometry.attributes.position, c = new THREE.Vector3(); for (let k = 0; k < Rope.SIDES; k++) c.add(new THREE.Vector3().fromBufferAttribute(P, Rope.SEGMENTS * Rope.SIDES + k)); return c.multiplyScalar(1 / Rope.SIDES); };
+    const start = new THREE.Vector3(5, 2.25, 7);
+    setHook({ x: 8, y: 7, z: 4, out: 1, slack: 1, phase: 'tight' });
+    Rope.update(spriteset);
+    let line = group.children.filter(c => c.isMesh)[0];
+    const span = start.distanceTo(end(line)), straight = start.clone().lerp(end(line), 0.5);
+    assert.ok(Math.abs(straight.y - middle(line).y - Rope.SAG * span) < 0.01, 'slack: it hangs by its sag at the middle');
+    setHook({ x: 8, y: 7, z: 4, out: 1, slack: 0, phase: 'pull' });
+    Rope.update(spriteset);
+    line = group.children.filter(c => c.isMesh)[0];
+    assert.ok(middle(line).distanceTo(straight) < 0.01, 'taut: straight');
+    // A cord, lit as the map is: not the unlit white rod it was.
+    assert.equal(line.material.type, 'MeshStandardMaterial');
+    assert.ok(Rope.WIDTH <= 0.05);
 });

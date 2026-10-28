@@ -1477,7 +1477,13 @@ class MessageCommandEditor {
             width: 100%;
         `;
 
+        // A face is used as soon as it is clicked: there is no OK to look for.
+        const previewHint = document.createElement('div');
+        previewHint.textContent = this._t('Click a face to use it.');
+        previewHint.style.cssText = 'color: var(--color-text-muted); font-size: 12px;';
+
         previewPane.appendChild(previewTitle);
+        previewPane.appendChild(previewHint);
         previewPane.appendChild(faceGridContainer);
 
         mainContent.appendChild(fileListContainer);
@@ -1552,7 +1558,7 @@ class MessageCommandEditor {
                     canvas.addEventListener('click', () => {
                         this.faceImage = filename;
                         this.faceIndex = i;
-                        document.body.removeChild(picker);
+                        picker.remove();
                         this.updateFacePreview();
                         if (this.modal) {
                             this.modal.style.zIndex = '10005';
@@ -1603,7 +1609,7 @@ class MessageCommandEditor {
         cancelBtn.textContent = this._t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => {
-            document.body.removeChild(picker);
+            picker.remove();
         });
 
         footer.appendChild(openFolderBtn);
@@ -1615,12 +1621,12 @@ class MessageCommandEditor {
         picker.appendChild(container);
 
         header.querySelector('.close-picker').addEventListener('click', () => {
-            document.body.removeChild(picker);
+            picker.remove();
         });
 
         picker.addEventListener('click', (e) => {
             if (e.target === picker) {
-                document.body.removeChild(picker);
+                picker.remove();
             }
         });
 
@@ -1724,7 +1730,7 @@ class MessageCommandEditor {
                 canvas.addEventListener('click', () => {
                     this.faceImage = filename;
                     this.faceIndex = i;
-                    document.body.removeChild(picker);
+                    picker.remove();
                     // Update the preview after removing the picker to ensure proper focus
                     setTimeout(() => {
                         this.updateFacePreview();
@@ -1749,12 +1755,12 @@ class MessageCommandEditor {
         picker.appendChild(container);
 
         header.querySelector('.close-picker').addEventListener('click', () => {
-            document.body.removeChild(picker);
+            picker.remove();
         });
 
         picker.addEventListener('click', (e) => {
             if (e.target === picker) {
-                document.body.removeChild(picker);
+                picker.remove();
             }
         });
 

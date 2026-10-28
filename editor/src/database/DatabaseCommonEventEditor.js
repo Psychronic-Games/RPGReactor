@@ -1388,14 +1388,14 @@ class DatabaseCommonEventEditor {
         const btnRow = document.createElement('div');
         btnRow.className = 'rr-modal-footer';
 
-        const cancelBtn = this.createButton('Cancel', () => document.body.removeChild(modal));
+        const cancelBtn = this.createButton('Cancel', () => modal.remove());
         const okBtn = this.createButton('OK', () => {
             try {
                 cmd.parameters = JSON.parse(textarea.value);
                 this.persistEvent();
                 const container = document.getElementById('common-event-command-list');
                 if (container) this.renderCommandList(container, event);
-                document.body.removeChild(modal);
+                modal.remove();
             } catch (e) {
                 RRDialog.alert(`${tt('Invalid JSON:')} ` + e.message, { title: this._dialogTitle(), kind: 'error' });
             }
@@ -1404,7 +1404,7 @@ class DatabaseCommonEventEditor {
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(okBtn);
         dialog.appendChild(btnRow);
-        dialog.querySelector('.raw-cmd-close').addEventListener('click', () => document.body.removeChild(modal));
+        dialog.querySelector('.raw-cmd-close').addEventListener('click', () => modal.remove());
         modal.appendChild(dialog);
         // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(modal);

@@ -74,6 +74,8 @@ const EXPECTED_EMITS = {
     fightOverwatch: 1,
     // A grapple taken on a unit's way (reactor_fight_tactical.js), and a fall that cost a unit HP (reactor_fight.js, every on-map mode).
     fightGrapple: 1,
+    // Each beat of it as it plays (the line out, the bite, the pull, the climb), from Rope.beats.
+    fightGrappleBeat: 1,
     fightFall: 1,
     // Action and First Person battles (reactor_fight_action.js): a shot at once or one that flies, an alert by sight or by a blow taken.
     fightShot: 2,

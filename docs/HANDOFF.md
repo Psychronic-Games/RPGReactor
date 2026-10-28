@@ -4,13 +4,11 @@ Dated notes for the cycle in progress, newest first. Read [STATUS.md](STATUS.md)
 
 An entry holds only what the next session needs and cannot find elsewhere: what is half-done, what to watch for, what waits on the owner, how to resume. What changed goes in the editor changelog; how the code works goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-10-26)
+## Where things stand (2026-10-28)
 
-- **0.99.2** shipped 2026-10-25 (runtime 20261025.11); the release commit and `v0.99.2` were made by hand on the 26th after `cut-release.cjs` refused on local failures. **0.99.3** is open at runtime **20261026.2**.
-- **CI:** green on GitHub for the `ci-shards` branch twice running (runs 40393131259, 40394416177), merged into `main` on 2026-10-26; `main` with today's other commits has not run on GitHub yet. New tests that time work, count what fits in a frame or wait on async work follow the patterns in STATUS › CI, or CI goes red again on the runner's speed.
-- **Unused files** (deploy option, game and editor) and the **playtest record** are in; the Demo's web build is under itch's limits without hand trimming. Follow-up: a Demo playtest with the record on, so the record is committed with the Demo.
-- **Braver** (template/Project4): its edited `rpg_managers.js` and the rest of `rpg_objects`/`rpg_scenes`/`rpg_windows` are ported in `reactor_mv_compat.js`. Other imported MV games may carry core edits too: comparing a project's `rpgmaker-runtime-backup.zip` against stock MV is how this one was found.
-- **Uncommitted:** the face expressions toned toward natural (`CharacterExpressions.js` and its test), not yet rendered for the owner.
-- **Editor windows:** the Event Editor, Database, Forge and Plugin Manager each open in a frameless window of their own (`utils/DetachedWindow.js`). Native Linux transparency still needs a look on the real desktop.
-- **Savior & Religion** (`template/Savior & Religion`, not in git, an encrypted MV game the owner is trying as a template) boots, plays its opening and draws its ULDS maps 2, 5 and 19.
+- **0.99.2** shipped 2026-10-25 (runtime 20261025.11). **0.99.3** is open at runtime **20261028.10**; every change is in [the editor changelog](../editor/changelog/0.99.3.md).
+- **CI:** the eight-shard workflow is merged into the local `main`; GitHub's `main` has not run it yet.
+- **Today:** Tactical grapple (command, beats, rope, sounds, camera), worn equipment, height reach as a setting, the reach preview under the menu cursor, Q/E kept through a key config plugin, GL error fixes, Builder metal and texture filtering in game; Demo: Builder characters for heroes 7-10 with faces, raiders and militia.
+- **Open items and how to pick them up:** [OPEN-ITEMS.md](OPEN-ITEMS.md) (Builder characters less detailed in game; export missing detail; face export too bright; metal at night; height reach "no limit").
+- **Older threads:** Unused files and the playtest record (a Demo playtest with the record on is still owed); Braver's corescript port; the detached editor windows (Linux transparency); Savior & Religion (not in git) boots and plays.
 - **Owner questions:** [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md).

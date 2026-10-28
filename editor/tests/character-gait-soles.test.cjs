@@ -228,3 +228,32 @@ test('levelling keeps the stride: the same thigh turns, the swinging foot under 
         }
     }
 });
+
+test('the legs keep their own line under the hips: no walking foot swings out past its hip, no running knee flares', () => {
+    // The capture's right foot lands across the body's middle and its pelvis rolls through a step. Read along the
+    // tilted pelvis, that roll counted a foot a leg's length below as 13 cm over the middle, and separateStride swung
+    // the right leg 14 degrees out; the toe-out turn about the thigh then swung its bent knee's foot further: the
+    // right walking foot reached 10 cm out past its hip, the left 4, and a run's kicked-up heel flared its knee 19 cm.
+    // Now sideways is read along the floor, a kicked-up heel comes out by the thigh turning on itself, and a stride's
+    // toes are turned about the hip-to-ankle line. Centimetres on a 170 cm body, + out from the leg's own hip.
+    for (const [label, recipe] of Object.entries(BODIES)) {
+        const r = Model.build(pack, recipe, {}, { quality: 'preview' }), skin = r.parts.find(p => p.name === 'Body'), bones = r.bones;
+        const at = n => bones.findIndex(b => b.name === n), hips = at('Hips');
+        const cm = 170 / Math.max(...bones.map(b => b.head[1]));
+        for (const id of ['walk', 'run']) {
+            const frames = posed(bones, Poses.clip(bones, id, skin)), reach = {};
+            for (const [S, m] of [['Left', 1], ['Right', -1]]) {
+                let foot = -Infinity, knee = -Infinity;
+                for (const { W, pos } of frames) {
+                    const x = qrot(W[hips], [1, 0, 0]), l = Math.hypot(x[0], x[2]), side = [x[0] / l * m, 0, x[2] / l * m], hip = pos[at(S + 'UpLeg')];
+                    const out = i => ((pos[i][0] - hip[0]) * side[0] + (pos[i][2] - hip[2]) * side[2]) * cm;
+                    foot = Math.max(foot, out(at(S + 'Foot'))); knee = Math.max(knee, out(at(S + 'Leg')));
+                }
+                reach[S] = { foot, knee };
+                if (id === 'walk') assert.ok(foot < 4, `${label} walk: the ${S} foot swings ${foot.toFixed(1)} cm out past its hip`);
+                assert.ok(knee < (id === 'run' ? 13 : 7), `${label} ${id}: the ${S} knee flares ${knee.toFixed(1)} cm out past its hip`);
+            }
+            if (id === 'walk') assert.ok(Math.abs(reach.Left.foot - reach.Right.foot) < 9, `${label} walk: the feet swing out unevenly (${reach.Left.foot.toFixed(1)} and ${reach.Right.foot.toFixed(1)} cm)`);
+        }
+    }
+});

@@ -8354,3 +8354,45 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
 (() => {
  for (const locale of ["ar","de","el","es","fr","id","it","ja","ko","pl","pt","ru","th","tr","vi","zh-Hans","zh-Hant"]) globalThis.RR_REVIEWED_TRANSLATIONS.text[locale]['HDR'] = 'HDR';
 })();
+
+// Database › Armors › Grapple: a sound for each beat; Database › Controls: the grapple's key (2026-10-28).
+// A machine-assisted first pass, flagged for review.
+(() => {
+ const keys=['Shot sound','Hook bites sound','Pull sound','Show where the grapple reaches'];
+ const rows={ja:'発射音|フックがかかる音|引き上げ音|グラップルの届く範囲を表示','zh-Hant':'發射音效|鉤爪咬合音效|拉升音效|顯示鉤索可及之處','zh-Hans':'发射音效|钩爪咬合音效|拉升音效|显示钩索可及之处',ko:'발사 효과음|갈고리가 걸리는 효과음|끌어올리기 효과음|그래플이 닿는 곳 표시',es:'Sonido del disparo|Sonido del gancho al agarrar|Sonido del tirón|Mostrar adónde llega el gancho',pt:'Som do disparo|Som do gancho prendendo|Som da puxada|Mostrar até onde o gancho alcança',fr:'Son du tir|Son du grappin qui accroche|Son de la traction|Afficher la portée du grappin',de:'Abschussgeräusch|Geräusch beim Greifen des Hakens|Zuggeräusch|Zeigen, wohin der Enterhaken reicht',it:'Suono dello sparo|Suono del rampino che aggancia|Suono della trazione|Mostra dove arriva il rampino',ru:'Звук выстрела|Звук зацепа крюка|Звук подтягивания|Показать, куда достаёт крюк',pl:'Dźwięk strzału|Dźwięk zaczepienia haka|Dźwięk podciągania|Pokaż zasięg kotwiczki',el:'Ήχος βολής|Ήχος γαντζώματος|Ήχος έλξης|Εμφάνιση εμβέλειας αρπάγης',ar:'صوت الإطلاق|صوت تشبث الخطاف|صوت السحب|إظهار مدى الخطاف',tr:'Atış sesi|Kancanın tutunma sesi|Çekme sesi|Kancanın ulaştığı yerleri göster',id:'Suara tembakan|Suara kait mencengkeram|Suara tarikan|Tampilkan jangkauan kait',vi:'Âm thanh bắn|Âm thanh móc bám|Âm thanh kéo|Hiện chỗ móc tới được',th:'เสียงยิง|เสียงตะขอเกี่ยว|เสียงดึงขึ้น|แสดงจุดที่ตะขอไปถึง'};
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Grapple sounds translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();
+
+// Database › Weapons / Skills / Items › Combat: how height adds to a shot's reach (2026-10-28).
+// A machine-assisted first pass, flagged for review.
+(() => {
+ const keys=['Height reach','levels up per extra tile','Most extra reach',"Shooting down from higher ground reaches further. Empty fields use the project's rule (System 1 › Battles); 0 extra tiles turns it off.",'height +1 tile per {levels} levels, up to {most}','no reach from height'];
+ const rows={
+  ja:'高所の射程|段ごとに射程+1|射程の最大増加|高所から撃ち下ろすと遠くまで届きます。空欄はプロジェクトの設定（システム1 › 戦闘設定）を使います。0マスで無効になります。|高所 {levels}段ごとに+1マス、最大{most}|高所による射程増加なし',
+  'zh-Hant':'高處射程|每高幾層多1格|最多增加射程|從高處往下射擊能射得更遠。留空則使用專案的規則（系統 1 › 戰鬥）；0 格表示關閉。|高處每 {levels} 層 +1 格，最多 {most}|高處不增加射程',
+  'zh-Hans':'高处射程|每高几层多1格|最多增加射程|从高处向下射击能射得更远。留空则使用项目的规则（系统 1 › 战斗）；0 格表示关闭。|高处每 {levels} 层 +1 格，最多 {most}|高处不增加射程',
+  ko:'고지 사거리|추가 1칸당 높이 단계|최대 추가 사거리|높은 곳에서 아래로 쏘면 더 멀리 닿습니다. 비워 두면 프로젝트 규칙(시스템 1 › 전투)을 씁니다. 0칸이면 꺼집니다.|높이 {levels}단계마다 +1칸, 최대 {most}|높이에 따른 사거리 증가 없음',
+  es:'Alcance por altura|niveles más arriba por casilla extra|Alcance extra máximo|Disparar desde un terreno más alto llega más lejos. Los campos vacíos usan la regla del proyecto (Sistema 1 › Batallas); 0 casillas extra lo desactiva.|altura +1 casilla cada {levels} niveles, hasta {most}|sin alcance extra por altura',
+  pt:'Alcance pela altura|níveis acima por casa extra|Alcance extra máximo|Atirar de um terreno mais alto alcança mais longe. Campos vazios usam a regra do projeto (Sistema 1 › Batalhas); 0 casas extra desativa.|altura +1 casa a cada {levels} níveis, até {most}|sem alcance extra pela altura',
+  fr:'Portée en hauteur|niveaux plus haut par case en plus|Portée en plus maximale|Tirer depuis une position plus haute porte plus loin. Les champs vides suivent la règle du projet (Système 1 › Combats) ; 0 case en plus la désactive.|hauteur +1 case tous les {levels} niveaux, jusqu’à {most}|pas de portée en plus par la hauteur',
+  de:'Reichweite durch Höhe|Ebenen höher je zusätzlichem Feld|Höchste Zusatzreichweite|Wer von höherem Gelände nach unten schießt, trifft weiter. Leere Felder nehmen die Regel des Projekts (System 1 › Kämpfe); 0 zusätzliche Felder schaltet es ab.|Höhe +1 Feld je {levels} Ebenen, bis {most}|keine Zusatzreichweite durch Höhe',
+  it:'Gittata dall’alto|livelli più in alto per casella in più|Gittata extra massima|Sparare da un terreno più alto arriva più lontano. I campi vuoti usano la regola del progetto (Sistema 1 › Battaglie); 0 caselle extra la disattiva.|altezza +1 casella ogni {levels} livelli, fino a {most}|nessuna gittata extra dall’alto',
+  ru:'Дальность с высоты|уровней выше за клетку|Наибольшая прибавка|Выстрел с возвышенности бьёт дальше. Пустые поля берут правило проекта (Система 1 › Бои); 0 клеток отключает прибавку.|высота: +1 клетка за {levels} ур., до {most}|высота не добавляет дальности',
+  pl:'Zasięg z wysokości|poziomów wyżej na dodatkowe pole|Największy dodatkowy zasięg|Strzał z wyższego terenu sięga dalej. Puste pola biorą regułę projektu (System 1 › Bitwy); 0 dodatkowych pól to wyłącza.|wysokość +1 pole co {levels} poziomy, do {most}|brak dodatkowego zasięgu z wysokości',
+  tr:'Yükseklik menzili|ek kare başına yukarıdaki seviye|En fazla ek menzil|Yüksek yerden aşağı ateş etmek daha uzağa ulaşır. Boş alanlar projenin kuralını kullanır (Sistem 1 › Savaşlar); 0 ek kare bunu kapatır.|yükseklik: her {levels} seviyede +1 kare, en fazla {most}|yükseklikten ek menzil yok',
+  ar:'المدى من الارتفاع|مستويات أعلى لكل مربع إضافي|أقصى مدى إضافي|الإطلاق من أرض أعلى يصل أبعد. الحقول الفارغة تتبع قاعدة المشروع (النظام 1 › المعارك)؛ و0 مربع إضافي يوقفها.|الارتفاع: +1 مربع لكل {levels} مستويات، حتى {most}|لا مدى إضافي من الارتفاع',
+  el:'Βεληνεκές από ύψος|επίπεδα ψηλότερα ανά επιπλέον τετράγωνο|Μέγιστο επιπλέον βεληνεκές|Η βολή από ψηλότερο έδαφος φτάνει πιο μακριά. Τα κενά πεδία ακολουθούν τον κανόνα του έργου (Σύστημα 1 › Μάχες)· 0 επιπλέον τετράγωνα το απενεργοποιεί.|ύψος +1 τετράγωνο ανά {levels} επίπεδα, έως {most}|χωρίς επιπλέον βεληνεκές από ύψος',
+  id:'Jangkauan dari ketinggian|tingkat lebih tinggi per petak tambahan|Jangkauan tambahan terbanyak|Menembak dari tempat lebih tinggi menjangkau lebih jauh. Kolom kosong memakai aturan proyek (Sistem 1 › Pertempuran); 0 petak tambahan mematikannya.|ketinggian +1 petak tiap {levels} tingkat, hingga {most}|tanpa jangkauan tambahan dari ketinggian',
+  vi:'Tầm bắn nhờ độ cao|tầng cao hơn cho mỗi ô thêm|Tầm thêm tối đa|Bắn từ chỗ cao xuống sẽ xa hơn. Ô để trống dùng quy tắc của dự án (Hệ thống 1 › Trận đấu); 0 ô thêm là tắt.|độ cao +1 ô mỗi {levels} tầng, tối đa {most}|độ cao không tăng tầm',
+  th:'ระยะจากที่สูง|ระดับที่สูงกว่าต่อช่องที่เพิ่ม|ระยะเพิ่มสูงสุด|ยิงลงจากที่สูงจะไปได้ไกลขึ้น ช่องว่างใช้กฎของโปรเจกต์ (ระบบ 1 › การต่อสู้) ใส่ 0 ช่องเพื่อปิด|ความสูง +1 ช่องทุก {levels} ระดับ สูงสุด {most}|ความสูงไม่เพิ่มระยะ'
+ };
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Height reach translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();
+
+// Show Text › Select Face: a face is used as soon as it is clicked (2026-10-28).
+// A machine-assisted first pass, flagged for review.
+(() => {
+ const keys=['Click a face to use it.'];
+ const rows={ja:'顔をクリックすると使用します。','zh-Hant':'點選臉圖即可使用。','zh-Hans':'点击脸图即可使用。',ko:'얼굴을 클릭하면 사용됩니다.',es:'Haz clic en una cara para usarla.',pt:'Clique num rosto para o usar.',fr:'Cliquez sur un visage pour l’utiliser.',de:'Klicke auf ein Gesicht, um es zu verwenden.',it:'Fai clic su un volto per usarlo.',ru:'Щёлкните лицо, чтобы выбрать его.',pl:'Kliknij twarz, aby jej użyć.',tr:'Kullanmak için bir yüze tıklayın.',ar:'انقر على وجه لاستخدامه.',el:'Κάντε κλικ σε ένα πρόσωπο για να το χρησιμοποιήσετε.',id:'Klik wajah untuk memakainya.',vi:'Nhấp vào một khuôn mặt để dùng.',th:'คลิกใบหน้าเพื่อใช้'};
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Face hint translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();

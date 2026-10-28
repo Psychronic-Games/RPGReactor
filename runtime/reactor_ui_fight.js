@@ -61,12 +61,12 @@
         whyAttack: 'Cannot attack', whySkill: 'No skill to use', whyItem: 'No item to use', whyCost: 'Not enough %1',
         whyUse: 'Cannot be used now', whyRange: 'Out of reach', whyNoTarget: 'No target there', whyNoReach: 'Nobody in reach',
         overwatch: 'Overwatch', auto: 'Auto', wait: 'Wait', endTurn: 'End Turn', watch: 'On watch',
-        mount: 'Mount', dismount: 'Dismount'
+        mount: 'Mount', dismount: 'Dismount', grapple: 'Grapple'
     };
     /** The commands of the battle's own (the rest are the project's Attack, Skill and Item), in menu order. */
-    H.WINDOW_LABELS = ['mount', 'dismount', 'overwatch', 'wait', 'endTurn', 'auto'];
+    H.WINDOW_LABELS = ['mount', 'dismount', 'grapple', 'overwatch', 'wait', 'endTurn', 'auto'];
     /** Their icons on the icon sheet, where the project's commands carry icons (a node may name others). */
-    H.COMMAND_ICONS = { mount: 502, dismount: 575, overwatch: 236, auto: 237, wait: 191, endTurn: 587 };
+    H.COMMAND_ICONS = { mount: 502, dismount: 575, grapple: 849, overwatch: 236, auto: 237, wait: 191, endTurn: 587 };
     H.GAUGE_STYLES = ['clipped', 'bar'];
 
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -498,6 +498,14 @@
             ctx.beginPath();
             ctx.arc(8 * u, 8 * u, 2.4 * u, 0, Math.PI * 2);
             ctx.fill();
+        } else if (key === 'grapple') {
+            // A hook on a line, thrown up.
+            ctx.beginPath();
+            ctx.moveTo(3 * u, 14 * u); ctx.lineTo(9 * u, 5.5 * u);
+            ctx.moveTo(9 * u, 5.5 * u); ctx.lineTo(9 * u, 1.8 * u);
+            ctx.moveTo(9 * u, 5.5 * u); ctx.quadraticCurveTo(5.2 * u, 5.5 * u, 5.6 * u, 2.6 * u);
+            ctx.moveTo(9 * u, 5.5 * u); ctx.quadraticCurveTo(12.8 * u, 5.5 * u, 12.4 * u, 2.6 * u);
+            ctx.stroke();
         } else if (key === 'mount' || key === 'dismount') {
             // A wheel, and an arrow onto it or off it.
             const tip = key === 'mount' ? 5.8 : 1.4, tail = key === 'mount' ? 1.4 : 5.8;

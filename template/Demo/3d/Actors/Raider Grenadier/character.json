@@ -1,0 +1,439 @@
+{
+  "builder": "character3d",
+  "version": 2,
+  "recipe": {
+    "species": "goblin",
+    "gender": 1,
+    "age": 30,
+    "muscle": 0.35,
+    "weight": 0.22,
+    "height": -0.6,
+    "cup": 0.5,
+    "firmness": 0.8,
+    "proportions": 1,
+    "ancestry": {
+      "african": 0.3333333333333333,
+      "asian": 0.3333333333333333,
+      "caucasian": 0.3333333333333333,
+      "people": ""
+    },
+    "shapes": {
+      "torsoLength": 0,
+      "legLength": 0,
+      "armLength": 0,
+      "neckLength": 0,
+      "handSize": 0,
+      "fingerLength": 0,
+      "footSize": 0,
+      "footLength": 0,
+      "footWidth": 0,
+      "shoulders": 0,
+      "chest": 0,
+      "pecs": 0,
+      "vshape": 0,
+      "lats": 0,
+      "waist": 0,
+      "belly": 0,
+      "abs": 0,
+      "hips": 0,
+      "butt": 0,
+      "breastSpacing": 0,
+      "breastHeight": 0,
+      "breastPoint": 0,
+      "breastFullness": 0,
+      "upperArmFat": 0,
+      "upperArmMuscle": 0,
+      "shoulderMuscle": 0,
+      "forearmFat": 0,
+      "forearmMuscle": 0,
+      "thighFat": 0,
+      "thighMuscle": 0,
+      "calfFat": 0,
+      "calfMuscle": 0,
+      "bowLegs": 0,
+      "neck": 0,
+      "doubleChin": 0,
+      "headFat": 0,
+      "headWidth": 0,
+      "headHeight": 0,
+      "headDepth": 0,
+      "headAge": 0,
+      "headBack": 0,
+      "foreheadHeight": 0,
+      "browRidge": 0,
+      "temples": 0,
+      "browHeight": 0,
+      "browAngle": 0,
+      "eyeSize": 0.8,
+      "eyeHeight": 0,
+      "eyeSpacing": 0,
+      "eyeSlant": 0,
+      "eyeOpen": 0,
+      "eyeBags": 0,
+      "eyeFold": 0,
+      "noseWidth": 0,
+      "noseLength": 1.4,
+      "noseHump": 0,
+      "noseDepth": 2.2,
+      "noseTip": 0,
+      "noseCurve": 0,
+      "nostrils": 0,
+      "noseVolume": 0,
+      "mouthWidth": 1.2,
+      "mouthHeight": 0,
+      "upperLip": 0,
+      "lowerLip": 0,
+      "mouthCorners": 0,
+      "cheekBones": 0,
+      "cheeks": 0,
+      "jaw": 0,
+      "chin": 0,
+      "chinWidth": 0,
+      "chinHeight": 0,
+      "underbite": 0,
+      "chinCleft": 0,
+      "earSize": 2.6,
+      "earOut": 1.5,
+      "earLobe": 0,
+      "earHeight": 0,
+      "earAngle": 0,
+      "earsPointed": 3.4,
+      "earsRound": 0,
+      "headRound": 0,
+      "headOval": 0,
+      "headSquare": 0,
+      "headTriangle": 0,
+      "headPear": 0,
+      "headDiamond": 0,
+      "chinPointed": 1
+    },
+    "headSize": 1.22,
+    "anatomy": {
+      "detail": true,
+      "areola": 1,
+      "nipple": 1,
+      "fold": 1,
+      "nippleProjection": 1,
+      "mons": 1,
+      "labia": 1,
+      "innerLabia": 1,
+      "clitoris": 1,
+      "paired": false,
+      "foreskin": "circumcised",
+      "areolaColor": "",
+      "sex": "auto",
+      "length": 0,
+      "girth": 0,
+      "testicles": 0
+    },
+    "morph": {
+      "snout": 0,
+      "muzzle": 0,
+      "flat": 0,
+      "earsAway": 0,
+      "earHoles": 0.6,
+      "toes": 1,
+      "eyeWide": 1,
+      "eyeTall": 1,
+      "eyeSocket": 0,
+      "cranialRidges": 0,
+      "cranialLobes": 0,
+      "earBowls": 0,
+      "foreheadSpoon": 0,
+      "facialRidges": 0,
+      "neckWebbing": 0,
+      "noseFolds": 0
+    },
+    "skin": "#7a8a3e",
+    "plan": "human",
+    "features": {
+      "horns": {
+        "type": "none",
+        "size": 1,
+        "color": "#3a2a22",
+        "color2": "#d8c8a8"
+      },
+      "ears": {
+        "type": "none",
+        "size": 1,
+        "color": "#8a6a4a",
+        "color2": "#e8b8a8"
+      },
+      "tail": {
+        "type": "none",
+        "size": 1,
+        "length": 1,
+        "color": "#6a7a4a",
+        "color2": "#d8d0b0"
+      },
+      "wings": {
+        "type": "none",
+        "size": 1,
+        "color": "#f2efe8",
+        "color2": "#c8c0b0"
+      },
+      "antennae": {
+        "type": "none",
+        "size": 1,
+        "color": "#503c30",
+        "color2": "#bdae88"
+      },
+      "fangs": {
+        "type": "none",
+        "size": 1,
+        "color": "#ece2cc",
+        "color2": "#808080"
+      },
+      "beak": {
+        "type": "none",
+        "size": 1,
+        "color": "#e0a830",
+        "color2": "#3a2a1a"
+      },
+      "tusks": {
+        "type": "none",
+        "size": 1,
+        "color": "#ece2c8",
+        "color2": "#808080"
+      },
+      "spines": {
+        "type": "none",
+        "size": 1,
+        "color": "#4a3a2a",
+        "color2": "#808080"
+      },
+      "whiskers": {
+        "type": "none",
+        "size": 1,
+        "color": "#f0ece4",
+        "color2": "#808080"
+      },
+      "insectHead": {
+        "type": "none",
+        "size": 1,
+        "color": "#718755",
+        "color2": "#a3b85a"
+      },
+      "alienEyes": {
+        "type": "none",
+        "size": 1,
+        "color": "#050507",
+        "color2": "#808080"
+      },
+      "arms": {
+        "type": "none",
+        "size": 1,
+        "color": "#718755",
+        "color2": "#3e4e35"
+      },
+      "machinery": {
+        "type": "none",
+        "size": 1,
+        "color": "#343e4d",
+        "color2": "#39d9e8"
+      }
+    },
+    "skinPattern": {
+      "type": "none",
+      "color": "#5a4030",
+      "belly": "",
+      "amount": 1,
+      "scale": 1,
+      "lips": "",
+      "nose": "",
+      "blush": 0,
+      "eyeshadow": "",
+      "shadowAmount": 0.7
+    },
+    "eyes": {
+      "color": "#e8a020",
+      "pupil": "slit",
+      "sclera": "",
+      "size": 1.25,
+      "pupilSize": 1,
+      "catchlight": true
+    },
+    "bodyHair": {
+      "amount": 0,
+      "pattern": "natural",
+      "regions": {
+        "face": 0,
+        "neck": 0,
+        "chest": 0.7,
+        "belly": 0.65,
+        "back": 0.05,
+        "shoulders": 0.05,
+        "upperArms": 0.3,
+        "forearms": 0.8,
+        "hands": 0.35,
+        "armpits": 1,
+        "pubic": 1,
+        "buttocks": 0.25,
+        "thighs": 0.55,
+        "shins": 0.85,
+        "feet": 0.45
+      },
+      "color": "",
+      "fur": 0,
+      "length": 1
+    },
+    "hair": {
+      "style": "fauxHawk",
+      "color": "#c8b8a0",
+      "tipColor": "",
+      "highlights": 0,
+      "length": 0.7,
+      "volume": 0.5,
+      "curl": 0,
+      "density": 1,
+      "frizz": 0,
+      "strandWidth": 1,
+      "part": "left",
+      "fringe": 0,
+      "hairline": 0,
+      "facial": {
+        "style": "none",
+        "color": "",
+        "length": 1,
+        "volume": 0.5
+      },
+      "brows": {
+        "style": "thin",
+        "thickness": 0.5,
+        "height": 0,
+        "color": ""
+      },
+      "lashes": true
+    },
+    "outfit": [
+      {
+        "id": "coveralls",
+        "color": "#4a4a3e",
+        "color2": "#38382e",
+        "material": "cloth",
+        "trimWidth": 0.04,
+        "sleeves": 0.5,
+        "length": 1,
+        "fit": 0.5,
+        "pattern": "solid",
+        "wear": 0.7
+      },
+      {
+        "id": "fingerlessGloves",
+        "color": "#24262a",
+        "color2": "#ddd6c8",
+        "material": "leather",
+        "trimWidth": 0.04,
+        "length": 0.2,
+        "wear": 0.75
+      },
+      {
+        "id": "toolBelt",
+        "color": "#3a2a1e",
+        "color2": "#5c5a44",
+        "trim": "#8a8678",
+        "material": "leather",
+        "wear": 0.6
+      },
+      {
+        "id": "workBoots",
+        "color": "#2a2018",
+        "color2": "#7a6a50",
+        "trim": "#2a1e14",
+        "length": 0.45,
+        "bulk": 0.2,
+        "material": "leather",
+        "wear": 0.7,
+        "style": "plain"
+      },
+      {
+        "id": "harness",
+        "color": "#3e3424",
+        "color2": "#6a7a3a",
+        "trim": "#b3a586",
+        "material": "canvas",
+        "wear": 0.6,
+        "style": "bandolier"
+      },
+      {
+        "id": "dustGoggles",
+        "color": "#2a2420",
+        "color2": "#e0a020",
+        "trim": "#8a7a5a",
+        "material": "leather",
+        "wear": 0.5,
+        "style": "eyes"
+      }
+    ],
+    "props": [
+      {
+        "id": "backpack",
+        "color": "#8a2c1c",
+        "color2": "#4a4232",
+        "size": 1.2,
+        "pockets": 3
+      }
+    ],
+    "head": null,
+    "bodyArt": {
+      "layers": [
+        {
+          "kind": "paint",
+          "motif": "stripes",
+          "region": "face",
+          "side": "both",
+          "style": "matte",
+          "color": "#9a2414",
+          "color2": "",
+          "size": 0.7,
+          "rotate": 0,
+          "around": 0,
+          "along": 0,
+          "band": false,
+          "text": "",
+          "picture": "",
+          "seed": 1,
+          "amount": 1
+        },
+        {
+          "kind": "scar",
+          "motif": "burn",
+          "region": "forearm",
+          "side": "left",
+          "style": "raised",
+          "color": "",
+          "color2": "",
+          "size": 0.9,
+          "rotate": 0,
+          "around": 0,
+          "along": 0,
+          "band": false,
+          "text": "",
+          "picture": "",
+          "seed": 1,
+          "amount": 1
+        }
+      ],
+      "piercings": [],
+      "limbs": [],
+      "eye": {
+        "side": "none",
+        "style": "lens",
+        "cyber": "sleek",
+        "glow": ""
+      },
+      "face": {
+        "studs": "none",
+        "plate": "none",
+        "side": "left",
+        "style": "sleek",
+        "glow": ""
+      }
+    },
+    "emotion": {
+      "strength": 1,
+      "blush": 1,
+      "blushColor": "#ee8a8a"
+    }
+  }
+}

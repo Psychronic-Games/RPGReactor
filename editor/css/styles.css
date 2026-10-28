@@ -6747,6 +6747,8 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .system-battle-mode-grid [hidden] { display: none !important; }
 .system-battle-mode-grid .rr-shim-wrapper:has(> select[hidden]) { display: none !important; }
 .system-battle-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.system-battle-inline { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--color-text-muted); }
+.system-battle-inline > input[type="number"] { width: 60px; flex: 0 0 60px; text-align: center; }
 .system-battle-mode-hint { color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
 /* A line of words and a group's heading take the whole width of the label | field grid. */
 .system-battle-mode-grid > .system-battle-mode-hint, .system-battle-mode-grid > .system-battle-group { grid-column: 1 / -1; }

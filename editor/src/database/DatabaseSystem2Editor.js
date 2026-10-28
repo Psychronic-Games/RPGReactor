@@ -592,7 +592,7 @@ class DatabaseSystem2Editor {
             </div>
         `;
 
-        const close = () => document.body.removeChild(overlay);
+        const close = () => overlay.remove();
 
         modal.querySelector('.atk-modal-close').addEventListener('click', close);
         modal.querySelector('.atk-modal-cancel').addEventListener('click', close);

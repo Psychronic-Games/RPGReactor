@@ -263,3 +263,20 @@ test('Escape with a command dialog on top of the Database closes the dialog, not
     assert.match(keys, /state\.options\.onEscape\) \{[\s\S]{0,400}if \(closeUnkeyedDialog\(event\)\) return;\s*state\.options\.onEscape\(event\);/);
     assert.match(keys, /function closeUnkeyedDialog\(event\) \{\s*const \{ doc, view \} = keyWindow\(event\);/, 'in the window the key was pressed in');
 });
+
+test('a dialog closes itself wherever it went: nothing takes it off the main body by name', () => {
+    // An element appended to the main body while a pop-out has the focus goes to the pop-out's body, so
+    // document.body.removeChild(dialog) throws there and the dialog cannot be closed (Show Text's face picker:
+    // a face, Cancel and × all did nothing). element.remove() works in either window.
+    const src = path.join(__dirname, '..', 'src');
+    const offenders = [];
+    const walk = dir => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) walk(full);
+            else if (entry.name.endsWith('.js') && /document\.body\.removeChild\(/.test(fs.readFileSync(full, 'utf8'))) offenders.push(path.relative(src, full));
+        }
+    };
+    walk(src);
+    assert.deepEqual(offenders, []);
+});

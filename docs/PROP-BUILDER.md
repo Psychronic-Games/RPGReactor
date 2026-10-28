@@ -133,12 +133,18 @@ Validation counts, source hashes and exact inspected views live in local `verifi
 **Save to Project** writes `3d/Props/<name>/`:
 
 - `source/<name>.glb`: the model with its pictures inside. Cloth is skinned to bones and carries its loop as the clip **Wave**. The loop lasts three seconds and is baked from the cloth simulated in the tool, so nothing is simulated in the game.
-- `model.json`: the Wave clip playing always and the model's origin placed where the prop stands. Every prop rests on the floor except wall-hung ones (a painting on a hook, a bracket flag, a span on brackets), which keep their height. Weapons add their hand rig; hanging banners add `span` (length in tiles, axis, origin).
+- `model.json`: the Wave clip playing always and the model's origin placed where the prop stands. Every prop rests on the floor except wall-hung ones (a painting on a hook, a bracket flag, a span on brackets), which keep their height. Weapons add their hand rig; hanging banners add `span` (length in tiles, axis, origin). Wearables add `wear`: the rig part that carries them (`RightLowerArm`, `Chest`, `Head`...) and the reference body's joints in the model's own coordinates, so the game can put them on any rigged humanoid (below). A pair spread apart for show (earrings, bracelets) has none.
 - `prop.json`: the recipe, for **Open…**. `thumbnail.png`: the picture Open shows.
 
 The model shows in Database › 3D Models like an imported one.
 
 Animated container lights and displays use a saved **Lights** clip and emissive materials. The game plays the clip; it runs no container simulation. Ordinary barrels, crates and chests remain still.
+
+## Worn by a hero
+
+A wearable saved here can be worn in the game. In **Database › Armors**, pick it as the armor's **3D Model**; any party member who equips that armor (or accessory) wears it on the map and in a battle fought on it, on any rigged humanoid model, imported or built in the Character Builder. The game lines the wearable's part up with the wearer's own, from joint to joint, in direction and length, and the wearer's bone carries it through every motion. The 3D Model row's **Scale** and turns adjust the fit for one armor. A Grappler worn this way is the one a Tactical grapple fires from: the line leaves its barrel and the harpoon flies on it. The Demo's Grappler (armor 114, `3d/Props/Grappler`) is worn by Fleagus, Carol and Jolt.
+
+Not yet: the Battle Room of a Classic battle and the Database's own previews don't show worn equipment, and a wearable is sized by the length of its part, not the wearer's girth (a gauntlet on a heavy arm can sink in; Scale corrects it).
 
 ## In the game
 

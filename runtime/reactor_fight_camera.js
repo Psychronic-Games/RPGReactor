@@ -288,6 +288,65 @@
     const sign = variant => (variant === "left" ? -1 : 1);
 
     C.shots = {
+        /**
+         * A grapple, beat by beat (`fightGrappleBeat`): `phase` "aim" low over the shoulder, looking up the wall at the
+         * edge as the line goes up; "tight" close on the hook biting at the lip; "pull" side-on and wide, following
+         * the body up; "climb" from the top, looking back down at the climber. `at` is the event's places (tiles,
+         * `h` up); `side` the shoulder (1 or -1). Each stays up until the next beat cuts to the one after.
+         */
+        grapple(world, U, at, phase, side) {
+            const P = q => ({ x: q.x + 0.5, y: q.h, z: q.y + 0.5 }), hook = { x: at.hook.x, y: at.hook.h, z: at.hook.y };
+            const start = P(at.start), top = P(at.top), hang = P(at.hang), h = U.h;
+            const up = axis(start, hook), toward = axis(hook, start);
+            // The hook as it is seen: a hand's breadth out from the lip and under it (on the lip itself the roof is
+            // in the way of every camera, and each framing was turned down for the view from above).
+            const bite = { x: hook.x + toward.dx * 0.45, y: hook.y - 0.3, z: hook.z + toward.dz * 0.45 };
+            let framings, track = null, look;
+            if (phase === "aim" || phase === "fly") {
+                look = { x: lerp(U.x, bite.x, 0.72), y: lerp(U.y + h * 0.9, bite.y, 0.72), z: lerp(U.z, bite.z, 0.72) };
+                framings = [1, -1].map(s => side * s).map(s => ({ variant: s > 0 ? "right" : "left",
+                    a: { eye: off(U, up, -1.5 * h, 0.55 * h * s, 0.45 * h), look, fov: 52 },
+                    b: { eye: off(U, up, -1.25 * h, 0.5 * h * s, 0.4 * h), look, fov: 48 } }));
+                framings.push({ variant: "raised", a: { eye: off(U, up, -2.2 * h, 0, 1.6 * h), look, fov: 50 }, b: { eye: off(U, up, -2.0 * h, 0, 1.5 * h), look, fov: 48 } });
+            } else if (phase === "tight") {
+                // Well out from the wall and below the lip, looking up at it: the hook bites against the sky, the line
+                // rising to it from the wearer below (level with the wall, the camera saw only its windows).
+                look = bite;
+                framings = [1, -1].map(s => side * s).map(s => ({ variant: s > 0 ? "right" : "left",
+                    a: { eye: off(hook, toward, 3.4, 1.9 * s, -2.8), look, fov: 50 },
+                    b: { eye: off(hook, toward, 3.0, 1.7 * s, -2.5), look, fov: 46 } }));
+                framings.push({ variant: "raised", a: { eye: off(hook, toward, 4.2, 0, -1.6), look, fov: 52 }, b: { eye: off(hook, toward, 3.8, 0, -1.4), look, fov: 50 } });
+            } else if (phase === "pull") {
+                // Side-on to the line, back far enough to hold the ground and the edge.
+                const mid = { x: (start.x + hang.x) / 2, y: (start.y + hang.y) / 2 + h * 0.6, z: (start.z + hang.z) / 2 };
+                const reach = Math.hypot(hang.x - start.x, hang.y - start.y, hang.z - start.z) * 0.9 + 3 * h * 0.5;
+                look = mid;
+                framings = [1, -1].map(s => side * s).map(s => ({ variant: s > 0 ? "right" : "left",
+                    a: { eye: off(mid, up, -reach * 0.35, reach * s, h * 0.4), look, fov: 50 },
+                    b: { eye: off(mid, up, -reach * 0.3, reach * 0.95 * s, h * 0.5), look, fov: 48 } }));
+                framings.push({ variant: "raised", a: { eye: off(start, up, -3 * h, 0, 2.2 * h), look, fov: 52 }, b: { eye: off(start, up, -2.8 * h, 0, 2.4 * h), look, fov: 50 } });
+                track = pose => { const p = C.point(U.c, world); return { eye: pose.eye, look: { x: lerp(mid.x, p.x, 0.65), y: lerp(mid.y, p.y + h * 0.6, 0.65), z: lerp(mid.z, p.z, 0.65) }, fov: pose.fov }; };
+            } else {
+                // From the top, past the edge: the climber comes over it toward the camera.
+                const into = axis(hang, top);
+                look = { x: hang.x, y: hang.y + h * 0.9, z: hang.z };
+                framings = [1, -1].map(s => side * s).map(s => ({ variant: s > 0 ? "right" : "left",
+                    a: { eye: off(top, into, 1.5 * h, 0.7 * h * s, 0.75 * h), look, fov: 46 },
+                    b: { eye: off(top, into, 1.3 * h, 0.6 * h * s, 0.7 * h), look, fov: 44 } }));
+                framings.push({ variant: "raised", a: { eye: off(top, into, 1.2 * h, 0, 1.6 * h), look, fov: 48 }, b: { eye: off(top, into, 1.1 * h, 0, 1.5 * h), look, fov: 46 } });
+                track = pose => { const p = C.point(U.c, world); return { eye: pose.eye, look: { x: p.x, y: p.y + h * 0.6, z: p.z }, fov: pose.fov }; };
+            }
+            const chosen = C.choose(world, framings, [look, chest(U)], up, undefined, [U.c], true);
+            const shot = makeShot("grapple", chosen, { x: U.x, z: U.z, zoom: 1.3 }, { x: hook.x, z: hook.z, zoom: 1.4 },
+                { frames: phase === "pull" ? 40 : 60, hold: 0, blend: phase === "aim" ? 12 : 0, curve: "inOut", linger: true, tau: phase === "pull" || phase === "climb" ? 4 : 8, subjects: [U.c] });
+            shot.phase = phase;
+            if (track) {
+                const base = chosen.b;
+                shot.track = () => track(base);
+            }
+            return shot;
+        },
+
         /** Over the shooter's shoulder, the target in frame, pushing in. */
         aim(world, U, T, last) {
             const f = axis(U, T, FACING[U.c && U.c.direction ? U.c.direction() : 2]), h = U.h;
@@ -661,6 +720,8 @@
     C.TIME_RAMP = 0.08;
     /** How slow the battle runs while the camera rides a round, and how many battle frames before the hit that begins. */
     C.RIDE_SLOW = 0.16;
+    /** How slow the battle runs as a grapple's pull snatches the body off the ground. */
+    C.GRAPPLE_SLOW = 0.55;
     C.RIDE_LEAD = 14;
     /** The letterbox bars, each as a share of the screen's height. */
     C.BARS = 0.085;
@@ -1153,7 +1214,8 @@
             else if (D._frame >= (shot.linger ? shot.hold : Math.max(shot.frames, shot.hold))) {
                 const waited = $gameFight.awaitsPlayer && $gameFight.awaitsPlayer();
                 // A shot that waits for the action's next beat stays (still pushing in); one with nothing more to show gives the view back.
-                if (!shot.linger || waited || (seq && seq.ended) || (!seq && shot.name !== "move")) D.release(shot.light ? 22 : C.RETURN_FRAMES, !waited && !shot.light);
+                // (A grapple's shot stays until its next beat cuts away, or its end gives the view back.)
+                if (!shot.linger || waited || (seq && seq.ended) || (!seq && shot.name !== "move" && shot.name !== "grapple")) D.release(shot.light ? 22 : C.RETURN_FRAMES, !waited && !shot.light);
             }
         } else if (D._mode === "return" && D._frame >= D._returnFrames && (D._settled || D._frame >= D._returnFrames + 12)) {
             D.finish();
@@ -1293,6 +1355,30 @@
             if (!U) return;
             D._seq = null;
             D.play(C.shots.move(world, U, payload.path, D._last.move)).unitId = payload.unitId;
+        },
+
+        fightGrappleBeat(payload) {
+            const phase = payload.phase;
+            if (phase === "done") {
+                if (D._grapple && D._grapple.unitId === payload.unitId) { D._grapple = null; if (D._mode === "shot" && D._shot.name === "grapple") D.release(C.RETURN_FRAMES, false); }
+                return;
+            }
+            // The shot already up carries on through the line's flight.
+            if (phase === "fly") return;
+            if (phase === "aim") {
+                // It takes the view from anything but a shot of an action still being shown (a camera on its way back,
+                // a run that brought the unit here, the battle's own view).
+                if (D._mode === "shot" && D._shot.name !== "move" && D._shot.name !== "grapple" && D._frame < D._shot.hold) return;
+                D._seq = null;
+                D._grapple = { unitId: payload.unitId, side: avoid("grapple", null, null) === "left" ? -1 : 1 };
+            }
+            const film = D._grapple;
+            if (!film || film.unitId !== payload.unitId || !payload.hook || !payload.start) return;
+            const world = stage(), U = unitPoint(payload.unitId, world);
+            if (!U) return;
+            D.play(C.shots.grapple(world, U, payload, phase, film.side));
+            // The moment the body leaves the ground, slowed.
+            if (phase === "pull") D.slow(C.GRAPPLE_SLOW, 26);
         },
 
         fightMoveEnd(payload) {

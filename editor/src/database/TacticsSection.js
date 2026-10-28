@@ -150,6 +150,22 @@
     /** A value the game takes for a whole number (a reach, a size, a Move), or null. */
     const counted = value => (value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? null : Math.trunc(Number(value)) || 0);
 
+    // How height adds to a shot's reach when nothing else says (the game's F.HEIGHT_REACH_LEVELS and F.HEIGHT_REACH_MAX):
+    // one more tile for every two levels the shooter stands above its target, up to three.
+    const HEIGHT_REACH = { levels: 2, most: 3 };
+    const HEIGHT_LIMITS = { levels: [1, 10], most: [0, 10] };
+
+    /** A height rule `{ levels, most }` as the game reads one (held to its limits), or null when the value is not one. */
+    function heightRule(value) {
+        if (!value || typeof value !== 'object') return null;
+        const levels = counted(value.levels), most = counted(value.most);
+        if (levels === null || most === null) return null;
+        return { levels: Math.max(HEIGHT_LIMITS.levels[0], Math.min(HEIGHT_LIMITS.levels[1], levels)), most: Math.max(HEIGHT_LIMITS.most[0], Math.min(HEIGHT_LIMITS.most[1], most)) };
+    }
+
+    /** The project's height rule (System.json `reactorBattle.heightReach`), else the game's own. */
+    const projectHeight = context => heightRule(context && context.heightReach) || HEIGHT_REACH;
+
     /**
      * The record's own settings: what its `rrBattle` holds, each read as the
      * game reads it (a value the game would not take is not there). Null
@@ -186,6 +202,8 @@
         const rule = Look(), sheet = rule ? rule.ownCharacter(record) : null;
         if (sheet) out.character = { name: sheet.characterName, index: sheet.characterIndex };
         if (held.comesBack === true) out.comesBack = true;
+        const height = heightRule(held.heightReach);
+        if (height) out.heightReach = height;
         return Object.keys(out).length ? out : null;
     }
 
@@ -683,7 +701,7 @@
     function ownTags(card, kind) {
         if (card === 'action') return kind === 'weapon' ? ['fireRate', 'magazine', 'reload', 'spread', 'combo', 'projectile'] : kind === 'skill' || kind === 'item' ? ['cooldown'] : [];
         if (card === 'shared') {
-            if (ACTION_KINDS.includes(kind)) return ['range', 'area', 'los'];
+            if (ACTION_KINDS.includes(kind)) return ['range', 'area', 'los', 'heightReach'];
             if (kind === 'enemy') return ['ai', 'character', 'comesBack'];
             return kind === 'actor' ? ['ai'] : [];
         }
@@ -700,7 +718,7 @@
     const within = (value, limit) => Math.max(limit[0], Math.min(limit[1], value));
 
     // Settings a card holds that no Note tag says.
-    const UNTAGGED = ['comesBack'];
+    const UNTAGGED = ['comesBack', 'heightReach'];
     const plainObject = value => !!value && typeof value === 'object' && !Array.isArray(value);
     const sameSettings = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
     const hundredths = value => Math.round(Math.max(0, Number(value) || 0) * 100) / 100;
@@ -802,6 +820,11 @@
                 patch.character = name ? { name, index: Math.min(7, whole(value.index)) } : null;
             } else if (key === 'comesBack') {
                 patch.comesBack = value === true ? true : null;
+            } else if (key === 'heightReach') {
+                // A field left empty takes the project's number; the project's rule as it is is nothing of the record's own.
+                const project = projectHeight(context), blank = part => value[part] === null || value[part] === undefined || value[part] === '';
+                const rule = heightRule({ levels: blank('levels') ? project.levels : value.levels, most: blank('most') ? project.most : value.most });
+                patch.heightReach = !rule || (rule.levels === project.levels && rule.most === project.most) ? null : rule;
             } else if (key === 'projectile') {
                 patch.projectile = !PROJECTILES.includes(value) || value === combatProfile(bare(key), context).projectile ? null : value;
             } else if (key === 'cooldown') {
@@ -878,7 +901,10 @@
             const ranged = !['self', 'all'].includes(value.area.shape);
             const range = value.weapon.range && ranged ? t("Uses equipped weapon's range") : value.weapon.area ? describeRange(value.range, t) : describe(value, t);
             const area = value.weapon.area ? ' · ' + t("Uses equipped weapon's area") : value.weapon.range && ranged ? ' · ' + describe(value, t, true) : '';
-            parts.push(said(tagged, range + area) + (found.los === false && sight ? ' · ' + t('no line of sight needed') : ''));
+            const height = (own(entry) || {}).heightReach;
+            tagged = tagged || !!height;
+            parts.push(said(tagged, range + area) + (found.los === false && sight ? ' · ' + t('no line of sight needed') : '')
+                + (height ? ' · ' + (height.most ? t('height +1 tile per {levels} levels, up to {most}').replace('{levels}', height.levels).replace('{most}', height.most) : t('no reach from height')) : ''));
         }
         if (card === 'shared' && (kind === 'actor' || kind === 'enemy')) {
             const back = kind === 'enemy' && !!(own(entry) || {}).comesBack;
@@ -1141,7 +1167,10 @@
                 <input type="number" class="database-field-value rr-tactics-size" data-no-stepper min="${LIMITS.size[0]}" max="${LIMITS.size[1]}" step="1">
                 <span class="rr-tactics-word">${word('tiles')}</span>
             </span>
-            <label class="rr-tactics-check"><input type="checkbox" class="system-checkbox rr-tactics-los"><span>${word('Needs a clear line of sight')}</span></label>`;
+            <label class="rr-tactics-check"><input type="checkbox" class="system-checkbox rr-tactics-los"><span>${word('Needs a clear line of sight')}</span></label>`
+                    + number('Height reach', 'rr-tactics-height-levels', 'levels up per extra tile', HEIGHT_LIMITS.levels[0], HEIGHT_LIMITS.levels[1], 1, ' data-height')
+                    + number('Most extra reach', 'rr-tactics-height-most', 'tiles', HEIGHT_LIMITS.most[0], HEIGHT_LIMITS.most[1], 1, ' data-height') + `
+            <span class="rr-tactics-hint" data-height>${word('Shooting down from higher ground reaches further. Empty fields use the project\'s rule (System 1 › Battles); 0 extra tiles turns it off.')}</span>`;
                 picture = true;
             }
             if (name === 'tactical' && UNIT_KINDS.includes(kind)) {
@@ -1247,6 +1276,8 @@
             weaponTypes: (databaseManager && databaseManager.getSystem && databaseManager.getSystem() || {}).weaponTypes || [],
             // An actor moves and climbs as its class does until it says otherwise itself.
             classOf: id => (databaseManager && typeof databaseManager.getClass === 'function' ? databaseManager.getClass(id) : null),
+            // How height adds to a shot's reach in this project (System 1 › Battles), read each time: the card there may have changed it.
+            get heightReach() { const system = databaseManager && databaseManager.getSystem && databaseManager.getSystem(); return (system && system.reactorBattle && system.reactorBattle.heightReach) || null; },
             get pluginTags() { return scan.tags || {}; }
         };
         const redraws = [];
@@ -1352,7 +1383,7 @@
 
     // The field of each setting's row, and what the row says while the Note keeps a tag for a plugin.
     const KEPT_ROWS = { range: '.rr-tactics-min', area: '.rr-tactics-shape', los: '.rr-tactics-los', move: '.rr-tactics-move', jump: '.rr-tactics-jump', ai: '.rr-tactics-ai',
-        character: '.rr-tactics-look-change', comesBack: '.rr-tactics-comes-back', fireRate: '.rr-combat-fireRate', magazine: '.rr-combat-magazine', reload: '.rr-combat-reload', spread: '.rr-combat-spread',
+        character: '.rr-tactics-look-change', comesBack: '.rr-tactics-comes-back', heightReach: '.rr-tactics-height-levels', fireRate: '.rr-combat-fireRate', magazine: '.rr-combat-magazine', reload: '.rr-combat-reload', spread: '.rr-combat-spread',
         combo: '.rr-combat-combo', cooldown: '.rr-combat-cooldown', projectile: '.rr-combat-projectile' };
     const KEPT_WORDS = 'Its tag stays in the Note: the plugin {name} reads it.';
 
@@ -1416,6 +1447,7 @@
         const context = link.context, q = selector => section.querySelector(selector);
         const pictureBox = q('.rr-tactics-picture'), canvas = pictureBox ? pictureBox.querySelector('canvas') : null, legend = q('.rr-tactics-legend');
         const min = q('.rr-tactics-min'), max = q('.rr-tactics-max'), shape = q('.rr-tactics-shape'), size = q('.rr-tactics-size'), los = q('.rr-tactics-los');
+        const heightLevels = q('.rr-tactics-height-levels'), heightMost = q('.rr-tactics-height-most');
         const rangeSource = q('.rr-tactics-range-source'), rangeValues = q('.rr-tactics-range-values'), rangeBox = q('.rr-tactics-range'), rangeLabel = q('.rr-tactics-range-label'), rangeHint = q('.rr-tactics-range-hint');
         const sizeLabel = q('.rr-tactics-size-label'), sizeValues = q('.rr-tactics-size-values'), previewHint = q('.rr-tactics-preview-hint');
         const move = q('.rr-tactics-move'), jump = q('.rr-tactics-jump'), ai = q('.rr-tactics-ai'), comesBack = q('.rr-tactics-comes-back');
@@ -1472,6 +1504,13 @@
                 const sight = sighted(value) || value.weapon.range;
                 los.checked = value.los && sight;
                 los.disabled = !sight;
+                // Height adds reach to what shoots (reach of 2 or more, or the weapon's): the rows stand for those only.
+                const held = (own(entry) || {}).heightReach, project = projectHeight(context), shoots = ranged && (value.range.max >= 2 || value.weapon.range);
+                section.querySelectorAll('[data-height]').forEach(row => { row.hidden = !shoots; });
+                heightLevels.value = held ? held.levels : '';
+                heightMost.value = held ? held.most : '';
+                heightLevels.placeholder = String(project.levels);
+                heightMost.placeholder = String(project.most);
             }
             if (unitKind) {
                 const stats = unitStats(kind, entry, context);
@@ -1529,6 +1568,12 @@
             });
             size.addEventListener('change', () => set({ area: { shape: effective(kind, link.live(), context).area.shape, size: Math.max(1, whole(size.value)) } }));
             los.addEventListener('change', () => set({ los: los.checked }));
+            const height = () => {
+                const levels = heightLevels.value.trim(), most = heightMost.value.trim();
+                set({ heightReach: levels === '' && most === '' ? null : { levels, most } });
+            };
+            heightLevels.addEventListener('change', height);
+            heightMost.addEventListener('change', height);
             // The pointer aims the area inside the reach.
             canvas.classList.add('is-aimed');
             canvas.addEventListener('pointermove', event => {
@@ -1737,7 +1782,7 @@
     }
 
     const api = {
-        SHAPES, SIZED, AI, DEFAULT_MOVE, DEFAULT_JUMP, SHAPE_LABELS, KINDS, FILES, DATA_KEYS, LIMITS,
+        SHAPES, SIZED, AI, DEFAULT_MOVE, DEFAULT_JUMP, SHAPE_LABELS, KINDS, FILES, DATA_KEYS, LIMITS, HEIGHT_REACH, HEIGHT_LIMITS, heightRule,
         parse, parseTags, parsePtbs, parseCombat, hasAction, strip, without,
         own, recordTactics, recordCombat, recordCharacter, sourceOf,
         effective, sighted, weaponSkill, weaponTypeReach, scopeDefaults, unitStats,

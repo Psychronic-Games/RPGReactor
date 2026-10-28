@@ -158,6 +158,7 @@
         return t;
     }
     const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
     const unit = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -646,7 +647,7 @@
     /** The most a walking or running foot points out (degrees, read along its pitched ankle-to-ball line, as TOE_OUT):
      * 10 lands the sole's own centerline 5 to 12 out once the sole is level. */
     const STRIDE_TOE_OUT = 10;
-    function limitLegs(index, names, world, steps, turnAt, bones, upright, once, toeOut = TOE_OUT) {
+    function limitLegs(index, names, world, steps, turnAt, bones, upright, once, toeOut = TOE_OUT, stride = false) {
         const clampTo = (v, r) => {
             const [lo, hi] = r.x, d = DEG;
             return [Math.max(lo * d, Math.min(hi * d, v[0])), Math.max(-r.y * d, Math.min(r.y * d, v[1])), Math.max(-r.z * d, Math.min(r.z * d, v[2]))];
@@ -690,10 +691,14 @@
             }
             // An upright body's foot points about where it faces, a little out: one turned out past TOE_OUT
             // (the heel swung in) or in past TOE_IN rolls the whole leg about the thigh, knee and foot together.
+            // A stride's leg turns about the line from the hip to the ankle instead, so the knee and the toes come
+            // round and the foot stays where it stands: turned about the thigh, the bent knee swung a walking
+            // foot up to 10 cm out past its hip.
             const hips = names.indexOf('Hips'), m = S === 'Left' ? 1 : -1;
             const toe = index.get(S + 'ToeBase');
             const footDir = toe === undefined ? [0, 0, 1] : unit(sub(bones[toe].head, bones[index.get(S + 'Foot')].head));
             const thighDir = unit(sub(bones[index.get(S + 'Leg')].head, bones[index.get(S + 'UpLeg')].head));
+            const thighLine = sub(bones[index.get(S + 'Leg')].head, bones[index.get(S + 'UpLeg')].head), shinLine = sub(bones[index.get(S + 'Foot')].head, bones[index.get(S + 'Leg')].head);
             // (Not on a body hung in place, its feet set on holds or kicking in the water.)
             if (hips < 0 || !upright) continue;
             for (let f = 0; f < steps; f++) {
@@ -711,7 +716,8 @@
                     const ease = Math.min(1, (-thigh[1] - 0.65) / 0.15);
                     const excess = (out > toeOut * DEG ? out - toeOut * DEG : out < -TOE_IN * DEG ? out + TOE_IN * DEG : 0) * ease;
                     if (!excess) break;
-                    const axis = rotate(world[chain[0].k][f], thighDir), turn = quat(...axis, Math.max(-0.6, Math.min(0.6, excess * m / Math.max(0.4, Math.abs(axis[1])))));
+                    const axis = stride ? unit(add3(rotate(world[chain[0].k][f], thighLine), rotate(world[chain[1].k][f], shinLine))) : rotate(world[chain[0].k][f], thighDir);
+                    const turn = quat(...axis, Math.max(-0.6, Math.min(0.6, excess * m / Math.max(0.4, Math.abs(axis[1])))));
                     for (const c of chain) world[c.k][f] = mul(turn, world[c.k][f]);
                 }
             }
@@ -720,24 +726,56 @@
 
     /** Keep each stride on its own side of the hips. Joint-angle limits
      * alone allow a captured narrow/crossing gait to scissor through a
-     * different body's opposite leg. Swing the whole chain at the hip so
-     * the knee remains a hinge and the ankle keeps its captured motion. */
+     * different body's opposite leg. Sideways is read along the floor (the
+     * hips' left-right line, level): read along the pelvis itself, its roll
+     * through a step tipped a foot a leg's length below it 13 cm across the
+     * body that never was, and the leg standing on it was swung 14 degrees
+     * out. A well bent leg's foot comes out first by the thigh turning on
+     * itself (the knee stays where it is: a run's kicked-up heel), the rest by the
+     * whole chain swinging out at the hip, so the knee remains a hinge and
+     * the ankle keeps its captured motion. */
+    /** The most a thigh turns on itself to bring a foot out (degrees). */
+    const STRIDE_TWIST = 30;
     function separateStride(bones, index, names, world, steps, place, scale) {
         const hips = index.get('Hips');
         for (let f = 0; f < steps; f++) for (const [S, sign] of [['Left', 1], ['Right', -1]]) {
-            const { pos, rot } = place(f), thigh = index.get(S + 'UpLeg'), knee = index.get(S + 'Leg'), foot = index.get(S + 'Foot');
-            const side = rotate(rot[hips], [1, 0, 0]), axis = rotate(rot[hips], [0, 0, 1]), origin = pos[thigh];
+            const thigh = index.get(S + 'UpLeg'), knee = index.get(S + 'Leg'), foot = index.get(S + 'Foot');
+            const chain = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(n => names.indexOf(S + n)).filter(k => k >= 0);
+            const frame = () => {
+                const { pos, rot } = place(f), x = rotate(rot[hips], [1, 0, 0]), side = unit([x[0], 0, x[2]]);
+                return { pos, side, axis: [-side[2], 0, side[0]], origin: pos[thigh] };
+            };
+            let { pos, side, axis, origin } = frame();
             const width = Math.abs(dot(sub(origin, pos[hips]), side));
             const gap = Math.max(.045 * scale, width * .55);
-            const clear = angle => {
-                const q = quat(...axis, angle * sign);
-                return [knee, foot].every(i => dot(sub(along3(origin, rotate(q, sub(pos[i], origin)), 1), pos[hips]), side) * sign >= gap);
-            };
+            const out = p => dot(sub(p, pos[hips]), side) * sign;
+            const moved = (q, i) => along3(origin, rotate(q, sub(pos[i], origin)), 1);
+            if (out(pos[knee]) >= gap && out(pos[foot]) >= gap) continue;
+            // Only a well bent knee (a heel kicked up): on a leg near straight the turn moves the foot little and its toes a lot.
+            const along = unit(sub(pos[knee], origin)), bend = Math.acos(Math.max(-1, Math.min(1, dot(along, unit(sub(pos[foot], pos[knee]))))));
+            const most = STRIDE_TWIST * DEG * smooth(70 * DEG, 95 * DEG, bend);
+            if (out(pos[knee]) >= gap && most > 0) {
+                const footAt = t => out(moved(quat(...along, t), foot));
+                const way = footAt(0.01) > footAt(-0.01) ? 1 : -1;
+                let t = 0;
+                if (footAt(way * most) >= gap) {
+                    let lo = 0, hi = most;
+                    for (let k = 0; k < 15; k++) { const mid = (lo + hi) / 2; if (footAt(way * mid) >= gap) hi = mid; else lo = mid; }
+                    t = hi;
+                } else if (footAt(way * most) > out(pos[foot]) + 0.002 * scale) t = most;
+                if (t) {
+                    const q = quat(...along, way * t);
+                    for (const k of chain) world[k][f] = mul(q, world[k][f]);
+                    ({ pos, side, axis, origin } = frame());
+                    if (out(pos[knee]) >= gap && out(pos[foot]) >= gap) continue;
+                }
+            }
+            const clear = angle => { const q = quat(...axis, angle * sign); return [knee, foot].every(i => out(moved(q, i)) >= gap); };
             if (clear(0)) continue;
             let lo = 0, hi = .55;
             for (let k = 0; k < 15; k++) { const mid = (lo + hi) / 2; if (clear(mid)) hi = mid; else lo = mid; }
             const q = quat(...axis, hi * sign);
-            for (const suffix of ['UpLeg', 'Leg', 'Foot', 'ToeBase']) { const k = names.indexOf(S + suffix); if (k >= 0) world[k][f] = mul(q, world[k][f]); }
+            for (const k of chain) world[k][f] = mul(q, world[k][f]);
         }
     }
 
@@ -1376,7 +1414,7 @@
         const stride = id === 'walk' || id === 'run' || id === 'crouchWalk';
         if (stride) separateStride(bones, index, names, world, steps, place, scale);
         // A stride's feet point a little out (STRIDE_TOE_OUT); a stance's may turn further (TOE_OUT).
-        limitLegs(index, names, world, steps, turnAt, bones, !cap.hang, cap.once, stride ? STRIDE_TOE_OUT : TOE_OUT);
+        limitLegs(index, names, world, steps, turnAt, bones, !cap.hang, cap.once, stride ? STRIDE_TOE_OUT : TOE_OUT, stride);
         if (!(options && options.rawFeet) && !FREE_FEET.has(id)) levelSoles(bones, index, names, world, steps, place, cap.skin ? stand() : null, scale, !!cap.once);
         const heights = stand();
         const tracks = names.map((n, k) => {

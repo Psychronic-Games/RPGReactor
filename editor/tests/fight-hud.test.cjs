@@ -266,7 +266,7 @@ test('Overwatch, Wait and End Turn are written the way the project writes Attack
     assert.deepEqual(Hud.commandStyle(['\\i[1] Attack', 'SKILL', 'Item']), { upper: false, icons: false }, 'only when all three agree');
     const node = Hud.normalizeProps({ fightWindow: 'command' }, 'fightWindow');
     assert.equal(node.commandIcons, true);
-    assert.deepEqual(Hud.WINDOW_LABELS, ['mount', 'dismount', 'overwatch', 'wait', 'endTurn', 'auto']);
+    assert.deepEqual(Hud.WINDOW_LABELS, ['mount', 'dismount', 'grapple', 'overwatch', 'wait', 'endTurn', 'auto']);
     assert.equal(Hud.commandText(node, 'auto', '', demo, () => true), '\\i[237] AUTO');
     assert.equal(Hud.commandLabel(node, 'wait', '', demo), 'WAIT');
     assert.equal(Hud.commandLabel(node, 'overwatch', '', demo), 'OVERWATCH');
@@ -310,7 +310,10 @@ test('Mount and Dismount are the battle\'s own commands: the project\'s case, an
     assert.equal(bare, 'MOUNT');
     assert.equal(Hud.commandGlyph(node, 'mount', bare, demo), true);
     const ctx = fakeContext();
-    for (const key of ['mount', 'dismount']) Hud.drawGlyph(ctx, key, 0, 0, 32, '#ffffff');
+    for (const key of ['mount', 'dismount', 'grapple']) Hud.drawGlyph(ctx, key, 0, 0, 32, '#ffffff');
+    // Grapple: its own icon (the Demo's Grappler), and a hook drawn where the sheet has none.
+    assert.equal(Hud.commandText(node, 'grapple', '', demo, every), '\\i[' + Hud.COMMAND_ICONS.grapple + '] GRAPPLE');
+    assert.equal(Hud.commandGlyph(node, 'grapple', Hud.commandText(node, 'grapple', '', demo, none), demo), true);
 });
 
 test('a unit that rides a vehicle with a life of its own shows that life under its own HP', () => {

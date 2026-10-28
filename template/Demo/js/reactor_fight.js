@@ -2290,6 +2290,8 @@
         wait: "Wait", endTurn: "End Turn", auto: "Auto", overwatch: "Overwatch",
         // A unit and a vehicle: getting on one beside it, and getting off.
         mount: "Mount", dismount: "Dismount", whyNoRoom: "No room to get off here",
+        // The grapple, as a command, and what the hint line says of it.
+        grapple: "Grapple", tipGrapple: "%1: next place to grapple to", tipGrappleMove: "%1 or a teal tile: grapple",
         // The goal in full (the battle menu, a change of goal), and as the HUD's line counts it down.
         goalDefeatAll: "Defeat all enemies", goalSurvive: "Survive %1 turns", goalDefeatUnit: "Defeat %1", goal: "Complete the objective",
         goalEnemiesLeft: "Enemies left: %1", goalSurviveLeft: "Survive: %1 turns left", goalSurviveLast: "Survive: last turn", goalChanged: "New goal: %1",

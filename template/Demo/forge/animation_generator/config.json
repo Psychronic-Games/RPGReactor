@@ -9,9 +9,6 @@
       "id": "Lmr5ie6nmraau",
       "categoryId": "effect",
       "animationId": "chromatic-pulse",
-      "blend": "screen",
-      "opacity": 0.35,
-      "visible": true,
       "keyframes": [
         {
           "_layerOpacity": 0.35,
@@ -31,36 +28,35 @@
           "cycZ": 0
         }
       ],
-      "activeKeyframe": 0
+      "activeKeyframe": 0,
+      "blend": "screen",
+      "opacity": 0.35,
+      "visible": true
     }
   ],
   "activeLayerId": "Lmr5ie6nmraau",
   "previewMode": "single",
   "previewSingle": {
     "categoryId": "elements",
-    "animationId": "light",
+    "animationId": "frost-crystal",
     "params": {
-      "color1": "#b21dd5",
-      "color2": "#cee86b",
+      "crystalColor": "#88ccff",
+      "glintColor": "#ffffff",
       "centerX": 0.5,
       "centerY": 0.5,
-      "rayCount": 20,
-      "innerRadius": 0.32,
-      "outerRadius": 1.2,
-      "rayWidth": 0.4,
-      "rotationCycles": -3,
-      "pulseCycles": 3,
-      "pulseStrength": 0.15,
-      "coreSize": 0.14,
-      "glow": 0.55,
-      "volume": 5,
-      "tiltX": -106,
-      "tiltY": 74,
-      "tiltZ": -128,
-      "cycX": -3,
-      "cycY": 2,
-      "cycZ": 1,
-      "opacity": 0.95
+      "size": 0.4,
+      "armCount": 6,
+      "branchDepth": 2,
+      "shimmerCycles": 3,
+      "sparkleCount": 12,
+      "lineWidth": 2.5,
+      "glowIntensity": 0.5,
+      "tiltX": -90,
+      "tiltY": 0,
+      "tiltZ": 0,
+      "cycX": 0,
+      "cycY": 0,
+      "cycZ": 0
     }
   }
 }

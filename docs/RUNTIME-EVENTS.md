@@ -395,6 +395,19 @@ Emitted when it arrived.
 | `x` | `number` |
 | `y` | `number` |
 
+### `fightGrappleBeat`
+
+Emitted at each beat of a grapple on a Tactical battle's map (after `fightGrapple`): once per beat, in order.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `phase` | `string` — `"aim"`, `"fly"` (the line goes out), `"tight"` (the hook bites, the slack drawn up), `"pull"`, `"climb"` (over the edge), `"done"` |
+| `start` | `{x, y, h}` — where it stood, in tiles (`h` up) |
+| `hook` | `{x, y, h}` — where the hook bites |
+| `top` | `{x, y, h}` — the cell on top it climbs onto |
+| `hang` | `{x, y, h}` — where the pull leaves it hanging under the edge |
+
 ### `fightAim`
 
 Emitted when an action is confirmed and about to play.

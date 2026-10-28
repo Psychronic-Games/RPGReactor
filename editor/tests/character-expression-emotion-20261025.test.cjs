@@ -50,8 +50,9 @@ test('every expression reads clearly against Normal at the default strength, on 
         for (const e of X.EXPRESSIONS) {
             if (e.id === 'neutral') continue;
             const m = movement(result, e.id, emotion);
-            // A brow or a mouth corner moved a third of a centimeter or more, over a good part of the face.
-            assert.ok(m.most > 6 && m.over > 150, `${result.recipe.species} ${e.id}: ${m.most.toFixed(1)} mm, ${m.over} vertices`);
+            // A brow or a mouth corner moved half a centimeter or so, over a good part of the face: natural faces,
+            // not exaggerated ones (the quiet ones, a worried look or a thought, move the least).
+            assert.ok(m.most > 4.5 && m.over > 150, `${result.recipe.species} ${e.id}: ${m.most.toFixed(1)} mm, ${m.over} vertices`);
         }
     }
 });

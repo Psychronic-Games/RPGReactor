@@ -3178,7 +3178,13 @@ Reactor3D.injectShine = function(material, shader) {
     for (const name of Object.keys(mirror)) shader.uniforms[name] = mirror[name];
     shader.uniforms.rrShine = { value: shine.vector };
     shader.uniforms.rrShineTint = { value: shine.tint };
+    // 1: the reflection takes the surface's own colour as well (its picture and vertex colours), as a
+    // metal does in PBR and in the Builders; a model's Surface keeps it white unless its tint says.
+    if (!shine.albedo || typeof shine.albedo !== "object") shine.albedo = { value: 0 };
+    shader.uniforms.rrShineAlbedo = shine.albedo;
     this.injectWorldNormal(shader);
+    // The surface's colour before any light is laid on it (Reactor3D.litMaterial lights diffuseColor there).
+    shader.fragmentShader = shader.fragmentShader.replace("#include <alphahash_fragment>", "vec3 rrAlbedo = diffuseColor.rgb;\n\t#include <alphahash_fragment>");
     shader.fragmentShader = [
         "uniform samplerCube rrEnvMap;",
         "uniform float rrEnvMaxLod;",
@@ -3190,6 +3196,7 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform float rrMirrorTolerance;",
         "uniform vec4 rrShine;",
         "uniform vec3 rrShineTint;",
+        "uniform float rrShineAlbedo;",
         this.WORLD_NORMAL_VARYING
     ].join("\n") + "\n" + shader.fragmentShader.replace(
         "#include <opaque_fragment>",
@@ -3236,7 +3243,8 @@ Reactor3D.injectShine = function(material, shader) {
             // How much of the texture stays (w): the rest is mirrored over, and what stays
             // takes the reflection as a glaze (a screen blend) of its bright parts only
             // (cubed): crisp highlights over the paint, never a milky wash.
-            "\tvec3 rrRefl = rrEnv * rrShineTint;",
+            "\tvec3 rrTint = rrShineTint * mix(vec3(1.0), rrAlbedo, rrShineAlbedo);",
+            "\tvec3 rrRefl = rrEnv * rrTint;",
             "\tfloat rrA = clamp(rrShine.x * rrFres, 0.0, 1.0);",
             "\tvec3 rrMirror = mix(outgoingLight, rrRefl, rrA * (1.0 - rrShine.w));",
             "\tvec3 rrGlaze = clamp(rrRefl * rrRefl * rrRefl * 1.6 * rrA * rrShine.w, 0.0, 1.0);",
@@ -3252,7 +3260,7 @@ Reactor3D.injectShine = function(material, shader) {
             "#ifdef RR_SHADOW_TAPS",
             "\t\trrKGGX *= 1.0 - clamp(rrSunShaded, 0.0, 1.0);",
             "#endif",
-            "\t\toutgoingLight += rrKeyColor * rrShineTint * (rrKGGX * rrShine.x * rrF0);",
+            "\t\toutgoingLight += rrKeyColor * rrTint * (rrKGGX * rrShine.x * rrF0);",
             "\t}",
             "}",
             "#include <opaque_fragment>"

@@ -41,6 +41,13 @@
         let open = 0; for (const n of edges.values()) if (n === 1) open++;
         return open > edges.size * 0.02;
     }
+    /** The rig part each of the reference body's bones belongs to, and the bone whose head is each rig part's joint. */
+    const RIG_PART={Hips:'Hips',Spine:'Spine',Spine1:'Spine',Spine2:'Chest',Neck:'Neck',Head:'Head'};
+    const RIG_JOINT={Hips:'Hips',Spine:'Spine',Chest:'Spine2',Neck:'Neck',Head:'Head'};
+    for(const S of ['Left','Right']){
+        Object.assign(RIG_PART,{[S+'Shoulder']:'Chest',[S+'Arm']:S+'UpperArm',[S+'ForeArm']:S+'LowerArm',[S+'Hand']:S+'Hand',[S+'UpLeg']:S+'UpperLeg',[S+'Leg']:S+'LowerLeg',[S+'Foot']:S+'Foot',[S+'ToeBase']:S+'Foot'});
+        Object.assign(RIG_JOINT,{[S+'UpperArm']:S+'Arm',[S+'LowerArm']:S+'ForeArm',[S+'Hand']:S+'Hand',[S+'UpperLeg']:S+'UpLeg',[S+'LowerLeg']:S+'Leg',[S+'Foot']:S+'Foot'});
+    }
     function build(input) {
         if (!reference) throw new Error('Accessory reference is not ready. Call prepare() first.');
         const recipe = normalize(input), {pack,built} = reference;
@@ -94,7 +101,16 @@
         for(const p of parts) for(let k=0;k<p.positions.length;k++)p.positions[k]=(p.positions[k]-pivot[k%3])*recipe.scale;
         const referenced=new Set(parts.flatMap(p=>[p.texture,p.normalTexture,p.metallicRoughnessTexture,p.emissiveTexture].filter(Boolean)));for(const name of Object.keys(textures))if(!referenced.has(name))delete textures[name];
         const extent=Math.max(...high.map((v,k)=>(v-low[k])*recipe.scale),.05);
-        const sidecarExtra=recipe.accessory.id==='ledMask'?{animations:LED_RULES.filter(r=>parts.some(p=>p.name===r.part)).map(r=>Object.assign({},r))}:undefined;
+        const sidecarExtra=recipe.accessory.id==='ledMask'?{animations:LED_RULES.filter(r=>parts.some(p=>p.name===r.part)).map(r=>Object.assign({},r))}:{};
+        // Where it is worn, so the game puts it on any rigged humanoid that wears it (reactor_3d_models.js › Reactor3D.Worn):
+        // the rig part that carries it and the reference body's joints, in this model's own coordinates. A pair spread
+        // apart for show is worn by nobody.
+        const rigPart=RIG_PART[bone.name.replace(/(Thumb|Index|Middle|Ring|Pinky)\d$/,'')];
+        if(rigPart&&!(PAIRED.has(recipe.accessory.id)&&recipe.pivot!=='attachment')){
+            const joints={};
+            for(const [name,from] of Object.entries(RIG_JOINT)){const b=built.bones.find(x=>x.name===from);if(b)joints[name]=rotate(b.head).map((v,k)=>Math.round((v-pivot[k])*recipe.scale*1e5)/1e5);}
+            sidecarExtra.wear={part:rigPart,joints};
+        }
         return {kind:'accessory',recipe,parts,bones:[{name:'Prop',head:[0,0,0],parent:-1}],clips:[],textures,construction:generated.construction,sidecarExtra,
             height:extent, triangles:parts.reduce((n,p)=>n+p.index.length/3,0)};
     }

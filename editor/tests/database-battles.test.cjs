@@ -1578,3 +1578,25 @@ test('a change of language with System 1 and Terms on screen relabels the Battle
     assert.deepEqual(words(), english, 'back in English every word is the one the page was drawn with');
     assert.equal(music.textContent, 'Battle', 'and the Music card\'s row is still its own word');
 });
+
+test('the card holds how height adds to a shot\'s reach: stored only when it is not the game\'s own, and the game reads it', () => {
+    const system = { reactorBattle: { mode: 'tactical', turns: 'team' } };
+    const { field } = battles(system);
+    assert.equal(field('.system-battle-height-levels').value, '2', 'a tile for every two levels');
+    assert.equal(field('.system-battle-height-most').value, '3', 'up to three');
+    field('.system-battle-height-levels').choose('1');
+    field('.system-battle-height-most').choose('6');
+    assert.deepEqual(plain(system.reactorBattle), { mode: 'tactical', turns: 'team', heightReach: { levels: 1, most: 6 } });
+    const F = fightWorld({ system: plain(system), tactical: true }).ReactorFight;
+    assert.equal(F.reachAt({ min: 2, max: 7 }, 6, 0), 13, 'a rifle six levels up reaches six tiles further');
+    // Held to the limits; back to the game's own stores nothing.
+    field('.system-battle-height-levels').choose('0');
+    assert.equal(system.reactorBattle.heightReach.levels, 1);
+    field('.system-battle-height-levels').choose('2');
+    field('.system-battle-height-most').choose('3');
+    assert.deepEqual(plain(system.reactorBattle), { mode: 'tactical', turns: 'team' });
+    // A stored rule is shown.
+    const shown = battles({ reactorBattle: { mode: 'tactical', turns: 'team', heightReach: { levels: 3, most: 0 } } });
+    assert.equal(shown.field('.system-battle-height-levels').value, '3');
+    assert.equal(shown.field('.system-battle-height-most').value, '0');
+});

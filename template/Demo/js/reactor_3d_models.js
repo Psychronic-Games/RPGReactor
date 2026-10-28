@@ -2579,6 +2579,17 @@ Reactor3D.textureCap = function() {
     return cap;
 };
 
+/**
+ * How sharply a model's picture is filtered where it is seen at a slant (the Tactical and the map's
+ * camera look down on every model): at 1 (three's default) a 2048 outfit sheet's trim and panel lines
+ * blur into its mean colour a short way off; the Character Builder draws at 4. Two on a weak GPU.
+ */
+Reactor3D.MODEL_ANISOTROPY = 4;
+Reactor3D.modelAnisotropy = function() {
+    const weak = typeof this.isWeakGpu === "function" && this.isWeakGpu();
+    return Math.max(1, Math.floor(weak ? Math.min(2, this.MODEL_ANISOTROPY) : this.MODEL_ANISOTROPY));
+};
+
 /** The main-thread twin of capBitmapSize for images decoded by the browser: a canvas at the capped size. */
 Reactor3D.capImage = function(image) {
     // Only a picture the browser draws: a compressed texture's levels are capped where they are transcoded.
@@ -3333,6 +3344,8 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
         child.position.y -= box.min.y;
         child.position.z -= center.z;
     }
+    // What the recentring moved the model by: worn equipment fits by the file's own coordinates (Reactor3D.Worn).
+    root.userData.glbRecentre = [-center.x, -box.min.y, -center.z];
     root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
     root.userData.glbTextures = textures;
     return root;
@@ -3810,6 +3823,8 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         }
     }
     const usedBitmaps = new Set();
+    // The Character and Prop Builders choose each part's metal: theirs shows as it does in the Builder.
+    const fromBuilder = Reactor3D.isBuilderGlb(json);
     const materials = (json.materials || []).map((def, materialIndex) => {
         if (!usedMaterials.has(materialIndex)) return null;
         const specgloss = def.extensions && def.extensions.KHR_materials_pbrSpecularGlossiness;
@@ -3831,7 +3846,7 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         const texInfo = pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture);
         const map = this._loadGlbTexture(
             json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps);
-        if (map) mat.map = map;
+        if (map) { map.anisotropy = this.modelAnisotropy(); mat.map = map; }
         // Its normal map, where it shares the picture's coordinates: lit by which way each texel faces
         // (Reactor3D.MODEL_FACING). Kept linear; a block-compressed copy is left out (its format is a color's).
         const normalInfo = def.normalTexture;
@@ -3842,7 +3857,8 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
             if (normal && !normal.isCompressedTexture) {
                 normal.colorSpace = THREE.NoColorSpace || "";
                 normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
-                normal.needsUpdate = true;
+                // A picture still decoding is uploaded when it arrives (_loadGlbTexture): marked now, it is nothing to upload.
+                if (normal.image) normal.needsUpdate = true;
                 mat.userData.rrNormalMap = normal;
                 mat.userData.rrNormalUv1 = true;
                 // glTF's green points up the picture, against +v: the frame's v runs the other way.
@@ -3853,7 +3869,7 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
             const normal = this._loadGlbTexture(json, bin, normalInfo, baseUrl, textures, bitmaps, usedBitmaps);
             if (normal && !normal.isCompressedTexture) {
                 normal.colorSpace = THREE.NoColorSpace || "";
-                normal.needsUpdate = true;
+                if (normal.image) normal.needsUpdate = true;
                 mat.userData.rrNormalMap = normal;
                 const k = normalInfo.scale != null ? Number(normalInfo.scale) : 1;
                 mat.userData.rrNormalScale = new THREE.Vector2(k, k);
@@ -3876,12 +3892,15 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         // Hair, as the Character Builder names it: a strand sheen over the light.
         if (/^(Hair|Beard)\b/.test(String(def.name || ""))) mat.userData.rrHair = true;
         // A file's own polished metal is remembered as a starting point for its
-        // Surface; nothing reflects until the model's surface says so.
+        // Surface; nothing reflects until the model's surface says so, but a
+        // Builder's file, whose metal parts shine as they did there
+        // (Reactor3D.applyModelSurface).
         const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
         const roughness = pbr.roughnessFactor != null ? pbr.roughnessFactor : 1;
         if (metallic > 0.25 && roughness < 0.65) {
             const round = v => Math.round(v * 100) / 100;
             mat.userData.glbShine = { reflect: round(Math.max(0.2, metallic * (1 - roughness * 0.65))), gloss: round(1 - roughness), metal: round(metallic), tint: "#ffffff" };
+            if (fromBuilder) mat.userData.glbShineOwn = true;
         }
         return mat;
     });
@@ -4010,6 +4029,8 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         child.position.y -= box.min.y;
         child.position.z -= center.z;
     }
+    // What the recentring moved the model by: worn equipment fits by the file's own coordinates (Reactor3D.Worn).
+    root.userData.glbRecentre = [-center.x, -box.min.y, -center.z];
     // Each mesh remembers its place in the flattened order, so a distance
     // level built from the same file (same nodes, same order) can hand it
     // a coarser geometry by index. A number, so clones keep it.
@@ -4349,6 +4370,7 @@ Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) 
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     content.position.set(-center.x, -box.min.y, -center.z);
+    root.userData.glbRecentre = [-center.x, -box.min.y, -center.z];
     root.updateMatrixWorld(true);
     root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
     root.userData.glbTextures = textures;
@@ -5561,6 +5583,155 @@ Reactor3D.attachLibraryMotions = function(root, rig) {
     root.__reactorClips = own.concat(clips);
     // The rig's own bones follow the clips as a file's do, and a pose bends them from the clip's pose.
     for (const joint of skeleton.joints) if (joint.node.isBone) joint.node.userData.__reactorClipBone = true;
+};
+
+/**
+ * Worn equipment on a rigged humanoid: an armor (or accessory) whose 3D
+ * model (Database › Armors, `Database.r3d.json` › armors) is a Prop
+ * Builder wearable is put on whoever wears it, on the map and in a battle
+ * on it. The prop's model.json says where it is worn (`wear`: the rig part
+ * that carries it, `part`, and the reference body's joints, `joints`, in
+ * the model's own coordinates); the same part of the wearer, measured at
+ * rest when its model was made, takes it: the part's line from joint to
+ * joint matched in direction and length, the binding's scale and turn
+ * (degrees) laid over that, and the prop held by the part's bone so it
+ * moves with every motion. A Grappler worn this way is the one a
+ * Tactical grapple fires (Rope.grapplerOf finds its harpoon).
+ */
+Reactor3D.Worn = {
+    /** Each rig part's next joint along the body; a part at an end (the head, a hand, a foot) runs on past its own. */
+    NEXT: { Hips: "Spine", Spine: "Chest", Chest: "Neck", Neck: "Head",
+        LeftUpperArm: "LeftLowerArm", LeftLowerArm: "LeftHand", RightUpperArm: "RightLowerArm", RightLowerArm: "RightHand",
+        LeftUpperLeg: "LeftLowerLeg", LeftLowerLeg: "LeftFoot", RightUpperLeg: "RightLowerLeg", RightLowerLeg: "RightFoot" },
+    END: { Head: ["Neck", 1], LeftHand: ["LeftLowerArm", 0.4], RightHand: ["RightLowerArm", 0.4], LeftFoot: ["LeftLowerLeg", 0.5], RightFoot: ["RightLowerLeg", 0.5] },
+    /** How often (frames) a party member's equipment is looked at for a change. */
+    CHECK_EVERY: 10,
+
+    /** A rig part's line, [from, to] as arrays, out of a table of joints ({ part: [x, y, z] }); null when the joints are not there. */
+    segment(joints, part) {
+        const at = joints && joints[part];
+        if (!at) return null;
+        let next = this.NEXT[part];
+        if (part === "Spine" && !joints.Chest) next = "Neck";
+        if (part === "Hips" && !joints.Spine) next = "Chest";
+        if (next && joints[next]) return [at, joints[next]];
+        const end = this.END[part], before = end && joints[end[0]];
+        if (!before) return null;
+        return [at, [0, 1, 2].map(k => at[k] + (at[k] - before[k]) * end[1])];
+    },
+
+    /** A model's rig at rest, as worn equipment needs it: each part's joint and its bone's matrix, in the model's frame. Null without a rig. */
+    rest(object) {
+        if (!object || typeof THREE === "undefined") return null;
+        object.updateMatrixWorld(true);
+        const unworld = new THREE.Matrix4().copy(object.matrixWorld).invert(), joints = {}, bones = {};
+        object.traverse(node => {
+            const part = node.userData && node.userData.__reactorRigBone && node.userData.parts && node.userData.parts[0];
+            if (!part || bones[part.name]) return;
+            const local = new THREE.Matrix4().multiplyMatrices(unworld, node.matrixWorld);
+            bones[part.name] = { node, local };
+            joints[part.name] = new THREE.Vector3().setFromMatrixPosition(local).toArray();
+        });
+        return Object.keys(bones).length ? { joints, bones } : null;
+    },
+
+    /** The actor a character shows: the party leader for the player, a follower's own; null for anyone else. */
+    actorOf(character) {
+        if (typeof Game_Player !== "undefined" && character instanceof Game_Player) return typeof $gameParty !== "undefined" && $gameParty ? $gameParty.leader() : null;
+        if (typeof Game_Follower !== "undefined" && character instanceof Game_Follower) return character.actor ? character.actor() : null;
+        return null;
+    },
+
+    /** The armors an actor wears that have a model: [{ id, spec }]. */
+    wornBy(actor) {
+        const out = [];
+        if (!actor || typeof actor.armors !== "function") return out;
+        for (const armor of actor.armors()) {
+            const spec = armor ? Reactor3D.databaseModelSpec("armors", armor.id) : null;
+            if (spec && spec.name) out.push({ id: armor.id, spec });
+        }
+        return out;
+    },
+
+    /**
+     * Keeps what a character's model wears in step with its actor's armors: called each frame after the motion
+     * pass; looks every CHECK_EVERY frames, and changes nothing unless the list changed. `scene` (a MapScene) takes
+     * the new materials into its lighting.
+     */
+    update(holder, character, scene) {
+        if (!holder || !holder.object || !holder.wornRest) return;
+        const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+        if (holder.wornAt !== undefined && frame - holder.wornAt < this.CHECK_EVERY && frame >= holder.wornAt) return;
+        holder.wornAt = frame;
+        const list = this.wornBy(this.actorOf(character));
+        const key = list.map(entry => entry.id + ":" + Reactor3D.modelCacheKey(entry.spec.name, entry.spec.ext, entry.spec.file)
+            + ":" + [entry.spec.scale, entry.spec.yaw, entry.spec.pitch, entry.spec.roll].join(",")).join("|");
+        if (key === (holder.wornKey || "")) return;
+        this.clear(holder);
+        holder.wornKey = key;
+        for (const entry of list) {
+            Promise.all([Reactor3D.loadModel(entry.spec.name, entry.spec.ext, entry.spec.file), Reactor3D.loadModelSidecar(entry.spec.name)]).then(([template, json]) => {
+                if (holder.wornKey !== key || !template || !holder.object) return;
+                const worn = this.put(holder, template, json, entry.spec, scene);
+                if (worn) (holder.worn || (holder.worn = [])).push(worn);
+            }).catch(error => console.warn("Reactor3D: worn equipment could not be put on.", error));
+        }
+    },
+
+    /** Takes off everything a model wears. */
+    clear(holder) {
+        for (const worn of holder.worn || []) if (worn.parent) worn.parent.remove(worn);
+        holder.worn = [];
+        holder.wornKey = "";
+        // What the wearer fires a grapple from is looked for again.
+        holder._reactorGrappler = undefined;
+    },
+
+    /** Puts one prop on: the clone, held by the wearer's bone for its part; null when the prop or the wearer has no such part. */
+    put(holder, template, json, spec, scene) {
+        const wear = json && json.wear, rest = holder.wornRest;
+        const part = wear && typeof wear.part === "string" ? wear.part : "";
+        const from = this.segment(wear && wear.joints, part), to = this.segment(rest && rest.joints, part), bone = rest && rest.bones[part];
+        if (!from || !to || !bone) return null;
+        // The prop's joints are in its file's coordinates; the loader moved the model to stand centred on its origin.
+        const shift = Array.isArray(template.userData.glbRecentre) ? template.userData.glbRecentre : [0, 0, 0];
+        const V = (a, by) => new THREE.Vector3(a[0] + (by ? by[0] : 0), a[1] + (by ? by[1] : 0), a[2] + (by ? by[2] : 0));
+        const pa = V(from[0], shift), pd = V(from[1], shift).sub(pa), wa = V(to[0]), wd = V(to[1]).sub(wa);
+        const pl = pd.length(), wl = wd.length();
+        if (!(pl > 1e-6) || !(wl > 1e-6)) return null;
+        const scale = wl / pl * (Number(spec.scale) > 0 ? Number(spec.scale) : 1);
+        const turn = new THREE.Quaternion().setFromUnitVectors(pd.normalize(), wd.normalize());
+        const deg = Math.PI / 180, adjust = new THREE.Quaternion().setFromEuler(new THREE.Euler((Number(spec.pitch) || 0) * deg, (Number(spec.yaw) || 0) * deg, (Number(spec.roll) || 0) * deg, "YXZ"));
+        // x → wa + scale · turn · adjust · (x − pa), in the wearer's frame; then into its bone's.
+        const place = new THREE.Matrix4().compose(wa, turn.multiply(adjust), new THREE.Vector3(scale, scale, scale))
+            .multiply(new THREE.Matrix4().makeTranslation(-pa.x, -pa.y, -pa.z));
+        const worn = Reactor3D.cloneModelTemplate(template);
+        worn.position.set(0, 0, 0); worn.quaternion.identity(); worn.scale.set(1, 1, 1);
+        new THREE.Matrix4().copy(bone.local).invert().multiply(place).decompose(worn.position, worn.quaternion, worn.scale);
+        worn.name = "Worn " + (spec.file || spec.name);
+        worn.userData.reactorWorn = true;
+        worn.traverse(child => {
+            if (child.isMesh) child.frustumCulled = false;
+            const mats = child.material ? (Array.isArray(child.material) ? child.material : [child.material]) : [];
+            for (const mat of mats) {
+                mat.__reactorModel = true;
+                mat.fog = false;
+                if (mat.color && !mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
+                if (typeof Reactor3D.litMaterial === "function") Reactor3D.litMaterial(mat);
+                if (scene && scene._materials && scene._materials.indexOf(mat) < 0) scene._materials.push(mat);
+            }
+        });
+        // A Builder prop's metal shines as it did there (no Surface of its own on a worn prop).
+        Reactor3D.applyModelSurface(worn, null);
+        bone.node.add(worn);
+        // It casts as its wearer does, drawn into the shadow rows with a depth material: with its own (lit) one it
+        // would sample the shadow atlas it is being drawn into, a feedback loop GL refuses every frame.
+        const casting = holder.object.userData.reactorShadowCaster;
+        if (casting && Reactor3D.Shadows && Reactor3D.Shadows.markCaster) Reactor3D.Shadows.markCaster(holder.object, casting === "dynamic");
+        holder._reactorGrappler = undefined;
+        if (scene) scene._ambientLevel = undefined;
+        return worn;
+    }
 };
 
 /** The rules that play a model's library motions (attachLibraryMotions) in the states `list` leaves open. */
@@ -9718,13 +9889,17 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // (A rider with no riding clip plays its riding motion, the rig's own Ride, from the rest pose.)
             const stateMotion = riding ? !ride && procedural("riding") : !jump && !swim && ((state.climbing && procedural("climbing"))
                 || (state.swimming && procedural(moving ? "swimming" : "treading")) || (state.airborne && procedural("jumping")));
+            const gait = ride || jump || swim || stateMotion || riding || !moving ? null
+                : (dashing ? pick("dashing") : pick("walking")) || pick("moving");
             const rule = ride || jump || swim || stateMotion ? null : (riding ? null : moving
-                ? (dashing ? pick("dashing") : pick("walking")) || pick("moving")
+                ? gait
                 : pick("idle")) || pick("always");
             if (rule) {
                 desired = rule.clip;
                 key = rule.clip;
-                rate = rule.rate || 1;
+                // A gait's steps keep up with the ground: a follower catching up a notch faster than the
+                // leader steps twice as fast, not the same walk sliding over twice the ground (gaitPace).
+                rate = (rule.rate || 1) * (rule === gait && state.pace > 0 ? state.pace : 1);
             }
         }
         // Under a pose the idle plays its first frame and stays there: a
@@ -10563,6 +10738,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
         frame = this.advanceModelAction(state, character, frame);
         this.applyModelAnimation(state.binding, state.rules, {
             frame,
+            pace: Reactor3D.gaitPace(character),
             moving: !!(character.isMoving && character.isMoving()) || distance > 0.0001,
             dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower
                 ? $gamePlayer.isDashing()
@@ -10669,8 +10845,19 @@ Reactor3D.readModelSurface = function(json) {
     };
 };
 
-/** Give one lit material a surface (or take it away), recompiling only when it starts or stops shining. */
-Reactor3D.setMaterialShine = function(material, surface) {
+/** Whether a GLB was saved by the Character Builder or the Prop Builder (they write the one generator). */
+Reactor3D.isBuilderGlb = function(json) {
+    return !!(json && json.asset && json.asset.generator === "RPG Reactor Character Builder");
+};
+
+/**
+ * Give one lit material a surface (or take it away), recompiling only when it
+ * starts or stops shining. `studio`: it reflects the studio light only, as a
+ * Builder's metal does in the Builder, and does not ask for the live capture
+ * of the world (a cube face drawn every frame); one that something else asked
+ * for, it shows too.
+ */
+Reactor3D.setMaterialShine = function(material, surface, studio) {
     if (!material || typeof THREE === "undefined") return;
     const shines = !!surface && surface.reflect > 0;
     const had = !!this.shineOf(material);
@@ -10681,7 +10868,10 @@ Reactor3D.setMaterialShine = function(material, surface) {
         const shine = material.userData.rrShine;
         shine.vector.set(surface.reflect, 1 - surface.gloss, surface.metal, Number(surface.texture) || 0);
         shine.tint.set(surface.tint || "#ffffff");
-        if (this.Reflections) { this.Reflections.wanted = true; this.Reflections.hook(material); }
+        // A Builder's metal reflects in its own colour (Reactor3D.injectShine › rrShineAlbedo).
+        if (!shine.albedo || typeof shine.albedo !== "object") shine.albedo = { value: 0 };
+        shine.albedo.value = studio ? 1 : 0;
+        if (this.Reflections) { if (!studio) this.Reflections.wanted = true; this.Reflections.hook(material); }
     } else if (material.userData.rrShine) {
         material.userData.rrShine.vector.x = 0;
     }
@@ -10692,14 +10882,27 @@ Reactor3D.setMaterialShine = function(material, surface) {
     if (had !== shines) { material.dispose(); material.needsUpdate = true; }
 };
 
-/** A model's surface on every lit material it has; with none, nothing reflects. */
+/**
+ * How much of a Builder metal part's own colour stays under its reflection (a Surface's `texture`): the
+ * reflection glazes it rather than replacing it, so a dark place (a night map reflects next to nothing)
+ * never leaves the metal darker than its paint, and the light there is (the sun, lamps, the editor's studio)
+ * shines on it.
+ */
+Reactor3D.BUILDER_METAL_KEEP = 0.7;
+
+/**
+ * A model's surface on every lit material it has. With none, nothing
+ * reflects but a Builder's metal parts, each as its file says (`glbShineOwn`).
+ */
 Reactor3D.applyModelSurface = function(object, surface) {
     if (!object || typeof THREE === "undefined") return;
     object.traverse(node => {
         if (!node.isMesh || !node.material) return;
         for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
             if (!material.__reactorLit) continue;
-            this.setMaterialShine(material, surface || null);
+            if (surface) this.setMaterialShine(material, surface);
+            else if (material.userData.glbShineOwn && material.userData.glbShine) this.setMaterialShine(material, Object.assign({}, material.userData.glbShine, { texture: this.BUILDER_METAL_KEEP }), true);
+            else this.setMaterialShine(material, null);
         }
     });
 };
@@ -11798,6 +12001,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 current.object = object;
                 current.binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
                 Reactor3D.bindModelLandmarks(object, Reactor3D.readModelLandmarks(sidecar));
+                // Its rig at rest, before any motion moves it: what worn equipment is fitted to (Reactor3D.Worn).
+                current.wornRest = rig && Reactor3D.partyCharacter(character) ? Reactor3D.Worn.rest(object) : null;
                 current.rules = sidecar ? Reactor3D.readModelAnimationRules(sidecar, object.__reactorClips) : [];
                 current.effects = sidecar ? Reactor3D.readModelEffects(sidecar, spec) : [];
                 current.variant = spec.variant || "";
@@ -11931,6 +12136,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             if (Reactor3D.updateModelFlash(holder)) this._ambientLevel = undefined;
             Reactor3D.applyModelAnimation(holder.binding, holder.rules, {
                 frame,
+                pace: Reactor3D.gaitPace(character),
                 moving: !!(character.isMoving && character.isMoving()) || distance > 0.0001,
                 // Followers keep the party leader's gait: their own
                 // isDashing is the CharacterBase stub and never true.
@@ -11951,6 +12157,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 action: holder.action || null
             });
         }
+        // What the party member wears (Database › Armors' models), kept in step with its equipment.
+        if (holder.wornRest) Reactor3D.Worn.update(holder, character, this);
         // After the animation pass: a clip writes every bone each frame, so
         // the look's lean goes on top of whatever the head was doing.
         if (!character._reactorRagdoll && holder.sampled !== false) Reactor3D.applyLookLean(object, character);
@@ -12675,6 +12883,18 @@ Reactor3D.characterFeet = function(c) {
 
 /** How tall a model's moves are authored against: the Database preview shows every model as tall as a character. */
 Reactor3D.MOVE_REFERENCE_TILES = 3;
+
+/**
+ * How fast a character's gait clip plays against its own speed: a follower
+ * moving at another speed than the leader whose gait it takes (a notch
+ * faster while it catches up, Game_Followers.rrPace) steps in proportion;
+ * anyone else, 1.
+ */
+Reactor3D.gaitPace = function(character) {
+    if (typeof Game_Follower === "undefined" || !(character instanceof Game_Follower) || typeof $gamePlayer === "undefined" || !$gamePlayer) return 1;
+    const own = character.realMoveSpeed ? character.realMoveSpeed() : 0, lead = $gamePlayer.realMoveSpeed ? $gamePlayer.realMoveSpeed() : 0;
+    return Number.isFinite(own - lead) ? Math.max(0.5, Math.min(2, Math.pow(2, own - lead))) : 1;
+};
 
 /** The player or a follower (their moves are tuned as they are). */
 Reactor3D.partyCharacter = function(character) {

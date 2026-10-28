@@ -152,6 +152,31 @@ test('Dismount leaves the vehicle parked and in the way; Mount takes it again', 
     assert.deepEqual([second.mount, follower._rrSeated, list(follower._rrRide), other._rrBoarded], [32, true, { map: 1, id: 32 }, true]);
 });
 
+test('Mount is offered beside any part of a long vehicle, not only beside its middle', () => {
+    // Reach was read from the vehicle's middle: a motorcycle lies several tiles long, so only the tiles beside its
+    // middle were in reach, and in North Haven those were taken by the next motorcycle parked beside it.
+    const w = world(), fight = begin(w), e = w.vehicle(31), R = w.Reactor3D, M = w.V.Mount, p = w.$gamePlayer;
+    const unit = menuOf(w, 1);
+    assert.equal(fight.commandDismount(), true);
+    const covered = [];
+    for (let y = e.y - 4; y <= e.y + 4; y++) for (let x = e.x - 4; x <= e.x + 4; x++) if (R.eventModelOccupies(e, x, y)) covered.push([x, y]);
+    assert.ok(covered.length >= 3, 'the motorcycle covers several tiles: ' + JSON.stringify(covered));
+    const isCovered = (x, y) => covered.some(c => c[0] === x && c[1] === y);
+    let end = null;
+    for (const [x, y] of covered) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const tx = x + dx, ty = y + dy;
+        if (!isCovered(tx, ty) && Math.hypot(tx - e._realX, ty - e._realY) > M.REACH + 0.2 && !fight.cellTaken(tx, ty)) end = end || [tx, ty];
+    }
+    assert.ok(end, 'a free tile against one end of it, out of reach of its middle');
+    p.locate(end[0], end[1]);
+    assert.deepEqual(symbols(fight, unit), ['mount'], 'beside its end at ' + end);
+    assert.equal(fight.commandMount(), true);
+    assert.equal(unit.mount, 31);
+    assert.equal(fight.commandDismount(), true);
+    p.locate(e.x, e.y + 4);
+    assert.deepEqual(symbols(fight, unit), [], 'two tiles off its body there is nothing to get on');
+});
+
 test('Attack by one who rides a vehicle that can attack asks whose attack: the vehicle\'s is made with its strength', () => {
     const w = world(), p = w.$gamePlayer, fight = begin(w), battler = w.V.battler(31), leader = w.$gameParty.leader();
     assert.equal(fight.commandSelectUnit(1), true);

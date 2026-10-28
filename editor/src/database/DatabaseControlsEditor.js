@@ -46,12 +46,12 @@ class DatabaseControlsEditor {
         ['viewLeft', 'Turn the view left'], ['viewRight', 'Turn the view right'],
         ['panUp', 'Move the view up'], ['panDown', 'Move the view down'], ['panLeft', 'Move the view left'], ['panRight', 'Move the view right'],
         ['level', 'Cursor to the next level'],
-        ['unit', 'Back to the acting unit'], ['skip', "End a unit's turn (hold: fast-forward)"]
+        ['unit', 'Back to the acting unit'], ['skip', "End a unit's turn (hold: fast-forward)"], ['grapple', 'Show where the grapple reaches']
     ];
     static TACTICAL_SYMBOLS = { viewLeft: 'pageup', viewRight: 'pagedown', level: 'control', unit: 'tab', skip: 'shift' };
-    static TACTICAL_VIEW_KEYS = { 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 69: 'viewRight' };
+    static TACTICAL_VIEW_KEYS = { 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 69: 'viewRight', 71: 'grapple' };
     static TACTICAL_VIEW_STOCK = { 87: 'pagedown' };
-    static DEFAULT_TACTICAL_KEYS = { 33: 'viewLeft', 81: 'viewLeft', 34: 'viewRight', 69: 'viewRight', 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 17: 'level', 18: 'level', 9: 'unit', 16: 'skip' };
+    static DEFAULT_TACTICAL_KEYS = { 33: 'viewLeft', 81: 'viewLeft', 34: 'viewRight', 69: 'viewRight', 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 17: 'level', 18: 'level', 9: 'unit', 16: 'skip', 71: 'grapple' };
     static DEFAULT_TACTICAL_BUTTONS = { 4: 'viewLeft', 5: 'viewRight', 2: 'skip', 11: 'level', 10: 'unit' };
     // The keys of `reactorControls` this page writes; any other (look speed, a hand-written key) is kept as it is.
     static MANAGED = ['keys', 'gamepad', 'jump', 'jumpKeys', 'jumpButtons', 'actionKeys', 'actionButtons', 'tacticalKeys', 'tacticalButtons'];

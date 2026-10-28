@@ -250,6 +250,78 @@ test('a grapple pulls its wearer up to a roof edge in reach: its own color in th
     assert.equal(F.grappleFor(fight, me), null, 'two uses a battle, both spent');
 });
 
+test('Grapple as a command: offered before the unit moves, the move range is then only the edges, the cursor on the nearest, Cancel back to the menu', () => {
+    // The grapple was only a teal cell in the move range, and the battle's cut opened the very roof it reached: there was
+    // no way to find it and the roof was hard to point at. The unit's menu now offers it.
+    const w = towerWorld({ battleClimb: false }), F = w.ReactorFight;
+    w.$dataArmors[1] = { id: 1, name: 'Grappler', atypeId: 1, etypeId: 5, traits: [], params: [0, 0, 0, 0, 0, 0, 0, 0], iconIndex: 0, price: 0, description: '', note: '',
+        rrGrapple: { range: 6, height: 10, uses: 0, cooldown: 0, cost: 'move', moveCost: 2 } };
+    const fight = begin(w), me = hero(w);
+    put(w, me, 3, 10, 0);
+    assert.ok(fight.commandSelectUnit(me.id));
+    fight._act.steps = 6;
+    const c = fight.character(me);
+    assert.ok(fight.commandMoveTo(c.x, c.y), 'stays: the menu');
+    assert.equal(fight._act.stage, 'command');
+    assert.equal(fight.canGrapple(me), false, 'nothing worn, no Grapple');
+    wear(w, fight.battler(me), w.$dataArmors[1]);
+    assert.equal(fight.canGrapple(me), true);
+    assert.equal(fight.commandGrapple(), true);
+    assert.deepEqual([fight._act.stage, fight._act.grappleOnly], ['move', true]);
+    const cells = Array.from(fight.moveCells());
+    assert.ok(cells.length > 0 && cells.every(cell => cell.grapple), 'only the edges');
+    const cursor = fight.cursor();
+    assert.deepEqual([cursor.x, cursor.y, cursor.h], [8, 10, 5], 'the cursor on the edge, at its height');
+    assert.equal(fight.commandMoveTo(4, 10, 0), false, 'a plain step is not a grapple');
+    assert.equal(fight.commandCancel(), true);
+    assert.deepEqual([fight._act.stage, fight._act.grappleOnly], ['command', undefined], 'back to the menu');
+    assert.ok(Array.from(fight.moveCells()).length === 0, 'out of the move stage');
+    assert.equal(fight.commandGrapple(), true);
+    assert.ok(fight.commandMoveTo(8, 10));
+    w.run(600, () => fight.tacticalState() === 'command');
+    assert.deepEqual([c.x, c.y, Math.round(c._reactorAlt * 100) / 100], [8, 10, 5], 'up on the roof');
+    assert.equal(fight._act.grappleOnly, undefined);
+    assert.equal(fight.canGrapple(me), false, 'moved: no Grapple');
+    assert.equal(F.term('grapple'), 'Grapple');
+});
+
+test('a grapple plays in beats: aim, the line out with slack, the hook bites and the slack draws up, then the pull; each beat its sound and its event', () => {
+    // The line was a straight rod from the first frame to the pull, and the pull began the moment the hook landed.
+    const w = towerWorld({ battleClimb: false }), F = w.ReactorFight, P = w.ReactorPhysics;
+    w.$dataArmors[1] = { id: 1, name: 'Grappler', atypeId: 1, etypeId: 5, traits: [], params: [0, 0, 0, 0, 0, 0, 0, 0], iconIndex: 0, price: 0, description: '', note: '',
+        rrGrapple: { range: 6, height: 10, uses: 0, cooldown: 0, cost: 'move', moveCost: 2,
+            sounds: { fire: { name: 'Grapple-01', volume: 90 }, bite: { name: 'Grapple-Bite' }, pull: { name: 'Grapple-Reel', pitch: 110 } } } };
+    const fight = begin(w), me = hero(w);
+    wear(w, fight.battler(me), w.$dataArmors[1]);
+    assert.deepEqual(plain(F.grappleOf(fight, me).sounds.pull), { name: 'Grapple-Reel', volume: 90, pitch: 110, pan: 0 });
+    put(w, me, 3, 10, 0);
+    const played = [], beats = [];
+    w.AudioManager.playSe = se => played.push(se.name);
+    w.ReactorEvents.on('fightGrappleBeat', payload => beats.push(payload.phase));
+    assert.ok(fight.commandSelectUnit(me.id));
+    fight._act.steps = 6;
+    assert.ok(fight.commandMoveTo(8, 10, 5));
+    const c = fight.character(me), hook = {}, seen = [];
+    let slackFly = 0, slackBite = 1, pulledBefore = false;
+    w.run(700, () => {
+        const h = P.grappleHook(c, hook);
+        if (h) {
+            if (seen[seen.length - 1] !== h.phase) seen.push(h.phase);
+            if (h.phase === 'fly') slackFly = Math.max(slackFly, h.slack);
+            if (h.phase === 'tight') slackBite = Math.min(slackBite, h.slack);
+            if (h.phase !== 'pull' && c._realX > 3.05) pulledBefore = true;
+        }
+        return fight.tacticalState() === 'command';
+    });
+    assert.deepEqual(seen, ['aim', 'fly', 'tight', 'pull'], 'the beats, in order');
+    assert.ok(slackFly > 0.9, 'the line flies out slack');
+    assert.ok(slackBite < 0.15, 'and is drawn taut before the pull');
+    assert.equal(pulledBefore, false, 'nothing moves the body before the pull');
+    assert.deepEqual(beats, ['aim', 'fly', 'tight', 'pull', 'climb', 'done']);
+    assert.deepEqual(played, ['Grapple-01', 'Grapple-Bite', 'Grapple-Reel'], 'a sound on the shot, the bite and the pull');
+    assert.deepEqual([c.x, c.y, Math.round(c._reactorAlt * 100) / 100], [8, 10, 5]);
+});
+
 test('a grapple that costs the action: free to move after it, and the turn ends where the way does; the AI weighs no action from there', () => {
     const w = towerWorld({ battleClimb: false }), F = w.ReactorFight, G = F.Grid;
     w.$dataArmors[1] = { id: 1, name: 'Grappler', atypeId: 1, etypeId: 5, traits: [], params: [0, 0, 0, 0, 0, 0, 0, 0], iconIndex: 0, price: 0, description: '', note: '',

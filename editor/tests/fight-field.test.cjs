@@ -525,3 +525,30 @@ test('a HUD panel knows when it covers a unit or the cursor: on a small map the 
     fight.setCursor(10, 6);
     assert.equal(U.covers(fight, cx + 2, cy + 2, tw - 4, th - 4), true, 'over the cursor');
 });
+
+test('the action under the menu\'s cursor shows its reach: a greyed Attack with nobody near still says how far it would shoot', () => {
+    const w = world({ events: [unit(1, 15, 2, 'enemy 1')] });
+    w.$dataEnemies[1].params[0] = 500;
+    w.$dataSkills[1].note = '<range: 2-4>';
+    const F = w.ReactorFight, M = F.Marks, K = M.KINDS, fight = begin(w), me = hero(w);
+    assert.ok(fight.commandSelectUnit(me.id));
+    assert.ok(fight.commandMoveTo(2, 2));
+    assert.equal(fight.tacticalState(), 'command');
+    assert.equal(fight.commandReason('attack'), 'whyNoReach', 'greyed: nobody within 4');
+    M.collect(fight);
+    assert.deepEqual(kindsAt(M, 6, 2), [], 'nothing highlighted, nothing shown');
+    // The cursor on Attack: its reach from here, 2 to 4 tiles, with nobody in it.
+    fight.setPreview('skill', fight.battler(me).attackSkillId());
+    M.collect(fight);
+    assert.deepEqual(kindsAt(M, 6, 2), [K.range], 'four tiles away');
+    assert.deepEqual(kindsAt(M, 2, 4), [K.range], 'two');
+    assert.deepEqual(kindsAt(M, 7, 2), [], 'five: out of reach');
+    assert.deepEqual(kindsAt(M, 3, 2), [], 'one: nearer than it shoots');
+    // Off Attack (Wait), nothing again; and the preview is the menu's only.
+    fight.setPreview('', 0);
+    M.collect(fight);
+    assert.deepEqual(kindsAt(M, 6, 2), []);
+    fight.setPreview('skill', fight.battler(me).attackSkillId());
+    assert.ok(fight.commandCancel());
+    assert.equal(fight.previewCells().length, 0, 'gone with the menu');
+});

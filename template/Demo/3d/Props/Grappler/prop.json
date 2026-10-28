@@ -1,0 +1,24 @@
+{
+  "builder": "prop",
+  "version": 1,
+  "recipe": {
+    "kind": "accessory",
+    "accessory": {
+      "id": "grappler",
+      "color": "#3d434a",
+      "color2": "#c4762a",
+      "shape": "tactical",
+      "size": 1
+    },
+    "scale": 1,
+    "pairGap": 0.025,
+    "pivot": "attachment",
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "material": "original",
+    "materials": {}
+  }
+}

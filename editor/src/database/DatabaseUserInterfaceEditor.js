@@ -5416,7 +5416,7 @@ class DatabaseUserInterfaceEditor {
                 html += this.row('', this.checkControl('p-commandIcons', node.commandIcons !== false, tt('Icons on Overwatch, Wait and End Turn')),
                     tt('Shown where Attack, Skill and Item carry icons. Blank words follow the case of those three.'));
                 html += `<div class="rr-ui-sub"${node.commandIcons !== false ? '' : ' hidden'}>`;
-                for (const [key, label] of [['mountIcon', 'Mount'], ['dismountIcon', 'Dismount'], ['overwatchIcon', 'Overwatch'], ['waitIcon', 'Wait'], ['endTurnIcon', 'End Turn'], ['autoIcon', 'Auto']]) {
+                for (const [key, label] of [['mountIcon', 'Mount'], ['dismountIcon', 'Dismount'], ['grappleIcon', 'Grapple'], ['overwatchIcon', 'Overwatch'], ['waitIcon', 'Wait'], ['endTurnIcon', 'End Turn'], ['autoIcon', 'Auto']]) {
                     html += this.row(tt(label), `<div class="rr-ui-icon-slot" data-icon-key="${key}"></div>`);
                 }
                 html += '</div>';

@@ -403,9 +403,9 @@ test('each card\'s Automatic clears its own tags and leaves the other card\'s ta
     const ptbs = '<PTBS>\nscope: circle(3,0)\n</PTBS>';
     assert.equal(resetNote('shared', 'skill', ptbs + '\n<range: 5>'), ptbs);
     assert.equal(resetNote('shared', 'weapon', 'Plain.\r\nTwo lines.'), 'Plain.\r\nTwo lines.');
-    assert.deepEqual(T.ownTags('shared', 'weapon'), ['range', 'area', 'los']);
+    assert.deepEqual(T.ownTags('shared', 'weapon'), ['range', 'area', 'los', 'heightReach']);
     assert.deepEqual(T.ownTags('action', 'weapon'), ['fireRate', 'magazine', 'reload', 'spread', 'combo', 'projectile']);
-    assert.deepEqual([T.ownTags('shared', 'skill'), T.ownTags('action', 'item'), T.ownTags('tactical', 'enemy'), T.ownTags('action', 'enemy')], [['range', 'area', 'los'], ['cooldown'], ['move', 'jump'], []]);
+    assert.deepEqual([T.ownTags('shared', 'skill'), T.ownTags('action', 'item'), T.ownTags('tactical', 'enemy'), T.ownTags('action', 'enemy')], [['range', 'area', 'los', 'heightReach'], ['cooldown'], ['move', 'jump'], []]);
 });
 
 test('each card\'s title line says what the record does in its kind of battle, with "Automatic:" while nothing is set there', () => {

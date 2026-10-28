@@ -139,7 +139,7 @@ class BattleTestConfigModal {
 
     close() {
         if (this.modal && this.modal.parentNode) {
-            document.body.removeChild(this.modal);
+            this.modal.remove();
         }
         // The party assembled here is the battle test party whether or not a test was started, so the troop preview can field it.
         const system = this.databaseManager?.getSystem?.();

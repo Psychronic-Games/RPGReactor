@@ -1706,8 +1706,14 @@
     // to it, and the climb over onto the top (a mantle from where the body
     // hangs). Plain data on the character (`_reactorGrapple`), as a mantle is.
 
-    /** Frames the line flies before the pull; tiles a frame the pull carries the body; how far under the edge it hangs. */
-    ReactorPhysics.GRAPPLE_SHOT = 16;
+    /**
+     * A grapple's beats, in frames: the wearer raises its arm to the edge (AIM), the line flies out with slack behind
+     * it (SHOT), the hook bites and the slack is drawn up until the line stands taut (TIGHT), then the pull. Tiles a
+     * frame the pull carries the body; how far under the edge it hangs.
+     */
+    ReactorPhysics.GRAPPLE_AIM = 12;
+    ReactorPhysics.GRAPPLE_SHOT = 20;
+    ReactorPhysics.GRAPPLE_TIGHT = 14;
     ReactorPhysics.GRAPPLE_SPEED = 0.22;
     ReactorPhysics.GRAPPLE_HANG = 2.4;
     /** The lowest top worth a grapple, over the feet: anything lower is hopped or mantled. */
@@ -1789,7 +1795,8 @@
         const sx = Number.isFinite(character._realX) ? character._realX : character.x, sy = Number.isFinite(character._realY) ? character._realY : character.y;
         const hang = Math.max(from, lip - this.GRAPPLE_HANG);
         const pull = Math.max(12, Math.round(Math.hypot(bx - sx, by - sy, hang - from) / this.GRAPPLE_SPEED));
-        character._reactorGrapple = { x: step.x, y: step.y, d: step.d, bx, by, hx, hy, sx, sy, from, to: step.height, lip, hang, t: 0, shot: this.GRAPPLE_SHOT, pull };
+        character._reactorGrapple = { x: step.x, y: step.y, d: step.d, bx, by, hx, hy, sx, sy, from, to: step.height, lip, hang, t: 0,
+            aim: this.GRAPPLE_AIM, shot: this.GRAPPLE_SHOT, tight: this.GRAPPLE_TIGHT, pull };
         character._reactorVz = 0; character._reactorLeap = false; character._reactorOnLadder = false; character._reactorSwim = false; character._reactorPeak = undefined;
         if (character.setDirection) character.setDirection(Math.abs(hx - 0.5 - sx) > Math.abs(hy - 0.5 - sy) ? (hx - 0.5 > sx ? 6 : 4) : (hy - 0.5 > sy ? 2 : 8));
         return true;
@@ -1800,13 +1807,29 @@
         return !!(character && character._reactorGrapple);
     };
 
-    /** Where a grapple's hook is now, in tiles (`x`, `y` across the map, `z` up), and how much of the line is out (0 to 1); null off one. */
+    /** The beat a grapple is at: "aim", "fly", "tight" or "pull" (the climb over is a mantle). */
+    ReactorPhysics.grapplePhase = function(g) {
+        const aim = g.aim || 0, shot = Math.max(1, g.shot), tight = g.tight || 0;
+        return g.t < aim ? "aim" : g.t < aim + shot ? "fly" : g.t < aim + shot + tight ? "tight" : "pull";
+    };
+
+    /**
+     * Where a grapple's hook is now, in tiles (`x`, `y` across the map, `z` up), how much of the line is out (`out`, 0
+     * to 1), how slack it hangs (`slack`, 0 taut to 1: it trails as it flies, hangs loose as the hook bites and is drawn
+     * up straight before the pull) and the beat (`phase`); null off one.
+     */
     ReactorPhysics.grappleHook = function(character, out) {
         const g = character && character._reactorGrapple;
         if (!g) return null;
         out = out || {};
         out.x = g.hx; out.y = g.hy; out.z = g.lip;
-        out.out = Math.min(1, g.t / Math.max(1, g.shot));
+        const aim = g.aim || 0, shot = Math.max(1, g.shot), tight = g.tight || 0;
+        out.out = Math.max(0, Math.min(1, (g.t - aim) / shot));
+        out.phase = this.grapplePhase(g);
+        if (out.phase === "aim") out.slack = 0;
+        else if (out.phase === "fly") out.slack = 0.45 + 0.55 * out.out;
+        else if (out.phase === "tight") { const k = (g.t - aim - shot) / Math.max(1, tight); out.slack = Math.pow(1 - k, 2); }
+        else out.slack = 0;
         return out;
     };
 
@@ -1815,9 +1838,11 @@
         const R = world(), g = character._reactorGrapple;
         g.t++;
         let height = g.from;
-        if (g.t > g.shot) {
-            if (g.t === g.shot + 1) { character._x = g.bx; character._y = g.by; }
-            const k = Math.min(1, (g.t - g.shot) / g.pull), e = k * k * (3 - 2 * k);
+        const before = (g.aim || 0) + g.shot + (g.tight || 0);
+        if (g.t > before) {
+            if (g.t === before + 1) { character._x = g.bx; character._y = g.by; }
+            // The pull snaps the body off its feet and slows as it reaches the edge.
+            const k = Math.min(1, (g.t - before) / g.pull), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
             character._realX = g.sx + (g.bx - g.sx) * e;
             character._realY = g.sy + (g.by - g.sy) * e;
             height = g.from + (g.hang - g.from) * e + Math.sin(k * Math.PI) * 0.35;

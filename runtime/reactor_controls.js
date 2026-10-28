@@ -138,12 +138,12 @@
      * project put those, the view takes W A S D and E (`TACTICAL_VIEW_KEYS`), and the next level and the
      * acting unit take R3 and L3 where those do nothing else.
      */
-    ReactorControls.TACTICAL_ACTIONS = ["viewLeft", "viewRight", "panUp", "panDown", "panLeft", "panRight", "level", "unit", "skip"];
+    ReactorControls.TACTICAL_ACTIONS = ["viewLeft", "viewRight", "panUp", "panDown", "panLeft", "panRight", "level", "unit", "skip", "grapple"];
     ReactorControls.TACTICAL_SYMBOLS = { viewLeft: "pageup", viewRight: "pagedown", level: "control", unit: "tab", skip: "shift" };
-    /** W A S D move the view and E turns it right (Q, a page key, turns it left): each on a key the game gives nothing, or only what the stock keys give it. */
-    ReactorControls.TACTICAL_VIEW_KEYS = { 87: "panUp", 65: "panLeft", 83: "panDown", 68: "panRight", 69: "viewRight" };
+    /** W A S D move the view and E turns it right (Q, a page key, turns it left), G shows where the grapple reaches: each on a key the game gives nothing, or only what the stock keys give it. */
+    ReactorControls.TACTICAL_VIEW_KEYS = { 87: "panUp", 65: "panLeft", 83: "panDown", 68: "panRight", 69: "viewRight", 71: "grapple" };
     ReactorControls.TACTICAL_VIEW_STOCK = { 87: "pagedown" };
-    ReactorControls.DEFAULT_TACTICAL_KEYS = { 33: "viewLeft", 81: "viewLeft", 34: "viewRight", 69: "viewRight", 87: "panUp", 65: "panLeft", 83: "panDown", 68: "panRight", 17: "level", 18: "level", 9: "unit", 16: "skip" };
+    ReactorControls.DEFAULT_TACTICAL_KEYS = { 33: "viewLeft", 81: "viewLeft", 34: "viewRight", 69: "viewRight", 87: "panUp", 65: "panLeft", 83: "panDown", 68: "panRight", 17: "level", 18: "level", 9: "unit", 16: "skip", 71: "grapple" };
     ReactorControls.DEFAULT_TACTICAL_BUTTONS = { 4: "viewLeft", 5: "viewRight", 2: "skip", 11: "level", 10: "unit" };
 
     /** The tactical bindings a mapper gives when the project names none: by the ordinary action on each key or button. */
@@ -161,6 +161,38 @@
         }
         return out;
     };
+
+    /**
+     * A key or button map put in place whole (a plugin's key config does it on every Input.clear: each scene
+     * change, and whenever the window loses the focus) takes the bindings in force with it: the 3D map's jump,
+     * a battle's own keys. They are laid on the new map again, in the order they were laid, each noting what
+     * the new map gave so that it goes back to that when it ends.
+     */
+    ReactorControls.relay = function(kind, mapper) {
+        if (this._saved && this._saved[kind]) {
+            for (const code of Object.keys(this._saved[kind])) { this._saved[kind][code] = mapper[code]; mapper[code] = "jump"; }
+        }
+        const set = kind === "keys" ? "keys" : "buttons";
+        for (const layer of [this._savedAction, this._savedTactical]) {
+            if (!layer) continue;
+            for (const [code, name] of Object.entries(layer.set[set])) { layer[kind][code] = mapper[code]; mapper[code] = name; }
+        }
+    };
+
+    /** Input's key and button maps, watched for being put in place whole (`relay`). */
+    ReactorControls.guardMappers = function() {
+        if (typeof Input === "undefined" || Input.__rrMappersGuarded) return;
+        Input.__rrMappersGuarded = true;
+        for (const [property, kind] of [["keyMapper", "keys"], ["gamepadMapper", "pads"]]) {
+            let held = Input[property];
+            Object.defineProperty(Input, property, {
+                configurable: true, enumerable: true,
+                get() { return held; },
+                set(value) { held = value; if (value && typeof value === "object") ReactorControls.relay(kind, value); }
+            });
+        }
+    };
+    ReactorControls.guardMappers();
 
     /** Whether a tactical battle's own bindings are in force (the driver then reads the named actions). */
     ReactorControls.isTactical = function() {

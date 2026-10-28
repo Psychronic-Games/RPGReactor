@@ -114,3 +114,37 @@ test('with the view turned, W still moves it up the screen', () => {
     assert.deepEqual(at(90)(1, 0), [0, 1]);
     assert.deepEqual(at(180)(0, 1), [0, 1]);
 });
+
+test('a key map put in place whole mid-battle (a key config plugin on every Input.clear: a lost focus, a scene change) keeps the battle\'s keys', () => {
+    const c = controls(STOCK);
+    c.ReactorControls.setTactical(true);
+    assert.equal(c.Input.keyMapper[81], 'viewLeft');
+    assert.equal(c.Input.keyMapper[69], 'viewRight');
+    // PSYCHRONIC_KeyboardConfigMZ: Input.keyMapper = a copy of its saved map, on every Input.clear.
+    c.Input.keyMapper = Object.assign({}, STOCK, { 69: 'menu' });
+    assert.equal(c.Input.keyMapper[81], 'viewLeft', 'Q still turns the view');
+    assert.equal(c.Input.keyMapper[69], 'viewRight', 'and E');
+    assert.equal(c.Input.keyMapper[87], 'panUp');
+    // The battle over, each key does what the new map gave it.
+    c.ReactorControls.setTactical(false);
+    assert.equal(c.Input.keyMapper[81], 'pageup');
+    assert.equal(c.Input.keyMapper[69], 'menu');
+    assert.equal(c.Input.keyMapper[87], 'pagedown');
+    // Buttons the same way.
+    c.ReactorControls.setTactical(true);
+    c.Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 4: 'pageup' };
+    assert.equal(c.Input.gamepadMapper[4], 'viewLeft');
+    c.ReactorControls.setTactical(false);
+    assert.equal(c.Input.gamepadMapper[4], 'pageup');
+});
+
+test('the 3D map\'s jump keys survive a key map put in place whole, under a battle\'s keys too', () => {
+    const c = controls(STOCK, { jump: true, jumpKeys: [32], jumpButtons: [2] });
+    c.ReactorPhysics = { jumpAllowed: () => true };
+    c.ReactorControls.setField3D(true);
+    assert.equal(c.Input.keyMapper[32], 'jump');
+    c.Input.keyMapper = Object.assign({}, STOCK);
+    assert.equal(c.Input.keyMapper[32], 'jump', 'Space still jumps');
+    c.ReactorControls.setField3D(false);
+    assert.equal(c.Input.keyMapper[32], 'ok', 'and is OK again off the map');
+});
