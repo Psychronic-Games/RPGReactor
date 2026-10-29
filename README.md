@@ -21,7 +21,7 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 </tr>
 </table>
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.3 and is not published yet; the latest tagged source release is [0.99.2](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.2).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3).
 
 ## What's new in 0.99.3
 
@@ -165,7 +165,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-10-23, before the 0.99.1 cut, local validation completed with **8336 passing tests**, 9 skipped and no failures. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-10-29, before the 0.99.3 cut, local validation completed with **8905 passing tests**, 33 skipped and no failures. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
 
 ## Trusted Projects
 
