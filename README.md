@@ -12,7 +12,7 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 <td width="50%" align="center"><img src="docs/media/releases/0.99.3/02-model-inspection.jpg" alt="Database model inspection"><br><sub>Saved thumbnails load first; exported materials retain their maps and studio appearance.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/03-chibi-frames.jpg" alt="Chibi walking frames"><br><sub>The complete exported sheet keeps the chibi body in every frame.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.3/03-world-in-play.jpg" alt="North Haven in play"><br><sub>Explore North Haven’s streets and buildings in the Demo’s 3D world.</sub></td>
 <td width="50%" align="center"><img src="docs/media/releases/0.99.3/04-face-portraits.jpg" alt="Face portraits"><br><sub>Exported faces keep their studio colors.</sub></td>
 </tr>
 <tr>

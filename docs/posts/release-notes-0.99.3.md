@@ -27,9 +27,9 @@ The Builder and export share their surface settings.
 
 Saved thumbnails load first; exported materials retain their maps and studio appearance.
 
-![Chibi walking frames](../media/releases/0.99.3/03-chibi-frames.jpg)
+![North Haven in play](../media/releases/0.99.3/03-world-in-play.jpg)
 
-The complete exported sheet keeps the chibi body in every frame.
+Explore North Haven’s streets and buildings in the Demo’s 3D world.
 
 ![Face portraits](../media/releases/0.99.3/04-face-portraits.jpg)
 
