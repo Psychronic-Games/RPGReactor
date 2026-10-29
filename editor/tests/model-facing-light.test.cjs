@@ -124,7 +124,7 @@ test('hair takes a two-lobe strand sheen along its picture\'s v, from the key li
     assert.match(f, /outgoingLight \+= rrHC \* rrHNL \* \(0\.060 \* rrP \* mix\(vec3\(1\.0\), diffuseColor\.rgb, 0\.5\) \+ 0\.300 \* rrSec \* diffuseColor\.rgb\);/);
     assert.match(shader.vertexShader, /vRRWorldNormal = /);
     const source = require('./helpers/runtime-3d-source.cjs').source3D();
-    assert.match(source, /if \(\/\^\(Hair\|Beard\)\\b\/\.test\(String\(def\.name \|\| ""\)\)\) mat\.userData\.rrHair = true;/);
+    assert.match(source, /if \(!studio && \/\^\(Hair\|Beard\)\\b\/\.test\(String\(def\.name \|\| ""\)\)\) mat\.userData\.rrHair = true;/);
 });
 
 test('a clone keeps the normal and glow pictures and its own glow', () => {

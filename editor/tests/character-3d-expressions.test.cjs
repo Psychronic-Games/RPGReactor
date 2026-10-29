@@ -215,7 +215,8 @@ test('the saved GLB carries every expression and viseme as a named, sparse morph
     assert.ok(bytes < 5000000, 'with a full beard: ' + bytes + ' bytes');
     const dv = new DataView(glb.buffer, glb.byteOffset);
     const json = JSON.parse(new TextDecoder().decode(glb.subarray(20, 20 + dv.getUint32(12, true))));
-    assert.deepEqual(json.extensionsUsed, ['KHR_mesh_quantization']);
+    assert.ok(json.extensionsUsed.includes('KHR_mesh_quantization'), 'material extensions can coexist with morph quantization');
+    assert.deepEqual(json.extensionsRequired, ['KHR_mesh_quantization']);
     const morphed = json.meshes.filter(m => m.primitives[0].targets);
     assert.ok(morphed.some(m => m.name === 'Teeth') && morphed.some(m => m.name === 'Facial hair') && morphed.some(m => m.name === 'Lashes') && morphed.some(m => m.name === 'Brows'));
     assert.deepEqual(morphed.find(m => m.name === 'Body').extras.targetNames, X.MORPH_NAMES, 'the face has every one');

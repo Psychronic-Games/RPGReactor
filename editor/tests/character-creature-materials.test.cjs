@@ -84,7 +84,7 @@ test('cloth hoods use a continuous head envelope and pack harness buckles retain
 });
 
 test('selected previews bind physical fish maps as linear data and keep them linear after a size change',()=>{
- require('../../runtime/libs/three.js');const THREE=global.THREE,scope={window:{RRMerfolkBody:Q.Merfolk},RRMerfolkBody:Q.Merfolk,THREE,console};
+ require('../../runtime/libs/three.js');const THREE=global.THREE,scope={window:{RRMerfolkBody:Q.Merfolk},RRMerfolkBody:Q.Merfolk,THREE,console,RRCharacterGlb:require('../src/forge/Character3D/CharacterGlb.js')};
  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../src/forge/Character3D/Character3DBuilder.js'),'utf8'),scope);
  const b=Object.create(scope.window.Character3DBuilder.prototype);b._view={textures:new Map(),meshes:[]};b._weak=false;
  const result=Q.Model.build(null,Q.Creature.kindRecipe('fish'),{},{quality:'preview'}),part=result.parts[0],material=b._material(part,result,null,new THREE.Scene());b._view.meshes=[{material}];

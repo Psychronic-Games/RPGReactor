@@ -103,7 +103,7 @@ test('a weak GPU keeps model textures at 1024, decoded at that size; a full one 
     }
 });
 
-test('a model keeps only the bytes it reads: its accessors packed and aligned, its base color picture, nothing else', () => {
+test('a model packs aligned accessors and retains every referenced material picture, discarding unused images', () => {
     const buffer = glbWithPictures();
     const split = R._workerParts.splitGlb(buffer);
     const before = JSON.parse(JSON.stringify(split.json));
@@ -117,7 +117,8 @@ test('a model keeps only the bytes it reads: its accessors packed and aligned, i
     assert.ok(packed.byteLength < 64, 'the pictures are not in the packed bytes (' + packed.byteLength + ')');
     assert.ok(split.json.images[0].rrBlob instanceof Blob, 'the base color picture is a Blob of its own');
     assert.equal(split.json.images[0].rrBlob.size, 12);
-    assert.equal(split.json.images[1].rrBlob, undefined, 'a normal map is left behind');
+    assert.ok(split.json.images[1].rrBlob instanceof Blob, 'normal and roughness maps survive alongside base color');
+    assert.equal(split.json.images[1].rrBlob.size, 4000);
     assert.equal(split.json.images[2].rrBlob, undefined, 'and a picture nothing names');
 });
 
@@ -147,13 +148,15 @@ test('the GLB worker sends back the packed bytes when asked, and the model built
     assert.equal(transfers.length, 1);
     assert.equal(transfers[0], message.buffer);
     assert.ok(message.buffer.byteLength < 64);
+    assert.ok(message.json.images[1].rrBlob instanceof Blob, 'the worker retains normal/ORM image bytes');
+    assert.equal(message.json.images[1].rrBlob.size, 4000);
     // Built both ways (no pictures loaded here): the same geometry, and its arrays over the packed bytes only.
-    for (const m of message.json.materials) delete m.pbrMetallicRoughness.baseColorTexture;
+    for (const m of message.json.materials) { delete m.pbrMetallicRoughness.baseColorTexture; delete m.pbrMetallicRoughness.metallicRoughnessTexture; delete m.normalTexture; delete m.emissiveTexture; }
     const packed = R.buildGlbTemplate(message.json, new Uint8Array(message.buffer), '');
     const enabled = R.GlbCompact.enabled;
     R.GlbCompact.enabled = false;
     const parsed = R.readGlb(copy);
-    for (const m of parsed.json.materials) delete m.pbrMetallicRoughness.baseColorTexture;
+    for (const m of parsed.json.materials) { delete m.pbrMetallicRoughness.baseColorTexture; delete m.pbrMetallicRoughness.metallicRoughnessTexture; delete m.normalTexture; delete m.emissiveTexture; }
     const whole = R.buildGlbTemplate(parsed.json, parsed.bin, '');
     R.GlbCompact.enabled = enabled;
     const geometryOf = root => { let g = null; root.traverse(o => { if (o.isMesh) g = o.geometry; }); return g; };

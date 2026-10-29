@@ -313,7 +313,7 @@ test('shiny surfaces read the capture at a mip matched to their roughness, and t
     if (typeof THREE !== 'undefined') Reactor3D.injectShine(material, shader);
     const source = source3D();
     // The lobe's width in the box-filtered mips: sigma = pi r^2 / (1 + r) of a face, never sharper than REFLECTION_MIN_LOD.
-    assert.match(source, /float rrLod = rrEnvMaxLod > 0\.0 \? clamp\(rrEnvMaxLod \+ log2\(max\(3\.14159265 \* rrShine\.y \* rrShine\.y \/ \(1\.0 \+ rrShine\.y\), 1e-6\)\), "/);
+    assert.match(source, /float rrLod = rrEnvMaxLod > 0\.0 \? clamp\(rrEnvMaxLod \+ log2\(max\(3\.14159265 \* rrFinish\.y \* rrFinish\.y \/ \(1\.0 \+ rrFinish\.y\), 1e-6\)\), "/);
     assert.match(source, /"\\tvec3 rrEnv = textureLod\(rrEnvMap, rrR, rrLod\)\.rgb;"/);
     assert.ok(Reactor3D.REFLECTION_MIN_LOD >= 1 && Reactor3D.REFLECTION_MIN_LOD <= 3);
     const lod = (r, max = 9) => Math.min(max, Math.max(Reactor3D.REFLECTION_MIN_LOD, max + Math.log2(Math.max(Math.PI * r * r / (1 + r), 1e-6))));
@@ -322,7 +322,7 @@ test('shiny surfaces read the capture at a mip matched to their roughness, and t
     assert.ok(lod(0.5) >= 8, 'a rough metal reads close to the coarsest');
     // The sun's highlight: a GGX lobe, in the reflection's tint, shadowed with the sun.
     assert.match(source, /if \(rrKeyLight\.w < 0\.5 && dot\(rrKeyColor, rrKeyColor\) > 0\.0\) \{/);
-    assert.match(source, /float rrKA = max\(rrShine\.y \* rrShine\.y, 0\.002\), rrKA2 = rrKA \* rrKA, rrKD = rrKNH \* rrKNH \* \(rrKA2 - 1\.0\) \+ 1\.0;/);
+    assert.match(source, /float rrKA = max\(rrFinish\.y \* rrFinish\.y, 0\.002\), rrKA2 = rrKA \* rrKA, rrKD = rrKNH \* rrKNH \* \(rrKA2 - 1\.0\) \+ 1\.0;/);
     assert.match(source, /"#ifdef RR_SHADOW_TAPS",\n\s*"\\t\\trrKGGX \*= 1\.0 - clamp\(rrSunShaded, 0\.0, 1\.0\);",/);
     // The key color is the packed sun's, and black with no sun (indoors: no highlight).
     const u = { rrLightPos: { value: new Float32Array(8) }, rrLightColor: { value: new Float32Array([0.8, 0.7, 0.6, 3, 0, 0, 0, 0]) }, rrLightAim: { value: new Float32Array([0, 1, 0, -1, 0, 0, 0, 0]) }, rrKeyLight: { value: new Float32Array(4) }, rrKeyColor: { value: new Float32Array(3) } };

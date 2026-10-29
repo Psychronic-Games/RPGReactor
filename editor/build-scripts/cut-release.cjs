@@ -210,9 +210,13 @@ function main() {
         });
     } catch (error) {
         // A failing run exits non-zero: name the failures before refusing.
+        const report = process.env.RR_RELEASE_TEST_REPORT
+            || path.join(require('node:os').tmpdir(), `rpg-reactor-${version}-tests.log`);
+        fs.writeFileSync(report, String(error.stdout || '') + String(error.stderr || ''));
         const failing = String(error.stdout || '').split('\n').filter(line => /^\s*(✖|not ok)\s/.test(line));
-        throw new Error(`the test suite failed; not releasing\n${[...new Set(failing)].slice(0, 40).join('\n')}`);
+        throw new Error(`the test suite failed; not releasing\n${[...new Set(failing)].slice(0, 40).join('\n')}\nFull report: ${report}`);
     }
+    if (process.env.RR_RELEASE_TEST_REPORT) fs.writeFileSync(process.env.RR_RELEASE_TEST_REPORT, testOutput);
     const passed = Number((testOutput.match(/^# pass (\d+)$/m)
         || testOutput.match(/pass (\d+)/) || [])[1] || 0);
     const failed = Number((testOutput.match(/^# fail (\d+)$/m)

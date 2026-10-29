@@ -62,14 +62,14 @@ test('tufts sample their own coat texels and interpolate attachment weights acro
 });
 
 test('short fur uses a stable alpha cut in the actual preview material',()=>{
- const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),THREE=require('three'),context=vm.createContext({THREE,window:{}});
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),THREE=require('three'),context=vm.createContext({THREE,window:{},RRCharacterGlb:require('../src/forge/Character3D/CharacterGlb.js')});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/forge/Character3D/Character3DBuilder.js'),'utf8')+'\nglobalThis.Builder=Character3DBuilder;',context);
  const b=Object.create(context.Builder.prototype),material=b._material({kind:'hair',cutout:true,onSkin:true,roughness:.8},{textures:{}},null,null);
  assert.equal(material.alphaToCoverage,false,'short tufts must not expand into bright card rectangles');assert.equal(material.alphaTest,.3);material.dispose();
 });
 
 test('the Face view aims at Slimefolk eyes instead of zooming inside the goo',()=>{
- const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),THREE=require('three'),context=vm.createContext({THREE,window:{}});
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),THREE=require('three'),context=vm.createContext({THREE,window:{},RRCharacterGlb:require('../src/forge/Character3D/CharacterGlb.js')});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/forge/Character3D/Character3DBuilder.js'),'utf8')+'\nglobalThis.Builder=Character3DBuilder;',context);
  const b=Object.create(context.Builder.prototype);b._view={camera:{fov:35,aspect:1}};
  for(const form of [0,.5,1]){const r=Q.Model.build(null,{plan:'slime',species:'slimefolk',form},{},{quality:'preview',static:true});b._faceFrame(r);
