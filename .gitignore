@@ -74,3 +74,6 @@ template/*/save/
 
 # Battle Test snapshots are regenerated from the project database.
 /template/Demo/data/Test_*.json
+
+# Generated check-only DOM declarations (TypeScript source is authoritative).
+/types/compat/lib.dom.generated.d.ts
