@@ -139,6 +139,52 @@ test('nothing reflects until its model says so; the capture leaves out the shado
     assert.deepEqual(faces, [0, 1, 2, 3, 4, 5, 0, 5, 1, 5], 'the mirror face (-z, toward the camera) comes round every other frame once the cube is whole');
 });
 
+test('a deferred cube face binds a safe sampler before water without reflections draws, including on render failure', () => {
+    const F = Reactor3D.Reflections, saved = { ...F }, studio = Reactor3D.studioEnvMap, weak = Reactor3D.isWeakGpu;
+    const fallback = new THREE.CubeTexture(), capture = { texture: new THREE.CubeTexture() }, previous = {};
+    const scene = new THREE.Scene(), camera = {}, hidden = { visible: true };
+    let target = previous, draws = 0, fail = false;
+    const renderer = {
+        autoClear: false, resetState() {}, getRenderTarget: () => target,
+        setRenderTarget(next) { target = next; },
+        render() {
+            draws++;
+            assert.ok(shader.uniforms.rrEnvMap.value !== target.texture, 'an active sampler cannot read the cube face being written, even when water reflect is zero');
+            assert.ok(shader.uniforms.rrEnvMap.value === fallback);
+            if (fail) throw Error('intentional capture failure');
+        }
+    };
+    Reactor3D.studioEnvMap = () => fallback;
+    Reactor3D.isWeakGpu = () => false;
+    Object.assign(F, { _uniforms: null, wanted: true, _ready: true, _renderer: renderer, _target: capture, _face: 0, _tick: 6,
+        _camera: { position: { set() {} }, updateMatrixWorld() {}, children: Array(6).fill(camera) } });
+    const water = Reactor3D.waterMaterial(null, { reflect: 0 });
+    const shader = { uniforms: {}, vertexShader: 'void main() {}', fragmentShader: 'void main() {}' };
+    water.onBeforeCompile(shader);
+    const mapScene = { reflectionProbe: () => ({ position: { x: 0, y: 1, z: 0 }, hidden: [hidden] }) };
+    try {
+        assert.equal(!!water.__reactorReflects, false, 'this material has no reflection binding hook');
+        for (fail of [false, true]) {
+            F.bind(renderer);
+            assert.ok(shader.uniforms.rrEnvMap.value === capture.texture, 'the preceding main draw used the live cube');
+            F._owed = { renderer, mapScene, scene, camera };
+            if (fail) assert.throws(() => F.takeOwed(renderer, mapScene, scene), /intentional capture failure/);
+            else F.takeOwed(renderer, mapScene, scene);
+            assert.ok(target === previous);
+            assert.equal(renderer.autoClear, false);
+            assert.equal(hidden.visible, true);
+            assert.equal(F._capturing, false);
+            F.bind(renderer);
+            assert.ok(shader.uniforms.rrEnvMap.value === capture.texture, 'the next main draw can use the cube again');
+        }
+        assert.equal(draws, 2);
+    } finally {
+        Object.assign(F, saved);
+        Reactor3D.studioEnvMap = studio; Reactor3D.isWeakGpu = weak;
+        water.dispose(); fallback.dispose(); capture.texture.dispose();
+    }
+});
+
 test('near a mirror-bright model the capture stands inside it, with it hidden and the party in view', () => {
     const shiny = Reactor3D.litMaterial(new THREE.MeshBasicMaterial());
     Reactor3D.setMaterialShine(shiny, { reflect: 1, gloss: 0.95, metal: 1, tint: '#ffffff', texture: 0 });

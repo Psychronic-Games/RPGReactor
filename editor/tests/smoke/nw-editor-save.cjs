@@ -67,6 +67,9 @@ async function main() {
             timeout: 90000,
             description: 'actual NW.js editor initialization',
         });
+        const pixi = await driver.execute('return PIXI.VERSION;');
+        const pinnedPixi = JSON.parse(fs.readFileSync(path.join(editorRoot, 'package.json'), 'utf8')).dependencies['pixi.js'];
+        assert.equal(pixi, pinnedPixi, 'actual editor loads the pinned offline PixiJS library');
 
         const token = `nw-smoke-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const result = await driver.executeAsync(`
@@ -104,7 +107,7 @@ async function main() {
         assert.equal(savedProject.webdriverSaveToken, token);
         assert.ok(savedProject.modified, 'ProjectManager wrote its save timestamp');
 
-        process.stdout.write(`NW.js editor save smoke passed with Chromium ${nwChromium}: ${token}\n`);
+        process.stdout.write(`NW.js editor save smoke passed with PixiJS ${pixi}, Chromium ${nwChromium}: ${token}\n`);
     } finally {
         if (driver) await driver.close();
         if (!process.argv.includes('--keep-temp')) fs.rmSync(tempRoot, { recursive: true, force: true });

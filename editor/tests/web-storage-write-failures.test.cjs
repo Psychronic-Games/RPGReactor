@@ -121,3 +121,12 @@ test('a failed delete is reported too', async () => {
     vfs.unlinkSync('/project/data/Map009.json');
     await assert.rejects(() => vfs.flush(), error => error.failures[0].path === 'data/Map009.json');
 });
+
+test('the shared atomic writer uses complete browser records and flush reports their storage failures',async()=>{
+    const atomic=require('../src/utils/FsAtomic.js');
+    const {fs:vfs,stored}=makeFileSystem();
+    atomic(vfs,'/project/3d/Characters/Web/source/Web.glb',new Uint8Array([103,108,84,70]));await vfs.flush();
+    assert.equal(stored.get('3d/Characters/Web/source/Web.glb').byteLength,4);
+    const bad=makeFileSystem({failPaths:new Set(['data/Map001.json'])});atomic(bad.fs,'/project/data/Map001.json','{}');
+    await assert.rejects(bad.fs.flush(),/browser storage/);
+});

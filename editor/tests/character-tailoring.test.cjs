@@ -99,23 +99,24 @@ test('joined robes keep a stable rear waist lining while broad bodies walk and s
  }assert.ok(samples>50,'samples the actual posed waist surfaces');
 });
 
-test('rolled garment edges stay on their fabric through rest draping, grounding and a seated pose',()=>{
- const result=Model.build(pack,Model.normalize({outfit:[{id:'robe'},{id:'boots'}],hair:{style:'bald'}}),{},{static:true,skinSize:64,atlasSize:64,hairBudget:0});
- const trim=result.parts.find(p=>p.name==='Sewn garment edges');assert.ok(trim&&result.cloth);
+test('painted bindings and their rolled fabric stay together through cloth baking and a seated pose',()=>{
+ const D=require('../src/forge/Character3D/CharacterGarmentDetails.js'),build=D.build;let entries,result;
+ try{D.build=(...a)=>{entries=a[2];return build(...a);};result=Model.build(pack,Model.normalize({outfit:[{id:'robe'},{id:'boots'}],hair:{style:'bald'}}),{},{static:true,skinSize:64,atlasSize:64,hairBudget:0});}finally{D.build=build;}
+ assert.ok(result.cloth);assert.ok(!result.parts.some(p=>p.name==='Sewn garment edges'),'no second ribbon can detach');
  const fabric=result.parts.filter(p=>p.fabricRefs),refs=new Map();
- for(const p of fabric)for(let v=0;v<p.positions.length/3;v++){
-  refs.set(p.fabricRefs[v*2]+':'+p.fabricRefs[v*2+1],[p,v]);
+ for(const p of fabric)for(let v=0;v<p.positions.length/3;v++)refs.set(p.fabricRefs[v*2]+':'+p.fabricRefs[v*2+1],[p,v]);
+ const raw=Poses.clip(result.bones,'sit',result.parts.find(p=>p.name==='Body')),clip=Cloth.bake(result,raw,{quality:'preview'}),pose=Cloth.pose(result.bones,clip,clip.times.at(-1)*.5),cache=new Map();let checked=0,moving=0;
+ for(const part of fabric){assert.ok(result.textures[part.texture],'binding color belongs to the moving fabric');
+  for(let v=0;v<part.positions.length/3;v++){
+   const e=part.fabricRefs[v*2],source=part.fabricRefs[v*2+1],L=entries[e].laid;if(source<L.rimStart)continue;
+   const root=refs.get(e+':'+L.origin[source]);assert.ok(root,'rolled hem retains its owning cut vertex');const [p,i]=root;
+   const distance=Math.hypot(...[0,1,2].map(k=>part.positions[v*3+k]-p.positions[i*3+k]));assert.ok(distance<L.hem.facing+L.hem.thickness*2+.002,'return remains within its fabric allowance');
+   for(const mesh of [part,p])if(!cache.has(mesh))cache.set(mesh,Cloth.skin(mesh,result.bones,pose));const a=cache.get(part),b=cache.get(p),d=Math.hypot(...[0,1,2].map(k=>a[v*3+k]-b[i*3+k]));
+   assert.ok(d<distance*1.6+.003,'posed return separates from its cut edge: '+d);
+   if(Array.from(part.joints.subarray(v*4,v*4+4)).some(j=>result.bones[j]?.cloth))moving++;checked++;
+  }
  }
- const raw=Poses.clip(result.bones,'sit',result.parts.find(p=>p.name==='Body')),clip=Cloth.bake(result,raw,{quality:'preview'}),pose=Cloth.pose(result.bones,clip,clip.times.at(-1)*.5),posed=Cloth.skin(trim,result.bones,pose),cache=new Map();let checked=0,moving=0;
- // A contrast trim is a flat band, three points across per edge point, the rolled edge's point first.
- for(let v=0;v<trim.positions.length/3;v+=3){
-  const best=refs.get(trim.sewnRefs[v*2]+':'+trim.sewnRefs[v*2+1]);assert.ok(best,'exact owning fabric vertex exists');const[p,i]=best;
-  const distance=Math.hypot(...[0,1,2].map(k=>trim.positions[v*3+k]-p.positions[i*3+k]));assert.ok(distance<.003,'rolled edge detached from fabric at rest: '+distance);
-  if(!cache.has(p))cache.set(p,Cloth.skin(p,result.bones,pose));const target=cache.get(p),d=Math.hypot(...[0,1,2].map(k=>posed[v*3+k]-target[i*3+k]));
-  assert.ok(d<.004,'rolled edge detached in seated pose: '+d);
-  if(Array.from(trim.joints.subarray(v*4,v*4+4)).some(j=>result.bones[j]?.cloth))moving++;checked++;
- }
- assert.ok(checked>100&&moving>30,'checks the free hem as well as cuffs and collar');
+ assert.ok(checked>100&&moving>30,'checks free hems as well as cuffs and collar');
 });
 
 test('background cloth baking retains sewn-detail collision probes and matches direct baking',async t=>{

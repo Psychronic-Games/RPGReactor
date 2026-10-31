@@ -79,7 +79,7 @@
         };
 
         const actors = byId(actorsSrc, a => ({
-            id: a.id, battlerName: str(a.battler_name), characterIndex: 0, characterName: a.character_name ? `$${a.character_name}[f4]` : '', classId: a.id,
+            id: a.id, battlerName: str(a.battler_name), characterIndex: 0, characterName: a.character_name ? str(a.character_name).replace(/\\/g, '/').replace(/([^/]+)$/, '$$$1[f4]') : '', classId: a.id,
             equips: [num(a.weapon_id), num(a.armor1_id), num(a.armor2_id), num(a.armor3_id), num(a.armor4_id)], faceIndex: 0, faceName: '',
             traits: [a.weapon_fix && { code: 53, dataId: 1, value: 1 }, a.armor1_fix && { code: 53, dataId: 2, value: 1 }, a.armor2_fix && { code: 53, dataId: 3, value: 1 },
                 a.armor3_fix && { code: 53, dataId: 4, value: 1 }, a.armor4_fix && { code: 53, dataId: 5, value: 1 }].filter(Boolean),

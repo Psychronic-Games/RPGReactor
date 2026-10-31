@@ -7,6 +7,8 @@
     const Model = need('RRPropModel', './PropModel.js');
     const Catalog = need('RRPropCatalog', './PropCatalog.js');
     const Surface=need('RRConstructionSurface','../Character3D/ConstructionSurface.js');
+    const Marks=need('RRCharacterMarks','../Character3D/CharacterMarks.js');
+    const DisplayMotion=need('RRPropDisplayMotion','./PropDisplayMotion.js');
     const Rand = need('RRPropRandom', './PropRandom.js');
     const clamp = (n, a, b, fallback) => Number.isFinite(+n) ? Math.max(a, Math.min(b, +n)) : fallback;
     const MATERIALS = { original:null, metal:[.3,.85], leather:[.6,0], plastic:[.4,0], fabric:[.88,0], velvet:[.97,0], glass:[.05,0] };
@@ -17,7 +19,7 @@
     // Load once on first use; a rejected load can be retried without restarting Forge.
     function prepare() {
         if (reference) return Promise.resolve();
-        if (!loading) loading = Body.loadPack().then(pack => { reference = { pack, built:Body.build(pack, {}) }; }).finally(() => { loading = null; });
+        if (!loading) loading = Body.loadPack().then(async pack => { await Body.prepareAuthoring(pack); reference = { pack, built:Body.build(pack, {}) }; }).finally(() => { loading = null; });
         return loading;
     }
     function normalize(input = {}) {
@@ -48,10 +50,10 @@
         Object.assign(RIG_PART,{[S+'Shoulder']:'Chest',[S+'Arm']:S+'UpperArm',[S+'ForeArm']:S+'LowerArm',[S+'Hand']:S+'Hand',[S+'UpLeg']:S+'UpperLeg',[S+'Leg']:S+'LowerLeg',[S+'Foot']:S+'Foot',[S+'ToeBase']:S+'Foot'});
         Object.assign(RIG_JOINT,{[S+'UpperArm']:S+'Arm',[S+'LowerArm']:S+'ForeArm',[S+'Hand']:S+'Hand',[S+'UpperLeg']:S+'UpLeg',[S+'LowerLeg']:S+'Leg',[S+'Foot']:S+'Foot'});
     }
-    function build(input) {
+    function build(input,cache={},options={}) {
         if (!reference) throw new Error('Accessory reference is not ready. Call prepare() first.');
         const recipe = normalize(input), {pack,built} = reference;
-        const generated = Props.build(pack,built,[recipe.accessory],[]);
+        const generated = Props.build(pack,built,[recipe.accessory],[],{images:options.images});
         if(recipe.accessory.id==='ledMask')generated.parts=ledRegions(generated.parts);
         const low=[Infinity,Infinity,Infinity], high=[-Infinity,-Infinity,-Infinity];
         const angles=recipe.rotation.map(v=>v*Math.PI/180),offsets={};
@@ -87,9 +89,10 @@
             const joints=new Uint8Array(positions.length/3*4),weights=new Float32Array(joints.length);
             for(let k=0;k<weights.length;k+=4)weights[k]=1;
             const part=Object.assign({},p,{positions,normals,joints,weights});
-            delete part.cloth;
+            delete part.cloth;delete part.sewnRoots;delete part.clothLining;
             // Single-layer pieces (lenses, bands, cups) show from both sides once off the body.
-            if (sheet(part)) part.doubleSided = true;
+            if (!p.pairedFace&&sheet(part)) part.doubleSided = true;
+            delete part.pairedFace;
             const material=recipe.materials[p.name]||recipe.material,finish=MATERIALS[material];
             if(finish){[part.roughness,part.metalness]=finish;part.opacity=material==='glass'?.30:1;part.blend=material==='glass';part.kind=material==='fabric'||material==='velvet'?'cloth':material==='glass'?'glass':material==='metal'?'metal':'prop';
                 delete part.normalTexture;delete part.metallicRoughnessTexture;
@@ -111,8 +114,22 @@
             for(const [name,from] of Object.entries(RIG_JOINT)){const b=built.bones.find(x=>x.name===from);if(b)joints[name]=rotate(b.head).map((v,k)=>Math.round((v-pivot[k])*recipe.scale*1e5)/1e5);}
             sidecarExtra.wear={part:rigPart,joints};
         }
-        return {kind:'accessory',recipe,parts,bones:[{name:'Prop',head:[0,0,0],parent:-1}],clips:[],textures,construction:generated.construction,sidecarExtra,
+        const result={kind:'accessory',recipe,parts,bones:[{name:'Prop',head:[0,0,0],parent:-1}],clips:[],textures,construction:generated.construction,sidecarExtra,
+            imageMissing:recipe.accessory.mark?.shape==='picture'&&!!recipe.accessory.mark.picture&&!options.images?.[recipe.accessory.mark.picture],imageName:recipe.accessory.mark?.picture||'',
             height:extent, triangles:parts.reduce((n,p)=>n+p.index.length/3,0)};
+        if(recipe.accessory.id==='earScouter'&&recipe.accessory.animate){
+            const p=generated.parts.find(p=>p.name==='Ear scouter lens');
+            if(p){
+                // Construct on the lens in its authored frame, then use the accessory transform.
+                const lo=[Infinity,Infinity,Infinity],hi=lo.map(()=>-Infinity);
+                for(let i=0;i<p.positions.length;i++){lo[i%3]=Math.min(lo[i%3],p.positions[i]);hi[i%3]=Math.max(hi[i%3],p.positions[i]);}
+                const z=hi[2]+.0003,w=hi[0]-lo[0],h=hi[1]-lo[1];
+                const lower=recipe.accessory.side==='right'?.09:.42,upper=recipe.accessory.side==='right'?.58:.91;
+                const corners=[[.08,lower],[.92,lower],[.92,upper],[.08,upper]].flatMap(([x,y])=>rotate([lo[0]+w*x,lo[1]+h*y,z]).map((v,k)=>(v-pivot[k])*recipe.scale));
+                DisplayMotion.attach(result,[{positions:Float32Array.from(corners)}],{color:recipe.accessory.color2||'#63edbe',name:'Scouter telemetry'});
+            }
+        }
+        return result;
     }
     // The LED mask's lights, by where they sit on the face: the eyes, the nose and the mouth each a part of their own
     // (the same material, its triangles split, nothing added), so a saved mask's `glow` rules light them apart.
@@ -166,17 +183,19 @@
     // are made by the Sword kind, books by Framed, and axes, spears, staffs, bows and shields by the
     // weapon kinds (Hafted, Staff, Bow, Shield), so those stay unlisted (their saved recipes still open).
     const GROUPS={
-        hats:['wearables','Hats',61],face:['wearables','Face',62],masks:['wearables','Masks',63],jewelry:['wearables','Jewelry & Ties',64],
-        back:['wearables','Capes & Packs',65],hands:['wearables','Nails & Claws',66],melee:['weapons','Axes, Bows & Shields',44],
-        bags:['gear','Bags',71],tools:['gear','Tools',72],instruments:['gear','Instruments',73],sports:['gear','Sports',74],other:['gear','Other',79],
+        hats:['wearables','Headwear',61],face:['wearables','Eyewear & Headsets',62],masks:['wearables','Masks',63],jewelry:['wearables','Jewelry & Ties',64],
+        back:['wearables','Capes & Scarves',65],packs:['wearables','Packs & Harnesses',65.5],hands:['wearables','Nails & Claws',66],melee:['weapons','Axes, Bows & Shields',44],
+        bags:['gear','Bags',71],tools:['gear','Tools',72],instruments:['instruments','Stage gear',80],sports:['gear','Sports',74],other:['gear','Other',79],
         cyber:['wearables','Cyberware',67]
     };
     const FROM_GROUP={Hats:'hats',Face:'face',Masks:'masks',Jewelry:'jewelry',Back:'back','Body details':'hands',Weapons:'melee',Performance:'instruments',Sports:'sports','Cyber faces':'cyber','Cyber masks':'cyber','HUD eyewear':'cyber',Implants:'cyber'};
-    const BAGS=new Set(['satchel','beltPouch','canteen','suitcase']),UNLISTED=new Set(['sword','dagger','book','axe','spear','staff','bow','shield']);
-    const groupOf=def=>def.group==='Bags and tools'?(BAGS.has(def.id)?'bags':'tools'):(FROM_GROUP[def.group]||'other');
+    const BAGS=new Set(['satchel','beltPouch','canteen','suitcase']),UNLISTED=new Set(['sword','dagger','book','axe','spear','staff','bow','shield','neckTie']);
+    const FACE_TYPES=new Set(['visor','faceShield','hudMonocle','earScouter','arGlasses','tacGoggles']);
+    const MASK_TYPES=new Set(['cyberFaceplate','cyberRespirator','ledMask','armorMask','mouthGuard']);
+    const groupOf=def=>FACE_TYPES.has(def.id)?'face':MASK_TYPES.has(def.id)?'masks':def.id==='haloProjector'?'hats':['backpack','jetpack','utilityHarness','quiver','satchel','beltPouch','canteen'].includes(def.id)?'packs':def.group==='Bags and tools'?(BAGS.has(def.id)?'bags':'tools'):(FROM_GROUP[def.group]||'other');
     for(const [id,[parent,label,order]] of Object.entries(GROUPS)) Catalog.category({id:'acc-'+id,label,order,parent});
-    for(const def of Props.PROPS) Catalog.add({id:'accessory-'+def.id,category:'acc-'+groupOf(def),label:def.label,hidden:UNLISTED.has(def.id),
-        icon:'equipment',kind:'accessory',keywords:'accessory equipment wearable '+def.slot+' '+def.group.toLowerCase(),
+    for(const def of Props.PROPS) Catalog.add({id:'accessory-'+def.id,category:'acc-'+groupOf(def),genre:def.cyber||['jetpack','grappler','haloProjector'].includes(def.id)?'scifi':['wizardhat','witchhat','crown','circlet','vikinghelm','halo'].includes(def.id)?'fantasy':['tricorn','quiver'].includes(def.id)?'historical':'modern',label:def.id==='quiver'?'Back quiver':def.label,hidden:UNLISTED.has(def.id),
+        icon:'equipment',kind:'accessory',keywords:'accessory equipment wearable '+def.id+' '+def.slot+' '+def.group.toLowerCase(),
         start:()=>normalize({accessory:{id:def.id}}),matches:r=>r.accessory?.id===def.id});
     // What the page shows for an accessory: the material slots its parts have, and whether its accent color shows.
     const slotCache=new Map(),accentCache=new Map();
@@ -188,6 +207,7 @@
     }
     function usesAccent(recipe) {
         const id=recipe.accessory.id;
+        if(['cape','scarf','jetpack'].includes(id))return true;
         if(!reference) return !!Props.BY_ID.get(id).defaults.color2;
         const key=JSON.stringify([id,recipe.accessory.shape,recipe.accessory.charm,recipe.accessory.studs]);
         if(!accentCache.has(key)) {
@@ -197,7 +217,7 @@
         }
         return accentCache.get(key);
     }
-    const OPTION_LABELS={charm:'Charm',studs:'Studs',thick:'Thickness',billLength:'Bill length',pockets:'Pockets',vents:'Vents',style:'Style',wear:'Wear',glow:'Glow',pattern:'Pattern',sides:'Sides',cables:'Cables'};
+    const OPTION_LABELS={charm:'Charm',studs:'Studs',thick:'Thickness',billLength:'Bill length',pockets:'Pockets',vents:'Vents',style:'Style',wear:'Wear',glow:'Glow',pattern:'Pattern',patternScale:'Pattern scale',trimWidth:'Trim width',sides:'Sides',cables:'Cables'};
     api.slots=slots; api.usesAccent=usesAccent;
 
     Catalog.ui('accessory',{
@@ -220,6 +240,7 @@
                 else if(Array.isArray(spec[0]))html+=this._select('accessory.'+key,label,spec);
                 else html+=this._slider({path:'accessory.'+key,label,range:spec,step:key==='pockets'||key==='vents'?1:.05});
             }
+            if(r.accessory.id==='earScouter')html+=this._check('accessory.animate','Animated display')+`<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t('Display readout')}</span><input class="rr-input rr-prop-text" data-path="accessory.displayText" maxlength="32" value="${String(r.accessory.displayText).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"></label>`;
             html+=this._section('Look')+this._color('accessory.color','Color');
             // Cyberware leaves its colors empty for its style's own; its second color is its glow.
             if((d.color2||def.cyber)&&usesAccent(r))html+=this._color('accessory.color2',def.cyber?def.labels.color2:'Accent');
@@ -229,6 +250,7 @@
                 const label=name==='Lenses'?'Lenses':['Material','Second material','Third material'][Math.min(2,plain.indexOf(name))];
                 html+=this._select('materials.'+name,label,MATERIAL_CHOICES,r.materials[name]||r.material);
             }
+            if(['cape','scarf','jetpack'].includes(r.accessory.id))html+=Marks.panel(this,'accessory.mark',r.accessory.mark);
             html+=this._section('Placement')+this._select('pivot','Origin',[['bottom','Bottom'],['center','Center'],['attachment','Attachment point']]);
             if(d.side)html+=this._select('accessory.side','Which side',[['left','Left'],['right','Right']]);
             for(const [i,label] of ['Rotate X','Rotate Y','Rotate Z'].entries())html+=this._slider({path:'rotation.'+i,label,range:[-180,180],step:1,format:'deg'});

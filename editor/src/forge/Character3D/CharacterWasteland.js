@@ -229,6 +229,10 @@
      * two edges (its thickness) and the face under it. `width`, `thickness` in meters.
      */
     function strap(m, path, width, thickness, color, skin, { uvStart = 0, edgeColor = null } = {}) {
+        // Retain the fitted outline within a fraction of a millimeter without
+        // carrying redundant straight stations into all four closed faces.
+        // Bound spans as well, so skinned webbing still bends along the body.
+        path=need('RRConstructionPatterns','./ConstructionPatterns.js').simplifySurfacePath(path,width,thickness);
         const n = path.length; if (n < 2) return;
         const rows = [];
         let along = uvStart;
@@ -239,25 +243,29 @@
             rows.push({ p, n: nn, x, along });
         }
         const sk = r => (typeof skin === 'function' ? skin(r.p) : skin);
-        const base = m.p.length / 3, e = edgeColor || tone(color, 0.8);
+        const base = m.p.length / 3, first = m.i.length, e = edgeColor || tone(color, 0.8);
         for (const r of rows) {
             const s0 = sk(r), top = add(r.p, mul(r.n, thickness)), w = width / 2;
-            m.vertex(add(top, mul(r.x, -w)), r.n, color, s0, [r.along, 0]);
-            m.vertex(add(top, mul(r.x, w)), r.n, color, s0, [r.along, width]);
-            m.vertex(add(top, mul(r.x, -w)), mul(r.x, -1), e, s0, [r.along, 0]);
-            m.vertex(add(r.p, mul(r.x, -w)), mul(r.x, -1), e, s0, [r.along, -thickness]);
-            m.vertex(add(top, mul(r.x, w)), r.x, e, s0, [r.along, width]);
-            m.vertex(add(r.p, mul(r.x, w)), r.x, e, s0, [r.along, width + thickness]);
+            for (const [p,n,c,uv] of [
+                [add(top,mul(r.x,-w)),r.n,color,[r.along,0]], [add(top,mul(r.x,w)),r.n,color,[r.along,width]],
+                [add(top,mul(r.x,-w)),mul(r.x,-1),e,[r.along,0]], [add(r.p,mul(r.x,-w)),mul(r.x,-1),e,[r.along,-thickness]],
+                [add(top,mul(r.x,w)),r.x,e,[r.along,width]], [add(r.p,mul(r.x,w)),r.x,e,[r.along,width+thickness]],
+                [add(r.p,mul(r.x,-w)),mul(r.n,-1),color,[r.along,0]], [add(r.p,mul(r.x,w)),mul(r.n,-1),color,[r.along,width]]
+            ]) m.vertex(p,n,c,s0,uv);
         }
         for (let i = 0; i + 1 < n; i++) {
-            const a = base + i * 6, b = a + 6;
-            m.quad(a, a + 1, b + 1, b);     // top
-            m.quad(a + 2, b + 2, b + 3, a + 3); // edge -
-            m.quad(a + 4, a + 5, b + 5, b + 4); // edge +
+            const a=base+i*8,b=a+8;
+            m.quad(a,a+1,b+1,b);m.quad(a+2,b+2,b+3,a+3);m.quad(a+4,a+5,b+5,b+4);
+            m.quad(a+6,b+6,b+7,a+7);
         }
-        // Wound outward on the top.
-        const P = q => m.at(q), f = cross(sub(P(base + 1), P(base)), sub(P(base + 6), P(base)));
-        if (dot(f, rows[0].n) < 0) for (let t = m.i.length - (n - 1) * 18; t < m.i.length; t += 3) { const x = m.i[t + 1]; m.i[t + 1] = m.i[t + 2]; m.i[t + 2] = x; }
+        // Close the cut ends and orient each span by its own surface normal. A curved
+        // head/chest strap cannot use the winding at its first point for the whole loop.
+        for(const [i,sign] of [[0,-1],[n-1,1]]) {
+            const r=rows[i],normal=mul(norm(sub(rows[Math.min(n-1,i+1)].p,rows[Math.max(0,i-1)].p)),sign),top=add(r.p,mul(r.n,thickness)),w=width/2;
+            const ids=[add(r.p,mul(r.x,-w)),add(r.p,mul(r.x,w)),add(top,mul(r.x,w)),add(top,mul(r.x,-w))].map(p=>m.vertex(p,normal,e,sk(r),[r.along,0]));
+            m.quad(...ids);
+        }
+        for(let t=first;t<m.i.length;t+=3){const [a,b,c]=m.i.slice(t,t+3),f=cross(sub(m.at(b),m.at(a)),sub(m.at(c),m.at(a))),nn=[0,1,2].map(k=>m.n[a*3+k]+m.n[b*3+k]+m.n[c*3+k]);if(dot(f,nn)<0)[m.i[t+1],m.i[t+2]]=[m.i[t+2],m.i[t+1]];}
         return rows;
     }
     /**
@@ -570,7 +578,7 @@
         const part = mesh.part(name, { roughness, metalness: 0 });
         if (Fabric) {
             const t = Fabric.tile(kind);
-            if (t) { part.uvs1 = Float32Array.from(mesh.uv, (v, i) => v / t.span[i % 2]); Fabric.applyTo(part, kind, null, { uvs1: part.uvs1, roughness }); part.fabricTile = kind; }
+            if (t) { part.uvs1 = Float32Array.from(mesh.uv, (v, i) => v / t.span[i % 2]); Fabric.applyTo(part, kind, null, { uvs1: part.uvs1, roughness,albedo:true }); part.fabricTile = kind; }
         }
         // Its color is in its vertices: a sheen without a picture of its own would wash it white.
         delete part.sheen;
@@ -580,7 +588,7 @@
     /** The parts' tile pictures (RRCharacterFabric), for the outfit's textures. */
     function tilePictures(parts) {
         const Fabric = need('RRCharacterFabric', './CharacterFabric.js'), out = [];
-        for (const p of parts) if (p.fabricTile && Fabric) { const t = Fabric.tile(p.fabricTile); for (const pic of [t.normal, t.orm]) if (!out.includes(pic)) out.push(pic); }
+        for (const p of parts) if (p.fabricTile && Fabric) { const t = Fabric.tile(p.fabricTile); for (const pic of [t.normal,t.orm,...(p.texture===t.albedo.name?[t.albedo]:[])]) if (!out.includes(pic)) out.push(pic); }
         return out;
     }
 
@@ -589,7 +597,7 @@
         const s = C.s, style = item.style || 'bandolier', webbing = new GearMesh(), cans = new GearMesh(), metal = new GearMesh();
         const skin = p => C.skinAt(p, true), neckY = C.neck[1], hipY = C.hips[1], span = neckY - hipY;
         const color = linear(item.color || '#4b4632'), accent = linear(item.color2 || '#6b5a3a'), metalC = linear(item.trim || '#77746a'), rand = stream(97 + (item.wearSeed | 0));
-        const gap = 0.012 * s, w = 0.05 * s, th = 0.0035 * s, step = 0.014 * s;
+        const gap = 0.012 * s, w = 0.05 * s, th = 0.0035 * s, step = (style==='bandolier'?.014:.024) * s;
         if (style === 'bandolier') {
             const hi = neckY - span * 0.09, lo = hipY + span * 0.08;
             // Front: from the left shoulder down across the chest to the right hip; behind, back up.
@@ -928,35 +936,26 @@
 
     /** Dust goggles: two cups with tinted lenses on an elastic band, on the forehead or over the eyes. */
     function goggles(C, item, out) {
-        const F = headFrame(C), s = C.s, head = C.rigid('Head'), cups = new GearMesh(), metal = new GearMesh(), glass = new GearMesh(), band = new GearMesh();
-        const color = linear(item.color || '#4a3624'), lens = linear(item.color2 || '#3a5040'), metalC = linear(item.trim || '#8a7a5a');
-        const up = item.style !== 'eyes';
-        const lift = up ? F.brow - F.eyeY + 0.03 * s : 0, tilt = up ? 0.55 : 0.05;
-        for (const E of [F.L.eyeL, F.L.eyeR]) {
-            const ey = E.center[1] + lift, a = Math.atan2(E.center[0] - F.cx, E.center[2] - F.cz) * (up ? 0.95 : 1);
-            const base = F.point(a, ey, 0.004 * s), n0 = F.normal(a, ey);
-            const dir = norm(add(add(mul(n0, 0.6), [0, 0, 0.55]), [0, tilt, 0]));
-            const r = Math.max(0.022 * s, E.radius * 1.7), depth = 0.018 * s;
-            // The cup: leather over a frame, wider at the face, a gasket against it.
-            const rows = [0, 0.15, 0.6, 1].map(t => { const c = add(base, mul(dir, depth * t - (t === 0 ? 0.002 * s : 0))), x = norm(cross(dir, Y)), y = cross(x, dir), rr = r * (1.18 - 0.16 * t); return Array.from({ length: 14 }, (_, k) => { const ang = k / 14 * TAU; return add(c, add(mul(x, Math.cos(ang) * rr), mul(y, Math.sin(ang) * rr * 0.92))); }); });
-            cups.grid(rows, color, head, () => base, { closed: true, colorAt: (r2) => (r2 === 0 ? tone(color, 0.6) : color) });
-            const lip = add(base, mul(dir, depth));
-            metal.tube([lip, add(lip, mul(dir, 0.003 * s))], r * 1.02, 14, metalC, head, { caps: false });
-            glass.disc(add(lip, mul(dir, 0.0015 * s)), dir, r * 0.95, lens, head, 14);
-            // Vent slits round the cup.
-            for (let k = 0; k < 4; k++) { const ang = k / 4 * TAU + Math.PI / 4, x = norm(cross(dir, Y)), y = cross(x, dir), p = add(add(base, mul(dir, depth * 0.55)), add(mul(x, Math.cos(ang) * r * 1.075), mul(y, Math.sin(ang) * r * 1.0))); metal.box(p, [norm(cross(dir, norm(sub(p, add(base, mul(dir, depth * 0.55)))))), dir, norm(sub(p, add(base, mul(dir, depth * 0.55))))], [0.0035 * s, 0.002 * s, 0.0008 * s], 0.0004 * s, [0.02, 0.02, 0.02], head, 1); }
+        const F=headFrame(C),s=C.s,head=C.rigid('Head'),cups=new GearMesh(),metal=new GearMesh(),glass=new GearMesh(),band=new GearMesh();
+        const color=linear(item.color||'#4a3624'),lens=linear(item.color2||'#3a5040'),metalC=linear(item.trim||'#8a7a5a'),up=item.style!=='eyes',lift=up?F.brow-F.eyeY+.03*s:0,ends=[],inner=[];
+        for(const E of [F.L.eyeL,F.L.eyeR]){
+            const ey=E.center[1]+lift,a=Math.atan2(E.center[0]-F.cx,E.center[2]-F.cz),base=F.point(a,ey,.003*s),dir=norm(add(F.normal(a,ey),[0,up?.38:.02,.55])),x=norm(cross(Y,dir)),y=cross(dir,x),r=Math.max(.022*s,E.radius*1.7),depth=.018*s,N=54;
+            const contour=(t,k,f=1)=>{const ang=k/N*TAU,rr=r*(1.18-.16*t)*f;return add(add(base,mul(dir,depth*t)),add(mul(x,Math.cos(ang)*rr),mul(y,Math.sin(ang)*rr*.92)));};
+            const rows=[0,.15,.7,1].map(t=>Array.from({length:N},(_,k)=>contour(t,k)));
+            cups.grid(rows,color,head,()=>sub(base,mul(dir,.01*s)),{closed:true,uvAt:(j,k)=>[k/N*TAU*r,j/3*depth]});
+            const rim=Array.from({length:N+1},(_,k)=>contour(1,k));metal.tube(rim,.0018*s,8,metalC,head);
+            // Glass and the cup share one contour and basis, including the oval aspect.
+            const center=glass.vertex(add(base,mul(dir,depth-.0005*s)),dir,lens,head,[.5,.5]);
+            const edge=Array.from({length:N},(_,k)=>glass.vertex(add(contour(1,k,.985),mul(dir,-.0005*s)),dir,lens,head,[.5+.5*Math.cos(k/N*TAU),.5+.5*Math.sin(k/N*TAU)]));
+            for(let k=0;k<N;k++)glass.tri(center,edge[k],edge[(k+1)%N]);
+            const side=E.center[0]>F.cx?1:-1,outer=contour(.30,side>0?0:N/2),inside=contour(.75,side>0?N/2:0);ends.push({side,p:outer});inner.push(inside);
+            for(const fraction of [.125,.375,.625,.875]){const p=contour(.65,fraction*N);metal.tube([p,add(p,mul(dir,.0007*s))],.0015*s,8,metalC,head);}
         }
-        // The band: round the head over the hair line, with a bridge between the cups.
-        const by = (F.L.eyeL.center[1] + F.L.eyeR.center[1]) / 2 + lift + (up ? 0.008 * s : 0.004 * s);
-        const path = [];
-        for (let i = 0; i <= 40; i++) { const a = -Math.PI + 0.65 + i / 40 * (TAU - 1.3), y = by - 0.004 * s * Math.cos(a); path.push({ p: F.point(a + Math.PI, y, 0.007 * s), n: F.normal(a + Math.PI, y) }); }
-        strap(band, path, 0.022 * s, 0.002 * s, linear(item.bandColor || '#2a2622'), head);
-        const bl = F.point(0.12, by - 0.004 * s, 0.012 * s), br = F.point(-0.12, by - 0.004 * s, 0.012 * s);
-        metal.tube([bl, add(lerp(bl, br, 0.5), [0, 0.004 * s, 0.006 * s]), br], 0.0025 * s, 6, metalC, head);
-        const parts = [fabricPart(cups, 'Goggles', 'leatherWorn', 0.65, item), fabricPart(band, 'Goggle band', 'jersey', 0.85, item)];
-        if (!metal.empty) parts.push(metal.part('Goggle rims', { roughness: 0.35, metalness: 0.85 }));
-        if (!glass.empty) parts.push(glass.part('Goggle lenses', { roughness: 0.05, metalness: 0.9, opacity: 0.85 }));
-        return parts;
+        ends.sort((a,b)=>a.side-b.side);const by=(F.L.eyeL.center[1]+F.L.eyeR.center[1])/2+lift,path=[{p:ends[1].p,n:F.normal(.7,by)}];
+        for(let k=0;k<=64;k++){const a=.60+k/64*(TAU-1.2);path.push({p:F.point(a,by-.004*s*Math.cos(a),.006*s),n:F.normal(a,by)});}path.push({p:ends[0].p,n:F.normal(-.7,by)});
+        strap(band,path,.021*s,.0015*s,linear(item.bandColor||'#2a2622'),head);
+        metal.tube([inner[0],add(lerp(inner[0],inner[1],.5),[0,.003*s,.002*s]),inner[1]],.002*s,10,metalC,head);
+        return [Object.assign(fabricPart(cups,'Goggles','leatherWorn',.65,item),{doubleSided:true}),fabricPart(band,'Goggle band','jersey',.85,item),metal.part('Goggle rims',{roughness:.35,metalness:.75}),glass.part('Goggle lenses',{roughness:.12,metalness:.05,doubleSided:true})];
     }
 
     const checks = new Map();
@@ -965,13 +964,13 @@
     function checkPicture(c1, c2) {
         const key = c1 + c2;
         if (checks.has(key)) return checks.get(key);
-        const S = 256, data = new Uint8Array(S * S * 4), A = linear(c1), B = linear(c2);
+        const S = 512, data = new Uint8Array(S * S * 4), A = linear(c1), B = linear(c2);
         for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
             const u = x / S * 12, v = y / S * 12, fu = fract(u), fv = fract(v);
             // Thin dark lines on the weave, a small diamond where they meet, a doubled line every fourth; faded unevenly.
             const line = fu < 0.1 || fv < 0.1 || (Math.floor(u) % 4 === 0 && fu > 0.24 && fu < 0.32) || (Math.floor(v) % 4 === 0 && fv > 0.24 && fv < 0.32);
             const diamond = Math.abs(fu - 0.6) + Math.abs(fv - 0.6) < 0.14;
-            const weave = (x + y) % 2 ? 0.95 : 1.05, fade = 0.85 + 0.25 * noise2(x / 40, y / 40, 4), c = line || diamond ? mixc(A, B, 0.55) : A;
+            const weave = (x + y) % 2 ? 0.95 : 1.05, fade = 0.96 + 0.06 * noise2(x / 80, y / 80, 4), c = line || diamond ? mixc(A, B, 0.55) : A;
             const o = (y * S + x) * 4;
             data[o] = toByte(c[0] * weave * fade); data[o + 1] = toByte(c[1] * weave * fade); data[o + 2] = toByte(c[2] * weave * fade); data[o + 3] = 255;
         }
@@ -1051,9 +1050,9 @@
     function blanketPicture(c1, c2) {
         const key = c1 + c2;
         if (blankets.has(key)) return blankets.get(key);
-        const S = 256, data = new Uint8Array(S * S * 4), A = linear(c1), B = linear(c2), D = A.map(c => c * 0.55);
+        const S = 512, data = new Uint8Array(S * S * 4), A = linear(c1), B = linear(c2), D = A.map(c => c * 0.55);
         for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            const v = y / S, tw = ((x + y) >> 1) % 4 < 2 ? 0.94 : 1.06, slub = 0.9 + 0.2 * noise2(x / 9, y / 3, 3);
+            const v = y / S, tw = ((x + y) >> 1) % 4 < 2 ? 0.94 : 1.06, slub = 0.97 + 0.06 * noise2(x / 18, y / 6, 3);
             let c = A;
             if (v > 0.8 && v < 0.86) c = B; else if (v > 0.89 && v < 0.91) c = B; else if (v > 0.07 && v < 0.09) c = D;
             if (v > 0.8 && v < 0.86 && (x >> 3) % 2 === ((y >> 3) % 2)) c = mixc(B, A, 0.3);
@@ -1150,34 +1149,40 @@
         const parts = [part];
         if (pic && !fr.empty) { parts.push(fr.part((opts.name || 'Poncho') + ' fringe', { texture: pic.name, keepColors: true, cutout: true, alphaCutoff: 0.45, roughness: 0.95, metalness: 0, doubleSided: true })); out.textures.push(pic); }
         // The hood up over the head.
-        if (opts.hood !== false) parts.push(...ponchoHood(C, item, out, blanket));
+        if (opts.hood !== false) parts.push(...ponchoHood(C, item, out, blanket, grid[0]));
         return parts;
     }
     /** A poncho's hood up over the head: a deep cowl from the collar round to the face's edge, domed over the crown. */
-    function ponchoHood(C, item, out, blanket) {
+    function ponchoHood(C, item, out, blanket, collar) {
         const F = headFrame(C), s = C.s, head = C.rigid('Head'), m = new GearMesh(), color = linear(item.color || '#a08a62');
-        const bottom = C.neck[1] - 0.005 * s, top = F.crown + 0.03 * s, taper = F.crown - 0.045 * s, A = 36, R = 18;
+        const bottom = C.neck[1] - 0.005 * s, top = F.crown + 0.03 * s, taper = F.crown - 0.045 * s, A = 48;
         // The face opening: an oval from under the chin to over the brow.
         const o0 = F.chin - 0.022 * s, o1 = F.brow + 0.045 * s, om = (o0 + o1) / 2, oh = (o1 - o0) / 2;
         const openAt = y => { const q = (y - om) / oh; return Math.abs(q) >= 1 ? 0 : 0.98 * Math.sqrt(1 - q * q); };
+        const ys=[...new Set([bottom,...Array.from({length:25},(_,j)=>bottom+(top-bottom)*j/24),o0,o1])].sort((a,b)=>a-b),R=ys.length-1;
         const rows = [];
         for (let r = 0; r <= R; r++) {
-            const t = r / R, y = bottom + (top - bottom) * t, half = openAt(y), row = [];
+            const y=ys[r],half = openAt(y), row = [];
             for (let k = 0; k <= A; k++) {
                 // Round from one side of the opening, behind the head, to the other.
                 const a = half + (TAU - 2 * half) * k / A, behind = Math.max(0, -Math.cos(a));
                 let rr = F.radius(a, Math.min(y, taper)) + (0.022 + 0.012 * behind) * s;
                 if (y > taper) rr *= Math.sqrt(Math.max(0.0025, 1 - ((y - taper) / (top - taper)) ** 2));
-                row.push([F.cx + Math.sin(a) * rr, y, F.cz + Math.cos(a) * rr - 0.01 * s * behind]);
+                let p=[F.cx + Math.sin(a) * rr, y, F.cz + Math.cos(a) * rr - 0.01 * s * behind];
+                if(collar&&y<bottom+.055*s){const f=((a/TAU+.5)%1+1)%1*collar.length,k=Math.floor(f),q=lerp(collar[k%collar.length],collar[(k+1)%collar.length],f-k),t=ss(bottom,bottom+.055*s,y);p=lerp([q[0],q[1]-.004*s,q[2]],p,t);}
+                row.push(p);
             }
             rows.push(row);
         }
         m.grid(rows, [0.95, 0.95, 0.95], head, p => [F.cx, Math.min(p[1], taper), F.cz], { uvAt: (r, k) => [k / A * 3, 0.15 + r / R * 0.35] });
+        // The last latitude still has a small radius; close it with a crown fan.
+        const crown=m.vertex([F.cx,top+.0005*s,F.cz],[0,1,0],[.95,.95,.95],head,[1.5,.50]);
+        const rim=rows[R].map((p,k)=>m.vertex(p,[0,1,0],[.95,.95,.95],head,[k/A*3,.50]));
+        for(let k=0;k<A;k++){const a=rim[k],b=rim[k+1];if(cross(sub(m.at(a),m.at(crown)),sub(m.at(b),m.at(crown)))[1]>0)m.tri(crown,a,b);else m.tri(crown,b,a);}
         // A rolled edge round the opening: down one side's first column and up the other's last.
-        const edge = [];
-        for (let r = 0; r <= R; r++) if (openAt(rows[r][0][1]) > 0.02) edge.push(rows[r][0]);
-        for (let r = R; r >= 0; r--) if (openAt(rows[r][A][1]) > 0.02) edge.push(rows[r][A]);
-        if (edge.length > 3) { edge.push(edge[0]); roll(m, edge.map(p => ({ p, n: norm(sub(p, [F.cx, p[1], F.cz])) })), 0.02 * s, 0.01 * s, [0.85, 0.85, 0.85], head); }
+        const edge=[];for(let r=0;r<=R;r++)if(ys[r]>=o0&&ys[r]<=o1)edge.push(rows[r][0]);
+        for(let r=R;r>=0;r--)if(ys[r]>=o0&&ys[r]<=o1)edge.push(rows[r][A]);
+        if(edge.length>3){edge.push(edge[0]);roll(m,edge.map(p=>({p,n:norm(sub(p,[F.cx,p[1],F.cz]))})),.006*s,.0025*s,[.88,.88,.88],head,{sides:8});}
         void color;
         const part = m.part('Poncho hood', { texture: blanket.name, keepColors: true, roughness: 0.92, metalness: 0, doubleSided: true });
         const Fabric = need('RRCharacterFabric', './CharacterFabric.js');
@@ -1259,24 +1264,30 @@
     /** A head wrap: bands of cloth wound round and round over a cap, crossing at the brow, a loose end hanging behind. */
     function headWrap(C, item, out) {
         const F = headFrame(C), s = C.s, head = C.rigid('Head'), m = new GearMesh(), color = linear(item.color || '#9a7a52'), rand = stream(31 + (item.wearSeed | 0));
-        const brow = F.brow + 0.006 * s, crown = F.crown;
-        // Each band its own height and tilt (lower at the front or behind), a little further out than the last.
-        const bands = [[0.04, 0.45], [0.14, -0.6], [0.26, 0.55], [0.36, -0.5], [0.5, 0.35]];
-        bands.forEach(([h, tilt], i) => {
-            const y0 = brow + (crown - brow) * h, gap = 0.013 * s + i * 0.0022 * s, path = [];
-            for (let k = 0; k <= 36; k++) {
-                const a = k / 36 * TAU, y = y0 - tilt * 0.04 * s * Math.cos(a) + 0.004 * s * Math.sin(a * 3 + i);
-                // Over the crown the head narrows: the band stays on the head, not up in the air.
-                path.push({ p: F.point(a, Math.min(y, crown - 0.012 * s), gap), n: F.normal(a, Math.min(y, crown - 0.012 * s)) });
-            }
-            roll(m, path.slice(0, -1), (0.04 + 0.01 * rand()) * s, (0.009 + 0.004 * rand()) * s, color.map(c => c * (0.88 + 0.16 * rand())), head, { closed: true });
-        });
+        const brow=F.brow+.006*s,crown=F.crown,top=crown+.017*s,N=80;
+        const rx=F.radius(Math.PI/2,brow)+.010*s,rz=(F.radius(0,brow)+F.radius(Math.PI,brow))/2+.010*s;
+        const at=(a,y,lift=0)=>{const t=Math.max(0,Math.min(.9999,(y-brow)/(top-brow))),d=Math.sqrt(1-t*t);return [F.cx+Math.sin(a)*(rx+lift)*d,y,F.cz+Math.cos(a)*(rz+lift)*d];};
+        const grid=Array.from({length:17},(_,j)=>Array.from({length:N},(_,k)=>at(k/N*TAU,brow+(top-brow)*j/16)));
+        m.grid(grid,color,head,p=>[F.cx,p[1],F.cz],{closed:true,uvAt:(j,k)=>[k/N*TAU*(rx+rz)/2,j/16*(top-brow)]});
+        for(let i=0;i<5;i++){
+            const center=brow+.003*s+i*.016*s,tilt=(i%2?1:-1)*.009*s;
+            const rows=Array.from({length:6},(_,j)=>Array.from({length:N},(_,k)=>{
+                const a=k/N*TAU,y=Math.max(brow-.009*s,Math.min(top-.001*s,center+(j/5-.5)*.026*s+tilt*Math.cos(a)));
+                return at(a,y,(.002+i*.002+.0011*Math.sin(j/5*Math.PI)+.00025*Math.sin(a*17+i)*Math.sin(j/5*Math.PI))*s);
+            }));
+            m.grid(rows,color.map(v=>v*(i%2?.84:1.03)),head,p=>[F.cx,p[1],F.cz],{closed:true,uvAt:(j,k)=>[k/N*TAU*(rx+rz)/2,j/5*.026*s]});
+        }
+        // Close the last small latitude; a fabric cap has no pinhole at its crown.
+        const crownPoint=m.vertex([F.cx,top+.0004*s,F.cz],[0,1,0],color,head,[0,top-brow]);for(let k=0;k<N;k++){const a=m.vertex(grid[16][k],[0,1,0],color,head,[k/N*TAU*(rx+rz)/2,top-brow]),b=m.vertex(grid[16][(k+1)%N],[0,1,0],color,head,[(k+1)/N*TAU*(rx+rz)/2,top-brow]);m.tri(crownPoint,a,b);}
         // The loose end, tucked in behind on the left and hanging to the shoulder.
-        const tail = new GearMesh(), a = Math.PI - 0.7, y = brow + 0.01 * s, base = F.point(a, y, 0.026 * s), nn = F.normal(a, y), side = norm(cross(Y, nn)), rows = [];
-        for (let r = 0; r <= 6; r++) { const t = r / 6, p = add(add(base, mul(Y, -t * 0.16 * s)), mul(nn, (0.004 + 0.035 * t * t) * s)), w = (0.02 + 0.006 * Math.sin(t * 5)) * s; rows.push([add(p, mul(side, -w)), add(p, mul(side, w * 0.1)), add(p, mul(side, w))]); }
-        tail.grid(rows.map(r => [r[0], r[1], r[2]]), tone(color, 0.95), head, () => sub(base, mul(nn, 0.1)), { uvAt: (r, k) => [k * 0.12, r / 6 * 0.34] });
+        const tail = new GearMesh(), a = Math.PI - 0.7, y = brow + 0.01 * s, base = at(a, y, .0012*s), nn = F.normal(a, y), side = norm(cross(Y, nn)), rows = [];
+        for (let r = 0; r <= 12; r++) { const t = r / 12, p = add(add(base, mul(Y, -t * 0.16 * s)), mul(nn, (0.0006 + 0.035 * t * t) * s)), w = (0.02 + 0.006 * Math.sin(t * 5)) * s; rows.push([add(p, mul(side, -w)), add(p, mul(side, w * 0.1)), add(p, mul(side, w))]); }
+        tail.grid(rows.map(r => [r[0], r[1], r[2]]), tone(color, 0.95), head, () => sub(base, mul(nn, 0.1)), { uvAt: (r, k) => [k / 2 * .04*s, r / 12 * .16*s] });
         const W = need('RRCharacterWear', './CharacterWear.js'), pic = W && W.pictures().fray;
-        const part = fabricPart(m, 'Head wrap bands', 'canvasWorn', 0.92, item), end = tail.part('Head wrap end', Object.assign({ roughness: 0.95, metalness: 0, doubleSided: true }, pic ? { texture: pic.name, keepColors: true, cutout: true, alphaCutoff: 0.45 } : {}));
+        const part = fabricPart(m, 'Head wrap bands', 'canvasWorn', .92, item), end=fabricPart(tail,'Head wrap end','canvasWorn',.95,item);
+        Object.assign(end,{doubleSided:true},pic?{texture:pic.name,keepColors:true,cutout:true,alphaCutoff:.45}:{});
+        if(pic)end.uvs=Float32Array.from(tail.uv,(v,i)=>v/(i%2?.16*s:.04*s));end.normalScale=.20;
+        part.normalScale=.22;
         if (pic) out.textures.push(pic);
         return [part, end];
     }
@@ -1403,7 +1414,7 @@
     // ── building ──────────────────────────────────────────────────────────
     // Built in this order, each fitted over the ones before it.
     const ORDER = ['ragWraps', 'scrapArmor', 'toolBelt', 'harness', 'scrapPauldrons', 'capelet', 'poncho', 'legWraps', 'bandages', 'bootWraps', 'headWrap', 'faceVeil', 'gasMask', 'goggles'];
-    const MAKERS = { scrapArmor, scrapPauldrons, harness, toolBelt, gasMask, goggles, bootWraps, headWrap, faceVeil, poncho, ragWraps,
+    const MAKERS = { scrapArmor, scrapPauldrons, harness, toolBelt, gasMask, goggles, bootWraps, headWrap, faceVeil, poncho:(C,item,out)=>poncho(C,item,out), ragWraps,
         bandages: (C, item, out, shoeParts) => limbWrap(C, item, out, shoeParts, false), legWraps: (C, item, out, shoeParts) => limbWrap(C, item, out, shoeParts, true),
         // A duster's storm cape: a short plain poncho over its shoulders, no hood.
         capelet: (C, item, out) => poncho(C, item, out, { length: 0.2, gap: 0.01, hood: false, plain: true, name: 'Shoulder cape', rows: 8, around: 40 }) };

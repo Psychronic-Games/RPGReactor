@@ -1957,8 +1957,13 @@
     G.FLOOD_SLICE = 16;
 
     /** Begin a flood: the buffers are cleared and the unit's own cell goes in. False when the unit has no place on the map. */
+    // Bounds of cells actually reached, retained across slices of one flood.
+    // Movement points are a cost, not a distance: a cheap grapple can land far away.
+    const reachedBounds = { x0: 0, y0: 0, x1: -1, y1: -1 };
+    G.reachedBounds = () => reachedBounds;
     G.floodStart = function(fight, unit, budget) {
         ensureGrid();
+        reachedBounds.x0 = gw; reachedBounds.y0 = gh; reachedBounds.x1 = reachedBounds.y1 = -1;
         flooding.open = false; flooding.reached = 0;
         const character = fight.character(unit);
         if (!character || !$gameMap.isValid(character.x, character.y)) return false;
@@ -2032,10 +2037,14 @@
             // (A cost that is not the node's own is an older way there: a way that kills, given up for one that does not.)
             if (cost !== gCost[node]) continue;
             reached++;
-            // A fall that leaves the unit with no HP ends its way.
-            if (gLoss[node] > 0 && gLoss[node] >= flooding.hp) continue;
             const cell = (node - node % LEVELS) / LEVELS;
             const x = cell % gw, y = (cell - x) / gw, height = gHeight[node];
+            if (x < reachedBounds.x0) reachedBounds.x0 = x;
+            if (y < reachedBounds.y0) reachedBounds.y0 = y;
+            if (x > reachedBounds.x1) reachedBounds.x1 = x;
+            if (y > reachedBounds.y1) reachedBounds.y1 = y;
+            // A fall that leaves the unit with no HP ends its way.
+            if (gLoss[node] > 0 && gLoss[node] >= flooding.hp) continue;
             const facedAs = turns ? gFace[node] : 0, faced = facedAs * 4;
             // Whether the cell it is on is a place to stand: asked only when a way on leads to one that is not.
             let grounded = -1;
@@ -3554,9 +3563,9 @@
         const act = { steps };
         this.ensureFlood(unit, act.steps);
         const cells = [];
-        const reach = Math.ceil(act.steps);
-        for (let y = character.y - reach; y <= character.y + reach; y++) {
-            for (let x = character.x - reach; x <= character.x + reach; x++) {
+        const bounds = G.reachedBounds();
+        for (let y = bounds.y0; y <= bounds.y1; y++) {
+            for (let x = bounds.x0; x <= bounds.x1; x++) {
                 // Every level of the cell the unit can stop on: the ground under an eave and the eave are two cells here.
                 const levels = G.reachedAt(x, y, reachedOut);
                 for (let i = 0; i < levels; i++) {
@@ -5818,20 +5827,17 @@
     };
 
     //-------------------------------------------------------------------------
-    // What the view opens. Nothing the player must see hides behind something
-    // built: while the tactical camera looks, what stands between it and a
-    // unit, the cursor, or a place the unit in hand can go to or strike is
-    // opened, and opened cleanly.
+    // Building interiors open only around the controlled unit's actual body
+    // inside a room. Cursor destinations, other units and nearby houses do
+    // not reveal interiors. Roofs remain available for movement and grappling.
     //  - A building loses the storey above the floor in question, whole (its
     //    roof, the floors over it). Its walls that stand between the camera
-    //    and its own rooms are cut down to a foot, and so is a wall where it
-    //    hides someone standing behind it.
-    //  - A low cover (a stall's awning, a porch roof) comes off whole.
+    //    and its own occupied room are cut down to a foot.
     //  - Scenery (a tree, a prop) is cut off above its foot.
     // What is cut is cut at a level and capped; the rest stays solid: nothing
     // is thinned and nothing is seen through. An opening comes and goes over
-    // a few frames and stays a while after it was last needed, so a pointer
-    // crossing tiles does not make it flicker. A unit, what it holds, its
+    // a few frames. Scenery holds briefly; interiors close when the unit
+    // leaves or selection changes. A unit, what it holds, its
     // ring and its bar are never cut. All of it is worked out when the marks,
     // a unit's tile, the view's quarter or (by a few tiles) its place change;
     // between those a frame costs a few comparisons.
@@ -6165,7 +6171,7 @@
         };
     };
 
-    /** Who and what must be seen, into `openSubjects`: every unit, the cursor, and the places the unit in hand can go to or strike. */
+    /** Subjects for scenery visibility; these never authorize opening a building. */
     function collectSubjects(fight) {
         const S = openSubjects, most = Math.min(S.x.length, View.OPEN_SUBJECTS);
         S.n = 0;
@@ -6204,6 +6210,37 @@
         return hits;
     }
 
+    /** The controlled unit actually inside a room, never its cursor or destination. */
+    View.interiorSubject = function(fight, grid) {
+        const unit = fight.activeUnit();
+        if (!unit || !fight.isPlayerUnit(unit) || !fight.isAlive(unit)) return null;
+        const c = fight.character(unit);
+        if (!c) return null;
+        const x = (Number.isFinite(c._realX) ? c._realX : c.x) + 0.5;
+        const y = (Number.isFinite(c._realY) ? c._realY : c.y) + 0.5;
+        const h = G.heightOf(c) + (Number(c._reactorAir) || 0);
+        const cx = Math.floor(x), cy = Math.floor(y);
+        if (cx < 0 || cy < 0 || cx >= grid.w || cy >= grid.h) return null;
+        const at = cy * grid.w + cx, base = Reactor3D.pieceBaseAt($dataMap, cx, cy);
+        const stack = grid.index.cells.get(cy * 65536 + cx);
+        // A roof above the body, rather than the roof the unit is standing on.
+        if (!stack || !stack.some(p => p.kind !== "doorway" && p.kind !== "ladder" && base + p.z >= h + 2.6)) return null;
+        if (builtAt(grid, cx, cy, x, h + 1.6, y, Infinity)) return null;
+        const cluster = clusterAt(grid, at);
+        if (!cluster) return null;
+        // Eaves and porches are outside. A doorway may be open, so three
+        // enclosing sides suffice; the actor must already be past its threshold.
+        let sides = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            for (let step = 1; step < 40; step++) {
+                const px = cx + dx * step, py = cy + dy * step;
+                if (px < cluster.x0 || px > cluster.x1 || py < cluster.y0 || py > cluster.y1) break;
+                if (builtAt(grid, px, py, px + 0.5, h + 1.6, py + 0.5, Infinity) || doorAt(grid, px, py, h)) { sides++; break; }
+            }
+        }
+        return sides >= 3 ? { x, y, h, cluster } : null;
+    };
+
     /**
      * Works out what is in the way now and what each opening is: called when something changed, never per frame.
      * A building in the way is opened for the lowest floor asked about, but never under someone who stands in
@@ -6215,32 +6252,34 @@
         const stamp = ++cut.stamp, needed = openNeeded;
         needed.length = 0;
         collectSubjects(fight);
-        const S = openSubjects;
-        if (grid) {
+        const interior = grid && View.interiorSubject(fight, grid);
+        if (interior) {
             const note = (hits, floor, least) => {
                 for (let i = 0; i < hits.length; i += 3) {
                     if (hits[i + 1] < least) continue;
                     const cluster = grid.clusters[hits[i]];
+                    if (cluster !== interior.cluster) continue;
                     if (cluster.stamp !== stamp) { cluster.stamp = stamp; cluster.stand = -1e9; cluster.floorMin = Infinity; cluster.hits.length = 0; }
                     if (cluster.wanted !== stamp) { cluster.wanted = stamp; needed.push(cluster); }
                     if (floor < cluster.floorMin) cluster.floorMin = floor;
                     if (cluster.hits.length < 900) cluster.hits.push(hits[i + 2], hits[i + 1], floor);
                 }
             };
-            for (let i = 0; i < S.n; i++) {
-                const x = S.x[i], y = S.y[i], h = S.h[i], kind = S.kind[i];
-                // Whoever is in or on a building: its rooms are what is looked into, and a unit or the cursor holds its floor.
+            {
+                const { x, y, h } = interior;
+                // The occupied storey follows the body, including its height on stairs.
                 const cx = Math.floor(x), cy = Math.floor(y), at = cx >= 0 && cy >= 0 && cx < grid.w && cy < grid.h ? cy * grid.w + cx : -1;
                 if (at >= 0 && grid.top[at] > -1e8) {
                     const own = clusterAt(grid, at);
                     if (own.stamp !== stamp) { own.stamp = stamp; own.stand = -1e9; own.floorMin = Infinity; own.hits.length = 0; }
                     own.inside = stamp;
-                    if ((kind === 1 || kind === 2) && h > own.stand) own.stand = h;
+                    if (h > own.stand) own.stand = h;
                 }
                 // A unit by its chest and its head, and by its feet where what is in the way stands as high as its chest (what
                 // it is seen over, a rim, a bench, a wall cut to its foot, hides nobody); a place by where a unit's chest would be.
                 note(hitsFor(grid, x, y, h, 1.5), h, -1e9);
-                if (S.tall[i] > 0) { note(hitsFor(grid, x, y, h, S.tall[i]), h, -1e9); note(hitsFor(grid, x, y, h, 0.3), h, h + 1.6); }
+                note(hitsFor(grid, x, y, h, 2.6), h, -1e9);
+                note(hitsFor(grid, x, y, h, 0.3), h, h + 1.6);
             }
         }
         const view = fight._tac && fight._tac.view, look = view ? View.direction(view.yaw) : null;
@@ -6321,6 +6360,12 @@
         let moving = changed;
         for (const cluster of cut.open) {
             if (cluster.wanted !== stamp) {
+                if (!interior || cluster !== interior.cluster) {
+                    cluster.asked = false;
+                    cluster.goal = 0;
+                    if (cluster.e !== cluster.goal) moving = true;
+                    continue;
+                }
                 // Needed until this look (nothing had changed since the last one): its time runs from now.
                 if (cluster.asked) { cluster.asked = false; cluster.last = frame; }
                 if (frame - cluster.last >= View.OPEN_HOLD || frame < cluster.last) cluster.goal = 0;
@@ -6652,6 +6697,9 @@
         else if (own && camera) {
             const eye = camera.getWorldPosition(cut.eye || (cut.eye = new THREE.Vector3()));
             const moved = Math.abs(eye.x - cut.ex) + Math.abs(eye.y - cut.ey) + Math.abs(eye.z - cut.ez) > View.OPEN_EYE;
+            const unit = $gameFight.activeUnit(), c = unit && $gameFight.character(unit);
+            const occupant = c ? unit.id + ":" + Math.floor((c._realX ?? c.x) + 0.5) + ":" + Math.floor((c._realY ?? c.y) + 0.5) + ":" + Math.round((G.heightOf(c) + (Number(c._reactorAir) || 0)) * 4) : "none";
+            if (occupant !== cut.occupant) { cut.occupant = occupant; changed = true; }
             // On the beat while units walk; at once when the marks change; when an opening's time is up; when the camera has moved.
             if (changed || frame >= cut.due || frame < cut.last || (moved && frame - cut.last >= 4) || (frame % 12 === 0 && !$gameFight.awaitsPlayer())) {
                 if (moved) { cut.ex = eye.x; cut.ey = eye.y; cut.ez = eye.z; cut.memo.clear(); }
@@ -6674,7 +6722,16 @@
             }
             const changed = keep || cut.rev !== -1 ? View.cutRegion($gameFight, keep) : false;
             if (keep || cut.open.length || cut.props.size || cut.scene !== this) View.updateOpenings(this, camera, own, keep, changed);
-            if (!own) return updateCutaway.call(this, camera, mapData, character, others);
+            if (!own) {
+                // Tactical battles that keep the map camera still follow the
+                // controlled unit, rather than opening the leader's house.
+                if ($gameFight.isTactical() && $gameFight.isHere()) {
+                    const unit = $gameFight.activeUnit();
+                    character = unit && $gameFight.isPlayerUnit(unit) && $gameFight.isAlive(unit) ? $gameFight.character(unit) : null;
+                    others = null;
+                }
+                return updateCutaway.call(this, camera, mapData, character, others);
+            }
             // The battle's openings are the whole cut: the map's own corridor to the player and its see-through pass rest.
             const result = updateCutaway.call(this, camera, mapData, null, null);
             if (this._cutState && this._cutState !== "none") {
@@ -6925,8 +6982,6 @@
             const moving = $gameFight, stage = moving._act;
             if (direction.y < -1e-6 && stage && stage.unitId && moving.playerStage("move")) {
                 moving.ensureFlood(moving.unit(stage.unitId), stage.steps);
-                const shared = Reactor3D.cutawayUniforms ? Reactor3D.cutawayUniforms() : null;
-                const box = shared ? shared.rrFightBox.value : null, opened = shared && View.active() && box[2] > box[0] ? shared.rrFightLevel.value[1] : Infinity;
                 let first = false, fx = 0, fy = 0, fh = 0, before = origin.y;
                 for (let t = 0; t < 600; t += 0.15) {
                     const px = origin.x + direction.x * t, pz = origin.z + direction.z * t, py = origin.y + direction.y * t;
@@ -6941,9 +6996,9 @@
                             if (!G.canStopAt(cx, cy, level)) continue;
                             const hook = G.grappledAt(cx, cy, level);
                             if (stage.grappleOnly && !hook) continue;
-                            // Over the battle's ground, what stands higher than the cut is not drawn: the pointer goes through it,
-                            // except to an edge the grapple reaches (its mark shows where the roof was).
-                            const cut = !hook && level > opened && cx + 0.5 >= box[0] && cx + 0.5 <= box[2] && cy + 0.5 >= box[1] && cy + 0.5 <= box[3];
+                            // Pick through only a roof this building's opening actually removes.
+                            // Grapple edges remain selectable from inside the occupied room.
+                            const cut = !hook && View.active() && level > View.openAt(cx, cy);
                             if (!cut) { picked.x = cx; picked.y = cy; picked.h = level; return picked; }
                             if (!first) { first = true; fx = cx; fy = cy; fh = level; }
                         }
@@ -8008,6 +8063,55 @@
         U.layer.visible = used > 0;
     };
 
+    /** The selected action's hit chance beside the valid hovered target. */
+    U.placeForecast = function(spriteset, on) {
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        const hud = root.ReactorFightHud;
+        const target = on && !M.hidden && fight && fight.playerStage("target") ? fight.focusedUnit() : null;
+        let view = U.forecast;
+        if (!target || !U.layer) { if (view) view.sprite.visible = false; return; }
+        if (!view || view.sprite.parent !== U.layer) {
+            if (view && view.bitmap.destroy) view.bitmap.destroy();
+            const bitmap = new Bitmap(160, 38), sprite = new Sprite(bitmap);
+            sprite.anchor.x = 0.5; sprite.anchor.y = 1;
+            U.layer.addChild(sprite);
+            view = U.forecast = { sprite, bitmap, revision: -1, serial: -1, unitId: 0, text: "" };
+        }
+        const rev = fight.tac().rev;
+        if (view.revision !== rev || view.serial !== fight._serial || view.unitId !== target.id) {
+            view.revision = rev; view.serial = fight._serial; view.unitId = target.id;
+            const targets = fight.targetsAtCursor();
+            const valid = targets.some(unit => unit.id === target.id);
+            const preview = valid ? fight.preview(target) : null;
+            const text = preview ? (hud ? hud.label(null, "hit") : "Hit") + " " + (hud ? hud.percent(preview.hit) : Math.round(Math.max(0, Math.min(1, preview.hit)) * 100) + "%") : "";
+            if (text !== view.text) {
+                view.text = text;
+                const b = view.bitmap;
+                b.clear();
+                if (text) {
+                    b.fillRect(0, 0, 160, 38, "#d8bd70"); b.fillRect(1, 1, 158, 36, "rgba(10,14,22,0.94)");
+                    b.fontSize = 20; b.fontBold = true; b.textColor = "#fff4c9"; b.outlineColor = "#000000"; b.outlineWidth = 3;
+                    b.drawText(text, 6, 0, 148, 38, "center");
+                }
+            }
+        }
+        const c = fight.character(target), live = spriteset._reactor3d, camera = live && live.camera;
+        if (!view.text || !c) { view.sprite.visible = false; return; }
+        let x, y;
+        if (camera) {
+            const tall = F.Stage && F.Stage.heightOf ? F.Stage.heightOf(c) : 2;
+            const point = Reactor3D.projectToScreen(camera, c._realX + 0.5, G.heightOf(c) + (Number(c._reactorAir) || 0) + tall + 0.65, c._realY + 0.5, U.forecastPoint || (U.forecastPoint = {}));
+            x = point.x; y = point.y;
+        } else {
+            x = $gameMap.adjustX(c._realX + 0.5) * $gameMap.tileWidth();
+            y = $gameMap.adjustY(c._realY + 1) * $gameMap.tileHeight() - 64;
+        }
+        view.sprite.visible = x >= 0 && y >= 0 && x <= Graphics.width && y <= Graphics.height;
+        view.sprite.x = Math.round(Math.max(84, Math.min(Graphics.width - 84, x)));
+        view.sprite.y = Math.round(Math.max(40, y));
+        if (view.sprite.visible) U.layer.visible = true;
+    };
+
     /** Each frame, after the marks: who is marked is read (no more than that), rings are laid again when it changed, bars are placed. */
     U.update = function(spriteset) {
         const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
@@ -8028,6 +8132,7 @@
             U.groundLayer.y = Math.round($gameMap.adjustY(0) * $gameMap.tileHeight());
         }
         U.placeBars(spriteset, on);
+        U.placeForecast(spriteset, on);
         U.shown = on;
     };
 

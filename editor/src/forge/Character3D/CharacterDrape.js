@@ -852,6 +852,28 @@
         P.set(X);
         for (let i = 0; i < n; i++) { if (!inv[i]) continue; refresh(i, true); collideOne(i, false); }
 
+        // Preserve each course's orientation. A few collapsed/reversed faces were hidden
+        // by average strain, leaving a hard tear across the chest or a knee. Ease only
+        // the affected neighborhood back toward its sound cut, retaining the surrounding drape.
+        const folded=t=>{const fs=[F[I[t]],F[I[t+1]],F[I[t+2]]];if(fs.some(f=>f.fam!==0)||fs.reduce((v,f)=>v+f.s/3,0)<2.25||fs.reduce((v,f)=>v+f.s/3,0)>3.45)return false;const a=I[t]*3,b=I[t+1]*3,c=I[t+2]*3;
+            const normal=Q=>{const ux=Q[b]-Q[a],uy=Q[b+1]-Q[a+1],uz=Q[b+2]-Q[a+2],vx=Q[c]-Q[a],vy=Q[c+1]-Q[a+1],vz=Q[c+2]-Q[a+2];return[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx];};
+            const before=normal(pos),after=normal(P),area0=Math.hypot(...before),area1=Math.hypot(...after);
+            // A side panel can turn through a right angle in a legitimate fold.
+            // Correct collapsed faces and strongly reversed front/back courses;
+            // leave those curved underarm and open-coat folds in their settled shape.
+            return area0>1e-10&&(area1<area0*.08||(Math.abs(before[2])>area0*.75&&(before[0]*after[0]+before[1]*after[1]+before[2]*after[2])<-.5*area0*area1));
+        };
+        let foldedFaces=0,remainingFoldedFaces=0;
+        for(let pass=0;pass<6;pass++){
+            const restore=new Float32Array(n);let count=0;
+            for(let t=0;t<I.length;t+=3)if(folded(t)){count++;for(let j=0;j<3;j++)restore[I[t+j]]=1;}
+            if(!pass)foldedFaces=count;if(!count)break;
+            for(const weight of [.75,.45,.20]){const core=restore.slice();for(let i=0;i<n;i++)if(core[i]>weight)for(const j of N[i])restore[j]=Math.max(restore[j],weight);}
+            for(let i=0;i<n;i++)if(restore[i]&&!held[i])for(let k=0;k<3;k++)P[i*3+k]+=(pos[i*3+k]-P[i*3+k])*restore[i];
+        }
+        if(foldedFaces)for(let i=0;i<n;i++){if(!inv[i])continue;refresh(i,true);collideOne(i,false);}
+        for(let t=0;t<I.length;t+=3)if(folded(t))remainingFoldedFaces++;
+
         // How far the settled cloth is from its cut lengths (mean and worst stretch, as fractions).
         let strain = 0, squeeze = 0, worst = 0, worstAt = -1;
         for (let e = 0; e < ne; e++) {
@@ -870,7 +892,7 @@
         // over it later, and its own turned hem, read "outward" from it).
         // A drape that went wrong (the cloth torn across a deep body fold on an extreme body, or caught inside it)
         // is not used: the piece keeps the shell it was laid as.
-        const rejected = strain / Math.max(1, ne) > 0.03 || squeeze / Math.max(1, ne) > 0.06 || inBody > Math.max(4, n * 0.02);
+        const rejected = strain / Math.max(1, ne) > 0.03 || squeeze / Math.max(1, ne) > 0.06 || inBody > Math.max(4, n * 0.02) || remainingFoldedFaces > Math.max(1, I.length/3*.001);
         if (rejected) {
             // (Still kept out of the skin: a refined shell's new points can lie on chords through a deep curve.)
             P.set(pos);
@@ -894,7 +916,7 @@
             drop += pos[o + 1] - P[o + 1];
             pos[o] = P[o]; pos[o + 1] = P[o + 1]; pos[o + 2] = P[o + 2];
         }
-        const stats = { rejected, inLayer, inBody, layered: !!layers, warm: !!warm, ms: now() - t0, steps: S, verts: n, pins: heldIds.length, moved: moved / n, strain: strain / Math.max(1, ne), squeeze: squeeze / Math.max(1, ne), stretch: worst, drop: drop / n, worstAt: worstAt >= 0 ? { fam: F[worstAt].fam, u: F[worstAt].u, p: [P[worstAt * 3], P[worstAt * 3 + 1], P[worstAt * 3 + 2]].map(v => +v.toFixed(3)), p0: [X0[worstAt * 3], X0[worstAt * 3 + 1], X0[worstAt * 3 + 2]].map(v => +v.toFixed(3)), sup: support ? support[worstAt] : null, held: held[worstAt], border: piece.onBorder[worstAt] } : null, role: prof.role, garment, quality: ctx.quality === 'preview' ? 'preview' : 'save' };
+        const stats = { rejected, foldedFaces, remainingFoldedFaces, inLayer, inBody, layered: !!layers, warm: !!warm, ms: now() - t0, steps: S, verts: n, pins: heldIds.length, moved: moved / n, strain: strain / Math.max(1, ne), squeeze: squeeze / Math.max(1, ne), stretch: worst, drop: drop / n, worstAt: worstAt >= 0 ? { fam: F[worstAt].fam, u: F[worstAt].u, p: [P[worstAt * 3], P[worstAt * 3 + 1], P[worstAt * 3 + 2]].map(v => +v.toFixed(3)), p0: [X0[worstAt * 3], X0[worstAt * 3 + 1], X0[worstAt * 3 + 2]].map(v => +v.toFixed(3)), sup: support ? support[worstAt] : null, held: held[worstAt], border: piece.onBorder[worstAt] } : null, role: prof.role, garment, quality: ctx.quality === 'preview' ? 'preview' : 'save' };
         if (api.trace) api.trace.push(stats);
         cache.set(key, { positions: Float32Array.from(pos), base: ctx.base ? Float32Array.from(ctx.base) : null, stats });
         // Where this piece settled relative to its laid shell: the next preview of it starts there.

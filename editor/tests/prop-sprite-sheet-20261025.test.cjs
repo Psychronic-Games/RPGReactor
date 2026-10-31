@@ -207,7 +207,7 @@ test('the panel\'s size comes from the prop at rest, turned to each direction ab
     assert.equal(P.restBounds([box], 8, 30).length, 8);
 });
 
-test('the width the user sets, in tiles: the cell that wide, the height following the prop', () => {
+test('the width the user sets in pixels: the cell that wide, the height following the prop', () => {
     const S = globalThis.RRCharacterSpriteSheet, ppm = S.pixelsPerMeter(48);
     const oak = [{ minX: -2, maxX: 2.2, minY: -0.5, maxY: 8 }];
     // Its own width beside characters: 128 px, 2.75 tiles to a quarter; at most what keeps both sides within the limit.
@@ -224,6 +224,8 @@ test('the width the user sets, in tiles: the cell that wide, the height followin
     // A width whose height would pass the limit comes down, and says so.
     const tall = P.matchSize([{ minX: -0.5, maxX: 0.5, minY: 0, maxY: 20 }], ppm, true, 480);
     assert.ok(tall.h <= P.MAX_FRAME && tall.shrunk < 1);
+    assert.equal(tall.w,480,'explicit pixel width is retained when tall props need horizontal padding');
     // A chest stays about its own size, a quarter tile at the least.
     assert.equal(P.widthTiles([{ minX: -0.1, maxX: 0.1, minY: 0, maxY: 0.2 }], true, 48).atScale, 0.25);
 });
+test('a full prop sheet is bounded before its bitmap allocation',()=>{assert.equal(P.sheetFits(48*1024,8*1024),false);assert.equal(P.sheetFits(8192,8192),true);assert.equal(P.sheetFits(8192,8193),false);assert.equal(P.sheetFits(16385,128),false);});

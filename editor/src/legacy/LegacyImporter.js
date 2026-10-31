@@ -205,19 +205,33 @@ function open(source, destination, options) {
     if (options && options.graphics !== undefined && !['remaster', 'original'].includes(options.graphics)) throw new Error('Artwork must be remaster or original.');
     options = options || {};
     source = path.resolve(source);
+    const directoryNames = new Map();
 /** Windows projects are case-insensitive; find `name` under `root` whatever its spelling. */
     function resolveInsensitive(root, name) {
         const parts = name.split(/[\\/]/).filter(Boolean);
         let at = root;
         for (const part of parts) {
-            if (!fs.existsSync(at)) return null;
-            const entries = fs.readdirSync(at);
-            const hit = entries.find(e => e === part) || entries.find(e => e.toLowerCase() === part.toLowerCase());
+            if (!directoryNames.has(at)) {
+                let names;
+                try { names = fs.readdirSync(at); } catch (_) { return null; }
+                directoryNames.set(at, { exact: new Set(names), lower: new Map(names.map(n => [n.toLowerCase(), n])) });
+            }
+            const entries = directoryNames.get(at);
+            const hit = entries.exact.has(part) ? part : entries.lower.get(part.toLowerCase());
             if (!hit) return null;
             at = path.join(at, hit);
         }
         return fs.existsSync(at) ? at : null;
     }
+    const findImage = (root, folder, name) => {
+        if (!name) return null;
+        const stem = K.stripExt(name);
+        for (const ext of ['.png', '.bmp', '.xyz']) {
+            const file = resolveInsensitive(root, path.join(folder, stem + ext)) || resolveInsensitive(root, path.join(folder, stem + ext + ext));
+            if (file) return file;
+        }
+        return null;
+    };
     const files = {
         read: (name) => { const p = resolveInsensitive(source, name); return p && fs.statSync(p).isFile() ? fs.readFileSync(p) : null; },
         list: (dir) => { const p = resolveInsensitive(source, dir); return p && fs.statSync(p).isDirectory() ? fs.readdirSync(p) : []; }
@@ -326,27 +340,7 @@ function open(source, destination, options) {
     // Found when an import starts; a report does not need it.
     let runtime = null;
     
-    /** Decode a PNG to RGBA, and make palette entry 0 transparent when `key` is set (the 2000/2003 rule). */
-    function decodePng(bytes, key) {
-        const png = PNG.sync.read(bytes);
-        const img = { width: png.width, height: png.height, data: new Uint8Array(png.data.buffer, png.data.byteOffset, png.data.length) };
-        if (key) {
-            const first = paletteFirst(bytes);
-            if (first) K.keyColour(img, first[0], first[1], first[2]);
-        }
-        return img;
-    }
-    /** The first PLTE entry of a PNG, or null when it has no palette. */
-    function paletteFirst(bytes) {
-        let pos = 8;
-        while (pos + 8 <= bytes.length) {
-            const len = bytes.readUInt32BE(pos), type = bytes.toString('latin1', pos + 4, pos + 8);
-            if (type === 'PLTE') return [bytes[pos + 8], bytes[pos + 9], bytes[pos + 10]];
-            if (type === 'IDAT' || type === 'IEND') return null;
-            pos += 12 + len;
-        }
-        return null;
-    }
+    const decodePng = require('./LegacyImage.js').decode;
     function encodePng(img) {
         const png = new PNG({ width: img.width, height: img.height });
         png.data = Buffer.from(img.data.buffer, img.data.byteOffset, img.data.length);
@@ -366,7 +360,7 @@ function open(source, destination, options) {
     function copyTree(from, to) {
         for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
             const s = path.join(from, entry.name), d = path.join(to, entry.name);
-            if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+            if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); EditorPaths.copyFile(s, d); }
         }
     }
     
@@ -395,15 +389,18 @@ function open(source, destination, options) {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
                 const full = path.join(dir, entry.name);
                 if (entry.isDirectory()) { await walk(full, path.join(rel, entry.name)); continue; }
-                if (!/\.png$/i.test(entry.name)) {
+                if (!/\.(png|bmp|xyz)$/i.test(entry.name)) {
                     // Another image format is art the game meant to show; saves, notes and the like left in an art folder are not.
-                    if (/\.(bmp|xyz|jpe?g|gif)$/i.test(entry.name)) notes.skipped.push(`${folder}/${path.join(rel, entry.name)}: not PNG`);
+                    if (/\.(jpe?g|gif)$/i.test(entry.name)) notes.skipped.push(`${folder}/${path.join(rel, entry.name)}: unsupported image format`);
                     continue;
                 }
-                const base = entry.name.replace(/\.png$/i, '');
+                const base = entry.name.replace(/\.(png|bmp|xyz)\.\1$/i, '.$1').replace(/\.(png|bmp|xyz)$/i, '');
+                // Like RPG_RT, prefer PNG, then BMP, then XYZ when several files share a stem.
+                const preferred = findImage(root, rel, base);
+                if (preferred !== full) continue;
                 // From the RTP, only what the game names.
-                if (options.only && !options.only.has(((options.rename ? options.rename(base) : base)).toLowerCase()) && !options.only.has(path.join(rel, base).replace(/\\/g, '/').toLowerCase())) continue;
-                const keying = typeof options.key === 'function' ? options.key(base) : options.key;
+                if (options.only && !options.only.has(path.join(rel, options.rename ? options.rename(base) : base).replace(/\\/g, '/').toLowerCase())) continue;
+                const keying = typeof options.key === 'function' ? options.key(path.join(rel, base).replace(/\\/g, '/')) : options.key;
                 const outDir = path.join(destination, target, rel);
                 await maybeBreathe();
                 const bytes = fs.readFileSync(full);
@@ -447,18 +444,24 @@ function open(source, destination, options) {
         const root = from.root !== undefined ? from.root : resolveInsensitive(source, folder);
         if (!root) return 0;
         let written = 0;
+        const copies = [];
         mkdir(path.join(destination, target));
-        for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        const walk = (dir, rel) => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.isDirectory()) { walk(path.join(dir, entry.name), path.join(rel, entry.name)); continue; }
             if (!entry.isFile()) continue;
-            if (from.only && !from.only.has(entry.name.replace(/\.[^.]+$/, '').toLowerCase())) continue;
+            const relative = path.join(rel, entry.name).replace(/\\/g, '/');
+            if (from.only && !from.only.has(relative.replace(/\.[^.]+$/, '').toLowerCase())) continue;
             stepAsset(folder, entry.name);
             // The old engine found "Song.ogg.ogg" when the data asked for "Song.ogg"; the runtime wants one extension.
             let name = entry.name;
-            const doubled = /^(.*\.(ogg|mp3|wav|flac|m4a|mid|midi))\.\2$/i.exec(name);
+            const doubled = /^(.*\.(ogg|mp3|wav|flac|m4a|mid|midi|avi|mpg|mpeg|wmv|mp4|webm|ogv|mov|mkv|flv))\.\2$/i.exec(name);
             if (doubled) { name = doubled[1]; addNote(notes.images, 'renamed', 1); }
-            fs.copyFileSync(path.join(root, entry.name), path.join(destination, target, safeName(name)));
-            written++;
-        }
+            const output = path.join(destination, target, rel, safeName(name));
+            copies.push([path.join(dir, entry.name), output]);
+        } };
+        walk(root, '');
+        require('./ProjectFiles.js').refreshConvertedMedia(destination, copies.map(([, output]) => path.relative(destination, output)));
+        for (const [file, output] of copies) { mkdir(path.dirname(output)); EditorPaths.copyFile(file, output); written++; }
         addNote(notes.images, folder, written);
         return written;
     }
@@ -483,13 +486,15 @@ function open(source, destination, options) {
         const title = (project.ini.RPG_RT && project.ini.RPG_RT.GameTitle) || path.basename(source);
         const sys = db.system || {};
         // A game built with FullPackageFlag=1 carries everything; otherwise it may take files from the RTP.
-        const needsRtp = String((project.ini.RPG_RT || {}).FullPackageFlag || '0').trim() !== '1';
+        const declaredRtp = String((project.ini.RPG_RT || {}).FullPackageFlag || '0').trim() !== '1';
         // Which RTP the game's names are, and the RTP on hand that answers to most of them. An RTP made for
         // other names (the official one for a game made with Don Miguel's, or the reverse) is read through a
         // temporary copy holding each file under both names; files no RTP on hand has are reported.
         const RM = require('./RtpManager.js');
-        const shipped = (folder, name) => ['.png', '.bmp', '.xyz', '.wav', '.mid', '.ogg', '.mp3'].some(e => !!resolveInsensitive(source, path.join(folder, name + e)));
-        const referenced = needsRtp ? RM.referencedNames(db, project.tree, shipped) : null;
+        const shipped = (folder, name) => !!findImage(source, folder, name) || ['.wav', '.mid', '.ogg', '.mp3'].some(e => !!resolveInsensitive(source, path.join(folder, name + e)));
+        const referenced = RM.referencedNames(db, project.tree, shipped, project.maps);
+        // Released games sometimes claim to be complete but still use an RTP sound in an event/route.
+        const needsRtp = declaredRtp || Object.values(referenced).some(names => names.length > 0);
         const rtpUse = referenced ? RM.classify(db.engine, referenced) : null;
         const rtpFound = needsRtp ? findRtp(db.engine, Object.assign({ source, referenced }, options)) : null;
         if (rtpFound) log(`  RTP: ${rtpFound}`, 'info');
@@ -513,9 +518,9 @@ function open(source, destination, options) {
         mkdir(path.join(dest, 'js'));
         for (const entry of fs.readdirSync(runtime, { withFileTypes: true })) {
             const s = path.join(runtime, entry.name), d = path.join(dest, 'js', entry.name);
-            if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else fs.copyFileSync(s, d);
+            if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else EditorPaths.copyFile(s, d);
         }
-        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        EditorPaths.copyFile(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const folder of ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/animations', 'img/characters', 'img/enemies', 'img/faces', 'img/parallaxes', 'img/pictures', 'img/tilesets', 'img/titles1', 'img/titles2', 'img/battlebacks1', 'img/battlebacks2', 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, folder));
     
         log('Converting the database…', 'stage');
@@ -533,13 +538,13 @@ function open(source, destination, options) {
         const pictureUse = {};
         const effectPictures = new Set();   // picture ids any event gives a rotation or wave, so a later plain move can stop it
         {
-            const scan = (cmds) => { for (const c of cmds || []) { if ((c.code === 11110 || c.code === 11120) && (c.parameters[12] === 1 || c.parameters[12] === 2)) effectPictures.add(c.parameters[0]); if (c.code === 11110 && c.string) { const u = pictureUse[C.stripExt(c.string)] || (pictureUse[C.stripExt(c.string)] = { keyed: 0, opaque: 0 }); if (c.parameters[7] > 0) u.keyed++; else u.opaque++; } } };
+            const scan = (cmds) => { for (const c of cmds || []) { if ((c.code === 11110 || c.code === 11120) && (c.parameters[12] === 1 || c.parameters[12] === 2)) effectPictures.add(c.parameters[0]); if (c.code === 11110 && c.string) { const key = C.stripExt(c.string).toLowerCase(); const u = pictureUse[key] || (pictureUse[key] = { keyed: 0, opaque: 0 }); if (c.parameters[7] > 0) u.keyed++; else u.opaque++; } } };
             for (const ce of (db.commonevents || [])) if (ce) scan(ce.event_commands);
             for (const t of (db.troops || [])) if (t) for (const pg of (t.pages || [])) if (pg) scan(pg.event_commands);
             for (const id in project.maps) for (const e of (project.maps[id].events || [])) if (e) for (const pg of (e.pages || [])) if (pg) scan(pg.event_commands);
         }
         converted.ctx.effectPictures = effectPictures;
-        const pictureKeying = (name) => { const u = pictureUse[name]; return !u || !u.opaque ? true : !u.keyed ? false : 'both'; };
+        const pictureKeying = (name) => { const u = pictureUse[name.toLowerCase()]; return !u || !u.opaque ? true : !u.keyed ? false : 'both'; };
         converted.ctx.pictureFile = (name, transparentColor) => (!transparentColor && pictureKeying(name) === 'both' ? name + ' (opaque)' : name);
         const convertCommands = (commands) => C.convertList(commands, converted.ctx).list;
         const convertRoute = (moves) => C.convertRoute(moves, converted.ctx);
@@ -558,7 +563,7 @@ function open(source, destination, options) {
             await breathe();
             const stem = `chip${String(chipset.id).padStart(3, '0')}`;
             const names = { A1: '', A2: '', B: '', C: '' };
-            const file = chipset.chipset_name ? (resolveInsensitive(source, path.join('ChipSet', chipset.chipset_name + '.png')) || (rtp && resolveInsensitive(rtp, path.join('ChipSet', chipset.chipset_name + '.png')))) : null;
+            const file = findImage(source, 'ChipSet', chipset.chipset_name) || (rtp && findImage(rtp, 'ChipSet', chipset.chipset_name));
             if (file && rtp && file.startsWith(rtp)) addNote(notes.images, 'fromRtp', 1);
             if (file) {
                 let sheets = sheetCache.get(file);
@@ -613,7 +618,7 @@ function open(source, destination, options) {
         // often do this). Keep every referenced skin, not just the initial one.
         const legacyWindows = [];
         const skinNames = new Map();
-        const addSkinName = name => { if (name) skinNames.set(String(name).replace(/\.png$/i, '').toLowerCase(), String(name).replace(/\.png$/i, '')); };
+        const addSkinName = name => { if (name) skinNames.set(K.stripExt(name).toLowerCase(), K.stripExt(name)); };
         addSkinName(sys.system_name);
         const scanSkins = commands => { for (const c of commands || []) if (c.code === 10680) addSkinName(c.string); };
         for (const ce of db.commonevents || []) if (ce) scanSkins(ce.event_commands);
@@ -621,9 +626,9 @@ function open(source, destination, options) {
         for (const map of Object.values(project.maps)) for (const event of map.events || []) if (event) for (const page of event.pages || []) if (page) scanSkins(page.event_commands);
         system.rrLegacySkins = {};
         for (const [key, name] of skinNames) {
-            const file = resolveInsensitive(source, path.join('System', name + '.png')) || (rtp && resolveInsensitive(rtp, path.join('System', name + '.png')));
+            const file = findImage(source, 'System', name) || (rtp && findImage(rtp, 'System', name));
             if (!file) continue;
-            const output = key === String(sys.system_name || '').toLowerCase() ? 'Window' : 'RR2kWindow_' + legacyWindows.length;
+            const output = key === K.stripExt(sys.system_name).toLowerCase() ? 'Window' : 'RR2kWindow_' + legacyWindows.length;
             try {
                 const image = decodePng(fs.readFileSync(file), true);
                 if (image.width < 160 || image.height < 80) throw new Error('expected a 160×80 System graphic');
@@ -639,7 +644,7 @@ function open(source, destination, options) {
         if (wanted && !wanted.has(system.startMapId)) { system.startMapId = written[0] || 1; system.editMapId = system.startMapId; }
         {   // Save and Load as 2003 laid them out; the bands between its windows are the system graphic's background colour (pixel 0,32).
             let background = '#000000';
-            const systemFile = sys.system_name ? resolveInsensitive(source, path.join('System', sys.system_name + '.png')) : null;
+            const systemFile = findImage(source, 'System', sys.system_name) || (rtp && findImage(rtp, 'System', sys.system_name));
             if (systemFile) {
                 try {
                     const img = decodePng(fs.readFileSync(systemFile), false), i = (32 * img.width) * 4;
@@ -658,7 +663,7 @@ function open(source, destination, options) {
             system.advanced.rrNamedSpriteBase = base;
             system.advanced.picturesUpperLimit = base + 399;
         }
-        if (system.title1Name && !resolveInsensitive(source, path.join('Title', system.title1Name + '.png'))) { notes.skipped.push(`Title/${system.title1Name}: named by the game but not on disk; no title image`); system.title1Name = ''; }
+        if (system.title1Name && !findImage(source, 'Title', system.title1Name) && !(rtp && findImage(rtp, 'Title', system.title1Name))) { notes.skipped.push(`Title/${system.title1Name}: named by the game but not on disk; no title image`); system.title1Name = ''; }
         {   // Fonts are installed separately from game graphics. Full-package games still need their RTP/system font.
             const names = ['RMG2000.fon', 'RM2000.fon'];
             const initial = Number(sys.font_id) === 1 ? 1 : 0;
@@ -758,7 +763,7 @@ function open(source, destination, options) {
         log('Copying images and audio…', 'stage');
         // 5. Images and audio.
         if (!options.skipAssets) {
-        const assetFolders = ['CharSet', 'FaceSet', 'Panorama', 'Picture', 'Picture 2', 'Monster', 'Battle', 'Battle2', 'Backdrop', 'Title', 'GameOver', 'System', 'System2', 'Frame', 'Music', 'Sound'];
+        const assetFolders = ['CharSet', 'FaceSet', 'Panorama', 'Picture', 'Picture 2', 'Monster', 'Battle', 'Battle2', 'Backdrop', 'Title', 'GameOver', 'System', 'System2', 'Frame', 'Music', 'Sound', 'Movie'];
         let assetTotal = 0;
         for (const folder of assetFolders) { const root = resolveInsensitive(source, folder); if (root) assetTotal += countFiles(root); }
         assetProgress = { done: 0, total: assetTotal, report: span(0.57, 1) };
@@ -787,6 +792,7 @@ function open(source, destination, options) {
         await importImages('Frame', 'img/system', { key: true });
         importAudio('Music', 'audio/bgm');
         importAudio('Sound', 'audio/se');
+        importAudio('Movie', 'movies');
         }
         // Files the game named from the RTP (RPG Maker's standard package, installed with the engine, not the game).
         if (!options.skipAssets && rtp) {
@@ -836,6 +842,11 @@ function open(source, destination, options) {
         summary.graphics = graphics;
         // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
         summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        summary.missingMapReferences = options.maps && options.maps.length ? [] : require('./ProjectFiles.js').missingMapReferences(dest);
+        if (summary.missingMapReferences.length) {
+            summary.skipped.push(...summary.missingMapReferences);
+            log(`  ${summary.missingMapReferences.length} map references need attention (listed in the import report).`, 'warn');
+        }
         if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         if (rtpUse) summary.rtp = { folder: rtpFound, names: rtpUse.variant, addonFiles: rtpUse.addon, addonMissing };
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));

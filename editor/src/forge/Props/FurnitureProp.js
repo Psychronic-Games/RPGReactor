@@ -4,26 +4,27 @@
 (function(root){
     'use strict';
     const need=(name,file)=>root[name]||(typeof require==='function'?require(file):null);
-    const CM=need('RRContainerMesh','./ContainerMesh.js'),CP=need('RRContainerPaint','./ContainerPaint.js'),Paint=need('RRPropPaint','./PropPaint.js'),Construction=need('RRFurnitureConstruction','./FurnitureConstruction.js'),Surface=need('RRConstructionSurface','../Character3D/ConstructionSurface.js'),Keycaps=need('RRPropKeycaps','./PropKeycaps.js');
+    const CM=need('RRContainerMesh','./ContainerMesh.js'),CP=need('RRContainerPaint','./ContainerPaint.js'),Paint=need('RRPropPaint','./PropPaint.js'),Construction=need('RRFurnitureConstruction','./FurnitureConstruction.js'),Surface=need('RRConstructionSurface','../Character3D/ConstructionSurface.js'),Keycaps=need('RRPropKeycaps','./PropKeycaps.js'),Expansion=need('RRFurnitureExpansion','./FurnitureExpansion.js'),Craft=need('RRFurnitureCraft','./FurnitureCraft.js'),DisplayMotion=need('RRPropDisplayMotion','./PropDisplayMotion.js');
     const {add,sub,scale,norm}=CM.vec;
     const FORMS=[
         ['chair','Dining chair','furniture',.50,.94,.55],['armchair','Armchair','furniture',.88,.90,.88],['sofa','Sofa','furniture',2.10,.88,.92],['bench','Bench','furniture',1.35,.48,.45],
         ['table','Dining table','furniture',1.50,.76,.90],['desk','Desk','furniture',1.35,.76,.68],['bed','Bed','furniture',1.55,.92,2.12],['cabinet','Cabinet','furniture',.90,1.05,.45],['bookshelf','Bookshelf','furniture',.92,1.85,.34],
         ['fridge','Refrigerator','appliances',.76,1.85,.72],['microwave','Microwave','appliances',.55,.34,.40],['tv','Television','electronics',1.25,.89,.25],['computer','Desktop computer','electronics',1.10,.64,.58],
-        ['wallPanel','Sci-fi wall panel','scifi-interiors',1.10,1.70,.14],['console','Computer console','scifi-interiors',1.50,1.24,.85],['serverRack','Server rack','scifi-interiors',.72,1.82,.72]
+        ['wallPanel','Sci-fi wall panel','scifi-interiors',1.10,1.70,.14],['console','Computer console','scifi-interiors',1.50,1.24,.85],['serverRack','Server rack','scifi-interiors',.72,1.82,.72],...Expansion.FORMS
     ];
     const BY_ID=new Map(FORMS.map(f=>[f[0],f])),STYLES=[['modern','Modern'],['rustic','Rustic'],['scifi','Sci-fi']];
     const clamp=(v,a,b,d)=>Number.isFinite(+v)?Math.max(a,Math.min(b,+v)):d;
     const color=(v,d)=>/^#[0-9a-f]{6}$/i.test(v)?v:d;
     function normalize(r={}){
-        const form=BY_ID.has(r.form)?r.form:'chair',f=BY_ID.get(form);
+        const form=BY_ID.has(r.form)?r.form:'chair',f=BY_ID.get(form),shellFinish=['standard','chrome'].includes(r.shellFinish)?r.shellFinish:form==='smartToilet'?'chrome':'standard';
         return{kind:'furniture',form,width:clamp(r.width,.25,4,f[3]),height:clamp(r.height,.20,3,f[4]),depth:clamp(r.depth,.08,2.5,f[5]),style:STYLES.some(s=>s[0]===r.style)?r.style:'modern',
-            color:color(r.color,'#567a83'),frame:color(r.frame,'#765034'),trim:color(r.trim,'#272f36'),accent:color(r.accent,'#45bfd4'),details:r.details!==false,screen:r.screen!==false,screenText:CP.cleanText(typeof r.screenText==='string'?r.screenText:'REACTOR / SYSTEM READY',32),
-            upholstery:['plain','tufted','channel'].includes(r.upholstery)?r.upholstery:'tufted',padding:clamp(r.padding,.65,1.5,1),roundness:clamp(r.roundness,.4,1.6,1),backHeight:clamp(r.backHeight,.65,1.2,1),armSize:clamp(r.armSize,.65,1.4,1),
+            color:color(r.color,'#567a83'),frame:color(r.frame,'#765034'),trim:color(r.trim,'#272f36'),accent:color(r.accent,'#45bfd4'),details:r.details!==false,screen:r.screen!==false,animateScreen:r.animateScreen!==false,displaySpeed:clamp(r.displaySpeed,.25,3,1),hologram:r.hologram!==false,screenReadout:CP.cleanText(typeof r.screenReadout==='string'?r.screenReadout:form==='fabricator'?'ALLOY / BUILD 03 / 72%':form==='cryoPod'?'CORE -140 C / STASIS':form==='computer'?'PROJECT / WORKSPACE ONLINE':'STATUS / SYSTEM NOMINAL',64),screenText:CP.cleanText(typeof r.screenText==='string'?r.screenText:['patientMonitor','medBed','medStation'].includes(form)?'REACTOR / VITAL SIGNS':form==='scanner'?'DIAGNOSTIC / ONLINE':form==='smartToilet'?'FECAL ANALYSIS / SYSTEM READY':'REACTOR / SYSTEM READY',32),
+            upholsteryMaterial:r.upholsteryMaterial==='leather'||r.upholsteryMaterial==null&&form==='officeChair'?'leather':'fabric',upholstery:['plain','tufted','channel'].includes(r.upholstery)?r.upholstery:'tufted',padding:clamp(r.padding,.65,1.5,1),roundness:clamp(r.roundness,.4,1.6,1),backHeight:clamp(r.backHeight,.65,1.2,1),armSize:clamp(r.armSize,.65,1.4,1),
             seats:Math.round(clamp(r.seats,1,5,3)),shelves:Math.round(clamp(r.shelves,2,7,4)),drawers:Math.round(clamp(r.drawers,1,5,3)),sections:Math.round(clamp(r.sections,1,4,2)),bookFill:clamp(r.bookFill,0,1,1),
-            deckAngle:clamp(r.deckAngle,15,50,35),screens:Math.round(clamp(r.screens,1,3,2)),keyRows:Math.round(clamp(r.keyRows,3,6,4)),hardware:Math.round(clamp(r.hardware,0,6,3)),
-            roughness:clamp(r.roughness,.2,.95,.55),frameMaterial:['wood','metal','painted'].includes(r.frameMaterial)?r.frameMaterial:'wood',
-            baseStyle:['feet','plinth'].includes(r.baseStyle)?r.baseStyle:'feet',screenStyle:['status','radar','landscape'].includes(r.screenStyle)?r.screenStyle:form==='tv'?'landscape':'status'};
+            recline:clamp(r.recline,0,75,35),deckAngle:clamp(r.deckAngle,15,50,35),screens:Math.round(clamp(r.screens,1,3,2)),keyRows:Math.round(clamp(r.keyRows,3,6,4)),hardware:Math.round(clamp(r.hardware,0,6,3)),
+            roughness:clamp(r.roughness,shellFinish==='chrome'?.06:.2,.95,shellFinish==='chrome'?.12:.55),frameMaterial:['wood','metal','painted'].includes(r.frameMaterial)?r.frameMaterial:'wood',
+            shellFinish,
+            baseStyle:['feet','plinth'].includes(r.baseStyle)?r.baseStyle:'feet',screenStyle:['status','radar','landscape','vitals'].includes(r.screenStyle)?r.screenStyle:form==='tv'?'landscape':['medBed','patientMonitor','medStation'].includes(form)?'vitals':'status'};
     }
     /** Each style's own finish, set when the style is picked (every color stays editable after):
      * modern teal fabric, walnut and steel; rustic oatmeal linen, dark oak and black iron, cream enamel
@@ -33,8 +34,8 @@
         rustic:{soft:{color:'#a48a68',frame:'#5e3d24',trim:'#2e241c',accent:'#a87c3c',frameMaterial:'wood'},tech:{color:'#e6dac0',frame:'#6a4428',trim:'#4a3626',accent:'#b08440',frameMaterial:'wood'}},
         scifi:{soft:{color:'#33404c',frame:'#dfe5ea',trim:'#1a2128',accent:'#3fd6ff',frameMaterial:'painted'},tech:{color:'#dfe5ea',frame:'#38434e',trim:'#11161b',accent:'#3fd6ff',frameMaterial:'painted'}}
     };
-    function styleLook(form,style){const f=BY_ID.get(form)||FORMS[0],technical=['appliances','electronics','scifi-interiors'].includes(f[2]);return Object.assign({},(LOOKS[style]||LOOKS.modern)[technical?'tech':'soft']);}
-    function fromPreset(id){const f=BY_ID.get(id)||FORMS[0],style=f[2]==='scifi-interiors'?'scifi':'modern';return normalize(Object.assign({form:f[0],style},styleLook(f[0],style)));}
+    function styleLook(form,style){const f=BY_ID.get(form)||FORMS[0],technical=['appliances','electronics','scifi-interiors','medical'].includes(f[2]);return Object.assign({},(LOOKS[style]||LOOKS.modern)[technical?'tech':'soft']);}
+    function fromPreset(id){const f=BY_ID.get(id)||FORMS[0],style=f[6]==='scifi'||f[2]==='scifi-interiors'?'scifi':f[6]==='fantasy'?'rustic':'modern';return normalize(Object.assign({form:f[0],style},styleLook(f[0],style),f[0]==='smartToilet'?{color:'#c5d3dc',frame:'#8d9ca8',trim:'#22303c',accent:'#50dfff',frameMaterial:'metal',shellFinish:'chrome',roughness:.12}:['bath','toilet','sink'].includes(f[0])?{color:'#e8e7df',roughness:.24}:f[0]==='cryoPod'?{color:'#486474',frame:'#718c99',trim:'#172b35',accent:'#65d9e7',frameMaterial:'metal',roughness:.38}:f[0]==='officeChair'?{color:'#252d33',frame:'#85929a',trim:'#161d22',frameMaterial:'metal',upholstery:'channel',roughness:.46}:['medBed','ivStand','patientMonitor','medTrolley','surgicalLamp'].includes(f[0])?{color:'#dce5e7',frame:'#829da9',frameMaterial:'metal'}:{}));}
     /** A rounded cushion, keeping planar centers and soft corners rather
      * than inflating an ellipsoid. Normals follow its actual rounded surface. */
     function cushion(center,size,radius,upholstery='plain'){
@@ -56,8 +57,8 @@
         }
         return{positions:Float32Array.from(P),normals:Float32Array.from(N),uvs:Float32Array.from(T),index:Uint32Array.from(I)};
     }
-    function screenPicture(mode,on,text){
-        const width=1024,height=576,data=new Uint8Array(width*height*4),L=CP.layout(text);
+    function screenPicture(mode,on,text,live,readout){
+        const width=1024,height=576,data=new Uint8Array(width*height*4),L=CP.layout(text),footer=CP.layout(readout||'');
         const textScale=Math.min(5,(width-112)/Math.max(1,L.width+1)),textX=56,textY=42;
         for(let py=0;py<height;py++)for(let px=0;px<width;px++){
             const x=px/2,y=py/2;
@@ -66,6 +67,12 @@
                 const mountain=288*(.60+.09*Math.sin(x*.022)+.04*Math.sin(x*.051));
                 c=y<mountain?[35+y*.20,62+y*.22,100+y*.24]:[25,48,59];if(Math.hypot(x-360,y-86)<34)c=[232,169,94];
                 if(y>288*.81)c=[26,55+(y%3)*2,72];
+            }else if(on&&mode==='vitals'){
+                c=[5,20,24];if(x%24<1||y%24<1)c=[11,38,40];
+                const q=((x-30)%140+140)%140,beat=90-10*Math.exp(-Math.pow((q-34)/8,2))+22*Math.exp(-Math.pow((q-57)/3,2))-56*Math.exp(-Math.pow((q-63)/2.5,2))+23*Math.exp(-Math.pow((q-70)/4,2))-12*Math.exp(-Math.pow((q-94)/12,2));
+                if(x>30&&x<480&&Math.abs(y-beat)<1.4)c=[89,227,157];
+                if(x>30&&x<480&&Math.abs(y-(177+7*Math.sin(x*.045)))<1.3)c=[89,185,222];
+                if(x>30&&x<480&&Math.abs(y-(235+4*Math.sin(x*.025)))<1.3)c=[219,188,102];
             }else if(on&&mode==='radar'){
                 const dx=x-256,dy=(y-144)*1.25,d=Math.hypot(dx,dy),a=Math.atan2(dy,dx);
                 if(d<123){c=[7,28,28];if(Math.abs(d%30-15)<1||Math.abs(dx)<1||Math.abs(dy)<1)c=[30,83,77];if(a>.2&&a<.23)c=[78,195,152];}
@@ -77,12 +84,13 @@
                 if(x>34&&x<210&&y>76&&y<234){const yy=(y-76)%28;if(yy<12&&x<70+Math.floor((y-76)/28)*22)c=[37,125,149];}
                 if(x>252&&x<466&&y>81&&y<228){if(y%24<2||x%36<2)c=[18,54,71];if(Math.abs(y-(154+35*Math.sin(x*.04)))<2)c=[91,202,188];}
             }
-            if(on&&text&&py<86){c=[7,17,27];const coverage=CP.coverage(L,(px-textX)/textScale,(py-textY)/textScale,.90,false,0,1/textScale);c=c.map((v,k)=>v+([170,234,242][k]-v)*coverage);}
+            if(live&&on&&py>=100){c=[7,19,27];if(px%64<1||py%64<1)c=[16,43,54];}if(on&&text&&py<86){c=[7,17,27];const coverage=CP.coverage(L,(px-textX)/textScale,(py-textY)/textScale,.90,false,0,1/textScale);c=c.map((v,k)=>v+([170,234,242][k]-v)*coverage);}
+            if(on&&readout&&py>height-72){const size=Math.min(4,(width-112)/Math.max(1,footer.width+1)),a=CP.coverage(footer,(px-56)/size,(py-(height-53))/size,.86,false,0,1/size);c=[7+115*a,17+174*a,27+163*a];}
             const i=(py*width+px)*4;data.set([...c.map(v=>Math.round(v)),255],i);
         }return{name:'furniture-screen.png',width,height,data};
     }
     function build(input,cache={},options={}){
-        const r=normalize(input),W=r.width,H=r.height,D=r.depth,groups=new Map(),textures={};
+        const r=normalize(input),W=r.width,H=r.height,D=r.depth,groups=new Map(),textures={},liveScreens=[];
         const put=(kind,m)=>{if(!groups.has(kind))groups.set(kind,[]);groups.get(kind).push(m);return m;};
         const box=(kind,p,s,b=.008)=>put(kind,Math.min(...s)>.025?CM.roundedBox(p,s,b*r.roundness):CM.chamferBox(p,s,b*r.roundness));
         const pad=(p,s,b=.04)=>{
@@ -96,7 +104,7 @@
             const F=CM.frame(o,u,v),bezel=CM.bezel(F,w,h,depth,border,.005);put(kind,bezel.housing);put('dark',bezel.floor);return F;
         };
         const screen=(o,u,v,w,h)=>{
-            const F=frame('trim',o,u,v,w,h,.014,.018),m=CM.plate(F,0,0,w-.03,h-.03,.015);put('screen',m);
+            const F=frame('trim',o,u,v,w,h,.014,.018),m=CM.plate(F,0,0,w-.03,h-.03,.015);put('screen',m);liveScreens.push(m);
         };
         const bolt=(p,n=[0,0,1])=>{if(r.details){const F=CM.frame(p,n[0]?[0,0,-n[0]]:[n[2],0,0],[0,1,0]);put('metal',CM.revolveOn(F,0,0,[[0,0],[.005,0],[.005,.002],[.004,.003],[0,.003]],16));put('dark',CM.slab(CM.rect(0,0,.005,.0008),{...F,o:add(F.o,scale(F.n,.0031))},.0004,0,true));}};
         const feet=(y=.07)=>{
@@ -314,7 +322,10 @@
             for(const sign of [-1,1])box('wood',[sign*W*.45,H*.24,0],[.035,H*.07,D*.88],.008);
         }
         if(['sofa','armchair','bed'].includes(r.form)&&r.style==='scifi')box('accent',[0,H*.22,D*.49],[W*.80,.012,.006],.003);
-        const construction=Construction.assemble({recipe:r,r,W,H,D,box,bar,pad,put,bolt});
+        Expansion.build({r,W,H,D,box,bar,pad,put,bolt,screen,groups});
+        let motion=null;
+        if(Craft.IDS.has(r.form)){groups.clear();liveScreens.length=0;motion=Craft.build({r,W,H,D,box,bar,pad,put,bolt,screen,groups});}
+        const construction=Craft.IDS.has(r.form)?['crafted-'+r.form]:Construction.assemble({recipe:r,r,W,H,D,box,bar,pad,put,bolt});
         const key=JSON.stringify([r.color,r.frame,r.trim,r.accent]);
         if(cache.surfaceKey!==key){
             const weave=CP.atlas(128,128),wood=CP.atlas(256,256),timber=CP.rgb(r.frame);
@@ -330,25 +341,47 @@
             cache.surfaces={'furniture-wood.png':{...wood,name:'furniture-wood.png',repeat:true},'furniture-fabric.png':{...weave,name:'furniture-fabric.png',repeat:true},'furniture-fabric-normal.png':{width:128,height:128,data:normal,name:'furniture-fabric-normal.png',repeat:true}};cache.surfaceKey=key;
         }
         if(groups.has('screen')){
-            const screenKey=JSON.stringify([r.screenStyle,r.screen,r.screenText]);
-            if(cache.screenKey!==screenKey){cache.screenPicture=screenPicture(r.screenStyle,r.screen,r.screenText);cache.screenKey=screenKey;}
+            const screenKey=JSON.stringify([r.screenStyle,r.screen,r.screenText,r.animateScreen,r.screenReadout]);
+            if(cache.screenKey!==screenKey){cache.screenPicture=screenPicture(r.screenStyle,r.screen,r.screenText,r.animateScreen&&r.screenStyle!=='landscape',r.screenReadout);cache.screenKey=screenKey;}
             cache.surfaces['furniture-screen.png']=cache.screenPicture;
         }
-        const parts=[],materials={legends:{texture:'furniture-key-legends.png',cutout:true,alphaCutoff:.5,roughness:.82},wood:{texture:'furniture-wood.png',roughness:.67},fabric:{kind:'cloth',texture:'furniture-fabric.png',normalTexture:'furniture-fabric-normal.png',normalScale:.25,roughness:.94},seam:{color:r.color,roughness:.96},metal:{color:'#8d969e',roughness:.32,metalness:.75},trim:{color:r.trim,roughness:.52,metalness:.18},dark:{color:'#090f15',roughness:.78},paint:{color:r.color,roughness:.40,metalness:.23},frame:{texture:'furniture-wood.png',roughness:r.roughness},glass:{color:'#102129',roughness:.16,metalness:.18},keys:{color:'#343e46',roughness:.72},screen:{texture:'furniture-screen.png',emissive:'#ffffff',emissiveTexture:'furniture-screen.png',emissiveIntensity:r.screen?.45:0,roughness:.35},accent:{color:r.accent,roughness:.48,emissive:r.style==='scifi'?r.accent:null,emissiveIntensity:.25},light:{color:r.accent,roughness:.3,emissive:r.accent,emissiveIntensity:1.6},iron:{color:'#2f2b29',roughness:.6,metalness:.6}};
+        const parts=[],materials={ceramic:{color:r.color,roughness:.23,metalness:0},seatShell:{color:'#e8e7df',roughness:.35,metalness:0},fluid:{color:'#b0d8db',roughness:.20,metalness:0},tube:{color:'#b5c8cf',roughness:.35,metalness:0},legends:{texture:'furniture-key-legends.png',cutout:true,alphaCutoff:.5,roughness:.82},wood:{texture:'furniture-wood.png',roughness:.67},fabric:{kind:'cloth',texture:'furniture-fabric.png',normalTexture:'furniture-fabric-normal.png',normalScale:.25,roughness:.94},seam:{color:r.color,roughness:.96},metal:{color:'#8d969e',roughness:.32,metalness:.75},trim:{color:r.trim,roughness:.52,metalness:.18},dark:{color:'#090f15',roughness:.78},paint:{color:r.color,roughness:.40,metalness:.23},frame:{texture:'furniture-wood.png',roughness:r.roughness},glass:{color:'#102129',roughness:.16,metalness:.18},keys:{color:'#343e46',roughness:.72},screen:{texture:'furniture-screen.png',emissive:'#ffffff',emissiveTexture:'furniture-screen.png',emissiveIntensity:r.screen?.45:0,roughness:.35},accent:{color:r.accent,roughness:.48,emissive:r.style==='scifi'?r.accent:null,emissiveIntensity:.25},light:{color:r.accent,roughness:.3,emissive:r.accent,emissiveIntensity:1.6},iron:{color:'#2f2b29',roughness:.6,metalness:.6}};
+        materials.water={color:'#77b9c8',roughness:.10,metalness:0,opacity:.38};
+        materials.bowlInterior={color:r.shellFinish==='chrome'?'#d3e0e6':r.color,roughness:.28,metalness:r.shellFinish==='chrome'?.45:0};
+        materials.drainInterior={color:'#455d65',roughness:.48,metalness:.12};
+        materials.clearGlass={color:'#acdce5',roughness:.16,metalness:.05,opacity:.32,doubleSided:true};
+        materials.cryoFrost={color:'#b6e8ed',roughness:.40,opacity:.57,doubleSided:true};
+        materials.hologram={color:r.accent,emissive:r.accent,emissiveIntensity:.75,roughness:.35,opacity:.48,doubleSided:true};
+        materials.sparks={color:'#fff2a1',emissive:'#ffc752',emissiveIntensity:3,roughness:.2};
         // Style finishes: sci-fi shells read as satin composite and polished alloy, rustic hardware as blackened iron.
         if(r.style==='scifi'){materials.metal={color:'#c3ccd4',roughness:.18,metalness:.9};materials.trim.metalness=.55;}
         if(r.style==='rustic')materials.metal={color:'#3a3431',roughness:.55,metalness:.65};
         if(r.frameMaterial!=='wood')materials.frame=materials.wood={color:r.frame,roughness:r.roughness,metalness:r.frameMaterial==='metal'?.7:.12};
         materials.wood.roughness=r.roughness;materials.fabric.roughness=.75+r.roughness*.25;materials.paint.roughness=r.roughness;materials.paint.metalness=r.style==='scifi'?.45:r.style==='rustic'?0:.23;materials.trim.roughness=r.style==='scifi'?Math.max(.22,r.roughness-.2):Math.min(.95,r.roughness+.10);if(r.style==='scifi'&&r.frameMaterial!=='metal'){materials.frame=materials.wood={color:r.frame,roughness:Math.max(.25,r.roughness-.15),metalness:.12};}
+        if(r.shellFinish==='chrome'){
+            materials.ceramic={color:r.color,roughness:r.roughness,metalness:1};
+            materials.seatShell={color:r.color,roughness:r.roughness,metalness:1};
+            materials.paint={color:r.color,roughness:r.roughness,metalness:1};
+            materials.metal={color:r.frame,roughness:Math.max(.06,r.roughness*.7),metalness:1};
+        }
         for(const [kind,meshes]of groups){
-            const m=CM.merge(meshes),material=materials[kind],density=kind==='fabric'?7:['wood','frame'].includes(kind)?1.8:1;
-            if(['wood','frame','fabric'].includes(kind))CM.mapUv(m,(_,__,v)=>{const n=Array.from(m.normals.subarray(v*3,v*3+3),Math.abs),axis=n.indexOf(Math.max(...n)),A=axis===0?[2,1]:axis===1?[0,2]:[0,1];return A.map(k=>m.positions[v*3+k]*density);});
-            CM.skin(m,0);parts.push({...m,...material,name:BY_ID.get(r.form)[1]+' '+kind,metalness:material.metalness??0});
+            const m=CM.merge(meshes),material=materials[kind]||(kind.endsWith('Cable')?materials.tube:kind.startsWith('robot')?{...materials.metal,color:kind.endsWith('Tool')?'#acb6bf':'#b78036',roughness:.38}:materials.metal),density=kind==='fabric'?7:['wood','frame'].includes(kind)?1.8:1;
+            if(['wood','frame','fabric','paint','metal','trim'].includes(kind))CM.mapUv(m,(_,__,v)=>{const n=Array.from(m.normals.subarray(v*3,v*3+3),Math.abs),axis=n.indexOf(Math.max(...n)),A=axis===0?[2,1]:axis===1?[0,2]:[0,1];return A.map(k=>m.positions[v*3+k]*density);});
+            CM.skin(m,motion?.roles?.[kind]||0);
+            const cable=motion?.cables?.[kind];if(cable)for(let v=0;v<m.positions.length/3;v++){const p=Array.from(m.positions.subarray(v*3,v*3+3));let best=null;for(let j=0;j<2;j++){const a=motion.bones[cable[j]].head,b=motion.bones[cable[j+1]].head,d=b.map((x,k)=>x-a[k]),len=d.reduce((s,x)=>s+x*x,0),q=Math.max(0,Math.min(1,d.reduce((s,x,k)=>s+x*(p[k]-a[k]),0)/len)),dist=Math.hypot(...p.map((x,k)=>x-a[k]-d[k]*q));if(!best||dist<best.dist)best={j,q,dist};}const t=Math.max(0,Math.min(1,(best.q-.60)/.40)),blend=t*t*(3-2*t);m.joints.set([cable[best.j],cable[best.j+1],0,0],v*4);m.weights.set([1-blend,blend,0,0],v*4);}
+            parts.push({...m,...material,name:BY_ID.get(r.form)[1]+' '+kind,metalness:material.metalness??0});
             for(const name of [material.texture,material.normalTexture,material.emissiveTexture])if(name&&cache.surfaces[name])textures[name]=cache.surfaces[name];
         }
-        Surface.apply(parts,textures,p=>p.name.endsWith(' fabric')?'fabric':p.name.endsWith(' wood')||p.name.endsWith(' frame')?(r.frameMaterial==='wood'?'wood':'metal'):/ (paint|metal|trim)$/.test(p.name)?'metal':null);
+        if(r.upholsteryMaterial==='leather')for(const p of parts)if(p.name.endsWith(' fabric')){p.color=r.color;p.roughness=.44;delete p.texture;delete p.normalTexture;}
+        Surface.apply(parts,textures,p=>p.name.endsWith(' fabric')?r.upholsteryMaterial:p.name.endsWith(' wood')||p.name.endsWith(' frame')?(r.frameMaterial==='wood'?'wood':'metal'):/ (paint|metal|trim)$/.test(p.name)?'metal':null);
+        if(r.shellFinish==='chrome')for(const p of parts)if(/ (paint|metal)$/.test(p.name))p.normalScale=.035;
         let low=Infinity,high=-Infinity;for(const p of parts)for(let i=1;i<p.positions.length;i+=3){low=Math.min(low,p.positions[i]);high=Math.max(high,p.positions[i]);}for(const p of parts)for(let i=1;i<p.positions.length;i+=3)p.positions[i]-=low;
-        return{kind:'furniture',recipe:r,construction,parts,textures,bones:[{name:'Prop',head:[0,0,0],parent:-1}],clips:[],height:high-low,cloth:null};
+        const bones=motion?.bones||[{name:'Prop',head:[0,0,0],parent:-1}],clips=[];
+        if(motion?.bones){for(const b of bones)b.head[1]-=low;const times=Float32Array.from({length:121},(_,i)=>i/30);
+            const tracks=bones.slice(1).map((b,i)=>({bone:i+1,path:'rotation',times,values:Float32Array.from(Array.from(times).flatMap(t=>{const a=b.name==='sparks'?t*Math.PI*2:Math.sin(t*Math.PI/2+(i%3)*.6)*.10*(i<3?1:-1);return b.name==='sparks'?[0,Math.sin(a/2),0,Math.cos(a/2)]:[0,0,Math.sin(a/2),Math.cos(a/2)];}))}));
+            clips.push({id:'fabricate',name:'Fabrication cycle',times,tracks});}
+        const result={kind:'furniture',recipe:r,construction,parts,textures,triangles:parts.reduce((n,p)=>n+p.index.length/3,0),bones,clips,height:high-low,cloth:null};
+        if(r.screen&&r.animateScreen&&r.screenStyle!=='landscape'){for(const m of liveScreens)for(let i=1;i<m.positions.length;i+=3)m.positions[i]-=low;DisplayMotion.attach(result,liveScreens,{color:r.accent,speed:r.displaySpeed});}return result;
     }
     function random(seed,recipe,scope='all'){
         const r=normalize(recipe),rand=Paint.random(seed),all=scope==='all';if(all||scope==='shape')for(const k of ['width','height','depth'])r[k]*=.85+rand()*.3;
@@ -358,16 +391,19 @@
     const api={FORMS,STYLES,LOOKS,styleLook,normalize,fromPreset,build,random};root.RRFurnitureProp=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
     const Model=need('RRPropModel','./PropModel.js'),Catalog=need('RRPropCatalog','./PropCatalog.js');
     Model.register({id:'furniture',label:'Furniture',normalize,build,random,randomScopes:[['all','Everything'],['shape','Shape'],['colors','Colors'],['details','Details']]});
-    for(const [id,label,order]of [['furniture','Furniture',50],['appliances','Appliances',51],['electronics','Electronics',52],['scifi-interiors','Sci-fi interiors',53]])Catalog.category({id,label,order});
+    Catalog.category({id:'interiors',label:'Furniture & Interiors',order:50});
+    for(const [id,label,order]of [['furniture','Furniture',50],['appliances','Appliances',51],['electronics','Electronics',52],['medical','Medical',52],['scifi-interiors','Sci-fi interiors',53]])Catalog.category({id,label:id==='scifi-interiors'?'Panels & Fixtures':label,order,parent:'interiors'});
     const icons={chair:'chair',armchair:'sofa',sofa:'sofa',bench:'table',table:'table',desk:'table',bed:'bed',cabinet:'cabinet',bookshelf:'cabinet',fridge:'appliance',microwave:'appliance',tv:'screen',computer:'screen',wallPanel:'console',console:'console',serverRack:'server'};
-    for(const f of FORMS)Catalog.add({id:'furniture-'+f[0],label:f[1],kind:'furniture',category:f[2],icon:icons[f[0]],keywords:f[0]+' furniture room interior '+(f[0]==='sofa'?'couch lounge':f[0]==='fridge'?'fridge kitchen':f[0]==='tv'?'TV screen display':f[0]==='console'?'scifi terminal control panel':''),start:()=>fromPreset(f[0]),matches:r=>r.form===f[0]});
+    for(const f of FORMS)Catalog.add({id:'furniture-'+f[0],label:f[1],kind:'furniture',genre:f[6]|| (f[2]==='scifi-interiors'?'scifi':['throne','tavernTable'].includes(f[0])?'fantasy':'modern'),category:['console','serverRack'].includes(f[0])?'electronics':f[2],icon:icons[f[0]]||(f[2]==='appliances'?'appliance':f[2]==='electronics'?'screen':'chair'),keywords:f[0]+' furniture room interior '+(['medBed','ivStand','patientMonitor','medTrolley','surgicalLamp','scanner','medStation','cryoPod'].includes(f[0])?'medical hospital clinic treatment ':'')+(f[0]==='sofa'?'couch lounge':f[0]==='fridge'?'fridge kitchen':f[0]==='tv'?'TV screen display':f[0]==='console'?'scifi terminal control panel':f[0]==='cryoPod'?'cryogenic stasis chamber':f[0]==='officeChair'?'executive ergonomic office chair':''),start:()=>fromPreset(f[0]),matches:r=>r.form===f[0]});
     Catalog.ui('furniture',{placeholder:'Furniture',tabs:[['shape','Shape'],['look','Look'],['details','Details']],panel(tab){
         if(tab==='shape')return this._section('Dimensions')+['width','height','depth'].map(k=>this._slider({path:k,label:k[0].toUpperCase()+k.slice(1),range:k==='height'?[.2,3]:k==='width'?[.25,4]:[.08,2.5],step:.01,format:'m'})).join('');
-        if(tab==='look')return this._select('style','Style',STYLES)+this._select('frameMaterial','Frame material',[['wood','Wood'],['metal','Metal'],['painted','Painted']])+this._color('color','Color')+this._color('frame','Frame')+this._color('trim','Trim')+this._color('accent','Accent')+this._slider({path:'roughness',label:'Roughness',range:[.2,.95]})+this._slider({path:'roundness',label:'Edge rounding',range:[.4,1.6]});
+        if(tab==='look')return this._select('style','Style',STYLES)+(['smartToilet','toilet','bath','sink'].includes(this.recipe.form)?this._select('shellFinish','Shell finish',[['standard','Standard'],['chrome','Chrome']]):'')+this._select('frameMaterial','Frame material',[['wood','Wood'],['metal','Metal'],['painted','Painted']])+this._color('color','Color')+this._color('frame','Frame')+this._color('trim','Trim')+this._color('accent','Accent')+this._slider({path:'roughness',label:'Roughness',range:[this.recipe.shellFinish==='chrome'?.06:.2,.95]})+this._slider({path:'roundness',label:'Edge rounding',range:[.4,1.6]});
         const f=this.recipe.form,slider=(path,label,range,step=.01)=>this._slider({path,label,range,step});
-        let out=this._check('details','Details');
-        if(['sofa','armchair','bed','bench','chair'].includes(f)&&!(f==='chair'&&this.recipe.style==='rustic'))out+=slider('padding','Cushion thickness',[.65,1.5])+this._select('upholstery','Upholstery',[['plain','Plain'],['tufted','Tufted'],['channel','Channel stitched']]);
+        let out=this._check('details','Details');if(f==='holoTable')out+=this._check('hologram','Holographic display');
+        if(['sofa','armchair','bed','bench','chair','stool','officeChair','medBed'].includes(f)&&!(f==='chair'&&this.recipe.style==='rustic'))out+=slider('padding','Cushion thickness',[.65,1.5])+this._select('upholstery','Upholstery',[['plain','Plain'],['tufted','Tufted'],['channel','Channel stitched']]);
+        if(['sofa','armchair','bed','bench','chair','stool','officeChair','medBed'].includes(f))out+=this._select('upholsteryMaterial','Cushion material',[['fabric','Fabric'],['leather','Leather']]);
         if(['sofa','armchair','bed'].includes(f))out+=slider('backHeight','Back height',[.65,1.2]);
+        if(f==='medBed')out+=slider('recline','Backrest recline',[0,75],1);
         if(f==='sofa')out+=slider('seats','Seat cushions',[1,5],1);
         if(['sofa','armchair'].includes(f))out+=slider('armSize','Arm width',[.65,1.4]);
         if(f==='bookshelf')out+=slider('shelves','Shelves',[2,7],1)+(this.recipe.details?slider('bookFill','Book fill',[0,1]):'');
@@ -376,8 +412,8 @@
         if(['sofa','armchair','bed','cabinet','bookshelf','fridge','console','serverRack'].includes(f))out+=this._select('baseStyle','Base',[['feet','Feet'],['plinth','Plinth']]);
         if(f==='console')out+=slider('deckAngle','Keyboard angle',[15,50],1)+slider('screens','Screens',[1,3],1)+(this.recipe.details?slider('hardware','Control knobs',[0,6],1):'');
         if(this.recipe.details&&['computer','console'].includes(f))out+=slider('keyRows','Keyboard rows',[3,6],1);
-        if(['tv','computer','console','wallPanel','microwave'].includes(f))out+=this._check('screen','Screen')+(this.recipe.screen?this._select('screenStyle','Screen design',[['status','Status display'],['radar','Radar'],['landscape','Landscape']])+`<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t('Screen text')}</span><input type="text" class="rr-input rr-prop-text" data-path="screenText" maxlength="32" value="${this.recipe.screenText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}" spellcheck="false"></label>`:'');
-        return out;
+        if(['tv','computer','console','wallPanel','microwave','patientMonitor','medStation','medBed','smartToilet','fabricator','holoTable','scanner','cryoPod'].includes(f))out+=this._check('screen','Screen')+(this.recipe.screen?this._check('animateScreen','Animated display')+slider('displaySpeed','Display speed',[.25,3])+this._select('screenStyle','Screen design',[['status','Status display'],['radar','Radar'],['landscape','Landscape'],['vitals','Vital signs']])+`<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t('Screen text')}</span><input type="text" class="rr-input rr-prop-text" data-path="screenText" maxlength="32" value="${this.recipe.screenText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}" spellcheck="false"></label>`:'');
+        if(this.recipe.screen&&['computer','console','wallPanel','patientMonitor','medStation','medBed','smartToilet','fabricator','holoTable','scanner','cryoPod'].includes(f))out+=`<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t('Display readout')}</span><input class="rr-input rr-prop-text" data-path="screenReadout" maxlength="64" value="${this.recipe.screenReadout.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"></label>`;return out;
     },
     /** Picking a style also sets that style's finish; each color stays editable afterwards. */
     choose(path,value){if(path!=='style')return false;this._set('style',value);for(const [k,v] of Object.entries(styleLook(this.recipe.form,value)))this._set(k,v);this._commit();this._renderPanel();this._queueRebuild();return true;},

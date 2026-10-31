@@ -82,7 +82,7 @@ function source(folder) {
     const entries = (dir) => { if (!dirCache.has(dir)) { try { dirCache.set(dir, fs.readdirSync(dir, { withFileTypes: true })); } catch (_) { dirCache.set(dir, []); } } return dirCache.get(dir); };
     const onDisk = (rel) => {
         let at = folder;
-        for (const part of rel.split('/').filter(Boolean)) {
+        for (const part of rel.replace(/\\/g, '/').split('/').filter(Boolean)) {
             const hit = entries(at).find(e => e.name === part) || entries(at).find(e => e.name.toLowerCase() === part.toLowerCase());
             if (!hit) return null;
             at = path.join(at, hit.name);
@@ -151,7 +151,7 @@ function installPlugins(dest, families, constants, scriptTexts, skipped, log, re
         const file = path.join(__dirname, 'plugins', family.name + '.js');
         if (!fs.existsSync(file)) continue;
         mkdir(path.join(dest, 'js', 'plugins'));
-        fs.copyFileSync(file, path.join(dest, 'js', 'plugins', family.name + '.js'));
+        require('./EditorPaths.js').copyFile(file, path.join(dest, 'js', 'plugins', family.name + '.js'));
         const description = (/@plugindesc\s+(.*)/.exec(fs.readFileSync(file, 'utf8')) || [, ''])[1].trim();
         // A plugin's settings come from the game's own script: a .params.js beside it reads them.
         const extractor = path.join(__dirname, 'plugins', family.name + '.params.js');
@@ -270,7 +270,7 @@ function copyAliasedAudio(dest, aliases) {
                 const target = path.join(dest, 'audio', kind, path.dirname(name), f);
                 if (fs.existsSync(target)) continue;
                 fs.mkdirSync(path.dirname(target), { recursive: true });
-                fs.copyFileSync(path.join(dir, f), target);
+                require('./EditorPaths.js').copyFile(path.join(dir, f), target);
                 copied++;
             }
         }
@@ -369,13 +369,13 @@ function open(folder, destination, options) {
         const copyTree = (from, to) => {
             for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
                 const s = path.join(from, entry.name), d = path.join(to, entry.name);
-                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); require('./EditorPaths.js').copyFile(s, d); }
             }
         };
         EditorPaths.copySkeleton(dest, r => r.startsWith('js/'));
         mkdir(path.join(dest, 'js'));
         copyTree(runtime, path.join(dest, 'js'));
-        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        require('./EditorPaths.js').copyFile(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const f of [...Object.values(GRAPHICS), ...Object.values(AUDIO), 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, f));
 
         log('Converting the database…', 'stage');
@@ -519,6 +519,7 @@ function open(folder, destination, options) {
         }
         for (const [folderName, target] of Object.entries(AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
         for (const f of src.files('Movies')) plan.push(['Movies/' + f, path.join('movies', lowerExt(f)), 'Movies']);
+        require('./ProjectFiles.js').refreshConvertedMedia(dest, plan.map(([, to]) => repairPath(to)));
         const assetProgress = span(0.4, 1);
         plan.forEach(([from, to, bucket], index) => {
             if (index % 10 === 0) assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`);
@@ -597,6 +598,11 @@ function open(folder, destination, options) {
         const summary = { source: folder, engine: 'RPG Maker VX Ace', archive: src.archive, title, writtenAt: now, ms: Date.now() - t0, maps: mapIds.length, approximations: notes, files: images, skipped, scripts: inventory().scripts, plugins: installed.map(p => p.name) };
         // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
         summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        summary.missingMapReferences = options.maps && options.maps.length ? [] : require('./ProjectFiles.js').missingMapReferences(dest);
+        if (summary.missingMapReferences.length) {
+            summary.skipped.push(...summary.missingMapReferences);
+            log(`  ${summary.missingMapReferences.length} map references need attention (listed in the import report).`, 'warn');
+        }
         if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;

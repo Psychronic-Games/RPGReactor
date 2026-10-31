@@ -91,13 +91,19 @@ function open(folder, destination, options) {
         const notes = {}, skipped = [], images = {};
         const add = (bucket, key, n = 1) => { bucket[key] = (bucket[key] || 0) + n; };
         const rgba = (png) => ({ width: png.width, height: png.height, data: new Uint8Array(png.data.buffer, png.data.byteOffset, png.data.length) });
-        const readPng = (rel) => { const b = src.read(rel); if (!b) return null; try { return rgba(PNG.sync.read(b)); } catch (_) { return null; } };
+        const decodedImages = new Map();
+        const readPng = (rel) => {
+            const b = decodedImages.has(rel) ? decodedImages.get(rel) : src.read(rel);
+            if (!b) return null;
+            try { return require('./LegacyImage.js').decode(b); }
+            catch (error) { skipped.push(`${rel}: ${error.message}`); return null; }
+        };
         const writePng = (file, img) => { const png = new PNG({ width: img.width, height: img.height }); png.data = Buffer.from(img.data.buffer, img.data.byteOffset, img.data.length); mkdir(path.dirname(file)); fs.writeFileSync(file, PNG.sync.write(png)); };
         /** A graphic by its XP name (no extension), in any of the formats RGSS loads. */
         const findGraphic = (folderName, name) => {
             if (!name) return null;
             const files = graphicFiles(folderName);
-            return files.find(f => f.replace(/\.(png|jpg|jpeg|bmp)$/i, '').toLowerCase() === name.toLowerCase()) || null;
+            return files.find(f => f.replace(/\.(png|jpg|jpeg|bmp)$/i, '').toLowerCase() === name.replace(/\\/g, '/').toLowerCase()) || null;
         };
         const fileCache = new Map();
         const graphicFiles = (folderName) => { if (!fileCache.has(folderName)) fileCache.set(folderName, src.files('Graphics/' + folderName)); return fileCache.get(folderName); };
@@ -110,13 +116,13 @@ function open(folder, destination, options) {
         const copyTree = (from, to) => {
             for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
                 const s = path.join(from, entry.name), d = path.join(to, entry.name);
-                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); EditorPaths.copyFile(s, d); }
             }
         };
         EditorPaths.copySkeleton(dest, r => r.startsWith('js/'));
         mkdir(path.join(dest, 'js'));
         copyTree(runtime, path.join(dest, 'js'));
-        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        EditorPaths.copyFile(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const f of [...Object.values(GRAPHICS), ...Object.values(R.AUDIO), 'img/characters', 'img/tilesets', 'img/faces', 'img/sv_actors', 'img/sv_enemies', 'img/battlebacks2', 'img/titles2', 'movies']) mkdir(path.join(dest, f));
 
         // ---- the database ------------------------------------------------------
@@ -128,9 +134,22 @@ function open(folder, destination, options) {
         C.setContext({ constants, messageCodes: {}, families, names: {} });
         const ruby = (source, kind, context) => C.ruby(source, kind, Object.assign({ constants }, context));
 
+        // JPEG cannot be decoded synchronously. Prepare the art that must be re-cut before
+        // the synchronous tile/skin constructors run; ordinary copied art converts in the media pass.
+        for (const folderName of ['Tilesets', 'Autotiles', 'Icons', 'Windowskins']) {
+            for (const file of graphicFiles(folderName).filter(f => /\.jpe?g$/i.test(f))) {
+                await breathe();
+                const rel = 'Graphics/' + folderName + '/' + file;
+                try {
+                    const image = await require('./LegacyMedia.js').decodeImage(src.read(rel), options);
+                    decodedImages.set(rel, PNG.sync.write({ width: image.width, height: image.height, data: Buffer.from(image.data) }));
+                }
+                catch (error) { decodedImages.set(rel, null); skipped.push(`${rel}: ${error.message}`); }
+            }
+        }
         // Icons are one file each in XP; MZ reads them from one IconSet sheet, 16 across.
         const iconNames = new Map();
-        const iconFiles = graphicFiles('Icons').filter(f => /\.png$/i.test(f));
+        const iconFiles = graphicFiles('Icons').filter(f => /\.(png|bmp|jpe?g)$/i.test(f));
         if (iconFiles.length) {
             const perRow = 16, size = 24;
             const sheet = X.blank(perRow * size, Math.ceil((iconFiles.length + 1) / perRow) * size);
@@ -140,7 +159,7 @@ function open(folder, destination, options) {
                 if (!img) continue;
                 const index = i + 1;
                 X.blit(sheet, img, 0, 0, size, size, (index % perRow) * size, Math.floor(index / perRow) * size);
-                iconNames.set(f.replace(/\.png$/i, '').toLowerCase(), index);
+                iconNames.set(f.replace(/\.(png|bmp|jpe?g)$/i, '').toLowerCase(), index);
             }
             writePng(path.join(dest, 'img', 'system', 'IconSet.png'), sheet);
             add(images, 'Icons', iconFiles.length);
@@ -251,8 +270,9 @@ function open(folder, destination, options) {
             if (!key) add(notes, 'scriptGraphicsFolder');
             for (const f of graphicFiles(folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
         }
-        for (const f of graphicFiles('Characters')) plan.push(['Graphics/Characters/' + f, path.join('img/characters', path.dirname(f), X.characterName(path.basename(f).replace(/\.png$/i, '')) + '.png'), 'Characters']);
+        for (const f of graphicFiles('Characters')) plan.push(['Graphics/Characters/' + f, path.join('img/characters', path.dirname(f), X.characterName(path.basename(f).replace(/\.(png|bmp|jpe?g)$/i, '')) + path.extname(f).toLowerCase()), 'Characters']);
         for (const [folderName, target] of Object.entries(R.AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
+        require('./ProjectFiles.js').refreshConvertedMedia(dest, plan.map(([, to]) => R.repairPath(to)));
         const assetProgress = span(0.45, 0.95);
         for (const [index, [from, to, bucket]] of plan.entries()) {
             if (index % 10 === 0) { assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`); await breathe(); }
@@ -268,7 +288,10 @@ function open(folder, destination, options) {
         }
         // XP's game-over image is MZ's img/system/GameOver.png.
         const gameover = findGraphic('Gameovers', system.gameover_name);
-        if (gameover) fs.writeFileSync(path.join(dest, 'img', 'system', 'GameOver.png'), src.read('Graphics/Gameovers/' + gameover));
+        if (gameover) {
+            try { writePng(path.join(dest, 'img', 'system', 'GameOver.png'), await require('./LegacyMedia.js').decodeImage(src.read('Graphics/Gameovers/' + gameover), options)); }
+            catch (error) { skipped.push(`Graphics/Gameovers/${gameover}: ${error.message}`); }
+        }
         // Window skins: each converted into MZ's layout under img/windowskins (Change Windowskin picks
         // among them); the game's own becomes img/system/Window.png.
         const baseSkinFile = EditorPaths.skeletonFile('img/system/Window.png');
@@ -279,7 +302,7 @@ function open(folder, destination, options) {
         const scriptSkins = Array.from(scriptText.matchAll(/windowskin\(\s*"([^"]+)"\s*\)/g)).map(m => m[1])
             .filter(n => { const f = findGraphic('Windowskins', n); const img = f && readPng('Graphics/Windowskins/' + f); return img && img.width === 192 && img.height === 128; });
         const defaultSkin = String(system.windowskin_name || '') || Object.keys(skinCounts).sort((a, b) => skinCounts[b] - skinCounts[a])[0] || scriptSkins[0] || '';
-        for (const f of graphicFiles('Windowskins').filter(n => /\.png$/i.test(n))) {
+        for (const f of graphicFiles('Windowskins').filter(n => /\.(png|bmp|jpe?g)$/i.test(n))) {
             await maybeBreathe();
             const skin = readPng('Graphics/Windowskins/' + f);
             if (!skin) continue;
@@ -287,8 +310,8 @@ function open(folder, destination, options) {
             const full = skin.width === 192 && skin.height === 128;
             if (full) {
                 const converted = X.windowSkin(skin, baseSkin);
-                writePng(path.join(dest, 'img', 'windowskins', f), converted);
-                if (f.replace(/\.png$/i, '').toLowerCase() === defaultSkin.toLowerCase()) writePng(path.join(dest, 'img', 'system', 'Window.png'), converted);
+                writePng(path.join(dest, 'img', 'windowskins', f.replace(/\.(bmp|jpe?g)$/i, '.png')), converted);
+                if (f.replace(/\.(png|bmp|jpe?g)$/i, '').toLowerCase() === defaultSkin.toLowerCase()) writePng(path.join(dest, 'img', 'system', 'Window.png'), converted);
             } else {
                 mkdir(path.join(dest, 'img', 'windowskins'));
                 fs.writeFileSync(path.join(dest, 'img', 'windowskins', f), src.read('Graphics/Windowskins/' + f));
@@ -328,6 +351,11 @@ function open(folder, destination, options) {
         const summary = { source: folder, engine: 'RPG Maker XP', archive: src.archive, title, writtenAt: now, ms: Date.now() - t0, maps: mapIds.length, approximations: notes, files: images, skipped, scripts: inventory().scripts, plugins: installed.map(p => p.name) };
         // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
         summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        summary.missingMapReferences = options.maps && options.maps.length ? [] : require('./ProjectFiles.js').missingMapReferences(dest);
+        if (summary.missingMapReferences.length) {
+            summary.skipped.push(...summary.missingMapReferences);
+            log(`  ${summary.missingMapReferences.length} map references need attention (listed in the import report).`, 'warn');
+        }
         if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;

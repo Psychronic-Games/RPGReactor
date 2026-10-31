@@ -184,7 +184,7 @@ test('the themed pose dropdown filters long labels and selects a matching pose w
     assert.equal(context.document.body.querySelector('.rr-shim-popup'),null);
 });
 test('prop preview preserves the transparent accessory lenses',()=>{
-    const ctx=builderContext();ctx.THREE=require('../node_modules/three');
+    const ctx=builderContext();ctx.THREE=require('./helpers/three.cjs');
     const b=Object.create(ctx.Builder.prototype),result=Accessory.build({accessory:{id:'glasses'}});
     const lens=result.parts.find(p=>p.name==='Lenses');assert.ok(lens);
     const material=b._material(lens,result);
@@ -194,7 +194,7 @@ test('prop preview preserves the transparent accessory lenses',()=>{
     material.dispose();
 });
 test('small equipment fills the preview and its origin never buries it under the floor',()=>{
-    const ctx=builderContext(),T=require('../node_modules/three');ctx.THREE=T;
+    const ctx=builderContext(),T=require('./helpers/three.cjs');ctx.THREE=T;
     const b=Object.create(ctx.Builder.prototype),view={target:new T.Vector3(),floor:new T.Object3D(),blob:new T.Object3D(),wall:new T.Object3D(),scene:new T.Scene(),key:new T.DirectionalLight(),camera:new T.PerspectiveCamera(32,1,.05,200)};
     Object.assign(b,{_view:view,_draw(){}});
     b._result=Accessory.build({accessory:{id:'glasses'},pivot:'center'});b._stage(b._result);

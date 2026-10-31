@@ -823,6 +823,7 @@
             SUBTRACT: "subtract"
         };
     }
+    if (_isV8Pixi && PIXI.BLEND_MODES.SRC_IN === undefined) PIXI.BLEND_MODES.SRC_IN = "source-in";
     if (!PIXI.TYPES) {
         // WebGL numeric constants (kept numeric — v8 internals don't expose
         // these but legacy code that uses them with raw gl calls still needs
@@ -1378,6 +1379,16 @@
         const _origRender = PIXI.AbstractRenderer.prototype.render;
         PIXI.AbstractRenderer.prototype.render = function() {
             flushTextureUploads();
+            // v8 ignores a render root's own blend mode. Legacy mask passes
+            // render a detached source-in sprite directly; give it a neutral
+            // parent so the native blend pipe applies its mode.
+            const options = arguments[0], root = options && options.container;
+            if (root && !root.parent && root.blendMode === "source-in") {
+                const holder = this.__reactorSourceInRoot || (this.__reactorSourceInRoot = new PIXI.Container());
+                holder.addChild(root);
+                try { return _origRender.call(this, Object.assign({}, options, { container: holder })); }
+                finally { holder.removeChild(root); }
+            }
             return _origRender.apply(this, arguments);
         };
         PIXI.AbstractRenderer.prototype.render.__reactorFlushesTextures = true;
@@ -1406,6 +1417,38 @@
         proto.contextChange.__rrSubtract = true;
     })();
 
+    // Porter-Duff source-in keeps a destination mask's alpha while replacing
+    // its colour. Hendrix whitens upper-tile masks with this operation; normal
+    // blending would replace the entire target with an opaque rectangle.
+    if (_isV8Pixi && PIXI.GlStateSystem && typeof PIXI.GlStateSystem.prototype.contextChange === "function"
+        && !PIXI.GlStateSystem.prototype.contextChange.__rrSourceIn) {
+        const proto = PIXI.GlStateSystem.prototype, contextChange = proto.contextChange;
+        proto.contextChange = function(gl) {
+            contextChange.apply(this, arguments);
+            this.blendModesMap["source-in"] = [gl.DST_ALPHA, gl.ZERO];
+        };
+        Object.assign(proto.contextChange, contextChange, { __rrSourceIn: true });
+    }
+    if (_isV8Pixi && PIXI.GpuBlendModesToPixi && !PIXI.GpuBlendModesToPixi["source-in"]) {
+        PIXI.GpuBlendModesToPixi["source-in"] = {
+            color: { srcFactor: "dst-alpha", dstFactor: "zero", operation: "add" },
+            alpha: { srcFactor: "dst-alpha", dstFactor: "zero", operation: "add" }
+        };
+    }
+    if (_isV8Pixi && PIXI.State) {
+        const descriptor = Object.getOwnPropertyDescriptor(PIXI.State.prototype, "blendMode");
+        if (descriptor && descriptor.set && !descriptor.set.__rrSourceIn) {
+            const setter = function(value) {
+                descriptor.set.call(this, value);
+                // WebGPU's pipeline cache keys on this id; an unknown mode
+                // otherwise shares normal blending's id even with native factors.
+                if (value === "source-in") this._blendModeId = 21;
+            };
+            setter.__rrSourceIn = true;
+            Object.defineProperty(PIXI.State.prototype, "blendMode", { ...descriptor, set: setter });
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Numeric blend modes. MV/MZ plugins assign numbers (sprite.blendMode = 1,
     // or a custom id they registered on PIXI.BLEND_MODES and described to the
@@ -1419,6 +1462,7 @@
     (function installNumericBlendModes() {
         if (!_isV8Pixi) return;
         const byId = PIXI.__reactorBlendModeById = PIXI.__reactorBlendModeById || { 0: "normal", 1: "add", 2: "multiply", 3: "screen" };
+        if (byId[21] === undefined) byId[21] = "source-in";
         // v4's [ZERO, SRC_COLOR] multiplied colour and ignored alpha; v8's
         // "multiply" is premultiplied, so a low-alpha source barely shows.
         // Ids registered as that pair are remembered, and a bridged filter
@@ -1720,17 +1764,22 @@
         PIXI.BaseTexture = class BaseTextureCompatShim {
             constructor(resource, options) {
                 options = options || {};
-                this._rawResource = resource || null;
-                this.resource = resource
-                    ? { source: resource, update: () => this.update() }
+                const existingSource = PIXI.TextureSource && resource instanceof PIXI.TextureSource ? resource : null;
+                this._rawResource = existingSource ? existingSource.resource : resource || null;
+                this.resource = this._rawResource
+                    ? { source: this._rawResource, update: () => this.update() }
                     : null;
+                if (this.resource && ArrayBuffer.isView(this._rawResource)) this.resource.data = this._rawResource;
                 this.scaleMode = options.scaleMode || "linear";
                 this.mipmap = options.mipmap || false;
                 this.valid = false;
                 this.width = 1;
                 this.height = 1;
-                this._textureSource = null;
-                if (resource) {
+                this._textureSource = existingSource;
+                if (existingSource) {
+                    this.valid = !existingSource.destroyed;
+                    this.width = existingSource.width; this.height = existingSource.height;
+                } else if (resource) {
                     this._buildTextureSource();
                 } else {
                     // Empty constructor: many call sites (e.g., Sprite._emptyBaseTexture)
@@ -1801,6 +1850,11 @@
                 this.resource = null;
                 this.valid = false;
             }
+            dispose() {
+                // v5 releases GPU storage while keeping pixels and the texture
+                // valid for the next draw. Resizing plugin views uses this path.
+                if (this._textureSource && this._textureSource.unload) this._textureSource.unload();
+            }
             resize(width, height) {
                 this.width = width;
                 this.height = height;
@@ -1869,10 +1923,21 @@
             // Also accept anything whose `.source` is a v8 TextureSource.
             return (
                 "_textureSource" in v ||
-                isV8TextureSource(v.source)
+                isV8TextureSource(v) ||
+                (isV8TextureSource(v.source) && "resource" in v)
             );
         };
         const TextureCompatWrapper = function(arg0, frame) {
+            // BaseTexture has a .source getter too. Check it before the v8
+            // options form, otherwise positional frames are silently ignored.
+            if (isLegacyBaseTexture(arg0)) {
+                const source = arg0.source || arg0._textureSource || null;
+                const opts = { source: source, dynamic: true };
+                if (frame) opts.frame = frame;
+                return Reflect.construct(
+                    RealTexture, [opts], new.target || TextureCompatWrapper
+                );
+            }
             // Already an options-style call (or undefined): forward as-is.
             if (
                 arg0 == null ||
@@ -1881,15 +1946,6 @@
             ) {
                 return Reflect.construct(
                     RealTexture, arguments, new.target || TextureCompatWrapper
-                );
-            }
-            // Legacy positional: (baseTexture, frame, ...)
-            if (isLegacyBaseTexture(arg0)) {
-                const source = arg0.source || arg0._textureSource || null;
-                const opts = { source: source };
-                if (frame) opts.frame = frame;
-                return Reflect.construct(
-                    RealTexture, [opts], new.target || TextureCompatWrapper
                 );
             }
             // Fallback: forward verbatim and let v8 complain.
@@ -1912,6 +1968,23 @@
         TextureCompatWrapper.__compatWrapped = true;
         TextureCompatWrapper.__real = RealTexture;
         PIXI.Texture = TextureCompatWrapper;
+    }
+
+    // Some v5 plugins replace texture.frame and increment _updateID directly.
+    // v8 removed that counter and needs explicit UV/view invalidation. Only an
+    // explicit legacy counter write takes this path; ordinary v8 updates stay native.
+    if (_isV8Pixi && PIXI.Texture && !("_updateID" in PIXI.Texture.prototype)) {
+        Object.defineProperty(PIXI.Texture.prototype, "_updateID", {
+            configurable: true,
+            get() { return this.__reactorUpdateID || 0; },
+            set(value) {
+                this.__reactorUpdateID = value;
+                if (this.destroyed || !this.source || !this.frame) return;
+                this.noFrame = false;
+                if (!this.trim && !this.rotate) this.orig = this.frame;
+                PIXI.Texture.prototype.update.call(this);
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -1998,7 +2071,9 @@
                     const shim = {
                         source: src,
                         resource: {
-                            get source() { return src.resource || src; }
+                            get source() { return src.resource || src; },
+                            get data() { return ArrayBuffer.isView(src.resource) ? src.resource : undefined; },
+                            update() { src.update(); }
                         },
                         get scaleMode() { return src.scaleMode; },
                         set scaleMode(v) {
@@ -2025,6 +2100,7 @@
                         },
                         get width() { return src.width; },
                         get height() { return src.height; },
+                        dispose() { if (src.unload) src.unload(); },
                         update: function() {
                             // Deliberately NOT deferred. Plugins that reach a
                             // source through texture.baseTexture are managing
@@ -2132,6 +2208,51 @@
     // Static factory methods used by legacy MZ plugins (PSYCHRONIC_RaveLighting,
     // etc.) to create BaseTextures from canvases/images. Just construct via
     // the shim if not already provided by the running PIXI.
+    // Procedural fog/noise plugins (Hendrix 3D Light and Shadow) use the
+    // removed buffer factories. Keep their typed array as the GPU resource:
+    // converting it to a canvas would lose float precision and live updates.
+    if (_isV8Pixi && PIXI.BufferImageSource && PIXI.BaseTexture && !PIXI.BaseTexture.fromBuffer) {
+        PIXI.BaseTexture.fromBuffer = function(buffer, width, height, options) {
+            options = options || {};
+            buffer = buffer || new Float32Array(width * height * 4);
+            const floating = buffer instanceof Float32Array;
+            const resolution = options.resolution || 1;
+            const scale = options.scaleMode;
+            const wrap = options.wrapMode;
+            const alpha = options.alphaMode;
+            const source = new PIXI.BufferImageSource({
+                resource: buffer, width: width / resolution, height: height / resolution, resolution,
+                format: typeof options.format === "string" ? options.format : floating ? "rgba32float" : "rgba8unorm",
+                scaleMode: scale === 1 ? "linear" : scale === 0 || scale == null ? "nearest" : scale,
+                addressMode: wrap === 10497 ? "repeat" : wrap === 33648 ? "mirror-repeat" : wrap === 33071 || wrap == null ? "clamp-to-edge" : wrap,
+                alphaMode: alpha === 1 ? "premultiply-alpha-on-upload" : alpha === 2 ? "premultiplied-alpha" : alpha === 0 || alpha == null ? "no-premultiply-alpha" : alpha,
+                autoGenerateMipmaps: !!options.mipmap
+            });
+            source.__reactorLegacyBuffer = true;
+            return new PIXI.BaseTexture(source, { scaleMode: source.scaleMode, mipmap: source.autoGenerateMipmaps });
+        };
+    }
+    // The v8 GL buffer uploader reads logical dimensions. A legacy buffer's
+    // resolution changes its display size, never the number of stored pixels.
+    const bufferUpload = PIXI.glUploadBufferImageResource;
+    if (_isV8Pixi && bufferUpload && !bufferUpload.__reactorBufferPixels) {
+        const upload = bufferUpload.upload;
+        bufferUpload.upload = function(source) {
+            if (source.__reactorLegacyBuffer && (source.width !== source.pixelWidth || source.height !== source.pixelHeight)) {
+                const pixels = Object.create(source);
+                Object.defineProperties(pixels, { width: { value: source.pixelWidth }, height: { value: source.pixelHeight } });
+                const args = Array.from(arguments); args[0] = pixels;
+                return upload.apply(this, args);
+            }
+            return upload.apply(this, arguments);
+        };
+        bufferUpload.__reactorBufferPixels = true;
+    }
+    if (PIXI.Texture && !PIXI.Texture.fromBuffer && PIXI.BaseTexture && PIXI.BaseTexture.fromBuffer) {
+        PIXI.Texture.fromBuffer = function(buffer, width, height, options) {
+            return new PIXI.Texture(PIXI.BaseTexture.fromBuffer(buffer, width, height, options));
+        };
+    }
     if (PIXI.BaseTexture && !PIXI.BaseTexture.from) {
         PIXI.BaseTexture.from = function(resource, options) {
             return new PIXI.BaseTexture(resource, options);
@@ -2590,6 +2711,30 @@
     // need a different shim -- likely replacing Sprite's collectRenderablesSimple
     // with Container's iterate-only version (sacrificing the sprite's own
     // texture draw for that instance).
+    // A v5 sprite can suppress its own quad with an empty instance _render,
+    // while keeping children visible (Hendrix's sliced billboards do this).
+    // v8's sprite pipe bypasses that method. Collapse only that quad's bounds;
+    // keep the normal batch lifecycle and child traversal intact.
+    if (_isV8Pixi && PIXI.SpritePipe && !PIXI.SpritePipe.prototype.__rrEmptyRender) {
+        const emptyFunctions = new WeakMap(), emptyBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+        const hiddenQuad = sprite => {
+            if (!Object.prototype.hasOwnProperty.call(sprite, "_render") || typeof sprite._render !== "function") return false;
+            const fn = sprite._render;
+            if (!emptyFunctions.has(fn)) emptyFunctions.set(fn, /^(?:function(?:\s+[\w$]+)?\s*\([^)]*\)|(?:\([^)]*\)|[\w$]+)\s*=>)\s*\{\s*\}$/.test(Function.prototype.toString.call(fn).trim()));
+            return emptyFunctions.get(fn);
+        };
+        const proto = PIXI.SpritePipe.prototype, init = proto._initGPUSprite, update = proto._updateBatchableSprite;
+        proto._initGPUSprite = function(sprite) {
+            const quad = init.apply(this, arguments);
+            if (hiddenQuad(sprite)) quad.bounds = emptyBounds;
+            return quad;
+        };
+        proto._updateBatchableSprite = function(sprite, quad) {
+            update.apply(this, arguments);
+            if (hiddenQuad(sprite)) quad.bounds = emptyBounds;
+        };
+        proto.__rrEmptyRender = true;
+    }
     if (PIXI.Sprite && PIXI.Sprite.prototype && PIXI.TextureSource) {
         try {
             Object.defineProperty(PIXI.Sprite.prototype, "allowChildren", {

@@ -90,13 +90,17 @@
     // ever show the markup; this popup is div-based, so it can show what the
     // name means. Any <option> whose text carries no code renders exactly as
     // it did - one textContent assignment.
-    const paintLabel = (target, text) => {
+    const paintLabel = (target, text, symbol) => {
         if (!target) return;
         // A panel that sets `select.value` on every frame repaints this label
         // on every frame; a repaint that changes nothing still replaces the
         // text node, and every replaced node is a mutation. Paint on change.
-        if (target.dataset.rrShimLabel === text) return;
-        target.dataset.rrShimLabel = text;
+        const key=text+'|'+(symbol||'');
+        if (target.dataset.rrShimLabel === key) return;
+        target.dataset.rrShimLabel = key;
+        if(symbol&&window.RRCharacterMarks?.icon){
+            target.textContent='';const preview=document.createElement('span');preview.className='rr-symbol-preview';preview.innerHTML=window.RRCharacterMarks.icon(symbol);target.append(preview,document.createTextNode(text));return;
+        }
         const codes = window.RRIconCodes;
         if (codes && codes.hasCode(text)) {
             codes.paint(target, text);
@@ -175,7 +179,7 @@
                 // wraps beneath it.
                 const labelLine = document.createElement('div');
                 labelLine.style.whiteSpace = 'nowrap';
-                paintLabel(labelLine, opt.textContent);
+                paintLabel(labelLine, opt.textContent, opt.dataset.rrSymbol);
                 item.appendChild(labelLine);
                 // A hint may carry further lines after a newline - a trait's
                 // says what the option does, then names the plugins that have
@@ -209,7 +213,7 @@
                 }
                 item.title = hint;
             } else {
-                paintLabel(item, opt.textContent);
+                paintLabel(item, opt.textContent, opt.dataset.rrSymbol);
             }
             // Typing part of an explanation finds the row too, which is the
             // point of writing them: an author who knows what they want but not
@@ -228,7 +232,7 @@
                     // Synthesize change + input events so existing listeners fire.
                     selectEl.dispatchEvent(new Event('change', { bubbles: true }));
                     selectEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    paintLabel(triggerEl.querySelector('.rr-shim-label'), opt.textContent);
+                    paintLabel(triggerEl.querySelector('.rr-shim-label'), opt.textContent, opt.dataset.rrSymbol);
                     triggerEl.title = hint;
                     closeOpenPopup();
                 });
@@ -446,7 +450,7 @@
         // icon alongside the text; the caret stays a sibling of it.
         const label = document.createElement('span');
         label.className = 'rr-shim-label';
-        paintLabel(label, getCurrentLabel(selectEl));
+        paintLabel(label, getCurrentLabel(selectEl), selectEl.options[selectEl.selectedIndex]?.dataset.rrSymbol);
         trigger.title = getCurrentHint(selectEl);
         trigger.appendChild(label);
 
@@ -491,7 +495,7 @@
         // re-populates options (e.g. project switch), refresh the trigger
         // label and re-open popup data on next open.
         const refreshLabel = () => {
-            paintLabel(label, getCurrentLabel(selectEl));
+            paintLabel(label, getCurrentLabel(selectEl), selectEl.options[selectEl.selectedIndex]?.dataset.rrSymbol);
             trigger.title = getCurrentHint(selectEl);
         };
         selectEl.addEventListener('change', refreshLabel);

@@ -46,9 +46,9 @@
     "gif.js": "^0.2.0",
     "gifuct-js": "^2.1.2",
     "lamejs": "^1.2.1",
-    "pixi.js": "^8.20.0",
+    "pixi.js": "8.22.0",
     "pngjs": "^7.0.0",
-    "three": "^0.185.1"
+    "three": "0.187.0"
   },
   "keywords": [
     "rpg",
@@ -71,6 +71,7 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "nw-builder": "^4.17.13",
     "png-to-ico": "^3.0.1"
   }

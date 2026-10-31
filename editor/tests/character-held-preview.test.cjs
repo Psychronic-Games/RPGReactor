@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
-const T = require('../node_modules/three');
+const T = require('./helpers/three.cjs');
 const Q = require('./helpers/character-quality-matrix.cjs');
 const Poses = require('../src/forge/Character3D/CharacterPoses.js'), Cloth = require('../src/forge/Character3D/CharacterCloth.js');
 const source = fs.readFileSync(path.join(__dirname, '../src/forge/Character3D/Character3DBuilder.js'), 'utf8');

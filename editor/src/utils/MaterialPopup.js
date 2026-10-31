@@ -61,8 +61,9 @@
         document.body.appendChild(grid);
         // Under the tile when there is room, else over it; never off the window.
         const rect = anchor.getBoundingClientRect(), box = grid.getBoundingClientRect();
-        const left = Math.max(8, Math.min(window.innerWidth - box.width - 8, rect.left));
-        const below = rect.bottom + 4 + box.height <= window.innerHeight - 8;
+        const view = grid.ownerDocument?.defaultView || window;
+        const left = Math.max(8, Math.min(view.innerWidth - box.width - 8, rect.left));
+        const below = rect.bottom + 4 + box.height <= view.innerHeight - 8;
         const top = below ? rect.bottom + 4 : Math.max(8, rect.top - 4 - box.height);
         grid.style.left = Math.round(left) + 'px';
         grid.style.top = Math.round(top) + 'px';

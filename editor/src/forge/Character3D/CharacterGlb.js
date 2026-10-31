@@ -60,8 +60,8 @@
                 sheenColor: part.sheen.color || [1, 1, 1], sheenRoughness: part.sheen.roughness ?? 0.5 });
             look.specularIntensity = look.roughness > 0.8 ? 0.45 : 0.75;
         } else if (kind === 'cloth') {
-            Object.assign(look, { roughness: Math.max(look.roughness, 0.8), sheen: 0.3,
-                sheenRoughness: 0.85, sheenColor: [0.8, 0.8, 0.8], specularIntensity: 0.12 });
+            Object.assign(look, { roughness: Math.max(look.roughness, 0.8), sheen: part.sheen?.strength ?? 0.3,
+                sheenRoughness: part.sheen?.roughness ?? 0.85, sheenColor: part.sheen?.color || [0.8, 0.8, 0.8], specularIntensity: 0.12 });
         } else if (kind === 'metal') {
             Object.assign(look, { metalness: Math.max(0.85, look.metalness), roughness: Math.min(0.4, look.roughness), clearcoat: 0.3 });
         } else if (kind === 'hair') {
@@ -281,6 +281,7 @@
                 material: json.materials.length - 1
             };
             if (second) primitive.attributes.TEXCOORD_1 = meshAccessor(Float32Array.from(part.uvs1), 'VEC2', 5126, 34962);
+            if (part.bodyUV) primitive.extras = { rrBodyUV: part.bodyUV };
             if (part.colors) primitive.attributes.COLOR_0 = meshAccessor(Float32Array.from(part.colors), 'VEC3', 5126, 34962);
             const mesh = { name: part.name, primitives: [primitive] };
             // Expressions hook: the face's named morph targets (built.morphs, RRCharacterExpressions.morphTargets) as

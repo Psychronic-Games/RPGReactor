@@ -36,10 +36,10 @@ test('Node worker and browser worker entry retain color, relief, roughness and i
  const expected=Q.Model.build(null,r,{},options);
  const {PreviewWorker}=require('../src/forge/Character3D/CharacterPreviewWorker.cjs'),pool=new PreviewWorker();t.after(()=>pool.dispose());pool.configure({});
  const native=await pool.build({key:'fish-materials',recipe:r,options});
- const messages=[],scope={console,setTimeout,clearTimeout,Uint8Array,Float32Array,Uint32Array,ArrayBuffer,DataView,Map,Set,performance,structuredClone,URL,OffscreenCanvas:function(){},createImageBitmap(){},location:{href:"https://example.test/CharacterPreviewBrowserEntry.js"}};scope.self=scope;scope.window=scope;scope.postMessage=m=>messages.push(m);scope.importScripts=(...files)=>{for(const file of files)vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../src/forge/Character3D',file),'utf8'),scope,{filename:file});};
+ const messages=[],scope={console,setTimeout,clearTimeout,Uint8Array,Float32Array,Uint32Array,ArrayBuffer,DataView,Map,Set,performance,structuredClone,URL,OffscreenCanvas:function(){},createImageBitmap(){},location:{href:"https://example.test/CharacterPreviewBrowserEntry.js"}};scope.self=scope;scope.window=scope;scope.postMessage=m=>messages.push(m);scope.importScripts=(...files)=>{for(const file of files)vm.runInNewContext(fs.readFileSync(file.startsWith('../../../runtime/')?path.resolve(__dirname,'../../runtime',file.slice('../../../runtime/'.length)):path.resolve(__dirname,'../src/forge/Character3D',file),'utf8'),scope,{filename:file});};
  // Browser entry runs its actual module loader and serialization path.
  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../src/forge/Character3D/CharacterPreviewBrowserEntry.js'),'utf8'),scope);
- scope.RRHumanBody.loadPack=async()=>({});scope.RRCharacterClothes.preload=async()=>{};
+ scope.RRHumanBody.loadPack=async()=>({});scope.RRHumanBody.prepareAuthoring=async()=>{};scope.RRCharacterClothes.preload=async()=>{};
  scope.onmessage({data:{type:'context',context:{}}});await new Promise(resolve=>{scope.postMessage=m=>{messages.push(m);resolve();};scope.onmessage({data:{type:'build',id:1,recipe:r,options}});});
  const browser=messages.find(m=>m.id===1);assert.ok(!browser.error,JSON.stringify(browser.error));
  for(const result of [native,browser.result]){
@@ -88,7 +88,7 @@ test('selected previews bind physical fish maps as linear data and keep them lin
  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../src/forge/Character3D/Character3DBuilder.js'),'utf8'),scope);
  const b=Object.create(scope.window.Character3DBuilder.prototype);b._view={textures:new Map(),meshes:[]};b._weak=false;
  const result=Q.Model.build(null,Q.Creature.kindRecipe('fish'),{},{quality:'preview'}),part=result.parts[0],material=b._material(part,result,null,new THREE.Scene());b._view.meshes=[{material}];
- assert.equal(material.iridescence,part.iridescence);assert.ok(material.roughnessMap===material.iridescenceThicknessMap);
+ assert.equal(material.iridescence,part.iridescence);assert.equal(material.iridescenceThicknessMinimum,(part.iridescenceThicknessRange||[100,400])[0]);assert.equal(material.iridescenceThicknessMaximum,(part.iridescenceThicknessRange||[100,400])[1]);assert.ok(material.roughnessMap===material.iridescenceThicknessMap);
  for(const texture of [material.normalMap,material.roughnessMap,material.metalnessMap,material.iridescenceThicknessMap])assert.equal(texture.colorSpace,THREE.NoColorSpace);
  assert.equal(material.map.colorSpace,THREE.SRGBColorSpace);
  const key=b._structure(result);assert.notEqual(key,b._structure({...result,parts:result.parts.map(p=>({...p,iridescence:.1}))}),'changed finish rebuilds materials');

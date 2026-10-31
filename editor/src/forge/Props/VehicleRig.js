@@ -84,6 +84,10 @@
             mark(parts, /^Twisted rotor blades$/, g => Math.hypot(g.mid[0] - at[0], g.mid[2] - at[2]) < R * 1.05, TAG + rig.length);
             rig.push({ bone: name, prefix: name, pivot: at, kind: 'fan', axis: [0, 1, 0] });
         });
+        for(const rotor of c.rotors||[]){
+            const at=lowered(rotor.at);mark(parts,new RegExp('^'+rotor.name+'$'),()=>true,TAG+rig.length);
+            rig.push({bone:rotor.name,prefix:rotor.name,pivot:at,kind:'fan',axis:rotor.axis});
+        }
         if (c.struts) c.struts.forEach((s, i) => {
             const at = lowered(s.at), name = 'Landing gear ' + (i + 1);
             const near = g => Math.sign(g.mid[0]) === Math.sign(at[0]) && Math.abs(g.mid[2] - at[2]) < s.reach * 1.2 && g.hi[1] <= at[1] + .02;
@@ -154,7 +158,7 @@
             rules.push({ name: 'Gear up', type: 'pose', trigger: 'action', part: q.prefix, period: 70, stay: true, keys: [{ at: 0, rotate: [0, 0, 0] }, { at: .65, rotate: [0, 0, 0] }, { at: 1, rotate: shut }] });
             rules.push({ name: 'Gear down', type: 'pose', trigger: 'action', part: q.prefix, period: 70, keys: [{ at: 0, rotate: shut }, { at: .35, rotate: [0, 0, 0] }, { at: 1, rotate: [0, 0, 0] }] });
         }
-        if (fans.length) rules.push({ name: r.form === 'drone' ? 'Rotors' : 'Lift fans', type: 'spin', trigger: 'always', part: r.form === 'drone' ? 'Rotor' : 'Lift fan', axis: 'y', speed: r.form === 'drone' ? 1440 : 900 });
+        for(const fan of fans){const axis=fan.axis||[0,1,0];rules.push({name:/Intake turbine/.test(fan.prefix)?'Engine turbines':'Rotors',type:'spin',trigger:'always',part:fan.prefix,axis:['x','y','z'][axis.map(Math.abs).indexOf(Math.max(...axis.map(Math.abs)))],speed:/Intake turbine/.test(fan.prefix)?720:r.form==='drone'?1440:1080});}
         // Preview loops, one bone track each.
         const times = Float32Array.from({ length: Math.round(LOOP * FPS) + 1 }, (_, f) => f / FPS), track = (bone, fn) => ({ bone, path: 'rotation', times, values: Float32Array.from(Array.from(times).flatMap(fn)) });
         const clips = [];
@@ -176,7 +180,7 @@
             for (const q of doorsGear) tracks.push(track(q.index, t => quat([0, 0, 1], q.turn * doorAt(t))));
             clips.push({ id: 'gear', name: 'Landing gear', times, tracks });
         }
-        if (fans.length) clips.push({ id: 'fly', name: 'Rotors spinning', times, tracks: fans.map((q, i) => track(q.index, t => quat([0, 1, 0], (i % 2 ? -1 : 1) * 360 * 3 * t / LOOP))) });
+        if (fans.length) clips.push({ id: 'fly', name: 'Rotors spinning', times, tracks: fans.map((q, i) => track(q.index, t => quat(q.axis||[0, 1, 0], (i % 2 ? -1 : 1) * 360 * 3 * t / LOOP))) });
         return { bones, regions, rules, clips, preview: id => clips.filter(c => c.id === id) };
     }
     const api = { pieces, finish, piecesOf, subset, LOOP, OPEN, FOLD };

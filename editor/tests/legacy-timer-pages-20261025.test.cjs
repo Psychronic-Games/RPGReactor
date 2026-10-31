@@ -18,8 +18,10 @@ test('the import keeps a page\'s timer condition', () => {
     assert.deepEqual(notes, {});
     assert.equal(K.eventPage({ condition: { flags: 0x01, switch_a_id: 2 } }, {}).conditions.rrTimerSec, undefined);
     const second = {};
-    assert.equal(K.eventPage({ condition: { flags: 0x60, timer_sec: 5, timer2_sec: 3 } }, second).conditions.rrTimerSec, 3, '2003\'s second timer runs on the one timer');
-    assert.deepEqual(second, { timerCondition: 1 });
+    const both = K.eventPage({ condition: { flags: 0x60, timer_sec: 5, timer2_sec: 3 } }, second).conditions;
+    assert.equal(both.rrTimerSec, 5);
+    assert.equal(both.rrTimer2Sec, 3, 'both timers retain their own condition');
+    assert.deepEqual(second, {});
 });
 
 function world() {

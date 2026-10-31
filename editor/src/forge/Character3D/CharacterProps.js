@@ -16,6 +16,7 @@
     const Surface=root.RRConstructionSurface||(typeof require==='function'?require('./ConstructionSurface.js'):null);
     const Patterns=root.RRConstructionPatterns||(typeof require==='function'?require('./ConstructionPatterns.js'):null);
     const Outfit = root.RRCharacterOutfit || (typeof require === 'function' ? require('./CharacterOutfit.js') : null);
+    const Marks=root.RRCharacterMarks||(typeof require==='function'?require('./CharacterMarks.js'):null);
     const linear = hex => Outfit.linear(hex);
 
     // ── vectors ───────────────────────────────────────────────────────────
@@ -356,7 +357,7 @@
     const PROPS = [
         // Eyes and face
         { id: 'glasses', label: 'Glasses', slot: 'eyes', group: 'Face', defaults: { color: '#2a2420', shape: 'round', size: 1 }, shapes: [['round', 'Round'], ['square', 'Square'], ['cat', 'Cat-eye']], make: (m, L, o) => eyewear(m, L, o, { tint: '#cfe4f0', opacity: 0.18 }) },
-        { id: 'sunglasses', label: 'Sunglasses', slot: 'eyes', group: 'Face', defaults: { color: '#141414', color2: '#1c1c22', shape: 'aviator', size: 1.1 }, shapes: [['aviator', 'Aviator'], ['square', 'Square'], ['round', 'Round']], make: (m, L, o) => eyewear(m, L, o, { tint: o.color2, opacity: 0.92 }) },
+        { id: 'sunglasses', label: 'Sunglasses', slot: 'eyes', group: 'Face', defaults: { color: '#141414', color2: '#1c1c22', shape: 'aviator', size: 1.1 }, shapes: [['aviator','Aviator'],['square','Square'],['round','Round'],['cat','Cat-eye'],['wayfarer','Wayfarer'],['wrap','Wraparound']], make: (m, L, o) => eyewear(m, L, o, { tint: o.color2, opacity: 0.92 }) },
         { id: 'monocle', label: 'Monocle', slot: 'eyes', group: 'Face', defaults: { color: '#c9a35a', size: 1 }, make: (m, L, o) => monocle(m, L, o) },
         { id: 'eyepatch', label: 'Eye patch', slot: 'eyes', group: 'Face', defaults: { color: '#141414', side: 'left' }, make: (m, L, o) => eyepatch(m, L, o) },
         { id: 'goggles', label: 'Goggles', slot: 'eyes', group: 'Face', defaults: { color: '#5a3d22', color2: '#7a9a6a', up: 0 }, make: (m, L, o) => goggles(m, L, o) },
@@ -387,8 +388,8 @@
         { id: 'bracelets', label: 'Bracelets', slot: 'wristwear', group: 'Jewelry', defaults: { color: '#e0b84a', size: 1 }, make: (m, L, o) => bracelets(m, L, o) },
         // Worn on the back and about the neck
         // `cloth`: hangs as cloth from that bone (RRCharacterCloth).
-        { id: 'cape', label: 'Cape', slot: 'back', group: 'Back', defaults: { color: '#8a1a2a', color2: '#d4af37', length: 0.8, width: 1 }, cloth: { anchor: 'Spine2' }, make: (m, L, o) => cape(m, L, o) },
-        { id: 'scarf', label: 'Scarf', slot: 'scarf', group: 'Back', defaults: { color: '#c8a040', color2: '#8a2a2a', length: 0.5 }, make: (m, L, o) => scarf(m, L, o) },
+        { id: 'cape', label: 'Cape', slot: 'back', group: 'Back', defaults: { color: '#8a1a2a', color2: '#d4af37', length: 0.8, width: 1, trimWidth: .025 }, options: {trimWidth:[0,.12]}, cloth: { anchor: 'Spine2' }, make: (m, L, o) => cape(m, L, o) },
+        { id: 'scarf', label: 'Scarf', slot: 'scarf', group: 'Back', defaults: { color: '#c8a040', color2: '#8a2a2a', length: 0.5, pattern:'stripes', patternScale:1 }, options: {pattern:[['solid','Solid'],['stripes','Stripes'],['checks','Checks']],patternScale:[.5,2]}, make: (m, L, o) => scarf(m, L, o) },
         { id: 'backpack', finish:'felt', label: 'Backpack', slot: 'back', group: 'Back', defaults: { color: '#4a5a3a', color2: '#2a3020', size: 1, pockets:1 }, options:{pockets:[1,3]}, make: (m, L, o) => backpack(m, L, o) },
         { id: 'utilityHarness', label: 'Utility harness', slot: 'harness', group: 'Back', finish: 'leather', defaults: { color: '#343d36', color2: '#a1a69b', size: 1 }, make: (m,L,o) => utilityHarness(m,L,o) },
         { id: 'quiver', label: 'Quiver', slot: 'back', group: 'Back', defaults: { color: '#6a4426', color2: '#e8e0d0', size: 1 }, make: (m, L, o) => quiver(m, L, o) },
@@ -421,6 +422,7 @@
             for(const side of [-1,1]){const sh=L.bone(side>0?'LeftArm':'RightArm').head,x=side*Math.abs(sh[0])*.55,at=[x,sh[1]-.10,L.neck.center[2]+L.neck.rz+.07];loop(hardware,[[x-.009,at[1]-.012,at[2]],[x+.009,at[1]-.012,at[2]],[x+.009,at[1]+.012,at[2]],[x-.009,at[1]+.012,at[2]]],.0016,linear('#96998b'),spineSkin(L),8);}
         }},
         {id:'hat/sewn-band-binding',when:{id:['wizardhat','witchhat','tophat','fedora','cowboy','bowler','tricorn','sunhat']},controls:['size','height','color2'],build({m,L,o}){
+            if(['wizardhat','witchhat','tophat','fedora','cowboy','bowler','tricorn','sunhat'].includes(o.id))return;
             const R=hatRing(L,o),skin=rigid(L.boneIndex('Head')),ink=linear(o.color2||o.color).map(v=>v*.78);
             for(const dy of [.005,.017])loop(m,ringPath(0,64,a=>[R.center[0]+Math.cos(a)*(R.rx+.001),R.center[1]+dy,R.center[2]+Math.sin(a)*(R.rz+.001)]),.0009,ink,skin,8);
         }},
@@ -529,17 +531,17 @@
             // The rim's centerline at angle a (0 = toward +x).
             const rim = a => {
                 let x = Math.cos(a) * r, y = Math.sin(a) * r * (shape === 'round' ? 0.92 : 0.72);
-                if (shape === 'square') { const k = 1 / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a)) * 1.25); x = Math.cos(a) * r * Math.min(1.12, k * 0.85); y = Math.sin(a) * r * 0.72 * Math.min(1.25, k * 0.85); }
+                if (shape === 'square'||shape==='wayfarer') { const k = 1 / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a)) * 1.25); x = Math.cos(a) * r * Math.min(1.12, k * 0.85); y = Math.sin(a) * r * 0.72 * Math.min(1.25, k * 0.85); }
                 if (shape === 'cat') { y *= 1 + 0.35 * Math.max(0, Math.sin(a)) * (side * Math.cos(a) > 0 ? 1 : 0.2); }
+                if(shape==='wrap'){x*=1.18;y*=.88;}
                 if (shape === 'aviator') { y = Math.sin(a) * r * (Math.sin(a) < 0 ? 1.05 : 0.72); x *= 1.05; }
-                return add(c, [x, y, -Math.abs(x) * 0.12]);
+                return add(c, [x, y, -Math.abs(x) * (shape==='wrap'?.48:.12)]);
             };
-            loop(m, ringPath(r, 28, rim), rimR, frame, skin);
-            const ln = new Mesh();
-            ln.disk(c, [0, 0, 1], r * 0.98, linear(lens.tint), skin, 24, r * (shape === 'round' ? 0.9 : shape === 'aviator' ? 0.86 : 0.7));
-            lensParts.p.push(...ln.p); lensParts.n.push(...ln.n); lensParts.c.push(...ln.c); lensParts.j.push(...ln.j); lensParts.w.push(...ln.w);
-            const base = lensParts.i.length ? Math.max(...lensParts.i) + 1 : 0;
-            for (const x of ln.i) lensParts.i.push(x + base);
+            loop(m, ringPath(r, 64, rim), rimR*(shape==='wayfarer'?1.9:1), frame, skin,8);
+            // The lens and its bezel use the same curve and depth; changing the shape cannot detach them.
+            const base=lensParts.p.length/3,center=lensParts.vertex(add(c,[0,0,-.0005]),[0,0,1],linear(lens.tint),skin),points=[];
+            for(let j=0;j<64;j++){const q=lerp(c,rim(j/64*Math.PI*2),.985);q[2]-=.0005;points.push(lensParts.vertex(q,[0,0,1],linear(lens.tint),skin));}
+            for(let j=0;j<64;j++)lensParts.tri(center,points[j],points[(j+1)%64]);
             // The bridge meets each rim at its inner edge, a little above center; the hinge sits on the outer edge.
             const inAt = side > 0 ? Math.PI - 0.32 : 0.32, outAt = side > 0 ? 0.28 : Math.PI - 0.28;
             inner[side] = rim(inAt);
@@ -562,7 +564,8 @@
         }
         // The bridge over the nose: from rim to rim, arched up and a touch forward.
         const inL = inner[1], inR = inner[-1], top = add(lerp(inL, inR, 0.5), [0, 0.0045, 0.003]);
-        m.tube([inL, lerp(inL, top, 0.55), top, lerp(inR, top, 0.55), inR], rimR * 0.95, 5, frame, skin);
+        m.tube([inL, lerp(inL, top, 0.55), top, lerp(inR, top, 0.55), inR], rimR * 0.95, 8, frame, skin);
+        if(shape==='aviator')m.tube([inL,add(inL,[0,.009,0]),add(top,[0,.008,0]),add(inR,[0,.009,0]),inR],rimR*.85,8,frame,skin);
         return [{ mesh: lensParts, extra: { name: 'Lenses', opacity: lens.opacity, roughness: 0.05, metalness: 0 } }];
     }
 
@@ -587,13 +590,14 @@
         const E = o.side === 'right' ? L.eyeR : L.eyeL, side = Math.sign(E.center[0]);
         const c = add(E.center, [0, 0, E.radius * 1.1 + 0.003]);
         const r = E.radius * 1.7;
-        m.loft(5, (i, t) => ({ center: add(c, [0, 0, -t * 0.006]), x: [1, 0, 0], y: [0, 1, 0], rx: r * (1 - t * t * 0.5), ry: r * 0.85 * (1 - t * t * 0.5) }), 20, linear(o.color), skin, true);
-        // The strap round the head, rising toward the back.
-        const ring = L.ring(E.center[1] + 0.02);
-        if (ring) {
-            const pts = ringPath(1, 32, a => [ring.center[0] + Math.sin(a) * (ring.rx + 0.004), E.center[1] + 0.015 + (1 - Math.cos(a)) * 0.012, ring.center[2] + Math.cos(a) * (ring.rz + 0.004)]);
-            loop(m, pts, 0.0025, linear(o.color), skin, 4);
-        }
+        const edge=ringPath(0,64,a=>add(c,[Math.cos(a)*r,Math.sin(a)*r*.83,-.003*Math.cos(a)**2]));
+        const center=m.vertex(add(c,[0,0,.003]),[0,0,1],linear(o.color),skin),border=edge.map(q=>m.vertex(q,[0,0,1],linear(o.color),skin));
+        for(let k=0;k<64;k++)m.tri(center,border[k],border[(k+1)%64]);
+        loop(m,edge,.0018,linear(o.color).map(v=>v*.65),skin,8);
+        for(let k=0;k<36;k++){const a=k/36*Math.PI*2,b=a+.05; m.tube([a,b].map(t=>add(c,[Math.cos(t)*r*.88,Math.sin(t)*r*.73,.0007])),.00035,4,linear('#877461'),skin);}
+        const a=add(c,[side*r*.94,0,-.001]),b=add(c,[-side*r*.94,.006,-.001]);
+        backStrap(m,L,a,b,E.center[1]+.012,.005,.0015,linear(o.color),skin,.012,1);
+        m.doubleSided=true;
         return [];
     }
 
@@ -646,6 +650,14 @@
     }
 
     function brim(m, R, out, rgb, skin, curl = 0, fold = 0) {
+        if(fold){
+            const rows=12,N=96,start=m.p.length/3,point=(j,k,bottom=false)=>{const t=j/rows,a=k/N*Math.PI*2,wave=(1+Math.cos(3*a))/2,reach=1+(out-1)*t*(1.08-.22*wave);return[R.center[0]+Math.sin(a)*R.rx*reach,R.center[1]+.003+(bottom?-.003:0)+Math.pow(t,1.8)*R.rx*.72*wave,R.center[2]+Math.cos(a)*R.rz*reach];};
+            const grid=[];for(const lower of [false,true]){const g=[];for(let j=0;j<=rows;j++){const row=[];for(let k=0;k<=N;k++)row.push(m.vertex(point(j,k,lower),[0,lower?-1:1,0],rgb,skin));g.push(row);}grid.push(g);}
+            for(let j=0;j<rows;j++)for(let k=0;k<N;k++)for(let face=0;face<2;face++){const g=grid[face],[a,b,c,d]=[g[j][k],g[j][k+1],g[j+1][k],g[j+1][k+1]];if(face){m.tri(a,c,b);m.tri(b,c,d);}else{m.tri(a,b,c);m.tri(b,d,c);}}
+            for(let k=0;k<N;k++){const a=grid[0][rows][k],b=grid[0][rows][k+1],c=grid[1][rows][k],d=grid[1][rows][k+1];m.tri(a,c,b);m.tri(b,c,d);}
+            const edge=Array.from({length:N+1},(_,k)=>point(rows,k));m.tube(edge,.0015,8,rgb.map(v=>v*.64),skin);
+            m.computeNormals();return;
+        }
         // Two rings of the brim's top and underside: from the crown's edge out to `out` times its radius.
         const sides = 40;
         m.loft(7, (i, t) => {
@@ -678,7 +690,10 @@
             const w = Math.pow(1 - t, 1.25) * (1 - t * 0.05);
             const bendZ = -k.bend * Math.pow(t, 2.2) * tall * 1.4, bendY = -k.bend * Math.pow(t, 3) * tall * 0.6;
             return { center: [R.center[0], R.center[1] + t * tall + bendY, R.center[2] + bendZ], x: [1, 0, 0], y: [0, 0, 1], rx: Math.max(0.002, R.rx * w), ry: Math.max(0.002, R.rz * w) };
-        }, 48, t => (t < 0.09 ? band : linear(o.color)), skin, true);
+        }, 64, linear(o.color), skin, true);
+        const bandAt=t=>{const w=Math.pow(1-t,1.25)*(1-t*.05);return {center:[R.center[0],R.center[1]+t*tall-k.bend*Math.pow(t,3)*tall*.6,R.center[2]-k.bend*Math.pow(t,2.2)*tall*1.4],x:[1,0,0],y:[0,0,1],rx:R.rx*w+.0012,ry:R.rz*w+.0012};};
+        m.loft(5,(i,t)=>bandAt(.006+t*.08),64,band,skin,false);
+        for(const t of [.006,.086]){const q=bandAt(t);loop(m,ringPath(0,64,a=>add(q.center,[Math.cos(a)*q.rx,0,Math.sin(a)*q.ry])),.0007,band.map(v=>v*.65),skin,6);}
         return [];
     }
 
@@ -695,7 +710,8 @@
             if (k.top === 'dome') { w *= Math.sqrt(Math.max(0, 1 - Math.pow(Math.max(0, t - 0.35) / 0.65, 2))); }
             if (t >= 1 && k.top !== 'dome') w *= 0.98;
             return { center: [R.center[0], R.center[1] + y, R.center[2]], x: [1, 0, 0], y: [0, 0, 1], rx: Math.max(0.002, R.rx * w), ry: Math.max(0.002, R.rz * w) };
-        }, 48, t => (k.band && t * tall < k.band ? band : linear(o.color)), skin, true);
+        }, 64, linear(o.color), skin, true);
+        if(k.band){const at=t=>({center:[R.center[0],R.center[1]+t,R.center[2]],x:[1,0,0],y:[0,0,1],rx:R.rx*(1+(k.flare-1)*t/tall)+.0011,ry:R.rz*(1+(k.flare-1)*t/tall)+.0011});m.loft(5,(i,t)=>at(.002+t*k.band),64,band,skin,false);for(const dy of [.002,k.band+.002]){const q=at(dy);loop(m,ringPath(0,64,a=>add(q.center,[Math.cos(a)*q.rx,0,Math.sin(a)*q.ry])),.0006,band.map(v=>v*.7),skin,6);}}
         // A pinched crown: the front dents in at the top.
         if (k.top === 'pinch') for (let v = base; v < m.p.length; v += 3) {
             const up = (m.p[v + 1] - R.center[1]) / tall;
@@ -866,15 +882,38 @@
         m.loft(10, (i, t) => {
             const a = t * Math.PI / 2;
             return { center: [R.center[0], R.center[1] + Math.sin(a) * dome, R.center[2]], x: [1, 0, 0], y: [0, 0, 1], rx: Math.max(0.002, R.rx * Math.cos(a)), ry: Math.max(0.002, R.rz * Math.cos(a)) };
-        }, 28, linear(o.color), skin, true);
+        }, 64, linear(o.color), skin, true);
         m.loft(2, (i, t) => ({ center: [R.center[0], R.center[1] + t * 0.02, R.center[2]], x: [1, 0, 0], y: [0, 0, 1], rx: R.rx + 0.004, ry: R.rz + 0.004 }), 28, linear('#6a5a3a'), skin, false);
         for (const side of [1, -1]) {
             const start = [R.center[0] + side * R.rx * 0.9, R.center[1] + dome * 0.45, R.center[2]];
             const pts = [];
-            for (let k = 0; k <= 10; k++) { const t = k / 10; pts.push(add(start, [side * t * 0.11 * (o.size || 1), Math.sin(t * Math.PI * 0.6) * 0.09 * (o.height || 1), -t * 0.02])); }
-            m.tube(pts, t => 0.022 * (1 - t) + 0.002, 8, linear(o.color2 || '#ece4d0'), skin);
+            for (let k = 0; k <= 32; k++) { const t = k / 32; pts.push(add(start, [side * t * 0.11 * (o.size || 1), Math.sin(t * Math.PI * 0.6) * 0.09 * (o.height || 1), -t * 0.02])); }
+            m.tube(pts, t => .024*Math.pow(1-t,.8)+.0005, 16, linear(o.color2 || '#ece4d0'), skin);
+            const axis=norm(sub(pts[2],pts[0]));m.tube([add(start,mul(axis,-.008)),add(start,mul(axis,.014))],[.028,.026],24,linear('#514b42'),skin);
+            for(let k=0;k<8;k++){const a=k/8*Math.PI*2;m.sphere(add(start,[side*.012,Math.cos(a)*.026,Math.sin(a)*.026]),.0023,linear('#aaa392'),skin,5,8);}
+            for(const t of [.17,.3,.43,.56]){const j=Math.round(t*32),axis=norm(sub(pts[j+1],pts[j-1])),U=norm(cross(axis,[0,0,1])),V=cross(axis,U),r=.024*Math.pow(1-t,.8)+.0004;loop(m,ringPath(0,32,a=>add(pts[j],add(mul(U,Math.cos(a)*r),mul(V,Math.sin(a)*r)))),.00065,linear(o.color2||'#ece4d0').map(v=>v*.8),skin,5);}
         }
         return [];
+    }
+
+    /** A sewn knit cap: a smooth crown and a folded ribbed cuff, independent of face topology. */
+    function knitCap(pack,built,item){
+        const L=landmarks(pack,built),skin=rigid(L.boneIndex('Head')),R=hatRing(L,{size:1},-.012),top=Math.max(...L.headIds.map(v=>L.P[v*3+1]))+.018;
+        const height=Math.max(.1,top-R.center[1])+.035*(item.length??.45),body=new Mesh(),cuff=new Mesh(),uv=[],cu=[],cols=80,rows=24,base=linear(item.color),second=linear(item.color2||item.color);
+        const tex=Marks.texture('knit-cap|'+JSON.stringify([item.color,item.color2,item.pattern]),512,512,(u,v)=>item.pattern==='stripes'&&v<.78&&Math.floor(v*8)%2?second:base);
+        for(let j=0;j<=rows;j++)for(let k=0;k<=cols;k++){
+            const t=j/rows,a=k/cols*Math.PI*2,rr=Math.max(.0002,Math.cos(t*Math.PI/2)),h=height*Math.sin(t*Math.PI/2),p=[R.center[0]+Math.cos(a)*R.rx*rr,R.center[1]+h,R.center[2]+Math.sin(a)*R.rz*rr];
+            body.vertex(p,[Math.cos(a)*rr,Math.sin(t*Math.PI/2),Math.sin(a)*rr],[1,1,1],skin);uv.push(k/cols,t);
+        }
+        for(let j=0;j<rows;j++)for(let k=0;k<cols;k++){const a=j*(cols+1)+k,b=a+1,c=a+cols+1,d=c+1;body.tri(a,c,b);body.tri(b,c,d);}
+        const profile=[[0,.002],[.004,.007],[.011,.008],[.028,.006],[.035,.002],[.030,-.001],[.005,-.001],[0,.002]];
+        cuff.loft(profile.length,(j)=>({center:[R.center[0],R.center[1]+profile[j][0],R.center[2]],x:[1,0,0],y:[0,0,-1],rx:R.rx+profile[j][1],ry:R.rz+profile[j][1]}),cols,base,skin,false);
+        for(let j=0;j<profile.length;j++)for(let k=0;k<cols;k++)cu.push(k/cols,profile[j][0]/height);
+        body.computeNormals();cuff.computeNormals();
+        const parts=[body.part('Beanie crown',{kind:'cloth',texture:tex.name,uvs:Float32Array.from(uv),roughness:.94,metalness:0,doubleSided:true}),cuff.part('Beanie folded cuff',{kind:'cloth',uvs:Float32Array.from(cu),roughness:.96,metalness:0,doubleSided:true})],textures={[tex.name]:tex};
+        const Fabric=root.RRCharacterFabric||(typeof require==='function'?require('./CharacterFabric.js'):null);
+        for(const part of parts)if(Fabric){const UV=part.uvs1=Float32Array.from(part.uvs,(v,i)=>v*(i%2?height:Math.PI*2*R.rx)/.0256);Fabric.applyTo(part,'rib',textures,{uvs1:UV,normalScale:.45,roughness:.94});}
+        return {parts,textures,hidden:new Set(L.headIds.filter(v=>L.P[v*3+1]>R.center[1]+.005))};
     }
 
     function headband(m, L, o) {
@@ -921,15 +960,22 @@
     }
 
     function necklace(m, L, o) {
-        const skin = spineSkin(L), N = L.neck;
-        const drop = 0.03 + (o.length ?? 0.5) * 0.12;
-        const pts = ringPath(1, 40, a => {
-            const f = Math.max(0, Math.cos(a));
-            return [N.center[0] + Math.sin(a) * (N.rx + 0.012 + f * 0.03), N.center[1] - 0.02 - f * f * drop, N.center[2] + Math.cos(a) * (N.rz + 0.008) + f * f * drop * 0.6];
-        });
-        loop(m, pts, 0.0016, linear(o.color), skin, 5);
-        const front = pts[0];
-        m.sphere(add(front, [0, -0.012, 0.004]), 0.008, linear(o.color2 || o.color), skin, 6, 8, [1, 1.3, 0.6]);
+        const skin=spineSkin(L),N=L.neck,gold=linear(o.color),gem=linear(o.color2||'#3a8ad8');
+        const drop=.03+(o.length??.5)*.12;
+        const at=a=>{const f=Math.max(0,Math.cos(a));return[N.center[0]+Math.sin(a)*(N.rx+.012+f*.03),N.center[1]-.02-f*f*drop,N.center[2]+Math.cos(a)*(N.rz+.008)+f*f*drop*.6];};
+        const points=ringPath(0,128,at),lengths=[0];for(let j=0;j<points.length;j++)lengths.push(lengths.at(-1)+len(sub(points[j],points[(j+1)%points.length])));const length=lengths.at(-1),count=Math.max(48,Math.min(120,Math.round(length/.006)));
+        const bearing=t=>{const d=t*length;let j=0;while(j+1<lengths.length&&lengths[j+1]<d)j++;return(j+(d-lengths[j])/(lengths[j+1]-lengths[j]))/128*Math.PI*2;};
+        for(let j=0;j<count;j++){
+            const a=bearing(j/count),c=at(a),t=norm(sub(at(a+.006),at(a-.006))),n=norm([Math.sin(a),0,Math.cos(a)]),up=norm(cross(n,t));
+            const tilt=(j%2?1:-1)*.65,v=add(mul(up,Math.cos(tilt)),mul(n,Math.sin(tilt)));
+            loop(m,ringPath(0,16,q=>add(c,add(mul(t,Math.cos(q)*length/count*.72),mul(v,Math.sin(q)*.0022)))),.00065,gold,skin,8);
+        }
+        const front=at(0),bail=add(front,[0,-.004,.001]);
+        loop(m,ringPath(0,24,a=>add(bail,[Math.sin(a)*.0027,Math.cos(a)*.005,0])),.0008,gold,skin,8);
+        const center=add(front,[0,-.016,.002]);
+        loop(m,ringPath(0,40,a=>add(center,[Math.sin(a)*.009,Math.cos(a)*.012,0])),.0012,gold,skin,8);
+        m.sphere(center,.008,gem,skin,10,16,[1,1.35,.5]);
+        for(const side of [-1,1])for(const y of [-.006,.006])m.sphere(add(center,[side*.0067,y,.002]),.0015,gold,skin,6,8);
         return [];
     }
 
@@ -985,56 +1031,61 @@
      * clear of the shoulder blades and the seat.
      */
     function cape(m, L, o) {
-        const N = L.neck, width = (o.width || 1);
-        const sh = L.bone('LeftArm').head, top = N.center[1] - 0.01;
-        const half = Math.abs(sh[0]) * 1.25 * width;
-        const length = 0.35 + (o.length ?? 0.8) * (top - 0.08 - 0.35);
-        const cols = 17, rows = 22;
-        const skin = spineSkin(L);
-        const grid = [];
-        const main = linear(o.color), lining = linear(o.color2 || o.color);
-        for (let r = 0; r <= rows; r++) {
-            const t = r / rows, y = top - t * length;
-            const row = [];
-            for (let c = 0; c <= cols; c++) {
-                const u = c / cols * 2 - 1;
-                const spread = half * (0.55 + 0.45 * Math.min(1, t * 4)) * (1 + t * 0.35);
-                const x = u * spread;
-                let z = Infinity;
-                // Behind the back: the deepest point of the body above, then clear of it.
-                for (let yy = y; yy <= top + 0.001; yy += 0.04) z = Math.min(z, L.backAt(yy, x * 0.8));
-                if (!isFinite(z)) z = N.center[2] - N.rz;
-                // At the shoulders the cape wraps forward over them.
-                const wrap = Math.max(0, 1 - t * 6) * Math.abs(u) ** 2 * 0.09;
-                const fold = Math.sin(u * Math.PI * 4 + 1) * 0.008 * t;
-                row.push([x, y - (1 - Math.min(1, t * 5)) * Math.abs(u) * 0.02, z - 0.025 - t * 0.05 + wrap + fold]);
-            }
-            grid.push(row);
+        const N=L.neck,sh=L.bone('LeftArm').head,top=N.center[1]-.01;
+        const half=Math.abs(sh[0])*1.25*(o.width||1),length=.35+(o.length??.8)*(top-.43),cols=24,rows=28,skin=spineSkin(L);
+        const mark=Marks.prepare(o.mark,L.markImages,'back'),main=linear(o.color),trim=linear(o.color2||o.color),aspect=length/(half*2*(1+.35*.43));
+        const image=Marks.texture('cape-cloth|'+JSON.stringify([o.color,o.color2,o.trimWidth,o.mark,aspect.toFixed(3),Marks.imageKey(mark.image)]),1024,1024,(u,v)=>{
+            const base=o.trimWidth>0&&v>1-o.trimWidth?trim:main;
+            return Marks.cloth(base,mark,u,v,aspect);
+        });L.textures[image.name]=image;
+        const outer=new Mesh(),inner=new Mesh(),uv=[];
+        for(let r=0;r<=rows;r++)for(let c=0;c<=cols;c++){
+            const t=r/rows,u=c/cols*2-1,y=top-t*length,spread=half*(.55+.45*Math.min(1,t*4))*(1+t*.35),x=u*spread;
+            let z=Infinity;for(let yy=y;yy<=top+.001;yy+=.04)z=Math.min(z,L.backAt(yy,x*.8));
+            if(!Number.isFinite(z))z=N.center[2]-N.rz;
+            const p=[x,y-(1-Math.min(1,t*5))*Math.abs(u)*.02,z-.025-t*.05+Math.max(0,1-t*6)*u*u*.09+Math.sin(u*Math.PI*4+1)*.008*t];
+            outer.vertex(p,[0,0,-1],[1,1,1],skin);inner.vertex(p,[0,0,1],main.map(v=>v*.65),skin);uv.push(1-c/cols,t);
         }
-        const ids = grid.map((row, r) => row.map(p => m.vertex(p, [0, 0, -1], r === rows ? lining : main, skin)));
-        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-            const a = ids[r][c], b = ids[r][c + 1], d = ids[r + 1][c], e = ids[r + 1][c + 1];
-            m.tri(a, b, d); m.tri(b, e, d);
+        for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+            const a=r*(cols+1)+c,b=a+1,d=a+cols+1,e=d+1;
+            outer.tri(a,b,d);outer.tri(b,e,d);inner.tri(a,d,b);inner.tri(b,d,e);
         }
-        m.computeNormals();
-        // A clasp at the collar.
-        m.sphere([0, top, N.center[2] + N.rz + 0.01], 0.009, linear(o.color2 || '#d4af37'), skin, 4, 8);
-        return [{ mesh: null, extra: { doubleSided: true } }];
+        outer.computeNormals();inner.computeNormals();
+        m.sphere([0,top,N.center[2]+N.rz+.01],.009,trim,skin,4,8);
+        const cloth=[{start:0,count:outer.p.length/3,anchor:'Spine2'}];
+        return [{mesh:outer,extra:{name:'Cape',kind:'cloth',texture:image.name,uvs:Float32Array.from(uv),roughness:.88,metalness:0,doubleSided:false,pairedFace:true,cloth}},
+            {mesh:inner,extra:{name:'Cape lining',kind:'cloth',roughness:.92,metalness:0,doubleSided:false,pairedFace:true,clothLining:true,sewnRoots:Float32Array.from(outer.p)}}];
     }
 
-    function scarf(m, L, o) {
-        const skin = spineSkin(L), N = L.neck;
-        const main = linear(o.color), stripe = linear(o.color2 || o.color);
-        const y = N.center[1] + 0.015;
-        const pts = ringPath(1, 28, a => [N.center[0] + Math.sin(a) * (N.rx + 0.022), y + Math.cos(a) * 0.006, N.center[2] + Math.cos(a) * (N.rz + 0.022)]);
-        loop(m, pts, 0.022, (t, a, p) => (Math.floor(t * 12) % 3 === 0 ? stripe : main), skin, 8);
-        // A tail hanging down the front.
-        const start = [N.center[0] + N.rx * 0.6, y - 0.01, N.center[2] + N.rz + 0.03];
-        const tail = [];
-        const len = 0.12 + (o.length ?? 0.5) * 0.35;
-        for (let k = 0; k <= 8; k++) { const t = k / 8; tail.push(add(start, [t * 0.02, -t * len, 0.025 * Math.sin(t * 2) + t * 0.02])); }
-        m.loft(tail.length, i => ({ center: tail[i], x: [1, 0, 0], y: [0, 0, 1], rx: 0.03, ry: 0.006 }), 8, (t) => (Math.floor(t * 8) % 3 === 0 ? stripe : main), skin, true);
-        return [];
+    function scarf(m,L,o){
+        const N=L.neck,skin=spineSkin(L),main=linear(o.color),stripe=linear(o.color2||o.color),mark=Marks.prepare(o.mark,L.markImages,'front');
+        const picture=Marks.texture('scarf-cloth|'+JSON.stringify([o.color,o.color2,o.pattern,o.patternScale,o.length,o.mark,Marks.imageKey(mark.image)]),1024,512,(u,v)=>{
+            const along=v<.5?u:(v-.5)*2,across=v<.5?v*2:u,count=12*(o.patternScale||1);
+            const alternate=o.pattern==='checks'?(Math.floor(along*count)+Math.floor(across*6))%2===0:Math.floor(along*count)%3===0;
+            const base=o.pattern!=='solid'&&alternate?stripe:main;
+            return v<.5||u>.5?base:Marks.cloth(base,mark,1-u*2,(v-.5)*2,(.12+(o.length??.5)*.35)/.06);
+        });L.textures[picture.name]=picture;
+        const mesh=new Mesh(),uv=[],steps=64,sides=12,y=N.center[1]+.015;
+        const put=(p,n,u,v)=>{const i=mesh.vertex(p,n,[1,1,1],skin);uv.push(u,v);return i;};
+        for(let i=0;i<=steps;i++){
+            const t=i/steps,a=t*Math.PI*2,center=[N.center[0]+Math.sin(a)*(N.rx+.022),y+Math.cos(a)*.006,N.center[2]+Math.cos(a)*(N.rz+.022)];
+            for(let j=0;j<=sides;j++){
+                const b=j/sides*Math.PI*2,n=[Math.sin(a)*Math.cos(b),Math.sin(b),Math.cos(a)*Math.cos(b)];
+                put(add(center,mul(n,.022)),n,t,j/sides*.48);
+            }
+        }
+        for(let i=0;i<steps;i++)for(let j=0;j<sides;j++){const a=i*(sides+1)+j,b=a+1,c=a+sides+1,d=c+1;mesh.tri(a,c,b);mesh.tri(b,c,d);}
+        const start=[N.center[0]+N.rx*.6,y-.01,N.center[2]+N.rz+.03],len=.12+(o.length??.5)*.35,base=mesh.p.length/3,rows=32;
+        for(let i=0;i<=rows;i++)for(let j=0;j<=sides;j++){
+            const t=i/rows,a=j/sides*Math.PI*2,center=add(start,[t*.02,-t*len,.025*Math.sin(t*2)+t*.02]);
+            const n=[Math.cos(a),0,Math.sin(a)];put(add(center,[n[0]*.03,0,n[2]*.006]),n,j/sides,.5+t*.5);
+        }
+        for(let i=0;i<rows;i++)for(let j=0;j<sides;j++){const a=base+i*(sides+1)+j,b=a+1,c=a+sides+1,d=c+1;mesh.tri(a,b,c);mesh.tri(b,d,c);}
+        for(const end of [0,rows]){
+            const t=end/rows,center=add(start,[t*.02,-t*len,.025*Math.sin(t*2)+t*.02]),cap=put(center,[0,end?-1:1,0],.5,.5+t*.5);
+            for(let j=0;j<sides;j++){const a=base+end*(sides+1)+j,b=a+1;if(end)mesh.tri(a,b,cap);else mesh.tri(a,cap,b);}
+        }
+        mesh.computeNormals();return [{mesh,extra:{name:'Scarf',kind:'cloth',texture:picture.name,uvs:Float32Array.from(uv),roughness:.9,metalness:0,doubleSided:true}}];
     }
 
     function utilityHarness(m,L,o) {
@@ -1058,6 +1109,8 @@
                 return [[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b])=>m.vertex(add(p,add([a*width,0,0],mul(normal,b*thick))),normal,color,skin));
             });
             for(let j=0;j+1<rows.length;j++)for(let k=0;k<4;k++){const a=rows[j][k],b=rows[j][(k+1)%4],c=rows[j+1][k],d=rows[j+1][(k+1)%4];m.tri(a,c,b);m.tri(b,c,d);}
+            for(const dx of [-.009,.009])m.tube(path.slice(0,13).map(p=>add(p,[dx*s,0,.0019*s])),.00055*s,6,trim.map(v=>v*.55),skin);
+            for(let j=0;j<4;j++){const yy=low+(.12+j*.045)*s,zz=surface(yy,x,1)+.018*s;m.box([x,yy,zz],[[1,0,0],[0,1,0],[0,0,1]],[.014*s,.003*s,.002*s],color.map(v=>v*.72),skin);}
             const y=low+.07*s,z=surface(y,x,1)+.035*s,c=[x,y,z];
             m.box(c,[[1,0,0],[0,1,0],[0,0,1]],[.033*s,.045*s,.018*s],color,skin);
             m.box(add(c,[0,.028*s,.020*s]),[[1,0,0],[0,1,0],[0,0,1]],[.035*s,.013*s,.004*s],color.map(v=>v*.8),skin);
@@ -1153,17 +1206,26 @@
         const z = L.backAt(y, 0);
         const s = o.size || 1, back = (isFinite(z) ? z : -0.12) - 0.06 * s;
         m.roundedBox([0, y, back + 0.02], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.13 * s, 0.17 * s, 0.03 * s], .012*s, linear(o.color), skin);
-        for(let k=0;k<Math.round(o.vents||5);k++)m.roundedBox([0,y+(.08-k*.025)*s,back-.014*s],[[1,0,0],[0,1,0],[0,0,1]],[.022*s,.005*s,.004*s],.002*s,linear('#252a30'),skin);
+        for(let k=0;k<Math.round(o.vents||5);k++)m.roundedBox([0,y+(-.04-k*.012)*s,back-.014*s],[[1,0,0],[0,1,0],[0,0,1]],[.022*s,.005*s,.004*s],.002*s,linear('#252a30'),skin);
         for (const side of [1, -1]) {
             const c = [side * 0.075 * s, y, back - 0.04 * s];
-            m.tube([add(c, [0, 0.2 * s, 0]), add(c, [0, -0.12 * s, 0]), add(c, [0, -0.2 * s, 0])], [0.05 * s, 0.05 * s, 0.035 * s], 14, linear(o.color), skin);
+            m.tube([add(c, [0, 0.2 * s, 0]), add(c, [0, -0.12 * s, 0]), add(c, [0, -0.2 * s, 0])], [0.05 * s, 0.05 * s, 0.035 * s], 48, linear(o.color), skin);
             m.tube([add(c,[0,-.15*s,0]),add(c,[0,-.20*s,0]),add(c,[0,-.22*s,0])],[.036*s,.047*s,.046*s],18,linear('#383e43'),skin);
             m.disk(add(c, [0, -0.222 * s, 0]), [0, -1, 0], .034*s,linear('#171b20'),skin,18);
             m.disk(add(c, [0, -0.223 * s, 0]), [0, -1, 0], .022*s, linear(o.color2 || '#ff8a20'), skin, 18);
             for(const yy of [-.09,.10]){const path=Array.from({length:25},(_,j)=>add(c,[Math.cos(j/24*Math.PI*2)*.051*s,yy*s,Math.sin(j/24*Math.PI*2)*.051*s]));m.tube(path,.003*s,6,linear('#383e43'),skin);}
             m.tube([[0,y+.13*s,back-.015*s],[side*.035*s,y+.15*s,back-.09*s],[side*.07*s,y+.09*s,back-.09*s]],.005*s,8,linear('#393f43'),skin);
         }
-        return [];
+        const ink=linear('#393f43'),axes=[[1,0,0],[0,1,0],[0,0,1]];
+        for(const side of [-1,1]){
+            for(const yy of [-.14,.14])m.sphere([side*.11*s,y+yy*s,back-.077*s],.0028*s,ink,skin);
+            for(let j=0;j<4;j++)m.roundedBox([side*.075*s,y+(.04+j*.012)*s,back-.090*s],axes,[.022*s,.002*s,.001*s],.0007*s,ink,skin);
+        }
+        const mark=Marks.prepare(o.mark,L.markImages,'back'),picture=Marks.texture('jetpack-mark|'+JSON.stringify([o.color,o.mark,Marks.imageKey(mark.image)]),512,512,(u,v)=>Marks.cloth(linear(o.color),mark,u,v,2));
+        L.textures[picture.name]=picture;
+        const badge=new Mesh(),corners=[[-.027,-.055],[.027,-.055],[.027,.055],[-.027,.055]],uv=[[1,1],[0,1],[0,0],[1,0]];
+        const ids=corners.map(([x,yy],j)=>badge.vertex([x*s,y+(.07+yy)*s,back-.0105*s],[0,0,-1],[1,1,1],skin,uv[j]));badge.tri(ids[0],ids[2],ids[1]);badge.tri(ids[0],ids[3],ids[2]);
+        return [{mesh:badge,extra:{name:'Jetpack insignia',texture:picture.name,roughness:.6,metalness:.15},texture:picture}];
     }
 
     /**
@@ -1444,7 +1506,7 @@
             prop('claws', 'Finger claws', 'nails', 'Body details', (m, L, o) => nails(m, L, o, true), { color: '#ded3b8', length: 0.7 }, 'plastic', 'hands'),
             prop('satchel', 'Shoulder satchel', 'bag', 'Bags and tools', (m, L, o) => beltGear(m, L, o, 'satchel'), { color: '#735239', side: 'left' }),
             prop('beltPouch', 'Belt pouch', 'pouch', 'Bags and tools', (m, L, o) => beltGear(m, L, o, 'pouch'), { side: 'right' }),
-            prop('canteen', 'Canteen', 'canteen', 'Bags and tools', (m, L, o) => beltGear(m, L, o, 'canteen'), { color: '#5b6850', side: 'left' }, 'plastic'),
+            prop('canteen', 'Canteen', 'canteen', 'Bags and tools', (m, L, o) => beltGear(m, L, o, 'canteen'), { color: '#5b6850', color2:'#303633',side: 'left' }, 'plastic'),
             prop('sword', 'Sword', 'held', 'Weapons', (m, L, o) => heldGear(m, L, o, 'sword'), { side: 'right', length: 0.7 }, 'metal'),
             prop('dagger', 'Dagger', 'held', 'Weapons', (m, L, o) => heldGear(m, L, o, 'dagger'), { side: 'right', length: 0.35 }, 'metal'),
             prop('axe', 'Axe', 'held', 'Weapons', (m, L, o) => heldGear(m, L, o, 'axe'), { side: 'right', length: 0.6 }, 'metal'),
@@ -1606,10 +1668,12 @@
         const center = [hip[0] + side * (wide + 0.025), hip[1] - (kind === 'satchel' ? 0.14 : 0.04), hip[2]];
         const skin = rigid(L.boneIndex('Hips')), axes = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
         if (kind === 'canteen') {
-            m.sphere(center,.075*s,linear(o.color),skin,14,24,[.65,1,.9]);
-            m.tube([add(center,[0,.065*s,0]),add(center,[0,.092*s,0])],.022*s,12,linear(o.color2),skin);
-            for(let j=0;j<8;j++){const a=j/8*Math.PI*2;m.tube([add(center,[Math.cos(a)*.022*s,.077*s,Math.sin(a)*.022*s]),add(center,[Math.cos(a)*.022*s,.091*s,Math.sin(a)*.022*s])],.002*s,4,linear(o.color2),skin);}
-            m.tube([add(center,[0,.087*s,.023*s]),add(center,[0,.07*s,.044*s]),add(center,[0,.05*s,.045*s])],.003*s,6,linear(o.color2),skin);
+            m.sphere(center,.075*s,linear(o.color),skin,24,48,[.60,1.04,.91]);
+            const neck=add(center,[0,.080*s,0]);m.tube([add(neck,[0,-.022*s,0]),add(neck,[0,.007*s,0])],.019*s,32,linear(o.color2||'#2e3532'),skin);
+            m.tube([add(neck,[0,.005*s,0]),add(neck,[0,.022*s,0])],.023*s,40,linear(o.color2||'#2e3532'),skin);
+            for(let j=0;j<24;j++){const a=j/24*Math.PI*2;m.tube([add(neck,[Math.cos(a)*.023*s,.006*s,Math.sin(a)*.023*s]),add(neck,[Math.cos(a)*.023*s,.020*s,Math.sin(a)*.023*s])],.0012*s,4,linear(o.color2||'#303633'),skin);}
+            for(const z of [-.038,.038])m.tube(Array.from({length:33},(_,k)=>{const a=k/32*Math.PI*2;return add(center,[Math.cos(a)*.045*s*Math.sqrt(1-(z/.06825)**2),Math.sin(a)*.078*s*Math.sqrt(1-(z/.06825)**2),z*s]);}),.003*s,8,linear(o.color2||'#303633'),skin);
+            m.tube([add(neck,[.018*s,.012*s,0]),add(neck,[.048*s,-.005*s,0]),add(center,[.045*s,.025*s,0])],.0022*s,8,linear(o.color2||'#303633'),skin);
         }
         else {
             const half = kind === 'satchel' ? [0.045, 0.1, 0.11] : [0.035, 0.055, 0.06];
@@ -1832,6 +1896,8 @@
             else if (Array.isArray(spec[0])) { if (!spec.some(c => c[0] === out[k])) out[k] = def.defaults[k]; }
             else out[k] = Math.max(spec[0], Math.min(spec[1], Number.isFinite(+out[k]) ? +out[k] : def.defaults[k]));
         }
+        if(def.id==='earScouter'){out.displayText=String(out.displayText||'POWER 9000').replace(/[<>]/g,'').slice(0,32);out.animate=out.animate!==false;}
+        if(['cape','scarf','jetpack'].includes(def.id))out.mark=Marks.normalize(item.mark,def.id==='scarf'?'front':'back');
         if (def.defaults.side && !['left', 'right'].includes(out.side)) out.side = def.defaults.side;
         return out;
     }
@@ -1870,7 +1936,7 @@
         const L = landmarks(pack, built);
         L.bodyPart = built.parts[0];
         // Cyberware lays its plates on the face as shaped, and brings pictures of its own.
-        L.pack = pack; L.built = built; L.textures = {};
+        L.pack = pack; L.built = built; L.textures = {}; L.markImages=options.images;
         L.outfitParts = options.outfitParts || [];
         L.frontAt0 = L.frontAt;
         if (options.outfitParts?.length) {
@@ -1905,7 +1971,7 @@
         if (!cloth.empty) parts.push(cloth.part('Cape', Object.assign({ roughness: 0.85, metalness: 0, doubleSided: true }, hanging.length ? { cloth: hanging } : {})));
         const all=parts.concat(extras),textures=Object.assign({},L.textures);
         for(const p of all)if(!p.uvs){p.uvs=new Float32Array(p.positions.length/3*2);for(let v=0;v<p.positions.length/3;v++){const n=Array.from(p.normals.subarray(v*3,v*3+3),Math.abs),axis=n.indexOf(Math.max(...n)),axes=axis===0?[2,1]:axis===1?[0,2]:[0,1];for(let j=0;j<2;j++)p.uvs[v*2+j]=p.positions[v*3+axes[j]]*8;}}
-        Surface.apply(all,textures,p=>p.opacity<1||p.emissive||p.ownSurface?null:p.name==='Felt and cloth'||p.name==='Cape'?'fabric':p.name==='Velvet'?'velvet':p.name==='Timber'?'wood':p.name==='Leather'?'leather':p.metalness>.5?'metal':p.name==='Plastic'?'rubber':null);
+        Surface.apply(all,textures,p=>p.opacity<1||p.emissive||p.ownSurface?null:['Felt and cloth','Cape','Cape lining','Scarf'].includes(p.name)?'fabric':p.name==='Velvet'?'velvet':p.name==='Timber'?'wood':p.name==='Leather'?'leather':p.metalness>.5?'metal':p.name==='Plastic'?'rubber':null);
         // A part left with no picture at all (the crown's faceted jewels, their colour their own) keeps its
         // coordinates inside one picture's span rather than the physical ones a tiled finish would use.
         for(const p of all)if(p.uvs&&!p.texture&&!p.normalTexture&&!p.metallicRoughnessTexture&&!p.emissiveTexture){let lo=Infinity,hi=-Infinity;for(const v of p.uvs){if(v<lo)lo=v;if(v>hi)hi=v;}if(lo<0||hi>1){const s=hi>lo?1/(hi-lo):0;for(let i=0;i<p.uvs.length;i++)p.uvs[i]=(p.uvs[i]-lo)*s;}}
@@ -1922,7 +1988,7 @@
     /** A Mesh whose tubes and spheres keep exactly the rows and sides asked for: creature anatomy sets its own triangle budgets. */
     class ExactMesh extends Mesh { constructor() { super(); this.exact = true; } }
 
-    const api = { PROPS, BY_ID, patterns:EQUIPMENT_PATTERNS, Mesh, ExactMesh, landmarks, rigid, spineSkin, normalizeProp, normalizeProps, finishOf, build, vec: { add, sub, mul, dot, cross, len, norm, lerp } };
+    const api = { PROPS, BY_ID, patterns:EQUIPMENT_PATTERNS, Mesh, ExactMesh, landmarks, knitCap, rigid, spineSkin, normalizeProp, normalizeProps, finishOf, build, vec: { add, sub, mul, dot, cross, len, norm, lerp } };
     root.RRCharacterProps = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

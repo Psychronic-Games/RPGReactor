@@ -74,6 +74,7 @@ class Character3DBuilder {
         this._dropHeldPreview();
         cancelAnimationFrame(view.frame);
         cancelAnimationFrame(view.loop);
+        view.clock?.dispose?.();
         view.resize?.disconnect();
         this._clearModel();
         for (const t of view.textures.values()) t.texture.dispose();
@@ -453,9 +454,10 @@ class Character3DBuilder {
 
     _select(path, label, choices, value) {
         const v = value ?? this._get(path);
+        const symbols=window.RRCharacterMarks?.symbolChoices(choices);
         const opts = choices.map(c => {
             if (c.group) return `<optgroup label="${rrEscapeHtml(this._t(c.group))}">${c.items.map(([id, l]) => `<option value="${rrEscapeHtml(id)}"${id === v ? ' selected' : ''}>${rrEscapeHtml(this._t(l))}</option>`).join('')}</optgroup>`;
-            return `<option value="${rrEscapeHtml(c[0])}"${c[0] === v ? ' selected' : ''}>${rrEscapeHtml(this._t(c[1]))}</option>`;
+            return `<option value="${rrEscapeHtml(c[0])}"${symbols?` data-rr-symbol="${rrEscapeHtml(c[0])}"`:""}${c[0] === v ? ' selected' : ''}>${rrEscapeHtml(this._t(c[1]))}</option>`;
         }).join('');
         return `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${this._t(label)}</span><select class="rr-select" data-path="${path}">${opts}</select></label>`;
     }
@@ -569,6 +571,18 @@ class Character3DBuilder {
         // Body art tab (CharacterBodyArtPanel.js): its own buttons.
         if (act.startsWith('art-') && this._bodyArtAct && this._bodyArtAct(act, b)) return;
         if (act === 'take-outfit') { this._showModels(); return; }
+        if (act === 'garment-prop') {
+            const item=this.recipe.outfit[+b.dataset.index],manager=window.reactor?.forgeManager;
+            if(!item||!manager||!window.RRGarmentProp)return;
+            const builder=manager.propBuilder||(manager.propBuilder=new PropBuilder());
+            builder._undo.push(JSON.stringify(builder.recipe));if(builder._undo.length>80)builder._undo.shift();
+            builder.recipe=RRGarmentProp.normalize({garment:item,body:this.recipe});
+            builder.cache={emblemProject:this._project()?.path,emblemPictures:new Map(this.cache.wardrobe?.emblemPictures||[])};
+            builder.name=RRCharacterWardrobe.BY_ID.get(item.id).label;
+            builder.search='';builder.folded['cat:wearables']=false;
+            builder.tab='garment';builder._redo=[];builder._committed=JSON.stringify(builder.recipe);
+            manager.openTool('prop-builder');builder.root?.querySelector('.rr-prop-type.is-active')?.scrollIntoView({block:'nearest'});return;
+        }
         if (act === 'extreme') { this.extreme = !this.extreme; this._renderPanel(); return; }
         if (act === 'plan') {
             if ((b.dataset.plan === 'quadruped') === !this.human) return;
@@ -614,6 +628,7 @@ class Character3DBuilder {
             return;
         }
         if (act === 'remove-garment') { r.outfit = r.outfit.filter(i => i.id !== b.dataset.id); this._replace(r); return; }
+        if(act==='mark-picture'){this._chooseMarkPicture(b.dataset.path);return;}
         if (act === 'remove-prop') { r.props = r.props.filter(i => i.id !== b.dataset.id); this._replace(r); return; }
         if (act === 'picker') { this.openPicker = this.openPicker === b.dataset.id ? null : b.dataset.id; this._renderPanel(); return; }
         if (act === 'pick') {
@@ -914,20 +929,22 @@ class Character3DBuilder {
         const knobs = { sleeves: ['Sleeves', [0, 1]], length: ['Length', [0, 1], [0, 1.4]], fit: ['Looseness', [0, 1], [0, 1.5]], flare: ['Flare', [0, 1], [0, 1.5]], bell: ['Bell sleeves', [0, 1]], open: ['Open front', [0, 1]], face: ['Covers face', [0, 1]], bulk: ['Bulk', [0, 1], [0, 1.5]] };
         const items = this.recipe.outfit.map((item, i) => {
             const g = W.BY_ID.get(item.id);
+            const wearable=window.RRGarmentProp?.supports(g.id)?`<button class="rr-btn-chip" data-act="garment-prop" data-index="${i}">${this._t('Edit as wearable prop')}</button>`:'';
             const swatches = ['#f2f0ea', '#1f1f24', '#2f4468', '#7a3b3b', '#3e5a32', '#5a3d22', '#8a8e96', '#c9a35a'];
             // [outfit transfer] A garment taken from a model shows its own picture until a color is chosen
             // (cleared, it comes back); its main color, second color and trim each move on their own.
             if (g.transfer) {
                 const html = this._color(`outfit.${i}.color`, 'Color', swatches, true) + this._color(`outfit.${i}.color2`, 'Second color', [], true) + this._color(`outfit.${i}.trim`, 'Trim', [], true);
-                return { id: item.id, label: g.label, html };
+                return { id: item.id, label: g.label, html:html+wearable };
             }
             // A modeled garment shows its own picture until a color is chosen (cleared, it comes back); its
             // pattern and trim are in the picture.
             if (g.modeled) {
-                const fitted = typeof RRCharacterClothes !== 'undefined' && RRCharacterClothes.load(this.pack).garments.get(item.id);
+                const fitted = this.pack && typeof RRCharacterClothes !== 'undefined' && RRCharacterClothes.load(this.pack).garments.get(item.id);
                 let html = this._color(`outfit.${i}.color`, 'Color', swatches, true);
-                if (fitted && fitted.regions > 1) html += this._color(`outfit.${i}.color2`, 'Second color', [], true);
-                return { id: item.id, label: g.label, html };
+                if (fitted && (fitted.regions > 1 || item.id==='mh_viking_tunic')) html += this._color(`outfit.${i}.color2`, item.id==='mh_viking_tunic'?'Mail color':'Second color', [], true);
+                if(item.id==='mh_viking_tunic')html+=this._color(`outfit.${i}.trim`,'Embroidery color',[],true)+this._slider({path:`outfit.${i}.textureContrast`,label:'Fabric contrast',natural:[.5,1.5],extreme:[.5,1.5]});
+                return { id: item.id, label: g.label, html:html+wearable };
             }
             let html = this._color(`outfit.${i}.color`, 'Color', swatches);
             html += this._color(`outfit.${i}.color2`, 'Second color', []) + this._color(`outfit.${i}.trim`, 'Trim', [], true);
@@ -956,7 +973,8 @@ class Character3DBuilder {
             html += this._slider({ path: `outfit.${i}.trimWidth`, label: 'Trim width', natural: [0, 0.25] });
             // Wear and damage (RRCharacterWear): grime, fading, frayed hems, holes, patches and tape as it grows.
             html += this._slider({ path: `outfit.${i}.wear`, label: 'Wear', natural: [0, 1] });
-            return { id: item.id, label: g.label, html };
+            if(RRCharacterMarks.supports(g,item))html+=RRCharacterMarks.panel(this,`outfit.${i}.mark`,item.mark,{garment:true});
+            return { id: item.id, label: g.label, html:html+wearable };
         });
         // [outfit transfer] An outfit taken off one of the project's own humanoid models.
         const take = window.RRCharacterOutfitTransfer && this._project() ? `<div class="rr-c3d-tiles"><button class="rr-c3d-tile rr-c3d-import-add" data-act="take-outfit"><span class="rr-c3d-nothumb">+</span><span class="rr-c3d-tile-label">${this._t('+ From model…')}</span></button></div>` : '';
@@ -966,6 +984,7 @@ class Character3DBuilder {
     }
 
     _propsTab() {
+        this._loadOutfitEmblems();
         const P = RRCharacterProps;
         const add = this._addPicker('prop', 'Add an accessory', P.PROPS.filter(p => RRCharacterModel.fitsProp(this.recipe,p.id)&&(!this.slime || RRSlimeBody.fits(p.id))).map(p => ({ id: p.id, label: p.label, group: p.group })), 'add-prop');
         const knobs = { size: ['Size', [0.6, 1.5], [0.3, 3]], height: ['Height', [0.5, 1.6], [0.3, 3]], length: ['Length', [0, 1]], width: ['Width', [0.6, 1.5]], up: ['Raised', [0, 1]] };
@@ -980,6 +999,7 @@ class Character3DBuilder {
                 if (def.shapes) html += this._select(path('shape'), 'Shape', def.shapes);
                 if (def.defaults.side) html += this._select(path('side'), 'Side', [['left', 'Left'], ['right', 'Right']]);
                 for (const [key, spec] of Object.entries(def.options)) if (!['style', 'glow', 'wear'].includes(key)) html += spec === 'check' ? this._check(path(key), labels[key] || key) : this._select(path(key), labels[key] || key, spec);
+                if(item.id==='earScouter')html+=`<label class="rr-c3d-row"><span class="rr-c3d-label">${this._t('Display readout')}</span><input class="rr-input" data-path="${path('displayText')}" maxlength="32" value="${rrEscapeHtml(item.displayText||'POWER 9000')}"></label>`;
                 html += this._color(path('color'), def.labels.color, def.swatches, true) + this._color(path('color2'), def.labels.color2, def.swatches2, true);
                 html += this._slider({ path: path('glow'), label: labels.glow, natural: [0, 1] }) + this._slider({ path: path('wear'), label: labels.wear, natural: [0, 1] });
                 return { id: item.id, label: def.label, html };
@@ -989,13 +1009,14 @@ class Character3DBuilder {
             if (def.shapes) html += this._select(`props.${i}.shape`, 'Shape', def.shapes);
             if (def.defaults.side) html += this._select(`props.${i}.side`, 'Side', [['left', 'Left'], ['right', 'Right']]);
             for (const [k, [label, natural, extreme]] of Object.entries(knobs)) if (def.defaults[k] != null) html += this._slider({ path: `props.${i}.${k}`, label, natural, extreme: extreme || natural, format: k === 'length' || k === 'up' ? '' : 'x' });
-            const optionLabels={charm:'Charm',studs:'Studs',thick:'Thickness',billLength:'Bill length',pockets:'Pockets',vents:'Vents'};
+            const optionLabels={charm:'Charm',studs:'Studs',thick:'Thickness',billLength:'Bill length',pockets:'Pockets',vents:'Vents',trimWidth:'Trim width',pattern:'Pattern',patternScale:'Pattern scale'};
             for(const [key,spec]of Object.entries(def.options||{})){
                 const path=`props.${i}.${key}`,label=optionLabels[key]||key;
                 if(spec==='check')html+=this._check(path,label);
                 else if(Array.isArray(spec[0]))html+=this._select(path,label,spec);
                 else html+=this._slider({path,label,natural:spec,extreme:spec,step:key==='pockets'||key==='vents'?1:.05});
             }
+            if(['cape','scarf','jetpack'].includes(item.id))html+=RRCharacterMarks.panel(this,`props.${i}.mark`,item.mark);
             return { id: item.id, label: def.label, html };
         });
         const weapons = this.human && !this.slime ? this._heldModels() : [];
@@ -1797,6 +1818,7 @@ class Character3DBuilder {
         if (!ready || !window.THREE) { this._status(this._t('The 3D libraries could not be loaded.'), 'error'); return; }
         try {
             if (!this.pack || !this.eyeSource) [this.pack, this.eyeSource] = await Promise.all([this.pack || RRHumanBody.loadPack(), this.eyeSource || this._loadEyeSource()]);
+            await RRHumanBody.prepareAuthoring(this.pack);
             // [outfit transfer] The pictures of the outfits taken from models, decoded before the first build;
             // one that comes in later (a project's own) builds the view again.
             if (window.RRCharacterOutfitTransfer) {
@@ -1816,6 +1838,7 @@ class Character3DBuilder {
         if (this._previewPaused) { this._startOwed = true; return; }
         this._makeView();
         this._rebuild();
+        if(this.tab==='outfit')this._renderPanel();
         this._refreshThumbs();
         this._status('');
     }
@@ -1889,7 +1912,7 @@ class Character3DBuilder {
         scene.add(blob);
         const group = new THREE.Group();
         scene.add(group);
-        const view = this._view = { renderer, scene, camera, floor, blob, group, key, meshes: [], bones: [], textures: new Map(), yaw: 0.35, pitch: 0.08, distance: 4.2, target: new THREE.Vector3(0, 0.9, 0), frame: 0, loop: 0, clock: new THREE.Clock() };
+        const view = this._view = { renderer, scene, camera, floor, blob, group, key, meshes: [], bones: [], textures: new Map(), yaw: 0.35, pitch: 0.08, distance: 4.2, target: new THREE.Vector3(0, 0.9, 0), frame: 0, loop: 0, clock: new THREE.Timer() };
 
         const size = () => {
             if (this._sheetExporting) { this._sheetResizeOwed = true; return; }
@@ -1971,6 +1994,12 @@ class Character3DBuilder {
             }
         }
         if (!Number.isFinite(low[0])) return;
+        // Tall updos and broad curls belong in the Face frame; long ends below the chin do not.
+        const chin=low[1];
+        for(const part of result.parts)if(part.name==='Hair')for(let v=0;v<part.positions.length;v+=3) {
+            if(part.positions[v+1]<chin)continue;
+            for(let k=0;k<3;k++){low[k]=Math.min(low[k],part.positions[v+k]);high[k]=Math.max(high[k],part.positions[v+k]);}
+        }
         view.faceCenter = low.map((x, k) => (x + high[k]) * 0.5);
         // Fit a bounding sphere at any orbit angle, leaving room around the chin/crown.
         const radius = Math.hypot(...low.map((x, k) => (high[k] - x) * 0.5));
@@ -2072,7 +2101,7 @@ class Character3DBuilder {
                 view.loop = 0;
                 if (this._previewPaused || this._view !== view) return;
                 view.loop = requestAnimationFrame(tick);
-                const dt = Math.min(0.1, view.clock.getDelta());
+                const dt = Math.min(0.1, view.clock.update().getDelta());
                 carried += dt;
                 if (!view.halfRate) {
                     gaps.push(dt);
@@ -2092,7 +2121,7 @@ class Character3DBuilder {
             view.resumeAnimation = () => {
                 if (view.loop || this._previewPaused || this._sheetExporting?.drawing || this._view !== view) return;
                 carried = 0; gaps.length = 0;
-                view.clock.getDelta();
+                view.clock.reset();
                 view.loop = requestAnimationFrame(tick);
             };
             view.resumeAnimation();
@@ -2258,7 +2287,7 @@ class Character3DBuilder {
         if (this._shapeWorkerRef !== undefined) return this._shapeWorkerRef;
         this._shapeWorkerRef = null;
         try {
-            if (typeof Worker === 'undefined' || typeof require !== 'function') return null;
+            if (typeof Worker === 'undefined' || typeof require !== 'function' || !(typeof process !== 'undefined' && process.versions?.node)) return null;
             const fs = require('fs'), path = require('path');
             const dir = path.join(RRHumanBody.dataFolder(), '..');
             const code = ['HumanTargets', 'HumanBody'].map(f => fs.readFileSync(path.join(dir, f + '.js'), 'utf8')).join('\n;\n') + `
@@ -2586,7 +2615,8 @@ class Character3DBuilder {
         }
         if(!this._weak && part.iridescence){
             m.iridescence=part.iridescence; m.iridescenceIOR=part.iridescenceIOR ?? 1.3;
-            m.iridescenceThicknessRange=part.iridescenceThicknessRange || [100,400];
+            const thickness=part.iridescenceThicknessRange || [100,400];
+            m.iridescenceThicknessMinimum=thickness[0]; m.iridescenceThicknessMaximum=thickness[1];
             m.iridescenceThicknessMap=linearMap(part.iridescenceThicknessTexture);
         }
         if (part.emissive) {
@@ -2907,6 +2937,7 @@ class Character3DBuilder {
     /** The skin painter: the body's own modules and data, loaded into a worker once. */
     _skinWorker() {
         if (this._skinWorkerRef !== undefined) return this._skinWorkerRef;
+        if (!(typeof process !== 'undefined' && process.versions?.node)) return (this._skinWorkerRef = null);
         try {
             const fs = require('fs'), path = require('path');
             const dir = path.join(RRHumanBody.dataFolder(), '..');
@@ -2937,6 +2968,7 @@ class Character3DBuilder {
     /** The shading worker: CharacterShading.js itself, run off the page. */
     _shadingWorker() {
         if (this._worker !== undefined) return this._worker;
+        if (!(typeof process !== 'undefined' && process.versions?.node)) return (this._worker = null);
         try {
             const fs = require('fs'), path = require('path');
             const file = [path.join(RRHumanBody.dataFolder(), '..', 'CharacterShading.js')].find(f => fs.existsSync(f));
@@ -3165,6 +3197,18 @@ class Character3DBuilder {
         }, reference => assets.imageUrlFor(folder, reference), item.emblemPicture || undefined, { selectButtonLabel: this._t('Use This Picture'), zIndex: 10500 });
     }
 
+    _chooseMarkPicture(path) {
+        const project=this._project(),assets=window.RRAssetFiles,picker=window.reactor?.databaseEditorUI;
+        if(!project||!assets||!picker?.showImagePicker)return;
+        const folder=require('path').join(project.path,'img','pictures'),files=assets.listImageReferences(folder);
+        if(!files.length){RRDialog.alert(this._t('No pictures in img/pictures yet. Add one there to use it here.'),{title:this._t('Emblem picture')});return;}
+        const before=JSON.stringify(this._get(path));
+        picker.showImagePicker(this._t('Choose a picture'),files,reference=>{
+            if(!reference||this._project()?.path!==project.path||JSON.stringify(this._get(path))!==before||!assets.findImage(folder,reference))return;
+            this._emblemFailed?.delete(reference);this._set(path+'.picture',reference);this._commit();this._renderPanel();this._queueRebuild();
+        },reference=>assets.imageUrlFor(folder,reference),this._get(path+'.picture')||undefined,{selectButtonLabel:this._t('Use This Picture'),zIndex:10500});
+    }
+
     /** Decode small emblem rasters once per project, shared by preview and save atlases. */
     _loadOutfitEmblems(recipe = this.recipe) {
         const project = this._project(), assets = window.RRAssetFiles;
@@ -3177,7 +3221,7 @@ class Character3DBuilder {
         const share = () => {
             this.cache.wardrobe = this.cache.wardrobe || {};
             const caches = [this.cache.wardrobe];
-            for (const kind of ['dress', 'garment', 'species']) {
+            for (const kind of ['dress', 'garment', 'species','prop']) {
                 this._thumbCache[kind] = this._thumbCache[kind] || {};
                 this._thumbCache[kind].wardrobe = this._thumbCache[kind].wardrobe || {};
                 caches.push(this._thumbCache[kind].wardrobe);
@@ -3190,9 +3234,10 @@ class Character3DBuilder {
         };
         share();
         const folder = require('path').join(project.path, 'img', 'pictures');
-        for (const item of recipe.outfit || []) {
+        const emblemItems=[...(recipe.outfit||[]),...(recipe.props||[])].flatMap(i=>[...(i.pattern==='emblem'?[{emblemPicture:i.emblemPicture}]:[]),...(i.mark?.shape==='picture'?[{emblemPicture:i.mark.picture}]:[])]);
+        for (const item of emblemItems) {
             const name = item.emblemPicture;
-            if (item.pattern !== 'emblem' || typeof name !== 'string' || !name || pictures.has(name) || this._emblemPending.has(name) || this._emblemFailed.has(name)) continue;
+            if (typeof name !== 'string' || !name || pictures.has(name) || this._emblemPending.has(name) || this._emblemFailed.has(name)) continue;
             if (/^(?:[a-z]+:|[\\/])/i.test(name) || name.replace(/\\/g, '/').split('/').includes('..') || !assets.findImage(folder, name)) { this._emblemFailed.add(name); continue; }
             const pending = this._emblemPending, failed = this._emblemFailed, img = new Image();
             let resolveReady, settled = false, watchdog;
@@ -3204,12 +3249,12 @@ class Character3DBuilder {
                 pending.delete(name);
                 if (this._project()?.path !== project.path || this._emblemPictures !== pictures || !this._view) { finish(false); return; }
                 try {
-                    const scale = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+                    const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
                     const width = Math.max(1, Math.round(img.naturalWidth * scale)), height = Math.max(1, Math.round(img.naturalHeight * scale));
                     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
                     const context = canvas.getContext('2d'); context.drawImage(img, 0, 0, width, height);
                     pictures.set(name, { width, height, data: new Uint8Array(context.getImageData(0, 0, width, height).data.buffer) });
-                    const active = new Set([...(this.recipe.outfit || []), ...(recipe.outfit || [])].filter(i => i.pattern === 'emblem').map(i => i.emblemPicture));
+                    const active = new Set([...(this.recipe.outfit||[]),...(recipe.outfit||[]),...(this.recipe.props||[]),...(recipe.props||[])].flatMap(i=>[i.pattern==='emblem'?i.emblemPicture:'',i.mark?.shape==='picture'?i.mark.picture:'']).filter(Boolean));
                     for (const ref of pictures.keys()) { if (pictures.size <= 16) break; if (!active.has(ref)) pictures.delete(ref); }
                     for (const cache of share()) delete cache.atlas;
                     this._queueRebuild();
@@ -3518,6 +3563,8 @@ class Character3DBuilder {
             if (!current()) return;
             for (const [name, picture] of this._artPictures || []) bodyArtPictures.set(name, picture);
             for (const [name, picture] of this.cache?.wardrobe?.emblemPictures || []) emblemPictures.set(name, picture);
+            const requiredPictures=[...(recipe.outfit||[]),...(recipe.props||[])].flatMap(item=>[item.pattern==='emblem'?item.emblemPicture:'',item.mark?.shape==='picture'?item.mark.picture:'']).filter(Boolean);
+            if(requiredPictures.some(name=>!emblemPictures.has(name)))throw new Error('Emblem picture could not be loaded.');
             const cache = { wardrobe: { emblemPictures } };
             // A full-quality build in its own cache, independent of later preview edits.
             // The full-size skin painted off the page first, then the file built with it.
@@ -3555,6 +3602,7 @@ class Character3DBuilder {
                 atomic(fs, sidecarFile, JSON.stringify(next, null, 2) + '\n');
                 if (ready && ready.rigBinary) atomic(fs, path.join(folder, 'model.rig.bin'), Buffer.from(ready.rigBinary));
             }
+            await window.RPGReactorHost?.flush?.();
             this._status(this._t('Saved to 3D Models › Characters/{name}.', { name }), 'ok');
             window.dispatchEvent(new CustomEvent('rr-models-changed', { detail: { name: 'Characters/' + name } }));
         } catch (error) {
@@ -3648,7 +3696,7 @@ Character3DBuilder.bodyPath = function(path) {
 };
 
 /** Bumped when the previews' look changes, so pictures kept on disk are drawn again. */
-Character3DBuilder.PREVIEW_VERSION = 48;
+Character3DBuilder.PREVIEW_VERSION = 61;
 
 /** Rigidly fit authored grip markers in the hand's rest frame; its bone carries every pose. */
 Character3DBuilder.fitHeldPreview = function(object, shape, frame, T) {

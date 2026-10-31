@@ -409,7 +409,7 @@
     A.SEAT = ["_x", "_y", "_realX", "_realY", "_direction", "_reactorDir8", "_opacity", "_jumpCount", "_jumpPeak",
         "_reactorGround", "_reactorAlt", "_reactorAir", "_reactorVz", "_reactorPeak", "_reactorLift", "_reactorZTarget",
         "_reactorMantle", "_reactorGrapple", "_reactorOnLadder", "_reactorClimb", "_reactorSwim", "_reactorDive", "_reactorLeap",
-        "_reactorStepUp", "_reactorStepDown", "_reactorJumped", "_reactorFall", "_reactorPosePitch", "_reactorFallYaw"];
+        "_reactorStepUp", "_reactorStepDown", "_reactorJumped", "_reactorFall", "_reactorPosePitch", "_reactorFallYaw", "_reactorKnockedOut", "_reactorRagdoll"];
 
     /**
      * Changes who leads the party (`change` does it) without moving anybody: every member's body stays where it

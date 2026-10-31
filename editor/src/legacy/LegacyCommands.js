@@ -39,11 +39,13 @@
     }
     function charsetName(name) {
         if (!name) return '';
-        let n = name.replace(/^\$/, '');
-        return n.startsWith('!') ? n : '!' + n;
+        const parts = stem(name).split('/');
+        let n = parts.pop().replace(/^\$/, '');
+        parts.push(n.startsWith('!') ? n : '!' + n);
+        return parts.join('/');
     }
     /** A name from the game's data without a media extension; other dots are part of the name. */
-    function stem(name) { return String(name || '').replace(/\.(png|bmp|xyz|jpe?g|gif|wav|ogg|opus|mp3|midi?|wma|flac|m4a|avi|mpe?g|mp4|wmv|webm|ogv)$/i, ''); }
+    function stem(name) { return String(name || '').replace(/\\/g, '/').replace(/\.(png|bmp|xyz|jpe?g|gif|wav|ogg|opus|mp3|midi?|wma|flac|m4a|avi|mpe?g|mp4|wmv|webm|ogv)$/i, ''); }
     /** 2003 message codes → MZ: \_ becomes \., \s[n] (speed) has no MZ code. */
     function text(s) {
         return String(s || '').replace(/\\_/g, '\\.').replace(/\\[sS]\[\d+\]/g, '');
@@ -64,11 +66,12 @@
         const out = [];
         const notes = ctx.notes || (ctx.notes = {});
         const note = (k, n = 1) => { notes[k] = (notes[k] || 0) + n; };
-        const state = { face: { name: '', index: 0 }, background: 0, position: 2, timer: [0, 0], timerVar: [null, null] };
+        const state = { face: { name: '', index: 0 }, background: 0, position: 2 };
         const push = (code, parameters, indent) => out.push({ code, indent, parameters });
         const script = (code, indent) => push(355, [code], indent);
         const comment = (what, indent) => { push(108, [what], indent); note('comment'); };
         const scope = (t, id) => (t === 0 ? [0, 0] : t === 1 ? [0, id] : [1, id]); // 2003 target: party / actor / variable
+        const actorsFor = (t, id) => t === 0 ? '$gameParty.members()' : `[$gameActors.actor(${valueOrVar(t === 2, id)})]`;
         const itemTable = (id) => ({ items: '$dataItems', weapons: '$dataWeapons', armors: '$dataArmors' }[ctx.itemKind(id)] || '$dataItems');
         // 2003 picture effects: 1 rotation (power = 1/256 turn per frame), 2 wave (power = ripple depth). The
         // runtime's rrPictureEffect carries both; a picture that had one and is shown or moved without gets it cleared.
@@ -178,6 +181,7 @@
                             const sub = { 0: [3, 7, 2], 1: [3, 7, 5], 2: [3, 7, 1], 3: [3, 7, 6], 4: [3, 7, 7], 5: [3, 7, 8], 7: [3, 7, 9] }[p5];
                             if (sub) mz = sub;
                             else if (p5 === 6) expr = '($gameSystem._rrDefeatCount || 0)';
+                            else if (p5 === 9) expr = '$gameTimer.rrTimer(1).seconds()';
                             else if (p5 === 10) expr = '(() => { const d = new Date(); return (d.getFullYear() % 100) * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })()';
                             else if (p5 === 11) expr = '(() => { const d = new Date(); return d.getHours() * 10000 + d.getMinutes() * 100 + d.getSeconds(); })()';
                             else if (p5 === 12) expr = 'Graphics.frameCount';
@@ -188,22 +192,16 @@
                         default: expr = '0'; note('variableOperand'); break;
                     }
                     if (mode === 2) {
-                        const v = mz ? (mz[0] === 0 ? String(mz[1]) : mz[0] === 1 ? `$gameVariables.value(${mz[1]})` : mz[0] === 2 ? `(${mz[1]} + Math.randomInt(${mz[2] - mz[1] + 1}))` : null) : expr;
-                        if (v !== null) {
-                            const ops = ['=', '+=', '-=', '*=', '/=', '%='][op] || '=';
-                            script(`{ const t = $gameVariables.value(${a}); let v = $gameVariables.value(t); v ${ops} (${v}); $gameVariables.setValue(t, Math.trunc(v)); }`, ind);
-                        } else { const ops = ['=', '+=', '-=', '*=', '/=', '%='][op] || '='; script(`{ const t = $gameVariables.value(${a}); const g = (id) => $gameVariables.value(id); let v = g(t); v ${ops} (${expr}); $gameVariables.setValue(t, Math.trunc(v)); }`, ind); }
+                        const v = !mz ? expr : mz[0] === 0 ? String(mz[1]) : mz[0] === 1 ? `$gameVariables.value(${mz[1]})`
+                            : mz[0] === 2 ? `(${mz[1]} + Math.randomInt(${mz[2] - mz[1] + 1}))` : `this.gameDataOperand(${mz.slice(1).join(', ')})`;
+                        script(`this.operateVariable($gameVariables.value(${a}), ${op}, ${v})`, ind);
                         note('indirectVariable');
                     } else if (mz) push(122, [a, mode === 1 ? b : a, op, ...mz], ind);
                     else push(122, [a, mode === 1 ? b : a, op, 4, expr], ind);
                     break;
                 }
                 case 10230: {
-                    const timer = p[5] || 0;
-                    if (timer) note('secondTimer');
-                    if (p[0] === 0) { state.timer[timer] = p[2]; state.timerVar[timer] = p[1] ? p[2] : null; }
-                    else if (p[0] === 1) { if (state.timerVar[timer] !== null) script(`$gameTimer.start($gameVariables.value(${state.timerVar[timer]}) * 60)`, ind); else push(124, [0, state.timer[timer] || 0], ind); }
-                    else push(124, [1], ind);
+                    script(`$gameTimer.rrLegacyControl(${p[5] || 0}, ${p[0]}, ${valueOrVar(p[1], p[2] || 0)}, ${!!p[3]}, ${!!p[4]})`, ind);
                     break;
                 }
 
@@ -221,12 +219,19 @@
                 case 10430: { const param = [0, 1, 2, 3, 4, 6][p[3]] ?? 0; if (p[3] === 4) note('spiritParam'); push(317, [...scope(p[0], p[1]), param, p[2], p[4], p[5]], ind); break; }
                 case 10440: if (p[3]) { script(`for (const a of ${p[0] === 0 ? '$gameParty.members()' : `[$gameActors.actor(${valueOrVar(p[0] === 2, p[1])})]`}) if (a) a.${p[2] ? 'forgetSkill' : 'learnSkill'}($gameVariables.value(${p[4]}))`, ind); } else push(318, [...scope(p[0], p[1]), p[2], p[4]], ind); break;
                 case 10450: {
-                    if (p[2] === 1) { const slot = p[3]; push(319, [p[1], slot, 0], ind); if (p[0] !== 1) note('equipTarget'); break; }
+                    if (p[2] === 1) {
+                        const type = [1, 2, 4, 3, 5][p[3]];
+                        if (p[3] === 5) script(`for (const a of ${actorsFor(p[0], p[1])}) if (a) for (let slot = 0; slot < a.equips().length; slot++) a.changeEquip(slot, null)`, ind);
+                        else if (type && p[0] === 1) push(319, [p[1], type, 0], ind);
+                        else if (type) script(`for (const a of ${actorsFor(p[0], p[1])}) if (a) a.changeEquipById(${type}, 0)`, ind);
+                        break;
+                    }
                     const item = p[4];
-                    if (p[3] === 1) { script(`{ const id = $gameVariables.value(${item}); const it = $dataWeapons[id] || $dataArmors[id]; if (it) for (const a of ${p[0] === 0 ? '$gameParty.members()' : `[$gameActors.actor(${p[1]})]`}) if (a) a.changeEquipById(it.etypeId, id); }`, ind); note('indirectItem'); break; }
+                    if (p[3] === 1) { script(`{ const id = $gameVariables.value(${item}); const it = $dataWeapons[id] || $dataArmors[id]; if (it) for (const a of ${actorsFor(p[0], p[1])}) if (a) a.changeEquipById(it.etypeId, id); }`, ind); note('indirectItem'); break; }
                     const type = ctx.itemType ? ctx.itemType(item) : 1;
-                    const slot = { 1: 0, 2: 1, 3: 3, 4: 2, 5: 4 }[type] ?? 0;
-                    if (p[0] === 1) push(319, [p[1], slot, item], ind);
+                    const slot = { 1: 0, 2: 1, 3: 3, 4: 2, 5: 4 }[type];
+                    if (slot === undefined) { note('invalidEquipment'); break; }
+                    if (p[0] === 1) push(319, [p[1], slot + 1, item], ind);
                     else { script(`for (const a of ${p[0] === 0 ? '$gameParty.members()' : `[$gameActors.actor($gameVariables.value(${p[1]}))]`}) if (a) a.changeEquipById(${slot + 1}, ${item})`, ind); }
                     break;
                 }
@@ -236,14 +241,14 @@
                 case 10490: push(314, [...scope(p[0], p[1])], ind); break;
                 case 10500: {
                     const [t, id, atk, def, spi, variance, toVar, varId] = p;
-                    script(`{ let last = 0; for (const a of ${t === 0 ? '$gameParty.members()' : `[$gameActors.actor(${valueOrVar(t === 2, id)})]`}) { if (!a) continue; let d = Math.max(0, Math.floor(${atk} / 2 - a.def / 4)); if (${variance} > 0) { const adj = Math.max(1, Math.floor(${variance} * d / 10)); d += Math.randomInt(adj + 1) - Math.floor(adj / 2); } a.gainHp(-d); last = d; } ${toVar ? `$gameVariables.setValue(${varId}, last);` : ''} }`, ind);
+                    script(`{ let last = 0; for (const a of ${actorsFor(t, id)}) { if (!a) continue; let d = Math.max(0, ${atk} - Math.trunc(a.def * ${def} / 400) - Math.trunc(a.mat * ${spi} / 800)); if (${variance} > 0) { const adj = Math.max(1, Math.trunc(${variance} * d / 10)); d += Math.randomInt(adj + 1) - Math.trunc(adj / 2); } d = Math.max(0, d); a.gainHp(-d); last = d; } ${toVar ? `$gameVariables.setValue(${varId}, last);` : ''} }`, ind);
                     note('simulatedAttack');
                     break;
                 }
                 case 10610: push(320, [p[0], s], ind); break;
                 case 10620: push(324, [p[0], s], ind); break;
-                case 10630: { const a = ctx.actors[p[0]] || {}; push(322, [p[0], charsetName(s), p[1] || 0, a.faceName || '', a.faceIndex || 0], ind); if (p[2]) note('transparentActor'); break; }
-                case 10640: { const a = ctx.actors[p[0]] || {}; push(322, [p[0], a.characterName || '', a.characterIndex || 0, s ? stem(s) : '', p[1] || 0], ind); break; }
+                case 10630: script(`this.rrChangeActorCharacter(${p[0]}, ${JSON.stringify(charsetName(stem(s)))}, ${p[1] || 0})`, ind); if (p[2]) note('transparentActor'); break;
+                case 10640: script(`this.rrChangeActorFace(${p[0]}, ${JSON.stringify(stem(s))}, ${p[1] || 0})`, ind); break;
                 case 10650: push(323, [p[0], charsetName(s), p[1] || 0], ind); break;
                 case 10660: {
                     const bgm = audio(s, p[2], p[3], p[4]);
@@ -544,7 +549,7 @@
         switch (p[0]) {
             case 0: return [0, p[1], p[2] ? 1 : 0];
             case 1: return [1, p[1], p[2] ? 1 : 0, p[3], p[4]];
-            case 2: return [2, p[1], p[2] ? 1 : 0];
+            case 2: return [12, `$gameTimer.seconds() ${p[2] ? '<=' : '>='} ${p[1]}`];
             case 3: return [7, p[1], p[2] ? 1 : 0];
             case 4: return p[2] ? [12, `!$gameParty.hasItem(${itemTable(p[1])}[${p[1]}], true)`] : [12, `$gameParty.hasItem(${itemTable(p[1])}[${p[1]}], true)`];
             case 5: {
@@ -564,7 +569,7 @@
             case 7: return [13, p[1]];
             case 8: return [12, '(() => { const e = $gameMap.event(this._eventId); return !!e && e.isTriggerIn([0]); })()'];
             case 9: note('bgmLooped'); return [12, 'true'];
-            case 10: note('secondTimer'); return [2, p[1], p[2] ? 1 : 0];
+            case 10: return [12, `$gameTimer.rrTimer(1).seconds() ${p[2] ? '<=' : '>='} ${p[1]}`];
             case 11: return [12, ['DataManager.isAnySavefileExists()', "Utils.isOptionValid('test')", '$dataSystem.battleSystem === 2', 'Graphics._isFullScreen()'][p[1]] || 'false'];
             default: note('unknownCondition'); return [12, 'false'];
         }

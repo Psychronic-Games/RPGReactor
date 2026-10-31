@@ -329,7 +329,8 @@ test('the map starts only once its world stands, and the world is laid on every 
 test('the game builds a map opened while loading without its pieces and water, and a draw of the wait is not counted as play', () => {
     const sprites = fs.readFileSync(path.join(runtimeRoot, 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /new Reactor3D\.MapScene\(\$dataMap, this\._tilemap\.bitmaps, arrival \? Reactor3D\.Arrival\.options\(\$dataMap\) : undefined\)/);
-    assert.match(sprites, /if \(!state\.warming\) \{\n\s+quality\.mapOpened\(\$gameMap\.mapId\(\)\);\n\s+if \(!quality\.worldTick\(performance\.now\(\)\)\) return;\n\s+\}/);
+    const draw = sprites.slice(sprites.indexOf('Spriteset_Map.prototype.drawReactor3D ='));
+    assert.ok(/if \(!state\.warming\) \{\n\s+Reactor3D\.Quality\.mapOpened\(\$gameMap\.mapId\(\)\);\n\s+Reactor3D\.Quality\.worldTick\(performance\.now\(\)\);\n\s+\}/.test(draw), 'loading draws do not count as gameplay frames');
     const R = load();
     const map = mapWith([]);
     R.Arrival._rocks = { map, cache: new Map([[1, []]]) };

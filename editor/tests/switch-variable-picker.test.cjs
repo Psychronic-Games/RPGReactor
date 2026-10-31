@@ -308,6 +308,7 @@ test('where it stands: beside the field of a docked panel, in the middle over a 
     const place = (options) => {
         const page = makePage(options);
         page.picker.createModal();
+        if (options.viewport) page.picker.modal.ownerDocument = { defaultView: options.viewport };
         const container = page.picker.modal.querySelector('.picker-container');
         size(container);
         page.picker.updateModalContent(1);
@@ -339,6 +340,8 @@ test('where it stands: beside the field of a docked panel, in the middle over a 
     assert.deepEqual(place({ inDialog: true }), ['', '', '', false]);
     const narrow = { openerRect: { left: 650, top: 300, right: 830, bottom: 326, width: 180, height: 26 }, panelRect: { left: 640, top: 200, right: 840, bottom: 700, width: 200, height: 500 } };
     assert.deepEqual(place(narrow), ['absolute', '852px', '23px', true], 'the same column on a page: beside it');
+    assert.deepEqual(place({ ...narrow, viewport: { innerWidth: 1000, innerHeight: 650 } }), ['absolute', '188px', '23px', true], 'in a smaller detached window, the right side does not fit');
+    assert.deepEqual(place({ ...narrow, openerRect: { left: 650, top: 570, right: 830, bottom: 596, width: 180, height: 26 }, viewport: { innerWidth: 1000, innerHeight: 650 } }), ['absolute', '188px', '54px', true], 'a detached window also supplies the bottom edge');
     for (const host of [{ className: 'set-movement-route-editor-modal' }, { className: 'get-location-info-editor-modal extra' }, { className: 'change-gold-container rr-modal' }, { id: 'plugin-manager-modal' }, { role: 'dialog' }]) {
         assert.deepEqual(place(Object.assign({ host }, narrow)), ['', '', '', false], JSON.stringify(host));
     }

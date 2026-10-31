@@ -379,8 +379,9 @@ walls), **Filled** and **Outline** say which. A wall, glass or block line
 that runs off the grid's axes is one **Straight** wall from end to end (a
 turned box, a tile thick, as tall as the wall in hand) or, **Stepped**, a
 staircase of cells. The **Level** card (− and +, or Q and E) is where the
-next piece goes; selected, it raises and lowers what is selected, as Q and
-E do, and a placed piece's **Position** card moves it by typing. The
+next piece goes above the ground: zero sits on the ground. The bottom bar calls
+this **Placement height**; it is a height offset, not a storey number. Selected,
+it raises and lowers what is selected, as Q and E do, and a placed piece's **Position** card moves it by typing. The
 **Size** card sets a wall's, glass's or pillar's height, of one in hand, one
 placed or every one in a selection. A **Window**, **Doorway**, **Glass** or
 **Door** pointed at a wall goes into it, in place of the piece of wall

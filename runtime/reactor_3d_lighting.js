@@ -1302,12 +1302,11 @@ Reactor3D.pieceCoverAt = function(mapData, wx, wz, near) {
     // A hair past the outer faces: a face on the box's own edge interpolates
     // a whisker outside it and escaped the cut (the whole upper west wall,
     // seen from the west, dithered into a mess).
-    // The building's own box and a stretch of map around the player, whichever
-    // reaches further each way: pieces laid by hand beside a building, or the
-    // next building over, stood uncut in the picture otherwise.
+    // A stamped building opens only its own footprint. Expanding it by the
+    // hand-laid fallback radius also exposed the neighboring closed houses.
     const m = this.CUTAWAY_MARGIN, r = this.CUTAWAY_REACH;
-    const reach = { x0: x - r, y0: y - r, x1: x + r + 1, y1: y + r + 1 };
-    return box ? { x0: Math.min(box.x0 - m, reach.x0), y0: Math.min(box.y0 - m, reach.y0), x1: Math.max(box.x1 + 1 + m, reach.x1), y1: Math.max(box.y1 + 1 + m, reach.y1) } : reach;
+    return box ? { x0: box.x0 - m, y0: box.y0 - m, x1: box.x1 + 1 + m, y1: box.y1 + 1 + m }
+        : { x0: x - r, y0: y - r, x1: x + r + 1, y1: y + r + 1 };
 };
 Reactor3D.CUTAWAY_MARGIN = 0.05;
 /** How far under the storey's top the cut plane sits: under a doorway's header. */
@@ -1322,8 +1321,8 @@ Reactor3D.CUTAWAY_REACH = 24;
  * is itself under the ceiling (first person, a low third-person orbit)
  * has nothing overhead in its way, and cutting the ceiling from it would
  * show the sky through the room. A wall between the camera and the
- * player is seen through while the player is inside a building (and in a
- * battle on the map); walking outside, buildings stay whole.
+ * player is seen through while the player is inside a building; walking
+ * outside, buildings stay whole.
  */
 /**
  * `others`: the characters beside the player a wall must not hide either
@@ -1390,9 +1389,9 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     }
     // A corridor only for who something built really hides: a rim, a bench or a counter the eye sees over is not
     // cover, and a corridor through it was a box cut out of it at the character's feet. Only for a player inside a
-    // building, or in a battle here: walking outside, a building between the camera and the party stays whole.
+    // building: walking outside, a building between the camera and the party stays whole.
     let count = 0;
-    const opens = !!covered || battle;
+    const opens = !!covered;
     if (opens && Reactor3D.cutawayHides(mapData, eye, character, x, ground, z, true, frame)) { foci[0] = x; foci[1] = ground + 1.5; foci[2] = z; count = 1; }
     let slot = 0;
     for (const other of opens ? others || [] : []) {
@@ -2311,15 +2310,21 @@ Reactor3D.Reflections = {
         const hide = (hidden || []).concat(shadowSentinel ? [shadowSentinel] : []).filter(object => object && object.visible);
         for (const object of hide) object.visible = false;
         this._capturing = true;
-        renderer.setRenderTarget(this._target, face);
         try {
+            // A deferred face follows the main draw, which left the live
+            // cube in the shared sampler. Water with reflect=0 still has
+            // that sampler in its shader, but no reflective-material hook
+            // to change it. Bind the safe inputs for the entire capture
+            // before any mesh can read the cube it is being drawn into.
+            this.bind(renderer);
+            renderer.setRenderTarget(this._target, face);
             Reactor3D.withSkyAt(scene, position, () => renderer.render(scene, camera));
         } finally {
             this._capturing = false;
             for (const object of hide) object.visible = true;
             renderer.setRenderTarget(previous);
+            renderer.autoClear = autoClear;
         }
-        renderer.autoClear = autoClear;
         this._renderer = renderer;
         this._probe = this._probe || new THREE.Vector4();
         this._probe.set(position.x, position.y, position.z, Number(radius) > 0 ? Number(radius) : 0);
@@ -3157,6 +3162,56 @@ Reactor3D.shineOf = function(material) {
     return shine.vector.x > 0 ? shine : null;
 };
 
+/** Direct specular for authored metal, including lamps whose diffuse light is baked into the volume. */
+Reactor3D.MODEL_SPECULAR_GLSL = [
+    "vec3 rrModelAmbient(vec3 reflected, float roughness) {",
+    "\tfloat width = max(0.08, roughness * 0.6);",
+    "\tfloat horizon = exp2(-reflected.y * reflected.y / (width * width));",
+    "\treturn rrAmbient * (0.25 + 0.75 * max(reflected.y, 0.0) + 3.0 * horizon);",
+    "}",
+    "float rrModelLobe(float nv, float nl, float nh, float roughness) {",
+    "\tfloat a = roughness * roughness, a2 = a * a, denom = nh * nh * (a2 - 1.0) + 1.0;",
+    "\tfloat distribution = a2 / max(3.14159265 * denom * denom, 1e-8);",
+    "\tfloat visibility = 0.5 / max(nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2), 1e-5);",
+    "\treturn min(distribution * visibility * nl, 4.0);",
+    "}",
+    "vec3 rrModelSpecular(vec3 p, vec3 n, vec3 v, float roughness, vec3 f0) {",
+    "\tvec3 sum = vec3(0.0);",
+    "\tfloat nv = max(dot(n, v), 0.0001);",
+    "\tfor (int i = 0; i < " + Reactor3D.SHADER_LIGHTS + "; i++) {",
+    "\t\tif (i >= rrLightCount) break;",
+    "\t\tvec4 lp = rrLightPos[i], lc = rrLightColor[i], aim = rrLightAim[i];",
+    "\t\tvec3 d = p - lp.xyz, l; float fall;",
+    "\t\tif (lc.w > 2.5) {",
+    "\t\t\tfall = smoothstep(lp.w, lp.w * 0.6, length(d.xz)); l = normalize(aim.xyz);",
+    "\t\t} else {",
+    "\t\t\tif (max(max(abs(d.x), abs(d.y)), abs(d.z)) >= max(lp.w, 0.001)) continue;",
+    "\t\t\tfloat dist = length(d); l = -d / max(dist, 0.0001);",
+    "\t\t\tfall = max(0.0, 1.0 - dist / max(lp.w, 0.001)); fall *= fall;",
+    "\t\t\tif (lc.w > 1.5) {",
+    "\t\t\t\tfloat along = dot(d, aim.xyz); if (along < 0.0 || along > lp.w) continue;",
+    "\t\t\t\tfall = smoothstep(aim.w, aim.w * 0.35, length(d - aim.xyz * along)) * sqrt(max(0.0, 1.0 - along / max(lp.w, 0.001)));",
+    "\t\t\t} else if (lc.w > 0.5) fall *= smoothstep(aim.w, mix(aim.w, 1.0, 0.35), dot(-l, aim.xyz));",
+    "\t\t}",
+    "\t\tfloat nl = max(dot(n, l), 0.0); if (fall <= 0.0 || nl <= 0.0) continue;",
+    "#ifdef RR_SHADOW_TAPS",
+    "\t\tfloat row = rrLightShadow[i];",
+    "\t\tif (row > " + ((Reactor3D.SUN_SHADOW_ROW || 64) - 0.5).toFixed(1) + ") fall *= rrSunShadowAt(p);",
+    "\t\telse if (row >= 0.0) fall *= rrShadowAt(int(row + 0.5), p);",
+    "#endif",
+    "\t\tvec3 h = normalize(l + v); float nh = max(dot(n, h), 0.0), vh = max(dot(v, h), 0.0);",
+    "\t\tvec3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);",
+    "\t\tvec3 response = fresnel * rrModelLobe(nv, nl, nh, roughness);",
+    "\t\tif (rrModelCoat.x > 0.0) {",
+    "\t\t\tfloat coatF = 0.04 + 0.96 * pow(1.0 - vh, 5.0);",
+    "\t\t\tresponse = response * (1.0 - rrModelCoat.x * coatF) + rrModelCoat.x * coatF * rrModelLobe(nv, nl, nh, max(rrModelCoat.y, 0.0525));",
+    "\t\t}",
+    "\t\tsum += lc.rgb * fall * response;",
+    "\t}",
+    "\treturn sum;",
+    "}"
+].join("\n");
+
 /**
  * The reflection term for a shiny lit material: the world in the capture,
  * mirrored about the surface normal, blurred by roughness, stronger at a
@@ -3190,7 +3245,10 @@ Reactor3D.injectShine = function(material, shader) {
     // metal does in PBR and in the Builders; a model's Surface keeps it white unless its tint says.
     if (!shine.albedo || typeof shine.albedo !== "object") shine.albedo = { value: 0 };
     shader.uniforms.rrShineAlbedo = shine.albedo;
+    const coat = material.userData?.rrClearcoat;
+    shader.uniforms.rrModelCoat = { value: new THREE.Vector2(coat?.factor || 0, coat?.roughness || 0) };
     this.injectWorldNormal(shader);
+    shader.fragmentShader = shader.fragmentShader.replace("void main()", this.MODEL_SPECULAR_GLSL + "\nvoid main()");
     // The surface's colour before any light is laid on it (Reactor3D.litMaterial lights diffuseColor there).
     shader.fragmentShader = shader.fragmentShader.replace("#include <alphahash_fragment>", "vec3 rrAlbedo = diffuseColor.rgb;\n\t#include <alphahash_fragment>");
     shader.fragmentShader = [
@@ -3205,6 +3263,7 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform vec4 rrShine;",
         "uniform vec3 rrShineTint;",
         "uniform float rrShineAlbedo;",
+        "uniform vec2 rrModelCoat;",
         this.WORLD_NORMAL_VARYING
     ].join("\n") + "\n" + shader.fragmentShader.replace(
         "#include <opaque_fragment>",
@@ -3250,6 +3309,30 @@ Reactor3D.injectShine = function(material, shader) {
             Reactor3D.mirrorLookup("rrEnv", slot => "dot(rrN, rrMirrorPlane" + slot + ".xyz) > 0.92 && abs(dot(vRRWorldPos, rrMirrorPlane" + slot + ".xyz) - rrMirrorPlane" + slot + ".w) < rrMirrorTolerance", "", "1.0"),
             "\tfloat rrF0 = mix(0.04, 1.0, rrFinish.z);",
             "\tfloat rrFres = rrF0 + (1.0 - rrF0) * pow(1.0 - clamp(dot(rrN, rrV), 0.0, 1.0), 5.0);",
+            // Builder metal uses its authored metallic/roughness response, rather than a lacquer over diffuse paint.
+            "\tif (rrShineAlbedo > 0.5) {",
+            // The map's ambient represents unresolved surrounding light, which
+            // the LDR world capture cannot reconstruct. Give metal that light
+            // as a hemisphere reflection, rather than a diffuse paint floor.
+            "\t\tvec3 rrDxy = max(abs(dFdx(rrN)), abs(dFdy(rrN)));",
+            "\t\tfloat rrRough = clamp(rrFinish.y + max(max(rrDxy.x, rrDxy.y), rrDxy.z), 0.0525, 1.0);",
+            "\t\trrEnv = max(rrEnv, rrModelAmbient(rrR, rrRough));",
+            "\t\tvec3 rrMetalF0 = mix(vec3(0.04), rrAlbedo, rrFinish.z) * rrShineTint;",
+            // Integrated GGX environment response; the rough reflection retains its energy instead of being cubed away.
+            "\t\tvec4 rrDfg = rrRough * vec4(-1.0, -0.0275, -0.572, 0.022) + vec4(1.0, 0.0425, 1.04, -0.04);",
+            "\t\tfloat rrA004 = min(rrDfg.x * rrDfg.x, exp2(-9.28 * max(dot(rrN, rrV), 0.0))) * rrDfg.x + rrDfg.y;",
+            "\t\tvec2 rrFab = vec2(-1.04, 1.04) * rrA004 + rrDfg.zw;",
+            "\t\tfloat rrCoatF = rrModelCoat.x * (0.04 + 0.96 * pow(1.0 - max(dot(rrN, rrV), 0.0), 5.0));",
+            "\t\tvec3 rrCoatEnv = rrEnv;",
+            "\t\tif (rrModelCoat.x > 0.0 && rrEnvMaxLod > 0.0) {",
+            "\t\t\tfloat rrCoatLod = clamp(rrEnvMaxLod + log2(max(3.14159265 * rrModelCoat.y * rrModelCoat.y / (1.0 + rrModelCoat.y), 1e-6)), " + (Reactor3D.REFLECTION_MIN_LOD || 0).toFixed(2) + ", rrEnvMaxLod);",
+            "\t\t\trrCoatEnv = textureLod(rrEnvMap, rrR, rrCoatLod).rgb;",
+            "\t\t\tif (rrEnvFlip > 0.0) rrCoatEnv = rrSRGBToLinear(rrCoatEnv); else rrCoatEnv *= rrSkyLight;",
+            "\t\t\trrCoatEnv = max(rrCoatEnv, rrModelAmbient(rrR, rrModelCoat.y));",
+            "\t\t}",
+            "\t\toutgoingLight = (outgoingLight * (1.0 - rrFinish.z) + rrEnv * (rrMetalF0 * rrFab.x + rrFab.y)) * (1.0 - rrCoatF) + rrCoatEnv * rrCoatF",
+            "\t\t\t+ rrModelSpecular(vRRWorldPos, rrN, rrV, rrRough, rrMetalF0);",
+            "\t} else {",
             // How much of the texture stays (w): the rest is mirrored over, and what stays
             // takes the reflection as a glaze (a screen blend) of its bright parts only
             // (cubed): crisp highlights over the paint, never a milky wash.
@@ -3271,6 +3354,7 @@ Reactor3D.injectShine = function(material, shader) {
             "\t\trrKGGX *= 1.0 - clamp(rrSunShaded, 0.0, 1.0);",
             "#endif",
             "\t\toutgoingLight += rrKeyColor * rrTint * (rrKGGX * rrShine.x * rrF0);",
+            "\t}",
             "\t}",
             "}",
             "#include <opaque_fragment>"
@@ -3589,6 +3673,11 @@ Reactor3D.SHADOW_QUALITY = {
     full: { slots: 8, dynamicSlots: 3, size: 512, taps: 5, dynamicTriangles: 600000, staticPerFrame: 2, dynamicPerFrame: 2, dynamicInterval: 1, sunSize: 1024, sunSpans: [24, 96], dynamicRowsWithSun: true },
     weak: { slots: 4, dynamicSlots: 2, size: 256, taps: 1, dynamicTriangles: 200000, staticPerFrame: 1, dynamicPerFrame: 1, dynamicInterval: 2, sunSize: 768, sunSpans: [16, 64], dynamicRowsWithSun: false }
 };
+// A CPU-limited Auto profile retains character shadows. Keep the atlas and
+// shader layout, but spend less on casters and redraw moving rows less often.
+Reactor3D.SHADOW_QUALITY.fullCpu = Object.assign({}, Reactor3D.SHADOW_QUALITY.full, {
+    dynamicTriangles: 300000, staticPerFrame: 1, dynamicPerFrame: 1, dynamicInterval: 2
+});
 /**
  * A sun casts along one direction through an orthographic map that follows
  * the focus, not through six cube faces from where it hangs: a cube face
@@ -3809,8 +3898,9 @@ Reactor3D.Shadows = {
 
     quality() {
         if (this._quality) return this._quality;
-        this._quality = Reactor3D.SHADOW_QUALITY[Reactor3D.isWeakGpu() ? "weak" : "full"];
-        return this._quality;
+        if (Reactor3D.isWeakGpu()) return Reactor3D.SHADOW_QUALITY.weak;
+        const Q = Reactor3D.Quality;
+        return Reactor3D.SHADOW_QUALITY[Q && Q.enabled !== false && Q.setting() === "auto" && Q.c >= 2 ? "fullCpu" : "full"];
     },
 
     active() {
@@ -4506,10 +4596,11 @@ Reactor3D.Shadows = {
                 if (d < c.radius && d < near) near = d;
             }
             ranked.push({ root, gap: (dx * dx + dy * dy + dz * dz) * bias, light: Number.isFinite(near) ? Math.max(1, Math.floor(near)) : Reactor3D.SHADOW_BUDGET_DISTANCE,
+                primary: !!(root.userData.reactorPlayer || root.userData.reactorRidden),
                 character: this._isCharacter(root) });
         }
         // Characters first (their shadows are outlines, and cheap), then props, nearest first.
-        ranked.sort((a, b) => (b.character - a.character) || (a.gap - b.gap));
+        ranked.sort((a, b) => (b.primary - a.primary) || (b.character - a.character) || (a.gap - b.gap));
 
         // The nearest caster is allowed past the budget, because a rule that
         // could refuse the only shadow on screen is worse than one frame of
@@ -4523,6 +4614,12 @@ Reactor3D.Shadows = {
         const wanted = new Set();
         for (const entry of ranked) {
             const tris = this._casterTriangles(entry.root, entry.light);
+            // The rider and ridden vehicle form the controlled subject. Reserve
+            // both silhouettes before NPCs, within the existing hard ceiling.
+            if (entry.primary && spent + tris <= ceiling) {
+                wanted.add(entry.root); spent += tris;
+                continue;
+            }
             if (!wanted.size) {
                 if (tris <= ceiling) { wanted.add(entry.root); spent += tris; }
                 continue;
@@ -5120,8 +5217,16 @@ Reactor3D.Shadows = {
         for (const root of roots) {
             if (!root.parent || !root.visible) continue;
             root.traverse(child => {
-                const caster = child.isMesh ? child.customDepthMaterial : null;
-                if (!caster || !caster.__rrCaster) return;
+                if (!child.isMesh) return;
+                let caster = child.customDepthMaterial;
+                if (!caster || !caster.__rrCaster) {
+                    const layers = (1 << Reactor3D.SHADOW_LAYER_STATIC) | (1 << Reactor3D.SHADOW_LAYER_DYNAMIC);
+                    if (!(child.layers.mask & layers)) return;
+                    // A held model can join after its character was registered.
+                    // Clones keep the casting layer but not customDepthMaterial;
+                    // drawing their lit shader here reads the atlas being written.
+                    caster = child.customDepthMaterial = this.casterMaterialFor(child.material, !!child.isSkinnedMesh);
+                }
                 const source = child.material;
                 if (caster.__rrCutout && source && !Array.isArray(source)) {
                     const map = source.map || null;

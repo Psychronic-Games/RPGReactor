@@ -5,7 +5,7 @@ following credits and license details cover bundled third-party components.
 
 ## PixiJS
 
-- Component: PixiJS 8.20.0
+- Component: PixiJS 8.22.0
 - Bundled file: `runtime/libs/pixi.js`
 - Header: "PixiJS is licensed under the MIT License."
 - Upstream license URL in header: <http://www.opensource.org/licenses/mit-license>
@@ -15,15 +15,16 @@ under BSD-3-Clause.
 
 ## Three.js
 
-- Component: Three.js 0.185.1 (r185.1)
+- Component: Three.js 0.187.0 (r187)
 - Bundled file: `runtime/libs/three.js`
 - Copyright: 2010-2026 Three.js Authors
 - License: MIT
 - Upstream: <https://github.com/mrdoob/three.js>
+- Browser bundle generated with esbuild 0.28.2 (MIT), a build-time tool: <https://github.com/evanw/esbuild>
 
 ## Basis Universal
 
-- Component: Basis Universal transcoder, as shipped with Three.js 0.185.1 (`examples/jsm/libs/basis`)
+- Component: Basis Universal transcoder, as shipped with Three.js 0.187.0 (`examples/jsm/libs/basis`)
 - Bundled files: `runtime/libs/basis/basis_transcoder.js` and `runtime/libs/basis/basis_transcoder.wasm`
 - Copyright: 2016-2026 Binomial LLC
 - License: Apache License 2.0

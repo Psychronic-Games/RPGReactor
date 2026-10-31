@@ -37,8 +37,12 @@ async function stageEditor(appRoot, outputDir) {
     return stageRoot;
 }
 
-// Scripts that only package the editor itself; they run from a source checkout.
-const PACKAGING_ONLY = new Set(['build-scripts/build.js', 'build-scripts/convert-icon.js']);
+// Build tools run from a source checkout with devDependencies. Packaged editors
+// load the already-vendored libraries and never regenerate them with esbuild.
+const PACKAGING_ONLY = new Set([
+    'build-scripts/build.js', 'build-scripts/convert-icon.js',
+    'build-scripts/vendor-three.js', 'build-scripts/vendor-pixi.cjs'
+]);
 
 function unresolvedPackages(stageRoot) {
     const builtins = new Set(require('node:module').builtinModules);
@@ -128,6 +132,12 @@ test('editor distribution staging includes runtime asset dependencies', async ()
         assert.equal(fs.existsSync(path.join(stageRoot, 'node_modules', 'pixi.js')), false);
 
         const packageJson = JSON.parse(fs.readFileSync(path.join(stageRoot, 'package.json'), 'utf8'));
+        const pinnedPixi = JSON.parse(fs.readFileSync(path.join(editorRoot, 'package.json'), 'utf8')).dependencies['pixi.js'];
+        assert.equal(packageJson.dependencies['pixi.js'], pinnedPixi);
+        const canonicalPixi = fs.readFileSync(path.resolve(editorRoot, '../runtime/libs/pixi.js'));
+        for (const relativePath of ['runtime/libs/pixi.js', 'template/Demo/js/libs/pixi.js']) {
+            assert.ok(fs.readFileSync(path.join(stageRoot, relativePath)).equals(canonicalPixi), `${relativePath} ships the pinned offline PixiJS bundle`);
+        }
         assert.equal(packageJson.dependencies['gif.js'], '^0.2.0');
         assert.equal(packageJson.dependencies['gifuct-js'], '^2.1.2');
         assert.equal(packageJson.dependencies['@jsquash/oxipng'], '2.3.0');

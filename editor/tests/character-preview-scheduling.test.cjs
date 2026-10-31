@@ -176,7 +176,7 @@ test('first startup preloads only the selected transferred outfits and ignores u
     const transfer = { BUILT_IN: ['selected', 'unused'], registerProject() {}, onPicture(callback) { arrival = callback; return () => {}; },
         async preload(keys) { requests.push(Array.from(keys)); } };
     const b = builder({ window: { THREE: {}, RRCharacterOutfitTransfer: transfer }, RRCharacterOutfitTransfer: transfer,
-        RRCharacterWardrobe: { BY_ID: new Map([['uniform', { transfer: 'selected' }]]) } });
+        RRCharacterWardrobe: { BY_ID: new Map([['uniform', { transfer: 'selected' }]]) },RRHumanBody:{async prepareAuthoring(){}} });
     mount(b, []);
     b.recipe = { outfit: [{ id: 'uniform' }, { id: 'uniform' }] };
     b.eyeSource = {}; b._queueRebuild = () => { rebuilt++; };

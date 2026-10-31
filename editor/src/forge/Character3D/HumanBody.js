@@ -362,11 +362,24 @@
                 if (typeof fetch !== 'function') throw error;
             }
         }
-        const [json, bin] = await Promise.all([
-            fetch(base + '/human.json').then(r => r.json()),
-            fetch(base + '/human.bin').then(r => r.arrayBuffer())
-        ]);
+        const read = async (name, method) => {
+            const response = await fetch(base + '/' + name);
+            if (!response.ok) throw new Error('Character body asset failed (' + response.status + '): ' + base + '/' + name);
+            return response[method]();
+        };
+        const [json, bin] = await Promise.all([read('human.json', 'json'), read('human.bin', 'arrayBuffer')]);
         return openPack(json, new Uint8Array(bin));
+    }
+
+    /** Browser authoring must preload data that desktop builds read synchronously. */
+    async function prepareAuthoring(pack, dir = DATA_PATH) {
+        if (typeof process !== 'undefined' && process.versions?.node) return pack;
+        const jobs = [];
+        if (root.RRCharacterClothes && !pack._clothes) jobs.push(root.RRCharacterClothes.preload(pack, dir));
+        if (root.RRCharacterExpressions && !pack._expressionUnits) jobs.push(root.RRCharacterExpressions.preload(pack, dir));
+        if (root.RRCharacterPoses && !root.RRCharacterPoses.ready()) jobs.push(root.RRCharacterPoses.loadAsync(dir + '/reactor_3d_motions.bin').then(ok => { if (!ok) throw new Error('Character motion data could not be loaded: ' + dir); }));
+        await Promise.all(jobs);
+        return pack;
     }
 
     /** Shaped positions (meters, MakeHuman's frame: y up, facing +z) for a recipe. */
@@ -1857,6 +1870,7 @@
         const body = pack.body;
         const parts = [{
             name: 'Body',
+            bodyUV: 'reactor-human-1',
             positions: gather(shaped, body.source, 3),
             normals: normals(shaped, body.source, body.index, pack.vertexCount),
             uvs: body.uv,
@@ -1939,7 +1953,7 @@
         return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0');
     }
 
-    const api = { PEOPLES, PEOPLE_BY_ID, withPeople, irisFor, earMask, noseFoldAt, cranialRidgeAt, foreheadSpoonAt, neckCords, almondEye: { frame: almondFrame, half: almondHalf, at: almondAt }, VOLUME, maskOf, fatMask, volume, sexOf, anatomyFields, nippleSurface, MORPHS, morph, headFields, vertexNormals, gather, normals, fittedSkin, naturalRecipe, neighbors, relax, SLIDERS, SHAPES, SLIDER_BY_KEY, MACRO_RANGES, ANCESTRY, DEFAULT_RECIPE, MIN_AGE, MAX_AGE, DATA_PATH, dataFolder, normalizeRecipe, targetWeights, openPack, loadPack, shape, joints, fit, build, randomRecipe, useExpressions };
+    const api = { PEOPLES, PEOPLE_BY_ID, withPeople, irisFor, earMask, noseFoldAt, cranialRidgeAt, foreheadSpoonAt, neckCords, almondEye: { frame: almondFrame, half: almondHalf, at: almondAt }, VOLUME, maskOf, fatMask, volume, sexOf, anatomyFields, nippleSurface, MORPHS, morph, headFields, vertexNormals, gather, normals, fittedSkin, naturalRecipe, neighbors, relax, SLIDERS, SHAPES, SLIDER_BY_KEY, MACRO_RANGES, ANCESTRY, DEFAULT_RECIPE, MIN_AGE, MAX_AGE, DATA_PATH, dataFolder, normalizeRecipe, targetWeights, openPack, loadPack, prepareAuthoring, shape, joints, fit, build, randomRecipe, useExpressions };
     root.RRHumanBody = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

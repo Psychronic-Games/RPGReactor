@@ -470,12 +470,42 @@ Game_Timer.prototype.initialize = function() {
 };
 
 Game_Timer.prototype.update = function(sceneActive) {
-    if (sceneActive && this._working && this._frames > 0) {
+    if (this._rrTimer2) this._rrTimer2.update(sceneActive);
+    const battlePaused = this._rrLegacy && !this._rrBattle && typeof $gameParty !== "undefined" && $gameParty.inBattle();
+    if (sceneActive && !battlePaused && this._working && this._frames > 0) {
         this._frames--;
         if (this._frames % 60 === 59) this.rrSecondsChanged();
-        if (this._frames === 0) {
+        if (this._rrLegacy && this.seconds() === 0) {
+            this.stop();
+            this._rrVisible = false;
+            if (this._rrBattle) this.onExpire();
+        } else if (this._frames === 0) {
             this.onExpire();
         }
+    }
+};
+
+/** Separate, saved 2000/2003 timers; ordinary projects retain the single MZ timer. */
+Game_Timer.prototype.rrTimer = function(id) {
+    if (id !== 1) return this;
+    if (!this._rrTimer2) this._rrTimer2 = new Game_Timer();
+    return this._rrTimer2;
+};
+
+Game_Timer.prototype.rrLegacyControl = function(id, operation, seconds, visible, battle) {
+    const timer = this.rrTimer(id);
+    timer._rrLegacy = true;
+    if (operation === 0) {
+        // RPG_RT sets the value now, independently of start/stop or which event starts it.
+        timer._frames = Math.max(0, Math.trunc(Number(seconds) || 0)) * 60 + 59;
+        timer.rrSecondsChanged();
+    } else if (operation === 1) {
+        timer._working = true;
+        timer._rrVisible = !!visible;
+        timer._rrBattle = !!battle;
+    } else if (operation === 2) {
+        timer.stop();
+        timer._rrVisible = false;
     }
 };
 

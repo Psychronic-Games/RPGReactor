@@ -345,6 +345,11 @@
                 storedPaths.add(relativePath);
                 persist(relativePath, stored);
             },
+            writeFileAtomicSync(filePath, data) {
+                // persist() puts the complete value in one IndexedDB transaction.
+                // Callers await flush() to observe quota or storage failures.
+                return this.writeFileSync(filePath, data);
+            },
             appendFileSync(filePath, data) {
                 let current = '';
                 try { current = this.readFileSync(filePath, 'utf8'); } catch {}

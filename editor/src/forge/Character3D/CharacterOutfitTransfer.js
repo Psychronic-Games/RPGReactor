@@ -1867,6 +1867,7 @@
     function fit(pack, built, outfit, frame) {
         frame = frame || {};
         const k = built.height / (outfit.height || built.height), n = outfit.count;
+        if(frame.sourceRest&&outfit.rest)return Float32Array.from(outfit.rest,x=>x*k);
         const { out, facing } = laidBindings(pack, built, outfit, frame);
         if (outfit.rest) {
             if (!outfit._reference) {
@@ -1924,6 +1925,7 @@
         return out;
 
         function tailor() {
+            if(outfit.key==='carol')smoothCarol(outfit,out,k);
             const reference=outfit._tailorBody||(outfit._tailorBody=Body.build(pack,Object.assign({},Body.DEFAULT_RECIPE,outfit.recipe)));
             Outfit.tailorTorso(pack,built,reference,outfit.rest,out,frame,{source:Array.from({length:n},(_,i)=>outfit.tri[i*3]),hanging:i=>outfit.surface[i]===2||(outfit.hang&&outfit.hang[i]>=0),lift:GAP});
             for(let pass=0;pass<5;pass++)Outfit.collide(pack,built,out,0,n,GAP,frame,near);
@@ -2317,7 +2319,7 @@
     /** Where an outfit's files are: { dir, name }, or null. */
     function filesOf(key) {
         if (store.folders.has(key)) return store.folders.get(key);
-        if (typeof require !== 'function') return null;
+        if (typeof require !== 'function' || !(typeof process !== 'undefined' && process.versions?.node)) return null;
         const path = require('path');
         return { dir: path.join(Body.dataFolder(), 'outfits'), name: key };
     }
@@ -2334,6 +2336,7 @@
                 if (fs.existsSync(file)) {
                     outfit = decode(JSON.parse(fs.readFileSync(file, 'utf8')), fs.readFileSync(path.join(at.dir, at.name + '.bin')));
                     outfit.key = key;
+                    if(key==='carol')repairCarol(outfit);
                     outfit.pictureFile = path.join(at.dir, outfit.picture || at.name + '.jpg');
                 }
             }
@@ -2342,6 +2345,68 @@
         }
         store.outfits.set(key, outfit);
         return outfit;
+    }
+
+    /** Repair scan pinholes without capping the intended collar, cuffs or hems.
+     * UV vertices remain separate; their shared point anchors retain the original skin and paint. */
+    function repairCarol(outfit) {
+        if(outfit._repaired)return;outfit._repaired=true;
+        let repaired=0,removed=0,welded=0; const R=outfit.render,P=outfit.rest;
+        const seam=new Map();for(let v=0;v<outfit.count;v++){const key=[0,1,2].map(j=>Math.round(P[v*3+j]/.00001)).join(',');if(!seam.has(key))seam.set(key,v);}
+        for(let i=0;i<R.point.length;i++){const v=R.point[i],key=[0,1,2].map(j=>Math.round(P[v*3+j]/.00001)).join(','),to=seam.get(key);if(to!==v){R.point[i]=to;welded++;}}
+
+        for(const piece of outfit.parts){
+            const keep=[],faces=new Set();for(let i=0;i<piece.index.length;i+=3){const tri=Array.from(piece.index.subarray(i,i+3)),ids=tri.map(v=>R.point[v]),key=ids.slice().sort((a,b)=>a-b).join(',');if(new Set(ids).size<3||faces.has(key)){removed++;continue;}faces.add(key);keep.push(...tri);}piece.index=Uint32Array.from(keep);
+            const edges=new Map(),renderOf=new Map();
+            for(const v of piece.index)if(!renderOf.has(R.point[v]))renderOf.set(R.point[v],v);
+            for(let i=0;i<piece.index.length;i+=3)for(let j=0;j<3;j++){
+                const a=R.point[piece.index[i+j]],b=R.point[piece.index[i+(j+1)%3]],key=Math.min(a,b)+':'+Math.max(a,b);
+                if(!edges.has(key))edges.set(key,{a,b,n:0});edges.get(key).n++;
+            }
+            const adj=new Map();for(const e of edges.values())if(e.n===1){for(const [a,b]of [[e.a,e.b],[e.b,e.a]]){if(!adj.has(a))adj.set(a,[]);adj.get(a).push(b);}}
+            const seen=new Set(),extra=[];
+            for(const v of adj.keys()){
+                if(seen.has(v))continue;const component=[v];seen.add(v);
+                for(let i=0;i<component.length;i++)for(const u of adj.get(component[i]))if(!seen.has(u)){seen.add(u);component.push(u);}
+                const lo=[Infinity,Infinity,Infinity],hi=lo.map(()=>-Infinity);
+                for(const u of component)for(let j=0;j<3;j++){lo[j]=Math.min(lo[j],P[u*3+j]);hi[j]=Math.max(hi[j],P[u*3+j]);}
+                // At most 16 mm: never the neck, wrist, ankle or intentional coat opening.
+                if(component.length>12||hi.some((x,j)=>x-lo[j]>.016)||component.some(u=>adj.get(u).length!==2))continue;
+                const loop=[v];let prev=-1,cur=v;
+                for(let i=0;i<component.length-1;i++){const next=adj.get(cur).find(u=>u!==prev);prev=cur;cur=next;loop.push(cur);}
+                const first=edges.get(Math.min(loop[0],loop[1])+':'+Math.max(loop[0],loop[1]));if(first.a===loop[0])loop.reverse();
+                for(let i=1;i+1<loop.length;i++)extra.push(renderOf.get(loop[0]),renderOf.get(loop[i]),renderOf.get(loop[i+1]));repaired++;
+            }
+            if(extra.length)piece.index=Uint32Array.from([...piece.index,...extra]);
+        }
+        outfit.repair={pinholes:repaired,degenerateFaces:removed,weldedUVVertices:welded};
+    }
+
+    /** Reduce scan chatter in fitted panels while preserving seams and source tailoring. */
+    function smoothCarol(outfit,out,scale){
+        const neighbors=Array.from({length:outfit.count},()=>new Set()),R=outfit.render.point;
+        for(const p of outfit.parts)for(let i=0;i<p.index.length;i+=3){const t=[R[p.index[i]],R[p.index[i+1]],R[p.index[i+2]]];for(let j=0;j<3;j++){neighbors[t[j]].add(t[(j+1)%3]);neighbors[t[j]].add(t[(j+2)%3]);}}
+        const reference=outfit.rest,delta=Float32Array.from(out,(v,i)=>v-reference[i]*scale);
+        // Smooth deformation, rather than shrinking the source collar and painted piping.
+        for(let pass=0;pass<3;pass++){
+            const next=Float32Array.from(delta);
+            for(let v=0;v<neighbors.length;v++){const ring=neighbors[v];if(!ring.size)continue;
+                for(let j=0;j<3;j++){let sum=0;for(const u of ring)sum+=delta[u*3+j];const change=(sum/ring.size-delta[v*3+j])*.42;next[v*3+j]+=Math.max(-.0015*scale,Math.min(.0015*scale,change));}}
+            delta.set(next);
+        }
+        for(let i=0;i<out.length;i++)out[i]=reference[i]*scale+delta[i];
+        // Press the two ankle openings into continuous cuffs. Source scan chatter at an
+        // open boundary survives deformation smoothing because it is already in the rest mesh.
+        const edges=new Map();for(const p of outfit.parts)for(let i=0;i<p.index.length;i+=3)for(let k=0;k<3;k++){const a=R[p.index[i+k]],b=R[p.index[i+(k+1)%3]],key=Math.min(a,b)+':'+Math.max(a,b);if(!edges.has(key))edges.set(key,{a,b,n:0});edges.get(key).n++;}
+        const boundary=new Map();for(const e of edges.values())if(e.n===1)for(const [a,b]of [[e.a,e.b],[e.b,e.a]]){if(!boundary.has(a))boundary.set(a,[]);boundary.get(a).push(b);}
+        const seen=new Set();for(const first of boundary.keys()){if(seen.has(first))continue;const loop=[],pending=[first];while(pending.length){const a=pending.pop();if(seen.has(a))continue;seen.add(a);loop.push(a);for(const b of boundary.get(a)||[])if(!seen.has(b))pending.push(b);}
+            if(loop.length<6||loop.length>150||loop.some(a=>boundary.get(a).length!==2))continue;
+            const lo=[Infinity,Infinity,Infinity],hi=lo.map(()=>-Infinity);for(const a of loop)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],out[a*3+k]);hi[k]=Math.max(hi[k],out[a*3+k]);}
+            if(hi[1]>.35*scale||hi[0]-lo[0]>.23*scale||hi[2]-lo[2]>.28*scale||hi[1]-lo[1]>.09*scale)continue;
+            const y=loop.reduce((n,a)=>n+out[a*3+1],0)/loop.length;
+            for(const a of loop){const was=out[a*3+1];out[a*3+1]=y;for(const b of neighbors[a])if(!boundary.has(b))out[b*3+1]+=(y-was)*.28;}
+        }
+
     }
 
     /** Called (once per picture) when an outfit's picture has been decoded: the page builds again. */
@@ -2368,18 +2433,55 @@
     }
 
     /** Every listed outfit's picture decoded (a page's builder calls it while it opens). */
-    function preload(keys) { return Promise.all(keys.map(k => { const o = load(k); if (!o) return null; picture(o); return store.pending.get(o.key); })); }
+    const browserLoads = new Map();
+    async function browserOutfit(key, base) {
+        if (!browserLoads.has(key)) browserLoads.set(key, (async () => {
+            const read = async name => {
+                const response = await fetch(base + '/outfits/' + name);
+                if (!response.ok) throw new Error('Character outfit asset failed (' + response.status + '): ' + name);
+                return response;
+            };
+            const [json, bin] = await Promise.all([read(key + '.json').then(r => r.json()), read(key + '.bin').then(r => r.arrayBuffer())]);
+            const outfit = decode(json, new Uint8Array(bin)); outfit.key = key;
+            if (key === 'carol') repairCarol(outfit);
+            outfit.pictureURL = base + '/outfits/' + (outfit.picture || key + '.jpg');
+            store.outfits.set(key, outfit);
+            return outfit;
+        })());
+        try { return await browserLoads.get(key); }
+        catch (error) { browserLoads.delete(key); throw error; }
+    }
+    function preload(keys, base = Body.DATA_PATH) {
+        const browser = !(typeof process !== 'undefined' && process.versions?.node);
+        return Promise.all(keys.map(async key => {
+            let outfit = load(key);
+            if (!outfit && browser && BUILT_IN.includes(key)) outfit = await browserOutfit(key, base);
+            if (!outfit) return null;
+            picture(outfit);
+            return store.pending.get(outfit.key);
+        }));
+    }
 
     async function decodePicture(outfit) {
-        if (typeof createImageBitmap !== 'function' || typeof require !== 'function') return null;
+        if (typeof createImageBitmap !== 'function') return null;
         try {
-            const fs = require('fs');
-            const bytes = fs.readFileSync(outfit.pictureFile);
-            const bitmap = await createImageBitmap(new Blob([bytes], { type: /\.png$/i.test(outfit.pictureFile) ? 'image/png' : 'image/jpeg' }));
+            let blob;
+            if (outfit.pictureURL) {
+                const response = await fetch(outfit.pictureURL);
+                if (!response.ok) throw new Error('Character outfit picture failed (' + response.status + '): ' + outfit.pictureURL);
+                blob = await response.blob();
+            } else {
+                if (typeof require !== 'function') return null;
+                const bytes = require('fs').readFileSync(outfit.pictureFile);
+                blob = new Blob([bytes], { type: /\.png$/i.test(outfit.pictureFile) ? 'image/png' : 'image/jpeg' });
+            }
+            const bitmap = await createImageBitmap(blob);
             const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(bitmap.width, bitmap.height) : Object.assign(document.createElement('canvas'), { width: bitmap.width, height: bitmap.height });
             const ctx = canvas.getContext('2d');
             ctx.drawImage(bitmap, 0, 0);
-            return { width: bitmap.width, height: bitmap.height, data: new Uint8Array(ctx.getImageData(0, 0, bitmap.width, bitmap.height).data.buffer) };
+            const result = { width: bitmap.width, height: bitmap.height, data: new Uint8Array(ctx.getImageData(0, 0, bitmap.width, bitmap.height).data.buffer) };
+            bitmap.close?.();
+            return result;
         } catch (error) {
             if (typeof console !== 'undefined') console.warn('[RRCharacterOutfitTransfer] picture', outfit.pictureFile, error);
             return null;
@@ -2404,6 +2506,47 @@
         return Object.assign({}, pic, { name: base + '-' + h.toString(36) + '.png' });
     }
 
+    /** Clean fitted officer tailoring over the authored uniform: shoulder tabs and embroidered insignia. */
+    function captainDetails(pack,built,part,item,texture){
+        const Props=(root.RRCharacterProps||require('./CharacterProps.js')),O=(root.RRCharacterOutfit||require('./CharacterOutfit.js')),m=new Props.Mesh(),gold=new Props.ExactMesh();
+        const {add,sub,mul,norm}=Props.vec,s=built.height/1.7,navy=O.linear(item.color||'#173369'),trim=O.linear(item.trim||'#b3bccb'),badge=O.linear(item.color2||'#d4b66a');
+        const surface=O.projectedSurface([part],{cell:.025*s}),top=O.projectedSurface([part],{cell:.025*s,axes:[[1,0,0],[0,0,1],[0,1,0]]});
+        let badgePlane=null;const shoulderPlanes=[];const sample=(field,x,y)=>{const plane=field===surface&&badgePlane&&Math.abs(x-badgePlane.x)<badgePlane.w*.65&&Math.abs(y-badgePlane.y)<badgePlane.h*.65?badgePlane:field===top?shoulderPlanes.find(t=>Math.abs(x-t.x)<t.w*.65&&Math.abs(y-t.z)<t.h*.65):null;const h=field.sample(x,y,1)||plane?.hit;if(!h)return null;const ids=h.ids,w=h.bary,p=[0,0,0],weights=new Map();let n=[0,0,0];ids.forEach((v,j)=>{for(let k=0;k<3;k++){p[k]+=part.positions[v*3+k]*w[j];n[k]+=part.normals[v*3+k]*w[j];}for(let k=0;k<4;k++){const b=part.joints[v*4+k],a=part.weights[v*4+k]*w[j];weights.set(b,(weights.get(b)||0)+a);}});const skin=[...weights].sort((a,b)=>b[1]-a[1]).slice(0,4),sum=skin.reduce((v,a)=>v+a[1],0)||1;if(field===surface&&badgePlane&&Math.abs(x-badgePlane.x)<badgePlane.w*.65&&Math.abs(y-badgePlane.y)<badgePlane.h*.65){p[0]=x;p[1]=y;p[2]=badgePlane.z+badgePlane.dx*(x-badgePlane.x)+badgePlane.dy*(y-badgePlane.y);n=[-badgePlane.dx,-badgePlane.dy,1];}if(field===top){const t=shoulderPlanes.find(t=>Math.abs(x-t.x)<t.w*.65&&Math.abs(y-t.z)<t.h*.65);if(t){p[0]=x;p[2]=y;p[1]=t.y+t.dx*(x-t.x)+t.dz*(y-t.z);n=[-t.dx,1,-t.dz];}}return{p,n:norm(n),skin:{joints:Array.from({length:4},(_,k)=>skin[k]?.[0]||0),weights:Array.from({length:4},(_,k)=>(skin[k]?.[1]||0)/sum)}};};
+        const strip=(field,points,r,color)=>{const path=points.map(([x,y])=>sample(field,x,y));let run=[];const flush=()=>{if(run.length>1)gold.tube(run.map(h=>add(h.p,mul(h.n,.0013*s))),r,6,color,run[0].skin,false);run=[];};for(const h of path){if(!h){flush();continue;}if(run.length&&Math.hypot(...sub(h.p,run.at(-1).p))>.04*s)flush();run.push(h);}flush();};
+        for(const side of [-1,1]){
+            const arm=built.bones.find(b=>b.name===(side>0?'Left':'Right')+'Arm').head,center=arm[0]*.96,width=.078*s,depth=.105*s,rows=[];
+            const corners=[[-1,-1],[1,-1],[-1,1],[1,1]].map(([x,z])=>sample(top,center+x*width*.65,arm[2]+z*depth*.65));
+            if(corners.some(Boolean)){const fallback=corners.find(Boolean);for(let c=0;c<4;c++)corners[c]||=fallback;const y=corners.reduce((n,p)=>n+p.p[1],0)/4,dx=(corners[1].p[1]+corners[3].p[1]-corners[0].p[1]-corners[2].p[1])/(width*2.6),dz=(corners[2].p[1]+corners[3].p[1]-corners[0].p[1]-corners[1].p[1])/(depth*2.6);shoulderPlanes.push({x:center,z:arm[2],w:width,h:depth,y,dx:Math.max(-.8,Math.min(.8,dx)),dz:Math.max(-.8,Math.min(.8,dz)),hit:top.sample(center,arm[2],1)||top.sample(center-width*.25,arm[2],1)});
+            }
+            for(let j=0;j<=4;j++){const row=[];for(let k=0;k<=8;k++){const x=center+(k/8-.5)*width,z=arm[2]+(j/4-.5)*depth,h=sample(top,x,z);if(!h){row.push(-1);continue;}row.push(m.vertex(add(h.p,mul(h.n,.00065*s)),h.n,navy,h.skin));}rows.push(row);}
+            for(let j=0;j<4;j++)for(let k=0;k<8;k++){const [a,b,c,d]=[rows[j][k],rows[j][k+1],rows[j+1][k],rows[j+1][k+1]];if(Math.min(a,b,c,d)<0)continue;m.tri(a,c,b);m.tri(b,c,d);}
+            for(const z of [-1,1])strip(top,Array.from({length:17},(_,j)=>[center+(j/16-.5)*width,arm[2]+z*depth*.46]),.0015*s,trim);
+            for(let j=0;j<3;j++){const x=center+side*(width*.24-j*.013*s);strip(top,Array.from({length:9},(_,k)=>[x,arm[2]+(k/8-.5)*depth*.73]),.0022*s,badge);}
+        }
+        const hip=built.bones.find(b=>b.name==='Hips').head,neck=built.bones.find(b=>b.name==='Neck').head;
+        // Locate the authored gold crest before covering it with clean embroidery.
+        // A body-proportion guess can leave both the old crest and a second badge showing.
+        const crest=[0,0,0];let samples=0;
+        if(texture?.data&&texture.width>4)for(let i=0;i<part.index.length;i+=3){
+            const ids=[part.index[i],part.index[i+1],part.index[i+2]],center=[0,1,2].map(k=>ids.reduce((sum,v)=>sum+part.positions[v*3+k]/3,0));
+            if(center[1]<hip[1]+(neck[1]-hip[1])*.45||center[1]>neck[1]||Math.abs(center[0])>.24*s||center[2]<hip[2])continue;
+            for(const bary of [[1/3,1/3,1/3],[.6,.2,.2],[.2,.6,.2],[.2,.2,.6]]){
+                const u=ids.reduce((sum,v,k)=>sum+part.uvs[v*2]*bary[k],0),v=ids.reduce((sum,v,k)=>sum+part.uvs[v*2+1]*bary[k],0),x=Math.min(texture.width-1,Math.max(0,Math.floor(u*texture.width))),y=Math.min(texture.height-1,Math.max(0,Math.floor(v*texture.height))),at=(y*texture.width+x)*4,[r,g,b]=texture.data.subarray(at,at+3);
+                if(r>100&&g>90&&r>b*1.25&&g>b*1.15){for(let k=0;k<3;k++)crest[k]+=ids.reduce((sum,v,j)=>sum+part.positions[v*3+k]*bary[j],0);samples++;}
+            }
+        }
+        const cx=samples?crest[0]/samples:.090*s,cy=samples?crest[1]/samples:hip[1]+(neck[1]-hip[1])*.74,W=.075*s,H=.09*s,grid=[];
+        const corners=[[-1,-1],[1,-1],[-1,1],[1,1]].map(([x,y])=>sample(surface,cx+x*W*.62,cy+y*H*.62));
+        if(corners.some(Boolean)){const fallback=corners.find(Boolean);for(let c=0;c<4;c++)corners[c]||=fallback;const z=corners.reduce((n,p)=>n+p.p[2],0)/4,dx=(corners[1].p[2]+corners[3].p[2]-corners[0].p[2]-corners[2].p[2])/(W*2.48),dy=(corners[2].p[2]+corners[3].p[2]-corners[0].p[2]-corners[1].p[2])/(H*2.48);badgePlane={x:cx,y:cy,w:W,h:H,z,dx:Math.max(-.8,Math.min(.8,dx)),dy:Math.max(-.8,Math.min(.8,dy)),hit:surface.sample(cx,cy,1)||surface.sample(cx-W*.25,cy,1)};
+        }
+        for(let j=0;j<=12;j++){const row=[];for(let k=0;k<=10;k++){const x=cx+(k/10-.5)*W,y=cy+(j/12-.5)*H,h=sample(surface,x,y);row.push(h?m.vertex(add(h.p,mul(h.n,.00055*s)),h.n,navy,h.skin):-1);}grid.push(row);}
+        for(let j=0;j<12;j++)for(let k=0;k<10;k++){const [a,b,c,d]=[grid[j][k],grid[j][k+1],grid[j+1][k],grid[j+1][k+1]];if(Math.min(a,b,c,d)<0)continue;m.tri(a,b,c);m.tri(b,d,c);}
+        const shield=[[-.43,.42],[.43,.42],[.40,-.15],[0,-.47],[-.40,-.15],[-.43,.42]],outline=[];
+        for(let j=0;j+1<shield.length;j++)for(let k=0;k<8;k++){const t=k/8;outline.push([cx+(shield[j][0]*(1-t)+shield[j+1][0]*t)*W,cy+(shield[j][1]*(1-t)+shield[j+1][1]*t)*H]);}outline.push(outline[0]);strip(surface,outline,.0011*s,badge);
+        const center=sample(surface,cx,cy+.006*s);if(center){const c=gold.vertex(add(center.p,mul(center.n,.0016*s)),center.n,badge,center.skin),ids=[];for(let j=0;j<10;j++){const a=j/10*Math.PI*2,r=(j%2?.007:.016)*s,h=sample(surface,cx+Math.sin(a)*r,cy+.006*s+Math.cos(a)*r);ids.push(h?gold.vertex(add(h.p,mul(h.n,.0016*s)),h.n,badge,h.skin):c);}for(let j=0;j<10;j++)gold.tri(c,ids[(j+1)%10],ids[j]);}
+        return[m.part('Captain tailored shoulder tabs and badge',{roughness:.85,metalness:0,doubleSided:true}),gold.part('Captain embroidered insignia and rank',{roughness:.65,metalness:.18,doubleSided:true})];
+    }
+
     // ── wearing items ─────────────────────────────────────────────────────
     /**
      * Garment items taken from models, on a built body: `items` with their
@@ -2419,7 +2562,7 @@
             const piece = outfit.parts.find(p => p.id === def.part);
             if (!piece) continue;
             const fkey = 'transfer:fit:' + outfit.key;
-            const pts = frame[fkey] || (frame[fkey] = fit(pack, built, outfit, frame));
+            const fitted = frame[fkey] || (frame[fkey] = fit(pack, built, outfit, frame)),pts=frame.sourceRest?fairSourceEdges(outfit,piece,fitted,built.height/1.7):fitted;
             const R = outfit.render, n = R.point.length;
             const skin = pointSkin(pack, outfit);
             const texture = pictureFor(outfit, item);
@@ -2432,11 +2575,56 @@
                 roughness: def.roughness ?? outfit.roughness ?? 0.8, metalness: def.metalness ?? outfit.metalness ?? 0, doubleSided: true
             };
             if (hang && hang.some(x => x >= 0)) { part.hang = hang; part.keepShape = true; }
-            const lining = liningFor(pack, built, outfit, piece, pts, def.label, texture.name, lined);
+            const lining = outfit.key==='carol'||frame.fullLining?null:liningFor(pack, built, outfit, piece, pts, def.label, texture.name, lined);
             if (lining) out.push({ part: lining, texture, hidden: piece.hidden });
-            out.push({ part, texture, hidden: piece.hidden });
+            const maps=[];
+            if(outfit.key==='carol'){
+                for(const detail of captainDetails(pack,built,part,item,texture))out.push({part:detail,texture,hidden:piece.hidden});
+
+            }
+            if(BUILT_IN.includes(outfit.key)){
+                const Fabric=root.RRCharacterFabric||require('./CharacterFabric.js');
+                const lining=tailoredLining(part,R,frame.fullLining,built.height/1.7);
+                const finish=['jolt','max'].includes(outfit.key)?'brushed':def.slot==='feet'?'leather':part.metalness>.5?'brushed':outfit.key==='vay'?'satin':'suiting';
+                Fabric.applyTo(part,finish,maps,{normalScale:finish==='satin'?.25:.42,roughness:part.roughness});
+                Fabric.applyTo(lining,'poplin',maps,{normalScale:.18,roughness:.92});
+                out.push({part:lining,texture,textures:maps,hidden:piece.hidden});
+            }
+            out.push({ part, texture, textures:maps, hidden: piece.hidden });
         }
         return out;
+    }
+
+    /** Fair cut boundaries on the authored sets. The original mesh has serrated
+     * selection edges at its hems and joint openings; deformation smoothing cannot remove them. */
+    function fairSourceEdges(outfit,piece,points,scale){
+        const R=outfit.render.point,edges=new Map();for(let t=0;t<piece.index.length;t+=3)for(let k=0;k<3;k++){const a=R[piece.index[t+k]],b=R[piece.index[t+(k+1)%3]],key=Math.min(a,b)+':'+Math.max(a,b);if(!edges.has(key))edges.set(key,{a,b,n:0});edges.get(key).n++;}
+        const boundary=new Map();for(const e of edges.values())if(e.n===1)for(const [a,b]of [[e.a,e.b],[e.b,e.a]]){if(!boundary.has(a))boundary.set(a,[]);boundary.get(a).push(b);}
+        const P=Float32Array.from(points),list=[...boundary].filter(([,n])=>n.length===2),origin=Float32Array.from(P);
+        for(let pass=0;pass<16;pass++)for(const amount of [.48,-.50]){const next=Float32Array.from(P);for(const [v,[a,b]]of list)for(let k=0;k<3;k++)next[v*3+k]+=amount*((P[a*3+k]+P[b*3+k])/2-P[v*3+k]);P.set(next);}
+        const seen=new Set();for(const [first]of list){if(seen.has(first))continue;const loop=[],pending=[first];while(pending.length){const v=pending.pop();if(seen.has(v))continue;seen.add(v);loop.push(v);for(const q of boundary.get(v)||[])if(!seen.has(q))pending.push(q);}if(loop.length<6||loop.length>500||loop.some(v=>boundary.get(v).length!==2))continue;
+            const ys=loop.map(v=>P[v*3+1]),lo=Math.min(...ys),hi=Math.max(...ys),mean=ys.reduce((a,b)=>a+b,0)/ys.length;
+            if(mean<.32*scale&&hi-lo<.045*scale)for(const v of loop)P[v*3+1]=mean;
+        }
+        // Imported panel edges include deliberate seams and overlapping layers.
+        // Smoothing a small loose component must not pull it centimeters off its source.
+        for(const [v]of list){const d=Math.hypot(...[0,1,2].map(k=>P[v*3+k]-origin[v*3+k])),limit=.003*scale;if(d>limit)for(let k=0;k<3;k++)P[v*3+k]=origin[v*3+k]+(P[v*3+k]-origin[v*3+k])*limit/d;}
+        // Ease the first adjoining cloth row toward the finished edge instead of leaving a step.
+        const shift=new Map();for(const [v]of list)shift.set(v,[0,1,2].map(k=>P[v*3+k]-origin[v*3+k]));
+        const offsets=new Map();for(let t=0;t<piece.index.length;t+=3){const ids=[0,1,2].map(k=>R[piece.index[t+k]]);for(const v of ids)if(!boundary.has(v)){const near=ids.filter(q=>shift.has(q));if(near.length){if(!offsets.has(v))offsets.set(v,[]);offsets.get(v).push(...near);}}}
+        for(const [v,near]of offsets)for(let k=0;k<3;k++)P[v*3+k]+=near.reduce((s,q)=>s+shift.get(q)[k],0)/near.length*.40;
+        return P;
+    }
+
+    /** Imported cloth needs an inward copy of its own fitted surface. A body-shaped
+     * backing can lie in front of the jacket and its embroidery, especially at the shoulder. */
+    function tailoredLining(part,render,full,scale){
+        const I=part.index,R=render.point,edges=new Map(),neighbors=new Map();
+        if(!full)for(let i=0;i<I.length;i+=3)for(let k=0;k<3;k++){const a=R[I[i+k]],b=R[I[i+(k+1)%3]],key=Math.min(a,b)+':'+Math.max(a,b);if(!edges.has(key))edges.set(key,{a,b,n:0});edges.get(key).n++;for(const [x,y]of [[a,b],[b,a]]){if(!neighbors.has(x))neighbors.set(x,new Set());neighbors.get(x).add(y);}}
+        const take=new Set();if(!full){for(const e of edges.values())if(e.n===1){take.add(e.a);take.add(e.b);}for(let pass=0;pass<2;pass++)for(const a of [...take])for(const b of neighbors.get(a)||[])take.add(b);}
+        const index=[];for(let i=0;i<I.length;i+=3)if(full||[I[i],I[i+1],I[i+2]].some(v=>take.has(R[v])))index.push(I[i],I[i+2],I[i+1]);
+        const positions=Float32Array.from(part.positions,(x,i)=>x-part.normals[i]*.0011*scale),normals=Float32Array.from(part.normals,x=>-x);
+        return {...part,name:part.name+' lining',positions,normals,index:Uint32Array.from(index),colors:new Float32Array(positions.length).fill(.58),rrLining:true,doubleSided:false};
     }
 
     /** Fabric backing under covered panels shares the body's deformation and closes moving seams. */

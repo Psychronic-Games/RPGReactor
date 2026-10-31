@@ -128,8 +128,8 @@
         return normalize(next);
     }
 
-    const HAIR_COVERS = new Set(['helm', 'greathelm', 'visorhelm', 'powerhelm', 'hood', 'hoodie', 'poncho', 'headWrap', 'techSmock']);
-    const FACE_COVERS = new Set(['greathelm', 'visorhelm', 'powerhelm']);
+    const HAIR_COVERS = Wardrobe.HAIR_COVERS;
+    const FACE_COVERS = Wardrobe.FACE_COVERS;
 
     function textureKey(name, settings) { return name + ':' + JSON.stringify(settings); }
 
@@ -326,7 +326,7 @@
         }
         const L = Props.landmarks(pack, built);
         const coveredHands = r.outfit.some(item => Wardrobe.BY_ID.get(item.id)?.slot === 'hands' && item.id !== 'fingerlessGloves');
-        const props = Props.build(pack, built, coveredHands ? r.props.filter(item => item.id !== 'nails' && item.id !== 'claws') : r.props, hair, { outfitParts: outfit.parts });
+        const props = Props.build(pack, built, coveredHands ? r.props.filter(item => item.id !== 'nails' && item.id !== 'claws') : r.props, hair, { outfitParts: outfit.parts, images:cache.wardrobe?.emblemPictures });
         // Furred features grow the body's coat when it has one (its length and color), a coat of their own when not.
         const furred = bodyHair.fur > 0.05;
         const features = Species.build(pack, built, graftKind ? headless(r.features) : r.features, L, { body, hooded: covers.some(id => HAIR_COVERS.has(id)), coat: { length: furred ? bodyHair.length || 1 : 1, color: furred ? bodyHair.color : null, budget } });
@@ -478,7 +478,10 @@
         const before = outfit.caps.map(c => Float32Array.from(c.positions));
         const done = O.clipUnderCap(built, outfit.caps, hairParts);
         if (!done.stretched) return;
-        const byEntry = new Map(outfit.caps.map((c, k) => [c.entry, k])), normals = outfit.caps.map(c => O.triangleNormals(c.positions, c.index));
+        const byEntry = new Map(outfit.caps.flatMap((c, k) => c.entry == null ? [] : [[c.entry, k]])), normals = outfit.caps.map(c => O.triangleNormals(c.positions, c.index));
+        // Formed caps already share their arrays with the output part; unlike atlas
+        // cloth they need no reference remap, but their eased normals must follow.
+        outfit.caps.forEach((cap,k)=>{if(cap.part)cap.part.normals=normals[k];});
         for (const p of outfit.parts) {
             const refs = p.fabricRefs || p.sewnRefs;
             if (!refs) continue;

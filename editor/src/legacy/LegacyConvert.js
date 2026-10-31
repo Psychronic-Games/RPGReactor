@@ -273,9 +273,11 @@
     /** MZ character-sheet name for a 2003 charset: '!' so it stands on the tile without the 6 px lift, and no '$'. */
     function charsetName(name) {
         if (!name) return '';
-        let n = name.replace(/^\$/, '');
+        const parts = stripExt(name).split('/');
+        let n = parts.pop().replace(/^\$/, '');
         if (!n.startsWith('!')) n = '!' + n;
-        return n;
+        parts.push(n);
+        return parts.join('/');
     }
 
     const DIRECTION = [8, 6, 2, 4]; // 2003 up, right, down, left → MZ
@@ -284,7 +286,7 @@
 
     // Only a media extension comes off: 2000/2003 names carry none, and names like "Buddler 1.1" or
     // "lazar NEU default o.ô" keep their dots.
-    function stripExt(name) { return String(name || '').replace(/\.(png|bmp|xyz|jpe?g|gif|wav|ogg|opus|mp3|midi?|wma|flac|m4a|avi|mpe?g|mp4|wmv|webm|ogv)$/i, ''); }
+    function stripExt(name) { return String(name || '').replace(/\\/g, '/').replace(/\.(png|bmp|xyz|jpe?g|gif|wav|ogg|opus|mp3|midi?|wma|flac|m4a|avi|mpe?g|mp4|wmv|webm|ogv)$/i, ''); }
 
     function audio(m) {
         if (!m || !m.name || m.name === '(OFF)') return { name: '', pan: 0, pitch: 100, volume: 90 };
@@ -329,18 +331,19 @@
         const anim = pg.animation_type ?? 0;
         const moveType = { 0: 0, 1: 1, 4: 2, 6: 3 }[pg.move_type ?? 0] ?? 0;
         if ([2, 3, 5].includes(pg.move_type)) notes.moveType = (notes.moveType || 0) + 1;
-        // 2003's second timer runs on the one timer the runtime keeps (LegacyCommands' 10230), so its condition reads that.
-        if (flags & 0x40) notes.timerCondition = (notes.timerCondition || 0) + 1;
         return {
             conditions: {
                 actorId: c.actor_id || 1, actorValid: !!(flags & 0x10), itemId: c.item_id || 1, itemValid: !!(flags & 0x08),
                 selfSwitchCh: 'A', selfSwitchValid: false, switch1Id: c.switch_a_id || 1, switch1Valid: !!(flags & 0x01),
                 switch2Id: c.switch_b_id || 1, switch2Valid: !!(flags & 0x02), variableId: c.variable_id || 1, variableValid: !!(flags & 0x04),
                 variableValue: c.variable_value || 0,
+                // LCF has one item table, including equipment; its page condition includes worn items.
+                ...(flags & 0x08 ? { rrLegacyItem: true } : {}),
                 // 2003 compares a variable six ways (0 ==, 1 >=, 2 <=, 3 >, 4 <, 5 !=); MZ only >=, so others are kept for the runtime
                 ...((flags & 0x04) && (c.compare_operator ?? 1) !== 1 ? { rrVariableOp: Math.max(0, Math.min(5, c.compare_operator)) } : {}),
                 // "Timer at N seconds or less": MZ pages have no such condition, so the runtime reads rrTimerSec
-                ...(flags & 0x60 ? { rrTimerSec: Math.max(0, Math.min(flags & 0x20 ? c.timer_sec ?? 0 : Infinity, flags & 0x40 ? c.timer2_sec ?? 0 : Infinity)) } : {})
+                ...(flags & 0x20 ? { rrTimerSec: Math.max(0, c.timer_sec ?? 0) } : {}),
+                ...(flags & 0x40 ? { rrTimer2Sec: Math.max(0, c.timer2_sec ?? 0) } : {})
             },
             directionFix: anim === 2 || anim === 3 || anim === 4,
             // no charset name: the page shows upper-layer tile `character_index` (EasyRPG's HasTileSprite)

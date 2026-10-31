@@ -427,7 +427,7 @@
     if (Catalog) {
         K.icons(Catalog);
         Catalog.category({ id: 'bows', label: 'Bows & Crossbows', order: 47, parent: 'weapons' });
-        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'bow-' + id, category, label, icon: FAMILY[id].icon, kind: 'bow', keywords: 'weapon ranged bow archery ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
+        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'bow-' + id, category:category==='scifi'?'bows':category, label, icon: FAMILY[id].icon, kind: 'bow', keywords: (category==='scifi'?'sci-fi energy science fiction ':'')+'weapon ranged bow archery ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
         Catalog.ui('bow', K.page({
             placeholder: 'Bow', PRESETS, normalize, random, keep: ['wood', 'metal', 'wrapColor', 'string', 'glow'],
             shape(r) {

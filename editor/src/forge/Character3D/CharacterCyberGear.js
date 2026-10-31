@@ -434,6 +434,7 @@
                 part(name, extra) {
                     const p = super.part(name, extra);
                     p.uvs = Float32Array.from(this.uv);
+                    let mapped=false;for(let t=0;t<p.index.length;t+=3){const [a,b,c]=Array.from(p.index.subarray(t,t+3),v=>v*2);if(Math.abs((p.uvs[b]-p.uvs[a])*(p.uvs[c+1]-p.uvs[a+1])-(p.uvs[c]-p.uvs[a])*(p.uvs[b+1]-p.uvs[a+1]))>1e-12){mapped=true;break;}}if(!mapped)delete p.normalTexture;
                     // A skin follower with no skin under it stays put.
                     for (let i = 0; i < this.fm.length; i++) if (this.fm[i] === SKIN && this.fs[i] < 0) this.fm[i] = RIGID;
                     if (this.fm.some(v => v)) p.faceFollow = { mode: Uint8Array.from(this.fm), source: Int32Array.from(this.fs) };
@@ -921,10 +922,11 @@
             const fr = F.frame(baseR, X, Y, 0), top = liftAt(X, Y) + under + regionLift(X, Y) + thick + (sp.relief ? sp.relief(X, Y, 1) : 0) + more;
             return { p: add(fr.p, mul(fr.n, top)), n: fr.n, x: fr.x, y: fr.y, mode: modeAt(X, Y), src: F.srcAt(X, Y), X, Y };
         };
-        const on = (spot, finish, fn) => { const keep = Object.assign({}, mesh.state); mesh.state.uv = swatchUV(finish); mesh.state.mode = spot.mode; mesh.state.src = spot.src; fn(mesh); mesh.state = keep; };
-        if (sp.hardware) sp.hardware(Object.assign({}, C, { P, at, on, baseR, uv, bbox, base, thick, under, liftAt, modeAt, region }));
+        const hardware=newMesh();const on = (spot, finish, fn) => { const keep = Object.assign({}, hardware.state); hardware.state.uv = swatchUV(finish); hardware.state.mode = spot.mode; hardware.state.src = spot.src; fn(hardware); hardware.state = keep; };
+        if (sp.hardware) sp.hardware(Object.assign({}, C, { mesh:hardware,P, at, on, baseR, uv, bbox, base, thick, under, liftAt, modeAt, region }));
         mesh.computeNormals();
         const extras = [{ mesh, extra: platingExtra(sp.name, pics, pal, o) }];
+        if(!hardware.empty){hardware.computeNormals();const extra=platingExtra(sp.name+' hardware',pics,pal,o);delete extra.normalTexture;extras.push({mesh:hardware,extra});}
         // An underlayer is a single open sheet (walls: false) welded under the plates: the piece shows from both
         // sides, as the Prop Builder shows it, and no part of it reads as a closed shell without an inside.
         if (under) extras[0].extra.doubleSided = true;
@@ -1293,7 +1295,8 @@
                     // Straps over and under the ears, a buckle where each meets the mask.
                     const front = Math.min(1.25, side / F.Rref + 0.12);
                     for (const [lo, hi] of [[E - 0.7 * s, E + 0.9 * s], [Mo - 0.35 * s, Mo + 0.15 * s]]) {
-                        strap(mesh, L, t => F.worldY(mix(lo, hi, smooth(0, 0.45, t))), front, 0.011, 0.0018, style === 'chrome' ? scaleRgb(pal.plate, 0.9) : [0.05, 0.05, 0.05], head);
+                        const band=strap(mesh, L, t => F.worldY(mix(lo, hi, smooth(0, 0.45, t))), front, 0.011, 0.0018, style === 'chrome' ? scaleRgb(pal.plate, 0.9) : [0.05, 0.05, 0.05], head);
+                        for(const [sd,end]of [[1,band[0]],[-1,band.at(-1)]]){const anchor=K.at(sd*(side-.003),lo);mesh.with('rubber',q=>q.tube([add(anchor.p,mul(anchor.n,.001)),lerp(anchor.p,end,.5),end],.0045,10,rubber,head,true));}
                     }
                 }
             };
@@ -1631,7 +1634,7 @@
 
     /** Pictures for a piece that is all hardware: just the swatches. */
     function hardwarePics(o, pal, textures) {
-        return bake('hw|' + inner(o.style) + '|' + pal.s.plate, 64, { x0: 0, y1: 0, span: 1 }, (X, Y, out) => { out.col = pal.plate; out.rough = pal.s.rough; out.metal = pal.s.metal; }, pal.s, textures);
+        return bake('hw|' + inner(o.style) + '|' + pal.s.plate, 256, { x0: 0, y1: 0, span: 1 }, (X, Y, out) => { out.col = pal.plate; out.rough = pal.s.rough; out.metal = pal.s.metal; }, pal.s, textures);
     }
     /** A grid surface: `at(u, v)` → point, rows × cols, double-sided parts take either side. */
     function sheet(m, rows, cols, at, rgb, skin, uvOf) {
@@ -1815,7 +1818,7 @@
                             const c0 = add(add(spot.p, mul(spot.x, dx * s * p.sd)), mul(spot.y, dy * s)), c1 = add(c0, mul(n, l)), rr = r * s;
                             K.on(spot, 'dark', q => cylinder(q, add(c0, mul(n, -0.002)), c1, rr, Math.max(12, Math.round(rr * 2000)), hw(pal, 0.55), head, rr * 0.92));
                             K.on(spot, style === 'chrome' ? 'chrome' : 'steel', q => ring(q, c1, n, rr * 0.93, Math.max(0.0007, rr * 0.08), hw(pal, 1.15), head, 20, 5));
-                            K.on(spot, 'gloss', q => lensDome(q, add(c1, mul(n, -0.0008)), n, rr * 0.86, rr * 0.25, style === 'military' ? [0.05, 0.09, 0.05] : [0.02, 0.025, 0.035], head, 18));
+                            K.on(spot, 'gloss', q => lensDome(q, add(c1, mul(n, .0010)), n, rr * 0.86, rr * 0.25, style === 'military' ? linear('#4b806c') : linear('#396f8b'), head, 32));
                             K.on(spot, 'glow', q => lensDome(q, add(c1, mul(n, rr * 0.2 - 0.0006)), n, rr * 0.3, Math.max(rr * 0.12, 0.0009), pal.glow, head, 10));
                         }
                     }
@@ -1866,11 +1869,11 @@
         mesh.with(style === 'chrome' ? 'chrome' : 'dark', q => cylinder(q, add(unit, mul(ax, 0.004)), add(unit, mul(ax, 0.009)), 0.009, 18, hw(pal, 0.8), head));
         mesh.with('glow', q => ring(q, add(unit, mul(ax, 0.0092)), ax, 0.0065, 0.0008, pal.glow, head, 18, 4));
         // The arm: forward along the temple, then in front of the eye.
-        const lensC = add(E.center, [sd * 0.008, 0.002, E.radius * 1.05 + 0.016]);
+        const lensC = add(E.center, [0, .001, E.radius*.70+.008]);
         const temple = aroundHead(L, E.center[1] + 0.012, sd * 1.15, 0.005);
         // The arm leaves the unit at a hinge boss on its face and runs in one smooth curve to the lens frame's outer edge.
-        const n = norm([sd * -0.35, 0, 1]), w = E.radius * 1.5, h = E.radius * 1.15;
-        const fa0 = norm(sub([sd, 0.25, 0], mul(n, dot([sd, 0.25, 0], n)))), lensEdge = add(lensC, mul(fa0, w + 0.0012));
+        const n = [0,0,1], w = E.radius * 1.5, h = E.radius * 1.15;
+        const fa0 = norm(sub([sd, 0, 0], mul(n, dot([sd, 0, 0], n)))), lensEdge = add(lensC, mul(fa0, w + 0.0012));
         const hinge = add(unit, add(mul(ax, 0.0075), [0, 0.012, 0.008]));
         mesh.with('dark', q => cylinder(q, add(hinge, mul(ax, -0.004)), add(hinge, mul(ax, 0.0035)), 0.0042, 14, hw(pal, 0.7), head));
         const via = [hinge, aroundHead(L, (hinge[1] + E.center[1] + 0.012) / 2, sd * 1.4, 0.011), aroundHead(L, E.center[1] + 0.012, sd * 1.15, 0.007), lensEdge];
@@ -1881,9 +1884,10 @@
         // A military unit's whip antenna stands from the unit's top, not loose at the temple.
         const top = add(unit, [0, 0.026, -0.004]);
         if (style === 'military') mesh.with('dark', q => cylinder(q, add(top, [0, -0.004, 0]), add(top, [0, 0.03, -0.01]), 0.0009, 6, [0.08, 0.08, 0.08], head, 0.0004));
-        lensPlate(lens, lensC, n, [sd, 0.25, 0], w, h, 0.0008, [1, 1, 1], head, 3, 28, 6);
-        const lp = bakeLens(designKey('scouterLens', o, F), 192, 160, (u, v, out) => { out.tint = scaleRgb(pal.glow, style === 'chrome' ? 0.35 : 0.6); out.glow = Math.max(readout('scouter', u * 1.3, 1 - v, 1.3, 5, style), (1 - smooth(0, 0.05, Math.min(u, 1 - u, v, 1 - v))) * 0.6); }, L.textures);
-        const fa = norm(sub([sd, 0.25, 0], mul(n, dot([sd, 0.25, 0], n)))), fb = cross(n, fa), edge = Array.from({ length: 33 }, (_, j) => { const a = j / 32 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), kk = Math.pow(Math.pow(Math.abs(ca), 6) + Math.pow(Math.abs(sa), 6), -1 / 6); return add(lensC, add(mul(fa, ca * kk * (w + 0.0008)), mul(fb, sa * kk * (h + 0.0008)))); });
+        lensPlate(lens, lensC, n, [sd, 0, 0], w, h, 0.0008, [1, 1, 1], head, 3, 28, 6);
+        const CP=root.RRContainerPaint||(typeof require==='function'?require('../Props/ContainerPaint.js'):null),text=CP.layout(o.displayText||'POWER 9000');
+        const lp = bakeLens(designKey('scouterLens', o, F, o.displayText||'POWER 9000'), 192, 160, (u, v, out) => { out.tint = scaleRgb(pal.glow, style === 'chrome' ? 0.35 : 0.6); out.glow = Math.max(readout('scouter', u * 1.3, 1 - v, 1.3, 5, style), (1 - smooth(0, 0.05, Math.min(u, 1 - u, v, 1 - v))) * 0.6);out.glow=Math.max(out.glow*.15,CP.coverage(text,(u-.10)*((text.width+1)/.8),(v-.65)*22,.86,false,0,.10)); }, L.textures);
+        const fa = norm(sub([sd, 0, 0], mul(n, dot([sd, 0, 0], n)))), fb = cross(n, fa), edge = Array.from({ length: 33 }, (_, j) => { const a = j / 32 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), kk = Math.pow(Math.pow(Math.abs(ca), 6) + Math.pow(Math.abs(sa), 6), -1 / 6); return add(lensC, add(mul(fa, ca * kk * (w + 0.0008)), mul(fb, sa * kk * (h + 0.0008)))); });
         mesh.with(style === 'chrome' ? 'chrome' : 'dark', q => q.tube(edge, 0.0011, 6, hw(pal, 0.9), head, false));
         void fwd; void s;
         lens.computeNormals(); mesh.computeNormals();
@@ -1951,6 +1955,7 @@
         mesh.with(style === 'military' ? 'rubber' : 'paint', q => q.loft(band.length, i => { const p = band[i], d = norm(sub(band[Math.min(band.length - 1, i + 1)], band[Math.max(0, i - 1)])), out = norm([p[0] - cx, 0, p[2] - cz]); return { center: p, x: norm(cross(out, d)), y: out, rx: 0.0065, ry: 0.0016 }; }, 8, style === 'military' ? [0.06, 0.06, 0.06] : rimCol, head, false));
         for (const u of [0, 1]) {
             const p = at(u, 0.02), out = norm([p[0] - cx, 0, p[2] - cz]);
+            const angle=u===0?-th:th,anchor=aroundHead(L,yb,angle,.003);mesh.with(style==='chrome'?'chrome':'paint',q=>q.tube([anchor,lerp(anchor,p,.5),p],.0045,12,rimCol,head,true));
             mesh.with('dark', q => cylinder(q, add(p, mul(out, -0.004)), add(p, mul(out, 0.006)), 0.0075, 18, hw(pal, 0.6), head));
             mesh.with('glow', q => ring(q, add(p, mul(out, 0.0061)), out, 0.005, 0.0007, pal.glow, head, 16, 4));
         }
@@ -2278,7 +2283,7 @@
         cyber('faceShield', 'Face shield', 'shield', 'Cyber masks', faceShield, { defaults: { style: 'sleek' } }),
         // HUD eyewear
         cyber('hudMonocle', 'HUD monocle', 'eyes', 'HUD eyewear', hudMonocle, { defaults: { side: 'right', style: 'sleek' } }),
-        cyber('earScouter', 'Ear scouter', 'eyes', 'HUD eyewear', earScouter, { defaults: { side: 'left', style: 'military' } }),
+        cyber('earScouter', 'Ear scouter', 'eyes', 'HUD eyewear', earScouter, { defaults: { side: 'left', style: 'military',displayText:'POWER 9000',animate:true } }),
         cyber('arGlasses', 'AR glasses', 'eyes', 'HUD eyewear', arGlasses, { defaults: { style: 'sleek' } }),
         cyber('tacGoggles', 'Tactical goggles', 'eyes', 'HUD eyewear', tacGoggles, { defaults: { style: 'military' } }),
         cyber('haloProjector', 'Halo projector', 'hat', 'HUD eyewear', haloProjector, { slots: ['hat', 'halo'], defaults: { style: 'neon' } }),

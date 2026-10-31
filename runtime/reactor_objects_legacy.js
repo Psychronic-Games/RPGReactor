@@ -58,6 +58,18 @@
         return true;
     };
 
+    // The old engine changes these independently. A combined MZ Change Images command would
+    // restore the other image from the database, discarding an earlier event's costume/portrait.
+    Game_Interpreter.prototype.rrChangeActorCharacter = function(actorId, name, index) {
+        const actor = $gameActors.actor(actorId);
+        if (actor) { actor.setCharacterImage(name, index); $gamePlayer.refresh(); }
+    };
+
+    Game_Interpreter.prototype.rrChangeActorFace = function(actorId, name, index) {
+        const actor = $gameActors.actor(actorId);
+        if (actor) actor.setFaceImage(name, index);
+    };
+
     // RPG Maker 2000/2003 variable arithmetic (System.json rrLegacyVariableLimit, 999999 or 9999999, which the
     // importer sets): whole numbers, division truncated toward zero, a division by zero leaves the variable as it
     // was and a remainder by zero is 0, every result clamped to the limit. A game that divides by a stat still 0

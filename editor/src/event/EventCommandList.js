@@ -57,8 +57,8 @@ const SIMPLE_COMMAND_EDITORS = {
     211: ['changeTransparencyEditor'],
     212: ['showAnimationEditor'],
     216: ['toggleCommandEditor', { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' }],
-    221: ['fadeScreenEditor'],
-    222: ['fadeScreenEditor'],
+    221: ['fadeScreenEditor', { code: 221 }],
+    222: ['fadeScreenEditor', { code: 222 }],
     223: ['tintScreenEditor'],
     224: ['flashScreenEditor'],
     225: ['shakeScreenEditor'],
@@ -2965,8 +2965,9 @@ class EventCommandList {
     /** At the pointer, kept inside the window: a row near the bottom still reaches Paste and Delete. */
     static keepMenuOnScreen(menu, x, y) {
         const w = menu.offsetWidth, h = menu.offsetHeight;
-        menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - w - 4))}px`;
-        menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - h - 4))}px`;
+        const view = menu.ownerDocument?.defaultView || window;
+        menu.style.left = `${Math.max(4, Math.min(x, view.innerWidth - w - 4))}px`;
+        menu.style.top = `${Math.max(4, Math.min(y, view.innerHeight - h - 4))}px`;
     }
 
     /**

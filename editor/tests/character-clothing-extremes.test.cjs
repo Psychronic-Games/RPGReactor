@@ -69,7 +69,7 @@ test('furry animal gear suppresses covered strands while retaining exposed fur a
 });
 
 test('fitted cape faces clear the actual cat and horse shoulders between their vertices',()=>{
- const T=require('three');
+ const T=require('./helpers/three.cjs');
  const heightAt=(part,x,z,y)=>{const ray=new T.Ray(new T.Vector3(x,y,z),new T.Vector3(0,-1,0)),hit=new T.Vector3(),points=[new T.Vector3(),new T.Vector3(),new T.Vector3()];let top=-Infinity;
   for(let t=0;t<part.index.length;t+=3){for(let k=0;k<3;k++)points[k].fromArray(part.positions,part.index[t+k]*3);if(ray.intersectTriangle(...points,false,hit))top=Math.max(top,hit.y);}return top;};
  for(const kind of ['cat','horse']){

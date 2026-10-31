@@ -1,20 +1,20 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const THREE=global.THREE=require('three'),F=require('../src/forge/Props/FurnitureProp.js'),M=require('../src/forge/Props/PropModel.js'),Catalog=require('../src/forge/Props/PropCatalog.js'),C=require('../src/forge/Props/ContainerProp.js');
+const THREE=global.THREE=require('./helpers/three.cjs'),F=require('../src/forge/Props/FurnitureProp.js'),M=require('../src/forge/Props/PropModel.js'),Catalog=require('../src/forge/Props/PropCatalog.js'),C=require('../src/forge/Props/ContainerProp.js');
 const Optimizer=require('../src/utils/GlbOptimizer.js'),{PNG}=require('pngjs');
 const encode=t=>{const p=new PNG({width:t.width,height:t.height});p.data=Buffer.from(t.data);return PNG.sync.write(p);};
 function builder(){const context={RRPropModel:M,RRPropCatalog:Catalog,THREE,sessionStorage:{getItem:()=>null},window:{},rrEscapeHtml:s=>String(s),console};vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/forge/Props/PropBuilder.js'),'utf8')+'\nglobalThis.Builder=PropBuilder;',context);return new context.Builder();}
-test('all sixteen furniture types register, normalize, build at meter dimensions and stand on the floor',()=>{
+test('all furniture types register, normalize, build at meter dimensions and stand on the floor',()=>{
  for(const [id,label]of F.FORMS){const recipe=F.fromPreset(id),type=Catalog.typeOf(recipe);assert.equal(type.label,label);assert.equal(M.kindOf(recipe).id,'furniture');
   for(const style of ['modern','rustic','scifi']){
-   const r=M.build({...recipe,style},{},{textureSize:256});let low=Infinity,triangles=0;
+   const r=M.build({...recipe,style,animateScreen:false},{},{textureSize:256});let low=Infinity,triangles=0;
    for(const p of r.parts){triangles+=p.index.length/3;const n=p.positions.length/3;assert.equal(p.normals.length,p.positions.length);assert.equal(p.uvs.length,n*2);assert.equal(p.joints.length,n*4);
     for(const key of ['positions','normals','uvs','weights'])assert.ok(p[key].every(Number.isFinite),id+' '+key);
     assert.ok(p.index.every(i=>i<n),id+' indices');for(let i=1;i<p.positions.length;i+=3)low=Math.min(low,p.positions[i]);
     for(let v=0;v<n;v++)assert.ok(Math.abs(p.weights[v*4]+p.weights[v*4+1]+p.weights[v*4+2]+p.weights[v*4+3]-1)<1e-6,id+' weights');
     for(const key of ['texture','normalTexture','emissiveTexture'])if(p[key])assert.ok(r.textures[p[key]],id+' '+key);
    }
-   assert.ok(Math.abs(low)<1e-6,id+' floor');assert.ok(triangles<180000,id+' budget '+triangles);assert.equal(r.bones.length,1);assert.equal(r.clips.length,0);
+   assert.ok(Math.abs(low)<1e-6,id+' floor');assert.ok(triangles<180000,id+' budget '+triangles);assert.equal(r.bones.length,id==='fabricator'?8:1);assert.equal(r.clips.length,id==='fabricator'?1:0);
   }
  }
  assert.ok(Catalog.grouped('couch').some(g=>g.types.some(t=>t.id==='furniture-sofa')));

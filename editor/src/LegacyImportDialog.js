@@ -292,8 +292,10 @@
         const cancelButton = button('rr-legacy-import-cancel', tt('Cancel'));
         const openButton = button('rr-legacy-import-open', tt('Open project'), 'rr-button-primary');
         openButton.style.display = 'none';
+        const reportButton = button('rr-legacy-import-report', tt('Import Report'));
+        reportButton.style.display = 'none';
         const importButton = button('rr-legacy-import-run', tt('Import'), 'rr-button-primary');
-        footer.append(cancelButton, openButton, importButton);
+        footer.append(cancelButton, reportButton, openButton, importButton);
         modal.append(header, body, progressPanel, footer);
         overlay.appendChild(modal);
 
@@ -559,8 +561,13 @@
                             importButton.style.display = 'none';
                             if (msg.success) {
                                 clearInterval(clock); tick();
-                                setProgress(1, tt('Import complete.'), 'done');
+                                const summary = msg.summary || {};
+                                const needsReview = (summary.missingFiles || []).length || (summary.missingMapReferences || []).length
+                                    || ['images', 'movies', 'music'].some(kind => (summary[kind]?.failed || []).length)
+                                    || ['rubyScript', 'moveRouteScript', 'rubyCondition', 'rubyOperand', 'rubyFormula'].some(kind => summary.approximations?.[kind] > 0);
+                                setProgress(1, tt(needsReview ? 'Import complete. Review the import report.' : 'Import complete.'), 'done');
                                 setLabel(cancelButton, 'Close');
+                                reportButton.style.display = '';
                                 openButton.style.display = '';
                                 openButton.focus();
                             } else failed(msg.error);
@@ -579,6 +586,7 @@
                 finish(null);
             };
             const handleKeyDown = event => {
+                if (document.getElementById('rr-legacy-report-dialog')) return;
                 if (event.key === 'Escape' && window.RRContextMenu && window.RRContextMenu.isOpen()) return;   // the menu closes first
                 if (event.key === 'Escape') { event.preventDefault(); close(); }
                 else if (event.key === 'Enter' && event.target === nameInput) { event.preventDefault(); start(); }
@@ -588,6 +596,7 @@
             cancelButton.addEventListener('click', close);
             importButton.addEventListener('click', start);
             openButton.addEventListener('click', () => { const d = destination; finish(d); if (openProject) openProject(d); });
+            reportButton.addEventListener('click', () => root.RRLegacyReportDialog?.show(destination));
             document.addEventListener('keydown', handleKeyDown, true);
             document.body.appendChild(overlay);
             root.RRKeyboardNavigation?.modal(overlay, { container: () => modal });

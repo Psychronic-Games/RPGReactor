@@ -108,21 +108,22 @@ class SwitchVariablePicker {
         if (SwitchVariablePicker.dialogOf(opener)) return;
         const field = opener.getBoundingClientRect();
         if (!field.width || !field.height) return;
+        const view = this.modal.ownerDocument?.defaultView || window;
         // The panel or column around the field: its widest ancestor that is still a side of the window, not the page.
         let side = field;
         for (let node = opener.parentElement; node && node !== document.body; node = node.parentElement) {
             const rect = node.getBoundingClientRect();
             if (!rect.width || !rect.height) continue;
-            if (rect.width > window.innerWidth * 0.45) break;
+            if (rect.width > view.innerWidth * 0.45) break;
             side = rect;
         }
         const box = container.getBoundingClientRect(), gap = 12, edge = 16;
         const fitsLeft = side.left - gap - box.width >= edge;
-        const fitsRight = side.right + gap + box.width <= window.innerWidth - edge;
+        const fitsRight = side.right + gap + box.width <= view.innerWidth - edge;
         if (!fitsLeft && !fitsRight) return;
-        const onLeft = fitsLeft && (!fitsRight || side.left >= window.innerWidth - side.right);
+        const onLeft = fitsLeft && (!fitsRight || side.left >= view.innerWidth - side.right);
         const left = onLeft ? side.left - gap - box.width : side.right + gap;
-        const top = Math.max(edge, Math.min(window.innerHeight - box.height - edge, field.top + field.height / 2 - box.height / 2));
+        const top = Math.max(edge, Math.min(view.innerHeight - box.height - edge, field.top + field.height / 2 - box.height / 2));
         container.style.position = 'absolute';
         container.style.left = `${Math.round(left)}px`;
         container.style.top = `${Math.round(top)}px`;

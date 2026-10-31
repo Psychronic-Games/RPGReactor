@@ -698,8 +698,9 @@ class DatabaseTroopEditor {
         }
         document.body.appendChild(menu);
         const rect = menu.getBoundingClientRect();
-        menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - rect.width - 4))}px`;
-        menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - rect.height - 4))}px`;
+        const view = menu.ownerDocument?.defaultView || window;
+        menu.style.left = `${Math.max(4, Math.min(x, view.innerWidth - rect.width - 4))}px`;
+        menu.style.top = `${Math.max(4, Math.min(y, view.innerHeight - rect.height - 4))}px`;
         const closeMenu = event => {
             if (menu.contains(event.target)) return;
             menu.remove();

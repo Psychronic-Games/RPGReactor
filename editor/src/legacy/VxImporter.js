@@ -92,13 +92,13 @@ function open(folder, destination, options) {
         const copyTree = (from, to) => {
             for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
                 const s = path.join(from, entry.name), d = path.join(to, entry.name);
-                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); EditorPaths.copyFile(s, d); }
             }
         };
         EditorPaths.copySkeleton(dest, r => r.startsWith('js/'));
         mkdir(path.join(dest, 'js'));
         copyTree(runtime, path.join(dest, 'js'));
-        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        EditorPaths.copyFile(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const f of [...Object.values(GRAPHICS), ...Object.values(R.AUDIO), 'img/tilesets', 'img/titles1', 'img/titles2', 'img/battlebacks1', 'img/battlebacks2', 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, f));
 
         // ---- the database ------------------------------------------------------
@@ -230,6 +230,7 @@ function open(folder, destination, options) {
             if (/^(graphics|audio|data|fonts|movies)$/i.test(dir)) continue;
             for (const f of src.files(dir)) if (/\.(png|jpe?g|bmp)$/i.test(f)) plan.push([dir + '/' + f, path.join('img', dir.toLowerCase(), lowerExt(f)), dir]);
         }
+        require('./ProjectFiles.js').refreshConvertedMedia(dest, plan.map(([, to]) => R.repairPath(to)));
         const assetProgress = span(0.4, 0.95);
         plan.forEach(([from, to, bucket], index) => {
             if (index % 10 === 0) assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`);
@@ -268,7 +269,7 @@ function open(folder, destination, options) {
             const have = fs.existsSync(from) ? fs.readdirSync(from) : [];
             for (const name of named) {
                 const file = have.find(f => f.replace(/\.[^.]+$/, '').toLowerCase() === name.toLowerCase());
-                if (file) { fs.copyFileSync(path.join(from, file), path.join(dest, 'img', 'battlebacks1', name + path.extname(file))); add(images, 'Battlebacks'); }
+                if (file) { EditorPaths.copyFile(path.join(from, file), path.join(dest, 'img', 'battlebacks1', name + path.extname(file))); add(images, 'Battlebacks'); }
                 else skipped.push(`${battlebacks.dir}/${name}: a battleback the game names but does not ship`);
             }
         }
@@ -311,6 +312,11 @@ function open(folder, destination, options) {
         const summary = { source: folder, engine: 'RPG Maker VX', archive: src.archive, title, writtenAt: now, ms: Date.now() - t0, maps: mapIds.length, approximations: notes, files: images, skipped, scripts: inventory().scripts, plugins: installed.map(p => p.name) };
         // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
         summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        summary.missingMapReferences = options.maps && options.maps.length ? [] : require('./ProjectFiles.js').missingMapReferences(dest);
+        if (summary.missingMapReferences.length) {
+            summary.skipped.push(...summary.missingMapReferences);
+            log(`  ${summary.missingMapReferences.length} map references need attention (listed in the import report).`, 'warn');
+        }
         if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;

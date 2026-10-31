@@ -1236,28 +1236,9 @@ Graphics._noteComposite = function() {
 };
 
 /**
- * Even motion however the screen's refreshes fall against the updates.
- *
- * The game updates 60 times a second and drew its map in the updates. A
- * frame rate 60 does not divide shows those updates unevenly: a 144 Hz
- * screen on a 3, 2, 2, 3 ... pattern of refreshes, a 180 Hz one whose frames
- * take two refreshes on a 1, 1, 0 pattern, a 50 Hz one with a double step
- * every fifth refresh. Motion then judders however fast each frame is made.
- * While the updates land unevenly on the frames, the map is drawn on every
- * k-th frame (k = frames per update, rounded down, at least 1: 72 pictures a
- * second at 144 Hz, 90 when a 180 Hz screen gets every other refresh), and
- * what the engine places from the game's state is drawn where it stands at
- * that frame's moment, between the last update and the one before: the
- * camera, the characters' models, billboards and sprites (`_realX`,
- * `_realY`, the jump, the air), the tilemap and parallax scroll. The game's
- * updates, their timing and everything they decide are untouched; what a
- * plugin moves itself is drawn where it put it. Updates that land evenly
- * (60 at 60 Hz, one in two frames at 120, one in three at 180) are drawn in
- * the updates as before, and the change between the two is eased over
- * `EASE_FRAMES` so the picture never steps.
- *
- * Aboard a vehicle, and at the quality levels' half rate, the map is drawn
- * in its updates. `enabled = false` draws in the updates always.
+ * Draw motion at the display's refresh rate between fixed 60 Hz game updates.
+ * Only presentation is interpolated; events, movement speed and plugin logic
+ * retain their timing. No available refresh is deliberately skipped.
  */
 Graphics.FramePacing = {
     enabled: true,
@@ -1288,18 +1269,17 @@ Graphics.FramePacing = {
     _uneven: 0, _even: 0, _paced: false, _ease: 0,
     _active: false, _index: 0,
     _chars: [], _prev: new Float64Array(256), _prevCount: 0, _capturedAt: -1, _live: new Float64Array(256),
-    _display: new Float64Array(2), _camera: new Float64Array(7), _cameraValid: false,
+    _display: new Float64Array(2), _camera: new Float64Array(8), _cameraValid: false,
+    _poses: [], _poseRoots: [], _posePrev: new Float64Array(2560), _poseLive: new Float64Array(2560), _poseCache: new WeakMap(), _poseApplied: false, _poseTick: -1, _poseSpan: 1,
     _applied: false, _objects: [], _objectCount: 0, _sprites: [], _spriteCount: 0, _spriteAt: new Float64Array(64),
-    _cameraSaved: new Float64Array(7), _cameraObject: null, _origin: null,
+    _cameraSaved: new Float64Array(8), _cameraObject: null, _origin: null,
 
     /** Frames per update at the frames' own interval; 0 until it is known. */
     ratio() {
         return this.frameMs > 0 ? (1000 / 60) / this.frameMs : 0;
     },
-    /** How many frames apart the map is drawn. */
-    every() {
-        return Math.max(1, Math.floor(this.ratio() + this.WHOLE));
-    },
+    /** Every available refresh can show a new position. */
+    every() { return 1; },
     noteInterval(now) {
         const interval = now - this._last;
         this._last = now;
@@ -1320,6 +1300,11 @@ Graphics.FramePacing = {
      * spacing SPACING off the usual one.
      */
     judge(now, updates) {
+        // Even 120/180/240 Hz need intermediate pictures, not repeated 60 Hz poses.
+        if (this.ratio() > 1 + this.WHOLE) {
+            this._paced = true; this._even = 0; this._uneven = 0; this._frames = 0;
+            return;
+        }
         const i = this._frames++;
         this._times[i] = now; this._counts[i] = updates;
         if (this._frames < this.WINDOW) return;
@@ -1370,20 +1355,21 @@ Graphics.FramePacing = {
     allowed() {
         if (!this.enabled || typeof SceneManager === "undefined" || SceneManager.trueSpeed === false) return false;
         if (!this.spriteset()) return false;
-        // At the quality levels' last step the world is drawn on every other update.
-        const quality = typeof Reactor3D !== "undefined" ? Reactor3D.Quality : null;
-        if (quality && quality.h) return false;
-        // A vehicle's model and its camera's lay are placed by its own code: drawn in the updates.
-        const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
-        if (player && ((player.isInVehicle && player.isInVehicle()) || player._vehicleType === "reactor")) return false;
         return true;
     },
     /** A frame begins: its interval, and whether its map is paced (drawn by `draw`, not in the update). */
     begin(now) {
         this.noteInterval(now);
-        this._active = this.allowed() && (this._paced || this._ease > 0);
-        if (this._active) this._index++;
-        else this._ease = 0;
+        const allowed = this.allowed();
+        this._active = allowed && (this._paced || this._ease > 0);
+        if (!allowed) {
+            this._poses.length = 0; this._poseRoots.length = 0; this._chars.length = 0;
+            this._prevCount = 0; this._capturedAt = -1; this._cameraValid = false; this._poseTick = -1;
+        }
+        if (this._active) {
+            this._index++;
+            if (Graphics.frameCount === 0) this._ease = this.EASE_FRAMES;
+        } else this._ease = 0;
     },
     /** Whether `spriteset`'s world waits for a paced frame rather than drawing in its update. */
     drawsWorld(spriteset) {
@@ -1397,7 +1383,7 @@ Graphics.FramePacing = {
         // Eased in while paced, out once the updates land evenly again; out, every frame draws (in an update, or here).
         this._ease = this._paced ? Math.min(this.EASE_FRAMES, this._ease + 1) : Math.max(0, this._ease - 1);
         if (!this._paced) return updates > 0 || this._ease > 0 ? this.DRAW : this.SKIP;
-        return this._index % this.every() === 0 ? this.DRAW : this.SKIP;
+        return this.DRAW;
     },
     /** How far between the update before last and the last this frame stands: 1 at the last. */
     alpha() {
@@ -1447,8 +1433,80 @@ Graphics.FramePacing = {
         if (camera) {
             const c = this._camera, p = camera.position, q = camera.quaternion;
             c[0] = p.x; c[1] = p.y; c[2] = p.z; c[3] = q.x; c[4] = q.y; c[5] = q.z; c[6] = q.w;
+            c[7] = Number.isFinite(camera.fov) ? camera.fov : 0;
         }
+        // Earlier catch-up updates skip model sync, so the preceding pose may span multiple ticks.
+        this._poseSpan = this._poseTick < 0 ? 1 : Math.max(1, Graphics.frameCount + 1 - this._poseTick);
+        this.capturePoses();
         this._capturedAt = Graphics.frameCount;
+    },
+    /** Model roots and articulated parts before the update; cached lists avoid a scene traversal per refresh. */
+    capturePoses() {
+        const models = this.spriteset()?._reactor3d?.scene?._modelInstances;
+        const poses = this._poses, roots = this._poseRoots;
+        let count = 0, rootCount = 0;
+        if (models) for (const holder of models.values()) {
+            const root = holder.object;
+            if (!root) continue;
+            roots[rootCount++] = root;
+            let nodes = this._poseCache.get(root);
+            if (!nodes || nodes._childCount !== root.children?.length) {
+                nodes = [];
+                nodes._childCount = root.children?.length;
+                // A parked model can thaw without changing its children. Keep
+                // its root in the cache and check the live flag at draw time.
+                const take = node => { if (node.position) nodes.push(node); };
+                if (root.traverse) root.traverse(take); else take(root);
+                this._poseCache.set(root, nodes);
+            }
+            for (const node of nodes) {
+                if (this._posePrev.length < (count + 1) * 10) {
+                    const size = Math.max(this._posePrev.length * 2, (count + 1) * 10);
+                    const prev = new Float64Array(size); prev.set(this._posePrev); this._posePrev = prev;
+                    this._poseLive = new Float64Array(size);
+                }
+                poses[count] = node;
+                this.readPose(node, this._posePrev, count++ * 10);
+            }
+        }
+        poses.length = count; roots.length = rootCount;
+    },
+    readPose(node, into, k) {
+        const p = node.position, q = node.quaternion, s = node.scale;
+        into[k] = p.x; into[k + 1] = p.y; into[k + 2] = p.z;
+        into[k + 3] = q?.x || 0; into[k + 4] = q?.y || 0; into[k + 5] = q?.z || 0; into[k + 6] = q?.w ?? 1;
+        into[k + 7] = s?.x ?? 1; into[k + 8] = s?.y ?? 1; into[k + 9] = s?.z ?? 1;
+    },
+    /** A draw's local transforms, then the authoritative transforms restored before any game update. */
+    swapPoses(alpha, into) {
+        const prev = this._posePrev, live = this._poseLive, nodes = this._poses;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i], k = i * 10;
+            if (into) {
+                this.readPose(node, live, k);
+                if (node.matrixAutoUpdate === false) continue;
+                if (Math.abs(live[k] - prev[k]) > this.JUMP || Math.abs(live[k + 1] - prev[k + 1]) > this.JUMP || Math.abs(live[k + 2] - prev[k + 2]) > this.JUMP) continue;
+                node.position.set(prev[k] + (live[k] - prev[k]) * alpha, prev[k + 1] + (live[k + 1] - prev[k + 1]) * alpha, prev[k + 2] + (live[k + 2] - prev[k + 2]) * alpha);
+                if (node.quaternion) {
+                    const sign = prev[k + 3] * live[k + 3] + prev[k + 4] * live[k + 4] + prev[k + 5] * live[k + 5] + prev[k + 6] * live[k + 6] < 0 ? -1 : 1;
+                    let x = prev[k + 3] * sign + (live[k + 3] - prev[k + 3] * sign) * alpha;
+                    let y = prev[k + 4] * sign + (live[k + 4] - prev[k + 4] * sign) * alpha;
+                    let z = prev[k + 5] * sign + (live[k + 5] - prev[k + 5] * sign) * alpha;
+                    let w = prev[k + 6] * sign + (live[k + 6] - prev[k + 6] * sign) * alpha;
+                    const length = Math.hypot(x, y, z, w) || 1;
+                    node.quaternion.set(x / length, y / length, z / length, w / length);
+                }
+                if (node.scale) node.scale.set(prev[k + 7] + (live[k + 7] - prev[k + 7]) * alpha, prev[k + 8] + (live[k + 8] - prev[k + 8]) * alpha, prev[k + 9] + (live[k + 9] - prev[k + 9]) * alpha);
+            } else {
+                node.position.set(live[k], live[k + 1], live[k + 2]);
+                if (node.quaternion) node.quaternion.set(live[k + 3], live[k + 4], live[k + 5], live[k + 6]);
+                if (node.scale) node.scale.set(live[k + 7], live[k + 8], live[k + 9]);
+            }
+        }
+        this._poseApplied = into;
+        // The viewport caches the rest of the scene's matrices by logic tick.
+        // Publish these intermediate transforms on every draw, including bones.
+        for (const root of this._poseRoots) root.updateMatrixWorld?.(true);
     },
     camera() {
         const spriteset = this.spriteset(), state = spriteset && spriteset._reactor3d;
@@ -1495,6 +1553,7 @@ Graphics.FramePacing = {
         list[n] = object; list[n + 1] = p.x; list[n + 2] = p.y; list[n + 3] = p.z;
         this._objectCount = n + 4;
         p.x += dx; p.y += dy; p.z += dz;
+        object.updateMatrixWorld?.(true);
     },
     /** This refresh's map, drawn with what the engine places where it stands at this refresh's moment. */
     draw() {
@@ -1502,7 +1561,8 @@ Graphics.FramePacing = {
         if (!spriteset) return;
         this._applied = true;
         this._objectCount = 0; this._spriteCount = 0; this._origin = null; this._cameraObject = null;
-        const alpha = this.alpha(), state = spriteset._reactor3d;
+        const alpha = this.alpha(), poseAlpha = 1 - (1 - alpha) / this._poseSpan, state = spriteset._reactor3d;
+        this._poseTick = Graphics.frameCount;
         const between = alpha < 1 && this._prevCount > 0;
         if (state) {
             const camera = state.viewport.camera ? state.viewport.camera() : null;
@@ -1511,11 +1571,7 @@ Graphics.FramePacing = {
             if (between && camera) this.noteSprites(sprites, sp => sp.reactor3DScreenPoint ? sp.reactor3DScreenPoint(camera, this._point || (this._point = {})) : null, true);
             if (between) {
                 this.swapCharacters(alpha, true);
-                const models = state.scene._modelInstances;
-                if (models) for (const holder of models.values()) {
-                    const i = holder.character ? this.indexOf(holder.character) : -1;
-                    if (i >= 0) this.shift(holder.object, i, true);
-                }
+                this.swapPoses(poseAlpha, true);
                 const boards = state.scene._billboards;
                 if (boards && boards.size) for (const sprite of sprites) {
                     const c = sprite && sprite._character, i = c ? this.indexOf(c) : -1;
@@ -1579,10 +1635,11 @@ Graphics.FramePacing = {
     easeCamera(camera, alpha) {
         const c = this._camera, p = camera.position, q = camera.quaternion, saved = this._cameraSaved;
         saved[0] = p.x; saved[1] = p.y; saved[2] = p.z; saved[3] = q.x; saved[4] = q.y; saved[5] = q.z; saved[6] = q.w;
+        saved[7] = Number.isFinite(camera.fov) ? camera.fov : 0;
         const dx = p.x - c[0], dy = p.y - c[1], dz = p.z - c[2];
         let dot = q.x * c[3] + q.y * c[4] + q.z * c[5] + q.w * c[6];
         if (dx * dx + dy * dy + dz * dz > this.CAMERA_JUMP * this.CAMERA_JUMP || 2 * Math.acos(Math.min(1, Math.abs(dot))) > this.CAMERA_TURN) return;
-        if (!dx && !dy && !dz && dot >= 1) return;
+        if (!dx && !dy && !dz && dot >= 1 && saved[7] === c[7]) return;
         this._cameraObject = camera;
         p.set(c[0] + dx * alpha, c[1] + dy * alpha, c[2] + dz * alpha);
         // Normalised linear blend along the shorter arc: within CAMERA_TURN it strays from the slerp by under a degree.
@@ -1591,22 +1648,28 @@ Graphics.FramePacing = {
         let z = c[5] * sign + (saved[5] - c[5] * sign) * alpha, w = c[6] * sign + (saved[6] - c[6] * sign) * alpha;
         const length = Math.sqrt(x * x + y * y + z * z + w * w) || 1;
         q.set(x / length, y / length, z / length, w / length);
+        if (saved[7] > 0 && c[7] > 0) {
+            const fov = c[7] + (saved[7] - c[7]) * alpha;
+            if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+        }
         camera.updateMatrixWorld();
     },
     /** After the composite: everything the paced draw moved, back where the game put it. */
     restore() {
         if (!this._applied) return;
         this._applied = false;
+        if (this._poseApplied) this.swapPoses(1, false);
         const camera = this._cameraObject;
         if (camera) {
             const s = this._cameraSaved;
             camera.position.set(s[0], s[1], s[2]);
             camera.quaternion.set(s[3], s[4], s[5], s[6]);
+            if (s[7] > 0 && camera.fov !== s[7]) { camera.fov = s[7]; camera.updateProjectionMatrix(); }
             camera.updateMatrixWorld();
             this._cameraObject = null;
         }
         const list = this._objects;
-        for (let i = 0; i < this._objectCount; i += 4) { list[i].position.set(list[i + 1], list[i + 2], list[i + 3]); list[i] = null; }
+        for (let i = 0; i < this._objectCount; i += 4) { list[i].position.set(list[i + 1], list[i + 2], list[i + 3]); list[i].updateMatrixWorld?.(true); list[i] = null; }
         this._objectCount = 0;
         const sprites = this._sprites, at = this._spriteAt;
         for (let i = 0; i < this._spriteCount; i++) { sprites[i].x = at[i * 4 + 2]; sprites[i].y = at[i * 4 + 3]; sprites[i] = null; }
@@ -1627,6 +1690,8 @@ Graphics._onTick = function(deltaTime) {
     const prof = ReactorProfiler._active ? ReactorProfiler : null;
     if (prof) prof.frameBegin();
     this._fpsCounter.startTick();
+    const worldBefore = this.worldFrameCount || 0;
+    let composited = false;
     // Counts the screen's refreshes (a refresh may hold no update, or several).
     this.refreshCount++;
     // The quality levels watch what each frame of a 3D map costs (reactor_3d.js, `Reactor3D.Quality`).
@@ -1670,40 +1735,44 @@ Graphics._onTick = function(deltaTime) {
         }
         if (prof) prof.phase("update", performance.now() - tUpdate);
     }
-    // On a screen 60 does not divide, the map is drawn on the refreshes the pacing picks, between updates.
+    // Draw intermediate map poses on available refreshes between game updates.
     const paced = pacing.decide(updates);
-    if (this._canRender() && (paced === pacing.DRAW || (paced !== pacing.SKIP && this._frameChanged(updates))
-        || (paced === pacing.SKIP && this._mustComposite()))) {
-        const tRender = prof ? performance.now() : 0;
-        if (paced === pacing.DRAW) pacing.draw();
-        // Draws from here to the composite are its own (Graphics._frameChanged).
-        this._compositing = true;
-        try {
-            for (const hook of this._reactorBeforeRender) {
-                try { hook(); } catch (e) { console.warn("Graphics._onTick: a before-render hook threw", e); }
-            }
-            this._app.render();
-        } finally { this._compositing = false; }
-        this._noteComposite();
-        if (prof) prof.phase("render", performance.now() - tRender);
-        // v8: Sprite_Animation._render runs via the onRender bridge, which v8
-        // invokes BEFORE the actual GPU draws happen. Effekseer's draws would
-        // therefore be overwritten by v8's subsequent rendering. Instead, on
-        // v8, Sprite_Animation._render registers the instance in a class-level
-        // queue and we flush that queue here -- AFTER v8's render() returns --
-        // so Effekseer draws on top of the rendered scene.
-        if (window.Sprite_Animation &&
-            typeof window.Sprite_Animation.renderActive === "function") {
+    try {
+        if (this._canRender() && (paced === pacing.DRAW || (paced !== pacing.SKIP && this._frameChanged(updates))
+            || (paced === pacing.SKIP && this._mustComposite()))) {
+            const tRender = prof ? performance.now() : 0;
+            if (paced === pacing.DRAW) pacing.draw();
+            // Draws from here to the composite are its own (Graphics._frameChanged).
+            this._compositing = true;
             try {
-                window.Sprite_Animation.renderActive(this._app.renderer);
-            } catch (e) {
-                console.warn("Graphics._onTick: renderActive threw", e);
+                for (const hook of this._reactorBeforeRender) {
+                    try { hook(); } catch (e) { console.warn("Graphics._onTick: a before-render hook threw", e); }
+                }
+                this._app.render();
+                composited = true;
+            } finally { this._compositing = false; }
+            this._noteComposite();
+            if (prof) prof.phase("render", performance.now() - tRender);
+            // v8: Sprite_Animation._render runs via the onRender bridge, which v8
+            // invokes BEFORE the actual GPU draws happen. Effekseer's draws would
+            // therefore be overwritten by v8's subsequent rendering. Instead, on
+            // v8, Sprite_Animation._render registers the instance in a class-level
+            // queue and we flush that queue here -- AFTER v8's render() returns --
+            // so Effekseer draws on top of the rendered scene.
+            if (window.Sprite_Animation &&
+                typeof window.Sprite_Animation.renderActive === "function") {
+                try {
+                    window.Sprite_Animation.renderActive(this._app.renderer);
+                } catch (e) {
+                    console.warn("Graphics._onTick: renderActive threw", e);
+                }
             }
         }
+    } finally {
+        if (paced === pacing.DRAW) pacing.restore();
     }
-    // The paced draw's places given back before the next update.
-    if (paced === pacing.DRAW) pacing.restore();
-    this._fpsCounter.endTick();
+    const world = pacing.spriteset()?._reactor3d;
+    this._fpsCounter.endTick(composited && (!world || (this.worldFrameCount || 0) !== worldBefore));
     if (quality) quality.tickEnd(performance.now());
     if (prof) prof.frameEnd();
 };
@@ -3094,7 +3163,9 @@ Graphics.FPSCounter.prototype.initialize = function() {
     this._tickCount = 0;
     this._frameTime = 100;
     this._frameStart = 0;
-    this._lastLoop = performance.now() - 100;
+    this._lastLoop = performance.now();
+    this._sampleStart = this._lastLoop;
+    this._presented = 0;
     this._showFps = true;
     this.fps = 0;
     this.duration = 0;
@@ -3106,16 +3177,19 @@ Graphics.FPSCounter.prototype.startTick = function() {
     this._frameStart = performance.now();
 };
 
-Graphics.FPSCounter.prototype.endTick = function() {
+// Count new pictures, rather than ticker callbacks which can reuse the same world frame.
+Graphics.FPSCounter.prototype.endTick = function(presented = true) {
     const time = performance.now();
-    const thisFrameTime = time - this._lastLoop;
-    this._frameTime += (thisFrameTime - this._frameTime) / 12;
-    this.fps = 1000 / this._frameTime;
+    if (presented) this._presented++;
+    const elapsed = time - this._sampleStart;
+    if (elapsed >= 500) {
+        this.fps = this._presented * 1000 / elapsed;
+        this._presented = 0;
+        this._sampleStart = time;
+    }
     this.duration = Math.max(0, time - this._frameStart);
     this._lastLoop = time;
-    if (this._tickCount++ % 15 === 0) {
-        this._update();
-    }
+    if (this._tickCount++ % 15 === 0) this._update();
 };
 
 Graphics.FPSCounter.prototype.switchMode = function() {

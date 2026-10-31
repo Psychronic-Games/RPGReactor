@@ -88,19 +88,19 @@ test('a slow graphics card is stepped down along the picture\'s size, and the ma
         assert.deepEqual([Q.g, Q.c, Q.h], [2, 0, false], 'down to the size it holds 60 at, and no further');
         assert.ok(rate >= 59 && rate <= 61, 'sixty a second again: ' + rate);
         assert.ok(Q.scale() < 0.7);
-        assert.deepEqual(saves[saves.length - 1], { gpu: 2, cpu: 0, half: false }, 'the machine\'s levels are kept for its next session');
+        assert.deepEqual(saves[saves.length - 1], { version: 2, gpu: 2, cpu: 0, half: false }, 'the machine\'s levels are kept for its next session');
     });
 });
 
-test('a slow main thread is stepped along its own levels, then to the half rate, and the picture keeps its size', () => {
+test('a slow main thread reduces its work without imposing a half-rate cap', () => {
     inGame({}, () => {
         Q.mapOpened(5);
         // 30 ms of main thread a drawn frame, 26 and 24 at the CPU levels: never inside a refresh.
         const machine = q => { const busy = [30, 26, 24][q.c]; return { frame: vsync(busy), busy }; };
         const rate = play(60, machine);
-        assert.deepEqual([Q.g, Q.c, Q.h], [0, 2, true]);
+        assert.deepEqual([Q.g, Q.c, Q.h], [0, 2, false]);
         assert.equal(Q.scale(), 1, 'a smaller picture does nothing for a slow main thread');
-        assert.equal(Q.drawEvery(), 2);
+        assert.equal(Q.drawEvery(), 1);
         assert.ok(rate >= 29 && rate <= 31, 'a draw that runs over a refresh is followed by the next at once: still 30 a second, not 20: ' + rate);
     });
 });
@@ -110,7 +110,7 @@ test('a little short with a kind spent is left alone rather than halved', () => 
         Q.mapOpened(5);
         Q._loaded = true; Q._cpu = Q.CPU.length - 1; Q.refresh();
         assert.equal(Q.stepDown('cpu', 0.15), null, 'fifty a second is not worth thirty');
-        assert.equal(Q.stepDown('cpu', 0.3), 'half');
+        assert.equal(Q.stepDown('cpu', 0.3), null, 'keep drawing every available refresh');
         assert.equal(Q.stepDown('cpu', 0.5), null, 'and there is nothing under the half rate');
     });
 });
@@ -125,7 +125,7 @@ test('a screen slower than 60 Hz is not a slow machine', () => {
     });
     inGame({}, () => {
         Q.mapOpened(5);
-        // A 180 Hz panel is asked for 60: the game makes no more.
+        // Auto evaluates a 60 Hz quality floor while rendering remains uncapped.
         const clock = { now: 1000 };
         title(2, clock, 1000 / 180);
         assert.equal(Q.wantedPerSecond(), 60);
@@ -172,13 +172,13 @@ test('a fixed setting holds its level whatever the frames do, and the switch dra
     try { assert.equal(Q.setting(), 'high', 'no game to ask: the editor draws the full picture'); } finally { global.ConfigManager = saved; }
 });
 
-test('a machine starts its next session at the levels it settled at', () => {
-    inGame({ graphicsAuto: { gpu: 2, cpu: 1, half: true } }, () => {
+test('a machine retains detail levels but discards obsolete saved frame caps', () => {
+    inGame({ graphicsAuto: { version: 2, gpu: 2, cpu: 1, half: true } }, () => {
         Q.refresh();
-        assert.deepEqual([Q.g, Q.c, Q.h], [2, 1, true]);
-        assert.deepEqual(Q._taken, ['gpu', 'gpu', 'cpu', 'half']);
+        assert.deepEqual([Q.g, Q.c, Q.h], [2, 1, false]);
+        assert.deepEqual(Q._taken, ['gpu', 'gpu', 'cpu']);
     });
-    inGame({ graphicsAuto: { gpu: 99, cpu: -3, half: 'yes' } }, () => {
+    inGame({ graphicsAuto: { version: 2, gpu: 99, cpu: -3, half: 'yes' } }, () => {
         Q.refresh();
         assert.deepEqual([Q.g, Q.c, Q.h], [Q.GPU.length - 1, 0, false], 'a file from elsewhere is read into range');
     });
@@ -191,11 +191,11 @@ test('the levels kept from the last session are taken once the options file has 
         title(0.2, clock);
         assert.deepEqual([Q.g, Q.c, Q.h], [0, 0, false], 'nothing is known of the machine yet');
         // The file arrives (ConfigManager.applyData).
-        global.ConfigManager.graphicsAuto = { gpu: 3, cpu: 2, half: true };
+        global.ConfigManager.graphicsAuto = { version: 2, gpu: 3, cpu: 2, half: true };
         global.ConfigManager._isLoaded = true;
         title(0.1, clock);
-        assert.deepEqual([Q.g, Q.c, Q.h], [3, 2, true], 'the machine starts at the levels it settled at');
-        assert.deepEqual(Q._taken, ['gpu', 'gpu', 'gpu', 'cpu', 'cpu', 'half']);
+        assert.deepEqual([Q.g, Q.c, Q.h], [3, 2, false], 'the machine starts at the levels it settled at');
+        assert.deepEqual(Q._taken, ['gpu', 'gpu', 'gpu', 'cpu', 'cpu']);
         assert.deepEqual(saves, [], 'and nothing was written over them');
     });
     // A game with no options file (its first launch) starts at the top once that is known.
@@ -209,7 +209,7 @@ test('the levels kept from the last session are taken once the options file has 
 });
 
 test('a step back up is tried as another map opens after a calm stretch, and given up for the session when it does not hold', () => {
-    inGame({ graphicsAuto: { gpu: 2, cpu: 0, half: false } }, () => {
+    inGame({ graphicsAuto: { version: 2, gpu: 2, cpu: 0, half: false } }, () => {
         const clock = { now: 1000 };
         Q.mapOpened(5);
         play(30, fast, clock);
@@ -233,12 +233,12 @@ test('a step back up is tried as another map opens after a calm stretch, and giv
     });
 });
 
-test('at the half rate the world is drawn on every other frame it is asked for', () => {
-    inGame({ graphicsAuto: { gpu: 0, cpu: 0, half: true } }, () => {
+test('an obsolete half-rate setting never suppresses an available world draw', () => {
+    inGame({ graphicsAuto: { version: 2, gpu: 0, cpu: 0, half: true } }, () => {
         Q.refresh();
         const drawn = [], frame = 1000 / 60;
         for (let i = 0; i < 8; i++) { const now = 1000 + i * frame; Q.tickBegin(now); drawn.push(Q.worldTick(now)); Q.tickEnd(now + 3); }
-        assert.deepEqual(drawn, [true, false, true, false, true, false, true, false]);
+        assert.ok(drawn.every(Boolean), 'all eight refreshes draw');
         ConfigManager.graphicsQuality = 'high';
         Q.refresh();
         assert.equal(Q.worldTick(2000), true);
@@ -247,11 +247,11 @@ test('at the half rate the world is drawn on every other frame it is asked for',
 });
 
 test('choosing Auto again starts from the full picture', () => {
-    inGame({ graphicsAuto: { gpu: 3, cpu: 2, half: true } }, saves => {
+    inGame({ graphicsAuto: { version: 2, gpu: 3, cpu: 2, half: true } }, saves => {
         Q.refresh();
         Q.reset();
         assert.deepEqual([Q.g, Q.c, Q.h], [0, 0, false]);
-        assert.deepEqual(saves[saves.length - 1], { gpu: 0, cpu: 0, half: false });
+        assert.deepEqual(saves[saves.length - 1], { version: 2, gpu: 0, cpu: 0, half: false });
         assert.equal(Q._ceiling, false);
     });
 });
@@ -264,7 +264,7 @@ test('the levels reach what they are for', () => {
     assert.match(source('reactor_3d_lighting.js'), /if \(this\.SHADOWS === "off" \|\| \(this\.Quality && !this\.Quality\.shadows\(\)\)\) return false;/);
     assert.match(source('reactor_3d_foliage.js'), /lodNow\.near = lod\.near \* quality\.foliageReach\(\); lodNow\.far = lod\.far \* quality\.foliageReach\(\); lodNow\.scale = lod\.scale \* quality\.foliageShare\(\);/);
     const sprites = source('reactor_sprites.js');
-    assert.match(sprites, /quality\.mapOpened\(\$gameMap\.mapId\(\)\);\n\s*if \(!quality\.worldTick\(performance\.now\(\)\)\) return;/, 'counted after the catch-up ticks are passed by');
+    assert.ok(/Reactor3D\.Quality\.worldTick\(performance\.now\(\)\)/.test(sprites.slice(sprites.indexOf('Spriteset_Map.prototype.drawReactor3D ='))), 'counts actual world draws, including intermediate refreshes');
     const tick = source('reactor_core.js');
     assert.match(tick, /if \(quality\) quality\.tickBegin\(performance\.now\(\)\);/);
     assert.match(tick, /if \(quality\) quality\.tickEnd\(performance\.now\(\)\);/);
@@ -331,4 +331,52 @@ test('a 60 Hz screen gets one update a frame, every frame, and a long frame is m
     assert.deepEqual([1, 1, 1, 2, 1, 1, 1, 3, 1, 1, 1, 1].map(dt => pacing.determineRepeatNumber(dt)), [1, 1, 1, 2, 1, 1, 1, 3, 1, 1, 1, 1], 'two ticks late: two updates, and back to one');
     // A machine a little short of its frames still gets an update in each.
     assert.equal(updatesAt(pacing, 55, 20, 0.06).none, 0);
+});
+
+test('a 180 Hz display running at 90 FPS retains resolution and shadows across maps', () => {
+    inGame({}, saves => {
+        const clock = { now: 1000 };
+        title(2, clock, 1000 / 180);
+        Q.mapOpened(5);
+        const rate = play(30, () => ({ frame: 1000 / 90, busy: 7 }), clock, 1000 / 180);
+        Q.mapOpened(8);
+        play(10, () => ({ frame: 1000 / 90, busy: 7 }), clock, 1000 / 180);
+        assert.ok(rate > 89 && rate < 91, 'ninety world draws per second, without a render cap');
+        assert.deepEqual([Q.g, Q.c], [0, 0]);
+        assert.equal(Q.scale(), 1);
+        assert.equal(Q.shadows(), true);
+        assert.equal(saves.length, 0);
+    });
+});
+
+test('Auto discards a profile learned under the old refresh-rate target once', () => {
+    inGame({ graphicsAuto: { gpu: 3, cpu: 2, half: false } }, saves => {
+        Q.refresh();
+        assert.deepEqual([Q.g, Q.c], [0, 0]);
+        assert.equal(Q.shadows(), true);
+        assert.deepEqual(ConfigManager.graphicsAuto, { version: Q.PROFILE_VERSION, gpu: 0, cpu: 0, half: false });
+        Q.refresh();
+        assert.equal(saves.length, 1, 'migration is written once');
+    });
+});
+
+// A saved CPU fallback must retain character grounding while reducing shadow work.
+test('saved Auto CPU level two keeps cheaper shadows and switching quality refreshes their budget', () => {
+    inGame({ graphicsAuto: { version: 2, gpu: 0, cpu: 2, half: false } }, () => {
+        Q.refresh();
+        assert.equal(Q.c, 2);
+        assert.equal(Q.shadows(), true);
+        const S = Reactor3D.Shadows, profiles = Reactor3D.SHADOW_QUALITY;
+        assert.equal(S.quality() === profiles.fullCpu, true);
+        assert.ok(S.quality().dynamicTriangles < profiles.full.dynamicTriangles);
+        assert.ok(S.quality().dynamicPerFrame < profiles.full.dynamicPerFrame);
+        assert.ok(S.quality().dynamicInterval > profiles.full.dynamicInterval);
+        for (const key of ['slots', 'dynamicSlots', 'size', 'sunSize', 'taps']) assert.equal(profiles.fullCpu[key], profiles.full[key], 'atlas and shader stay compatible: ' + key);
+        ConfigManager.graphicsQuality = 'high'; Q.refresh();
+        assert.equal(Q.shadows(), true); assert.equal(S.quality() === profiles.full, true);
+        ConfigManager.graphicsQuality = 'low'; Q.refresh();
+        assert.equal(Q.shadows(), false, 'explicit Low still disables shadows');
+        ConfigManager.graphicsQuality = 'auto'; Q.refresh();
+        assert.equal(Q.shadows(), true); assert.equal(S.quality() === profiles.fullCpu, true);
+    });
 });

@@ -18,12 +18,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const FOLDERS = ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/characters', 'img/faces', 'img/pictures', 'img/parallaxes', 'img/enemies', 'img/battlebacks1', 'img/battlebacks2', 'img/animations', 'img/titles1', 'img/tilesets', 'img/system'];
+const FOLDERS = ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/characters', 'img/faces', 'img/pictures', 'img/parallaxes', 'img/enemies', 'img/battlebacks1', 'img/battlebacks2', 'img/animations', 'img/titles1', 'img/titles2', 'img/tilesets', 'img/system', 'movies'];
 const AUDIO_CODES = { 241: 'audio/bgm', 132: 'audio/bgm', 245: 'audio/bgs', 249: 'audio/me', 133: 'audio/me', 250: 'audio/se' };
-const IMAGE_KEYS = { characterName: 'img/characters', faceName: 'img/faces', parallaxName: 'img/parallaxes', battlerName: 'img/enemies', battleback1Name: 'img/battlebacks1', battleback2Name: 'img/battlebacks2', animation1Name: 'img/animations', animation2Name: 'img/animations', title1Name: 'img/titles1' };
+const IMAGE_KEYS = { characterName: 'img/characters', faceName: 'img/faces', parallaxName: 'img/parallaxes', battlerName: 'img/enemies', battleback1Name: 'img/battlebacks1', battleback2Name: 'img/battlebacks2', animation1Name: 'img/animations', animation2Name: 'img/animations', title1Name: 'img/titles1', title2Name: 'img/titles2' };
 const AUDIO_KEYS = { bgm: 'audio/bgm', titleBgm: 'audio/bgm', battleBgm: 'audio/bgm', bgs: 'audio/bgs', victoryMe: 'audio/me', gameoverMe: 'audio/me', defeatMe: 'audio/me', se: 'audio/se' };
 
-const SCRIPT_PICTURE = /(this\.rr(?:MakePic|ShowPic)\?\.\(\s*\d+\s*,\s*)("(?:[^"\\]|\\.)*")/;
+// Only importer-generated calls with JSON string literals; never evaluate project scripts.
+const LITERAL = '("(?:[^"\\\\]|\\\\.)*")';
+const SCRIPT_REFERENCES = [
+    ['img/pictures', new RegExp('(this\\.rr(?:MakePic|ShowPic)(?:\\?\\.)?\\([^,]+,\\s*)' + LITERAL, 'g')],
+    ['img/pictures', new RegExp('(\\$gameScreen\\.showPicture\\([^,]+,\\s*)' + LITERAL, 'g')],
+    ['img/characters', new RegExp('(this\\.rrChangeActorCharacter\\([^,]+,\\s*)' + LITERAL, 'g')],
+    ['img/faces', new RegExp('(this\\.rrChangeActorFace\\([^,]+,\\s*)' + LITERAL, 'g')],
+    ['img/faces', new RegExp('(this\\.rrMessageFace\\(\\s*)' + LITERAL, 'g')],
+    ['audio/se', new RegExp('(\\$dataSystem\\.sounds\\[\\d+\\]\\s*=\\s*\\{\\s*"name"\\s*:\\s*)' + LITERAL, 'g')],
+    ['audio/me', new RegExp('(\\$dataSystem\\.(?:gameoverMe|rrInnBgm)\\s*=\\s*\\{\\s*"name"\\s*:\\s*)' + LITERAL, 'g')]
+];
 
 function forEachReference(dest, visit) {
     const walk = (v) => {
@@ -36,14 +46,16 @@ function forEachReference(dest, visit) {
             else if (v.code === 44 && p[0] && typeof p[0] === 'object') visit('audio/se', p[0], 'name');   // move route Play SE
             else if (v.code === 41) visit('img/characters', p, 0);                                          // move route Change Image
             else if (v.code === 322) { visit('img/characters', p, 1); visit('img/faces', p, 3); }
+            else if (v.code === 323) visit('img/characters', p, 1);
+            else if (v.code === 140 && p[1] && typeof p[1] === 'object') visit('audio/bgm', p[1], 'name');
+            else if (v.code === 261) visit('movies', p, 0);
             else if (v.code === 283) { visit('img/battlebacks1', p, 0); visit('img/battlebacks2', p, 1); }
             else if (v.code === 284) visit('img/parallaxes', p, 0);
             else if (v.code === 101 && typeof p[0] === 'string') visit('img/faces', p, 0);
-            else if ((v.code === 355 || v.code === 655) && typeof p[0] === 'string' && SCRIPT_PICTURE.test(p[0])) {
-                // A picture a ported script call names (this.rrMakePic?.(1, "name", …)).
-                p[0] = p[0].replace(new RegExp(SCRIPT_PICTURE.source, 'g'), (all, head, name) => {
+            else if ((v.code === 355 || v.code === 655) && typeof p[0] === 'string') {
+                for (const [folder, pattern] of SCRIPT_REFERENCES) p[0] = p[0].replace(pattern, (all, head, name) => {
                     const holder = [JSON.parse(name)];
-                    visit('img/pictures', holder, 0);
+                    visit(folder, holder, 0);
                     return head + JSON.stringify(holder[0]);
                 });
             }
@@ -51,6 +63,7 @@ function forEachReference(dest, visit) {
         for (const [k, x] of Object.entries(v)) {
             if (typeof x === 'string') { if (IMAGE_KEYS[k]) visit(IMAGE_KEYS[k], v, k); }
             else if (x && typeof x === 'object') {
+                if (k === 'tilesetNames' && Array.isArray(x)) for (let i = 0; i < x.length; i++) visit('img/tilesets', x, i);
                 if (AUDIO_KEYS[k] && typeof x.name === 'string') visit(AUDIO_KEYS[k], x, 'name');
                 else if (k === 'sounds' && Array.isArray(x)) for (const snd of x) if (snd) visit('audio/se', snd, 'name');
                 walk(x);
@@ -130,7 +143,7 @@ function clearMissingSystemFiles(dest) {
     for (const snd of sys.sounds || []) check('audio/se', snd, 'name');
     for (const [k, folder] of [['titleBgm', 'audio/bgm'], ['battleBgm', 'audio/bgm'], ['victoryMe', 'audio/me'], ['defeatMe', 'audio/me'], ['gameoverMe', 'audio/me']]) check(folder, sys[k], 'name');
     for (const v of ['boat', 'ship', 'airship']) { if (sys[v]) { check('audio/bgm', sys[v].bgm, 'name'); check('img/characters', sys[v], 'characterName'); } }
-    for (const [k, folder] of [['battleback1Name', 'img/battlebacks1'], ['battleback2Name', 'img/battlebacks2'], ['battlerName', 'img/enemies'], ['title1Name', 'img/titles1']]) check(folder, sys, k);
+    for (const [k, folder] of [['battleback1Name', 'img/battlebacks1'], ['battleback2Name', 'img/battlebacks2'], ['battlerName', 'img/enemies'], ['title1Name', 'img/titles1'], ['title2Name', 'img/titles2']]) check(folder, sys, k);
     if (cleared) fs.writeFileSync(file, JSON.stringify(sys));
     return cleared;
 }
@@ -152,6 +165,53 @@ function missingList(dest) {
     return out.sort();
 }
 
+/** Direct transfers to maps the source did not supply. Keep the authored command, but
+ * make the broken reference visible in the import report instead of guessing a destination. */
+function missingMapReferences(dest) {
+    const dir = path.join(dest, 'data'), files = fs.readdirSync(dir);
+    const maps = new Set(files.filter(n => /^Map\d+\.json$/i.test(n)).map(n => Number(n.slice(3, -5))));
+    const missing = new Set();
+    const walk = (v, file) => {
+        if (!v || typeof v !== 'object') return;
+        if (v.code === 201 && v.parameters && v.parameters[0] === 0 && v.parameters[1] > 0 && !maps.has(v.parameters[1])) {
+            missing.add(`${file}: transfer to map ${v.parameters[1]}, which was not supplied by the source project.`);
+        }
+        for (const child of Object.values(v)) if (child && typeof child === 'object') walk(child, file);
+    };
+    for (const file of files.filter(n => /^(Map\d+|CommonEvents|Troops)\.json$/i.test(n))) {
+        let data;
+        try { data = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')); } catch (_) { continue; }
+        walk(data, file);
+    }
+    return [...missing].sort();
+}
+
+/** A repeat import must regenerate derived media from the newly copied source. An authored
+ * PNG/Ogg/WebM in this import takes precedence and is never removed as a derivative. */
+function refreshConvertedMedia(dest, targets) {
+    const paths = targets.map(n => n.replace(/\\/g, '/').toLowerCase());
+    const authored = new Set(paths), stale = new Set();
+    for (const name of paths) {
+        const target = /^img\//.test(name) ? name.replace(/\.(jpe?g|bmp)$/, '.png')
+            : /^audio\//.test(name) ? name.replace(/\.midi?$/, '.ogg')
+            : /^movies\//.test(name) ? name.replace(/\.(avi|mpg|mpeg|wmv|ogv|flv|mov|mkv|mp4)$/, '.webm') : name;
+        if (target !== name && !authored.has(target)) stale.add(target);
+    }
+    if (!stale.size) return 0;
+    let removed = 0;
+    const walk = (dir, rel) => {
+        let entries;
+        try { if (!fs.lstatSync(dir).isDirectory()) return; entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+        for (const entry of entries) {
+            const name = rel + '/' + entry.name, full = path.join(dir, entry.name);
+            if (entry.isDirectory()) walk(full, name);
+            else if (entry.isFile() && stale.has(name.toLowerCase())) { fs.unlinkSync(full); removed++; }
+        }
+    };
+    for (const folder of ['img', 'audio', 'movies']) walk(path.join(dest, folder), folder);
+    return removed;
+}
+
 function copyAcrossAudio(dest) {
     const index = fileIndex(dest);
     const AUDIO = ['audio/bgm', 'audio/me', 'audio/se', 'audio/bgs'];
@@ -159,15 +219,16 @@ function copyAcrossAudio(dest) {
     for (const [folder, names] of missingReferences(dest)) {
         if (!AUDIO.includes(folder)) continue;
         for (const name of names) {
-            const from = AUDIO.find(other => other !== folder && index.get(other).has(name.toLowerCase()));
+            const normalized = name.replace(/\\/g, '/').toLowerCase();
+            const from = AUDIO.find(other => other !== folder && index.get(other).has(normalized));
             if (!from) continue;
-            const stem = index.get(from).get(name.toLowerCase());
+            const stem = index.get(from).get(normalized);
             const dir = path.join(dest, from, path.dirname(stem));
             for (const f of fs.readdirSync(dir)) {
                 if (f.replace(/\.[^.]+$/, '') !== path.basename(stem)) continue;
                 const target = path.join(dest, folder, path.dirname(stem), f);
                 fs.mkdirSync(path.dirname(target), { recursive: true });
-                if (!fs.existsSync(target)) { fs.copyFileSync(path.join(dir, f), target); copied++; }
+                if (!fs.existsSync(target)) { require('./EditorPaths.js').copyFile(path.join(dir, f), target); copied++; }
             }
         }
     }
@@ -220,4 +281,4 @@ function packageName(title) {
     return 'rr-' + (slug ? slug + '-' : '') + 'game-' + hash.toString(16).padStart(8, '0');
 }
 
-module.exports = { packageName, raisePictureLimit, forEachReference, fileIndex, matchFileCase, clearMissingSystemFiles, missingList, missingReferences, copyAcrossAudio, FOLDERS };
+module.exports = { packageName, raisePictureLimit, forEachReference, fileIndex, matchFileCase, clearMissingSystemFiles, missingList, missingMapReferences, refreshConvertedMedia, missingReferences, copyAcrossAudio, FOLDERS };

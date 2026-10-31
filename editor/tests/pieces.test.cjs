@@ -657,7 +657,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.match(source3D(), /transparent: true, opacity: Reactor3D\.GHOST_OPACITY, depthWrite: false/, 'the ghost pass is translucent');
     assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
     { const run = R.pieceShapes('stair', { kind: 'stair', z: 3 }); assert.equal(run.length, 5); assert.deepEqual(run[4].box, [0, -3, 0, 1, 0, 1], 'a stair above the ground stands on a solid down to it'); assert.equal(R.pieceShapes('stair', { kind: 'stair', z: 0 }).length, 4); }
-    { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.ok(cover.x0 <= 4 - R.CUTAWAY_MARGIN && cover.x1 >= 5 + R.CUTAWAY_MARGIN && cover.x0 <= 4 - R.CUTAWAY_REACH, 'the cut box reaches a hair past the outer faces and the stretch around the player'); }
+    { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.ok(cover.x0 === 4 - R.CUTAWAY_MARGIN && cover.x1 === 5 + R.CUTAWAY_MARGIN, 'the cut box reaches a hair past this building, without opening neighboring houses'); }
     assert.match(runtime, /this\.updateCutCaps\(mapData, shared\.rrCutTop\.value, cutState === "none" \? null : shared\.rrCutBox\.value\);/, 'the cut lays caps over the walls it passes through');
     { const capMap = mapWith([{ id: 1, kind: 'wall', x: 2, y: 2, z: 0, rot: 0, material: 'Stone' }, { id: 2, kind: 'window', x: 3, y: 2, z: 0, rot: 0, material: 'Stone' }, { id: 3, kind: 'doorway', x: 4, y: 2, z: 0, rot: 0, material: 'Stone' }, { id: 4, kind: 'wall', x: 2, y: 2, z: 5, rot: 0, material: 'Stone' }, { id: 5, kind: 'block', x: 6, y: 6, z: 0, rot: 0, material: 'Stone' }]);
       const capScene = Object.create(R.MapScene.prototype); capScene._scene = new THREE.Scene(); capScene._meshes = []; capScene._materials = []; capScene._textures = [];
@@ -701,7 +701,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(R.pieceCoverAt(house, 6.5, 6.5, 0), null, 'open ground');
     assert.deepEqual({ ...R.pieceCoverAt(house, 2.5, 2.5, 0.1) }, { x0: 2 - R.CUTAWAY_REACH, y0: 2 - R.CUTAWAY_REACH, x1: 3 + R.CUTAWAY_REACH, y1: 3 + R.CUTAWAY_REACH }, 'hand-laid: a stretch around the cell');
     const grouped = mapWith([{ id: 1, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 7 }, { id: 2, kind: 'wall', x: 6, y: 7, z: 0, rot: 0, material: '', group: 7 }]);
-    { const m = R.CUTAWAY_MARGIN, r = R.CUTAWAY_REACH; assert.deepEqual({ ...R.pieceCoverAt(grouped, 4.5, 4.5, 0) }, { x0: Math.min(4 - m, 4 - r), y0: Math.min(4 - m, 4 - r), x1: Math.max(7 + m, 4 + r + 1), y1: Math.max(8 + m, 4 + r + 1) }, 'stamped: the building\'s own footprint a hair past its outer faces, or the stretch around the player, whichever reaches further'); }
+    { const m = R.CUTAWAY_MARGIN; assert.deepEqual({ ...R.pieceCoverAt(grouped, 4.5, 4.5, 0) }, { x0: 4 - m, y0: 4 - m, x1: 7 + m, y1: 8 + m }, 'stamped: only this building opens; surrounding houses remain whole'); }
     const scene = Object.create(R.MapScene.prototype);
     const camera = new THREE.PerspectiveCamera(); camera.position.set(10, 8, 12); camera.updateMatrixWorld();
     const shared = R.cutawayUniforms();

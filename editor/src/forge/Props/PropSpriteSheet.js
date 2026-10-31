@@ -91,6 +91,10 @@
     /** The largest frame either way; a prop bigger at character scale is drawn smaller, and the export says so. */
     const MAX_FRAME = 1024;
 
+    // Bound the completed bitmap before allocating it, including repeated 8-direction blocks.
+    const sheetFits = (w,h) => w>0 && h>0 && w<=16384 && h<=16384 && w*h<=64*1024*1024;
+    const SIZE_WARNING='Sheet is too large. Reduce frame width or frames.';
+
     /**
      * The cell at a set scale (pixels a metre: the character sheets', so a
      * prop stands beside an exported character at its true size): wide and
@@ -111,12 +115,12 @@
             while (h < 65536) { const m = S.cellMetrics(w, h, outline); if (m.baseline - m.top >= (high - low) * s) break; h += 4; }
             return { w, h };
         };
-        const fixed = width > 0 ? Math.max(16, Math.round(width)) : 0;
+        const fixed = width > 0 ? Math.max(16, Math.min(MAX_FRAME, Math.round(width))) : 0;
         const wanted = fixed && half > 0 ? room(fixed) / (2 * half) : scale;
         let s = wanted, size = fitAt(s, fixed);
         if (size.w > MAX_FRAME || size.h > MAX_FRAME) {
             const f = Math.min(MAX_FRAME / size.w, MAX_FRAME / size.h) * 0.98;
-            s *= f; size = fitAt(s, fixed ? Math.max(16, Math.floor(fixed * f)) : 0);
+            s *= f; size = fitAt(s, fixed);
         }
         const m = S.cellMetrics(size.w, size.h, outline);
         return { w: size.w, h: size.h, scale: s, shrunk: s / wanted, anchor: { x: size.w / 2, y: m.baseline + low * s } };
@@ -245,6 +249,7 @@
             const fitted = { scale: sized.scale, anchors: bounds.map(() => sized.anchor) };
             const k = Math.max(2, Math.min(6, Math.floor(512 / Math.max(w, h))));
             const width = size.columns * w, height = size.rows * h;
+            if(!sheetFits(width,height)){const error=new RangeError(SIZE_WARNING);error.code='SHEET_SIZE';throw error;}
             sheet = new Uint8ClampedArray(width * height * 4);
             const e = elevation * Math.PI / 180;
             const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 400);
@@ -315,34 +320,41 @@
         const host = builder.root && builder.root.querySelector('.rr-c3d-view');
         if (!host) return null;
         const old = host.querySelector('.rr-c3d-export');
-        if (old) { old.remove(); return null; }
+        if (old) { if(old.dataset.busy)return old;const same=old.dataset.mode==='sheet',src=old.querySelector('img')?.src;if(src?.startsWith('blob:'))URL.revokeObjectURL(src);old.remove();if(same)return null; }
         const t = (text, params) => builder._t(text, params), S = sheets();
         const looping = hasLoop(builder);
         const state = builder._sheetSettings || (builder._sheetSettings = { directions: 1, elevation: 30, outline: true, look: 'smooth', chose: {}, widths: {} });
         // Until chosen here: 8 frames for a prop with a loop, else 1.
         if (!state.chose.frames) state.frames = looping ? 8 : 1;
         if (!state.widths) state.widths = {};
-        // The width in tiles, kept per prop type while the Forge is open (never saved): until chosen, the prop's width beside characters.
+        if (!state.pixelWidths) state.pixelWidths = {};
+        // Pixel widths are per prop type; old in-memory tile choices migrate once.
         const Catalog = root.RRPropCatalog, typeId = (Catalog && Catalog.typeOf && (Catalog.typeOf(builder.recipe) || {}).id) || (builder.recipe && builder.recipe.kind) || 'prop';
         const tile = defaultWidth();
         const choice = () => {
             const at = builder._result ? widthTiles(restBounds(builder._result.parts, state.directions, state.elevation), state.outline, tile) : { atScale: 1, most: 1024 / tile };
-            const chosen = state.widths[typeId];
-            return Object.assign(at, { tiles: chosen ? Math.min(chosen, at.most) : Math.min(at.atScale, at.most) });
+            const chosen = state.pixelWidths[typeId] || (state.widths[typeId] ? state.widths[typeId] * tile : 0);
+            return { width: Math.max(16, Math.min(MAX_FRAME, Math.round(chosen || Math.min(at.atScale, at.most) * tile))) };
         };
         const panel = document.createElement('div');
-        panel.className = 'rr-c3d-export';
+        panel.className = 'rr-c3d-export';panel.dataset.mode='sheet';
         panel.setAttribute('role', 'dialog');
         panel.setAttribute('aria-label', t('Export Sprite Sheet'));
         host.appendChild(panel);
         // The frame the width makes, its height following the prop: shown from the prop at rest (its loop adds a little).
         const sizeText = () => {
             if (!builder._result || !S) return '';
-            const sized = matchSize(restBounds(builder._result.parts, state.directions, state.elevation), S.pixelsPerMeter(tile), state.outline, Math.round(choice().tiles * tile));
+            const sized = matchSize(restBounds(builder._result.parts, state.directions, state.elevation), S.pixelsPerMeter(tile), state.outline, choice().width);
             const g = grid(state.directions, state.frames);
             return `≈ ${sized.w} × ${sized.h} px · ${g.columns} × ${g.rows}`;
         };
-        const refresh = () => { const size = panel.querySelector('.rr-c3d-export-size'); if (size) size.textContent = sizeText(); };
+        const refresh = () => {
+            const size=panel.querySelector('.rr-c3d-export-size');if(size)size.textContent=sizeText();
+            if(!builder._result||!S)return;
+            const f=matchSize(restBounds(builder._result.parts,state.directions,state.elevation),S.pixelsPerMeter(tile),state.outline,choice().width),g=grid(state.directions,state.frames),large=!sheetFits(f.w*g.columns,f.h*g.rows),go=panel.querySelector('.rr-c3d-export-go'),status=panel.querySelector('.rr-c3d-export-status');
+            if(go)go.disabled=large;
+            if(status&&large){status.textContent=t(SIZE_WARNING);status.dataset.kind='size';}else if(status?.dataset.kind==='size'){status.textContent='';delete status.dataset.kind;}
+        };
         const dirLabel = d => (d === 1 ? t('1 direction') : d === 4 ? t('4 directions') : t('8 directions [8D]'));
         const draw = () => {
             const name = (S && S.safeName(builder.name)) || t('Prop'), file = fileName(name, state.directions, state.frames), c = choice();
@@ -351,8 +363,8 @@
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Directions'))}</span><select class="rr-select" data-x="directions">${DIRECTIONS.map(d => `<option value="${d}"${d === directionsOf(state.directions) ? ' selected' : ''}>${esc(dirLabel(d))}</option>`).join('')}</select></label>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Frames'))}</span><select class="rr-select" data-x="frames">${FRAME_CHOICES.map(n => `<option value="${n}"${n === framesOf(state.frames) ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
                 ${looping ? '' : `<div class="rr-c3d-row"><span class="rr-c3d-label"></span><span class="rr-c3d-export-hint" style="grid-column: 2 / 4; font-size: 11px; color: var(--color-text-muted);">${esc(t('This prop has no loop: every frame is the same. One frame is enough.'))}</span></div>`}
-                <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Width (tiles)'))}</span><input type="number" class="rr-input" data-x="tiles" min="0.25" max="${c.most}" step="0.25" value="${c.tiles}"></div>
-                <div class="rr-c3d-row"><span class="rr-c3d-label"></span><button class="rr-btn-chip" data-x="charscale" style="grid-column: 2 / 4; justify-self: start;" title="${esc(t('The width the prop has beside exported characters'))}"${state.widths[typeId] ? '' : ' disabled'}>${esc(t('Character scale'))}</button></div>
+                <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Frame width (px)'))}</span><input type="number" class="rr-input" data-x="pixels" min="16" max="1024" step="1" value="${c.width}"></div>
+                <div class="rr-c3d-row"><span class="rr-c3d-label"></span><button class="rr-btn-chip" data-x="charscale" style="grid-column: 2 / 4; justify-self: start;" title="${esc(t('The width the prop has beside exported characters'))}"${(state.pixelWidths[typeId] || state.widths[typeId]) ? '' : ' disabled'}>${esc(t('Character scale'))}</button></div>
                 <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Frame size'))}</span><span class="rr-c3d-export-size" style="grid-column: 2 / 4;">${esc(sizeText())}</span></div>
                 <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Camera angle'))}</span><input type="range" data-x="elevation" min="0" max="60" step="1" value="${state.elevation}"><span class="rr-c3d-value">${state.elevation}°</span></label>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Look'))}</span><select class="rr-select" data-x="look">${(S ? S.LOOKS : []).map(o => `<option value="${o.id}"${o.id === state.look ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
@@ -364,29 +376,30 @@
                 <div class="rr-c3d-export-foot"><button class="rr-btn-chip" data-x="close">${esc(t('Close'))}</button><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export'))}</button></div>`;
             const fill = panel.querySelector('input[type="range"]');
             if (fill) fill.style.setProperty('--rr-fill', (state.elevation / 60 * 100) + '%');
+            refresh();
         };
         panel.addEventListener('input', e => {
             const x = e.target.dataset.x;
             if (x === 'elevation') { state.elevation = Number(e.target.value); refresh(); e.target.style.setProperty('--rr-fill', (state.elevation / 60 * 100) + '%'); e.target.parentElement.querySelector('.rr-c3d-value').textContent = state.elevation + '°'; }
-            if (x === 'tiles') {
-                const v = Number(e.target.value), most = choice().most;
-                if (v >= 0.25) { state.widths[typeId] = Math.min(v, most); refresh(); const reset = panel.querySelector('[data-x="charscale"]'); if (reset) reset.disabled = false; }
+            if (x === 'pixels') {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v >= 16) { state.pixelWidths[typeId] = Math.min(Math.round(v), MAX_FRAME); refresh(); const reset = panel.querySelector('[data-x="charscale"]'); if (reset) reset.disabled = false; }
             }
         });
         panel.addEventListener('change', e => {
             const x = e.target.dataset.x;
             if (x === 'directions') { state.directions = Number(e.target.value); draw(); }
             else if (x === 'frames') { state.frames = Number(e.target.value); state.chose.frames = true; draw(); }
-            else if (x === 'tiles') draw();
+            else if (x === 'pixels') draw();
             else if (x === 'outline') { state.outline = e.target.checked; refresh(); }
             else if (x === 'look') state.look = e.target.value;
         });
         panel.addEventListener('click', e => {
             const b = e.target.closest('[data-x]');
             if (!b) return;
-            if (b.dataset.x === 'close' && !panel.dataset.busy) panel.remove();
-            else if (b.dataset.x === 'charscale') { delete state.widths[typeId]; draw(); }
-            else if (b.dataset.x === 'export' && !panel.dataset.busy) exportNow(builder, panel, Object.assign({}, state, { width: Math.round(choice().tiles * tile) }));
+            if (b.dataset.x === 'close' && !panel.dataset.busy) {const src=panel.querySelector('img')?.src;if(src?.startsWith('blob:'))URL.revokeObjectURL(src);panel.remove();}
+            else if (b.dataset.x === 'charscale') { delete state.widths[typeId]; delete state.pixelWidths[typeId]; draw(); }
+            else if (b.dataset.x === 'export' && !panel.dataset.busy) exportNow(builder, panel, Object.assign({}, state, { width: choice().width }));
         });
         draw();
         return panel;
@@ -427,12 +440,13 @@
                 + (S.turnOnMultiFrames() ? ' ' + t('Multi-frame sheets turned on in Reactor Features.') : '');
             status.dataset.kind = 'ok';
             const img = panel.querySelector('.rr-c3d-export-preview');
+            if(img.src?.startsWith('blob:'))URL.revokeObjectURL(img.src);
             img.src = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
             img.hidden = false;
             console.log(`[RRPropSpriteSheet] ${path.basename(file)} ${sheet.width}x${sheet.height} in ${seconds} s`);
         } catch (error) {
             console.error('[RRPropSpriteSheet] export', error);
-            status.textContent = t('The sprite sheet could not be made.');
+            status.textContent = error.code==='SHEET_SIZE'?t(SIZE_WARNING):t('The sprite sheet could not be made.');
             status.dataset.kind = 'error';
         } finally {
             delete panel.dataset.busy;
@@ -440,7 +454,62 @@
         }
     }
 
-    const api = { DIRECTIONS, FRAME_CHOICES, YAW, MAX_FRAME, grid, plan, fileName, cellHeight, matchSize, widthTiles, restBounds, footprint, defaultWidth, hasLoop, render, openPanel };
+    /** Capture the current camera and pose. GPU target bounds keep export independent of DPR. */
+    function renderPicture(builder, settings = {}) {
+        const THREE = root.THREE, v = builder._view;
+        if (!v || !builder._result) throw new Error('The prop is not built yet.');
+        const dimension = n => Math.max(16, Math.min(4096, Math.round(Number(n) || 512)));
+        const width = dimension(settings.width), height = dimension(settings.height), renderer = v.renderer;
+        const camera = v.camera.clone(); camera.aspect = width / height; camera.updateProjectionMatrix();
+        const target = new THREE.WebGLRenderTarget(width, height, { depthBuffer: true, samples: 0 });
+        target.texture.colorSpace = THREE.SRGBColorSpace;
+        const previous = renderer.getRenderTarget(), clear = renderer.getClearColor(new THREE.Color()), alpha = renderer.getClearAlpha(), background = v.scene.background;
+        const studio = [v.floor, v.blob, v.wall, v.wall2].filter(Boolean), visible = studio.map(o => o.visible);
+        const bytes = new Uint8Array(width * height * 4);
+        try {
+            if (settings.transparent !== false) { for (const o of studio) o.visible = false; v.scene.background = null; renderer.setClearColor(0, 0); }
+            renderer.setRenderTarget(target); renderer.clear(); renderer.render(v.scene, camera);
+            renderer.readRenderTargetPixels(target, 0, 0, width, height, bytes);
+        } finally {
+            renderer.setRenderTarget(previous); renderer.setClearColor(clear, alpha); v.scene.background = background;
+            studio.forEach((o, i) => { o.visible = visible[i]; }); target.dispose(); builder._draw();
+        }
+        const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d'), img = ctx.createImageData(width, height);
+        for (let y = 0; y < height; y++) img.data.set(bytes.subarray(y * width * 4, (y + 1) * width * 4), (height - 1 - y) * width * 4);
+        ctx.putImageData(img, 0, 0);
+        return { width, height, dataURL: canvas.toDataURL('image/png') };
+    }
+    function openPicturePanel(builder) {
+        const host = builder.root?.querySelector('.rr-c3d-view'); if (!host) return;
+        const old = host.querySelector('.rr-c3d-export'); if (old) {if(old.dataset.busy)return old;const same=old.dataset.mode==='picture',src=old.querySelector('img')?.src;if(src?.startsWith('blob:'))URL.revokeObjectURL(src);old.remove();if(same)return null;}
+        const t = (s, p) => builder._t(s, p), state = builder._pictureSettings || (builder._pictureSettings = { width: 512, height: 512, transparent: true });
+        const panel = document.createElement('div'); panel.className = 'rr-c3d-export';panel.dataset.mode='picture'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', t('Export Picture'));
+        panel.innerHTML = `<div class="rr-c3d-export-head"><span>${esc(t('Export Picture'))}</span><button class="rr-c3d-clear" data-x="close">✕</button></div>
+            <p class="rr-c3d-export-hint">${esc(t('Uses the current camera angle, zoom and pose.'))}</p>
+            ${['width','height'].map(k => `<label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t(k==='width'?'Width (px)':'Height (px)'))}</span><input class="rr-input" type="number" data-x="${k}" min="16" max="4096" step="1" value="${state[k]}"></label>`).join('')}
+            <label class="rr-c3d-row rr-c3d-check"><span class="rr-c3d-label">${esc(t('Transparent background'))}</span><input type="checkbox" data-x="transparent"${state.transparent?' checked':''}></label>
+            <div class="rr-c3d-export-file">img/pictures/</div><img class="rr-c3d-export-preview" alt="" hidden><div class="rr-c3d-export-status" aria-live="polite"></div>
+            <div class="rr-c3d-export-foot"><button class="rr-btn-chip" data-x="close">${esc(t('Close'))}</button><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export'))}</button></div>`;
+        host.appendChild(panel);
+        panel.addEventListener('change', e => { const k = e.target.dataset.x; if (k==='transparent') state.transparent=e.target.checked; else if (k==='width'||k==='height') { state[k]=Math.max(16,Math.min(4096,Math.round(Number(e.target.value)||512))); e.target.value=state[k]; } });
+        panel.addEventListener('click', async e => {
+            const go = e.target.closest('[data-x]'), status = panel.querySelector('.rr-c3d-export-status'); if (!go || panel.dataset.busy) return;
+            if (go.dataset.x==='close') return panel.remove(); if (go.dataset.x!=='export') return;
+            const project=builder._project?.(), S=sheets(); if (!project || !S) return;
+            let name=S.safeName(builder.name); if (!name) name=S.safeName(await root.RRDialog.prompt(t('Name this prop:'), {title:t('Export Picture'),value:t('Prop')})); if (!name) return;
+            const fs=require('fs'),path=require('path'),file=path.join(project.path,'img','pictures',name+'.png');
+            if(fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?',{file:'img/pictures/'+name+'.png'}),{title:t('Export Picture'),ok:t('Replace'),danger:true}))return;
+            panel.dataset.busy='1'; go.disabled=true;
+            try { const image=renderPicture(builder,state), bytes=Buffer.from(image.dataURL.split(',')[1],'base64'); fs.mkdirSync(path.dirname(file),{recursive:true}); (root.RRWriteFileAtomicSync || ((io,p,b)=>io.writeFileSync(p,b)))(fs,file,bytes);
+                const preview=panel.querySelector('img');preview.src=image.dataURL;preview.hidden=false;status.textContent=t('Saved img/{folder}/{file} ({s} s).',{folder:'pictures',file:name+'.png',s:'0.0'});status.dataset.kind='ok';
+            } catch(error) { console.error('[RRPropSpriteSheet] picture',error);status.textContent=t('The picture could not be made.');status.dataset.kind='error'; }
+            finally {delete panel.dataset.busy;go.disabled=false;}
+        });
+        return panel;
+    }
+
+    const api = { DIRECTIONS, FRAME_CHOICES, YAW, MAX_FRAME, sheetFits, grid, plan, fileName, cellHeight, matchSize, widthTiles, restBounds, footprint, defaultWidth, hasLoop, render, openPanel, renderPicture, openPicturePanel };
     root.RRPropSpriteSheet = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -35,7 +35,9 @@
         if (!current) return;
         current.cleanup();
         current.el.remove();
+        const onClose = current.onClose;
         current = null;
+        onClose?.();
     }
 
     function open(anchor, options) {
@@ -142,7 +144,7 @@
         const escape = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); anchor.focus && anchor.focus(); } };
         setTimeout(() => document.addEventListener('pointerdown', outside, true), 0);
         document.addEventListener('keydown', escape, true);
-        current = { el, cleanup: () => { clearTimeout(pendingInput); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape, true); } };
+        current = { el, onClose: o.onClose, cleanup: () => { clearTimeout(pendingInput); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape, true); } };
         paint();
         paintRecent();
         sv.focus({ preventScroll: true });

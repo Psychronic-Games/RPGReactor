@@ -84,6 +84,8 @@
     }
 
     function writeFileAtomicSync(fs, filePath, data, options) {
+        // Browser project storage already replaces a complete IndexedDB record.
+        if (typeof fs.writeFileAtomicSync === 'function') return fs.writeFileAtomicSync(filePath, data, options);
         const crypto = require('crypto');
         const path = require('path');
         const constants = fs.constants || {};

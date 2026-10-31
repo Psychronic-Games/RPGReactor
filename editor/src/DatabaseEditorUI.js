@@ -1547,8 +1547,9 @@ class DatabaseEditorUI {
 
         // Keep menu in viewport
         const rect = menu.getBoundingClientRect();
-        if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
-        if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
+        const view = menu.ownerDocument?.defaultView || window;
+        if (rect.right > view.innerWidth) menu.style.left = Math.max(4, view.innerWidth - rect.width - 4) + 'px';
+        if (rect.bottom > view.innerHeight) menu.style.top = Math.max(4, view.innerHeight - rect.height - 4) + 'px';
 
         const closeMenu = (e) => {
             if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
@@ -1762,8 +1763,9 @@ class DatabaseEditorUI {
 
         document.body.appendChild(menu);
         const rect = menu.getBoundingClientRect();
-        if (rect.right > window.innerWidth) menu.style.left = `${Math.max(4, window.innerWidth - rect.width - 4)}px`;
-        if (rect.bottom > window.innerHeight) menu.style.top = `${Math.max(4, window.innerHeight - rect.height - 4)}px`;
+        const view = menu.ownerDocument?.defaultView || window;
+        if (rect.right > view.innerWidth) menu.style.left = `${Math.max(4, view.innerWidth - rect.width - 4)}px`;
+        if (rect.bottom > view.innerHeight) menu.style.top = `${Math.max(4, view.innerHeight - rect.height - 4)}px`;
         menu.setAttribute('role', 'menu');
         window.RRKeyboardNavigation?.menu(menu, {
             items: () => menu.children,
@@ -3273,6 +3275,7 @@ class DatabaseEditorUI {
         const listEl = document.getElementById('image-picker-list');
         const previewEl = document.getElementById('image-picker-preview');
         const closeBtn = document.getElementById('image-picker-close-btn');
+        let importButton = null;
 
         if (this._imagePickerBaseZIndex === undefined) {
             this._imagePickerBaseZIndex = modal.style.zIndex || '';
@@ -3303,8 +3306,16 @@ class DatabaseEditorUI {
             closed = true;
             modal.style.display = 'none';
             clearPreview();
+            importButton?.remove();
         };
         this._closeImagePicker = close;
+        if (typeof options.onImport === 'function') {
+            importButton = document.createElement('button');
+            importButton.className = 'rr-btn-secondary';
+            importButton.textContent = options.importButtonLabel || tt('Import picture');
+            importButton.onclick = () => { if (isCurrent()) { close(); options.onImport(); } };
+            closeBtn.before(importButton);
+        }
         (this._detailCleanups ||= []).push(close);
         const select = (file, index) => {
             if (!isCurrent()) return;

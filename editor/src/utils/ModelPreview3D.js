@@ -133,7 +133,7 @@ class ModelPreview3D {
         return uniforms;
     }
 
-    static studioEnvironment(renderer) {
+    static studioEnvironment(renderer, { balanced = false } = {}) {
         const room = new THREE.Scene();
         const box = (w, h, d, color, x, y, z, intensity) => {
             const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.BackSide }));
@@ -141,17 +141,47 @@ class ModelPreview3D {
             room.add(m);
             return m;
         };
-        box(14, 8, 14, '#2a2c32', 0, 3, 0, 1);
+        box(14, 8, 14, balanced ? '#78828f' : '#2a2c32', 0, 3, 0, 1);
         const soft = (w, h, x, y, z, intensity, color) => {
             const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.DoubleSide }));
             m.position.set(x, y, z);
             m.lookAt(0, 1, 0);
             room.add(m);
+            if (balanced && w >= 5 && x !== 0) {
+                // Window divisions give the shaded chrome reflected structure,
+                // rather than another featureless bright plane.
+                for (const u of [-.25,0,.25]) {
+                    const bar = new THREE.Mesh(new THREE.PlaneGeometry(.10,h), new THREE.MeshBasicMaterial({color:0x243241,side:THREE.DoubleSide}));
+                    bar.position.set(w*u,0,.012); m.add(bar);
+                }
+                const cross = new THREE.Mesh(new THREE.PlaneGeometry(w,.10), new THREE.MeshBasicMaterial({color:0x243241,side:THREE.DoubleSide}));
+                cross.position.z=.014; m.add(cross);
+            }
         };
         soft(3, 2, 3, 4, 4, 9, '#fff2e4');
         soft(2, 3, -4, 2.5, 2, 3.5, '#dfe8ff');
         soft(4, 1, -1, 3, -5, 6, '#e8eeff');
-        soft(8, 8, 0, -0.9, 0, 0.6, '#8a7a6a');
+        soft(8, 8, 0, -0.9, 0, balanced ? 1.0 : 0.6, balanced ? '#b4c2ce' : '#8a7a6a');
+        if (balanced) {
+            // Broad wall cards keep polished metal legible between the bright
+            // softboxes, including its shadow side and the underside of bowls.
+            soft(6, 5, 5, 1.8, -1, 2.0, '#e3edff');
+            soft(5, 4, -4, 1.5, -4, 1.4, '#f0f3ff');
+            // Faint architectural divisions on every wall give flat chrome
+            // faces something to reflect even when they miss a softbox.
+            for (const [x,z] of [[6.96,0],[-6.96,0],[0,6.96],[0,-6.96]]) {
+                const wall = new THREE.Mesh(new THREE.PlaneGeometry(13.8,7.8),new THREE.MeshBasicMaterial({color:0x78828f,side:THREE.DoubleSide}));
+                wall.position.set(x,3,z);wall.lookAt(0,3,0);room.add(wall);
+                for (let j=-4;j<=4;j++) {
+                    const bar=new THREE.Mesh(new THREE.PlaneGeometry(.07,7.8),new THREE.MeshBasicMaterial({color:0x4c5868,side:THREE.DoubleSide}));
+                    bar.position.set(j*1.4,0,.015);wall.add(bar);
+                }
+                for (const y of [-2,0,2]) {
+                    const bar=new THREE.Mesh(new THREE.PlaneGeometry(13.8,.06),new THREE.MeshBasicMaterial({color:0x4c5868,side:THREE.DoubleSide}));
+                    bar.position.set(0,y,.017);wall.add(bar);
+                }
+            }
+        }
         const pmrem = new THREE.PMREMGenerator(renderer);
         const target = pmrem.fromScene(room, 0.03);
         pmrem.dispose();

@@ -30,16 +30,25 @@ const os = require('node:os');
 const https = require('node:https');
 const { execFile, execFileSync } = require('node:child_process');
 
-const PLAYABLE = /\.(webm|mp4)$/i;
-const CONVERTIBLE = /\.(avi|mpg|mpeg|wmv|ogv|flv|mov|mkv)$/i;
+const PLAYABLE = /\.webm$/i;
+const CONVERTIBLE = /\.(avi|mpg|mpeg|wmv|ogv|flv|mov|mkv|mp4)$/i;
 
 /** Movies in the project that the runtime cannot play yet, with no WebM beside them. */
 function pendingMovies(projectDir) {
     const dir = path.join(projectDir, 'movies');
     if (!fs.existsSync(dir)) return [];
-    const files = fs.readdirSync(dir);
-    const playable = new Set(files.filter(f => PLAYABLE.test(f)).map(f => f.replace(/\.[^.]+$/, '').toLowerCase()));
-    return files.filter(f => CONVERTIBLE.test(f) && !playable.has(f.replace(/\.[^.]+$/, '').toLowerCase()));
+    const pending = [];
+    const walk = (folder, rel) => {
+        const entries = fs.readdirSync(folder, { withFileTypes: true });
+        const playable = new Set(entries.filter(e => e.isFile() && PLAYABLE.test(e.name)).map(e => e.name.replace(/\.[^.]+$/, '').toLowerCase()));
+        for (const entry of entries) {
+            const name = rel ? rel + '/' + entry.name : entry.name;
+            if (entry.isDirectory()) walk(path.join(folder, entry.name), name);
+            else if (CONVERTIBLE.test(entry.name) && !playable.has(entry.name.replace(/\.[^.]+$/, '').toLowerCase())) pending.push(name);
+        }
+    };
+    walk(dir, '');
+    return pending;
 }
 
 function systemFfmpeg() {
@@ -99,6 +108,20 @@ function run(executable, args) {
 function stopAll() {
     for (const child of running) { try { child.kill('SIGKILL'); } catch (_) { /* already gone */ } }
     running.clear();
+}
+
+/** Decode JPEG art before XP re-cuts its tiles, icons or skins. Never writes to the source game. */
+async function decodeImage(bytes, options = {}) {
+    const Image = require('./LegacyImage.js');
+    if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return Image.decode(bytes);
+    const ffmpeg = await resolveFfmpeg(options);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-import-image-'));
+    try {
+        const source = path.join(dir, 'source.jpg'), target = path.join(dir, 'decoded.png');
+        fs.writeFileSync(source, bytes);
+        await run(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-threads', '2', '-i', source, '-frames:v', '1', '-threads', '2', target]);
+        return Image.decode(fs.readFileSync(target));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
 async function convertMovies(projectDir, options = {}) {
@@ -354,4 +377,4 @@ async function convertMedia(projectDir, options = {}) {
 
 const pendingMedia = (projectDir) => pendingImages(projectDir).length + pendingMovies(projectDir).length + pendingMusic(projectDir).length;
 
-module.exports = { run, stopAll, convertImages, convertMovies, convertMusic, convertMedia, pendingImages, pendingMovies, pendingMusic, pendingMedia, midiLoop, resolveFfmpeg };
+module.exports = { run, stopAll, decodeImage, convertImages, convertMovies, convertMusic, convertMedia, pendingImages, pendingMovies, pendingMusic, pendingMedia, midiLoop, resolveFfmpeg };

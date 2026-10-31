@@ -243,7 +243,7 @@ class ForgeManager {
             const active = tool.id === this.activeToolId;
             const name = this._t(tool.nameKey);
             return `
-                <div class="rr-forge-sidebar-item" data-tool-id="${tool.id}" title="${this._t(tool.descriptionKey).replace(/"/g, '&quot;')}" style="padding: 10px 14px; cursor: pointer; font-size: 12px; color: var(--color-text); background: ${active ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${active ? 'var(--color-accent-bright)' : 'transparent'}; display: flex; align-items: center; gap: 8px;">
+                <div class="rr-forge-sidebar-item${active ? ' is-active' : ''}" data-tool-id="${tool.id}" title="${this._t(tool.descriptionKey).replace(/"/g, '&quot;')}">
                     <span style="line-height: 1; color: var(--color-accent-bright); flex-shrink: 0; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;">${tool.icon(18)}</span>
                     <span class="rr-forge-sidebar-name">${name}</span>
                 </div>
@@ -256,20 +256,14 @@ class ForgeManager {
         this.workspaceModal.querySelector('.rr-modal-title').textContent = this._t('menu.forge') + titleSuffix;
         this.workspaceModal.querySelector('.rr-forge-close').setAttribute('aria-label', this._t('common.close'));
         this.workspaceModal.querySelector('.rr-forge-workspace-body').innerHTML = `
-                    <div class="rr-forge-sidebar" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto; padding: 8px 0;">
-                        <div style="padding: 6px 14px 8px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${this._t('forge.tools')}</div>
+                    <div class="rr-forge-sidebar">
+                        <div class="rr-forge-tools-header lit-section-header">${this._t('forge.tools')}</div>
                         ${sidebarHtml}
                     </div>
                     <div class="rr-forge-content" style="overflow: hidden; min-width: 0; display: flex; flex-direction: column;"></div>
         `;
 
         this.workspaceModal.querySelectorAll('.rr-forge-sidebar-item').forEach(el => {
-            el.addEventListener('mouseenter', () => {
-                if (el.dataset.toolId !== this.activeToolId) el.style.background = 'var(--color-bg-hover)';
-            });
-            el.addEventListener('mouseleave', () => {
-                if (el.dataset.toolId !== this.activeToolId) el.style.background = 'transparent';
-            });
             el.addEventListener('click', () => this._activateTool(el.dataset.toolId));
         });
 

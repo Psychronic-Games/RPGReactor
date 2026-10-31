@@ -57,6 +57,15 @@
         ['railgun', 'Railgun rifle', 'scifi', { style: 'monocoque', barrelBuild: 'rails', capacitors: 4, barrel: { length: 0.54, thickness: 0.02 }, receiver: { length: 0.36, height: 0.07 }, magazine: 'cell', magSize: 1.1, stock: 'full', sight: 'scope', grip: { angle: 18, length: 0.1 }, muzzle: 'plain', rails: true, frame: 'painted', furniture: 'polymer', paint: '#4a4e56', coils: 0, vents: true, glow: '#38c8ff', forend: true }],
         ['laser', 'Laser rifle', 'scifi', { style: 'monocoque', barrel: { length: 0.55, thickness: 0.011 }, receiver: { length: 0.3, height: 0.055 }, magazine: 'cell', magSize: 0.9, stock: 'full', sight: 'scope', grip: { angle: 18, length: 0.1 }, muzzle: 'emitter', rails: false, frame: 'chrome', furniture: 'painted', paint: '#f0f0f2', coils: 2, vents: false, glow: '#c86aff' }]
     ];
+    // Each new energy family has its own mechanical silhouette, not only a new coating.
+    for(const [id,label,base,over]of [
+        ['ionPistol','Ion pistol','blasterPistol',{style:'truss',paint:'#d1dce2',barrel:{length:.14,thickness:.025},receiver:{length:.24,height:.055},coils:0,glow:'#51e8f2'}],
+        ['pulseCarbine','Pulse carbine','blasterRifle',{style:'monocoque',paint:'#e2dcc9',barrel:{length:.26,thickness:.025},receiver:{length:.4,height:.08},stock:'full',sight:'dot',coils:0,glow:'#29d5ff'}],
+        ['arcCaster','Arc caster','plasma',{style:'truss',paint:'#c9ac51',barrel:{length:.33,thickness:.035},receiver:{length:.32,height:.075},coils:4,sight:'none',glow:'#9582ff'}],
+        ['particleLance','Particle lance','laser',{style:'truss',paint:'#d3dee6',barrel:{length:.74,thickness:.028},receiver:{length:.36,height:.075},coils:0,glow:'#ff6693'}],
+        ['gravCannon','Gravity cannon','plasma',{style:'heavy',paint:'#344553',barrel:{length:.32,thickness:.06},receiver:{length:.4,height:.11},coils:0,sight:'none',glow:'#72ffd4'}],
+        ['microMissile','Micro-missile launcher','plasma',{style:'heavy',paint:'#7e8058',barrel:{length:.29,thickness:.04},receiver:{length:.39,height:.12},coils:0,magazine:'box',muzzle:'plain',glow:'#ffba57'}]
+    ]){const b=PRESETS.find(p=>p[0]===base)[3];PRESETS.push([id,label,'scifi',{...b,...over}]);}
     const PRESET_BY_ID = new Map(PRESETS.map(p => [p[0], p[3]]));
 
     function normalize(input) {
@@ -770,8 +779,8 @@
         add(P.copper, { name: 'Conductors', kind: 'metal', color: '#b87048', roughness: 0.28, metalness: 0.9 });
         add(P.insul, { name: 'Insulators', kind: 'prop', color: '#d8d0bc', roughness: 0.5, metalness: 0 });
         add(P.boreGlow, { name: 'Bore glow', kind: 'prop', color: '#0c0d10', roughness: 0.4, metalness: 0, emissive: r.glow, emissiveIntensity: 0.16 });
-        add(P.charge, { name: 'Charge lights', kind: 'prop', color: r.glow, roughness: 0.3, metalness: 0, emissive: r.glow });
-        add(P.glow, { name: 'Glow', kind: 'prop', color: r.glow, roughness: 0.3, metalness: 0, emissive: r.glow });
+        add(P.charge, { name: 'Charge lights', kind: 'prop', color: r.glow, roughness: 0.3, metalness: 0, emissive: r.glow, emissiveIntensity:2.6 });
+        add(P.glow, { name: 'Glow', kind: 'prop', color: r.glow, roughness: 0.3, metalness: 0, emissive: r.glow, emissiveIntensity:2.6 });
         Surface.apply(parts, textures, p => ['Frame', 'Underframe', 'Metal', 'Details'].includes(p.name) ? 'metal' : p.name === 'Furniture' ? (r.furniture === 'wood' ? 'wood' : 'rubber') : null);
         for (const p of parts) Mesh.transform(p, toWorld, toWorld);
         let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -836,7 +845,7 @@
     if (Model && Model.register) Model.register({ id: 'gun', label: 'Firearm', normalize, build, random, randomScopes: [Rand.SCOPES.all, Rand.SCOPES.shape, Rand.SCOPES.details, Rand.SCOPES.colors] });
     if (Catalog) {
         const icon = { pistol: 'pistol', revolver: 'pistol', rifle: 'rifle', shotgun: 'shotgun', smg: 'rifle', sniper: 'rifle', blasterPistol: 'blaster', blasterRifle: 'blaster', plasma: 'cannon', laser: 'blaster', railgun: 'rifle' };
-        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'gun-' + id, category, label, icon: icon[id], kind: 'gun', keywords: 'gun weapon firearm ranged ' + id + (id === 'railgun' ? ' rail magnetic coil capacitor' : ''), start: () => normalize({ preset: id }), matches: r => r.preset === id });
+        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'gun-' + id, category:'firearms',genre:category==='scifi'?'scifi':'modern', label, icon: icon[id], kind: 'gun', keywords: (category==='scifi'?'sci-fi energy science fiction ':'')+'gun weapon firearm ranged ' + id + (id === 'railgun' ? ' rail magnetic coil capacitor' : ''), start: () => normalize({ preset: id }), matches: r => r.preset === id });
         Catalog.ui('gun', {
             placeholder: 'Firearm',
             tabs: [['body', 'Body'], ['parts', 'Parts'], ['look', 'Look']],

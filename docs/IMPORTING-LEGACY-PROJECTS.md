@@ -172,6 +172,21 @@ files are overwritten in place. Do not delete the folder first when it sits
 in a synced directory such as Dropbox; the sync client can put the old files
 back underneath the new import.
 
+## Reliability audit
+
+Imports use the current runtime bundled with the editor, while keeping the source game untouched. The 2026-10-29 pass strengthens that normal import path; there are no per-game patches to apply.
+
+- **2000/2003 artwork:** PNG, uncompressed Windows BMP and XYZ decode before chipset/sprite/window conversion. Nested character names retain their sheet markers on the filename. Pictures keep their per-command transparent/opaque choice, including mixed case and subfolders. Doubled image extensions are normalized.
+- **Dependencies:** event commands, autonomous movement and forced routes contribute RTP references. An available RTP can supply a missing dependency even when the game claims to be a full package. Nested audio and movie folders are retained. Shared checks cover tile sheets, vehicle images/music, both title layers, movies and importer-generated image/sound calls.
+- **Event behavior:** indirect variable operands use the runtime's integer arithmetic. Equipment changes retain party/actor/variable targets and the correct equipment type. Page item conditions include equipped weapons/armor. Costume and portrait changes preserve one another. Simulated attacks retain their authored defense/spirit factors.
+- **Timers:** setting a timer records its value at execution time, independently of the event that starts it. Both timers keep separate values, visibility, battle participation, page conditions and saved-game state. Starting resumes the remaining time; stopping does not reset it.
+- **Repeat imports:** copied files are writable, and replacement handles read-only earlier copies. Newly imported media regenerates derived PNG/Ogg/WebM files; authored alternatives take precedence. XP JPEG/BMP art is decoded before re-cutting, and character image extensions remain correct until media conversion.
+- **Review:** the completion screen opens the Import Report directly. Missing resources, failed conversions and direct transfers to absent source maps are identified. Untranslated event Ruby and damage formulas are identified too. The importer preserves a dangling authored transfer rather than inventing a destination.
+
+Runtime revision **20261029.9** supplies the timer and event-condition support. Refreshing an existing imported project's runtime supplies that support; new converted commands and resource handling require importing again. Import into a new destination when retaining edits to an earlier conversion.
+
+Verification and evidence are recorded under `scratchpad/legacy-audit-20261029/`: ten import passes across nine games (1,406 maps), with no converted event-script syntax or map-shape errors; 121 image, 373 MIDI and three movie conversions completed without failures. Five unconverted Dreamwalker formulas remain flagged. Native dialog checks cover dark/light themes at 1280×720 and 1024×600, failure/retry, the report flow and a real worker import. Live runtime checks cover both Imdahl artwork modes through maps 11→22→21→23→10, its authored rat-hunt timer/page fixture, and menus/save-load in XP/VX samples. Controlled Legionwood fixtures exercise Classic and Tactical battles on converted data. This is a compatibility pass across the available projects, not a claim of complete playthroughs or universal custom-script compatibility. Unshipped source content and unsupported community scripts remain explicit limits.
+
 ## What converts today
 
 | 2000/2003 | Reactor | Notes |
@@ -181,7 +196,7 @@ back underneath the new import.
 | Passability, counter, terrain bush and damage | Tileset flags | 2003 terrain ids do not fit MZ's eight terrain tags and are not carried |
 | Map tree | MapInfos.json with the same ids, parents and order | Areas have no MZ counterpart and are dropped |
 | Map music, parallax, encounters, scroll type | Map properties | Inherited music is resolved up the tree |
-| Events: position, graphic, direction, movement, move route, trigger, priority, page conditions, commands | Events with pages | Timer conditions and variable comparisons other than "at least" on a page are noted in the report |
+| Events: position, graphic, direction, movement, move route, trigger, priority, page conditions, commands | Events with pages | Both timer conditions, equipment-inclusive item conditions and variable comparisons retain runtime fields |
 | Event commands | MZ commands, one for one where MZ has one | Messages with their face and options, choices with their cancel branch, battles with their handlers, shops with their transaction branch, inns as message, choice, payment and heal. Control Variables operands MZ lacks (equipment ids, dates, frames) are Script operands. See the runtime equivalents below |
 | Actors | Actors, each with its own class (id = actor id) carrying curves, learnings and the exact 2003 EXP table | The 2003 classes follow after the actors' classes, offset by the actor count, for Change Class |
 | Stats | Attack, Defense, Spirit, Agility → Attack, Defense, M.Attack and M.Defense (both from Spirit), Agility; Luck 50 | State and attribute ranks become state and element rate traits |
@@ -203,12 +218,12 @@ back underneath the new import.
 | Title screen | The title image, or none when the game hides its title screen (`rrSkipTitle` in System.json boots straight into a new game, the way 2003 did for games that draw their own title from events). The menu is the old engines' (`rrLegacyTitle`): New Game, Continue and the game's exit command (`rrTitleShutdown`), one line each in a window as wide as the widest command, centred with its bottom at 53/60 of the screen; no game title is drawn over the picture | A title image the game names but does not ship is left blank and noted |
 | CharSet (288×256, rows up/right/down/left) | img/characters, rows reordered to MZ's down/left/right/up, named with a leading `!` so sprites stand on their tile | A leading `$` is removed: MZ reads it as a single-character sheet |
 | FaceSet, Panorama, Picture (with subfolders), Monster, Battle, Backdrop, Title, GameOver, System | The matching img folders, palette entry 0 made transparent where the old engine did | Show Picture chose per call whether palette entry 0 is transparent: a picture only ever shown opaque is written opaque, one shown both ways gets a second `Name (opaque).png` that those calls name |
-| Music and Sound | audio/bgm and audio/se | MIDI files are copied but the runtime does not play them |
+| Music and Sound | audio/bgm and audio/se | MIDI becomes Ogg in the media pass when FluidSynth and a soundfont are available; otherwise the report identifies it |
 | System: start position, party, title, title and battle music, system sounds, switch and variable names | System.json | 2003 had no icon set: every icon index is 0 and the Demo's IconSet.png comes with the project at 32 px cells, for authors who add icons later |
 
 ## Runtime equivalents
 
-Seven 2003 commands have no MZ command. The importer emits Script calls to
+Several 2003 commands have no MZ command. The importer emits Script calls to
 engine methods that the runtime carries for any project:
 
 | 2003 command | Call |
@@ -276,8 +291,7 @@ fast-forward: hold F for 3× speed, G for 10× (plugin parameters).
   Teleport and Escape targets, Change Battle Commands and the video options.
   Change System Graphics and teleport transition settings have runtime
   equivalents; unsupported wipe styles and non-teleport slots remain approximate.
-  Pictures fixed to the map, looping flashes and shakes, the second timer
-  and the pan lock are noted in the report.
+  Pictures fixed to the map and pan locks have runtime support; looping flashes and shakes remain approximate.
 
 Verification: `editor/tests/legacy-convert.test.cjs` draws Deep 8 maps by
 EasyRPG Player's tables from the original chipsets and by MZ's tables from
@@ -493,7 +507,7 @@ Every import (2000/2003, XP, VX, VX Ace) finishes by converting what the runtime
 cannot play, with the system's FFmpeg or the pinned build the asset optimizer
 downloads:
 
-- **Movies** (AVI, MPEG, WMV, Ogg Theora, FLV, MOV, MKV) become WebM.
+- **Movies** (AVI, MPEG, WMV, Ogg Theora, FLV, MOV, MKV and MP4) become WebM, including in subfolders. This supplies the format the runtime selects on Chromium.
 - **MIDI** becomes Ogg through FluidSynth and a General MIDI soundfont when
   both are installed; RPG Maker's loop point (controller 111) becomes the
   LOOPSTART/LOOPLENGTH tags. Without them the files stay and the report says so.

@@ -467,6 +467,16 @@ class DatabaseCommonEventEditor {
                 this.getEditor('script', ScriptEditor).show(null, null, null, insertAndRefresh);
                 return;
             }
+            if (code === 302) {
+                this.getEditor('shopProcessing', ShopProcessingEditor).show(null, insertAndRefresh);
+                return;
+            }
+            if (code === 301) {
+                this.getEditor('battleProcessing', BattleProcessingEditor).show(null, edited => {
+                    if (edited) insertAndRefresh(BattleProcessingEditor.block(edited));
+                });
+                return;
+            }
 
             // Simple single-command editors for insert
             const singleInsert = (editor, ...extraArgs) => {
@@ -506,6 +516,13 @@ class DatabaseCommonEventEditor {
             }
             if (code === 357 && command.reactor === 'SpeakModel3D' && typeof SpeakModel3DEditor !== 'undefined') {
                 this.getEditor('speakModel3D', SpeakModel3DEditor).show(null, insertAndRefresh);
+                return;
+            }
+            // Reactor commands offered by the shared picker must retain their
+            // own encoding and dialog instead of becoming an empty plugin call.
+            const reactorEditor = code === 357 && command.reactor && this._getFormatter()._reactorCommandEditor(command.reactor);
+            if (reactorEditor) {
+                reactorEditor.show(null, insertAndRefresh, command.reactor, { type: 'common' });
                 return;
             }
 
@@ -592,6 +609,14 @@ class DatabaseCommonEventEditor {
             };
             if (toggleMap[code]) {
                 singleInsert(this.getEditor('toggle', ToggleCommandEditor), toggleMap[code]);
+                return;
+            }
+
+            // Keep newly supported single-command dialogs in step with map
+            // events. Falling through here used to insert empty parameters.
+            const simple = ECL.simpleCommandEditor(code);
+            if (simple) {
+                singleInsert(this._getFormatter()[simple.editor], simple.options);
                 return;
             }
 
@@ -1016,7 +1041,16 @@ class DatabaseCommonEventEditor {
         if (code === 285) { singleReplace(this.getEditor('getLocationInfo', GetLocationInfoEditor)); return; }
 
         // Battle Processing (301)
-        if (code === 301) { singleReplace(this.getEditor('battleProcessing', BattleProcessingEditor)); return; }
+        if (code === 301) {
+            this.getEditor('battleProcessing', BattleProcessingEditor).show(command, edited => {
+                if (!isCurrent() || !edited) return;
+                ECL.replaceBattleStart(event.list, idx, BattleProcessingEditor.block(edited), { drop: true });
+                refreshList();
+            }, undefined, {
+                beforeStore: edited => this._getFormatter().confirmLostBranches(event.list, idx, BattleProcessingEditor.block(edited))
+            });
+            return;
+        }
 
         // Shop Processing (302) - multi-command with 605 continuation
         if (code === 302) {
@@ -1202,6 +1236,23 @@ class DatabaseCommonEventEditor {
                 ECL.replaceContiguousBlock(event.list, idx, editedCommand, 357, 657);
                 refreshList();
             }, undefined, { type: 'common' });
+            return;
+        }
+        const reactorEditor = code === 357 && command.parameters?.[0] === 'RPGReactor'
+            && this._getFormatter()._reactorCommandEditor(command.parameters[1]);
+        if (reactorEditor) {
+            const battleStart = ECL.isMapBattleStart(command);
+            let drop = false;
+            const context = battleStart ? {
+                type: 'common',
+                beforeStore: async block => (drop = await this._getFormatter().confirmLostBranches(event.list, idx, block))
+            } : { type: 'common' };
+            reactorEditor.show(command, edited => {
+                if (!isCurrent() || !edited) return;
+                if (battleStart) ECL.replaceBattleStart(event.list, idx, edited, { drop });
+                else ECL.replaceContiguousBlock(event.list, idx, edited, 357, 657);
+                refreshList();
+            }, command.parameters[1], context);
             return;
         }
         if (code === 356 || code === 357) {
@@ -1603,8 +1654,9 @@ class DatabaseCommonEventEditor {
     // ==========================================
 
     /**
-     * Lazily construct a shared EventCommandList instance used here purely
-     * as a formatter. EventCommandList's getCommandInfo / getCommandColor /
+     * Lazily construct a shared EventCommandList for summaries and fallback
+     * command dialogs. Its currentPage stays null, keeping its list keyboard
+     * handlers inactive. EventCommandList's getCommandInfo / getCommandColor /
      * _fmtSwitch / _fmtVar / _fmtGameDataOperand etc. are the canonical
      * summary renderers for every event command; reusing them keeps the
      * common-event command list visually identical to the map event one.

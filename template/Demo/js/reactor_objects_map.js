@@ -4330,7 +4330,7 @@ Game_Event.prototype.findProperPageIndex = function() {
 Game_Map.prototype.rrHasTimerPages = function() {
     if (typeof $dataMap === "undefined" || !$dataMap) return false;
     if ($dataMap._rrTimerPages === undefined) {
-        $dataMap._rrTimerPages = ($dataMap.events || []).some(e => e && (e.pages || []).some(p => p && p.conditions && p.conditions.rrTimerSec !== undefined));
+        $dataMap._rrTimerPages = ($dataMap.events || []).some(e => e && (e.pages || []).some(p => p && p.conditions && (p.conditions.rrTimerSec !== undefined || p.conditions.rrTimer2Sec !== undefined)));
     }
     return $dataMap._rrTimerPages;
 };
@@ -4360,6 +4360,9 @@ Game_Event.prototype.meetsConditions = function(page) {
     if (c.rrTimerSec !== undefined && $gameTimer.seconds() > c.rrTimerSec) {
         return false;
     }
+    if (c.rrTimer2Sec !== undefined && $gameTimer.rrTimer(1).seconds() > c.rrTimer2Sec) {
+        return false;
+    }
     if (c.selfSwitchValid) {
         const key = [this._mapId, this._eventId, c.selfSwitchCh];
         if ($gameSelfSwitches.value(key) !== true) {
@@ -4367,8 +4370,8 @@ Game_Event.prototype.meetsConditions = function(page) {
         }
     }
     if (c.itemValid) {
-        const item = $dataItems[c.itemId];
-        if (!$gameParty.hasItem(item)) {
+        const item = $dataItems[c.itemId] || (c.rrLegacyItem && ($dataWeapons[c.itemId] || $dataArmors[c.itemId]));
+        if (!$gameParty.hasItem(item, !!c.rrLegacyItem)) {
             return false;
         }
     }

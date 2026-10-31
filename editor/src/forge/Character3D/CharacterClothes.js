@@ -202,25 +202,22 @@
      * comes out as the color chosen. A region without a color keeps its own.
      */
     function tinted(clothes, g, item) {
-        const colors = [item.color || null, g.regions > 1 ? item.color2 || null : null];
-        const name = 'cloth-' + g.id + '.png';
-        const own = picture(clothes, g);
-        if (!colors[0] && !colors[1]) return Object.assign({ name }, own);
-        const key = JSON.stringify(colors);
-        const kept = clothes.tints.get(g.id);
-        if (kept && kept.key === key) return kept.picture;
-        const size = own.width, src = own.data, data = new Uint8Array(src.length);
-        const mask = g.regions > 1 ? (g._mask || (g._mask = regionMask(g, size))) : null;
-        const target = colors.map(c => (c ? hexLinear(c) : null));
-        const mean = [0, 1].map(r => Math.max(0.02, (g.luminance && g.luminance[r]) || 0.2));
-        for (let i = 0, n = size * size; i < n; i++) {
-            const r = mask ? mask[i] : 0, o = i * 4, c = target[r];
-            data[o + 3] = src[o + 3];
-            if (!c) { data[o] = src[o]; data[o + 1] = src[o + 1]; data[o + 2] = src[o + 2]; continue; }
-            const l = (0.2126 * TO_LINEAR[src[o]] + 0.7152 * TO_LINEAR[src[o + 1]] + 0.0722 * TO_LINEAR[src[o + 2]]) / mean[r];
-            data[o] = TO_SRGB[Math.min(4096, Math.round(c[0] * l * 4096))];
-            data[o + 1] = TO_SRGB[Math.min(4096, Math.round(c[1] * l * 4096))];
-            data[o + 2] = TO_SRGB[Math.min(4096, Math.round(c[2] * l * 4096))];
+        const viking=g.id==='mh_viking_tunic',colors=[item.color||null,(g.regions>1||viking)?item.color2||null:null,...(viking?[item.trim||null]:[])];
+        const contrast=viking?Math.max(.5,Math.min(1.5,Number.isFinite(+item.textureContrast)?+item.textureContrast:1)):1;
+        const name='cloth-'+g.id+'.png',own=picture(clothes,g);
+        if(!colors.some(Boolean)&&contrast===1)return Object.assign({name},own);
+        const key=JSON.stringify([colors,contrast]),kept=clothes.tints.get(g.id);if(kept&&kept.key===key)return kept.picture;
+        const size=own.width,src=own.data,data=new Uint8Array(src.length),mask=g.regions>1?(g._mask||(g._mask=regionMask(g,size))):null;
+        const region=i=>{if(!viking)return mask?mask[i]:0;const o=i*4,u=(i%size)/size,v=Math.floor(i/size)/own.height;
+            if(src[o]>40&&src[o]>src[o+2]*1.35&&src[o+1]>src[o+2]*1.15)return 2;
+            return v>.16&&v<.46&&(u>.085&&u<.355||u>.56&&u<.80)?1:0;};
+        const target=colors.map(c=>c?hexLinear(c):null),mean=colors.map((_,r)=>Math.max(.02,g.luminance?.[r]||.2));
+        if(viking){const sums=[0,0,0],counts=[0,0,0];for(let i=0;i<size*own.height;i++){if(src[i*4+3]<128)continue;const r=region(i);sums[r]+=.2126*TO_LINEAR[src[i*4]]+.7152*TO_LINEAR[src[i*4+1]]+.0722*TO_LINEAR[src[i*4+2]];counts[r]++;}for(let r=0;r<3;r++)mean[r]=Math.max(.005,sums[r]/Math.max(1,counts[r]));}
+        for(let i=0;i<size*own.height;i++){
+            const r=region(i),o=i*4,c=target[r];data[o+3]=src[o+3];
+            if(!c&&contrast===1){data.set(src.subarray(o,o+4),o);continue;}
+            const lum=.2126*TO_LINEAR[src[o]]+.7152*TO_LINEAR[src[o+1]]+.0722*TO_LINEAR[src[o+2]],l=Math.pow(Math.max(.0001,lum/mean[r]),contrast);
+            for(let k=0;k<3;k++){const value=c?c[k]*l:TO_LINEAR[src[o+k]]*Math.pow(Math.max(.0001,lum/mean[r]),contrast-1);data[o+k]=TO_SRGB[Math.min(4096,Math.max(0,Math.round(value*4096)))];}
         }
         const pic = { name, width: size, height: own.height, data };
         clothes.tints.set(g.id, { key, picture: pic });

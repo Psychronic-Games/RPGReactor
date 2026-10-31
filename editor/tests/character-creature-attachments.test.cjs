@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const T=require('../node_modules/three'),Q=require('./helpers/character-quality-matrix.cjs'),Cloth=require('../src/forge/Character3D/CharacterCloth.js');
+const T=require('./helpers/three.cjs'),Q=require('./helpers/character-quality-matrix.cjs'),Cloth=require('../src/forge/Character3D/CharacterCloth.js');
 function inside(part,point){
     const ray=new T.Ray(new T.Vector3(...point),new T.Vector3(.932,.271,.239).normalize()),hit=new T.Vector3(),hits=[];
     const p=part.positions,index=part.index,at=i=>new T.Vector3(p[i*3],p[i*3+1],p[i*3+2]);

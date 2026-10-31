@@ -423,13 +423,14 @@ class BuildHotbar {
         };
         // The key that picks a slot (1 to 9, then 0; the Eraser's X) is in its tooltip: no badge on some slots and not the rest.
         const keyOf = (slot, index) => slot === 'hammer' ? 'X' : index < 10 ? String((index + 1) % 10) : '';
+        const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         const buttons = BuildHotbar.slotsHtml(slots.map((slot, index) => ({ id: slot, label: this.label(slot), icon: face(slot), key: keyOf(slot, index), className: /^model\d+$/.test(slot) ? 'rr-build-slot-model' : '' })), active);
         root.innerHTML = `
             ${this.is3D() ? '' : `<div class="rr-build-note">${this._t('build.needs3D')}</div>`}
             <div class="rr-build-row rr-build-slots">
-                <div class="rr-build-groups" role="radiogroup">${BuildHotbar.GROUPS.map(g => `<button type="button" class="rr-build-group" data-group="${g}" role="radio" aria-checked="${g === group}" title="${this._t('build.group.' + g)}">${this.icon(g, 18)}<span>${this._t('build.group.' + g)}</span></button>`).join('')}</div>
+                <div class="rr-build-groups" role="radiogroup">${BuildHotbar.GROUPS.map(g => `<button type="button" class="rr-build-group" data-group="${g}" role="radio" aria-checked="${g === group}" title="${escape(this._t('build.group.' + g))}" aria-label="${escape(this._t('build.group.' + g))}">${this.icon(g, 18)}<span>${escape(this._t('build.group.' + g))}</span></button>`).join('')}</div>
                 ${buttons}</div>
-            <div class="rr-build-hint" tabindex="0">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b><span class="rr-build-keys"> · ${this._tt(manager.mode === 'select' ? BuildHotbar.SELECT_HINT : manager.mode === 'erase' ? BuildHotbar.ERASE_HINT : BuildHotbar.KEYS_HINT)}</span>`}</div>`;
+            <div class="rr-build-hint" tabindex="0">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `<span class="rr-build-height" title="${escape(this._tt('Height above the ground for the next piece. Zero places it on the ground. Q lowers it; E raises it.'))}">${this._tt('Placement height')}: <b class="rr-build-level">${manager.level}</b> ${this._tt('above ground')}</span><span class="rr-build-keys"> · ${this._tt(manager.mode === 'select' ? BuildHotbar.SELECT_HINT : manager.mode === 'erase' ? BuildHotbar.ERASE_HINT : BuildHotbar.KEYS_HINT)}</span>`}</div>`;
         this._slotsKey = slots.join('|');
         BuildHotbar.bindSlots(root, slot => this.pick(slot));
         root.querySelectorAll('.rr-build-group').forEach(el => el.addEventListener('click', () => {
@@ -1013,6 +1014,13 @@ class BuildHotbar {
         root.classList.toggle('is-compact', compact);
         root.classList.toggle('is-narrow', narrow);
         root.classList.toggle('is-short', short);
+        // Fit a nearly-full row before wrapping a single tool onto a mostly empty row.
+        const slots = root.querySelectorAll('.rr-build-slot').length;
+        const groups = root.querySelector('.rr-build-groups');
+        if (compact && slots) {
+            const available = width - 24 - 14 - (groups ? groups.getBoundingClientRect().width + 4 : 0) - slots * 4;
+            root.style.setProperty('--rr-build-slot-width', Math.max(38, Math.min(46, Math.floor(available / slots))) + 'px');
+        } else root.style.removeProperty('--rr-build-slot-width');
         panel.classList.toggle('is-compact', compact);
         panel.classList.toggle('is-narrow', narrow);
         panel.style.width = (width >= 1100 ? 300 : width >= 760 ? 268 : Math.max(200, Math.min(248, width - 40))) + 'px';

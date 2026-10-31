@@ -245,3 +245,23 @@ test('hair saves into the character GLB with its colors, two-sided', () => {
     assert.equal(json.materials[hair.material].doubleSided, true);
     for (const node of json.nodes.filter(n => n.mesh != null)) assert.equal(node.skin, 0);
 });
+
+test('requested cuts have distinct silhouettes, a real bald crown, and editable combed sections',()=>{
+    const H=Hair._internal.measure(pack,woman),make=(style,patch={})=>byName(Hair.build(pack,woman,{...Hair.withStyle({},style),...patch}),'Hair');
+    for(const style of ['centerPartShort','centerPartLong'])assert.equal(Hair.withStyle({part:'right'},style).part,'center');
+    const short=make('centerPartShort'),long=make('centerPartLong');
+    const lowest=p=>{let y=Infinity;for(let i=1;i<p.positions.length;i+=3)y=Math.min(y,p.positions[i]);return y;};
+    assert.ok(lowest(long)<lowest(short)-.15);
+    const balding=make('balding');
+    assert.ok(balding.positions.length>0);
+    assert.equal(Array.from(balding.positions).filter((_,i)=>i%3===1&&balding.positions[i]>H.center[1]+H.radii[1]*.85).length,0,'top remains bare');
+    const high=p=>{let y=-Infinity;for(let i=1;i<p.positions.length;i+=3)y=Math.max(y,p.positions[i]);return y;};
+    assert.ok(high(make('beehive'))>high(make('bun'))+.04,'beehive rises above an ordinary bun');
+    for(const field of [{length:1.4},{volume:.9},{curl:.8},{density:.5},{frizz:.8},{strandWidth:1.5},{part:'right'},{fringe:0}]) {
+        const changed=make('centerPartLong',field);
+        assert.ok(changed.positions.length!==long.positions.length||changed.positions.some((v,i)=>v!==long.positions[i]),JSON.stringify(field)+' changes the cut');
+    }
+    const sweep=make('faceSweep'),clear=make('faceSweep',{fringe:0});
+    assert.ok(sweep.positions.length>clear.positions.length,'face-covering fringe can be removed');
+    assertWellFormed([make('wavyBob'),make('beehive'),sweep],woman,'new silhouettes');
+});

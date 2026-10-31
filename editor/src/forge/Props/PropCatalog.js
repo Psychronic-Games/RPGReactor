@@ -34,7 +34,13 @@
         return entry;
     }
 
+    const GENRES={modern:'Modern',fantasy:'Fantasy',historical:'Historical',scifi:'Sci-fi',wasteland:'Wasteland'};
     function add(type) {
+        if(type.genre&&GENRES[type.genre]){
+            const parent=type.category,id=parent+'-'+type.genre;
+            if(!CATEGORIES.some(c=>c.id===id))category({id,label:GENRES[type.genre],parent,order:{historical:1,fantasy:2,modern:3,wasteland:4,scifi:5}[type.genre]});
+            type={...type,category:id};
+        }
         const i = TYPES.findIndex(x => x.id === type.id);
         const entry = Object.assign({ matches: () => false, keywords: '' }, type);
         if (i >= 0) TYPES[i] = entry; else TYPES.push(entry);
@@ -64,15 +70,17 @@
             const words = [t(x.label), x.label, x.keywords, ...cats.flatMap(c => [t(c.label), c.label])].join(' ').toLowerCase();
             return q.split(/\s+/).every(w => words.includes(w));
         };
-        return CATEGORIES.filter(c => !c.parent).map(top => {
-            const own = TYPES.filter(x => x.category === top.id && fits(x, top));
-            const groups = CATEGORIES.filter(c => c.parent === top.id).map(g => ({ category: g, types: TYPES.filter(x => x.category === g.id && fits(x, g, top)) })).filter(g => g.types.length);
-            return { category: top, own, groups, types: own.concat(...groups.map(g => g.types)) };
-        }).filter(g => g.types.length);
+        const node=(category,parents=[])=>{
+            if(parents.some(p=>p.id===category.id))return null;
+            const chain=parents.concat(category),own=TYPES.filter(x=>x.category===category.id&&fits(x,...chain));
+            const groups=CATEGORIES.filter(c=>c.parent===category.id).map(c=>node(c,chain)).filter(g=>g&&g.types.length);
+            return {category,own,groups,types:own.concat(...groups.map(g=>g.types))};
+        };
+        return CATEGORIES.filter(c=>!c.parent).map(c=>node(c)).filter(g=>g.types.length);
     }
 
     /** The top section a category sits in. */
-    function topOf(id) { let c = CATEGORIES.find(x => x.id === id); while (c && c.parent) c = CATEGORIES.find(x => x.id === c.parent); return c || null; }
+    function topOf(id) { let c = CATEGORIES.find(x => x.id === id); const seen=new Set(); while(c&&c.parent){if(seen.has(c.id))return null;seen.add(c.id);c=CATEGORIES.find(x=>x.id===c.parent);} return c || null; }
 
     /** Small line icons (24 x 24, currentColor) the types are shown with. */
     const ICONS = {
@@ -120,7 +128,13 @@
     category({ id: 'firearms', label: 'Firearms', order: 42, parent: 'weapons' });
     category({ id: 'scifi', label: 'Sci-fi', order: 43, parent: 'weapons' });
     category({ id: 'wearables', label: 'Wearables', order: 60 });
+    category({ id: 'acc-hats', label: 'Headwear', order: 61, parent: 'wearables' });
+    category({ id: 'acc-face', label: 'Eyewear & Headsets', order: 62, parent: 'wearables' });
+    category({ id: 'acc-masks', label: 'Masks', order: 63, parent: 'wearables' });
+    category({ id: 'acc-back', label: 'Capes & Scarves', order: 65, parent: 'wearables' });
+    category({ id: 'acc-packs', label: 'Packs & Harnesses', order: 65.5, parent: 'wearables' });
     category({ id: 'gear', label: 'Tools & Gear', order: 70 });
+    category({ id: 'instruments', label: 'Instruments', order: 75 });
 
     const api = { CATEGORIES, TYPES, UI, ICONS, category, add, ui, typeOf, grouped, topOf, icon };
     root.RRPropCatalog = api;

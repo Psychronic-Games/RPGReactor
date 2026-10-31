@@ -45,7 +45,7 @@ test('the same recipe drapes the same way every time', () => {
     const b = layOutfit(recipe);
     assert.ok(a.trace.length >= 1 && a.trace.every(s => !s.cached), 'settled from scratch');
     assert.equal(a.laid.length, b.laid.length);
-    a.laid.forEach((L, k) => assert.deepEqual(Array.from(L.laid.positions), Array.from(b.laid[k].laid.positions), 'piece ' + k));
+    a.laid.forEach((L,k)=>{const P=L.laid.positions,Q=b.laid[k].laid.positions;assert.ok(P.length===Q.length&&P.every((v,i)=>v===Q[i]),'identical positions for piece '+k);});
     // Built again on the same body: kept, not settled again.
     const c = layOutfit(recipe);
     assert.ok(c.trace.every(s => s.cached));

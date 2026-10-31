@@ -1,17 +1,29 @@
 # Handoff
 
-Dated notes for the cycle in progress, newest first. Read [STATUS.md](STATUS.md) first: it is the current state and the one list of open work. Earlier cycles are in [archive/handoff](archive/handoff/), one file per version ([0.99.2](archive/handoff/0.99.2.md), [0.99.1](archive/handoff/0.99.1.md), [0.99.0](archive/handoff/0.99.0.md), [0.98.8](archive/handoff/0.98.8.md), and date-named files before that).
+Read [STATUS.md](STATUS.md) for open work. Earlier: [archive/handoff](archive/handoff/).
 
-An entry holds only what the next session needs and cannot find elsewhere: what is half-done, what to watch for, what waits on the owner, how to resume. What changed goes in the editor changelog; how the code works goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
+Changes belong in the editor changelog; behavior goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-10-28)
+## Where things stand (2026-10-30)
 
 - **0.99.3 source release:** runtime **20261028.11**, [release notes](posts/release-notes-0.99.3.md) and [editor changelog](../editor/changelog/0.99.3.md). **0.99.4** is open after the release push; binary publishing is separate.
-- **CI:** the eight-shard workflow is pushed; check the latest `main` run in GitHub Actions.
-- **Today:** Tactical grapple, worn equipment, height reach, Q/E through key config, GL fixes, Builder metal/filtering; Demo Builder heroes 7-10, raiders and militia.
-- **Builder/export audit:** GLB images/PBR settings survive loading; Database inspection shares the Builder studio. Orbit zoom keeps its centre; chibi sheets survive rebuilds; faces keep studio colors. Rhea's GLB and four face sheets are refreshed. Native: `smoke/nw-builder-export-parity.cjs`; evidence: `scratchpad/builder-parity-20261028/`.
-- **Database audit:** saved model thumbnails load first; only missing pictures render. Structures expand the complete preview into editable pieces and retain child content on save. Both builders share tool controls; help clears the bar. Native: `smoke/nw-database-assets.cjs`; evidence: `scratchpad/database-assets-20261028/`.
-- **Remaining work:** [OPEN-ITEMS.md](OPEN-ITEMS.md), including optional distance/night readability tuning; game and Builder lighting intentionally follow their own scene.
-- **Older threads:** Unused files and the playtest record (a Demo playtest with the record on is still owed); Braver's corescript port; the detached editor windows (Linux transparency); Savior & Religion (not in git) boots and plays.
+- **Forge** (2026-10-30): Preview 61: richer cloth and repaired seams; 152 defaults / 1,216 captures / 152 saved GLBs checked. Reload/re-export garments. [Evidence and limits](CHARACTER-QUALITY.md), [props](PROP-BUILDER.md).
+- **0.99.4:** runtime **20261030.3**, PixiJS **8.22.0**, Three.js **0.187.0**; [legacy import audit](IMPORTING-LEGACY-PROJECTS.md#reliability-audit). Shared skins (20261029.8) raised North Haven Tactical from 76–81 to 158 pictures/s on RTX; CPU throttling and iGPU acceptance remain. [Performance](PERFORMANCE.md).
+- **Battle/world presentation:** occupant-only cutaways, grapple arms, sleeping combat ragdolls and target hit badges pass native checks. Auto keeps cheaper shadows. Roof flicker needs a house/location; no fix claimed. Evidence: [PERFORMANCE.md](PERFORMANCE.md).
+- **Border feedback:** a deferred cube face inherited its own sampler before plain water drew. Fixed at capture entry. Reproduce with `smoke/nw-border-feedback.cjs --uncapped` (continue west through Forest Road); short edge trips miss it. Evidence: `scratchpad/border-feedback-20261029/`.
+- **Database/pop-out audit:** `smoke/nw-popout-audit.cjs`, evidence `scratchpad/popout-audit-20261029/`: all 25 pages and 136 command entries; nested and save/cancel flows. Menus, animation placement, Common Events and Fadein fixed. Rapid Database hide/reopen hung once on RTX; still open (STATUS).
+- **Remaining work:** [OPEN-ITEMS.md](OPEN-ITEMS.md): chibi quality and physical hardware acceptance. Keep gameplay timing fixed; render available refreshes without imposing a cadence cap.
+- **Older threads:** unused-file/playtest records, Braver port and Linux pop-out transparency remain; see STATUS and [PERFORMANCE.md](PERFORMANCE.md).
 - **0.99.4 priority:** improve chibi visual quality. The current appearance was rejected; review proportions, hair, outfits and faces in complete exported sheets at native size. [Details](OPEN-ITEMS.md).
-- **Owner questions:** [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md).
+
+## 2026-10-30 — End-of-day checkpoint
+
+The last prior commit was October 28. This checkpoint captures the outstanding 0.99.4 work carried through October 29–30: Forge tools/exports and prop construction, clothing and hair, web Forge packaging, legacy import reliability, Database/Common Events fixes, rendering/presentation work, pinned Three.js r187 and PixiJS 8.22.0, and the Tactical status-panel opacity repair. The detailed record is the [editor changelog](../editor/changelog/0.99.4.md); this is a development checkpoint, not a release or deployment.
+
+Start tomorrow with runtime **20261030.3** and **Preview 61**. Reload the editor and regenerate existing baked props to receive generator changes. The final clothing pass covers all **152 defaults**, eight views each, save/reopen and the actual game GLB reader. Its **126 focused checks** pass across recorded runs/rechecks; the final seam/budget run passes 12 and documentation/runtime-sync checks pass 10. Triangle maxima are **82,556 total / 51,412 outfit**, within the existing ceilings. [Quality record](CHARACTER-QUALITY.md#clothing-texture-and-seam-close-ups--2026-10-30-preview-61); [tracked per-item findings and provenance](archive/evidence/clothing-texture-seams-20261030.json).
+
+Local galleries and logs remain in ignored `scratchpad/clothing-texture-seams-20261030/`: `comparison.html`, `native/review.html`, `native/export-audit.json` and `verification.json`. Larger earlier prop/renderer/native evidence is linked from the quality and performance guides. These rendered artifacts are local evidence, not committed project assets. The Demo checkpoint also preserves North Haven placement/Smithy edits, its usage record and the newly added `SCControllerMain` source GLB.
+
+Next work: imported Carol/Jolt/Max/Vay borders/cuts still need source mesh/art repairs; some procedural inward joins retain angular facets. Chibi appearance, physical hardware acceptance, the Database rapid-close freeze and the unreproduced roof-flicker report remain in [OPEN-ITEMS.md](OPEN-ITEMS.md). Four wider-integration assertions already fail with both the old and new Three.js: the old armor ceiling, one-bone accessory assumption, furniture uniqueness and keycap legends. See [renderer validation](PERFORMANCE.md#threejs-r187-upgrade-2026-10-30-runtime-202610301). No fresh full-repository pass is claimed; the October 29 full-suite result is historical.
+
+For substantial checks use `/home/doug/.local/bin/codex-check`, one at a time, with `node --test --test-concurrency=1`; native clothing batches stay at four entries (two for large Jolt/Max imports). Avoid deep-diffing texture/mesh arrays. Closeout validation passes **141 checks** covering documentation, runtime copies, renderer versions/compatibility, Tactical HUD, Common Events, legacy imports, web Forge and distribution staging. Logs: `scratchpad/closeout-20261030/checks.log`.

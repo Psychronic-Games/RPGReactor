@@ -67,13 +67,30 @@ function skeletonFile(rel) {
     return file;
 }
 
+let copySerial = 0;
+const copyToken = require('node:crypto').randomBytes(6).toString('hex');
+/** Import copies are editable. Replace via a sibling so read-only old copies and linked
+ * files do not cause an in-place write to fail or change the source's permissions. */
+function copyFile(source, destination) {
+    const part = destination + '.part-' + process.pid + '-' + copyToken + '-' + (++copySerial);
+    try {
+        fs.copyFileSync(source, part);
+        fs.chmodSync(part, fs.statSync(part).mode | 0o200);
+        if (process.platform === 'win32' && fs.existsSync(destination)) {
+            const stat = fs.lstatSync(destination);
+            if (stat.isFile()) fs.chmodSync(destination, stat.mode | 0o200);
+        }
+        fs.renameSync(part, destination);
+    } finally { fs.rmSync(part, { force: true }); }
+}
+
 function copySkeleton(dest, skip = () => false) {
     for (const [rel, file] of skeletonFiles()) {
         if (skip(rel)) continue;
         const to = path.join(dest, ...rel.split('/'));
         fs.mkdirSync(path.dirname(to), { recursive: true });
-        fs.copyFileSync(file, to);
+        copyFile(file, to);
     }
 }
 
-module.exports = { APP_ROOT, editorPackage, runtime, skeletonFiles, skeletonFile, copySkeleton };
+module.exports = { APP_ROOT, editorPackage, runtime, skeletonFiles, skeletonFile, copySkeleton, copyFile };

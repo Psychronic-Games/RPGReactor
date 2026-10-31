@@ -147,7 +147,16 @@
         }
         // The skirt: as wide as the hips, its length from waistband to hem.
         radius[5] = 0.2; unit[5] = (top - bottom);
-        return (pack._anatomy = { member, s, angle, skirtU, height: built.height, chains, rest: P, radius, unit });
+        // Cut each finger across its proximal phalanx, including the opposed thumb.
+        // A single distance along the middle-finger chain only made a wrist cuff.
+        const fingerlessCut=new Float32Array(n).fill(1);
+        for(let v=0;v<n;v++){
+            let best=0,name='';for(let k=0;k<4;k++){const b=pack.bones[pack.skinJoints[v*4+k]],w=pack.skinWeights[v*4+k];if(/Hand(Thumb|Index|Middle|Ring|Pinky)[123]$/.test(b.name)&&w>best){best=w;name=b.name;}}
+            if(!name)continue;const rootName=name.replace(/[123]$/,'1'),a=built.bones.find(b=>b.name===rootName),b=built.bones.find(b=>b.name===rootName.replace(/1$/,'2'));if(!a||!b)continue;
+            const d=b.head.map((q,k)=>q-a.head[k]),len=Math.hypot(...d)||1,cut=a.head.map((q,k)=>q+d[k]*.32);
+            fingerlessCut[v]=-d.reduce((q,x,k)=>q+x/len*(P[v*3+k]-cut[k]),0)/.15;
+        }
+        return (pack._anatomy = { fingerlessCut, member, s, angle, skirtU, height: built.height, chains, rest: P, radius, unit });
     }
 
     // ── binding to the skin ───────────────────────────────────────────────
@@ -924,6 +933,21 @@
         // on the layers laid before it. The hem below is turned from the draped edge.
         const draped = Drape && !cache.noDrape && piece.drapeProfile && spec.drapeCloth !== false ? Drape.drape({ pack, built, piece, spec, pos, base, frame: cache, quality: cache.quality,
             chains: { 1: chainPoints(built.bones, 'armL'), 2: chainPoints(built.bones, 'armR'), 3: chainPoints(built.bones, 'legL'), 4: chainPoints(built.bones, 'legR') } }) : null;
+        // Finish the cut after solving the cloth, including skirt hems and glove openings.
+        if(spec.finishEdges)finishBorder(piece,pos,base,built.height/1.7);
+        if(spec.tailcoat){
+            const hip=built.bones.find(b=>b.name==='Hips').head,scale=built.height/1.7;
+            let back=Infinity,waist=-Infinity;
+            for(let v=0;v<count;v++)if(piece.field[v].u<.035){back=Math.min(back,pos[v*3+2]);waist=Math.max(waist,pos[v*3+1]);}
+            if(!Number.isFinite(back))back=hip[2]-.13*scale;if(!Number.isFinite(waist))waist=hip[1]+.08*scale;
+            // Two long, nearly planar tails. Tailoring the skirt against the pelvis used to
+            // compress these into rounded paddles; use its authored drop coordinate instead.
+            for(let v=0;v<count;v++){
+                const f=piece.field[v],u=Math.max(0,f.u),t=smoothstep(.025,.16,u),across=Math.max(0,Math.min(1,(Math.PI-Math.abs(f.spineAng))/(Math.PI-1.7))),side=Math.sign(pos[v*3])||1;
+                const x=side*(.009+.135*across)*(1-.12*Math.min(1,u)),z=back-.012*scale-.015*scale*u;
+                pos[v*3]+=(x*scale-pos[v*3])*t;pos[v*3+1]+=(waist-u*.66*scale-pos[v*3+1])*t;pos[v*3+2]+=(z-pos[v*3+2])*t;
+            }
+        }
         // The hem: the cloth turned under at its cut edge. From the outer face it rolls round the edge
         // (a rounded fold as thick as the fabric) and comes back as a facing under it, a finger's width in.
         // Rows of new vertices follow each border vertex: the roll, then the facing's end.
@@ -957,7 +981,9 @@
         }
         const out = Float32Array.from(positions);
         // The rim folds back to the body, never into it (a helper a slider pushed under the skin).
-        if (spec.collide !== false && out.length / 3 > count) collide(pack, built, out, count, out.length / 3, 0.001, cache);
+        // The fitted outer cloth already clears the body. Re-colliding its inward
+        // hem snapped tiny facing vertices onto unrelated skin triangles and tore the trim.
+        // The rolled facing remains within the cloth's physical thickness.
         if(!spec.hard)for(let v=count;v<origin.length;v++){
             const source=origin[v]*3,o=v*3,d=Math.hypot(out[o]-out[source],out[o+1]-out[source+1],out[o+2]-out[source+2]),limit=.006*built.height/1.7;
             // A nearest-skin query can jump across a crease at an extreme.
@@ -968,7 +994,10 @@
         skins.forEach((s, i) => { joints.set(s.joints, i * 4); weights.set(s.weights, i * 4); });
         const edge = new Float32Array(out.length / 3);
         edge.set(piece.edgeDist || []);
-        const laid = { positions: out, normals: triangleNormals(out, index), uvs: Float32Array.from(uvs), index: Uint32Array.from(index), joints, weights, field: fields, vals: Float32Array.from(vals), edge, base, rimStart: count, origin: Int32Array.from(origin), piece, hem: Object.assign({ rows: rowOf, turn: hemTurn }, hemThickness(built, spec)), draped };
+        const normals=triangleNormals(out,index);
+        // A rolled return must not pull the panel's boundary normals toward its inside.
+        normals.set(triangleNormals(pos,piece.index));
+        const laid = { positions: out, normals, uvs: Float32Array.from(uvs), index: Uint32Array.from(index), joints, weights, field: fields, vals: Float32Array.from(vals), edge, base, rimStart: count, origin: Int32Array.from(origin), piece, hem: Object.assign({ rows: rowOf, turn: hemTurn }, hemThickness(built, spec)), draped };
         // Pieces laid after it (outer layers) drape over it.
         if (Drape && !cache.noDrape && spec.collide !== false) Drape.remember(cache, laid, spec);
         return laid;
@@ -977,7 +1006,10 @@
     /** A soft garment's turned hem: the fabric's thickness and how far its facing reaches in (meters on this body). */
     function hemThickness(built, spec) {
         const scale = built.height / 1.7, hem = spec.hem || {};
-        return { thickness: Math.max(0.0006, hem.thickness ?? 0.0012) * scale, facing: Math.max(0, hem.facing ?? 0.012) * scale };
+        const thickness = Math.max(0.0006, hem.thickness ?? 0.0012) * scale;
+        // The complete inward lining supplies the deep facing. Keep the
+        // geometric turn short so its chords cannot cut through curved cloth.
+        return { thickness, facing: Math.min(Math.max(0, hem.facing ?? 0.012) * scale, Math.max(.003 * scale, thickness * 1.5)) };
     }
 
     /**
@@ -989,15 +1021,15 @@
      * { rows: Map(border vertex → [points]), turn: the first row under the edge }.
      */
     function hemRows(built, piece, spec, pos, base) {
-        const { thickness: T, facing: F } = hemThickness(built, spec), R = 3;
+        const { thickness: T, facing: F } = hemThickness(built, spec), R = Math.max(2,Math.min(4,spec.hem?.segments??3));
         const N = triangleNormals(pos, piece.index);
-        const outward = i => { const o = (pos[i * 3] - base[i * 3]) * N[i * 3] + (pos[i * 3 + 1] - base[i * 3 + 1]) * N[i * 3 + 1] + (pos[i * 3 + 2] - base[i * 3 + 2]) * N[i * 3 + 2]; return o < 0 ? -1 : 1; };
+        const outward = () => 1;
         const next = new Map(), prev = new Map();
         for (const [a, b] of piece.border) { next.set(a, b); prev.set(b, a); }
         const P = i => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
         const rows = new Map();
         for (const i of new Set(piece.border.flat())) {
-            const p = P(i), sgn = outward(i), n = [N[i * 3] * sgn, N[i * 3 + 1] * sgn, N[i * 3 + 2] * sgn];
+            const p=P(i),sgn=outward(i),neighbors=[i,...piece.neighbors[i]],n=[0,1,2].map(k=>neighbors.reduce((sum,v)=>sum+N[v*3+k]*(v===i?3:1),0));let nl=Math.hypot(...n)||1;for(let k=0;k<3;k++)n[k]=n[k]/nl*sgn;
             const a = prev.get(i) ?? i, b = next.get(i) ?? i;
             let t = [pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]];
             // Inward along the cloth: across the edge, toward the vertices inside it.
@@ -1019,8 +1051,16 @@
             }
             // The facing: under the cloth toward the next vertices in, as far as the facing reaches.
             if (F > 0) {
-                const under = out[R - 1], nl = Math.hypot(...nq) || 1;
-                const end = inner.length ? [q[0] - nq[0] / nl * T, q[1] - nq[1] / nl * T, q[2] - nq[2] / nl * T] : [under[0] + d[0] * F * 0.5, under[1] + d[1] * F * 0.5, under[2] + d[2] * F * 0.5];
+                const under = out[R - 1];
+                // Follow a real inward mesh edge. The average of a concave fan
+                // lies outside its cloth and made the return flash through hems.
+                let best=-Infinity,target=null;
+                for(const j of toward){const delta=P(j).map((v,k)=>v-p[k]),L=Math.hypot(...delta);if(L<1e-8)continue;
+                    const score=delta.reduce((sum,v,k)=>sum+v*d[k],0)/L;if(score<=best)continue;best=score;
+                    const a=Math.min(1,F/L),nn=[0,1,2].map(k=>N[i*3+k]*(1-a)+N[j*3+k]*a),nl=Math.hypot(...nn)||1;
+                    target=p.map((v,k)=>v+delta[k]*a-nn[k]/nl*T);
+                }
+                const end=target||[under[0]+d[0]*F*.5,under[1]+d[1]*F*.5,under[2]+d[2]*F*.5];
                 const span = Math.hypot(end[0] - under[0], end[1] - under[1], end[2] - under[2]), k = span > F ? F / span : 1;
                 out.push([under[0] + (end[0] - under[0]) * k, under[1] + (end[1] - under[1]) * k, under[2] + (end[2] - under[2]) * k]);
             }
@@ -1384,6 +1424,35 @@
     }
 
     /** Each border vertex moved toward the middle of its two neighbors along the border, `passes` times (the body point under it too). */
+    /** Ease short zigzags with arc-length weights and paired smoothing passes.
+     * Bound the displacement and share it with the first adjoining cloth row. */
+    function finishBorder(piece,pos,base,scale=1){
+        if(!piece.border.length)return;
+        const boundary=new Map();
+        for(const [a,b]of piece.border)for(const [v,q]of [[a,b],[b,a]]){if(!boundary.has(v))boundary.set(v,new Set());boundary.get(v).add(q);}
+        const list=[...boundary].filter(([,n])=>n.size===2).map(([v,n])=>[v,[...n]]),original=Float32Array.from(pos),N=triangleNormals(pos,piece.index);
+        for(let pass=0;pass<18;pass++)for(const amount of [.52,-.53]){
+            const next=Float32Array.from(pos);
+            for(const [v,[a,b]]of list){
+                const length=q=>Math.hypot(...[0,1,2].map(k=>pos[q*3+k]-pos[v*3+k]));
+                const A=length(a),B=length(b),sum=A+B;if(sum<1e-8)continue;
+                for(let k=0;k<3;k++)next[v*3+k]+=amount*((pos[a*3+k]*B+pos[b*3+k]*A)/sum-pos[v*3+k]);
+            }
+            pos.set(next);
+        }
+        const shifts=new Map();
+        for(const [v]of list){
+            const d=[0,1,2].map(k=>pos[v*3+k]-original[v*3+k]),along=d.reduce((s,x,k)=>s+x*N[v*3+k],0),bounded=Math.max(-.002*scale,Math.min(.003*scale,along));
+            for(let k=0;k<3;k++)d[k]+=N[v*3+k]*(bounded-along);
+            const length=Math.hypot(...d),limit=.012*scale;if(length>limit)for(let k=0;k<3;k++)d[k]*=limit/length;
+            shifts.set(v,d);
+        }
+        for(const [v,d]of shifts)for(let k=0;k<3;k++){pos[v*3+k]=original[v*3+k]+d[k];base[v*3+k]+=d[k];}
+        const inner=new Map();
+        for(const [v,d]of shifts)for(const u of piece.neighbors[v]||[]){if(boundary.has(u))continue;if(!inner.has(u))inner.set(u,[]);inner.get(u).push(d);}
+        for(const [v,ds]of inner)for(let k=0;k<3;k++){const d=ds.reduce((sum,a)=>sum+a[k],0)/ds.length*.45;pos[v*3+k]+=d;base[v*3+k]+=d;}
+    }
+
     function smoothBorder(piece, pos, base, passes, select, level) {
         if (!passes || !piece.border.length) return;
         if (!piece.borderNext) {
@@ -1460,7 +1529,7 @@
             }
             let rgb = mixRgb(c1, c2, t);
             // Trim along the cut lines (the hem, cuffs, collar) and on the rim.
-            if (look.trimWidth && (laid.vals[i] < look.trimWidth)) rgb = trim;
+            if (!look.physicalBinding && look.trimWidth && (laid.vals[i] < look.trimWidth)) rgb = trim;
             // A little darker toward the body at the rim, as a fold would be.
             if (laid.vals[i] < 0) rgb = rgb.map(x => x * 0.7);
             colors.set(rgb, i * 3);
@@ -1486,7 +1555,7 @@
      * sole, welt, heel (0 flat .. 1 a raised waist), spring, lames (rows to a
      * painted plate), sandal (straps on a footbed), lining }. Armor's plates are painted along the rows.
      */
-    const SHOE_COLS = 40, SHOE_DOME = 10, SHOE_WALL = 2;
+    const SHOE_COLS = 64, SHOE_DOME = 10, SHOE_WALL = 2;
 
     /** The foot's own frame: the ankle joint, forward along the floor toward the toe tip, outward. */
     function footFrame(built, side) {
@@ -1524,6 +1593,51 @@
         }
         return a;
     };
+
+    /** A manufactured sole follows a smooth last, rather than individual footprint samples.
+     * Smooth in equal arc lengths: angular smoothing shrinks a long toe and widens the waist.
+     * An outward allowance keeps the measured foot and ankle envelope inside the finished sole. */
+    function shoeSoleOutline(points,required) {
+        const n=points.length,lengths=[0];
+        for(let i=0;i<n;i++)lengths.push(lengths[i]+Math.hypot(points[(i+1)%n][0]-points[i][0],points[(i+1)%n][1]-points[i][1]));
+        if(!(lengths[n]>1e-6))return points;
+        const arc=[];let edge=0;
+        for(let i=0;i<n;i++){
+            const at=lengths[n]*i/n;
+            while(edge<n-1&&lengths[edge+1]<at)edge++;
+            const t=(at-lengths[edge])/(lengths[edge+1]-lengths[edge]||1),a=points[edge],b=points[(edge+1)%n];
+            arc.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);
+        }
+        const x=circBlur(arc.map(p=>p[0]),64),y=circBlur(arc.map(p=>p[1]),64);
+        const curve=arc.map((_,i)=>[x[i],y[i]]);
+        const allowances=new Float64Array(n).fill(.00035);
+        for(const p of required){
+            let inside=false,distance=Infinity,nearest=0;
+            for(let i=0;i<n;i++){
+                const a=curve[i],b=curve[(i+1)%n],dx=b[0]-a[0],dy=b[1]-a[1];
+                if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+                const t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy||1)));
+                const d=Math.hypot(p[0]-a[0]-dx*t,p[1]-a[1]-dy*t);if(d<distance){distance=d;nearest=i;}
+            }
+            const need=Math.max(.00035,(p[2]||0)+(inside?-distance:distance)+.00035);for(let q=-8;q<=8;q++){const k=(nearest+q+n)%n;allowances[k]=Math.max(allowances[k],need*Math.exp(-q*q/32));}
+        }
+        const widened=Array.from(allowances,(a,i)=>Math.max(a,allowances[(i+1)%n],allowances[(i+n-1)%n])),soft=circBlur(widened,3);
+        const outer=curve.map((p,i)=>{const allowance=Math.max(widened[i],soft[i]);
+            const a=curve[(i+n-1)%n],b=curve[(i+1)%n],dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy)||1;
+            return [p[0]+dy/length*allowance,p[1]-dx/length*allowance];
+        });
+        // Keep the original angular order and heel seam for all body shapes and cached UVs.
+        return points.map((fallback,i)=>{
+            const angle=i/n*Math.PI*2,dx=Math.cos(angle),dy=Math.sin(angle);let radius=0;
+            for(let k=0;k<n;k++){
+                const a=outer[k],b=outer[(k+1)%n],ex=b[0]-a[0],ey=b[1]-a[1],den=dx*ey-dy*ex;
+                if(Math.abs(den)<1e-12)continue;
+                const t=(a[0]*ey-a[1]*ex)/den,u=(a[0]*dy-a[1]*dx)/den;
+                if(t>0&&u>=0&&u<=1)radius=Math.max(radius,t);
+            }
+            return radius?[dx*radius,dy*radius]:fallback;
+        });
+    }
 
     /** A stiff boot and its lining share one foot articulation, with a flexible ankle sleeve. */
     function rigidFootSkin(built, position, skin) {
@@ -1703,6 +1817,18 @@
             const current=Math.hypot(...p),wanted=Math.max(current,radius);
             outline[j]=p.map(v=>v*(1+(wanted/current-1)*smoothstep(0,.35,t)));
         }
+        const required=[];
+        for(let k=0;k<own/3;k++)if(pts[k*3+1]<=yj){
+            const f=plan[k*2],l=plan[k*2+1];
+            required.push([f,l,gap+(style.width||0)*Math.abs(Math.sin(Math.atan2(l,f)))]);
+        }
+        // Keep the designed toe reach and heel length without preserving accidental sample spikes.
+        for(const direction of [-1,1]){
+            const tip=outline.reduce((a,b)=>b[0]*direction>a[0]*direction?b:a);
+            required.push([tip[0],tip[1],0]);
+        }
+        const finished=shoeSoleOutline(outline,required);
+        outline.splice(0,outline.length,...finished);
         // Columns at even steps along the outline, from the heel (behind the ankle) round.
         const start = N / 2;
         const len = [0];
@@ -2718,7 +2844,7 @@
             for (let i = 0; i + 1 < 4; i++) if (y <= ch[i + 1][1] || i === 2) { const t = (y - ch[i][1]) / ((ch[i + 1][1] - ch[i][1]) || 1); return [ch[i][0] + (ch[i + 1][0] - ch[i][0]) * t, ch[i][2] + (ch[i + 1][2] - ch[i][2]) * t]; }
             return [ch[0][0], ch[0][2]];
         };
-        const cols = 48, y0 = yAt(spec.from), y1 = yAt(spec.to), gap = spec.gap ?? 0.004, th = spec.thick ?? 0.004;
+        const cols = 96, y0 = yAt(spec.from), y1 = yAt(spec.to), gap = spec.gap ?? 0.004, th = spec.thick ?? 0.004;
         const yc = (y0 + y1) / 2, [cx, cz] = centerAt(yc), half = (y1 - y0) / 2 + 0.008;
         const dirs = Array.from({ length: cols }, (_, j) => Math.PI + j / cols * Math.PI * 2);
         const win = Math.PI * 2 / cols * 1.6;
@@ -2742,8 +2868,11 @@
             const g = reach(extra, Array.from(r, x => x + 0.05));
             for (let k = 0; k < cols; k++) r[k] = Math.max(r[k], g[k]);
         }
-        const sm = circBlur(r, 2);
-        const R = Array.from(r, (x, k) => Math.max(x, sm[k]) + gap);
+        // A belt is stiff leather: bridge narrow creases in a smooth convex envelope.
+        let sm=Array.from(r);for(let pass=0;pass<12;pass++)sm=Array.from(sm,(x,k)=>(sm[(k+cols-1)%cols]+2*x+sm[(k+1)%cols])/4);
+        const envelope=new Float64Array(cols);for(let k=0;k<cols;k++)for(let j=0;j<cols;j++){const c=Math.cos(dirs[k]-dirs[j]);if(c>.55)envelope[k]=Math.max(envelope[k],r[j]*c);}
+        for(let pass=0;pass<8;pass++){const next=Array.from(sm,(x,k)=>Math.max(envelope[k],(sm[(k+cols-1)%cols]+2*x+sm[(k+1)%cols])/4));sm=next;}
+        const R=sm.map((x,k)=>Math.max(x,r[k])+gap);
         // The cross-section: the outer face bottom to top, over the top edge, the inner face back down.
         const section = [[0, y0], [0, (y0 + y1) / 2], [0, y1], [-th * 0.5, y1 + th * 0.4], [-th, y1], [-th, y0], [-th * 0.5, y0 - th * 0.4], [0, y0]];
         const positions = [], uvs = [], index = [];
@@ -3096,7 +3225,7 @@
         return { moved, stretched };
     }
 
-    const api = { foldAt, FOLD_GAP, weightsOf, hemThickness, clipUnderCap, projectedSurface, crossSection, binding, boundPositions, collide, tailorTorso, pointGrid, rigidFootSkin, FAMILIES, CHAINS, linear, anatomy, coverage, cut, cutFor, lay, paint, mixSkin, surfaceNormals, triangleNormals, relaxScalar, shoes, footFrame, band, helmet, pauldrons, collarBand, uncovered, swimStraps };
+    const api = { foldAt, FOLD_GAP, weightsOf, hemThickness, finishBorder, clipUnderCap, projectedSurface, crossSection, binding, boundPositions, collide, tailorTorso, pointGrid, rigidFootSkin, FAMILIES, CHAINS, linear, anatomy, coverage, cut, cutFor, lay, paint, mixSkin, surfaceNormals, triangleNormals, relaxScalar, shoes, footFrame, band, helmet, pauldrons, collarBand, uncovered, swimStraps };
     root.RRCharacterOutfit = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -138,7 +138,7 @@ test('the catalog lists every type once: one id, one label, one place, sections 
     assert.deepEqual(labels.filter((x, i) => labels.indexOf(x) !== i), [], 'no label twice');
     assert.equal(new Set(listed).size, listed.length, 'no type in two places');
     assert.equal(listed.length, Catalog.TYPES.filter(t => !t.hidden).length, 'every listed type shows');
-    for (const c of Catalog.CATEGORIES) if (c.parent) assert.ok(Catalog.CATEGORIES.some(x => x.id === c.parent && !x.parent), `${c.id} sits in a top section`);
+    for (const c of Catalog.CATEGORIES) if (c.parent) assert.ok(Catalog.topOf(c.id), `${c.id} has an acyclic path to its top section`);
     for (const t of Catalog.TYPES) assert.ok(Catalog.CATEGORIES.some(c => c.id === t.category), `${t.id} has a category`);
     const tops = tree.map(g => g.category.label);
     for (const name of ['Banners & Flags', 'From Picture', 'Weapons', 'Wearables', 'Tools & Gear']) assert.ok(tops.includes(name), name);
@@ -150,7 +150,7 @@ test('the catalog lists every type once: one id, one label, one place, sections 
         assert.equal(Catalog.typeOf(Accessory.normalize({ accessory: { id } })), t, id + ' recipes still name their type');
     }
     const weapons = tree.find(g => g.category.id === 'weapons');
-    assert.deepEqual(weapons.groups.map(g => g.category.id).slice(0, 3), ['swords', 'firearms', 'scifi']);
+    assert.deepEqual(weapons.groups.map(g => g.category.id).slice(0, 3), ['swords', 'firearms', 'axes']);
 });
 
 test('every catalog entry builds whole, within budget, on the floor, facing outward', () => {

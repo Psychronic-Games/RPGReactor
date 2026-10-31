@@ -2,8 +2,8 @@
 // What a Tactical battle shows and what it opens to show it (runtime/reactor_fight_tactical.js, "What the view
 // opens" and "The way to the cursor"; runtime/reactor_3d_lighting.js, injectCutaway and cutawayMarkBody):
 //  - nothing of a unit is cut, thinned or hidden: its model, what it holds, a character standing by;
-//  - what hides a unit is opened at a level (a storey whole, a wall in the way down to its foot, scenery to its
-//    foot) and capped, comes and goes over a few frames, and holds after it was last needed;
+//  - only the controlled unit inside a room opens its building, with capped walls and eased transitions;
+//    roof targets, outdoor units and distant movement marks keep buildings whole; scenery retains its own hold;
 //  - the way to the cursor is a square on each of its tiles with a brighter one travelling from the unit to the
 //    destination, on 3D maps and on flat ones.
 // Logic only: nothing here draws. One 3D world and one flat world serve the whole file.
@@ -86,6 +86,7 @@ function world3D() {
         clear() {
             chars.forEach((c, i) => { c.locate(46 + i * 2, 34); c._reactorGround = 0; });
             F.Marks.count = 0;
+            fight._act = { player: true, stage: 'move', unitId: units[0].id };
             fight._tac.cursor.on = false;
             V.closeOpenings(scene, true);
         },
@@ -167,83 +168,27 @@ test('a house that hides someone is opened at a level: the storey over their flo
     assert.equal(R.cutawayUniforms().rrOpenCount.value, 0);
 });
 
-test('an opening eases in, holds after it was last needed and eases out; a pointer crossing tiles does not move it', () => {
-    const d = world3D(), { V, R, fight } = d;
-    d.clear();
-    d.look(12, 12);
-    d.put(0, 12, 12, 0.1);
-    d.step(0);
-    const tops = R.cutawayUniforms().rrOpenTop.value, storey = R.PIECE_STOREY - R.CUTAWAY_DROP;
-    assert.ok(V.openings().buildings[0].e < 0.3, 'it has only begun');
-    assert.ok(tops[0] > storey + 0.5, 'the cut starts over the roof');
-    const seen = [];
-    for (let i = 0; i < V.OPEN_EASE + 1; i++) { d.step(1, false); seen.push(tops[0]); }
-    for (let i = 1; i < seen.length; i++) assert.ok(seen[i] <= seen[i - 1] + 1e-6, 'and comes down, never back up');
-    assert.ok(near(seen[seen.length - 1], storey), 'to the storey\'s cut');
-    assert.equal(V.openings().buildings[0].e, 1);
-    // The cursor on a tile inside and on one outside, turn about, every frame: the house stays as it is.
-    const cursor = fight._tac.cursor;
-    d.put(0, 46, 34, 0);
-    cursor.on = true; cursor.h = 0.1;
-    for (let i = 0; i < 60; i++) {
-        cursor.x = i % 2 ? 12 : 20; cursor.y = i % 2 ? 12 : 22;
-        d.w.Graphics.frameCount++;
-        d.step(0, true);
-        assert.equal(V.openings().buildings.length, 1, 'frame ' + i);
-        assert.equal(V.openings().buildings[0].e, 1, 'frame ' + i + ': no flicker');
-        assert.ok(near(tops[0], storey));
-    }
-    // The pointer rests on the house a long while, nothing changing, then leaves for good: the time it holds is counted
-    // from the moment it left, however long it had rested.
-    cursor.x = 12; cursor.y = 12;
-    d.step(0, true);
-    d.step(V.OPEN_HOLD * 4, false);
-    assert.equal(V.openings().buildings[0].e, 1);
-    d.w.Graphics.frameCount++;
-    cursor.x = 20; cursor.y = 22;
-    d.step(0, true);
-    d.step(V.OPEN_HOLD - 6, false);
-    assert.equal(V.openings().buildings[0].e, 1, 'held while its time runs');
-    d.step(8, false);
-    const closing = V.openings().buildings[0];
-    assert.ok(closing && closing.goal === 0 && closing.e < 1 && closing.e > 0, 'then it shuts over a few frames');
-    assert.ok(tops[0] > storey + 0.01, 'the cut going back up');
-    d.step(V.OPEN_EASE + 2, false);
-    assert.equal(V.openings().buildings.length, 0);
-    assert.equal(V.openAt(12, 12), 1e9);
+test('an occupied room eases open and shuts when the selected unit leaves; a cursor cannot hold it open', () => {
+    const d=world3D(),{V,R,fight}=d;d.clear();d.look(12,12);d.put(0,12,12,0.1);
+    d.step(0);const tops=R.cutawayUniforms().rrOpenTop.value,storey=R.PIECE_STOREY-R.CUTAWAY_DROP;
+    assert.ok(V.openings().buildings[0].e<0.3);
+    const seen=[];for(let i=0;i<V.OPEN_EASE+1;i++){d.frame();seen.push(tops[0]);}
+    for(let i=1;i<seen.length;i++)assert.ok(seen[i]<=seen[i-1]+1e-6);
+    assert.ok(near(seen.at(-1),storey));
+    const cursor=fight._tac.cursor;Object.assign(cursor,{on:true,x:12,y:12,h:0.1});
+    d.put(0,46,34,0);d.step(V.OPEN_EASE+2);
+    assert.equal(V.openings().buildings.length,0,'hovering the room does not keep it exposed');
+    assert.equal(V.openAt(12,12),1e9);cursor.on=false;
 });
 
-test('nothing a unit stands on is taken from under it, and a tall building far off loses only the storeys in the way', () => {
-    const d = world3D(), { V, R } = d;
-    d.clear();
-    // One in the house, one on its roof: the roof stays under the one who stands on it.
-    d.look(12, 12);
-    d.put(0, 12, 12, 0.1);
-    d.put(1, 13, 12, 5.1);
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(V.openAt(13, 12) > 5.1 + 1, 'the roof is not cut under the unit on it (' + V.openAt(13, 12) + ')');
-    assert.ok(V.openAt(12, 12) > 5.1 + 1);
-    // Alone in the house again: it opens for the room.
-    d.put(1, 48, 34, 0);
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(near(V.openAt(12, 12), R.PIECE_STOREY - R.CUTAWAY_DROP));
-    // The tower stands between the camera and someone a long way behind it: their line passes through its third storey only.
-    d.clear();
-    // From (44,4) the sight line to the camera enters the tower's east face eleven and a half tiles up: in its third storey.
-    d.look(44, 4);
-    d.put(0, 44, 4, 0);
-    d.step(V.OPEN_EASE + 2);
-    const tower = V.openings().buildings.find(b => b.box[0] === TOWER[0]);
-    assert.ok(tower, 'the tower is in the way');
-    assert.ok(near(tower.level, 2 * R.PIECE_STOREY - R.CUTAWAY_DROP), 'it keeps its two storeys under the line (' + tower.level + ')');
-    assert.equal(tower.lows, 0, 'and no wall of it comes down');
-    assert.ok(near(V.openAt(31, 15), 2 * R.PIECE_STOREY - R.CUTAWAY_DROP));
-    // Nearer, the line passes through its second storey: that goes too, and the first stays.
-    d.clear();
-    d.look(42, 6);
-    d.put(0, 42, 6, 0);
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(near(V.openAt(31, 15), R.PIECE_STOREY - R.CUTAWAY_DROP), 'two storeys off: ' + V.openAt(31, 15));
+test('a selected unit on a roof or outdoors keeps buildings whole, even when someone else is inside', () => {
+    const d=world3D(),{V,R}=d;d.clear();d.look(12,12);
+    d.put(0,13,12,5.1);d.put(1,12,12,0.1);d.step(V.OPEN_EASE+2);
+    assert.equal(V.openings().buildings.length,0,'standing on the roof is not entering its room');
+    d.put(0,12,12,0.1);d.step(V.OPEN_EASE+2);
+    assert.ok(near(V.openAt(12,12),R.PIECE_STOREY-R.CUTAWAY_DROP));
+    d.clear();d.look(44,4);d.put(0,44,4,0);d.step(V.OPEN_EASE+2);
+    assert.equal(V.openAt(31,15),1e9,'a distant tower between the camera and the actor stays whole');
 });
 
 test('a wall cut low stays a foot over the building\'s own floor whoever stands higher in it: on a table, on a stair, the cursor on a crate', () => {
@@ -276,27 +221,9 @@ test('a wall cut low stays a foot over the building\'s own floor whoever stands 
     cursor.on = false;
 });
 
-test('someone behind a house: the wall that hides them comes down where it hides them, with the storey over it', () => {
-    const d = world3D(), { V, R } = d;
-    d.clear();
-    // North-east of the house, against its corner: the camera (south-west) sees them only through the house.
-    d.put(0, 16, 9, 0);
-    d.look(14, 11);
-    d.step(V.OPEN_EASE + 2);
-    const open = V.openings().buildings;
-    assert.equal(open.length, 1);
-    assert.ok(near(open[0].level, R.PIECE_STOREY - R.CUTAWAY_DROP), 'the storey over the wall goes');
-    assert.ok(open[0].lows > 0, 'and the wall in the way is cut low');
-    assert.ok(near(V.openAt(15, 10), 0.1 + V.OPEN_FOOT), 'the corner they stand behind is down to a foot over the house\'s floor (' + V.openAt(15, 10) + ')');
-    assert.ok(near(V.openAt(10, 15), R.PIECE_STOREY - R.CUTAWAY_DROP), 'the far end of the house keeps its walls to the cut');
-    // Three tiles further off the wall's top is under their chest's line and over their feet's: a storey of wall still
-    // hides them to the waist, ring and all, so it comes down there too.
-    d.clear();
-    d.put(0, 19, 6, 0);
-    d.look(15, 10);
-    d.step(V.OPEN_EASE + 2);
-    assert.equal(V.openings().buildings.length, 1);
-    assert.ok(near(V.openAt(15, 10), 0.1 + V.OPEN_FOOT), 'the wall between the camera and their feet is cut low (' + V.openAt(15, 10) + ')');
+test('standing behind a closed house never opens its walls', () => {
+    const d=world3D(),{V}=d;d.clear();d.put(0,19,6,0);d.look(15,10);d.step(V.OPEN_EASE+2);
+    assert.equal(V.openings().buildings.length,0);assert.equal(V.openAt(15,10),1e9);
 });
 
 test('a wall cut low takes the roof\'s overhang beyond it too: nothing of the eave is left hanging over it', () => {
@@ -324,29 +251,15 @@ test('a wall cut low takes the roof\'s overhang beyond it too: nothing of the ea
     d.look(27, 26);
     d.step(V.OPEN_EASE + 2);
     const behind = V.openings().buildings.find(b => b.box[0] === 20);
-    assert.ok(behind, 'the hut is in the way');
-    assert.ok(near(behind.level, d.R.PIECE_STOREY - d.R.CUTAWAY_DROP), 'at its storey: ' + behind.level);
+    assert.equal(behind, undefined, 'a hut in the way stays closed when the selected unit is outside');
 });
 
-test('a low cover comes off whole; a post and a low wall open nothing', () => {
-    const d = world3D(), { V } = d;
-    d.clear();
-    d.put(0, 23, 20, 0);
-    d.look(23, 20);
-    d.step(V.OPEN_EASE + 2);
-    const awning = V.openings().buildings;
-    assert.equal(awning.length, 1);
-    assert.deepEqual(Array.from(awning[0].box), [22, 20, 23, 21]);
-    assert.ok(awning[0].level < 3 && awning[0].level > 1.5 + 0.5, 'cut under the awning, over the unit\'s head: ' + awning[0].level);
-    assert.equal(awning[0].lows, 0, 'nothing of it is a wall');
-    for (const [x, y] of [[22, 20], [23, 20], [22, 21], [23, 21]]) assert.ok(near(V.openAt(x, y), awning[0].level), 'the whole of it, not a hole in it');
-    // Behind a post, and behind a wall one tile high: seen past, nothing opened.
-    d.clear();
-    d.put(0, 41, 19, 0);
-    d.put(1, 45, 19, 0);
-    d.look(42, 20);
-    d.step(V.OPEN_EASE + 2);
-    assert.equal(V.openings().buildings.length, 0);
+test('awnings, porches, posts and low walls do not qualify as building interiors', () => {
+    const d=world3D(),{V}=d;
+    for(const [x,y,h]of [[23,20,0],[20,30,0.1],[41,19,0],[45,19,0]]){
+        d.clear();d.put(0,x,y,h);d.look(x,y);d.step(V.OPEN_EASE+2);
+        assert.equal(V.openings().buildings.length,0,`outside at ${x},${y}`);
+    }
 });
 
 test('a rock is land: the view opens nothing for it, and the camera turns for it as it does for a hill', () => {
@@ -370,24 +283,15 @@ test('a rock is land: the view opens nothing for it, and the camera turns for it
     } finally { V.live = live; view.yaw = 45; }
 });
 
-test('where the other side can come is told, not opened; where the unit in hand can go is', () => {
-    const d = world3D(), { V, M } = d;
-    d.clear();
-    d.look(12, 12);
-    M.count = 1; M.x[0] = 12; M.y[0] = 12; M.h[0] = 0.1;
-    for (const kind of [M.KINDS.threat, M.KINDS.tread]) {
-        M.kind[0] = kind;
-        d.step(V.OPEN_EASE + 2);
-        assert.equal(V.openings().buildings.length, 0, 'a tile the enemy could reach inside the house opens nothing');
+test('movement, attack and grapple destination marks never authorize opening a building', () => {
+    const d=world3D(),{V,M,fight}=d;d.clear();d.look(12,12);
+    const cursor=fight._tac.cursor;Object.assign(cursor,{on:true,x:12,y:12,h:0.1});
+    for(const kind of Object.values(M.KINDS)){
+        M.count=1;M.x[0]=12;M.y[0]=12;M.h[0]=0.1;M.kind[0]=kind;d.step(V.OPEN_EASE+2);
+        assert.equal(V.openings().buildings.length,0,`mark ${kind} is only a preview`);
     }
-    for (const kind of [M.KINDS.move, M.KINDS.range, M.KINDS.area]) {
-        M.kind[0] = kind;
-        d.step(V.OPEN_EASE + 2);
-        assert.equal(V.openings().buildings.length, 1, 'a tile the unit can act on inside the house opens it');
-        d.clear();
-        M.count = 1;
-    }
-    M.count = 0;
+    d.put(0,12,12,0.1);d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,1);
+    cursor.on=false;M.count=0;
 });
 
 test('what is cut is capped: a top over every wall the cut passes through, a side where a low wall meets a standing one, and no cap of its own for a pane', () => {
@@ -608,205 +512,31 @@ test('what a unit holds is part of its body whenever it came to the hand; the sh
     assert.equal(R.cutawayUniforms().rrOpenBox.value.length, 4 * R.CUTAWAY_OPENINGS);
 });
 
-test('walls in the way come down by the run, each over a few frames, and stay while the pointer crosses tiles behind them: none jumps, none goes up and down', () => {
-    const d = world3D(), { V, R, fight, scene, w } = d;
-    d.clear();
-    d.look(14, 11);
-    const cursor = fight._tac.cursor;
-    cursor.on = true; cursor.h = 0;
-    const storey = R.PIECE_STOREY - R.CUTAWAY_DROP, foot = 0.1 + V.OPEN_FOOT;
-    // The most a wall's cut moves in one frame of its ease.
-    const stride = (storey - foot) * 1.5 / V.OPEN_EASE + 0.02;
-    const group = scene.piecesGroup;
-    let capped = 0;
-    scene.piecesGroup = () => { capped++; return group(); };
-    try {
-        // Behind the house (north-east of it; the camera stands south-west): open and settled.
-        cursor.x = 16; cursor.y = 9;
-        d.step(V.OPEN_EASE + 2);
-        assert.equal(V.openings().buildings.length, 1);
-        assert.ok(near(V.openAt(12, 10), foot), 'the wall they are behind is down');
-        for (let x = HOUSE[0]; x <= HOUSE[2]; x++) assert.ok(near(V.openAt(x, 10), foot), `the whole run of it, not a slot where the pointer is (${x},10: ${V.openAt(x, 10)})`);
-        // Tile by tile round the corner and along the east side and back, a step every ten frames.
-        const walk = [];
-        for (let x = 16; x <= 19; x++) walk.push([x, 9]);
-        for (let y = 9; y <= 14; y++) walk.push([17, y]);
-        for (let y = 14; y >= 9; y--) walk.push([16, y]);
-        let last = d.ring(HOUSE), most = 0, steps = 0, moved = 0;
-        const turns = last.map(() => 0), way = last.map(() => 0);
-        capped = 0;
-        for (const [x, y] of walk) {
-            cursor.x = x; cursor.y = y;
-            let changed = true, differs = false;
-            for (let frame = 0; frame < 10; frame++) {
-                w.Graphics.frameCount++;
-                d.step(0, changed);
-                changed = false;
-                const now = d.ring(HOUSE);
-                for (let i = 0; i < now.length; i++) {
-                    const by = now[i] - last[i];
-                    if (Math.abs(by) < 1e-6) continue;
-                    differs = true;
-                    most = Math.max(most, Math.abs(by));
-                    if (way[i] && Math.sign(by) !== way[i]) turns[i]++;
-                    way[i] = Math.sign(by);
-                }
-                last = now;
-                assert.equal(V.openings().buildings.length, 1);
-                assert.ok(near(V.openings().buildings[0].level, storey), 'the storey\'s cut does not move');
-            }
-            steps++;
-            if (differs) moved++;
-        }
-        assert.ok(most <= stride, `no wall's cut moves more than a step of its ease in a frame (${most} of ${stride})`);
-        assert.ok(Math.max(...turns) <= 1, 'no wall goes down, up and down again as the pointer crosses tiles: ' + turns.join(' '));
-        assert.ok(moved <= 8, `walls move after few of the ${steps} steps, not after each (${moved})`);
-        assert.ok(capped <= 6, 'and what is capped is laid again only when a run comes or goes: ' + capped);
-        // Two tiles turn about every frame: once what both ask for is down, nothing moves at all.
-        for (let i = 0; i < V.OPEN_HOLD + V.OPEN_EASE + 3; i++) { cursor.x = i % 2 ? 16 : 17; cursor.y = i % 2 ? 12 : 10; w.Graphics.frameCount++; d.step(0, true); }
-        const still = d.ring(HOUSE);
-        assert.ok(still.some(cut => near(cut, foot)) && still.some(cut => near(cut, storey)), 'some walls down, the rest standing');
-        capped = 0;
-        for (let i = 0; i < 60; i++) {
-            cursor.x = i % 2 ? 16 : 17; cursor.y = i % 2 ? 12 : 10;
-            w.Graphics.frameCount++;
-            d.step(0, true);
-            assert.deepEqual(d.ring(HOUSE), still, 'frame ' + i);
-        }
-        assert.equal(capped, 0, 'nothing is laid again');
-    } finally { scene.piecesGroup = group; cursor.on = false; }
+test('cursor and roof previews do not change an occupied room or rebuild its caps', () => {
+    const d=world3D(),{V,fight,scene,w}=d;d.clear();d.put(0,12,12,0.1);d.look(12,12);d.step(V.OPEN_EASE+2);
+    const cursor=fight._tac.cursor,group=scene.piecesGroup;let capped=0;
+    scene.piecesGroup=()=>{capped++;return group();};const before=d.ring(HOUSE);
+    try{for(let i=0;i<80;i++){
+        Object.assign(cursor,{on:true,x:i%2?12:31,y:i%2?12:15,h:i%2?5.1:15.1});w.Graphics.frameCount++;d.step(0,true);
+        assert.deepEqual(d.ring(HOUSE),before);assert.equal(V.openings().buildings.length,1);
+    }assert.equal(capped,0);}finally{scene.piecesGroup=group;cursor.on=false;}
 });
 
-test('a run of wall no longer in the way stays down a while, then is a wall again over a few frames; its building stays open', () => {
-    const d = world3D(), { V, R, fight, w } = d;
-    d.clear();
-    d.look(14, 11);
-    const cursor = fight._tac.cursor;
-    cursor.on = true; cursor.h = 0;
-    const storey = R.PIECE_STOREY - R.CUTAWAY_DROP, foot = 0.1 + V.OPEN_FOOT;
-    try {
-        // Behind the north wall, then round the corner behind the east wall only.
-        cursor.x = 16; cursor.y = 9;
-        d.step(V.OPEN_EASE + 2);
-        assert.ok(near(d.shaderCut(12.5, 10.5), foot));
-        w.Graphics.frameCount++;
-        cursor.x = 17; cursor.y = 10;
-        d.step(0, true);
-        d.step(V.OPEN_HOLD - 4, false);
-        assert.ok(near(d.shaderCut(12.5, 10.5), foot), 'held while its time runs: ' + d.shaderCut(12.5, 10.5));
-        assert.ok(near(d.shaderCut(15.5, 12.5), foot), 'the wall now in the way is down');
-        const seen = [];
-        for (let i = 0; i < V.OPEN_EASE + 8; i++) { d.frame(); seen.push(d.shaderCut(12.5, 10.5)); }
-        for (let i = 1; i < seen.length; i++) assert.ok(seen[i] >= seen[i - 1] - 1e-6, 'it only goes up');
-        assert.ok(seen.filter(v => v > foot + 0.05 && v < storey - 0.05).length >= 3, 'over a few frames, not in one: ' + seen.map(v => v.toFixed(2)).join(' '));
-        assert.ok(near(seen[seen.length - 1], storey), 'to the storey\'s cut');
-        assert.ok(near(V.openAt(12, 10), storey), 'and the view says so');
-        const open = V.openings().buildings;
-        assert.equal(open.length, 1);
-        assert.equal(open[0].e, 1, 'the building itself never moved');
-        assert.ok(near(d.shaderCut(15.5, 12.5), foot));
-        // Asked for again while it is going up: it comes back down from where it is.
-        w.Graphics.frameCount++;
-        cursor.x = 16; cursor.y = 9;
-        d.step(0, true);
-        d.step(V.OPEN_EASE + 1, false);
-        w.Graphics.frameCount++;
-        cursor.x = 17; cursor.y = 10;
-        d.step(0, true);
-        d.step(V.OPEN_HOLD + 3, false);
-        const mid = d.shaderCut(12.5, 10.5);
-        assert.ok(mid > foot + 0.05 && mid < storey - 0.05, 'on its way up: ' + mid);
-        w.Graphics.frameCount++;
-        cursor.x = 16; cursor.y = 9;
-        d.step(0, true);
-        const next = d.shaderCut(12.5, 10.5);
-        assert.ok(Math.abs(next - mid) < 0.6, `no jump as it turns round (${mid} to ${next})`);
-        d.step(V.OPEN_EASE + 1, false);
-        assert.ok(near(d.shaderCut(12.5, 10.5), foot));
-    } finally { cursor.on = false; }
+test('only the controlled active unit can open a room; unselected allies and enemies cannot', () => {
+    const d=world3D(),{V,fight,units}=d;d.clear();d.look(12,12);d.put(0,12,12,0.1);d.step(V.OPEN_EASE+2);
+    assert.equal(V.openings().buildings.length,1);
+    fight._act.unitId=units[1].id;d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,0,'the selected ally is outdoors');
+    const enemy=units.find(u=>!fight.isPlayerUnit(u));
+    if(enemy){const i=units.indexOf(enemy);d.put(i,12,12,0.1);fight._act.unitId=enemy.id;d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,0,'an enemy turn does not disclose its room');}
+    fight._act.unitId=null;d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,0,'no selected unit opens nothing');
 });
 
-test('more to open than the shaders have room for: every building still loses its storey, what does not fit stays standing, nothing is flattened and nothing flips as the view moves', () => {
-    const d = world3D(), { V, R, M, w } = d;
-    d.clear();
-    const storey = R.PIECE_STOREY - R.CUTAWAY_DROP, foot = 0.1 + V.OPEN_FOOT, shared = R.cutawayUniforms();
-    const mark = (from, to) => { M.count = 0; for (let i = from; i < to; i++) { const n = M.count++; M.x[n] = 6 + i * 6; M.y[n] = 44; M.h[n] = 0.1; M.kind[n] = M.KINDS.move; } };
-    const state = () => JSON.stringify([V.openings().buildings.map(b => [b.box[0], b.level, b.runs, b.uncut, b.whole]), Array.from(shared.rrOpenTop.value.slice(0, shared.rrOpenCount.value))]);
-    // Somewhere to go in each of the nine houses of the street.
-    mark(0, STREET);
-    d.look(28, 44);
-    d.step(V.OPEN_EASE + 2);
-    let open = V.openings();
-    assert.equal(open.buildings.length, STREET);
-    assert.equal(open.boxes, R.CUTAWAY_OPENINGS, 'every box is used and no more');
-    let down = 0, standing = 0;
-    for (let i = 0; i < STREET; i++) {
-        const x = 4 + i * 6, b = open.buildings.find(b => b.box[0] === x);
-        assert.ok(near(d.shaderCut(x + 2.5, 44.5), storey), `house ${i + 1}: its storey is off`);
-        assert.ok(near(d.shaderCut(x + 2.5, 42.5), storey) && near(d.shaderCut(x + 4.5, 44.5), storey), `house ${i + 1}: the walls behind its room stand (${d.shaderCut(x + 2.5, 42.5)})`);
-        assert.equal(b.runs + b.uncut, 2, 'two runs of wall are asked for: toward the camera');
-        const west = d.shaderCut(x + 0.5, 45.5), south = d.shaderCut(x + 2.5, 46.5);
-        for (const cut of [west, south]) { assert.ok(near(cut, foot) || near(cut, storey), 'a wall is down to its foot or stands to the cut: ' + cut); if (near(cut, foot)) down++; else standing++; }
-        assert.ok(near(V.openAt(x, 45), west) && near(V.openAt(x + 2, 46), south), 'and the view says what the shaders do');
-    }
-    assert.equal(down, R.CUTAWAY_OPENINGS - STREET, 'as many runs as there is room for');
-    assert.equal(standing, STREET * 2 - down, 'the rest left standing');
-    // The view moves along the street: who has what does not change.
-    const before = state();
-    for (const x of [34, 20, 40, 28]) { d.look(x, 44); d.step(6, false); assert.equal(state(), before, 'the view at ' + x); }
-    // Three houses are no longer asked about: once they have shut, the runs that waited come down over a few frames.
-    w.Graphics.frameCount++;
-    mark(3, STREET);
-    d.step(0, true);
-    d.step(V.OPEN_HOLD + V.OPEN_EASE + 1, false);
-    const seen = [];
-    for (let i = 0; i < V.OPEN_EASE + 2; i++) { seen.push(d.shaderCut(4 + 8 * 6 + 0.5, 45.5)); d.frame(); }
-    open = V.openings();
-    assert.equal(open.buildings.length, STREET - 3);
-    assert.ok(open.buildings.every(b => b.uncut === 0 && b.runs === 2), 'room for all of them now');
-    assert.ok(near(d.shaderCut(4 + 8 * 6 + 0.5, 45.5), foot), 'the last house\'s wall toward the camera is down');
-    assert.ok(seen.filter(v => v > foot + 0.05 && v < storey - 0.05).length >= 3, 'and came down over a few frames: ' + seen.map(v => v.toFixed(2)).join(' '));
-    // Room for six boxes only: six buildings open, three stay whole, and nothing is written past the room there is.
-    const most = R.CUTAWAY_OPENINGS;
-    d.clear();
-    R.CUTAWAY_OPENINGS = 6;
-    try {
-        shared.rrOpenBox.value.fill(-7, 24);
-        mark(0, STREET);
-        d.step(V.OPEN_EASE + 2);
-        open = V.openings();
-        assert.equal(open.boxes, 6);
-        assert.equal(open.buildings.filter(b => !b.whole).length, 6);
-        assert.equal(open.buildings.filter(b => b.whole && b.runs === 0 && b.lows === 0).length, 3, 'the rest are left as they were built');
-        for (const b of open.buildings) assert.equal(V.openAt(b.box[0] + 2, 44), b.whole ? 1e9 : storey);
-        assert.ok(Array.from(shared.rrOpenBox.value.slice(24)).every(v => v === -7), 'nothing past the sixth box');
-    } finally { R.CUTAWAY_OPENINGS = most; M.count = 0; d.clear(); }
-    // Room for two footprints and one run. Someone behind the solid block (a wall that hides them) and somewhere to go
-    // inside the house (its walls toward the camera): the house's wall comes first, and the block's waits.
-    R.CUTAWAY_OPENINGS = 3;
-    try {
-        d.put(0, 41, 25, 0);
-        M.count = 1; M.x[0] = 12; M.y[0] = 12; M.h[0] = 0.1; M.kind[0] = M.KINDS.move;
-        d.look(26, 19);
-        d.step(V.OPEN_EASE + 2);
-        const block = V.openings().buildings.find(b => b.box[0] === 38), house = V.openings().buildings.find(b => b.box[0] === HOUSE[0]);
-        assert.ok(block && house, 'both are open');
-        assert.deepEqual([house.runs, house.uncut, block.runs, block.uncut], [1, 1, 0, 1], 'the wall between the camera and the room has the room there is');
-        // A run that is down keeps its room. The block's wall first, alone; then the place inside the house is asked
-        // about as well: the house loses its storey and its walls wait, and the block's wall does not move.
-        d.clear();
-        M.count = 0;
-        d.put(0, 41, 25, 0);
-        d.step(V.OPEN_EASE + 2);
-        assert.ok(near(d.shaderCut(39.5, 27.5), foot), 'the block is down');
-        d.w.Graphics.frameCount++;
-        M.count = 1;
-        d.step(0, true);
-        for (let i = 0; i < V.OPEN_EASE + 4; i++) { d.frame(); assert.ok(near(d.shaderCut(39.5, 27.5), foot), 'frame ' + i + ': ' + d.shaderCut(39.5, 27.5)); }
-        const kept = V.openings().buildings.find(b => b.box[0] === 38), waits = V.openings().buildings.find(b => b.box[0] === HOUSE[0]);
-        assert.deepEqual([kept.runs, kept.uncut, waits.runs, waits.uncut], [1, 0, 0, 2], 'what is down stays down; what came later waits standing');
-        assert.ok(near(d.shaderCut(12.5, 12.5), storey), 'with its storey off');
-    } finally { R.CUTAWAY_OPENINGS = most; M.count = 0; d.clear(); }
+test('a village of reachable destinations stays whole; only the occupied building takes opening slots', () => {
+    const d=world3D(),{V,R,M}=d;d.clear();d.look(12,12);
+    M.count=0;for(let y=2;y<10;y+=2)for(let x=2;x<50;x+=3){const i=M.count++;M.x[i]=x;M.y[i]=y;M.h[i]=0.1;M.kind[i]=M.KINDS.move;}
+    d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,0);assert.equal(R.cutawayUniforms().rrOpenCount.value,0);
+    d.put(0,12,12,0.1);d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,1);
+    assert.deepEqual(Array.from(V.openings().buildings[0].box),HOUSE);assert.ok(R.cutawayUniforms().rrOpenCount.value<=R.CUTAWAY_OPENINGS);M.count=0;
 });
 
 test('what the shaders are told is whole at every frame: every box inside the one box, the lowest height the lowest, nothing cut outside or under them', () => {
@@ -853,65 +583,18 @@ test('what the shaders are told is whole at every frame: every box inside the on
     assert.equal(shared.rrOpenCount.value, 0);
 });
 
-test('a building\'s cut never hops: a cover comes off at its own level wherever it is met, a storey that goes later comes down over a few frames and stays down', () => {
-    const d = world3D(), { V, R, fight, w } = d;
-    d.clear();
-    // The awning: the same level from under each of its tiles and from beside it, whatever the camera.
-    const levels = new Set();
-    for (const [x, y, lx, ly] of [[23, 20, 23, 20], [22, 21, 22, 21], [22, 20, 26, 18], [23, 21, 20, 24], [24, 19, 23, 20]]) {
-        d.clear();
-        d.put(0, x, y, 0);
-        d.look(lx, ly);
-        d.step(V.OPEN_EASE + 2);
-        for (const b of V.openings().buildings) if (b.box[0] === 22) levels.add(b.level);
-    }
-    assert.deepEqual(Array.from(levels), [2.75], 'a quarter under its underside, the same every time');
-    // What is met under a house's cut and is no wall leaves the house's level where it is: the cursor crossing every tile behind it.
-    d.clear();
-    d.look(14, 11);
-    const cursor = fight._tac.cursor;
-    cursor.on = true; cursor.h = 0;
-    const storey = R.PIECE_STOREY - R.CUTAWAY_DROP;
-    try {
-        for (let y = 7; y <= 14; y++) for (let x = 16; x <= 19; x++) {
-            cursor.x = x; cursor.y = y;
-            w.Graphics.frameCount++;
-            d.step(1, true);
-            for (const b of V.openings().buildings) if (b.box[0] === HOUSE[0]) assert.ok(near(b.level, storey), `the house's storey at ${x},${y}: ${b.level}`);
-        }
-    } finally { cursor.on = false; }
-    // The tower with someone far behind it loses its third storey; with them nearer, its second as well, over a few
-    // frames from where the cut was; and further off again it stays as it is while it is open.
-    d.clear();
-    const third = 2 * R.PIECE_STOREY - R.CUTAWAY_DROP;
-    d.look(44, 4);
-    d.put(0, 44, 4, 0);
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(near(d.shaderCut(31.5, 15.5), third));
-    w.Graphics.frameCount++;
-    d.look(42, 6);
-    d.put(0, 42, 6, 0);
-    d.step(0);
-    const seen = [d.shaderCut(31.5, 15.5)];
-    for (let i = 0; i < V.OPEN_EASE + 2; i++) { d.frame(); seen.push(d.shaderCut(31.5, 15.5)); }
-    assert.ok(seen[0] > third - 2, 'it starts from where the cut was: ' + seen[0]);
-    for (let i = 1; i < seen.length; i++) assert.ok(seen[i] <= seen[i - 1] + 1e-6 && seen[i - 1] - seen[i] < 2, 'down, a little a frame: ' + seen.map(v => v.toFixed(2)).join(' '));
-    assert.ok(near(seen[seen.length - 1], storey));
-    w.Graphics.frameCount++;
-    d.look(44, 4);
-    d.put(0, 44, 4, 0);
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(near(d.shaderCut(31.5, 15.5), storey), 'opened is opened: the storey does not come back while the tower is open');
-    // Shut and opened again, it is decided afresh.
-    d.clear();
-    d.put(0, 44, 4, 0);
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(near(d.shaderCut(31.5, 15.5), third));
+test('the occupied storey follows the actor on stairs, not the cursor on a roof', () => {
+    const d=world3D(),{V,R,fight}=d;d.clear();d.look(12,12);const storey=R.PIECE_STOREY-R.CUTAWAY_DROP;
+    for(const h of [0.1,1.1,2.1]){d.put(0,12,12,h);Object.assign(fight._tac.cursor,{on:true,x:12,y:12,h:5.1});d.step(V.OPEN_EASE+2);assert.ok(near(V.openAt(12,12),storey),`actor at ${h}`);}
+    d.clear();d.put(0,31,15,5.1);d.look(31,15);d.step(V.OPEN_EASE+2);
+    assert.ok(near(V.openAt(31,15),2*R.PIECE_STOREY-R.CUTAWAY_DROP),'inside the next storey');
+    d.put(0,31,15,15.1);d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,0,'on the tower roof');fight._tac.cursor.on=false;
 });
 
 test('a doorway is part of the wall it stands in: the run comes down through it, casing and all', () => {
     const d = world3D(), { V, R, M } = d;
     d.clear();
+    d.put(0, 6, 44, 0.1);
     M.count = 1; M.x[0] = 6; M.y[0] = 44; M.h[0] = 0.1; M.kind[0] = M.KINDS.move;
     d.look(6, 44);
     d.step(V.OPEN_EASE + 2);
@@ -925,64 +608,70 @@ test('a doorway is part of the wall it stands in: the run comes down through it,
     d.clear();
 });
 
-test('a thick wall is one run: a solid block in the way comes down whole, not in slots', () => {
-    const d = world3D(), { V } = d;
-    d.clear();
-    // North-east of the block, against it: the camera (south-west) sees them only through it.
-    d.put(0, 41, 25, 0);
-    d.look(40, 26);
-    d.step(V.OPEN_EASE + 2);
-    const open = V.openings().buildings;
-    assert.equal(open.length, 1);
-    assert.deepEqual(Array.from(open[0].box), [38, 26, 40, 28]);
-    assert.equal(open[0].runs, 1, 'one run for the whole of it');
-    assert.equal(open[0].lows, 9);
-    for (let y = 26; y <= 28; y++) for (let x = 38; x <= 40; x++) assert.ok(near(d.shaderCut(x + 0.5, y + 0.5), 0.1 + V.OPEN_FOOT), `${x},${y}`);
+test('a solid block never becomes a room merely because it hides the selected unit', () => {
+    const d=world3D(),{V}=d;d.clear();d.put(0,41,25,0);d.look(40,26);d.step(V.OPEN_EASE+2);
+    assert.equal(V.openings().buildings.length,0);for(let y=26;y<=28;y++)for(let x=38;x<=40;x++)assert.equal(d.shaderCut(x+0.5,y+0.5),1e9);
 });
 
-test('the view looks again when it must and only then: the camera gone elsewhere, the other side walking, another map\'s scene', () => {
-    const d = world3D(), { V, R, THREE, fight, w } = d;
-    d.clear();
-    // Someone the house hides from one place of the camera and not from another; nothing else changes.
-    d.put(0, 19, 6, 0);
-    d.look(40, 30);
-    d.step(V.OPEN_EASE + 2);
-    assert.equal(V.openings().buildings.length, 0, 'seen past the house from here');
-    d.look(15, 10);
-    d.step(6, false);
-    assert.equal(V.openings().buildings.length, 1, 'the camera moved: the sight lines are walked again, from where it is now');
-    // The other side's phase: a unit walks behind the house while the player is not asked; the view looks on its beat.
-    d.clear();
-    d.look(14, 11);
-    d.step(2);
-    const awaits = fight.awaitsPlayer;
+test('the map camera also opens only around the controlled unit, including when it is not the leader', () => {
+    const d = world3D(), { R, THREE, w, fight, units } = d;
+    d.clear(); d.put(0, 12, 12, 0.1); d.put(1, 46, 34, 0.1);
+    const scene = Object.create(R.MapScene.prototype), camera = new THREE.PerspectiveCamera();
+    scene.setCutLook = () => {}; scene.updateCutCaps = () => {};
+    camera.position.set(-20, 35, 45); camera.updateMatrixWorld(true);
+    fight._tac.view.own = false;
+    const update = () => scene.updateCutaway(camera, w.$dataMap, w.$gamePlayer, []);
     try {
-        d.put(0, 16, 9, 0);
-        fight.awaitsPlayer = () => true;
-        d.step(13, false);
-        assert.equal(V.openings().buildings.length, 0, 'while the player is asked nothing moves by itself, and nothing is looked for');
-        fight.awaitsPlayer = () => false;
-        d.step(13, false);
-        assert.equal(V.openings().buildings.length, 1, 'while units walk the view looks every twelve frames');
-    } finally { fight.awaitsPlayer = awaits; }
-    d.step(V.OPEN_EASE + 2);
-    assert.ok(d.group.children.length > 0);
-    // Another map's scene arrives with the house open: what the last one wore is gone, and this one starts afresh.
-    const group = new THREE.Group(), other = { piecesGroup: () => group, pieceMaterial: () => new THREE.MeshBasicMaterial() };
-    try {
-        V.updateOpenings(other, d.camera, true, true, false);
-        const open = V.openings();
-        assert.equal(open.buildings.length, 1, 'the house once, not twice');
-        assert.ok(open.buildings[0].e < 0.3, 'opening afresh: ' + open.buildings[0].e);
-        for (let i = 0; i < V.OPEN_EASE + 2; i++) { w.Graphics.frameCount++; V.updateOpenings(other, d.camera, true, true, false); }
-        assert.ok(group.children.length > 0, 'its caps are laid in the new scene');
-        assert.equal(V.openings().caps, group.children.length, 'and only those are kept');
-    } finally { V.closeOpenings(other, true); V.updateOpenings(d.scene, d.camera, true, true, false); d.clear(); }
-    void R;
+        fight._act.unitId = units[1].id; update();
+        assert.equal(R.cutawayUniforms().rrCutTop.value, 1e9, 'the leader inside does not open a house for the selected outdoor ally');
+        d.put(1, 12, 12, 0.1); d.put(0, 46, 34, 0.1); update();
+        assert.ok(R.cutawayUniforms().rrCutTop.value < 10, 'the selected follower inside opens its room');
+        fight._act.unitId = 0; update();
+        assert.equal(R.cutawayUniforms().rrCutTop.value, 1e9, 'no selection reveals no room');
+        fight._act.unitId = units[2].id; d.put(2, 12, 12, 0.1); update();
+        assert.equal(R.cutawayUniforms().rrCutTop.value, 1e9, 'an enemy cannot reveal the interior');
+    } finally { fight._tac.view.own = true; }
 });
 
-//-----------------------------------------------------------------------------
-// The way to the cursor.
+test('actual threshold crossing updates openings without a cursor change or a completed move', () => {
+    const d=world3D(),{V,fight,w,chars}=d;d.clear();d.look(12,12);
+    const c=chars[0];c.locate(12,12);c._realX=9;c._realY=12;c._reactorGround=0.1;
+    d.step(V.OPEN_EASE+2);assert.equal(V.openings().buildings.length,0,'the logical destination is already inside, but the body is outside');
+    c._realX=12;for(let i=0;i<V.OPEN_EASE+3;i++)d.frame();assert.equal(V.openings().buildings.length,1,'the body crossed the threshold');
+    let calls=0;const refresh=V.refreshOpenings;V.refreshOpenings=function(...a){calls++;return refresh.apply(this,a);};
+    try{for(let i=0;i<24;i++)d.frame();assert.equal(calls,0,'a still actor does not rescan the map');}
+    finally{V.refreshOpenings=refresh;}
+    c.locate(9,12);for(let i=0;i<V.OPEN_EASE+3;i++)d.frame();assert.equal(V.openings().buildings.length,0);
+});
+
+test('movement picking uses the visible roof outside and the revealed room floor inside', () => {
+    const d = world3D(), { F, V, R, fight, w } = d;
+    d.clear(); d.put(0, 9, 12, 0.1); d.look(12, 12); d.step(V.OPEN_EASE + 2);
+    const G = F.Grid, In = F.Input;
+    fight.ensureFlood(fight.activeUnit(), 20);
+    const saved = { live: V.live, active: V.active, ground: R.groundTileFromRay, flood: fight.ensureFlood,
+        reached: G.reachedAt, stop: G.canStopAt, grapple: G.grappledAt, ray: In._ray };
+    // A camera ray crosses two reachable surfaces. The old broad battle rectangle
+    // incorrectly skipped the roof even though the outdoor actor kept it visible.
+    V.live = () => ({ camera: { updateMatrixWorld() {} } }); V.active = () => true;
+    In._ray = { setFromCamera() {}, ray: { origin: { x: 12.5, y: 20, z: 12.5 }, direction: { x: 0, y: -1, z: 0 } } };
+    In._point = new w.THREE.Vector2();
+    R.groundTileFromRay = () => ({ x: 12, y: 12 }); fight.ensureFlood = () => {};
+    G.reachedAt = (x, y, out) => { out[0] = 5.1; out[1] = 1; out[2] = 0.1; out[3] = 1; return 2; };
+    G.canStopAt = () => true; G.grappledAt = () => false; fight._act.steps = 20;
+    R.cutawayUniforms().rrFightBox.value.splice(0, 4, 0, 0, 59, 51);
+    R.cutawayUniforms().rrFightLevel.value[1] = 1.1;
+    try {
+        assert.ok(near(In.pick(100, 100).h, 5.1), 'closed building roof is selectable');
+        d.put(0, 12, 12, 0.1); d.step(V.OPEN_EASE + 2);
+        assert.ok(near(In.pick(100, 100).h, 0.1), 'occupied room is selectable through its actual opening');
+        G.grappledAt = () => true;
+        assert.ok(near(In.pick(100, 100).h, 5.1), 'a grapple can still select the roof edge from inside');
+    } finally {
+        V.live = saved.live; V.active = saved.active; R.groundTileFromRay = saved.ground; fight.ensureFlood = saved.flood;
+        G.reachedAt = saved.reached; G.canStopAt = saved.stop; G.grappledAt = saved.grapple; In._ray = saved.ray;
+    }
+});
 
 test('the travelling square: from the unit to the destination in the same time however long the way, tile by tile, easing in and out of each', () => {
     const M = world3D().M;

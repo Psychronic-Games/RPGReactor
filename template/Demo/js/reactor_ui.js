@@ -5394,8 +5394,6 @@
         for (const window of hud._nodeWindows) {
             const node = window._uiNode;
             if (!node || node.type !== "fightUnit" || !window.visible || !window._fightShown) continue;
-            // One that lets a unit or the cursor show through is pointed through as well.
-            if (window._coverAlpha !== undefined && window._coverAlpha < 1) continue;
             // A record fitted to another screen is shown at its fit's scale.
             const scale = window._uiFitScale > 0 ? window._uiFitScale : 1;
             if (px >= window.x && py >= window.y && px < window.x + window.width * scale && py < window.y + window.height * scale) return true;
@@ -6064,15 +6062,10 @@
             const info = paused && window.node().type === "fightInfo" ? window.node().fightInfo : "";
             if (!window._fightShown || info === "hint" || info === "phase") window.visible = false;
             else {
+                // Unit panels keep their configured opacity while choosing and moving.
+                // Map units or a parked cursor behind them must not dim the status text.
                 if (window._fightAlpha < 1) window.alpha *= window._fightAlpha;
                 if (shot < 1 && window.node().type === "fightUnit") window.alpha *= shot;
-                // A unit panel over a unit or the cursor (a small map leaves them under it) lets them show through.
-                if (window.node().type === "fightUnit") {
-                    const want = this.fightPanelCovers(scene, window, fight) ? this.FIGHT_COVER_ALPHA : 1;
-                    const was = window._coverAlpha === undefined ? 1 : window._coverAlpha;
-                    window._coverAlpha = Math.abs(want - was) <= this.FIGHT_COVER_STEP ? want : was + Math.sign(want - was) * this.FIGHT_COVER_STEP;
-                    if (window._coverAlpha < 1) window.alpha *= window._coverAlpha;
-                }
             }
         }
         for (const entry of hud._fightNodes) this.placeFightWindow(scene, hud, entry);
@@ -6081,19 +6074,6 @@
             const state = reader.tacticalState();
             this.FightPortraits.update(state === "acting" || state === "moving" || state === "ending");
         }
-    };
-
-    // How much of a unit panel shows while a unit or the cursor is under it, and how fast it goes to that and back.
-    ReactorUI.FIGHT_COVER_ALPHA = 0.3;
-    ReactorUI.FIGHT_COVER_STEP = 0.1;
-
-    /** Whether a unit panel's window lies over a unit or the cursor's cell on the screen. */
-    ReactorUI.fightPanelCovers = function(scene, window, fight) {
-        const marks = typeof ReactorFight !== "undefined" ? ReactorFight.UnitMarks : null;
-        if (!marks || typeof marks.covers !== "function" || !fight || !window.visible) return false;
-        const layer = scene._windowLayer, scale = window._uiFitScale > 0 ? window._uiFitScale : 1;
-        const x = window.x + (layer ? Number(layer.x) || 0 : 0), y = window.y + (layer ? Number(layer.y) || 0 : 0);
-        return marks.covers(fight, x, y, window.width * scale, window.height * scale);
     };
 
     /** A stock map battle window, moved and sized to its node; it slides in each time it opens. */

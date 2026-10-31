@@ -2396,7 +2396,16 @@
         if (unit.vehicle) { if (typeof this.wreckVehicle === "function") this.wreckVehicle(unit); }
         // It falls and lies: one of the party until it is brought back, an event's unit as its Collapse Effect says.
         else if (unit.eventId && character) this.fell(unit, character);
-        else if (character) { character.setOpacity(110); character._reactorFall = 1; }
+        else if (character) { character.setOpacity(110); character._reactorFall = 1; character._reactorKnockedOut = true; }
+        if (character && character._reactorKnockedOut) {
+            const P = root.ReactorPhysics, R = root.Reactor3D;
+            if (P && P.settings && P.settings().ragdoll && R && R.isMap3D && R.isMap3D(typeof $dataMap !== "undefined" ? $dataMap : null)) {
+                character._reactorGrapple = null; character._reactorMantle = null; character._reactorOnLadder = false;
+                character._reactorRagdoll = { combat: true, frame: typeof Graphics !== "undefined" ? Graphics.frameCount : 0,
+                    vx: Number.isFinite(yaw) ? Math.sin(yaw) * 0.055 : 0,
+                    vz: Number.isFinite(yaw) ? Math.cos(yaw) * 0.055 : 0, vy: -0.08 };
+            }
+        }
         if (unit.enemy) F.collapseSound(this.battler(unit));
         // (A battle page's "unit defeated" is asked about the battle's units, not about what they ride.)
         if (!unit.vehicle) this.fireHooks("unitDefeated", { unit });
@@ -2431,6 +2440,8 @@
 
     /** A character is on its feet again: nothing of a fall is left on it. */
     F.stand = function(character) {
+        character._reactorKnockedOut = false;
+        if (character._reactorRagdoll && character._reactorRagdoll.combat) character._reactorRagdoll = null;
         if (character._reactorFall) character._reactorFall = 0;
         if (character._reactorPosePitch) character._reactorPosePitch = 0;
         if (character._reactorFallYaw != null) character._reactorFallYaw = null;
@@ -2466,6 +2477,7 @@
     /** A unit an event stands for has fallen: what is left of it (`F.remainsOf`) is put on the way it goes. */
     Game_Fight.prototype.fell = function(unit, event) {
         const remains = F.remainsOf(unit, this.battler(unit));
+        event._reactorKnockedOut = remains === "body" || remains === "fade";
         const fade = { eventId: unit.eventId, frames: F.DEFEAT_FADE, hold: F.DEFEAT_HOLD, rest: F.FALL_REST };
         if (remains === "gone") { fade.frames = 1; fade.hold = 0; fade.rest = 0; }
         if (remains === "stand") fade.rest = 0;
@@ -2502,7 +2514,7 @@
             delete unit.fallYaw;
         }
         const character = this.character(unit);
-        if (character) character.setOpacity(255);
+        if (character) { F.stand(character); character.setOpacity(255); }
     };
 
     /**
@@ -2532,6 +2544,7 @@
             const battler = this.battler(unit);
             if (battler && battler.isAlive()) { F.stand(character); character.setOpacity(255); }
             else if (character._reactorFall > 0) {
+                character._reactorKnockedOut = true;
                 character._reactorFall = Math.min(F.FALL_FRAMES + 1, character._reactorFall + 1);
                 character._reactorPosePitch = F.fallPitch(character._reactorFall / F.FALL_FRAMES);
             }
@@ -2543,6 +2556,7 @@
             if (!event) { fade.frames = 0; continue; }
             // It falls and lies a while before it fades, rather than vanishing where it stood.
             if (fade.rest > 0) {
+                event._reactorKnockedOut = true;
                 fade.rest--;
                 event._reactorPosePitch = F.fallPitch((F.FALL_REST - fade.rest) / F.FALL_FRAMES);
                 continue;
@@ -2569,7 +2583,7 @@
             const event = $gameMap.event(unit.eventId);
             // One that stays for the battle is put back as it was left: lying, or standing where it stood.
             if (event && unit.defeated && unit.body && !unit.erased) {
-                if (unit.body === "lie") { event._reactorPosePitch = 1; event._reactorFallYaw = unit.fallYaw != null ? unit.fallYaw : null; event.setThrough(true); }
+                if (unit.body === "lie") { event._reactorKnockedOut = true; event._reactorPosePitch = 1; event._reactorFallYaw = unit.fallYaw != null ? unit.fallYaw : null; event.setThrough(true); }
                 stays.push({ eventId: unit.eventId, frames: F.DEFEAT_FADE, hold: 0, rest: 0, stay: true, ours: !!unit.actorId && unit.team === "ally" });
                 continue;
             }

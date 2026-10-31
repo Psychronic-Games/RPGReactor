@@ -110,6 +110,7 @@
                 Object.assign(out, { sewnRefs: Int32Array.from(this.refs), sewnRoots: Float32Array.from(this.roots), clothDetail: true, onSkin: true });
                 if (this.hang.some(h => h >= 0)) out.hang = Float32Array.from(this.hang);
             }
+            const surface=Float32Array.from(this.uv);let good=0;for(let i=0;i<this.i.length;i+=3){const [a,b,c]=this.i.slice(i,i+3).map(v=>v*2);if(Math.abs((surface[b]-surface[a])*(surface[c+1]-surface[a+1])-(surface[c]-surface[a])*(surface[b+1]-surface[a+1]))>1e-12)good++;}if(good>this.i.length/3*.97)out.surfaceUvs=surface;
             return out;
         }
     }
@@ -117,7 +118,7 @@
     function withTile(part, kind, roughness, normalScale) {
         const Fabric = need('RRCharacterFabric', './CharacterFabric.js');
         if (!Fabric || !Fabric.tile || !Fabric.tile(kind)) return part;
-        Fabric.applyTo(part, kind, null, { roughness, normalScale });
+        const span=Fabric.tile(kind).span,uvs1=part.surfaceUvs?Float32Array.from(part.surfaceUvs,(x,i)=>x/span[i%2]):null;Fabric.applyTo(part, kind, null, { roughness, normalScale,albedo:true,...(uvs1?{uvs1}:{}) });delete part.surfaceUvs;
         part.fabricTile = kind;
         return part;
     }
@@ -649,8 +650,8 @@
         m.smooth(base, firstTri);
         // The underside, a flat fan facing in.
         const under = [];
-        for (let j = 0; j < n; j++) { const q = pt(1, j), p = at(q[0], q[1], 0.0003); under.push(m.v(p, norm(sub(inside(p), p)), tone(color, 0.4), skin, [0, 0])); }
-        const cu = at(c[0], c[1], 0.0003), uc = m.v(cu, norm(sub(inside(cu), cu)), tone(color, 0.4), skin, [0, 0]);
+        for (let j = 0; j < n; j++) { const q = pt(1, j), p = at(q[0], q[1], 0.0003); under.push(m.v(p, norm(sub(inside(p), p)), tone(color, 0.4), skin, [q[0]*uvScale,q[1]*uvScale])); }
+        const cu = at(c[0], c[1], 0.0003), uc = m.v(cu, norm(sub(inside(cu), cu)), tone(color, 0.4), skin, [c[0]*uvScale,c[1]*uvScale]);
         for (let j = 0; j < n; j++) m.tri(uc, under[j], under[(j + 1) % n]);
         // A point on the face `d` meters in from the outline along spoke j, `up` over it.
         const face = rings.filter(r => r[0] <= 1 - k + 1e-9).map(r => [r[0], r[1]]).concat([[0, T + crown]]);
@@ -680,7 +681,7 @@
         if (!M.frame.empty) out.push(M.frame.part(label + ' frames', { roughness: Math.max(0.16, L.st.trimRoughness ?? 0.3), metalness: L.st.trimMetalness ?? 0.8 }));
         if (!M.dark.empty) out.push(M.dark.part(label + ' joints', { roughness: 0.5, metalness: 0.4 }));
         if (!M.glow.empty) out.push(M.glow.part(label + ' lights', { roughness: 0.3, metalness: 0, emissive: L.glowHex, emissiveIntensity: L.intensity }));
-        if (!M.glass.empty) out.push(M.glass.part(label + ' glass', { roughness: 0.08, metalness: 0.1, opacity: 0.62, emissive: L.glowHex, emissiveIntensity: L.intensity * 0.55, doubleSided: false }));
+        if (!M.glass.empty) out.push(M.glass.part(label + ' glass', { roughness: 0.08, metalness: 0.1, opacity: 0.62, emissive: L.glowHex, emissiveIntensity: L.intensity * 0.55, doubleSided: true }));
         if (!M.soft.empty) out.push(withTile(M.soft.part(label + ' straps', { roughness: 0.8, metalness: 0 }), 'canvas', 0.8));
         return out;
     }
@@ -963,12 +964,12 @@
     const softMeshes = () => ({ panel: new Mesh(), tape: new Mesh(), glow: new Mesh(), glass: new Mesh(), hard: new Mesh(), rubber: new Mesh() });
     function softParts(label, L, M, tileKind = 'plastic', panelRough = 0.32) {
         const out = [];
-        if (!M.panel.empty) out.push(withTile(M.panel.part(label + ' panels', { roughness: panelRough, metalness: 0, doubleSided: false }), tileKind, panelRough, 0.5));
-        if (!M.tape.empty) out.push(withTile(M.tape.part(label + ' tapes', { roughness: 0.55, metalness: 0, doubleSided: false }), 'neoprene', 0.55, 0.5));
-        if (!M.rubber.empty) out.push(withTile(M.rubber.part(label + ' straps', { roughness: 0.82, metalness: 0, doubleSided: false }), 'canvas', 0.82, 0.8));
+        if (!M.panel.empty) out.push(withTile(M.panel.part(label + ' panels', { roughness: panelRough, metalness: 0, doubleSided: true }), tileKind, panelRough, 0.5));
+        if (!M.tape.empty) out.push(withTile(M.tape.part(label + ' tapes', { roughness: 0.55, metalness: 0, doubleSided: true }), 'neoprene', 0.55, 0.5));
+        if (!M.rubber.empty) out.push(withTile(M.rubber.part(label + ' straps', { roughness: 0.82, metalness: 0, doubleSided: true }), 'canvas', 0.82, 0.8));
         if (!M.hard.empty) out.push(M.hard.part(label + ' hardware', { roughness: 0.3, metalness: 0.75 }));
         if (!M.glow.empty) out.push(M.glow.part(label + ' lights', { roughness: 0.35, metalness: 0, emissive: L.glowHex, emissiveIntensity: L.intensity }));
-        if (!M.glass.empty) out.push(M.glass.part(label + ' inserts', { roughness: 0.12, metalness: 0, opacity: 0.7, emissive: L.glowHex, emissiveIntensity: L.intensity * 0.7, doubleSided: false }));
+        if (!M.glass.empty) out.push(M.glass.part(label + ' inserts', { roughness: 0.12, metalness: 0, opacity: 0.7, emissive: L.glowHex, emissiveIntensity: L.intensity * 0.7, doubleSided: true }));
         return out;
     }
     /** Region helpers on cloth coordinates (signed meters, inside positive). */
@@ -1214,41 +1215,43 @@
         const F = trunkField(C, ctx.under, ctx.trunkParts), H = C.neck[1] - C.hips[1], yF = f => C.hips[1] + f * H;
         const web = tone(L.main, 1), plateC = L.second, railC = linear(item.trim || '#55595f');
         const sk = (p, joint) => joint ? C.rigid(joint) : C.skinAt(p, v => C.an.member[C.src[v] * 5] > 0.5);
-        /** A strap round the trunk through (bearing, height fraction) stations. */
-        const strapPath = (stations, gap, width, thick, color) => {
-            const pts = [];
-            for (let i = 0; i + 1 < stations.length; i++) { const [a0, f0] = stations[i], [a1, f1] = stations[i + 1], n = Math.max(2, Math.ceil(Math.abs(a1 - a0) * 12 + Math.abs(f1 - f0) * 30)); for (let k = 0; k < n; k++) { const t = k / n; pts.push([a0 + (a1 - a0) * t, f0 + (f1 - f0) * t]); } }
-            pts.push(stations[stations.length - 1]);
-            const P = pts.map(([a, f]) => F.at(a, yF(f), gap)), rows = [];
-            for (let i = 0; i < P.length; i++) {
-                const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], nn = norm(sub(P[i], F.inside(P[i]))), t = norm(sub(b, a)), x = norm(cross(t, nn)), k = sk(P[i]);
-                rows.push([[-1, 0], [-1, 1], [1, 1], [1, 0]].map(([sx, up]) => M.rubber.v(add(add(P[i], mul(x, sx * width / 2 * s)), mul(nn, up * thick * s)), norm(add(mul(nn, up ? 1 : 0.2), mul(x, up ? sx * 0.15 : sx))), color, k, [pts[i][0], pts[i][1]])));
+        // Closed webbing with independent normals on the front, back and cut edges.
+        const closedWeb=(points,normals,width,thick)=>{
+            const path=need('RRConstructionPatterns','./ConstructionPatterns.js').simplifySurfacePath(points.map((p,i)=>({p,n:normals[i]})),width*s,thick*s);
+            points=path.map(q=>q.p);normals=path.map(q=>q.n);
+            const mesh=M.rubber,start=mesh.i.length,rows=[];let distance=0;
+            for(let i=0;i<points.length;i++){
+                const p=points[i],n=normals[i],t=norm(sub(points[Math.min(i+1,points.length-1)],points[Math.max(0,i-1)])),x=norm(cross(t,n)),skin=sk(p),w=width*s/2;
+                if(i)distance+=len(sub(p,points[i-1]));const ids=[];
+                for(const [j,[sx,up,normal]]of [[-1,0,mul(n,-1)],[1,0,mul(n,-1)],[-1,1,n],[1,1,n],[-1,0,mul(x,-1)],[-1,1,mul(x,-1)],[1,0,x],[1,1,x]].entries())
+                    ids.push(mesh.v(add(add(p,mul(x,sx*w)),mul(n,up*thick*s)),normal,web,skin,[distance,j<4?(sx+1)*width*.5:up*thick]));
+                rows.push(ids);
             }
-            for (let i = 0; i + 1 < rows.length; i++) for (let k = 0; k < 3; k++) M.rubber.quad(rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]);
+            for(let i=0;i+1<rows.length;i++){const a=rows[i],b=rows[i+1];for(const [u,v]of [[0,1],[2,3],[4,5],[6,7]])mesh.quad(a[u],a[v],b[v],b[u]);}
+            for(const [i,sgn]of [[0,-1],[points.length-1,1]]){const normal=mul(norm(sub(points[Math.min(i+1,points.length-1)],points[Math.max(0,i-1)])),sgn),q=rows[i],ids=[q[0],q[1],q[3],q[2]].map(k=>mesh.v(mesh.at(k),normal,web,sk(points[i]),[mesh.p[k*3],mesh.p[k*3+1]+mesh.p[k*3+2]]));mesh.quad(...ids);}
+            for(let t=start;t<mesh.i.length;t+=3){const [a,b,c]=mesh.i.slice(t,t+3),f=cross(sub(mesh.at(b),mesh.at(a)),sub(mesh.at(c),mesh.at(a))),n=[0,1,2].map(k=>mesh.n[a*3+k]+mesh.n[b*3+k]+mesh.n[c*3+k]);if(dot(f,n)<0)[mesh.i[t+1],mesh.i[t+2]]=[mesh.i[t+2],mesh.i[t+1]];}
         };
-        /** Over a shoulder: from the front (bearing a, height f) up over the top and down the back. */
-        const overShoulder = (sx) => {
-            const pts = [], arm = C.bone((sx > 0 ? 'Left' : 'Right') + 'Arm').head, x = C.neck[0] + (arm[0] - C.neck[0]) * 0.55, cap = C.shoulderY + 0.035 * s;
-            const z0 = F.at(0.4 * sx, yF(0.86), 0)[2], z1 = F.at(Math.PI - 0.42 * sx, yF(0.86), 0)[2];
-            for (let i = 0; i <= 14; i++) {
-                const z = z0 + (z1 - z0) * i / 14; let y = yF(0.86);
-                const BP = C.body.positions;
-                for (let v = 0; v < BP.length / 3; v++) if (Math.abs(BP[v * 3] - x) < 0.02 * s && Math.abs(BP[v * 3 + 2] - z) < 0.02 * s && BP[v * 3 + 1] < C.neck[1] + 0.02 * s && BP[v * 3 + 1] > y) y = BP[v * 3 + 1];
-                for (const e of ctx.under) { const P = e.laid.positions; for (let v = 0; v < e.laid.rimStart; v++) if (Math.abs(P[v * 3] - x) < 0.02 * s && Math.abs(P[v * 3 + 2] - z) < 0.02 * s && P[v * 3 + 1] < C.neck[1] + 0.03 * s && P[v * 3 + 1] > y) y = P[v * 3 + 1]; }
-                pts.push([x, Math.min(y, cap) + 0.006 * s, z]);
+        const strapPath=(stations,gap,width,thick,color,draw=true)=>{
+            const pts=[];for(let i=0;i+1<stations.length;i++){const [a,f]=stations[i],[b,g]=stations[i+1],n=Math.max(2,Math.ceil(Math.abs(b-a)*16+Math.abs(g-f)*36));for(let k=0;k<n;k++)pts.push(F.at(a+(b-a)*k/n,yF(f+(g-f)*k/n),gap));}
+            const [a,f]=stations.at(-1);pts.push(F.at(a,yF(f),gap));const normals=pts.map(p=>norm(sub(p,F.inside(p))));if(draw)closedWeb(pts,normals,width,thick);return {pts,normals};
+        };
+        const overShoulder=(sx,draw=true)=>{
+            const arm=C.bone((sx>0?'Left':'Right')+'Arm').head,x=C.neck[0]+(arm[0]-C.neck[0])*.55,cap=C.shoulderY+.035*s;
+            const first=F.at(.4*sx,yF(.87),.006*s),last=F.at(Math.PI-.65*sx,yF(.87),.006*s),pts=[];
+            for(let i=0;i<=32;i++){
+                const t=i/32,z=first[2]+(last[2]-first[2])*t,xx=first[0]*(1-t)+last[0]*t+(x-(first[0]+last[0])/2)*Math.sin(t*Math.PI),BP=C.body.positions;let y=yF(.86);
+                for(let v=0;v<BP.length/3;v++)if(Math.abs(BP[v*3]-xx)<.025*s&&Math.abs(BP[v*3+2]-z)<.022*s&&BP[v*3+1]<C.neck[1]+.02*s)y=Math.max(y,BP[v*3+1]);
+                for(const e of ctx.under){const P=e.laid.positions;for(let v=0;v<(e.laid.rimStart??P.length/3);v++)if(Math.abs(P[v*3]-xx)<.025*s&&Math.abs(P[v*3+2]-z)<.022*s&&P[v*3+1]<C.neck[1]+.03*s)y=Math.max(y,P[v*3+1]);}
+                pts.push([xx,Math.min(y,cap)+.008*s,z]);
             }
-            for (let pass = 0; pass < 4; pass++) for (let k = 1; k + 1 < pts.length; k++) pts[k][1] = Math.max(pts[k][1], (pts[k - 1][1] + pts[k + 1][1]) / 2);
-            const rows = [];
-            for (let i = 0; i < pts.length; i++) {
-                const d = norm(sub(pts[Math.min(pts.length - 1, i + 1)], pts[Math.max(0, i - 1)])); let nn = norm(cross(d, X)); if (nn[1] < 0) nn = mul(nn, -1);
-                const k = C.rigid('Spine2'), w2 = 0.024 * s;
-                rows.push([[-1, 0], [-1, 1], [1, 1], [1, 0]].map(([sxx, up]) => M.rubber.v(add(add(pts[i], [sxx * w2, 0, 0]), mul(nn, up * 0.003 * s)), norm(add(mul(nn, up ? 1 : 0.2), [up ? sxx * 0.15 : sxx, 0, 0])), web, k, [i * 0.02, sxx])));
-            }
-            for (let i = 0; i + 1 < rows.length; i++) for (let k = 0; k < 3; k++) M.rubber.quad(rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]);
+            pts[0]=first;pts[pts.length-1]=last;
+            for(let pass=0;pass<4;pass++)for(let k=1;k+1<pts.length;k++)pts[k][1]=Math.max(pts[k][1],(pts[k-1][1]+pts[k+1][1])/2);
+            const normals=pts.map((p,i)=>{const d=norm(sub(pts[Math.min(i+1,pts.length-1)],pts[Math.max(0,i-1)]));let n=norm(cross(d,X));if(n[1]<0)n=mul(n,-1);return n;});
+            if(draw)closedWeb(pts,normals,.045,.003);return {pts,normals};
         };
         /** A rail: a slotted bar on a mounting plate, `pods` snapped onto it. */
         const railAt = (a0, a1, f, joint, pods) => {
-            const gap = 0.012 * s, Rn = F.radius((a0 + a1) / 2, yF(f)), at = (u, v, h) => F.at(u / Rn, yF(f) + v, gap + h), sk2 = C.rigid(joint);
+            const gap = 0.015 * s, Rn = F.radius((a0 + a1) / 2, yF(f)), at = (u, v, h) => F.at(u / Rn, yF(f) + v, gap + h), sk2 = C.rigid(joint);
             const w = (a1 - a0) * Rn, hh = 0.075 * s;
             const sh = outline([[a0 * Rn, -hh / 2], [a1 * Rn, -hh / 2], [a1 * Rn, hh / 2], [a0 * Rn, hh / 2]], 0.012 * s, 30);
             shell(M.panel, at, sh, { T: 0.006 * s, ch: 0.0018 * s, crown: 0.003 * s, color: plateC, skin: sk2, inside: F.inside });
@@ -1269,19 +1272,21 @@
             });
         };
         if (style === 'chest') {
-            for (const sx of [1, -1]) { overShoulder(sx); strapPath([[0.4 * sx, 0.87], [0.42 * sx, 0.62]], 0.006 * s, 0.045, 0.003, web); strapPath([[Math.PI - 0.42 * sx, 0.87], [Math.PI - 0.28 * sx, 0.55]], 0.006 * s, 0.045, 0.003, web); }
-            strapPath(Array.from({ length: 9 }, (_, i) => [-Math.PI + 0.25 + i / 8 * (TAU - 0.5), 0.5]), 0.006 * s, 0.04, 0.003, web);
+            for(const sx of [1,-1]){const a=strapPath([[.42*sx,.50],[.4*sx,.87]],.006*s,.045,.003,web,false),b=overShoulder(sx,false),d=strapPath([[Math.PI-.65*sx,.87],[Math.PI-.65*sx,.50]],.006*s,.045,.003,web,false);const pts=[...a.pts.slice(0,-1),...b.pts,...d.pts.slice(1)],normals=[...a.normals.slice(0,-1),...b.normals,...d.normals.slice(1)];for(const at of [a.pts.length-1,a.pts.length+b.pts.length-2])for(let k=-2;k<=2;k++){const i=Math.max(0,Math.min(normals.length-1,at+k)),t=(k+2)/4;normals[i]=norm(lerp(normals[Math.max(0,at-3)],normals[Math.min(normals.length-1,at+3)],t));}closedWeb(pts,normals,.045,.003);}
+            strapPath(Array.from({ length: 9 }, (_, i) => [-Math.PI + 0.25 + i / 8 * (TAU - 0.5), 0.5]), 0.010 * s, 0.04, 0.003, web);
             railAt(-0.55, 0.55, 0.64, 'Spine2', [0.16, 0.5, 0.84]);
             // A back plate between the straps.
-            const Rb = F.radius(Math.PI, yF(0.68)), atb = (u, v, h) => F.at(Math.PI + u / Rb, yF(0.68) + v, 0.012 * s + h);
-            shell(M.panel, atb, outline([[-0.07 * s, -0.08 * s], [0.07 * s, -0.08 * s], [0.07 * s, 0.08 * s], [-0.07 * s, 0.08 * s]], 0.015 * s, 30), { T: 0.007 * s, ch: 0.002 * s, crown: 0.004 * s, color: plateC, skin: C.rigid('Spine2'), inside: F.inside });
+            const O=need('RRCharacterOutfit','./CharacterOutfit.js'),back=O.projectedSurface([C.body,...ctx.under.map(e=>e.laid)],{cell:.025*s}),atb=(u,v,h)=>{const x=C.hips[0]+u,y=yF(.68)+v,hit=back.sample(x,y,-1);return[x,y,(hit?hit.depth:F.at(Math.PI,y,0)[2])-.012*s-h];};
+            shell(M.panel, atb, outline([[-.04*s,-.08*s],[.04*s,-.08*s],[.04*s,.08*s],[-.04*s,.08*s]], 0.015 * s, 30), { T: 0.007 * s, ch: 0.002 * s, crown: 0.004 * s, color: plateC, skin: C.rigid('Spine2'), inside: F.inside });
             // Quick-release buckle at the sternum strap.
             const bk = F.at(0, yF(0.5), 0.009 * s); box(M.hard, bk, [X, Y, Z], [0.024 * s, 0.018 * s, 0.006 * s], 0.004 * s, tone(railC, 0.6), C.rigid('Spine1'), 2);
             if (L.badges) box(M.glow, add(bk, [0, 0, 0.0062 * s]), [X, Y, Z], [0.006 * s, 0.006 * s, 0.001 * s], 0.002 * s, L.glow, C.rigid('Spine1'), 1);
         } else if (style === 'sling') {
             overShoulder(-1);
             strapPath([[-0.4, 0.87], [-0.2, 0.7], [0.3, 0.45], [0.75, 0.22], [1.3, 0.12]], 0.006 * s, 0.05, 0.003, web);
-            strapPath([[Math.PI + 0.42, 0.87], [Math.PI + 0.1, 0.6], [Math.PI - 0.5, 0.35], [Math.PI - 1.3, 0.13], [1.3, 0.12]].map(([a, f]) => [wrap(a), f]).map(([a, f], i, arr) => [i && a < arr[i - 1][0] - Math.PI ? a + TAU : a, f]), 0.006 * s, 0.05, 0.003, web);
+            const back=[[Math.PI+.42,.87],[Math.PI+.1,.6],[Math.PI-.5,.35],[Math.PI-1.3,.13],[1.3,.12]];
+            for(let i=1;i<back.length;i++){while(back[i][0]-back[i-1][0]>Math.PI)back[i][0]-=TAU;while(back[i][0]-back[i-1][0]<-Math.PI)back[i][0]+=TAU;}
+            strapPath(back, 0.006 * s, 0.05, 0.003, web);
             railAt(-0.32, 0.18, 0.6, 'Spine2', [0.25, 0.75]);
             strapPath(Array.from({ length: 9 }, (_, i) => [-Math.PI + 0.25 + i / 8 * (TAU - 0.5), 0.12]), 0.008 * s, 0.045, 0.004, web);
         } else {
@@ -1364,31 +1369,38 @@
      */
     function glowMask(item, p) {
         if (!item || p.val < 0 || item.lightStyle === 'none' || !(item.lightIntensity > 0)) return 0;
-        const w = item.lightWidth || 1, R = p.rest || [0, 1, 0], st = item.style;
+        const w = item.lightWidth || 1, R = p.printRest || p.rest || [0, 1, 0], st = item.style;
         const line = (d, width) => 1 - ss(width * w * 0.5, width * w, Math.abs(d));
         if (item.id === 'smartShirt') {
             // Surface coordinates in meters: round the trunk (its bearing at a chest's radius) and up it; round and along a limb.
-            const x = p.fam === 0 ? Math.atan2(R[0], R[2]) * 0.15 : p.ang * 0.045, y = p.fam === 0 ? R[1] : 1.3 - (p.s - 1) * 0.27;
+            const x = p.fam === 0 ? R[0] : p.ang * 0.045, y = p.fam === 0 ? R[1] : 1.3 - (p.s - 1) * 0.27;
+            // Flat display panels and a solid shoulder yoke. Angular trunk
+            // projection stretched hexes across the clavicles and neck.
+            const envelope=p.fam===0?ss(.92,.98,R[1])*(1-ss(1.29,1.35,R[1]))*(1-ss(.12,.155,Math.abs(R[0])))*ss(.035,.065,Math.abs(R[2])):ss(1.18,1.40,p.s)*(1-ss(2.60,2.78,p.s))*.65;
+            if(envelope<=0)return 0;
             if (st === 'pulse') {
                 // Chevron waves running down from the collar, fading toward the hem.
                 const v = (1.45 - y) + 0.55 * Math.abs(p.fam === 0 ? R[0] : 0), k = fract(v / 0.055);
-                return line(k - 0.5, 0.06) * (0.3 + 0.7 * ss(0.65, 0.05, v)) * (p.fam === 0 ? 1 : 0.6);
+                return line(k - 0.5, 0.06) * (0.3 + 0.7 * ss(0.65, 0.05, v)) * envelope;
             }
             if (st === 'rain') {
                 const col = Math.floor(x / 0.009) + p.fam * 97;
                 const speed = 0.5 + ihash(col, 3, 1), phase = fract(y * 3.2 * speed + ihash(col, 7, 2) * 10), drop = phase < 0.35 ? (0.35 - phase) / 0.35 : 0;
                 const on = ihash(col, 11, 3) > 0.45 ? 1 : 0, digit = fract(y * 120) < 0.7 ? 1 : 0.3;
-                return on * drop * digit * line(fract(x / 0.009) - 0.5, 0.18);
+                return on * drop * digit * line(fract(x / 0.009) - 0.5, 0.18) * envelope;
             }
             // Hex scales: lit edges, a few cells lit through, brightest over the chest and shoulders.
             const a = 0.024, rowH = a * Math.sqrt(3) / 2, j0 = Math.round(y / rowH);
             let best = Infinity, cell = null;
             for (let j = j0 - 1; j <= j0 + 1; j++) { const off = (j & 1) * 0.5, i0 = Math.round(x / a - off); for (let i = i0 - 1; i <= i0 + 1; i++) { const cx = (i + off) * a, cy = j * rowH, d = Math.hypot(x - cx, y - cy); if (d < best) { best = d; cell = [i, j, cx, cy]; } } }
             const dx = x - cell[2], dy = y - cell[3];
-            let m = 0; for (const t of [Math.PI / 2, Math.PI / 6, -Math.PI / 6]) m = Math.max(m, Math.abs(dx * Math.cos(t) + dy * Math.sin(t)));
-            const edge = (a * Math.sqrt(3) / 4 - m) / a, live = ss(0.25, 0.85, noise2(cell[0] * 0.45 + p.fam * 7, cell[1] * 0.45, 5));
+            // Voronoi edges of the triangular center lattice: normals along
+            // 0 and +/-60 degrees, half a center-spacing from each center.
+            // The old rotated, undersized hex stamped star-like diagonals.
+            const m=Math.max(Math.abs(dx),Math.abs(dx*.5+dy*Math.sqrt(3)/2),Math.abs(dx*.5-dy*Math.sqrt(3)/2));
+            const edge = (a / 2 - m) / a, live = ss(0.25, 0.85, noise2(cell[0] * 0.45 + p.fam * 7, cell[1] * 0.45, 5));
             const env = p.fam === 0 ? 0.3 + 0.7 * ss(1.05, 1.35, R[1]) : 0.55, fill = ihash(cell[0] + p.fam * 31, cell[1], 9) > 0.93 ? 0.35 : 0;
-            return Math.max(line(edge, 0.045) * (0.35 + 0.65 * live), fill * live) * env;
+            return Math.max(line(edge, 0.045) * (0.35 + 0.65 * live), fill * live) * env * envelope;
         }
         if (item.id === 'compressionSuit') {
             if (st === 'plain') return 0;
@@ -1459,7 +1471,7 @@
                 pieces: () => [{ cyberGear: 'rig' }] }, own),
             Object.assign({ id: 'techGloves', label: 'Tech gloves', slot: 'hands', group: GROUP, knobs: ['length'], styles: [['fingerless', 'Fingerless'], ['full', 'Full fingers']],
                 defaults: Object.assign({ color: '#1d1f23', color2: '#2f3238', trim: '#7d838b', length: 0.25, material: 'leather', wear: 0, style: 'fingerless' }, light('#38e6ff', 0.8)),
-                pieces: i => [i.style === 'full' ? hands(i) : hands(i, { rules: { arms: [2.82 - (i.length ?? 0.25) * 0.6, 3.5] } }), { cyberGear: 'gloves' }] }, own),
+                pieces: i => [i.style === 'full' ? hands(i) : hands(i, {fingerless:true, rules: { arms: [2.82 - (i.length ?? 0.25) * 0.6, 9] } }), { cyberGear: 'gloves' }] }, own),
             Object.assign({ id: 'magSoles', label: 'Mag-sole shoes', slot: 'feet', group: GROUP, knobs: ['length'], styles: [['sneaker', 'Sneakers'], ['boot', 'High boots']],
                 defaults: Object.assign({ color: '#1e2024', color2: '#3a3e45', trim: '#1a1c20', length: 0.45, bulk: 0.1, material: 'rubber', wear: 0, style: 'sneaker' }, light('#38e6ff', 0.9)),
                 pieces: i => [i.style === 'boot' ? shoe('mag', i, { sole: 0.024, toe: 0.011, wall: 0.024 }) : shoe('sneaker', i, { sole: 0.026 }), { cyberGear: 'magSoles' }] }, own),
@@ -1575,7 +1587,7 @@
             out.parts.push(...parts);
         }
         const Fabric = need('RRCharacterFabric', './CharacterFabric.js');
-        if (Fabric) for (const p of out.parts) if (p.fabricTile) { const t = Fabric.tile(p.fabricTile); for (const pic of [t.normal, t.orm]) if (!out.textures.includes(pic)) out.textures.push(pic); }
+        if (Fabric) for (const p of out.parts) if (p.fabricTile) { const t = Fabric.tile(p.fabricTile); for (const pic of [t.normal,t.orm,...(p.texture===t.albedo.name?[t.albedo]:[])]) if (!out.textures.includes(pic)) out.textures.push(pic); }
         return out;
     }
 

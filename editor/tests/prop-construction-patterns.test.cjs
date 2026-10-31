@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-global.THREE=require('three');
+global.THREE=require('./helpers/three.cjs');
 const Rules=require('../src/forge/Character3D/ConstructionPatterns.js'),Surface=require('../src/forge/Character3D/ConstructionSurface.js'),F=require('../src/forge/Props/FurnitureProp.js'),C=require('../src/forge/Props/ContainerProp.js'),M=require('../src/forge/Props/PropModel.js'),A=require('../src/forge/Props/AccessoryProp.js'),CP=require('../src/forge/Props/ContainerPaint.js'),Catalog=require('../src/forge/Props/PropCatalog.js');
 const hash=(parts,fields=['positions','index'])=>{const h=crypto.createHash('sha256');for(const p of parts)for(const k of fields)if(p[k])h.update(Buffer.from(p[k].buffer,p[k].byteOffset,p[k].byteLength));return h.digest('hex');};
 function builder(){const box={window:{},RRPropModel:M,RRPropCatalog:Catalog,THREE:global.THREE,sessionStorage:{getItem:()=>null},console};vm.createContext(box);vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/forge/Props/PropBuilder.js'),'utf8')+';globalThis.Builder=PropBuilder;',box);return new box.Builder();}

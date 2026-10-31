@@ -58,7 +58,7 @@
     const need=(name,file)=>root[name]||(typeof require==='function'?require(file):null);
     const Props=need('RRCharacterProps','./CharacterProps.js'),O=need('RRCharacterOutfit','./CharacterOutfit.js');
     const {add,sub,mul,norm,cross,dot}=Props.vec;
-    const TECH=new Set(['starshipUniform','officerJacket','techSuit','explorerSuit','evaSuit','spacesuit','bodysuit']);
+    const TECH=new Set(['starshipUniform','techSuit','explorerSuit','evaSuit','spacesuit','bodysuit']);
     const COATS=new Set(['fieldCoat','tacvest']);
 
     /** A triangle's skin and surface point at its barycentric coordinates. */
@@ -101,6 +101,24 @@
 
     function build(pack,built,entries) {
         const mesh=new Props.Mesh(),hardware=new Props.Mesh(),scale=built.height/1.7;
+        const jacket=entries.find(e=>e.garment==='officerJacket'&&!e.lining),jacketFaces=new Map();
+        // The older suit's projecting pockets and zipper must not pierce a jacket worn over it.
+        // Keep details visible through an open front, and discard only covered triangles.
+        const hideUnderJacket=(e,starts)=>{
+            if(!jacket||!(jacket.laid.layer>e.laid.layer))return;
+            for(const [m,start]of [[mesh,starts[0]],[hardware,starts[1]]]){
+                const keep=m.i.slice(0,start);
+                for(let t=start;t<m.i.length;t+=3){
+                    const ids=m.i.slice(t,t+3),p=[0,1,2].map(k=>ids.reduce((n,v)=>n+m.p[v*3+k]/3,0));
+                    const side=ids.reduce((n,v)=>n+m.n[v*3+2],0)>=0?1:-1;
+                    if(!jacketFaces.has(side))jacketFaces.set(side,O.projectedSurface([jacket.laid],{cell:.04*scale,
+                        accept:(part,vs)=>vs.reduce((n,v)=>n+part.normals[v*3+2]*side,0)>.6}));
+                    const hit=jacketFaces.get(side).sample(p[0],p[1],side);
+                    if(!hit||(hit.depth-p[2])*side<-.006*scale)keep.push(...ids);
+                }
+                m.i=keep;
+            }
+        };
         const tube=(samples,radius,color,sides=6)=>{
             for(let i=0;i+1<samples.length;i++){
                 const a=samples[i],b=samples[i+1];if(!a||!b||Math.hypot(...sub(a.p,b.p))>scale*.08)continue;
@@ -113,6 +131,7 @@
             }
         };
         for(const e of entries){
+            const starts=[mesh.i.length,hardware.i.length];
             if(e.garment==='cargoTrousers'&&!e.lining&&!construct){
                 const L=e.laid,main=O.linear(e.look.color),trim=O.linear(e.look.trim||e.look.color2||e.look.color);
                 for(const [side,family,name]of [[1,3,'Left'],[-1,4,'Right']]){
@@ -231,6 +250,7 @@
                     }
                 }
             }
+            hideUnderJacket(e,starts);
         }
         // A garment's cloth cut at one spine position of a family (fam, s from its field): crossing segments.
         const levelOn=(L,fam,at)=>{const hits=[];
@@ -453,7 +473,7 @@
         const painted=finishPictures('armor-grain',S,S,(x,y,s)=>{
             // Orange peel and faint sanding marks; chipped paint comes from the form (formWear), at real edges.
             const peel=tileNoise(x,y,S,24,3)*.6+tileNoise(x,y,S,48,4)*.4,mark=tileNoise(x*.2,y*6,S,32,5);
-            s.h=.3*peel+.05*mark;s.t=.95+.04*peel;s.r=.6+.14*peel+.06*mark;s.m=.6;},2.2);
+            s.h=.09*peel+.014*mark;s.t=.95+.04*peel;s.r=.6+.14*peel+.06*mark;s.m=.6;},2.2);
         painted.normal.name='armor-grain-normal.png';painted.surface.name='armor-finish.png';
         const steel=finishPictures('armor-steel',S,S,(x,y,s)=>{
             const c=cells(x,y,9,11),d=Math.min(1,c.f1/.62),streak=tileNoise(x,y,S,4,12)*.4+tileNoise(x*.25,y*8,S,64,13)*.6;
@@ -528,7 +548,7 @@
             // Surface coordinates in meters from the builder (RRCharacterPowerArmor), shown only with a tiled map.
             if(p.armorUvs){p.uvs=p.armorUvs;p.armorUV=true;delete p.armorUvs;}
             if(finish==='etched'||finish==='tooled'){
-                const t=tiles[finish];Object.assign(p,{texture:use(t.albedo),normalTexture:use(t.normal),normalScale:.7,cutout:true,alphaCutoff:.5,keepColors:true});
+                const t=tiles[finish];Object.assign(p,{texture:use(t.albedo),normalTexture:use(t.normal),normalScale:.16,cutout:true,alphaCutoff:.5,keepColors:true});
                 continue;
             }
             // Surface coordinates: the builder's own (meters times `uvDensity`), else projected along each vertex's main axis.
@@ -546,11 +566,11 @@
             if(Fabric&&shared&&Fabric.tile&&Fabric.tile(shared)){
                 const span=Fabric.tile(shared).span,uvs1=new Float32Array(p.uvs.length);
                 for(let i=0;i<uvs1.length;i++)uvs1[i]=p.uvs[i]/perMeter/span[i%2];
-                const pics={};Fabric.applyTo(p,shared,pics,{uvs1,roughness:p.roughness,normalScale:shared==='hammered'?.38:shared==='brushed'?.45:shared==='plastic'?.6:.7});for(const pic of Object.values(pics))use(pic);
+                const pics={};Fabric.applyTo(p,shared,pics,{uvs1,roughness:p.roughness,normalScale:shared==='hammered'?.20:shared==='brushed'?.18:shared==='plastic'?.6:.7});for(const pic of Object.values(pics))use(pic);
                 continue;
             }
             const t=tiles[finish==='steel'?'steel':finish==='leather'?'leather':'painted'];
-            Object.assign(p,{texture:use(t.albedo),keepColors:true,normalTexture:use(t.normal),normalScale:finish==='leather'?.5:.35,metallicRoughnessTexture:use(t.surface)});
+            Object.assign(p,{texture:use(t.albedo),keepColors:true,normalTexture:use(t.normal),normalScale:finish==='leather'?.35:.22,metallicRoughnessTexture:use(t.surface)});
         }
         return [...out.values()];
     }
@@ -599,6 +619,16 @@
      */
     function clothSurface(entry,index,scale){
         const L=entry.laid,n=L.rimStart,I=L.index,tris=[];
+        // Band widths and stitch offsets are measured on the finished cloth.
+        // Rest-mesh distances left a scalloped inner edge after draping or smoothing.
+        if(L.edge&&!L._finishedEdgeDistance){
+            const Atlas=need('RRCharacterAtlas','./CharacterAtlas.js'),field=Atlas?.edgeField(null,L.piece,.12*scale,L);
+            if(field)for(let v=0;v<n;v++){
+                const d=field.at(Array.from(L.positions.subarray(v*3,v*3+3)),field.forTriangle([v]));
+                L.edge[v]=Number.isFinite(d)?d:.12*scale;
+            }
+            L._finishedEdgeDistance=true;
+        }
         for(let t=0;t<I.length;t+=3)if(I[t]<n&&I[t+1]<n&&I[t+2]<n)tris.push(I[t],I[t+1],I[t+2]);
         const S={entry,index,L,n,tris,scale,N:null,grid:null,cell:.03*scale,stamp:new Int32Array(tris.length/3),query:0};
         S.refresh=()=>{
@@ -650,7 +680,7 @@
     function frameOf(a){
         const S=a.S,p=[0,0,0],nn=[0,0,0];
         for(let k=0;k<3;k++){const v=a.ids[k],w=a.bary[k];if(!w)continue;const q=S.p(v),m=S.nv(v);for(let c=0;c<3;c++){p[c]+=q[c]*w;nn[c]+=m[c]*w;}}
-        const n=unit(nn,[0,0,1]),up=Math.abs(n[1])>.95?[0,0,1]:[0,1,0],t1=unit(along(up,n)),t2=cross(n,t1);
+        const n=a.liftNormal||unit(nn,[0,0,1]),up=Math.abs(n[1])>.95?[0,0,1]:[0,1,0],t1=unit(along(up,n)),t2=cross(n,t1);
         return {p,n,t1,t2};
     }
     const anchorAt=(S,ids,bary)=>({S,ids,bary});
@@ -668,14 +698,14 @@
             v(g,p,hint,color,a,uv,uv1){
                 const k=g.p.length/3,S=a.S,L=S.L;
                 g.p.push(p[0],p[1],p[2]);g.h.push(hint[0],hint[1],hint[2]);g.c.push(color[0],color[1],color[2]);
-                g.uv.push(uv?uv[0]:0,uv?uv[1]:0);g.uv1.push(uv1?uv1[0]:0,uv1?uv1[1]:0);
+                g.uv.push(uv?uv[0]:0,uv?uv[1]:0);g.uv1.push(uv1?uv1[0]:p[0],uv1?uv1[1]:p[1]);
                 const m=new Map();
                 for(let q=0;q<3;q++){const v=a.ids[q],b=a.bary[q];if(b<=0)continue;for(let s=0;s<4;s++){const j=L.joints[v*4+s],w=L.weights[v*4+s]*b;if(w>0)m.set(j,(m.get(j)||0)+w);}}
                 const top=[...m].sort((x,y)=>y[1]-x[1]).slice(0,4),tot=top.reduce((s,q)=>s+q[1],0)||1;
                 for(let q=0;q<4;q++){g.j.push(top[q]?top[q][0]:0);g.w.push(top[q]?top[q][1]/tot:0);}
                 let dom=0;for(let q=1;q<3;q++)if(a.bary[q]>a.bary[dom])dom=q;dom=a.ids[dom];
                 g.refs.push(L.fabricEntry,dom);g.roots.push(L.positions[dom*3],L.positions[dom*3+1],L.positions[dom*3+2]);g.hang.push(L.hang?.[dom]??-1);
-                const f=frameOf(a),q=sub(p,f.p);
+                const f=frameOf({...a,liftNormal:null}),q=sub(p,f.p);
                 g.anc.push(S.index,a.ids[0],a.ids[1],a.ids[2],a.bary[0],a.bary[1],a.bary[2],dot(q,f.t1),dot(q,f.t2),dot(q,f.n));
                 return k;
             },
@@ -716,8 +746,8 @@
         const groove=finishPictures('garment-seam',32,64,(x,y,s)=>{
             const u=(x+.5)/32-.5,d=Math.abs(u),core=Math.exp(-((u/.09)**2)),lip=Math.exp(-(((u-.16)/.07)**2));
             s.h=-core+.35*lip;s.t=.58+.42*sstep(0,.24,d)+.1*lip;s.a=d<.26?1:0;s.r=.95;s.m=0;},2.2,true);
-        const stitch=finishPictures('garment-stitch',16,128,(x,y,s)=>{
-            const u=(x+.5)/16-.5,v=((y+.5)/128*4)%1,dash=v>.1&&v<.84?Math.sin((v-.1)/.74*Math.PI):0,across=Math.max(0,1-((u/.34)**2)),thread=Math.sqrt(dash)*across;
+        const stitch=finishPictures('garment-stitch',32,256,(x,y,s)=>{
+            const u=(x+.5)/32-.5,v=((y+.5)/256*4)%1,dash=v>.1&&v<.84?Math.sin((v-.1)/.74*Math.PI):0,across=Math.max(0,1-((u/.34)**2)),thread=Math.sqrt(dash)*across;
             s.a=thread>.3?1:0;s.h=thread*1.3;s.t=.72+.28*thread;s.r=.75;s.m=0;},2.2,true);
         return seamTiles={groove,stitch};
     }
@@ -733,15 +763,16 @@
             const part={name:g.name,positions:Float32Array.from(g.p),normals,colors:Float32Array.from(g.c),joints:Uint8Array.from(g.j),weights:Float32Array.from(g.w),index:Uint32Array.from(g.i),
                 roughness:g.roughness??.88,metalness:g.metalness??0,doubleSided:g.doubleSided!==false,onSkin:true,clothDetail:true,
                 sewnRefs:Int32Array.from(g.refs),sewnRoots:Float32Array.from(g.roots),detailAnchors:Float32Array.from(g.anc)};
+            if(g.emissive)Object.assign(part,{emissive:g.emissive,emissiveIntensity:g.emissiveIntensity??1});
             if(g.hang.some(h=>h>=0))part.hang=Float32Array.from(g.hang);
             if(g.tile){
                 const t=seamPictures()[g.tile];part.uvs=Float32Array.from(g.uv);
-                Object.assign(part,{texture:t.albedo.name,normalTexture:t.normal.name,normalScale:g.tile==='groove'?.9:.7,cutout:true,alphaCutoff:.5,keepColors:true});
+                Object.assign(part,{texture:t.albedo.name,normalTexture:t.normal.name,normalScale:g.tile==='groove'?.16:.24,cutout:true,alphaCutoff:.5,keepColors:true});
                 pics.push(t.albedo,t.normal);
             }else if(g.fabric&&Fabric&&Fabric.tile&&Fabric.tile(g.fabric)){
                 const span=Fabric.tile(g.fabric).span;
-                part.uvs1=g.ribbed?Float32Array.from(g.uv1,(v,k)=>v/span[k%2]):Fabric.boxUvs(part.positions,part.normals,span);
-                Fabric.applyTo(part,g.fabric,pics,{uvs1:part.uvs1,roughness:g.roughness});
+                part.uvs1=Float32Array.from(g.uv1,(v,k)=>v/span[k%2]);
+                Fabric.applyTo(part,g.fabric,pics,{uvs1:part.uvs1,roughness:g.roughness,albedo:true,normalScale:.65});
                 // Its sheen in its own colors (the cut cloth takes it from its picture).
                 if(part.sheen&&!part.sheen.texture){const n=g.c.length/3,m=[0,0,0];for(let k=0;k<g.c.length;k++)m[k%3]+=g.c[k]/n;part.sheen.color=m.map(v=>Math.min(1,v*1.4+.02));}
             }
@@ -786,15 +817,22 @@
         const s=kit.scale,all=pts.map(q=>{const f=frameOf(q.a);return {f,p:add(f.p,mul(f.n,q.lift??.0004*s)),a:q.a};});
         // No finer than `step` along it (an iso line crosses every small face of refined cloth); a gap stays a gap.
         const P=[];
-        for(let i=0;i<all.length;i++){const q=all[i],last=P[P.length-1];const brk=i+1<all.length&&len(sub(all[i+1].p,q.p))>.05*s;
-            if(!last||i===all.length-1||brk||len(sub(q.p,last.p))>=step*s||len(sub(q.p,last.p))>.05*s)P.push(q);}
+        for(let i=0;i<all.length;i++){
+            if(P.length&&len(sub(all[i].p,P[P.length-1].p))<.00001*s)continue;const q=all[i],last=P[P.length-1];const brk=i+1<all.length&&len(sub(all[i+1].p,q.p))>.05*s;
+            if(!last||i===all.length-1||brk||len(sub(q.p,last.p))>=step*s||dot(q.f.n,last.f.n)<.995||len(sub(q.p,last.p))>.05*s)P.push(q);}
         let run=0,prev=null;
         for(let i=0;i<P.length;i++){
             const A=P[Math.max(0,i-1)].p,B=P[Math.min(P.length-1,i+1)].p,t=unit(sub(B,A),P[i].f.t1),b=unit(cross(P[i].f.n,t),P[i].f.t2);
             if(i)run+=len(sub(P[i].p,P[i-1].p));
             const gap=i&&len(sub(P[i].p,P[i-1].p))>.05*s;
-            const l=kit.v(g,add(P[i].p,mul(b,offset-width/2)),P[i].f.n,color,P[i].a,[0,run/period]);
-            const r=kit.v(g,add(P[i].p,mul(b,offset+width/2)),P[i].f.n,color,P[i].a,[1,run/period]);
+            // Offset stitching follows the cloth across the ribbon as well as
+            // along it. A flat offset used to sink alternating dashes into folds.
+            const edge=(off,u)=>{
+                const root=add(P[i].f.p,mul(b,off)),S=P[i].a.S,hit=S.closest(root,Math.min(.018*s,Math.abs(off)+.004*s));
+                const a=hit?anchorAt(S,hit.ids,hit.bary):P[i].a,f=hit?frameOf(a):P[i].f,lift=dot(sub(P[i].p,P[i].f.p),P[i].f.n);
+                return kit.v(g,add(hit?f.p:root,mul(f.n,lift)),f.n,color,a,[u,run/period]);
+            };
+            const l=edge(offset-width/2,0),r=edge(offset+width/2,1);
             if(prev&&!gap)kit.q(g,prev[0],prev[1],l,r);
             prev=[l,r];
         }
@@ -802,8 +840,8 @@
     /** A sunk seam with its top-stitching: a groove, and `rows` lines of thread `gap` apart to one side. */
     function seam(kit,pts,{color,thread,rows=1,gap=.006,side=1,groove=true,first=.0035}){
         const s=kit.scale;
-        if(groove)ribbon(kit,kit.group('seam',{name:'Garment seams',tile:'groove',flat:true,roughness:.92}),pts,{width:.0045*s,color:color.map(v=>v*.95)});
-        for(let r=0;r<rows;r++)ribbon(kit,kit.group('stitch',{name:'Top-stitching',tile:'stitch',flat:true,roughness:.78}),pts.map(q=>({a:q.a,lift:(q.lift??.0004*s)+.0002*s})),{width:.0018*s,offset:side*(first+r*gap)*s,color:thread,period:.016*s});
+        if(groove)ribbon(kit,kit.group('seam',{name:'Garment seams',tile:'groove',flat:true,roughness:.92}),pts,{width:.0016*s,color:color.map(v=>v*.95)});
+        for(let r=0;r<rows;r++)ribbon(kit,kit.group('stitch',{name:'Top-stitching',tile:'stitch',flat:true,roughness:.78}),pts.map(q=>({a:q.a,lift:(q.lift??.0004*s)+.0002*s})),{width:.0010*s,offset:side*(first+r*gap)*s,color:thread,period:.016*s});
     }
     /** Points every `step` meters along a polyline of bound points, each put back on the cloth. */
     function resample(S,pts,step,accept){
@@ -836,7 +874,23 @@
             const f=frameOf(a),h=height(u,v),tint=shade?color.map(c=>c*shade(u,v)):color;
             row.push({a,f,h,k:kit.v(g,add(f.p,mul(f.n,h)),f.n,tint,a,[u,v],[x,y]),x,y});
         }grid.push(row);}
-        for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const A=grid[j][i],B=grid[j][i+1],C=grid[j+1][i],D=grid[j+1][i+1];if(A&&B&&C&&D)kit.q(g,A.k,B.k,C.k,D.k);}
+        // Fitted corners alone do not keep a triangle outside a curved fold.
+        // Check the spans as well, retaining the panel's cloth anchors and rig.
+        const faces=[];for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const A=grid[j][i],B=grid[j][i+1],C=grid[j+1][i],D=grid[j+1][i+1];if(A&&B&&C&&D)faces.push([A,B,C],[B,D,C]);}
+        const at=(x,y)=>{if(locate)return locate(x,y);const hit=S.closest(add(origin,add(mul(ex,x),mul(ey,y))),.06*s,accept);return hit&&anchorAt(S,hit.ids,hit.bary);};
+        for(let pass=0;pass<3;pass++){
+            const bumps=new Map();
+            for(const face of faces)for(const bary of [[1/3,1/3,1/3],[.5,.5,0],[.5,0,.5],[0,.5,.5]]){
+                const x=face.reduce((v,c,k)=>v+c.x*bary[k],0),y=face.reduce((v,c,k)=>v+c.y*bary[k],0),a=at(x,y);if(!a)continue;
+                const f=frameOf(a),p=[0,1,2].map(k=>face.reduce((v,c,j)=>v+g.p[c.k*3+k]*bary[j],0)),need=.00065*s-dot(sub(p,f.p),f.n);
+                if(need<=0)continue;
+                for(const c of face)bumps.set(c,Math.max(bumps.get(c)||0,(need+.0001*s)/Math.max(.35,dot(c.f.n,f.n))));
+            }
+            if(!bumps.size)break;
+            for(const [c,need]of bumps){const d=Math.min(need,Math.max(0,.012*s-(c.fitLift||0)));c.fitLift=(c.fitLift||0)+d;c.h+=d;const p=add(c.f.p,mul(c.f.n,c.h));for(let k=0;k<3;k++)g.p[c.k*3+k]=p[k];}
+        }
+        for(const c of grid.flat())if(c?.fitLift){const f=frameOf({...c.a,liftNormal:null}),d=sub(g.p.slice(c.k*3,c.k*3+3),f.p);g.anc[c.k*10+7]=dot(d,f.t1);g.anc[c.k*10+8]=dot(d,f.t2);g.anc[c.k*10+9]=dot(d,f.n);}
+        for(const [A,B,C]of faces)kit.t(g,A.k,B.k,C.k);
         // The rim, all round (or only where `free` says the edge is free to be seen turned).
         const ring=[];
         for(let i=0;i<cols;i++)ring.push([0,i]);for(let j=0;j<rows;j++)ring.push([j,cols]);for(let i=cols;i>0;i--)ring.push([rows,i]);for(let j=rows;j>0;j--)ring.push([j,0]);
@@ -912,7 +966,7 @@
         const vertex=(key,ids,bary,wrap)=>{
             const k=key+(wrap?'+':'');if(keys.has(k))return keys.get(k);
             const a=anchorAt(S,ids,bary),f=frameOf(a),uvs=uv1?ids.map(i=>uv1(i)):null;
-            let uv=null;if(uvs){const U=uvs.map(q=>q[0]+(wrap&&q[0]<0?wrap:0));uv=[U[0]*bary[0]+U[1]*bary[1]+U[2]*bary[2],uvs[0][1]*bary[0]+uvs[1][1]*bary[1]+uvs[2][1]*bary[2]];}
+            let uv=null;if(uvs){const cut=(Math.max(...uvs.map(q=>q[0]))+Math.min(...uvs.map(q=>q[0])))/2,U=uvs.map(q=>q[0]+(wrap&&q[0]<cut?wrap:0));uv=[U[0]*bary[0]+U[1]*bary[1]+U[2]*bary[2],uvs[0][1]*bary[0]+uvs[1][1]*bary[1]+uvs[2][1]*bary[2]];}
             const d=val[ids[0]]*bary[0]+val[ids[1]]*bary[1]+val[ids[2]]*bary[2],h=typeof height==='function'?height(d,ids,bary):height,tint=shade?color.map(c=>c*shade(d)):color;
             const out={a,f,h,k:kit.v(g,add(f.p,mul(f.n,h)),f.n,tint,a,null,uv)};keys.set(k,out);return out;
         };
@@ -920,7 +974,7 @@
         for(let t=0;t<T.length;t+=3){
             const ids=[T[t],T[t+1],T[t+2]],vs=ids.map(v=>val[v]);if(vs.every(x=>x>0))continue;
             // A band round a body wraps its along coordinate once (its seam behind).
-            let wrap=0;if(uv1){const U=ids.map(i=>uv1(i)[0]);const span=Math.max(...U)-Math.min(...U);if(span>uv1.period/2)wrap=uv1.period;}
+            let wrap=0;if(uv1){const coords=ids.map(i=>uv1(i)),U=coords.map(q=>q[0]),period=coords.find(q=>q[2]>0)?.[2]||uv1.period;const span=Math.max(...U)-Math.min(...U);if(span>period/2)wrap=period;}
             const poly=[];
             for(let k=0;k<3;k++){
                 const i=ids[k],j=ids[(k+1)%3],a=vs[k],b=vs[(k+1)%3];
@@ -929,6 +983,31 @@
             }
             for(let k=1;k+1<poly.length;k++)kit.t(g,poly[0].k,poly[k].k,poly[k+1].k);
             const iso=poly.filter(c=>c.iso);if(iso.length===2)lines.push(iso);
+        }
+        // Ease the cut of a knit binding before turning it down. A linear
+        // distance value across a coarse triangle fan used to leave a sawtooth
+        // outline, even when the neckline itself had already been finished.
+        if(g.ribbed)for(const loop of chains(lines)){
+            const closed=loop.length>2&&loop[0]===loop[loop.length-1],run=closed?loop.slice(0,-1):loop;
+            if(run.length<4)continue;
+            const original=run.map(c=>c.f.p.slice());let points=original.map(p=>p.slice());
+            for(let pass=0;pass<12;pass++){
+                const factor=pass%2?-.53:.5;
+                points=points.map((p,i)=>{
+                    if(!closed&&(i===0||i===points.length-1))return p;
+                    const a=points[(i+points.length-1)%points.length],b=points[(i+1)%points.length],la=len(sub(a,p)),lb=len(sub(b,p)),sum=la+lb||1;
+                    const mid=add(mul(a,lb/sum),mul(b,la/sum)),q=add(p,mul(sub(mid,p),factor)),delta=sub(q,original[i]),L=len(delta);
+                    return L>.005*s?add(original[i],mul(delta,.005*s/L)):q;
+                });
+            }
+            for(let i=0;i<run.length;i++){
+                const c=run[i],hit=S.closest(points[i],.012*s);if(!hit)continue;
+                c.a=anchorAt(S,hit.ids,hit.bary);c.f=frameOf(c.a);
+                const k=kit.v(g,add(c.f.p,mul(c.f.n,c.h)),c.f.n,g.c.slice(c.k*3,c.k*3+3),c.a,g.uv.slice(c.k*2,c.k*2+2),g.uv1.slice(c.k*2,c.k*2+2));
+                for(const [key,width]of [['p',3],['h',3],['c',3],['j',4],['w',4],['uv',2],['uv1',2],['refs',2],['roots',3],['hang',1],['anc',10]]){
+                    for(let j=0;j<width;j++)g[key][c.k*width+j]=g[key][k*width+j];g[key].length-=width;
+                }
+            }
         }
         // The inner line: a step down to the cloth.
         const stepRows=new Map(),step=c=>{
@@ -967,7 +1046,7 @@
         const starts=[...byK.values()].sort((x,y)=>(deg.get(x.k)===1?0:1)-(deg.get(y.k)===1?0:1));
         for(const st of starts){if(seen.has(st.k))continue;const run=[st];seen.add(st.k);let cur=st;
             for(;;){const n=(next.get(cur.k)||[]).find(c=>!seen.has(c.k));if(!n)break;run.push(n);seen.add(n.k);cur=n;}
-            if(run.length>1)out.push(run);}
+            if(run.length>1){if((next.get(cur.k)||[]).some(c=>c.k===st.k))run.push(st);out.push(run);}}
         return out;
     }
     /**
@@ -1001,7 +1080,7 @@
     function projector(S,side=1,accept=null,axes=null){
         const O=need('RRCharacterOutfit','./CharacterOutfit.js');
         const surface=O.projectedSurface([{positions:S.L.positions,index:Uint32Array.from(S.tris)}],{cell:.03*S.scale,accept:accept?(part,ids)=>accept(ids):null,...(axes?{axes}:{})});
-        return (x,y)=>{const hit=surface.sample(x,y,side);return hit?anchorAt(S,hit.ids,hit.bary):null;};
+        return (x,y)=>{const hit=surface.sample(x,y,side);if(!hit)return null;const a=anchorAt(S,hit.ids,hit.bary);if(axes)a.liftNormal=mul(axes[2],side);return a;};
     }
     const bone=(built,name)=>built.bones.find(b=>b.name===name);
     const linearOf=hex=>need('RRCharacterOutfit','./CharacterOutfit.js').linear(hex);
@@ -1156,7 +1235,7 @@
         const s=kit.scale;let bound=[];
         // A point with no cloth under it (across an open front) breaks the line there.
         const flush=()=>{if(bound.length>1)seam(kit,bound,{color:color||thread,thread,rows,groove,first:0,gap:.0055});bound=[];};
-        for(const p of pts){const a=locate?locate(p.x,p.y):(()=>{const hit=S.closest(add(origin,add(mul(ex,p.x),mul(ey,p.y))),.05*s,accept);return hit&&anchorAt(S,hit.ids,hit.bary);})();if(a)bound.push({a,lift});else flush();}
+        for(const p of pts){const a=locate?locate(p.x,p.y):(()=>{const hit=S.closest(add(origin,add(mul(ex,p.x),mul(ey,p.y))),.05*s,accept);return hit&&anchorAt(S,hit.ids,hit.bary);})();if(a)bound.push({a,lift:lift+(p.c?.fitLift||0)});else flush();}
         flush();
     }
     /** A frame on the cloth at a bound point: origin, across (ex) and up (ey) the cloth. */
@@ -1231,7 +1310,51 @@
     function ribbonLine(kit,S,anchors,{width,lift,color,cloth}){
         const pts=resample(S,anchors.filter(Boolean),.006*kit.scale);if(pts.length<2)return;
         const g=cloth?clothGroup(kit,cloth):kit.group('slits',{name:'Garment construction shadows',roughness:.95,metalness:0,flat:true});
+        const first=g.p.length/3,firstTriangle=g.i.length;
         ribbon(kit,g,pts.map(a=>({a,lift})),{width,color});
+        for(let pass=0;pass<2;pass++){
+            const shifts=new Map();
+            for(let t=firstTriangle;t<g.i.length;t+=3){const ids=g.i.slice(t,t+3),n=unit([0,1,2].map(k=>ids.reduce((sum,v)=>sum+g.h[v*3+k],0)));
+                for(const bary of [[1/3,1/3,1/3],[.5,.5,0],[.5,0,.5],[0,.5,.5]]){
+                    const p=[0,1,2].map(k=>ids.reduce((sum,v,j)=>sum+g.p[v*3+k]*bary[j],0)),hit=S.closest(p,.008*kit.scale);if(!hit)continue;
+                    const f=frameOf(anchorAt(S,hit.ids,hit.bary));if(dot(f.n,n)<.7)continue;
+                    const depth=dot(sub(f.p,p),n)+.00025*kit.scale;
+                    if(depth>0&&depth<.004*kit.scale)for(const v of ids)shifts.set(v,Math.max(shifts.get(v)||0,depth));
+                }
+            }
+            for(const [v,d]of shifts)for(let k=0;k<3;k++)g.p[v*3+k]+=g.h[v*3+k]*d;
+        }
+        for(let v=first;v<g.p.length/3;v++){const a=v*10,f=frameOf({S,ids:g.anc.slice(a+1,a+4),bary:g.anc.slice(a+4,a+7)}),d=sub(g.p.slice(v*3,v*3+3),f.p);g.anc[a+7]=dot(d,f.t1);g.anc[a+8]=dot(d,f.t2);g.anc[a+9]=dot(d,f.n);}
+    }
+
+    /** Fitted corsetry: stitched boning channels, a front busk and rear lacing. */
+    function corsetDetails(kit,S,built,entry){
+        const s=kit.scale,F=S.L.field,color=linearOf(entry.look.color),thread=threadOf(entry.look),metal=linearOf(entry.look.trim||'#bca16b');
+        const accept=ids=>ids.every(v=>F[v].fam===0)&&Math.max(...ids.map(v=>F[v].spineAng))-Math.min(...ids.map(v=>F[v].spineAng))<Math.PI;
+        for(const angle of [-2.35,-1.2,-.55,.55,1.2,2.35])for(const run of isoLines(S,v=>F[v].spineAng-angle,accept)){
+            if(run.length<3)continue;
+            const points=resample(S,run,.008*s);
+            ribbonLine(kit,S,points,{width:.008*s,lift:.0011*s,color:tone(color,1.12),cloth:entry});
+            seam(kit,points.map(a=>({a,lift:.0014*s})),{color,thread:thread.map(v=>v*.7),rows:2,gap:.005,first:-.0025,groove:false});
+        }
+        const cx=bone(built,'Hips').head[0];
+        for(const face of [1,-1]){
+            const at=projector(S,face,facing1(S,face));let lo=Infinity,hi=-Infinity;
+            for(let v=0;v<S.n;v++)if(F[v].fam===0&&Math.cos(F[v].spineAng)*face>.8){const y=S.p(v)[1];lo=Math.min(lo,y);hi=Math.max(hi,y);}
+            if(!isFinite(lo)||hi-lo<.05*s)continue;
+            lo+=.02*s;hi-=.02*s;
+            const center=Array.from({length:20},(_,k)=>at(cx,lo+(hi-lo)*k/19)).filter(Boolean);
+            ribbonLine(kit,S,center,{width:(face===1?.014:.045)*s,lift:.0013*s,color:tone(color,face===1?.72:.55),cloth:entry});
+            if(face===1){for(let k=0;k<6;k++){const a=at(cx,lo+(hi-lo)*k/5);if(a)rivet(kit,a,{radius:.003*s,color:metal});}}
+            else{
+                const rows=[];for(let k=0;k<7;k++){const y=lo+(hi-lo)*k/6,A=at(cx-.017*s,y),B=at(cx+.017*s,y);if(!A||!B)continue;rows.push([A,B]);rivet(kit,A,{radius:.0032*s,color:metal,open:true});rivet(kit,B,{radius:.0032*s,color:metal,open:true});}
+                const group=kit.group('corset-lacing',{name:'Corset cross lacing',roughness:.86,metalness:0});
+                for(let k=0;k+1<rows.length;k++)for(const side of [0,1]){
+                    const points=resample(S,[rows[k][side],rows[k+1][1-side]],.006*s);
+                    if(points.length>1)cord(kit,group,points.map(a=>({a})),{radius:.00085*s,color:thread,lift:.003*s});
+                }
+            }
+        }
     }
 
     /** Trousers: waistband and loops, fly, front and back pockets, yoke, seams, rivets. */
@@ -1302,23 +1425,36 @@
                 }else{
                     const W=.13*s;
                     ribbonLine(kit,S,[locate(-W/2,0),locate(0,0),locate(W/2,0)],{width:.0028*s,lift:.0004*s,color:tone(color,.28)});
-                    for(const off of [.003,-.003])ribbonLine(kit,S,[locate(-W/2,off*s),locate(0,off*s),locate(W/2,off*s)],{width:.003*s,lift:T*.6,color:tone(color,1.03),cloth:entry});
+                    for(const off of [.0045,-.0045])ribbonLine(kit,S,[locate(-W/2,off*s),locate(0,off*s),locate(W/2,off*s)],{width:.003*s,lift:T*.6,color:tone(color,1.03),cloth:entry});
                     if(style==='tailored'){const b=locate(0,-.012*s);if(b)button(kit,b,{radius:.0055*s,color:tone(color,.55),holes:4});}
                 }
             }
         }
         // Cargo pockets: bellowed patches on the outside of each thigh, a buttoned flap over each.
-        if(entry.garment==='cargoTrousers')for(const [fam,side,name] of [[3,1,'Left'],[4,-1,'Right']]){
+        if(['cargoTrousers','tacticalTrousers'].includes(entry.garment))for(const [fam,side,name] of [[3,1,'Left'],[4,-1,'Right']]){
             const up=bone(built,name+'UpLeg').head,knee=bone(built,name+'Leg').head,cy=mix(up[1],knee[1],.5),cz=mix(up[2],knee[2],.2)-.01*s;
             const sideP=projector(S,side,famOnly(S,fam),[[0,0,1],[0,1,0],[1,0,0]]),locate=(z,y)=>sideP(cz+z,cy+y);
             // Flat on the thigh's side, following the cloth closely (fine rows, so no chord cuts into the curved leg);
             // only a slight fullness at its middle, under a flap that lies on it.
-            const W=.12*s,H=.16*s,lift=T*1.05+.0012*s,full=u=>.004*s*Math.pow(Math.max(0,Math.sin(Math.PI*u)),.6);
+            const W=.13*s,H=.17*s,lift=T*1.05+.004*s,full=u=>.004*s*Math.pow(Math.max(0,Math.sin(Math.PI*u)),.6);
             const P=panel(kit,g,S,{cols:12,rows:14,color:tone(color,1.03),locate,shape:(u,v)=>[(u-.5)*W*side,H/2-v*H],height:(u,v)=>lift+full(u)*Math.pow(Math.max(0,Math.sin(Math.PI*v)),.4)});
             seamFrom(kit,S,insetLine(S,P,.004*s,null,0),{locate,lift:lift+.0006*s,thread,rows:1});
-            const F2=panel(kit,g,S,{cols:12,rows:3,color,locate:(z,y)=>sideP(cz+z,cy+H/2+.008*s+y),shape:(u,v)=>[(u-.5)*W*1.06*side,-v*.048*s],height:u=>lift+.0026*s+full(u)});
+            const F2=panel(kit,g,S,{cols:12,rows:3,color,locate:(z,y)=>sideP(cz+z,cy+H/2+.008*s+y),shape:(u,v)=>[(u-.5)*W*1.06*side,-v*.048*s],height:u=>lift+.006*s+full(u)});
             seamFrom(kit,S,insetLine(S,F2,.004*s,null,0),{locate:(z,y)=>sideP(cz+z,cy+H/2+.008*s+y),lift:lift+.0034*s+.004*s,thread});
             const b=sideP(cz,cy+H/2-.03*s);if(b)button(kit,b,{radius:.006*s,color:tone(color,.45),holes:4,height:lift+.0035*s+.004*s});
+        }
+        if(entry.garment==='tacticalTrousers')for(const [fam,side,name] of [[3,1,'Left'],[4,-1,'Right']]){
+            const up=bone(built,name+'UpLeg').head,knee=bone(built,name+'Leg').head,ankle=bone(built,name+'Foot').head;
+            const sideP=projector(S,side,famOnly(S,fam),[[0,0,1],[0,1,0],[1,0,0]]);
+            // Lower-leg utility pouch and a slim zipped magazine pocket above the cargo bellows.
+            for(const [cy,cz,W,H]of [[mix(knee[1],ankle[1],.38),mix(knee[2],ankle[2],.38),.095*s,.12*s],[mix(up[1],knee[1],.22),mix(up[2],knee[2],.22),.09*s,.075*s]]){
+                const locate=(z,y)=>sideP(cz+z,cy+y),lift=.005*s;
+                const P=panel(kit,g,S,{cols:12,rows:12,color:tone(color,.87),locate,shape:(u,v)=>[(u-.5)*W*side,H/2-v*H],height:(u,v)=>lift+.007*s*Math.sin(Math.PI*u)*Math.sin(Math.PI*v)});
+                seamFrom(kit,S,insetLine(S,P,.003*s,null,0),{locate,lift:lift+.001*s,thread,rows:1});
+                const zip=[locate(-W*.40,H*.27),locate(0,H*.27),locate(W*.40,H*.27)];ribbonLine(kit,S,zip,{width:.003*s,lift:.009*s,color:tone(thread,.6)});
+            }
+            const front=projector(S,1,famOnly(S,fam)),cx=(knee[0]+up[0])*.5,cy=knee[1]+.025*s;
+            panel(kit,g,S,{cols:12,rows:12,color:tone(color,.62),locate:(x,y)=>front(cx+x,cy+y),shape:(u,v)=>[(u-.5)*.105*s,.085*s-v*.17*s],height:(u,v)=>.004*s+.006*s*Math.sin(Math.PI*u)*Math.sin(Math.PI*v)});
         }
         // Belt loops over the band, bar-tacked at both ends.
         if(d.loops!==false&&!plain){
@@ -1427,9 +1563,11 @@
     function ribBands(kit,S,built,entry,{neck=.016,cuffs=.06,hem=.05}){
         const s=kit.scale,L=S.L,F=L.field,look=entry.look,color=tone(linearOf(look.color||'#7a3b3b'),.96),T=Math.max(.0012*s,L.hem?.thickness||.0018*s);
         const g=kit.group('rib:'+entry.roughness,{name:'Rib knit bands',fabric:'rib',ribbed:true,roughness:entry.roughness??.9,metalness:0});
-        const R=.14,period=2*Math.PI*R;
-        const trunkUv=v=>[F[v].spineAng*R,L.edge[v]];trunkUv.period=period;
-        const limbUv=v=>[F[v].la*.045,L.edge[v]];limbUv.period=2*Math.PI*.045;
+        const Atlas=need('RRCharacterAtlas','./CharacterAtlas.js'),field=Atlas.edgeField(null,L.piece,.16*s,L),coordinates=new Map();
+        // Rib columns run perpendicular to the finished edge. A bearing round
+        // the spine flares into chevrons where neck and shoulder charts meet.
+        const edgeUv=v=>{if(!coordinates.has(v)){const detail={};field.at(S.p(v),null,detail);coordinates.set(v,[detail.edgeAlong||0,L.edge[v],detail.edgeLoopLength||1]);}return coordinates.get(v);};
+        const trunkUv=edgeUv,limbUv=edgeUv;trunkUv.period=1;
         const lines=[];
         if(neck){const from=neck>.04?3.92:3.3,r=band(kit,g,S,{value:v=>F[v].fam===0&&F[v].s>from?L.edge[v]-neck:1,height:T*1.2,color,uv1:trunkUv});lines.push(...r.lines);}
         if(hem){const r=band(kit,g,S,{value:v=>F[v].fam===0&&F[v].s<2.6?L.edge[v]-hem:1,height:T*1.35,color,uv1:trunkUv});lines.push(...r.lines);}
@@ -1739,6 +1877,69 @@
         }
     }
 
+    /** A service jacket: concealed center closure, shallow waist welts and fitted insignia.
+     * Its shoulder yoke belongs to the fabric atlas; there is no overlay across the chest. */
+    function officerFront(kit,S,built,entry){
+        const s=kit.scale,item=entry.item,color=linearOf(entry.look.color),trim=linearOf(entry.look.trim||'#c9a85c');
+        const hips=bone(built,'Hips').head,neck=bone(built,'Neck').head;
+        const facesFront=ids=>ids.reduce((sum,v)=>sum+S.L.normals[v*3+2],0)>.6;
+        const front=projector(S,1,facesFront);
+        const outer=O.projectedSurface([S.L],{cell:.03*s,accept:(p,ids)=>facesFront(ids)});
+        const yAt=v=>hips[1]+(neck[1]-hips[1])*v/4;
+        const at=(x,v)=>front(hips[0]+x*s,yAt(v));
+        const line=(anchors,{width,lift,color,cloth})=>{
+            const g=cloth?kit.group('officer-welts',{name:'Officer pocket welts',roughness:entry.roughness??.9,metalness:0,
+                fabric:fabricTiles()?.kindFor(entry.look.material,'officerJacket',entry.look.pattern)}):
+                kit.group('officer-seams',{name:'Officer closure and pocket seams',roughness:.95,metalness:0});
+            // Stay on the front projection instead of snapping a resampled line into a neighboring fold.
+            ribbon(kit,g,anchors.filter(Boolean).map(a=>({a,lift})),{width,color,step:.002});
+        };
+        // An open jacket already has turned, lined edges. A second facing over them
+        // cuts through the collar and paints a white stripe over the shoulder color.
+        if(!(item.open>.01)) {
+            const low=2.2-item.length*2.4+.045;
+            const closure=Array.from({length:300},(_,k)=>at(0,low+(4.5-low)*k/299));
+            // A narrow centered seam over the concealed placket, without exposed gold teeth.
+            line(closure,{width:.0012*s,lift:.0011*s,color:tone(color,.04)});
+        }
+        for(const side of [-1,1]) {
+            const welt=Array.from({length:19},(_,k)=>at(side*(.067+.079*k/18),1.36+.055*k/18));
+            line(welt,{width:.0028*s,lift:.001*s,color:tone(color,.3)});
+            const lip=Array.from({length:19},(_,k)=>at(side*(.067+.079*k/18),1.32+.055*k/18));
+            line(lip,{width:.006*s,lift:.0013*s,color:tone(color,1.01),cloth:entry});
+        }
+        // Every point of the small badge follows the jacket, including a curved bust.
+        const badge=kit.group('officer-badge',{name:'Officer insignia',roughness:.4,metalness:.6});
+        const patch=(g,x,v,w,h,tint,lift)=>panel(kit,g,S,{cols:8,rows:3,color:tint,
+            locate:(dx,dy)=>front(hips[0]+x*s+dx,yAt(v)+dy),
+            shape:(u,v2)=>[(u-.5)*w*s,(v2-.5)*h*s],height:()=>lift*s,edge:.00035*s});
+        patch(badge,.075,3.25,.033,.014,trim,.0023);
+        for(let k=0;k<3;k++)patch(badge,-.065-k*.009,3.29,.0045,.009,trim,.0018);
+        const enabled=item.lightStyle!=='none'&&(item.lightIntensity??.3)>0;
+        const light=kit.group('officer-indicator',{name:'Officer badge indicator',roughness:.4,metalness:0,
+            emissive:item.lightColor||'#77caff',emissiveIntensity:enabled?item.lightIntensity:0});
+        patch(light,.075,3.25,.023*Math.max(.7,Math.min(1.15,item.lightWidth||1)),.004,linearOf(item.lightColor||'#77caff'),.0034);
+        // The interiors of small triangles can chord through a convex fold even when their
+        // corners clear it. Fit the complete detail, then retain its original cloth anchors.
+        for(const [key,g]of kit.groups){
+            if(!key.startsWith('officer-'))continue;
+            const support=(x,y)=>outer.sample(x,y)?.depth??-Infinity;
+            for(let v=0;v<g.p.length;v+=3)g.p[v+2]=Math.max(g.p[v+2],support(g.p[v],g.p[v+1])+.0006*s);
+            for(let pass=0;pass<3;pass++)for(let t=0;t<g.i.length;t+=3){
+                const ids=g.i.slice(t,t+3);let lift=0;
+                for(const b of [[1/3,1/3,1/3],[.5,.5,0],[.5,0,.5],[0,.5,.5]]){
+                    const p=[0,1,2].map(k=>ids.reduce((sum,v,j)=>sum+g.p[v*3+k]*b[j],0));
+                    lift=Math.max(lift,support(p[0],p[1])+.0006*s-p[2]);
+                }
+                if(lift>0)for(const v of ids)g.p[v*3+2]+=lift;
+            }
+            for(let v=0;v<g.p.length/3;v++){
+                const a=v*10,f=frameOf({S,ids:g.anc.slice(a+1,a+4),bary:g.anc.slice(a+4,a+7)}),d=sub(g.p.slice(v*3,v*3+3),f.p);
+                g.anc[a+7]=dot(d,f.t1);g.anc[a+8]=dot(d,f.t2);g.anc[a+9]=dot(d,f.n);
+            }
+        }
+    }
+
     /**
      * Every construction detail of an outfit's cut garments, on their finished cloth. Each
      * garment's `details` choices come from its outfit item (RRCharacterWardrobe.detailsOf).
@@ -1768,6 +1969,8 @@
                         ribbonLine(kit,S,lap.filter(Boolean),{width:.022*s,lift:Math.max(.0012*s,L.hem?.thickness||.002*s)*.9,color:tone(color,1.02),cloth:e});}
                 }
                 switch(id){
+                    case 'corset':corsetDetails(kit,S,built,e);break;
+                    case 'officerJacket':if(bodice)officerFront(kit,S,built,e);break;
                     case 'shirt':shirtFront(kit,S,built,e,d,{});break;
                     case 'polo':shirtFront(kit,S,built,e,{},{placket:.016,placketTo:3.05,buttons:2,yoke:false,cuffs:false,buttonRadius:.0048});ribBands(kit,S,built,e,{neck:0,cuffs:(e.item.sleeves??.3)<.8?.022:.05,hem:0});break;
                     case 'tshirt':case 'cropTop':if(d.ribs!==false)ribBands(kit,S,built,e,{neck:.016,cuffs:0,hem:0});twinNeedle(kit,S,e);break;
@@ -1777,12 +1980,17 @@
                     case 'cardigan':if(d.ribs!==false)ribBands(kit,S,built,e,{neck:0,cuffs:.045,hem:.04});
                         {const L=S.L,F=L.field;band(kit,kit.group('rib:'+e.roughness,{name:'Rib knit bands',fabric:'rib',ribbed:true,roughness:e.roughness??.9,metalness:0}),S,{value:v=>F[v].fam===0&&Math.cos(F[v].spineAng)>.2&&F[v].s>.3?L.edge[v]-.022:1,height:Math.max(.0015*s,L.hem?.thickness||.002*s)*1.2,color:tone(linearOf(e.look.color),.96)});}
                         if(d.pockets==='patch')chestPockets(kit,S,built,e,{flap:false,at:1.1,x:.1,W:.13,H:.14});break;
-                    case 'jeans':case 'shorts':case 'capri':case 'flaredTrousers':case 'cargoTrousers':case 'swimTrunks':trousers(kit,S,built,e,d);break;
+                    case 'jeans':case 'shorts':case 'capri':case 'flaredTrousers':case 'cargoTrousers':case 'tacticalTrousers':case 'swimTrunks':trousers(kit,S,built,e,d);break;
                     case 'skirt':case 'pleatedSkirt':case 'pencilSkirt':case 'kilt':if(d.waistband!==false&&e.skirt)skirtWaistband(kit,S,built,e);break;
                     case 'dress':case 'gown':case 'ballGown':case 'eveningGown':case 'qipao':case 'tennisDress':case 'balletDress':if(bodice&&d.seams!==false)princessSeams(kit,S,built,e);break;
                     case 'robe':if(bodice&&d.lining!==false){const F=S.L.field,lc=linearOf(e.item.color2||shadeLining(e.item.color));lining(kit,S,e,{color:lc,reach:.12,take:v=>(F[v].fam===1||F[v].fam===2)&&F[v].s>1.6});lining(kit,S,e,{color:lc,reach:.05,take:v=>F[v].fam===0&&F[v].s>2.4});}break;
                     case 'coveralls':{const F=S.L.field;for(const fam of [3,4]){const sideSign=fam===3?-1:1,ok=ids=>ids.every(v=>F[v].fam===fam&&F[v].s>.15)&&Math.max(...ids.map(v=>F[v].la))-Math.min(...ids.map(v=>F[v].la))<Math.PI;for(const run of isoLines(S,v=>F[v].la*sideSign-Math.PI/2,ok))if(run.length>3)seam(kit,run.map(a=>({a})),{color:linearOf(e.look.color),thread:threadOf(e.look),rows:1,groove:true});}break;}
                     case 'vest':if(d.pockets!=='none'){const front=projector(S,1,facing1(S,1)),hips=bone(built,'Hips').head,neck=bone(built,'Neck').head,y=hips[1]+(neck[1]-hips[1])*1.25/4,color=linearOf(e.look.color);for(const side of [-1,1]){const x=hips[0]+side*.1*s,W=.085*s;ribbonLine(kit,S,[front(x-W/2,y),front(x,y),front(x+W/2,y)],{width:.0026*s,lift:.0004*s,color:tone(color,.3)});ribbonLine(kit,S,[front(x-W/2,y-.005*s),front(x,y-.005*s),front(x+W/2,y-.005*s)],{width:.008*s,lift:.0016*s,color:tone(color,1.04),cloth:e});}}break;
+                }
+                if(['bikiniTop','bikiniBottom','swimBriefs','swimsuit','triathlonSuit','rashGuard','techSuit'].includes(id)){
+                    const color=linearOf(e.look.color),thread=threadOf(e.look),L=S.L;
+                    for(const run of isoLines(S,v=>L.edge[v]-.004*s,null))if(run.length>3)seam(kit,resample(S,run,.004*s).map(a=>({a,lift:.00045*s})),{color,thread,rows:2,groove:false,first:0,gap:.0022});
+                    if(['swimsuit','triathlonSuit','techSuit'].includes(id)&&bodice)princessSeams(kit,S,built,e);
                 }
                 // What the garment declares as data (`construction.parts`), on its body or its skirt.
                 if(g.construction?.parts)declared(kit,S,built,e,d,g.construction.parts.filter(p=>(p.piece==='skirt')===!!e.skirt));

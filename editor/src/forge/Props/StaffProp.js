@@ -319,7 +319,7 @@
         // The charge's heart: the crystal's color most of the way to white.
         const hot = '#' + Paint.hex(r.gem).map(v => Math.round(v + (255 - v) * 0.6).toString(16).padStart(2, '0')).join('');
         const arc = '#' + Paint.hex(r.gem).map(v => Math.round(v + (255 - v) * 0.3).toString(16).padStart(2, '0')).join('');
-        const gemLook = glow ? { kind: 'prop', color: K.shadeHex(r.gem, 0.55), emissive: r.gem, emissiveIntensity: 0.85, roughness: 0.1, metalness: 0.1 } : { kind: 'metal', color: r.gem, roughness: 0.08, metalness: 0.35 };
+        const gemLook = glow ? { kind: 'prop', color: K.shadeHex(r.gem, 0.55), emissive: r.gem, emissiveIntensity: 3.2, roughness: 0.1, metalness: 0.1 } : { kind: 'metal', color: r.gem, roughness: 0.08, metalness: 0.35 };
         const P = {
             Wood: { meshes: H.Wood, look: { kind: 'prop', texture: 'staff-wood.png', roughness: 0.66, metalness: 0, mat: 'wood' } },
             Bone: { meshes: H.Bone, look: { kind: 'prop', color: '#d6c9a8', roughness: 0.55, metalness: 0, mat: 'leather', tint: { at: p => 0.35 * Math.max(0, Math.sin(p[0] * 61) * Math.sin(p[1] * 47 + p[2] * 53)), color: '#9c8a64' } } },
@@ -330,7 +330,7 @@
             Leaves: { meshes: H.Leaves, look: { kind: 'prop', color: '#4f7a34', roughness: 0.6, metalness: 0, doubleSided: false } },
             Dark: { meshes: H.Dark, look: { kind: 'prop', color: '#141210', roughness: 0.8, metalness: 0 } },
             Gem: { meshes: H.Gem, look: gemLook },
-            Glow: { meshes: H.Glow, look: glow ? { kind: 'prop', color: K.shadeHex(r.gem, 0.5), emissive: r.gem, emissiveIntensity: 0.9, roughness: 0.3, metalness: 0 } : { kind: 'prop', color: '#0e0e10', roughness: 0.5, metalness: 0.2 } },
+            Glow: { meshes: H.Glow, look: glow ? { kind: 'prop', color: K.shadeHex(r.gem, 0.5), emissive: r.gem, emissiveIntensity: 2.6, roughness: 0.3, metalness: 0 } : { kind: 'prop', color: '#0e0e10', roughness: 0.5, metalness: 0.2 } },
             // An emitter's charge (the energy staff's): bright and unlit-looking at its heart, softer and see-through outward;
             // all a touch see-through so none of it throws a shadow on the rest.
             Core: { meshes: H.Core, look: { kind: 'prop', color: hot, emissive: hot, emissiveIntensity: 2.2, opacity: 0.94, roughness: 0.4, metalness: 0 } },
@@ -340,7 +340,7 @@
         };
         const g = head.grip ? head.grip : [L * fam.grip - 0.05, L * fam.grip + 0.05];
         const marks = { gripBottom: [g[0], 0, 0], gripTop: [g[1], 0, 0], tip: head.tip, edge: head.face };
-        return K.finish('staff', r, P, marks, textures, { template: 'blade', light: glow && r.light && head.light ? { at: head.light, color: r.gem, radius: L > 1 ? 3 : 1.8 } : null });
+        return K.finish('staff', r, P, marks, textures, { template: 'blade', halo:glow&&head.light?{at:head.light,color:r.gem,radius:(r.preset.startsWith('wand')?.045:.095)*r.size}:null, light: glow && r.light && head.light ? { at: head.light, color: r.gem, radius: L > 1 ? 3 : 1.8 } : null });
     }
 
     /** A random staff or wand: a style of its own (another when Everything rolls); shape its size and twist; colors its wood, metal and crystal. */
@@ -366,7 +366,7 @@
     if (Catalog) {
         K.icons(Catalog);
         Catalog.category({ id: 'staffs', label: 'Staffs & Wands', order: 48, parent: 'weapons' });
-        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'staff-' + id, category, label, icon: FAMILY[id].icon, kind: 'staff', keywords: 'weapon magic staff wand stave rod ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
+        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'staff-' + id, category:category==='scifi'?'staffs':category, label, icon: FAMILY[id].icon, kind: 'staff', keywords: (category==='scifi'?'sci-fi energy science fiction ':'')+'weapon magic staff wand stave rod ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
         Catalog.ui('staff', K.page({
             placeholder: 'Staff', PRESETS, normalize, random, keep: ['wood', 'metal', 'gem', 'glow', 'light'],
             shape(r) {

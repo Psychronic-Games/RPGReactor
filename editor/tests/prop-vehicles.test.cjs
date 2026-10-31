@@ -2,10 +2,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),V=require('../src/forge/Props/VehicleProp.js'),M=require('../src/forge/Props/PropModel.js'),C=require('../src/forge/Props/PropCatalog.js'),Glb=require('../src/utils/GlbOptimizer.js');
 const {PNG}=require('pngjs');const encode=t=>{const p=new PNG({width:t.width,height:t.height});p.data=Buffer.from(t.data);return PNG.sync.write(p);};
 function bounds(parts){const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(const p of parts)for(let i=0;i<p.positions.length;i++) {const k=i%3;lo[k]=Math.min(lo[k],p.positions[i]);hi[k]=Math.max(hi[k],p.positions[i]);}return{lo,hi};}
-test('all nine transport types have complete finite geometry, meter dimensions and a grounded origin',()=>{
+test('all registered transport types have complete finite geometry, meter dimensions and a grounded origin',()=>{
  for(const [id]of V.FORMS)for(const extra of [{},{width:1,height:1.5,length:2,wheelSize:1.3,axles:3},{width:4,height:3,length:7,roofRack:true,cargo:1,engineSize:1.4,wingSpan:1.4,spokes:10,tread:1}]){
   const recipe=V.normalize({...V.fromPreset(id),...extra}),r=M.build(recipe,{});assert.equal(C.typeOf(recipe).id,'vehicle-'+id);assert.deepEqual(V.normalize(recipe),recipe);
-  const b=bounds(r.parts);assert.ok(Math.abs(b.lo[1])<1e-5,id+' ground');assert.ok(r.parts.length>=3);assert.ok(r.parts.reduce((n,p)=>n+p.index.length/3,0)<180000,id+' budget');
+  const b=bounds(r.parts);assert.ok(Math.abs(b.lo[1])<1e-5,id+' ground');assert.ok(r.parts.length>=3);assert.ok(r.parts.reduce((n,p)=>n+p.index.length/3,0)<(id==='airliner'?330000:180000),id+' budget');
   for(const p of r.parts){assert.ok(p.positions.every(Number.isFinite)&&p.normals.every(Number.isFinite),id+' finite');assert.ok(p.index.every(i=>i<p.positions.length/3),id+' indices');assert.equal(p.joints.length,p.positions.length/3*4);assert.ok(p.weights.every((w,i)=>w===(i%4===0?1:0)));}
  }
 });

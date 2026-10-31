@@ -1,7 +1,6 @@
 'use strict';
-// On a screen 60 does not divide (144, 165, 100, 50 Hz) the game's 60 updates
-// land on uneven refreshes and motion judders. Graphics.FramePacing draws the
-// map on every k-th refresh, evenly, with the camera and the characters where
+// Game logic stays at 60 updates while Graphics.FramePacing draws on every
+// available refresh, with camera, characters and articulated models where
 // they stand at that refresh's moment between the last two updates. The
 // game's own updates and state are untouched. Driven here by a mocked series
 // of refresh times through the real tick, update count and pacing code.
@@ -25,12 +24,13 @@ const quaternion = () => ({ x: 0, y: 0, z: 0, w: 1, set(a, b, c, d) { this.x = a
  * placed from `_realX` by the sync, and a camera following it; refreshed at
  * `hz` for `seconds`. Returns what each composite showed and when.
  */
-function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map3d = true, panorama = false } = {}) {
+function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map3d = true, panorama = false, throwRenderAt = null, fovStep = 0, initiallyFrozen = false } = {}) {
     let now = 0;
     const shown = [];
-    const camera = { position: vector(0, 10, 10), quaternion: quaternion(), updateMatrixWorld() {} };
+    const camera = { position: vector(0, 10, 10), quaternion: quaternion(), fov: 45, updateProjectionMatrix() {}, updateMatrixWorld() {} };
     const player = { _realX: 0, _realY: 5, _jumpCount: 0, _reactorAir: 0 };
-    const model = { position: vector(0.5, 0, 5.5), matrixAutoUpdate: true };
+    const bone = { position: vector(0, 1, 0), quaternion: quaternion(), scale: vector(1, 1, 1), matrixAutoUpdate: true };
+    const model = { position: vector(0.5, 0, 5.5), matrixAutoUpdate: !initiallyFrozen, traverse(fn) { fn(this); fn(bone); } };
     const scene = { _modelInstances: new Map([['p', { character: player, object: model }]]) };
     const state = map3d ? { viewport: { camera: () => camera }, scene } : null;
     let updatesRun = 0, worldDrawnInUpdate = 0;
@@ -38,11 +38,15 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
     const spriteset = {
         _reactor3d: state, _characterSprites: [], _tilemap: tilemap,
         _parallax: panorama ? { bitmap: { width: 1920, height: 1440, isReady: () => true }, origin: { x: 0, y: 0 } } : null,
-        drawReactor3D() { shown.push({ t: now, model: model.position.x, camera: camera.position.x }); },
+        drawReactor3D() { shown.push({ t: now, model: model.position.x, camera: camera.position.x, fov: camera.fov, bone: 2 * Math.atan2(bone.quaternion.z, bone.quaternion.w) }); },
         // The final update's sync: places the model and aims the camera from the game's state.
         sync() {
+            model.matrixAutoUpdate = true;
             model.position.x = player._realX + 0.5;
+            const angle = updatesRun * .002;
+            bone.quaternion.set(0, 0, Math.sin(angle / 2), Math.cos(angle / 2));
             camera.position.x = player._realX;
+            camera.fov = 45 + updatesRun * fovStep;
             if (!Graphics.FramePacing.drawsWorld(this)) { worldDrawnInUpdate++; this.drawReactor3D(state); }
         }
     };
@@ -55,8 +59,10 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
         _parallaxX: 0, _parallaxY: 0, parallaxOx: () => 0, parallaxOy: () => 0
     };
     const composites = [];
+    let renderFailure = false;
     const app = { stage: { renderGroup: { childrenToUpdate: {}, renderGroupChildren: [] } }, renderer: {}, render() {
         composites.push(now);
+        if (throwRenderAt !== null && now >= throwRenderAt) throw Error('intentional composite failure');
         if (spriteset._parallax) panoramas.push({ t: now, display: tilemap.origin.x / 48, origin: spriteset._parallax.origin.x });
     } };
     const panoramas = [];
@@ -70,7 +76,7 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
             player._realX += speed;
             $gameMap._displayX = player._realX - 8;
             if (this.isFinalUpdateOfFrame()) spriteset.sync();
-            else { model.position.x = player._realX + 0.5; camera.position.x = player._realX; }
+            else { camera.position.x = player._realX; camera.fov = 45 + updatesRun * fovStep; }
         }
     };
     const context = {
@@ -98,12 +104,18 @@ function play(hz, { seconds = 4, speed = 0.0625, pacing = true, late = null, map
         if (late && late(i)) now += interval;
         const dt = (now - last) / (1000 / 60);
         last = now;
-        Graphics._onTick(dt);
+        try { Graphics._onTick(dt); } catch (error) {
+            if (throwRenderAt === null || error.message !== 'intentional composite failure') throw error;
+            renderFailure = true;
+        }
         // Whatever the paced draw moved is back where the game put it.
         assert.equal(model.position.x, player._realX + 0.5, 'the model is the game\'s again after the composite');
         assert.equal(camera.position.x, player._realX);
+        assert.equal(camera.fov, 45 + updatesRun * fovStep, 'render restores the camera projection');
+        assert.ok(Math.abs(2 * Math.atan2(bone.quaternion.z, bone.quaternion.w) - updatesRun * .002) < 1e-12, 'render interpolation never changes the game pose');
+        if (renderFailure) break;
     }
-    return { shown, composites, panoramas, updatesRun, worldDrawnInUpdate, player, Graphics };
+    return { shown, composites, panoramas, renderFailure, updatesRun, worldDrawnInUpdate, player, Graphics };
 }
 
 /** Of the pictures from `from` ms on: the spread of speed between consecutive pictures, as a share of the mean. */
@@ -116,13 +128,13 @@ function judder(shown, from = 2500) {
     return { mean, spread: spread / mean, gaps: s.slice(1).map((p, i) => +(p.t - s[i].t).toFixed(2)) };
 }
 
-test('144 Hz: the map is drawn on every other refresh, evenly, and motion is even', () => {
+test('144 Hz: every refresh draws an interpolated position, with unchanged game timing', () => {
     const before = play(144, { pacing: false });
     const after = play(144);
     const was = judder(before.shown), now = judder(after.shown);
     assert.ok(was.spread > 0.15, 'drawn on its updates, a walk judders (' + was.spread.toFixed(3) + ')');
     assert.ok(now.spread < 0.01, 'paced, it does not (' + now.spread.toFixed(4) + ')');
-    assert.ok(now.gaps.every(g => Math.abs(g - 2000 / 144) < 0.01), 'a picture every other refresh: 72 a second');
+    assert.ok(now.gaps.every(g => Math.abs(g - 1000 / 144) < 0.01), 'a new picture on every refresh: 144 a second');
     assert.equal(after.composites.filter(t => t >= 2500).length, after.shown.filter(p => p.t >= 2500).length, 'and the composite with it, nothing between');
     assert.ok(after.worldDrawnInUpdate < 100, 'the world drawn in an update only until the uneven updates are seen');
     // The game itself: the same updates, the same state.
@@ -137,7 +149,7 @@ test('144 Hz: the map is drawn on every other refresh, evenly, and motion is eve
 });
 
 test('165 and 100 Hz pace too; 50 Hz plays every refresh evenly', () => {
-    for (const [hz, every] of [[165, 2], [100, 1], [50, 1], [75, 1]]) {
+    for (const [hz, every] of [[165, 1], [100, 1], [50, 1], [75, 1]]) {
         const run = play(hz);
         const j = judder(run.shown);
         assert.ok(j.spread < 0.01, hz + ' Hz: even (' + j.spread.toFixed(4) + ')');
@@ -146,14 +158,17 @@ test('165 and 100 Hz pace too; 50 Hz plays every refresh evenly', () => {
     }
 });
 
-test('a screen 60 divides is drawn on its updates as before', () => {
-    for (const hz of [60, 120, 180, 240]) {
-        const run = play(hz);
-        assert.equal(run.Graphics.FramePacing._active, false, hz + ' Hz is not paced');
-        assert.ok(run.worldDrawnInUpdate > 0, hz + ' Hz draws in its updates');
+test('120, 180 and 240 Hz show new positions every refresh while game speed stays at 60 updates', () => {
+    for (const hz of [120, 180, 240]) {
+        const run = play(hz), baseline = play(hz, { pacing: false });
+        assert.equal(run.Graphics.FramePacing._active, true, hz + ' Hz interpolates');
         const j = judder(run.shown);
-        assert.ok(j.spread < 0.01, hz + ' Hz is already even');
+        assert.ok(j.spread < 0.01, hz + ' Hz has even movement');
+        assert.ok(j.gaps.every(g => Math.abs(g - 1000 / hz) < 0.01), hz + ' new pictures per second');
+        assert.equal(run.updatesRun, baseline.updatesRun);
+        assert.equal(run.player._realX, baseline.player._realX);
     }
+    assert.equal(play(60).Graphics.FramePacing._active, false, '60 Hz needs no intermediate pictures');
 });
 
 test('a dropped frame does not rubber-band: the drawn place keeps to the clock', () => {
@@ -234,4 +249,55 @@ test('144 Hz, a 2D map with a 2000/2003 panorama: every picture shows the panora
     assert.ok(walking.length > 100);
     assert.ok(walking.some(p => Math.abs(p.display / 0.05 - Math.round(p.display / 0.05)) > 0.01), 'pictures between updates were drawn');
     for (const p of walking) assert.equal(p.origin, Math.floor(48 * p.display), 'panorama at ' + p.origin + ' for a camera at ' + p.display);
+});
+
+test('180 Hz interpolates skeletal animation, not just root position and camera', () => {
+    const run = play(180), pictures = run.shown.filter(p => p.t > 2500);
+    for (let i = 1; i < pictures.length; i++) {
+        const step = pictures[i].bone - pictures[i - 1].bone;
+        assert.ok(Math.abs(step - .002 / 3) < 1e-8, 'each refresh has an intermediate bone pose');
+    }
+});
+
+test('F2 reports new pictures rather than callbacks, including a retained 30 Hz world', () => {
+    let now = 0;
+    const Graphics = {};
+    vm.runInNewContext(between(core, 'Graphics.FPSCounter = function()', 'Graphics.FPSCounter.prototype.switchMode'), { Graphics, performance: { now: () => now }, Math });
+    Graphics.FPSCounter.prototype._createElements = function() {};
+    Graphics.FPSCounter.prototype._update = function() {};
+    for (const every of [1, 3, 6]) {
+        now = 0;
+        const fps = new Graphics.FPSCounter();
+        for (let i = 1; i <= 360; i++) {
+            now = i * 1000 / 180;
+            fps.startTick(); fps.endTick(i % every === 0);
+        }
+        assert.ok(Math.abs(fps.fps - 180 / every) < 2, '180 callbacks with one picture per ' + every + ': ' + fps.fps);
+        for (let i = 1; i <= 120; i++) { now += 1000 / 180; fps.startTick(); fps.endTick(false); }
+        assert.equal(fps.fps, 0, 'callbacks without pictures do not sustain a high FPS reading');
+    }
+});
+
+test('a failed composite restores interpolated roots, bones and camera before control returns', () => {
+    assert.equal(play(180, { throwRenderAt: 1500 }).renderFailure, true);
+});
+
+test('50 Hz catch-up interpolates model poses across their actual update span', () => {
+    const run = play(50), baseline = play(50, { pacing: false });
+    assert.ok(judder(run.shown).spread < .01, 'model movement stays even when some frames run two logic updates');
+    assert.equal(run.updatesRun, baseline.updatesRun);
+    assert.equal(run.player._realX, baseline.player._realX);
+});
+
+test('motorcycle acceleration FOV interpolates with the camera even when only the projection changes', () => {
+    const run = play(180, { speed: 0, fovStep: .005 });
+    const pictures = run.shown.filter(p => p.t > 2500);
+    for (let i = 1; i < pictures.length; i++) assert.ok(Math.abs(pictures[i].fov - pictures[i - 1].fov - .005 / 3) < 1e-8);
+    assert.equal(play(180, { speed: 0, fovStep: .005, throwRenderAt: 1500 }).renderFailure, true);
+});
+
+test('a parked motorcycle thawing its root joins interpolation without a hierarchy change', () => {
+    const run = play(180, { initiallyFrozen: true });
+    assert.ok(judder(run.shown).spread < .01, 'the moving root advances between logic updates after thawing');
+    for (const picture of run.shown.filter(p => p.t > 2500)) assert.ok(Math.abs(picture.model - picture.camera - .5) < 1e-8, 'bike and following camera stay in step');
 });

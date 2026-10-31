@@ -179,3 +179,15 @@ test('a custom in-memory outfit registration is usable in the worker and removed
     const next = await pool.build({ key: 'removed', recipe: { gender: 1, bald: true, outfit: [{ id }] }, options });
     assert.equal(next.textures[name], undefined, 'changing project/context removes stale custom registrations and pictures');
 });
+
+test('independent shirt and cape picture symbols match the real preview worker and survive resource replacement',async t=>{
+    const pool=new PreviewWorker();t.after(()=>pool.dispose());
+    const Body=require(path.join(dir,'HumanBody.js')),Model=require(path.join(dir,'CharacterModel.js')),pack=await Body.loadPack();
+    const marked={gender:1,hair:{style:'bald'},outfit:[{id:'shirt',pattern:'stripes',mark:{shape:'picture',picture:'badge.png',place:'back'}}],props:[{id:'cape',mark:{shape:'picture',picture:'badge.png'}}]};
+    const pictures=new Map([['badge.png',picture]]);pool.configure({emblemPictures:pictures});
+    const actual=await pool.build({key:'marks',recipe:marked,options});
+    const expected=Model.build(pack,marked,{wardrobe:{emblemPictures:pictures}},options);
+    for(const name of ['outfit.png','cape-cloth.png'])assert.equal(hash(actual.textures[name].data),hash(expected.textures[name].data),name+' shared mark');
+    pool.configure({});const missing=await pool.build({key:'marks-removed',recipe:marked,options});
+    for(const name of ['outfit.png','cape-cloth.png'])assert.notEqual(hash(actual.textures[name].data),hash(missing.textures[name].data),name+' drops previous project image');
+});

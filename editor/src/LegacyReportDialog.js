@@ -17,10 +17,12 @@
         if (report.writtenAt) rows.push([tt('Imported on'), String(report.writtenAt).replace('T', ' ').slice(0, 16)]);
         if (report.source) rows.push([tt('Original folder'), report.source]);
         if (report.maps) rows.push([tt('Maps'), String(report.maps)]);
+        if (report.missingMapReferences && report.missingMapReferences.length) rows.push([tt('Map references needing attention'), String(report.missingMapReferences.length)]);
         if (report.files && Object.keys(report.files).length) rows.push([tt('Files'), Object.entries(report.files).map(([k, v]) => `${k} ${v}`).join(', ')]);
         const approx = report.approximations || {};
         const ruby = (approx.rubyScript || 0) + (approx.moveRouteScript || 0) + (approx.rubyCondition || 0) + (approx.rubyOperand || 0);
         if (approx.rubyTranslated || ruby) rows.push([tt('Ruby in events'), `${approx.rubyTranslated || 0} ${tt('translated to JavaScript')}, ${ruby} ${tt('kept as comments')}`]);
+        if (approx.rubyFormula) rows.push([tt('Damage formulas needing a port'), String(approx.rubyFormula)]);
         const other = Object.entries(approx).filter(([k]) => !/^ruby|^moveRouteScript$/.test(k)).sort((a, b) => b[1] - a[1]);
         if (other.length) rows.push([tt('Converted or approximated'), other.map(([k, v]) => `${k} ${v}`).join(', ')]);
         if (report.scripts && report.scripts.custom) rows.push([tt('Original scripts'), `${report.scripts.custom} ${tt('sections')}, ${report.scripts.customLines} ${tt('lines')}`]);
@@ -48,6 +50,8 @@
         const rows = summarize(report);
         const skipped = report && Array.isArray(report.skipped) ? report.skipped : [];
         const missing = report && Array.isArray(report.missingFiles) ? report.missingFiles : [];
+        const failedMedia = ['images', 'movies', 'music'].flatMap(kind => Array.isArray(report?.[kind]?.failed)
+            ? report[kind].failed.map(entry => `${entry.name}: ${entry.error}`) : []);
         modal.innerHTML = `
             <div class="rr-modal-header"><div class="rr-modal-title">${rrEscapeHtml(tt('Import Report'))}</div><button type="button" class="rr-modal-close" aria-label="${rrEscapeHtml(tt('Close'))}">×</button></div>
             <div class="rr-modal-body" style="display: flex; flex-direction: column; gap: 10px; max-height: 76vh; overflow: auto;">
@@ -55,6 +59,7 @@
                     : `<div style="color: var(--color-text-muted); font-size: 13px;">${rrEscapeHtml(tt('This project was not imported from an older engine.'))}</div>`}
                 ${skipped.length ? `<details><summary style="cursor: pointer; font-size: 12px; color: var(--color-text);">${rrEscapeHtml(tt('Skipped'))} (${skipped.length})</summary><pre style="margin: 6px 0 0; max-height: 160px; overflow: auto; font-size: 11px; color: var(--color-text); background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; white-space: pre-wrap;">${rrEscapeHtml(skipped.join('\n'))}</pre></details>` : ''}
                 ${missing.length ? `<details><summary style="cursor: pointer; font-size: 12px; color: var(--color-text);">${rrEscapeHtml(tt('Files the game names but does not have'))} (${missing.length})</summary><pre style="margin: 6px 0 0; max-height: 160px; overflow: auto; font-size: 11px; color: var(--color-text); background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; white-space: pre-wrap;">${rrEscapeHtml(missing.join('\n'))}</pre></details>` : ''}
+                ${failedMedia.length ? `<details><summary style="cursor:pointer;font-size:12px;color:var(--color-text);">${rrEscapeHtml(tt('Media that could not be converted'))} (${failedMedia.length})</summary><pre style="margin:6px 0 0;max-height:160px;overflow:auto;font-size:11px;color:var(--color-text);white-space:pre-wrap;">${rrEscapeHtml(failedMedia.join('\n'))}</pre></details>` : ''}
                 ${scripts.length ? `
                 <div style="font-size: 13px; font-weight: 600; color: var(--color-text);">${rrEscapeHtml(tt('Original scripts'))} <span style="font-weight: 400; color: var(--color-text-muted); font-size: 12px;">legacy/Scripts</span></div>
                 <div style="display: grid; grid-template-columns: minmax(180px, 1fr) 3fr; gap: 8px; min-height: 280px;">
@@ -67,7 +72,7 @@
             <div class="rr-modal-footer">${scripts.length ? `<button type="button" class="rr-btn-secondary rr-legacy-open-folder">${rrEscapeHtml(tt('Open Folder'))}</button>` : ''}<button type="button" class="rr-button-primary rr-legacy-close">${rrEscapeHtml(tt('Close'))}</button></div>`;
         overlay.appendChild(modal);
         const close = () => { document.removeEventListener('keydown', onKey, true); overlay.remove(); };
-        const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+        const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); } };
         modal.querySelector('.rr-modal-close').addEventListener('click', close);
         modal.querySelector('.rr-legacy-close').addEventListener('click', close);
         modal.querySelector('.rr-legacy-open-folder')?.addEventListener('click', () => { try { nw.Shell.openItem(scriptsDir); } catch (_) { /* no shell */ } });

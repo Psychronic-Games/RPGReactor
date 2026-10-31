@@ -15,13 +15,13 @@ class FadeScreenEditor {
      * @param {object} command - The command to edit (or null for new)
      * @param {function} callback - Callback when done editing
      */
-    show(command, callback) {
+    show(command, callback, options = {}) {
         this.callback = callback;
 
         if (command && (command.code === 221 || command.code === 222)) {
             this.fadeType = command.code;
         } else {
-            this.fadeType = 221; // Default to fadeout
+            this.fadeType = options.code === 222 ? 222 : 221;
         }
 
         if (!this.modal) {

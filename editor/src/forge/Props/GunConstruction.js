@@ -43,5 +43,22 @@
             P.dark.push(M.polyTube(points,.0025,16));for(const point of [points[0],points.at(-1)])P.metal.push(M.sphere(point,.0045,24));
         }}}
     ];
+    rules.push({id:'energy-receiver-and-emitter',test:r=>SCIFI.includes(r.style),controls:['style','barrel.length','receiver.length','glow'],build(c){
+        const {r,P,xr0,xr1,Lr,Hr,rb,yb,W,Lb}=c;
+        // Seated capacitor housings, luminous sockets and faceted cheeks give energy guns a coherent chassis.
+        for(const side of [-1,1]){
+            const z=side*(W*.5+.004),outline=[[xr0+Lr*.10,Hr*.18],[xr0+Lr*.23,Hr*.78],[xr0+Lr*.77,Hr*.73],[xr0+Lr*.94,Hr*.38],[xr0+Lr*.75,Hr*.12]];
+            P.frame.push(HS.plate(outline,.005,.0015,{center:z}));
+            for(let j=0;j<3;j++){const x=xr0+Lr*(.32+j*.13);P.dark.push(HS.chamferedBox([x,Hr*.58,side*(W*.5+.008)],[Lr*.035,Hr*.15,.003],.0008));P.glow.push(HS.chamferedBox([x,Hr*.58,side*(W*.5+.010)],[Lr*.021,Hr*.10,.0015],.0004));}
+        }
+        const end=xr1+Lb;
+        if(['ionPistol','arcCaster','particleLance','gravCannon'].includes(r.preset)){
+            const fingers=r.preset==='gravCannon'?4:3,reach=r.preset==='particleLance'?.09:r.preset==='ionPistol'?.025:.055;
+            for(let j=0;j<fingers;j++){const a=j/fingers*Math.PI*2,rad=rb*(r.preset==='gravCannon'?2:1.7),at=x=>[x,yb+Math.cos(a)*rad,Math.sin(a)*rad];P.frame.push(M.polyTube([at(end-.055),at(end+.015),at(end+reach)],Math.max(.003,rb*.22),8));P.glow.push(M.sphere(at(end+reach-.005),Math.max(.002,rb*.12),12));}
+        }
+        if(r.preset==='pulseCarbine')for(const side of [-1,1]){const z=side*(W*.65+.007);P.under.push(HS.chamferedBox([xr0+Lr*.15,Hr*.16,z],[Lr*.29,Hr*.5,.018],.006));P.glow.push(HS.chamferedBox([xr0+Lr*.15,Hr*.16,z+side*.01],[Lr*.18,.004,.002],.001));}
+        if(r.preset==='gravCannon')for(const x of [end-.06,end])P.frame.push(M.lathe([[rb*1.7,0],[rb*2.5,0],[rb*2.5,.018],[rb*1.7,.018],[rb*1.7,0]],32,{base:[x,yb,0],dir:[1,0,0]}));
+        if(r.preset==='microMissile')for(const sy of [-1,1])for(const sz of [-1,1]){const y=yb+sy*.038,z=sz*.039;P.under.push(M.lathe([[0,0],[.029,0],[.029,.22],[.020,.22],[.020,.012],[0,.012]],24,{base:[end-.15,y,z],dir:[1,0,0]}));P.metal.push(M.lathe([[.017,0],[.017,.015],[0,.055]],24,{base:[end+.018,y,z],dir:[1,0,0]}));}
+    }});
     const api=Patterns.bank(rules);root.RRGunConstruction=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

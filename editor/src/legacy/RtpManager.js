@@ -33,12 +33,12 @@ function downloadFolder(engine, env = process.env, platform = process.platform) 
 }
 
 /** The RTP files a 2000/2003 database names that the game does not ship, by RTP folder. */
-function referencedNames(db, tree, has) {
+function referencedNames(db, tree, has, maps) {
     const out = {};
     const add = (folder, name) => {
         if (!name || typeof name !== 'string') return;
-        name = name.replace(/\.[^.]{3}$/, '');
-        if (/^\(off\)$/i.test(name) || (has && has(folder, name))) return;
+        name = require('./LegacyConvert.js').stripExt(name);
+        if ((/^(Music|Sound)$/.test(folder) && /^\(.*\)$/.test(name)) || (has && has(folder, name))) return;
         (out[folder] = out[folder] || new Set()).add(name);
     };
     const sys = db.system || {};
@@ -53,6 +53,34 @@ function referencedNames(db, tree, has) {
         if (v && typeof v === 'object' && typeof v.name === 'string') add(/_se$/.test(k) ? 'Sound' : 'Music', v.name);
     }
     for (const node of (tree && tree.maps) || []) if (node && node.music && node.music_type === 2) add('Music', node.music.name);
+    const move = commands => {
+        for (const c of commands || []) {
+            if (c.code === 34) add('CharSet', c.parameter_string);
+            else if (c.code === 35) add('Sound', c.parameter_string);
+        }
+    };
+    const assets = { 10130: 'FaceSet', 10630: 'CharSet', 10640: 'FaceSet', 10650: 'CharSet', 10660: 'Music', 10670: 'Sound', 10680: 'System', 11110: 'Picture', 11510: 'Music', 11550: 'Sound', 11720: 'Panorama' };
+    const commands = list => {
+        for (const c of list || []) {
+            if (assets[c.code]) add(assets[c.code], c.string);
+            if (c.code === 11330) {
+                const decode = b => new TextDecoder(db.encoding || 'windows-1252').decode(b);
+                const route = require('./LegacyCommands.js').decodeRoute(c.parameters.slice(4), { decode }, c);
+                for (const r of route.list) {
+                    if (r.code === 44) add('Sound', r.parameters[0].name);
+                    else if (r.code === 41) add('CharSet', r.parameters[0].replace(/(^|\/)\!/, '$1'));
+                }
+            }
+        }
+    };
+    for (const ce of db.commonevents || []) if (ce) commands(ce.event_commands);
+    for (const troop of db.troops || []) if (troop) for (const pg of troop.pages || []) if (pg) commands(pg.event_commands);
+    for (const map of Object.values(maps || {})) {
+        if (map.parallax_flag) add('Panorama', map.parallax_name);
+        for (const event of map.events || []) if (event) for (const pg of event.pages || []) if (pg) {
+            add('CharSet', pg.character_name); move(pg.move_route && pg.move_route.move_commands); commands(pg.event_commands);
+        }
+    }
     for (const k of Object.keys(out)) out[k] = Array.from(out[k]);
     return out;
 }

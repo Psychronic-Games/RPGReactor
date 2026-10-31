@@ -224,6 +224,13 @@ test('a grapple pulls its wearer up to a roof edge in reach: its own color in th
     assert.deepEqual(plain(way.map(step => [step.kind, step.x, step.y, step.d])), [['grapple', 8, 10, 6]]);
     // In the move range the edges have their own mark.
     assert.ok(fight.commandSelectUnit(me.id));
+    fight._act.steps = 2;
+    assert.ok(fight.moveCells().some(cell => cell.x === 8 && cell.y === 10 && cell.grapple), 'a two-point grapple still reaches its edge five cells away');
+    fight._act.steps = 3;
+    assert.ok(fight.moveCells().some(cell => cell.x === 9 && cell.y === 10 && !cell.grapple), 'remaining movement can continue beyond that distant edge');
+    fight._act.steps = 1;
+    assert.ok(!fight.moveCells().some(cell => cell.x === 8 && cell.y === 10), 'a new flood respects a budget too small to pay for the pull');
+    assert.ok(G.reachedBounds().x1 < 8, 'the prior distant flood does not expand this flood');
     fight._act.steps = 6;
     const move = Array.from(fight.moveCells());
     assert.ok(move.some(cell => cell.x === 8 && cell.y === 10 && cell.grapple), 'the edge is a grapple cell');
@@ -335,6 +342,8 @@ test('a grapple that costs the action: free to move after it, and the turn ends 
     assert.equal(G.spentAt(10, 10, 5), true, 'nor does anything walked on from it leave the action');
     assert.equal(G.spentAt(4, 10, 0), false);
     assert.ok(fight.commandSelectUnit(me.id));
+    fight._act.steps = 0;
+    assert.ok(fight.moveCells().some(cell => cell.x === 8 && cell.y === 10 && cell.grapple), 'an action-cost grapple remains selectable without movement points');
     fight._act.steps = 4;
     fight.setCursor(10, 10, 5);
     assert.ok(fight.commandMoveTo(10, 10));

@@ -205,11 +205,15 @@
             H.Glow.push(lathe([[R * 0.885, 0], [R * 0.93, 0], [R * 0.93, 0.004], [R * 0.885, 0.004], [R * 0.885, 0]], add(back, mul(FRONT, Lp - 0.016)), FRONT, 48, { caps: false }));
             // Two dark bands round its shell, three legs to the floor.
             for (const h of [0.15, 0.21]) H.Panel.push(lathe([[R * 0.95, 0], [R * 1.012, 0], [R * 1.012, 0.012], [R * 0.95, 0.012], [R * 0.95, 0]], add(back, mul(FRONT, h)), FRONT, 48, { caps: false }));
-            for (let i = 0; i < 3; i++) {
-                const a = -Math.PI / 2 + (i - 1) * 0.95, o = [Math.cos(a), 0, Math.sin(a)], y = [Lp * 0.3, Lp * 0.1, Lp * 0.3][i] * (i === 1 ? -1 : 1);
-                const top = add(back, add(mul(o, R * 0.7), mul(FRONT, i === 1 ? Lp * 0.3 : Lp * 0.75))), foot = [o[0] * 0.26, top[1] + y * 0.6, 0.012];
-                H.Panel.push(K.tube([top, foot], 0.011, 10));
-                H.Rubber.push(lathe([[0, 0], [0.022, 0], [0.02, 0.012], [0, 0.014]], [foot[0], foot[1], 0], Z, 16));
+            const hub=[0,back[1]-.055,.19];
+            H.Panel.push(lathe([[0,0],[.035,0],[.035,.045],[.026,.06],[0,.06]],hub,Z,32));
+            for(let i=0;i<3;i++){
+                const a=-Math.PI/2+i*Math.PI*2/3,foot=[Math.cos(a)*.25,hub[1]+Math.sin(a)*.25,.014];
+                const mount=[Math.cos(a)*.022,hub[1]+Math.sin(a)*.022,.205];
+                H.Panel.push(K.tube([mount,foot],.012,16));
+                const brace=[Math.cos(a)*.13,hub[1]+Math.sin(a)*.13,.095];
+                H.Trim.push(K.tube([[0,hub[1],.14],brace],.005,12));
+                H.Rubber.push(lathe([[0,0],[.024,0],[.024,.012],[.019,.017],[0,.017]],[foot[0],foot[1],0],Z,24));
             }
         }
     };

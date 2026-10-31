@@ -2,6 +2,10 @@
 (function(root) {
     'use strict';
     const scriptURL = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : null;
+    const workerURL = scriptURL && /\/CharacterPreviewBrowser\.js(?:[?#]|$)/.test(scriptURL)
+        ? new URL('CharacterPreviewBrowserEntry.js', scriptURL).href
+        : typeof document !== 'undefined' && document.baseURI
+            ? new URL('src/forge/Character3D/CharacterPreviewBrowserEntry.js', document.baseURI).href : null;
     function abortError(message = 'Character preview canceled') {
         const error = new Error(message); error.name = 'AbortError'; error.code = 'ABORT_ERR'; return error;
     }
@@ -69,7 +73,7 @@
             if (!this.options.createWorker && typeof root.Worker !== 'function') {
                 const error = new Error('Browser character preview workers are unavailable'); error.code = 'PREVIEW_WORKER_UNAVAILABLE'; throw error;
             }
-            const file = this.options.workerURL || (scriptURL ? new URL('CharacterPreviewBrowserEntry.js', scriptURL).href : null);
+            const file = this.options.workerURL || workerURL;
             if (!file) {
                 const error = new Error('A browser character preview worker URL is required'); error.code = 'PREVIEW_WORKER_UNAVAILABLE'; throw error;
             }

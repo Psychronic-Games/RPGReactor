@@ -270,8 +270,8 @@ test('the game wires it: Jump against a ledge, a push in the air, followers, the
     // Beside the wall it climbs; over the edge it walks onto the top.
     assert.match(models, /return !!\(character && \(character\._reactorOnLadder \|\| \(character\._reactorMantle && !character\._reactorMantle\.over\)\)\);/);
     assert.match(models, /: character\._reactorMantle \? Reactor3D\.mantleHold\(holder, character\) : 0;/);
-    assert.match(models, /if \(character\._reactorMantle\) \{ this\.stow\(state\); return false; \}\n\s+if \(state\.stowed\) this\.unstow\(state\);/);
-    assert.match(models, /if \(character\._reactorMantle \|\| holder\.mantlePose\) Reactor3D\.MantlePose\.update\(holder, character\);\n\s+\/\/ What the character holds/, 'the hands go on the edge before what they hold is laid over the motion');
+    assert.match(models, /if \(character\._reactorMantle \|\| character\._reactorGrapple \|\| character\._reactorKnockedOut \|\| character\._reactorRagdoll\) \{ this\.stow\(state\); return false; \}\n\s+if \(state\.stowed\) this\.unstow\(state\);/);
+    assert.ok(models.indexOf('Reactor3D.MapHeld.update(holder, character, this, !object.visible);') < models.indexOf('Reactor3D.MantlePose.update(holder, character);'), 'stow the weapon before the grapple or ledge pose takes the arms');
     // Through the player's own eyes nobody is shown through a wall.
     assert.match(read('runtime/reactor_sprites.js'), /Reactor3D\.Camera\.currentState\(\)\.mode === "firstPerson"\) return list;/);
 });

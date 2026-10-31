@@ -562,7 +562,7 @@ test('zoom is clamped at both ends', () => {
 });
 
 test('3D wheel zoom keeps the pointed ground location at the same screen coordinate', () => {
-    const THREE = require('three');
+    const THREE = require('./helpers/three.cjs');
     const view = viewport({}, { THREE });
     view.canvas = { getBoundingClientRect: () => ({ left: 150, top: 80, width: 900, height: 600 }) };
     view.camera = new THREE.PerspectiveCamera(50, 1.5, 0.1, 1000);

@@ -2475,6 +2475,7 @@ class DatabaseAnimationEditor {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
 
         const modal = document.getElementById('cell-properties-modal');
+        window.RRPopoutBridge?.bringToWindowInUse?.(modal);
         const closeBtn = document.getElementById('cell-modal-close');
         const cancelBtn = document.getElementById('cell-modal-cancel');
         const saveBtn = document.getElementById('cell-modal-save');
@@ -5129,6 +5130,7 @@ class DatabaseAnimationEditor {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
 
         const modal = document.getElementById('effect-picker-modal');
+        window.RRPopoutBridge?.bringToWindowInUse?.(modal);
         const closeBtn = document.getElementById('effect-picker-close');
         const cancelBtn = document.getElementById('effect-picker-cancel');
         const okBtn = document.getElementById('effect-picker-ok');

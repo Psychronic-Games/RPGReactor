@@ -765,7 +765,7 @@
         if (!bass) knob(xs - 0.02, -0.136 * sc);
         H.Metal.push(Mesh.lathe([[0, 0], [0.006, 0], [0.006, 0.003], [0.0018, 0.004], [0.0018, 0.016], [0, 0.017]], 12, { base: [cx + 0.2 * sc, 0.105 * sc, 0], dir: [0, 0, 1] }));
         H.Ivory.push(blob([cx + 0.2 * sc, 0.105 * sc, 0.018], 0.004, 0.004, 0.005, 10));
-        H.Metal.push(ring([xs - 0.085, -0.13 * sc, -0.002], [0, 0, 1], 0.004, 0.011, 0.004, 20));
+        H.Metal.push(ring([cx - 0.065 * sc, -0.112 * sc, 0.0005], [0, 0, 1], 0.004, 0.011, 0.004, 20));
         for (const [x, y] of [[cx - 0.196 * sc - 0.004, 0], [outline.reduce((m, p) => (p[0] > m[0] && p[1] > 0.05 ? p : m), [0, 0])[0] - 0.006, outline.reduce((m, p) => (p[0] > m[0] && p[1] > 0.05 ? p : m), [0, 0])[1]]]) H.Metal.push(disc([x, y, -Dz * 0.5], [x < 0.1 ? -1 : 1, 0, 0], 0.0045, 0.008, 12));
         // Strings from the bridge saddles over the nut to the tuner posts.
         for (let i = 0; i < n; i++) {

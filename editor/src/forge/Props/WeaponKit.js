@@ -474,6 +474,14 @@
      */
     function finish(kind, recipe, P, marks, textures, o) {
         const opt = o || {}, toWorld = opt.toWorld || flat, parts = [];
+        if(opt.halo){
+            const h=opt.halo,N=128,data=new Uint8Array(N*N*4),rgb=Paint.hex(h.color);
+            for(let y=0;y<N;y++)for(let x=0;x<N;x++){const d=Math.hypot((x+.5)/N*2-1,(y+.5)/N*2-1),a=Math.max(0,1-d);data.set([...rgb,Math.round(72*a*a*a)],(y*N+x)*4);}
+            textures['weapon-aura.png']={name:'weapon-aura.png',width:N,height:N,data};
+            const pos=[],nor=[],uv=[],idx=[];
+            for(let axis=0;axis<3;axis++){const u=(axis+1)%3,v=(axis+2)%3,b=pos.length/3;for(const [x,y]of [[-1,-1],[1,-1],[1,1],[-1,1]]){const q=h.at.slice(),n=[0,0,0];q[u]+=x*h.radius;q[v]+=y*h.radius;n[axis]=1;pos.push(...q);nor.push(...n);uv.push((x+1)/2,(y+1)/2);}idx.push(b,b+1,b+2,b,b+2,b+3);}
+            P={...P,'Soft glow':{meshes:[{positions:Float32Array.from(pos),normals:Float32Array.from(nor),uvs:Float32Array.from(uv),index:Uint32Array.from(idx)}],look:{texture:'weapon-aura.png',emissive:'#ffffff',emissiveTexture:'weapon-aura.png',emissiveIntensity:2.5,roughness:1,metalness:0,blend:true,doubleSided:true}}};
+        }
         for (const [name, entry] of Object.entries(P)) {
             const list = entry.meshes.filter(m => m && m.index && m.index.length);
             if (!list.length) continue;

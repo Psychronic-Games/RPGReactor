@@ -65,7 +65,25 @@ test('the command menu stays inside the window', () => {
     EventCommandList.keepMenuOnScreen(menu, 1550, 200);
     assert.equal(menu.style.left, '1416px');
     assert.equal(menu.style.top, '200px');
+    menu.ownerDocument = { defaultView: { innerWidth: 1000, innerHeight: 650 } };
+    EventCommandList.keepMenuOnScreen(menu, 992, 642);
+    assert.equal(menu.style.left, '816px', 'a detached window has its own right edge');
+    assert.equal(menu.style.top, '356px', 'a detached window has its own bottom edge');
     assert.match(source, /document\.body\.appendChild\(menu\);\s*EventCommandList\.keepMenuOnScreen\(menu, x, y\);/);
+});
+
+test('Fadein and Fadeout open with the direction selected in the shared picker', () => {
+    const EventCommandList = require('../src/event/EventCommandList.js');
+    const FadeScreenEditor = vm.runInNewContext(`${read('event/commands/FadeScreenEditor.js')}\nFadeScreenEditor;`, { window: {}, document: {} });
+    const editor = new FadeScreenEditor(null, null);
+    editor.modal = { style: {} };
+    editor.renderContent = () => {};
+    for (const code of [222, 221, 222]) {
+        editor.show(null, () => {}, EventCommandList.simpleCommandEditor(code).options);
+        assert.equal(editor.buildCommand().code, code);
+    }
+    editor.show({ code: 222 }, () => {}, { code: 221 });
+    assert.equal(editor.buildCommand().code, 222, 'editing keeps the saved direction');
 });
 
 test('a new Set Movement Route runs once and waits; an autonomous route still repeats', () => {

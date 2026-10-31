@@ -108,7 +108,7 @@
         for(const p of parts){
             const material=p.surfaceRole;
             if(material==='glass'&&(/glass$|canopy|windscreen/i.test(p.name))&&r.interior)p.opacity=r.windowOpacity;
-            if(['glass','light','red','glow'].includes(material))continue;
+            if(['glass','flightGlass','light','red','glow'].includes(material))continue;
             const role=['paint','secondary','armor','cargo'].includes(material)?r.finish:material==='frame'?'powder':material==='metal'||material==='accent'?'metal':material==='seat'?'fabric':material==='rubber'?(/seat/i.test(p.name)?'fabric':'rubber'):'polymer',m=maps(role);
             const geometryId=p.name+'|'+material,stored=cache.vehicleGeometry.parts.get(geometryId);
             if(stored){for(const [key,value]of Object.entries(stored))p[key]=key==='uvs'?Float32Array.from(value):value;}
@@ -120,7 +120,9 @@
             for(const key of ['albedo','normal','surface']){const t=m[key];textures[t.name]=t;}
             if(['paint','secondary','armor','cargo'].includes(material)){p.metalness=r.finish==='brushed'?.78:r.finish==='composite'?.18:.12;p.roughness=Math.max(.18,Math.min(.95,r.roughness+(r.finish==='powder'?.22:r.finish==='composite'?-.08:0)+r.wear*.12));}
         }
-        bakePanels(parts,textures,r,cache,size);
+        // Large passenger cabins have hundreds of repeated charts. Meter-scale tiled finishes
+        // keep their surface detail without packing every seat into a single painted-body atlas.
+        if(!['airliner','carriage','oxcart','wagon'].includes(r.form))bakePanels(parts,textures,r,cache,size);
     }
     /** Panel kit for one painted part: what the panel layer may draw on it. */
     function kitOf(p,r){
@@ -132,6 +134,7 @@
         if(/Formed side equipment bays|Nose access panels/.test(n))return'bay';
         if(['hover','shuttle'].includes(f)&&/hull|keel|spine|Canopy spine/i.test(n))return'hull';
         if(['walker','drone'].includes(f))return'mech';
+        if(['jet','helicopter','starfighter','starship','freighter'].includes(f)&&/hull|spine|bridge|shell|casing|module|ring|fuselage/i.test(n))return'hull';
         return null;
     }
     /** Lettering and artwork regions the panel layer leaves clean: [{o,u,v,n,hw,hh,depth}]. */

@@ -490,9 +490,8 @@ Reactor3D.minRenderScale = 0.5;
  * down, a level at a time, until it does: along GPU when the graphics card
  * is what the frame waits for (the size the world is drawn at, then model
  * detail, then shadows), along CPU when the main thread is (the depth-first
- * draw and far foliage, then shadows), and last of all, where that is not
- * enough, the world drawn on every other update: a steady 30 pictures a
- * second under 60 updates.
+ * draw and far foliage, then shadows). Available refreshes are never skipped;
+ * a machine that cannot sustain the target keeps drawing as fast as it can.
  * Measured on an integrated Radeon in North Haven's square: the size alone
  * is 14.0, 11.6 and 9.6 ms of GPU at levels 0, 1 and 2; shadows are 1 ms;
  * with the main thread slowed four times the first CPU level is 2 to 3 ms.
@@ -512,6 +511,9 @@ Reactor3D.minRenderScale = 0.5;
  * editor) the level is always 0.
  */
 Reactor3D.Quality = {
+    // Profiles learned while Auto chased monitor Hz can contain unnecessary
+    // resolution/shadow reductions. Re-evaluate those under the 60 Hz policy.
+    PROFILE_VERSION: 2,
     /** The kill switch: false draws level 0 whatever the frame rate or the player's setting. */
     enabled: true,
     GPU: [
@@ -523,7 +525,7 @@ Reactor3D.Quality = {
     CPU: [
         { depthFirst: true, reach: 1, share: 1, shadows: true },
         { depthFirst: false, reach: 0.65, share: 0.7, shadows: true },
-        { depthFirst: false, reach: 0.45, share: 0.5, shadows: false }
+        { depthFirst: false, reach: 0.45, share: 0.5, shadows: true }
     ],
     /** The levels a player's fixed setting holds: [GPU, CPU]. */
     FIXED: { high: [0, 0], medium: [1, 1], low: [3, 2] },
@@ -534,8 +536,6 @@ Reactor3D.Quality = {
     SLOW: 0.12,
     FAILING: 0.4,
     CALM: 0.03,
-    /** Short by this share with a kind's levels spent: the world is drawn on every other update. Less is left alone. */
-    HALF_AT: 0.25,
     /** The main thread is what a frame waits for when its work takes this share of the frame, or of a refresh's budget. */
     BOUND: 0.6,
     BOUND_OF_BUDGET: 0.75,
@@ -569,7 +569,7 @@ Reactor3D.Quality = {
         const setting = this.enabled === false ? "high" : this.setting();
         if (setting === "auto") {
             if (!this._loaded) this.load();
-            this.g = this._gpu; this.c = this._cpu; this.h = this._half;
+            this.g = this._gpu; this.c = this._cpu; this.h = false;
         } else {
             const fixed = this.FIXED[setting];
             this.g = fixed[0]; this.c = fixed[1]; this.h = false;
@@ -585,8 +585,8 @@ Reactor3D.Quality = {
     /** The share of the foliage's distances kept, and of its clumps. */
     foliageReach() { return this.CPU[this.c].reach; },
     foliageShare() { return this.CPU[this.c].share; },
-    /** How many updates one world draw stands for: 2 at the last level. */
-    drawEvery() { return this.h ? 2 : 1; },
+    /** Retained for callers of older quality APIs; detail never imposes a frame cap. */
+    drawEvery() { return 1; },
 
     /** The machine's own levels from its last session. */
     load() {
@@ -596,20 +596,25 @@ Reactor3D.Quality = {
         this._loaded = true;
         const kept = typeof ConfigManager !== "undefined" && ConfigManager.graphicsAuto;
         if (!kept || typeof kept !== "object") return;
+        if (kept.version !== this.PROFILE_VERSION) {
+            this._gpu = 0; this._cpu = 0; this._half = false; this._taken = [];
+            this.keep();
+            return;
+        }
         this._gpu = Math.max(0, Math.min(this.GPU.length - 1, Number(kept.gpu) || 0));
         this._cpu = Math.max(0, Math.min(this.CPU.length - 1, Number(kept.cpu) || 0));
-        this._half = kept.half === true;
+        // Ignore half-rate settings retained by older versions.
+        this._half = false;
         this._taken = [];
         for (let i = 0; i < this._gpu; i++) this._taken.push("gpu");
         for (let i = 0; i < this._cpu; i++) this._taken.push("cpu");
-        if (this._half) this._taken.push("half");
     },
 
     keep() {
         this.refresh();
         const config = typeof ConfigManager !== "undefined" ? ConfigManager : null;
         if (!config) return;
-        config.graphicsAuto = { gpu: this._gpu, cpu: this._cpu, half: this._half };
+        config.graphicsAuto = { version: this.PROFILE_VERSION, gpu: this._gpu, cpu: this._cpu, half: false };
         try { if (typeof config.save === "function") config.save(); } catch (e) { /* a config that cannot be written is not worth a frame */ }
     },
 
@@ -633,16 +638,14 @@ Reactor3D.Quality = {
     },
 
     /**
-     * One step down along `kind` ("cpu" or "gpu"); with that kind spent, the
-     * half rate, when the frames are `short` enough to be worth it. The other
-     * kind's steps are never taken in its place: a smaller picture does
-     * nothing for a slow main thread, and the picture would be spent for it.
+     * Reduce work along `kind` ("cpu" or "gpu"). Once its levels are spent,
+     * keep drawing available frames instead of imposing a lower cadence.
      */
     stepDown(kind, short) {
         const left = kind === "cpu" ? this._cpu < this.CPU.length - 1 : this._gpu < this.GPU.length - 1;
-        const step = left ? kind : !this._half && !(short < this.HALF_AT) ? "half" : null;
+        const step = left ? kind : null;
         if (!step) return null;
-        if (step === "cpu") this._cpu++; else if (step === "gpu") this._gpu++; else this._half = true;
+        if (step === "cpu") this._cpu++; else if (step === "gpu") this._gpu++; else this._half = false;
         this._taken.push(step);
         // A step up that did not hold is not tried again this session.
         if (this._probe) { this._probe = null; this._ceiling = true; }
@@ -706,15 +709,13 @@ Reactor3D.Quality = {
         if (this._sorted[3] < this._refreshMs) this._refreshMs = this._sorted[3];
     },
 
-    /** The world frames a second this screen can show at this level: 60, the screen's own refresh if lower, half at the half rate. */
+    /** Auto's quality threshold, not a rendering cap: faster frames keep drawing. */
     wantedPerSecond() {
-        const screen = this._refreshMs < Infinity ? 1030 / this._refreshMs : 60;
-        return Math.min(60, screen) / this.drawEvery();
+        return Math.min(60, this._refreshMs < Infinity ? 1030 / this._refreshMs : 60);
     },
 
     /**
-     * The 3D map is asked for this frame's picture. Returns whether to draw
-     * it: false on every other frame at the half rate.
+     * Count an actual world draw for quality adaptation. Always accepts it.
      */
     worldTick(now) {
         this._worldTick = true;
@@ -724,9 +725,6 @@ Reactor3D.Quality = {
             else this.clearWindow();
         }
         this._last = now;
-        // At the half rate a draw waits a frame and a half from the last one: every other refresh
-        // at 60 Hz, and no longer than that after a draw that itself ran over a refresh.
-        if (this.h && now - this._lastDraw < 25) return false;
         this._lastDraw = now;
         this._drew = true;
         this._draws++;
@@ -9256,7 +9254,9 @@ Reactor3D.mirrorOf = function(object) {
         meshes = true;
         for (const material of [].concat(node.material)) {
             const shine = Reactor3D.shineOf ? Reactor3D.shineOf(material) : null;
-            if (shine) reflect = Math.max(reflect, shine.vector.x * (1 - 0.5 * (shine.vector.w || 0)));
+            // Authored metal uses a PBR response, not the legacy paint/glaze mix.
+            // Its old texture-keep setting must not disqualify it from a nearby probe.
+            if (shine) reflect = Math.max(reflect, shine.vector.x * (shine.albedo?.value > 0.5 ? 1 : 1 - 0.5 * (shine.vector.w || 0)));
         }
     });
     if (meshes) { object.userData.__rrMirror = reflect; object.userData.__rrMirrorMeshes = object.children.length; }

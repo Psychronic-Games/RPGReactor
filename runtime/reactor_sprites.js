@@ -5113,8 +5113,9 @@ function Sprite_Timer() {
 Sprite_Timer.prototype = Object.create(Sprite.prototype);
 Sprite_Timer.prototype.constructor = Sprite_Timer;
 
-Sprite_Timer.prototype.initialize = function() {
+Sprite_Timer.prototype.initialize = function(timerId = 0) {
     Sprite.prototype.initialize.call(this);
+    this._rrTimerId = timerId;
     this._seconds = 0;
     this.createBitmap();
     this.update();
@@ -5148,8 +5149,9 @@ Sprite_Timer.prototype.update = function() {
 };
 
 Sprite_Timer.prototype.updateBitmap = function() {
-    if (this._seconds !== $gameTimer.seconds()) {
-        this._seconds = $gameTimer.seconds();
+    const timer = this._rrTimerId ? $gameTimer.rrTimer(this._rrTimerId) : $gameTimer;
+    if (this._seconds !== timer.seconds()) {
+        this._seconds = timer.seconds();
         this.redraw();
     }
 };
@@ -5170,11 +5172,13 @@ Sprite_Timer.prototype.timerText = function() {
 
 Sprite_Timer.prototype.updatePosition = function() {
     this.x = (Graphics.width - this.bitmap.width) / 2;
-    this.y = 0;
+    this.y = this._rrTimerId && $gameTimer.isWorking() && $gameTimer._rrVisible !== false ? this.bitmap.height : 0;
 };
 
 Sprite_Timer.prototype.updateVisibility = function() {
-    this.visible = $gameTimer.isWorking();
+    const timer = this._rrTimerId ? $gameTimer.rrTimer(this._rrTimerId) : $gameTimer;
+    this.visible = timer.isWorking() && timer._rrVisible !== false;
+    if (timer._rrLegacy && !timer._rrBattle && $gameParty.inBattle()) this.visible = false;
 };
 
 //-----------------------------------------------------------------------------
@@ -5329,6 +5333,10 @@ Spriteset_Base.prototype.pictureContainerRect = function() {
 Spriteset_Base.prototype.createTimer = function() {
     this._timerSprite = new Sprite_Timer();
     this.addChild(this._timerSprite);
+    if ($dataSystem.rrLegacyVariableLimit) {
+        this._rrTimer2Sprite = new Sprite_Timer(1);
+        this.addChild(this._rrTimer2Sprite);
+    }
 };
 
 Spriteset_Base.prototype.createOverallFilters = function() {
@@ -6373,14 +6381,6 @@ Spriteset_Map.prototype.updateReactor3D = function() {
         && !SceneManager.isFinalUpdateOfFrame()) {
         return;
     }
-    // The quality levels count this frame, and at the last level have the
-    // world drawn on every other one (the passes keep the picture between).
-    // A draw while the map still loads (updateReactor3DArrival) is not a frame of play: not counted.
-    const quality = Reactor3D.Quality;
-    if (!state.warming) {
-        quality.mapOpened($gameMap.mapId());
-        if (!quality.worldTick(performance.now())) return;
-    }
     // The Options window offers the setting once a 3D map has been drawn on this machine.
     if (!ConfigManager.reactor3dSeen) { ConfigManager.reactor3dSeen = true; ConfigManager.save(); }
 
@@ -6444,6 +6444,11 @@ Spriteset_Map.prototype.reactor3DKeepsLastPicture = function(state) {
 
 /** The passes of this frame's world, from the camera as it stands. */
 Spriteset_Map.prototype.drawReactor3D = function(state) {
+    // Count actual world pictures, including the refreshes between game updates.
+    if (!state.warming) {
+        Reactor3D.Quality.mapOpened($gameMap.mapId());
+        Reactor3D.Quality.worldTick(performance.now());
+    }
     // The flat copy of whatever the ground was built from, every frame: a
     // parallax plugin rebuilds its layers on its own schedule.
     this.suppressReactor3DGroundParallaxes(true);
@@ -6485,6 +6490,8 @@ Spriteset_Map.prototype.drawReactor3D = function(state) {
         this.updateReactor3DTexture(this._reactor3dLights, canvas);
         this.keepReactor3DLightsOnTop();
     }
+
+    if (!state.warming) Graphics.worldFrameCount = (Graphics.worldFrameCount || 0) + 1;
 
 };
 

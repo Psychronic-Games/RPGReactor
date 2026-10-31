@@ -434,7 +434,7 @@
     if (Catalog) {
         K.icons(Catalog);
         Catalog.category({ id: 'shields', label: 'Shields', order: 49, parent: 'weapons' });
-        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'shield-' + id, category, label, icon: FAMILY[id].icon, kind: 'shield', keywords: 'weapon armor defense shield ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
+        for (const [id, label, category] of PRESETS) Catalog.add({ id: 'shield-' + id, category:category==='scifi'?'shields':category, label, icon: FAMILY[id].icon, kind: 'shield', keywords: (category==='scifi'?'sci-fi energy science fiction ':'')+'weapon armor defense shield ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
         const page = K.page({
             placeholder: 'Shield', PRESETS, normalize, random, keep: ['face', 'design', 'glow', 'metal', 'wear'],
             tabs: [['shape', 'Shape'], ['design', 'Design'], ['look', 'Look']],

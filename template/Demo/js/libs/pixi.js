@@ -1,6 +1,6 @@
 /*!
- * PixiJS - v8.20.0
- * Compiled Thu, 20 Aug 2026 18:42:36 UTC
+ * PixiJS - v8.22.0
+ * Compiled Thu, 01 Oct 2026 21:49:13 UTC
  *
  * PixiJS is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
@@ -33,12 +33,15 @@ var PIXI = (function (exports) {
       ExtensionType2["WebGLPipes"] = "webgl-pipes";
       ExtensionType2["WebGLPipesAdaptor"] = "webgl-pipes-adaptor";
       ExtensionType2["WebGLSystem"] = "webgl-system";
+      ExtensionType2["WebGLLoader"] = "webgl-loader";
       ExtensionType2["WebGPUPipes"] = "webgpu-pipes";
       ExtensionType2["WebGPUPipesAdaptor"] = "webgpu-pipes-adaptor";
       ExtensionType2["WebGPUSystem"] = "webgpu-system";
+      ExtensionType2["WebGPULoader"] = "webgpu-loader";
       ExtensionType2["CanvasSystem"] = "canvas-system";
       ExtensionType2["CanvasPipesAdaptor"] = "canvas-pipes-adaptor";
       ExtensionType2["CanvasPipes"] = "canvas-pipes";
+      ExtensionType2["CanvasLoader"] = "canvas-loader";
       ExtensionType2["Asset"] = "asset";
       ExtensionType2["LoadParser"] = "load-parser";
       ExtensionType2["ResolveParser"] = "resolve-parser";
@@ -2266,15 +2269,20 @@ var PIXI = (function (exports) {
         const skewX = -Math.atan2(-c, d);
         const skewY = Math.atan2(b, a);
         const delta = Math.abs(skewX + skewY);
+        let scaleX = Math.sqrt(a * a + b * b);
         if (delta < 1e-5 || Math.abs(PI_2 - delta) < 1e-5) {
           transform.rotation = skewY;
           transform.skew.x = transform.skew.y = 0;
+        } else if (Math.abs(Math.PI - delta) < 1e-5) {
+          transform.rotation = skewY - Math.PI;
+          transform.skew.x = transform.skew.y = 0;
+          scaleX = -scaleX;
         } else {
           transform.rotation = 0;
           transform.skew.x = skewX;
           transform.skew.y = skewY;
         }
-        transform.scale.x = Math.sqrt(a * a + b * b);
+        transform.scale.x = scaleX;
         transform.scale.y = Math.sqrt(c * c + d * d);
         transform.position.x = this.tx + (pivot.x * a + pivot.y * c);
         transform.position.y = this.ty + (pivot.x * b + pivot.y * d);
@@ -2757,6 +2765,8 @@ var PIXI = (function (exports) {
     const warnings = /* @__PURE__ */ new Set();
     const v8_0_0 = "8.0.0";
     const v8_3_4 = "8.3.4";
+    const v8_21_0 = "8.21.0";
+    const v8_22_0 = "8.22.0";
     const deprecationState = {
       quiet: false,
       noColor: false
@@ -5379,10 +5389,17 @@ Deprecated since v${version}`;
         this.instructionSize = 0;
       }
       /**
-       * Destroy the instruction set, clearing the instructions and renderables.
+       * Destroy the instruction set, clearing the instructions and renderables and notifying
+       * each render pipe so it can release any per-InstructionSet cached resources.
        * @internal
        */
       destroy() {
+        var _a, _b;
+        if (this.renderPipes) {
+          for (const i in this.renderPipes) {
+            (_b = (_a = this.renderPipes[i]).destroyInstructionSet) == null ? void 0 : _b.call(_a, this);
+          }
+        }
         this.instructions.length = 0;
         this.renderables.length = 0;
         this.renderPipes = null;
@@ -5479,8 +5496,6 @@ Deprecated since v${version}`;
         super();
         /** @internal */
         this._resourceType = "textureSampler";
-        /** @internal */
-        this._touched = 0;
         /**
          * Specifies the maximum anisotropy value clamp used by the sampler.
          * Note: Most implementations support {@link TextureStyle#maxAnisotropy} values in range
@@ -5593,7 +5608,7 @@ Deprecated since v${version}`;
        * @param options - options for creating a new TextureSource
        */
       constructor(options = {}) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f;
         super();
         this.options = options;
         /** @internal */
@@ -5655,16 +5670,21 @@ Deprecated since v${version}`;
          *
          * For performance reasons, it is recommended to NOT use this with RenderTextures, as they are often updated every frame.
          * If you do, make sure to call `updateMipmaps` after you update the texture.
+         *
+         * A 3D texture on WebGPU needs {@link TextureSourceOptions.storage} and `rgba8unorm` or `rgba16float`,
+         * because a compute shader writes the mips. WebGL fills the chain with `gl.generateMipmap`.
          */
         this.autoGenerateMipmaps = false;
         /** the format that the texture data has */
         this.format = "rgba8unorm";
-        /** how many dimensions does this texture have? currently v8 only supports 2d */
+        /** how the texture is stored (WebGPU texture dimension), derived from {@link TextureSource#viewDimension} */
         this.dimension = "2d";
         /** how this texture is viewed/sampled by shaders (WebGPU view dimension) */
         this.viewDimension = "2d";
-        /** how many array layers this texture has (WebGPU depthOrArrayLayers) */
+        /** how many array layers this texture has; 1 for a 3D texture */
         this.arrayLayerCount = 1;
+        /** the depth of a 3D texture in texels; 1 for every other texture */
+        this.depth = 1;
         this._ownsStyle = false;
         /**
          * Only really affects RenderTextures.
@@ -5679,10 +5699,10 @@ Deprecated since v${version}`;
          */
         this.transient = false;
         /**
-         * Used by automatic texture Garbage Collection, stores last GC tick when it was bound
-         * @protected
+         * Whether compute shaders can write to this texture on WebGPU. See {@link TextureSourceOptions.storage}.
+         * Read when the GPU texture is created.
          */
-        this._touched = 0;
+        this.storage = false;
         /**
          * Used by the batcher to build texture batches. faster to have the variable here!
          * @protected
@@ -5693,7 +5713,11 @@ Deprecated since v${version}`;
          * @protected
          */
         this._textureBindLocation = -1;
+        const passedOptions = options;
         options = __spreadValues$1o(__spreadValues$1o({}, _TextureSource.defaultOptions), options);
+        const viewDimension = resolveViewDimension(options);
+        const dimension = viewDimension === "3d" || viewDimension === "1d" ? viewDimension : "2d";
+        validateTextureShape(passedOptions, viewDimension, dimension);
         this.label = (_a = options.label) != null ? _a : "";
         this.resource = options.resource;
         this.autoGarbageCollect = options.autoGarbageCollect;
@@ -5711,19 +5735,28 @@ Deprecated since v${version}`;
         this.width = this.pixelWidth / this._resolution;
         this.height = this.pixelHeight / this._resolution;
         this.format = options.format;
-        this.dimension = options.dimensions;
-        this.viewDimension = (_d = options.viewDimension) != null ? _d : options.dimensions;
+        this.dimension = dimension;
+        this.viewDimension = viewDimension;
         this.arrayLayerCount = options.arrayLayerCount;
+        this.depth = dimension === "3d" ? (_d = options.depth) != null ? _d : 1 : 1;
         this.mipLevelCount = options.mipLevelCount;
         this.autoGenerateMipmaps = options.autoGenerateMipmaps;
         this.sampleCount = options.sampleCount;
-        this.antialias = options.antialias;
+        this.antialias = dimension === "3d" ? false : options.antialias;
         this.transient = (_e = options.transient) != null ? _e : false;
+        this.storage = (_f = options.storage) != null ? _f : false;
         this.alphaMode = options.alphaMode;
         this.style = new TextureStyle(definedProps(options));
         this._ownsStyle = true;
         this.destroyed = false;
         this._refreshPOT();
+      }
+      /**
+       * The size along z that the GPU allocates: {@link TextureSource#depth} for a 3D texture,
+       * {@link TextureSource#arrayLayerCount} otherwise. WebGPU's `depthOrArrayLayers`.
+       */
+      get depthOrArrayLayers() {
+        return this.dimension === "3d" ? this.depth : this.arrayLayerCount || 1;
       }
       /** returns itself */
       get source() {
@@ -5934,8 +5967,6 @@ Deprecated since v${version}`;
       resolution: 1,
       format: "bgra8unorm",
       alphaMode: "premultiply-alpha-on-upload",
-      dimensions: "2d",
-      viewDimension: "2d",
       arrayLayerCount: 1,
       mipLevelCount: 1,
       autoGenerateMipmaps: false,
@@ -5944,6 +5975,33 @@ Deprecated since v${version}`;
       autoGarbageCollect: false
     };
     let TextureSource = _TextureSource;
+    function resolveViewDimension(options) {
+      if (options.viewDimension) return options.viewDimension;
+      if (options.depth) return "3d";
+      return options.arrayLayerCount > 1 ? "2d-array" : "2d";
+    }
+    function validateTextureShape(options, viewDimension, dimension) {
+      if (options.depth !== void 0 && typeof options.depth !== "number") {
+        throw new Error(`[TextureSource] depth is a 3D texture's depth in texels, but got ${options.depth}. For a depth buffer, use the depth option of a RenderTarget or the renderer.`);
+      }
+      if (options.depth && options.arrayLayerCount > 1) {
+        throw new Error("[TextureSource] depth and arrayLayerCount can't be combined: use depth for a 3D texture or arrayLayerCount for a 2D array.");
+      }
+      if (options.depth && viewDimension !== "3d") {
+        throw new Error(`[TextureSource] depth makes a 3D texture, but viewDimension is '${viewDimension}'. Use arrayLayerCount for layered textures.`);
+      }
+      if (viewDimension === "3d" && options.arrayLayerCount > 1) {
+        throw new Error("[TextureSource] a 3D texture takes depth, not arrayLayerCount.");
+      }
+      if (options.dimensions && options.dimensions !== dimension) {
+        throw new Error(`[TextureSource] dimensions '${options.dimensions}' doesn't match viewDimension '${viewDimension}'. Leave dimensions out; it is derived from the view.`);
+      } else if (options.dimensions) {
+        deprecation(v8_22_0, "TextureSource dimensions is derived from viewDimension and depth; leave it out.");
+      }
+      if (dimension === "3d" && options.antialias) {
+        throw new Error("[TextureSource] a 3D texture can't be antialiased: WebGPU has no multisampled 3D textures.");
+      }
+    }
 
     "use strict";
     const ux = [1, 1, 0, -1, -1, -1, 0, 1, 1, 1, 0, -1, -1, -1, 0, 1];
@@ -6263,6 +6321,11 @@ Deprecated since v${version}`;
     };
 
     "use strict";
+    function isIntegerFormat(format) {
+      return format.endsWith("int");
+    }
+
+    "use strict";
     var __defProp$1n = Object.defineProperty;
     var __defProps$C = Object.defineProperties;
     var __getOwnPropDescs$C = Object.getOwnPropertyDescriptors;
@@ -6284,7 +6347,9 @@ Deprecated since v${version}`;
     var __spreadProps$C = (a, b) => __defProps$C(a, __getOwnPropDescs$C(b));
     class BufferImageSource extends TextureSource {
       constructor(options) {
-        const buffer = options.resource || new Float32Array(options.width * options.height * 4);
+        var _a, _b;
+        const depthOrArrayLayers = (_b = (_a = options.depth) != null ? _a : options.arrayLayerCount) != null ? _b : 1;
+        const buffer = options.resource || new Float32Array(options.width * options.height * depthOrArrayLayers * 4);
         let format = options.format;
         if (!format) {
           if (buffer instanceof Float32Array) {
@@ -6303,11 +6368,62 @@ Deprecated since v${version}`;
             format = "bgra8unorm";
           }
         }
-        super(__spreadProps$C(__spreadValues$1n({}, options), {
+        const noPremultiply = isIntegerFormat(format) || depthOrArrayLayers > 1;
+        super(__spreadProps$C(__spreadValues$1n(__spreadValues$1n({}, noPremultiply && { alphaMode: "no-premultiply-alpha" }), options), {
           resource: buffer,
           format
         }));
         this.uploadMethodId = "buffer";
+        /**
+         * First texel of the range being uploaded by the current {@link BufferImageSource#update} call.
+         * @internal
+         */
+        this._updateStart = 0;
+        /**
+         * One past the last texel of the range being uploaded by the current
+         * {@link BufferImageSource#update} call. `Infinity` means the whole texture.
+         * @internal
+         */
+        this._updateEnd = Infinity;
+      }
+      /**
+       * Uploads the buffer to the GPU. Call this after changing the data in {@link TextureSource#resource}.
+       *
+       * The buffer is a flat list of texels in row-major order, so texel `i` sits at
+       * `x = i % width`, `y = floor(i / width)`. Pass a texel range to upload only that part of
+       * the texture; leave it out to upload everything.
+       *
+       * The upload happens immediately for every renderer that already holds the texture, and the
+       * range applies to this call only. If you change several parts of the buffer, track the dirty
+       * span yourself and call `update` once with the combined range. Each call has a fixed cost on
+       * top of the bytes it moves, which reaches tens of microseconds on some mobile GPUs. One span
+       * usually beats many small calls.
+       *
+       * Partial uploads assume the buffer holds exactly `width * height` texels. A 3D texture or 2D array
+       * always uploads whole, so it takes no range.
+       * @example
+       * ```ts
+       * const data = new Float32Array(4096 * 64 * 4);
+       * const source = new BufferImageSource({ resource: data, width: 4096, height: 64 });
+       *
+       * // change texels 100 to 115 (4 floats per rgba32float texel)
+       * data.fill(1, 100 * 4, 116 * 4);
+       *
+       * // upload only those 16 texels
+       * source.update(100, 116);
+       * ```
+       * @param start - index of the first texel to upload
+       * @param end - index one past the last texel to upload (exclusive, like `TypedArray.subarray`)
+       */
+      update(start = 0, end = Infinity) {
+        if ((start > 0 || end < Infinity) && this.depthOrArrayLayers > 1) {
+          throw new Error("[BufferImageSource] a 3D texture or 2D array uploads whole: call update() with no range.");
+        }
+        this._updateStart = start;
+        this._updateEnd = end;
+        super.update();
+        this._updateStart = 0;
+        this._updateEnd = Infinity;
       }
       static test(resource) {
         return resource instanceof Int8Array || resource instanceof Uint8Array || resource instanceof Uint8ClampedArray || resource instanceof Int16Array || resource instanceof Uint16Array || resource instanceof Int32Array || resource instanceof Uint32Array || resource instanceof Float32Array;
@@ -6598,6 +6714,94 @@ Deprecated since v${version}`;
     Texture.WHITE.destroy = NOOP;
 
     "use strict";
+    class ScreenSizeRegistry {
+      constructor() {
+        /** the live screen sizes in physical pixels, keyed by renderer uid */
+        this._screenSizes = /* @__PURE__ */ new Map();
+        /** the unique registered screen widths in physical pixels, sorted ascending */
+        this._widths = [];
+        /** the unique registered screen heights in physical pixels, sorted ascending */
+        this._heights = [];
+      }
+      /** The number of renderers with a registered screen. */
+      get size() {
+        return this._screenSizes.size;
+      }
+      /**
+       * Registers, or updates, the screen size of a renderer.
+       * @param rendererUid - The uid of the renderer, used to update or remove this screen later.
+       * @param pixelWidth - The width of the screen in physical pixels.
+       * @param pixelHeight - The height of the screen in physical pixels.
+       * @returns `true` if this changed the registered screens, `false` if the size was already registered.
+       */
+      set(rendererUid, pixelWidth, pixelHeight) {
+        const current = this._screenSizes.get(rendererUid);
+        if (current && current.pixelWidth === pixelWidth && current.pixelHeight === pixelHeight) return false;
+        this._screenSizes.set(rendererUid, { pixelWidth, pixelHeight });
+        this._update();
+        return true;
+      }
+      /**
+       * Removes the screen of a renderer.
+       * @param rendererUid - The uid the screen was registered with.
+       * @returns `true` if a screen was removed, `false` if the renderer had none registered.
+       */
+      remove(rendererUid) {
+        if (!this._screenSizes.delete(rendererUid)) return false;
+        this._update();
+        return true;
+      }
+      /**
+       * The smallest registered screen width the request fits in.
+       * @param pixelWidth - The requested width in physical pixels.
+       * @returns The smallest live screen width that is at least `pixelWidth`, or `undefined` if none.
+       */
+      getFittingWidth(pixelWidth) {
+        return this._getFittingAxis(pixelWidth, this._widths);
+      }
+      /**
+       * The smallest registered screen height the request fits in.
+       * @param pixelHeight - The requested height in physical pixels.
+       * @returns The smallest live screen height that is at least `pixelHeight`, or `undefined` if none.
+       */
+      getFittingHeight(pixelHeight) {
+        return this._getFittingAxis(pixelHeight, this._heights);
+      }
+      /**
+       * Whether a live screen uses this width.
+       * @param width - The width in physical pixels.
+       */
+      hasWidth(width) {
+        return this._widths.includes(width);
+      }
+      /**
+       * Whether a live screen uses this height.
+       * @param height - The height in physical pixels.
+       */
+      hasHeight(height) {
+        return this._heights.includes(height);
+      }
+      /**
+       * The smallest registered screen on this axis that the request still fits in.
+       * @param pixelSize - The requested size on this axis in physical pixels.
+       * @param screenSizes - The live screen sizes on this axis, sorted ascending.
+       * @returns The smallest screen size that is at least `pixelSize`, or `undefined` if none.
+       */
+      _getFittingAxis(pixelSize, screenSizes) {
+        for (let i = 0; i < screenSizes.length; i++) {
+          const screenSize = screenSizes[i];
+          if (screenSize >= pixelSize) return screenSize;
+        }
+        return void 0;
+      }
+      /** Rebuilds the sorted unique sizes for each axis. */
+      _update() {
+        this._widths = [...this._screenSizes.values()].map((screenSize) => screenSize.pixelWidth).filter((width, i, widths) => widths.indexOf(width) === i).sort((a, b) => a - b);
+        this._heights = [...this._screenSizes.values()].map((screenSize) => screenSize.pixelHeight).filter((height, i, heights) => heights.indexOf(height) === i).sort((a, b) => a - b);
+      }
+    }
+
+    "use strict";
     var __defProp$1m = Object.defineProperty;
     var __defProps$B = Object.defineProperties;
     var __getOwnPropDescs$B = Object.getOwnPropertyDescriptors;
@@ -6618,75 +6822,176 @@ Deprecated since v${version}`;
     };
     var __spreadProps$B = (a, b) => __defProps$B(a, __getOwnPropDescs$B(b));
     let count = 0;
+    const maxKeyDimension$1 = 32767;
+    const scaleBit = 4294967296;
+    const formatBit = 8589934592;
+    const formatIds = /* @__PURE__ */ Object.create(null);
+    let nextFormatId = 0;
+    function formatId(format) {
+      const id = formatIds[format];
+      if (id !== void 0) return id;
+      return formatIds[format] = nextFormatId++;
+    }
+    function bucketKey$1(width, height, antialias, autoGenerateMipmaps, format, scaleMode) {
+      const packed = (width << 17) + (height << 2) + ((autoGenerateMipmaps ? 1 : 0) << 1) + (antialias ? 1 : 0);
+      const scale = scaleMode === "nearest" ? 1 : 0;
+      return packed + scale * scaleBit + formatId(format) * formatBit;
+    }
     class TexturePoolClass {
       /**
        * @param textureOptions - options that will be passed to BaseRenderTexture constructor
        * @param {SCALE_MODE} [textureOptions.scaleMode] - See {@link SCALE_MODE} for possible values.
        */
       constructor(textureOptions) {
-        this._poolKeyHash = /* @__PURE__ */ Object.create(null);
-        this._texturePool = {};
+        /** idle textures, keyed by format, scale mode, size and flags */
+        this._buckets = /* @__PURE__ */ new Map();
+        /** the bucket key of every texture handed out, by texture uid */
+        this._poolKey = /* @__PURE__ */ Object.create(null);
+        /** the style the pool created for every texture handed out, by texture uid */
+        this._poolStyle = /* @__PURE__ */ Object.create(null);
+        /** the screens this pool is sizing its textures for */
+        this._screens = new ScreenSizeRegistry();
+        this._enableFullScreen = false;
         this.textureOptions = textureOptions || {};
-        this.enableFullScreen = false;
-        this.textureStyle = new TextureStyle(this.textureOptions);
       }
       /**
-       * Creates texture with params that were specified in pool constructor.
-       * @param pixelWidth - Width of texture in pixels.
-       * @param pixelHeight - Height of texture in pixels.
-       * @param antialias
-       * @param autoGenerateMipmaps - Whether to automatically generate mipmaps for this texture
+       * A style built from the pool options. The pool no longer applies it to anything.
+       * @deprecated since 8.21.0, pooled textures carry their own style; pass `scaleMode` in the request instead.
        */
-      createTexture(pixelWidth, pixelHeight, antialias, autoGenerateMipmaps) {
+      get textureStyle() {
+        deprecation(v8_21_0, "TexturePool.textureStyle is no longer used, pooled textures carry their own style. Pass scaleMode in the request instead.");
+        if (!this._textureStyle) this._textureStyle = new TextureStyle(this.textureOptions);
+        return this._textureStyle;
+      }
+      set textureStyle(value) {
+        deprecation(v8_21_0, "TexturePool.textureStyle is no longer used, pooled textures carry their own style. Pass scaleMode in the request instead.");
+        this._textureStyle = value;
+      }
+      /**
+       * Has no effect. The pool sizes textures to the screens registered with
+       * {@link TexturePoolClass#setScreenSize|setScreenSize}.
+       * @deprecated since 8.21.0
+       */
+      get enableFullScreen() {
+        deprecation(v8_21_0, "TexturePool.enableFullScreen is no longer used, the pool sizes textures to the screens registered with setScreenSize.");
+        return this._enableFullScreen;
+      }
+      set enableFullScreen(value) {
+        deprecation(v8_21_0, "TexturePool.enableFullScreen is no longer used, the pool sizes textures to the screens registered with setScreenSize.");
+        this._enableFullScreen = value;
+      }
+      createTexture(...args) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        let options = args[0];
+        if (typeof options === "number") {
+          deprecation(v8_21_0, "TexturePool.createTexture params are now an options object. See params: { width, height, antialias, autoGenerateMipmaps }");
+          options = {
+            width: options,
+            height: args[1],
+            antialias: (_a = args[2]) != null ? _a : false,
+            autoGenerateMipmaps: (_b = args[3]) != null ? _b : false
+          };
+        }
+        const format = (_d = (_c = options.format) != null ? _c : this.textureOptions.format) != null ? _d : TextureSource.defaultOptions.format;
+        const scaleMode = (_f = (_e = options.scaleMode) != null ? _e : this.textureOptions.scaleMode) != null ? _f : TextureStyle.defaultOptions.scaleMode;
         const textureSource = new TextureSource(__spreadProps$B(__spreadValues$1m({}, this.textureOptions), {
-          width: pixelWidth,
-          height: pixelHeight,
+          width: options.width,
+          height: options.height,
           resolution: 1,
-          antialias,
+          antialias: (_g = options.antialias) != null ? _g : false,
           autoGarbageCollect: false,
-          autoGenerateMipmaps
+          autoGenerateMipmaps: (_h = options.autoGenerateMipmaps) != null ? _h : false,
+          format,
+          scaleMode
         }));
         return new Texture({
           source: textureSource,
           label: `texturePool_${count++}`
         });
       }
-      /**
-       * Gets a Power-of-Two render texture or fullScreen texture
-       * @param frameWidth - The minimum width of the render texture.
-       * @param frameHeight - The minimum height of the render texture.
-       * @param resolution - The resolution of the render texture.
-       * @param antialias
-       * @param autoGenerateMipmaps - Whether to automatically generate mipmaps. Defaults to false.
-       * @returns The new render texture.
-       */
-      getOptimalTexture(frameWidth, frameHeight, resolution = 1, antialias, autoGenerateMipmaps = false) {
-        let po2Width = Math.ceil(frameWidth * resolution - 1e-6);
-        let po2Height = Math.ceil(frameHeight * resolution - 1e-6);
-        po2Width = nextPow2(po2Width);
-        po2Height = nextPow2(po2Height);
-        const antialiasFlag = antialias ? 1 : 0;
-        const mipmapFlag = autoGenerateMipmaps ? 1 : 0;
-        const key = (po2Width << 17) + (po2Height << 2) + (mipmapFlag << 1) + antialiasFlag;
-        if (!this._texturePool[key]) {
-          this._texturePool[key] = [];
+      getOptimalTexture(...args) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+        let options = args[0];
+        if (typeof options === "number") {
+          deprecation(v8_21_0, "TexturePool.getOptimalTexture params are now an options object. See params: { width, height, resolution, antialias, autoGenerateMipmaps }");
+          options = {
+            width: options,
+            height: args[1],
+            resolution: (_a = args[2]) != null ? _a : 1,
+            antialias: (_b = args[3]) != null ? _b : false,
+            autoGenerateMipmaps: (_c = args[4]) != null ? _c : false
+          };
         }
-        let texture = this._texturePool[key].pop();
+        const frameWidth = options.width;
+        const frameHeight = options.height;
+        const resolution = (_d = options.resolution) != null ? _d : 1;
+        const antialias = (_e = options.antialias) != null ? _e : false;
+        const autoGenerateMipmaps = (_f = options.autoGenerateMipmaps) != null ? _f : false;
+        const format = (_h = (_g = options.format) != null ? _g : this.textureOptions.format) != null ? _h : TextureSource.defaultOptions.format;
+        const scaleMode = (_j = (_i = options.scaleMode) != null ? _i : this.textureOptions.scaleMode) != null ? _j : TextureStyle.defaultOptions.scaleMode;
+        const { width: textureWidth, height: textureHeight } = this.getOptimalSize(
+          frameWidth,
+          frameHeight,
+          resolution
+        );
+        if (textureWidth > maxKeyDimension$1 || textureHeight > maxKeyDimension$1) {
+          warn(`TexturePool: ${textureWidth}x${textureHeight} is larger than the ${maxKeyDimension$1}px pool key limit, textures of this size may be pooled together`);
+        }
+        const key = bucketKey$1(textureWidth, textureHeight, antialias, autoGenerateMipmaps, format, scaleMode);
+        let bucket = this._buckets.get(key);
+        if (!bucket) {
+          bucket = [];
+          this._buckets.set(key, bucket);
+        }
+        let texture = bucket.pop();
         if (!texture) {
-          texture = this.createTexture(po2Width, po2Height, antialias, autoGenerateMipmaps);
+          texture = this.createTexture({
+            width: textureWidth,
+            height: textureHeight,
+            antialias,
+            autoGenerateMipmaps,
+            format,
+            scaleMode
+          });
+          this._poolStyle[texture.uid] = texture.source.style;
         }
         texture.source._resolution = resolution;
-        texture.source.width = po2Width / resolution;
-        texture.source.height = po2Height / resolution;
-        texture.source.pixelWidth = po2Width;
-        texture.source.pixelHeight = po2Height;
+        texture.source.width = textureWidth / resolution;
+        texture.source.height = textureHeight / resolution;
+        texture.source.pixelWidth = textureWidth;
+        texture.source.pixelHeight = textureHeight;
         texture.frame.x = 0;
         texture.frame.y = 0;
         texture.frame.width = frameWidth;
         texture.frame.height = frameHeight;
         texture.updateUvs();
-        this._poolKeyHash[texture.uid] = key;
+        this._poolKey[texture.uid] = key;
         return texture;
+      }
+      /**
+       * The backing size, in physical pixels, that {@link TexturePoolClass#getOptimalTexture|getOptimalTexture}
+       * would allocate for a request, without taking a texture from the pool.
+       *
+       * Each axis is the next power of two, or the smallest registered screen the request fits inside
+       * (see {@link TexturePoolClass#setScreenSize|setScreenSize}). Use it when a consumer needs to know
+       * where a request's content will sit inside its pooled texture before it has one, such as a uniform
+       * that maps content space onto texture space.
+       * @param frameWidth - The minimum width of the texture.
+       * @param frameHeight - The minimum height of the texture.
+       * @param resolution - The resolution of the texture.
+       * @returns The width and height the pooled texture would have, in physical pixels.
+       */
+      getOptimalSize(frameWidth, frameHeight, resolution = 1) {
+        const pixelWidth = Math.ceil(frameWidth * resolution - 1e-6);
+        const pixelHeight = Math.ceil(frameHeight * resolution - 1e-6);
+        const po2Width = nextPow2(pixelWidth);
+        const screenWidth = this._screens.getFittingWidth(pixelWidth);
+        const po2Height = nextPow2(pixelHeight);
+        const screenHeight = this._screens.getFittingHeight(pixelHeight);
+        return {
+          width: screenWidth !== void 0 ? Math.min(screenWidth, po2Width) : po2Width,
+          height: screenHeight !== void 0 ? Math.min(screenHeight, po2Height) : po2Height
+        };
       }
       /**
        * Gets a pooled texture matching the dimensions and resolution of the given texture.
@@ -6696,47 +7001,109 @@ Deprecated since v${version}`;
        * a temporary texture the same size as its input (e.g., for multi-pass blur).
        * @param texture - The texture whose dimensions to match.
        * @param antialias - Whether to use antialias on the pooled texture. Defaults to `false`.
-       * @returns A pooled texture with power-of-two backing dimensions at the source resolution.
+       * @returns A pooled texture with power-of-two or screen sized backing dimensions at the source resolution.
        */
       getSameSizeTexture(texture, antialias = false) {
         const source = texture.source;
-        return this.getOptimalTexture(texture.width, texture.height, source._resolution, antialias);
+        return this.getOptimalTexture({
+          width: texture.width,
+          height: texture.height,
+          resolution: source._resolution,
+          antialias
+        });
       }
       /**
        * Returns a texture to the pool so it can be reused by future
        * {@link TexturePoolClass#getOptimalTexture|getOptimalTexture}
        * or {@link TexturePoolClass#getSameSizeTexture|getSameSizeTexture} calls.
        *
-       * If you modified the texture's style after obtaining it (e.g., changed filtering or wrapping),
-       * pass `resetStyle = true` to restore the pool's default {@link TexturePoolClass#textureStyle|textureStyle}.
-       * This prevents style changes from leaking into subsequent consumers of the same pooled texture.
+       * If you gave the texture a style of your own after obtaining it (a different address mode, anisotropy
+       * or similar), pass `resetStyle = true` so the pool puts its own style back. Otherwise your style stays
+       * on the texture and the next consumer inherits it.
        * @param renderTexture - The texture to return to the pool.
-       * @param resetStyle - When `true`, replaces the texture source's style with the pool default. Defaults to `false`.
+       * @param resetStyle - When `true`, restores the style the pool created for this texture. Defaults to `false`.
        */
       returnTexture(renderTexture, resetStyle = false) {
-        const key = this._poolKeyHash[renderTexture.uid];
-        if (resetStyle) {
-          renderTexture.source.style = this.textureStyle;
+        const uid = renderTexture.uid;
+        const key = this._poolKey[uid];
+        if (key === void 0) {
+          warn("TexturePool: returnTexture was passed a texture that did not come from this pool, ignoring it");
+          return;
         }
-        this._texturePool[key].push(renderTexture);
+        const poolStyle = this._poolStyle[uid];
+        if (resetStyle && renderTexture.source.style !== poolStyle) {
+          renderTexture.source.style = poolStyle;
+        }
+        const textures = this._buckets.get(key);
+        if (!textures) {
+          delete this._poolKey[uid];
+          delete this._poolStyle[uid];
+          renderTexture.destroy(true);
+          return;
+        }
+        textures.push(renderTexture);
+      }
+      /**
+       * Registers the screen size of a renderer with the pool, in physical pixels.
+       *
+       * While a screen is registered, a request that fits inside it on an axis is given that screen's size on
+       * that axis instead of the next power of two, which stops a full screen filter from allocating a texture
+       * far larger than the screen. Requests larger than every registered screen on an axis keep the power of
+       * two size - the pool never rounds a request up to a screen it does not fit in.
+       * @param rendererUid - The uid of the renderer, used to update or remove this screen later.
+       * @param pixelWidth - The width of the screen in physical pixels.
+       * @param pixelHeight - The height of the screen in physical pixels.
+       */
+      setScreenSize(rendererUid, pixelWidth, pixelHeight) {
+        if (!this._screens.set(rendererUid, pixelWidth, pixelHeight)) return;
+        this._pruneScreenTextures();
+      }
+      /**
+       * Removes a screen previously registered with
+       * {@link TexturePoolClass#setScreenSize|setScreenSize}, destroying any idle textures that were
+       * only being kept for it.
+       * @param rendererUid - The uid the screen was registered with.
+       */
+      removeScreen(rendererUid) {
+        if (!this._screens.remove(rendererUid)) return;
+        this._pruneScreenTextures();
+      }
+      /**
+       * Destroys the idle textures in every bucket that has a non power of two dimension matching no live
+       * screen. Power of two buckets are always kept, as any request can fall back to them.
+       */
+      _pruneScreenTextures() {
+        for (const [key, textures] of this._buckets) {
+          const packed = key >>> 0;
+          const width = packed >>> 17;
+          const height = packed >>> 2 & 32767;
+          if ((isPow2(width) || this._screens.hasWidth(width)) && (isPow2(height) || this._screens.hasHeight(height))) continue;
+          this._dropTextures(textures, true);
+          this._buckets.delete(key);
+        }
+      }
+      /**
+       * Forgets idle textures were ever handed out, so a later return is ignored, and optionally destroys them.
+       * @param textures - The textures of one bucket.
+       * @param destroy - Whether to destroy the textures as well.
+       */
+      _dropTextures(textures, destroy) {
+        for (let i = 0; i < textures.length; i++) {
+          const texture = textures[i];
+          delete this._poolKey[texture.uid];
+          delete this._poolStyle[texture.uid];
+          if (destroy) texture.destroy(true);
+        }
       }
       /**
        * Clears the pool.
        * @param destroyTextures - Destroy all stored textures.
        */
       clear(destroyTextures) {
-        destroyTextures = destroyTextures !== false;
-        if (destroyTextures) {
-          for (const i in this._texturePool) {
-            const textures = this._texturePool[i];
-            if (textures) {
-              for (let j = 0; j < textures.length; j++) {
-                textures[j].destroy(true);
-              }
-            }
-          }
+        for (const textures of this._buckets.values()) {
+          this._dropTextures(textures, destroyTextures !== false);
         }
-        this._texturePool = {};
+        this._buckets.clear();
       }
     }
     const TexturePool = new TexturePoolClass();
@@ -6795,7 +7162,7 @@ Deprecated since v${version}`;
       disableCacheAsTexture() {
         this.isCachedAsTexture = false;
         if (this.texture) {
-          TexturePool.returnTexture(this.texture, true);
+          TexturePool.returnTexture(this.texture);
           this.texture = null;
         }
       }
@@ -6923,6 +7290,7 @@ Deprecated since v${version}`;
         }
       }
       destroy() {
+        var _a;
         this.disableCacheAsTexture();
         this.renderGroupParent = null;
         this.root = null;
@@ -6930,6 +7298,7 @@ Deprecated since v${version}`;
         this.childrenToUpdate = null;
         this.renderGroupChildren = null;
         this._onRenderContainers = null;
+        (_a = this.instructionSet) == null ? void 0 : _a.destroy();
         this.instructionSet = null;
       }
       getChildren(out = []) {
@@ -9475,9 +9844,6 @@ Deprecated since v${version}`;
             renderer: this._renderer
           });
         }
-        if (this._activateOnTab) {
-          globalThis.addEventListener("keydown", this._boundOnKeyDown, false);
-        }
         if (this._deactivateOnMouseMove) {
           globalThis.document.addEventListener("mousemove", this._boundOnMouseMove, true);
         }
@@ -9514,9 +9880,6 @@ Deprecated since v${version}`;
         }
         this._isActive = false;
         globalThis.document.removeEventListener("mousemove", this._boundOnMouseMove, true);
-        if (this._activateOnTab) {
-          globalThis.addEventListener("keydown", this._boundOnKeyDown, false);
-        }
         this._renderer.runners.postrender.remove(this);
         for (const child of this._children) {
           if ((_a = child._accessibleDiv) == null ? void 0 : _a.parentNode) {
@@ -9574,6 +9937,9 @@ Deprecated since v${version}`;
         this.debug = mergedOptions.accessibilityOptions.debug;
         this._activateOnTab = mergedOptions.accessibilityOptions.activateOnTab;
         this._deactivateOnMouseMove = mergedOptions.accessibilityOptions.deactivateOnMouseMove;
+        if (this._activateOnTab) {
+          globalThis.addEventListener("keydown", this._boundOnKeyDown, false);
+        }
         if (mergedOptions.accessibilityOptions.enabledByDefault) {
           this._activate();
         }
@@ -9690,6 +10056,9 @@ Deprecated since v${version}`;
         } else {
           if (container.accessibleType === "button") {
             div = document.createElement("button");
+            if (!this.debug) {
+              div.style.color = "transparent";
+            }
           } else {
             div = document.createElement(container.accessibleType);
             div.style.cssText = `
@@ -9706,9 +10075,6 @@ Deprecated since v${version}`;
                         -moz-user-select: none;
                         -ms-user-select: none;
                     `;
-            if (container.accessibleText) {
-              div.innerText = container.accessibleText;
-            }
           }
           div.style.width = `${DIV_TOUCH_SIZE}px`;
           div.style.height = `${DIV_TOUCH_SIZE}px`;
@@ -9732,6 +10098,9 @@ Deprecated since v${version}`;
         }
         div.style.pointerEvents = container.accessiblePointerEvents;
         div.type = container.accessibleType;
+        if (container.accessibleText) {
+          div.innerText = container.accessibleText;
+        }
         if (container.accessibleTitle && container.accessibleTitle !== null) {
           div.title = container.accessibleTitle;
         } else if (!container.accessibleHint || container.accessibleHint === null) {
@@ -10180,7 +10549,7 @@ Deprecated since v${version}`;
         }
       return a;
     };
-    var __objRest$q = (source, exclude) => {
+    var __objRest$r = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$1l.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -10197,7 +10566,7 @@ Deprecated since v${version}`;
        * @param options - The options for creating the DOM container.
        */
       constructor(options = {}) {
-        const _a = options, { element, anchor } = _a, rest = __objRest$q(_a, ["element", "anchor"]);
+        const _a = options, { element, anchor } = _a, rest = __objRest$r(_a, ["element", "anchor"]);
         super(__spreadValues$1k({
           label: "DOMContainer"
         }, rest));
@@ -10693,6 +11062,7 @@ Deprecated since v${version}`;
         this.mapPointerUp = this.mapPointerUp.bind(this);
         this.mapPointerUpOutside = this.mapPointerUpOutside.bind(this);
         this.mapWheel = this.mapWheel.bind(this);
+        this.mapContextMenu = this.mapContextMenu.bind(this);
         this.mappingTable = {};
         this.addEventMapping("pointerdown", this.mapPointerDown);
         this.addEventMapping("pointermove", this.mapPointerMove);
@@ -10702,6 +11072,7 @@ Deprecated since v${version}`;
         this.addEventMapping("pointerup", this.mapPointerUp);
         this.addEventMapping("pointerupoutside", this.mapPointerUpOutside);
         this.addEventMapping("wheel", this.mapWheel);
+        this.addEventMapping("contextmenu", this.mapContextMenu);
       }
       /**
        * Adds an event mapping for the event `type` handled by `fn`.
@@ -11302,6 +11673,19 @@ Deprecated since v${version}`;
         this.freeEvent(wheelEvent);
       }
       /**
+       * Maps the upstream `contextmenu` event to a downstream `contextmenu` event.
+       * @param from - The upstream `contextmenu` event.
+       */
+      mapContextMenu(from) {
+        if (!(from instanceof FederatedPointerEvent)) {
+          warn("EventBoundary cannot map a non-pointer event as a pointer event");
+          return;
+        }
+        const e = this.createPointerEvent(from);
+        this.dispatchEvent(e, "contextmenu");
+        this.freeEvent(e);
+      }
+      /**
        * Finds the most specific event-target in the given propagation path that is still mounted in the scene graph.
        *
        * This is used to find the correct `pointerup` and `pointerout` target in the case that the original `pointerdown`
@@ -11607,7 +11991,7 @@ Deprecated since v${version}`;
         this.supportsPointerEvents = !!globalThis.PointerEvent;
         /**
          * The DOM element to which the root event listeners are bound. This is automatically set to
-         * the renderer's {@link Renderer#view view}.
+         * the renderer's {@link AbstractRenderer#canvas canvas}.
          */
         this.domElement = null;
         /** The resolution used to convert between the DOM client space into world space. */
@@ -11619,6 +12003,7 @@ Deprecated since v${version}`;
         this._eventsAdded = false;
         this._rootPointerEvent = new FederatedPointerEvent(null);
         this._rootWheelEvent = new FederatedWheelEvent(null);
+        this._rootContextMenuEvent = new FederatedPointerEvent(null);
         this.cursorStyles = {
           default: "inherit",
           pointer: "pointer"
@@ -11636,6 +12021,7 @@ Deprecated since v${version}`;
         this._onPointerMove = this._onPointerMove.bind(this);
         this._onPointerUp = this._onPointerUp.bind(this);
         this._onPointerOverOut = this._onPointerOverOut.bind(this);
+        this._onContextMenu = this._onContextMenu.bind(this);
         this.onWheel = this.onWheel.bind(this);
       }
       /**
@@ -11834,6 +12220,23 @@ Deprecated since v${version}`;
         this.setCursor(this.rootBoundary.cursor);
       }
       /**
+       * Event handler for `contextmenu` events on {@link EventSystem#domElement this.domElement}.
+       *
+       * {@link EventSystem#autoPreventDefault autoPreventDefault} does not apply, so the browser menu
+       * opens unless a listener calls `preventDefault()`.
+       * @param nativeEvent - The native mouse/pointer event.
+       */
+      _onContextMenu(nativeEvent) {
+        if (!this.features.click) return;
+        this.rootBoundary.rootTarget = this.renderer.lastObjectRendered;
+        const normalizedEvents = this._normalizeToPointerData(nativeEvent);
+        for (let i = 0, j = normalizedEvents.length; i < j; i++) {
+          const event = this._bootstrapEvent(this._rootContextMenuEvent, normalizedEvents[i]);
+          this.rootBoundary.mapEvent(event);
+        }
+        this.setCursor(this.rootBoundary.cursor);
+      }
+      /**
        * Passive handler for `wheel` events on {@link EventSystem.domElement this.domElement}.
        * @param nativeEvent - The native wheel event.
        */
@@ -11913,6 +12316,7 @@ Deprecated since v${version}`;
           passive: true,
           capture: true
         });
+        this.domElement.addEventListener("contextmenu", this._onContextMenu, true);
         this._eventsAdded = true;
       }
       /** Unregister event listeners on {@link EventSystem#domElement this.domElement}. */
@@ -11949,6 +12353,7 @@ Deprecated since v${version}`;
           }
         }
         this.domElement.removeEventListener("wheel", this.onWheel, true);
+        this.domElement.removeEventListener("contextmenu", this._onContextMenu, true);
         this.domElement = null;
         this._eventsAdded = false;
       }
@@ -12176,6 +12581,7 @@ Deprecated since v${version}`;
     "use strict";
     const FederatedContainer = {
       onclick: null,
+      oncontextmenu: null,
       onmousedown: null,
       onmouseenter: null,
       onmouseleave: null,
@@ -13893,7 +14299,7 @@ Deprecated since v${version}`;
         }
       return a;
     };
-    var __objRest$p = (source, exclude) => {
+    var __objRest$q = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$1i.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -13913,7 +14319,7 @@ Deprecated since v${version}`;
         if (options instanceof Texture) {
           options = { texture: options };
         }
-        const _a = options, { texture = Texture.EMPTY, anchor, roundPixels, width, height } = _a, rest = __objRest$p(_a, ["texture", "anchor", "roundPixels", "width", "height"]);
+        const _a = options, { texture = Texture.EMPTY, anchor, roundPixels, width, height } = _a, rest = __objRest$q(_a, ["texture", "anchor", "roundPixels", "width", "height"]);
         super(__spreadValues$1h({
           label: "Sprite"
         }, rest));
@@ -15183,9 +15589,11 @@ Deprecated since v${version}`;
         canvas.width = Math.ceil(outWidth);
         canvas.height = Math.ceil(outHeight);
         context.save();
-        context.fillStyle = Color.shared.setValue(color).toHex();
-        context.fillRect(0, 0, outWidth, outHeight);
-        context.globalCompositeOperation = "multiply";
+        if (color !== 16777215) {
+          context.fillStyle = Color.shared.setValue(color).toHex();
+          context.fillRect(0, 0, outWidth, outHeight);
+          context.globalCompositeOperation = "multiply";
+        }
         const source = canvasUtils.getCanvasSource(texture);
         if (!source) {
           context.restore();
@@ -15205,18 +15613,20 @@ Deprecated since v${version}`;
           crop.width,
           crop.height
         );
-        context.globalCompositeOperation = "destination-atop";
-        context.drawImage(
-          source,
-          crop.x,
-          crop.y,
-          crop.width,
-          crop.height,
-          0,
-          0,
-          crop.width,
-          crop.height
-        );
+        if (color !== 16777215) {
+          context.globalCompositeOperation = "destination-atop";
+          context.drawImage(
+            source,
+            crop.x,
+            crop.y,
+            crop.width,
+            crop.height,
+            0,
+            0,
+            crop.width,
+            crop.height
+          );
+        }
         context.restore();
       },
       tintWithOverlay: (texture, color, canvas) => {
@@ -15331,11 +15741,31 @@ Deprecated since v${version}`;
     canvasUtils.tintMethod = canvasUtils.canUseMultiply ? canvasUtils.tintWithMultiply : canvasUtils.tintWithPerPixel;
 
     "use strict";
+    const maxKeyDimension = 32767;
+    function bucketKey(width, height) {
+      return (width << 17) + (height << 2);
+    }
     class CanvasPoolClass {
       constructor(canvasOptions) {
-        this._canvasPool = /* @__PURE__ */ Object.create(null);
+        /** idle canvases, keyed by size */
+        this._buckets = /* @__PURE__ */ new Map();
+        /** the screens this pool is sizing its canvases for */
+        this._screens = new ScreenSizeRegistry();
+        this._enableFullScreen = false;
         this.canvasOptions = canvasOptions || {};
-        this.enableFullScreen = false;
+      }
+      /**
+       * Has no effect. The pool sizes canvases to the screens registered with
+       * {@link CanvasPoolClass#setScreenSize|setScreenSize}.
+       * @deprecated since 8.21.0
+       */
+      get enableFullScreen() {
+        deprecation(v8_21_0, "CanvasPool.enableFullScreen is no longer used, the pool sizes canvases to the screens registered with setScreenSize.");
+        return this._enableFullScreen;
+      }
+      set enableFullScreen(value) {
+        deprecation(v8_21_0, "CanvasPool.enableFullScreen is no longer used, the pool sizes canvases to the screens registered with setScreenSize.");
+        this._enableFullScreen = value;
       }
       /**
        * Creates texture with params that were specified in pool constructor.
@@ -15350,41 +15780,106 @@ Deprecated since v${version}`;
         return { canvas, context };
       }
       /**
-       * Gets a Power-of-Two render texture or fullScreen texture
-       * @param minWidth - The minimum width of the render texture.
-       * @param minHeight - The minimum height of the render texture.
-       * @param resolution - The resolution of the render texture.
-       * @returns The new render texture.
+       * Gets a Power-of-Two canvas or screen sized canvas
+       * @param minWidth - The minimum width of the canvas.
+       * @param minHeight - The minimum height of the canvas.
+       * @param resolution - The resolution of the canvas.
+       * @returns The new canvas and its context.
        */
       getOptimalCanvasAndContext(minWidth, minHeight, resolution = 1) {
-        minWidth = Math.ceil(minWidth * resolution - 1e-6);
-        minHeight = Math.ceil(minHeight * resolution - 1e-6);
-        minWidth = nextPow2(minWidth);
-        minHeight = nextPow2(minHeight);
-        const key = (minWidth << 17) + (minHeight << 1);
-        if (!this._canvasPool[key]) {
-          this._canvasPool[key] = [];
+        const { width: canvasWidth, height: canvasHeight } = this.getOptimalSize(minWidth, minHeight, resolution);
+        if (canvasWidth > maxKeyDimension || canvasHeight > maxKeyDimension) {
+          warn(`CanvasPool: ${canvasWidth}x${canvasHeight} is larger than the ${maxKeyDimension}px pool key limit, canvases of this size may be pooled together`);
         }
-        let canvasAndContext = this._canvasPool[key].pop();
+        const key = bucketKey(canvasWidth, canvasHeight);
+        let bucket = this._buckets.get(key);
+        if (!bucket) {
+          bucket = [];
+          this._buckets.set(key, bucket);
+        }
+        let canvasAndContext = bucket.pop();
         if (!canvasAndContext) {
-          canvasAndContext = this._createCanvasAndContext(minWidth, minHeight);
+          canvasAndContext = this._createCanvasAndContext(canvasWidth, canvasHeight);
         }
         return canvasAndContext;
       }
       /**
-       * Place a render texture back into the pool.
+       * The backing size, in physical pixels, that
+       * {@link CanvasPoolClass#getOptimalCanvasAndContext|getOptimalCanvasAndContext} would allocate for a request,
+       * without taking a canvas from the pool.
+       *
+       * Each axis is the next power of two, or the smallest registered screen the request fits inside
+       * (see {@link CanvasPoolClass#setScreenSize|setScreenSize}).
+       * @param minWidth - The minimum width of the canvas.
+       * @param minHeight - The minimum height of the canvas.
+       * @param resolution - The resolution of the canvas.
+       * @returns The width and height the pooled canvas would have, in physical pixels.
+       */
+      getOptimalSize(minWidth, minHeight, resolution = 1) {
+        const pixelWidth = Math.ceil(minWidth * resolution - 1e-6);
+        const pixelHeight = Math.ceil(minHeight * resolution - 1e-6);
+        const po2Width = nextPow2(pixelWidth);
+        const screenWidth = this._screens.getFittingWidth(pixelWidth);
+        const po2Height = nextPow2(pixelHeight);
+        const screenHeight = this._screens.getFittingHeight(pixelHeight);
+        return {
+          width: screenWidth !== void 0 ? Math.min(screenWidth, po2Width) : po2Width,
+          height: screenHeight !== void 0 ? Math.min(screenHeight, po2Height) : po2Height
+        };
+      }
+      /**
+       * Place a canvas back into the pool.
        * @param canvasAndContext
        */
       returnCanvasAndContext(canvasAndContext) {
         const canvas = canvasAndContext.canvas;
         const { width, height } = canvas;
-        const key = (width << 17) + (height << 1);
+        const canvases = this._buckets.get(bucketKey(width, height));
+        if (!canvases) return;
         canvasAndContext.context.resetTransform();
         canvasAndContext.context.clearRect(0, 0, width, height);
-        this._canvasPool[key].push(canvasAndContext);
+        canvases.push(canvasAndContext);
       }
+      /**
+       * Registers the screen size of a renderer with the pool, in physical pixels.
+       *
+       * While a screen is registered, a request that fits inside it on an axis is given that screen's size on
+       * that axis instead of the next power of two, which stops a full screen canvas from being allocated far
+       * larger than the screen. Requests larger than every registered screen on an axis keep the power of two
+       * size - the pool never rounds a request up to a screen it does not fit in.
+       * @param rendererUid - The uid of the renderer, used to update or remove this screen later.
+       * @param pixelWidth - The width of the screen in physical pixels.
+       * @param pixelHeight - The height of the screen in physical pixels.
+       */
+      setScreenSize(rendererUid, pixelWidth, pixelHeight) {
+        if (!this._screens.set(rendererUid, pixelWidth, pixelHeight)) return;
+        this._pruneScreenCanvases();
+      }
+      /**
+       * Removes a screen previously registered with
+       * {@link CanvasPoolClass#setScreenSize|setScreenSize}, dropping any idle canvases that were
+       * only being kept for it.
+       * @param rendererUid - The uid the screen was registered with.
+       */
+      removeScreen(rendererUid) {
+        if (!this._screens.remove(rendererUid)) return;
+        this._pruneScreenCanvases();
+      }
+      /** Clears the pool. */
       clear() {
-        this._canvasPool = {};
+        this._buckets.clear();
+      }
+      /**
+       * Drops the idle canvases in every bucket that has a non power of two dimension matching no live
+       * screen. Power of two buckets are always kept, as any request can fall back to them.
+       */
+      _pruneScreenCanvases() {
+        for (const [key] of this._buckets) {
+          const width = key >>> 17;
+          const height = key >>> 2 & 32767;
+          if ((isPow2(width) || this._screens.hasWidth(width)) && (isPow2(height) || this._screens.hasHeight(height))) continue;
+          this._buckets.delete(key);
+        }
       }
     }
     const CanvasPool = new CanvasPoolClass();
@@ -15757,6 +16252,7 @@ Deprecated since v${version}`;
        * - Uses normalized ellipse equations
        * - Considers stroke alignment
        * - Returns false if dimensions are 0
+       * - A stroke wider than the shape covers it entirely, leaving no unstroked interior
        * @param x - The X coordinate of the point to test
        * @param y - The Y coordinate of the point to test
        * @param strokeWidth - The width of the line to check
@@ -15778,9 +16274,11 @@ Deprecated since v${version}`;
         const outerVertical = halfHeight + strokeOuterWidth;
         const normalizedX = x - this.x;
         const normalizedY = y - this.y;
-        const innerEllipse = normalizedX * normalizedX / (innerHorizontal * innerHorizontal) + normalizedY * normalizedY / (innerVertical * innerVertical);
         const outerEllipse = normalizedX * normalizedX / (outerHorizontal * outerHorizontal) + normalizedY * normalizedY / (outerVertical * outerVertical);
-        return innerEllipse > 1 && outerEllipse <= 1;
+        if (outerEllipse > 1) return false;
+        if (innerHorizontal <= 0 || innerVertical <= 0) return true;
+        const innerEllipse = normalizedX * normalizedX / (innerHorizontal * innerHorizontal) + normalizedY * normalizedY / (innerVertical * innerVertical);
+        return innerEllipse > 1;
       }
       /**
        * Returns the framing rectangle of the ellipse as a Rectangle object.
@@ -16744,19 +17242,19 @@ Deprecated since v${version}`;
 
     "use strict";
     const tempBounds$3 = new Bounds();
-    function getPo2TextureFromSource(image, width, height, resolution, autoGenerateMipmaps = false) {
+    function getPo2TextureFromSource(image, width, height, resolution, autoGenerateMipmaps = false, scaleMode) {
       const bounds = tempBounds$3;
       bounds.minX = 0;
       bounds.minY = 0;
       bounds.maxX = image.width / resolution | 0;
       bounds.maxY = image.height / resolution | 0;
-      const texture = TexturePool.getOptimalTexture(
-        bounds.width,
-        bounds.height,
+      const texture = TexturePool.getOptimalTexture({
+        width: bounds.width,
+        height: bounds.height,
         resolution,
-        false,
-        autoGenerateMipmaps
-      );
+        autoGenerateMipmaps,
+        scaleMode
+      });
       texture.source.uploadMethodId = "image";
       texture.source.resource = image;
       texture.source.alphaMode = "premultiply-alpha-on-upload";
@@ -17126,6 +17624,12 @@ Deprecated since v${version}`;
     }
 
     "use strict";
+    const unqualifiedSamplerPattern = /\buniform\s+([iu]?sampler\w+)/g;
+    const declaredSamplerPattern = /\bprecision\s+\w+\s+([iu]?sampler\w+)\s*;/g;
+    const defaultSamplerPrecisions = {
+      sampler2D: "lowp",
+      samplerCube: "lowp"
+    };
     function ensurePrecision(src, options, isFragment) {
       const maxSupportedPrecision = isFragment ? options.maxSupportedFragmentPrecision : options.maxSupportedVertexPrecision;
       if (src.substring(0, 9) !== "precision") {
@@ -17133,12 +17637,26 @@ Deprecated since v${version}`;
         if (precision === "highp" && maxSupportedPrecision !== "highp") {
           precision = "mediump";
         }
-        return `precision ${precision} float;
+        src = `precision ${precision} float;
 ${src}`;
       } else if (maxSupportedPrecision !== "highp" && src.substring(0, 15) === "precision highp") {
-        return src.replace("precision highp", "precision mediump");
+        src = src.replace("precision highp", "precision mediump");
       }
-      return src;
+      const samplerPrecision = options.maxSupportedFragmentPrecision === "highp" ? "highp" : "mediump";
+      return ensureSamplerPrecision(src, samplerPrecision);
+    }
+    function ensureSamplerPrecision(src, dataPrecision) {
+      var _a;
+      const done = /* @__PURE__ */ new Set();
+      let header = "";
+      for (const [, type] of src.matchAll(declaredSamplerPattern)) done.add(type);
+      for (const [, type] of src.matchAll(unqualifiedSamplerPattern)) {
+        if (done.has(type)) continue;
+        done.add(type);
+        header += `precision ${(_a = defaultSamplerPrecisions[type]) != null ? _a : dataPrecision} ${type};
+`;
+      }
+      return header + src;
     }
 
     "use strict";
@@ -17450,6 +17968,15 @@ ${src}`;
     })(ShaderStage || {});
 
     "use strict";
+    function getTextureSampleType(type) {
+      if (type.endsWith("<u32>")) {
+        return "uint";
+      }
+      if (type.endsWith("<i32>")) {
+        return "sint";
+      }
+      return "float";
+    }
     function generateGpuLayoutGroups({ groups }) {
       const layout = [];
       for (let i = 0; i < groups.length; i++) {
@@ -17494,7 +18021,7 @@ ${src}`;
             binding: group.binding,
             visibility: ShaderStage.VERTEX | ShaderStage.FRAGMENT,
             texture: {
-              sampleType: "float",
+              sampleType: getTextureSampleType(group.type),
               viewDimension: "2d",
               multisampled: false
             }
@@ -17524,8 +18051,18 @@ ${src}`;
             binding: group.binding,
             visibility: ShaderStage.VERTEX | ShaderStage.FRAGMENT,
             texture: {
-              sampleType: "float",
+              sampleType: getTextureSampleType(group.type),
               viewDimension: "2d-array",
+              multisampled: false
+            }
+          });
+        } else if (group.type === "texture_3d" || group.type.startsWith("texture_3d<")) {
+          layout[group.group].push({
+            binding: group.binding,
+            visibility: ShaderStage.VERTEX | ShaderStage.FRAGMENT,
+            texture: {
+              sampleType: getTextureSampleType(group.type),
+              viewDimension: "3d",
               multisampled: false
             }
           });
@@ -17534,7 +18071,7 @@ ${src}`;
             binding: group.binding,
             visibility: ShaderStage.VERTEX | ShaderStage.FRAGMENT,
             texture: {
-              sampleType: "float",
+              sampleType: getTextureSampleType(group.type),
               viewDimension: "cube",
               multisampled: false
             }
@@ -17657,14 +18194,33 @@ ${src}`;
        * @param resources - The resources that are bound together for use by a shader.
        */
       constructor(resources) {
-        /** The resources that are bound together for use by a shader. */
+        /**
+         * The resources that are bound together for use by a shader, keyed by binding number.
+         *
+         * Treat this as read-only and use {@link BindGroup#setResource} to add or replace a resource.
+         * A direct write skips the bind group's change tracking: the GPU bind group is not rebuilt,
+         * and the renderer never syncs the new resource's uniforms or marks it as in use.
+         * @readonly
+         */
         this.resources = /* @__PURE__ */ Object.create(null);
+        this._resourceKeysValue = null;
         this._dirty = true;
         let index = 0;
         for (const i in resources) {
           const resource = resources[i];
           this.setResource(resource, index++);
         }
+      }
+      /**
+       * The binding numbers in use in {@link BindGroup#resources}, ascending. Binding numbers can
+       * have gaps, so per-draw loops index this list instead of running `for...in` over
+       * `resources`, which builds a fresh key list on every call for integer keys.
+       * @internal
+       */
+      get _resourceKeys() {
+        var _a;
+        (_a = this._resourceKeysValue) != null ? _a : this._resourceKeysValue = Object.keys(this.resources).map(Number);
+        return this._resourceKeysValue;
       }
       /**
        * A key used internally to match it up to a WebGPU BindGroup.
@@ -17698,6 +18254,9 @@ ${src}`;
           (_a = currentResource.off) == null ? void 0 : _a.call(currentResource, "change", this.onResourceChange, this);
         }
         (_b = resource.on) == null ? void 0 : _b.call(resource, "change", this.onResourceChange, this);
+        if (currentResource === void 0) {
+          this._resourceKeysValue = null;
+        }
         this.resources[index] = resource;
         this._dirty = true;
       }
@@ -17713,16 +18272,15 @@ ${src}`;
        * Used internally to 'touch' each resource, to ensure that the GC
        * knows that all resources in this bind group are still being used.
        * @param now - The current time in milliseconds.
-       * @param tick - The current tick.
        * @internal
        */
-      _touch(now, tick) {
+      _touch(now) {
         const resources = this.resources;
-        for (const i in resources) {
-          const resource = resources[i];
+        const keys = this._resourceKeys;
+        for (let i = 0; i < keys.length; i++) {
+          const resource = resources[keys[i]];
           if (!resource) continue;
           resource._gcLastUsed = now;
-          resource._touched = tick;
         }
       }
       /** Destroys this bind group and removes all listeners. */
@@ -17734,6 +18292,7 @@ ${src}`;
           (_a = resource == null ? void 0 : resource.off) == null ? void 0 : _a.call(resource, "change", this.onResourceChange, this);
         }
         this.resources = null;
+        this._resourceKeysValue = null;
       }
       onResourceChange(resource) {
         this._dirty = true;
@@ -17906,11 +18465,6 @@ ${src}`;
       constructor(uniformStructures, options) {
         var _a, _b;
         super();
-        /**
-         * used internally to know if a uniform group was used in the last render pass
-         * @internal
-         */
-        this._touched = 0;
         /** a unique id for this uniform group used through the renderer */
         this.uid = uid$1("uniform");
         /**
@@ -18032,7 +18586,7 @@ ${src}`;
         }
       return a;
     };
-    var __objRest$o = (source, exclude) => {
+    var __objRest$p = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$1d.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -18209,7 +18763,7 @@ ${src}`;
         this._overrides = null;
       }
       static from(options) {
-        const _a = options, { gpu, gl } = _a, rest = __objRest$o(_a, ["gpu", "gl"]);
+        const _a = options, { gpu, gl } = _a, rest = __objRest$p(_a, ["gpu", "gl"]);
         let gpuProgram;
         let glProgram;
         if (gpu) {
@@ -18402,7 +18956,7 @@ ${src}`;
         }
       return a;
     };
-    var __objRest$n = (source, exclude) => {
+    var __objRest$o = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$1c.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -18470,7 +19024,7 @@ ${src}`;
        * @returns A shiny new PixiJS filter!
        */
       static from(options) {
-        const _a = options, { gpu, gl } = _a, rest = __objRest$n(_a, ["gpu", "gl"]);
+        const _a = options, { gpu, gl } = _a, rest = __objRest$o(_a, ["gpu", "gl"]);
         let gpuProgram;
         let glProgram;
         if (gpu) {
@@ -18580,11 +19134,6 @@ ${src}`;
          * @internal
          */
         this._resourceId = uid$1("resource");
-        /**
-         * used internally to know if a uniform group was used in the last render pass
-         * @internal
-         */
-        this._touched = 0;
         /** @internal */
         this._updateID = 1;
         /** @internal */
@@ -18781,7 +19330,7 @@ ${src}`;
        * @param options - The options for the geometry.
        */
       constructor(options = {}) {
-        var _a;
+        var _a, _b;
         super();
         /** @internal */
         this._gpuData = /* @__PURE__ */ Object.create(null);
@@ -18799,6 +19348,18 @@ ${src}`;
         this._layoutKey = 0;
         /** the instance count of the geometry to draw */
         this.instanceCount = 1;
+        /**
+         * The number of indices to draw, or `0` to draw the whole index buffer.
+         *
+         * Set this when a geometry only covers a prefix of an index buffer it shares with others - a
+         * pool of identical quads, say, where one buffer holds the six indices per quad for the largest
+         * batch and each geometry draws as many quads as it currently holds. A `size` passed to the
+         * draw call still wins, and a geometry with no index buffer ignores this entirely
+         * ({@link Geometry.vertexCount} drives those). Read at draw time only, so changing it never
+         * re-uploads or re-lays-out anything.
+         * @default 0
+         */
+        this.indexCount = 0;
         this._bounds = new Bounds();
         this._boundsDirty = true;
         this._vertexCount = 0;
@@ -18812,6 +19373,7 @@ ${src}`;
           }
         }
         this.instanceCount = (_a = options.instanceCount) != null ? _a : 1;
+        this.indexCount = (_b = options.indexCount) != null ? _b : 0;
         if (indexBuffer) {
           this.addIndex(indexBuffer);
         }
@@ -18917,11 +19479,13 @@ ${src}`;
        */
       destroy(destroyBuffers = false) {
         this.emit("destroy", this);
-        this.removeAllListeners();
-        if (destroyBuffers) {
-          this.buffers.forEach((buffer) => buffer.destroy());
+        for (const buffer of this.buffers) {
+          buffer.off("update", this.onBufferUpdate, this);
+          buffer.off("change", this.onBufferUpdate, this);
+          if (destroyBuffers) buffer.destroy();
         }
         this.unload();
+        this.removeAllListeners();
         this.attributes = null;
         this.buffers = null;
         this.indexBuffer = null;
@@ -18983,11 +19547,6 @@ ${src}`;
          * @type {RenderSurface}
          */
         this.outputRenderSurface = null;
-        /**
-         * The global frame of the filter area.
-         * @type {{ x: number, y: number, width: number, height: number }}
-         */
-        this.globalFrame = { x: 0, y: 0, width: 0, height: 0 };
         /** The first enabled filter index in the current filter list. */
         this.firstEnabledIndex = -1;
         /** The last enabled filter index in the current filter list. */
@@ -19044,21 +19603,6 @@ ${src}`;
           return;
         }
         const previousFilterData = this._getPreviousFilterData();
-        const globalResolution = this._findFilterResolution(rootResolution);
-        let offsetX = 0;
-        let offsetY = 0;
-        if (previousFilterData) {
-          offsetX = previousFilterData.bounds.minX;
-          offsetY = previousFilterData.bounds.minY;
-        }
-        this._calculateGlobalFrame(
-          filterData,
-          offsetX,
-          offsetY,
-          globalResolution,
-          colorTextureSource.width,
-          colorTextureSource.height
-        );
         this._setupFilterTextures(filterData, bounds, renderer, previousFilterData);
       }
       /**
@@ -19078,7 +19622,7 @@ ${src}`;
        * const filters = [new BlurFilter(), new ColorMatrixFilter()];
        *
        * // Apply the filters to the texture
-       * const resultTexture = filterSystem.applyToTexture({ texture, filters });
+       * const resultTexture = renderer.filter.generateFilteredTexture({ texture, filters });
        *
        * // Use the resulting texture
        * sprite.texture = resultTexture;
@@ -19089,6 +19633,9 @@ ${src}`;
        * 2. If all filters are disabled or skipped, the original texture is returned.
        */
       generateFilteredTexture({ texture, filters }) {
+        if (filters.every((filter) => !filter.enabled)) {
+          return texture;
+        }
         const filterData = this._pushFilterData();
         this._activeFilterData = filterData;
         filterData.skip = false;
@@ -19096,33 +19643,20 @@ ${src}`;
         const colorTextureSource = texture.source;
         const rootResolution = colorTextureSource.resolution;
         const rootAntialias = colorTextureSource.antialias;
-        if (filters.every((filter) => !filter.enabled)) {
-          filterData.skip = true;
-          return texture;
-        }
         const bounds = filterData.bounds;
+        bounds.clear();
         bounds.addRect(texture.frame);
         this._calculateFilterBounds(filterData, bounds.rectangle, rootAntialias, rootResolution, 0);
         if (filterData.skip) {
+          this._popFilterData();
           return texture;
         }
-        const globalResolution = rootResolution;
-        const offsetX = 0;
-        const offsetY = 0;
-        this._calculateGlobalFrame(
-          filterData,
-          offsetX,
-          offsetY,
-          globalResolution,
-          colorTextureSource.width,
-          colorTextureSource.height
-        );
-        filterData.outputRenderSurface = TexturePool.getOptimalTexture(
-          bounds.width,
-          bounds.height,
-          filterData.resolution,
-          filterData.antialias
-        );
+        filterData.outputRenderSurface = TexturePool.getOptimalTexture({
+          width: bounds.width,
+          height: bounds.height,
+          resolution: filterData.resolution,
+          antialias: filterData.antialias
+        });
         filterData.backTexture = Texture.EMPTY;
         filterData.inputTexture = texture;
         const renderer = this.renderer;
@@ -19130,6 +19664,7 @@ ${src}`;
         this._applyFiltersToTexture(filterData, true);
         const outputTexture = filterData.outputRenderSurface;
         outputTexture.source.alphaMode = "premultiplied-alpha";
+        this._popFilterData();
         return outputTexture;
       }
       /** @internal */
@@ -19156,12 +19691,11 @@ ${src}`;
        */
       getBackTexture(lastRenderSurface, bounds, previousBounds) {
         const backgroundResolution = lastRenderSurface.colorTexture.source._resolution;
-        const backTexture = TexturePool.getOptimalTexture(
-          bounds.width,
-          bounds.height,
-          backgroundResolution,
-          false
-        );
+        const backTexture = TexturePool.getOptimalTexture({
+          width: bounds.width,
+          height: bounds.height,
+          resolution: backgroundResolution
+        });
         let x = bounds.minX;
         let y = bounds.minY;
         if (previousBounds) {
@@ -19193,14 +19727,13 @@ ${src}`;
         const filterData = this._activeFilterData;
         const outputRenderSurface = filterData.outputRenderSurface;
         const isFinalTarget = outputRenderSurface === output;
-        const rootResolution = renderer.renderTarget.rootRenderTarget.colorTexture.source._resolution;
-        const resolution = this._findFilterResolution(rootResolution);
+        const closestFilterData = this._findClosestFilterData();
+        const resolution = closestFilterData ? closestFilterData.inputTexture.source._resolution : renderer.renderTarget.rootRenderTarget.colorTexture.source._resolution;
         let offsetX = 0;
         let offsetY = 0;
-        if (isFinalTarget) {
-          const offset = this._findPreviousFilterOffset();
-          offsetX = offset.x;
-          offsetY = offset.y;
+        if (isFinalTarget && closestFilterData) {
+          offsetX = closestFilterData.bounds.minX;
+          offsetY = closestFilterData.bounds.minY;
         }
         this._updateFilterUniforms(input, output, filterData, offsetX, offsetY, resolution, isFinalTarget, clear);
         const filterToApply = filter.enabled ? filter : this._getPassthroughFilter();
@@ -19283,12 +19816,12 @@ ${src}`;
        */
       _setupFilterTextures(filterData, bounds, renderer, previousFilterData) {
         filterData.backTexture = Texture.EMPTY;
-        filterData.inputTexture = TexturePool.getOptimalTexture(
-          bounds.width,
-          bounds.height,
-          filterData.resolution,
-          filterData.antialias
-        );
+        filterData.inputTexture = TexturePool.getOptimalTexture({
+          width: bounds.width,
+          height: bounds.height,
+          resolution: filterData.resolution,
+          antialias: filterData.antialias
+        });
         if (filterData.blendRequired) {
           renderer.renderTarget.finishRenderPass();
           const renderTarget = renderer.renderTarget.getRenderTarget(filterData.outputRenderSurface);
@@ -19298,22 +19831,6 @@ ${src}`;
         renderer.globalUniforms.push({
           offset: bounds
         });
-      }
-      /**
-       * Calculates and sets the global frame for the filter.
-       * @param filterData - The filter data to update
-       * @param offsetX - The X offset
-       * @param offsetY - The Y offset
-       * @param globalResolution - The global resolution
-       * @param sourceWidth - The source texture width
-       * @param sourceHeight - The source texture height
-       */
-      _calculateGlobalFrame(filterData, offsetX, offsetY, globalResolution, sourceWidth, sourceHeight) {
-        const globalFrame = filterData.globalFrame;
-        globalFrame.x = offsetX * globalResolution;
-        globalFrame.y = offsetY * globalResolution;
-        globalFrame.width = sourceWidth * globalResolution;
-        globalFrame.height = sourceHeight * globalResolution;
       }
       /**
        * Updates the filter uniforms with the current filter state.
@@ -19374,35 +19891,18 @@ ${src}`;
         this._filterGlobalUniforms.update();
       }
       /**
-       * Finds the correct resolution by looking back through the filter stack.
-       * @param rootResolution - The fallback root resolution to use
-       * @returns The resolution from the previous filter or root resolution
+       * Finds the non-skipped entry closest to the top of the filter stack.
+       *
+       * `pop()` removes its entry before it applies the filters, so the result is the enclosing filter's entry.
+       * `generateFilteredTexture()` applies the filters while its entry is still on the stack, so the result is that entry.
+       * @returns The entry, or null if there is none
        */
-      _findFilterResolution(rootResolution) {
-        let currentIndex = this._filterStackIndex - 1;
-        while (currentIndex > 0 && this._filterStack[currentIndex].skip) {
-          --currentIndex;
+      _findClosestFilterData() {
+        for (let i = this._filterStackIndex - 1; i >= 0; i--) {
+          const filterData = this._filterStack[i];
+          if (!filterData.skip) return filterData;
         }
-        return currentIndex > 0 && this._filterStack[currentIndex].inputTexture ? this._filterStack[currentIndex].inputTexture.source._resolution : rootResolution;
-      }
-      /**
-       * Finds the offset from the previous non-skipped filter in the stack.
-       * @returns The offset coordinates from the previous filter
-       */
-      _findPreviousFilterOffset() {
-        let offsetX = 0;
-        let offsetY = 0;
-        let lastIndex = this._filterStackIndex;
-        while (lastIndex > 0) {
-          lastIndex--;
-          const prevFilterData = this._filterStack[lastIndex];
-          if (!prevFilterData.skip) {
-            offsetX = prevFilterData.bounds.minX;
-            offsetY = prevFilterData.bounds.minY;
-            break;
-          }
-        }
-        return { x: offsetX, y: offsetY };
+        return null;
       }
       /**
        * Calculates the filter area bounds based on the instruction type.
@@ -19439,12 +19939,11 @@ ${src}`;
           filters[firstEnabled].apply(this, inputTexture, filterData.outputRenderSurface, clear);
         } else {
           let flip = filterData.inputTexture;
-          const tempTexture = TexturePool.getOptimalTexture(
-            bounds.width,
-            bounds.height,
-            flip.source._resolution,
-            false
-          );
+          const tempTexture = TexturePool.getOptimalTexture({
+            width: bounds.width,
+            height: bounds.height,
+            resolution: flip.source._resolution
+          });
           let flop = tempTexture;
           for (let i = firstEnabled; i < lastEnabled; i++) {
             const filter = filters[i];
@@ -19521,17 +20020,18 @@ ${src}`;
         this._filterStackIndex--;
         return this._filterStack[this._filterStackIndex];
       }
+      /**
+       * Finds the closest non-skipped entry that encloses the filter being pushed.
+       *
+       * `push()` has already added that filter's own entry, so the search starts one entry below it.
+       * @returns The entry, or null if there is none
+       */
       _getPreviousFilterData() {
-        let previousFilterData;
-        let index = this._filterStackIndex - 1;
-        while (index > 0) {
-          index--;
-          previousFilterData = this._filterStack[index];
-          if (!previousFilterData.skip) {
-            break;
-          }
+        for (let i = this._filterStackIndex - 2; i >= 0; i--) {
+          const filterData = this._filterStack[i];
+          if (!filterData.skip) return filterData;
         }
-        return previousFilterData;
+        return null;
       }
       _pushFilterData() {
         let filterData = this._filterStack[this._filterStackIndex];
@@ -20448,6 +20948,9 @@ ${src}`;
       async init(options = {}) {
         const skip = options.skipExtensionImports === true ? true : options.manageImports === false;
         await loadEnvironmentExtensions(skip);
+        if (!skip && this.config.loaders) {
+          await Promise.all(this.config.loaders.map((loader) => loader.value.load()));
+        }
         this._addSystems(this.config.systems);
         this._addPipes(this.config.renderPipes, this.config.renderPipeAdaptors);
         for (const systemName in this._systemsHash) {
@@ -20864,7 +21367,7 @@ ${src}`;
 
     "use strict";
     const DATA_URI = /^\s*data:(?:([\w-]+)\/([\w+.-]+))?(?:;charset=([\w-]+))?(?:;(base64))?,(.*)/i;
-    const VERSION = "8.20.0";
+    const VERSION = "8.22.0";
 
     "use strict";
     class ApplicationInitHook {
@@ -23936,6 +24439,7 @@ ${parts.join("\n")}
         const gpuData = item._gpuData[this._renderer.uid];
         if (!gpuData) return;
         (_a = this._onUnload) == null ? void 0 : _a.call(this, item, ...args);
+        item.off("unload", this.remove, this);
         gpuData.destroy();
         item._gpuData[this._renderer.uid] = null;
         this.items[item.uid] = null;
@@ -25332,7 +25836,7 @@ ${parts.join("\n")}
         geometry.indexBuffer.setDataWithSize(batcher.indexBuffer, batcher.indexSize, true);
         geometry.buffers[0].setDataWithSize(batcher.attributeBuffer.float32View, batcher.attributeSize, true);
         const drawBatches = batcher.batches;
-        for (let i = 0; i < drawBatches.length; i++) {
+        for (let i = 0; i < batcher.batchIndex; i++) {
           const batch = drawBatches[i];
           batch.bindGroup = getTextureBatchBindGroup(
             batch.textures.textures,
@@ -26903,30 +27407,56 @@ ${parts.join("\n")}
         }
       }
     }
-    function parseLinearGradient(child) {
-      const x0 = parseSVGFloatAttribute(child, "x1", 0);
-      const y0 = parseSVGFloatAttribute(child, "y1", 0);
-      const x1 = parseSVGFloatAttribute(child, "x2", 1);
-      const y1 = parseSVGFloatAttribute(child, "y2", 0);
-      const gradientUnit = child.getAttribute("gradientUnits") || "objectBoundingBox";
-      const gradient = new FillGradient(
-        x0,
-        y0,
-        x1,
-        y1,
-        gradientUnit === "objectBoundingBox" ? "local" : "global"
-      );
-      for (let k = 0; k < child.children.length; k++) {
-        const stop = child.children[k];
-        const offset = parseSVGFloatAttribute(stop, "offset", 0);
-        const color = Color.shared.setValue(stop.getAttribute("stop-color")).toNumber();
-        gradient.addColorStop(offset, color);
+    function parseGradientCoordinate(svg, id, defaultValue) {
+      const value = svg.getAttribute(id);
+      if (value == null ? void 0 : value.trim().endsWith("%")) {
+        const percentage = Number(value.trim().slice(0, -1));
+        return Number.isNaN(percentage) ? defaultValue : percentage / 100;
       }
-      return gradient;
+      return parseSVGFloatAttribute(svg, id, defaultValue);
     }
-    function parseRadialGradient(_child) {
-      warn("[SVG Parser] Radial gradients are not yet supported");
-      return new FillGradient(0, 0, 1, 0);
+    function parseGradientTextureSpace(svg) {
+      return (svg.getAttribute("gradientUnits") || "objectBoundingBox") === "objectBoundingBox" ? "local" : "global";
+    }
+    function parseGradientColorStops(svg) {
+      const colorStops = [];
+      for (let i = 0; i < svg.children.length; i++) {
+        const stop = svg.children[i];
+        const offset = parseGradientCoordinate(stop, "offset", 0);
+        const color = Color.shared.setValue(stop.getAttribute("stop-color")).toNumber();
+        colorStops.push({ offset, color });
+      }
+      return colorStops;
+    }
+    function parseLinearGradient(child) {
+      const x0 = parseGradientCoordinate(child, "x1", 0);
+      const y0 = parseGradientCoordinate(child, "y1", 0);
+      const x1 = parseGradientCoordinate(child, "x2", 1);
+      const y1 = parseGradientCoordinate(child, "y2", 0);
+      return new FillGradient({
+        type: "linear",
+        start: { x: x0, y: y0 },
+        end: { x: x1, y: y1 },
+        textureSpace: parseGradientTextureSpace(child),
+        colorStops: parseGradientColorStops(child)
+      });
+    }
+    function parseRadialGradient(child) {
+      const cx = parseGradientCoordinate(child, "cx", 0.5);
+      const cy = parseGradientCoordinate(child, "cy", 0.5);
+      const r = parseGradientCoordinate(child, "r", 0.5);
+      const fx = parseGradientCoordinate(child, "fx", cx);
+      const fy = parseGradientCoordinate(child, "fy", cy);
+      const fr = parseGradientCoordinate(child, "fr", 0);
+      return new FillGradient({
+        type: "radial",
+        center: { x: fx, y: fy },
+        innerRadius: fr,
+        outerCenter: { x: cx, y: cy },
+        outerRadius: r,
+        textureSpace: parseGradientTextureSpace(child),
+        colorStops: parseGradientColorStops(child)
+      });
     }
 
     "use strict";
@@ -27395,7 +27925,7 @@ ${parts.join("\n")}
         }
       return a;
     };
-    var __objRest$m = (source, exclude) => {
+    var __objRest$n = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$11.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -27476,7 +28006,7 @@ ${parts.join("\n")}
       return handleFillObject(objectStyle, defaultStyle);
     }
     function toStrokeStyle(value, defaultStyle) {
-      const _a = defaultStyle, { width, alignment, miterLimit, cap, join, pixelLine } = _a, rest = __objRest$m(_a, ["width", "alignment", "miterLimit", "cap", "join", "pixelLine"]);
+      const _a = defaultStyle, { width, alignment, miterLimit, cap, join, pixelLine } = _a, rest = __objRest$n(_a, ["width", "alignment", "miterLimit", "cap", "join", "pixelLine"]);
       const fill = toFillStyle(value, rest);
       if (!fill) {
         return null;
@@ -28439,7 +28969,7 @@ ${parts.join("\n")}
         }
       return a;
     };
-    var __objRest$l = (source, exclude) => {
+    var __objRest$m = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$$.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -28497,7 +29027,7 @@ ${parts.join("\n")}
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = "high";
       context.drawImage(image, 0, 0, width * resolution, height * resolution);
-      const _g = (_f = asset.data) != null ? _f : {}, { parseAsGraphicsContext: _p } = _g, rest = __objRest$l(_g, ["parseAsGraphicsContext"]);
+      const _g = (_f = asset.data) != null ? _f : {}, { parseAsGraphicsContext: _p } = _g, rest = __objRest$m(_g, ["parseAsGraphicsContext"]);
       const base = new ImageSource(__spreadValues$_({
         resource: canvas,
         alphaMode: "premultiply-alpha-on-upload",
@@ -29055,7 +29585,7 @@ ${parts.join("\n")}
        *                 {
        *                     alias: 'hero',
        *                     src: 'hero.{png,webp}',
-       *                     data: { scaleMode: SCALE_MODES.NEAREST }
+       *                     data: { scaleMode: 'nearest' }
        *                 },
        *                 {
        *                     alias: 'map',
@@ -31941,7 +32471,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$q = (a, b) => __defProps$q(a, __getOwnPropDescs$q(b));
-    var __objRest$k = (source2, exclude) => {
+    var __objRest$l = (source2, exclude) => {
       var target = {};
       for (var prop in source2)
         if (__hasOwnProp$R.call(source2, prop) && exclude.indexOf(prop) < 0)
@@ -31971,7 +32501,7 @@ ${parts.join("\n")}
           fragment: fragment$5,
           name: "alpha-filter"
         });
-        const _a = options, { alpha } = _a, rest = __objRest$k(_a, ["alpha"]);
+        const _a = options, { alpha } = _a, rest = __objRest$l(_a, ["alpha"]);
         const alphaUniforms = new UniformGroup({
           uAlpha: { value: alpha, type: "f32" }
         });
@@ -32043,6 +32573,7 @@ ${parts.join("\n")}
     const fragTemplate = [
       "in vec2 vBlurTexCoords[%size%];",
       "uniform sampler2D uTexture;",
+      "uniform vec4 uInputClamp;",
       "out vec4 finalColor;",
       "void main(void)",
       "{",
@@ -32055,7 +32586,7 @@ ${parts.join("\n")}
       let blurLoop = "";
       const prefixFirst = "finalColor = ";
       const prefixRest = "    + ";
-      const template = "texture(uTexture, vBlurTexCoords[%index%]) * %value%";
+      const template = "texture(uTexture, clamp(vBlurTexCoords[%index%], uInputClamp.xy, uInputClamp.zw)) * %value%";
       for (let i = 0; i < kernelSize; i++) {
         const prefix = i === 0 ? prefixFirst : prefixRest;
         const value = i < halfLength ? i : kernelSize - i - 1;
@@ -32153,7 +32684,8 @@ ${parts.join("\n")}
         }
         const kernelIndex = i < halfLength ? i : kernelSize - i - 1;
         const kernelValue = kernel[kernelIndex].toString();
-        blurSamplingSource[i] = `finalColor += textureSample(uTexture, uSampler, offset${i}) * ${kernelValue};`;
+        blurSamplingSource[i] = `finalColor += textureSample(uTexture, uSampler,
+            clamp(offset${i}, gfu.uInputClamp.xy, gfu.uInputClamp.zw)) * ${kernelValue};`;
       }
       const blurStruct = blurStructSource.join("\n");
       const blurOut = blurOutSource.join("\n");
@@ -32356,7 +32888,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$p = (a, b) => __defProps$p(a, __getOwnPropDescs$p(b));
-    var __objRest$j = (source, exclude) => {
+    var __objRest$k = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$P.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -32380,7 +32912,7 @@ ${parts.join("\n")}
           if (args[3] !== void 0) options.kernelSize = args[3];
         }
         options = __spreadValues$O(__spreadValues$O({}, BlurFilterPass.defaultOptions), options);
-        const _b = options, { strength, strengthX, strengthY, quality } = _b, rest = __objRest$j(_b, ["strength", "strengthX", "strengthY", "quality"]);
+        const _b = options, { strength, strengthX, strengthY, quality } = _b, rest = __objRest$k(_b, ["strength", "strengthX", "strengthY", "quality"]);
         super(__spreadProps$p(__spreadValues$O({}, rest), {
           compatibleRenderers: RendererType.BOTH,
           resources: {}
@@ -33855,7 +34387,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$n = (a, b) => __defProps$n(a, __getOwnPropDescs$n(b));
-    var __objRest$i = (source2, exclude) => {
+    var __objRest$j = (source2, exclude) => {
       var target = {};
       for (var prop in source2)
         if (__hasOwnProp$N.call(source2, prop) && exclude.indexOf(prop) < 0)
@@ -33876,7 +34408,7 @@ ${parts.join("\n")}
           }
           options = { sprite: options, scale: args[1] };
         }
-        const _a = options, { sprite, scale: scaleOption } = _a, rest = __objRest$i(_a, ["sprite", "scale"]);
+        const _a = options, { sprite, scale: scaleOption } = _a, rest = __objRest$j(_a, ["sprite", "scale"]);
         let scale = scaleOption != null ? scaleOption : 20;
         if (typeof scale === "number") {
           scale = new Point(scale, scale);
@@ -33988,7 +34520,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$m = (a, b) => __defProps$m(a, __getOwnPropDescs$m(b));
-    var __objRest$h = (source2, exclude) => {
+    var __objRest$i = (source2, exclude) => {
       var target = {};
       for (var prop in source2)
         if (__hasOwnProp$M.call(source2, prop) && exclude.indexOf(prop) < 0)
@@ -34021,7 +34553,7 @@ ${parts.join("\n")}
           fragment: fragment$2,
           name: "noise-filter"
         });
-        const _a = options, { noise, seed } = _a, rest = __objRest$h(_a, ["noise", "seed"]);
+        const _a = options, { noise, seed } = _a, rest = __objRest$i(_a, ["noise", "seed"]);
         super(__spreadProps$m(__spreadValues$L({}, rest), {
           gpuProgram,
           glProgram,
@@ -34128,7 +34660,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$l = (a, b) => __defProps$l(a, __getOwnPropDescs$l(b));
-    var __objRest$g = (source2, exclude) => {
+    var __objRest$h = (source2, exclude) => {
       var target = {};
       for (var prop in source2)
         if (__hasOwnProp$L.call(source2, prop) && exclude.indexOf(prop) < 0)
@@ -34142,7 +34674,7 @@ ${parts.join("\n")}
     };
     class MaskFilter extends Filter {
       constructor(options) {
-        const _a = options, { sprite } = _a, rest = __objRest$g(_a, ["sprite"]);
+        const _a = options, { sprite } = _a, rest = __objRest$h(_a, ["sprite"]);
         const textureMatrix = new TextureMatrix(sprite.texture);
         const filterUniforms = new UniformGroup({
           uFilterMatrix: { value: new Matrix(), type: "mat3x3<f32>" },
@@ -34583,7 +35115,7 @@ ${parts.join("\n")}
       addRenderable(graphics, instructionSet) {
         const contextSystem = this.renderer.graphicsContext;
         const gpuContext = contextSystem.updateGpuContext(graphics.context);
-        if (graphics.didViewUpdate) {
+        if (graphics.didViewUpdate || !graphics._gpuData[this.renderer.uid]) {
           this._rebuild(graphics);
         }
         if (gpuContext.isBatchable) {
@@ -34700,7 +35232,7 @@ ${parts.join("\n")}
         }
       return a;
     };
-    var __objRest$f = (source, exclude) => {
+    var __objRest$g = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$K.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -34721,7 +35253,7 @@ ${parts.join("\n")}
         if (options instanceof GraphicsContext) {
           options = { context: options };
         }
-        const _a = options || {}, { context, roundPixels } = _a, rest = __objRest$f(_a, ["context", "roundPixels"]);
+        const _a = options || {}, { context, roundPixels } = _a, rest = __objRest$g(_a, ["context", "roundPixels"]);
         super(__spreadValues$J({
           label: "Graphics"
         }, rest));
@@ -35887,7 +36419,7 @@ ${parts.join("\n")}
         }
       return a;
     };
-    var __objRest$e = (source, exclude) => {
+    var __objRest$f = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$I.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -35914,7 +36446,7 @@ ${parts.join("\n")}
             options.geometry.topology = args[3];
           }
         }
-        const _a = options, { geometry, shader, texture, roundPixels, state } = _a, rest = __objRest$e(_a, ["geometry", "shader", "texture", "roundPixels", "state"]);
+        const _a = options, { geometry, shader, texture, roundPixels, state } = _a, rest = __objRest$f(_a, ["geometry", "shader", "texture", "roundPixels", "state"]);
         super(__spreadValues$H({
           label: "Mesh"
         }, rest));
@@ -36099,7 +36631,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$k = (a, b) => __defProps$k(a, __getOwnPropDescs$k(b));
-    var __objRest$d = (source, exclude) => {
+    var __objRest$e = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$H.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -36130,7 +36662,7 @@ ${parts.join("\n")}
           onLoop = null,
           textures,
           updateAnchor = false
-        } = _a, rest = __objRest$d(_a, [
+        } = _a, rest = __objRest$e(_a, [
           "animationSpeed",
           "autoPlay",
           "autoUpdate",
@@ -37378,7 +37910,7 @@ ${parts.join("\n")}
         }
       return a;
     };
-    var __objRest$c = (source, exclude) => {
+    var __objRest$d = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$F.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -37412,7 +37944,7 @@ ${parts.join("\n")}
           height,
           applyAnchorToTexture,
           roundPixels
-        } = _a, rest = __objRest$c(_a, [
+        } = _a, rest = __objRest$d(_a, [
           "texture",
           "anchor",
           "tilePosition",
@@ -37650,7 +38182,7 @@ ${parts.join("\n")}
        * // Use a texture from the asset cache
        * tilingSprite.texture = Texture.from('assets/pattern.png');
        * ```
-       * @default Texture.WHITE
+       * @default Texture.EMPTY
        */
       get texture() {
         return this._texture;
@@ -37898,7 +38430,7 @@ ${parts.join("\n")}
         }
       return a;
     };
-    var __objRest$b = (source, exclude) => {
+    var __objRest$c = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$E.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -37912,7 +38444,7 @@ ${parts.join("\n")}
     };
     class AbstractText extends ViewContainer {
       constructor(options, styleClass) {
-        const _a = options, { text, resolution, style, anchor, width, height, roundPixels } = _a, rest = __objRest$b(_a, ["text", "resolution", "style", "anchor", "width", "height", "roundPixels"]);
+        const _a = options, { text, resolution, style, anchor, width, height, roundPixels } = _a, rest = __objRest$c(_a, ["text", "resolution", "style", "anchor", "width", "height", "roundPixels"]);
         super(__spreadValues$D({}, rest));
         /** @internal */
         this.batched = true;
@@ -38234,6 +38766,8 @@ ${parts.join("\n")}
        * text.destroy() // Destroys the text, but not its style
        */
       destroy(options = false) {
+        var _a;
+        (_a = this._style) == null ? void 0 : _a.off("update", this.onViewUpdate, this);
         super.destroy(options);
         this.owner = null;
         this._bounds = null;
@@ -41100,6 +41634,16 @@ ${parts.join("\n")}
     }
 
     "use strict";
+    let warned = false;
+    function warnIgnoredTextureStyle(textureStyle) {
+      if (warned) return;
+      const scaleModeOnly = new TextureStyle({ scaleMode: textureStyle.scaleMode });
+      if (textureStyle._resourceId === scaleModeOnly._resourceId) return;
+      warned = true;
+      warn("Text textureStyle: only scaleMode is applied to a text texture, the other fields are ignored");
+    }
+
+    "use strict";
     function updateTextBounds(batchableSprite, text) {
       const { texture, bounds } = batchableSprite;
       const padding = text._style._getFinalPadding();
@@ -41154,6 +41698,7 @@ ${parts.join("\n")}
       constructor(renderer) {
         this._renderer = renderer;
         renderer.runners.resolutionChange.add(this);
+        renderer.runners.contextChange.add(this);
         this._managedTexts = new GCManagedHash({
           renderer,
           type: "renderable",
@@ -41167,6 +41712,16 @@ ${parts.join("\n")}
           if (text == null ? void 0 : text._autoResolution) text.onViewUpdate();
         }
       }
+      /**
+       * Text textures are uploaded from pooled canvases that are cleared and reused straight after upload,
+       * so they cannot be re-uploaded after a context loss. Unload them and regenerate on the next render.
+       */
+      contextChange() {
+        var _a;
+        for (const key in this._managedTexts.items) {
+          (_a = this._managedTexts.items[key]) == null ? void 0 : _a.unload();
+        }
+      }
       validateRenderable(text) {
         const gpuText = this._getGpuText(text);
         const newKey = text.styleKey;
@@ -41175,7 +41730,7 @@ ${parts.join("\n")}
       }
       addRenderable(text, instructionSet) {
         const batchableText = this._getGpuText(text);
-        if (text._didTextUpdate) {
+        if (text._didTextUpdate || batchableText.currentKey !== text.styleKey) {
           const resolution = text._autoResolution ? this._renderer.resolution : text.resolution;
           if (batchableText.currentKey !== text.styleKey || text._resolution !== resolution) {
             this._updateGpuText(text);
@@ -41258,9 +41813,6 @@ ${parts.join("\n")}
         if (!(options.style instanceof TextStyle)) {
           options.style = new TextStyle(options.style);
         }
-        if (!(options.textureStyle instanceof TextureStyle)) {
-          options.textureStyle = new TextureStyle(options.textureStyle);
-        }
         if (typeof options.text !== "string") {
           options.text = options.text.toString();
         }
@@ -41276,9 +41828,9 @@ ${parts.join("\n")}
           frame.width,
           frame.height,
           resolution,
-          autoGenerateMipmaps
+          autoGenerateMipmaps,
+          textureStyle == null ? void 0 : textureStyle.scaleMode
         );
-        if (textureStyle) texture.source.style = textureStyle;
         if (style.trim) {
           frame.pad(style.padding);
           texture.frame.copyFrom(frame);
@@ -41314,7 +41866,7 @@ ${parts.join("\n")}
         source.resource = null;
         source.uploadMethodId = "unknown";
         source.alphaMode = "no-premultiply-alpha";
-        TexturePool.returnTexture(texture, true);
+        TexturePool.returnTexture(texture);
       }
       /**
        * Renders text to its canvas, and updates its texture.
@@ -41458,6 +42010,7 @@ ${parts.join("\n")}
         this.renderPipeId = "text";
         if (options.textureStyle) {
           this.textureStyle = options.textureStyle instanceof TextureStyle ? options.textureStyle : new TextureStyle(options.textureStyle);
+          warnIgnoredTextureStyle(this.textureStyle);
         }
         this.autoGenerateMipmaps = (_a = options.autoGenerateMipmaps) != null ? _a : TextureSource.defaultOptions.autoGenerateMipmaps;
       }
@@ -43322,6 +43875,7 @@ ${parts.join("\n")}
       constructor(renderer) {
         this._renderer = renderer;
         renderer.runners.resolutionChange.add(this);
+        renderer.runners.contextChange.add(this);
         this._managedTexts = new GCManagedHash({
           renderer,
           type: "renderable",
@@ -43337,6 +43891,16 @@ ${parts.join("\n")}
           }
         }
       }
+      /**
+       * HTMLText textures are uploaded from pooled images that are reused for the next text,
+       * so they cannot be re-uploaded after a context loss. Unload them and regenerate on the next render.
+       */
+      contextChange() {
+        var _a;
+        for (const key in this._managedTexts.items) {
+          (_a = this._managedTexts.items[key]) == null ? void 0 : _a.unload();
+        }
+      }
       validateRenderable(htmlText) {
         const gpuText = this._getGpuText(htmlText);
         const newKey = htmlText.styleKey;
@@ -43347,7 +43911,7 @@ ${parts.join("\n")}
       }
       addRenderable(htmlText, instructionSet) {
         const batchableHTMLText = this._getGpuText(htmlText);
-        if (htmlText._didTextUpdate) {
+        if (htmlText._didTextUpdate || batchableHTMLText.currentKey !== htmlText.styleKey) {
           const resolution = htmlText._autoResolution ? this._renderer.resolution : htmlText.resolution;
           if (batchableHTMLText.currentKey !== htmlText.styleKey || htmlText.resolution !== resolution) {
             this._updateGpuText(htmlText).catch((e) => {
@@ -43380,7 +43944,9 @@ ${parts.join("\n")}
         }
         batchableHTMLText.texturePromise = texturePromise;
         batchableHTMLText.currentKey = htmlText.styleKey;
-        batchableHTMLText.texture = await texturePromise;
+        const texture = await texturePromise;
+        if (!batchableHTMLText.renderable) return;
+        batchableHTMLText.texture = texture;
         const renderGroup = htmlText.renderGroup || htmlText.parentRenderGroup;
         if (renderGroup) {
           renderGroup.structureDidChange = true;
@@ -43405,7 +43971,7 @@ ${parts.join("\n")}
       }
       onTextUnload(text) {
         const gpuData = text._gpuData[this._renderer.uid];
-        if (!gpuData) return;
+        if (!(gpuData == null ? void 0 : gpuData.texturePromise)) return;
         const { htmlText } = this._renderer;
         htmlText.getReferenceCount(gpuData.currentKey) === null ? htmlText.returnTexturePromise(gpuData.texturePromise) : htmlText.decreaseReferenceCount(gpuData.currentKey);
       }
@@ -43639,6 +44205,7 @@ ${parts.join("\n")}
         return this._buildTexturePromise(options);
       }
       async _buildTexturePromise(options) {
+        var _a;
         const { text, style, resolution, textureStyle, autoGenerateMipmaps } = options;
         const htmlTextData = BigPool.get(HTMLTextRenderData);
         const fontFamilies = extractFontFamilies(text, style);
@@ -43662,11 +44229,11 @@ ${parts.join("\n")}
           image.width - uvSafeOffset,
           image.height - uvSafeOffset,
           resolution,
-          autoGenerateMipmaps
+          autoGenerateMipmaps,
+          textureStyle == null ? void 0 : textureStyle.scaleMode
         );
-        if (textureStyle) texture.source.style = textureStyle;
+        (_a = this._renderer) == null ? void 0 : _a.texture.initSource(texture.source);
         if (this._createCanvas) {
-          this._renderer.texture.initSource(texture.source);
           CanvasPool.returnCanvasAndContext(canvasAndContext);
         }
         BigPool.return(htmlTextData);
@@ -43680,9 +44247,10 @@ ${parts.join("\n")}
         });
       }
       _cleanUp(texture) {
-        TexturePool.returnTexture(texture, true);
-        texture.source.resource = null;
-        texture.source.uploadMethodId = "unknown";
+        const source = texture.source;
+        TexturePool.returnTexture(texture);
+        source.resource = null;
+        source.uploadMethodId = "unknown";
       }
       destroy() {
         this._renderer = null;
@@ -43716,6 +44284,7 @@ ${parts.join("\n")}
         this.renderPipeId = "htmlText";
         if (options.textureStyle) {
           this.textureStyle = options.textureStyle instanceof TextureStyle ? options.textureStyle : new TextureStyle(options.textureStyle);
+          warnIgnoredTextureStyle(this.textureStyle);
         }
         this.autoGenerateMipmaps = (_a = options.autoGenerateMipmaps) != null ? _a : TextureSource.defaultOptions.autoGenerateMipmaps;
       }
@@ -44051,6 +44620,7 @@ ${parts.join("\n")}
         for (let i = 0; i < batch.textures.count; i++) {
           renderer.texture.bind(textures[i], i);
         }
+        renderer.texture.unbindIntegerTextures(batch.textures.count);
         renderer.geometry.draw(batch.topology, batch.size, batch.start);
       }
     }
@@ -44147,7 +44717,7 @@ ${parts.join("\n")}
           batch.topology,
           this._shader._overrides
         );
-        batch.bindGroup._touch(renderer.gc.now, renderer.tick);
+        batch.bindGroup._touch(renderer.gc.now);
         encoder.setPipeline(pipeline);
         encoder.renderPassEncoder.setBindGroup(1, gpuBindGroup);
         encoder.renderPassEncoder.drawIndexed(batch.size, 1, batch.start);
@@ -44234,6 +44804,24 @@ ${parts.join("\n")}
           this._adaptor.start(this, geometry, shader);
         }
         this._adaptor.execute(this, batch);
+      }
+      /**
+       * Releases all batchers cached for the given InstructionSet. Called from
+       * `InstructionSet.destroy()` so that batchers (and their GPU geometry / attribute
+       * buffers / referenced textures) do not leak when the owning RenderGroup is destroyed.
+       * @param instructionSet - the instruction set being destroyed
+       */
+      destroyInstructionSet(instructionSet) {
+        const batchers = this._batchersByInstructionSet[instructionSet.uid];
+        if (!batchers) return;
+        for (const i in batchers) {
+          batchers[i].destroy();
+        }
+        delete this._batchersByInstructionSet[instructionSet.uid];
+        if (this._activeBatches === batchers) {
+          this._activeBatches = /* @__PURE__ */ Object.create(null);
+          this._activeBatch = null;
+        }
       }
       destroy() {
         this.state = null;
@@ -44461,12 +45049,12 @@ ${parts.join("\n")}
             instruction.mask.mask.measurable = false;
             bounds.ceil();
             const colorTextureSource = renderer.renderTarget.renderTarget.colorTexture.source;
-            const filterTexture = TexturePool.getOptimalTexture(
-              bounds.width,
-              bounds.height,
-              colorTextureSource._resolution,
-              colorTextureSource.antialias
-            );
+            const filterTexture = TexturePool.getOptimalTexture({
+              width: bounds.width,
+              height: bounds.height,
+              resolution: colorTextureSource._resolution,
+              antialias: colorTextureSource.antialias
+            });
             renderer.renderTarget.push({ target: filterTexture, clear: true });
             renderer.globalUniforms.push({
               offset: bounds,
@@ -44934,13 +45522,10 @@ ${parts.join("\n")}
     "use strict";
     class StencilMaskPipe {
       constructor(renderer) {
-        // used when building and also when executing..
-        this._maskStackHash = {};
         this._maskHash = /* @__PURE__ */ new WeakMap();
         this._renderer = renderer;
       }
       push(mask, _container, instructionSet) {
-        var _a, _b;
         const effect = mask;
         const renderer = this._renderer;
         renderer.renderPipes.batch.break(instructionSet);
@@ -44978,8 +45563,6 @@ ${parts.join("\n")}
         });
         const instructionsLength = instructionSet.instructionSize - maskData.instructionsStart - 1;
         maskData.instructionsLength = instructionsLength;
-        const renderTargetUid = renderer.renderTarget.renderTarget.uid;
-        (_b = (_a = this._maskStackHash)[renderTargetUid]) != null ? _b : _a[renderTargetUid] = 0;
       }
       pop(mask, _container, instructionSet) {
         const effect = mask;
@@ -45003,11 +45586,10 @@ ${parts.join("\n")}
         });
       }
       execute(instruction) {
-        var _a, _b;
         const renderer = this._renderer;
         const gpuRenderer = renderer;
-        const renderTargetUid = renderer.renderTarget.renderTarget.uid;
-        let maskStackIndex = (_b = (_a = this._maskStackHash)[renderTargetUid]) != null ? _b : _a[renderTargetUid] = 0;
+        const gpuRenderTarget = gpuRenderer.renderTarget.getGpuRenderTarget(gpuRenderer.renderTarget.renderTarget);
+        let maskStackIndex = gpuRenderTarget.maskStackIndex;
         if (instruction.action === "pushMaskBegin") {
           gpuRenderer.renderTarget.ensureDepthStencil();
           gpuRenderer.stencil.setStencilMode(STENCIL_MODES.RENDERING_MASK_ADD, maskStackIndex);
@@ -45037,11 +45619,10 @@ ${parts.join("\n")}
           }
           gpuRenderer.colorMask.setMask(15);
         }
-        this._maskStackHash[renderTargetUid] = maskStackIndex;
+        gpuRenderTarget.maskStackIndex = maskStackIndex;
       }
       destroy() {
         this._renderer = null;
-        this._maskStackHash = null;
         this._maskHash = null;
       }
     }
@@ -46108,15 +46689,15 @@ ${parts.join("\n")}
             const lastTexture = renderGroup.texture;
             bounds.ceil();
             if (renderGroup.texture) {
-              TexturePool.returnTexture(renderGroup.texture, true);
+              TexturePool.returnTexture(renderGroup.texture);
             }
-            const texture = TexturePool.getOptimalTexture(
-              bounds.width,
-              bounds.height,
+            const texture = TexturePool.getOptimalTexture({
+              width: bounds.width,
+              height: bounds.height,
               resolution,
-              antialias
-            );
-            texture._source.style = new TextureStyle({ scaleMode });
+              antialias,
+              scaleMode
+            });
             renderGroup.texture = texture;
             renderGroup._textureBounds || (renderGroup._textureBounds = new Bounds());
             renderGroup._textureBounds.copyFrom(bounds);
@@ -46127,7 +46708,7 @@ ${parts.join("\n")}
             }
           }
         } else if (renderGroup.texture) {
-          TexturePool.returnTexture(renderGroup.texture, true);
+          TexturePool.returnTexture(renderGroup.texture);
           renderGroup.texture = null;
         }
       }
@@ -46705,7 +47286,7 @@ ${parts.join("\n")}
       return a;
     };
     var __spreadProps$h = (a, b) => __defProps$h(a, __getOwnPropDescs$h(b));
-    var __objRest$a = (source, exclude) => {
+    var __objRest$b = (source, exclude) => {
       var target = {};
       for (var prop in source)
         if (__hasOwnProp$w.call(source, prop) && exclude.indexOf(prop) < 0)
@@ -46728,7 +47309,7 @@ ${parts.join("\n")}
        * rt.resize(500, 500);
        */
       static create(options) {
-        const _a = options, { dynamic, textureOptions } = _a, rest = __objRest$a(_a, ["dynamic", "textureOptions"]);
+        const _a = options, { dynamic, textureOptions } = _a, rest = __objRest$b(_a, ["dynamic", "textureOptions"]);
         return new RenderTexture(__spreadProps$h(__spreadValues$v({}, textureOptions), {
           source: new TextureSource(rest),
           dynamic: dynamic != null ? dynamic : false
@@ -46927,6 +47508,7 @@ ${parts.join("\n")}
         this._managedResourceHashes = [];
         this._managedCollections = [];
         this._ready = false;
+        this._running = false;
         this._renderer = renderer;
       }
       /**
@@ -47055,12 +47637,16 @@ ${parts.join("\n")}
         if (!gcData) return;
         const index = gcData.index;
         const last = this._managedResources.length - 1;
-        if (index !== last) {
-          const lastResource = this._managedResources[last];
-          this._managedResources[index] = lastResource;
-          lastResource._gcData.index = index;
+        if (this._running) {
+          this._managedResources[index] = null;
+        } else {
+          if (index !== last) {
+            const lastResource = this._managedResources[last];
+            this._managedResources[index] = lastResource;
+            lastResource._gcData.index = index;
+          }
+          this._managedResources.length--;
         }
-        this._managedResources.length--;
         resource._gcData = null;
         resource._gcLastUsed = -1;
       }
@@ -47086,17 +47672,34 @@ ${parts.join("\n")}
        * Removes resources that haven't been used for longer than maxUnusedTime.
        */
       run() {
+        if (this._running) return;
         const now = performance.now();
         const managedResourceHashes = this._managedResourceHashes;
-        for (const hashEntry of managedResourceHashes) {
-          this.runOnHash(hashEntry, now);
+        const managedResources = this._managedResources;
+        this._running = true;
+        try {
+          for (const hashEntry of managedResourceHashes) {
+            this.runOnHash(hashEntry, now);
+          }
+          const length = managedResources.length;
+          for (let i = 0; i < length; i++) {
+            const resource = managedResources[i];
+            if (resource) this.runOnResource(resource, now);
+          }
+        } finally {
+          let writeIndex = 0;
+          for (let i = 0; i < managedResources.length; i++) {
+            const resource = managedResources[i];
+            if (!resource) continue;
+            if (writeIndex !== i) {
+              managedResources[writeIndex] = resource;
+              resource._gcData.index = writeIndex;
+            }
+            writeIndex++;
+          }
+          managedResources.length = writeIndex;
+          this._running = false;
         }
-        let writeIndex = 0;
-        for (let i = 0; i < this._managedResources.length; i++) {
-          const resource = this._managedResources[i];
-          writeIndex = this.runOnResource(resource, now, writeIndex);
-        }
-        this._managedResources.length = writeIndex;
       }
       updateRenderableGCTick(renderable, now) {
         var _a, _b, _c, _d, _e;
@@ -47107,23 +47710,15 @@ ${parts.join("\n")}
           (_e = renderable._onTouch) == null ? void 0 : _e.call(renderable, now);
         }
       }
-      runOnResource(resource, now, writeIndex) {
-        const gcData = resource._gcData;
-        if (gcData.type === "renderable") {
+      runOnResource(resource, now) {
+        if (resource._gcData.type === "renderable") {
           this.updateRenderableGCTick(resource, now);
         }
         const isRecentlyUsed = now - resource._gcLastUsed < this.maxUnusedTime;
-        if (isRecentlyUsed || !resource.autoGarbageCollect) {
-          this._managedResources[writeIndex] = resource;
-          gcData.index = writeIndex;
-          writeIndex++;
-        } else {
-          resource.unload();
-          resource._gcData = null;
-          resource._gcLastUsed = -1;
-          resource.off("unload", this.removeResource, this);
-        }
-        return writeIndex;
+        if (isRecentlyUsed || !resource.autoGarbageCollect) return;
+        resource.off("unload", this.removeResource, this);
+        resource.unload();
+        this.removeResource(resource);
       }
       /**
        * Creates a clone of the hash, copying all non-null entries up to (but not including) the stop key.
@@ -47193,7 +47788,7 @@ ${parts.join("\n")}
       destroy() {
         this.enabled = false;
         this._managedResources.forEach((resource) => {
-          resource.off("unload", this.removeResource, this);
+          resource == null ? void 0 : resource.off("unload", this.removeResource, this);
         });
         this._managedResources.length = 0;
         this._managedResourceHashes.length = 0;
@@ -47748,11 +48343,13 @@ ${parts.join("\n")}
         }
       return a;
     };
-    const _RenderTarget = class _RenderTarget {
+    const _RenderTarget = class _RenderTarget extends EventEmitter {
       /**
        * @param options - Options for creating a render target, or a WebGPU-flavored descriptor.
        */
       constructor(options = {}) {
+        var _a;
+        super();
         /** unique id for this render target */
         this.uid = uid$1("renderTarget");
         /**
@@ -47770,7 +48367,6 @@ ${parts.join("\n")}
         /** stencil capability requested for this target — via options, attachment format, or the mask system @internal */
         this._stencil = false;
         this._colorTextures = null;
-        var _a;
         const descriptor = "colorAttachments" in options ? options : this._normalizeOptions(options);
         this.isRoot = (_a = descriptor.isRoot) != null ? _a : false;
         this.label = descriptor.label;
@@ -47923,6 +48519,7 @@ ${parts.join("\n")}
       }
       destroy() {
         if (!this.colorAttachments && !this.depthStencilAttachment) return;
+        this.emit("destroy", this);
         this.sizeSource.off("resize", this.onSourceResize, this);
         if (this._managedColorTextures) {
           this.colorAttachments.forEach((attachment) => {
@@ -47935,6 +48532,7 @@ ${parts.join("\n")}
         }
         this.colorAttachments = null;
         this._colorTextures = null;
+        this.removeAllListeners();
       }
       /**
        * The single recipe for internally-created depth-stencil textures.
@@ -47959,6 +48557,11 @@ ${parts.join("\n")}
         return this.depthStencilAttachment;
       }
     };
+    /**
+     * emits when the render target is destroyed, before its attachments are released.
+     * letting the renderer know that it needs to free the framebuffers and MSAA buffers it built for it
+     * @event destroy
+     */
     /** The default options for a render target */
     _RenderTarget.defaultOptions = {
       /** the width of the RenderTarget */
@@ -48039,6 +48642,18 @@ ${parts.join("\n")}
         }
       return a;
     };
+    var __objRest$a = (source, exclude) => {
+      var target = {};
+      for (var prop in source)
+        if (__hasOwnProp$q.call(source, prop) && exclude.indexOf(prop) < 0)
+          target[prop] = source[prop];
+      if (source != null && __getOwnPropSymbols$q)
+        for (var prop of __getOwnPropSymbols$q(source)) {
+          if (exclude.indexOf(prop) < 0 && __propIsEnum$q.call(source, prop))
+            target[prop] = source[prop];
+        }
+      return target;
+    };
     const _ViewSystem = class _ViewSystem {
       /**
        * Whether CSS dimensions of canvas view should be resized to screen dimensions automatically.
@@ -48062,6 +48677,9 @@ ${parts.join("\n")}
           value
         );
       }
+      constructor(renderer) {
+        this._renderer = renderer;
+      }
       /**
        * initiates the view system
        * @param options - the options for the view
@@ -48075,14 +48693,17 @@ ${parts.join("\n")}
         this.screen = new Rectangle(0, 0, options.width, options.height);
         this.canvas = options.canvas || DOMAdapter.get().createCanvas();
         this.antialias = !!options.antialias;
-        this.texture = getCanvasTexture(this.canvas, options);
+        const _a = options, { depth } = _a, canvasOptions = __objRest$a(_a, ["depth"]);
+        this.texture = getCanvasTexture(this.canvas, canvasOptions);
         this.renderTarget = new RenderTarget({
           colorTextures: [this.texture],
-          depth: !!options.depth,
+          depth: !!depth,
           isRoot: true
         });
         this.texture.source.transparent = options.backgroundAlpha < 1;
+        this.texture.source.on("resize", this._updateScreenSize, this);
         this.resolution = options.resolution;
+        this._updateScreenSize();
       }
       /**
        * Resizes the screen and canvas to the specified dimensions.
@@ -48108,7 +48729,20 @@ ${parts.join("\n")}
         if (removeView && this.canvas.parentNode) {
           this.canvas.parentNode.removeChild(this.canvas);
         }
+        this.texture.source.off("resize", this._updateScreenSize, this);
+        TexturePool.removeScreen(this._renderer.uid);
+        CanvasPool.removeScreen(this._renderer.uid);
         this.texture.destroy();
+      }
+      /**
+       * Tells the texture and canvas pools how big this renderer's screen is, in physical pixels, so they
+       * can hand out screen sized resources instead of rounding every request up to a power of two.
+       */
+      _updateScreenSize() {
+        const { pixelWidth, pixelHeight } = this.texture.source;
+        const uid = this._renderer.uid;
+        TexturePool.setScreenSize(uid, pixelWidth, pixelHeight);
+        CanvasPool.setScreenSize(uid, pixelWidth, pixelHeight);
       }
     };
     /** @ignore */
@@ -48283,7 +48917,7 @@ ${parts.join("\n")}
         flipY = options.flipY;
         frame = options.frame;
         const renderTarget = this.getRenderTarget(renderSurface);
-        const didChange = this.renderTarget !== renderTarget;
+        const didChange = this.renderTarget !== renderTarget || !!renderTarget.flipY !== !!flipY;
         this.renderTarget = renderTarget;
         const gpuRenderTarget = this.getGpuRenderTarget(renderTarget);
         if (renderTarget.pixelWidth !== gpuRenderTarget.width || renderTarget.pixelHeight !== gpuRenderTarget.height) {
@@ -48293,9 +48927,9 @@ ${parts.join("\n")}
         }
         const source = ((_d = renderTarget.colorAttachments[0]) == null ? void 0 : _d.texture) || ((_e = renderTarget.depthStencilAttachment) == null ? void 0 : _e.texture);
         const viewport = this.viewport;
-        const arrayLayerCount = source.arrayLayerCount || 1;
-        if (layer < 0 || layer >= arrayLayerCount) {
-          throw new Error(`[RenderTargetSystem] layer ${layer} is out of bounds (arrayLayerCount=${arrayLayerCount}).`);
+        const layerCount = source.dimension === "3d" ? Math.max(source.depth >> mipLevel, 1) : source.depthOrArrayLayers;
+        if (layer < 0 || layer >= layerCount) {
+          throw new Error(`[RenderTargetSystem] layer ${layer} is out of bounds (layer count=${layerCount}).`);
         }
         const bindState = this._bindState;
         bindState.target = renderSurface;
@@ -48403,31 +49037,44 @@ ${parts.join("\n")}
         return out;
       }
       /**
-       * The effective front-face orientation of the current bind — `true` when a front-facing triangle
-       * ends up wound the opposite way on the surface (so the winding/cull has been inverted to compensate).
+       * Whether pixi inverts the front face for a bind — `true` when a front-facing triangle ends up
+       * wound the opposite way on the surface, so the winding/cull has been inverted to compensate.
+       *
+       * With no arguments, answers for the current bind. With a target, answers for that target as if
+       * it were bound with the given `flipY` (defaulting to `false`, exactly as {@link bind} would), so
+       * a consumer can choose a projection or a `flipY` before binding.
        *
        * This is the requested `flipY` combined with the backend's inherent orientation, not the raw request:
        *
        * ```text
-       * frontFaceInverted = flipY XOR (isWebGL && !isRoot)
+       * inverted = flipY XOR (isWebGL && !isRoot)
        * ```
        *
        * WebGL's non-root FBOs carry an inherent Y-flip vs the root (the classic render-texture flip), so the
        * same requested `flipY` lands with the opposite winding depending on `isRoot`. WebGPU has no such
-       * inherent flip, so there it is simply `flipY`. This is exactly the winding inversion each backend bakes
-       * at bind ({@link GlStateSystem} / {@link PipelineSystem}), exposed so consumers (e.g. 3D pipelines) can
-       * read the resolved orientation instead of re-deriving it from `flipY`, `isRoot`, and a backend check of
-       * their own.
-       *
-       * It is per-bind, not per-target: `flipY` is set on every `bind`/`renderStart` while `isRoot` is fixed on
-       * the target, so this recomputes from whatever the last bind resolved.
+       * inherent flip, so there it is simply `flipY`. This is the one spelling of the rule: the winding each
+       * backend bakes at bind ({@link GlStateSystem} / {@link PipelineSystem}) comes from here too, so
+       * consumers (e.g. 3D pipelines) read the resolved orientation instead of re-deriving it.
+       * @param renderTarget - the target to ask about; omit for the current bind
+       * @param flipY - the `flipY` the target would be bound with; ignored when `renderTarget` is omitted
+       * @returns whether the front face is inverted
+       */
+      isFrontFaceInverted(renderTarget, flipY) {
+        if (!renderTarget) {
+          renderTarget = this.renderTarget;
+          if (!renderTarget) return false;
+          flipY = renderTarget.flipY;
+        }
+        return !!flipY !== (this._renderer.type === RendererType.WEBGL && !renderTarget.isRoot);
+      }
+      /**
+       * The effective front-face orientation of the current bind.
+       * @deprecated since 8.21.0, use {@link isFrontFaceInverted} instead
        * @returns whether the current bind's front face is inverted
        */
       get frontFaceInverted() {
-        const renderTarget = this.renderTarget;
-        if (!renderTarget) return false;
-        const glInherentFlip = this._renderer.type === RendererType.WEBGL && !renderTarget.isRoot;
-        return !!renderTarget.flipY !== glInherentFlip;
+        deprecation(v8_21_0, "RenderTargetSystem.frontFaceInverted is deprecated, use isFrontFaceInverted() instead");
+        return this.isFrontFaceInverted();
       }
       clear(target, clear = CLEAR.ALL, clearColor, mipLevel = this.mipLevel, layer = this.layer) {
         if (!clear) return;
@@ -48648,9 +49295,14 @@ ${parts.join("\n")}
         this._renderSurfaceToRenderTargetHash.forEach((renderTarget, key) => {
           if (renderTarget !== key) {
             this._releaseRenderTarget(key, renderTarget);
+          } else {
+            renderTarget.off("destroy", this._onRenderTargetDestroy, this);
           }
         });
         this._renderSurfaceToRenderTargetHash.clear();
+        for (const gpuRenderTarget of Object.values(this._gpuRenderTargetHash)) {
+          if (gpuRenderTarget) this.adaptor.destroyGpuRenderTarget(gpuRenderTarget);
+        }
         this._gpuRenderTargetHash = /* @__PURE__ */ Object.create(null);
       }
       _initRenderTarget(renderSurface) {
@@ -48660,6 +49312,7 @@ ${parts.join("\n")}
         }
         if (renderSurface instanceof RenderTarget) {
           renderTarget = renderSurface;
+          renderSurface.once("destroy", this._onRenderTargetDestroy, this);
         } else if (renderSurface instanceof TextureSource) {
           const format = renderSurface.format;
           const isDepthStencil = format.includes("depth") || format.includes("stencil");
@@ -48677,6 +49330,15 @@ ${parts.join("\n")}
         if (renderTarget) this._releaseRenderTarget(renderSurface, renderTarget);
       }
       /**
+       * A caller-owned render target is tearing itself down. It releases its own attachments,
+       * so only the system's references to it and the backend objects built for it go here.
+       * @param renderTarget - the render target being destroyed
+       */
+      _onRenderTargetDestroy(renderTarget) {
+        this._renderSurfaceToRenderTargetHash.delete(renderTarget);
+        this._releaseGpuRenderTarget(renderTarget);
+      }
+      /**
        * Tears down a render target that wraps a texture source, removing every reference the
        * system holds to it so neither the system's own teardown nor the source's `destroy`
        * event can destroy it a second time.
@@ -48687,6 +49349,13 @@ ${parts.join("\n")}
         renderTarget.destroy();
         this._renderSurfaceToRenderTargetHash.delete(renderSurface);
         renderSurface.off("destroy", this._onRenderSurfaceDestroy, this);
+        this._releaseGpuRenderTarget(renderTarget);
+      }
+      /**
+       * Frees the backend objects (framebuffers, renderbuffers, MSAA textures) cached for a render target.
+       * @param renderTarget - the render target whose backend counterpart is no longer needed
+       */
+      _releaseGpuRenderTarget(renderTarget) {
         const gpuRenderTarget = this._gpuRenderTargetHash[renderTarget.uid];
         if (gpuRenderTarget) {
           this._gpuRenderTargetHash[renderTarget.uid] = null;
@@ -48978,9 +49647,11 @@ ${parts.join("\n")}
     const systems$2 = [];
     const renderPipes$2 = [];
     const renderPipeAdaptors$2 = [];
+    const loaders$2 = [];
     extensions.handleByNamedList(ExtensionType.CanvasSystem, systems$2);
     extensions.handleByNamedList(ExtensionType.CanvasPipes, renderPipes$2);
     extensions.handleByNamedList(ExtensionType.CanvasPipesAdaptor, renderPipeAdaptors$2);
+    extensions.handleByNamedList(ExtensionType.CanvasLoader, loaders$2);
     extensions.add(...DefaultCanvasSystems, ...DefaultCanvasPipes, ...DefaultCanvasAdapters);
     class CanvasRenderer extends AbstractRenderer {
       constructor() {
@@ -48989,7 +49660,8 @@ ${parts.join("\n")}
           type: RendererType.CANVAS,
           systems: systems$2,
           renderPipes: renderPipes$2,
-          renderPipeAdaptors: renderPipeAdaptors$2
+          renderPipeAdaptors: renderPipeAdaptors$2,
+          loaders: loaders$2
         };
         super(systemConfig);
       }
@@ -49532,7 +50204,7 @@ ${parts.join("\n")}
           (_a = attribute.format) != null ? _a : attribute.format = attributeData.format;
           (_b = attribute.offset) != null ? _b : attribute.offset = attributeData.offset;
           (_c = attribute.instance) != null ? _c : attribute.instance = attributeData.instance;
-        } else {
+        } else if (!attribute.format) {
           warn(`Attribute ${i} is not present in the shader, but is present in the geometry. Unable to infer attribute details.`);
         }
       }
@@ -49581,6 +50253,7 @@ ${parts.join("\n")}
       GL_TARGETS2[GL_TARGETS2["TEXTURE_2D"] = 3553] = "TEXTURE_2D";
       GL_TARGETS2[GL_TARGETS2["TEXTURE_CUBE_MAP"] = 34067] = "TEXTURE_CUBE_MAP";
       GL_TARGETS2[GL_TARGETS2["TEXTURE_2D_ARRAY"] = 35866] = "TEXTURE_2D_ARRAY";
+      GL_TARGETS2[GL_TARGETS2["TEXTURE_3D"] = 32879] = "TEXTURE_3D";
       GL_TARGETS2[GL_TARGETS2["TEXTURE_CUBE_MAP_POSITIVE_X"] = 34069] = "TEXTURE_CUBE_MAP_POSITIVE_X";
       GL_TARGETS2[GL_TARGETS2["TEXTURE_CUBE_MAP_NEGATIVE_X"] = 34070] = "TEXTURE_CUBE_MAP_NEGATIVE_X";
       GL_TARGETS2[GL_TARGETS2["TEXTURE_CUBE_MAP_POSITIVE_Y"] = 34071] = "TEXTURE_CUBE_MAP_POSITIVE_Y";
@@ -49820,7 +50493,7 @@ ${parts.join("\n")}
         const vaoCache = gpuData.vaoCache;
         if (!contextLost) {
           for (const i in vaoCache) {
-            if (this._activeVao !== vaoCache[i]) {
+            if (this._activeVao === vaoCache[i]) {
               this.resetState();
             }
             this.gl.deleteVertexArray(vaoCache[i]);
@@ -49894,8 +50567,9 @@ ${parts.join("\n")}
       /**
        * Draws the currently bound geometry.
        * @param topology - The type primitive to render.
-       * @param size - The number of elements to be rendered. If not specified, all vertices after the
-       *  starting vertex will be drawn.
+       * @param size - The number of elements to be rendered. If not specified, an indexed geometry
+       *  falls back to {@link Geometry.indexCount} and then to its whole index buffer, and a
+       *  non-indexed one to {@link Geometry.vertexCount}.
        * @param start - The starting vertex in the geometry to start drawing from. If not specified,
        *  drawing will start from the first vertex.
        * @param instanceCount - The number of instances of the set of elements to execute. If not specified,
@@ -49910,10 +50584,12 @@ ${parts.join("\n")}
         if (geometry.indexBuffer) {
           const byteSize = geometry.indexBuffer.data.BYTES_PER_ELEMENT;
           const glType = byteSize === 2 ? gl.UNSIGNED_SHORT : gl.UNSIGNED_INT;
+          const count = size || geometry.indexCount || geometry.indexBuffer.data.length;
+          const byteOffset = (start || 0) * byteSize;
           if (instanceCount !== 1) {
-            gl.drawElementsInstanced(glTopology, size || geometry.indexBuffer.data.length, glType, (start || 0) * byteSize, instanceCount);
+            gl.drawElementsInstanced(glTopology, count, glType, byteOffset, instanceCount);
           } else {
-            gl.drawElements(glTopology, size || geometry.indexBuffer.data.length, glType, (start || 0) * byteSize);
+            gl.drawElements(glTopology, count, glType, byteOffset);
           }
         } else if (instanceCount !== 1) {
           gl.drawArraysInstanced(glTopology, start || 0, size || geometry.vertexCount, instanceCount);
@@ -50191,6 +50867,16 @@ ${parts.join("\n")}
          */
         this._attachedLayer = 0;
         this.msaaRenderBuffer = [];
+        /**
+         * The stencil state the stencil system and the mask pipe track for this target on this renderer.
+         * It lives here rather than in a uid-keyed record so it is restored when the target is bound again
+         * and freed with the backend object when the target dies.
+         */
+        this.stencilMode = STENCIL_MODES.DISABLED;
+        /** the stencil reference value that goes with `stencilMode` */
+        this.stencilReference = 0;
+        /** how many stencil masks are currently pushed on this target */
+        this.maskStackIndex = 0;
       }
     }
 
@@ -50252,7 +50938,7 @@ ${parts.join("\n")}
           stencilReference: 0,
           stencilMode: STENCIL_MODES.NONE
         };
-        this._renderTargetStencilState = /* @__PURE__ */ Object.create(null);
+        this._renderer = renderer;
         renderer.renderTarget.onRenderTargetChange.add(this);
       }
       contextChange(gl) {
@@ -50277,19 +50963,15 @@ ${parts.join("\n")}
           "increment-wrap": gl.INCR_WRAP,
           "decrement-wrap": gl.DECR_WRAP
         };
+        this._activeGpuRenderTarget = null;
         this.resetState();
       }
       onRenderTargetChange(renderTarget) {
         if (this._activeRenderTarget === renderTarget) return;
         this._activeRenderTarget = renderTarget;
-        let stencilState = this._renderTargetStencilState[renderTarget.uid];
-        if (!stencilState) {
-          stencilState = this._renderTargetStencilState[renderTarget.uid] = {
-            stencilMode: STENCIL_MODES.DISABLED,
-            stencilReference: 0
-          };
-        }
-        this.setStencilMode(stencilState.stencilMode, stencilState.stencilReference);
+        const gpuRenderTarget = this._renderer.renderTarget.getGpuRenderTarget(renderTarget);
+        this._activeGpuRenderTarget = gpuRenderTarget;
+        this.setStencilMode(gpuRenderTarget.stencilMode, gpuRenderTarget.stencilReference);
       }
       resetState() {
         this._stencilCache.enabled = false;
@@ -50297,12 +50979,13 @@ ${parts.join("\n")}
         this._stencilCache.stencilReference = 0;
       }
       setStencilMode(stencilMode, stencilReference) {
-        const stencilState = this._renderTargetStencilState[this._activeRenderTarget.uid];
+        var _a;
+        const gpuRenderTarget = (_a = this._activeGpuRenderTarget) != null ? _a : this._activeGpuRenderTarget = this._renderer.renderTarget.getGpuRenderTarget(this._activeRenderTarget);
         const gl = this._gl;
         const mode = GpuStencilModesToPixi[stencilMode];
         const _stencilCache = this._stencilCache;
-        stencilState.stencilMode = stencilMode;
-        stencilState.stencilReference = stencilReference;
+        gpuRenderTarget.stencilMode = stencilMode;
+        gpuRenderTarget.stencilReference = stencilReference;
         if (stencilMode === STENCIL_MODES.DISABLED) {
           if (this._stencilCache.enabled) {
             this._stencilCache.enabled = false;
@@ -50320,6 +51003,13 @@ ${parts.join("\n")}
           gl.stencilFunc(this._comparisonFuncMapping[mode.stencilBack.compare], stencilReference, 255);
           gl.stencilOp(gl.KEEP, gl.KEEP, this._stencilOpsMapping[mode.stencilBack.passOp]);
         }
+      }
+      destroy() {
+        this._renderer.renderTarget.onRenderTargetChange.remove(this);
+        this._renderer = null;
+        this._gl = null;
+        this._activeRenderTarget = null;
+        this._activeGpuRenderTarget = null;
       }
     }
     /** @ignore */
@@ -50901,10 +51591,7 @@ ${parts.join("\n")}
                 glSource.texture,
                 mipLevel
               );
-            } else if (glSource.target === gl.TEXTURE_2D_ARRAY) {
-              if (this._renderer.context.webGLVersion < 2) {
-                throw new Error("[RenderTargetSystem] Rendering to 2D array textures requires WebGL2.");
-              }
+            } else if (glSource.target === gl.TEXTURE_2D_ARRAY || glSource.target === gl.TEXTURE_3D) {
               gl.framebufferTextureLayer(
                 gl.FRAMEBUFFER,
                 gl.COLOR_ATTACHMENT0 + i,
@@ -51024,7 +51711,7 @@ ${parts.join("\n")}
         gpuRenderTarget.msaaRenderBuffer.forEach((renderBuffer) => {
           gl.deleteRenderbuffer(renderBuffer);
         });
-        gpuRenderTarget.msaaRenderBuffer = null;
+        gpuRenderTarget.msaaRenderBuffer.length = 0;
       }
       clear(renderTarget, clear, clearColor, _viewport, _mipLevel = 0, layer = 0) {
         if (!clear) return;
@@ -51097,10 +51784,7 @@ ${parts.join("\n")}
               glTexture,
               0
             );
-          } else if (glSource.target === gl.TEXTURE_2D_ARRAY) {
-            if (renderer.context.webGLVersion < 2) {
-              throw new Error("[RenderTargetSystem] TEXTURE_2D_ARRAY requires WebGL2.");
-            }
+          } else if (glSource.target === gl.TEXTURE_2D_ARRAY || glSource.target === gl.TEXTURE_3D) {
             gl.framebufferTextureLayer(
               gl.FRAMEBUFFER,
               gl.COLOR_ATTACHMENT0 + i,
@@ -51208,7 +51892,7 @@ ${parts.join("\n")}
             glTexture,
             mipLevel
           );
-        } else if (glSource.target === gl.TEXTURE_2D_ARRAY) {
+        } else if (glSource.target === gl.TEXTURE_2D_ARRAY || glSource.target === gl.TEXTURE_3D) {
           gl.framebufferTextureLayer(
             gl.FRAMEBUFFER,
             attachment,
@@ -51369,11 +52053,6 @@ ${parts.join("\n")}
          */
         this._resourceType = "bufferResource";
         /**
-         * used internally to know if a uniform group was used in the last render pass
-         * @internal
-         */
-        this._touched = 0;
-        /**
          * the resource id used internally by the renderer to build bind group keys
          * @internal
          */
@@ -51438,8 +52117,6 @@ ${parts.join("\n")}
         this._resourceType = "textureView";
         /** Unique ID for this resource. */
         this._resourceId = uid$1("resource");
-        /** Used for GC. */
-        this._touched = 0;
         this.source = source;
         this.viewDescriptor = viewDescriptor;
         this._onChange = this._onChange.bind(this);
@@ -51591,6 +52268,7 @@ ${parts.join("\n")}
         case "uint":
         case "sampler2D":
         case "sampler2DArray":
+        case "sampler3D":
           return 0;
         case "ivec2":
           return new Int32Array(2 * size);
@@ -51687,7 +52365,10 @@ ${parts.join("\n")}
       SAMPLER_2D_ARRAY: "sampler2DArray",
       INT_SAMPLER_2D_ARRAY: "sampler2DArray",
       UNSIGNED_INT_SAMPLER_2D_ARRAY: "sampler2DArray",
-      SAMPLER_2D_ARRAY_SHADOW: "sampler2DArrayShadow"
+      SAMPLER_2D_ARRAY_SHADOW: "sampler2DArrayShadow",
+      SAMPLER_3D: "sampler3D",
+      INT_SAMPLER_3D: "sampler3D",
+      UNSIGNED_INT_SAMPLER_3D: "sampler3D"
     };
     const GLSL_TO_VERTEX_TYPES = {
       float: "float32",
@@ -52338,6 +53019,7 @@ ${parts.join("\n")}
          * @default false
          */
         this._invertFrontFace = false;
+        this._renderer = renderer;
         this.gl = null;
         this.stateId = 0;
         this.polygonOffset = 0;
@@ -52355,7 +53037,7 @@ ${parts.join("\n")}
         renderer.renderTarget.onRenderTargetChange.add(this);
       }
       onRenderTargetChange(renderTarget) {
-        this._invertFrontFace = !renderTarget.isRoot !== !!renderTarget.flipY;
+        this._invertFrontFace = this._renderer.renderTarget.isFrontFaceInverted(renderTarget, renderTarget.flipY);
         if (this._cullFace) {
           this.setFrontFace(this._frontFace);
         } else {
@@ -52551,6 +53233,7 @@ ${parts.join("\n")}
       destroy() {
         this.gl = null;
         this.checks.length = 0;
+        this._renderer = null;
       }
     };
     /** @ignore */
@@ -52585,23 +53268,77 @@ ${parts.join("\n")}
     }
 
     "use strict";
+    function getTexelRangeRects(start, end, width, height, out) {
+      start = Math.max(0, start);
+      end = Math.min(end, width * height);
+      if (start >= end) return 0;
+      const firstRow = Math.floor(start / width);
+      const firstX = start - firstRow * width;
+      const lastRow = Math.floor(end / width);
+      const lastX = end - lastRow * width;
+      if (firstRow === lastRow) {
+        out[0].set(firstX, firstRow, lastX - firstX, 1);
+        return 1;
+      }
+      let count = 0;
+      let firstFullRow = firstRow;
+      if (firstX > 0) {
+        out[count++].set(firstX, firstRow, width - firstX, 1);
+        firstFullRow++;
+      }
+      if (lastRow > firstFullRow) {
+        out[count++].set(0, firstFullRow, width, lastRow - firstFullRow);
+      }
+      if (lastX > 0) {
+        out[count++].set(0, lastRow, lastX, 1);
+      }
+      return count;
+    }
+
+    "use strict";
+    const tempRects$1 = [new Rectangle(), new Rectangle(), new Rectangle()];
     const glUploadBufferImageResource = {
       id: "buffer",
       upload(source, glTexture, gl, _webGLVersion, targetOverride, forceAllocation = false) {
         const target = targetOverride || glTexture.target;
-        if (!forceAllocation && (glTexture.width === source.width && glTexture.height === source.height)) {
-          gl.texSubImage2D(
-            target,
-            0,
-            0,
-            0,
-            source.width,
-            source.height,
-            glTexture.format,
-            glTexture.type,
-            source.resource
-          );
-        } else {
+        const resource = source.resource;
+        if (target === GL_TARGETS.TEXTURE_3D || target === GL_TARGETS.TEXTURE_2D_ARRAY) {
+          if (forceAllocation || glTexture.width !== source.width || glTexture.height !== source.height) {
+            gl.texImage3D(
+              target,
+              0,
+              glTexture.internalFormat,
+              source.width,
+              source.height,
+              source.depthOrArrayLayers,
+              0,
+              glTexture.format,
+              glTexture.type,
+              resource
+            );
+          } else {
+            gl.texSubImage3D(
+              target,
+              0,
+              0,
+              0,
+              0,
+              source.width,
+              source.height,
+              source.depthOrArrayLayers,
+              glTexture.format,
+              glTexture.type,
+              resource
+            );
+          }
+          glTexture.width = source.width;
+          glTexture.height = source.height;
+          return;
+        }
+        const texelCount = source.width * source.height;
+        const needsAllocation = forceAllocation || glTexture.width !== source.width || glTexture.height !== source.height;
+        const isPartial = source._updateStart > 0 || source._updateEnd < texelCount;
+        if (needsAllocation) {
           gl.texImage2D(
             target,
             0,
@@ -52611,7 +53348,43 @@ ${parts.join("\n")}
             0,
             glTexture.format,
             glTexture.type,
-            source.resource
+            resource
+          );
+        } else if (isPartial) {
+          const elementsPerTexel = resource.length / texelCount;
+          const count = getTexelRangeRects(
+            source._updateStart,
+            source._updateEnd,
+            source.width,
+            source.height,
+            tempRects$1
+          );
+          for (let i = 0; i < count; i++) {
+            const rect = tempRects$1[i];
+            const offset = (rect.y * source.width + rect.x) * elementsPerTexel;
+            gl.texSubImage2D(
+              target,
+              0,
+              rect.x,
+              rect.y,
+              rect.width,
+              rect.height,
+              glTexture.format,
+              glTexture.type,
+              resource.subarray(offset, offset + rect.width * rect.height * elementsPerTexel)
+            );
+          }
+        } else {
+          gl.texSubImage2D(
+            target,
+            0,
+            0,
+            0,
+            source.width,
+            source.height,
+            glTexture.format,
+            glTexture.type,
+            resource
           );
         }
         glTexture.width = source.width;
@@ -52973,44 +53746,44 @@ ${parts.join("\n")}
         // 8-bit formats
         r8unorm: gl.RED,
         r8snorm: gl.RED,
-        r8uint: gl.RED,
-        r8sint: gl.RED,
+        r8uint: gl.RED_INTEGER,
+        r8sint: gl.RED_INTEGER,
         // 16-bit formats
-        r16uint: gl.RED,
-        r16sint: gl.RED,
+        r16uint: gl.RED_INTEGER,
+        r16sint: gl.RED_INTEGER,
         r16float: gl.RED,
         rg8unorm: gl.RG,
         rg8snorm: gl.RG,
-        rg8uint: gl.RG,
-        rg8sint: gl.RG,
+        rg8uint: gl.RG_INTEGER,
+        rg8sint: gl.RG_INTEGER,
         // 32-bit formats
-        r32uint: gl.RED,
-        r32sint: gl.RED,
+        r32uint: gl.RED_INTEGER,
+        r32sint: gl.RED_INTEGER,
         r32float: gl.RED,
-        rg16uint: gl.RG,
-        rg16sint: gl.RG,
+        rg16uint: gl.RG_INTEGER,
+        rg16sint: gl.RG_INTEGER,
         rg16float: gl.RG,
         rgba8unorm: gl.RGBA,
         "rgba8unorm-srgb": gl.RGBA,
         // Packed 32-bit formats
         rgba8snorm: gl.RGBA,
-        rgba8uint: gl.RGBA,
-        rgba8sint: gl.RGBA,
+        rgba8uint: gl.RGBA_INTEGER,
+        rgba8sint: gl.RGBA_INTEGER,
         bgra8unorm: gl.RGBA,
         "bgra8unorm-srgb": gl.RGBA,
         rgb9e5ufloat: gl.RGB,
         rgb10a2unorm: gl.RGBA,
         rg11b10ufloat: gl.RGB,
         // 64-bit formats
-        rg32uint: gl.RG,
-        rg32sint: gl.RG,
+        rg32uint: gl.RG_INTEGER,
+        rg32sint: gl.RG_INTEGER,
         rg32float: gl.RG,
-        rgba16uint: gl.RGBA,
-        rgba16sint: gl.RGBA,
+        rgba16uint: gl.RGBA_INTEGER,
+        rgba16sint: gl.RGBA_INTEGER,
         rgba16float: gl.RGBA,
         // 128-bit formats
-        rgba32uint: gl.RGBA,
-        rgba32sint: gl.RGBA,
+        rgba32uint: gl.RGBA_INTEGER,
+        rgba32sint: gl.RGBA_INTEGER,
         rgba32float: gl.RGBA,
         // Depth/stencil formats
         stencil8: gl.STENCIL_INDEX8,
@@ -53277,6 +54050,8 @@ ${parts.join("\n")}
       constructor(renderer) {
         this._glSamplers = /* @__PURE__ */ Object.create(null);
         this._boundTextures = [];
+        /** Bit `n` is set while unit `n` may hold an integer-format texture; `resetState` sets every unit. */
+        this._integerUnits = 0;
         this._activeTextureLocation = -1;
         this._boundSamplers = /* @__PURE__ */ Object.create(null);
         this._premultiplyAlpha = false;
@@ -53347,11 +54122,50 @@ ${parts.join("\n")}
         const gl = this._gl;
         source._gcLastUsed = this._renderer.gc.now;
         if (this._boundTextures[location] !== source) {
-          this._boundTextures[location] = source;
+          this._setBoundTexture(location, source);
           this._activateLocation(location);
           source || (source = Texture.EMPTY.source);
           const glTexture = this.getGlSource(source);
           gl.bindTexture(glTexture.target, glTexture.texture);
+        }
+      }
+      /**
+       * Binds the empty texture over every integer texture on unit `location` and above
+       *
+       * WebGL fails a draw when a float sampler's unit holds an integer texture, even if the shader
+       * never samples it. Call this after binding a batch's textures when the shader declares more
+       * samplers than the batch binds.
+       * @param location - The first texture unit to check.
+       */
+      unbindIntegerTextures(location) {
+        if (location >= 32) return;
+        let units = this._integerUnits >>> location << location;
+        while (units) {
+          const unit = 31 - Math.clz32(units);
+          units &= ~(1 << unit);
+          this.bind(Texture.EMPTY, unit);
+        }
+      }
+      /**
+       * Records the source bound to a unit, keeping `_integerUnits` in step. Every per-unit write to
+       * `_boundTextures` goes through here so the two can't drift apart.
+       *
+       * A unit has a separate binding per target (2D, 2D array, cube), and the batch shaders sample
+       * the 2D target, so only a 2D source changes the unit's bit. Anything else, including null,
+       * leaves it as it was: a bit left set after the integer texture is gone only costs one extra
+       * `bind(Texture.EMPTY)` in `unbindIntegerTextures`, while a cleared bit over an integer texture
+       * fails the next batch.
+       * @param location - The texture unit.
+       * @param source - The source now bound there, or null.
+       */
+      _setBoundTexture(location, source) {
+        this._boundTextures[location] = source;
+        if (location < 0 || location > 31) return;
+        if (!source || source.viewDimension !== "2d") return;
+        if (isIntegerFormat(source.format)) {
+          this._integerUnits |= 1 << location;
+        } else {
+          this._integerUnits &= ~(1 << location);
         }
       }
       _bindSampler(style, location = 0) {
@@ -53376,7 +54190,7 @@ ${parts.join("\n")}
             this._activateLocation(i);
             const glTexture = this.getGlSource(source);
             gl.bindTexture(glTexture.target, null);
-            boundTextures[i] = null;
+            this._setBoundTexture(i, null);
           }
         }
       }
@@ -53397,7 +54211,7 @@ ${parts.join("\n")}
           throw new Error(`Unsupported view dimension: ${source.viewDimension} with this webgl version: ${this._renderer.context.webGLVersion}`);
         }
         if (source.autoGenerateMipmaps && (this._renderer.context.supports.nonPowOf2mipmaps || source.isPowerOfTwo)) {
-          const biggestDimension = Math.max(source.width, source.height);
+          const biggestDimension = Math.max(source.width, source.height, source.depth);
           source.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
         }
         source._gpuData[this._renderer.uid] = glTexture;
@@ -53419,7 +54233,7 @@ ${parts.join("\n")}
         const gl = this._gl;
         const glTexture = this.getGlSource(source);
         gl.bindTexture(glTexture.target, glTexture.texture);
-        this._boundTextures[this._activeTextureLocation] = source;
+        this._setBoundTexture(this._activeTextureLocation, source);
         applyStyleParams(
           source.style,
           gl,
@@ -53448,8 +54262,8 @@ ${parts.join("\n")}
         const gl = this._gl;
         const glTexture = this.getGlSource(source);
         gl.bindTexture(glTexture.target, glTexture.texture);
-        this._boundTextures[this._activeTextureLocation] = source;
-        const premultipliedAlpha = source.alphaMode === "premultiply-alpha-on-upload";
+        this._setBoundTexture(this._activeTextureLocation, source);
+        const premultipliedAlpha = source.alphaMode === "premultiply-alpha-on-upload" && !isIntegerFormat(source.format) && glTexture.target !== gl.TEXTURE_3D && glTexture.target !== gl.TEXTURE_2D_ARRAY;
         if (this._premultiplyAlpha !== premultipliedAlpha) {
           this._premultiplyAlpha = premultipliedAlpha;
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultipliedAlpha);
@@ -53458,8 +54272,8 @@ ${parts.join("\n")}
           this._uploads[source.uploadMethodId].upload(source, glTexture, gl, this._renderer.context.webGLVersion);
         } else if (glTexture.target === gl.TEXTURE_2D) {
           this._initEmptyTexture2D(glTexture, source);
-        } else if (glTexture.target === gl.TEXTURE_2D_ARRAY) {
-          this._initEmptyTexture2DArray(glTexture, source);
+        } else if (glTexture.target === gl.TEXTURE_2D_ARRAY || glTexture.target === gl.TEXTURE_3D) {
+          this._initEmptyTexture3D(glTexture, source);
         } else if (glTexture.target === gl.TEXTURE_CUBE_MAP) {
           this._initEmptyTextureCube(glTexture, source);
         } else {
@@ -53506,34 +54320,26 @@ ${parts.join("\n")}
           h = Math.max(h >> 1, 1);
         }
       }
-      _initEmptyTexture2DArray(glTexture, source) {
-        if (this._renderer.context.webGLVersion !== 2) {
-          throw new Error("[GlTextureSystem] TEXTURE_2D_ARRAY requires WebGL2.");
-        }
-        const gl2 = this._gl;
-        const depth = Math.max(source.arrayLayerCount | 0, 1);
-        gl2.texImage3D(
-          gl2.TEXTURE_2D_ARRAY,
-          0,
-          glTexture.internalFormat,
-          source.pixelWidth,
-          source.pixelHeight,
-          depth,
-          0,
-          glTexture.format,
-          glTexture.type,
-          null
-        );
-        let w = Math.max(source.pixelWidth >> 1, 1);
-        let h = Math.max(source.pixelHeight >> 1, 1);
-        for (let level = 1; level < source.mipLevelCount; level++) {
-          gl2.texImage3D(
-            gl2.TEXTURE_2D_ARRAY,
+      /**
+       * Allocates a texture with a depth: the layers of a 2D array or the slices of a 3D texture.
+       * Layer counts stay the same at every mip level; 3D depth halves like width and height.
+       * @param glTexture - The GL texture wrapper.
+       * @param source - The texture source describing the size.
+       */
+      _initEmptyTexture3D(glTexture, source) {
+        const gl = this._gl;
+        const is3D = glTexture.target === gl.TEXTURE_3D;
+        let w = source.pixelWidth;
+        let h = source.pixelHeight;
+        let d = source.depthOrArrayLayers;
+        for (let level = 0; level < source.mipLevelCount; level++) {
+          gl.texImage3D(
+            glTexture.target,
             level,
             glTexture.internalFormat,
             w,
             h,
-            depth,
+            d,
             0,
             glTexture.format,
             glTexture.type,
@@ -53541,6 +54347,7 @@ ${parts.join("\n")}
           );
           w = Math.max(w >> 1, 1);
           h = Math.max(h >> 1, 1);
+          if (is3D) d = Math.max(d >> 1, 1);
         }
       }
       _initEmptyTextureCube(glTexture, source) {
@@ -53666,8 +54473,10 @@ ${parts.join("\n")}
         this._renderer = null;
       }
       resetState() {
+        const maxTextures = this._renderer.limits.maxTextures;
         this._activeTextureLocation = -1;
-        this._boundTextures.fill(Texture.EMPTY.source);
+        this._boundTextures.fill(null);
+        this._integerUnits = maxTextures >= 32 ? -1 : (1 << maxTextures) - 1;
         this._boundSamplers = /* @__PURE__ */ Object.create(null);
         const gl = this._gl;
         this._premultiplyAlpha = false;
@@ -53739,6 +54548,7 @@ ${parts.join("\n")}
             for (let j = 0; j < batch.textures.count; j++) {
               renderer.texture.bind(batch.textures.textures[j], j);
             }
+            renderer.texture.unbindIntegerTextures(batch.textures.count);
             renderer.geometry.draw(batch.topology, batch.size, batch.start);
           }
         }
@@ -53834,9 +54644,11 @@ ${parts.join("\n")}
     const systems$1 = [];
     const renderPipes$1 = [];
     const renderPipeAdaptors$1 = [];
+    const loaders$1 = [];
     extensions.handleByNamedList(ExtensionType.WebGLSystem, systems$1);
     extensions.handleByNamedList(ExtensionType.WebGLPipes, renderPipes$1);
     extensions.handleByNamedList(ExtensionType.WebGLPipesAdaptor, renderPipeAdaptors$1);
+    extensions.handleByNamedList(ExtensionType.WebGLLoader, loaders$1);
     extensions.add(...DefaultWebGLSystems, ...DefaultWebGLPipes, ...DefaultWebGLAdapters);
     class WebGLRenderer extends AbstractRenderer {
       constructor() {
@@ -53845,7 +54657,8 @@ ${parts.join("\n")}
           type: RendererType.WEBGL,
           systems: systems$1,
           renderPipes: renderPipes$1,
-          renderPipeAdaptors: renderPipeAdaptors$1
+          renderPipeAdaptors: renderPipeAdaptors$1,
+          loaders: loaders$1
         };
         super(systemConfig);
       }
@@ -53857,18 +54670,42 @@ ${parts.join("\n")}
     };
 
     "use strict";
+    class GpuBindGroupEntry {
+      constructor(gpuBindGroup, now) {
+        this.autoGarbageCollect = true;
+        /** Part of the {@link GCable} contract; a cached bind group owns no per-renderer GPU data. */
+        this._gpuData = null;
+        this.gpuBindGroup = gpuBindGroup;
+        this._gcLastUsed = now;
+      }
+      /**
+       * Native bind groups have no destroy; dropping the reference is the whole release. Anything
+       * still holding the group (a recorded render bundle, a graphics batch) keeps it alive, and the
+       * next immediate-mode bind simply recreates the cache entry.
+       */
+      unload() {
+        this.gpuBindGroup = null;
+      }
+    }
     class BindGroupSystem {
       constructor(renderer) {
         this._hash = /* @__PURE__ */ Object.create(null);
         this._renderer = renderer;
+        renderer.gc.addResourceHash(this, "_hash", "resource");
+        renderer.gc.addCollection(this, "_hash", "hash");
       }
       contextChange(gpu) {
         this._gpu = gpu;
+        this._hash = /* @__PURE__ */ Object.create(null);
       }
       getBindGroup(bindGroup, program, groupIndex) {
         const key = `${bindGroup._key}:${program._layoutKey << 4 | groupIndex}`;
-        const gpuBindGroup = this._hash[key] || this._createBindGroup(key, bindGroup, program, groupIndex);
-        return gpuBindGroup;
+        const entry = this._hash[key];
+        if (entry) {
+          entry._gcLastUsed = this._renderer.gc.now;
+          return entry.gpuBindGroup;
+        }
+        return this._createBindGroup(key, bindGroup, program, groupIndex);
       }
       _createBindGroup(key, group, program, groupIndex) {
         var _a, _b;
@@ -53925,7 +54762,7 @@ ${parts.join("\n")}
           layout,
           entries
         });
-        this._hash[key] = gpuBindGroup;
+        this._hash[key] = new GpuBindGroupEntry(gpuBindGroup, renderer.gc.now);
         return gpuBindGroup;
       }
       destroy() {
@@ -53963,6 +54800,7 @@ ${parts.join("\n")}
       }
       contextChange(gpu) {
         this._gpu = gpu;
+        this.destroyAll();
       }
       getGPUBuffer(buffer) {
         var _a;
@@ -54092,6 +54930,7 @@ ${parts.join("\n")}
     };
 
     "use strict";
+    const tileBasedVendors = /* @__PURE__ */ new Set(["apple", "arm", "qualcomm", "img-tec"]);
     class GpuDeviceSystem {
       /**
        * @param {WebGPURenderer} renderer - The renderer this System works for.
@@ -54101,14 +54940,30 @@ ${parts.join("\n")}
       }
       async init(options) {
         if (this._initPromise) return this._initPromise;
-        this._initPromise = (options.gpu ? Promise.resolve(options.gpu) : this._createDeviceAndAdaptor(options)).then((gpu) => {
-          this.gpu = gpu;
-          this.extensions = {
-            transientAttachment: typeof GPUTextureUsage.TRANSIENT_ATTACHMENT === "number"
-          };
-          this._renderer.runners.contextChange.emit(this.gpu);
-        });
+        this._options = options;
+        this._initPromise = (options.gpu ? Promise.resolve(options.gpu) : this._createDeviceAndAdaptor(options)).then((gpu) => this._setGpu(gpu));
         return this._initPromise;
+      }
+      _setGpu(gpu) {
+        var _a, _b;
+        this.gpu = gpu;
+        this.extensions = {
+          transientAttachment: typeof GPUTextureUsage.TRANSIENT_ATTACHMENT === "number",
+          tileBased: tileBasedVendors.has((_b = (_a = gpu.adapter) == null ? void 0 : _a.info) == null ? void 0 : _b.vendor)
+        };
+        if (!this._options.gpu) {
+          void gpu.device.lost.then(() => this._restoreDevice()).catch((e) => warn("WebGPU device was lost and could not be restored", e));
+        }
+        this._renderer.runners.contextChange.emit(this.gpu);
+      }
+      async _restoreDevice() {
+        if (!this._renderer) return;
+        const gpu = await this._createDeviceAndAdaptor(this._options);
+        if (!this._renderer) {
+          gpu.device.destroy();
+          return;
+        }
+        this._setGpu(gpu);
       }
       /**
        * Handle the context change event
@@ -54136,7 +54991,10 @@ ${parts.join("\n")}
           "texture-compression-bc",
           "texture-compression-astc",
           "texture-compression-etc2",
-          "indirect-first-instance"
+          "indirect-first-instance",
+          // more formats for TextureSource `storage`
+          "bgra8unorm-storage",
+          "texture-formats-tier1"
         ].filter((feature) => adapter.features.has(feature));
         const device = await adapter.requestDevice({
           requiredFeatures,
@@ -54148,6 +55006,10 @@ ${parts.join("\n")}
         return { adapter, device };
       }
       destroy() {
+        var _a, _b;
+        if (!((_a = this._options) == null ? void 0 : _a.gpu)) {
+          (_b = this.gpu) == null ? void 0 : _b.device.destroy();
+        }
         this.gpu = null;
         this.extensions = null;
         this._renderer = null;
@@ -54175,6 +55037,22 @@ ${parts.join("\n")}
     };
 
     "use strict";
+    class RenderBundle {
+      /**
+       * @param gpuBundle - The recorded native render bundle.
+       * @param stateKey - The pipeline state key captured when recording began.
+       * @param device - The device the bundle was recorded on.
+       * @param label - Optional debug label for the bundle.
+       */
+      constructor(gpuBundle, stateKey, device, label) {
+        this.gpuBundle = gpuBundle;
+        this.stateKey = stateKey;
+        this.device = device;
+        this.label = label;
+      }
+    }
+
+    "use strict";
     class GpuEncoderSystem {
       constructor(renderer) {
         /**
@@ -54196,11 +55074,17 @@ ${parts.join("\n")}
         });
         this.commandEncoder = this._renderer.gpu.device.createCommandEncoder();
       }
+      /**
+       * Ends any open pass and begins one on the target's descriptor.
+       * @param gpuRenderTarget - the target to render to
+       * @returns the begun pass
+       */
       beginRenderPass(gpuRenderTarget) {
         this.endRenderPass();
         this._clearCache();
         this._passEncoder = this.commandEncoder.beginRenderPass(gpuRenderTarget.descriptor);
         this.renderPassEncoder = this._passEncoder;
+        return this._passEncoder;
       }
       endRenderPass() {
         if (this._passEncoder) {
@@ -54216,38 +55100,94 @@ ${parts.join("\n")}
        *
        * Render bundles allow pre-recording of draw commands that can be replayed multiple times
        * via {@link executeBundle}, reducing CPU overhead for repeated draw sequences.
+       * @param label - Optional debug label. Names the bundle in GPU captures and in the WebGPU
+       * validation errors it can raise when replayed, instead of `(unlabeled)`.
        * @throws If a render bundle is already being recorded.
        */
-      beginBundle() {
+      beginBundle(label) {
         if (this._passEncoder !== this.renderPassEncoder) {
           throw new Error("Cannot begin a new render bundle while one is already being recorded.");
         }
         this._clearCache();
-        const descriptor = this._renderer.pipeline.getBundleDescriptor();
+        const pipeline = this._renderer.pipeline;
+        const descriptor = pipeline.getBundleDescriptor();
+        descriptor.label = label;
+        this._bundleStateKey = pipeline.bundleStateKey;
+        this._bundleLabel = label;
         this.renderPassEncoder = this._gpu.device.createRenderBundleEncoder(descriptor);
       }
       /**
        * Finishes recording the current render bundle and restores the previous render pass encoder.
-       * @returns The recorded {@link GPURenderBundle} ready to be executed via {@link executeBundle}.
+       * @returns The recorded {@link RenderBundle}, ready to be executed via {@link executeBundle} and
+       * stamped with the pipeline state it baked so {@link isBundleValid} can vet it on later frames.
        */
       endBundle() {
         const encoder = this.renderPassEncoder;
         if (!encoder || !("finish" in encoder)) {
           throw new Error("endBundle called without an active render bundle.");
         }
-        const bundle = encoder.finish();
+        const gpuBundle = encoder.finish({ label: this._bundleLabel });
         this.renderPassEncoder = this._passEncoder;
         this._clearCache();
-        return bundle;
+        return new RenderBundle(gpuBundle, this._bundleStateKey, this._gpu.device, this._bundleLabel);
       }
       /**
-       * Replays a previously recorded render bundle on the current render pass.
-       * The bound state cache is cleared since the bundle may set its own pipeline, bind groups, and buffers.
-       * @param bundle - The render bundle to execute.
+       * Checks whether a recorded bundle can still be replayed against the render target that is
+       * bound now.
+       *
+       * A bundle permanently bakes the attachment state it was recorded with — color format(s),
+       * color target count, depth/stencil format, sample count — and WebGPU rejects the entire
+       * command buffer if any of it differs at execute time. It also bakes the front-face winding of
+       * its pipelines, which WebGPU does *not* validate: once the target's {@link RenderTarget.flipY}
+       * parity changes, replaying silently renders geometry inside out.
+       *
+       * Ask before replaying rather than after: only the caller owns the draw commands, so only the
+       * caller can re-record. A missing bundle reports `false`, so `!isBundleValid(bundles[i])` reads
+       * correctly on the first frame, before anything has been recorded.
+       * @param bundle - The bundle to check, as returned by {@link endBundle}.
+       * @returns `true` if the bundle is safe to execute right now, `false` if it must be re-recorded.
+       */
+      isBundleValid(bundle) {
+        return (bundle == null ? void 0 : bundle.stateKey) === this._renderer.pipeline.bundleStateKey && bundle.device === this._gpu.device;
+      }
+      /**
+       * Replays previously recorded render bundles on the current render pass.
+       * The bound state cache is cleared since a bundle may set its own pipeline, bind groups, and buffers.
+       *
+       * Pass a whole run of bundles rather than calling this once per bundle: WebGPU resets the pass
+       * state after every call, so N calls cost N cache clears and N trips through the binding layer
+       * for exactly the same result.
+       *
+       * Every bundle must have been recorded against a matching render target — check with
+       * {@link isBundleValid} first and re-record if it says no, as Pixi cannot rebuild your draw
+       * commands for you.
+       * @param bundle - The render bundle to execute, or a run of them to execute in one call.
        */
       executeBundle(bundle) {
+        const gpuBundles = [];
+        if (Array.isArray(bundle)) {
+          for (let i = 0; i < bundle.length; i++) {
+            gpuBundles[i] = this._getGpuBundle(bundle[i]);
+          }
+        } else {
+          gpuBundles[0] = this._getGpuBundle(bundle);
+        }
         this._clearCache();
-        this._passEncoder.executeBundles([bundle]);
+        this._passEncoder.executeBundles(gpuBundles);
+      }
+      /**
+       * Unwraps a bundle for {@link executeBundle}, complaining first if it no longer matches the
+       * bound render target — the winding half of that mismatch is invisible otherwise, since WebGPU
+       * validates attachments but not front-face order.
+       * @param bundle - The bundle being executed.
+       * @returns The native bundle to hand to `executeBundles`.
+       */
+      _getGpuBundle(bundle) {
+        var _a;
+        if (!this.isBundleValid(bundle)) {
+          warn(`Render bundle ${(_a = bundle == null ? void 0 : bundle.label) != null ? _a : "(unlabeled)"} was recorded against a different render target state or on a lost device. Re-record it \u2014 replaying it will either be rejected by WebGPU or draw with the wrong winding. Check encoder.isBundleValid(bundle) before executing.`);
+        }
+        return bundle.gpuBundle;
       }
       setViewport(viewport) {
         this._passEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1);
@@ -54298,14 +55238,14 @@ ${parts.join("\n")}
         slot.bindGroup = bindGroup;
         slot.program = program;
         slot.key = bindGroup._key;
-        bindGroup._touch(this._renderer.gc.now, this._renderer.tick);
+        bindGroup._touch(this._renderer.gc.now);
         const gpuBindGroup = this._renderer.bindGroup.getBindGroup(bindGroup, program, index);
         this.renderPassEncoder.setBindGroup(index, gpuBindGroup);
       }
       setGeometry(geometry, program) {
         const buffersToBind = this._renderer.pipeline.getBufferNamesToBind(geometry, program);
-        for (const i in buffersToBind) {
-          this._setVertexBuffer(parseInt(i, 10), geometry.attributes[buffersToBind[i]].buffer);
+        for (let i = 0; i < buffersToBind.length; i++) {
+          this._setVertexBuffer(i, geometry.attributes[buffersToBind[i]].buffer);
         }
         if (geometry.indexBuffer) {
           this._setIndexBuffer(geometry.indexBuffer);
@@ -54313,9 +55253,10 @@ ${parts.join("\n")}
       }
       _setShaderBindGroups(shader, skipSync) {
         const program = shader.gpuProgram;
-        for (const i in shader.groups) {
-          if (!program.layout[i]) continue;
+        const layout = program.layout;
+        for (let i = 0; i < layout.length; i++) {
           const bindGroup = shader.groups[i];
+          if (!layout[i] || !bindGroup) continue;
           if (!skipSync) {
             this._syncBindGroup(bindGroup);
           }
@@ -54323,8 +55264,10 @@ ${parts.join("\n")}
         }
       }
       _syncBindGroup(bindGroup) {
-        for (const j in bindGroup.resources) {
-          const resource = bindGroup.resources[j];
+        const resources = bindGroup.resources;
+        const keys = bindGroup._resourceKeys;
+        for (let i = 0; i < keys.length; i++) {
+          const resource = resources[keys[i]];
           if (!resource) continue;
           if (resource.isUniformGroup) {
             this._renderer.ubo.updateUniformGroup(resource);
@@ -54338,7 +55281,7 @@ ${parts.join("\n")}
         this._setShaderBindGroups(shader, skipSync);
         if (geometry.indexBuffer) {
           this.renderPassEncoder.drawIndexed(
-            size || geometry.indexBuffer.data.length,
+            size || geometry.indexCount || geometry.indexBuffer.data.length,
             instanceCount != null ? instanceCount : geometry.instanceCount,
             start || 0,
             baseVertex || 0,
@@ -54471,25 +55414,23 @@ ${parts.join("\n")}
     "use strict";
     class GpuStencilSystem {
       constructor(renderer) {
-        this._renderTargetStencilState = /* @__PURE__ */ Object.create(null);
         this._renderer = renderer;
         renderer.renderTarget.onRenderTargetChange.add(this);
       }
+      contextChange() {
+        this._activeGpuRenderTarget = null;
+      }
       onRenderTargetChange(renderTarget) {
-        let stencilState = this._renderTargetStencilState[renderTarget.uid];
-        if (!stencilState) {
-          stencilState = this._renderTargetStencilState[renderTarget.uid] = {
-            stencilMode: STENCIL_MODES.DISABLED,
-            stencilReference: 0
-          };
-        }
+        const gpuRenderTarget = this._renderer.renderTarget.getGpuRenderTarget(renderTarget);
         this._activeRenderTarget = renderTarget;
-        this.setStencilMode(stencilState.stencilMode, stencilState.stencilReference);
+        this._activeGpuRenderTarget = gpuRenderTarget;
+        this.setStencilMode(gpuRenderTarget.stencilMode, gpuRenderTarget.stencilReference);
       }
       setStencilMode(stencilMode, stencilReference) {
-        const stencilState = this._renderTargetStencilState[this._activeRenderTarget.uid];
-        stencilState.stencilMode = stencilMode;
-        stencilState.stencilReference = stencilReference;
+        var _a;
+        const gpuRenderTarget = (_a = this._activeGpuRenderTarget) != null ? _a : this._activeGpuRenderTarget = this._renderer.renderTarget.getGpuRenderTarget(this._activeRenderTarget);
+        gpuRenderTarget.stencilMode = stencilMode;
+        gpuRenderTarget.stencilReference = stencilReference;
         const renderer = this._renderer;
         renderer.pipeline.setStencilMode(stencilMode);
         renderer.encoder.setStencilReference(stencilReference);
@@ -54498,7 +55439,7 @@ ${parts.join("\n")}
         this._renderer.renderTarget.onRenderTargetChange.remove(this);
         this._renderer = null;
         this._activeRenderTarget = null;
-        this._renderTargetStencilState = null;
+        this._activeGpuRenderTarget = null;
       }
     }
     /** @ignore */
@@ -54575,7 +55516,7 @@ ${parts.join("\n")}
     "use strict";
     function generateArraySyncWGSL(uboElement, offsetToAdd) {
       const { size, align } = WGSL_ALIGN_SIZE_DATA[uboElement.data.type];
-      const remainder = (align - size) / 4;
+      const remainder = (Math.max(size, align) - size) / 4;
       const data = uboElement.data.type.indexOf("i32") >= 0 ? "dataInt32" : "data";
       return `
          v = uv.${uboElement.data.name};
@@ -54585,7 +55526,7 @@ ${parts.join("\n")}
 
          t = 0;
 
-         for(var i=0; i < ${uboElement.data.size * (size / 4)}; i++)
+         for(var i=0; i < ${uboElement.data.size}; i++)
          {
              for(var j = 0; j < ${size / 4}; j++)
              {
@@ -54806,6 +55747,9 @@ ${parts.join("\n")}
     function getGlobalStateKey(stencilStateId, multiSampleCount, colorMask, colorTargetCount, depthStencilFormat, colorFormatId, depthReadOnly, invertFrontFace) {
       return invertFrontFace << 20 | colorFormatId << 16 | depthStencilFormat << 13 | colorMask << 9 | stencilStateId << 6 | depthReadOnly << 5 | colorTargetCount << 1 | multiSampleCount;
     }
+    function getBundleStateKey(multiSampleCount, colorTargetCount, depthStencilFormat, depthReadOnly, stencilReadOnly, invertFrontFace, colorFormatId) {
+      return colorFormatId << 11 | invertFrontFace << 10 | stencilReadOnly << 9 | depthReadOnly << 8 | depthStencilFormat << 5 | colorTargetCount << 1 | multiSampleCount;
+    }
     class PipelineSystem {
       constructor(renderer) {
         this._moduleCache = /* @__PURE__ */ Object.create(null);
@@ -54821,11 +55765,14 @@ ${parts.join("\n")}
         this._depthStencilFormat = "depth24plus-stencil8";
         this._depthStencilFormatData = emptyDepthStencilFormatData;
         this._depthReadOnly = false;
+        this._stencilReadOnly = false;
         this._invertFrontFace = false;
         this._renderer = renderer;
       }
       contextChange(gpu) {
         this._gpu = gpu;
+        this._moduleCache = /* @__PURE__ */ Object.create(null);
+        this._pipeStateCaches = /* @__PURE__ */ Object.create(null);
         this.setStencilMode(STENCIL_MODES.DISABLED);
         this._updatePipeHash();
       }
@@ -54835,7 +55782,7 @@ ${parts.join("\n")}
         this._updatePipeHash();
       }
       setRenderTarget(renderTarget) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f, _g;
         const colorTexture = (_a = renderTarget.colorAttachments[0]) == null ? void 0 : _a.texture;
         this._multisampleCount = (colorTexture == null ? void 0 : colorTexture.source.antialias) ? 4 : 1;
         this._colorTargetCount = renderTarget.colorAttachments.length;
@@ -54844,7 +55791,8 @@ ${parts.join("\n")}
         this._depthStencilFormat = (_c = renderTarget.depthStencilAttachment) == null ? void 0 : _c.texture.format;
         this._depthStencilFormatData = depthStencilFormatMap[this._depthStencilFormat] || emptyDepthStencilFormatData;
         this._depthReadOnly = (_e = (_d = renderTarget.depthStencilAttachment) == null ? void 0 : _d.depthReadOnly) != null ? _e : false;
-        this._invertFrontFace = !!renderTarget.flipY;
+        this._stencilReadOnly = (_g = (_f = renderTarget.depthStencilAttachment) == null ? void 0 : _f.stencilReadOnly) != null ? _g : this._depthReadOnly;
+        this._invertFrontFace = this._renderer.renderTarget.isFrontFaceInverted(renderTarget, renderTarget.flipY);
         this._updatePipeHash();
       }
       setColorMask(colorMask) {
@@ -54859,8 +55807,38 @@ ${parts.join("\n")}
         this._updatePipeHash();
       }
       /**
-       * Builds a {@link GPURenderBundleEncoderDescriptor} that matches the current render target
-       * configuration (color formats, sample count, and depth/stencil format).
+       * A packed key for everything a render bundle recorded right now would bake into itself: the
+       * attachment state WebGPU validates when the bundle is executed (color format(s), color target
+       * count, depth/stencil format, sample count, read-only aspects), plus the front-face winding
+       * its pipelines capture — which WebGPU does *not* validate.
+       *
+       * Equal keys mean a bundle recorded then is compatible with, and correct for, the pass now;
+       * different keys mean it has to be re-recorded before it is replayed. Comparing the two is
+       * what {@link GpuEncoderSystem.isBundleValid} does.
+       *
+       * `colorMask` and `stencilMode` are deliberately left out, unlike the pipeline cache key: they
+       * are ambient draw state a bundle bakes per-pipeline as it records, so their value at execute
+       * time says nothing about whether the bundle is still good.
+       */
+      get bundleStateKey() {
+        const formatData = this._depthStencilFormatData;
+        return getBundleStateKey(
+          // normalize the raw sample count (1 or 4 — WebGPU's only renderable counts) to a
+          // true single bit, so it cannot spill into the colorTargetCount field above it
+          this._multisampleCount === 1 ? 0 : 1,
+          this._colorTargetCount,
+          formatData.index,
+          // the same two flags getBundleDescriptor sets — keep them in step
+          formatData.depth && this._depthReadOnly ? 1 : 0,
+          formatData.stencil && this._stencilReadOnly ? 1 : 0,
+          this._invertFrontFace ? 1 : 0,
+          this._colorFormatId
+        );
+      }
+      /**
+       * Builds a `GPURenderBundleEncoderDescriptor` that matches the current render target
+       * configuration (color formats, sample count, depth/stencil format, and which of its aspects
+       * are read-only).
        * Used by {@link GpuEncoderSystem.beginBundle} to create a compatible render bundle encoder.
        * @returns A descriptor for creating a GPURenderBundleEncoder.
        */
@@ -54873,8 +55851,11 @@ ${parts.join("\n")}
           colorFormats,
           sampleCount: this._multisampleCount
         };
-        if (this._depthStencilFormatData.depth || this._depthStencilFormatData.stencil) {
+        const formatData = this._depthStencilFormatData;
+        if (formatData.depth || formatData.stencil) {
           descriptor.depthStencilFormat = this._depthStencilFormat;
+          if (formatData.depth && this._depthReadOnly) descriptor.depthReadOnly = true;
+          if (formatData.stencil && this._stencilReadOnly) descriptor.stencilReadOnly = true;
         }
         return descriptor;
       }
@@ -55037,17 +56018,17 @@ ${parts.join("\n")}
         return program._attributeLocationsKey;
       }
       /**
-       * Returns a hash of buffer names mapped to bind locations.
+       * Returns the buffer names to bind, one per vertex buffer slot.
        * This is used to bind the correct buffer to the correct location in the shader.
        * @param geometry - The geometry where to get the buffer names
        * @param program - The program where to get the buffer names
-       * @returns An object of buffer names mapped to the bind location.
+       * @returns The buffer names, indexed by vertex buffer slot.
        */
       getBufferNamesToBind(geometry, program) {
         const key = geometry._layoutKey << 16 | program._attributeLocationsKey;
         if (this._bindingNamesCache[key]) return this._bindingNamesCache[key];
         const data = this._createVertexBufferLayouts(geometry, program);
-        const bufferNamesToBind = /* @__PURE__ */ Object.create(null);
+        const bufferNamesToBind = [];
         const attributeData = program.attributeData;
         for (let i = 0; i < data.length; i++) {
           const attributes = Object.values(data[i].attributes);
@@ -55132,11 +56113,170 @@ ${parts.join("\n")}
     };
 
     "use strict";
+    class GpuMsaaRestore {
+      constructor(renderer) {
+        /** per attachment layout, one pipeline per colour attachment */
+        this._pipelines = /* @__PURE__ */ Object.create(null);
+        this._modules = /* @__PURE__ */ Object.create(null);
+        /** one bind group per back texture, dropped with the texture when a resize replaces it */
+        this._bindGroups = /* @__PURE__ */ new WeakMap();
+        this._renderer = renderer;
+        this._device = renderer.gpu.device;
+        this._layout = this._device.createBindGroupLayout({
+          entries: [{
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "unfilterable-float" }
+          }]
+        });
+        this._pipelineLayout = this._device.createPipelineLayout({ bindGroupLayouts: [this._layout] });
+      }
+      /**
+       * Copies one colour attachment's resolved image into the target's back texture, creating it on first use
+       * at the attachment's size and format. Must be recorded outside a render pass.
+       * @param commandEncoder - the encoder to record the copy on
+       * @param renderTarget - the target being reopened
+       * @param index - the colour attachment to copy
+       * @param resolved - the attachment's resolved texture
+       */
+      copy(commandEncoder, renderTarget, index, resolved) {
+        var _a, _b;
+        const gpuRenderTarget = this._renderer.renderTarget.getGpuRenderTarget(renderTarget);
+        const colorTexture = renderTarget.colorAttachments[index].texture;
+        (_b = (_a = gpuRenderTarget.msaaBackTextures)[index]) != null ? _b : _a[index] = new TextureSource({
+          label: "msaa-back-texture",
+          width: colorTexture.width,
+          height: colorTexture.height,
+          resolution: colorTexture._resolution,
+          format: gpuRenderTarget.msaaTextures[index].format,
+          autoGenerateMipmaps: false,
+          // every restore copies into it afresh, so an idle one can be freed and re-created on the next restore
+          autoGarbageCollect: true
+        });
+        const backTexture = this._renderer.texture.getGpuSource(gpuRenderTarget.msaaBackTextures[index]);
+        commandEncoder.copyTextureToTexture(
+          { texture: resolved },
+          { texture: backTexture },
+          { width: Math.min(resolved.width, backTexture.width), height: Math.min(resolved.height, backTexture.height) }
+        );
+      }
+      /**
+       * Draws one colour attachment's back texture into the multisampled buffer. Must be the first draw of the
+       * pass, before any viewport or scissor is set.
+       * @param pass - the pass that was just begun
+       * @param renderTarget - the target the pass renders to
+       * @param index - the colour attachment to restore, copied by {@link GpuMsaaRestore.copy}
+       */
+      draw(pass, renderTarget, index) {
+        var _a, _b, _c, _d, _e;
+        const gpuRenderTarget = this._renderer.renderTarget.getGpuRenderTarget(renderTarget);
+        const backTexture = this._renderer.texture.getGpuSource(gpuRenderTarget.msaaBackTextures[index]);
+        let key = (_b = (_a = renderTarget.depthStencilAttachment) == null ? void 0 : _a.texture.format) != null ? _b : "";
+        for (const attachment of renderTarget.colorAttachments) {
+          key += `|${attachment.texture.format}`;
+        }
+        const pipelines = (_d = (_c = this._pipelines)[key]) != null ? _d : _c[key] = [];
+        let bindGroup = this._bindGroups.get(backTexture);
+        if (!bindGroup) {
+          bindGroup = this._device.createBindGroup({
+            layout: this._layout,
+            entries: [{ binding: 0, resource: backTexture.createView() }]
+          });
+          this._bindGroups.set(backTexture, bindGroup);
+        }
+        pass.setPipeline((_e = pipelines[index]) != null ? _e : pipelines[index] = this._createPipeline(renderTarget, index));
+        pass.setBindGroup(0, bindGroup);
+        pass.draw(3);
+      }
+      _getModule(index) {
+        var _a, _b;
+        (_b = (_a = this._modules)[index]) != null ? _b : _a[index] = this._device.createShaderModule({
+          label: "msaa-restore",
+          code: (
+            /* wgsl */
+            `
+                @group(0) @binding(0) var resolved: texture_2d<f32>;
+
+                @vertex
+                fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+                    let pos = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+
+                    return vec4<f32>(pos[i], 0.0, 1.0);
+                }
+
+                @fragment
+                fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(${index}) vec4<f32> {
+                    return textureLoad(resolved, vec2<i32>(position.xy), 0);
+                }
+            `
+          )
+        });
+        return this._modules[index];
+      }
+      _createPipeline(renderTarget, index) {
+        var _a;
+        const depthStencilFormat = (_a = renderTarget.depthStencilAttachment) == null ? void 0 : _a.texture.format;
+        let depthStencil;
+        if (depthStencilFormat) {
+          depthStencil = { format: depthStencilFormat };
+          if (depthStencilFormat.includes("depth")) {
+            depthStencil.depthWriteEnabled = false;
+            depthStencil.depthCompare = "always";
+          }
+        }
+        const module = this._getModule(index);
+        return this._device.createRenderPipeline({
+          label: "msaa-restore",
+          layout: this._pipelineLayout,
+          vertex: { module, entryPoint: "vertexMain" },
+          fragment: {
+            module,
+            entryPoint: "fragmentMain",
+            // every attachment must be declared to match the pass; only the restored one is written
+            targets: renderTarget.colorAttachments.map((attachment, i) => ({
+              format: attachment.texture.format,
+              writeMask: i === index ? GPUColorWrite.ALL : 0
+            }))
+          },
+          depthStencil,
+          multisample: { count: 4 }
+        });
+      }
+    }
+
+    "use strict";
     class GpuRenderTarget {
       constructor() {
         this.contexts = [];
+        /**
+         * Per canvas attachment, the canvas texture the last pass drew into. A canvas hands out a new, empty
+         * texture each frame, so a different one means nothing has been drawn this frame yet.
+         */
+        this.canvasTextures = [];
         this.msaaTextures = [];
+        /**
+         * The user marked this multisampled target `transient` (single pass, never reopened), so its MSAA
+         * depth/stencil is discarded too. Read once from the colour texture, like `msaa`. Separate from each
+         * `msaaTextures[i].transient`, which is also set on every tile-based GPU.
+         */
+        this.transient = false;
         this.msaaSamples = 1;
+        /**
+         * Per MSAA colour attachment, the copy of its resolved image that a reopened pass draws back in (see
+         * GpuMsaaRestore), as FilterSystem's `backTexture` is a copy of what a filter draws over. Created on the
+         * first restore, then resized and destroyed with `msaaTextures`.
+         */
+        this.msaaBackTextures = [];
+        /**
+         * The stencil state the stencil system and the mask pipe track for this target on this renderer.
+         * It lives here rather than in a uid-keyed record so it is restored when the target is bound again
+         * and freed with the backend object when the target dies.
+         */
+        this.stencilMode = STENCIL_MODES.DISABLED;
+        /** the stencil reference value that goes with `stencilMode` */
+        this.stencilReference = 0;
+        /** how many stencil masks are currently pushed on this target */
+        this.maskStackIndex = 0;
       }
     }
 
@@ -55181,6 +56321,15 @@ ${parts.join("\n")}
       init(renderer, renderTargetSystem) {
         this._renderer = renderer;
         this._renderTargetSystem = renderTargetSystem;
+        renderer.runners.contextChange.add(this);
+        renderer.runners.destroy.add(this);
+      }
+      /** Drops the restore helper, whose pipelines belong to the old device. The next restore makes a new one. */
+      contextChange() {
+        this._msaaRestore = null;
+      }
+      destroy() {
+        this._msaaRestore = null;
       }
       copyToTexture(sourceRenderSurfaceTexture, destinationTexture, originSrc, size, originDest) {
         const renderer = this._renderer;
@@ -55241,15 +56390,26 @@ ${parts.join("\n")}
         const hasDepthStencil = !!renderTarget.depthStencilAttachment;
         const activePass = this._activePass;
         const reuse = activePass !== null && activePass.renderTarget === renderTarget && activePass.mipLevel === mipLevel && activePass.layer === layer && activePass.depthStencil === hasDepthStencil && this._renderer.encoder.renderPassEncoder !== null && clearBits === CLEAR.NONE;
+        this._renderer.pipeline.setRenderTarget(renderTarget);
         if (reuse) {
           this._renderer.encoder.setViewport(viewport);
           return;
         }
-        const descriptor = this.getDescriptor(renderTarget, clear, clearColor, mipLevel, layer);
+        const { descriptor, restore } = this._buildDescriptor(renderTarget, clear, clearColor, mipLevel, layer);
         gpuRenderTarget.descriptor = descriptor;
-        this._renderer.pipeline.setRenderTarget(renderTarget);
-        this._renderer.encoder.beginRenderPass(gpuRenderTarget);
-        this._renderer.encoder.setViewport(viewport);
+        const encoder = this._renderer.encoder;
+        if (restore) {
+          encoder.endRenderPass();
+          this._beginRestoredPass(
+            renderTarget,
+            restore,
+            encoder.commandEncoder,
+            () => encoder.beginRenderPass(gpuRenderTarget)
+          );
+        } else {
+          encoder.beginRenderPass(gpuRenderTarget);
+        }
+        encoder.setViewport(viewport);
         this._activePass = { renderTarget, mipLevel, layer, depthStencil: hasDepthStencil };
       }
       finishRenderPass() {
@@ -55257,23 +56417,58 @@ ${parts.join("\n")}
         this._activePass = null;
       }
       /**
-       * returns the gpu texture for the first color texture in the render target
-       * mainly used by the filter manager to get copy the texture for blending
+       * Begins a pass whose MSAA colour must be restored: copies each resolved texture in `restore` into the
+       * target's back textures, begins the pass, and draws them back in before anything else (see GpuMsaaRestore).
+       * @param renderTarget - the target being reopened
+       * @param restore - the colour attachments to restore
+       * @param commandEncoder - the encoder to record the copies on, with no pass open
+       * @param beginPass - begins the pass on the same encoder
+       * @returns the begun pass
+       */
+      _beginRestoredPass(renderTarget, restore, commandEncoder, beginPass) {
+        var _a;
+        const msaaRestore = (_a = this._msaaRestore) != null ? _a : this._msaaRestore = new GpuMsaaRestore(this._renderer);
+        for (const index of restore) {
+          msaaRestore.copy(commandEncoder, renderTarget, index, this._getGpuColorTexture(renderTarget, index));
+        }
+        const pass = beginPass();
+        for (const index of restore) {
+          msaaRestore.draw(pass, renderTarget, index);
+        }
+        return pass;
+      }
+      /**
+       * returns the gpu texture for a color texture in the render target, the first by default
+       * mainly used by the filter manager to copy the texture for blending
        * @param renderTarget
+       * @param index - the color attachment to get
        * @returns a gpu texture
        */
-      _getGpuColorTexture(renderTarget) {
+      _getGpuColorTexture(renderTarget, index = 0) {
         if (renderTarget.colorAttachments.length === 0) {
           throw new Error("[GpuRenderTargetAdaptor] cannot get gpu color texture from a depth-only render target");
         }
-        const colorTexture = renderTarget.colorAttachments[0].texture;
+        const colorTexture = renderTarget.colorAttachments[index].texture;
         if (colorTexture instanceof CanvasSource && colorTexture._gpuContext) {
           return colorTexture._gpuContext.getCurrentTexture();
         }
         return this._renderer.texture.getGpuSource(colorTexture);
       }
       getDescriptor(renderTarget, clear, clearValue, mipLevel = 0, layer = 0) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+        return this._buildDescriptor(renderTarget, clear, clearValue, mipLevel, layer).descriptor;
+      }
+      /**
+       * Builds the pass descriptor, along with the MSAA colour attachments it opens with `clear` in place of
+       * `load`. Those buffers were discarded, so the pass must restore them before drawing.
+       * @param renderTarget - the target to render to
+       * @param clear - what to clear
+       * @param clearValue - the colour to clear to
+       * @param mipLevel - the mip level to render to
+       * @param layer - the array layer to render to
+       */
+      _buildDescriptor(renderTarget, clear, clearValue, mipLevel = 0, layer = 0) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        let restoreList = null;
         if (typeof clear === "boolean") {
           clear = clear ? CLEAR.ALL : CLEAR.NONE;
         }
@@ -55286,11 +56481,14 @@ ${parts.join("\n")}
             const context = colorTexture instanceof CanvasSource ? colorTexture._gpuContext : null;
             let view;
             let resolveTarget;
+            let newCanvasFrame = false;
             if (context) {
               if (layer !== 0) {
                 throw new Error("[RenderTargetSystem] Rendering to array layers is not supported for canvas targets.");
               }
               const currentTexture = context.getCurrentTexture();
+              newCanvasFrame = gpuRenderTarget.canvasTextures[i] !== currentTexture;
+              gpuRenderTarget.canvasTextures[i] = currentTexture;
               const canvasTextureView = currentTexture.createView(colorAttachment.viewDescriptor);
               view = canvasTextureView;
             } else {
@@ -55301,30 +56499,35 @@ ${parts.join("\n")}
                 colorAttachment.viewDescriptor
               );
             }
-            let attachmentIsTransient = false;
-            if (gpuRenderTarget.msaaTextures[i]) {
+            const msaaTexture = gpuRenderTarget.msaaTextures[i];
+            if (msaaTexture) {
               resolveTarget = view;
-              view = this._renderer.texture.getTextureView(
-                gpuRenderTarget.msaaTextures[i]
-              );
-              attachmentIsTransient = gpuRenderTarget.msaaTextures[i].transient;
+              view = this._renderer.texture.getTextureView(msaaTexture);
             }
             let loadOp = colorAttachment.loadOp;
             if (clear !== void 0) {
               loadOp = clear & CLEAR.COLOR ? "clear" : "load";
             }
             clearValue != null ? clearValue : clearValue = renderTargetSystem.defaultClearColor;
-            const storeOp = (_a2 = colorAttachment.storeOp) != null ? _a2 : "store";
+            const transient = !!(msaaTexture == null ? void 0 : msaaTexture.transient);
+            const load = transient && loadOp !== "clear";
+            const restore = load && !newCanvasFrame;
+            if (load) {
+              loadOp = "clear";
+              if (restore) (restoreList != null ? restoreList : restoreList = []).push(i);
+            }
             const baseAttachment = {
               view,
               resolveTarget,
-              // Only discard the MSAA buffer when it was created as transient — i.e. we know
-              // no later pass will try to load it. Non-transient MSAA targets keep storeOp:'store'
-              // so flows like filter pop-back (loadOp:'load' on the parent RT) keep working.
-              storeOp: attachmentIsTransient ? "discard" : storeOp,
+              storeOp: transient ? "discard" : (_a2 = colorAttachment.storeOp) != null ? _a2 : "store",
               loadOp
             };
-            if (loadOp === "clear") {
+            if (colorTexture.dimension === "3d") {
+              baseAttachment.depthSlice = layer;
+            }
+            if (load) {
+              baseAttachment.clearValue = [0, 0, 0, 0];
+            } else if (loadOp === "clear") {
               clearValue != null ? clearValue : clearValue = (_b2 = colorAttachment.clearValue) != null ? _b2 : renderTargetSystem.defaultClearColor;
               baseAttachment.clearValue = clearValue;
             }
@@ -55338,14 +56541,12 @@ ${parts.join("\n")}
         );
         let depthStencilAttachment;
         if (renderTarget.depthStencilAttachment) {
-          if (gpuRenderTarget.msaa) {
-            renderTarget.depthStencilAttachment.texture.sampleCount = 4;
-          }
-          renderTarget.depthStencilAttachment.texture.transient = !!((_a = gpuRenderTarget.msaaTextures[0]) == null ? void 0 : _a.transient);
+          this._prepareDepthStencil(renderTarget, gpuRenderTarget);
           const attachment = renderTarget.depthStencilAttachment;
           const stencil = attachment.texture.format.includes("stencil");
           const depth = attachment.texture.format.includes("depth");
-          const dsStoreOp = attachment.texture.transient ? "discard" : "store";
+          const dsStoreOp = gpuRenderTarget.transient ? "discard" : "store";
+          const dsLoadOp = gpuRenderTarget.transient ? "clear" : "load";
           depthStencilAttachment = {
             view: this._renderer.texture.getTextureRenderTargetView(
               attachment.texture,
@@ -55354,22 +56555,22 @@ ${parts.join("\n")}
               attachment.viewDescriptor
             )
           };
-          const depthReadOnly = (_b = attachment.depthReadOnly) != null ? _b : false;
-          const stencilReadOnly = (_c = attachment.stencilReadOnly) != null ? _c : depthReadOnly;
+          const depthReadOnly = (_a = attachment.depthReadOnly) != null ? _a : false;
+          const stencilReadOnly = (_b = attachment.stencilReadOnly) != null ? _b : depthReadOnly;
           if (stencil && !stencilReadOnly) {
-            depthStencilAttachment.stencilLoadOp = clear & CLEAR.STENCIL ? "clear" : (_d = attachment.stencilLoadOp) != null ? _d : "load";
-            depthStencilAttachment.stencilStoreOp = (_e = attachment.stencilStoreOp) != null ? _e : dsStoreOp;
+            depthStencilAttachment.stencilLoadOp = clear & CLEAR.STENCIL ? "clear" : (_c = attachment.stencilLoadOp) != null ? _c : dsLoadOp;
+            depthStencilAttachment.stencilStoreOp = (_d = attachment.stencilStoreOp) != null ? _d : dsStoreOp;
             if (depthStencilAttachment.stencilLoadOp === "clear") {
-              depthStencilAttachment.stencilClearValue = (_f = attachment.stencilClearValue) != null ? _f : 0;
+              depthStencilAttachment.stencilClearValue = (_e = attachment.stencilClearValue) != null ? _e : 0;
             }
           } else if (stencil && stencilReadOnly) {
             depthStencilAttachment.stencilReadOnly = true;
           }
           if (depth && !depthReadOnly) {
-            depthStencilAttachment.depthLoadOp = clear & CLEAR.DEPTH ? "clear" : (_g = attachment.depthLoadOp) != null ? _g : "load";
-            depthStencilAttachment.depthStoreOp = (_h = attachment.depthStoreOp) != null ? _h : dsStoreOp;
+            depthStencilAttachment.depthLoadOp = clear & CLEAR.DEPTH ? "clear" : (_f = attachment.depthLoadOp) != null ? _f : dsLoadOp;
+            depthStencilAttachment.depthStoreOp = (_g = attachment.depthStoreOp) != null ? _g : dsStoreOp;
             if (depthStencilAttachment.depthLoadOp === "clear") {
-              depthStencilAttachment.depthClearValue = (_i = attachment.depthClearValue) != null ? _i : 1;
+              depthStencilAttachment.depthClearValue = (_h = attachment.depthClearValue) != null ? _h : 1;
             }
           } else if (depth && depthReadOnly) {
             depthStencilAttachment.depthReadOnly = true;
@@ -55385,7 +56586,7 @@ ${parts.join("\n")}
           depthStencilAttachment,
           label: renderTarget.label
         };
-        return descriptor;
+        return { descriptor, restore: restoreList };
       }
       clear(renderTarget, clear = true, clearColor, viewport, mipLevel = 0, layer = 0) {
         if (!clear) return;
@@ -55394,8 +56595,9 @@ ${parts.join("\n")}
         const standAlone = encoder.commandEncoder === null;
         if (standAlone) {
           const commandEncoder = device.createCommandEncoder();
-          const renderPassDescriptor = this.getDescriptor(renderTarget, clear, clearColor, mipLevel, layer);
-          const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+          const { descriptor, restore } = this._buildDescriptor(renderTarget, clear, clearColor, mipLevel, layer);
+          const beginPass = () => commandEncoder.beginRenderPass(descriptor);
+          const passEncoder = restore ? this._beginRestoredPass(renderTarget, restore, commandEncoder, beginPass) : beginPass();
           passEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1);
           passEncoder.end();
           const gpuCommands = commandEncoder.finish();
@@ -55408,28 +56610,27 @@ ${parts.join("\n")}
         var _a;
         renderTarget.isRoot = true;
         const gpuRenderTarget = new GpuRenderTarget();
+        gpuRenderTarget.transient = !!((_a = renderTarget.colorTexture) == null ? void 0 : _a.antialias) && !!renderTarget.colorTexture.transient;
         renderTarget.colorAttachments.forEach((colorAttachment, i) => {
+          var _a2;
           const colorTexture = colorAttachment.texture;
           if (colorTexture instanceof CanvasSource) {
-            if (!colorTexture._gpuContext) {
-              const context = colorTexture.resource.getContext(
-                "webgpu"
-              );
-              const alphaMode = colorTexture.transparent ? "premultiplied" : "opaque";
-              const canvasFormat = getCanvasContextFormat(colorTexture.format);
-              try {
-                context.configure(__spreadValues$i({
-                  device: this._renderer.gpu.device,
-                  usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-                  format: canvasFormat,
-                  alphaMode
-                }, canvasFormat === "rgba16float" ? { toneMapping: { mode: "extended" } } : {}));
-              } catch (e) {
-                console.error(e);
-              }
-              colorTexture._gpuContext = context;
+            const context = (_a2 = colorTexture._gpuContext) != null ? _a2 : colorTexture._gpuContext = colorTexture.resource.getContext(
+              "webgpu"
+            );
+            const alphaMode = colorTexture.transparent ? "premultiplied" : "opaque";
+            const canvasFormat = getCanvasContextFormat(colorTexture.format);
+            try {
+              context.configure(__spreadValues$i({
+                device: this._renderer.gpu.device,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+                format: canvasFormat,
+                alphaMode
+              }, canvasFormat === "rgba16float" ? { toneMapping: { mode: "extended" } } : {}));
+            } catch (e) {
+              console.error(e);
             }
-            gpuRenderTarget.contexts[i] = colorTexture._gpuContext;
+            gpuRenderTarget.contexts[i] = context;
           }
           gpuRenderTarget.msaa = colorTexture.source.antialias;
           if (colorTexture.antialias) {
@@ -55437,7 +56638,10 @@ ${parts.join("\n")}
               width: 0,
               height: 0,
               sampleCount: 4,
-              transient: colorTexture.transient,
+              // WebGPU requires multisampled textures to have exactly 1 mip level, so this must never
+              // inherit TextureSource.defaultOptions.autoGenerateMipmaps
+              autoGenerateMipmaps: false,
+              transient: this._renderer.device.extensions.tileBased || gpuRenderTarget.transient,
               arrayLayerCount: colorTexture.arrayLayerCount,
               format: colorTexture.format
             });
@@ -55446,12 +56650,22 @@ ${parts.join("\n")}
         });
         if (gpuRenderTarget.msaa) {
           gpuRenderTarget.msaaSamples = 4;
-          if (renderTarget.depthStencilAttachment) {
-            renderTarget.depthStencilAttachment.texture.sampleCount = 4;
-            renderTarget.depthStencilAttachment.texture.transient = !!((_a = gpuRenderTarget.msaaTextures[0]) == null ? void 0 : _a.transient);
-          }
         }
         return gpuRenderTarget;
+      }
+      /**
+       * Sets up a depth/stencil texture for an MSAA target before its GPU texture is created: 4 samples, and
+       * the transient usage bit when the user marked the target single-pass. Both are fixed at creation, so this
+       * runs when a pass descriptor is built, just before the depth/stencil view is first made.
+       * @param renderTarget - the target whose depth/stencil texture to set up
+       * @param gpuRenderTarget - its backend target
+       */
+      _prepareDepthStencil(renderTarget, gpuRenderTarget) {
+        var _a;
+        const texture = (_a = renderTarget.depthStencilAttachment) == null ? void 0 : _a.texture;
+        if (!texture || !gpuRenderTarget.msaa) return;
+        texture.sampleCount = 4;
+        texture.transient = gpuRenderTarget.transient;
       }
       destroyGpuRenderTarget(gpuRenderTarget) {
         gpuRenderTarget.contexts.forEach((context) => {
@@ -55460,14 +56674,15 @@ ${parts.join("\n")}
         gpuRenderTarget.msaaTextures.forEach((texture) => {
           texture.destroy();
         });
+        gpuRenderTarget.msaaBackTextures.forEach((texture) => {
+          texture == null ? void 0 : texture.destroy();
+        });
         gpuRenderTarget.msaaTextures.length = 0;
+        gpuRenderTarget.msaaBackTextures.length = 0;
         gpuRenderTarget.contexts.length = 0;
       }
       ensureDepthStencilTexture(renderTarget) {
-        const gpuRenderTarget = this._renderTargetSystem.getGpuRenderTarget(renderTarget);
-        if (renderTarget.depthStencilAttachment && gpuRenderTarget.msaa) {
-          renderTarget.depthStencilAttachment.texture.sampleCount = 4;
-        }
+        this._prepareDepthStencil(renderTarget, this._renderTargetSystem.getGpuRenderTarget(renderTarget));
       }
       resizeGpuRenderTarget(renderTarget) {
         const gpuRenderTarget = this._renderTargetSystem.getGpuRenderTarget(renderTarget);
@@ -55475,9 +56690,10 @@ ${parts.join("\n")}
         gpuRenderTarget.height = renderTarget.height;
         if (gpuRenderTarget.msaa) {
           renderTarget.colorAttachments.forEach((colorAttachment, i) => {
+            var _a, _b;
             const colorTexture = colorAttachment.texture;
-            const msaaTexture = gpuRenderTarget.msaaTextures[i];
-            msaaTexture == null ? void 0 : msaaTexture.resize(
+            (_a = gpuRenderTarget.msaaTextures[i]) == null ? void 0 : _a.resize(colorTexture.width, colorTexture.height, colorTexture._resolution);
+            (_b = gpuRenderTarget.msaaBackTextures[i]) == null ? void 0 : _b.resize(
               colorTexture.width,
               colorTexture.height,
               colorTexture._resolution
@@ -55510,6 +56726,7 @@ ${parts.join("\n")}
       }
       contextChange(gpu) {
         this._gpu = gpu;
+        this._gpuProgramData = /* @__PURE__ */ Object.create(null);
       }
       getProgramData(program) {
         return this._gpuProgramData[program._layoutKey] || this._createGPUProgramData(program);
@@ -55724,26 +56941,42 @@ ${parts.join("\n")}
     };
 
     "use strict";
+    const tempRects = [new Rectangle(), new Rectangle(), new Rectangle()];
     const gpuUploadBufferImageResource = {
       type: "image",
       upload(source, gpuTexture, gpu, originZOverride = 0) {
         const resource = source.resource;
-        const total = (source.pixelWidth | 0) * (source.pixelHeight | 0);
-        const bytesPerPixel = resource.byteLength / total;
-        gpu.device.queue.writeTexture(
-          { texture: gpuTexture, origin: { x: 0, y: 0, z: originZOverride } },
-          resource,
-          {
-            offset: 0,
-            rowsPerImage: source.pixelHeight,
-            bytesPerRow: source.pixelWidth * bytesPerPixel
-          },
-          {
-            width: source.pixelWidth,
-            height: source.pixelHeight,
-            depthOrArrayLayers: 1
-          }
-        );
+        const width = source.pixelWidth | 0;
+        const height = source.pixelHeight | 0;
+        const depth = source.depthOrArrayLayers;
+        const bytesPerPixel = resource.byteLength / (width * height * depth);
+        if (depth > 1) {
+          gpu.device.queue.writeTexture(
+            { texture: gpuTexture, origin: { x: 0, y: 0, z: originZOverride } },
+            resource,
+            { offset: 0, rowsPerImage: height, bytesPerRow: width * bytesPerPixel },
+            { width, height, depthOrArrayLayers: depth }
+          );
+          return;
+        }
+        const count = getTexelRangeRects(source._updateStart, source._updateEnd, width, height, tempRects);
+        for (let i = 0; i < count; i++) {
+          const rect = tempRects[i];
+          gpu.device.queue.writeTexture(
+            { texture: gpuTexture, origin: { x: rect.x, y: rect.y, z: originZOverride } },
+            resource,
+            {
+              offset: (rect.y * width + rect.x) * bytesPerPixel,
+              rowsPerImage: rect.height,
+              bytesPerRow: width * bytesPerPixel
+            },
+            {
+              width: rect.width,
+              height: rect.height,
+              depthOrArrayLayers: 1
+            }
+          );
+        }
       }
     };
 
@@ -55843,17 +57076,117 @@ ${parts.join("\n")}
     };
 
     "use strict";
-    class GpuMipmapGenerator {
+    const MIPMAP_3D_FORMATS = ["rgba8unorm", "rgba16float"];
+    const WORKGROUP_SIZE = 4;
+    function assertMipmap3dTexture(format, storage) {
+      if (!storage) {
+        throw new Error("[Gpu3dMipmapGenerator] generating mipmaps for a 3D texture needs storage: true.");
+      }
+      if (!MIPMAP_3D_FORMATS.includes(format)) {
+        throw new Error(`[Gpu3dMipmapGenerator] format '${format}' can't be downsampled. Use ${MIPMAP_3D_FORMATS.join(", ")}.`);
+      }
+    }
+    class Gpu3dMipmapGenerator {
       constructor(device) {
-        this.device = device;
-        this.sampler = device.createSampler({ minFilter: "linear" });
-        this.pipelines = {};
+        this._pipelines = {};
+        this._device = device;
+        this._sampler = device.createSampler({
+          magFilter: "linear",
+          minFilter: "linear"
+        });
       }
       _getMipmapPipeline(format) {
-        let pipeline = this.pipelines[format];
+        var _a, _b;
+        (_b = (_a = this._pipelines)[format]) != null ? _b : _a[format] = this._device.createComputePipeline({
+          layout: "auto",
+          compute: {
+            module: this._device.createShaderModule({
+              code: (
+                /* wgsl */
+                `
+                        @group(0) @binding(0) var srcSampler : sampler;
+                        @group(0) @binding(1) var src : texture_3d<f32>;
+                        @group(0) @binding(2) var dst : texture_storage_3d<${format}, write>;
+
+                        @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
+                        fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
+                            let dstSize = textureDimensions(dst);
+
+                            if (gid.x >= dstSize.x || gid.y >= dstSize.y || gid.z >= dstSize.z) {
+                                return;
+                            }
+
+                            // centre of the 2x2x2 footprint in the previous mip. When a dimension is
+                            // odd its last texel, row or slice is never sampled, as in the 2D generator
+                            let uv = (vec3<f32>(gid) * 2.0 + 1.0) / vec3<f32>(textureDimensions(src));
+
+                            textureStore(dst, gid, textureSampleLevel(src, srcSampler, uv, 0.0));
+                        }
+                    `
+              )
+            }),
+            entryPoint: "main"
+          }
+        });
+        return this._pipelines[format];
+      }
+      /**
+       * Fills mip levels 1..n of a 3D texture from level 0.
+       * @param texture - a 3D texture with `STORAGE_BINDING` and more than one mip level
+       */
+      generateMipmap(texture) {
+        if (texture.dimension !== "3d") {
+          throw new Error("[Gpu3dMipmapGenerator] generateMipmap expects a 3D texture.");
+        }
+        if (texture.mipLevelCount < 2) return;
+        assertMipmap3dTexture(texture.format, (texture.usage & GPUTextureUsage.STORAGE_BINDING) !== 0);
+        const pipeline = this._getMipmapPipeline(texture.format);
+        const layout = pipeline.getBindGroupLayout(0);
+        const encoder = this._device.createCommandEncoder({ label: "Gpu3dMipmapGenerator" });
+        const pass = encoder.beginComputePass();
+        pass.setPipeline(pipeline);
+        let width = texture.width;
+        let height = texture.height;
+        let depth = texture.depthOrArrayLayers;
+        let srcView = texture.createView({ dimension: "3d", baseMipLevel: 0, mipLevelCount: 1 });
+        for (let level = 1; level < texture.mipLevelCount; level++) {
+          width = Math.max(1, width >> 1);
+          height = Math.max(1, height >> 1);
+          depth = Math.max(1, depth >> 1);
+          const dstView = texture.createView({ dimension: "3d", baseMipLevel: level, mipLevelCount: 1 });
+          pass.setBindGroup(0, this._device.createBindGroup({
+            layout,
+            entries: [
+              { binding: 0, resource: this._sampler },
+              { binding: 1, resource: srcView },
+              { binding: 2, resource: dstView }
+            ]
+          }));
+          pass.dispatchWorkgroups(
+            Math.ceil(width / WORKGROUP_SIZE),
+            Math.ceil(height / WORKGROUP_SIZE),
+            Math.ceil(depth / WORKGROUP_SIZE)
+          );
+          srcView = dstView;
+        }
+        pass.end();
+        this._device.queue.submit([encoder.finish()]);
+      }
+    }
+
+    "use strict";
+    class GpuMipmapGenerator {
+      constructor(device) {
+        // a pipeline for every texture format used
+        this._pipelines = {};
+        this._device = device;
+        this._sampler = device.createSampler({ minFilter: "linear" });
+      }
+      _getMipmapPipeline(format) {
+        let pipeline = this._pipelines[format];
         if (!pipeline) {
-          if (!this.mipmapShaderModule) {
-            this.mipmapShaderModule = this.device.createShaderModule({
+          if (!this._mipmapShaderModule) {
+            this._mipmapShaderModule = this._device.createShaderModule({
               code: (
                 /* wgsl */
                 `
@@ -55884,19 +57217,19 @@ ${parts.join("\n")}
               )
             });
           }
-          pipeline = this.device.createRenderPipeline({
+          pipeline = this._device.createRenderPipeline({
             layout: "auto",
             vertex: {
-              module: this.mipmapShaderModule,
+              module: this._mipmapShaderModule,
               entryPoint: "vertexMain"
             },
             fragment: {
-              module: this.mipmapShaderModule,
+              module: this._mipmapShaderModule,
               entryPoint: "fragmentMain",
               targets: [{ format }]
             }
           });
-          this.pipelines[format] = pipeline;
+          this._pipelines[format] = pipeline;
         }
         return pipeline;
       }
@@ -55906,10 +57239,13 @@ ${parts.join("\n")}
        * @returns {module:External.GPUTexture} - The originally passed texture
        */
       generateMipmap(texture) {
-        const pipeline = this._getMipmapPipeline(texture.format);
-        if (texture.dimension === "3d" || texture.dimension === "1d") {
-          throw new Error("Generating mipmaps for non-2d textures is currently unsupported!");
+        if (texture.dimension === "3d") {
+          throw new Error("[GpuMipmapGenerator] a 3D texture uses Gpu3dMipmapGenerator.");
         }
+        if (texture.dimension === "1d") {
+          throw new Error("Generating mipmaps for 1d textures is currently unsupported!");
+        }
+        const pipeline = this._getMipmapPipeline(texture.format);
         let mipTexture = texture;
         const arrayLayerCount = texture.depthOrArrayLayers || 1;
         const renderToSource = texture.usage & GPUTextureUsage.RENDER_ATTACHMENT;
@@ -55924,9 +57260,9 @@ ${parts.join("\n")}
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT,
             mipLevelCount: texture.mipLevelCount - 1
           };
-          mipTexture = this.device.createTexture(mipTextureDescriptor);
+          mipTexture = this._device.createTexture(mipTextureDescriptor);
         }
-        const commandEncoder = this.device.createCommandEncoder({});
+        const commandEncoder = this._device.createCommandEncoder({});
         const bindGroupLayout = pipeline.getBindGroupLayout(0);
         for (let arrayLayer = 0; arrayLayer < arrayLayerCount; ++arrayLayer) {
           let srcView = texture.createView({
@@ -55953,11 +57289,11 @@ ${parts.join("\n")}
                 clearValue: { r: 0, g: 0, b: 0, a: 0 }
               }]
             });
-            const bindGroup = this.device.createBindGroup({
+            const bindGroup = this._device.createBindGroup({
               layout: bindGroupLayout,
               entries: [{
                 binding: 0,
-                resource: this.sampler
+                resource: this._sampler
               }, {
                 binding: 1,
                 resource: srcView
@@ -55988,7 +57324,7 @@ ${parts.join("\n")}
             mipLevelSize.height = Math.ceil(mipLevelSize.height / 2);
           }
         }
-        this.device.queue.submit([commandEncoder.finish()]);
+        this._device.queue.submit([commandEncoder.finish()]);
         if (!renderToSource) {
           mipTexture.destroy();
         }
@@ -56030,6 +57366,10 @@ ${parts.join("\n")}
         this.gpuTexture = null;
       }
     }
+    const SRGB_CAPABLE = /^(rgba8|bgra8|bc[1237]-rgba-|etc2-rgb8|etc2-rgb8a1|etc2-rgba8|astc-\d+x\d+-)unorm$/;
+    function srgbViewFormat(format) {
+      return SRGB_CAPABLE.test(format) ? [`${format}-srgb`] : void 0;
+    }
     function getViewDescriptorKey(viewDescriptor) {
       return `${viewDescriptor.format || ""}.${viewDescriptor.dimension || ""}.${viewDescriptor.aspect || ""}.${viewDescriptor.baseMipLevel || 0}.${viewDescriptor.mipLevelCount || ""}.${viewDescriptor.baseArrayLayer || 0}.${viewDescriptor.arrayLayerCount || ""}`;
     }
@@ -56063,6 +57403,10 @@ ${parts.join("\n")}
       }
       contextChange(gpu) {
         this._gpu = gpu;
+        this._managedTextures.removeAll();
+        this._gpuSamplers = /* @__PURE__ */ Object.create(null);
+        this._mipmapGenerator = null;
+        this._mipmap3dGenerator = null;
       }
       /**
        * Initializes a texture source, if it has already been initialized nothing will happen.
@@ -56075,10 +57419,12 @@ ${parts.join("\n")}
       }
       _initSource(source) {
         if (source.autoGenerateMipmaps) {
-          const biggestDimension = Math.max(source.pixelWidth, source.pixelHeight);
+          if (source.dimension === "3d") assertMipmap3dTexture(source.format, source.storage);
+          const biggestDimension = Math.max(source.pixelWidth, source.pixelHeight, source.depth);
           source.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
         }
         let usage;
+        let viewFormats;
         if (source.sampleCount > 1) {
           usage = GPUTextureUsage.RENDER_ATTACHMENT;
           if (source.transient && this._renderer.device.extensions.transientAttachment) {
@@ -56090,6 +57436,8 @@ ${parts.join("\n")}
             usage |= GPUTextureUsage.RENDER_ATTACHMENT;
             usage |= GPUTextureUsage.COPY_SRC;
           }
+          if (source.storage) usage |= GPUTextureUsage.STORAGE_BINDING;
+          viewFormats = srgbViewFormat(source.format);
         }
         const blockData = blockDataMap[source.format] || { blockBytes: 4, blockWidth: 1, blockHeight: 1 };
         const width = Math.ceil(source.pixelWidth / blockData.blockWidth) * blockData.blockWidth;
@@ -56097,8 +57445,9 @@ ${parts.join("\n")}
         const textureDescriptor = {
           label: source.label,
           // WebGPU cube textures are 2D textures with 6 array layers and a cube view.
-          size: { width, height, depthOrArrayLayers: source.arrayLayerCount },
+          size: { width, height, depthOrArrayLayers: source.depthOrArrayLayers },
           format: source.format,
+          viewFormats,
           sampleCount: source.sampleCount,
           mipLevelCount: source.mipLevelCount,
           dimension: source.dimension,
@@ -56126,10 +57475,14 @@ ${parts.join("\n")}
         }
       }
       onUpdateMipmaps(source) {
-        if (!this._mipmapGenerator) {
-          this._mipmapGenerator = new GpuMipmapGenerator(this._gpu.device);
-        }
+        var _a, _b;
         const gpuTexture = this.getGpuSource(source);
+        if (source.dimension === "3d") {
+          (_a = this._mipmap3dGenerator) != null ? _a : this._mipmap3dGenerator = new Gpu3dMipmapGenerator(this._gpu.device);
+          this._mipmap3dGenerator.generateMipmap(gpuTexture);
+          return;
+        }
+        (_b = this._mipmapGenerator) != null ? _b : this._mipmapGenerator = new GpuMipmapGenerator(this._gpu.device);
         this._mipmapGenerator.generateMipmap(gpuTexture);
       }
       onSourceUnload(source) {
@@ -56209,12 +57562,14 @@ ${parts.join("\n")}
           this.initSource(source);
           gpuData = source._gpuData[this._renderer.uid];
         }
+        const is3D = source.dimension === "3d";
+        if (is3D) layer = 0;
         let descriptorKey = layer * (source.mipLevelCount || 1) + mipLevel + 1;
         if (viewDescriptor) {
           descriptorKey = `${descriptorKey}.${getViewDescriptorKey(viewDescriptor)}`;
         }
         (_a = gpuData.textureViews)[descriptorKey] || (_a[descriptorKey] = gpuData.gpuTexture.createView(__spreadValues$h({
-          dimension: "2d",
+          dimension: is3D ? "3d" : "2d",
           baseMipLevel: mipLevel,
           mipLevelCount: 1,
           baseArrayLayer: layer,
@@ -56271,6 +57626,7 @@ ${parts.join("\n")}
         this._renderer = null;
         this._gpu = null;
         this._mipmapGenerator = null;
+        this._mipmap3dGenerator = null;
         this._gpuSamplers = null;
         this._bindGroupHash = null;
       }
@@ -56371,7 +57727,7 @@ ${parts.join("\n")}
         }
       }
       destroy() {
-        this.shader.destroy(true);
+        this.shader.destroy();
         this.shader = null;
       }
     }
@@ -56430,7 +57786,7 @@ ${parts.join("\n")}
         });
       }
       destroy() {
-        this._shader.destroy(true);
+        this._shader.destroy();
         this._shader = null;
       }
     }
@@ -56464,9 +57820,11 @@ ${parts.join("\n")}
     const systems = [];
     const renderPipes = [];
     const renderPipeAdaptors = [];
+    const loaders = [];
     extensions.handleByNamedList(ExtensionType.WebGPUSystem, systems);
     extensions.handleByNamedList(ExtensionType.WebGPUPipes, renderPipes);
     extensions.handleByNamedList(ExtensionType.WebGPUPipesAdaptor, renderPipeAdaptors);
+    extensions.handleByNamedList(ExtensionType.WebGPULoader, loaders);
     extensions.add(...DefaultWebGPUSystems, ...DefaultWebGPUPipes, ...DefaultWebGPUAdapters);
     class WebGPURenderer extends AbstractRenderer {
       constructor() {
@@ -56475,7 +57833,8 @@ ${parts.join("\n")}
           type: RendererType.WEBGPU,
           systems,
           renderPipes,
-          renderPipeAdaptors
+          renderPipeAdaptors,
+          loaders
         };
         super(systemConfig);
       }
@@ -56595,7 +57954,6 @@ ${parts.join("\n")}
           // Keep these aligned with the face sources so any code that reads width/height works.
           width: first.width,
           height: first.height,
-          dimensions: "2d",
           viewDimension: "cube",
           arrayLayerCount: 6,
           resolution: derivedResolution,
@@ -60093,6 +61451,18 @@ ${parts.join("\n")}
     let ParticleContainer = _ParticleContainer;
 
     "use strict";
+    const colsSrc = [[0, 0], [0, 0], [0, 0]];
+    const rowsSrc = [[0, 0], [0, 0], [0, 0]];
+    const colsDst = [[0, 0], [0, 0], [0, 0]];
+    const rowsDst = [[0, 0], [0, 0], [0, 0]];
+    function setSpans(spans, s0, n0, s1, n1, s2, n2) {
+      spans[0][0] = s0;
+      spans[0][1] = n0;
+      spans[1][0] = s1;
+      spans[1][1] = n1;
+      spans[2][0] = s2;
+      spans[2][1] = n2;
+    }
     class CanvasNineSliceSpritePipe {
       constructor(renderer) {
         this._renderer = renderer;
@@ -60182,95 +61552,54 @@ ${parts.join("\n")}
           sw = finalSource.width;
           sh = finalSource.height;
         }
-        context.drawImage(finalSource, sx, sy, lw, tw, dx, dy, destLeftWidth, destTopHeight);
-        context.drawImage(
-          finalSource,
-          sx + lw,
-          sy,
-          sw - lw - rw,
-          tw,
-          dx + destLeftWidth,
-          dy,
-          destCenterWidth,
-          destTopHeight
-        );
-        context.drawImage(
-          finalSource,
-          sx + sw - rw,
-          sy,
-          rw,
-          tw,
-          dx + width - destRightWidth,
-          dy,
-          destRightWidth,
-          destTopHeight
-        );
-        context.drawImage(
-          finalSource,
-          sx,
-          sy + tw,
-          lw,
-          sh - tw - bw,
+        const centerSrcW = sw - lw - rw;
+        const centerSrcH = sh - tw - bw;
+        const centerSx = centerSrcW > 0 ? sx + lw : Math.max(sx, Math.min(sx + lw, sx + sw - 1));
+        const centerSw = centerSrcW > 0 ? centerSrcW : 1;
+        const centerSy = centerSrcH > 0 ? sy + tw : Math.max(sy, Math.min(sy + tw, sy + sh - 1));
+        const centerSh = centerSrcH > 0 ? centerSrcH : 1;
+        setSpans(colsSrc, sx, lw, centerSx, centerSw, sx + sw - rw, rw);
+        setSpans(rowsSrc, sy, tw, centerSy, centerSh, sy + sh - bw, bw);
+        setSpans(
+          colsDst,
           dx,
-          dy + destTopHeight,
           destLeftWidth,
-          destCenterHeight
-        );
-        context.drawImage(
-          finalSource,
-          sx + lw,
-          sy + tw,
-          sw - lw - rw,
-          sh - tw - bw,
           dx + destLeftWidth,
-          dy + destTopHeight,
           destCenterWidth,
-          destCenterHeight
-        );
-        context.drawImage(
-          finalSource,
-          sx + sw - rw,
-          sy + tw,
-          rw,
-          sh - tw - bw,
           dx + width - destRightWidth,
+          destRightWidth
+        );
+        setSpans(
+          rowsDst,
+          dy,
+          destTopHeight,
           dy + destTopHeight,
-          destRightWidth,
-          destCenterHeight
-        );
-        context.drawImage(
-          finalSource,
-          sx,
-          sy + sh - bw,
-          lw,
-          bw,
-          dx,
+          destCenterHeight,
           dy + height - destBottomHeight,
-          destLeftWidth,
           destBottomHeight
         );
-        context.drawImage(
-          finalSource,
-          sx + lw,
-          sy + sh - bw,
-          sw - lw - rw,
-          bw,
-          dx + destLeftWidth,
-          dy + height - destBottomHeight,
-          destCenterWidth,
-          destBottomHeight
-        );
-        context.drawImage(
-          finalSource,
-          sx + sw - rw,
-          sy + sh - bw,
-          rw,
-          bw,
-          dx + width - destRightWidth,
-          dy + height - destBottomHeight,
-          destRightWidth,
-          destBottomHeight
-        );
+        for (let col = 0; col < 3; col++) {
+          const dww = colsDst[col][1];
+          if (dww <= 0) continue;
+          const sxx = colsSrc[col][0];
+          const sww = colsSrc[col][1];
+          const dxx = colsDst[col][0];
+          for (let row = 0; row < 3; row++) {
+            const dhh = rowsDst[row][1];
+            if (dhh <= 0) continue;
+            context.drawImage(
+              finalSource,
+              sxx,
+              rowsSrc[row][0],
+              sww,
+              rowsSrc[row][1],
+              dxx,
+              rowsDst[row][0],
+              dww,
+              dhh
+            );
+          }
+        }
         context.restore();
       }
       destroy() {
@@ -62263,6 +63592,7 @@ ${parts.join("\n")}
     exports.GlUniformGroupSystem = GlUniformGroupSystem;
     exports.GlobalResourceRegistry = GlobalResourceRegistry;
     exports.GlobalUniformSystem = GlobalUniformSystem;
+    exports.Gpu3dMipmapGenerator = Gpu3dMipmapGenerator;
     exports.GpuBatchAdaptor = GpuBatchAdaptor;
     exports.GpuBlendModesToPixi = GpuBlendModesToPixi;
     exports.GpuBufferData = GpuBufferData;
@@ -62275,6 +63605,7 @@ ${parts.join("\n")}
     exports.GpuLimitsSystem = GpuLimitsSystem;
     exports.GpuMeshAdapter = GpuMeshAdapter;
     exports.GpuMipmapGenerator = GpuMipmapGenerator;
+    exports.GpuMsaaRestore = GpuMsaaRestore;
     exports.GpuParticleContainerAdaptor = GpuParticleContainerAdaptor;
     exports.GpuParticleContainerPipe = GpuParticleContainerPipe;
     exports.GpuProgram = GpuProgram;
@@ -62352,6 +63683,7 @@ ${parts.join("\n")}
     exports.QuadGeometry = QuadGeometry;
     exports.RAD_TO_DEG = RAD_TO_DEG;
     exports.Rectangle = Rectangle;
+    exports.RenderBundle = RenderBundle;
     exports.RenderContainer = RenderContainer;
     exports.RenderGroup = RenderGroup;
     exports.RenderGroupPipe = RenderGroupPipe;
@@ -62374,6 +63706,7 @@ ${parts.join("\n")}
     exports.SVGParser = SVGParser;
     exports.SchedulerSystem = SchedulerSystem;
     exports.ScissorMask = ScissorMask;
+    exports.ScreenSizeRegistry = ScreenSizeRegistry;
     exports.SdfShader = SdfShader;
     exports.Shader = Shader;
     exports.ShaderOverrides = ShaderOverrides;
@@ -62445,6 +63778,7 @@ ${parts.join("\n")}
     exports.applyMatrix = applyMatrix;
     exports.applyProjectiveTransformationToPlane = applyProjectiveTransformationToPlane;
     exports.applyStyleParams = applyStyleParams;
+    exports.assertMipmap3dTexture = assertMipmap3dTexture;
     exports.assignWithIgnore = assignWithIgnore;
     exports.autoDetectEnvironment = autoDetectEnvironment;
     exports.autoDetectRenderer = autoDetectRenderer;
@@ -62629,6 +63963,7 @@ ${parts.join("\n")}
     exports.getSupportedTextureFormats = getSupportedTextureFormats;
     exports.getTemporaryCanvasFromImage = getTemporaryCanvasFromImage;
     exports.getTestContext = getTestContext;
+    exports.getTexelRangeRects = getTexelRangeRects;
     exports.getTextureBatchBindGroup = getTextureBatchBindGroup;
     exports.getTextureDefaultMatrix = getTextureDefaultMatrix;
     exports.getTextureFormatFromKTXTexture = getTextureFormatFromKTXTexture;
@@ -62663,6 +63998,7 @@ ${parts.join("\n")}
     exports.isBreakingSpace = isBreakingSpace;
     exports.isCanvasFilterCapable = isCanvasFilterCapable;
     exports.isCollapsibleSpace = isCollapsibleSpace;
+    exports.isIntegerFormat = isIntegerFormat;
     exports.isMobile = isMobile;
     exports.isNewline = isNewline;
     exports.isPow2 = isPow2;
@@ -62801,6 +64137,8 @@ ${parts.join("\n")}
     exports.updateTransformBackwards = updateTransformBackwards;
     exports.updateWorldTransform = updateWorldTransform;
     exports.v8_0_0 = v8_0_0;
+    exports.v8_21_0 = v8_21_0;
+    exports.v8_22_0 = v8_22_0;
     exports.v8_3_4 = v8_3_4;
     exports.validFormats = validFormats;
     exports.validateRenderables = validateRenderables;
@@ -62808,6 +64146,7 @@ ${parts.join("\n")}
     exports.vertexGlTemplate = vertexGlTemplate;
     exports.vkFormatToGPUFormat = vkFormatToGPUFormat;
     exports.warn = warn;
+    exports.warnIgnoredTextureStyle = warnIgnoredTextureStyle;
     exports.wordWrap = wordWrap;
     exports.wordWrapTaggedLines = wordWrapTaggedLines;
     exports.wrapModeToGlAddress = wrapModeToGlAddress;

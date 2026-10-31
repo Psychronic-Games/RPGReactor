@@ -19,6 +19,7 @@ const nativeRelease = require('./native-release.cjs');
 const webFileIndex = require('./web-file-index.cjs');
 const webPack = require('./web-pack.cjs');
 const unusedAssets = require('./unused-assets.cjs');
+const { copyWebForgeAssets } = require('./web-forge-assets.cjs');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -991,6 +992,8 @@ function buildWeb(stageRoot, stagingDir) {
     // The playtest runs the project in a browser, which corrects filename casing from this index.
     webFileIndex.writeWebFileIndex(path.join(webRoot, 'project'));
 
+    copyWebForgeAssets(stageRoot, webRoot);
+
     const sourceHtml = fs.readFileSync(path.join(stageRoot, 'index.html'), 'utf8');
     const scriptPattern = /<script\s+src="(src\/[^"]+)"\s*><\/script>/g;
     const sourceScripts = [...sourceHtml.matchAll(scriptPattern)].map(match => match[1]);
@@ -1013,6 +1016,8 @@ function buildWeb(stageRoot, stagingDir) {
         'src/forge/CharacterGenerator/procgen/hair_engine.js',
         ...characterStyleScripts);
     const bundleScripts = sourceScripts.filter(source => source !== 'src/main.js' && !source.startsWith('src/web/'));
+    // Desktop poses read this library from disk; the web page must define it before CharacterPoses.
+    bundleScripts.splice(bundleScripts.indexOf('src/forge/Character3D/CharacterPoses.js'), 0, 'runtime/reactor_3d_motions.js');
     const bundle = bundleScripts.map(source => {
         const contents = fs.readFileSync(path.join(stageRoot, source), 'utf8');
         return `${contents}\n//# sourceURL=${source}\n`;

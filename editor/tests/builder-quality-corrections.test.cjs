@@ -60,7 +60,7 @@ test('bird wings have separate manus articulation and standing feathers stay abo
 test('sewn shoulder panels remain complete across mixed torso/arm chart boundaries',async()=>{
  const D=require('../src/forge/Character3D/CharacterGarmentDetails.js'),O=require('../src/forge/Character3D/CharacterOutfit.js'),pack=await B.loadPack(),built=B.build(pack,B.normalizeRecipe({gender:1}));
  const laid={positions:Float32Array.from([-.3,.9,.3,.3,.9,.3,-.3,1.6,.3,.3,1.6,.3]),index:Uint32Array.from([0,1,2,1,3,2]),normals:Float32Array.from([0,0,1,0,0,1,0,0,1,0,0,1]),joints:new Uint8Array(16),weights:Float32Array.from([1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]),field:[{fam:1},{fam:0},{fam:1},{fam:0}],fabricEntry:0};
- const parts=D.build(pack,built,[{garment:'officerJacket',laid,look:{color:'#203040',color2:'#708090',trim:'#b0b8c0'}}]),surface=O.projectedSurface(parts),an=O.anatomy(pack),hip=built.bones.find(b=>b.name==='Hips').head[1],neck=built.bones.find(b=>b.name==='Neck').head[1];
+ const parts=D.build(pack,built,[{garment:'techSuit',laid,look:{color:'#203040',color2:'#708090',trim:'#b0b8c0'}}]),surface=O.projectedSurface(parts),an=O.anatomy(pack),hip=built.bones.find(b=>b.name==='Hips').head[1],neck=built.bones.find(b=>b.name==='Neck').head[1];
  for(const x of [-.11,.11]){const restY=1.292-Math.abs(x)*.16+.026,y=hip+(restY-an.chains.spine[0][1])/(an.chains.spine[4][1]-an.chains.spine[0][1])*(neck-hip),hit=surface.sample(x,y);assert.ok(hit&&hit.depth>.305,'sewn panel has a hole at its anatomical chart boundary');}
 });
 test('formed wheel flanges leave the entire wheel opening clear, including triangle interiors',()=>{

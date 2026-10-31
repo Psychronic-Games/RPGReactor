@@ -637,4 +637,58 @@ test('placed flags with continuous clips cast moving shadows; still props retain
     assert.equal(Reactor3D.modelCasterMoves(prop, [{ type: 'clip', trigger: 'action' }]), false);
     assert.equal(Reactor3D.modelCasterMoves(event, []), true);
     assert.equal(Reactor3D.modelCasterMoves(null, []), true);
+    assert.equal(Reactor3D.modelCasterMoves({ ...prop, _rrVehicle: 1 }, []), true, 'a transferred motorcycle stays a moving caster despite a prop-range event id');
+});
+
+test('the rider and ridden motorcycle retain shadows before distant NPCs spend the budget', () => {
+    const S = Reactor3D.Shadows;
+    const kept = { dynamic: S._dynamic, casting: S._casting, quality: S._quality, triangles: S._casterTriangles };
+    const root = (x, triangles, data) => ({ parent: {}, visible: true, triangles,
+        userData: { rrShadowCharacter: true, ...data }, scale: { x: 1, y: 1, z: 1 },
+        matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, 0, 0, 1] },
+        traverse(fn) { fn(this); } });
+    const rider = root(0, 156697, { reactorPlayer: true });
+    const bike = root(.2, 226754, { rrShadowCharacter: false, reactorRidden: true });
+    const npcs = [5, 8, 12, 16].map(x => root(x, 149000, {}));
+    try {
+        S._casterTriangles = object => object.triangles;
+        for (const budget of [600000, 200000]) {
+            S._quality = { dynamicTriangles: budget };
+            S._dynamic = new Set([...npcs, rider, bike]); S._casting = new Set();
+            S._budgetDynamic({ x: 0, y: 0, z: 0 });
+            assert.equal(S._casting.has(rider), true, 'rider casts');
+            assert.equal(S._casting.has(bike), true, 'ridden bike casts despite NPC priority and rigid geometry');
+            assert.ok([...S._casting].reduce((sum, object) => sum + object.triangles, 0) <= budget * Reactor3D.SHADOW_DYNAMIC_CEILING);
+        }
+    } finally { S._dynamic = kept.dynamic; S._casting = kept.casting; S._quality = kept.quality; S._casterTriangles = kept.triangles; }
+});
+
+
+test('a held mesh attached after caster registration gets a depth material before shadow drawing', () => {
+    const savedThree = global.THREE;
+    require(path.join(repoRoot, 'runtime/libs/three.js'));
+    const THREE = global.THREE, S = Reactor3D.Shadows;
+    const root = new THREE.Group(), scene = new THREE.Scene(); scene.add(root);
+    S.markCaster(root, true);
+    const lit = new THREE.MeshBasicMaterial(), mesh = new THREE.Mesh(new THREE.BoxGeometry(), lit);
+    mesh.layers.enable(Reactor3D.SHADOW_LAYER_DYNAMIC);
+    root.add(mesh);
+    assert.equal(mesh.customDepthMaterial, undefined, 'a cloned held mesh has no custom depth material');
+    let swapped;
+    try {
+        swapped = S._swapCasters(new Set([root]));
+        assert.equal(mesh.material === lit, false, 'the lit shader must not sample the atlas being written');
+        assert.equal(mesh.material.type, 'MeshDepthMaterial');
+        assert.equal(mesh.customDepthMaterial.__rrCaster, true);
+        S._unswap(swapped); swapped = null;
+        assert.equal(mesh.material === lit, true, 'the world pass keeps the held model material');
+        const depth = mesh.customDepthMaterial;
+        swapped = S._swapCasters(new Set([root]));
+        assert.equal(mesh.material === depth, true, 'later passes reuse the prepared depth material');
+    } finally {
+        if (swapped) S._unswap(swapped);
+        S._dynamic.delete(root); S._static.delete(root); S._casting?.delete(root);
+        mesh.geometry.dispose(); lit.dispose();
+        if (savedThree === undefined) delete global.THREE; else global.THREE = savedThree;
+    }
 });

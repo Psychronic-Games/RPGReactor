@@ -178,7 +178,10 @@ const BUDGET = { total: 60000, outfit: 24000 };
 // Dark linings inside open cuffs, hems and collars (2026-10-25) add 1.4-5k an outfit: the layered Wasteland scavenger
 // reaches 77.2k (73.1k without), so the ceiling on a whole character rises to 77,500, and 20 presets are over 60k.
 // Cargo pockets laid flat on the thigh in finer rows so no chord cuts into the leg (2026-10-25): +0.9k, 78,500.
-const RATCHET = { maxTotal: 78500, maxOutfit: 50500, overTotal: 20, overOutfit: 33 };
+// Preview52 source measurement after finer footwear: max 81,050 / 51,595; 23 / 34 over target.
+// Preview53 fitted goggles add 2,296 triangles to affected presets; max total 83,346.
+// Evidence: scratchpad/forge-quality-20261029/{baseline-budgets,preset-budgets}.json.
+const RATCHET = { maxTotal: 83400, maxOutfit: 51600, overTotal: 23, overOutfit: 34 };
 const FEMININE = /dress|skirt|gown|bra|bikini|stocking|corset|qipao|ballet|tennis|cropTop|offShoulder|operaGloves|swimsuit|peasant|sundress|carol|vay|tights|leggings/i;
 test('humanoid presets stay within the triangle budget (ratchet)', () => {
     const rows = [];
@@ -192,6 +195,7 @@ test('humanoid presets stay within the triangle budget (ratchet)', () => {
     // and by their own budget (character-postapoc-20261024), not counted against the ratchet's tally. So are the
     // Cyberpunk presets (character-cyberwear-20261024), techwear and armor layered over undersuits.
     const over = key => rows.filter(r => r[key] > BUDGET[key] && !r.wasteland).map(r => r.id + ' ' + r[key]);
+    if(process.env.RR_BUDGET_REPORT) require('node:fs').writeFileSync(process.env.RR_BUDGET_REPORT,JSON.stringify({rows,overTotal:over('total'),overOutfit:over('outfit')},null,2));
     for (const r of rows) {
         assert.ok(r.total <= Math.max(BUDGET.total, RATCHET.maxTotal), r.id + ' has ' + r.total + ' triangles');
         assert.ok(r.outfit <= Math.max(BUDGET.outfit, RATCHET.maxOutfit), r.id + '\'s outfit has ' + r.outfit + ' triangles');

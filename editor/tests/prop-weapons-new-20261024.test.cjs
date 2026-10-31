@@ -78,11 +78,11 @@ function nearest(b, q) {
 test('the catalog lists the new weapons in their groups, once each, and hides the old equipment versions', () => {
     const tree = Catalog.grouped(''), weapons = tree.find(g => g.category.id === 'weapons');
     const groups = weapons.groups.map(g => g.category.id);
-    for (const id of ['axes', 'polearms', 'bows', 'staffs', 'shields', 'scifi']) assert.ok(groups.includes(id), id);
-    assert.deepEqual(groups.slice(0, 3), ['swords', 'firearms', 'scifi'], 'swords, firearms and sci-fi still lead');
+    for (const id of ['axes', 'polearms', 'bows', 'staffs', 'shields']) assert.ok(groups.includes(id), id);
+    assert.deepEqual(groups.slice(0, 3), ['swords', 'firearms', 'axes'], 'weapon families stay together');
     for (const { kind, id, category } of presets()) {
         const t = Catalog.TYPES.find(x => x.id === kind + '-' + id);
-        assert.ok(t && !t.hidden && t.category === category, kind + '-' + id + ' listed');
+        assert.ok(t && !t.hidden && t.category === (category === 'scifi' ? {staff:'staffs',bow:'bows',shield:'shields'}[kind] : category), kind + '-' + id + ' listed');
         assert.equal(Catalog.typeOf(Model.normalize(t.start())), t, kind + '-' + id + ' is what it starts as');
         assert.ok(Catalog.ICONS[t.icon], t.id + ' has its icon');
     }

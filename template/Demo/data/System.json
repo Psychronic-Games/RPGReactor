@@ -90,7 +90,7 @@
   "titleBgm": {"name":"Psychronic - Forest Trek","pan":0,"pitch":100,"volume":90},
   "titleCommandWindow": {"background":0,"offsetX":0,"offsetY":0},
   "variables": ["","Battle result","","","","","","","","","","","","","","","","","","",""],
-  "versionId": 12727652,
+  "versionId": 1915610,
   "victoryMe": {"name":"Victory1","pan":0,"pitch":100,"volume":90},
   "weaponTypes": ["","Dagger","Sword","Flail","Axe","Whip","Staff","Bow","Crossbow","Gun","Claw","Glove","Spear","Pistol","Rifle","Shotgun","Cannon"],
   "windowTone": [0,0,0,0],

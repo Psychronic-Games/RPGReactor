@@ -211,7 +211,9 @@ test('the viewport hands a refresh with no update the owed face, once, and the e
     assert.match(body, /this\._matrixFrame = frame;\n\s*if \(typeof Graphics !== "undefined"\) this\._spareRefresh = Graphics\.refreshCount;/, 'the update\'s own refresh is not a spare one');
     assert.match(body, /\} else if \(Reactor3D\.Reflections && typeof Graphics !== "undefined" && this\._spareRefresh !== Graphics\.refreshCount\) \{\n[^\n]*\n\s*this\._spareRefresh = Graphics\.refreshCount;\n\s*Reactor3D\.Reflections\.takeOwed\(this\._renderer, mapScene, scene\);/);
     const coreJs = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
-    assert.match(coreJs, /this\._fpsCounter\.startTick\(\);\n[^\n]*\n\s*this\.refreshCount\+\+;/);
+    const tickAt = coreJs.indexOf('Graphics._onTick = function'), tick = coreJs.slice(tickAt, coreJs.indexOf('\n};', tickAt));
+    const start = tick.indexOf('this._fpsCounter.startTick();'), refresh = tick.indexOf('this.refreshCount++;'), pacing = tick.indexOf('pacing.begin(');
+    assert.ok(start >= 0 && refresh > start && pacing > refresh, 'a refresh is counted after its counter starts and before presentation uses it');
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /static PROBE_HALF_WHILE_MOVING = true;/);
     assert.match(editor, /const moving = this\._drawActive && MapEditor3D\.PROBE_HALF_WHILE_MOVING;\n\s*if \(moving\) this\._probeTurn = !this\._probeTurn;[\s\S]{0,1200}?if \(!reflections\.idle\(\) && \(!moving \|\| this\._probeTurn\)\)/);

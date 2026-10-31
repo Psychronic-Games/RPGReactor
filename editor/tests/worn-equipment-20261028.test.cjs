@@ -174,6 +174,7 @@ test('a Builder\'s metal shines as it did in the Builder, over its own colour; a
         assert.equal(+shine.vector.z.toFixed(2), 0.9, 'as metal');
         assert.equal(shine.vector.w, R.BUILDER_METAL_KEEP, 'over its own colour');
         assert.equal(shine.albedo.value, 1, 'reflecting in that colour');
+        assert.ok(R.mirrorOf(object) > .5, 'authored metal qualifies for a nearby environment probe');
         assert.equal(R.Reflections.wanted, false, 'without the live capture of the world');
         assert.equal(R.shineOf(imported), null, 'another file\'s metal waits for a Surface');
         // A Surface set on the model stands over both.

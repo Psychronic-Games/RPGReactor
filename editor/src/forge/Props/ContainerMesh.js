@@ -460,7 +460,16 @@
         return out;
     }
 
-    const api = { Geo, make, revolve, revolveOn, smoothNormals, chamferBox, roundedBox, planarAt, slab, insetConvex, rect, frame, sweep, orientOutward, bezel, plate, dome, transform, yaw, pitch, copy, mapUv, skin, occlude, merge, vec: { sub, add, scale, dot, cross, norm } };
+    /** Divide long panel edges before bending them onto a hull. Moving only a slab's
+     * corners leaves its broad front triangles cutting straight through a cylinder. */
+    function tessellate(m, step=.08) {
+        if(!m.positions.every(Number.isFinite))throw new Error('Cannot bend a non-finite panel');
+        const P=Array.from(m.positions),N=Array.from(m.normals),U=Array.from(m.uvs),I=[],middle=new Map();
+        const midpoint=(a,b)=>{const key=Math.min(a,b)+':'+Math.max(a,b);if(middle.has(key))return middle.get(key);const v=P.length/3;for(let k=0;k<3;k++){P.push((P[a*3+k]+P[b*3+k])/2);N.push((N[a*3+k]+N[b*3+k])/2);}for(let k=0;k<2;k++)U.push((U[a*2+k]+U[b*2+k])/2);middle.set(key,v);return v;};
+        const divide=(a,b,c,depth)=>{const t=[a,b,c],length=t.map((v,k)=>Math.hypot(...[0,1,2].map(j=>P[v*3+j]-P[t[(k+1)%3]*3+j]))),e=length.indexOf(Math.max(...length));if(length[e]<=step||depth===14){I.push(a,b,c);return;}const x=t[e],y=t[(e+1)%3],z=t[(e+2)%3],v=midpoint(x,y);divide(x,v,z,depth+1);divide(v,y,z,depth+1);};
+        for(let i=0;i<m.index.length;i+=3)divide(m.index[i],m.index[i+1],m.index[i+2],0);return make(P,N,U,I);
+    }
+    const api = { Geo, make, revolve, revolveOn, smoothNormals, chamferBox, roundedBox, planarAt, slab, insetConvex, rect, frame, sweep, orientOutward, bezel, plate, dome, transform, yaw, pitch, copy, mapUv, skin, occlude, merge, tessellate, vec: { sub, add, scale, dot, cross, norm } };
     root.RRContainerMesh = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

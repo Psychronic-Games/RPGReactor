@@ -8396,3 +8396,99 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  const rows={ja:'顔をクリックすると使用します。','zh-Hant':'點選臉圖即可使用。','zh-Hans':'点击脸图即可使用。',ko:'얼굴을 클릭하면 사용됩니다.',es:'Haz clic en una cara para usarla.',pt:'Clique num rosto para o usar.',fr:'Cliquez sur un visage pour l’utiliser.',de:'Klicke auf ein Gesicht, um es zu verwenden.',it:'Fai clic su un volto per usarlo.',ru:'Щёлкните лицо, чтобы выбрать его.',pl:'Kliknij twarz, aby jej użyć.',tr:'Kullanmak için bir yüze tıklayın.',ar:'انقر على وجه لاستخدامه.',el:'Κάντε κλικ σε ένα πρόσωπο για να το χρησιμοποιήσετε.',id:'Klik wajah untuk memakainya.',vi:'Nhấp vào một khuôn mặt để dùng.',th:'คลิกใบหน้าเพื่อใช้'};
  for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Face hint translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 })();
+
+// Prop construction controls and additions (2026-10-30). Machine-assisted first pass.
+(() => {
+ const keys=['Tactical trousers','Honeycomb shirt','Circuit shirt','Honeycomb','Circuit board','Curved bar counter','IV infusion stand','Patient monitor','Medical instrument trolley','Surgical examination lamp','Diagnostic scanner','Medical treatment station','Mail color','Embroidery color','Fabric contrast','Cushion material','Backrest recline','Vital signs'];
+ const rows={
+  ja:'タクティカルパンツ|ハニカム柄シャツ|回路柄シャツ|ハニカム|回路基板|曲線バーカウンター|点滴スタンド|患者モニター|医療器具ワゴン|手術・診察灯|診断スキャナー|医療処置ステーション|鎖帷子の色|刺繍の色|生地のコントラスト|クッション素材|背もたれの傾斜|バイタルサイン',
+  'zh-Hant':'戰術長褲|蜂巢紋襯衫|電路紋襯衫|蜂巢紋|電路板|弧形吧檯|點滴架|病患監視器|醫療器械推車|手術檢查燈|診斷掃描儀|醫療處置站|鎖甲顏色|刺繡顏色|布料對比度|坐墊材質|靠背傾斜|生命徵象',
+  'zh-Hans':'战术长裤|蜂巢纹衬衫|电路纹衬衫|蜂巢纹|电路板|弧形吧台|输液架|患者监护仪|医疗器械推车|手术检查灯|诊断扫描仪|医疗处置站|锁甲颜色|刺绣颜色|面料对比度|坐垫材质|靠背倾斜|生命体征',
+  ko:'전술 바지|벌집무늬 셔츠|회로무늬 셔츠|벌집무늬|회로 기판|곡선 바 카운터|수액 걸이|환자 모니터|의료 기구 카트|수술·진찰등|진단 스캐너|의료 처치 장치|사슬갑옷 색상|자수 색상|직물 대비|쿠션 소재|등받이 기울기|활력 징후',
+  es:'Pantalones tácticos|Camisa de panal|Camisa de circuitos|Panal|Placa de circuitos|Barra curva|Soporte de suero|Monitor de paciente|Carro de instrumental médico|Lámpara de cirugía y exploración|Escáner diagnóstico|Estación de tratamiento médico|Color de la cota de malla|Color del bordado|Contraste de la tela|Material del cojín|Inclinación del respaldo|Signos vitales',
+  pt:'Calças táticas|Camisa com padrão de colmeia|Camisa de circuitos|Colmeia|Placa de circuitos|Balcão de bar curvo|Suporte de soro|Monitor de paciente|Carrinho de instrumentos médicos|Lâmpada cirúrgica e de exame|Scanner de diagnóstico|Estação de tratamento médico|Cor da cota de malha|Cor do bordado|Contraste do tecido|Material da almofada|Inclinação do encosto|Sinais vitais',
+  fr:'Pantalon tactique|Chemise à motif alvéolé|Chemise à circuits|Nid d’abeilles|Circuit imprimé|Comptoir de bar courbe|Pied à perfusion|Moniteur patient|Chariot d’instruments médicaux|Lampe chirurgicale et d’examen|Scanner de diagnostic|Poste de soins médicaux|Couleur de la cotte de mailles|Couleur de la broderie|Contraste du tissu|Matière du coussin|Inclinaison du dossier|Signes vitaux',
+  de:'Taktische Hose|Hemd mit Wabenmuster|Hemd mit Leiterbahnen|Wabenmuster|Leiterplatte|Geschwungene Bartheke|Infusionsständer|Patientenmonitor|Medizinischer Instrumentenwagen|Operations- und Untersuchungsleuchte|Diagnosescanner|Medizinische Behandlungsstation|Farbe des Kettengeflechts|Stickereifarbe|Stoffkontrast|Polstermaterial|Rückenlehnenneigung|Vitalzeichen',
+  it:'Pantaloni tattici|Camicia a nido d’ape|Camicia a circuiti|Nido d’ape|Circuito stampato|Bancone da bar curvo|Asta portaflebo|Monitor paziente|Carrello per strumenti medici|Lampada chirurgica e da visita|Scanner diagnostico|Stazione di trattamento medico|Colore della maglia metallica|Colore del ricamo|Contrasto del tessuto|Materiale del cuscino|Inclinazione dello schienale|Parametri vitali',
+  ru:'Тактические брюки|Рубашка с узором сот|Рубашка с узором схем|Соты|Печатная плата|Изогнутая барная стойка|Инфузионная стойка|Монитор пациента|Тележка для медицинских инструментов|Хирургический смотровой светильник|Диагностический сканер|Медицинская лечебная станция|Цвет кольчуги|Цвет вышивки|Контраст ткани|Материал подушки|Наклон спинки|Жизненные показатели',
+  pl:'Spodnie taktyczne|Koszula w plaster miodu|Koszula z obwodami|Plaster miodu|Płytka drukowana|Zakrzywiona lada barowa|Stojak do kroplówek|Monitor pacjenta|Wózek na narzędzia medyczne|Lampa chirurgiczna i zabiegowa|Skaner diagnostyczny|Stanowisko zabiegowe|Kolor kolczugi|Kolor haftu|Kontrast tkaniny|Materiał poduszki|Nachylenie oparcia|Parametry życiowe',
+  tr:'Taktik pantolon|Petek desenli gömlek|Devre desenli gömlek|Petek|Devre kartı|Kavisli bar tezgâhı|Serum askısı|Hasta monitörü|Tıbbi alet arabası|Ameliyat ve muayene lambası|Tanı tarayıcısı|Tıbbi tedavi istasyonu|Zincir zırh rengi|Nakış rengi|Kumaş kontrastı|Minder malzemesi|Sırtlık eğimi|Yaşamsal bulgular',
+  ar:'سروال تكتيكي|قميص بنمط خلايا النحل|قميص بنمط دوائر إلكترونية|خلايا النحل|لوحة دوائر إلكترونية|منضدة حانة منحنية|حامل محاليل وريدية|جهاز مراقبة المريض|عربة أدوات طبية|مصباح جراحة وفحص|ماسح تشخيصي|محطة علاج طبي|لون الدرع الزردي|لون التطريز|تباين النسيج|مادة الوسادة|ميل مسند الظهر|العلامات الحيوية',
+  el:'Τακτικό παντελόνι|Πουκάμισο με κυψελωτό μοτίβο|Πουκάμισο με κυκλώματα|Κυψέλη|Πλακέτα κυκλωμάτων|Καμπύλος πάγκος μπαρ|Στατό ορού|Μόνιτορ ασθενούς|Τροχήλατο ιατρικών εργαλείων|Χειρουργικός και εξεταστικός λαμπτήρας|Διαγνωστικός σαρωτής|Σταθμός ιατρικής περίθαλψης|Χρώμα αλυσιδωτού θώρακα|Χρώμα κεντήματος|Αντίθεση υφάσματος|Υλικό μαξιλαριού|Κλίση πλάτης|Ζωτικά σημεία',
+  id:'Celana taktis|Kemeja pola sarang lebah|Kemeja pola sirkuit|Sarang lebah|Papan sirkuit|Meja bar melengkung|Tiang infus|Monitor pasien|Troli instrumen medis|Lampu bedah dan pemeriksaan|Pemindai diagnostik|Stasiun perawatan medis|Warna zirah rantai|Warna sulaman|Kontras kain|Bahan bantalan|Kemiringan sandaran|Tanda vital',
+  vi:'Quần chiến thuật|Áo họa tiết tổ ong|Áo họa tiết mạch điện|Tổ ong|Bảng mạch|Quầy bar cong|Giá treo dịch truyền|Máy theo dõi bệnh nhân|Xe đẩy dụng cụ y tế|Đèn phẫu thuật và khám bệnh|Máy quét chẩn đoán|Trạm điều trị y tế|Màu giáp xích|Màu thêu|Độ tương phản vải|Chất liệu đệm|Độ ngả lưng tựa|Dấu hiệu sinh tồn',
+  th:'กางเกงยุทธวิธี|เสื้อลายรังผึ้ง|เสื้อลายวงจร|รังผึ้ง|แผงวงจร|เคาน์เตอร์บาร์โค้ง|เสาแขวนน้ำเกลือ|เครื่องติดตามผู้ป่วย|รถเข็นเครื่องมือแพทย์|โคมไฟผ่าตัดและตรวจรักษา|เครื่องสแกนวินิจฉัย|สถานีรักษาพยาบาล|สีเกราะโซ่|สีงานปัก|ความต่างระดับสีผ้า|วัสดุเบาะ|ความเอนพนักพิง|สัญญาณชีพ'
+ };
+ for(const [locale,row]of Object.entries(rows)){const values=row.split('|');if(values.length!==keys.length)throw Error('Prop construction translation count: '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+})();
+
+// Clinical equipment and aircraft controls (2026-10-30). Machine-assisted first pass.
+(() => {
+ const keys=['Medical','Smart toilet','Passenger airliner','Cabin cutaway','Canopy opening','Fabrication cycle'];
+ const rows={
+  ja:'医療設備|スマートトイレ|旅客機|客室の断面表示|キャノピーの開き具合|製造サイクル',
+  'zh-Hant':'醫療設備|智慧馬桶|客機|客艙剖面|座艙罩開度|製造循環',
+  'zh-Hans':'医疗设备|智能马桶|客机|客舱剖面|座舱罩开度|制造循环',
+  ko:'의료 장비|스마트 변기|여객기|객실 단면|캐노피 열림|제작 주기',
+  de:'Medizin|Intelligente Toilette|Passagierflugzeug|Kabinenquerschnitt|Haubenöffnung|Fertigungszyklus',
+  fr:'Matériel médical|Toilettes intelligentes|Avion de ligne|Vue en coupe de la cabine|Ouverture de la verrière|Cycle de fabrication',
+  es:'Equipo médico|Inodoro inteligente|Avión de pasajeros|Vista en corte de la cabina|Apertura de la carlinga|Ciclo de fabricación',
+  pt:'Equipamento médico|Sanita inteligente|Avião de passageiros|Corte da cabine|Abertura da cobertura|Ciclo de fabricação',
+  it:'Attrezzatura medica|WC intelligente|Aereo di linea|Sezione della cabina|Apertura del tettuccio|Ciclo di fabbricazione',
+  ru:'Медицинское оборудование|Умный унитаз|Пассажирский авиалайнер|Разрез салона|Открытие фонаря|Производственный цикл',
+  pl:'Sprzęt medyczny|Inteligentna toaleta|Samolot pasażerski|Przekrój kabiny|Otwarcie osłony kabiny|Cykl produkcji',
+  tr:'Tıbbi ekipman|Akıllı tuvalet|Yolcu uçağı|Kabin kesiti|Kanopi açıklığı|Üretim döngüsü',
+  ar:'معدات طبية|مرحاض ذكي|طائرة ركاب|مقطع المقصورة|فتح غطاء قمرة القيادة|دورة التصنيع',
+  el:'Ιατρικός εξοπλισμός|Έξυπνη τουαλέτα|Επιβατικό αεροσκάφος|Τομή καμπίνας|Άνοιγμα καλύπτρας|Κύκλος κατασκευής',
+  id:'Peralatan medis|Toilet pintar|Pesawat penumpang|Potongan kabin|Bukaan kanopi|Siklus fabrikasi',
+  vi:'Thiết bị y tế|Bồn cầu thông minh|Máy bay chở khách|Mặt cắt khoang|Độ mở vòm buồng lái|Chu kỳ chế tạo',
+  th:'อุปกรณ์การแพทย์|สุขภัณฑ์อัจฉริยะ|เครื่องบินโดยสาร|ภาพตัดห้องโดยสาร|การเปิดฝาครอบห้องนักบิน|รอบการผลิต'
+ };
+ for(const [locale,row]of Object.entries(rows)){const words=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=words[i]);}
+})();
+
+// Prop instrument and source tailoring controls (2026-10-30). Machine-assisted first pass.
+(() => {
+ const keys=['Animated display','Display speed','Display readout','Holographic display','Preserve original tailoring','Uses the authored proportions. Turn this off to fit another body.'];
+ const rows={
+ ja:'表示のアニメーション|表示速度|表示内容|ホログラム表示|元の仕立てを保持|元の体型を使用します。別の体型に合わせるにはオフにしてください。',
+ 'zh-Hant':'動態顯示|顯示速度|顯示內容|全像顯示|保留原始剪裁|使用原始身形比例。若要配合其他身形，請關閉此選項。',
+ 'zh-Hans':'动态显示|显示速度|显示内容|全息显示|保留原始剪裁|使用原始身形比例。若要适配其他身形，请关闭此选项。',
+ ko:'디스플레이 애니메이션|표시 속도|표시 내용|홀로그램 표시|원본 재단 유지|원본 체형 비율을 사용합니다. 다른 체형에 맞추려면 끄세요.',
+ de:'Animierte Anzeige|Anzeigegeschwindigkeit|Anzeigetext|Holografische Anzeige|Originalschnitt beibehalten|Verwendet die ursprünglichen Proportionen. Zum Anpassen an einen anderen Körper ausschalten.',
+ fr:'Affichage animé|Vitesse d’affichage|Texte affiché|Affichage holographique|Conserver la coupe originale|Utilise les proportions d’origine. Désactivez cette option pour adapter à un autre corps.',
+ es:'Pantalla animada|Velocidad de pantalla|Texto de pantalla|Pantalla holográfica|Conservar el corte original|Utiliza las proporciones originales. Desactiva esta opción para ajustar a otro cuerpo.',
+ pt:'Ecrã animado|Velocidade do ecrã|Texto do ecrã|Ecrã holográfico|Manter o corte original|Utiliza as proporções originais. Desative para ajustar a outro corpo.',
+ it:'Schermo animato|Velocità dello schermo|Testo dello schermo|Display olografico|Mantieni il taglio originale|Usa le proporzioni originali. Disattiva per adattare a un altro corpo.',
+ ru:'Анимированный дисплей|Скорость дисплея|Текст дисплея|Голографический дисплей|Сохранить исходный крой|Использует исходные пропорции. Отключите, чтобы подогнать под другое тело.',
+ pl:'Animowany wyświetlacz|Szybkość wyświetlania|Tekst wyświetlacza|Wyświetlacz holograficzny|Zachowaj oryginalny krój|Używa oryginalnych proporcji. Wyłącz, aby dopasować do innego ciała.',
+ tr:'Animasyonlu ekran|Ekran hızı|Ekran metni|Holografik ekran|Özgün kesimi koru|Özgün vücut oranlarını kullanır. Başka bir vücuda uydurmak için kapatın.',
+ ar:'شاشة متحركة|سرعة العرض|نص الشاشة|عرض هولوغرافي|الحفاظ على التفصيل الأصلي|يستخدم نسب الجسم الأصلية. أوقف هذا الخيار لملاءمة جسم آخر.',
+ el:'Κινούμενη οθόνη|Ταχύτητα οθόνης|Κείμενο οθόνης|Ολογραφική οθόνη|Διατήρηση αρχικής ραφής|Χρησιμοποιεί τις αρχικές αναλογίες. Απενεργοποιήστε για προσαρμογή σε άλλο σώμα.',
+ id:'Tampilan animasi|Kecepatan tampilan|Teks tampilan|Tampilan holografis|Pertahankan potongan asli|Menggunakan proporsi asli. Nonaktifkan untuk menyesuaikan tubuh lain.',
+ vi:'Màn hình chuyển động|Tốc độ hiển thị|Nội dung hiển thị|Màn hình ảnh ba chiều|Giữ kiểu cắt gốc|Sử dụng tỷ lệ cơ thể gốc. Tắt để điều chỉnh theo cơ thể khác.',
+ th:'หน้าจอเคลื่อนไหว|ความเร็วหน้าจอ|ข้อความบนหน้าจอ|จอภาพโฮโลแกรม|คงรูปแบบการตัดเย็บเดิม|ใช้สัดส่วนร่างกายเดิม ปิดตัวเลือกนี้เพื่อปรับให้เข้ากับร่างกายอื่น'
+ };
+ for(const [locale,row]of Object.entries(rows)){const words=row.split('|');if(words.length!==keys.length)throw Error('Instrument translations '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=words[i]);}
+})();
+
+// Prop shell finishes and importing personal emblem artwork.
+(()=>{const keys=['Shell finish','Chrome','Import picture','Could not import picture.'],rows={
+ ja:'シェルの仕上げ|クローム|画像をインポート|画像をインポートできませんでした。',
+ 'zh-Hant':'外殼表面|鍍鉻|匯入圖片|無法匯入圖片。',
+ 'zh-Hans':'外壳表面|镀铬|导入图片|无法导入图片。',
+ ko:'외장 마감|크롬|그림 가져오기|그림을 가져올 수 없습니다.',
+ de:'Gehäuseoberfläche|Chrom|Bild importieren|Bild konnte nicht importiert werden.',
+ fr:'Finition de la coque|Chrome|Importer une image|Impossible d’importer l’image.',
+ es:'Acabado de la carcasa|Cromo|Importar imagen|No se pudo importar la imagen.',
+ pt:'Acabamento da estrutura|Cromado|Importar imagem|Não foi possível importar a imagem.',
+ it:'Finitura della scocca|Cromo|Importa immagine|Impossibile importare l’immagine.',
+ ru:'Отделка корпуса|Хром|Импортировать изображение|Не удалось импортировать изображение.',
+ pl:'Wykończenie obudowy|Chrom|Importuj obraz|Nie udało się zaimportować obrazu.',
+ tr:'Gövde kaplaması|Krom|Resim içe aktar|Resim içe aktarılamadı.',
+ ar:'طلاء الهيكل|كروم|استيراد صورة|تعذر استيراد الصورة.',
+ el:'Φινίρισμα κελύφους|Χρώμιο|Εισαγωγή εικόνας|Δεν ήταν δυνατή η εισαγωγή της εικόνας.',
+ id:'Finishing cangkang|Krom|Impor gambar|Tidak dapat mengimpor gambar.',
+ vi:'Bề mặt vỏ|Crôm|Nhập ảnh|Không thể nhập ảnh.',
+ th:'พื้นผิวโครง|โครเมียม|นำเข้ารูปภาพ|ไม่สามารถนำเข้ารูปภาพได้'
+ };for(const [locale,row]of Object.entries(rows)){const words=row.split('|');if(words.length!==keys.length)throw Error('Prop finish translations '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=words[i]);}})();

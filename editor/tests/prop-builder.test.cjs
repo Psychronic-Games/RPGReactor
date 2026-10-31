@@ -224,10 +224,12 @@ test('the Prop Builder is on the Forge sidebar and loaded by the editor page', (
     const forge = fs.readFileSync(path.join(root, 'src', 'forge', 'ForgeManager.js'), 'utf8');
     assert.match(forge, /id: 'prop-builder'[\s\S]*?new PropBuilder\(\)/);
     const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-    const order = ['PropCloth.js', 'PropPaint.js', 'PropMesh.js', 'PropCatalog.js', 'FlagDesign.js', 'FlagProp.js', 'PropModel.js', 'FramedProp.js', 'PictureProp.js', 'PropBuilder.js'].map(f => page.indexOf(`src/forge/Props/${f}`));
+    const order = ['PropCloth.js', 'PropMesh.js', 'PropCatalog.js', 'FlagDesign.js', 'FlagProp.js', 'PropModel.js', 'FramedProp.js', 'PictureProp.js', 'PropBuilder.js'].map(f => page.indexOf(`src/forge/Props/${f}`));
     order.forEach(i => assert.ok(i > 0));
     assert.deepEqual(order, order.slice().sort((a, b) => a - b), 'loaded in order');
     assert.ok(page.indexOf('src/forge/Character3D/CharacterGlb.js') < order[0], 'after the GLB writer');
+    const paint=page.indexOf('src/forge/Props/PropPaint.js'),marks=page.indexOf('src/forge/Character3D/CharacterMarks.js');
+    assert.ok(paint>0&&paint<marks&&marks<page.indexOf('src/forge/Character3D/CharacterAtlas.js'),'shared print sampling loads before character and prop cloth');
 });
 
 // ── From picture ───────────────────────────────────────────────────────────

@@ -4176,14 +4176,12 @@
             box-sizing: border-box;
             overflow-x: auto;
         }
-        /* A view too narrow for one row: smaller slots that wrap onto a second row, the groups as a square of icons. */
+        /* A view too narrow for one row: smaller slots that wrap onto a second row. */
         .rr-build-hotbar.is-compact .rr-build-row { flex-wrap: wrap; justify-content: center; overflow-x: visible; row-gap: 2px; padding: 5px 6px; }
-        .rr-build-hotbar.is-compact .rr-build-slot { width: 46px; height: 46px; gap: 1px; font-size: 9px; }
+        .rr-build-hotbar.is-compact .rr-build-slot { width: var(--rr-build-slot-width, 46px); height: 46px; gap: 1px; font-size: 9px; }
         .rr-build-hotbar.is-compact .rr-build-slot svg { width: 20px; height: 20px; }
         .rr-build-hotbar.is-compact .rr-build-slot-label { max-width: 44px; }
-        .rr-build-hotbar.is-compact .rr-build-groups { display: grid; grid-template-columns: repeat(2, 30px); gap: 3px; margin-right: 4px; padding-right: 6px; }
-        .rr-build-hotbar.is-compact .rr-build-group { justify-content: center; padding: 3px 0; }
-        .rr-build-hotbar.is-compact .rr-build-group span { display: none; }
+        .rr-build-hotbar.is-compact .rr-build-group { height: 22px; padding: 1px 0; }
         /* A short view: icons only (each slot keeps its name as a tooltip), so the panel above keeps its room. */
         .rr-build-hotbar.is-short .rr-build-slot { width: 38px; height: 36px; }
         .rr-build-hotbar.is-short .rr-build-slot-label { display: none; }
@@ -4431,8 +4429,9 @@
         /* Models > Select with nothing selected: the hint alone. */
         .mp-panel.is-select-idle > :not(.mp-select-hint) { display: none; }
         /* Build | Terrain: which group the slots are, at the bar's left end. */
-        .rr-build-groups { display: flex; flex-direction: column; gap: 3px; margin-right: 6px; padding-right: 8px; border-right: 1px solid var(--color-border); }
-        .rr-build-group { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: transparent; color: var(--color-text-muted); font-size: 11px; cursor: pointer; white-space: nowrap; }
+        .rr-build-groups { display: grid; grid-template-columns: repeat(2, 30px); flex: 0 0 auto; gap: 3px; margin-right: 4px; padding-right: 6px; border-right: 1px solid var(--color-border); }
+        .rr-build-group { display: inline-flex; align-items: center; justify-content: center; height: 27px; padding: 3px 0; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: 4px; background: transparent; color: var(--color-text-muted); cursor: pointer; }
+        .rr-build-group span { display: none; }
         .rr-build-group[aria-checked="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
         .rr-build-group:hover { color: var(--color-text); }
         /* Room for a label of two words (Wind direction, Reflection) before it wraps. */
@@ -4473,8 +4472,9 @@
         /* A note meant to wrap does, whatever order the two rules come in. */
         .rr-build-note.rr-build-wrap { white-space: normal; overflow-wrap: anywhere; padding: 0; }
         /* Two lines at most, wrapped rather than cut: a laptop-width window still shows every shortcut. */
-        .rr-build-hint { font-size: 11px; line-height: 15px; color: var(--color-text-muted); white-space: normal; max-width: 100%; max-height: 60px; overflow-y: auto; text-align: center; pointer-events: auto; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
-        .rr-build-hint b { color: var(--color-text-strong); font-weight: 600; }
+        .rr-build-hint { font-size: 13px; line-height: 19px; color: var(--color-text); background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 5px; padding: 5px 9px; white-space: normal; max-width: 100%; max-height: 60px; overflow-y: auto; text-align: center; pointer-events: auto; text-shadow: none; box-sizing: border-box; }
+        .rr-build-hint b { color: var(--color-text-strong); font-weight: 700; }
+        .rr-build-height { color: var(--color-text-strong); font-weight: 600; }
         .rr-build-flash {
             font-size: 12px;
             color: var(--color-text-strong);
@@ -7511,6 +7511,7 @@ html.rr-web #database-viewer.rr-database-floating {
 #forge-workspace {
     position: fixed; inset: 0; align-items: center; justify-content: center;
     z-index: 1000; background: transparent; pointer-events: none;
+    --rr-forge-header-bg: var(--color-bg-deep);
 }
 #forge-workspace > .rr-forge-window {
     pointer-events: auto; position: fixed; margin: 0; width: 95vw; height: 95vh;
@@ -7522,7 +7523,7 @@ html.rr-web #database-viewer.rr-database-floating {
 #forge-workspace > .rr-forge-window > .rr-modal-header {
     display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
     padding: 12px 18px; border-bottom: 1px solid var(--color-border-subtle);
-    border-left: 3px solid var(--color-accent); background: var(--color-bg-toolbar);
+    border-left: 3px solid var(--color-accent); background-color: var(--rr-forge-header-bg);
     cursor: move; user-select: none;
 }
 .rr-forge-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -7531,6 +7532,26 @@ html.rr-web #database-viewer.rr-database-floating {
 .rr-forge-close { background: none; border: none; color: var(--color-text-muted); font-size: 22px; cursor: pointer; line-height: 1; }
 .rr-forge-close:hover { color: var(--color-text-strong); }
 .rr-forge-workspace-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); flex: 1; min-height: 0; }
+.rr-forge-sidebar {
+    background-color: var(--color-bg-panel); border-right: 1px solid var(--color-border);
+    overflow-y: auto; padding: 8px 0; scrollbar-width: thin;
+    scrollbar-color: var(--color-accent-bright) var(--color-bg-deep);
+}
+.rr-forge-tools-header { margin: 0 8px 6px; border-radius: 3px; }
+.rr-forge-sidebar-item {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    cursor: pointer; font-size: 12px; color: var(--color-text);
+    background-color: transparent; border-left: 3px solid transparent;
+}
+.rr-forge-sidebar-item:hover { background-color: var(--color-bg-hover); }
+.rr-forge-sidebar-item.is-active {
+    background-color: var(--color-accent-tint-15); border-left-color: var(--color-accent);
+    color: var(--color-text-strong); font-weight: 600;
+}
+/* Keep the title band distinct in light palettes as in the other editor windows. */
+:root:is([data-theme="light"], [data-theme="bubblegum-light"], [data-theme="ocean-light"], [data-theme="cascadia-light"], [data-theme="underworld-light"], [data-theme="creamsicle-light"], [data-theme="royalty-light"]) #forge-workspace {
+    --rr-forge-header-bg: var(--color-bg-selected);
+}
 #forge-workspace.rr-forge-popped { pointer-events: auto; }
 #forge-workspace.rr-forge-popped > .rr-forge-window {
     position: static; width: 100% !important; height: 100% !important;
@@ -7900,6 +7921,11 @@ html.rr-detached-window.rr-repaint { clip-path: inset(0 round calc(var(--radius-
 .rr-prop-none { padding: 0 4px; }
 .rr-prop-subhead { padding: 6px 8px 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-muted); }
 .rr-prop-subhead:first-child { padding-top: 2px; }
+.rr-prop-subhead.rr-prop-subhead-band {
+    margin: 6px 0 3px; padding: 4px 6px; border-left-width: 2px; border-radius: 2px;
+    font-size: 10px; line-height: 1.4; color: var(--color-text);
+}
+.rr-prop-subhead.rr-prop-subhead-band:first-child { margin-top: 0; }
 .rr-prop-randomgroup[hidden], .rr-prop-random-scope[hidden] { display: none; }
 .rr-prop-tiles5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .rr-prop-tiles5 .rr-c3d-tile { padding: 2px; }
@@ -7960,6 +7986,7 @@ html.rr-detached-window.rr-repaint { clip-path: inset(0 round calc(var(--radius-
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: clip;
 }
 .rr-build-hotbar.is-compact .rr-build-slot { font-size: 10px; height: 52px; }
+.rr-build-hotbar.is-short .rr-build-slot { width: 38px; height: 36px; }
 .rr-build-hotbar.is-compact .rr-build-slot .rr-build-slot-label { max-width: 46px; }
 /* A colour row with its None chip beside the swatch: the chip takes the room it needs, not the value column's 40px. */
 .rr-build-range:has(> .rr-build-chip) { grid-template-columns: 64px auto minmax(0, 1fr); }
@@ -8104,3 +8131,13 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-global-search-empty { padding: 18px 14px; text-align: center; font-size: 13px; color: var(--color-text-muted); }
 .rr-global-search-hint.rr-modal-footer { padding: 7px 12px; justify-content: flex-start; font-size: 11px; color: var(--color-text-muted); }
 .rr-global-search-flash { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; transition: outline-color 0.3s; }
+
+/* Shape previews retain the native select's keyboard, search and change behavior. */
+.rr-symbol-preview { display:inline-flex; width:26px; height:24px; vertical-align:middle; margin-right:8px; color:var(--color-accent); align-items:center; justify-content:center; }
+.rr-symbol-icon { flex:none; }
+.rr-prop-subhead-band[data-depth="1"] { margin-left:9px; border-left-width:2px; font-size:11px; }
+
+/* Forge export dimensions stay legible in each editor theme. */
+.rr-c3d-export input.rr-input[type="number"] { background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 5px; padding: 6px 8px; width: 110px; }
+.rr-c3d-export input.rr-input[type="number"]:focus { border-color: var(--color-accent); outline: 2px solid color-mix(in srgb, var(--color-accent) 30%, transparent); }
+.rr-c3d-export .rr-c3d-export-preview { max-width: 100%; max-height: 260px; object-fit: contain; }

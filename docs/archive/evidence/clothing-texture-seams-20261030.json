@@ -1,0 +1,569 @@
+{
+  "date": "2026-10-30",
+  "localEvidenceRoot": "scratchpad/clothing-texture-seams-20261030",
+  "verification": {
+    "preview": 61,
+    "runtime": "20261030.3",
+    "reviewedDefaults": 152,
+    "reviewedImages": 1216,
+    "snapshot": "review-snapshot",
+    "finalCapturePending": false,
+    "gameReaderPending": false,
+    "regressionsPending": false,
+    "focusedPassed": 126,
+    "sourceBefore": "scratchpad/clothing-texture-seams-20261030/source-before",
+    "visualReview": "scratchpad/clothing-texture-seams-20261030/visual-review.json",
+    "importantChanges": [
+      "filtered yarn and relief",
+      "physical seam phases",
+      "knit perimeter UV direction and eased cut",
+      "actual-face projection and edge-connected atlas patches",
+      "separate print coordinates",
+      "fine fitted panel seams",
+      "pocket welt clearance and lip separation",
+      "actual-edge hem returns",
+      "surface binding on rolled hem",
+      "correct smart-shirt hexes",
+      "brushed Jolt/Max finish",
+      "short lining-backed hem turn",
+      "no decorative trim on support yokes",
+      "joined open suit-jacket waist with preserved lower hem"
+    ],
+    "limits": [
+      "Imported Jolt/Max/Vay/Carol rough source edges and artwork remain; no remesh/repaint claimed",
+      "152 defaults, not all customization and pose combinations"
+    ],
+    "sourceHashes": {
+      "editor/src/forge/Character3D/CharacterOutfit.js": "bb3cbda79524a3ff3f241d75c612f215b736222321722541f80063bd0f3691bc",
+      "editor/src/forge/Character3D/CharacterWardrobe.js": "650a5cd5441e7871ee55d65888b4219256bc65c36e610ae51f7d5fa5b71387be",
+      "editor/src/forge/Character3D/CharacterGarmentDetails.js": "dc61697dc536efdbe39983ab4523276d61bd0b70525f2351c6eff8e8e52e4c04",
+      "editor/src/forge/Character3D/CharacterAtlas.js": "119aede7f5ccbf24e289734f531223f4760e545d41a4f7cc7dbca61f8ab69ed9",
+      "editor/src/forge/Character3D/CharacterFabric.js": "966fa2e74e1cd19f3402c3a5100321b29e321651f884693b7296c2cc5ab2cc7f",
+      "editor/src/forge/Character3D/CharacterDrape.js": "b51dbc7939995958be621dbc4e1e6a32a496b11c0da35dcbfe1ec6867e640f71",
+      "editor/src/forge/Character3D/CharacterClothes.js": "fbd8f7bf8839ee95fd33765d62ab696c9e72b7f8f62ab025ff5f5dbbbfb242fb",
+      "editor/src/forge/Character3D/CharacterOutfitTransfer.js": "0b31c54dfcff5bf78e25e7d32827aa320f4a4e9c8e3fe9b3f716a3289f1fb74e",
+      "editor/src/forge/Character3D/CharacterCyberwear.js": "3e9277cd9a2edf28ab913898510e816557ee9f688ecac420b9f3860b0f8248ac",
+      "editor/src/forge/Character3D/CharacterWasteland.js": "588a40d9dae893a0189a71960359f084646977eeac3efc7a75ef8633628c2445",
+      "editor/src/forge/Character3D/ConstructionPatterns.js": "8650cff2cff1525667c715cb30fc9d6e39ea9a1438664dc2bbf01beb7c0a1672",
+      "editor/src/forge/Props/GarmentProp.js": "43c411ca9baa74ad771f8a9817ba64b1160fed86830c3035c890f9b3ebf86c5d",
+      "editor/src/forge/Props/PropArmorInterior.js": "8fe7baac93e5261745c820c22fefddb09e191c4e5ddd1a966532feecaea9b7a5"
+    },
+    "compatibilityNotes": [
+      "Tiny atlas requests grow only when isolated chart footprints cannot fit; no high-resolution fallback grouping",
+      "Subpixel badge coverage now survives small-body 256px previews",
+      "Binding pose/material tests now inspect the real rolled fabric and its shared color texture, replacing assumptions about a separate helper strip"
+    ],
+    "testResult": {
+      "fullRun": {
+        "tests": 123,
+        "passed": 122,
+        "failed": 1,
+        "log": "regressions-final.log"
+      },
+      "recheck": {
+        "tests": 1,
+        "passed": 1,
+        "log": "belt-recheck.log",
+        "reason": "Count unique fabric references; UV chart splitting must not alter the collision ratio",
+        "evidence": "belt-comparison.json"
+      },
+      "uniqueTestsPassed": 126,
+      "finalSeamGeometryRun": {
+        "tests": 51,
+        "passed": 50,
+        "failed": 1,
+        "log": "waist-regressions.log",
+        "recheck": {
+          "passed": 1,
+          "log": "suit-waist-recheck.log",
+          "reason": "Sample the shaped upper border, not only its two lowest scalar-coordinate vertices"
+        }
+      },
+      "finalBudgetAndSeams": {
+        "tests": 12,
+        "passed": 12,
+        "failed": 0,
+        "log": "budget-and-seams-final.log"
+      }
+    },
+    "finalCapture": "native",
+    "finalDefaults": 152,
+    "finalImages": 1216,
+    "finalSavedAndReopened": 152,
+    "finalSourceFingerprint": "7c9814869f8f988ea09ffe7c51465bddcc5400eacfc25681fd8b3a8f8d075575",
+    "gameReaderPassed": 152,
+    "gameReaderReport": "native/export-audit.json",
+    "comparison": "comparison.html",
+    "comparisonCases": [
+      "officerJacket",
+      "vest",
+      "gambeson",
+      "cropTop"
+    ],
+    "finalGeometryTestsPassed": 51,
+    "budgets": {
+      "maxTotal": 82556,
+      "maxOutfit": 51412,
+      "overTotal": 20,
+      "overOutfit": 33,
+      "unchangedCeilings": {
+        "total": 83400,
+        "outfit": 51600
+      },
+      "report": "preset-budgets-final.json"
+    },
+    "docsPassed": 10,
+    "docsLog": "docs-final.log",
+    "artifactLinksValid": true
+  },
+  "visualReview": {
+    "reviewedSnapshot": {
+      "editor/src/forge/Character3D/CharacterOutfit.js": "efae6d9fe950e11f685a0fa441e68a12e1e7d5428f2bcb0dae32e9f4e1ae06dd",
+      "editor/src/forge/Character3D/CharacterWardrobe.js": "447b615df513ab424e948448b89aa44de52cb6d3490ed8c1375bf0e400dc6110",
+      "editor/src/forge/Character3D/CharacterGarmentDetails.js": "f5954c186e1a74166583eac1442a0c17922bd2c06ee1d13cf9314eeff86190d7",
+      "editor/src/forge/Character3D/CharacterAtlas.js": "485c695934f56b68a8fe94fa80c6dd27811ff7137e7ee0aa2c512a015c2c5bc4",
+      "editor/src/forge/Character3D/CharacterFabric.js": "f852cb3b7b3a2e2d3d4b5b59c1cb07642af6e2b6069c652e9ba0ce7fa0aa5527",
+      "editor/src/forge/Character3D/CharacterDrape.js": "b51dbc7939995958be621dbc4e1e6a32a496b11c0da35dcbfe1ec6867e640f71",
+      "editor/src/forge/Character3D/CharacterClothes.js": "fbd8f7bf8839ee95fd33765d62ab696c9e72b7f8f62ab025ff5f5dbbbfb242fb",
+      "editor/src/forge/Character3D/CharacterOutfitTransfer.js": "dc39daf1ddb42c76ee83880ce175b952dd3ba34eb63e0dc8c9983b1518088f3a",
+      "editor/src/forge/Character3D/CharacterCyberwear.js": "b4634ba5145dd3e8e711b3b0f4d652fd615cd363a0fc3bd8113b9bceff79f714",
+      "editor/src/forge/Character3D/CharacterWasteland.js": "588a40d9dae893a0189a71960359f084646977eeac3efc7a75ef8633628c2445",
+      "editor/src/forge/Character3D/ConstructionPatterns.js": "8650cff2cff1525667c715cb30fc9d6e39ea9a1438664dc2bbf01beb7c0a1672",
+      "editor/src/forge/Props/GarmentProp.js": "43c411ca9baa74ad771f8a9817ba64b1160fed86830c3035c890f9b3ebf86c5d",
+      "editor/src/forge/Props/PropArmorInterior.js": "8fe7baac93e5261745c820c22fefddb09e191c4e5ddd1a966532feecaea9b7a5"
+    },
+    "batches": [
+      {
+        "batch": "01",
+        "ids": [
+          "tshirt",
+          "tanktop",
+          "shirt",
+          "sweater"
+        ],
+        "notes": "Knit ribs now run across neckbands without shoulder chevrons; woven grain visible; hem rows continuous. Shirt and sweater upper camera needs centered recapture; tank top shoulder binding still has small source-angle steps."
+      },
+      {
+        "batch": "02",
+        "ids": [
+          "hoodie",
+          "jeans",
+          "shorts",
+          "leggings"
+        ],
+        "notes": "Denim and knit relief visible, waistband stitching continuous. Shorts rear welt lips intermittently cover the narrow dark mouth; follow up with fitted ribbon clearance. Black leggings need neutral-color close-up for seam visibility."
+      },
+      {
+        "batch": "03",
+        "ids": [
+          "skirt",
+          "dress",
+          "suitjacket",
+          "trenchcoat"
+        ],
+        "notes": "Skirt waistband/hem texture reads; dress fine fabric and princess seams read but small dark hem fragments remain. Suit jacket shows dark ragged strip near lower back/hem; diagnose its source. Trenchcoat has visible felt/suede character and clean long open-edge binding."
+      },
+      {
+        "batch": "04",
+        "ids": [
+          "sneakers",
+          "shoes",
+          "boots",
+          "gloves"
+        ],
+        "notes": "Footwear grain and edge sewing read clearly. White/red sneakers retain angular source-painted accent ends; boots have a coarser painted rear seam. Gloves have visible grain and a clean rolled inward wrist. Paired footwear camera still centered near one component; adequate for material but full frames retain silhouette."
+      },
+      {
+        "batch": "05",
+        "ids": [
+          "beanie",
+          "gambeson",
+          "tabard",
+          "tunic"
+        ],
+        "notes": "Beanie rib reads. Gambeson diamond seams now stay regular across front/back/shoulder; narrow neckline rolled trim retains small source facets. Tabard/tunic fabric reads. Tabard neckline gold ribbon has local double edges; target shared binding finish."
+      },
+      {
+        "batch": "06",
+        "ids": [
+          "peasant",
+          "robe",
+          "gown",
+          "vest"
+        ],
+        "notes": "Visible cloth character and attached shoulder/armhole binding. Robe/gown hem gold ribbon varies in width in short steps; target shared binding finish. Vest grain reads, but mouth has interrupted rear/front welt exposure; target welt clearance."
+      },
+      {
+        "batch": "07",
+        "ids": [
+          "corset",
+          "sash",
+          "kilt",
+          "loincloth"
+        ],
+        "notes": "Corset channels and lacing retained; gold edge bands step and boning ends protrude at upper cut, needs end inset. Belt has leather grain and stitched perimeter. Kilt plaid changes phase on different planar projection faces, producing triangular patch artifacts: separate print coordinates from packing UVs. Loincloth layered hide detail reads."
+      },
+      {
+        "batch": "08",
+        "ids": [
+          "hood",
+          "sandals",
+          "wraps",
+          "leatherarmor"
+        ],
+        "notes": "Hood fabric readable, rolled edge still faceted. Sandal straps attach. Arm-wrap rolled hems have small angular cut facets; leather-armor bound edge has a narrow dark lip and a few strap ends above shoulder, preserve intended leather layering."
+      },
+      {
+        "batch": "09",
+        "ids": [
+          "chainmail",
+          "breastplate",
+          "pauldrons",
+          "vambraces"
+        ],
+        "notes": "Mail rings remain visible but shoulder chart joins vary ring orientation. Plate/bracer brushed finish and molded rims are coherent; interior surfaces are present. Paired shoulder/arm detail camera needs centered component framing at upper views."
+      },
+      {
+        "batch": "10",
+        "ids": [
+          "gauntlets",
+          "tassets",
+          "greaves",
+          "sabatons"
+        ],
+        "notes": "Gauntlet leather substrate/grain and turned wrist are visible; articulated plate construction retained. Tassets straps and rims read; greave trim has small source-painted flecks. Armored boot leather and stitched welt read, toe armor still a visibly faceted design."
+      },
+      {
+        "batch": "11",
+        "ids": [
+          "helm",
+          "greathelm",
+          "starshipUniform",
+          "officerJacket"
+        ],
+        "notes": "Metal helmets have brushed finish and molded edges. Service-uniform yoke piping still scallops; smooth physical print frame should extend from Officer to fleet pattern. Officer yoke is substantially smoother, cloth reads, but tiny pale flecks remain at shoulder chart seams; check padding/lining before final acceptance."
+      },
+      {
+        "batch": "12",
+        "ids": [
+          "techSuit",
+          "explorerSuit",
+          "evaSuit",
+          "reconArmor"
+        ],
+        "notes": "Soft suit surfaces show fabric/padded structure; separate technical yoke/patch mesh remains too plain, so apply the same textile finish there. Technical glow/seam charts are wavy, extend smooth print frame where applicable. Recon carrier has material finish; hard plates remain an angular design rather than cloth."
+      },
+      {
+        "batch": "13",
+        "ids": [
+          "bodysuit",
+          "spacesuit",
+          "tacvest",
+          "powerarmor"
+        ],
+        "notes": "Bodysuit/suit panel frames need the same fitted print correction; belts/hardware remain designed box forms. Tactical vest carrier reads but large plates are simple. Power armor has visible metallic finish, undersuit creases and deliberate layer joins; no new cloth edge defect isolated."
+      },
+      {
+        "batch": "14",
+        "ids": [
+          "powergauntlets",
+          "powerhelm",
+          "cyberjacket",
+          "visorhelm"
+        ],
+        "notes": "Glove knit visible; glove plate coverage is outside this material-only change. Helmet metal finish retained. Neon coat piping clean and smooth; satin/rubber body correctly glossy. Visor helmet molded rim and glossy visor retain their finish."
+      },
+      {
+        "batch": "15",
+        "ids": [
+          "magboots",
+          "polo",
+          "cardigan",
+          "cropTop"
+        ],
+        "notes": "Mag-boot cuff/welt visible. Polo and crop top rib direction is improved and seam rows attached; neckband inner corners remain mildly faceted. Cardigan front ribbing is directional and hem turns have deliberate thicker knit folds."
+      },
+      {
+        "batch": "16",
+        "ids": [
+          "offShoulder",
+          "flaredTrousers",
+          "capri",
+          "pleatedSkirt"
+        ],
+        "notes": "Blouse material and cut edge read. Flared/capri denim shows warp grain and coherent waist/hem stitching; capri welt mouth partly occluded. Pleated skirt vertical print remains continuous, waistband sew lines attached."
+      },
+      {
+        "batch": "17",
+        "ids": [
+          "pencilSkirt",
+          "ballGown",
+          "eveningGown",
+          "tailcoat"
+        ],
+        "notes": "Pencil skirt and satin gown material separation reads. Small dark facing fragments remain along gown hems. Tailcoat smooth satin lapels and split tail retained; lower lining visible as expected through opening."
+      },
+      {
+        "batch": "18",
+        "ids": [
+          "fieldCoat",
+          "apron",
+          "coveralls",
+          "scrubs"
+        ],
+        "notes": "Field coat and apron fabric read. Apron inward edge still broad/faceted in places; validate hem facing. Coverall printed panel seams are far too thick and source-body zigzagged, so apply smooth print frame and narrow seam scale. Scrubs woven material/pocket and hems coherent."
+      },
+      {
+        "batch": "19",
+        "ids": [
+          "uniform",
+          "swimBriefs",
+          "swimTrunks",
+          "bikiniTop"
+        ],
+        "notes": "Uniform has the same thick warped panel print as coveralls. Swim briefs and trunks have coherent double stitch rows; inward folded facings protrude at a few thin cuts. Bikini strings remain intact, cup detail view/readability okay; upper camera often chooses strings instead of cup."
+      },
+      {
+        "batch": "20",
+        "ids": [
+          "bikiniBottom",
+          "swimsuit",
+          "briefs",
+          "boxers"
+        ],
+        "notes": "Swimwear stitch placement is orderly; inside briefs/bikini has visible ragged facing edges that require a shared hem return correction. Swimsuit princess seam faint/dark but attached. Boxers waist/leg opening seam and material coherent."
+      },
+      {
+        "batch": "21",
+        "ids": [
+          "bra",
+          "sportsBra",
+          "socks",
+          "stockings"
+        ],
+        "notes": "Bra/sports bra edge stitching and material coherent; thin scalloped painted top stitch is an even repeating feature rather than random tears. Socks rib grain reads and cuff is smooth. Stocking dark top edge needs return check but no new outside seam gap isolated."
+      },
+      {
+        "batch": "22",
+        "ids": [
+          "tights",
+          "operaGloves",
+          "fingerlessGloves",
+          "qipao"
+        ],
+        "notes": "Tights material intentionally fine. Long opera-glove upper camera misses cuff, recapture with arm-centered view. Fingerless ports remain distinct and rolled. Qipao front/neck material clean, skirt hem retains the shared small facing fragments."
+      },
+      {
+        "batch": "23",
+        "ids": [
+          "balletDress",
+          "tennisDress",
+          "wetsuit",
+          "triathlonSuit"
+        ],
+        "notes": "Dress cloth/stitched princess seams are coherent; ballet/tennis hem returns show intermittent lighter fragments. Wetsuit panel seams need the same smooth/narrow pattern pass. Triathlon two-color field remains continuous but neck/arm openings have tiny opposite-color chart flecks; test atlas gutters."
+      },
+      {
+        "batch": "24",
+        "ids": [
+          "cargoTrousers",
+          "tacticalTrousers",
+          "honeycombShirt",
+          "circuitShirt"
+        ],
+        "notes": "Cargo/tactical pocket stitching remains attached and substrate has grain; rear welt exposure needs shared fix. Honeycomb and circuit-tree front/back patterns stay continuous on this snapshot. Contrasting white edge trim is smooth except small local contour corners."
+      },
+      {
+        "batch": "25",
+        "ids": [
+          "duster",
+          "fieldJacket",
+          "ragWraps",
+          "shawl"
+        ],
+        "notes": "Wasteland cloth has deliberate aging/patches/fringe, retained as wear rather than erased. Rag wraps use torn strips intentionally. Frayed duster and shawl edges remain deliberate source styling; do not apply clean-binding changes to those fringes."
+      },
+      {
+        "batch": "26",
+        "ids": [
+          "shemagh",
+          "headWrap",
+          "poncho",
+          "bandages"
+        ],
+        "notes": "Shemagh plaid has the same triangular projection-phase defects as kilt. Head wrap has real layered seams and tiny dark interlayer gaps; topology/pose is an existing modeled-piece concern. Poncho fabric and hood opening now continuous, fringe deliberate. Bandages have gauze weave and wrap layers."
+      },
+      {
+        "batch": "27",
+        "ids": [
+          "legWraps",
+          "workBoots",
+          "harness",
+          "toolBelt"
+        ],
+        "notes": "Wrap/boot textiles and leather grain visible. Utility/scavenger harness straps remain an intentionally sparse modeled construction, with some broad solid-color hardware; geometric redesign not claimed by this texture pass."
+      },
+      {
+        "batch": "28",
+        "ids": [
+          "gasMask",
+          "dustGoggles",
+          "scrapArmor",
+          "scrapPauldrons"
+        ],
+        "notes": "Mask/goggle straps have visible grain and connections; salvaged armor uses deliberate chips/wear and detailed brushed/hammered metals. Preserve intended damage."
+      },
+      {
+        "batch": "29",
+        "ids": [
+          "techJacket",
+          "cyberTrench",
+          "cyberBomber",
+          "techSmock"
+        ],
+        "notes": "Technical shell now has visible fine grid and finish variation; trench coated material retained. Large separate yokes/hood binding panels are still flatter than main cloth, so finish shared detail mesh. Bomber baffles and knit bands orderly, smock pocket/cuff panel plain."
+      },
+      {
+        "batch": "30",
+        "ids": [
+          "cyberJoggers",
+          "compressionSuit",
+          "smartShirt",
+          "utilityRig"
+        ],
+        "notes": "Jogger cordura/rib grain visible; cuff layering intentional. Compression contour glow still wavy, now addressed with fitted frame. Smart-shirt default hex glow is mathematically malformed into stars: fix triangular-lattice Voronoi orientation/inradius as well as smooth print coordinates. Hard-point carrier cloth has fine weave; strap/panel geometry remains angular source."
+      },
+      {
+        "batch": "31",
+        "ids": [
+          "techGloves",
+          "magSoles",
+          "cyberChest",
+          "cyberPauldrons"
+        ],
+        "notes": "Tech glove five digit ports and leather grain retained; cuff glow continuous. Mag shoes upper grain/welt stitching good. Cyber plate subtle surface grain and riveted edge trim remain coherent; interior finished."
+      },
+      {
+        "batch": "32",
+        "ids": [
+          "cyberBracers",
+          "cyberLegs",
+          "mh_tee_jeans",
+          "mh_fitted_jeans"
+        ],
+        "notes": "Cyber plate edge flange remains angular but continuous. Imported T-shirt/jeans preserve their authored logo/dye details; source fit seams remain a separate asset concern. Stronger relief does not replace the original painting."
+      },
+      {
+        "batch": "33",
+        "ids": [
+          "mh_tee_shorts",
+          "mh_jacket_jeans",
+          "mh_sport",
+          "mh_overalls"
+        ],
+        "notes": "Source-painted cloth, jean weave and hems retained; jacket seam painting is broad and softened in original artwork, not remade. Crop/legging and overalls preserve authored construction. Stronger micro relief is subtle over original textures."
+      },
+      {
+        "batch": "34",
+        "ids": [
+          "mh_suit",
+          "mh_skirtsuit",
+          "mh_sundress",
+          "mh_uniform"
+        ],
+        "notes": "Suit and shirt source seams/prints retained. Sundress has stretched original floral print in skirt pleats, an imported UV/art limitation. Star uniform panel/cuff textures retain source appearance and tiny molded accessories."
+      },
+      {
+        "batch": "35",
+        "ids": [
+          "mh_sweater",
+          "mh_viking_tunic",
+          "mh_viking_trousers",
+          "mh_loafers"
+        ],
+        "notes": "Benchmark knit sweater and Viking tunic retain the successful source weave, embroidery and painted depth. Viking trouser leather/fabric and seam stitches remain detailed. Loafer stitching/grain preserved; tall sock source cloth remains."
+      },
+      {
+        "batch": "36",
+        "ids": [
+          "mh_sneakers",
+          "mh_boots",
+          "mh_viking_boots",
+          "ss_carol_uniform"
+        ],
+        "notes": "Shoe source leather/knit painting retained. Carol still has rough authored edge painting, angular lower cuffs and shoulder source trim; stronger cloth finish helps material read but source replacement is not claimed."
+      },
+      {
+        "batch": "37",
+        "ids": [
+          "ss_jolt_armor",
+          "ss_jolt_legs"
+        ],
+        "notes": "Detailed authored armor painting remains, including strong scuffing; source cuts at neck, wrists and waist remain visibly serrated. Shared procedural hem fixes cannot repair those imported cutouts."
+      },
+      {
+        "batch": "38",
+        "ids": [
+          "ss_jolt_boots",
+          "ss_max_armor"
+        ],
+        "notes": "Jolt footwear and Max preserve painted plating/wear and source cutouts. Existing damaged-looking edge art remains visible, requires deliberate source remodel/repaint rather than fabric relief changes."
+      },
+      {
+        "batch": "39",
+        "ids": [
+          "ss_max_legs",
+          "ss_max_boots"
+        ],
+        "notes": "Max leg/boot plating source painting retained. Serrated shell cutouts and overlapping source cloth remain; no asset rebuild claimed."
+      },
+      {
+        "batch": "40",
+        "ids": [
+          "ss_vay_robes",
+          "ss_vay_boots"
+        ],
+        "notes": "Royal robe/boot source trims and satin character retained. Rough gold/red border painting and serrated source cutouts remain imported-asset limitations."
+      }
+    ],
+    "captureRoot": "review-snapshot",
+    "finalCaptureRoot": "native",
+    "finalCloseupReview": {
+      "01": "Visible jersey/poplin yarn, attached neckline ribs and continuous hem sewing; sweater ribs and horizontal bands retain their intended design.",
+      "03": "Dress hem no longer has protruding dark facing fragments. Suit jacket waist is attached and its short hem retained; pocket welt layers remain intentionally modeled. Skirt and trench have continuous sewing and readable textile grain.",
+      "05": "Gambeson diamonds continuous over front/back/sleeves; tunic and tabard have one narrow color binding. Tabard neckline retains small source contour facets.",
+      "06": "Robe gold hem is even; gown waist has no broken gold stripe and its lower hem is clean. Vest fabric grain visible; welt mouths continuous, tiny trim-end facets remain.",
+      "11": "Officer shoulder atlas is clean with no pale flecks, fitted yoke line smooth and worsted grain visible. Fleet yoke piping is smoother and fabric retains red/navy separation; helmet metal unchanged.",
+      "02": "Shorts rear welts now uninterrupted; denim and shorts hem thread continuous and rolled leg openings intact. Hoodie modeled neck fittings retain preexisting angular construction.",
+      "12": "Technical and exploration suit panel frames cleaner, separate yokes have textile finish; hardware and armor silhouette intentionally retained.",
+      "18": "Coverall panel lines much finer and straighter; field-coat and apron hems continuous. Scrubs grain/pocket readable. Apron still has angular inward source panel joins.",
+      "19": "Service-uniform chest lines cleaner and narrower; brief/trunk/bikini exterior stitching orderly. Briefs interior joins remain visibly faceted and are not a remesh. Bikini upper detail camera targets strings; full views retain cups.",
+      "24": "Cargo cloth has grain and continuous rear welts; tactical trousers preserve black styling. Honeycomb and circuit-tree prints remain coherent over shoulders and packed chart joins, with narrow rolled trim.",
+      "29": "Technical shell grid visible, coated trench/bomber finish retained, knit bands orderly. Modeled hood/front fittings remain angular; this pass does not redesign them.",
+      "30": "Smart-shirt glow forms regular hexes with solid shoulders. Jogger knit/woven detail and cuff sewing retained; compression contour lines smoother. Hard-point rig keeps its angular modeled construction.",
+      "35": "Benchmark sweater and Viking tunic retain original knitting, mail, embroidery and hem artwork.",
+      "36": "Carol retains visibly rough white source border painting and angular cuff cuts; improved cloth finish does not remove those source limitations."
+    },
+    "correctionEvidence": {
+      "atlas-validation": "Officer pale shoulder flecks removed by isolating projected connected panels.",
+      "waist-validation": "Gown gold waist artifacts removed; dress hem and tabard edge continuous. Suit waist attaches; final capture checks restored short hem.",
+      "edge-validation": "Pocket welt lips remain apart and bindings share actual rolled cloth."
+    },
+    "finalSnapshot": {
+      "editor/src/forge/Character3D/CharacterOutfit.js": "bb3cbda79524a3ff3f241d75c612f215b736222321722541f80063bd0f3691bc",
+      "editor/src/forge/Character3D/CharacterWardrobe.js": "650a5cd5441e7871ee55d65888b4219256bc65c36e610ae51f7d5fa5b71387be",
+      "editor/src/forge/Character3D/CharacterGarmentDetails.js": "dc61697dc536efdbe39983ab4523276d61bd0b70525f2351c6eff8e8e52e4c04",
+      "editor/src/forge/Character3D/CharacterAtlas.js": "119aede7f5ccbf24e289734f531223f4760e545d41a4f7cc7dbca61f8ab69ed9",
+      "editor/src/forge/Character3D/CharacterFabric.js": "966fa2e74e1cd19f3402c3a5100321b29e321651f884693b7296c2cc5ab2cc7f",
+      "editor/src/forge/Character3D/CharacterDrape.js": "b51dbc7939995958be621dbc4e1e6a32a496b11c0da35dcbfe1ec6867e640f71",
+      "editor/src/forge/Character3D/CharacterClothes.js": "fbd8f7bf8839ee95fd33765d62ab696c9e72b7f8f62ab025ff5f5dbbbfb242fb",
+      "editor/src/forge/Character3D/CharacterOutfitTransfer.js": "0b31c54dfcff5bf78e25e7d32827aa320f4a4e9c8e3fe9b3f716a3289f1fb74e",
+      "editor/src/forge/Character3D/CharacterCyberwear.js": "3e9277cd9a2edf28ab913898510e816557ee9f688ecac420b9f3860b0f8248ac",
+      "editor/src/forge/Character3D/CharacterWasteland.js": "588a40d9dae893a0189a71960359f084646977eeac3efc7a75ef8633628c2445",
+      "editor/src/forge/Character3D/ConstructionPatterns.js": "8650cff2cff1525667c715cb30fc9d6e39ea9a1438664dc2bbf01beb7c0a1672",
+      "editor/src/forge/Props/GarmentProp.js": "43c411ca9baa74ad771f8a9817ba64b1160fed86830c3035c890f9b3ebf86c5d",
+      "editor/src/forge/Props/PropArmorInterior.js": "8fe7baac93e5261745c820c22fefddb09e191c4e5ddd1a966532feecaea9b7a5"
+    },
+    "matchingCameraReview": "Officer yoke no longer scallops and shoulders retain navy fabric without pale flecks; Gambeson broken shoulder diamonds now join into continuous quilting. Comparison page uses unchanged cameras, colors and lighting."
+  }
+}

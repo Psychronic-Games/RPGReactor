@@ -1,5 +1,5 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),T=require('../node_modules/three');
+const test=require('node:test'),assert=require('node:assert/strict'),T=require('./helpers/three.cjs');
 const Q=require('./helpers/character-quality-matrix.cjs'),Skin=require('../src/forge/Character3D/CharacterSkin.js'),Props=require('../src/forge/Character3D/CharacterProps.js'),Gear=require('../src/forge/Character3D/CreatureGear.js');
 let pack;test.before(async()=>{pack=await Q.Body.loadPack();});
 function inside(part,p){const origin=new T.Vector3(...p),ray=new T.Ray(origin,new T.Vector3(.932,.271,.239).normalize()),hit=new T.Vector3(),hits=[];const at=i=>new T.Vector3(...part.positions.subarray(i*3,i*3+3));for(let t=0;t<part.index.length;t+=3)if(ray.intersectTriangle(...[0,1,2].map(k=>at(part.index[t+k])),false,hit)){const d=hit.distanceTo(origin);if(d>1e-7&&!hits.some(x=>Math.abs(x-d)<1e-7))hits.push(d);}return hits.length%2===1;}

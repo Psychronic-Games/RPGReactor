@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
-const T = require('../node_modules/three');
+const T = require('./helpers/three.cjs');
 const Creature = require('../src/forge/Character3D/CreatureBody.js');
 const scope = { window: {}, THREE: T, console };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/forge/Character3D/Character3DBuilder.js'), 'utf8'), scope);

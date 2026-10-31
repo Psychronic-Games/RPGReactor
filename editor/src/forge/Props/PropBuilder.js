@@ -44,6 +44,11 @@ class PropBuilder {
 
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
+        const project=this._project()?.path;
+        if(this._imageProject!==project) {
+            this._imageProject=project;this._images={};this._loadingImages=new Map();
+            if(this.cache.emblemProject!==project){delete this.cache.emblemPictures;delete this.cache.atlas;this.cache.emblemProject=project;}
+        }
         this.root = containerEl;
         if (!this._project()) {
             this.root.innerHTML = `<div class="rr-c3d-empty">${this._t('Open a project to use Forge tools.')}</div>`;
@@ -58,6 +63,7 @@ class PropBuilder {
         if (this._worker) { this._worker.terminate(); this._worker = null; }
         if (!view) return;
         cancelAnimationFrame(view.loop);
+        view.clock?.dispose?.();
         cancelAnimationFrame(view.frame);
         view.resize?.disconnect();
         this._clearModel();
@@ -127,6 +133,11 @@ class PropBuilder {
     /** The page of the kind being made (RRPropCatalog.ui). */
     _ui() { return RRPropCatalog.UI[this.kind] || RRPropCatalog.UI.flag; }
 
+    _randomScopes(kind) {
+        const scopes=typeof kind.randomScopes==='function'?kind.randomScopes(this.recipe):kind.randomScopes;
+        return (scopes||[]).filter(s=>s[0]!=='all');
+    }
+
     _renderPage() {
         this.root.innerHTML = `
             <div class="rr-c3d rr-prop">
@@ -144,12 +155,13 @@ class PropBuilder {
                     <button class="rr-btn-chip rr-prop-keep" title="${this._t('Keep this prop\'s settings in the Forge to open and change later. No model is made.')}">${this._t('Save Design')}</button>
                     <span class="rr-c3d-spacer"></span>
                     <span class="rr-c3d-status" aria-live="polite"></span>
+                    <button class="rr-btn-chip rr-prop-picture">${this._t('Export Picture')}</button>
                     <button class="rr-btn-chip rr-prop-sheet">${this._t('Export Sprite Sheet')}</button>
                     <button class="rr-btn-chip rr-c3d-save rr-prop-save">${this._t('Export Model To Project')}</button>
                 </div>
                 <div class="rr-c3d-body rr-prop-body">
                     <div class="rr-prop-types">
-                        <input type="search" class="rr-input rr-prop-search" placeholder="${this._t('Search props')}" aria-label="${this._t('Search props')}">
+                        <input type="search" class="rr-input rr-prop-search" value="${rrEscapeHtml(this.search||'')}" placeholder="${this._t('Search props')}" aria-label="${this._t('Search props')}">
                         <div class="rr-prop-typelist"></div>
                     </div>
                     <div class="rr-c3d-side">
@@ -184,7 +196,7 @@ class PropBuilder {
         RRRandomPartsMenu.bind(this.root.querySelector('.rr-random-parts'), chosen => {
             this.randomParts = chosen;
             const kind = RRPropModel.kindOf(this.recipe);
-            RRRandomPartsMenu.save('prop-' + kind.id, chosen, (kind.randomScopes || []).filter(s => s[0] !== 'all'));
+            RRRandomPartsMenu.save('prop-' + kind.id, chosen, this._randomScopes(kind));
             this.root.querySelector('.rr-prop-random').disabled = !chosen.size;
         });
         q('.rr-prop-reset').addEventListener('click', () => this._replace(this._ui().reset(this.recipe)));
@@ -196,6 +208,7 @@ class PropBuilder {
         });
         this._renderDesignGroups();
         q('.rr-prop-save').addEventListener('click', () => this.save());
+        q('.rr-prop-picture').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) RRPropSpriteSheet.openPicturePanel(this); });
         q('.rr-prop-sheet').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) RRPropSpriteSheet.openPanel(this); });
         q('.rr-prop-motion').addEventListener('click', e => { const b = e.target.closest('[data-motion]'); if (b) this._setMotion(b.dataset.motion); });
         this.root.querySelectorAll('.rr-c3d-frame').forEach(b => b.addEventListener('click', () => this._frame(b.dataset.frame)));
@@ -236,12 +249,13 @@ class PropBuilder {
         const current = RRPropCatalog.typeOf(this.recipe), searching = !!String(this.search || '').trim();
         const groups = RRPropCatalog.grouped(this.search, s => this._t(s));
         const row = t => `<button class="rr-prop-type${t === current ? ' is-active' : ''}" data-type="${rrEscapeHtml(t.id)}" title="${rrEscapeHtml(this._t(t.label))}">${RRPropCatalog.icon(t.icon, 16)}<span>${rrEscapeHtml(this._t(t.label))}</span></button>`;
+        const subrow=(g,depth=0)=>`<div class="rr-prop-subhead lit-section-header rr-prop-subhead-band" data-depth="${depth}">${rrEscapeHtml(this._t(g.category.label))}</div>${g.own.map(row).join('')}${g.groups.map(c=>subrow(c,depth+1)).join('')}`;
         list.innerHTML = groups.map(({ category, own, groups: subs, types }) => {
             const folded = !searching && !!this.folded['cat:' + category.id];
             return `<div class="lit-section rr-prop-cat${folded ? ' is-collapsed' : ''}">
                 <div class="lit-section-header rr-prop-cathead" data-cat="${rrEscapeHtml(category.id)}" tabindex="0" role="button" aria-expanded="${!folded}">
                     <span class="r3d-sec-toggle">${folded ? '▸' : '▾'}</span><span class="r3d-sec-title">${rrEscapeHtml(this._t(category.label))}</span><span class="lit-section-meta">${types.length}</span></div>
-                <div class="lit-section-body rr-prop-catbody">${own.map(row).join('')}${subs.map(g => `<div class="rr-prop-subhead">${rrEscapeHtml(this._t(g.category.label))}</div>${g.types.map(row).join('')}`).join('')}</div>
+                <div class="lit-section-body rr-prop-catbody">${own.map(row).join('')}${subs.map(g=>subrow(g)).join('')}</div>
             </div>`;
         }).join('') || `<p class="rr-c3d-note rr-prop-none">${this._t('No props match.')}</p>`;
     }
@@ -272,8 +286,8 @@ class PropBuilder {
         const kind = RRPropModel.kindOf(this.recipe), group = this.root.querySelector('.rr-prop-randomgroup');
         if (group) {
             group.hidden = !kind.random;
-            const parts = (kind.randomScopes || []).filter(s => s[0] !== 'all'), menu = group.querySelector('.rr-random-parts');
-            if (this._randomFor !== kind.id) { this.randomParts = RRRandomPartsMenu.load('prop-' + kind.id, parts); this._randomFor = kind.id; }
+            const parts = this._randomScopes(kind), menu = group.querySelector('.rr-random-parts'),key=kind.id+'|'+parts.map(p=>p[0]).join(',');
+            if (this._randomFor !== key) { this.randomParts = RRRandomPartsMenu.load('prop-' + kind.id, parts); this._randomFor = key; }
             RRRandomPartsMenu.render(menu, parts, this.randomParts, t => this._t(t));
             menu.hidden = parts.length < 2;
             this.root.querySelector('.rr-prop-random').disabled = parts.length > 1 && !this.randomParts.size;
@@ -336,7 +350,8 @@ class PropBuilder {
 
     _select(path, label, choices, value) {
         const v = value ?? this._get(path);
-        const opts = choices.map(c => `<option value="${rrEscapeHtml(c[0])}"${c[0] === v ? ' selected' : ''}>${rrEscapeHtml(this._t(c[1]))}</option>`).join('');
+        const symbols=window.RRCharacterMarks?.symbolChoices(choices);
+        const opts = choices.map(c => `<option value="${rrEscapeHtml(c[0])}"${symbols?` data-rr-symbol="${rrEscapeHtml(c[0])}"`:""}${c[0] === v ? ' selected' : ''}>${rrEscapeHtml(this._t(c[1]))}</option>`).join('');
         return `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${this._t(label)}</span><select class="rr-select" data-path="${path}">${opts}</select></label>`;
     }
 
@@ -399,12 +414,21 @@ class PropBuilder {
             const path = b.dataset.path;
             RRColorPopover.open(b, {
                 value: this._shownColor(path) || '#808080',
-                onInput: hex => { this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); this._quick = true; this._queueRebuild(); },
-                onChange: hex => { this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; this._commit(); this._quick = false; this._renderPanel(); this._queueRebuild(); }
+                // Keep dragging on the UI thread cheap; commit one authoring rebuild on release.
+                onInput: hex => { b.style.setProperty('--rr-c3d-swatch', hex); },
+                onClose: () => b.style.setProperty('--rr-c3d-swatch', this._shownColor(path) || '#808080'),
+                onChange: hex => { this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; this._commit(); this._quick = false; this._queueRebuild(); }
             });
             return;
         }
         if (act === 'swatch') { this._set(b.dataset.path, b.dataset.color); this._commit(); this._renderPanel(); this._queueRebuild(); return; }
+        if(act==='mark-picture'){
+            const path=b.dataset.path,project=this._project()?.path,before=JSON.stringify(this._get(path));
+            this._choosePicture(this._get(path+'.picture'),name=>{
+                if(this._project()?.path!==project||JSON.stringify(this._get(path))!==before)return;
+                this._set(path+'.picture',name);this._commit();this._renderPanel();this._queueRebuild();
+            });return;
+        }
         const hook = this._ui().act;
         if (hook) hook.call(this, act, b);
     }
@@ -425,7 +449,7 @@ class PropBuilder {
     _randomize() {
         const kind = RRPropModel.kindOf(this.recipe);
         if (!kind.random) return;
-        const parts = (kind.randomScopes || []).filter(s => s[0] !== 'all');
+        const parts = this._randomScopes(kind);
         const scopes = parts.length < 2 ? ['all'] : RRRandomPartsMenu.scopesFor(parts, this.randomParts || new Set(parts.map(p => p[0])));
         let r = this.recipe;
         for (const scope of scopes) r = kind.random((Math.random() * 4294967296) >>> 0, r, scope);
@@ -462,8 +486,10 @@ class PropBuilder {
         renderer.toneMappingExposure = 1.0;
         renderer.setClearColor(0x000000, 0);
         const scene = new THREE.Scene();
-        scene.environment = Character3DBuilder.prototype._studio.call(this, renderer);
-        scene.environmentIntensity = 0.7;
+        const studio = ModelPreview3D.studioEnvironment(renderer, { balanced: true });
+        (this._envTargets ||= []).push(studio);
+        scene.environment = studio.texture;
+        scene.environmentIntensity = 0.85;
         const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 200);
         scene.add(new THREE.HemisphereLight(0xeaf2ff, 0x3a3630, 0.55));
         // A sun from high to one side: the folds shade, and the cloth shades itself.
@@ -495,7 +521,7 @@ class PropBuilder {
         wall.receiveShadow = true;
         wall.visible = false;
         scene.add(wall);
-        const view = this._view = { renderer, scene, camera, key, floor, blob, wall, group, meshes: [], bones: [], textures: new Map(), yaw: 0.5, pitch: 0.12, distance: 8, target: new THREE.Vector3(0, 3, 0), frame: 0, loop: 0, clock: new THREE.Clock(), extent: 6 };
+        const view = this._view = { renderer, scene, camera, key, floor, blob, wall, group, meshes: [], bones: [], textures: new Map(), yaw: 0.5, pitch: 0.12, distance: 8, target: new THREE.Vector3(0, 3, 0), frame: 0, loop: 0, clock: new THREE.Timer(), extent: 6 };
         const size = () => {
             const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
             renderer.setSize(w, h, false);
@@ -529,12 +555,12 @@ class PropBuilder {
     _tick() {
         const view = this._view;
         if (!view) return;
-        view.clock.getDelta();
+        view.clock.reset();
         let carried = 0;
         const step = () => {
             if (!this._view) return;
             view.loop = requestAnimationFrame(step);
-            const dt = Math.min(0.1, view.clock.getDelta());
+            const dt = Math.min(0.1, view.clock.update().getDelta());
             carried += dt;
             if (this._weak && carried < 1 / 32) return;
             const moving = this._advance(carried);
@@ -586,7 +612,7 @@ class PropBuilder {
     /** The bounds of a build as the view shows it (posed). */
     _shownBox(result) {
         const box = new THREE.Box3(), v = new THREE.Vector3(), group = this._view && this._view.group, m = group ? group.matrixWorld : null;
-        for (const p of result.parts) for (let i = 0; i < p.positions.length; i += 3) { v.set(p.positions[i], p.positions[i + 1], p.positions[i + 2]); box.expandByPoint(m ? v.applyMatrix4(m) : v); }
+        for (const p of result.parts) for (const id of p.index) { const i=id*3;v.set(p.positions[i], p.positions[i + 1], p.positions[i + 2]); box.expandByPoint(m ? v.applyMatrix4(m) : v); }
         return box;
     }
 
@@ -633,7 +659,7 @@ class PropBuilder {
     _structure(result) {
         // Where every vertex stands, summed: a reshaped part with as many vertices is still a new shape.
         const sum = (positions, colors) => { let s = 0; for (let i = 0; i < positions.length; i++) s += positions[i] * ((i % 7) + 1); if (colors) for (let i = 0; i < colors.length; i++) s += colors[i] * 7.31; return s.toFixed(5); };
-        const materialLayout=p=>JSON.stringify([p.kind==='cloth',p.texture||'',p.normalTexture||'',p.metallicRoughnessTexture||'',p.emissiveTexture||'',!!p.doubleSided,!!p.blend]);
+        const materialLayout=p=>JSON.stringify([p.kind==='cloth',p.texture||'',p.normalTexture||'',p.metallicRoughnessTexture||'',p.emissiveTexture||'',!!p.uvs1,p.normalTexCoord||0,p.metallicRoughnessTexCoord||0,!!p.doubleSided,!!p.blend]);
         return result.kind + '|' + result.bones.map(b => b.head.map(v => v.toFixed(4)).join(',')).join(';') + '|' + result.parts.map(p => [p.name, p.positions.length, p.index.length, p.cutout ? 1 : 0, materialLayout(p), sum(p.positions, p.colors)].join(':')).join(';')
             + '|' + RRPropModel.clothsOf(result).map(c => Array.from(c.setup.holes || []).join('')).join('/');
     }
@@ -655,7 +681,7 @@ class PropBuilder {
             if (this._preparing !== kind) {
                 this._preparing = kind;
                 kind.prepare().then(() => {
-                    if (this._view && this.kind === kind.id) this._queueRebuild();
+                    if (this._view && this.kind === kind.id) { this._renderPanel();this._queueRebuild(); }
                 }).catch(error => {
                     console.error('[PropBuilder] prepare', error);
                     if (this._view && this.kind === kind.id) this._status(this._t('This prop could not be built.'), 'error');
@@ -680,15 +706,15 @@ class PropBuilder {
         if (same) {
             // A coating atlas can repack UV charts between drag and final
             // resolutions without changing vertex positions or material slots.
-            result.parts.forEach((part,k)=>{const uv=view.meshes[k].geometry.getAttribute('uv');if(uv&&part.uvs){uv.array.set(part.uvs);uv.needsUpdate=true;}});
+            result.parts.forEach((part,k)=>{for(const [name,data]of [['uv',part.uvs],['uv1',part.uvs1]]){const at=view.meshes[k].geometry.getAttribute(name);if(at&&data){at.array.set(data);at.needsUpdate=true;}}});
             this._swapTextures(result);
             this._applyMaterials(result);
-        } else if (view.layout === layout && view.meshes.length === result.parts.length) {
+        } else if (result.kind !== 'garment' && view.layout === layout && view.meshes.length === result.parts.length) {
             // Reshaped or recolored with as many vertices and the same bones (a profile dragged, a pole's color): the
             // same meshes take the new places and colors, and a cloth flies on.
             result.parts.forEach((part, k) => {
                 const g = view.meshes[k].geometry;
-                for (const [name, data] of [['position', part.positions], ['normal', part.normals], ['uv', part.uvs], ['color', part.colors]]) {
+                for (const [name, data] of [['position', part.positions], ['normal', part.normals], ['uv', part.uvs], ['uv1',part.uvs1], ['color', part.colors]]) {
                     const at = g.getAttribute(name);
                     if (at && data && at.array.length === data.length) { at.array.set(data); at.needsUpdate = true; }
                 }
@@ -699,6 +725,7 @@ class PropBuilder {
             this._applyMaterials(result);
         } else { this._show(result, structure); view.layout = layout; }
         if (!same) this._stage(result);
+        this._syncEffects(result);
         this._playClip(result);
         // The running cloth takes a new wind or fabric as it flies.
         if (view.sims) RRPropModel.clothsOf(result).forEach((c, i) => { if (view.sims[i]) { view.sims[i].cloth = c; RRPropCloth.configure(view.sims[i].state, c.setup); } });
@@ -715,9 +742,20 @@ class PropBuilder {
         this._draw();
     }
 
+    /** Preview the same authored lights written to model.json; they move with the displayed prop. */
+    _syncEffects(result){
+        const v=this._view;if(v.effects){v.group.remove(v.effects);v.effects=null;}
+        const effects=result.sidecarExtra?.effects?.filter(e=>e.type==='light'&&e.trigger==='always')||[];
+        if(!effects.length)return;
+        const group=v.effects=new THREE.Group();group.name='Prop effect preview';
+        for(const effect of effects.slice(0,8)){const l=effect.light||{},p=new THREE.PointLight(l.color||'#ffffff',(l.intensity??1)*4,l.radius||3,2);p.position.set(...(effect.anchor?.offset||[0,0,0]));p.castShadow=false;group.add(p);}
+        v.group.add(group);
+    }
+
     _clearModel() {
         const view = this._view;
         if (!view) return;
+        if(view.effects){view.group.remove(view.effects);view.effects=null;}
         if (view.mixer) { view.mixer.stopAllAction(); view.mixer.uncacheRoot(view.group); }
         for (const m of view.meshes) { m.geometry.dispose(); m.material.dispose(); view.group.remove(m); }
         for (const b of view.bones) if (b.parent === view.group) view.group.remove(b);
@@ -726,8 +764,8 @@ class PropBuilder {
         view.clipAction = null; view.clipKey = null;
     }
 
-    _texture(name, tex, color) {
-        const view = this._view, kept = view.textures.get(name);
+    _texture(name, tex, color, channel=0) {
+        const view = this._view, id=name+'@'+channel, kept = view.textures.get(id);
         if (kept && kept.data === tex.data) return kept.texture;
         if (kept && kept.texture.image.width === tex.width && kept.texture.image.height === tex.height) {
             kept.texture.image.data = tex.data; kept.texture.needsUpdate = true; kept.data = tex.data;
@@ -736,23 +774,25 @@ class PropBuilder {
         if (kept) kept.texture.dispose();
         const t = new THREE.DataTexture(tex.data, tex.width, tex.height, THREE.RGBAFormat);
         t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-        t.flipY = false;
+        t.flipY = false;t.channel=channel;
         if(tex.repeat)t.wrapS=t.wrapT=THREE.RepeatWrapping;
         t.generateMipmaps = true;
         t.minFilter = THREE.LinearMipmapLinearFilter;
         t.magFilter = THREE.LinearFilter;
         t.anisotropy = 8;
         t.needsUpdate = true;
-        view.textures.set(name, { data: tex.data, texture: t });
+        view.textures.set(id, { data: tex.data, texture: t });
         return t;
     }
 
     _swapTextures(result) {
-        for (const [name, tex] of Object.entries(result.textures || {})) {
-            if (!tex) continue;
-            const kept = this._view.textures.get(name);
-            const fresh = this._texture(name, tex, !/normal|surface/.test(name));
-            if (kept && kept.texture !== fresh) for (const m of this._view.meshes) { if (m.material.map === kept.texture) m.material.map = fresh; if (m.material.normalMap === kept.texture) m.material.normalMap = fresh; if (m.material.emissiveMap === kept.texture) m.material.emissiveMap = fresh; if(m.material.roughnessMap===kept.texture)m.material.roughnessMap=fresh;if(m.material.metalnessMap===kept.texture)m.material.metalnessMap=fresh; m.material.needsUpdate = true; }
+        for(const [name,tex]of Object.entries(result.textures||{})){
+            if(!tex)continue;
+            for(const channel of [0,1]){
+                const kept=this._view.textures.get(name+'@'+channel);if(!kept)continue;
+                const fresh=this._texture(name,tex,!/normal|surface|orm/.test(name),channel);
+                if(kept.texture!==fresh)for(const mesh of this._view.meshes)for(const key of ['map','normalMap','emissiveMap','roughnessMap','metalnessMap','aoMap'])if(mesh.material[key]===kept.texture){mesh.material[key]=fresh;mesh.material.needsUpdate=true;}
+            }
         }
     }
 
@@ -762,6 +802,8 @@ class PropBuilder {
             const m = this._view.meshes[k] && this._view.meshes[k].material;
             if (!m) return;
             if (!part.texture && !part.colors) m.color.set(part.color || '#bbbbbb');
+            if(m.normalScale)m.normalScale.setScalar(part.normalScale??1);
+            m.aoMapIntensity=part.occlusionStrength??1;
             m.roughness = part.roughness ?? 0.6;
             m.metalness = part.metalness ?? 0;
             m.opacity = part.opacity ?? 1;
@@ -770,7 +812,7 @@ class PropBuilder {
             m.depthWrite = !transparent;
             this._view.meshes[k].castShadow = !transparent;
             if(m.emissive){m.emissive.set(part.emissive||'#000000');m.emissiveIntensity=part.emissiveIntensity??1.4;}
-            if (m.sheen !== undefined && part.kind === 'cloth') m.sheen = result.recipe.cloth && result.recipe.cloth.fabric === 'silk' ? 0.6 : 0.25;
+            if (m.sheen !== undefined && part.kind === 'cloth') m.sheen = part.sheen?.strength ?? (result.recipe.cloth && result.recipe.cloth.fabric === 'silk' ? 0.6 : 0.25);
         });
     }
 
@@ -788,16 +830,17 @@ class PropBuilder {
             alphaTest: part.cutout ? (part.alphaCutoff ?? 0.5) : 0
         });
         const normal = part.normalTexture && result.textures[part.normalTexture];
-        if (normal) { m.normalMap = this._texture(part.normalTexture, normal, false); m.normalScale = new THREE.Vector2(part.normalScale ?? 1, part.normalScale ?? 1); }
+        if (normal) { m.normalMap = this._texture(part.normalTexture, normal, false,part.normalTexCoord||0); m.normalScale = new THREE.Vector2(part.normalScale ?? 1, part.normalScale ?? 1); }
         const surface=part.metallicRoughnessTexture&&result.textures[part.metallicRoughnessTexture];
-        if(surface)m.roughnessMap=m.metalnessMap=this._texture(part.metallicRoughnessTexture,surface,false);
+        if(surface)m.roughnessMap=m.metalnessMap=this._texture(part.metallicRoughnessTexture,surface,false,part.metallicRoughnessTexCoord||0);
+        if(part.occlusionTexture&&result.textures[part.occlusionTexture]){m.aoMap=this._texture(part.occlusionTexture,result.textures[part.occlusionTexture],false,part.occlusionTexCoord||0);m.aoMapIntensity=part.occlusionStrength??1;}
         if (part.cutout) m.alphaToCoverage = true;
         if (part.emissive) { m.emissive = new THREE.Color(part.emissive); m.emissiveIntensity = part.emissiveIntensity ?? 1.4; }
         // Containers: a glow drawn from its picture (lamps, a display), halos blended by their alpha.
         if (part.emissive && part.emissiveTexture && result.textures[part.emissiveTexture]) m.emissiveMap = this._texture(part.emissiveTexture, result.textures[part.emissiveTexture], true);
         if (part.blend) { m.transparent = true; m.depthWrite = false; }
         // Cloth: a soft sheen at grazing angles in its own colors; silk shines more.
-        if (cloth && m.isMeshPhysicalMaterial) { m.sheen = result.recipe.cloth && result.recipe.cloth.fabric === 'silk' ? 0.6 : 0.25; m.sheenRoughness = 0.5; m.sheenColor = new THREE.Color(0.85, 0.85, 0.85); if (m.map) m.sheenColorMap = m.map; m.specularIntensity = 0.25; }
+        if (cloth && m.isMeshPhysicalMaterial) { m.sheen = part.sheen?.strength ?? (result.recipe.cloth && result.recipe.cloth.fabric === 'silk' ? 0.6 : 0.25); m.sheenRoughness = part.sheen?.roughness ?? 0.5; m.sheenColor = part.sheen?.color ? new THREE.Color(...part.sheen.color) : new THREE.Color(0.85, 0.85, 0.85); if (m.map) m.sheenColorMap = m.map; m.specularIntensity = 0.25; }
         return m;
     }
 
@@ -820,11 +863,12 @@ class PropBuilder {
             g.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(part.positions), 3));
             g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(part.normals), 3));
             if (part.uvs) g.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(part.uvs), 2));
+            if(part.uvs1)g.setAttribute('uv1',new THREE.BufferAttribute(Float32Array.from(part.uvs1),2));
             if (part.colors) g.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(part.colors), 3));
             g.setAttribute('skinIndex', new THREE.BufferAttribute(Uint16Array.from(part.joints), 4));
             g.setAttribute('skinWeight', new THREE.BufferAttribute(Float32Array.from(part.weights), 4));
             g.setIndex(new THREE.BufferAttribute(Uint32Array.from(part.index), 1));
-            if (part.normalTexture) g.computeTangents?.();
+            if (part.normalTexture&&part.normalTexCoord!==1) g.computeTangents?.();
             const mesh = new THREE.SkinnedMesh(g, this._material(part, result));
             mesh.frustumCulled = false;
             mesh.castShadow = (part.opacity ?? 1) >= 1 && !part.blend;
@@ -876,7 +920,7 @@ class PropBuilder {
         view.blob.scale.setScalar(Math.max(0.3, extent * 0.12));
         const box = this._shownBox(result);
         const mid = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() * 0.6 + 0.5;
-        view.floor.position.y = result.kind === 'accessory' ? box.min.y - .001 : 0;
+        view.floor.position.y = ['accessory','garment'].includes(result.kind) ? box.min.y - .001 : 0;
         view.blob.position.y = view.floor.position.y + .002;
         view.key.target.position.copy(mid);
         view.key.position.copy(mid).add(new THREE.Vector3(2.2, 4, 3).normalize().multiplyScalar(r * 3));
@@ -897,7 +941,8 @@ class PropBuilder {
         const view = this._view;
         // A vehicle's previewClips: the motion its Details tab picks, played here only (the game plays its rules).
         const clips = result.previewClips || result.clips, clip = !RRPropModel.moves(result) && clips && clips[0];
-        const key = clip ? view.structure + '|' + clip.tracks.map(t => t.bone + t.path + Array.from(t.times || clip.times).join(',')).join('|') : null;
+        let valuesKey=2166136261;if(clip)for(const track of clip.tracks)for(const value of track.values)valuesKey=Math.imul(valuesKey^Math.round(value*1e6),16777619);
+        const key = clip ? valuesKey+'|'+view.structure + '|' + clip.tracks.map(t => t.bone + t.path + Array.from(t.times || clip.times).join(',')).join('|') : null;
         if (view.clipKey === key && (view.clipAction || !clip)) return;
         if (view.clipAction) { view.clipAction.stop(); view.clipAction = null; }
         view.clipKey = key;
@@ -1013,34 +1058,80 @@ class PropBuilder {
     _choosePicture(current, onPick) {
         const folder = this._picturesFolder(), picker = window.reactor?.databaseEditorUI, assets = window.RRAssetFiles;
         if (!folder || !picker || typeof picker.showImagePicker !== 'function' || !assets) return;
+        const recipe = this.recipe, project = this._project()?.path;
+        const apply = name => { if (name && this.recipe === recipe && this._project()?.path === project) onPick(name); };
         let files = [];
         try { files = assets.listImageReferences(folder); } catch (error) { files = []; }
-        if (!files.length) { RRDialog.alert(this._t('No pictures in img/pictures yet. Add one there to use it here.'), { title: this._t('3D Prop Builder') }); return; }
-        picker.showImagePicker(this._t('Choose a picture'), files, name => { if (name) onPick(name); }, name => assets.imageUrlFor(folder, name), current || undefined,
-            { selectButtonLabel: this._t('Use This Picture'), zIndex: 10500 });
+        picker.showImagePicker(this._t('Choose a picture'), files, apply, name => assets.imageUrlFor(folder, name), current || undefined,
+            { selectButtonLabel: this._t('Use This Picture'), zIndex: 10500, onImport: () => this._importPicture(apply) });
+    }
+
+    /** Copy artwork into this project so symbols still work after reopening or export. */
+    _importPicture(onPick) {
+        const input = document.createElement('input'), project = this._project()?.path;
+        input.type = 'file';
+        input.accept = window.RRAssetFiles.IMAGE_EXTENSIONS.join(',');
+        input.hidden = true;
+        input.oncancel = () => input.remove();
+        input.onchange = async () => {
+            const file = input.files?.[0]; input.remove();
+            if (!file || this._project()?.path !== project) return;
+            try { const name = await this._importPictureFile(file, project); if (name && this._project()?.path === project) onPick(name); }
+            catch (error) { console.error('[PropBuilder] import picture', error); this._status(this._t('Could not import picture.'), 'error'); }
+        };
+        document.body.appendChild(input); input.click();
+    }
+
+    async _importPictureFile(file, project = this._project()?.path) {
+        if (!project || this._project()?.path !== project) return null;
+        const fs = require('fs'), path = require('path'), assets = window.RRAssetFiles;
+        const extension = path.extname(file.name).toLowerCase();
+        if (!assets.IMAGE_EXTENSIONS.includes(extension)) throw new Error('Unsupported picture format');
+        const stem = path.basename(file.name, path.extname(file.name)).replace(/[\\/:*?"<>|\x00-\x1f]/g, '').trim().slice(0, 80) || 'Picture';
+        const folder = path.join(project, 'img', 'pictures');
+        await fs.promises.mkdir(folder, { recursive: true });
+        const used = new Set(assets.listImageReferences(folder).map(n => n.toLowerCase()));
+        const data = file.path ? null : Buffer.from(await file.arrayBuffer());
+        for (let n = 0; ; n++) {
+            if (this._project()?.path !== project) return null;
+            const name = stem + (n ? '-' + (n + 1) : '');
+            if (used.has(name.toLowerCase())) continue;
+            const target = path.join(folder, name + extension);
+            try {
+                if (file.path) await fs.promises.copyFile(file.path, target, fs.constants.COPYFILE_EXCL);
+                else await fs.promises.writeFile(target, data, { flag: 'wx' });
+                return name;
+            } catch (error) { if (error.code !== 'EEXIST') throw error; }
+        }
     }
 
     /** A picture's pixels, read once (at most 1024 on a side) and kept by name; the view is built again when it is in. */
     _loadImage(name) {
-        if (!name || this._images[name] || (this._loadingImages || (this._loadingImages = new Set())).has(name)) return;
+        if (!name || this._images[name]) return Promise.resolve(!!this._images[name]);
+        const jobs=this._loadingImages||(this._loadingImages=new Map());
+        if(jobs.has(name))return jobs.get(name);
         const folder = this._picturesFolder(), url = folder && window.RRAssetFiles ? window.RRAssetFiles.imageUrlFor(folder, name) : '';
-        if (!url) return;
-        this._loadingImages.add(name);
-        const img = new Image();
-        img.onload = () => {
-            this._loadingImages.delete(name);
-            const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
-            const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
-            const c = document.createElement('canvas');
-            c.width = w; c.height = h;
-            const g = c.getContext('2d');
-            g.drawImage(img, 0, 0, w, h);
-            this._images[name] = { width: w, height: h, data: new Uint8Array(g.getImageData(0, 0, w, h).data.buffer), version: Date.now() };
-            this._renderPanel();
-            this._queueRebuild();
-        };
-        img.onerror = () => { this._loadingImages.delete(name); this._status(this._t('{name} could not be opened.', { name }), 'error'); };
-        img.src = url;
+        if (!url) return Promise.resolve(false);
+        const project=this._project()?.path;
+        const job=new Promise(resolve=>{
+            const img=new Image();let timer,settled=false;
+            const finish=ok=>{if(settled)return;settled=true;clearTimeout(timer);jobs.delete(name);resolve(ok);};
+            img.onload=()=>{
+                if(settled)return;
+                if(this._project()?.path!==project||this._loadingImages!==jobs){finish(false);return;}
+                try {
+                    const scale=Math.min(1,1024/Math.max(img.naturalWidth,img.naturalHeight));
+                    const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));
+                    const c=document.createElement('canvas');c.width=w;c.height=h;
+                    const g=c.getContext('2d');g.drawImage(img,0,0,w,h);
+                    this._images[name]={width:w,height:h,data:new Uint8Array(g.getImageData(0,0,w,h).data.buffer),version:Date.now()};
+                    finish(true);if(this._view&&this.root?.isConnected){this._renderPanel();this._queueRebuild();}
+                } catch(error){img.onerror();}
+            };
+            img.onerror=()=>{if(settled)return;if(this._project()?.path===project&&this._loadingImages===jobs)this._status(this._t('{name} could not be opened.',{name}),'error');finish(false);};
+            timer=setTimeout(()=>{img.onerror();img.src='';},15000);img.src=url;
+        });
+        jobs.set(name,job);return job;
     }
 
     // ── files ──────────────────────────────────────────────────────────────
@@ -1197,6 +1288,9 @@ class PropBuilder {
             const recipe = JSON.parse(JSON.stringify(this.recipe));
             const kind = RRPropModel.kindOf(recipe);
             await kind.prepare?.();
+            const item=recipe.garment||recipe.accessory;
+            const pictures=[item?.pattern==='emblem'?item.emblemPicture:'',item?.mark?.shape==='picture'?item.mark.picture:''].filter(Boolean);
+            for(const name of pictures)if(!await this._loadImage(name))throw new Error('Emblem picture could not be loaded.');
             const stillCurrent = this._view && JSON.stringify(this.recipe) === JSON.stringify(recipe);
             if (kind.prepare && stillCurrent) this._rebuild();
             const thumb = stillCurrent ? this._thumbnail() : null;

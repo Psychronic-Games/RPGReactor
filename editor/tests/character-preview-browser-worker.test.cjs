@@ -78,7 +78,7 @@ test('classic worker entry sequences asynchronous asset loading before off-page 
     const outfit = { key: 'carol', picture: 'carol.jpg' };
     const self = {
         location: { href: 'https://example.test/src/forge/Character3D/CharacterPreviewBrowserEntry.js' },
-        RRHumanBody: { loadPack(url) { calls.push(['pack', url]); return new Promise(resolve => { resolvePack = resolve; }); } },
+        RRHumanBody: { async prepareAuthoring(pack,url){calls.push(['authoring',url]);return pack;}, loadPack(url) { calls.push(['pack', url]); return new Promise(resolve => { resolvePack = resolve; }); } },
         RRCharacterClothes: { async preload(pack, url) { calls.push(['clothes', url]); } },
         RRCharacterWardrobe: { BY_ID: new Map([['ss_carol_uniform', { transfer: 'carol' }]]), PRESETS: [] },
         RRCharacterOutfitTransfer: { BUILT_IN: ['carol'], store: { outfits: new Map(), pictures: new Map(), tints: new Map() },
@@ -92,7 +92,7 @@ test('classic worker entry sequences asynchronous asset loading before off-page 
     const realm = vm.createContext({ self, importScripts: (...urls) => imports.push(...urls), URL, Map, Set, ArrayBuffer, Float32Array, Uint16Array, Uint8Array, DataView,
         OffscreenCanvas: function() {}, createImageBitmap() {}, performance });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/forge/Character3D/CharacterPreviewBrowserEntry.js'), 'utf8'), realm);
-    assert.equal(imports[0], '../../utils/QuadricDecimator.js'); assert.equal(imports.at(-1), 'CharacterModel.js');
+    assert.equal(imports[0], '../../../runtime/reactor_3d_motions.js'); assert.ok(imports.indexOf('../../utils/QuadricDecimator.js') < imports.indexOf('CharacterSimplify.js')); assert.ok(imports.indexOf('../Props/PropPaint.js')<imports.indexOf('CharacterMarks.js')&&imports.indexOf('CharacterMarks.js')<imports.indexOf('CharacterAtlas.js'),'cloth print dependencies load in the browser worker'); assert.equal(imports.at(-1), 'CharacterModel.js');
     self.onmessage({ data: { type: 'context', context: { eyeSource: { width: 42 }, emblemPictures: new Map([['logo', {}]]), transfers: [{ key: 'carol', id: 'ss_carol_uniform', outfit, picture: { data: pixels } }] } } });
     self.onmessage({ data: { type: 'build', id: 1, recipe: { name: 'old', outfit: [{ id: 'ss_carol_uniform' }] } } });
     self.onmessage({ data: { type: 'context', context: { eyeSource: { width: 43 } } } });
@@ -129,7 +129,7 @@ test('browser static thumbnails reduce eyes and transferred pictures without alt
     const messages = [], picture = { width: 512, height: 256, data: new Uint8Array(512 * 256 * 4).fill(255) };
     const self = { location: { href: 'https://example.test/CharacterPreviewBrowserEntry.js' },
         RRCharacterPreviewTextures: require('../src/forge/Character3D/CharacterPreviewTextures.js'),
-        RRHumanBody: { async loadPack() { return {}; } }, RRCharacterClothes: { async preload() {} },
+        RRHumanBody: { async prepareAuthoring(pack){return pack;}, async loadPack() { return {}; } }, RRCharacterClothes: { async preload() {} },
         RRCharacterWardrobe: { BY_ID: new Map() },
         RRCharacterOutfitTransfer: { BUILT_IN: [], store: { outfits: new Map(), pictures: new Map(), tints: new Map() } },
         RRCharacterModel: { build(pack, recipe, cache, options) {

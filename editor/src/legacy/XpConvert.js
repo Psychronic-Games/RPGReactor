@@ -159,7 +159,12 @@
     const WEATHER = ['none', 'rain', 'storm', 'snow'];
 
     /** An XP character sheet's name in the project: every XP sheet is one character, four frames a row. */
-    const characterName = (name) => (name ? `$${name}[f4]` : '');
+    const characterName = (name) => {
+        if (!name) return '';
+        const parts = name.replace(/\\/g, '/').split('/');
+        parts.push('$' + parts.pop() + '[f4]');
+        return parts.join('/');
+    };
 
     function moveCommand(c, notes, ruby) {
         const code = num(c.code);

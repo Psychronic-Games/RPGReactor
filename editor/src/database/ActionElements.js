@@ -187,13 +187,14 @@ class ActionElements {
         // each name: a checked row wears the accent tint the shim gives its
         // active option, and hovering tints the rest.
         const rect = button.getBoundingClientRect();
-        const spaceBelow = window.innerHeight - rect.bottom - 10;
+        const view = button.ownerDocument?.defaultView || window;
+        const spaceBelow = view.innerHeight - rect.bottom - 10;
         const spaceAbove = rect.top - 10;
         const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
         const maxH = Math.min(360, Math.max(140, openUp ? spaceAbove : spaceBelow));
         const panel = document.createElement('div');
         panel.className = 'rr-shim-popup rr-elements-popover';
-        panel.style.cssText = `position:fixed;left:${rect.left}px;${openUp ? `bottom:${window.innerHeight - rect.top + 2}px;` : `top:${rect.bottom + 2}px;`}`
+        panel.style.cssText = `position:fixed;left:${rect.left}px;${openUp ? `bottom:${view.innerHeight - rect.top + 2}px;` : `top:${rect.bottom + 2}px;`}`
             + `min-width:${Math.max(rect.width, 200)}px;max-height:${maxH}px;display:flex;flex-direction:column;`
             + 'background:var(--color-bg-panel);border:1px solid var(--color-accent-border-strong);border-radius:var(--radius-md);'
             + 'z-index:100000;box-shadow:var(--shadow-popup);font-family:inherit;';

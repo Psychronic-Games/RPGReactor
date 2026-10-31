@@ -72,7 +72,7 @@ test('switches and variables map to 121 and 122, with script operands where MZ h
     assert.deepEqual(list[8].parameters, [2, 2, 0, 3, 5, -1, 0], 'the player x (MZ game data 5, a character)');
     assert.deepEqual(list[9].parameters, [2, 2, 0, 3, 7, 2], 'gold');
     assert.equal(list[10].parameters[3], 4, 'an equipment id is a script operand');
-    assert.match(list[11].parameters[0], /const t = \$gameVariables\.value\(4\)/);
+    assert.match(list[11].parameters[0], /this\.operateVariable\(\$gameVariables\.value\(4\), 1, 3\)/);
     assert.deepEqual(c.notes, { toggleSwitch: 1, indirectSwitch: 1, indirectVariable: 1 });
 });
 

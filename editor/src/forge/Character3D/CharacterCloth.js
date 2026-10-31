@@ -878,12 +878,13 @@
         });
         return geometry=>{
             for(const [pi,refs]of attachments){
-                const p=result.parts[pi],positions=geometry?Float32Array.from(p.positions):p.positions,roots=geometry?Float32Array.from(p.sewnRoots):p.sewnRoots,joints=Uint8Array.from(p.joints),weights=Float32Array.from(p.weights);
+                // A cape lining follows the final settled surface as well as its bones.
+                const p=result.parts[pi],followGeometry=geometry||p.clothLining,positions=followGeometry?Float32Array.from(p.positions):p.positions,roots=followGeometry?Float32Array.from(p.sewnRoots):p.sewnRoots,joints=Uint8Array.from(p.joints),weights=Float32Array.from(p.weights);
                 for(const [v,from,index,dx,dy,dz]of refs){const source=result.parts[from];
-                    if(geometry){positions[v*3]=source.positions[index*3]+dx;positions[v*3+1]=source.positions[index*3+1]+dy;positions[v*3+2]=source.positions[index*3+2]+dz;for(let k=0;k<3;k++)roots[v*3+k]=source.positions[index*3+k];}
+                    if(followGeometry){positions[v*3]=source.positions[index*3]+dx;positions[v*3+1]=source.positions[index*3+1]+dy;positions[v*3+2]=source.positions[index*3+2]+dz;for(let k=0;k<3;k++)roots[v*3+k]=source.positions[index*3+k];}
                     for(let k=0;k<4;k++){joints[v*4+k]=source.joints[index*4+k];weights[v*4+k]=source.weights[index*4+k];}
                 }
-                result.parts[pi]=Object.assign({},p,{positions,sewnRoots:roots,joints,weights,...(geometry?{normals:normalsOf(positions,p.index)}:{})});
+                result.parts[pi]=Object.assign({},p,{positions,sewnRoots:roots,joints,weights,...(followGeometry?{normals:normalsOf(positions,p.index)}:{})});
             }
         };
     }

@@ -344,7 +344,7 @@
     if (Model && Model.register) Model.register({ id: 'sword', label: 'Sword', normalize, build, random, randomScopes: [Rand.SCOPES.all, Rand.SCOPES.shape, Rand.SCOPES.details, Rand.SCOPES.colors] });
     if (Catalog) {
         const icon = { katana: 'curved', scimitar: 'curved', falchion: 'curved', dagger: 'dagger', machete: 'curved' };
-        for (const [id, label] of PRESETS) Catalog.add({ id: 'sword-' + id, category: id === 'energy' ? 'scifi' : 'swords', label, icon: icon[id] || 'sword', kind: 'sword', keywords: 'blade weapon melee ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
+        for (const [id, label] of PRESETS) Catalog.add({ id: 'sword-' + id, category: 'swords', label, icon: icon[id] || 'sword', kind: 'sword', keywords: (id==='energy'?'sci-fi energy science fiction ':'')+'blade weapon melee ' + id, start: () => normalize({ preset: id }), matches: r => r.preset === id });
         Catalog.ui('sword', {
             placeholder: 'Sword',
             tabs: [['blade', 'Blade'], ['hilt', 'Hilt'], ['look', 'Look']],

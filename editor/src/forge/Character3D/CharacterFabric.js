@@ -156,8 +156,8 @@
         suiting: { span: 0.0128, size: 256, normalScale: 0.8, cavity: 6, occlusion: 0.55, sheen: [0.4, 0.75],
             sample(u, v, s) {
                 const wale = twill(u, v, 16), heather = pnoise(u, v, 64, 64, 15);
-                s.h = 0.03 * wale + 0.01 * heather;
-                s.r = 0.8 + 0.05 * (heather - 0.5);
+                s.h = 0.07 * wale + 0.018 * heather + .025 * pnoise(u,v,4,8,115);
+                s.r = 0.82 + 0.12 * (heather - 0.5);
             } },
         // Satin: long smooth floats along the warp; its shine breaks into soft streaks along them.
         satin: { span: 0.0256, size: 256, normalScale: 0.7, cavity: 2, occlusion: 0.2, sheen: [0.6, 0.35],
@@ -295,7 +295,7 @@
                 s.r = 0.88 + 0.05 * seam;
             } },
         // Riveted mail: rows of rings, every other row offset by half a ring, each ring over the row below it.
-        mail: { span: [0.056, 0.044], size: 512, normalScale: 1, cavity: 0.35, occlusion: 0.9, metal: true,
+        mail: { span: [0.028, 0.022], size: 512, normalScale: 1, cavity: 0.35, occlusion: 0.9, metal: true,
             sample(u, v, s) {
                 const X = u * 56, Y = v * 44, row = Math.floor(Y / 11);
                 let best = -1.4, ring = false;
@@ -310,7 +310,7 @@
                     }
                 }
                 s.h = best;
-                s.r = ring ? 0.34 : 0.9;
+                s.r = ring ? 0.49 : 0.96;
                 s.m = ring ? 1 : 0;
                 if (!ring) s.ao = 0.35;
             } }
@@ -323,13 +323,14 @@
         rib: ['sweater', 'beanie', 'cardigan', 'socks'],
         suiting: ['suitjacket', 'tailcoat', 'pencilSkirt', 'pleatedSkirt', 'skirt'],
         felt: ['robe', 'hood', 'kilt', 'gown'],
-        poplin: ['shirt'],
+        poplin: ['shirt','circuitShirt'],
+        canvas: ['cargoTrousers','tacticalTrousers','coveralls','apron','fieldJacket','fieldCoat','duster'],
         ripstop: ['starshipUniform', 'officerJacket', 'explorerSuit', 'tacvest', 'swimTrunks', 'techJacket', 'techSmock', 'cyberJoggers', 'cyberBomber'],
         padded: ['evaSuit', 'spacesuit']
     };
     /** The Cyberpunk garments' own technical cloths, for their soft materials. */
     const CYBER_CLOTH = new Map([['techJacket', 'techShell'], ['techSmock', 'techShell'], ['cyberJoggers', 'cordura'], ['cyberBomber', 'baffled'],
-        ['compressionSuit', 'hexKnit'], ['cyberTrench', 'coated'], ['smartShirt', 'ventMesh'], ['utilityRig', 'cordura']]);
+        ['compressionSuit', 'hexKnit'], ['cyberTrench', 'coated'], ['smartShirt', 'ventMesh'], ['honeycombShirt', 'hexKnit'], ['utilityRig', 'cordura']]);
     const CYBER_SOFT = new Set(['cloth', 'canvas', 'rubber', 'knit', 'denim', undefined]);
     const CLOTH_OF = new Map(Object.entries(GARMENT_CLOTH).flatMap(([kind, ids]) => ids.map(id => [id, kind])));
     const SUEDE = new Set(['vest', 'sash', 'loincloth']);
@@ -405,8 +406,11 @@
             orm[i * 4 + 2] = Math.round(255 * clamp01(metal[i]));
             orm[i * 4 + 3] = 255;
         }
+        let lo=Infinity,hi=-Infinity;for(const h of height){lo=Math.min(lo,h);hi=Math.max(hi,h);}
+        const textile=!!DYE_PROFILES[kind],albedo=new Uint8Array(n*4);
+        for(let i=0;i<n;i++){const grain=Math.max(0,Math.min(255,Math.round(textile?238+15*(height[i]-lo)/Math.max(.001,hi-lo):242+7*Math.tanh(height[i]*2))));albedo.set([grain,grain,grain,255],i*4);}
         const out = {
-            kind, span, size: W,
+            kind, span, size: W,albedo:{name:'fabric-'+kind+'-albedo.png',width:W,height:H,data:albedo,repeat:true},
             normal: { name: 'fabric-' + kind + '-normal.png', width: W, height: H, data: normal, repeat: true },
             orm: { name: 'fabric-' + kind + '-orm.png', width: W, height: H, data: orm, repeat: true },
             normalScale: def.normalScale ?? 1, roughness: top, mean: sum / n, metal: !!def.metal,
@@ -447,6 +451,32 @@
         return out;
     }
 
+    /** Project complete faces, splitting shared vertices where the cloth chart changes.
+     * Choosing an axis separately at each corner stretches the weave across shoulders
+     * and pocket rims. All vertex attributes, including skin and sewing anchors, follow
+     * the split; the triangle count and the primary painted UVs stay intact. */
+    function surfaceUvs(part, span, existing=null) {
+        const P=part.positions,I=part.index,count=P.length/3;
+        if(!I)return boxUvs(P,part.normals,span);
+        const attrs=Object.entries(part).filter(([key,value])=>key!=='index'&&ArrayBuffer.isView(value)&&value.length>=count&&value.length%count===0&&value.length/count<=16);
+        const source=[],uv=[],index=new Uint32Array(I.length),vertices=new Map();
+        for(let t=0;t<I.length;t+=3){
+            const [a,b,c]=[I[t]*3,I[t+1]*3,I[t+2]*3],u=[0,1,2].map(k=>P[b+k]-P[a+k]),v=[0,1,2].map(k=>P[c+k]-P[a+k]);
+            const n=[Math.abs(u[1]*v[2]-u[2]*v[1]),Math.abs(u[2]*v[0]-u[0]*v[2]),Math.abs(u[0]*v[1]-u[1]*v[0])],axis=n.indexOf(Math.max(...n));
+            const axes=axis===0?[2,1]:axis===1?[0,2]:[0,1];
+            const ids=[I[t],I[t+1],I[t+2]],U=existing;
+            const keep=U&&Math.abs((U[ids[1]*2]-U[ids[0]*2])*(U[ids[2]*2+1]-U[ids[0]*2+1])-(U[ids[2]*2]-U[ids[0]*2])*(U[ids[1]*2+1]-U[ids[0]*2+1]))>1e-10;
+            for(let j=0;j<3;j++){
+                const old=I[t+j],key=old+':'+(keep?'keep':axis);let next=vertices.get(key);
+                if(next===undefined){next=source.length;vertices.set(key,next);source.push(old);uv.push(keep?U[old*2]:P[old*3+axes[0]]/span[0],keep?U[old*2+1]:-P[old*3+axes[1]]/span[1]);}
+                index[t+j]=next;
+            }
+        }
+        for(const [key,value]of attrs){const width=value.length/count,mapped=new value.constructor(source.length*width);for(let v=0;v<source.length;v++)for(let k=0;k<width;k++)mapped[v*width+k]=value[source[v]*width+k];part[key]=mapped;}
+        part.index=index;
+        return Float32Array.from(uv);
+    }
+
     /**
      * A part made to show `kind`'s tile. `textures`: a name-keyed object or an
      * array the tile's pictures are added to. `options`: { uvs1 (already in
@@ -458,7 +488,11 @@
         const t = tile(kind);
         if (!t || !part) return part;
         const o = options || {};
-        part.uvs1 = o.uvs1 || part.uvs1 || boxUvs(part.positions, part.normals, t.span);
+        const uv=o.uvs1||part.uvs1;
+        let repair=!uv;
+        if(uv&&part.index)for(let i=0;i<part.index.length;i+=3){const [a,b,c]=[part.index[i],part.index[i+1],part.index[i+2]];if(Math.abs((uv[b*2]-uv[a*2])*(uv[c*2+1]-uv[a*2+1])-(uv[c*2]-uv[a*2])*(uv[b*2+1]-uv[a*2+1]))<1e-10){repair=true;break;}}
+        part.uvs1=repair?surfaceUvs(part,t.span,uv):uv;
+        if(o.albedo&&!part.texture&&part.colors){part.texture=t.albedo.name;part.uvs=Float32Array.from(part.uvs1);}
         part.fabric = kind;
         part.normalTexture = t.normal.name; part.normalTexCoord = 1; part.normalScale = o.normalScale ?? t.normalScale;
         part.metallicRoughnessTexture = t.orm.name; part.metallicRoughnessTexCoord = 1;
@@ -467,11 +501,31 @@
         // (to the tile's own level, or round the level asked for).
         part.roughness = Math.min(1, o.roughness != null ? t.roughness * o.roughness / Math.max(0.05, t.mean) : t.roughness);
         if (t.sheen) part.sheen = Object.assign({ strength: t.sheen.strength, roughness: t.sheen.roughness }, o.sheenTexture ? { texture: o.sheenTexture } : {});
-        for (const pic of [t.normal, t.orm]) {
+        for (const pic of [t.normal, t.orm,...(part.texture===t.albedo.name?[t.albedo]:[])]) {
             if (Array.isArray(textures)) { if (!textures.some(x => x.name === pic.name)) textures.push(pic); }
             else if (textures) textures[pic.name] = pic;
         }
         return part;
+    }
+
+    /** Dye carried by yarn bundles, filtered to the atlas footprint. This is
+     * deliberately broader than the weave: no unfiltered thread grid is baked
+     * into a garment's color map. Coordinates are shared across every UV chart. */
+    const DYE_PROFILES={denim:[.16,340,48],jersey:[.12,330,270],rib:[.10,240,200],
+            canvas:[.17,240,300],poplin:[.105,340,280],felt:[.18,230,240],
+            suiting:[.16,300,260],ripstop:[.12,280,280],quilted:[.13,280,280],
+            techShell:[.12,260,310],cordura:[.18,270,270],baffled:[.08,310,240],
+            hexKnit:[.12,280,260],ventMesh:[.12,300,300],padded:[.10,270,270],
+            suede:[.17,300,300],leather:[.12,280,280]};
+    const dyeNoise=(x,y)=>{const ix=Math.floor(x),iy=Math.floor(y),fx=fract(x),fy=fract(y),a=fx*fx*(3-2*fx),b=fy*fy*(3-2*fy);
+        return (1-b)*((1-a)*ihash(ix,iy,107)+a*ihash(ix+1,iy,107))+b*((1-a)*ihash(ix,iy+1,107)+a*ihash(ix+1,iy+1,107));};
+    function dye(kind,R,px=0) {
+        const q=DYE_PROFILES[kind];if(!q||!R)return 1;
+        const u=R[0]+R[2]*.6,v=R[1],fade=1-smoothstep(.45,1.3,px*Math.max(q[1],q[2]));
+        // Non-periodic garment-space noise avoids a repeating printed/checker look.
+        const fine=dyeNoise(u*q[1],v*q[2])-.5,slub=dyeNoise(u*110,v*140)-.5;
+        const slubFade=1-smoothstep(.45,1.3,px*140);
+        return 1+q[0]*(fine*fade+slub*.45*slubFade);
     }
 
     /** The tile's maps for another builder (armor plates): { normal, orm, span, roughness, metal }. */
@@ -480,7 +534,7 @@
         return t ? { normal: t.normal, orm: t.orm, span: t.span, roughness: t.roughness, mean: t.mean, metal: t.metal, normalScale: t.normalScale } : null;
     }
 
-    const api = { KINDS, GARMENT_CLOTH, kindFor, tile, maps, applyTo, boxUvs, pnoise, pcells };
+    const api = { KINDS, GARMENT_CLOTH, kindFor, tile, maps, applyTo, boxUvs, surfaceUvs, pnoise, pcells, dye };
     root.RRCharacterFabric = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
