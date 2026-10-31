@@ -23,7 +23,7 @@ One bullet per area, holding its latest check. A bullet is replaced when its are
 - **User Interfaces in the game** (runtime 20261015.3): a copy of the tester's AbyssGazes with all 17 roles bound, on Linux and under Wine as Windows, 33 of 33 by real keys: every scene replacement used for its job (save, load, buy, rename, equip), the Classic HUD and Victory, the Tactical, Action and First Person HUDs, and custom interfaces in play (a map event's terminal with Text Input, a called interface, an overlay HUD on a switch). Editor: Angle drawn, picked and resized as in the game; the Use as notice binds by a real click. Not checked: touch on a phone, real Windows hardware.
 - **Editor map loading** (2026-10-23): North Haven rebuilds in 0.64 s, down from 1.42, on the i5 and RTX 3060; maps 1 and 5 not yet rechecked on the RTX after the driver fix. [Limits](PERFORMANCE.md).
 
-- **Forge** (2026-10-30): Preview 61: 152 clothing defaults, 1,216 captures and 152 GLB reloads; richer cloth and repaired seams. Reload/re-export garments. [Evidence and limits](CHARACTER-QUALITY.md), [props](PROP-BUILDER.md).
+- **Forge** (2026-10-30): Preview 62 adds eight Wasteland vehicles and a seven-seat minivan; 291 prop exports checked. Regenerate baked models. [Props](PROP-BUILDER.md), [clothing](CHARACTER-QUALITY.md).
 - **0.99.4 presentation:** metal, interpolation, uncapped rendering and F2 checks pass; native controlled clocks at 50/60/144/180 Hz preserve game speed. Auto uses a 60 FPS stability floor. Motorcycle FOV and crossing shadows have native coverage. Border captures bind safe inputs; 85 focused tests and the native westbound reproducer pass without GL warnings. Physical throughput remains unmeasured; evidence is in [PERFORMANCE.md](PERFORMANCE.md).
 
 ## What is built
@@ -72,7 +72,7 @@ Each system has a guide; the guide is the authority on its behaviour and limits.
 
 The one list of open threads. Remove an item when it is done; record the doing in the changelog.
 
-- **Builder quality** (2026-10-30, Preview 56): visual acceptance open. Clothing and named props have native review captures; extreme cloth/armor contact, imported art, hair and save-time budgets still need work. Chibi appearance remains a priority. [Characters](CHARACTER-QUALITY.md), [props](PROP-BUILDER.md).
+- **Builder quality** (2026-10-30, Preview 62): visual acceptance open. Clothing and named props have native review captures; extreme cloth/armor contact, imported art, hair and save-time budgets still need work. Chibi appearance remains a priority. [Characters](CHARACTER-QUALITY.md), [props](PROP-BUILDER.md).
 - **Waiting on the owner:** [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md), the one list, each item with a recommendation.
 - **Neighbors:** a map three maps out still appears at a crossing. The crossing frame still misses about one refresh (25 to 40 ms): the new map scene built on every transfer. Keeping the map scene across a seamless crossing is the next step ([PERFORMANCE.md](PERFORMANCE.md) › Border crossing).
 - **Cutaway look:** the game's cutaway shows the stamped Cottage's cut walls plain grey; the editor's Floors cut shows stone.

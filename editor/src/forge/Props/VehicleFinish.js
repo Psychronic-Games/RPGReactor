@@ -80,7 +80,7 @@
         for(const [meshes,name,color,role]of [[steel,'Seated panel fasteners','#9ca5a8','metal'],[recesses,'Fastener hex sockets','#20272b','dark']])if(meshes.length){const p=CM.merge(meshes);CM.skin(p,0);parts.push({...p,name,color,surfaceRole:role,roughness:.38,metalness:role==='metal'?.80:0});}
     }
     function colorSurface(p,r){
-        const own=lin(p.color),dirt=lin('#625345'),primer=lin('#5c6468'),bare=lin('#8d979b'),b=bounds(p),extent=b.hi.map((v,k)=>v-b.lo[k]),P=p.positions,N=p.normals,C=new Float32Array(P.length),painted=['paint','secondary','armor','cargo'].includes(p.surfaceRole);
+        const own=lin(p.color),dirt=lin('#625345'),primer=lin('#5c6468'),bare=lin('#8d979b'),oxide=lin('#864421'),b=bounds(p),extent=b.hi.map((v,k)=>v-b.lo[k]),P=p.positions,N=p.normals,C=new Float32Array(P.length),painted=['paint','secondary','armor','cargo'].includes(p.surfaceRole);
         const welded=new Map(),key=i=>[0,1,2].map(k=>Math.round(P[i*3+k]*1e4)).join(',');
         if(painted)for(let i=0;i<P.length/3;i++){const k=key(i);let v=welded.get(k);if(!v){v=[0,0,0,0];welded.set(k,v);}for(let a=0;a<3;a++)v[a]+=N[i*3+a];v[3]++;}
         for(let i=0;i<P.length/3;i++){
@@ -91,6 +91,8 @@
             for(let c=0;c<3;c++){
                 let value=base[c]*(1-r.wear*.05*(.3+blotch));
                 value=mix(value,mix(primer[c],bare[c],a),scuff*.76);
+                const rust=painted?(r.corrosion||0)*clamp((blotch-.37)*1.7+edge*.32):0;
+                value=mix(value,oxide[c]*(.7+a*.5),rust*.75);
                 value=mix(value,dirt[c]*.55,grime*.62);
                 C[i*3+c]=value;
             }
@@ -99,7 +101,7 @@
     }
     const coatingKey=r=>JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!['markings','livery','windowOpacity','seatColor','trim','glass','insignia'].includes(k))));
     function apply(parts,textures,r,cache={},options={}){
-        const look=new Set(['paint','secondary','trim','accent','glass','roughness','finish','wear','grime','surfaceSeed','livery','markings','windowOpacity','seatColor','insignia']),geometryKey=JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!look.has(k))));
+        const look=new Set(['paint','secondary','trim','accent','glass','roughness','finish','wear','grime','corrosion','surfaceSeed','livery','markings','windowOpacity','seatColor','insignia']),geometryKey=JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k])=>!look.has(k))));
         if(cache.vehicleGeometry?.key!==geometryKey)cache.vehicleGeometry={key:geometryKey,parts:new Map()};
         // A window, seat or marking edit can reuse the full coating even
         // while its input is being dragged; only changed paint needs rebaking.
@@ -159,6 +161,7 @@
      * grime in the cavities and wear on what stands proud. Charts get a
      * bounded atlas; small fittings retain shared micro maps. */
     function bakePanels(parts,textures,r,cache,size){
+        const oxide=lin('#884623');
         const charts=[],chosen=[],slotNames=['vehicle-coating-albedo.png','vehicle-coating-normal.png','vehicle-coating-surface.png'];
         for(const p of parts){
             if(!['paint','secondary','armor','cargo'].includes(p.surfaceRole))continue;
@@ -237,14 +240,15 @@
                     const variation=broad(px*.11+pz*.07,py*.10+pz*.037),streak=stain(px*.27+pz*.19,py*.025),low=clamp(1-py/(r.height*.72));
                     const cav=blur[t]-H[t],concave=clamp(cav/.0012),convex=clamp(-cav/.0010),rim=clamp(1-(edge[t]-1)/3);
                     const dust=clamp(r.grime*(clamp(low*.75+(streak-.40)*1.3)*.72+concave*.65)),worn=Math.max(rim*.8,convex),chips=r.wear*worn*clamp((hash(Math.floor(px*200+pz*71),Math.floor(py*220),r.surfaceSeed)-.52)*3),pigment=(1-r.wear*(.12+variation*.24))*(1+f.T[t]),gray=linear(m.albedo.data[si]/255);
+                    const rust=(r.corrosion||0)*clamp((streak-.36)*2.1+rim*.38+concave*.22);
                     const color=[CR[t],CG[t],CB[t]],luma=color[0]*.21+color[1]*.72+color[2]*.07,inkC=luma>.30?inkDark:inkLight,inkA=f.S[t]*.92*(1-r.wear*.5*clamp((streak+variation)-.6));
-                    for(let k=0;k<3;k++){let v=color[k]*gray*pigment;v=mix(v,inkC[k],inkA);v*=f.A[t];v=mix(v,linear(.47+k*.025),chips*.80);v=mix(v,rgbLinear[k]*(.55+streak*.35),dust);albedo[out+k]=sRGB(v);}
+                    for(let k=0;k<3;k++){let v=color[k]*gray*pigment;v=mix(v,inkC[k],inkA);v*=f.A[t];v=mix(v,linear(.47+k*.025),chips*.80);v=mix(v,oxide[k]*(.65+variation*.7),rust*.85);v=mix(v,rgbLinear[k]*(.55+streak*.35),dust);albedo[out+k]=sRGB(v);}
                     albedo[out+3]=255;
                     const gx=x>0&&x<q.w-1&&f.cover[t-1]&&f.cover[t+1]?(H[t+1]-H[t-1])/(2*f.m0):0,gy=y>0&&y<q.h-1&&f.cover[t-q.w]&&f.cover[t+q.w]?(H[t+q.w]-H[t-q.w])/(2*f.m1):0;
                     const mx=(m.normal.data[si]-128)/127*microScale,my=(m.normal.data[si+1]-128)/127*microScale,nx=Math.max(-2.5,Math.min(2.5,-gx))+mx,ny=Math.max(-2.5,Math.min(2.5,-gy))+my,l=Math.hypot(nx,ny,1);
                     normal[out]=Math.round(128+nx/l*127);normal[out+1]=Math.round(128+ny/l*127);normal[out+2]=Math.round(128+127/l);normal[out+3]=255;
-                    const roughness=Math.max(.16,Math.min(.97,baseRough+r.wear*.14+dust*.30+(variation-.5)*r.wear*.20+f.R[t]-inkA*.05));
-                    surface.set([255,Math.round(clamp(roughness*m.surface.data[si+1]/255)*255),Math.round(mix(metal,.80,Math.max(chips,f.M[t]*r.wear))*255),255],out);
+                    const roughness=Math.max(.16,Math.min(.97,baseRough+r.wear*.14+dust*.30+rust*.25+(variation-.5)*r.wear*.20+f.R[t]-inkA*.05));
+                    surface.set([255,Math.round(clamp(roughness*m.surface.data[si+1]/255)*255),Math.round(mix(mix(metal,.80,Math.max(chips,f.M[t]*r.wear)),.06,rust)*255),255],out);
                 }
             }
             resources=[albedo,normal,surface].map((data,i)=>({name:slotNames[i],width,height,data}));cache.vehicleCoating={key,size,layout:JSON.stringify(layout),resources};
@@ -345,6 +349,10 @@
             addSpec('Turbine casings',CM.frame([x,H*.45+R,-L*.235],[1,0,0],[0,0,-1]),R*1.45,L*.12,'equipment',R*.7);
             const wings=find('Swept airfoil wings');if(wings){const b=bounds(wings);addSpec(wings.name,CM.frame([s*W*.30,H*.49,-L*.06],[1,0,0],[0,0,-1]),W*.12,L*.16,'hazard',H*.12);}
         }
+        if(r.form==='scrapBike')for(const side of [-1,1])place('Donor fuel tank',0,side,'side',.65,.65);
+        if(r.form==='scrapBuggy')for(const p of parts.filter(p=>/^Replaceable bumper armor /.test(p.name)))place(p.name,2,1,'side',.68,.62);
+        if(r.form==='minivan')for(const side of [-1,1])place('Minivan sliding door lower panels',0,side,'side',.78,.58);
+        if(r.form.startsWith('scrap')||r.form==='warBus')for(const p of parts.filter(p=>/^Donor door panels |^Pannier salvage cases$/.test(p.name))){const b=bounds(p);place(p.name,0,b.mid[0]>0?1:-1,'side',.70,.62);}
         return specs;
     }
     /** Where the insignia goes: under the name on each door (or fuel tank),

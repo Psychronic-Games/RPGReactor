@@ -1,0 +1,4104 @@
+{
+  "date": "2026-10-30",
+  "preview": 62,
+  "runtime": "20261030.3",
+  "scope": "282 pre-existing visible non-garment catalog entries; nine added vehicles",
+  "baseline": {
+    "entries": 282,
+    "views": [
+      "front",
+      "back",
+      "inside"
+    ],
+    "manualReview": "Every front contact; targeted back/interior views. Picture entries use a generated QA silhouette fixture."
+  },
+  "final": {
+    "state": "complete",
+    "entries": 291,
+    "captures": 1063,
+    "savedAndReopened": 291,
+    "gameReaderReloads": 291,
+    "occupiedVehicleReloads": 4,
+    "adultHeightMeters": 1.75,
+    "occupiedSeats": {
+      "minivan": 7,
+      "warBus": 12,
+      "scrapPickup": 2,
+      "scrapInterceptor": 2
+    },
+    "focusedCloseoutTests": 39,
+    "characterBudgetRatchet": "passed without raising ceilings",
+    "validationRuns": [
+      {
+        "name": "game-reader-defaults",
+        "exit": 0,
+        "signal": null,
+        "milliseconds": 7693,
+        "log": "scratchpad/prop-audit-wasteland-20261030/game-reader-defaults.log"
+      },
+      {
+        "name": "game-reader-occupied",
+        "exit": 0,
+        "signal": null,
+        "milliseconds": 861,
+        "log": "scratchpad/prop-audit-wasteland-20261030/game-reader-occupied.log"
+      },
+      {
+        "name": "character-budget",
+        "exit": 0,
+        "signal": null,
+        "milliseconds": 121370,
+        "log": "scratchpad/prop-audit-wasteland-20261030/character-budget.log"
+      },
+      {
+        "name": "focused-closeout",
+        "exit": 1,
+        "signal": null,
+        "milliseconds": 30535,
+        "log": "scratchpad/prop-audit-wasteland-20261030/focused-closeout.log",
+        "supersededBy": "focused-closeout-final",
+        "resolution": "Corrected the new test setup to use the hafted builder normalization API and load Three.js ShapeUtils. The final 39-check run passes."
+      },
+      {
+        "name": "game-reader-final",
+        "exit": 0,
+        "signal": null,
+        "milliseconds": 6505,
+        "log": "scratchpad/prop-audit-wasteland-20261030/game-reader-final.log"
+      },
+      {
+        "name": "focused-closeout-final",
+        "exit": 0,
+        "signal": null,
+        "milliseconds": 29844,
+        "log": "scratchpad/prop-audit-wasteland-20261030/focused-closeout-final.log"
+      }
+    ],
+    "staticChecks": {
+      "syntaxFiles": 16,
+      "documentationTests": 6,
+      "whitespace": "passed",
+      "log": "scratchpad/prop-audit-wasteland-20261030/static-closeout.log"
+    }
+  },
+  "newVehicles": [
+    "minivan",
+    "scrapBuggy",
+    "scrapInterceptor",
+    "scrapPickup",
+    "scrapHauler",
+    "scrapTanker",
+    "warBus",
+    "scrapBike",
+    "scrapCrawler"
+  ],
+  "evidenceRoot": "scratchpad/prop-audit-wasteland-20261030",
+  "sources": {
+    "editor/src/forge/Character3D/Character3DBuilder.js": "1d62d64e4fa4abc105e5a05c62d042c6dc00b0141cd714dd692d7f19a5faa131",
+    "editor/src/forge/Character3D/CharacterProps.js": "b9ea43c200a07b7db27c597882dc5131b576f693e5a92135a9081883abfba117",
+    "editor/src/forge/Props/AccessoryProp.js": "00ccf394574ade467a1fb61f4c6b27fd57664b6f58161d163544a835eef7f9f2",
+    "editor/src/forge/Props/AlienFlora.js": "e3e8641015331b74cfdbb852133645e89dc36709385788060c252a60c24f0f6a",
+    "editor/src/forge/Props/CableProp.js": "2e91b2d04655b19807addef892bb0e45a5c9291dd968de8fbd650f8ac5645f34",
+    "editor/src/forge/Props/ContainerMesh.js": "57a03a9a9285e7a935b525c16af0d3fe33b9a12a9882138248c4fa8c9b66730b",
+    "editor/src/forge/Props/ContainerPaint.js": "8de7eda1ceef9f8d9f1aa1ca39103fe01292549ba8e1d45bfb94b89fc75a98c7",
+    "editor/src/forge/Props/ContainerProp.js": "070e6325c94312174634578b1b81db00d924ce53fb14bdd150ca35576fb6329d",
+    "editor/src/forge/Props/FlagDesign.js": "d3556a12f880e5f8db98b09abed0b9cbdaadc2aff21c87499de202e1e4d65f34",
+    "editor/src/forge/Props/FlagProp.js": "e364eebc15b5484d369d0ca9ba589548cf4075e8fd4b9f9bbd656ff3f8a26bd0",
+    "editor/src/forge/Props/FlightCraft.js": "8a91f7b2247a07b98e10fa572dbad484a49bd7abd61badbc13fabe664b86eff4",
+    "editor/src/forge/Props/FramedProp.js": "63eb05198776c30d426aa22aabf200cc7685d3feb54c1560c6c251c2dc227890",
+    "editor/src/forge/Props/FurnitureConstruction.js": "9252264d482b97ef4070de5897d08465fea7e072f7f0e70bb36f29ec3ea38ae2",
+    "editor/src/forge/Props/FurnitureCraft.js": "42cda912b46d858ed9d3578a39105f7414c00c28bd01ad8a686074db67f54372",
+    "editor/src/forge/Props/FurnitureExpansion.js": "5ffb24dc1899df38dc943a127fb26b4b0b921ee5a73a89ee21e7f3ce50fe5126",
+    "editor/src/forge/Props/FurnitureJoinery.js": "305bf321a3c2c400b51c4965b5abaa3b48af3a8fcce1de93cfc89d498991a07d",
+    "editor/src/forge/Props/FurnitureProp.js": "6581a691383694c2cf0098f6fdfcc270398e0977084dd345345fc0e4cf23a367",
+    "editor/src/forge/Props/GarmentProp.js": "43c411ca9baa74ad771f8a9817ba64b1160fed86830c3035c890f9b3ebf86c5d",
+    "editor/src/forge/Props/GunConstruction.js": "9f0130913923e590ee24b01b86204776916e029820c82761aff498df4e0cb028",
+    "editor/src/forge/Props/GunProp.js": "aa6c311199dd19d6a22287a4220b4590f2d076263be5697bf5d8e71918043869",
+    "editor/src/forge/Props/HaftedProp.js": "2e3a3de5120a26792fc54658ea9a7c19c7d0d71e218d9370b151f519a39b0ad5",
+    "editor/src/forge/Props/HardSurface.js": "808a35033ed90704477b155ff2ce732437db7013d1542143e2482cb80ef18718",
+    "editor/src/forge/Props/InstrumentProp.js": "bfa913c1e9b1a4d0c8858d4db3e8f4fef395d2acd3700193e249ff7fe9689fa0",
+    "editor/src/forge/Props/MinivanCraft.js": "6bb252e55c65041bac1ad26498a781800e09a8c1978dbf4cf22ce7b330cf72ef",
+    "editor/src/forge/Props/NatureKit.js": "e3673df533b05ebba046451f1e60e239484434233ca28b32e878ea4eee7ede44",
+    "editor/src/forge/Props/NatureProp.js": "90cd748455e09122fdd1bab29547d36a044889b903c6292bba04dd38a1d607d8",
+    "editor/src/forge/Props/NatureTexture.js": "f2517e5b2885a90add9d39dbac2fe0b904c8771a60677b8b38dc6c47b7719f2d",
+    "editor/src/forge/Props/PictureProp.js": "48a500acb2791267cd2bf5d5b15cb6148087efaabfc9b6e62ed7e90dc2171475",
+    "editor/src/forge/Props/PlantConstruction.js": "aae2ba548511b9d195d3794e4bbecab91e87805049658db5b0f3c57da150599a",
+    "editor/src/forge/Props/PropArmorInterior.js": "8fe7baac93e5261745c820c22fefddb09e191c4e5ddd1a966532feecaea9b7a5",
+    "editor/src/forge/Props/PropBuilder.js": "e3d1e541b31e858633bcb6943440f0a449166cdd7d396304b0d443d2cf5072c5",
+    "editor/src/forge/Props/PropCatalog.js": "5b69c2fe8a7b50d754b5f3a05bad7a5768425e88835a0470499ebb1e8f3c951c",
+    "editor/src/forge/Props/PropCloth.js": "ddfa9505ae7f77b75dbbde9df9f17f9dd3dade6685f9153be4aad3060773c79b",
+    "editor/src/forge/Props/PropDisplayMotion.js": "7241dc18c83a6c0e1db7ded180313f5163ced2489d4ac2bf5a06d04936a84c40",
+    "editor/src/forge/Props/PropKeycaps.js": "98b29d92b655686464192bc1109233467b1438293590ffe03fbe7f0e1ae3ea15",
+    "editor/src/forge/Props/PropMesh.js": "8f97564bdb025b0b7ac2911a6d6ed4e95899e746712584c45e092881e706a045",
+    "editor/src/forge/Props/PropModel.js": "fb8654ca0765c798ca88297b12bea56e3b6efa9ec17e4ed8d8752f957b5b4643",
+    "editor/src/forge/Props/PropPaint.js": "b96d44ffd61a03372c773a4c1d824fea4201ff2b0c5741a940030caa05666e5d",
+    "editor/src/forge/Props/PropRandom.js": "4b2a44e28f619603aee3d539220f8a4d6926b55d34f29e3736017b7b0edf1bcf",
+    "editor/src/forge/Props/PropSpriteSheet.js": "cb84324a4f287408fc0ab159c460b61ffdf673ff5ab67f0e42946a619958ed58",
+    "editor/src/forge/Props/RangedProp.js": "07f1e936ff3c657ac718c27e0771de99d417161beed55f30fc503800db0054d3",
+    "editor/src/forge/Props/RockConstruction.js": "0b63580f393ac6919ab3f26666aa4e6e47a47027d543f651232d0b1460d1c5aa",
+    "editor/src/forge/Props/SalvageCraft.js": "5d186aacc8ca99c4e29275055967fff45e8725b5530514b794138c0fcfa470cd",
+    "editor/src/forge/Props/SalvageProp.js": "bf7dc5a407a1b30021a526383cb43bcc72fad761e9722ff82a93bd5c05a9e6ac",
+    "editor/src/forge/Props/ShieldProp.js": "b7602926da49fa82ae41b3c60e8f3d341396c6ad6011852890ad65abc894b40a",
+    "editor/src/forge/Props/SpanProp.js": "514e89501dd11a2f9e764d08b445a0d4caea5ade54941b11577867b91dc660d6",
+    "editor/src/forge/Props/SpeakerProp.js": "a5a9640eef1795c85e8b2e25b640deb2298bcd813b1f2e0891f84762123d3de3",
+    "editor/src/forge/Props/StaffProp.js": "c22c5dc98967e7939558e31eb677f4c29d7eaa4830352bf65912a8e6040c03f1",
+    "editor/src/forge/Props/SwordProp.js": "32e695beadf19f6d5414a2cdd31346fef2462dc008b824f12f23ca0f40bd1311",
+    "editor/src/forge/Props/TreeConstruction.js": "e62ad570f3021060f6cb2baacf26d01cf70099bd08533fefe04e29dae3889b80",
+    "editor/src/forge/Props/VehicleBodywork.js": "e125b37f3674790a59db00464737f2112fb225b977e75cb8c6d411b5119b7006",
+    "editor/src/forge/Props/VehicleConstruction.js": "399ec8b679645e2b13ecf31284f5335f26d34a95e3c5459dc7fcc991537a273e",
+    "editor/src/forge/Props/VehicleExpansion.js": "de1d1d468f04b25d00ef460d05fdeca351974b46f7d323c244ba314fe7890e6c",
+    "editor/src/forge/Props/VehicleFinish.js": "130a3954826d0dae51aca3ddf357e8ea8c6cde034234c0e2a61c87e7517500ba",
+    "editor/src/forge/Props/VehicleHardware.js": "1c92fb7299c155a53eba8717a992353087a45b23e99912f2f33d3523c53b0438",
+    "editor/src/forge/Props/VehiclePanels.js": "ef0d4815145b42fcbeb1f36562db93e2ec6a88bf9caee512884b9b050f4a5461",
+    "editor/src/forge/Props/VehicleProp.js": "81d0482482841a9f73351ad618bb0c68ba58070979802b0cb7734f5af78af92a",
+    "editor/src/forge/Props/VehicleRig.js": "34e831a4f5f990b7a80c0cb89271af0ed30cc46fbea2105775c24240a9f1402d",
+    "editor/src/forge/Props/VehicleTypeface.js": "ec74681ea7cca73c8f80e89b0b7d3a33690c1efe37adff22c3286df4d3b89bd6",
+    "editor/src/forge/Props/WastelandVehicle.js": "17f8f935149e8acef8b5bb33dba8d6b20efe8b8faa9107cd1e411aacdac6fd57",
+    "editor/src/forge/Props/WeaponKit.js": "e84779816f05f7ffbb4178fb875a9ba464fc52ae1f403997602c90e4078cf0ac"
+  },
+  "lateCorrections": [
+    "vehicle-compact",
+    "vehicle-sport",
+    "vehicle-truck",
+    "vehicle-rover",
+    "vehicle-motorcycle",
+    "vehicle-hover",
+    "vehicle-shuttle",
+    "vehicle-drone",
+    "vehicle-walker",
+    "vehicle-airliner",
+    "vehicle-jet",
+    "vehicle-helicopter",
+    "vehicle-rocket",
+    "vehicle-starfighter",
+    "vehicle-starship",
+    "vehicle-freighter",
+    "vehicle-carriage",
+    "vehicle-oxcart",
+    "vehicle-wagon",
+    "hafted-handaxe",
+    "hafted-battleaxe",
+    "hafted-warhammer",
+    "hafted-maul",
+    "hafted-mace",
+    "hafted-morningstar",
+    "hafted-spear",
+    "hafted-halberd",
+    "hafted-glaive",
+    "hafted-trident",
+    "hafted-scythe",
+    "salvage-garbage",
+    "salvage-bags",
+    "salvage-scrap",
+    "salvage-drum",
+    "salvage-tires",
+    "salvage-generator",
+    "salvage-console",
+    "salvage-engine",
+    "vehicle-minivan",
+    "vehicle-scrapBuggy",
+    "vehicle-scrapInterceptor",
+    "vehicle-scrapPickup",
+    "vehicle-scrapHauler",
+    "vehicle-scrapTanker",
+    "vehicle-warBus",
+    "vehicle-scrapBike",
+    "vehicle-scrapCrawler",
+    "accessory-hammer",
+    "accessory-pickaxe",
+    "accessory-lantern",
+    "accessory-stethoscope",
+    "furniture-bookshelf",
+    "furniture-floorLamp",
+    "nature-succulent"
+  ],
+  "provenance": "Each report keeps its per-capture source fingerprint. Entries affected by late corrections were recaptured; unchanged branches retain their earlier captures. Source hashes above describe the final generators.",
+  "review": [
+    {
+      "id": "flag",
+      "label": "Flag",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "streamer",
+      "label": "Streamer",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "banner",
+      "label": "Banner",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "picture-cutout",
+      "label": "Cut-out",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "picture-turned",
+      "label": "Turned",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "picture-framed",
+      "label": "Framed",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "span",
+      "label": "Hanging banners",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-longsword",
+      "label": "Longsword",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-katana",
+      "label": "Katana",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-scimitar",
+      "label": "Scimitar",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-rapier",
+      "label": "Rapier",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-greatsword",
+      "label": "Greatsword",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-dagger",
+      "label": "Dagger",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-machete",
+      "label": "Machete",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-falchion",
+      "label": "Falchion",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "sword-energy",
+      "label": "Energy sword",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-pistol",
+      "label": "Pistol",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-revolver",
+      "label": "Revolver",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-rifle",
+      "label": "Rifle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-shotgun",
+      "label": "Shotgun",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-smg",
+      "label": "Submachine gun",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-sniper",
+      "label": "Sniper rifle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-blasterPistol",
+      "label": "Blaster pistol",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-blasterRifle",
+      "label": "Blaster rifle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-plasma",
+      "label": "Plasma cannon",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-railgun",
+      "label": "Railgun rifle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-laser",
+      "label": "Laser rifle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-ionPistol",
+      "label": "Ion pistol",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-pulseCarbine",
+      "label": "Pulse carbine",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-arcCaster",
+      "label": "Arc caster",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-particleLance",
+      "label": "Particle lance",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-gravCannon",
+      "label": "Gravity cannon",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "gun-microMissile",
+      "label": "Micro-missile launcher",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "furniture-chair",
+      "label": "Dining chair",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-armchair",
+      "label": "Armchair",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-sofa",
+      "label": "Sofa",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-bench",
+      "label": "Bench",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-table",
+      "label": "Dining table",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-desk",
+      "label": "Desk",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-bed",
+      "label": "Bed",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-cabinet",
+      "label": "Cabinet",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-bookshelf",
+      "label": "Bookshelf",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Varied covered books, page blocks, spine bands and bookends; connected feet/plinth choices and calmer timber grain."
+    },
+    {
+      "id": "furniture-fridge",
+      "label": "Refrigerator",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-microwave",
+      "label": "Microwave",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-tv",
+      "label": "Television",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-computer",
+      "label": "Desktop computer",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-wallPanel",
+      "label": "Sci-fi wall panel",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-console",
+      "label": "Computer console",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-serverRack",
+      "label": "Server rack",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-stove",
+      "label": "Cooking range",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-washer",
+      "label": "Washing machine",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-dishwasher",
+      "label": "Dishwasher",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-sink",
+      "label": "Kitchen sink",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-toilet",
+      "label": "Toilet",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-smartToilet",
+      "label": "Smart toilet",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-bath",
+      "label": "Bathtub",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-stool",
+      "label": "Bar stool",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-officeChair",
+      "label": "Office chair",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-drawers",
+      "label": "Chest of drawers",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-coffeeTable",
+      "label": "Coffee table",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-workbench",
+      "label": "Workbench",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-throne",
+      "label": "Throne",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "furniture-tavernTable",
+      "label": "Tavern table",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-cryoPod",
+      "label": "Cryogenic pod",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-medBed",
+      "label": "Medical bed",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-fabricator",
+      "label": "Fabricator",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-holoTable",
+      "label": "Holographic table",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-floorLamp",
+      "label": "Floor lamp",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Open shade, bulb and connected spider supports; optional cable/switch; shade, frame material and light colors remain editable."
+    },
+    {
+      "id": "furniture-barCounter",
+      "label": "Curved bar counter",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-ivStand",
+      "label": "IV infusion stand",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-patientMonitor",
+      "label": "Patient monitor",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-medTrolley",
+      "label": "Medical instrument trolley",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-surgicalLamp",
+      "label": "Surgical examination lamp",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-scanner",
+      "label": "Diagnostic scanner",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "furniture-medStation",
+      "label": "Medical treatment station",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Existing construction retained; wood grain refined across furniture. Inspect final finish where wood is present."
+    },
+    {
+      "id": "vehicle-compact",
+      "label": "Compact car",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-sport",
+      "label": "Sports coupe",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-truck",
+      "label": "Utility truck",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-rover",
+      "label": "Armored rover",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-motorcycle",
+      "label": "Motorcycle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-hover",
+      "label": "Hover transport",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-shuttle",
+      "label": "Shuttle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-drone",
+      "label": "Survey drone",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-walker",
+      "label": "Utility walker",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-airliner",
+      "label": "Passenger airliner",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-jet",
+      "label": "Jet aircraft",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-helicopter",
+      "label": "Helicopter",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-rocket",
+      "label": "Orbital rocket",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-starfighter",
+      "label": "Starfighter",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-starship",
+      "label": "Explorer starship",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-freighter",
+      "label": "Space freighter",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-carriage",
+      "label": "Horse-drawn carriage",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-oxcart",
+      "label": "Ox cart",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "vehicle-wagon",
+      "label": "Covered wagon",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-glasses",
+      "label": "Glasses",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-sunglasses",
+      "label": "Sunglasses",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-monocle",
+      "label": "Monocle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-eyepatch",
+      "label": "Eye patch",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-goggles",
+      "label": "Goggles",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-visor",
+      "label": "Cyber visor",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-wizardhat",
+      "label": "Wizard hat",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-witchhat",
+      "label": "Witch hat",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-tophat",
+      "label": "Top hat",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-fedora",
+      "label": "Fedora",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cowboy",
+      "label": "Cowboy hat",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-bowler",
+      "label": "Bowler hat",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-tricorn",
+      "label": "Tricorn",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cap",
+      "label": "Cap",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-crown",
+      "label": "Crown",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-circlet",
+      "label": "Circlet",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-vikinghelm",
+      "label": "Horned helmet",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-headband",
+      "label": "Headband",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-halo",
+      "label": "Halo",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-brooch",
+      "label": "Gem brooch",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-hoops",
+      "label": "Hoop earrings",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-studs",
+      "label": "Stud earrings",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-necklace",
+      "label": "Necklace",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-choker",
+      "label": "Choker",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-bracelets",
+      "label": "Bracelets",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cape",
+      "label": "Cape",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-scarf",
+      "label": "Scarf",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-backpack",
+      "label": "Backpack",
+      "manualViews": [
+        "front contact",
+        "back"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-utilityHarness",
+      "label": "Utility harness",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-quiver",
+      "label": "Back quiver",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-jetpack",
+      "label": "Jetpack",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-grappler",
+      "label": "Grappler",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-bowtie",
+      "label": "Bow tie",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-necktie",
+      "label": "Tie",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-eyeMask",
+      "label": "Domino mask",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-mouthMask",
+      "label": "Cloth face mask",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-respirator",
+      "label": "Respirator",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-nails",
+      "label": "Fingernails",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-claws",
+      "label": "Finger claws",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-satchel",
+      "label": "Shoulder satchel",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-beltPouch",
+      "label": "Belt pouch",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-canteen",
+      "label": "Canteen",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-hammer",
+      "label": "Hammer",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "accessory-pickaxe",
+      "label": "Pickaxe",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "accessory-lantern",
+      "label": "Lantern",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "accessory-umbrella",
+      "label": "Umbrella",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-beret",
+      "label": "Beret",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-sunhat",
+      "label": "Sun hat",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-suitcase",
+      "label": "Suitcase",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-microphone",
+      "label": "Microphone",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-tennisRacket",
+      "label": "Tennis racket",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-headset",
+      "label": "Headset",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-stethoscope",
+      "label": "Stethoscope",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "accessory-cyberFaceplate",
+      "label": "Full faceplate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cyberJaw",
+      "label": "Cyber jaw",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cyberHalfFace",
+      "label": "Half-face plate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cyberBrow",
+      "label": "Brow plate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-cyberRespirator",
+      "label": "Cyber respirator",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-ledMask",
+      "label": "LED mask",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-armorMask",
+      "label": "Armored mask",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-mouthGuard",
+      "label": "Mouth guard",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-faceShield",
+      "label": "Face shield",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-hudMonocle",
+      "label": "HUD monocle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-earScouter",
+      "label": "Ear scouter",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-arGlasses",
+      "label": "AR glasses",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-tacGoggles",
+      "label": "Tactical goggles",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-haloProjector",
+      "label": "Halo projector",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-templeJacks",
+      "label": "Temple jacks",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-neckJack",
+      "label": "Neck jack",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-spineImplant",
+      "label": "Spinal column",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-chestCore",
+      "label": "Chest core",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-forearmScreen",
+      "label": "Forearm screen",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-underEyeLights",
+      "label": "Under-eye lights",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "accessory-earAntennas",
+      "label": "Ear antennas",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "hafted-handaxe",
+      "label": "Hand axe",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-battleaxe",
+      "label": "Battle axe",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-warhammer",
+      "label": "War hammer",
+      "manualViews": [
+        "front contact",
+        "back",
+        "material isolation",
+        "diffuse clay",
+        "final front"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-maul",
+      "label": "Maul",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-mace",
+      "label": "Flanged mace",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-morningstar",
+      "label": "Morning star",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-spear",
+      "label": "Spear",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-halberd",
+      "label": "Halberd",
+      "manualViews": [
+        "front contact",
+        "material isolation",
+        "diffuse clay",
+        "final front"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-glaive",
+      "label": "Glaive",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-trident",
+      "label": "Trident",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "hafted-scythe",
+      "label": "War scythe",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Physical tangent charts repair black normal-map artifacts on the reinforcing plates. Meshes and metallic finish are retained."
+    },
+    {
+      "id": "staff-wizard",
+      "label": "Wizard staff",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-druid",
+      "label": "Druid staff",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-quarterstaff",
+      "label": "Quarterstaff",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-cleric",
+      "label": "Cleric staff",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-necro",
+      "label": "Bone staff",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-energy",
+      "label": "Energy staff",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-wandwood",
+      "label": "Wooden wand",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-wandbone",
+      "label": "Bone wand",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "staff-wandcrystal",
+      "label": "Crystal wand",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-longbow",
+      "label": "Longbow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-recurve",
+      "label": "Recurve bow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-composite",
+      "label": "Horse bow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-compound",
+      "label": "Compound bow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-crossbow",
+      "label": "Crossbow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-elven",
+      "label": "Elven bow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-energy",
+      "label": "Energy bow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-arrow",
+      "label": "Arrow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "bow-quiver",
+      "label": "Quiver of arrows",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "shield-round",
+      "label": "Round shield",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "shield-heater",
+      "label": "Heater shield",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "shield-kite",
+      "label": "Kite shield",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "shield-tower",
+      "label": "Tower shield",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "shield-buckler",
+      "label": "Buckler",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "shield-energy",
+      "label": "Energy shield",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-acoustic",
+      "label": "Acoustic guitar",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-electric",
+      "label": "Electric guitar",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-bass",
+      "label": "Bass guitar",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-violin",
+      "label": "Violin",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-cello",
+      "label": "Cello",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-lute",
+      "label": "Lute",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-harp",
+      "label": "Harp",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-flute",
+      "label": "Flute",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-recorder",
+      "label": "Recorder",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-ocarina",
+      "label": "Ocarina",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-trumpet",
+      "label": "Trumpet",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-sax",
+      "label": "Saxophone",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-snare",
+      "label": "Snare drum",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-handdrum",
+      "label": "Hand drum",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-keytar",
+      "label": "Keytar",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-lyre",
+      "label": "Crystal lyre",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "instrument-synth",
+      "label": "Synth",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "cable-cord",
+      "label": "Extension cord",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "cable-bundle",
+      "label": "Cable bundle",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "cable-powerline",
+      "label": "Hanging power line",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "cable-coiled",
+      "label": "Coiled cable",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "cable-loose",
+      "label": "Loose wires",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "cable-conduit",
+      "label": "Sci-fi conduit",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "speaker-bookshelf",
+      "label": "Bookshelf speaker",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "speaker-wedge",
+      "label": "Floor monitor wedge",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "speaker-amp",
+      "label": "Guitar amp",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "speaker-tower",
+      "label": "Tower speaker",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "speaker-pod",
+      "label": "Sci-fi speaker pod",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-wine-barrel",
+      "label": "Wine barrel",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-barrel",
+      "label": "Wooden barrel",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-oil-drum",
+      "label": "Oil drum",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-explosive-barrel",
+      "label": "Explosive barrel",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-supply-crate",
+      "label": "Supply crate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-ammo-box",
+      "label": "Ammo crate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-crate-stack",
+      "label": "Crate stack",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-treasure-chest",
+      "label": "Treasure chest",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-cargo-crate",
+      "label": "Sci-fi cargo crate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-fuel-canister",
+      "label": "Sci-fi fuel canister",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-coolant-cell",
+      "label": "Reactor coolant cell",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "container-data-crate",
+      "label": "Data crate",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-broadleaf",
+      "label": "Broadleaf tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-conifer",
+      "label": "Conifer",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-palm",
+      "label": "Palm tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-birch",
+      "label": "Birch",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-willow",
+      "label": "Willow",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-dead",
+      "label": "Dead tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-baobab",
+      "label": "Bottle tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-blossom",
+      "label": "Blossom tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-shrub",
+      "label": "Shrub",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-hedge",
+      "label": "Hedge",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-fern",
+      "label": "Fern",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-grass",
+      "label": "Tall grass",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-flowers",
+      "label": "Flowering plant",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-cactus",
+      "label": "Cactus",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-succulent",
+      "label": "Succulent",
+      "manualViews": [
+        "front contact",
+        "back"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Leaf profiles have more curvature samples and tapered closed tips; the blunt dark ends in baseline are removed."
+    },
+    {
+      "id": "nature-mushroom",
+      "label": "Mushrooms",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-ivy",
+      "label": "Ivy & vines",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-boulder",
+      "label": "Boulder",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-cluster",
+      "label": "Rock cluster",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-cliff",
+      "label": "Cliff & pillar",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-standing",
+      "label": "Standing stone",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-arch",
+      "label": "Natural arch",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-crystal",
+      "label": "Crystal formation",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-lantern",
+      "label": "Lantern tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-fungus",
+      "label": "Fungus tower",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-tentacle",
+      "label": "Tentacle plant",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-crystaltree",
+      "label": "Crystal tree",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-pod",
+      "label": "Pod plant",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-coral",
+      "label": "Coral",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-puffball",
+      "label": "Spore puffballs",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "nature-horn",
+      "label": "Spiral horns",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "salvage-garbage",
+      "label": "Garbage pile",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline. Corroded surfaces now use noncollapsed physical tangent coordinates."
+    },
+    {
+      "id": "salvage-bags",
+      "label": "Trash bags",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline."
+    },
+    {
+      "id": "salvage-scrap",
+      "label": "Scrap heap",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline. Corroded surfaces now use noncollapsed physical tangent coordinates."
+    },
+    {
+      "id": "salvage-drum",
+      "label": "Rusted drum",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available. Corroded surfaces now use noncollapsed physical tangent coordinates."
+    },
+    {
+      "id": "salvage-tires",
+      "label": "Discarded tires",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Front contact reviewed; existing form retained. Three baseline views available."
+    },
+    {
+      "id": "salvage-generator",
+      "label": "Broken generator",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline. Corroded surfaces now use noncollapsed physical tangent coordinates."
+    },
+    {
+      "id": "salvage-console",
+      "label": "Ruined console",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline. Corroded surfaces now use noncollapsed physical tangent coordinates."
+    },
+    {
+      "id": "salvage-engine",
+      "label": "Wrecked engine",
+      "manualViews": [
+        "front contact"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside"
+      ],
+      "action": "Construction or hardware rebuilt; compare final views with baseline. Corroded surfaces now use noncollapsed physical tangent coordinates."
+    },
+    {
+      "id": "vehicle-minivan",
+      "label": "Seven-seat minivan",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 7,
+      "wheels": 4,
+      "triangles": 90760
+    },
+    {
+      "id": "vehicle-scrapBuggy",
+      "label": "Scavenger buggy",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 2,
+      "wheels": 4,
+      "triangles": 82110
+    },
+    {
+      "id": "vehicle-scrapInterceptor",
+      "label": "Raider interceptor",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 2,
+      "wheels": 4,
+      "triangles": 89274
+    },
+    {
+      "id": "vehicle-scrapPickup",
+      "label": "Salvage pickup",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 2,
+      "wheels": 4,
+      "triangles": 97324
+    },
+    {
+      "id": "vehicle-scrapHauler",
+      "label": "Six-wheel scrap hauler",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 2,
+      "wheels": 6,
+      "triangles": 125700
+    },
+    {
+      "id": "vehicle-scrapTanker",
+      "label": "Wasteland water tanker",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 2,
+      "wheels": 6,
+      "triangles": 123748
+    },
+    {
+      "id": "vehicle-warBus",
+      "label": "Fortified survivor bus",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 12,
+      "wheels": 6,
+      "triangles": 158860
+    },
+    {
+      "id": "vehicle-scrapBike",
+      "label": "Scrambler motorcycle",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 1,
+      "wheels": 2,
+      "triangles": 19972
+    },
+    {
+      "id": "vehicle-scrapCrawler",
+      "label": "Tracked recovery crawler",
+      "manualViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "capturedViews": [
+        "front",
+        "back",
+        "inside",
+        "below",
+        "side"
+      ],
+      "action": "Added constructed vehicle with running gear, occupied seating anchors and connected cabin/access fittings.",
+      "seats": 2,
+      "wheels": 10,
+      "triangles": 149212
+    }
+  ],
+  "limits": [
+    "Stylized procedural models; visual acceptance remains user review.",
+    "No exhaustive combination sweep or full repository suite claimed.",
+    "No new autonomous passenger or flight behavior; existing ground vehicle metadata contract retained."
+  ],
+  "baselineCommit": "5fc5c86c",
+  "testMaintenance": {
+    "test": "Carol lining follows the fitted jacket",
+    "baselineFailure": "73368 lining coordinate components versus 72213 outer coordinate components on unchanged HEAD",
+    "reason": "UV charts split and reorder the two layers independently. Triangle counts remain equal.",
+    "repair": "Retains triangle count and badge assertions; compares every lining position with nearby outer vertices within the original 1.3 mm thickness bound.",
+    "measuredMaximumMeters": 0.0010271272136461397
+  }
+}

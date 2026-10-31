@@ -1514,8 +1514,8 @@
             prop('staff', 'Staff', 'held', 'Weapons', (m, L, o) => heldGear(m, L, o, 'staff'), { side: 'right', length: 1, color2: '#5fa5db' }),
             prop('bow', 'Bow', 'held', 'Weapons', (m, L, o) => heldGear(m, L, o, 'bow'), { side: 'left', length: 0.8 }),
             prop('shield', 'Round shield', 'held', 'Weapons', (m, L, o) => heldGear(m, L, o, 'shield'), { side: 'left', color: '#465e86' }, 'metal'),
-            prop('hammer', 'Hammer', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'hammer'), { side: 'right', length: 0.4 }, 'metal'),
-            prop('pickaxe', 'Pickaxe', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'pickaxe'), { side: 'right', length: 0.65 }, 'metal'),
+            prop('hammer', 'Hammer', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'hammer'), { side: 'right', length: 0.4 }, 'wood'),
+            prop('pickaxe', 'Pickaxe', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'pickaxe'), { side: 'right', length: 0.65 }, 'wood'),
             prop('lantern', 'Lantern', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'lantern'), { side: 'left', color: '#4e4840', color2: '#f0c86a' }, 'metal'),
             prop('book', 'Book', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'book'), { side: 'left', color: '#71373c', color2: '#e1d4b5' }),
             prop('umbrella', 'Umbrella', 'held', 'Bags and tools', (m, L, o) => heldGear(m, L, o, 'umbrella'), { side: 'right', length: 0.8, color: '#426792' }, 'felt'),
@@ -1767,16 +1767,19 @@
             for (const z of [0.003, 0.047]) box(at(0, 0, z), [0.08, 0.11, 0.004]);
             box(at(-0.078, 0, 0.025), [0.005, 0.11, 0.026]);
         } else if (kind === 'lantern') {
-            m.tube([at(0, 0), at(-0.055, -0.06), at(-0.055, -0.12), at(0.055, -0.12), at(0.055, -0.06), at(0, 0)], 0.006 * s, 6, linear(o.color), skin);
-            const panes=new Mesh(),bulb=new Mesh();
-            panes.roundedBox(at(0,-.2),axes,[.058*s,.073*s,.058*s],.006*s,linear('#d9b46b'),skin);
-            bulb.sphere(at(0,-.23),.022*s,linear('#efc06d'),skin,8,12,[.7,1.6,.7]);
-            m.tube([at(0,-.12),at(0,-.09)],[.035*s,.020*s],12,linear(o.color),skin);
-            for (const y of [-0.28,-0.12])box(at(0,y),[.075,.01,.075]);
-            for(const x of [-.06,.06])for(const z of [-.06,.06])rod(at(x,-.12,z),at(x,-.28,z),.004);
-            return[{mesh:panes,extra:{name:'Lantern glass',opacity:.22,roughness:.20,metalness:0}},{mesh:bulb,extra:{name:'Lantern light',emissive:'#ffad48',emissiveIntensity:.6,roughness:.6}}];
-            for (const y of [-0.28, -0.12]) box(at(0, y), [0.075, 0.01, 0.075]);
-            for (const x of [-0.06, 0.06]) for (const z of [-0.06, 0.06]) rod(at(x, -0.12, z), at(x, -0.28, z), 0.004);
+            const brass=linear(o.color2),panes=new Mesh(),flame=new Mesh();
+            const handle=Array.from({length:25},(_,i)=>{const a=i/24*Math.PI;return at(Math.cos(a)*.061,-.105+Math.sin(a)*.105);});
+            m.tube(handle,.004*s,12,brass,skin);
+            for(const x of [-.061,.061])m.sphere(at(x,-.105),.008*s,brass,skin,6,12);
+            for(const y of [-.285,-.135])m.tube([at(0,y-.008),at(0,y+.008)],[.073*s,.073*s],32,brass,skin);
+            m.loft(8,(_,t)=>({center:at(0,-.135+t*.045),x:[1,0,0],y:[0,0,1],rx:(.069-.038*t)*s,ry:(.069-.038*t)*s}),32,brass,skin,true);
+            for(let j=0;j<6;j++){const a=j/6*Math.PI*2;rod(at(Math.cos(a)*.061,-.275,Math.sin(a)*.061),at(Math.cos(a)*.061,-.135,Math.sin(a)*.061),.0035,o.color2);}
+            panes.tube([at(0,-.272),at(0,-.144)],.058*s,32,linear('#ecdcb0'),skin,false);
+            const innerGlass=new Mesh();innerGlass.tube([at(0,-.272),at(0,-.144)],.057*s,32,linear('#ecdcb0'),skin,false);for(let j=0;j<innerGlass.i.length;j+=3){const n=innerGlass.i[j+1];innerGlass.i[j+1]=innerGlass.i[j+2];innerGlass.i[j+2]=n;}for(let j=0;j<innerGlass.n.length;j++)innerGlass.n[j]*=-1;merge(panes,innerGlass);
+            m.tube([at(0,-.278),at(0,-.24)],[.032*s,.027*s],24,brass,skin);
+            m.tube([at(0,-.244),at(0,-.230)],.006*s,12,linear('#292320'),skin);
+            flame.loft(9,(_,t)=>({center:at(Math.sin(t*Math.PI)*.004,-.233+t*.054),x:[1,0,0],y:[0,0,1],rx:Math.max(.0005,Math.sin(t*Math.PI)*.012)*s,ry:Math.max(.0005,Math.sin(t*Math.PI)*.009)*s}),16,linear('#ffcb66'),skin,true);
+            return[{mesh:panes,extra:{name:'Lantern glass',opacity:.20,roughness:.14,metalness:0,pairedFace:true}},{mesh:flame,extra:{name:'Lantern light',emissive:'#ffad48',emissiveIntensity:1.2,roughness:.6}}];
         } else if (kind === 'bow') {
             const pts = Array.from({ length: 17 }, (_, k) => { const t = k / 16 * Math.PI; return at(Math.sin(t) * 0.18, (k / 16 - 0.5) * (o.length + 0.25)); });
             m.tube(pts, 0.012 * s, 8, linear(o.color), skin);
@@ -1791,8 +1794,21 @@
                 m.loft(12,(_,t)=>({center:add(center,[(.005+t*.145)*s,reach-.01*s,0]),x:[0,1,0],y:[0,0,1],rx:(.032+.065*t*t)*s,ry:(.016*(1-t)+.0015)*s}),8,linear(o.color2),skin,true);
                 box(add(center,[0,reach-.02*s,0]),[.022,.045,.022],o.color2);
             }
-            else if (kind === 'hammer') box(add(center, [0, reach, 0]), [0.08, 0.035, 0.035], o.color2);
-            else if (kind === 'pickaxe') m.tube([add(center, [-0.2 * s, reach - 0.06 * s, 0]), add(center, [0, reach, 0]), add(center, [0.2 * s, reach - 0.06 * s, 0])], [0.002 * s, 0.025 * s, 0.002 * s], 8, linear(o.color2), skin);
+            else if (kind === 'hammer') {
+                const hardware=new Mesh(),head=add(center,[0,reach,0]);
+                hardware.tube([add(head,[-.070*s,0,0]),add(head,[.055*s,0,0])],[.024*s,.021*s],24,linear(o.color2),skin);
+                hardware.tube([add(head,[-.088*s,0,0]),add(head,[-.069*s,0,0])],[.032*s,.030*s],32,linear(o.color2),skin);
+                hardware.roundedBox(head,axes,[.024,.033,.027].map(v=>v*s),.006*s,linear(o.color2),skin);
+                for(const z of [-.017,.017])hardware.tube(Array.from({length:13},(_,i)=>{const t=i/12;return add(head,[(.035+.088*t)*s,(-.004-.052*t*t)*s,z*s]);}),t=>(.014*(1-t)+.0015)*s,12,linear(o.color2),skin);
+                for(const y of [-.10,-.075,-.05,-.025,0,.025])m.tube([at(0,y-.003),at(0,y+.003)],.015*s,16,linear(o.color),skin);
+                return[{mesh:hardware,extra:{name:'Hammer forged head',roughness:.30,metalness:.88}}];
+            }
+            else if (kind === 'pickaxe') {
+                const hardware=new Mesh(),head=add(center,[0,reach,0]);hardware.roundedBox(head,axes,[.026,.036,.028].map(v=>v*s),.006*s,linear(o.color2),skin);
+                for(const side of [-1,1])hardware.loft(17,(_,t)=>({center:add(head,[side*(.015+.20*t)*s,-.065*t*t*s,0]),x:[0,1,0],y:[0,0,1],rx:(.027*(1-t)+.001)*s,ry:(side<0?.027*(1-t)+.001:.022+.018*t)*s}),16,linear(o.color2),skin,true);
+                box(add(head,[0,.038*s,0]),[.011,.003,.016],'#594737');
+                return[{mesh:hardware,extra:{name:'Pickaxe forged head',roughness:.36,metalness:.85}}];
+            }
             else if (kind === 'staff') m.sphere(add(center, [0, reach + 0.035 * s, 0]), 0.045 * s, linear(o.color2), skin);
             else if (kind === 'umbrella') {
                 const top=add(center,[0,reach+.12*s,0]),structure=new Mesh(),ink=linear('#72777d'),start=m.p.length;
@@ -1867,20 +1883,21 @@
     }
 
     function stethoscope(m, L, o) {
-        const N = L.neck, skin = spineSkin(L), color = linear(o.color), metal = linear(o.color2);
-        const chest = [N.center[0], N.center[1] - 0.24 * o.size, N.center[2] + N.rz + 0.06];
-        const front = L.frontAt(chest[1], chest[0]);
-        if (isFinite(front)) chest[2] = Math.max(chest[2], front + 0.03);
-        for (const side of [-1, 1]) {
-            const start = [N.center[0] + side * (N.rx + 0.015), N.center[1] + 0.025, N.center[2]];
-            const path = Array.from({ length: 13 }, (_, i) => {
-                const p = lerp(start, chest, i / 12), z = L.frontAt(p[1], p[0]);
-                if (isFinite(z)) p[2] = Math.max(p[2], z + 0.028);
-                return p;
-            });
-            m.tube(path, 0.004, 8, color, skin);
+        const hardware=new Mesh(),N=L.neck,skin=spineSkin(L),rubber=linear(o.color),steel=linear(o.color2),s=o.size;
+        const chest=[N.center[0]+.035*s,N.center[1]-.25*s,N.center[2]+N.rz+.06];
+        const front=L.frontAt(chest[1],chest[0]);if(isFinite(front))chest[2]=Math.max(chest[2],front+.032);
+        const join=add(chest,[-.035*s,.08*s,0]);
+        for(const side of [-1,1]){
+            const start=[N.center[0]+side*(N.rx+.018),N.center[1]+.035,N.center[2]];
+            const path=Array.from({length:21},(_,i)=>{const t=i/20,p=lerp(start,join,t);p[0]+=side*Math.sin(t*Math.PI)*.035*s;const z=L.frontAt(p[1],p[0]);if(isFinite(z))p[2]=Math.max(p[2],z+.028);return p;});
+            m.tube(path,.0045*s,12,rubber,skin);
+            const ear=add(start,[-side*.018*s,.022*s,.003]);hardware.tube([start,add(start,[0,.018*s,0]),ear],.003*s,12,steel,skin);m.sphere(ear,.006*s,rubber,skin,6,12,[1,1.3,1]);
         }
-        m.sphere(chest, 0.018 * o.size, metal, skin, 6, 12, [1, 1, 0.3]);
+        m.tube([join,add(chest,[0,.035*s,0]),chest],.005*s,12,rubber,skin);
+        hardware.tube([add(chest,[0,0,-.007*s]),add(chest,[0,0,.003*s])],.023*s,32,steel,skin);
+        hardware.tube([add(chest,[0,0,.0035*s]),add(chest,[0,0,.0045*s])],.019*s,32,linear('#c8cbca'),skin);
+        hardware.tube([add(chest,[-.017*s,.018*s,0]),add(chest,[.017*s,.018*s,0])],.004*s,12,steel,skin);
+        return[{mesh:hardware,extra:{name:'Stethoscope steel',roughness:.30,metalness:.80}}];
     }
 
     // ── building ──────────────────────────────────────────────────────────

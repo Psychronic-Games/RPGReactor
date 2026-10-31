@@ -508,15 +508,15 @@
                 const Lf = S * (agave ? 0.75 : aloe ? 0.65 : 0.5) * (0.45 + 0.6 * (1 - t)) * (0.9 + R.next() * 0.2), el = (agave ? 0.25 : aloe ? 0.55 : 0.1) + t * (agave ? 1.0 : 0.9) + (R.next() - 0.5) * 0.15;
                 const base = add([0, S * 0.04 + t * S * 0.05, 0], scale(out, S * 0.02 * (1 - t))), pts = [];
                 let d = norm(add(scale(out, Math.cos(el)), scale(UP, Math.sin(el))));
-                for (let k = 0; k <= 6; k++) { pts.push(add(base, scale(d, Lf * k / 6))); d = norm(add(d, [0, (agave ? -0.06 : aloe ? -0.08 : 0.05) * (k / 6), 0])); }
+                for (let k = 0; k <= 8; k++) { pts.push(add(base, scale(d, Lf * k / 8))); d = norm(add(d, [0, (agave ? -0.03 : aloe ? -0.04 : 0.025) * (k / 8), 0])); }
                 const w = Lf * (agave ? 0.13 : aloe ? 0.11 : 0.28), th = Lf * (agave ? 0.05 : aloe ? 0.07 : 0.12);
                 const g = Kit.geo();
                 Kit.tube(g, pts, (k, ang) => {
-                    const tt = k / 6, wk = w * (agave || aloe ? (1 - tt * 0.92) : Math.sin(Math.PI * Math.min(1, 0.25 + tt * 0.8))) + 0.002, tk = th * (1 - tt * 0.8) + 0.002;
+                    const tt = k / 8, taper=Math.max(.006,Math.min(1,(1-tt)*8)), wk = w * (agave || aloe ? (1 - tt * 0.92) : Math.sin(Math.PI * Math.min(1, 0.25 + tt * 0.8))) * taper + S*.001, tk = th * (1 - tt * 0.8)*taper + S*.001;
                     const c = Math.cos(ang), s = Math.sin(ang); return 1 / Math.sqrt((c / wk) * (c / wk) + (s / tk) * (s / tk));
-                }, { sides: 8, up: side, color: (k) => lin(mix(tint[0], tint[1], Math.pow(k / 6, 2) * (agave ? 0.5 : 1))), capEnd: true });
+                }, { sides: 14, up: side, color: (k) => lin(mix(tint[0], tint[1], Math.pow(k / 8, 2) * (agave ? 0.5 : 1))), capEnd: true, capStart: true });
                 Kit.append(flesh, g);
-                if (agave) Kit.tube(extra, [pts[6], add(pts[6], scale(norm(sub(pts[6], pts[5])), Lf * 0.06))], Lf * 0.012, { sides: 4, color: () => lin([0.25, 0.15, 0.1]), capEnd: true });
+                if (agave) Kit.tube(extra, [pts[8], add(pts[8], scale(norm(sub(pts[8], pts[7])), Lf * 0.06))], Lf * 0.012, { sides: 4, color: () => lin([0.25, 0.15, 0.1]), capEnd: true });
             }
             if (aloe && ch > 0.3) { const pts = [[0, S * 0.1, 0], [S * 0.05, S * 0.8, 0], [S * 0.08, S * 1.5, 0]]; Kit.tube(flesh, pts, S * 0.012, { sides: 5, color: () => lin([0.4, 0.45, 0.3]), sway, capEnd: true }); for (let k = 0; k < 20; k++) { const p = Trees.along(pts, 0.6 + k / 50).p; Kit.blob(extra, add(p, [(R.next() - 0.5) * 0.06, 0, (R.next() - 0.5) * 0.06]), [S * 0.012, S * 0.03, S * 0.012], { sides: 5, rings: 3, color: () => lin([0.95, 0.45, 0.15]), sway }); } }
             fleshStyle = ['stalk', ['#a8a8a8', '#d4d4d4', '#f4f4f4']];

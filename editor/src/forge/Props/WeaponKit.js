@@ -493,6 +493,12 @@
             // A tint over the part's color by where each point is (weapon space): `tint.at(p)` 0..1 toward `tint.color`.
             if (entry.look.tint) { const P = m.positions, k = new Float32Array(P.length / 3); for (let i = 0; i < k.length; i++) k[i] = Math.max(0, Math.min(1, entry.look.tint.at([P[i * 3], P[i * 3 + 1], P[i * 3 + 2]]))); part._tint = { k, color: entry.look.tint.color }; }
         }
+        // Numerous tiny rivets can hide a collapsed chart on a much larger
+        // reinforcing plate in a triangle-count check. Give the haft's
+        // fittings physical charts before attaching their normal maps.
+        if(kind==='hafted')for(const part of parts)if(part.name==='Fittings'){
+            delete part.uvs;delete part.uvs1;Surface.ensureUvs(part);part.uvs=Float32Array.from(part.uvs1);
+        }
         Surface.apply(parts, textures, p => p._mat || null);
         for (const p of parts) { delete p._mat; Mesh.transform(p, toWorld, toWorld); }
         let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
