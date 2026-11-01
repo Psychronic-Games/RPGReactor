@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 // Forge › 3D Character Builder, outfits taken from 3D models (RRCharacterOutfitTransfer): the Star Shift outfits build
 // on any body, extremes included, outside the skin and without NaNs; they keep to their picture and triangle budgets;
 // taking an outfit gives the same outfit every time; a project's own outfits are listed, kept and worn.
@@ -68,7 +69,7 @@ test('the catalog lists the four Star Shift outfits, each garment a part of a sh
 });
 
 test('every Star Shift outfit builds on average and extreme bodies, finite, standing on the floor', () => {
-    for (const preset of STAR_SHIFT) for (const body of BODIES) {
+    for (const [preset, body] of cover(STAR_SHIFT, BODIES)) {
         const result = Model.build(pack, Object.assign({}, body, { outfit: preset.items, hair: { style: 'bald' } }), {}, { quality: 'preview', skinSize: 256 });
         const label = preset.id + ' on ' + JSON.stringify(body);
         const taken = result.parts.filter(p => TAKEN.some(g => g.label === p.name));
@@ -92,9 +93,9 @@ test('every Star Shift outfit builds on average and extreme bodies, finite, stan
 });
 
 test('garments stay outside the skin they are worn on', () => {
-    for (const key of Transfer.BUILT_IN) {
+    for (const [key, body] of cover(Transfer.BUILT_IN, BODIES)) {
         const outfit = Transfer.load(key);
-        for (const body of BODIES) {
+        {
             const built = Body.build(pack, Body.normalizeRecipe(body));
             const frame = {}, P = Transfer.fit(pack, built, outfit, frame);
             const N = frame.bodyNormals, S = built.shaped, grid = frame.bodyGrid;
@@ -325,8 +326,15 @@ test('a cuff encloses the limb axis while a nearby pinhole is repaired', () => {
 test('Captain lining follows the finished jacket and shares its weights, including on an extreme body', () => {
     const preset=STAR_SHIFT.find(p=>p.id==='ss_carol'),built=Body.build(pack,Body.normalizeRecipe({gender:1,extreme:true,weight:4})),out=Wardrobe.build(pack,built,preset.items,{}),scale=built.height/1.7;
     const lining=out.parts.filter(p=>p.rrLining&&p.name!== 'Garment linings');assert.ok(lining.length,'actual fabric lining');
-    for(const part of lining){const outer=out.parts.find(p=>p.name===part.name.replace(/ lining$/,''));assert.ok(outer);assert.equal(part.positions.length,outer.positions.length);assert.ok(part.index.length<outer.index.length,'character lining stays near openings');
-        for(const v of new Set(part.index)){let clearance=0,normal=0;for(let c=0;c<3;c++){clearance+=(outer.positions[v*3+c]-part.positions[v*3+c])*outer.normals[v*3+c];normal+=outer.normals[v*3+c]*part.normals[v*3+c];}
-            assert.ok(clearance>.0007*scale&&clearance<.0015*scale,'lining remains within cloth thickness');assert.ok(normal<-.99,'inward-facing normals');for(let k=0;k<4;k++){assert.equal(part.joints[v*4+k],outer.joints[v*4+k]);assert.equal(part.weights[v*4+k],outer.weights[v*4+k]);}}
+    for(const part of lining){const outer=out.parts.find(p=>p.name===part.name.replace(/ lining$/,''));assert.ok(outer);assert.ok(part.index.length<outer.index.length,'character lining stays near openings');
+        // Jacket and lining each take their own weave chart (2026-10-30), so vertices no longer pair by number: each
+        // lining vertex pairs with the jacket vertex it was stepped in from, by the shared normal, nearest in place.
+        const twin=new Map(),key=(n,sign)=>[0,1,2].map(c=>Math.round(n[c]*sign*1e4)).join();
+        for(let v=0;v<outer.positions.length/3;v++){const k=key(outer.normals.subarray(v*3,v*3+3),1);(twin.get(k)||twin.set(k,[]).get(k)).push(v);}
+        for(const v of new Set(part.index)){const near=twin.get(key(part.normals.subarray(v*3,v*3+3),-1))||[];let o=-1,best=Infinity;
+            for(const u of near){const d=Math.hypot(...[0,1,2].map(c=>outer.positions[u*3+c]-part.positions[v*3+c]));if(d<best){best=d;o=u;}}
+            assert.ok(o>=0,'every lining vertex has its jacket vertex');
+            let clearance=0,normal=0;for(let c=0;c<3;c++){clearance+=(outer.positions[o*3+c]-part.positions[v*3+c])*outer.normals[o*3+c];normal+=outer.normals[o*3+c]*part.normals[v*3+c];}
+            assert.ok(clearance>.0007*scale&&clearance<.0015*scale,'lining remains within cloth thickness');assert.ok(normal<-.99,'inward-facing normals');for(let k=0;k<4;k++){assert.equal(part.joints[v*4+k],outer.joints[o*4+k]);assert.equal(part.weights[v*4+k],outer.weights[o*4+k]);}}
     }
 });

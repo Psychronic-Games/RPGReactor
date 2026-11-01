@@ -129,7 +129,8 @@ test('the resting mouth is closed: the lips meet in the middle, without pressing
         delete globalThis.__lipsAtRest;
         const closed = gap(recipe);
         assert.ok(closed <= 0 && closed > -3, JSON.stringify(recipe) + ' lips meet: ' + closed.toFixed(2) + ' mm');
-        assert.ok(closed < open - 1, JSON.stringify(recipe) + ' closed from MakeHuman\'s parted ' + open.toFixed(2) + ' mm');
+        // (Since 2026-10-31 the lips' rims are laid on one line by HumanBody.lipForm, whatever closeLips left, so the mouth rests closed either way.)
+        assert.ok(open <= 0, JSON.stringify(recipe) + ' closed however MakeHuman\'s mouth began: ' + open.toFixed(2) + ' mm');
     }
 });
 

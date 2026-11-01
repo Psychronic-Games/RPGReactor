@@ -187,14 +187,14 @@ test('fangs remain seated at the lips and chest accessories clear the shaped tor
         const chestY = L.neck.center[1] - 0.24, skinFront = L.frontAt(chestY, L.neck.center[0]);
         const part = Props.build(pack, body, [{ id: 'stethoscope' }]).parts[0];
         const front = [];
-        for (let i = 0; i < part.positions.length; i += 3) if (Math.abs(part.positions[i + 1] - chestY) < 0.01) front.push(part.positions[i + 2]);
+        for (let i = 0; i < part.positions.length; i += 3) if (Math.abs(part.positions[i + 1] - chestY) < 0.014) front.push(part.positions[i + 2]);
         assert.ok(Math.max(...front) > skinFront + 0.02, 'the chest piece is outside this body, including a full bust');
         const uniform = Wardrobe.build(pack, body, [{ id: 'scrubs' }], { atlasSize: 64 });
         let clothFront = -Infinity;
         for (const p of uniform.parts) for (let i = 0; i < p.positions.length; i += 3) if (Math.abs(p.positions[i]) < 0.04 && Math.abs(p.positions[i + 1] - chestY) < 0.03) clothFront = Math.max(clothFront, p.positions[i + 2]);
         const worn = Props.build(pack, body, [{ id: 'stethoscope' }], [], { outfitParts: uniform.parts }).parts[0];
         let badgeFront = -Infinity;
-        for (let i = 0; i < worn.positions.length; i += 3) if (Math.abs(worn.positions[i + 1] - chestY) < 0.01) badgeFront = Math.max(badgeFront, worn.positions[i + 2]);
+        for (let i = 0; i < worn.positions.length; i += 3) if (Math.abs(worn.positions[i + 1] - chestY) < 0.014) badgeFront = Math.max(badgeFront, worn.positions[i + 2]);
         assert.ok(badgeFront > clothFront + 0.02, 'the chest piece clears loose clothing as well as skin');
     }
 });

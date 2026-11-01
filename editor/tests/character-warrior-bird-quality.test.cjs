@@ -5,11 +5,13 @@ function warrior(id,gender,extra={}){return Q.Model.build(pack,{gender,hair:{sty
 test('Barbarian and Gladiator have closed, curved overlapping leather with a covered waist on both sexes',()=>{
  for(const id of ['barbarian','gladiator'])for(const gender of [0,1]){
   const r=warrior(id,gender),p=r.parts.find(p=>p.name==='Leather apron panels'),surface=O.projectedSurface(r.parts.filter(p=>p.texture==='outfit.png')),edges=new Map();assert.ok(r.cloth,id+' cloth rig');
-  assert.equal(p.normalTexture,'warrior-leather-normal.png');assert.ok(r.textures[p.normalTexture].repeat);
+  assert.equal(p.normalTexture,'fabric-leather-normal.png');/* Preview 60: the shared leather grain replaced the panels' own map. */assert.ok(r.textures[p.normalTexture].repeat);
   const depths=[];let buried=0,probed=0;
   for(let v=0;v<p.positions.length/3;v++){depths.push(p.positions[v*3+2]);if(p.hang[v]>.22||v%7)continue;const [x,y,z]=Array.from(p.positions.subarray(v*3,v*3+3)),front=surface.sample(x,y),back=surface.sample(x,y,-1);if(!front||!back)continue;probed++;if(z<front.depth-.004&&z>back.depth+.004)buried++;}
   assert.ok(Math.max(...depths)-Math.min(...depths)>.18*r.height/1.7,'wrap has front, side and rear volume');assert.ok(probed>25);assert.equal(buried,0,id+'/'+gender+' waist crosses its lining');
-  for(let i=0;i<p.index.length;i+=3)for(let j=0;j<3;j++){const a=p.index[i+j],b=p.index[i+(j+1)%3],key=Math.min(a,b)+':'+Math.max(a,b);edges.set(key,(edges.get(key)||0)+1);}
+  // Welded by place: the leather grain's chart splits vertices along chart borders (2026-10-30) without opening the surface.
+  const weld=new Map(),at=v=>{const k=[0,1,2].map(c=>Math.round(p.positions[v*3+c]*1e6)).join();if(!weld.has(k))weld.set(k,weld.size);return weld.get(k);};
+  for(let i=0;i<p.index.length;i+=3)for(let j=0;j<3;j++){const a=at(p.index[i+j]),b=at(p.index[i+(j+1)%3]);if(a===b)continue;const key=Math.min(a,b)+':'+Math.max(a,b);edges.set(key,(edges.get(key)||0)+1);}
   assert.ok([...edges.values()].every(n=>n===2),'closed leather cut edges');
  }
 });

@@ -28,7 +28,12 @@
 
     function kindOf(recipe) { return BY_ID.get(recipe && recipe.kind) || KINDS[0]; }
     function normalize(recipe) { return kindOf(recipe).normalize(recipe || {}); }
-    function build(recipe, cache, options) { return kindOf(recipe).build(recipe, cache, options); }
+    function build(recipe, cache, options) {
+        // Test runs set a smaller default (tests/helpers/small-pictures.cjs). Nature keeps its own: a size under 1024 also thins its shapes.
+        const small = globalThis.RR_DEFAULT_PICTURES?.prop, kind = kindOf(recipe);
+        if (small && !options?.textureSize && kind.id !== 'nature') options = { ...options, textureSize: small };
+        return kind.build(recipe, cache, options);
+    }
 
     /**
      * A build's cloths, each { setup, grid, offset }: `offset` is where its

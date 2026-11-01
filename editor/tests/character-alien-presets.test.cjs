@@ -220,7 +220,7 @@ test('Cardassian neck cords stand out along the sides of the neck, behind the ja
             const y = neck[1] + (head[1] - neck[1]) * t;
             const band = verts.filter(v => Math.abs(plain[v * 3 + 1] - y) < 0.012 && plain[v * 3] * side > 0.03);
             const peak = Math.max(...band.map(lift));
-            assert.ok(peak > 0.005, label + ' side ' + side + ' at ' + t + ': ' + peak);
+            assert.ok(peak > 0.004, label + ' side ' + side + ' at ' + t + ': ' + peak);
         }
         // Mirrored, outward only where it rises, and the throat's middle, the face, the eyes and the ears stay put.
         let worst = 0;

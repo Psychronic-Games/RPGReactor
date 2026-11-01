@@ -188,6 +188,157 @@
         return picture;
     }
 
+    /**
+     * The lips: their own patch with their own picture and relief, as the areolas have, so they stay sharp up close. The body's skin picture
+     * can't give them more than a few pixels, and its lip field (the lip targets' reach) stops short of the mouth's corners, which left the
+     * mouth line running on past the colored lip. This patch is measured from the mouth itself, corner to corner, and bends with its line.
+     */
+    function lipPatch(pack) {
+        if (pack._lipPatch) return pack._lipPatch;
+        const Body = root.RRHumanBody || require('./HumanBody.js'), P = pack.positions, N = Body.vertexNormals(pack, P);
+        const U = Body.maskOf(pack, ['shape/upperLip-incr'], 2), L = Body.maskOf(pack, ['shape/lowerLip-incr'], 2);
+        const src = Array.from(pack.body.source), I = pack.body.index, front = src.filter(v => (U[v] > 0.5 || L[v] > 0.5) && N[v * 3 + 2] > 0.25);
+        if (front.length < 8) return (pack._lipPatch = null);
+        let top = -Infinity, bottom = Infinity, zFront = -Infinity, upperEdge = Infinity, lowerEdge = -Infinity;
+        for (const v of front) {
+            const y = P[v * 3 + 1];
+            top = Math.max(top, y); bottom = Math.min(bottom, y); zFront = Math.max(zFront, P[v * 3 + 2]);
+            if (Math.abs(P[v * 3]) < 0.004) { if (U[v] > L[v]) upperEdge = Math.min(upperEdge, y); else lowerEdge = Math.max(lowerEdge, y); }
+        }
+        const center = (upperEdge + lowerEdge) / 2;
+        // The mouth's corner: where the line ends, the last of either lip's reach beside it.
+        let corner = 0, cornerY = center;
+        for (const v of src) { const x = Math.abs(P[v * 3]), y = P[v * 3 + 1]; if ((U[v] > 0.05 || L[v] > 0.05) && Math.abs(y - center) < 0.005 && x > corner && P[v * 3 + 2] > zFront - 0.02) { corner = x; cornerY = y; } }
+        corner *= 1.1; // (The field stops a little short of where the mouth's line truly ends.)
+        const H = Math.max(top - center, center - bottom), ids = [], index = [], uvs = [], at = new Map();
+        // A flat mapping: the mouth's curve is drawn in the picture. Bent here, the outline kinked at every edge of the coarse mesh, a lumpy lip.
+        const place = v => [0.5 + P[v * 3] / corner / LIP_BOX[0], 0.5 - (P[v * 3 + 1] - center) / (LIP_BOX[1] * H)];
+        for (let t = 0; t < I.length; t += 3) {
+            const tri = [src[I[t]], src[I[t + 1]], src[I[t + 2]]];
+            if (!tri.every(v => { const q = place(v); return q[0] > 0 && q[0] < 1 && q[1] > 0 && q[1] < 1 && (N[v * 3 + 2] > 0.02 || Math.abs(q[1] - 0.5) < 0.16) && P[v * 3 + 2] > zFront - 0.022; })) continue;
+            for (const v of tri) { if (!at.has(v)) { at.set(v, ids.length); ids.push(v); uvs.push(...place(v)); } index.push(at.get(v)); }
+        }
+        return (pack._lipPatch = { ids, index, uvs, upper: (top - center) / H, lower: (center - bottom) / H, bend: (cornerY - center) / H, span: [corner * LIP_BOX[0], H * LIP_BOX[1]] });
+    }
+    // The lip picture's box, in the mouth's half widths across and its lip heights up.
+    const LIP_BOX = [2.4, 3];
+
+    /**
+     * The mouth as it finally lies. The rest mesh's mouth is slack and open; closing and shaping it moves its vertices unevenly, so a picture
+     * mapped from rest bent at every triangle and the lips' outline came out lumpy. Mapped from here it runs as smooth as the picture.
+     */
+    function lipFit(pack, P) {
+        const patch = lipPatch(pack);
+        if (!patch) return null;
+        const Body = root.RRHumanBody || require('./HumanBody.js'), U = Body.maskOf(pack, ['shape/upperLip-incr'], 2), L = Body.maskOf(pack, ['shape/lowerLip-incr'], 2);
+        let upperEdge = Infinity, lowerEdge = -Infinity, top = -Infinity, bottom = Infinity, corner = 0, cornerY = 0, n = 0;
+        for (const v of pack.body.source) {
+            if (U[v] < 0.5 && L[v] < 0.5) continue;
+            const x = Math.abs(P[v * 3]), y = P[v * 3 + 1];
+            top = Math.max(top, y); bottom = Math.min(bottom, y);
+            if (x < 0.004) { if (U[v] > L[v]) upperEdge = Math.min(upperEdge, y); else lowerEdge = Math.max(lowerEdge, y); }
+        }
+        const center = (upperEdge + lowerEdge) / 2;
+        for (const v of patch.ids) if ((U[v] > 0.05 || L[v] > 0.05) && Math.abs(P[v * 3 + 1] - center) < 0.008) corner = Math.max(corner, Math.abs(P[v * 3]));
+        for (const v of patch.ids) if ((U[v] > 0.05 || L[v] > 0.05) && Math.abs(P[v * 3]) > corner * 0.9 && Math.abs(P[v * 3 + 1] - center) < 0.008) { cornerY += P[v * 3 + 1]; n++; }
+        cornerY = n ? cornerY / n : center; corner *= 1.06;
+        const H = Math.max(top - center, center - bottom), bend = (cornerY - center) / H;
+        // The lips' real outline, measured on the mesh across the mouth: how far each lip reaches from the mouth's line, from the middle to the corner.
+        const BINS = 44, ups = [[0, 0]], lows = [[0, 0]];
+        for (const v of patch.ids) {
+            if (U[v] < 0.3 && L[v] < 0.3) continue;
+            const side = Math.abs(P[v * 3]) / corner, t = (P[v * 3 + 1] - center) / H - bend * Math.min(1.2, side) ** 2;
+            if (side < 0.98) (U[v] >= L[v] ? ups : lows).push([side, U[v] >= L[v] ? t : -t]);
+        }
+        // One smooth curve round those points (their upper hull, to the corner), not a line through each: they lie far apart and it came out jagged.
+        const fill = points => {
+            points.push([1, 0]); points.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+            const hull = [];
+            for (const p of points) {
+                while (hull.length > 1) { const [a, b] = [hull[hull.length - 2], hull[hull.length - 1]]; if ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0) hull.pop(); else break; }
+                hull.push(p);
+            }
+            const peak = Math.max(...hull.map(p => p[1])), top = hull.findIndex(p => p[1] === peak), a = new Float32Array(BINS);
+            for (let i = 0; i < BINS; i++) {
+                const x = i / (BINS - 1);
+                if (x <= hull[top][0]) { a[i] = peak; continue; }
+                let k = top; while (k + 1 < hull.length - 1 && hull[k + 1][0] < x) k++;
+                const [p, q] = [hull[k], hull[k + 1]]; a[i] = p[1] + (q[1] - p[1]) * (x - p[0]) / Math.max(1e-6, q[0] - p[0]);
+            }
+            for (let pass = 0; pass < 8; pass++) { const b = a.slice(); for (let i = 1; i < BINS - 1; i++) a[i] = (b[i - 1] + 2 * b[i] + b[i + 1]) / 4; a[0] = a[1]; }
+            return Array.from(a, x => +x.toFixed(3));
+        };
+        return { center, corner, H, upper: (top - center) / H, lower: (center - bottom) / H, bend, up: fill(ups), low: fill(lows), span: [corner * LIP_BOX[0], H * LIP_BOX[1]] };
+    }
+
+    /** The lip picture and its relief: corner to corner, a bow in the upper lip, fine creases running up and down them, a soft shine. */
+    function lipTexture(pack, skinHex, options) {
+        const patch = lipPatch(pack), o = options || {}, W = o.size || 512, Ht = W >> 1;
+        const skin = Outfit.linear(skinHex || '#c69c7f'), lum = skin[0] * 0.3 + skin[1] * 0.59 + skin[2] * 0.11;
+        // Rosier than the skin on fair skin, deeper and browner on dark; a chosen color wins.
+        const natural = skin.map((c, i) => c * [0.84, 0.5, 0.56][i] * (0.9 + 0.1 * (1 - lum)));
+        // (A head's own lips: rose rather than orange, and a man's close to his skin; the form does the rest, not paint.)
+        const own = o.fit?.measured, g = o.fit?.gender ?? 0.5, rosy = own ? skin.map((c, i) => c + (c * [0.84, 0.55, 0.62][i] - c) * (1.0 - 0.28 * g)) : natural;
+        const base = o.color ? Outfit.linear(o.color) : rosy;
+        const data = new Uint8Array(W * Ht * 4), relief = o.relief ? new Float32Array(W * Ht) : null;
+        const fit = o.fit || patch, upper = fit?.upper ?? 1, lower = fit?.lower ?? 1, bendBy = fit?.bend ?? 0;
+        for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+            const u = ((x + 0.5) / W - 0.5) * LIP_BOX[0], side = Math.abs(u), t = (0.5 - (y + 0.5) / Ht) * LIP_BOX[1] - bendBy * Math.min(1.2, side) ** 2;
+            // How tall each lip stands here: tapering to a point at the corner, the upper with its bow and dip.
+            const bow = fit?.measured ? 1 : 1 + 0.07 * Math.exp(-(((side - 0.2) / 0.14) ** 2)) - 0.13 * Math.exp(-((side / 0.07) ** 2));
+            // (Read from the mesh's own outline, so color and shape agree all the way to the corners.)
+            const along = (a, s) => { if (!a) return 0; const at = Math.min(0.9999, s) * (a.length - 1), i = Math.floor(at); return a[i] + (a[i + 1] - a[i]) * (at - i); };
+            const tall = side >= 1 ? 0 : (t > 0 ? along(fit?.up, side) * bow : along(fit?.low, side)), q = tall > 1e-4 ? Math.abs(t) / tall : 9;
+            const alpha = 1 - (fit?.measured ? smooth(0.8, 1.05, q) : smooth(0.88, 1.03, q));
+            // Fine creases fanning out from the mouth's line, deepest mid-lip, each a little unlike the next.
+            const fan = u * (1 + 0.22 * Math.abs(t)) * 62 + (noise2(u * 5 + 3, t * 3 + 1) - 0.5) * 6, thin = Math.abs(Math.sin(fan)) ** 0.3;
+            const deep = (1 - thin) * smooth(0.02, 0.2, q) * (1 - smooth(0.72, 0.98, q)) * (0.55 + 0.9 * noise2(u * 14, 7.1));
+            const grain = noise2(u * 90, t * 60) - 0.5;
+            // The lip's roundness, fullest in the lower lip's middle.
+            const round = Math.sqrt(Math.max(0, 1 - q * q));
+            // (A head's own lips are lit by their real form: the upper faces down and the lower up, so the picture evens them out a little.)
+            const tone = fit?.measured ? (t > 0 ? 1.16 : 0.86) : 1;
+            let rgb = base.map(c => c * tone * (0.82 + 0.24 * round) * (1 - 0.08 * deep) * (1 + 0.03 * grain));
+            // The mouth's line, darkest in the middle, carried out to the corner and just past it as a soft fold.
+            const line = (1 - smooth(0.03, 0.11 * (1 - 0.35 * side), Math.abs(t))) * (1 - smooth(0.98, 1.13, side));
+            const dark = skin.map((c, i) => c * [0.3, 0.2, 0.2][i]);
+            rgb = mix(rgb, dark, line * 0.92);
+            const o4 = (y * W + x) * 4;
+            data[o4] = toByte(rgb[0]); data[o4 + 1] = toByte(rgb[1]); data[o4 + 2] = toByte(rgb[2]);
+            data[o4 + 3] = Math.round(255 * Math.max(alpha, line) * smooth(0, 0.04, x / W) * smooth(0, 0.04, 1 - x / W));
+            if (relief) relief[y * W + x] = alpha * (0.00042 * round - 0.00004 * deep + 0.000006 * grain) - 0.0002 * line;
+        }
+        const picture = { width: W, height: Ht, data, name: 'lips.png' };
+        if (relief) {
+            const pixels = new Uint8Array(data.length), [sx, sy] = fit?.span || [0.05, 0.03], tx = sx / W, ty = sy / Ht;
+            for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+                const dx = (relief[y * W + Math.min(W - 1, x + 1)] - relief[y * W + Math.max(0, x - 1)]) / (2 * tx);
+                const dy = (relief[Math.min(Ht - 1, y + 1) * W + x] - relief[Math.max(0, y - 1) * W + x]) / (2 * ty);
+                const length = Math.hypot(dx, dy, 1), a = (y * W + x) * 4;
+                pixels[a] = Math.round((0.5 - dx / length * 0.5) * 255); pixels[a + 1] = Math.round((0.5 + dy / length * 0.5) * 255);
+                pixels[a + 2] = Math.round((0.5 + 0.5 / length) * 255); pixels[a + 3] = 255;
+            }
+            picture.normal = { width: W, height: Ht, data: pixels, name: 'lips_n.png' };
+        }
+        return picture;
+    }
+
+    /** The lips as a part: the mouth's patch over the shaped face, a hair off the skin. Moves with the skin under it, so it talks. */
+    function lipPart(pack, P, normals) {
+        const patch = lipPatch(pack);
+        if (!patch || !patch.ids.length) return null;
+        const n = patch.ids.length, positions = new Float32Array(n * 3), nrm = new Float32Array(n * 3), joints = new Uint8Array(n * 4), weights = new Float32Array(n * 4), uvs = new Float32Array(n * 2), fit = lipFit(pack, P);
+        patch.ids.forEach((v, i) => {
+            // (Straight forward: along the normal it sank behind the skin where the lips fold into their line, and skin showed through as flecks.)
+            for (let k = 0; k < 3; k++) { nrm[i * 3 + k] = normals[v * 3 + k]; positions[i * 3 + k] = P[v * 3 + k] + (k === 2 ? 0.0004 : 0); }
+            uvs[i * 2] = Math.max(0, Math.min(1, 0.5 + P[v * 3] / fit.corner / LIP_BOX[0])); uvs[i * 2 + 1] = Math.max(0, Math.min(1, 0.5 - (P[v * 3 + 1] - fit.center) / (LIP_BOX[1] * fit.H)));
+            joints.set(pack.skinJoints.subarray(v * 4, v * 4 + 4), i * 4);
+            weights.set(pack.skinWeights.subarray(v * 4, v * 4 + 4), i * 4);
+        });
+        return { name: 'Lips', positions, normals: nrm, uvs, index: Uint32Array.from(patch.index), joints, weights,
+            texture: 'lips.png', opacity: 0.999, roughness: 0.4, kind: 'skin', source: Int32Array.from(patch.ids), decal: true, noShade: true };
+    }
+
     /** The areola patches as one part over the shaped body (`P`, every pack vertex, floor at 0). */
     function areolaPart(pack, P, normals, reach, skinPart) {
         const patches = areolaPatches(pack, reach);
@@ -1021,7 +1172,7 @@
             interpolation };
     }
 
-    const api = { strandTexture, areolaPatches, areolaTexture, areolaPart, chestParts, cranialPart, genitalSurface, genitalTexture, genitalPart, genitalProfile, replaceGenitalSurface, hairStrands, hairPart, furCards, bodyHairTexture };
+    const api = { strandTexture, areolaPatches, areolaTexture, areolaPart, lipPatch, lipFit, lipTexture, lipPart, chestParts, cranialPart, genitalSurface, genitalTexture, genitalPart, genitalProfile, replaceGenitalSurface, hairStrands, hairPart, furCards, bodyHairTexture };
     root.RRCharacterDetail = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

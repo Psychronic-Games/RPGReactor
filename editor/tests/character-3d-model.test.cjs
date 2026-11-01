@@ -37,7 +37,7 @@ test('static thumbnail settings do not leak into the main character or its reusa
     const main = Model.build(bodyPack, recipe, cache, { quality: 'preview', skinSize: 32, atlasSize: 64, eyeSource: eyes(16) });
     assert.ok(main.clips.length > 0);
     assert.equal(main.textures['eyes.png'].width, 16);
-    assert.equal(main.textures['shoes.png'].width, 1024);
+    assert.equal(main.textures['shoes.png'].width, globalThis.RR_DEFAULT_PICTURES?.picture || 1024, 'the main view keeps its own picture size, not the thumbnail\'s');
     assert.ok(sameBytes(main.parts[0].positions, small.parts[0].positions), 'thumbnail detail budgets do not reshape the body');
     assert.equal(JSON.stringify(recipe), before);
 });
@@ -183,7 +183,15 @@ test('a kept cache lays the outfit on the body built now, not on the one before'
     for (const body of [{ age: 11 }, { cup: 4, gender: 0 }, { weight: 3, gender: 1 }]) {
         const reused = Model.build(pack, Object.assign({ outfit }, body), kept, { quality: 'preview' });
         const fresh = Model.build(pack, Object.assign({ outfit }, body), {}, { quality: 'preview' });
-        for (let k = 0; k < fresh.parts.length; k++) assert.ok(sameBytes(reused.parts[k].positions, fresh.parts[k].positions), fresh.parts[k].name + ' on ' + JSON.stringify(body));
+        // The kept picture keeps its planar charts, drawn on the first body (Preview 61, 2026-10-30), and charts split
+        // vertices differently per body: so compare the points and triangles the cloth is laid on, not their numbering.
+        const places = p => new Set(Array.from({ length: p.positions.length / 3 }, (_, v) => Array.from(p.positions.subarray(v * 3, v * 3 + 3)).join()));
+        assert.equal(reused.parts.length, fresh.parts.length);
+        for (let k = 0; k < fresh.parts.length; k++) {
+            const a = places(reused.parts[k]), b = places(fresh.parts[k]), label = fresh.parts[k].name + ' on ' + JSON.stringify(body);
+            assert.equal(reused.parts[k].index.length, fresh.parts[k].index.length, label);
+            assert.ok(a.size === b.size && [...a].every(q => b.has(q)), label);
+        }
     }
 });
 
@@ -556,11 +564,13 @@ test('a modeled garment shows its own picture until a color is chosen; a color k
     const red = Model.build(pack, { outfit: [{ id: 'mh_tee_jeans', color: '#b02020', color2: '#6a6a6a' }] }, {}, { quality: 'preview' }).textures['cloth-mh_tee_jeans.png'];
     assert.ok(red.data !== own.data, 'recolor without changing the source picture');
     // Sample the texels the shirt and the trousers use.
-    const part = plain.parts.find(p => p.name === 'T-shirt and jeans'), size = red.width;
+    // The denim's weave chart splits the part's vertices (2026-10-30): a vertex finds its region by its painted coordinates.
+    const part = plain.parts.find(p => p.name === 'T-shirt and jeans'), size = red.width, regionAt = new Map();
+    for (let i = 0; i < g.region.length; i++) regionAt.set(g.uvRaw[i * 2] + ':' + g.uvRaw[i * 2 + 1], g.region[i]);
     const stats = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]];
     for (let i = 0; i < part.uvs.length / 2; i++) {
         const o = (Math.min(size - 1, Math.floor(part.uvs[i * 2 + 1] * size)) * size + Math.min(size - 1, Math.floor(part.uvs[i * 2] * size))) * 4;
-        const r = g.region[i], s = stats[r];
+        const r = regionAt.get(Math.round(part.uvs[i * 2] * 65535) + ':' + Math.round(part.uvs[i * 2 + 1] * 65535)), s = stats[r];
         const l = red.data[o] * 0.3 + red.data[o + 1] * 0.59 + red.data[o + 2] * 0.11;
         s[0] += red.data[o]; s[1] += red.data[o + 1]; s[2] += red.data[o + 2]; s[3] += l * l; s[4]++;
     }

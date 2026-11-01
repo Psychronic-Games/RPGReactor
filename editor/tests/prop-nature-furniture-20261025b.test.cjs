@@ -102,8 +102,10 @@ test('the season shows on mushrooms: young in spring, full in summer, leaf litte
 });
 
 test('every furniture type differs by style in finish, hardware and light; sci-fi glows and picking a style sets its finish', () => {
-    const sig = b => new Map(b.parts.map(p => [p.name.split(' ').pop(), [p.color || p.texture || '', p.metalness || 0, p.emissiveIntensity || 0].join('|')]));
-    for (const [form] of F.FORMS) {
+    // A texture counts by its pixels: wood takes the style's own frame color through its picture.
+    const picture = (b, p) => p.texture ? require('node:crypto').createHash('sha1').update(b.textures[p.texture]?.data || '').digest('hex') : '';
+    const sig = b => new Map(b.parts.map(p => [p.name.split(' ').pop(), [p.color || picture(b, p), p.metalness || 0, p.emissiveIntensity || 0].join('|')]));
+    for (const form of ['chair','armchair','sofa','bench','table','desk','bed','cabinet','bookshelf','fridge','microwave','tv','computer','wallPanel','console','serverRack']) {
         const built = {};
         for (const style of ['modern', 'rustic', 'scifi']) built[style] = F.build(Object.assign(F.fromPreset(form), F.styleLook(form, style), { style }), {}, { textureSize: 256 });
         const light = built.scifi.parts.find(p => p.name.endsWith(' light'));

@@ -47,7 +47,7 @@ test('doors are pivoted parts with rules that open and close, and a preview clip
 });
 test('wheels roll, front wheels steer, fans spin and gear folds, each loop closing on its start',()=>{
   const drive=V.build({...V.fromPreset('compact'),motion:'drive'}).previewClips[0];assert.equal(drive.name,'Driving');assert.ok(drive.tracks.length>=5);
-  const hover=V.build({...V.fromPreset('hover'),motion:'gear'});assert.equal(hover.previewClips[0].name,'Landing gear');assert.ok(hover.sidecarExtra.animations.some(a=>a.name==='Gear up')&&hover.sidecarExtra.animations.some(a=>a.type==='spin'&&a.part==='Lift fan'));
+  const hover=V.build({...V.fromPreset('hover'),motion:'gear'});assert.equal(hover.previewClips[0].name,'Landing gear');assert.ok(hover.sidecarExtra.animations.some(a=>a.name==='Gear up')&&hover.sidecarExtra.animations.some(a=>a.type==='spin'&&/^Lift fan \d$/.test(a.part)));
   const drone=V.build({...V.fromPreset('drone'),motion:'fly'});assert.equal(drone.previewClips[0].tracks.length,4);assert.equal(drone.sidecarExtra.parts.filter(p=>/^Rotor \d$/.test(p.name)).length,4);
   for(const clip of [drive,hover.previewClips[0],drone.previewClips[0]])for(const t of clip.tracks){const v=t.values,s=t.path==='rotation'?4:3,n=v.length;for(let k=0;k<s;k++)assert.ok(Math.abs(Math.abs(v[k])-Math.abs(v[n-s+k]))<1e-5,clip.name+' loops');}
 });

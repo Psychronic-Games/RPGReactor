@@ -185,10 +185,14 @@
         // still free to take it anywhere. A woman's face narrower, its cheeks soft; MakeHuman's man's face is long
         // and narrow, so his is shortened (the head, the chin, the nose) and broadened at the jaw's angle over a
         // squarer chin.
-        female: { headWidth: -0.35, headFat: -0.1, cheeks: 0.3, cheekBones: 0.7, jaw: -0.4, chin: 0.25, chinWidth: -0.3, mouthHeight: 0.12, eyeSize: 0.5, eyeOpen: -0.15, eyeSlant: 0.2, eyeBags: -0.5, eyeSpacing: -0.1, headOval: 0.55,
-            browRidge: -0.7, browHeight: -0.5, underbite: -0.25, noseWidth: -0.6, noseVolume: -0.3, noseLength: -0.4, noseTip: 0.2, nostrils: -0.2, upperLip: 0.35, lowerLip: 0.15, mouthWidth: -0.05, mouthCorners: 0.3, neck: -0.3 },
-        male: { headWidth: -0.15, headHeight: -0.4, headFat: -0.05, cheeks: 0, cheekBones: 0.85, jaw: 1, chin: 0.35, chinWidth: 0.3, chinHeight: -0.45, eyeSize: 0.3, eyeOpen: -0.05, eyeSlant: 0.15, eyeBags: -0.5, headSquare: 0.55, headOval: 0.2, noseWidth: -0.45, noseLength: -0.65, noseHump: -0.1,
-            upperLip: 0.2, lowerLip: 0.2, mouthWidth: 0.15, mouthCorners: 0.15, browHeight: -0.5, browRidge: 0.3, temples: -0.3, underbite: -0.2, neck: 0.15 }
+        // Tuned against measured proportions from the attractiveness literature: eye spacing near 46% of face width and eye to mouth near
+        // 36% of face length (Pallett, Link and Lee 2010), the mouth 1.5 noses wide, a lower lip fuller than the upper, even facial thirds.
+        // Near those averages rather than extreme: averageness is the strongest predictor. The two ends differ, and the middle of the
+        // gender slider blends them into a neutral face that keeps the same proportions.
+        female: { headWidth: -0.46, headFat: -0.1, foreheadHeight: -0.9, doubleChin: -0.6, cheeks: 0.18, cheekBones: 0.85, jaw: -0.31, chin: 0.17, chinWidth: -0.5, chinHeight: 0.15, mouthHeight: 0.36, eyeSize: 0.99, eyeOpen: -0.05, eyeSlant: 0.2, eyeBags: -0.5, eyeSpacing: 0.16, headOval: 0.55,
+            browRidge: -0.45, browHeight: -0.5, underbite: 0.05, noseWidth: -1, noseVolume: -0.47, noseLength: -0.25, noseDepth: 0.75, noseTip: 0.73, nostrils: -0.2, upperLip: -0.4, lowerLip: -0.5, mouthWidth: 0.44, mouthCorners: 0.3, neck: -0.4 },
+        male: { noseVolume: 0.27, headWidth: -0.89, headHeight: -0.4, headFat: -0.05, foreheadHeight: -0.75, doubleChin: -0.8, cheeks: -0.25, cheekBones: 0.95, jaw: 1.06, chin: 0.42, chinWidth: 0.3, chinHeight: 0.1, mouthHeight: 0.96, eyeSize: 0.5, eyeSpacing: 0.15, eyeOpen: -0.05, eyeSlant: 0.15, eyeBags: -0.5, headSquare: 0.3, headOval: 0.35, noseWidth: -0.75, noseLength: -1, noseDepth: 0.71, noseHump: -0.1,
+            upperLip: -0.6, lowerLip: -0.6, mouthWidth: 0.41, mouthCorners: 0.15, browHeight: -0.5, browRidge: 0.6, temples: -0.3, underbite: 0.05, neck: 0 }
     };
     /** With them, by their own targets (appeal/…): a defined upper lip, the mouth drawn back, an upright forehead, a younger skull. */
     const APPEAL_MOUTH = { female: { cupidsBow: 0.6, mouthBack: 0.35, foreheadForward: 0.5, younger: 0.35 }, male: { cupidsBow: 0.3, mouthBack: 0.3, foreheadForward: 0.45, younger: 0.25 } };
@@ -552,6 +556,8 @@
      * that has not loaded it) the mouth stays as MakeHuman made it.
      */
     const LIPS_AT_REST = { lipsPart: -0.35 };
+    /** Lip modeling, in meters at the rest mesh: lower fuller than upper, as on most faces. */
+    const LIP_SHAPE = { thin: 0.3, upper: 0.0012, lower: 0.0015, tubercle: 0.0005, bow: 0.0014, ridge: 0.0007, groove: 0.0012, hollow: 0.0014, corner: 0.0016 };
     // CharacterExpressions loads after this file and needs it; it hands itself over here when it loads (useExpressions).
     let expressions = null;
     function useExpressions(api) { expressions = api; }
@@ -574,10 +580,220 @@
         }
     }
 
+    /**
+     * The base mesh's lips are two flat bands on the face. This models what makes a mouth read as a mouth, by how far each vertex
+     * sits across it: the lips rolled forward and full, a tubercle at the upper lip's middle, the cupid's bow in its border,
+     * the philtrum's groove and ridges down to it, the hollow under the lower lip, and corners tucked back into the cheek.
+     * Worked out once on the rest mesh and laid under every target, so sliders and expressions keep working on top of it.
+     */
+    function lipSculpt(pack, P) {
+        if (pack._lipSculpt) return pack._lipSculpt;
+        const U = maskOf(pack, ['shape/upperLip-incr'], 2), L = maskOf(pack, ['shape/lowerLip-incr'], 2), N = vertexNormals(pack, P);
+        const lips = pack.body.source.filter(v => (U[v] > 0.5 || L[v] > 0.5) && N[v * 3 + 2] > 0.25), out = new Float32Array(P.length);
+        if (lips.length < 8) return (pack._lipSculpt = out);
+        let w = 0, front = -Infinity, top = -Infinity, bottom = Infinity;
+        for (const v of lips) { w = Math.max(w, Math.abs(P[v * 3])); front = Math.max(front, P[v * 3 + 2]); top = Math.max(top, P[v * 3 + 1]); bottom = Math.min(bottom, P[v * 3 + 1]); }
+        const bell = (x, width) => Math.exp(-(x * x) / (width * width));
+        for (const v of pack.body.source) {
+            const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2], u = x / w, side = Math.abs(u);
+            if (side > 1.7 || y > top + w * 1.3 || y < bottom - w * 1.1 || z < front - 0.03 || N[v * 3 + 2] < 0.2) continue;
+            const across = Math.max(0, 1 - (u / 1.06) ** 2), mid = (top + bottom) / 2, reach = (top - bottom) / 2;
+            // By place, not by the lip targets' reach, which steps from vertex to vertex and left the surface lumpy.
+            const inside = 1 - smooth01(0.75, 1.15, Math.abs(y - mid) / reach), upper = y >= mid ? inside : 0, lower = y < mid ? inside : 0;
+            let dy = 0, dz = LIP_SHAPE.upper * upper * across ** 0.6 + LIP_SHAPE.lower * lower * across ** 0.7 + LIP_SHAPE.tubercle * upper * bell(u, 0.22);
+            // The bow: the border lifted either side of a dip at the middle.
+            dy += 4 * upper * (1 - upper) * LIP_SHAPE.bow * (bell(side - 0.26, 0.16) - 0.75 * bell(u, 0.1));
+            const up = (y - top) / w, down = (bottom - y) / w;
+            if (up > 0) { const band = smooth01(0, 0.15, up) * (1 - smooth01(0.8, 1.2, up)); dz += band * (LIP_SHAPE.ridge * bell(side - 0.22, 0.1) - LIP_SHAPE.groove * bell(u, 0.12)); }
+            if (down > 0) dz -= LIP_SHAPE.hollow * smooth01(0, 0.2, down) * (1 - smooth01(0.5, 0.9, down)) * Math.max(0, 1 - (u / 0.9) ** 2);
+            dz -= LIP_SHAPE.corner * smooth01(0.82, 1.05, side) * (1 - smooth01(1.2, 1.6, side));
+            out[v * 3 + 1] = dy; out[v * 3 + 2] = dz;
+        }
+        const sculpt = relax(pack, out, 1);
+        // Toward the corners the lips stop short of each other and the far side of the head shows through the slit: their meeting
+        // rows are brought together, along the mouth, by how far apart they stand there.
+        const rows = new Map(), rowOf = v => Math.floor(Math.abs(P[v * 3]) / w * 10);
+        for (const v of pack.body.source) {
+            if (U[v] < 0.3 && L[v] < 0.3) continue;
+            const row = rows.get(rowOf(v)) || rows.set(rowOf(v), { upper: Infinity, lower: -Infinity }).get(rowOf(v));
+            if (U[v] >= L[v]) row.upper = Math.min(row.upper, P[v * 3 + 1]); else row.lower = Math.max(row.lower, P[v * 3 + 1]);
+        }
+        // (Read along the mouth between those rows, so the line stays a smooth one.)
+        const along = (side, key) => {
+            const at = side * 10 - 0.5, i = Math.floor(at), a = rows.get(i)?.[key], b = rows.get(i + 1)?.[key];
+            return isFinite(a) && isFinite(b) ? a + (b - a) * (at - i) : isFinite(a) ? a : b;
+        };
+        const seal = new Float32Array(P.length);
+        for (const v of pack.body.source) {
+            const side = Math.abs(P[v * 3]) / w;
+            if (side > 1.25 || (U[v] < 0.3 && L[v] < 0.3)) continue;
+            const upper = along(side, 'upper'), lower = along(side, 'lower');
+            if (!isFinite(upper) || !isFinite(lower)) continue;
+            const edge = U[v] >= L[v] ? upper : lower;
+            if (Math.abs(P[v * 3 + 1] - edge) < 0.0022) seal[v * 3 + 1] = ((upper + lower) / 2 - edge) * smooth01(0.6, 0.9, side);
+        }
+        const sealed = relax(pack, seal, 1);
+        for (let i = 0; i < sculpt.length; i++) sculpt[i] += sealed[i] * 0.55;
+        // Past each corner the base mesh keeps a sharp little fold, the slit running on into the cheek and catching the light as a tick.
+        // The whole fold, its inner skin too, is eased into the cheek, so a mouth ends in a soft dimple. Worked on the sculpted surface.
+        const moved = Float32Array.from(P);
+        for (let i = 0; i < moved.length; i++) moved[i] += sculpt[i];
+        const fold = pack.body.source.filter(v => { const side = Math.abs(P[v * 3]) / w; return side > 0.9 && side < 1.5 && Math.abs(P[v * 3 + 1] - (top + bottom) / 2) < w * 0.5 && P[v * 3 + 2] > front - 0.016; });
+        const eased = relaxIn(pack, moved, 16, fold);
+        for (const v of fold) { const fade = smooth01(0.9, 1.02, Math.abs(P[v * 3]) / w); for (let k = 0; k < 3; k++) sculpt[v * 3 + k] += (eased[v * 3 + k] - moved[v * 3 + k]) * fade; }
+        // The band round the lips' outer edge is where the base mesh's bands of faces end in a ripple: it caught the light as a lumpy
+        // outline. Evened out, on the sculpted surface; the mouth's line itself is left alone.
+        const shaped = Float32Array.from(P);
+        for (let i = 0; i < shaped.length; i++) shaped[i] += sculpt[i];
+        const edgeBand = pack.body.source.filter(v => {
+            const mask = Math.max(U[v], L[v]), side = Math.abs(P[v * 3]) / w, up = P[v * 3 + 1] - (top + bottom) / 2;
+            return mask < 0.85 && side < 1.15 && N[v * 3 + 2] > 0.3 && Math.abs(up) > 0.0035 && Math.abs(up) < (top - bottom) * 0.95 && P[v * 3 + 2] > front - 0.02;
+        });
+        const even = relaxIn(pack, shaped, 12, edgeBand);
+        for (const v of edgeBand) for (let k = 0; k < 3; k++) sculpt[v * 3 + k] += even[v * 3 + k] - shaped[v * 3 + k];
+        return (pack._lipSculpt = sculpt);
+    }
+
+    /**
+     * The face's form: each vertex moved onto the surface of a reference head (RR_FACE_FIELD), the female or the male set, sized by the face it lands
+     * on. Laid after the sliders, so they still work on top of it. Only the mouth's line is then closed.
+     */
+    function faceField(pack, P, recipe) {
+        if (root.RR_RAW_FACE) return;
+        const D = root.RR_FACE_FIELD || (typeof require === 'function' ? require('./FaceFieldData.js') : null);
+        if (!D || (recipe.species && recipe.species !== 'human')) return;
+        const F = headFields(pack), eyeIds = F.eyeIds, chinOf = () => { let c = Infinity; for (const v of pack.body.source) if (F.w[v] > 0.5 && Math.abs(P[v * 3]) < 0.012 && P[v * 3 + 2] > 0 && P[v * 3 + 1] < c) c = P[v * 3 + 1]; return c; };
+        let eyeY = 0;
+        for (const v of eyeIds) eyeY += P[v * 3 + 1] / eyeIds.length;
+        const E = eyeY - chinOf(), g = recipe.gender ?? 0.5;
+        // (The one head's own field, not a blend: its lids and lips are bound to this shape, and half of another head's moves tears them off the eye and mouth.)
+        for (const [set, k] of [[D.F, g < 0.5 ? 1 : 0], [D.M, g < 0.5 ? 0 : 1]]) {
+            if (k <= 0) continue;
+            const { ids, d } = set;
+            for (let i = 0; i < ids.length; i++) { const v = ids[i] * 3; P[v] += d[i * 3] * E * k; P[v + 1] -= d[i * 3 + 1] * E * k; P[v + 2] += d[i * 3 + 2] * E * k; }
+        }
+        sealMouth(pack, P, E);
+        seatEyes(pack, P, recipe, E);
+        faceOutline(pack, P, recipe, E, eyeY);
+        noseWidth(pack, P, recipe, E, eyeY);
+        eyeSet(pack, P, recipe, E, eyeY);
+    }
+
+    /**
+     * The head's outline, crown to chin: our half-width and the wanted one at each height (tenths of eyes-to-chin, from 0.8 above the eyes), the wanted read from
+     * the reference heads (face-proportions/outline.py), a man's jaw drawn partway to a woman's taper. The middle of the face stays: only cheeks, temples and the
+     * skull's sides move, so eyes and nose keep their places. Our own head was narrow and hollow beside the references; most of what looked gaunt or boxy was this.
+     */
+    const FACE_OUTLINE = {"F":[[0.0,0.276,0.452,0.534,0.569,0.581,0.579,0.575,0.573,0.57,0.56,0.543,0.521,0.503,0.487,0.462,0.417,0.336,0.197,0.0],[0.682,0.709,0.724,0.726,0.719,0.703,0.681,0.667,0.663,0.663,0.657,0.639,0.618,0.597,0.569,0.527,0.462,0.36,0.204,0.0]],"M":[[0.273,0.359,0.424,0.465,0.489,0.501,0.506,0.509,0.512,0.514,0.513,0.508,0.501,0.491,0.477,0.455,0.419,0.366,0.3,0.231],[0.451,0.52,0.576,0.613,0.629,0.621,0.6,0.583,0.58,0.587,0.592,0.588,0.574,0.552,0.522,0.49,0.44,0.374,0.281,0.17]]}, OUTLINE_FROM = -0.8;
+    function faceOutline(pack, P, recipe, E, eyeY) {
+        if (root.RR_NO_JAW || root.RR_NO_EYE_SEAT || root.RR_NO_HEAD_MESH || (recipe.head && recipe.head.kind)) return;
+        const g = Math.max(0, Math.min(1, recipe.gender ?? 0.5)), w = headFields(pack).w, ease = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+        const at = (a, y) => { const q = Math.max(0, Math.min(a.length - 1.001, (y - OUTLINE_FROM) * 10)), i = Math.floor(q); return a[i] + (a[i + 1] - a[i]) * (q - i); };
+        let tip = -Infinity;
+        const ball = new Set(headFields(pack).eyeIds);
+        for (const v of ball) tip = Math.max(tip, P[v * 3 + 2]);
+        for (let v = 0; v < pack.vertexCount; v++) {
+            if (!(w[v] > 0.01) || ball.has(v)) continue;
+            const y = (eyeY - P[v * 3 + 1]) / E, z = (P[v * 3 + 2] - tip) / E, x = Math.abs(P[v * 3]) / E;
+            // Above the brow the same widening, fading out toward the crown: the references' skulls stand higher, so width against width there means nothing.
+            const yy = Math.max(y, -0.3), from = at(FACE_OUTLINE.F[0], yy) * (1 - g) + at(FACE_OUTLINE.M[0], yy) * g, to = at(FACE_OUTLINE.F[1], yy) * (1 - g) + at(FACE_OUTLINE.M[1], yy) * g, x0 = Math.min(0.32 + 0.1 * ease(-0.9, -0.2, y) * (1 - ease(0.1, 0.8, y)), from * 0.75);     // (further out at eye height: the lids must keep the eyeball's width)
+            if (x <= x0 || from <= x0) continue;
+            // Below the chin only the face's underside: the neck behind it keeps its width.
+            const k = (1 - (1 - ease(-0.75, -0.35, z)) * ease(0.92, 1.1, y)) * (1 - ease(1.04, 1.34, y)), grow = (a => (a(y - 0.2) + a(y - 0.1) + a(y) + a(y + 0.1) + a(y + 0.2)) / 5)(q => { const u = Math.max(q, -0.3); return (at(FACE_OUTLINE.F[1], u) - at(FACE_OUTLINE.F[0], u)) * (1 - g) + (at(FACE_OUTLINE.M[1], u) - at(FACE_OUTLINE.M[0], u)) * g; }), wanted = x + grow * 0.75 * (1 - 0.8 * ease(0.3, 0.8, y)) * ease(-1.2, -0.45, y) * ease(x0, from, x);     // (eased over the face's height: taken row by row each step of the table leaves a crease across the cheek)     // growing smoothly out to the edge; what stands past it (the ears) goes with it
+            P[v * 3] = Math.sign(P[v * 3]) * (x + (wanted - x) * k * Math.min(1, w[v] * 2)) * E;
+        }
+    }
+
+    /**
+     * The eyes brought in toward the nose, in eyes-to-chin: the references set them wider than a face's proportions (about one eye's width between them),
+     * the bridge narrowing and the outer face staying where it is. Everything round the eye comes with it, skin, lids and brows.
+     */
+    const EYE_IN = [0.038, 0.024];
+    function eyeSet(pack, P, recipe, E, eyeY) {
+        if (root.RR_NO_JAW || root.RR_NO_EYE_SEAT || root.RR_NO_HEAD_MESH || (recipe.head && recipe.head.kind)) return;
+        const g = Math.max(0, Math.min(1, recipe.gender ?? 0.5)), by = (EYE_IN[0] + (EYE_IN[1] - EYE_IN[0]) * g) * E, w = headFields(pack).w, ease = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+        for (let v = 0; v < pack.vertexCount; v++) {
+            if (!(w[v] > 0.01)) continue;
+            const y = (eyeY - P[v * 3 + 1]) / E, x = Math.abs(P[v * 3]) / E, k = ease(-0.6, -0.2, y) * (1 - ease(0.15, 0.55, y)) * ease(0, 0.3, x) * (1 - ease(0.46, 0.7, x));
+            if (k > 0) P[v * 3] -= Math.sign(P[v * 3]) * by * k;
+        }
+    }
+
+    /** The nose drawn in a little across its wings, a man's most (his reference's is broad): the cheeks beside it stay. */
+    const NOSE_NARROW = [0.2, 0.26];
+    function noseWidth(pack, P, recipe, E, eyeY) {
+        if (root.RR_NO_JAW || root.RR_NO_EYE_SEAT || root.RR_NO_HEAD_MESH || (recipe.head && recipe.head.kind)) return;
+        const g = Math.max(0, Math.min(1, recipe.gender ?? 0.5)), amount = NOSE_NARROW[0] + (NOSE_NARROW[1] - NOSE_NARROW[0]) * g, w = headFields(pack).w, ease = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+        for (let v = 0; v < pack.vertexCount; v++) {
+            if (!(w[v] > 0.5) || P[v * 3 + 2] < 0) continue;
+            const y = (eyeY - P[v * 3 + 1]) / E, x = Math.abs(P[v * 3]) / E, k = ease(0.08, 0.3, y) * (1 - ease(0.44, 0.54, y)) * (1 - ease(0.2, 0.34, x));
+            if (k > 0) P[v * 3] *= 1 - amount * k;
+        }
+    }
+
+    /** The eyeballs behind the head's lid openings (see CharacterHeadMesh): moved and sized as that head was measured, sized by the face they land on. */
+    function seatEyes(pack, P, recipe, E) {
+        if (root.RR_NO_EYE_SEAT || root.RR_NO_HEAD_MESH || (recipe.head && recipe.head.kind)) return;
+        const D = root.RR_HEAD_MESH || (typeof require === 'function' ? require('./HeadMeshData.js') : null);
+        if (!D) return;
+        const seats = ((recipe.gender ?? 0.5) < 0.5 ? D.F : D.M).eye, ids = headFields(pack).eyeIds, sides = [1, -1];
+        sides.forEach((side, k) => {
+            const own = ids.filter(v => P[v * 3] * side > 0), s = seats[k], low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];
+            for (const v of own) for (let a = 0; a < 3; a++) { low[a] = Math.min(low[a], P[v * 3 + a]); high[a] = Math.max(high[a], P[v * 3 + a]); }
+            const c = low.map((q, a) => (q + high[a]) / 2);
+            for (const v of own) {
+                P[v * 3] = c[0] + (P[v * 3] - c[0]) * s.s + s.dx * E;
+                P[v * 3 + 1] = c[1] + (P[v * 3 + 1] - c[1]) * s.s - s.dy * E;
+                P[v * 3 + 2] = c[2] + (P[v * 3 + 2] - c[2]) * s.s + s.dz * E;
+            }
+        });
+    }
+
+    /**
+     * The mouth's line: the two rims of the lips (the last skin facing out before it rolls in) laid on one smooth curve, into the corners and past
+     * them, so a closed mouth has no slit to look into. Expressions open it from here. The lips' inner skin stays behind.
+     */
+    function sealMouth(pack, P, E) {
+        const U = maskOf(pack, ['shape/upperLip-incr'], 2), L = maskOf(pack, ['shape/lowerLip-incr'], 2), N = vertexNormals(pack, pack.positions), restFront = v => N[v * 3 + 2] > 0.05;
+        let front = -Infinity, upperEdge = Infinity, lowerEdge = -Infinity, top = -Infinity, bottom = Infinity;
+        for (const v of pack.body.source) {
+            if (U[v] < 0.5 && L[v] < 0.5) continue;
+            const y = P[v * 3 + 1];
+            top = Math.max(top, y); bottom = Math.min(bottom, y); front = Math.max(front, P[v * 3 + 2]);
+            if (Math.abs(P[v * 3]) < 0.004) { if (U[v] > L[v]) upperEdge = Math.min(upperEdge, y); else lowerEdge = Math.max(lowerEdge, y); }
+        }
+        const center = (upperEdge + lowerEdge) / 2, H = Math.max(top - center, center - bottom);
+        let corner = 0, cornerY = 0, n = 0;
+        const sides = pack.body.source.filter(v => (U[v] > 0.05 || L[v] > 0.05) && Math.abs(P[v * 3 + 1] - center) < 0.008 && P[v * 3 + 2] > front - 0.022);
+        for (const v of sides) corner = Math.max(corner, Math.abs(P[v * 3]));
+        for (const v of sides) if (Math.abs(P[v * 3]) > corner * 0.9) { cornerY += P[v * 3 + 1]; n++; }
+        cornerY = n ? cornerY / n : center; corner *= 1.06;
+        const { offsets, flat: links } = neighbors(pack), curve = x => center + (cornerY - center) * Math.min(1.2, Math.abs(x) / corner) ** 2 - H * 0.04 * Math.exp(-(((x / corner) / 0.12) ** 2));
+        const near = pack.body.source.filter(v => Math.abs(P[v * 3]) < corner * 1.3 && Math.abs(P[v * 3 + 1] - center) < H * 0.75 && P[v * 3 + 2] > front - E * 0.5), rim = new Map(), shift = new Float32Array(pack.vertexCount);
+        for (const v of near) {
+            if (!restFront(v)) continue;
+            for (let i = offsets[v]; i < offsets[v + 1]; i++) if (!restFront(links[i])) { rim.set(v, curve(P[v * 3]) - P[v * 3 + 1]); break; }
+        }
+        for (const [v, d] of rim) shift[v] = d;
+        for (let pass = 0; pass < 6; pass++) for (const v of near) {
+            if (rim.has(v)) continue;
+            let sum = 0, c = 0;
+            for (let i = offsets[v]; i < offsets[v + 1]; i++) { sum += shift[links[i]]; c++; }
+            if (c) shift[v] = sum / c * 0.9;
+        }
+        for (const v of near) P[v * 3 + 1] += shift[v];
+        const rows = new Map(), rowOf = v => Math.round(P[v * 3] / corner * 14);
+        for (const v of rim.keys()) { const r = rows.get(rowOf(v)) || rows.set(rowOf(v), [0, 0]).get(rowOf(v)); r[0] += P[v * 3 + 2]; r[1]++; }
+        const rimZ = v => { const r = rows.get(rowOf(v)); return r ? r[0] / r[1] : Infinity; };
+        for (const v of rim.keys()) P[v * 3 + 2] = rimZ(v);
+        for (const v of near) if (!restFront(v) && P[v * 3 + 2] > rimZ(v) - 0.0015) P[v * 3 + 2] = rimZ(v) - 0.0015;
+    }
+
     function shape(pack, recipe, out) {
         const positions = out && out.length === pack.positions.length ? out : new Float32Array(pack.positions.length);
         positions.set(pack.positions);
         closeLips(pack, positions, recipe);
+        { const lip = lipSculpt(pack, positions); for (let i = 0; i < positions.length; i++) positions[i] += lip[i]; }
         const natural = targetWeights(recipe, true), full = targetWeights(recipe);
         const narrowing = {};
         for (const key of ['hips', 'shoulders']) {
@@ -662,6 +878,7 @@
             for (const v of pack.body.source) floor = Math.min(floor, positions[v * 3 + 1]);
             for (let i = 0; i < positions.length; i += 3) { positions[i] *= k; positions[i + 1] = floor + (positions[i + 1] - floor) * k; positions[i + 2] *= k; }
         }
+        faceField(pack, positions, recipe);
         return positions;
     }
 
@@ -1054,8 +1271,10 @@
      * wrapping back round the skull toward the outer corner and a little
      * toward the nose, so it lies in the face instead of standing off it).
      */
-    const ALMOND = { width: 1.6, height: 0.6, tilt: 0.28, dome: 0.21, back: 0.11, wrapOut: 0.75, wrapIn: 0.15 };
-    const almondHalf = out => (Math.abs(out) >= 1 ? 0 : Math.pow(1 - out * out, 0.42) * (1 - 0.22 * out));
+    // Large, soft and flush: a shallow dome and a rounded outer corner, tilted up and away. A deeper dome and a wrapped
+    // tip stood out of the head as a thorn in profile.
+    const ALMOND = { width: 1.62, height: 0.52, tilt: 0.42, dome: 0.12, back: 0.08, wrapOut: 0.8, wrapIn: 0.12, apart: 0.16 };
+    const almondHalf = out => (Math.abs(out) >= 1 ? 0 : Math.pow(1 - out * out, 0.62) * (1 - 0.1 * out));
     function almondFrame(pack, P, side, size = 1) {
         const ids = [...new Set(pack.eyes.refs)].filter(v => Math.sign(pack.positions[v * 3]) === side);
         const c0 = [0, 1, 2].map(k => ids.reduce((t, v) => t + P[v * 3 + k], 0) / ids.length);
@@ -1068,8 +1287,14 @@
         const U0 = [F[2], 0, -F[0]], V0 = [0, 1, 0];
         const t = ALMOND.tilt * side, ct = Math.cos(t), st = Math.sin(t);
         const U = [0, 1, 2].map(k => U0[k] * ct + V0[k] * st), V = [0, 1, 2].map(k => -U0[k] * st + V0[k] * ct);
-        const a = R * ALMOND.width * size, b = a * ALMOND.height;
-        const c = [0, 1, 2].map(k => c0[k] + F[k] * R * 0.9 + U0[k] * side * a * 0.04 + V0[k] * a * 0.06);
+        // Never past the side of the head, on any skull: read as sunglasses from above. The lens stays inside the face at its own height.
+        const F0 = headFields(pack);
+        let faceSide = 0;
+        // (Measured behind the eye, which its socket doesn't change: the lens and the socket must come out the same size.)
+        for (const v of pack.body.source) if (F0.w[v] > 0.5 && Math.abs(P[v * 3 + 1] - c0[1]) < R * 0.7 && P[v * 3 + 2] < c0[2] - R) faceSide = Math.max(faceSide, Math.abs(P[v * 3]));
+        const room = (faceSide * 0.8 - Math.abs(c0[0])) / (Math.cos(ALMOND.tilt) + ALMOND.apart);
+        const a = Math.min(R * ALMOND.width * size, room > R ? room : Infinity), b = a * ALMOND.height;
+        const c = [0, 1, 2].map(k => c0[k] + F[k] * R * 0.5 + U0[k] * side * a * ALMOND.apart + V0[k] * a * 0.06);
         const lens = rr => a * (ALMOND.dome * Math.sqrt(Math.max(0, 1 - rr * rr)) - ALMOND.back * rr * rr);
         const wrap = x => { const o = x * side; return a * (o > 0 ? ALMOND.wrapOut : ALMOND.wrapIn) * o * o; };
         return { c, U, V, F, a, b, side, R, lens, surf: (x, rr) => lens(rr) - wrap(x) };
@@ -1088,6 +1313,8 @@
      * depth, fuller in front than behind), so whatever the sliders made of
      * the human skull, no dent, ridge or lump is left on it.
      */
+    /** The Grey's skull, by the height from chin to eyes: the ball's radius, how far it sits above and behind the eyes, its width across. */
+    const GREY_SKULL = { radius: 1.02, up: 0.81, back: 1.08, wide: 1.1 };
     function greyDome(pack, P) {
         const F = headFields(pack), own = new Set(F.eyeIds);
         const eye = meanOf(P, F.eyeIds), h = meanOf(P, pack.bones[F.head].head);
@@ -1100,26 +1327,62 @@
             ax = Math.max(ax, Math.abs(P[v * 3])); zmin = Math.min(zmin, P[v * 3 + 2]); zmax = Math.max(zmax, P[v * 3 + 2]);
         }
         if (!isFinite(zmin)) return;
-        // A little fuller than the skull it replaces, most of all upward: the large cranium over a small face.
-        const cy = eye[1] - H * 0.05, cz = (zmin + zmax) / 2, by = (crown - cy) * 1.1, front = (zmax - cz) * 1.04, back = (cz - zmin) * 1.06;
-        ax *= 1.05;
-        const field = new Float32Array(P.length);
-        for (let v = 0; v < F.w.length; v++) {
-            if (F.w[v] <= 0 || own.has(v)) continue;
+        const cz = zmin + (zmax - zmin) * 0.5;
+        let chinY = Infinity, chinZ = 0;
+        for (const v of pack.body.source) {
             const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
-            // Above the brow everywhere; behind the head's middle down to the nape.
-            // In front it starts higher, over the forehead, so the brow over the eyes keeps its own line.
-            const rise = smooth01(cz, zmax, z), top = smooth01(brow - H * 0.08 + rise * H * 0.1, brow + H * 0.06 + rise * H * 0.22, y), nape = smooth01(cz + H * 0.05, cz - H * 0.15, z) * smooth01(cy - H * 0.45, cy - H * 0.1, y);
-            const wd = Math.max(top, nape) * smooth01(0.5, 0.95, F.w[v]);
-            if (!wd) continue;
-            const dx = x / ax, dy = (y - cy) / by, dz = (z - cz) / (z > cz ? front : back);
-            const e = Math.hypot(dx, Math.max(dy, -1), dz);
-            if (e < 1e-6) continue;
-            const k = 1 / e - 1;
-            field[v * 3] = x * k * wd; field[v * 3 + 1] = (y - cy) * k * wd; field[v * 3 + 2] = (z - cz) * k * wd;
+            if (!own.has(v) && F.w[v] > 0.5 && Math.abs(x) < 0.015 && z > cz && y < chinY) { chinY = y; chinZ = z; }
         }
-        const eased = relax(pack, field, 2);
-        for (let v = 0; v < F.w.length; v++) if (!own.has(v)) for (let k = 0; k < 3; k++) P[v * 3 + k] += eased[v * 3 + k];
+        if (!isFinite(chinY)) return;
+        // A teardrop leaning back: a ball of brain high behind the face, drawn in straight lines to the point of the chin.
+        // Placed by the face it sits over, so it keeps its shape on any recipe. (Proportions from the owner's sketch.)
+        const E = eye[1] - chinY, r = E * GREY_SKULL.radius, ballY = eye[1] + E * GREY_SKULL.up, ballZ = eye[2] - E * GREY_SKULL.back;
+        const cy0 = chinY - ballY, cz0 = chinZ - ballZ, L = Math.hypot(cy0, cz0), edge = Math.acos(Math.min(1, r / L));
+        const reach = (dy, dz) => {
+            const len = Math.hypot(dy, dz) || 1e-6, along = Math.acos(Math.max(-1, Math.min(1, (dy * cy0 + dz * cz0) / (len * L))));
+            return along >= edge ? r : r / Math.cos(edge - along);
+        };
+        const midY = eye[1] + E * 0.1, midZ = eye[2] - E * 0.45;
+        // Widest high up, narrowing to the face's own width at the eyes, so the brain never overhangs the face as a rim.
+        const widthAt = y => GREY_SKULL.wide * (0.74 + 0.26 * smooth01(eye[1] + E * 0.1, ballY + r * 0.15, y));
+        const within = (x, dy, dz) => {
+            const y = dy + midY - ballY, z = dz + midZ - ballZ, plane = Math.hypot(y, z), dx = x / widthAt(dy + midY), span = Math.hypot(dx, plane);
+            return span < (plane > 1e-6 ? reach(y * span / plane, z * span / plane) : r);
+        };
+        const field = new Float32Array(P.length);
+        for (const v of pack.body.source) {
+            if (own.has(v)) continue;
+            const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2], w = F.w[v] || 0;
+            const rise = smooth01(cz, zmax, z), top = smooth01(brow - H * 0.08 + rise * H * 0.1, brow + H * 0.06 + rise * H * 0.22, y) * smooth01(0.5, 0.95, w);
+            const behind = smooth01(cz + H * 0.05, cz - H * 0.15, z) * smooth01(ballY - r * 1.05, ballY - r * 0.25, y);
+            const wd = Math.max(top, behind);
+            if (!wd) continue;
+            // Out along the ray from the middle of the head, to where it leaves the drop. (Not from the ball's own center: on a
+            // small skull that lies almost on the surface, and the rays would scatter.)
+            const dx = x, dy = y - midY, dz = z - midZ;
+            if (!within(dx, dy, dz)) continue;
+            let out = 1;
+            while (out < 8 && within(dx * out, dy * out, dz * out)) out *= 1.25;
+            let lo = out === 1 ? 1 : out / 1.25, hi = out;
+            for (let i = 0; i < 10; i++) { const t = (lo + hi) / 2; if (within(dx * t, dy * t, dz * t)) lo = t; else hi = t; }
+            const m = (lo - 1) * wd;
+            field[v * 3] = x * m; field[v * 3 + 1] = dy * m; field[v * 3 + 2] = dz * m;
+        }
+        const eased = relax(pack, field, 9);
+        for (let v = 0; v < P.length / 3; v++) if (!own.has(v)) for (let k = 0; k < 3; k++) P[v * 3 + k] += eased[v * 3 + k];
+        // The scalp has few vertices, bunched near the ears: stretched over the drop they stand out as points on its outline. Evened out
+        // over its surface (eased among their neighbors, then back onto it) they round it, with no vertices added.
+        const scalp = pack.body.source.filter(v => !own.has(v) && P[v * 3 + 1] > eye[1] + E * 0.5 && P[v * 3 + 2] < eye[2] - E * 0.28);
+        const onDrop = v => {
+            const dx = P[v * 3], dy = P[v * 3 + 1] - midY, dz = P[v * 3 + 2] - midZ;
+            let lo = 0.3, hi = 3;
+            for (let i = 0; i < 12; i++) { const t = (lo + hi) / 2; if (within(dx * t, dy * t, dz * t)) lo = t; else hi = t; }
+            P[v * 3] *= lo; P[v * 3 + 1] = midY + dy * lo; P[v * 3 + 2] = midZ + dz * lo;
+        };
+        for (let round = 0; round < 8; round++) {
+            const even = relaxIn(pack, Float32Array.from(P), 2, scalp);
+            for (const v of scalp) { for (let k = 0; k < 3; k++) P[v * 3 + k] = even[v * 3 + k]; onDrop(v); }
+        }
     }
 
     /**
@@ -1169,11 +1432,47 @@
         }
         const eased = relax(pack, field, 3);
         for (let v = 0; v < pack.vertexCount; v++) for (let k = 0; k < 3; k++) P[v * 3 + k] += eased[v * 3 + k];
-        // Inside the outline the skin stays behind the lens however the easing spread it.
-        for (const [v, fr, rr, xe] of clamp) {
-            const q = almondAt(fr, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]]), to = fr.surf(xe, rr) - 0.003;
-            if (q.f > to) for (let k = 0; k < 3; k++) P[v * 3 + k] += fr.F[k] * (to - q.f);
+        // The eye's outline is where the skin crosses the lens, and the tear duct's many small folds make that a ragged line. The ring of
+        // skin round the outline is faired, the tear duct's side hardest, so the outline runs clean.
+        const lensBack = () => {
+            // Inside the outline the skin stays behind the lens however the easing spread it.
+            for (const [v, fr, rr, xe] of clamp) {
+                const q = almondAt(fr, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]]), to = fr.surf(xe, rr) - 0.003;
+                if (q.f > to) for (let k = 0; k < 3; k++) P[v * 3 + k] += fr.F[k] * (to - q.f);
+            }
+        };
+        lensBack();
+        for (const side of [1, -1]) {
+            const fr = almondFrame(pack, P, side, size), ring = [], duct = [], mid = Math.abs(fr.c?.[0] ?? 0.04);
+            for (const v of face) {
+                if (Math.sign(P[v * 3]) !== side) continue;
+                const q = almondAt(fr, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]]);
+                if (q.rr < 0.72 || q.rr > 1.5) continue;
+                ring.push(v);
+                if (Math.abs(P[v * 3]) < mid) duct.push(v);
+            }
+            for (const [list, passes] of [[ring, 3], [duct, 10]]) {
+                if (!list.length) continue;
+                const fair = relaxIn(pack, Float32Array.from(P), passes, list);
+                for (const v of list) for (let k = 0; k < 3; k++) P[v * 3 + k] = fair[v * 3 + k];
+            }
+            // The skin is coarser than the curve it should end in: tucked just behind the lens all the way round, so the outline you see
+            // is the lens's own smooth edge.
+            for (const v of face) {
+                if (Math.sign(P[v * 3]) !== side) continue;
+                const q = almondAt(fr, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]]);
+                // (Not by the outline's own measure, which runs out at a corner just where the skin needs tucking most.)
+                const near = Math.hypot(q.x, q.y / Math.max(0.55, almondHalf(q.x * side)));
+                if (near >= 1.22 || Math.abs(q.x) > 1) continue;
+                const to = fr.surf(Math.max(-1, Math.min(1, q.x)), Math.min(1, near)) - 0.0015;
+                const fade = 1 - smooth01(1.06, 1.22, near);
+                if (q.f > to) for (let k = 0; k < 3; k++) P[v * 3 + k] += fr.F[k] * (to - q.f) * fade;
+            }
+            // The bridge beside it eased after, so the tuck leaves no crease between the eyes.
+            const bridge = face.filter(v => { if (Math.sign(P[v * 3]) !== side || Math.abs(P[v * 3]) > mid) return false; const rr = almondAt(fr, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]]).rr; return rr > 1.12 && rr < 2.4; });
+            if (bridge.length) { const eased = relaxIn(pack, Float32Array.from(P), 8, bridge); for (const v of bridge) for (let k = 0; k < 3; k++) P[v * 3 + k] = eased[v * 3 + k]; }
         }
+        lensBack();
     }
 
     /** The sex a recipe shows: chosen, or by its Gender slider. */
@@ -1652,12 +1951,26 @@
                     if (Math.sign(P[v * 3]) !== side) continue;
                     const d = Math.hypot(Q[v * 3 + 1] - c[1], Q[v * 3 + 2] - c[2]) / (reach || 1);
                     Q[v * 3] += side * 0.002 * Math.max(0, 1 - d * d);
-                    const e = Math.min(1, own[v] * 1.5) * m.earsAway;
+                    // All of the ear goes, its root too: a stub left by a soft edge stood round the ear hole as a nub.
+                    const e = Math.min(1, own[v] * 3.5) * m.earsAway;
                     for (let k = 0; k < 3; k++) P[v * 3 + k] += (Q[v * 3 + k] - P[v * 3 + k]) * e;
                 }
                 // With the ear gone, an ear hole: a pit in the side of the head, as wide as asked.
                 if (m.earsAway > 0.6 && m.earHoles > 0) {
                     const r = 0.004 + 0.007 * m.earHoles, depth = (0.004 + 0.006 * m.earHoles) * (m.earsAway - 0.6) / 0.4;
+                    // First the side of the head made whole where the ear stood, level with the skin around it,
+                    // so the hole is a recess in a smooth surface and not the mouth of a stub.
+                    let wall = 0, around = 0;
+                    for (let v = 0; v < F.w.length; v++) {
+                        if (F.w[v] < 0.5 || Math.sign(P[v * 3]) !== side) continue;
+                        const d = Math.hypot(P[v * 3 + 1] - c[1], P[v * 3 + 2] - c[2]);
+                        if (d > 0.036 && d < 0.046 && Math.abs(P[v * 3] - c[0]) < 0.04) { wall += P[v * 3]; around++; }
+                    }
+                    if (around) for (let v = 0; v < F.w.length; v++) {
+                        if (F.w[v] < 0.5 || Math.sign(P[v * 3]) !== side) continue;
+                        const d = Math.hypot(P[v * 3 + 1] - c[1], P[v * 3 + 2] - c[2]);
+                        if (d < 0.038 && Math.abs(P[v * 3] - c[0]) < 0.05) P[v * 3] += (wall / around - P[v * 3]) * (1 - smooth01(0.018, 0.038, d));
+                    }
                     for (let v = 0; v < F.w.length; v++) {
                         if (F.w[v] < 0.5 || Math.sign(P[v * 3]) !== side) continue;
                         const d = Math.hypot(P[v * 3 + 1] - c[1], P[v * 3 + 2] - c[2]);

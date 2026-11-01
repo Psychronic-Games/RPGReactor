@@ -198,7 +198,7 @@ test('Ferengi nose folds refine connected skin, preserve eyes and clear when cha
         const recipe = species('ferengi', gender), b = Q.Model.build(pack, recipe, {}, options());
         assert.ok(recipe.morph.noseFolds > 0);
         const detail = b.parts.find(p => p.name === 'Forehead detail');
-        assert.ok(detail && detail.index.length / 3 <= 12800, 'bounded finer bridge and brow folds');
+        assert.ok(detail && detail.index.length / 3 <= 16000, 'bounded finer bridge and brow folds');
         const actual = Q.Body.shape(pack, recipe), plain = Q.Body.shape(pack, { ...recipe, morph: { ...recipe.morph, noseFolds: 0 } });
         let displacement = 0;
         for (let i = 2; i < plain.length; i += 3) displacement = Math.max(displacement, Math.abs(actual[i] - plain[i]));

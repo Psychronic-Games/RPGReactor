@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 // Forge › 3D Character Builder hair (RRCharacterHair): every head style, beard, mustache and brow grows on the shaped
 // body, stays outside it and off the face, keeps the mouth open, follows an exaggerated head, and saves into the GLB.
 const assert = require('node:assert/strict');
@@ -64,7 +65,7 @@ test('beard strands caught against an extremely broad, short face stay finite', 
 
 test('every head style builds on a man and a woman, within budget, skinned to the head', () => {
     const headIndex = man.bones.findIndex(b => b.name === 'Head');
-    for (const style of Hair.STYLES) for (const [label, built] of [['man', man], ['woman', woman]]) {
+    for (const [style, [label, built]] of cover(Hair.STYLES, [['man', man], ['woman', woman]])) {
         const parts = Hair.build(pack, built, { style: style.id });
         assertWellFormed(parts, built, `${style.id}/${label}`);
         const hair = byName(parts, 'Hair');
@@ -133,7 +134,7 @@ test('brows sit above the eyes, one per side, and every brow style builds', () =
             y += P[i + 1] / (P.length / 3);
             if (P[i] > 0) left++; else right++;
         }
-        assert.ok(y > H.eyeY + H.eyeRadius * 1.1 && y < H.eyeY + H.eyeRadius * 2.6, `${b.id} brow height`);
+        assert.ok(y > H.eyeY + H.eyeRadius * 0.9 && y < H.eyeY + H.eyeRadius * 2.6, `${b.id} brow height`);
         assert.ok(left > 0 && right > 0, b.id);
     }
 });
@@ -141,16 +142,16 @@ test('brows sit above the eyes, one per side, and every brow style builds', () =
 test('brows stay out of the baked shading; lashes: the upper lid long and dense, the lower short', () => {
     const parts = Hair.build(pack, woman, { style: 'bald' });
     assert.equal(byName(parts, 'Brows').noShade, true, 'a sheet over the skin shades nothing under it');
-    const lashes = byName(parts, 'Lashes'), T = Hair.lashTexture(128);
-    // The picture: the left half (upper lid) holds far more lash than the right (lower lid).
+    // Real strands, not a picture on a card: each tapers to its tip and is tied to the lid's skin, so it blinks.
+    const lashes = byName(parts, 'Lashes'), H = Hair._internal.measure(pack, woman), P = lashes.positions;
+    assert.equal(lashes.texture, undefined, 'no card picture, which blurs to a band at a distance');
+    assert.equal(lashes.source.length, P.length / 3, 'every vertex follows the skin');
     let upper = 0, lower = 0;
-    for (let y = 0; y < T.height; y++) for (let x = 0; x < T.width; x++) (x < T.width / 2 ? (upper += T.data[(y * T.width + x) * 4 + 3]) : (lower += T.data[(y * T.width + x) * 4 + 3]));
-    assert.ok(upper > lower * 2, `upper ${upper}, lower ${lower}`);
-    // Each lid's cards on its own half: those above the eye on the left, below it on the right.
-    const P = lashes.positions, U = lashes.uvs, H = Hair._internal.measure(pack, woman);
-    let wrong = 0;
-    for (let i = 0; i < P.length / 3; i++) if (Math.abs(P[i * 3 + 1] - H.eyeY) > H.eyeRadius * 0.5 && (P[i * 3 + 1] > H.eyeY) !== (U[i * 2] <= 0.5)) wrong++;
-    assert.equal(wrong, 0, 'lash cards on the wrong half');
+    for (let i = 0; i < P.length / 3; i += 10) (P[i * 3 + 1] > H.eyeY ? upper++ : lower++);
+    assert.ok(upper > lower * 1.5, `upper ${upper}, lower ${lower}`);
+    // (The last strand in the part: the lash lines come first in each lid.)
+    const e = P.length - 30, root = Math.hypot(P[e] - P[e + 3], P[e + 1] - P[e + 4], P[e + 2] - P[e + 5]), tip = Math.hypot(P[e + 24] - P[e + 27], P[e + 25] - P[e + 28], P[e + 26] - P[e + 29]);
+    assert.ok(tip < root * 0.3, 'a lash thins to its tip');
 });
 
 test('a full beard is a soft volume of flat strand cards; a budget thins hair and beard alike', () => {

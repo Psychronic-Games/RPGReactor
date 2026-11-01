@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 // Forge › 3D Character Builder, four-legged gear (RRCreatureGear): a catalog of collars, tack, barding, packs and regalia,
 // presets, a normalized `gear` list in the creature recipe, and parts fitted and skinned to the creature they are built on.
 const assert = require('node:assert/strict');
@@ -35,11 +36,12 @@ test('normalizeGear: known pieces, one a slot, colors and material checked', () 
 });
 
 test('every piece builds on every kind, skinned to real bones, as cloth or metal, near the body', () => {
-    for (const kind of ['horse', 'dog', 'lion', 'cat', 'bull']) {
+    const heights = new Map();
+    for (const [kind, item] of cover(['horse', 'dog', 'lion', 'cat', 'bull'], Gear.ITEMS)) {
         const base = Creature.kindRecipe(kind);
-        const bare = Creature.build(base, { quality: 'preview', hairBudget: 0 });
-        const height = bare.height;
-        for (const item of Gear.ITEMS) {
+        if (!heights.has(kind)) heights.set(kind, Creature.build(base, { quality: 'preview', hairBudget: 0 }).height);
+        const height = heights.get(kind);
+        {
             const built = Creature.build(Object.assign({}, base, { gear: [{ id: item.id }] }), { quality: 'preview', hairBudget: 0 });
             const parts = built.parts.filter(p => p.name.startsWith('Gear '));
             assert.ok(parts.length, kind + ' ' + item.id + ' builds');

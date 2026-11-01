@@ -111,13 +111,14 @@ test('the saved creature is a skinned GLB with vertex colors and an Idle clip, a
     const glb = Glb.toGlb(built, { name: 'Horse', clips: built.clips });
     const { json } = Optimizer.parseGlb(glb);
     const names = json.skins[0].joints.map(j => json.nodes[j].name);
-    for (const name of ['Hips', 'Chest', 'Head', 'Tail', 'LeftFrontUpperLeg', 'RightRearFoot']) assert.ok(names.includes(name), name);
+    for (const name of ['Hips', 'Chest', 'Head', 'Jaw', 'Tail', 'LeftFrontUpperLeg', 'RightRearFoot']) assert.ok(names.includes(name), name);
     for (const mesh of json.meshes) assert.ok(mesh.primitives[0].attributes.COLOR_0 != null, mesh.name + ' colors');
     assert.equal(json.animations.length, 1);
     assert.equal(json.animations[0].name, 'Idle');
     assert.ok(json.animations[0].channels.some(c => json.nodes[c.target.node].name === 'Tail'));
     const tris = built.parts.reduce((s, p) => s + p.index.length / 3, 0);
-    assert.ok(tris > 8000 && tris < 45000, 'triangles ' + tris);
+    // Ratchet, raised from 45k on 2026-10-31: the mouth's lining, tongue and teeth are visible detail (horse 45,406).
+    assert.ok(tris > 8000 && tris < 46000, 'triangles ' + tris);
     const side = Creature.sidecar(built);
     assert.equal(side.rig.template, 'quadruped');
     assert.equal(side.rig.weightsFile, undefined);

@@ -195,7 +195,9 @@
         if(previous&&previous.key===key&&previous.layout===JSON.stringify(layout))resources=previous.resources;
         else{
             const {width,height}=layout,count=width*height,albedo=new Uint8Array(count*4),normal=new Uint8Array(count*4),surface=new Uint8Array(count*4);
-            for(let i=0;i<count;i++){albedo.set([230,230,230,255],i*4);normal.set([128,128,255,255],i*4);surface.set([255,180,40,255],i*4);}
+            // One fill per picture: setting each of four million texels from a new array was a tenth of a vehicle's build.
+            const blank=(bytes,r,g,b,a)=>{bytes.set([r,g,b,a]);for(let done=4;done<bytes.length;done*=2)bytes.copyWithin(done,0,Math.min(done,bytes.length-done));};
+            blank(albedo,230,230,230,255);blank(normal,128,128,255,255);blank(surface,255,180,40,255);
             const broad=Paint.noise(r.surfaceSeed,32),stain=Paint.noise(r.surfaceSeed+17,64),rgbLinear=lin('#62503b'),sRGB=v=>Math.round(255*clamp(v<=.0031308?v*12.92:1.055*v**(1/2.4)-.055));
             const microScale=r.finish==='powder'?.65:r.finish==='composite'?.75:.40,boxes=keepouts(parts,r),style=r.bodyStyle||'rounded',density01=r.details===false?0:r.detailDensity??.6;
             const baseRough=r.roughness+(r.finish==='powder'?.22:r.finish==='composite'?-.08:0),metal=r.finish==='brushed'?.78:r.finish==='composite'?.18:.12;
@@ -204,10 +206,13 @@
                 const p=c.p,q=c.rect,base=lin(p.color),mid=bounds(p).mid,m=c.filtered=filteredMaps(r.finish,512*5*Math.max(c.w/q.w,c.h/q.h)),mw=m.albedo.width,mh=m.albedo.height,[A0,A1]=c.axes;
                 // Padded chart background carries the same paint, avoiding a
                 // bright border when mipmaps sample past a thin surface edge.
+                // The finish maps hold bytes, so each result has 256 possible values: worked out once, not per texel and channel.
+                const shades=new Uint8Array(256*3),roughs=new Uint8Array(256),metalByte=Math.round(metal*255),roughBase=Math.max(.18,Math.min(.96,baseRough+r.wear*.14));
+                for(let b=0;b<256;b++){const gray=linear(b/255);for(let k=0;k<3;k++)shades[b*3+k]=sRGB(base[k]*gray*(1-r.wear*.2));roughs[b]=Math.round(clamp(roughBase*b/255)*255);}
                 for(let y=q.y-4;y<q.y+q.h+4;y++)for(let x=q.x-4;x<q.x+q.w+4;x++){
-                    const u=clamp((x-q.x)/q.w),v=clamp((y-q.y)/q.h),px=mid[0],tx=((Math.floor(mix(c.lo[0],c.hi[0],u)*5*mw)%mw)+mw)%mw,ty=((Math.floor(mix(c.lo[1],c.hi[1],v)*5*mh)%mh)+mh)%mh,si=(ty*mw+tx)*4,out=(y*width+x)*4,gray=linear(m.albedo.data[si]/255);
-                    for(let k=0;k<3;k++)albedo[out+k]=sRGB(base[k]*gray*(1-r.wear*.2));
-                    surface.set([255,Math.round(clamp(Math.max(.18,Math.min(.96,baseRough+r.wear*.14))*m.surface.data[si+1]/255)*255),Math.round(metal*255),255],out);void px;
+                    const u=clamp((x-q.x)/q.w),v=clamp((y-q.y)/q.h),tx=((Math.floor(mix(c.lo[0],c.hi[0],u)*5*mw)%mw)+mw)%mw,ty=((Math.floor(mix(c.lo[1],c.hi[1],v)*5*mh)%mh)+mh)%mh,si=(ty*mw+tx)*4,out=(y*width+x)*4,b=m.albedo.data[si];
+                    albedo[out]=shades[b*3];albedo[out+1]=shades[b*3+1];albedo[out+2]=shades[b*3+2];
+                    surface[out]=255;surface[out+1]=roughs[m.surface.data[si+1]];surface[out+2]=metalByte;surface[out+3]=255;
                 }
                 // 1. Rasterize the surface: position, vertex color and facing per texel.
                 const f=new Panels.Field(q.w,q.h,c.w/q.w,c.h/q.h,c.lo[0],c.lo[1]),n=q.w*q.h,PX=new Float32Array(n),PY=new Float32Array(n),PZ=new Float32Array(n),CR=new Float32Array(n),CG=new Float32Array(n),CB=new Float32Array(n);

@@ -184,11 +184,15 @@ test('the cutaway opens a corridor only where something built hides a player ins
     const hidden = { _realX: 8, _realY: 8 }, open = { _realX: 12, _realY: 13 };
     scene.updateCutaway(camera, walled, open, [hidden]);
     assert.equal(shared.rrCutFocusCount.value, 0, 'the player walking outside: no corridor for anyone');
-    // In a battle here the corridors open outside too: the one behind the wall is kept in sight.
+    // A battle keeps a building whole around an outdoor character too (0.99.4): only an occupant opens it.
     const beforeFight = global.$gameFight;
     global.$gameFight = { isHere: () => true };
-    try { scene.updateCutaway(camera, walled, open, [hidden]); } finally { global.$gameFight = beforeFight; }
-    assert.equal(shared.rrCutFocusCount.value, 1);
+    try {
+        scene.updateCutaway(camera, walled, open, [hidden]);
+        assert.equal(shared.rrCutFocusCount.value, 0, 'an outdoor character leaves the building whole in a battle');
+        scene.updateCutaway(camera, walled, hidden, [open]);
+    } finally { global.$gameFight = beforeFight; }
+    assert.equal(shared.rrCutFocusCount.value, 1, 'the occupant behind the wall opens it');
     assert.deepEqual(Array.from(shared.rrCutFoci.value.slice(0, 3)), [8.5, 1.5, 8.5], 'the first corridor is the hidden one\'s');
     // Who the picture shows through a wall is in plain view (a number on it is shown); who stands in the open has
     // no corridor, the player's company included.

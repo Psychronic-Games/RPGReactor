@@ -22,7 +22,8 @@ test('cape hem has a defined boundary, a readable outside print and a separate p
     const result=P.build(pack,built,[{id:'cape',trimWidth:.04,mark:{shape:'eagle'}}],[]),outer=result.parts.find(p=>p.name==='Cape'),inner=result.parts.find(p=>p.name==='Cape lining'),texture=result.textures[outer.texture];
     assert.equal(texture.width,1024);assert.ok(outer.colors.every(v=>v===1),'color does not interpolate across the hem');
     assert.deepEqual(pixel(texture,.5,.9),[138,26,42]);assert.deepEqual(pixel(texture,.5,.99),[212,175,55]);
-    assert.ok(!inner.texture&&outer.cloth&&inner.sewnRoots&&!inner.cloth);assert.equal(outer.doubleSided,false);assert.equal(inner.doubleSided,false);
+    // Preview 60 gave linings a woven surface: the neutral shared weave tinted by the lining color, never the printed cape picture.
+    assert.equal(inner.texture,'construction-fabric-albedo.png');assert.notEqual(inner.texture,outer.texture);assert.ok(outer.cloth&&inner.sewnRoots&&!inner.cloth);assert.equal(outer.doubleSided,false);assert.equal(inner.doubleSided,false);
     const prop=A.build({accessory:{id:'cape',mark:{shape:'eagle'}}});
     assert.equal(prop.parts.find(p=>p.name==='Cape').doubleSided,false,'standalone builder respects the two separate faces');
     assert.equal(prop.parts.find(p=>p.name==='Cape lining').doubleSided,false);

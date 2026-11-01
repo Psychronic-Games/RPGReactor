@@ -31,9 +31,11 @@ test('joined dresses include a fitted pelvis lining independent of the free skir
  for(const id of ['robe','gown','dress','ballGown','qipao']){
   const body=Q.Body.build(pack,{gender:0,age:30}),out=W.build(pack,body,[{id}],{atlasSize:128});
   const lining=out.parts.find(p=>p.name.includes('lining'));assert.ok(lining,id+' has an inner yoke');
-  assert.ok(!lining.hang,'the yoke stays with the hips while the skirt simulates');
+  // Since the closed-waist rework (2026-10-30) yoke, bodice and skirt share one cut part: the skirt's vertices carry a
+  // reach down the cloth (hang >= 0), the yoke's stay off the rig (hang -1) and ride the hips.
+  assert.ok(lining.hang?.some(h=>h>0),id+' has a free skirt in the joined part');
   const hip=body.bones.find(b=>b.name==='Hips').head,seat=[];
-  for(let i=0;i<lining.positions.length;i+=3)if(lining.positions[i+1]<hip[1]+.06&&lining.positions[i+1]>hip[1]-.08&&lining.positions[i+2]<hip[2])seat.push(i);
+  for(let i=0;i<lining.positions.length;i+=3)if(lining.hang[i/3]<0&&lining.positions[i+1]<hip[1]+.06&&lining.positions[i+1]>hip[1]-.08&&lining.positions[i+2]<hip[2])seat.push(i);
   assert.ok(seat.length>12,id+' has actual rear fabric over the pelvis');sound([lining],body.bones);
  }
  const body=Q.Body.build(pack,{gender:1}),open=W.build(pack,body,[{id:'tabard'}],{atlasSize:128});

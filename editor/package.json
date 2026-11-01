@@ -7,7 +7,12 @@
   "scripts": {
     "start": "nw .",
     "dev": "nw .",
-    "test": "node --test --test-concurrency=8",
+    "test": "node --require=./tests/helpers/small-pictures.cjs --test --test-concurrency=8",
+    "test:all": "node tests/run-tier.cjs all",
+    "test:fast": "node tests/run-tier.cjs fast",
+    "test:changed": "node tests/run-tier.cjs changed",
+    "test:whole": "node tests/run-tier.cjs whole",
+    "test:heavy": "node tests/run-tier.cjs heavy",
     "smoke:web": "node tests/smoke/web-editor-persistence.cjs",
     "smoke:nw": "node tests/smoke/nw-editor-save.cjs",
     "smoke:nw-interactions": "node tests/smoke/nw-interaction-order.cjs",

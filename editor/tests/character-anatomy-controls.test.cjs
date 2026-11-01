@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const Body = require('../src/forge/Character3D/HumanBody.js'), Model = require('../src/forge/Character3D/CharacterModel.js');
 const Detail = require('../src/forge/Character3D/CharacterDetail.js'), Creature = require('../src/forge/Character3D/CreatureBody.js');
@@ -122,7 +123,7 @@ test('foreskin styles and female fold controls change local geometry and pigment
 });
 
 test('actual creature meshes attach anatomy and tails across kinds, sexes and contrasting proportions', () => {
-    for (const kind of Creature.KINDS.filter(k => !k.form)) for (const sex of ['male', 'female']) {
+    for (const [kind, sex] of cover(Creature.KINDS.filter(k => !k.form), ['male', 'female'])) {
         const r = Creature.normalizeRecipe({ ...Creature.kindRecipe(kind.kind), anatomy: { detail: true, sex } });
         const built = Creature.build(r, { quality: 'preview', hairBudget: 0, static: true, diagnostics: true });
         assert.deepEqual(inspectAttachments(built), [], kind.kind + '/' + sex);

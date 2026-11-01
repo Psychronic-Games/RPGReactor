@@ -67,6 +67,13 @@
         const ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2], iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2];
         return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
     };
+    /** rotate() for the tightest loops: the same sums, into `out`. */
+    const rotateInto = (q, vx, vy, vz, out) => {
+        const x = q[0], y = q[1], z = q[2], w = q[3];
+        const ix = w * vx + y * vz - z * vy, iy = w * vy + z * vx - x * vz, iz = w * vz + x * vy - y * vx, iw = -x * vx - y * vy - z * vz;
+        out[0] = ix * w + iw * -x + iy * -z - iz * -y; out[1] = iy * w + iw * -y + iz * -x - ix * -z; out[2] = iz * w + iw * -z + ix * -y - iy * -x;
+        return out;
+    };
     const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -303,6 +310,15 @@
         into[at + 9] = w[0]; into[at + 10] = w[1]; into[at + 11] = w[2];
     }
 
+    /** A collider's widest reach, kept off its enumerable fields (colliders are saved and compared). */
+    function rMaxOf(c) {
+        if (c.__rMax !== undefined) return c.__rMax;
+        let most = 0;
+        for (let i = 0; i < c.r.length; i++) if (c.r[i] > most) most = c.r[i];
+        Object.defineProperty(c, '__rMax', { value: most, enumerable: false });
+        return most;
+    }
+
     /** The collider's reach from its line at slice position t (along it) and bearing angle. */
     function radiusAt(c, t, angle) {
         const x = Math.max(0, Math.min(c.slices - 1, (t - c.t0) / ((c.t1 - c.t0) || 1) * c.slices - 0.5)), s0 = Math.floor(x), fs = x - s0, s1 = Math.min(c.slices - 1, s0 + 1);
@@ -330,6 +346,9 @@
         const rc = cap + gap;
         if (ex >= rc) return 2;
         const a = dx * C[at + 6] + dy * C[at + 7] + dz * C[at + 8], b = dx * C[at + 9] + dy * C[at + 10] + dz * C[at + 11];
+        // Beyond the collider's widest slice nothing below can bring the point inside, and most checks end here.
+        const widest = rMaxOf(c) + gap;
+        if (widest <= 0 || a * a + b * b >= widest * widest) return 2;
         const rho = Math.sqrt(a * a + b * b), angle = Math.atan2(b, a), R = radiusAt(c, t, angle) + gap;
         if (R <= 0) return 2;
         const s = Math.sqrt((rho / R) * (rho / R) + (ex ? (ex / rc) * (ex / rc) : 0));
@@ -1886,7 +1905,7 @@
                 let best = null, bd = cell * cell;
                 for (let i = 0; i <= 1; i++) for (let j = 0; j <= 1; j++) for (let k = 0; k <= 1; k++) {
                     const list = grid.get(cellKey(cx + i, cy + j, cz + k));
-                    if (list) for (const q of list) { const p = pts[q], d = (p[0] - x) ** 2 + (p[1] - y) ** 2 + (p[2] - z) ** 2; if (d < bd) { bd = d; best = p; } }
+                    if (list) for (let q = 0; q < list.length; q++) { const p = pts[list[q]], ax = p[0] - x, ay = p[1] - y, az = p[2] - z, d = ax * ax + ay * ay + az * az; if (d < bd) { bd = d; best = p; } }
                 }
                 return best;
             }
@@ -1905,7 +1924,7 @@
         const step = Math.max(1, stride | 0);
         // Each vertex where it was the frame before: the side it is sent back out to.
         const before = new Float32Array(bound.length * 3), now = new Float32Array(bound.length * 3), from = [0, 0, 0];
-        const best = new Float32Array(rec[0].length);
+        const best = new Float32Array(rec[0].length), turned = [0, 0, 0];
         for (let f = 0; f < rec.length; f++) {
             // The frame as it checks best is kept: a move out of one limb can push the cloth into another.
             let fewest = Infinity;
@@ -1930,11 +1949,11 @@
                 for (let i = 0; i < bound.length; i += step) {
                     const B = bound[i];
                     let px = 0, py = 0, pz = 0;
-                    for (const [b, w, slot, , point] of B.infl) {
-                        const h = bones[b].head, rest = point || B.x, d = [rest[0] - h[0], rest[1] - h[1], rest[2] - h[2]];
-                        let o, P;
-                        if (slot >= 0) { o = rotate(turns[slot], d); P=heads[slot]; }
-                        else { o = rotate(ps.R[b], d); P = ps.P[b]; }
+                    // Runs for every vertex, bone, pass and frame of a bake: no iterators, no new vectors.
+                    const infl = B.infl;
+                    for (let q = 0; q < infl.length; q++) {
+                        const one = infl[q], b = one[0], w = one[1], slot = one[2], rest = one[4] || B.x, h = bones[b].head;
+                        const P = slot >= 0 ? heads[slot] : ps.P[b], o = rotateInto(slot >= 0 ? turns[slot] : ps.R[b], rest[0] - h[0], rest[1] - h[1], rest[2] - h[2], turned);
                         px += w * (o[0] + P[0]); py += w * (o[1] + P[1]); pz += w * (o[2] + P[2]);
                     }
                     let dx = 0, dy = 0, dz = 0, hit = false;

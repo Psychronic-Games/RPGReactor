@@ -247,7 +247,8 @@
         const meanOf = (a, z) => { let s = [0, 0, 0]; for (let v = a; v <= z; v++) s = add(s, P(v)); return mul(s, 1 / (z - a + 1)); };
         const spreadOf = (a, z, c) => { let m = 0; for (let v = a; v <= z; v++) m = Math.max(m, len(sub(P(v), c))); return m; };
         const eyeL = meanOf(14598, 14669), eyeR = meanOf(14670, 14741);
-        const eyeRadius = spreadOf(14598, 14669, eyeL);
+        // (From the rest pose: the head's own seating of the eyeballs and the eye sliders resize them, and this only sizes the skull's zones.)
+        const eyeRadius = (() => { const R = pack.positions, c = [0, 0, 0]; for (let v = 14598; v <= 14669; v++) for (let k = 0; k < 3; k++) c[k] += R[v * 3 + k] / 72; let m = 0; for (let v = 14598; v <= 14669; v++) m = Math.max(m, Math.hypot(R[v * 3] - c[0], R[v * 3 + 1] - c[1], R[v * 3 + 2] - c[2])); return m; })();
         const mouth = lerp(meanOf(15060, 15127), meanOf(14992, 15059), 0.5);
         const eyeY = (eyeL[1] + eyeR[1]) / 2;
 
@@ -267,10 +268,12 @@
         const ry0 = top - eyeY;
         for (const v of headVerts) {
             const p = P(v);
-            if (weightOn(v, head) > 0.6 && p[1] > eyeY + ry0 * 0.35) rx = Math.max(rx, Math.abs(p[0]));
+            // (Above the brow and behind the face: eye and face sliders stretch the skin round the eyes, and the hair must not take that for a wider skull.)
+            if (weightOn(v, head) > 0.6 && p[1] > eyeY + ry0 * 0.5) rx = Math.max(rx, Math.abs(p[0]));
         }
         const center = [n ? sumX / n : 0, eyeY - ry0 * 0.05, (minZ + maxZ) / 2];
-        const radii = [rx, top - center[1], (maxZ - minZ) / 2];
+        // (A skull stretched flat can leave too few vertices in the measured band to give it any depth: never less than a head's.)
+        const radii = [rx, top - center[1], Math.max((maxZ - minZ) / 2, rx * 0.7)];
 
         // Features from MakeHuman's own targets.
         const ears = new Uint8Array(pack.vertexCount);
@@ -834,7 +837,7 @@
             if (H.earCore[v]) return -12;
             const c = headCoords(H, H.P(v));
             // A soft irregular edge: real hairlines are not ruled lines.
-            const j = jitter[Math.floor(((c.az + 180) / 360) * 63)] * 1.4;
+            const j = jitter[Math.floor(((c.az + 180) / 360) * 63) % jitter.length] * 1.4;
             let f = c.el - hairlineAt(c.az, hair.hairline) + j;
             if (zone) f = Math.min(f, zone(c, v));
             return f;
@@ -1825,7 +1828,7 @@
         // above the eye's center: the brow lies along the orbit's upper rim, its head a little lower than
         // its arch, not up on the forehead.
         return {
-            natural: [1.27, 1.55, 1.3, 0.6, 1, 34],
+            natural: [1.38, 1.58, 1.2, 0.64, 1, 34],
             thin: [1.32, 1.58, 1.32, 0.62, 0.45, 26],
             thick: [1.22, 1.5, 1.25, 0.58, 1.6, 46],
             arched: [1.2, 1.75, 1.27, 0.55, 0.9, 34],
@@ -1881,8 +1884,12 @@
      * inner ones short and rising, the rest lying outward, over a faint fill
      * of the brow's color so it reads full; alpha everywhere else.
      */
-    function browTexture(brows, color) {
-        const W = 512, Ht = 256, b = brows, shape = browShape(b.style);
+    function browTexture(brows, color, gender) {
+        const W = 512, Ht = 256, b = brows;
+        let shape = browShape(b.style);
+        // The everyday brow by build: a man's lies flat and heavy along the brow bone, a woman's is finer, arches to a peak between the iris's
+        // outer edge and the eye's corner, and tapers; either way the tail ends about level with the head, never above it.
+        if (b.style === 'natural') { const g = Math.max(0, Math.min(1, gender ?? 0.5)); shape = [mix(1.24, 1.26, g), mix(1.54, 1.38, g), mix(1.16, 1.18, g), mix(0.66, 0.62, g), mix(0.82, 1.2, g), shape[5]]; }
         const data = new Uint8Array(W * Ht * 4);
         if (!shape) return { width: W, height: Ht, data, name: 'brows.png' };
         const rgb = linear(color || '#3a2a1a'), rand = rng(hash(b.style) ^ Math.round(b.thickness * 1000));
@@ -1907,29 +1914,28 @@
             const ex = x / W * BROW_BOX[1] - BROW_BOX[0], ey = BROW_BOX[2] + (1 - y / Ht) * BROW_BOX[3];
             const u = (ex + 1.15) / 2.9;
             if (u < -0.05 || u > 1.05) continue;
-            const half = 0.19 * thickness * (1 - 0.6 * Math.min(1, Math.max(0, u))) + 0.04;
+            const half = 0.19 * thickness * (1 - 0.72 * smooth(0.42, 1, Math.max(0, u))) + 0.03;
             const d = Math.abs(ey - lineAt(Math.min(1, Math.max(0, u)))) / half;
             const ends = smooth(-0.05, 0.12, u) * (1 - smooth(0.85, 1.05, u));
-            alpha[y * W + x] = Math.max(0, 1 - d * d) * ends * (b.style === 'bushy' ? 0.42 : 0.22);
+            alpha[y * W + x] = Math.max(0, 1 - d * d) * ends * (b.style === 'bushy' ? 0.46 : 0.46);
         }
-        // The hairs.
-        const count = Math.round(shape[5] * (0.7 + 0.6 * b.thickness) * 9);
+        // The hairs, as they grow: upright at the brow's head, then lying along it, those above leaning down and those below leaning up
+        // so they meet along a ridge down its middle; the tail thins to a few fine hairs lying with the line.
+        const count = Math.round(shape[5] * (0.7 + 0.6 * b.thickness) * 14);
         for (let k = 0; k < count; k++) {
-            const u = rand();
-            const band = (rand() - 0.5) * 0.38 * thickness * (1 - 0.6 * u);
+            const u = rand(), tail = smooth(0.72, 1, u), head = 1 - smooth(0, 0.12, u);
+            if (rand() < tail * 0.6) continue;
+            const across = (rand() + rand() - 1) * (1 - 0.72 * smooth(0.42, 1, u)), band = across * 0.36 * thickness;
+            const slope = (lineAt(Math.min(1, u + 0.02)) - lineAt(Math.max(0, u - 0.02))) / (0.04 * 2.75);
+            const lying = Math.atan(slope) - across * 0.62, ang0 = mix(lying, 0.85 - across * 0.3, head) + (rand() - 0.5) * 0.1;
             let x = mix(-1.15, 1.6, u), y = lineAt(u) + band;
-            const dir = norm([1, mix(1.4, -0.15, Math.min(1, u * 1.4)), 0]);
-            // The tail thins to a few fine, short hairs; the head near the nose is soft.
-            const tail = smooth(0.7, 1, u);
-            if (rand() < tail * 0.55) continue;
-            const lenH = (0.32 + 0.3 * rand()) * (u < 0.15 ? 0.7 : 1) * (1 - 0.5 * tail), bend = (rand() - 0.3) * 0.5;
-            const a0 = (0.55 + 0.4 * rand()) * (0.55 + 0.45 * smooth(0, 0.18, u)) * (1 - 0.4 * tail), t0 = 0.55 + 0.35 * rand();
+            const lenH = (0.17 + 0.1 * rand()) * (1 - 0.35 * tail) * (1 - 0.4 * head), bend = -0.25 * (0.5 + rand()) * (1 - head);
+            const a0 = (0.72 + 0.28 * rand()) * (0.45 + 0.55 * smooth(0, 0.12, u)) * (1 - 0.4 * tail), t0 = 0.4 + 0.35 * rand();
             const steps = Math.ceil(lenH / BROW_BOX[1] * W * 1.5);
             for (let i = 0; i <= steps; i++) {
-                const t = i / steps, ang = bend * t;
-                const dx = dir[0] * Math.cos(ang) - dir[1] * Math.sin(ang), dy = dir[0] * Math.sin(ang) + dir[1] * Math.cos(ang);
-                plot(px(x), py(y), a0 * (1 - t * 0.55), t0);
-                x += dx * lenH / steps; y += dy * lenH / steps;
+                const t = i / steps, ang = ang0 + bend * t;
+                plot(px(x), py(y), a0 * (1 - t * 0.6), t0);
+                x += Math.cos(ang) * lenH / steps; y += Math.sin(ang) * lenH / steps;
             }
         }
         // Nothing reaches the picture's edges, so the patch's own outline never shows.
@@ -1968,8 +1974,7 @@
     function buildLashes(H, m) {
         const h = H.pack.helpers && H.pack.helpers.lashes;
         if (!h) return;
-        const base = m.pos.length / 3;
-        const col = [0.03, 0.022, 0.02];
+        const col = [0.03, 0.022, 0.02], soft = [0.2, 0.14, 0.11];
         const pts = Array.from(h.source, v => H.P(v));
         // Each eye's center: the mean of its side's lash vertices.
         const center = side => {
@@ -1991,14 +1996,68 @@
             sp.r[0] = Math.min(sp.r[0], q.r); sp.r[1] = Math.max(sp.r[1], q.r);
             sp.a[0] = Math.min(sp.a[0], q.a); sp.a[1] = Math.max(sp.a[1], q.a);
         });
-        polar.forEach((q, i) => {
-            const sp = span[Math.sign(pts[i][0]) + ':' + q.up];
-            // The upper lid takes the picture's left half (long, dense lashes), the lower its right half (short, sparse).
-            const along = (q.a - sp.a[0]) / Math.max(1e-5, sp.a[1] - sp.a[0]);
-            // A man's lashes are shorter: the strands reach their tips sooner along the card.
-            pushVert(m, pts[i], [0, 0, 1], col, [q.up ? along * 0.5 : 0.5 + along * 0.5, Math.min(1, (q.r - sp.r[0]) / Math.max(1e-5, sp.r[1] - sp.r[0]) * (1 + 0.45 * (H.gender || 0)))]);
-        });
-        for (let t = 0; t < h.index.length; t++) m.idx.push(base + h.index[t]);
+        // Real strands: a picture of hairs on a card blurs into a black band at any normal distance. Each lash grows from the lid's edge,
+        // out from the eye and curling away from it, thinning to nothing; neighbors lean together at their tips in little groups, as lashes
+        // do. Longest over the outer third; a man's a little shorter.  ties each to the lid's skin so it blinks with it.
+        const rnd = rng(7), skin = H.pack.body.source, source = m.source = [];
+        for (const side of [1, -1]) for (const up of [true, false]) {
+            const sp = span[side + ':' + up];
+            if (!sp) continue;
+            const BINS = 12, rim = new Array(BINS).fill(null);
+            polar.forEach((q, i) => {
+                if (Math.sign(pts[i][0]) !== side || q.up !== up) return;
+                const b = Math.min(BINS - 1, Math.floor((q.a - sp.a[0]) / Math.max(1e-5, sp.a[1] - sp.a[0]) * BINS));
+                if (!rim[b] || q.r < rim[b].r) rim[b] = { r: q.r, p: pts[i] };
+            });
+            const own = H.lashRim && (up ? H.lashRim[side] : H.lashRim.low[side]);
+            if (own) C[side] = [own.reduce((a, p) => a + p[0], 0) / own.length, own.reduce((a, p) => a + p[1], 0) / own.length + (up ? -0.007 : 0.007), own.reduce((a, p) => a + p[2], 0) / own.length];
+            // (A hair proud of the edge, along the way out of the eye: exactly on it they run inside the lid before they show.)
+            const line = own ? own.map(p => add(p, mul(p.out, up ? 0.0007 : 0.0005))) : rim.filter(Boolean).map(b => b.p);
+            const outAt = t => { const at = Math.max(0, Math.min(0.9999, t)) * (own.length - 1), i = Math.floor(at), f = at - i; return [0, 1, 2].map(k => own[i].out[k] + (own[i + 1].out[k] - own[i].out[k]) * f); };
+            const seat = (p, lift) => own ? { p, n: [0, 0, 1] } : onSkin(H, p, lift);
+            if (line.length < 3) continue;
+            // (Eased: taken vertex by vertex the lid's edge zigzags, and the lashes' roots with it.)
+            for (let pass = 0; pass < 5; pass++) { const was = line.map(p => p.slice()); for (let i = 1; i + 1 < line.length; i++) for (let k = 0; k < 3; k++) line[i][k] = (was[i - 1][k] + 2 * was[i][k] + was[i + 1][k]) / 4; }
+            const rootAt = t => { const at = Math.max(0, Math.min(0.9999, t)) * (line.length - 1), i = Math.floor(at), f = at - i; return [0, 1, 2].map(k => line[i][k] + (line[i + 1][k] - line[i][k]) * f); };
+            const near = skin.filter(v => Math.hypot(H.S[v * 3] - C[side][0], H.S[v * 3 + 1] - C[side][1]) < sp.r[1] * 1.6 && H.S[v * 3 + 2] > C[side][2] - 0.02);
+            const nearestSkin = p => { let best = skin[0], d = Infinity; for (const v of near) { const e = (H.S[v * 3] - p[0]) ** 2 + (H.S[v * 3 + 1] - p[1]) ** 2 + (H.S[v * 3 + 2] - p[2]) ** 2; if (e < d) { d = e; best = v; } } return best; };
+            const g = H.gender || 0, count = up ? Math.round(own ? 96 - 40 * g : 130) : own ? Math.round(84 - 34 * g) : 22, length = (up ? 0.0048 : own ? 0.0026 : 0.0016) * (1 - 0.22 * g) * (own ? 0.86 - 0.14 * g : 1), width = (up ? 0.00014 : own ? 0.00007 : 0.00008) * (own ? 1 - 0.25 * g : 1), curl = up ? (own ? 0.45 : 0.62) : 0, SEGMENTS = 4;
+            // The lash line: where they root they crowd into one soft dark edge along the lid, which is most of what reads at a distance.
+            if (up) {
+                const SEG = 22, start = m.pos.length / 3;
+                for (let j = 0; j <= SEG; j++) {
+                    const t = j / SEG, p = rootAt(own ? t * 0.93 : t), rl = Math.hypot(p[0] - C[side][0], p[1] - C[side][1]) || 1e-6, o = [(p[0] - C[side][0]) / rl, (p[1] - C[side][1]) / rl, 0], w = 0.00075 * (own ? 1.15 - 0.45 * g : 1) * Math.sin(t * Math.PI) ** 0.5 + 0.00005;
+                    const a = seat([p[0] + o[0] * 0.0002, p[1] + o[1] * 0.0002, p[2]], 0.00018), b = seat([p[0] + o[0] * (0.0002 + w), p[1] + o[1] * (0.0002 + w), p[2]], 0.00018), v0 = nearestSkin(a.p);
+                    pushVert(m, a.p, a.n, col, [0, 0]); pushVert(m, b.p, b.n, col, [1, 1]); source.push(v0, v0);
+                    if (j) { const q = start + (j - 1) * 2; m.idx.push(q, q + 1, q + 3, q, q + 3, q + 2); }
+                }
+            }
+            // (Lower lashes hardly show on a real face at any distance a character is seen from; as strands they only read as stray marks.)
+            if (!up && !own) continue;
+            for (let k = 0; k < count; k++) {
+                const along = (k + 0.5 + (rnd() - 0.5) * 0.7) / count;
+                // Only the last few at each corner go missing.
+                if (rnd() > 0.5 + 1.6 * Math.sin(along * Math.PI)) continue;
+                if (own && along > 0.94) continue;     // none at the very inner corner, where the lid turns in
+                const lift = rootAt(along), lrl = Math.hypot(lift[0] - C[side][0], lift[1] - C[side][1]) || 1e-6, out_ = own ? 0 : (up ? 0.0007 : 0.0003), lid = seat([lift[0] + (lift[0] - C[side][0]) / lrl * out_, lift[1] + (lift[1] - C[side][1]) / lrl * out_, lift[2]], 0.0002), R = lid.p, T = norm(sub(rootAt(along + 0.03), rootAt(along - 0.03)));
+                const rl = Math.hypot(R[0] - C[side][0], R[1] - C[side][1]) || 1e-6, fan = [(R[0] - C[side][0]) / rl, (R[1] - C[side][1]) / rl, 0];
+                // (On a head's own lid they fan less at the corners: straight out from the eye's middle there, they lie across the eyeball.)
+                const radial = own ? (up ? norm([fan[0] * 0.5, Math.max(0.65, Math.abs(fan[1])), 0]) : norm([fan[0] * 1.1 + side * 0.25, -Math.max(0.5, Math.abs(fan[1])), 0])) : fan;
+                const D = own ? norm(add(outAt(along), mul(radial, 0.32))) : up ? norm([radial[0] * 0.28, radial[1] * 0.28, 0.96]) : norm([radial[0] * 0.9, radial[1] * 0.9, 0.42]), L = length * (0.62 + 0.38 * Math.exp(-(((along - 0.36) / 0.3) ** 2))) * (own && !up ? 0.45 + 0.75 * rnd() : 0.9 + 0.18 * rnd());
+                const group = rootAt((Math.floor(k / 3) + 0.5) * 3 / count), root = nearestSkin(R), base2 = m.pos.length / 3;
+                for (let j = 0; j <= SEGMENTS; j++) {
+                    const t = j / SEGMENTS, w = width * (own ? 1.6 : 1) * (1 - t) ** (own ? 1.1 : 0.7) + 0.00002;
+                    let c = [0, 1, 2].map(i => R[i] + D[i] * L * t + radial[i] * L * curl * t * t + (group[i] - R[i]) * (own ? (up ? 0.5 : 0.1) : 0.22) * t * t);
+                    // (Never down into the skin: a lash that dips under it reads as a stray dot.)
+                    const under = H.surface(c);
+                    if (!own && Number.isFinite(under.d) && under.d < 0.0002 && under.d > -0.01) c = add(c, mul(under.n, 0.0002 - under.d));
+                    pushVert(m, [c[0] - T[0] * w, c[1] - T[1] * w, c[2] - T[2] * w], D, up ? col : soft, [0, t]);
+                    pushVert(m, [c[0] + T[0] * w, c[1] + T[1] * w, c[2] + T[2] * w], D, up ? col : soft, [1, t]);
+                    source.push(root, root);
+                    if (j) { const a = base2 + (j - 1) * 2; m.idx.push(a, a + 1, a + 3, a, a + 3, a + 2); }
+                }
+            }
+        }
     }
 
     /**
@@ -2014,9 +2073,10 @@
         const draw = (u0, count, len, width, opacity) => {
             for (let k = 0; k < count; k++) {
                 const along = (k + rnd()) / count, mid = Math.sin(along * Math.PI);
-                // Sparse at the corners: a lash there is often missing, and shorter.
-                if (rnd() > 0.25 + 0.75 * mid) continue;
-                const c0 = u0 + along * 0.5, L = len * (0.55 + 0.45 * mid) * (0.75 + 0.4 * rnd()), curl = (rnd() - 0.5) * 0.006 + (along - 0.5) * 0.012;
+                // The whole lid has them, thinning only right at the corners; longest over the outer third, fanning out from the eye's middle.
+                if (rnd() > 0.55 + 0.75 * mid) continue;
+                const reach = 0.62 + 0.38 * Math.exp(-(((along - 0.36) / 0.3) ** 2));
+                const c0 = u0 + along * 0.5, L = len * reach * (0.8 + 0.3 * rnd()), curl = (rnd() - 0.5) * 0.006 + (along - 0.5) * 0.03;
                 const w0 = width * (0.8 + 0.4 * rnd()) * size, a0 = opacity * (0.75 + 0.25 * rnd());
                 for (let y = 0; y < size; y++) {
                     const v = (y + 0.5) / size;
@@ -2032,8 +2092,8 @@
                 }
             }
         };
-        draw(0, 80, 0.95, 0.0028, 1);
-        draw(0.5, 16, 0.4, 0.0018, 0.5);
+        draw(0, 170, 1, 0.0022, 1);
+        draw(0.5, 44, 0.45, 0.0016, 0.55);
         for (let o = 0; o < size * size; o++) {
             const v = Math.floor(o / size) / size, u = (o % size) / size;
             // The upper lid's lash line: the roots close together, a soft dark line along the lid.
@@ -2152,6 +2212,7 @@
         H.budget = clamp(o.budget ?? 1, 0.25, 1);
         // `options.gender` (0 female .. 1 male): a man's lashes are shorter.
         H.gender = clamp(o.gender ?? 0, 0, 1);
+        H.lashRim = o.lashRim || null;
         const seed = (o.seed >>> 0) || hash(hair.style);
         const parts = [];
         const ramp = colorRamp(hair);
@@ -2206,7 +2267,7 @@
         if (hair.lashes) {
             const lashes = meshBuilder();
             buildLashes(H, lashes);
-            if (lashes.idx.length) parts.push(toPart(H, lashes, 'Lashes', { rigid: true, extra: { roughness: 0.8, uvs: Float32Array.from(lashes.uv), texture: 'lashes.png', cutout: true, alphaCutoff: 0.3, kind: 'hair' } }));
+            if (lashes.idx.length) parts.push(toPart(H, lashes, 'Lashes', { rigid: true, extra: { roughness: 0.7, uvs: Float32Array.from(lashes.uv), kind: 'hair', doubleSided: true, source: Int32Array.from(lashes.source) } }));
         }
         return parts;
     }
@@ -2401,6 +2462,7 @@
     }
 
     const api = {
+        BROW_BOX,
         lashTexture, hairTexture, browTexture,
         STYLES, FACIAL, BROWS, PARTS, STYLE_FRINGE, withStyle, DEFAULT_HAIR, normalizeHair, randomHair, build,
         _internal: { measure, headCoords, cutSurface, facialField, scalpField, styleLayers, meshBuilder, addShell, addClump, addTube, addBlob, grow, curlStrand, scatter, tangent, rng, hash, linear }

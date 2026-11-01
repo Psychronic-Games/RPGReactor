@@ -88,15 +88,22 @@ test('the space marine wears an assault faceplate: a wraparound glazed visor und
     assert.equal(item.style, 'assault');
     const { wear } = measure('marine', 1, []), trooper = measure('trooper', 1, []).wear;
     const glass = wear.parts.find(p => p.name === 'Power helmet lenses');
-    assert.ok(glass && glass.index.length / 3 >= 200, 'a lofted visor band, not two small lenses');
+    // The integrated helmet (2026-10-29) cuts its visor out of the shell's own surface: one row of its 96 columns, 84
+    // triangles against the old lofted band's 260. So one band across the face, not a triangle count, says "not two lenses".
+    assert.ok(glass && glass.index.length / 3 >= 60, 'a visor band, not two small lenses');
+    const spot = v => [0, 1, 2].map(k => Math.round(glass.positions[v * 3 + k] * 1e5)).join(), seen = new Set([spot(glass.index[0])]);
+    for (let grew = true; grew;) { grew = false; for (let t = 0; t < glass.index.length; t += 3) { const q = [0, 1, 2].map(k => spot(glass.index[t + k])); if (q.some(v => seen.has(v)) && q.some(v => !seen.has(v))) { q.forEach(v => seen.add(v)); grew = true; } } }
+    assert.equal(seen.size, new Set(Array.from(glass.index, spot)).size, 'one piece of glass');
     assert.ok(glass.emissive && glass.emissiveIntensity > 0 && glass.emissiveIntensity < 0.3, 'a faint glow behind the glass');
-    assert.ok(glass.roughness <= 0.08, 'glossy glass');
+    assert.ok(glass.roughness <= 0.12, 'glossy glass (0.12 since the integrated helmet, 0.05 on the old lofted band)');
     const box = part => { const b = { lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity] }; for (let i = 0; i < part.positions.length; i += 3) for (let k = 0; k < 3; k++) { b.lo[k] = Math.min(b.lo[k], part.positions[i + k]); b.hi[k] = Math.max(b.hi[k], part.positions[i + k]); } return b; };
     const g = box(glass);
     assert.ok(g.hi[0] - g.lo[0] > 0.12 && g.hi[1] - g.lo[1] > 0.008 && g.hi[1] - g.lo[1] < 0.05, `visor ${(g.hi[0] - g.lo[0]).toFixed(3)} x ${(g.hi[1] - g.lo[1]).toFixed(3)} m`);
     // The marine's visor wraps further round than the trooper's, and the two shells differ in shape.
     const tg = box(trooper.parts.find(p => p.name === 'Power helmet lenses'));
-    assert.ok(g.hi[0] - g.lo[0] > tg.hi[0] - tg.lo[0] + 0.008, `marine visor ${(g.hi[0] - g.lo[0]).toFixed(3)} vs trooper ${(tg.hi[0] - tg.lo[0]).toFixed(3)} m wide`);
+    // Measured front to back: both bands now reach the shell's full width, so only how far back they run tells them apart.
+    assert.ok(g.hi[2] - g.lo[2] > tg.hi[2] - tg.lo[2] + 0.008, `marine visor runs ${(g.hi[2] - g.lo[2]).toFixed(3)} vs trooper ${(tg.hi[2] - tg.lo[2]).toFixed(3)} m back`);
+    assert.ok(g.hi[1] - g.lo[1] < tg.hi[1] - tg.lo[1] - 0.005, 'the assault visor is the narrower slit');
     const m = wear.parts.find(p => p.name === 'Power helmet plating'), t = trooper.parts.find(p => p.name === 'Power helmet plating');
     assert.notEqual(m.index.length, t.index.length);
 });

@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 // Realism pass on Character Builder birds and quadrupeds (2026-10-24): feather-card plumage,
 // folded-wing rig, eagle proportions, hair coats without the periodic pore lattice, crest manes.
 const test = require('node:test'), assert = require('node:assert/strict');
@@ -92,7 +93,7 @@ test('choosing a bird type brings its typical size and eye colour; saved recipes
 });
 
 test('quadruped coats: no periodic pore lattice on hair, crest manes and hair tails, budgets kept', () => {
-    for (const k of Q.Creature.KINDS.filter(k => !k.form || k.form === 'quadruped').map(k => k.kind)) {
+    for (const k of sample(Q.Creature.KINDS.filter(k => !k.form || k.form === 'quadruped').map(k => k.kind), 3)) {
         const r = Q.Creature.kindRecipe(k);
         if (r.morphology && r.morphology !== 'quadruped') continue;
         const b = Q.Creature.build(r, { quality: 'save' }), q = Q.inspect(b, { recipe: r });
@@ -109,7 +110,8 @@ test('quadruped coats: no periodic pore lattice on hair, crest manes and hair ta
 });
 
 test('round 3: species eyes, paws with claws and pads, regional fur, faces', () => {
-    const build = k => Q.Creature.build(typeof k === 'string' ? Q.Creature.kindRecipe(k) : k, { quality: 'preview' });
+    // One build per kind: this test asks each several questions, and nothing here changes a build.
+    const built = new Map(), build = k => typeof k !== 'string' ? Q.Creature.build(k, { quality: 'preview' }) : built.get(k) || built.set(k, Q.Creature.build(Q.Creature.kindRecipe(k), { quality: 'preview' })).get(k);
     // Each kind's eye picture: a slit for cats and foxes, round for dogs, a bar for horses (dark pupil texels in those shapes).
     const pupil = b => { const t = b.textures['creature-eyes.png'], s = t.width, at = (u, v) => { const x = Math.floor((u + 1) / 2 * s), y = Math.floor((v + 1) / 2 * s), o = (y * s + x) * 4; return t.data[o] + t.data[o + 1] + t.data[o + 2]; }; return { center: at(0, 0), side: at(0.28, 0), up: at(0, 0.24) }; };
     const cat = pupil(build('cat')), dog = pupil(build('dog')), horse = pupil(build('horse'));

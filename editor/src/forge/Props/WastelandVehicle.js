@@ -94,7 +94,7 @@
             const F=CM.frame(p,[1,0,0],[0,rear?-1:1,0]);
             put('trim',CM.revolveOn(F,0,0,[[0,-.035],[R*1.2,-.035],[R*1.2,.010],[R,.025],[0,.025]],40),'Lamp housings');
             put('metal',CM.revolveOn(F,0,0,[[R*.80,.025],[R,.025],[R,.033],[R*.80,.033],[R*.80,.025]],40),'Lamp bezels');
-            put(r.lights?(rear?'red':'light'):'glass',CM.revolveOn(F,0,0,[[0,.034],[R*.79,.034],[R*.79,.038],[0,.038]],40),'Sealed lamp lenses');
+            put(r.lights?(rear?'red':'light'):'glass',CM.revolveOn(F,0,0,[[0,.034],[R*.79,.034],[R*.79,.038],[0,.038]],40),rear?'Sealed tail lamp lenses':'Sealed lamp lenses');
             if(r.details)for(const s of [-1,1])tube('frame',[[p[0]+s*R*.55,p[1]-R,p[2]+.05],[p[0]+s*R*.55,p[1]+R,p[2]+.05]],.009,'Lamp guards');
         }
         function engine(center,size=1){
@@ -228,7 +228,9 @@
         k.engine([0,deck+.24,nose],interceptor?1.05:buggy?.78:heavy?1.2:.95);
         if(!buggy&&!interceptor)box('paint',[0,belt-.04,L*.39],[W*.69,.13,L*.17],.065,'Donor bonnet');
         if(interceptor){
-            const shell=B.shell([[-L*.47,W*.32,deck+.21,.19],[-L*.28,W*.40,deck+.24,.25],[L*.12,W*.35,deck+.24,.19],[L*.43,W*.36,deck+.23,.18]],3.8,48);B.openSkin(shell,[[-half-.02,cabRear-.04],[half+.02,cabRear-.04],[half+.02,cabFront+.04],[-half-.02,cabFront+.04]],floor+.01);put('paint',shell,'Chopped interceptor lower shell');
+            const shell=B.shell([[-L*.47,W*.32,deck+.21,.19],[-L*.28,W*.40,deck+.24,.25],[L*.12,W*.35,deck+.24,.19],[L*.43,W*.36,deck+.23,.18]],3.8,48);const opening=[[-half-.02,cabRear-.04],[half+.02,cabRear-.04],[half+.02,cabFront+.04],[-half-.02,cabFront+.04]];B.openSkin(shell,opening,floor+.01);put('paint',shell,'Chopped interceptor lower shell');
+            // The cut-open body seen from the cabin: a dark lining just inside the skin, not a see-through back.
+            const lining=B.shell([[-L*.47,W*.32,deck+.21,.19],[-L*.28,W*.40,deck+.24,.25],[L*.12,W*.35,deck+.24,.19],[L*.43,W*.36,deck+.23,.18]],3.8,48);B.openSkin(lining,opening,floor+.01);CM.transform(lining,p=>[p[0]*.99,p[1]-.004,p[2]*.995]);put('liner',lining,'Chopped interceptor lining');
             for(const side of [-1,1])tube('metal',[[side*W*.32,deck+.02,L*.19],[side*W*.43,deck+.04,-L*.38]],.045,'Side-exit exhaust pipes');
         }
         if(!bus&&!buggy&&!interceptor&&!tanker)k.bed(deck+.07,-L*.43,cabRear-.10);

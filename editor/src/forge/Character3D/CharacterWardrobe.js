@@ -620,6 +620,8 @@
     }
 
     const SLOTS = [...new Set(GARMENTS.map(g => g.slot))];
+    // Thin cloth worn close: it shows a raised point under it. Coats, armor and the like stand clear, as on a person.
+    const SHOWS_POINT = new Set(['under', 'underwearTop', 'top', 'dress']);
     // Outward order: a later slot is laid over an earlier one.
     // Leg armor goes over trousers and under the skirt of a tunic, a dress or a robe.
     // A mail shirt goes over a top and under plate.
@@ -796,7 +798,7 @@
         const Details=root.RRCharacterGarmentDetails||(typeof require==='function'?require('./CharacterGarmentDetails.js'):null);
         cache = cache || {};
         const items = normalizeOutfit(outfit);
-        const entries = [];
+        const entries = [], seamsToSew = [];
         // What laying needs of this body (its normals, the tights on its skin, a lookup of its vertices)
         // is worked out once per build and never kept: the next build is another body.
         // (`quality`: how finely soft pieces are draped, RRCharacterDrape: 'preview' in the builder's view.)
@@ -955,6 +957,7 @@
                 const beneath = LAYERED.has(g.slot) ? new Set(entries.filter(e => !e.lining && e.garment !== item.id && LAYERED.has(BY_ID.get(e.garment)?.slot)).map(e => e.garment)).size : 0;
                 spec.lift = (spec.lift ?? 0.006) + (spec.closeFit ? 0 : beneath * 0.0035);
                 spec.finishEdges=!spec.hard&&!g.ragged;
+                if (SHOWS_POINT.has(g.slot) && !spec.lining) spec.showsPoint = true;
                 const piece = O.cutFor(pack, spec);
                 if (!piece.index.length) return;
                 const laid = O.lay(pack, built, piece, spec, frame);
@@ -985,7 +988,7 @@
                 const [roughness, metalness] = MATERIAL[item.material] || MATERIAL.cloth;
                 if(spec.surface === 'skirt'){
                     const bodice=entries.find(e=>e.garment===item.id&&!e.skirt&&!e.lining);
-                    if(bodice){const seam=waistSeam(bodice.laid,laid,item,g.label,O,built);if(seam)shoeParts.push(seam);}
+                    if(bodice)seamsToSew.push([bodice.laid,laid,item,g.label]);
                 }
                 entries.push({ laid, look, item, garment:item.id, lining:!!spec.lining, skirt: spec.surface === 'skirt', name: g.label+(spec.lining?' lining':''), roughness, metalness, doubleSided: true });
                 // The skin a tight piece covers is not drawn (a skirt hangs free of the legs).
@@ -993,6 +996,33 @@
             });
         });
         if(Details){Details.tailor(entries,built);for(const item of aprons)shoeParts.push(...Details.apronPanels(pack,built,item,entries.map(e=>e.laid),entries.filter(e=>e.garment===item.id).map(e=>e.laid)));}
+        // Every garment clears the real surface under it, whatever the body's proportions (RRCharacterFit).
+        const Fit=root.RRCharacterFit||(typeof require==='function'?require('./CharacterFit.js'):null);
+        if(Fit&&built.parts?.[0]?.index&&entries.length){
+            // Nipples are skin detail added later: the cloth clears them here, a little wide, as fabric tents over a point.
+            const B=root.RRHumanBody||require('./HumanBody.js'),a=cache.anatomy,female=!!cache.female,bumps=[],order=[...LAYERED];
+            if(a?.detail&&a.nipple>0){
+                const normals=B.vertexNormals(pack,built.shaped),S=built.shaped;
+                // How far the point stands proud, measured on the skin round it: a slider or a body changes this, not a constant.
+                for(const nip of B.anatomyFields(pack).nipples){
+                    const normal=[normals[nip.v*3],normals[nip.v*3+1],normals[nip.v*3+2]],tip=[S[nip.v*3],S[nip.v*3+1],S[nip.v*3+2]];
+                    let drop=0,count=0;
+                    for(const v of pack.body.source){
+                        const d=[S[v*3]-tip[0],S[v*3+1]-tip[1],S[v*3+2]-tip[2]],along=d[0]*normal[0]+d[1]*normal[1]+d[2]*normal[2];
+                        if(along>0||along<-.03)continue;
+                        const r=Math.hypot(d[0]-normal[0]*along,d[1]-normal[1]*along,d[2]-normal[2]*along);
+                        if(r>.013&&r<.017){drop-=along;count++;}
+                    }
+                    const raised=Math.max(.0015,Math.min(.012,count?drop/count:0));
+                    bumps.push({at:tip.map((c,k)=>c-normal[k]*raised),normal,height:raised+.0012,radius:.03});
+                }
+            }
+            // LAYERED runs from the skin out: what is worn over what, whatever order the outfit lists them in.
+            cache.fitReport=Fit.settle(entries,built.parts[0],O.triangleNormals,bumps,e=>{const at=order.indexOf(BY_ID.get(e.garment)?.slot);return at<0?order.length:at;},
+                e=>SHOWS_POINT.has(BY_ID.get(e.garment)?.slot)&&!e.lining);
+        }
+        // Sewn last: a waist seam is made from where the fit left the cloth it joins.
+        for(const [top,skirt,item,label] of seamsToSew){const seam=waistSeam(top,skirt,item,label,O,built);if(seam)shoeParts.push(seam);}
         // Hardware is fitted after the fabric layers, so badges, pouches and
         // rigid plates sit on the finished clothing rather than inside it.
         for (const [i, gear] of fieldGear.entries()) {
@@ -1087,6 +1117,11 @@
         }
         // Only skin a garment really covers stays hidden: none is left out under a slit, an opening or a tear.
         for (const v of O.uncovered(pack, built, cutParts.concat(modeledParts), hidden, frame)) hidden.delete(v);
+        if (Fit) {
+            // What a garment is there to cover stays covered, however near an edge it lies.
+            const A = (root.RRHumanBody || require('./HumanBody.js')).anatomyFields(pack), keep = new Set([A.low, ...A.nipples.flatMap(n => [n.v, ...(n.near || [])]), ...(Array.isArray(A.vulva) ? A.vulva : [])]);
+            Fit.reveal(hidden, built.shaped, entries, keep);
+        }
         // Skin behind a torn garment's holes, where nothing else is worn over it (RRCharacterWear).
         if (WearMod()) WearMod().unhide(pack, built, entries, hidden, entries.map(e => e.laid).concat(modeledParts.filter(p => !p.clothDetail)), frame);
         // Skin under a garment and just past its edge, where no body hair or fur grows (it would poke out under a

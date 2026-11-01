@@ -5,7 +5,7 @@
     const {add,norm}=CM.vec,TAU=Math.PI*2;
     const IDS=new Set(['throne','bookshelf','workbench','floorLamp']);
     function build(c){
-        const {r,W,H,D,bar,pad}=c,pieces=[],put=(kind,m)=>{pieces.push(m);return c.put(kind,m);},box=(...args)=>{const m=c.box(...args);pieces.push(m);return m;},tube=(kind,path,rad=.008)=>put(kind,CM.sweep(path,rad,16,true));
+        const {r,W,H,D,bar,pad,feet}=c,pieces=[],put=(kind,m)=>{pieces.push(m);return c.put(kind,m);},box=(...args)=>{const m=c.box(...args);pieces.push(m);return m;},tube=(kind,path,rad=.008)=>put(kind,CM.sweep(path,rad,16,true));
         const knob=(p,R=.015)=>put('metal',CM.transform(CM.revolve([[0,-R],[R*.80,-R*.65],[R,0],[R*.80,R*.65],[0,R]],32),q=>add(q,p)));
         function rim(p,w,h,role='wood',width=.018){
             const F=CM.frame(p,[1,0,0],[0,1,0]),b=CM.bezel(F,w,h,width*1.2,width,.004);put(role,b.housing);
@@ -34,8 +34,12 @@
                 }
                 for(const side of [-1,1]){box('metal',[side*W*.44,y+.045,0],[.012,.07,D*.48],.003);box('metal',[side*W*.40,y+.020,0],[W*.08,.012,D*.48],.003);}
             }
+            // Rustic adds a heavy crown and corner posts over the case; Sci-fi runs light strips up the uprights.
+            if(r.style==='rustic'){box('frame',[0,H+.012,0],[W*1.10,.030,D*1.10],.010);for(const side of [-1,1])box('frame',[side*W*.46,H*.50,D*.49],[.05,H-.05,.035],.008);}
+            if(r.style==='scifi')for(const side of [-1,1]){box('trim',[side*(W/2-.025),H*.50,D/2+.002],[.022,H*.88,.006],.002);box('light',[side*(W/2-.025),H*.50,D/2+.006],[.008,H*.84,.004],.001);}
             const base=Math.min(.065,H*.045);for(const m of pieces)CM.transform(m,p=>[p[0],base+p[1]*(H-base)/H,p[2]],n=>norm([n[0],n[1]*H/(H-base),n[2]]));
-            if(r.baseStyle==='plinth')box('frame',[0,base/2,0],[W*1.02,base,D*1.02],.008);
+            if(r.style!=='modern')feet(base);
+            else if(r.baseStyle==='plinth')box('frame',[0,base/2,0],[W*1.02,base,D*1.02],.008);
             else for(const x of [-1,1])for(const z of [-1,1])box('frame',[x*W*.40,base/2,z*D*.32],[.07,base,.07],.008);
             return true;
         }

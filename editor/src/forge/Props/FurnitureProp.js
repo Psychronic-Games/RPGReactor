@@ -122,7 +122,7 @@
         const sci=r.style==='scifi'&&['fridge','microwave','tv','computer','wallPanel','console','serverRack'].includes(r.form);
         const L=(p,s)=>box('light',p,s,.003),seam=(p,s)=>box('dark',p,s,.0005);
         const holo=(o,w,h,glow=true)=>{const F=CM.frame(o,[1,0,0],[0,1,0]);box('trim',[o[0],o[1],o[2]-.012],[w+.012,h+.012,.018],.008);put('screen',CM.plate(F,0,0,w,h,.0015));
-            if(glow){box('light',[o[0],o[1],o[2]-.024],[w*.92,h*.88,.004],.002);L([o[0],o[1]-h/2-.009,o[2]-.004],[w*.8,.012,.008]);}};
+            if(glow){box('trim',[o[0],o[1],o[2]-.024],[w*.92,h*.88,.004],.002);for(const s of [-1,1]){L([o[0],o[1]+s*h*.45,o[2]-.027],[w*.86,.006,.003]);L([o[0]+s*w*.45,o[1],o[2]-.027],[.006,h*.86,.003]);}L([o[0],o[1]-h/2-.009,o[2]-.004],[w*.8,.012,.008]);}};
         const fins=(x,y,z,w,h,n,axis='x')=>{for(let i=0;i<n;i++){const t=(i/(n-1)-.5);box('trim',axis==='x'?[x+t*w,y,z]:[x,y+t*h,z],axis==='x'?[.012,h,.02]:[w,.012,.02],.003);}};
         const ring=(c,rad,y0,y1,kind='light')=>put(kind,CM.revolveOn(CM.frame(c,[1,0,0],[0,0,-1]),0,0,[[rad*.9,y0],[rad,y0],[rad,y1],[rad*.9,y1],[rad*.9,y0]],40));
         const disc=(c,rad,h,kind='trim')=>put(kind,CM.revolveOn(CM.frame(c,[1,0,0],[0,0,-1]),0,0,[[0,0],[rad,0],[rad,h*.6],[rad*.85,h],[0,h]],40));
@@ -159,7 +159,7 @@
         }
         if(sci&&r.form==='computer'){
             // A floating holo monitor on an arm, a sleek finned tower with a lit spine, a low keyboard slab.
-            const x=-W*.17,cy=H*.66,mw=W*.63,mh=H*.61;holo([x,cy,-D*.12],mw*.98,mh*.95);
+            const x=-W*.17,cy=H*.66,mw=W*.63,mh=H*.61;holo([x,cy,-D*.12],mw*.98,mh*.95);liveScreens.push(groups.get('screen').at(-1));
             disc([x,0,-D*.13],Math.min(.12,mw*.2),.022);bar('trim',[x,.02,-D*.15],[x,cy-mh/2-.03,-D*.15],.014);ring([x,0,-D*.13],Math.min(.12,mw*.2)+.004,.004,.016);
             box('paint',[W*.35,H*.46,-D*.1],[W*.22,H*.86,D*.66],.05);L([W*.35,H*.46,D*.235],[.016,H*.74,.01]);
             for(const s of [-1,1])fins(W*.35+s*W*.112,H*.46,-D*.1,.02,H*.6,8,'y');
@@ -324,10 +324,17 @@
         if(['sofa','armchair','bed'].includes(r.form)&&r.style==='scifi')box('accent',[0,H*.22,D*.49],[W*.80,.012,.006],.003);
         Expansion.build({r,W,H,D,box,bar,pad,put,bolt,screen,groups});
         let motion=null;
-        if(Craft.IDS.has(r.form)){groups.clear();liveScreens.length=0;motion=Craft.build({r,W,H,D,box,bar,pad,put,bolt,screen,groups});}
-        if(Joinery.IDS.has(r.form)){groups.clear();Joinery.build({r,W,H,D,put,box,bar,pad});}
+        // Craft is the casework for every style but two: a Sci-fi television or computer keeps its own holo build above.
+        const crafted=Craft.IDS.has(r.form)&&!(sci&&['tv','computer'].includes(r.form));
+        if(crafted){
+            groups.clear();liveScreens.length=0;
+            const keycaps=(F,w,d,capHeight)=>{textures['furniture-key-legends.png']=Keycaps.build(F,w,d,r.keyRows,put,capHeight);};
+            motion=Craft.build({r,W,H,D,box,bar,pad,put,bolt,screen,groups,keycaps});
+        }
+        if(Joinery.IDS.has(r.form)){groups.clear();Joinery.build({r,W,H,D,put,box,bar,pad,feet});}
         Joinery.details({r,W,H,D,put,box,bar,pad});
-        const construction=Joinery.IDS.has(r.form)?['joinery-'+r.form]:Craft.IDS.has(r.form)?['crafted-'+r.form]:Construction.assemble({recipe:r,r,W,H,D,box,bar,pad,put,bolt});
+        const construction=Joinery.IDS.has(r.form)?['joinery-'+r.form]:crafted?['crafted-'+r.form]:Construction.assemble({recipe:r,r,W,H,D,box,bar,pad,put,bolt});
+        if(!construction.length&&Expansion.IDS.has(r.form))construction.push('expansion-'+r.form);
         const key=JSON.stringify([r.color,r.frame,r.trim,r.accent]);
         if(cache.surfaceKey!==key){
             const weave=CP.atlas(128,128),wood=CP.atlas(256,256),timber=CP.rgb(r.frame),grainNoise=Paint.fractal(71,8,4),fiberNoise=Paint.noise(72,128);
@@ -349,7 +356,7 @@
         }
         const parts=[],materials={ceramic:{color:r.color,roughness:.23,metalness:0},seatShell:{color:'#e8e7df',roughness:.35,metalness:0},fluid:{color:'#b0d8db',roughness:.20,metalness:0},tube:{color:'#b5c8cf',roughness:.35,metalness:0},legends:{texture:'furniture-key-legends.png',cutout:true,alphaCutoff:.5,roughness:.82},wood:{texture:'furniture-wood.png',roughness:.67},fabric:{kind:'cloth',texture:'furniture-fabric.png',normalTexture:'furniture-fabric-normal.png',normalScale:.25,roughness:.94},seam:{color:r.color,roughness:.96},metal:{color:'#8d969e',roughness:.32,metalness:.75},trim:{color:r.trim,roughness:.52,metalness:.18},dark:{color:'#090f15',roughness:.78},paint:{color:r.color,roughness:.40,metalness:.23},frame:{texture:'furniture-wood.png',roughness:r.roughness},glass:{color:'#102129',roughness:.16,metalness:.18},keys:{color:'#343e46',roughness:.72},screen:{texture:'furniture-screen.png',emissive:'#ffffff',emissiveTexture:'furniture-screen.png',emissiveIntensity:r.screen?.45:0,roughness:.35},accent:{color:r.accent,roughness:.48,emissive:r.style==='scifi'?r.accent:null,emissiveIntensity:.25},light:{color:r.accent,roughness:.3,emissive:r.accent,emissiveIntensity:1.6},iron:{color:'#2f2b29',roughness:.6,metalness:.6}};
         Object.assign(materials,{pages:{color:'#e2d8bd',roughness:.95},bookRed:{color:'#854e46',roughness:.76},bookBlue:{color:'#3d596c',roughness:.76},bookGreen:{color:'#596345',roughness:.80},bookTan:{color:'#aa8250',roughness:.80},bookDark:{color:'#393836',roughness:.75},bookGold:{color:'#c0a064',roughness:.62,metalness:.18},bookGroove:{color:'#ad9e7d',roughness:1},shade:{color:r.color,roughness:.93,metalness:0,doubleSided:true},bulb:{color:r.accent,roughness:.25,emissive:r.accent,emissiveIntensity:1.2}});
-        materials.water={color:'#77b9c8',roughness:.10,metalness:0,opacity:.38};
+        materials.water={color:'#77b9c8',roughness:.10,metalness:0,opacity:.38,doubleSided:true};
         materials.bowlInterior={color:r.shellFinish==='chrome'?'#d3e0e6':r.color,roughness:.28,metalness:r.shellFinish==='chrome'?.45:0};
         materials.drainInterior={color:'#455d65',roughness:.48,metalness:.12};
         materials.clearGlass={color:'#acdce5',roughness:.16,metalness:.05,opacity:.32,doubleSided:true};
@@ -359,6 +366,8 @@
         // Style finishes: sci-fi shells read as satin composite and polished alloy, rustic hardware as blackened iron.
         if(r.style==='scifi'){materials.metal={color:'#c3ccd4',roughness:.18,metalness:.9};materials.trim.metalness=.55;}
         if(r.style==='rustic')materials.metal={color:'#3a3431',roughness:.55,metalness:.65};
+        // A basin's walls face in: its own part, as a toilet's bowl, and the same metal as the sink it is pressed from.
+        materials.sinkInterior={...materials.metal};
         if(r.frameMaterial!=='wood')materials.frame=materials.wood={color:r.frame,roughness:r.roughness,metalness:r.frameMaterial==='metal'?.7:.12};
         materials.wood.roughness=r.roughness;materials.fabric.roughness=.75+r.roughness*.25;materials.paint.roughness=r.roughness;materials.paint.metalness=r.style==='scifi'?.45:r.style==='rustic'?0:.23;materials.trim.roughness=r.style==='scifi'?Math.max(.22,r.roughness-.2):Math.min(.95,r.roughness+.10);if(r.style==='scifi'&&r.frameMaterial!=='metal'){materials.frame=materials.wood={color:r.frame,roughness:Math.max(.25,r.roughness-.15),metalness:.12};}
         if(r.shellFinish==='chrome'){

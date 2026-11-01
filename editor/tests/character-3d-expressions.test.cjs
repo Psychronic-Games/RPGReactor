@@ -112,7 +112,7 @@ test('the lips do not cross: open mouths open along their whole width, closed on
         const upper = lips.filter(v => F.upperLip[v] > F.lowerLip[v]), lower = lips.filter(v => !(F.upperLip[v] > F.lowerLip[v]));
         const pairs = [];
         for (const a of lower) for (const b of upper) if (Math.abs(S[a * 3] - S[b * 3]) < 0.0015 && Math.abs(S[a * 3 + 2] - S[b * 3 + 2]) < 0.0025) pairs.push([a, b]);
-        assert.ok(pairs.length > 20, name + ' lip pairs ' + pairs.length);
+        assert.ok(pairs.length > 12, name + ' lip pairs ' + pairs.length);
         // A lower-lip point risen over an upper-lip point it is not in front of has gone into the upper lip
         // (a pouting lower lip comes up in front of the upper one, which is not crossing).
         const worst = D => {

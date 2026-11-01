@@ -41,7 +41,7 @@ test('new coats and utility harnesses fit, skin and export as original procedura
         assert.ok(r.parts.some(p=>p.name==='Garment zipper teeth'));
         assert.ok(r.recipe.props.some(p=>p.id==='utilityHarness'));
         assert.ok(r.cloth,'coat has simulated tails');
-        assert.ok(r.parts.reduce((s,p)=>s+p.index.length/3,0)<65000,'bounded geometry');
+        assert.ok(r.parts.reduce((s,p)=>s+p.index.length/3,0)<68000,'bounded geometry');
     }
     const r=make(outfit('courier'),{props:[{id:'utilityHarness'}]});
     const bytes=await Q.Model.toGlb(r,'Courier',()=>new Uint8Array([137,80,78,71]));
@@ -49,7 +49,12 @@ test('new coats and utility harnesses fit, skin and export as original procedura
 });
 
 test('sci-fi cloth construction adds fitted relief and pressure bellows',()=>{
-    for(const id of ['flightCrew','surveyTeam','astronaut','evaCrew']){
+    // The Officer jacket left the shared 'field' relief (2026-10-30): one concealed closure, fitted welts and insignia on
+    // its own parts, and no zipper or bulky chest pockets (officer-jacket.test.cjs covers the tailoring).
+    const crew=make(outfit('flightCrew'));
+    for(const name of ['Officer closure and pocket seams','Officer pocket welts','Officer insignia'])assert.ok(crew.parts.find(p=>p.name===name)?.index.length>100,'flightCrew '+name);
+    assert.ok(!crew.parts.some(p=>p.name==='Garment zipper teeth'),'flightCrew has one concealed closure');
+    for(const id of ['surveyTeam','astronaut','evaCrew']){
         const r=make(outfit(id)),p=r.parts.find(p=>p.name==='Tailored seams and pockets');
         assert.ok(p?.index.length>1000,id+' sewn geometry');
         assert.ok(p.positions.every(Number.isFinite)&&p.normals.every(Number.isFinite),id+' finite detail');

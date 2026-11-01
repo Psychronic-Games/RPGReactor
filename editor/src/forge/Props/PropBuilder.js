@@ -25,6 +25,9 @@ class PropBuilder {
         this._committed = JSON.stringify(this.recipe);
         this._view = null;
         this._pending = 0;
+        this._offPageEpoch = 0;
+        this._slowKinds = new Set();
+        this._pageKinds = new Set();
         this._images = {};
         this._minis = new Map();
     }
@@ -61,6 +64,7 @@ class PropBuilder {
     detach() {
         const view = this._view;
         if (this._worker) { this._worker.terminate(); this._worker = null; }
+        this._closeOffPage();
         if (!view) return;
         cancelAnimationFrame(view.loop);
         view.clock?.dispose?.();
@@ -208,8 +212,8 @@ class PropBuilder {
         });
         this._renderDesignGroups();
         q('.rr-prop-save').addEventListener('click', () => this.save());
-        q('.rr-prop-picture').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) RRPropSpriteSheet.openPicturePanel(this); });
-        q('.rr-prop-sheet').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) RRPropSpriteSheet.openPanel(this); });
+        q('.rr-prop-picture').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) { this._settle(); RRPropSpriteSheet.openPicturePanel(this); } });
+        q('.rr-prop-sheet').addEventListener('click', () => { if (window.RRPropSpriteSheet && this._view && this._result) { this._settle(); RRPropSpriteSheet.openPanel(this); } });
         q('.rr-prop-motion').addEventListener('click', e => { const b = e.target.closest('[data-motion]'); if (b) this._setMotion(b.dataset.motion); });
         this.root.querySelectorAll('.rr-c3d-frame').forEach(b => b.addEventListener('click', () => this._frame(b.dataset.frame)));
         q('.rr-c3d-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { this.tab = b.dataset.tab; this._renderPanel(); } });
@@ -414,10 +418,10 @@ class PropBuilder {
             const path = b.dataset.path;
             RRColorPopover.open(b, {
                 value: this._shownColor(path) || '#808080',
-                // Keep dragging on the UI thread cheap; commit one authoring rebuild on release.
-                onInput: hex => { b.style.setProperty('--rr-c3d-swatch', hex); },
-                onClose: () => b.style.setProperty('--rr-c3d-swatch', this._shownColor(path) || '#808080'),
-                onChange: hex => { this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; this._commit(); this._quick = false; this._queueRebuild(); }
+                // The drag only previews; the recipe and undo take one change, on release.
+                onInput: hex => { b.style.setProperty('--rr-c3d-swatch', hex); this._previewColor?.(path, hex); },
+                onClose: () => { b.style.setProperty('--rr-c3d-swatch', this._shownColor(path) || '#808080'); if (this._colorShown) { this._colorShown = false; this._queueRebuild(); } },
+                onChange: hex => { this._colorShown = false; this._set(path, hex); b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; this._commit(); this._quick = false; this._queueRebuild(); }
             });
             return;
         }
@@ -651,8 +655,96 @@ class PropBuilder {
     }
 
     _queueRebuild() {
-        if (this._pending) return;
-        this._pending = requestAnimationFrame(() => { this._pending = 0; this._rebuild(); });
+        if (this._pending > 0) return;
+        this._pending = requestAnimationFrame(() => { this._pending = 0; this._rebuild({ offPage: true }); });
+    }
+
+    /** The preview worker, or null where there is none (then every build stays on the page). */
+    _offPage() {
+        if (this._previewClient !== undefined) return this._previewClient;
+        this._previewClient = null;
+        try {
+            if (typeof process === 'undefined' || !process.versions?.nw || typeof require !== 'function') return null;
+            const { PropPreviewClient } = require(require('path').join(RRHumanBody.dataFolder(), '..', '..', 'Props', 'PropPreviewWorker.cjs'));
+            this._previewClient = new PropPreviewClient({
+                arrays: window,
+                onDone: (job, reply) => this._offPageDone(job, reply),
+                onFatal: error => { console.warn('[PropBuilder] preview worker', error); this._offPageFailed(); }
+            });
+        } catch (error) {
+            console.warn('[PropBuilder] preview worker', error);
+            this._previewClient = null;
+        }
+        return this._previewClient;
+    }
+
+    /** Ask for a build off the page: the newest request waits behind a running one, and replaces any before it. */
+    _buildOffPage(recipe, textureSize, warm) {
+        const client = this._offPage();
+        if (!client) return false;
+        const job = { recipe, textureSize, warm: !!warm, epoch: this._offPageEpoch };
+        if (!warm) this._pending = -1;
+        if (this._offPageBusy) { if (!warm) this._offPageNext = job; return true; }
+        this._sendOffPage(client, job);
+        return true;
+    }
+
+    _sendOffPage(client, job) {
+        this._offPageBusy = true;
+        client.syncImages(this._images, this._imageProject);
+        client.build(job);
+    }
+
+    _offPageDone(job, reply) {
+        const view = this._view, next = this._offPageNext;
+        this._offPageBusy = false;
+        this._offPageNext = null;
+        const current = job.epoch === this._offPageEpoch && !job.warm && !!view;
+        if (reply.stayOnPage) this._pageKinds.add(job.recipe.kind);
+        if (reply.error) console.warn('[PropBuilder] preview build', reply.error);
+        if (!reply.result) {
+            // What the worker can't make is made here, which also reports a build that really fails.
+            if (next || current) { this._pending = 0; this._quick = (next || job).textureSize < 1024; this._rebuild(); }
+            return;
+        }
+        // A step of a drag is worth showing on the way; a prop of another kind is already gone.
+        if (current && !(next && next.recipe.kind !== reply.result.kind)) this._showResult(reply.result);
+        if (next && next.epoch === this._offPageEpoch) this._sendOffPage(this._previewClient, next);
+        else if (this._pending === -1) this._pending = 0;
+    }
+
+    _offPageFailed() {
+        const waiting = this._pending === -1;
+        this._previewClient = null;
+        this._offPageBusy = false;
+        this._offPageNext = null;
+        this._offPageEpoch++;
+        if (waiting) { this._pending = 0; if (this._view) this._rebuild(); }
+    }
+
+    /** For what reads the view or the build itself: the newest recipe, now, even with a preview on its way. */
+    _settle() { if (this._pending === -1) this._rebuild(); }
+
+    _closeOffPage() {
+        this._previewClient?.dispose();
+        this._previewClient = undefined;
+        this._offPageBusy = false;
+        this._offPageNext = null;
+        this._offPageEpoch++;
+        if (this._pending === -1) this._pending = 0;
+    }
+
+    /** A color on the view while its picker drags; `recipe` and undo stay as they are until release. */
+    _previewColor(path, hex) {
+        const view = this._view, kept = this.recipe, kind = RRPropModel.kindOf(kept);
+        if (!view || (kind.prepare && !kind.ready())) return;
+        this._set(path, hex);
+        const shown = this.recipe;
+        this.recipe = kept;
+        this._colorShown = true;
+        if (this._slowKinds.has(kind.id) && !this._pageKinds.has(kind.id) && this._buildOffPage(shown, 512)) return;
+        try { this._showResult(RRPropModel.build(shown, this.cache, { textureSize: 512, images: this._images })); }
+        catch (error) { console.error('[PropBuilder] build', error); }
     }
 
     /** What the meshes, bones and the running cloth are made of: changing any of it starts them over. */
@@ -664,7 +756,8 @@ class PropBuilder {
             + '|' + RRPropModel.clothsOf(result).map(c => Array.from(c.setup.holes || []).join('')).join('/');
     }
 
-    _rebuild() {
+    /** With `offPage`, a prop too slow for a frame goes to the preview worker; otherwise it builds here, now. */
+    _rebuild(how) {
         const view = this._view;
         if (!view) return;
         const kind = RRPropModel.kindOf(this.recipe);
@@ -689,15 +782,32 @@ class PropBuilder {
             }
             return;
         }
+        const textureSize = this._quick ? 512 : 1024;
+        if (how?.offPage && this._slowKinds.has(kind.id) && !this._pageKinds.has(kind.id) && this._buildOffPage(this.recipe, textureSize)) { this._quick = false; return; }
+        // Built here, this is the newest: nothing still running off the page may land on top of it.
+        this._offPageEpoch++;
+        this._offPageNext = null;
+        if (this._pending === -1) this._pending = 0;
+        const started = Date.now();
         let result;
         try {
-            result = RRPropModel.build(this.recipe, this.cache, { textureSize: this._quick ? 512 : 1024, images: this._images });
+            result = RRPropModel.build(this.recipe, this.cache, { textureSize, images: this._images });
         } catch (error) {
             console.error('[PropBuilder] build', error);
             this._status(this._t('This prop could not be built.'), 'error');
             return;
         }
         this._quick = false;
+        if (Date.now() - started > PropBuilder.FRAME_BUDGET_MS && !this._slowKinds.has(kind.id) && !RRPropModel.moves(result)) this._slowKinds.add(kind.id);
+        this._showResult(result);
+        // Warm: the first drag on it shouldn't wait for the worker to learn the prop.
+        if (this._slowKinds.has(kind.id) && !this._pageKinds.has(kind.id) && !this._offPageBusy) this._buildOffPage(this.recipe, textureSize, true);
+    }
+
+    /** A build onto the view, wherever it was made. */
+    _showResult(result) {
+        const view = this._view;
+        if (!view) return;
         view.group.visible = true;
         if (result.imageMissing) this._loadImage(result.imageName);
         const structure = this._structure(result), layout = structure.replace(/:-?[\d.]+(?=;|\|)/g, '');
@@ -1292,7 +1402,8 @@ class PropBuilder {
             const pictures=[item?.pattern==='emblem'?item.emblemPicture:'',item?.mark?.shape==='picture'?item.mark.picture:''].filter(Boolean);
             for(const name of pictures)if(!await this._loadImage(name))throw new Error('Emblem picture could not be loaded.');
             const stillCurrent = this._view && JSON.stringify(this.recipe) === JSON.stringify(recipe);
-            if (kind.prepare && stillCurrent) this._rebuild();
+            // The thumbnail needs the view to be this very recipe, even with a preview on its way.
+            if (kind.prepare && stillCurrent) this._rebuild(); else if (stillCurrent) this._settle();
             const thumb = stillCurrent ? this._thumbnail() : null;
             this._status(this._t('Saving…'));
             let result = RRPropModel.build(recipe, this.cache, { textureSize: 1024, images: this._images });
@@ -1678,5 +1789,7 @@ PropBuilder.prototype._mini = function(key, make) {
     return url;
 };
 
+/** A build slower than this takes frames from a drag, so that kind's previews go to the worker. */
+PropBuilder.FRAME_BUDGET_MS = 12;
 PropBuilder.FOLDED_KEY = 'rr.propBuilder.foldedCategories';
 if (typeof window !== 'undefined') window.PropBuilder = PropBuilder;

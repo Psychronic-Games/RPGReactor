@@ -1,4 +1,5 @@
 'use strict';
+const { sample } = require('./helpers/coverage.cjs');
 // Vehicle quality pass 2, 2026-10-24: body styles (Rounded, Faceted, Armored),
 // a sealed flight canopy, the baked panel layer, fittings behind Detail
 // density, walker/drone hardware, the dark frame material and the insignia.
@@ -6,7 +7,8 @@ const test=require('node:test'),assert=require('node:assert/strict'),crypto=requ
 const V=require('../src/forge/Props/VehicleProp.js'),HW=require('../src/forge/Props/VehicleHardware.js'),P=require('../src/forge/Props/VehiclePanels.js'),M=require('../src/forge/Props/PropModel.js'),Glb=require('../src/utils/GlbOptimizer.js'),{PNG}=require('pngjs');
 const tris=r=>r.parts.reduce((n,p)=>n+p.index.length/3,0),encode=t=>{const p=new PNG({width:t.width,height:t.height});p.data=Buffer.from(t.data);return PNG.sync.write(p);};
 const hash=r=>{const h=crypto.createHash('sha256');for(const p of r.parts)for(const k of ['positions','index'])h.update(Buffer.from(p[k].buffer,p[k].byteOffset,p[k].byteLength));return h.digest('hex');};
-const FORMS=V.FORMS.map(f=>f[0]);
+// The nine forms with Body style and Detail density; the Expansion, salvage and van forms have one built body and hide both.
+const FORMS=['compact','sport','truck','rover','motorcycle','hover','shuttle','drone','walker'];
 
 test('one Body style choice per vehicle: per-form defaults, saved and rolled; a recipe saved before styles stays Rounded',()=>{
  assert.deepEqual(FORMS.map(f=>V.fromPreset(f).bodyStyle),['faceted','rounded','faceted','armored','rounded','faceted','faceted','faceted','armored']);
@@ -22,7 +24,7 @@ test('one Body style choice per vehicle: per-form defaults, saved and rolled; a 
 });
 
 test('every form builds three different bodies within budget, keeping wheel, steering and named-panel contracts',async()=>{
- for(const f of FORMS){const hashes=new Set();
+ for(const f of sample(FORMS,3)){const hashes=new Set();
   for(const s of V.STYLES){const r=V.build({...V.fromPreset(f),bodyStyle:s});hashes.add(hash(r));const n=tris(r);assert.ok(n<180000,`${f}/${s}: ${n} triangles`);assert.ok(r.parts.length<=(V.GROUND.has(f)&&f!=='motorcycle'?55:30),`${f}/${s}: ${r.parts.length} meshes`);
    for(const p of r.parts){assert.ok(p.positions.every(Number.isFinite)&&p.normals.every(Number.isFinite),f+' finite');assert.ok(p.index.length>0,f+' no empty mesh: '+p.name);}
    if(!V.GROUND.has(f))continue;
@@ -76,7 +78,7 @@ test('the panel layer draws seams and features as height, AO and roughness, and 
 });
 
 test('one Detail density control adds fittings on anchors, capped per face and never overlapping',()=>{
- for(const f of FORMS){const a=V.build({...V.fromPreset(f),detailDensity:0}),b=V.build({...V.fromPreset(f),detailDensity:1});if(['sport','motorcycle'].includes(f))continue;assert.ok(tris(b)>tris(a),f+' density adds fittings');}
+ for(const f of sample(FORMS,3,1)){const a=V.build({...V.fromPreset(f),detailDensity:0}),b=V.build({...V.fromPreset(f),detailDensity:1});if(['sport','motorcycle'].includes(f))continue;assert.ok(tris(b)>tris(a),f+' density adds fittings');}
  assert.equal(hash(V.build({...V.fromPreset('rover'),details:false,detailDensity:0})),hash(V.build({...V.fromPreset('rover'),details:false,detailDensity:1})),'Details off means no fittings');
  const placed=[],c={r:{details:true,surfaceSeed:3,lights:true},H:1,put:()=>{},tube:()=>{}},F=o=>({o,u:[1,0,0],v:[0,0,-1],n:[0,1,0]});
  const anchors=[...Array.from({length:6},(_,i)=>({kind:'antenna',F:F([i*.05,0,0]),size:[.1,.3],face:'roof'})),...Array.from({length:5},(_,i)=>({kind:'vent',F:F([2+i*.5,0,0]),size:[.3,.2],face:'deck'}))];

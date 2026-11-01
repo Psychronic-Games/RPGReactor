@@ -38,6 +38,7 @@
 
     const Gear = root.RRCreatureGear || (typeof require === 'function' ? (() => { try { return require('./CreatureGear.js'); } catch (e) { return null; } })() : null);
     const Forms = root.RRCreatureForms || (typeof require === 'function' ? require('./CreatureForms.js') : null);
+    const Mouth = root.RRCreatureMouth || (typeof require === 'function' ? require('./CreatureMouth.js') : null);
     const Flyers = root.RRCreatureFlyers || (typeof require === 'function' ? require('./CreatureFlyers.js') : null);
     const Decimator = root.RRQuadricDecimator || (typeof require === 'function' ? (() => { try { return require('../../utils/QuadricDecimator.js'); } catch (e) { return null; } })() : null);
 
@@ -122,6 +123,7 @@
         { key: 'snoutLength', label: 'Snout length', section: 'Head', min: 0, max: 3, step: 0.01, natural: [0.2, 1.7] },
         { key: 'snoutWidth', label: 'Snout width', section: 'Head', min: 0.3, max: 2.2, step: 0.01, natural: [0.6, 1.4] },
         { key: 'headPitch', label: 'Head tilt', section: 'Head', min: -20, max: 80, step: 1, natural: [0, 60], unit: '°' },
+        { key: 'mouthOpen', label: 'Mouth opening', section: 'Head', min: 0, max: 1, step: 0.01, natural: [0, 0.6] },
         { key: 'eyeSize', label: 'Eye size', section: 'Head', min: 0.3, max: 3, step: 0.01, natural: [0.6, 1.6] },
         { key: 'eyeSide', label: 'Eyes to the side', section: 'Head', min: 0, max: 1, step: 0.01, natural: [0, 1] },
         { key: 'earSize', label: 'Ear size', section: 'Head', min: 0, max: 3.5, step: 0.01, natural: [0.4, 1.8] },
@@ -170,7 +172,7 @@
         plan: 'quadruped', kind: 'dog',
         size: 0.42, bodyLength: 1, girth: 1, chestDepth: 1, belly: 0, hump: 0, hipHeight: 1, fluff: 0.2,
         legLength: 1, legThickness: 1, pawSize: 1, plantigrade: 0,
-        neckLength: 1, neckThickness: 1, neckAngle: 40, headSize: 1, snoutLength: 1, snoutWidth: 1, headPitch: 15, eyeSize: 1, eyeSide: 0.2,
+        neckLength: 1, neckThickness: 1, neckAngle: 40, headSize: 1, snoutLength: 1, snoutWidth: 1, headPitch: 15, mouthOpen: 0, eyeSize: 1, eyeSide: 0.2,
         earSize: 1, earDroop: 0, tailLength: 0.9, tailThickness: 1, tailCurl: 0, hornSize: 1, tuskSize: 0, maneSize: 0, spines: 0, wingSize: 1,
         patternScale: 1, patternAmount: 1,
         ears: 'pointed', tail: 'long', horns: 'none', feet: 'paw', wings: 'none', mane: 'none', pattern: 'countershade',
@@ -3462,6 +3464,8 @@
         }
         const scalePoint = p => [p[0] * S, (p[1] - minY) * S, p[2] * S];
         const outBones = bones.map(b => ({ name: b.name, parent: b.parent, head: scalePoint(b.head), tail: scalePoint(b.tail) }));
+        // A mouth that opens: what lets a creature talk, in the builder and the game.
+        if (Mouth && !o.headOnly && !o.headless && (!r.morphology || r.morphology === 'quadruped')) Mouth.apply(parts, outBones, r);
         let top = 0;
         for (const part of parts) for (let i = 1; i < part.positions.length; i += 3) top = Math.max(top, part.positions[i]);
         const markers = markersOf(lay, scalePoint);

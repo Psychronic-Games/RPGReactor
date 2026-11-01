@@ -596,12 +596,13 @@
         rgb = [rgb[0] * (1 + 0.06 * blood - 0.05 * pigment + 0.05 * grain), rgb[1] * (1 - 0.04 * blood - 0.07 * pigment + 0.05 * grain), rgb[2] * (1 - 0.035 * blood - 0.09 * pigment + 0.05 * grain)];
         // Where blood shows: the nose, the ears, the cheeks; the knuckles, elbows and knees.
         const flush = mix(rgb, rgb.map((c, i) => c * [1.12, 0.78, 0.74][i]), 1);
-        let warm = p.nose * 0.45 + p.ears * 0.5 + p.cheeks * 0.32;
+        // No ears, no flush where they stood: it read as a stain round an ear hole.
+        let warm = p.nose * 0.45 + (s.earHoles ? 0 : p.ears * 0.5) + p.cheeks * 0.32;
         if (p.fam === 1 || p.fam === 2) warm += smooth(0.07, 0, Math.abs(p.s - 3.25)) * 0.35 + smooth(0.12, 0, Math.abs(p.s - 2.0)) * Math.max(0, -p.n[2]) * 0.3;
         if (p.fam === 3 || p.fam === 4) warm += smooth(0.14, 0, Math.abs(p.s - 1.0)) * Math.max(0, p.n[2]) * 0.3;
         rgb = mix(rgb, flush, Math.min(1, warm) * 0.55);
         // The eyelids a little darker, cooler; under the eyes a faint shadow of the same hue.
-        if (p.lids > 0.15) rgb = mix(rgb, rgb.map((c, i) => c * [0.8, 0.74, 0.8][i]), smooth(0.15, 0.6, p.lids) * 0.22);
+        if (p.lids > 0.15) rgb = mix(rgb, rgb.map((c, i) => c * [0.8, 0.74, 0.8][i]), smooth(0.15, 0.6, p.lids) * 0.1);
         if (p.bags > 0.2) rgb = mix(rgb, rgb.map((c, i) => c * [0.88, 0.82, 0.88][i]), smooth(0.2, 0.7, p.bags) * 0.3 * (1 - smooth(0.15, 0.4, p.lids)));
         // The palms and soles paler, the more so on deep skin.
         const deep = 1 - Math.min(1, (base[0] * 0.3 + base[1] * 0.55 + base[2] * 0.15) * 2.2);
@@ -840,7 +841,7 @@
                 const q = Math.hypot(dx / (R * 0.95), dy / (R * 0.46)), band = Math.max(0, 1 - Math.abs(q - 1) / 0.2);
                 if (band > 0 && dy < 0) rgb = mix(rgb, rgb.map((c, i) => Math.min(1, c * [1.12, 0.9, 0.9][i])), band * 0.5 * smooth(-0.1, -0.35, dy / R));
                 const caruncle = Math.max(0, 1 - Math.hypot((dx + R * 0.86) / (R * 0.16), dy / (R * 0.16)));
-                if (caruncle > 0) rgb = mix(rgb, rgb.map((c, i) => c * [1.08, 0.7, 0.7][i]), Math.min(1, caruncle * 1.5) * 0.7);
+                if (caruncle > 0 && !s.noLips) rgb = mix(rgb, rgb.map((c, i) => c * [1.08, 0.7, 0.7][i]), Math.min(1, caruncle * 1.5) * 0.7);
             }
         }
         // An aged face: its lines, darker and a little warmer in their depth; and age spots on the face.
@@ -853,22 +854,24 @@
             }
         }
         // With the ears folded away, the ear's own skin is the inside of the ear hole: dark.
-        if (s.earHoles && p.ears > 0.7) rgb = mix(rgb, rgb.map(c => c * 0.12), smooth(0.7, 0.95, p.ears));
         // Blush, lips and eye shadow on the face.
         // An animal's nose pad: its own color over the tip of the nose, where the nose stands furthest out.
         if (s.nose && p.noseTip > 0.35 && p.n[2] > -0.2) rgb = mix(rgb, Outfit.linear(s.nose), smooth(0.35, 0.7, p.noseTip) * smooth(-0.2, 0.3, p.n[2]));
+        // A living face's color, on a head with its own form: warmer over the cheeks and the nose's tip, where the blood lies near the skin.
+        if (s.noLips) rgb = mix(rgb, rgb.map((c, i) => c * [1.04, 0.88, 0.86][i]), Math.min(1, p.cheeks * 0.5 + p.noseTip * 0.3));
         if (s.blush) rgb = mix(rgb, mix(rgb, Outfit.linear('#c0484a'), 0.6), p.cheeks * s.blush * 0.6);
-        if (p.lips > 0.12) {
+        if (p.lips > 0.12 && !s.noLips) {
             // The lip's own color, rosier and deeper than the skin, blending into it over a soft vermilion
             // border (no outline); fine upright lines across the lips, fainter toward their edge.
             const lip = s.lips ? Outfit.linear(s.lips) : rgb.map((c, i) => c * [0.76, 0.5, 0.54][i]);
+            // (Under the detailed lip patch, RRCharacterDetail.lipPart, which reaches past this field: it colors the slit and the inner roll.)
             const body = smooth(0.12, 0.62, p.lips);
             const lines = smooth(0.5, 0.9, p.lips) * (0.5 + 0.5 * Math.sin(x * 2600 + noise3(x * 300, y * 900, z * 300) * 5)) * (0.5 + 0.5 * noise3(x * 500, y * 140, z * 500));
             // The inner roll where the lips meet lies in the other lip's shade.
             rgb = mix(rgb, lip.map(c => c * (1 - 0.08 * lines) * (1 - 0.6 * Math.min(1, p.innerLip * 2))), body);
         }
         // The line where the lips meet, in shade.
-        if (p.seam > 0.05) rgb = mix(rgb, rgb.map((c, i) => c * [0.58, 0.46, 0.48][i]), Math.min(1, p.seam) * 0.6);
+        if (p.seam > 0.05 && !s.noLips) rgb = mix(rgb, rgb.map((c, i) => c * [0.58, 0.46, 0.48][i]), Math.min(1, p.seam) * 0.6);
         if (s.eyeshadow && p.lids > 0.2) rgb = mix(rgb, Outfit.linear(s.eyeshadow), smooth(0.2, 0.6, p.lids) * s.shadowAmount);
         return rgb;
     }
@@ -972,6 +975,8 @@
         s.bellyRgb = s.belly ? Outfit.linear(s.belly) : null;
         // The body's picture spans about 1.8 m of skin: a texel's size, for strands finer than one.
         s.texel = 1.8 / ((options && options.size) || 1024);
+        // (A head with its own lips paints them itself, and its skin lies elsewhere in this picture: painted here too they land on the upper lip.)
+        s.noLips = !!(options && options.noLips);
         const fur = options && options.fur;
         const furRgb = fur ? Outfit.linear(fur.color || '#2a1d15') : null;
         const size = (options && options.size) || 1024;
@@ -1159,7 +1164,7 @@
     // ── eyes ──────────────────────────────────────────────────────────────
     const PUPILS = [['round', 'Round'], ['slit', 'Slit'], ['goat', 'Bar'], ['none', 'None']];
     // No painted catchlight by default: the eye's wet surface reflects the scene's own lights.
-    const DEFAULT_EYES = Object.freeze({ color: '#6a4a2a', pupil: 'round', sclera: '', size: 1.25, pupilSize: 1, catchlight: false });
+    const DEFAULT_EYES = Object.freeze({ color: '#6a4a2a', pupil: 'round', sclera: '', size: 1.2, pupilSize: 1, catchlight: false });
     // The picture holds two eyeballs; each iris is centered here, about 0.11 of the picture across.
     const IRIS = [[0.708, 0.259], [0.292, 0.671]], IRIS_R = 0.108, PUPIL_R = 0.042;
 
@@ -1184,6 +1189,20 @@
         const out = Uint8Array.from(src);
         const iris = Outfit.linear(e.color), sclera = e.sclera ? Outfit.linear(e.sclera) : null;
         const irisR = IRIS_R * e.size;
+        // The eye's plain white: the picture's whites averaged just outside the iris.
+        let plain = null;
+        const white = () => {
+            if (plain) return plain;
+            const sum = [0, 0, 0];
+            let count = 0;
+            for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+                const o = (y * size + x) * 4, best = Math.min(...IRIS.map(([cu, cv]) => Math.hypot((x + 0.5) / size - cu, (y + 0.5) / size - cv)));
+                if (src[o + 3] < 128 || best < IRIS_R * 1.6 || best > IRIS_R * 2.2) continue;
+                for (let k = 0; k < 3; k++) sum[k] += Math.min(1, srgb(src[o + k] / 255) * 1.72);
+                count++;
+            }
+            return (plain = count ? sum.map(v => v / count) : [0.85, 0.83, 0.8]);
+        };
         for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
             const o = (y * size + x) * 4;
             if (src[o + 3] < 128) continue;
@@ -1221,6 +1240,8 @@
                 // The picture's whites are a dim beige: lifted to a living white, its veins kept.
                 const src3 = [srgb(src[o] / 255), srgb(src[o + 1] / 255), srgb(src[o + 2] / 255)];
                 rgb = src3.map((c, i) => Math.min(1, c * [1.72, 1.72, 1.7][i]));
+                // (The picture's own iris can outlast a smaller new one, as a red fringe: that ring takes the eye's plain white, fading back into the veined white beyond.)
+                if (best < IRIS_R * 1.55) rgb = mix(white(), rgb, smooth(1.3, 1.55, best / IRIS_R));
             }
             if (!rgb) continue;
             out[o] = toByte(rgb[0]); out[o + 1] = toByte(rgb[1]); out[o + 2] = toByte(rgb[2]);

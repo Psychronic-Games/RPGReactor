@@ -162,8 +162,13 @@ cd editor
 
 ```bash
 cd editor
-npm test
+npm run test:changed   # what your edits reach; skips everything already proven on exactly this code
+npm run test:whole     # the same, plus tests whose inputs a fingerprint can't see (folders, project data)
+npm run test:all       # every test, about 7 minutes on ten workers
+npm test               # every test, as CI runs it
 ```
+
+Every run keeps each pass as it happens, so an interrupted `test:changed` or `test:whole` resumes where it stopped. The same tests run on a working machine and on CI. Tests use small default pictures (`tests/helpers/small-pictures.cjs`); a test that judges pixels asks for its size explicitly. Sweeps use `tests/helpers/coverage.cjs`: every value, paired rather than multiplied; `RR_TEST_EXHAUSTIVE=1` walks every combination.
 
 GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-10-29, before the 0.99.3 cut, local validation completed with **8905 passing tests**, 33 skipped and no failures. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
 

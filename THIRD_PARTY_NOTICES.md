@@ -246,3 +246,11 @@ grant patent rights.
 
 Package-manager dependencies retain the licenses recorded by their packages
 and lockfile.
+
+## Character face base heads
+
+The default human faces in the Character Builder (`editor/src/forge/Character3D/FaceFieldData.js`) are derived from these models, adapted to the engine's own mesh with averaged proportions.
+
+- Male head base by alkalor (https://sketchfab.com/alkalor), from https://sketchfab.com/3d-models/male-head-base-3bcf954d4f6846d6b665b057c7c8d795, licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Adapted.
+
+- Female Elf Head by Scol3D (https://sketchfab.com/seancollett88), from https://sketchfab.com/3d-models/female-elf-head-ff52160ba5184ea5968715c01c64d0f8, licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Adapted.

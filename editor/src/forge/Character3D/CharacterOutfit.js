@@ -560,6 +560,12 @@
         // Cloth that is draped (RRCharacterDrape) is refined wherever it is free to fold and seen; its folds are its own.
         const drapeProfile = Drape ? Drape.profile(spec) : null;
         piece.drapeProfile = drapeProfile;
+        // Over the nipples the cloth is fine enough to show a point: elsewhere its faces are wider than one.
+        if (spec.showsPoint && !spec.hard && spec.surface !== 'skirt' && Body?.anatomyFields) {
+            const tips = Body.anatomyFields(pack).nipples.map(nip => [an.rest[nip.v * 3], an.rest[nip.v * 3 + 1], an.rest[nip.v * 3 + 2]]);
+            // (Finer than this and the drape buckles the cloth under the bust into creases.)
+            refine(piece, an, (vert, p) => (tips.some(t => Math.hypot(p[0] - t[0], p[1] - t[1], p[2] - t[2]) < 0.036) ? 1 : 0), () => 0.009, 3);
+        }
         if (drapeProfile) {
             const limit = Drape.edgeLimit(drapeProfile);
             refine(piece, an, vert => Drape.zone(drapeProfile, fieldOf(vert)) * hiddenScale(vert), () => limit, drapeProfile.passes);
@@ -1661,6 +1667,23 @@
      * its outward normals). `extra`: points of garments already laid that a
      * boot's shaft goes over.
      */
+    /**
+     * Points across the leg's triangles, not only at their corners. A heavy calf stretches the skin's rings 4 cm apart;
+     * measured at the corners alone, a boot shaft's 64 columns mostly read nothing and it caved in between them.
+     */
+    function legSurface(pack, P, side) {
+        const ids = new Set(legSkin(pack, side)), I = pack.body.index, S = pack.body.source, out = [], STEP = 3;
+        for (let t = 0; t < I.length; t += 3) {
+            const a = S[I[t]], b = S[I[t + 1]], c = S[I[t + 2]];
+            if (!ids.has(a) || !ids.has(b) || !ids.has(c)) continue;
+            for (let i = 0; i <= STEP; i++) for (let j = 0; i + j <= STEP; j++) {
+                const u = i / STEP, v = j / STEP, w = 1 - u - v;
+                for (let k = 0; k < 3; k++) out.push(P[a * 3 + k] * u + P[b * 3 + k] * v + P[c * 3 + k] * w);
+            }
+        }
+        return out;
+    }
+
     function shoeGrid(pack, built, style, side, extra) {
         const F = footFrame(built, side), P = built.shaped, a = F.a;
         const shaft = style.top != null;
@@ -1678,6 +1701,7 @@
             if (extra[i] * F.sign > 0 && Math.hypot(extra[i] - c[0], extra[i + 2] - c[2]) < 0.3) pts.push(extra[i], y, extra[i + 2]);
         }
         const gap = style.gap ?? 0.004;
+        const legFaces = shaft ? legSurface(pack, P, side) : null;
         // The footprint and the top of the foot as a height field in the foot's plan, 4 mm cells.
         const cell = 0.004;
         let f0 = Infinity, f1 = -Infinity, l0 = Infinity, l1 = -Infinity;
@@ -1750,16 +1774,20 @@
             const r = new Float64Array(dirs.length), rg = new Float64Array(dirs.length);
             const win = Math.PI * 2 / dirs.length * 1.6;
             const [cf, cl] = toPlan(F, c[0], c[2]);
-            for (let i = 0; i < pts.length; i += 3) {
-                if (Math.abs(pts[i + 1] - y) > half) continue;
-                const [f, l] = toPlan(F, pts[i], pts[i + 2]);
-                const df = f - cf, dl = l - cl, d = Math.hypot(df, dl), ang = Math.atan2(dl, df);
-                const into = i < own ? r : rg;
-                for (let k = 0; k < dirs.length; k++) {
-                    let da = Math.abs(ang - dirs[k]); if (da > Math.PI) da = Math.PI * 2 - da;
-                    if (da < win) into[k] = Math.max(into[k], d * Math.cos(da));
+            const scan = (list, ownTo) => {
+                for (let i = 0; i < list.length; i += 3) {
+                    if (Math.abs(list[i + 1] - y) > half) continue;
+                    const [f, l] = toPlan(F, list[i], list[i + 2]);
+                    const df = f - cf, dl = l - cl, d = Math.hypot(df, dl), ang = Math.atan2(dl, df);
+                    const into = i < ownTo ? r : rg;
+                    for (let k = 0; k < dirs.length; k++) {
+                        let da = Math.abs(ang - dirs[k]); if (da > Math.PI) da = Math.PI * 2 - da;
+                        if (da < win) into[k] = Math.max(into[k], d * Math.cos(da));
+                    }
                 }
-            }
+            };
+            scan(pts, own);
+            if (legFaces) scan(legFaces, Infinity);
             const n = dirs.length, smg = circBlur(rg, 4);
             // The skin's reach round the leg, eased into one smooth line: widened a column each way, then
             // softened. Taken as the larger of each reading and its blur, every sparse skin point stood as its

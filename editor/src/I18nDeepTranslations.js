@@ -51821,6 +51821,27 @@ for (const [locale, phrases] of Object.entries({
   }
 })) Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS[locale], phrases);
 
+// Import report rows
+for (const [locale, phrases] of Object.entries({
+  "ja": { "Map references needing attention": "マップ参照の確認が必要", "Damage formulas needing a port": "移植が必要なダメージ計算式", "Media that could not be converted": "変換できなかったメディア" },
+  "es": { "Map references needing attention": "Referencias de mapa que requieren atención", "Damage formulas needing a port": "Fórmulas de daño que requieren adaptación", "Media that could not be converted": "Medios que no se pudieron convertir" },
+  "zh-Hant": { "Map references needing attention": "需要注意的地圖參照", "Damage formulas needing a port": "需要移植的傷害公式", "Media that could not be converted": "無法轉換的媒體" },
+  "zh-Hans": { "Map references needing attention": "需要注意的地图引用", "Damage formulas needing a port": "需要移植的伤害公式", "Media that could not be converted": "无法转换的媒体" },
+  "ru": { "Map references needing attention": "Ссылки на карты, требующие внимания", "Damage formulas needing a port": "Формулы урона, требующие переноса", "Media that could not be converted": "Медиафайлы, которые не удалось преобразовать" },
+  "pt": { "Map references needing attention": "Referências de mapa que precisam de atenção", "Damage formulas needing a port": "Fórmulas de dano que precisam de adaptação", "Media that could not be converted": "Mídias que não puderam ser convertidas" },
+  "de": { "Map references needing attention": "Kartenverweise, die Aufmerksamkeit erfordern", "Damage formulas needing a port": "Schadensformeln, die portiert werden müssen", "Media that could not be converted": "Medien, die nicht konvertiert werden konnten" },
+  "fr": { "Map references needing attention": "Références de cartes à vérifier", "Damage formulas needing a port": "Formules de dégâts à adapter", "Media that could not be converted": "Médias impossibles à convertir" },
+  "el": { "Map references needing attention": "Αναφορές χαρτών που χρειάζονται προσοχή", "Damage formulas needing a port": "Τύποι ζημιάς που χρειάζονται μεταφορά", "Media that could not be converted": "Πολυμέσα που δεν ήταν δυνατή η μετατροπή τους" },
+  "ko": { "Map references needing attention": "확인이 필요한 맵 참조", "Damage formulas needing a port": "이식이 필요한 대미지 공식", "Media that could not be converted": "변환할 수 없는 미디어" },
+  "ar": { "Map references needing attention": "مراجع الخرائط التي تحتاج إلى مراجعة", "Damage formulas needing a port": "صيغ الضرر التي تحتاج إلى نقل", "Media that could not be converted": "الوسائط التي تعذّر تحويلها" },
+  "it": { "Map references needing attention": "Riferimenti alle mappe da controllare", "Damage formulas needing a port": "Formule del danno da adattare", "Media that could not be converted": "Contenuti multimediali non convertibili" },
+  "pl": { "Map references needing attention": "Odwołania do map wymagające uwagi", "Damage formulas needing a port": "Formuły obrażeń wymagające przeniesienia", "Media that could not be converted": "Multimedia, których nie udało się przekonwertować" },
+  "id": { "Map references needing attention": "Referensi peta yang perlu diperhatikan", "Damage formulas needing a port": "Rumus kerusakan yang perlu diporting", "Media that could not be converted": "Media yang tidak dapat dikonversi" },
+  "vi": { "Map references needing attention": "Tham chiếu bản đồ cần chú ý", "Damage formulas needing a port": "Công thức sát thương cần chuyển đổi", "Media that could not be converted": "Phương tiện không thể chuyển đổi" },
+  "th": { "Map references needing attention": "การอ้างอิงแผนที่ที่ต้องตรวจสอบ", "Damage formulas needing a port": "สูตรความเสียหายที่ต้องพอร์ต", "Media that could not be converted": "สื่อที่แปลงไม่ได้" },
+  "tr": { "Map references needing attention": "Dikkat gerektiren harita başvuruları", "Damage formulas needing a port": "Uyarlanması gereken hasar formülleri", "Media that could not be converted": "Dönüştürülemeyen medya" }
+})) Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS[locale] || (globalThis.RR_DEEP_TEXT_TRANSLATIONS[locale] = {}), phrases);
+
 // Forge current-camera picture export.
 for (const [locale, label] of Object.entries({
   "ja": "画像を書き出す",

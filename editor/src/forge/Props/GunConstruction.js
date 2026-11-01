@@ -57,7 +57,7 @@
             for(let j=0;j<fingers;j++){const a=j/fingers*Math.PI*2,rad=rb*(r.preset==='gravCannon'?2:1.7),at=x=>[x,yb+Math.cos(a)*rad,Math.sin(a)*rad];P.frame.push(M.polyTube([at(end-.055),at(end+.015),at(end+reach)],Math.max(.003,rb*.22),8));P.glow.push(M.sphere(at(end+reach-.005),Math.max(.002,rb*.12),12));}
         }
         if(r.preset==='pulseCarbine')for(const side of [-1,1]){const z=side*(W*.65+.007);P.under.push(HS.chamferedBox([xr0+Lr*.15,Hr*.16,z],[Lr*.29,Hr*.5,.018],.006));P.glow.push(HS.chamferedBox([xr0+Lr*.15,Hr*.16,z+side*.01],[Lr*.18,.004,.002],.001));}
-        if(r.preset==='gravCannon')for(const x of [end-.06,end])P.frame.push(M.lathe([[rb*1.7,0],[rb*2.5,0],[rb*2.5,.018],[rb*1.7,.018],[rb*1.7,0]],32,{base:[x,yb,0],dir:[1,0,0]}));
+        if(r.preset==='gravCannon')for(const x of [end-.06,end])P.frame.push(M.lathe([[rb*1.7,0],[rb*2.5,0],[rb*2.5,.018],[rb*1.7,.018],[rb*1.7,0]],32,{base:[x,yb,0],dir:[1,0,0],caps:false}));
         if(r.preset==='microMissile')for(const sy of [-1,1])for(const sz of [-1,1]){const y=yb+sy*.038,z=sz*.039;P.under.push(M.lathe([[0,0],[.029,0],[.029,.22],[.020,.22],[.020,.012],[0,.012]],24,{base:[end-.15,y,z],dir:[1,0,0]}));P.metal.push(M.lathe([[.017,0],[.017,.015],[0,.055]],24,{base:[end+.018,y,z],dir:[1,0,0]}));}
     }});
     const api=Patterns.bank(rules);root.RRGunConstruction=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;

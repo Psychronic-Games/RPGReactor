@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
@@ -27,8 +28,8 @@ function encloses(P, I, point) {
 
 test('power armor boots enclose the posed heel, toes and ankle through every walking frame', async () => {
     const pack = await Body.loadPack();
-    for (const body of [{ gender: 1 }, { gender: 0 }, { gender: 1, extreme: true, weight: 3, muscle: 2 }]) {
-        for (const bulk of [0.6, 1.1]) {
+    for (const [body, bulk] of cover([{ gender: 1 }, { gender: 0 }, { gender: 1, extreme: true, weight: 3, muscle: 2 }], [0.6, 1.1])) {
+        {
             const result = Model.build(pack, Object.assign({}, body, { outfit: [{ id: 'powerarmor', bulk }, { id: 'powerhelm' }] }), {}, { quality: 'preview', skinSize: 64 });
             const suit = result.parts.find(p => p.name === 'Power armor undersuit');
             const boot = result.parts.find(p => p.name === 'Power armor' && /^shoes/.test(p.texture || ''));
@@ -62,7 +63,13 @@ test('choosing flexible footwear preserves the original foot bindings under powe
     for(const feet of [null,'magboots','boots']){
         const result=Model.build(pack,{gender:1,outfit:[{id:'powerarmor'},...(feet?[{id:feet}]:[])]},{},{static:true,quality:'preview',skinSize:64,atlasSize:64});
         const suit=result.parts.find(p=>p.name==='Power armor undersuit'),body=result.built.parts.find(p=>p.name==='Body');
-        same.push(suit.joints.every((q,i)=>q===body.joints[i])&&suit.weights.every((q,i)=>q===body.weights[i]));
+        // The undersuit's jersey chart (2026-10-30) splits vertices, so pair each with its body vertex by the normal a
+        // split copies unchanged (duplicates at the skin's own seams share one binding).
+        const place=(p,v)=>[p.normals[v*3],p.normals[v*3+1],p.normals[v*3+2]].join();
+        const under=new Map();for(let v=0;v<body.positions.length/3;v++)under.set(place(body,v),v);
+        const pairs=Array.from({length:suit.positions.length/3},(_,v)=>under.get(place(suit,v)));
+        assert.ok(pairs.every(b=>b!==undefined),'every undersuit vertex comes from a body vertex');
+        same.push(pairs.every((b,v)=>[0,1,2,3].every(k=>suit.joints[v*4+k]===body.joints[b*4+k]&&suit.weights[v*4+k]===body.weights[b*4+k])));
     }
     assert.ok(!same[0]&&!same[1],'hard boots and their lining retain a rigid foot');
     assert.ok(same[2],'flexible boots keep the original underlying articulation');

@@ -558,7 +558,7 @@ test('each member\'s model stays with its body when the lead passes on: the scen
         modelCacheKey: name => name
     });
     const removed = [];
-    const holder = (key, spec) => ({ key, spec, variant: '', object: { parent: { remove() { removed.push(key); } } } });
+    const holder = (key, spec) => ({ key, spec, variant: '', object: { userData: {}, traverse() {}, parent: { remove() { removed.push(key); } } } });
     const scene = { modelsGroup: () => ({ add() {} }), _modelInstances: new Map([['p', holder('p', 'Actor1')], ['f1', holder('f1', 'Actor2')]]) };
     w.ReactorFight.Stage = { mapScene: () => scene };
     const fight = begin(w);

@@ -169,7 +169,7 @@ test('the vendored three.js is a classic script exposing window.THREE', () => {
     assert.match(head, /GENERATED FILE/);
     assert.match(head, /vendor-three\.js/, 'and says how to regenerate it');
     const tail = fs.readFileSync(lib, 'utf8').slice(-400);
-    assert.match(tail, /root\.THREE = module\.exports;/);
+    assert.match(tail, /root\.THREE = \{ \.\.\.THREE \};/);
 });
 
 test('the vendored build actually loads and exposes what the renderer needs', () => {

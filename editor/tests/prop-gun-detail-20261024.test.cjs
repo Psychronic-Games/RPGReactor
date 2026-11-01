@@ -129,7 +129,7 @@ test('every firearm type builds within the detail budget, every style on every f
 });
 
 test('saved recipes from before the styles still load: each preset brings its own receiver style', () => {
-    const expected = { pistol: 'slide', revolver: 'classic', rifle: 'carbine', shotgun: 'classic', smg: 'stamped', sniper: 'bolt', blasterPistol: 'monocoque', blasterRifle: 'truss', plasma: 'heavy', laser: 'monocoque', railgun: 'monocoque' };
+    const expected = { pistol: 'slide', revolver: 'classic', rifle: 'carbine', shotgun: 'classic', smg: 'stamped', sniper: 'bolt', blasterPistol: 'monocoque', blasterRifle: 'truss', plasma: 'heavy', laser: 'monocoque', railgun: 'monocoque', ionPistol: 'truss', pulseCarbine: 'monocoque', arcCaster: 'truss', particleLance: 'truss', gravCannon: 'heavy', microMissile: 'heavy' };
     for (const [id] of Gun.PRESETS) {
         const old = Gun.normalize({ preset: id });
         delete old.style;

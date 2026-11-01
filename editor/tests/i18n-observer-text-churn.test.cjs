@@ -24,7 +24,7 @@ test('the translation observer scopes its passes to what was added', () => {
 
 test('the themed select label and the preview frame counter write only on change', () => {
     const shim = read('utils', 'SelectThemingShim.js');
-    assert.match(shim, /if \(target\.dataset\.rrShimLabel === text\) return;\s*target\.dataset\.rrShimLabel = text;/);
+    assert.match(shim, /if \(target\.dataset\.rrShimLabel === key\) return;\s*target\.dataset\.rrShimLabel = key;/);
     const editor = read('database', 'DatabaseActionSequenceEditor.js');
     assert.match(editor, /if\(this\.time\.textContent!==readout\)this\.time\.textContent=readout;/);
 });

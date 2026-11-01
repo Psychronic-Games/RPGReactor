@@ -661,7 +661,9 @@
             if (d.blink != null) index[VISEMES.length] = d.blink;
             meshes.push({ influences: node.morphTargetInfluences, index });
         });
-        const rig = meshes.length ? { meshes } : null;
+        let rig = meshes.length ? { meshes } : null;
+        // No mouth shapes but a jaw (a Character Builder creature, or any rig with one): the letters turn it instead.
+        if (!rig) object.traverse(node => { if (!rig && node.isBone && /^(.*[:_])?(jaw|lowerjaw)$/i.test(node.name)) rig = { meshes: [], jaw: node, rest: node.rotation.x }; });
         rigs.set(object, rig);
         return rig;
     }
@@ -687,7 +689,7 @@
     function endTalk(now) {
         if (!talk.character) return;
         if (!now) { talk.ending = true; return; }
-        if (talk.rig) for (const m of talk.rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = 0;
+        if (talk.rig) restRig(talk.rig);
         talk.weight.fill(0); talk.target.fill(0);
         talk.character = null; talk.window = null; talk.object = null; talk.rig = null; talk.shapes = null; talk.text = null;
     }
@@ -735,8 +737,22 @@
         return open + t.weight[b];
     }
 
-    /** Writes the talk's weights into its model's morph influences. */
+    /** How far each mouth shape opens a jaw, in VISEMES' order. */
+    const JAW_OPEN = [1, 0.55, 0.5, 0.85, 0.6, 0.15, 0.04, 0.4, 0.3, 0.35, 0.25];
+
+    /** Lets a rig go: its morphs at rest, its jaw shut. */
+    function restRig(rig) {
+        for (const m of rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = 0;
+        if (rig.jaw) rig.jaw.rotation.x = rig.rest;
+    }
+
+    /** Writes the talk's weights into its model's morph influences, or turns its jaw. */
     function writeTalk(t) {
+        if (t.rig.jaw) {
+            let open = 0;
+            for (let k = 0; k < VISEMES.length; k++) open += t.weight[k] * JAW_OPEN[k];
+            t.rig.jaw.rotation.x = t.rig.rest + Math.min(1, open) * 0.28;
+        }
         for (const m of t.rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = t.weight[k];
     }
 
@@ -745,7 +761,7 @@
         const holder = scene._modelInstances?.get(R.modelInstanceKey(talk.character));
         const object = holder?.object || null;
         if (object !== talk.object) {
-            if (talk.rig) for (const m of talk.rig.meshes) for (let k = 0; k < m.index.length; k++) if (m.index[k] >= 0) m.influences[m.index[k]] = 0;
+            if (talk.rig) restRig(talk.rig);
             talk.object = object; talk.rig = talkRig(object);
         }
         if (!talk.rig) { if (talk.ending) endTalk(true); return; }

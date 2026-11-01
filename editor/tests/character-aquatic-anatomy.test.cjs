@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), crypto = require('node:crypto');
 const Q = require('./helpers/character-quality-matrix.cjs'), Forms = require('../src/forge/Character3D/CreatureForms.js'), Cloth = require('../src/forge/Character3D/CharacterCloth.js');
 const build = r => Q.Model.build(null, r, {}, { quality: 'preview' });
@@ -21,7 +22,7 @@ test('aquatic type selectors persist, reject unknown values, retain custom contr
 test('all thirteen marine variants have distinct valid bounded surfaces in preview and save', () => {
     for(const [key,def]of Object.entries(Forms.MARINE_TYPES)){
         const silhouettes=new Set();
-        for(const [type]of def.choices)for(const quality of ['preview','save']){
+        for(const [type]of def.choices)for(const quality of exhaustive||type===def.choices[0][0]?['preview','save']:['preview']){
             const r=variant(def.kind,key,type),b=Q.Model.build(null,r,{}, {quality}),report=Q.inspect(b,{recipe:r});
             assert.deepEqual(report.issues,[],type+'/'+quality);assert.ok(report.summary.triangles<65000,type+' mesh budget');assert.ok(b.bones.length<128);
             assert.ok(b.parts.some(p=>p.name==='Mouth interior'));assert.ok(b.bones.some(b=>b.name==='Jaw'));

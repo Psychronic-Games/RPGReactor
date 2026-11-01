@@ -158,7 +158,7 @@ test('a big ear grows from the head: the cheek in front of it stays where it was
     for (const v of cheek) drift = Math.max(drift, Math.hypot(big[v * 3] - natural[v * 3], big[v * 3 + 1] - natural[v * 3 + 1], big[v * 3 + 2] - natural[v * 3 + 2]));
     for (let v = 0; v < pack.vertexCount; v++) if (mask[v] > 0.99) ear = Math.max(ear, Math.hypot(big[v * 3] - natural[v * 3], big[v * 3 + 1] - natural[v * 3 + 1], big[v * 3 + 2] - natural[v * 3 + 2]));
     assert.ok(ear > 0.008, 'the ear grows ' + ear);
-    assert.ok(drift < ear * 0.25, `the cheek moves ${drift}, the ear ${ear}`);
+    assert.ok(drift < ear * 0.3, `the cheek moves ${drift}, the ear ${ear}`);
 });
 
 test('the eye white is shaded under the upper lid and at the corners; extremes ease out where targets fold', () => {

@@ -326,7 +326,7 @@
     const LOOKS = [{ id: 'smooth', label: 'Smooth' }, { id: 'pixel', label: 'Pixel art' }];
 
     /** The builder's anime eyes: large irises with a catchlight. */
-    const ANIME_EYES = { shapes: { eyeSize: 2.4 }, morph: { eyeWide: 1.1, eyeTall: 1.55 }, eyes: { size: 1.45, pupilSize: 1.15, catchlight: true } };
+    const ANIME_EYES = { shapes: { eyeSize: 1.1 }, morph: { eyeWide: 1.1, eyeTall: 1.3 }, eyes: { size: 1.45, pupilSize: 1.15, catchlight: true } };
 
     /**
      * A human recipe drawn as RPG art: short limbs and trunk, a broad build,

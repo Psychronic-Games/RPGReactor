@@ -572,6 +572,40 @@
             }
         }
         const X0 = Float64Array.from(X);
+
+        // Cloth is cut to the body, so on a full figure a hem starts inside what is worn under it, threaded through a
+        // waistband. Pushed out from there it would climb over the band and fold on itself: it starts outside instead,
+        // moved straight out from the trunk, and easing back in above the band so it laps over the edge.
+        if (layers && prof.role !== 'skirt') {
+            const reach = 0.05 * scale, under = new Float64Array(9), need = new Float64Array(n), move = new Float64Array(n * 3);
+            for (let i = 0; i < n; i++) {
+                // (Only near its hem: the rest of a jacket over a shirt is where the layers already put it.)
+                if (held[i] || (piece.edgeDist && piece.edgeDist[i] > 0.1 * scale)) continue;
+                const o = i * 3;
+                if (!contact(layers, X[o], X[o + 1], X[o + 2], under)) continue;
+                const across = Math.hypot(under[3], under[5]);
+                if (across < 0.2) continue;
+                const hx = under[3] / across, hz = under[5] / across, want = layerGap + under[8], above = X[o + 1] - under[1];
+                const off = (X[o] - under[0]) * under[3] + (X[o + 1] - under[1]) * under[4] + (X[o + 2] - under[2]) * under[5];
+                const side = (X[o] - under[0]) * hx + (X[o + 2] - under[2]) * hz;
+                const k = !under[7] && above > 0 ? (above < reach ? (want - side) * (1 - above / reach) : 0) : off > -0.045 ? (want - off) / across : 0;
+                if (k <= 0) continue;
+                need[i] = Math.min(k, 0.025 * scale); move[o] = hx * need[i]; move[o + 2] = hz * need[i];
+            }
+            for (let round = 0; round < 8; round++) {
+                const next = Float64Array.from(move);
+                for (let i = 0; i < n; i++) {
+                    if (held[i] || !nb_[i].length) continue;
+                    let x = 0, z = 0;
+                    for (const q of nb_[i]) { x += move[q * 3]; z += move[q * 3 + 2]; }
+                    x /= nb_[i].length; z /= nb_[i].length;
+                    const m = Math.hypot(x, z), have = Math.hypot(move[i * 3], move[i * 3 + 2]);
+                    if (need[i] > 0 ? m > have : round < 5 ? m * 0.9 > have : true) { const s = need[i] > 0 || round < 5 ? 0.9 : 1; next[i * 3] = x * s; next[i * 3 + 2] = z * s; }
+                }
+                move.set(next);
+            }
+            for (let i = 0; i < n * 3; i++) { X[i] += move[i]; X0[i] += move[i]; }
+        }
         // A full skirt's petticoat: no closer to the hips' axis than this.
         // Any skirt hangs straight down from the widest thing above it (the seat, a belly): below that it may fold in
         // only so far, never into the hollow under the seat; a full skirt stands out on its petticoat. Measured round

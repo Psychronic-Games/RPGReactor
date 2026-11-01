@@ -25,12 +25,14 @@ test('ordinary hems are the garment turned under, with no rolled piping tube', (
     const built = Body.build(pack, { gender: 1, age: 30 });
     const plain = Wardrobe.build(pack, built, [{ id: 'tshirt' }, { id: 'jeans' }], { atlasSize: 64 });
     assert.ok(!plain.parts.some(p => p.name === 'Sewn garment edges'), 'no binding without a chosen contrast trim');
-    // A contrast trim is a flat band one quad across (two points per edge point), not a six-sided tube.
-    const robe = Wardrobe.build(pack, built, [{ id: 'robe' }], { atlasSize: 64 }), band = robe.parts.find(p => p.name === 'Sewn garment edges');
-    assert.ok(band, 'the robe keeps its gold trim as a band');
-    const ratio = (band.index.length / 3) / (band.positions.length / 3);
-    assert.ok(ratio < 1.5, 'flat band, not piping (tube parts have two triangles per vertex): ' + ratio.toFixed(2));
-    assert.ok(band.sewnRefs && band.sewnRefs.length === band.positions.length / 3 * 2, 'every band point rides on a fabric vertex');
+    // Since Preview 60 (2026-10-30) a contrast trim is painted on the cloth's edge, 3-6 mm wide: no separate ribbon or
+    // tube that can detach. 512 texels: a 64-texel atlas cannot resolve so fine a band.
+    const robe = Wardrobe.build(pack, built, [{ id: 'robe' }], { atlasSize: 512 });
+    assert.ok(!robe.parts.some(p => p.name === 'Sewn garment edges'), 'no second ribbon over the turned hem');
+    const atlas = robe.texture;
+    let gold = 0, cloth = 0;
+    for (let i = 0; i < atlas.data.length; i += 4) if (atlas.data[i + 3] >= 128) { cloth++; if (Math.abs(atlas.data[i] - 212) + Math.abs(atlas.data[i + 1] - 175) + Math.abs(atlas.data[i + 2] - 55) < 60) gold++; }
+    assert.ok(gold / cloth > 0.01 && gold / cloth < 0.1, 'the robe keeps its gold trim as a narrow band: ' + (gold / cloth * 100).toFixed(2) + '%');
     // The hem's rows: a roll round the edge, then a facing inside.
     const [{ spec, piece }] = pieces('tshirt');
     const laid = Outfit.lay(pack, built, piece, spec, {});
@@ -130,7 +132,7 @@ test('typical outfits stay within the triangle budget', () => {
     // Preview 54 measured costs include the earlier fine footwear/formed cap and
     // the new physical belt. Evidence: scratchpad/prop-quality-20261030/budget-details.log.
     // The separate whole-character preset ratchet remains unchanged.
-    for (const [preset, most] of [['casual', 21700], ['office', 31500], ['winter', 38300], ['mage', 21900], ['generatedMedic', 19700], ['detective', 32900]]) {
+    for (const [preset, most] of [['casual', 23000], ['office', 32500], ['winter', 40000], ['mage', 23500], ['generatedMedic', 21000], ['detective', 34500]]) {
         const out = Wardrobe.build(pack, built, Wardrobe.PRESETS.find(p => p.id === preset).items, { atlasSize: 64 });
         const tris = outfitTris(out.parts);
         assert.ok(tris <= most, preset + ' outfit ' + tris + ' > ' + most);

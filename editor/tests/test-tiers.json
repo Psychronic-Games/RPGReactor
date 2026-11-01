@@ -1,0 +1,25 @@
+{
+  "heavy": [
+    "builder-quality-corrections.test.cjs",
+    "character-3d-cloth.test.cjs",
+    "character-3d-creatures.test.cjs",
+    "character-3d-model-presets-1.test.cjs",
+    "character-3d-model-presets-2.test.cjs",
+    "character-3d-model-presets-4.test.cjs",
+    "character-3d-model-presets-5.test.cjs",
+    "character-3d-model-presets-6.test.cjs",
+    "character-3d-model.test.cjs",
+    "character-3d-outfit-transfer.test.cjs",
+    "character-alien-presets.test.cjs",
+    "character-anatomy-controls.test.cjs",
+    "character-aquatic-anatomy.test.cjs",
+    "character-creature-materials.test.cjs",
+    "character-creature-realism-20261024.test.cjs",
+    "character-cyberwear-20261024.test.cjs",
+    "character-garment-construction.test.cjs",
+    "character-garment-lining-20261025.test.cjs",
+    "prop-catalog.test.cjs",
+    "prop-vehicle-detail-20261024.test.cjs",
+    "prop-vehicle-styles-20261024.test.cjs"
+  ]
+}

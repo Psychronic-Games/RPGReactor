@@ -19,6 +19,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [3D Character Builder](CHARACTER-BUILDER.md): shaping a human with sliders in the Forge and saving it as a rigged model.
 - [Character quality coverage](CHARACTER-QUALITY.md) and [Claude continuation tracker](CLAUDE-QUALITY-TRACKER.md): catalog/slider sweeps, inherited agent issues, reproduced fixes, validation evidence and remaining appearance limits.
 - [3D Prop Builder](PROP-BUILDER.md): flags and hanging banners in the wind, props made from a picture, frames, swords, firearms and wearables, saved as models.
+- [Human face handoff](HUMAN-FACE-HANDOFF.md): the unfinished default human faces, how they are built and what remains.
 - [Model face points and speech](3D-FACE-AND-SPEECH.md): eye placement, mouth and lip authoring, spoken dialogue, per-prop animation speed.
 - [Media surfaces](MEDIA-SURFACES.md): image and video placement on maps, models and the screen; transforms and proportions.
 - [Custom user interfaces](DESIGN-USER-INTERFACES.md): the User Interfaces database section, its node set, actor bindings, opt-in stock-scene replacement and explicit boundaries.

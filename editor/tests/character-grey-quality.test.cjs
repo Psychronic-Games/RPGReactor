@@ -98,3 +98,27 @@ test('thumbnail cameras keep tall hats, long weapons, boot shafts and claws insi
         assert.ok(checked > 50, id + ' projected actual mesh vertices');
     }
 });
+
+test('a Grey\'s skull is a teardrop leaning back from the chin', () => {
+    const grey = inventory().find(f => f.group === 'species' && f.entity === 'alien');
+    const built = Body.build(pack, Body.normalizeRecipe(grey.recipe)), P = built.shaped, head = pack.body.source.filter(v => P[v * 3 + 1] > 0);
+    const top = head.reduce((a, v) => (P[v * 3 + 1] > P[a * 3 + 1] ? v : a), head[0]);
+    const chin = head.filter(v => Math.abs(P[v * 3]) < 0.015 && P[v * 3 + 2] > 0).reduce((a, v) => (P[v * 3 + 1] > 1.2 && P[v * 3 + 1] < P[a * 3 + 1] ? v : a), top);
+    assert.ok(P[top * 3 + 2] < P[chin * 3 + 2] - 0.04, 'the crown lies well behind the chin: the drop leans back');
+    const eyeY = P[top * 3 + 1] - (P[top * 3 + 1] - P[chin * 3 + 1]) * 0.6;
+    let wideHigh = 0, wideLow = 0;
+    for (const v of head) { if (P[v * 3 + 2] > P[chin * 3 + 2] + 0.03) continue; const y = P[v * 3 + 1], x = Math.abs(P[v * 3]); if (y > eyeY + 0.07 && y < P[top * 3 + 1]) wideHigh = Math.max(wideHigh, x); else if (y > P[chin * 3 + 1] + 0.02 && y < eyeY - 0.02) wideLow = Math.max(wideLow, x); }
+    assert.ok(wideHigh > wideLow, 'widest over the eyes, narrowing to the chin');
+});
+
+test('the lips stand forward of the skin above and below them, and meet at their corners', () => {
+    const P = Body.build(pack, Body.normalizeRecipe({ gender: 0 })).shaped, U = Body.maskOf(pack, ['shape/upperLip-incr'], 2), L = Body.maskOf(pack, ['shape/lowerLip-incr'], 2), N = Body.vertexNormals(pack, P);
+    const front = pack.body.source.filter(v => N[v * 3 + 2] > 0.2);
+    const lips = front.filter(v => U[v] > 0.5 || L[v] > 0.5), w = lips.reduce((m, v) => Math.max(m, Math.abs(P[v * 3])), 0), top = lips.reduce((m, v) => Math.max(m, P[v * 3 + 1]), -9);
+    const lipZ = lips.filter(v => Math.abs(P[v * 3]) < w * 0.3).reduce((m, v) => Math.max(m, P[v * 3 + 2]), -9);
+    const philtrum = front.filter(v => Math.abs(P[v * 3]) < w * 0.15 && P[v * 3 + 1] > top + w * 0.25 && P[v * 3 + 1] < top + w * 0.5);
+    assert.ok(philtrum.length && philtrum.every(v => P[v * 3 + 2] < lipZ), 'the upper lip stands out from the philtrum, not flush with it');
+    // At the corner the lowest upper-lip row and the highest lower-lip row meet.
+    const corner = (mask, pick) => pack.body.source.filter(v => mask[v] > 0.3 && Math.abs(P[v * 3]) > w * 0.75 && Math.abs(P[v * 3]) < w * 0.95).reduce((m, v) => pick(m, P[v * 3 + 1]), pick === Math.min ? 9 : -9);
+    assert.ok(corner(U, Math.min) - corner(L, Math.max) < 0.0008, 'no slit to see through at the corner');
+});

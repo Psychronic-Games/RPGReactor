@@ -106,7 +106,7 @@ function characterView(shared, raf) {
     const action = { time: 0, stop() {}, play() {}, setLoop() {}, getClip: () => ({ duration: 2 }), isRunning: () => true };
     const view = { bones: [], plan: 'human', group: { position: {} }, frame: 0, loop: 0,
         actions: new Map([['idle', { meta: {} }]]), action, textures: new Map(), renderer: { dispose() {} },
-        clock: { getDelta() { const now = raf.performance.now(), delta = (now - clockAt) / 1000; clockAt = now; return delta; } },
+        clock: { update() { return this; }, reset() { clockAt = raf.performance.now(); }, getDelta() { const now = raf.performance.now(), delta = (now - clockAt) / 1000; clockAt = now; return delta; } },
         mixer: { update(delta) { calls.deltas.push(delta); action.time += delta; } } };
     Object.assign(builder, { _view: view, pose: 'idle', _thumbQueue: [], _thumbEpoch: 0,
         root: { ownerDocument: { hidden: false }, querySelector: () => null },
@@ -204,7 +204,8 @@ test('a paused map retains the playtest memory-release deadline without polling 
 
 test('an inactive character defers WebGL startup and a closed one cannot finish a late startup', async () => {
     const shared = activity(), raf = frames();
-    const world = { window: { RRDetachedWindow: shared, THREE: {} }, console, ...raf, setTimeout, clearTimeout };
+    const prepareAuthoring = async () => {};
+    const world = { window: { RRDetachedWindow: shared, THREE: {} }, RRHumanBody: { prepareAuthoring }, console, ...raf, setTimeout, clearTimeout };
     vm.runInNewContext(read('forge/Character3D/Character3DBuilder.js'), world);
     const builder = Object.create(world.window.Character3DBuilder.prototype);
     let creates = 0;
@@ -216,11 +217,12 @@ test('an inactive character defers WebGL startup and a closed one cannot finish 
     assert.equal(creates, 0);
     assert.equal(builder._startOwed, true);
     shared.set('forge');
+    await new Promise(resolve => setImmediate(resolve)); // The owed start awaits authoring data before its view.
     assert.equal(creates, 1);
     assert.equal(builder._startOwed, false);
     builder._view = null; builder.pack = null;
     let finish;
-    world.RRHumanBody = { loadPack: () => new Promise(resolve => { finish = resolve; }) };
+    world.RRHumanBody = { prepareAuthoring, loadPack: () => new Promise(resolve => { finish = resolve; }) };
     const pending = builder._start();
     builder.detach();
     finish({}); await pending;

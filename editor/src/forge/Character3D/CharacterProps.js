@@ -654,7 +654,7 @@
             const rows=12,N=96,start=m.p.length/3,point=(j,k,bottom=false)=>{const t=j/rows,a=k/N*Math.PI*2,wave=(1+Math.cos(3*a))/2,reach=1+(out-1)*t*(1.08-.22*wave);return[R.center[0]+Math.sin(a)*R.rx*reach,R.center[1]+.003+(bottom?-.003:0)+Math.pow(t,1.8)*R.rx*.72*wave,R.center[2]+Math.cos(a)*R.rz*reach];};
             const grid=[];for(const lower of [false,true]){const g=[];for(let j=0;j<=rows;j++){const row=[];for(let k=0;k<=N;k++)row.push(m.vertex(point(j,k,lower),[0,lower?-1:1,0],rgb,skin));g.push(row);}grid.push(g);}
             for(let j=0;j<rows;j++)for(let k=0;k<N;k++)for(let face=0;face<2;face++){const g=grid[face],[a,b,c,d]=[g[j][k],g[j][k+1],g[j+1][k],g[j+1][k+1]];if(face){m.tri(a,c,b);m.tri(b,c,d);}else{m.tri(a,b,c);m.tri(b,d,c);}}
-            for(let k=0;k<N;k++){const a=grid[0][rows][k],b=grid[0][rows][k+1],c=grid[1][rows][k],d=grid[1][rows][k+1];m.tri(a,c,b);m.tri(b,c,d);}
+            for(let k=0;k<N;k++){const a=grid[0][rows][k],b=grid[0][rows][k+1],c=grid[1][rows][k],d=grid[1][rows][k+1];m.tri(a,b,c);m.tri(b,d,c);}
             const edge=Array.from({length:N+1},(_,k)=>point(rows,k));m.tube(edge,.0015,8,rgb.map(v=>v*.64),skin);
             m.computeNormals();return;
         }
@@ -1223,9 +1223,9 @@
         }
         const mark=Marks.prepare(o.mark,L.markImages,'back'),picture=Marks.texture('jetpack-mark|'+JSON.stringify([o.color,o.mark,Marks.imageKey(mark.image)]),512,512,(u,v)=>Marks.cloth(linear(o.color),mark,u,v,2));
         L.textures[picture.name]=picture;
-        const badge=new Mesh(),corners=[[-.027,-.055],[.027,-.055],[.027,.055],[-.027,.055]],uv=[[1,1],[0,1],[0,0],[1,0]];
-        const ids=corners.map(([x,yy],j)=>badge.vertex([x*s,y+(.07+yy)*s,back-.0105*s],[0,0,-1],[1,1,1],skin,uv[j]));badge.tri(ids[0],ids[2],ids[1]);badge.tri(ids[0],ids[3],ids[2]);
-        return [{mesh:badge,extra:{name:'Jetpack insignia',texture:picture.name,roughness:.6,metalness:.15},texture:picture}];
+        const badge=new Mesh(),corners=[[-.027,-.055],[.027,-.055],[.027,.055],[-.027,.055]],uv=[1,1,0,1,0,0,1,0];
+        const ids=corners.map(([x,yy])=>badge.vertex([x*s,y+(.07+yy)*s,back-.0105*s],[0,0,-1],[1,1,1],skin));badge.tri(ids[0],ids[2],ids[1]);badge.tri(ids[0],ids[3],ids[2]);
+        return [{mesh:badge,extra:{name:'Jetpack insignia',texture:picture.name,uvs:Float32Array.from(uv),roughness:.6,metalness:.15},texture:picture}];
     }
 
     /**

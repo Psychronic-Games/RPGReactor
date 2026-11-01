@@ -257,7 +257,7 @@ test('a neighbor\'s events by the shared side stand before the crossing, and the
         assert.equal(events.filter(Boolean).length, 4, 'the vehicles are added once');
         // Entered: a model is kept where the map's own event wears it, and goes where it does not.
         const removed = [];
-        const holder = spec => ({ ahead: true, spec, object: { parent: { remove: () => removed.push(spec) } } });
+        const holder = spec => ({ ahead: true, spec, object: { userData: {}, traverse() {}, parent: { remove: () => removed.push(spec) } } });
         const held = new Map([['e1', holder(R.modelCacheKey('M1', '.glb', 'm'))], ['e4', holder(R.modelCacheKey('Old', '.glb', 'm'))], ['p', { spec: 'party' }]]);
         const savedMap = global.$gameMap;
         global.$gameMap = { event: id => (id === 1 || id === 4 ? { _eventId: id } : null) };

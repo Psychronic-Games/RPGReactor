@@ -270,7 +270,10 @@
         let prev = null, len = 0;
         const rings = [];
         for (let i = 0; i < n; i++) {
-            const t = norm(sub(points[Math.min(n - 1, i + 1)], points[Math.max(0, i - 1)]));
+            // The ring bisects the corner: from the raw chord it leaned toward the longer span and twisted the tube.
+            const before = sub(points[i], points[Math.max(0, i - 1)]), after = sub(points[Math.min(n - 1, i + 1)], points[i]);
+            const turn = i && i < n - 1 ? add(norm(before), norm(after)) : (i ? before : after);
+            const t = norm(Math.hypot(...turn) > 1e-6 ? turn : after);
             // Carried along the path: each ring's frame turned as little as the path turns.
             let u;
             if (!prev) { const up = Math.abs(t[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]; u = norm(cross(up, t)); }
@@ -292,8 +295,9 @@
             for (let s = 0; s < sd; s++) I.push(a + s, a + s + 1, b + s, a + s + 1, b + s + 1, b + s); // winding fix 2026-10-18: faces out
         }
         const m = make(P, N, T, I);
-        // The ring order winds its faces inward on some paths: turned out by the normals.
-        orientOutward(m);
+        // The ring order winds its faces inward on some paths: the whole tube is turned out by the normals. Turning
+        // each face on its own broke a tight bend's faces from their neighbors.
+        orientWhole(m);
         if (closeEnds) {
             const g = new Geo();
             for (const [k, dir] of [[0, -1], [n - 1, 1]]) {
@@ -307,6 +311,18 @@
     }
 
     /** Triangles turned to agree with their vertices' normals. */
+    function orientWhole(m) {
+        const P = m.positions, N = m.normals, I = m.index;
+        let vote = 0;
+        for (let t = 0; t < I.length; t += 3) {
+            const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+            const fn = cross([P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]], [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]]);
+            vote += fn[0] * (N[a] + N[b] + N[c]) + fn[1] * (N[a + 1] + N[b + 1] + N[c + 1]) + fn[2] * (N[a + 2] + N[b + 2] + N[c + 2]);
+        }
+        if (vote < 0) for (let t = 0; t < I.length; t += 3) { const k = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = k; }
+        return m;
+    }
+
     function orientOutward(m) {
         const P = m.positions, N = m.normals, I = m.index;
         for (let t = 0; t < I.length; t += 3) {

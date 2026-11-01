@@ -594,6 +594,8 @@
         const crown=Math.max(...skin.map(v=>C.P[v*3+1])),low=C.bone('Neck').head[1]+.008*s,eye=L.eyeY,base=L.neck.center,cx=base[0];
         const points=skin.map(v=>C.at(v)).filter(p=>p[1]>eye-.07*s&&p[1]<crown-.01*s),front=Math.max(...points.map(p=>p[2]))+.018*s,back=Math.min(...points.map(p=>p[2]))-.014*s,wide=Math.max(...points.map(p=>Math.abs(p[0]-cx)))+.016*s,cz=(front+back)/2,rz=(front-back)/2;
         const lens=new Mesh(),assault=item.style==='assault',lenses=item.style==='lenses',v0=eye-(assault?.010:.015)*s,v1=eye+(assault?.010:.014)*s,N=96;
+        // Half the visor's arc: the assault faceplate's glazed slit wraps back to the ear modules.
+        const wrap=assault?1.36:1.13;
         const yy=[low,eye-.068*s,eye-.044*s,v0,v1,eye+.043*s,...Array.from({length:12},(_,j)=>eye+.045*s+(crown+.014*s-eye-.045*s)*j/11)].sort((a,b)=>a-b);
         const at=(a,y,lift=0)=>{
             const t=Math.max(0,Math.min(1,(y-(eye+.035*s))/(crown+.015*s-eye-.035*s))),d=Math.max(.015,Math.sqrt(Math.max(0,1-t*t))),ca=Math.cos(a),sa=Math.sin(a),q=1/(Math.abs(ca)**3.2+Math.abs(sa)**3.2)**(1/3.2),jaw=1-.37*smooth(eye-.04*s,low,y);
@@ -614,7 +616,7 @@
         // Split the visor out of the shared smooth surface. Its perimeter stays seated.
         const shellIndices=[],source=C.shell.i.slice();
         for(let j=0;j+1<yy.length;j++)for(let k=0;k<N;k++){
-            const a=(k+.5)/N*Math.PI*2,glass=yy[j]>=v0-1e-6&&yy[j+1]<=v1+1e-6&&Math.cos(a)>.42&&(!lenses||Math.abs(Math.sin(a))>.13),offset=(j*N+k)*6;
+            const a=(k+.5)/N*Math.PI*2,glass=yy[j]>=v0-1e-6&&yy[j+1]<=v1+1e-6&&Math.cos(a)>Math.cos(wrap)&&(!lenses||Math.abs(Math.sin(a))>.13),offset=(j*N+k)*6;
             if(!glass){shellIndices.push(...source.slice(offset,offset+6));continue;}
             const map=new Map();for(const v of source.slice(offset,offset+6)){
                 if(!map.has(v))map.set(v,lens.push(C.shell.p.slice(v*3,v*3+3),C.shell.n.slice(v*3,v*3+3),Outfit.linear(item.lightColor||'#1e4257'),head,C.shell.t[v*2],C.shell.t[v*2+1]));lens.i.push(map.get(v));
@@ -622,7 +624,7 @@
         }
         C.shell.i=shellIndices;
         C.shell.face(rings.at(-1),C.color,head,Y);
-        for(const y of [v0,v1])bead(C.hardware,Array.from({length:33},(_,k)=>at(-1.17+k/32*2.34,y,.0008*s)),false,.0018*s,C.trim,head,p=>sub(p,[cx,p[1],cz]),8,.1);
+        for(const y of [v0,v1])bead(C.hardware,Array.from({length:33},(_,k)=>at((-1+k/16)*(wrap+.04),y,.0008*s)),false,.0018*s,C.trim,head,p=>sub(p,[cx,p[1],cz]),8,.1);
         for(const side of [-1,1]){
             const a=side*1.39,p=at(a,eye-.004*s,.002*s),n=[Math.sin(a),0,Math.cos(a)],u=[Math.cos(a),0,-Math.sin(a)];
             rectangle(C.hardware,p,u,Y,.038*s,.059*s,n,C.trim,head,.006*s,.002*s);
@@ -632,7 +634,7 @@
             for(const a0 of [side*.8,side*2.25])bolt(C.hardware,at(a0,eye+.05*s,.0016*s),normalAt(a0,eye+.05*s),.0024*s,C.trim,head);
         }
         // The brow is a continuous raised band; cheek seams follow the shell rather than crossing it.
-        const browRows=[eye+.022*s,eye+.028*s,eye+.037*s].map((y,j)=>Array.from({length:49},(_,k)=>at(-1.18+k/48*2.36,y,(j===1?.004:.0008)*s)));
+        const browRows=[eye+.022*s,eye+.028*s,eye+.037*s].map((y,j)=>Array.from({length:49},(_,k)=>at((-1+k/24)*(wrap+.05),y,(j===1?assault?.0065:.004:.0008)*s)));
         C.shell.loft(browRows,lighten(C.color,.065),head,p=>[cx,p[1],cz],null,true);
         const flange=[low-.006*s,low+.003*s,low+.013*s].map((y,j)=>Array.from({length:N},(_,k)=>at(k/N*Math.PI*2,low,.001*s+(j===1?.003:0)).map((v,a)=>a===1?y:v)));C.hardware.loft(flange,C.trim,head,p=>[cx,p[1],cz]);
         // Chin air inlet is inset into the same faceplate, not a separate floating mouth cage.
@@ -1249,7 +1251,9 @@
                     const grid=[0,.5,1].map(v=>{
                         const down=(k+v)/count;
                         return cols.map((f,c)=>{
-                            let r=smoothBase[c]+.015*s+k*.0035*s+flare*.024*s*down+.0015*s*Math.sin(Math.PI*v);
+                            // 24 mm off the cloth: the fauld's own stand-off. The mail's folded hem used to supply the last 9 mm of it; with
+                            // the short turned hem (2026-10-30) a bare 15 mm drew the lames in under the breastplate's rim.
+                            let r=smoothBase[c]+.024*s+k*.0035*s+flare*.024*s*down+.0015*s*Math.sin(Math.PI*v);
                             if(style==='fluted')r+=.0032*s*Math.exp(-((f/.12)**2));
                             let y=yTop-(d0-dTop)-(d1-d0)*v;if(style==='fluted'&&k===count-1&&v===1)y-=.018*s*Math.exp(-((f/.3)**2));
                             return levelAt(dirs[c],r,y);

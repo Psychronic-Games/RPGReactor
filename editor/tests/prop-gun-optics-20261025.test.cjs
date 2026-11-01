@@ -93,7 +93,7 @@ test('every scope has a lens at both ends, facing out, sunk in its housing with 
 
 test('the railgun rifle builds whole within budget: rails, open channel, cheeks, capacitors, heat sinks, cell, lit charge on the glow rule', () => {
     const type = Catalog.TYPES.find(t => t.id === 'gun-railgun');
-    assert.ok(type && type.category === 'scifi' && !type.hidden, 'listed under Sci-fi');
+    assert.ok(type && type.category === 'firearms-scifi' && type.genre === 'scifi' && !type.hidden, 'listed under Sci-fi firearms');
     const result = Model.build(type.start(), {}, {}), r = result.recipe, n = Model.stats(result).triangles;
     assert.equal(r.barrelBuild, 'rails');
     assert.ok(n >= 8000 && n <= 25000, n + ' triangles');

@@ -876,6 +876,7 @@
         if (Math.abs(area) < 1e-9) return;
         const x0 = Math.max(0, Math.floor(Math.min(...px)) - 1), x1 = Math.min(size - 1, Math.ceil(Math.max(...px)) + 1);
         const y0 = Math.max(0, Math.floor(Math.min(...py)) - 1), y1 = Math.min(size - 1, Math.ceil(Math.max(...py)) + 1);
+        const A = tri[0], B = tri[1], C = tri[2], tol = -0.75 / Math.sqrt(Math.abs(area));
         const p = { edgeCandidates:tri.edgeCandidates, fam: tri[0].fam, s: 0, ang: 0, cu: 0, cv: 0, y: 0, val: 0, vm: 0, u: 0, printU:0,printV:0,trimSuppressed:0, rest: [0, 0, 0], surface:[0,0,0], su: tri[0].su, rad: tri[0].rad, exact: !!tri.exact, px: 1 / scale };
         for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
             const cx = x + 0.5, cy = y + 0.5;
@@ -883,16 +884,20 @@
             let w1 = ((px[2] - cx) * (py[0] - cy) - (px[0] - cx) * (py[2] - cy)) / area;
             let w2 = 1 - w0 - w1;
             // Half a texel past the edge too, so neighboring triangles meet without a gap.
-            const tol = -0.75 / Math.sqrt(Math.abs(area));
             if (w0 < tol || w1 < tol || w2 < tol) continue;
             const o = y * size + x;
             if (filled[o] === 2) continue;
             const inside = w0 >= 0 && w1 >= 0 && w2 >= 0;
             w0 = Math.max(0, w0); w1 = Math.max(0, w1); w2 = Math.max(0, w2);
             const ws = w0 + w1 + w2; w0 /= ws; w1 /= ws; w2 /= ws;
-            const k = (name) => tri[0][name] * w0 + tri[1][name] * w1 + tri[2][name] * w2;
-            p.printU=k('printU');p.printV=k('printV');p.trimSuppressed=k('trimSuppressed');p.s = k('s'); p.ang = k('ang'); p.cu = k('cu'); p.cv = k('cv'); p.y = k('y'); p.val = k('val'); p.vm = k('vm'); p.u = k('u');
-            for (let q = 0; q < 3; q++) {p.rest[q] = tri[0].rest[q] * w0 + tri[1].rest[q] * w1 + tri[2].rest[q] * w2;p.surface[q]=tri[0].surface[q]*w0+tri[1].surface[q]*w1+tri[2].surface[q]*w2;}
+            // Written out, not looked up by name: this runs once per texel of a 2048 picture.
+            p.printU = A.printU * w0 + B.printU * w1 + C.printU * w2; p.printV = A.printV * w0 + B.printV * w1 + C.printV * w2;
+            p.trimSuppressed = A.trimSuppressed * w0 + B.trimSuppressed * w1 + C.trimSuppressed * w2;
+            p.s = A.s * w0 + B.s * w1 + C.s * w2; p.ang = A.ang * w0 + B.ang * w1 + C.ang * w2;
+            p.cu = A.cu * w0 + B.cu * w1 + C.cu * w2; p.cv = A.cv * w0 + B.cv * w1 + C.cv * w2;
+            p.y = A.y * w0 + B.y * w1 + C.y * w2; p.val = A.val * w0 + B.val * w1 + C.val * w2;
+            p.vm = A.vm * w0 + B.vm * w1 + C.vm * w2; p.u = A.u * w0 + B.u * w1 + C.u * w2;
+            for (let q = 0; q < 3; q++) { p.rest[q] = A.rest[q] * w0 + B.rest[q] * w1 + C.rest[q] * w2; p.surface[q] = A.surface[q] * w0 + B.surface[q] * w1 + C.surface[q] * w2; }
             const rgb = color(p);
             data[o * 4] = toByte(rgb[0]); data[o * 4 + 1] = toByte(rgb[1]); data[o * 4 + 2] = toByte(rgb[2]); data[o * 4 + 3] = rgb.length > 3 ? Math.round(Math.max(0, Math.min(1, rgb[3])) * 255) : 255;
             if (emission) { const glow = light(p); for (let k = 0; k < 3; k++) emission[o * 4 + k] = toByte(glow[k]); emission[o * 4 + 3] = 255; }
@@ -902,22 +907,31 @@
 
     /** Grows painted texels into the empty ones around them, `passes` texels deep (so filtering never reads black). */
     function dilate(data, filled, size, passes) {
-        for (let p = 0; p < passes; p++) {
-            const next = [];
-            for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-                const o = y * size + x;
-                if (filled[o]) continue;
+        // Only the rim of what is painted can change: the whole picture is looked at once, then each pass walks the
+        // texels the last one touched. (Rescanning 2048 x 2048 on every pass was a fifth of a character's build.)
+        const seen = new Int32Array(size * size);
+        let rim = [];
+        const touch = (o, x, y, round) => {
+            if (x + 1 < size && !filled[o + 1] && seen[o + 1] !== round) { seen[o + 1] = round; rim.push(o + 1); }
+            if (x > 0 && !filled[o - 1] && seen[o - 1] !== round) { seen[o - 1] = round; rim.push(o - 1); }
+            if (y + 1 < size && !filled[o + size] && seen[o + size] !== round) { seen[o + size] = round; rim.push(o + size); }
+            if (y > 0 && !filled[o - size] && seen[o - size] !== round) { seen[o - size] = round; rim.push(o - size); }
+        };
+        for (let y = 0, o = 0; y < size; y++) for (let x = 0; x < size; x++, o++) if (filled[o]) touch(o, x, y, 1);
+        for (let p = 0; p < passes && rim.length; p++) {
+            const now = rim, colors = new Float64Array(now.length * 3);
+            for (let i = 0; i < now.length; i++) {
+                const o = now[i], x = o % size, y = (o - x) / size;
                 let r = 0, g = 0, b = 0, n = 0;
-                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-                    const X = x + dx, Y = y + dy;
-                    if (X < 0 || Y < 0 || X >= size || Y >= size) continue;
-                    const q = Y * size + X;
-                    if (!filled[q]) continue;
-                    r += data[q * 4]; g += data[q * 4 + 1]; b += data[q * 4 + 2]; n++;
-                }
-                if (n) next.push([o, r / n, g / n, b / n]);
+                if (x + 1 < size && filled[o + 1]) { const q = (o + 1) * 4; r += data[q]; g += data[q + 1]; b += data[q + 2]; n++; }
+                if (x > 0 && filled[o - 1]) { const q = (o - 1) * 4; r += data[q]; g += data[q + 1]; b += data[q + 2]; n++; }
+                if (y + 1 < size && filled[o + size]) { const q = (o + size) * 4; r += data[q]; g += data[q + 1]; b += data[q + 2]; n++; }
+                if (y > 0 && filled[o - size]) { const q = (o - size) * 4; r += data[q]; g += data[q + 1]; b += data[q + 2]; n++; }
+                colors[i * 3] = r / n; colors[i * 3 + 1] = g / n; colors[i * 3 + 2] = b / n;
             }
-            for (const [o, r, g, b] of next) { data[o * 4] = r; data[o * 4 + 1] = g; data[o * 4 + 2] = b; data[o * 4 + 3] = 255; filled[o] = 1; }
+            for (let i = 0; i < now.length; i++) { const o = now[i]; data[o * 4] = colors[i * 3]; data[o * 4 + 1] = colors[i * 3 + 1]; data[o * 4 + 2] = colors[i * 3 + 2]; data[o * 4 + 3] = 255; filled[o] = 1; }
+            rim = [];
+            for (let i = 0; i < now.length; i++) { const o = now[i], x = o % size; touch(o, x, (o - x) / size, p + 2); }
         }
     }
 

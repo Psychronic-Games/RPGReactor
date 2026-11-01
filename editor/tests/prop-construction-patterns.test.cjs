@@ -9,8 +9,18 @@ test('construction rules match recipe traits in order, consume explicit controls
  for(const style of ['modern','rustic','scifi']){const ctx={recipe:{kind:'furniture',style},parts:[]};assert.deepEqual(bank.assemble(ctx),style==='modern'?['frame']:['frame','joinery']);assert.deepEqual(ctx.parts,style==='modern'?['frame']:['frame','joinery']);}
  assert.deepEqual(Rules.anchor({deck:[0,1,0]},'deck',[.1,0,.2]),[.1,1,.2]);assert.throws(()=>Rules.anchor({deck:[0,NaN,0]},'deck'),/anchor/);assert.throws(()=>Rules.bank([{id:'x',build(){}},{id:'x',build(){}}]),/pattern/);
 });
-test('all sixteen furniture styles select different actual construction, including with details disabled',()=>{
- for(const [form]of F.FORMS)for(const details of [false,true]){const hashes=new Set();for(const style of ['modern','rustic','scifi']){const r=F.build({...F.fromPreset(form),style,details},{});hashes.add(hash(r.parts));assert.ok(r.construction.length,form+' construction plan');}assert.equal(hashes.size,3,form+' styles must change the mesh, details='+details);}
+const STYLED_FORMS=['chair','armchair','sofa','bench','table','desk','bed','cabinet','bookshelf','fridge','microwave','tv','computer','wallPanel','console','serverRack'];
+test('all sixteen styled furniture forms select different actual construction, including with details disabled',()=>{
+ for(const form of STYLED_FORMS)for(const details of [false,true]){const hashes=new Set();for(const style of ['modern','rustic','scifi']){const r=F.build({...F.fromPreset(form),style,details},{});hashes.add(hash(r.parts));assert.ok(r.construction.length,form+' construction plan');}assert.equal(hashes.size,3,form+' styles must change the mesh, details='+details);}
+});
+test('style on every later furniture form still picks a different finish, and every form has a construction plan',()=>{
+ // These forms have one construction; Style sets their finish. STYLED_FORMS above change shape as well.
+ for(const [form]of F.FORMS.filter(([id])=>!STYLED_FORMS.includes(id))){const looks=new Set();for(const style of ['modern','rustic','scifi']){const r=F.build({...F.fromPreset(form),style,...F.styleLook(form,style)},{});assert.ok(r.construction.length,form+' construction plan');const pictures=crypto.createHash('sha256');for(const t of Object.values(r.textures))if(t?.data)pictures.update(t.data);looks.add(JSON.stringify(r.parts.map(p=>[p.name,p.color,p.roughness,p.metalness,p.texture]))+pictures.digest('hex'));}assert.equal(looks.size,3,form+' styles must change the finish');}
+});
+test('default television, computer and wall panel keep their crafted builds; sci-fi televisions and computers keep their holo builds',()=>{
+ for(const form of ['tv','computer','wallPanel'])assert.deepEqual(F.build(F.fromPreset(form),{}).construction,['crafted-'+form]);
+ for(const form of ['tv','computer'])assert.notDeepEqual(F.build({...F.fromPreset(form),style:'scifi'},{}).construction,['crafted-'+form]);
+ const live=F.build({...F.fromPreset('computer'),style:'scifi',screenStyle:'status',animateScreen:true},{});assert.ok(live.parts.some(p=>/^Live display/.test(p.name)),'sci-fi computer readout animates');
 });
 test('upholstery settings deform the cushion surface, with finite normals and original skin support',()=>{
  for(const form of ['chair','armchair','sofa','bench','bed']){const hashes=new Set();for(const upholstery of ['plain','tufted','channel']){const r=F.build({...F.fromPreset(form),upholstery},{}),parts=r.parts.filter(p=>p.kind==='cloth');hashes.add(hash(parts,['positions','normals']));assert.ok(parts.every(p=>p.normals.every(Number.isFinite)),form);}assert.equal(hashes.size,3,form+' upholstery must change its shape');}
@@ -49,6 +59,7 @@ test('cross position changes tall banners and repeated emblems fit their painted
 test('keycap assemblies have fitted modifier widths, engraved legends and a real space bar',()=>{
  const K=require('../src/forge/Props/PropKeycaps.js');for(const n of [3,4,5,6]){const rows=K.layout(n);assert.equal(rows.length,n);if(n>=4)assert.ok(rows.flat().some(([name,width])=>name==='SPACE'&&width>4));}
  for(const form of ['computer','console']){const r=F.build(F.fromPreset(form),{}),p=r.parts.find(p=>p.name.endsWith(' legends'));assert.ok(p&&p.cutout&&p.texture);const t=r.textures[p.texture];assert.ok(t.data.some((v,i)=>i%4===3&&v===0));assert.ok(t.data.some((v,i)=>i%4===3&&v>200));assert.ok(p.uvs.every(v=>v>=-1e-6&&v<=1.000001));}
+ const keys=keyRows=>F.build({...F.fromPreset('computer'),keyRows},{}).parts.find(p=>p.name.endsWith(' keys')).index.length;assert.ok(keys(3)<keys(4)&&keys(4)<keys(6),'Key rows reach the crafted computer');
 });
 
 test('character chokers follow the actual neck below the jaw instead of a displaced lower-neck ellipse',async()=>{

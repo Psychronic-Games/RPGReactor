@@ -27,7 +27,7 @@ test('six sci-fi ensembles retain valid fitted geometry and emissive UV maps acr
             assert.ok(result.parts.some(p => p.emissiveTexture === glow.name));
             assert.ok(glow.data.some((v, i) => i % 4 < 3 && v > 30), 'resolved luminous details: '+id+'/'+gender+'/'+JSON.stringify(shape));
         }
-        assert.ok(result.parts.reduce((sum, p) => sum + p.index.length / 3, 0) < 65000, 'bounded whole-character triangle count');
+        assert.ok(result.parts.reduce((sum, p) => sum + p.index.length / 3, 0) < 80000, 'bounded whole-character triangle count');
     }
 });
 

@@ -5,6 +5,7 @@
 // the newest work starts, while dispose() terminates it immediately.
 const { Worker, isMainThread, parentPort, workerData, threadId } = require('node:worker_threads');
 const PreviewTextures = require('./CharacterPreviewTextures.js');
+const { createPacker, unpack } = require('../Props/PropPreviewWorker.cjs');
 
 function abortError(message = 'Character preview canceled') {
     const error = new Error(message);
@@ -120,7 +121,7 @@ class PreviewWorker {
                 const error = new Error(data.error.message); error.name = data.error.name || 'Error'; error.code = data.error.code;
                 this._settle(job, error);
             } else if (job.revision !== this._revision) this._settle(job, abortError());
-            else this._settle(job, null, data.result);
+            else this._settle(job, null, data.live ? unpack(data, this._store || (this._store = new Map()), this.options.arrays || globalThis) : data.result);
             this._pump();
         });
         worker.on('error', error => { if (this._worker === worker) this._fail(error); });
@@ -156,8 +157,8 @@ class PreviewWorker {
     }
 }
 
-const PART_FIELDS = ['name', 'kind', 'color', 'texture', 'keepColors', 'normalTexture', 'normalScale', 'normalTexCoord', 'metallicRoughnessTexture', 'metallicRoughnessTexCoord', 'occlusionTexture', 'occlusionTexCoord', 'occlusionStrength', 'sheen', 'fabric', 'iridescence', 'iridescenceIOR', 'iridescenceThicknessRange', 'iridescenceThicknessTexture', 'emissive', 'emissiveIntensity', 'emissiveTexture', 'roughness', 'metalness', 'doubleSided', 'opacity', 'cutout', 'alphaCutoff', 'onSkin', 'envMapIntensity', 'wet'];
-const GEOMETRY_FIELDS = ['positions', 'normals', 'uvs', 'uvs1', 'colors', 'index'];
+const PART_FIELDS = ['name', 'softGloss', 'kind', 'color', 'texture', 'keepColors', 'normalTexture', 'normalScale', 'normalTexCoord', 'metallicRoughnessTexture', 'metallicRoughnessTexCoord', 'occlusionTexture', 'occlusionTexCoord', 'occlusionStrength', 'sheen', 'fabric', 'iridescence', 'iridescenceIOR', 'iridescenceThicknessRange', 'iridescenceThicknessTexture', 'emissive', 'emissiveIntensity', 'emissiveTexture', 'roughness', 'metalness', 'doubleSided', 'opacity', 'cutout', 'alphaCutoff', 'onSkin', 'envMapIntensity', 'wet'];
+const GEOMETRY_FIELDS = ['positions', 'normals', 'uvs', 'uvs1', 'colors', 'index', 'edge', 'lidWall', 'tone'];
 
 function renderPayload(result, options = {}) {
     const transfers = [];
@@ -185,16 +186,20 @@ function renderPayload(result, options = {}) {
 async function serve() {
     // All modules and filesystem-backed lazy assets are loaded in the worker, never by the client.
     require('../../utils/QuadricDecimator.js');
-    for (const name of ['HumanTargets', 'HumanBody', 'CharacterDrape', 'CharacterOutfit', 'CharacterFabric', 'CharacterWear', 'CharacterMarks', 'CharacterAtlas', 'CharacterClothes', 'CharacterSimplify', 'CharacterOutfitTransfer', 'CharacterPowerArmor', 'CharacterWasteland', 'ConstructionSurface', 'ConstructionPatterns', 'CharacterCyberGear', 'CharacterProps', 'CharacterGarmentDetails', 'CharacterReconConstruction', 'CharacterWardrobe', 'CharacterSpecies', 'CharacterBodyArtMotifs', 'CharacterBodyArt', 'CharacterSkin', 'CharacterBodyMods', 'CharacterHair', 'CreatureGear', 'CreatureArthropods', 'CreatureFlyers', 'CreatureReptiles', 'CreatureForms', 'CreatureBody', 'CharacterGlb', 'CharacterShading', 'CharacterDetail', 'CharacterPoses', 'MerfolkBody', 'CharacterCentaur', 'CharacterCloth', 'CharacterExpressions', 'SlimeBody']) require('./' + name + '.js');
+    for (const name of ['HumanTargets', 'FaceFieldData', 'HeadMeshData', 'HumanBody', 'CharacterHeadMesh', 'CharacterDrape', 'CharacterOutfit', 'CharacterFabric', 'CharacterWear', 'CharacterMarks', 'CharacterAtlas', 'CharacterClothes', 'CharacterSimplify', 'CharacterOutfitTransfer', 'CharacterPowerArmor', 'CharacterWasteland', 'ConstructionSurface', 'ConstructionPatterns', 'CharacterCyberGear', 'CharacterProps', 'CharacterGarmentDetails', 'CharacterReconConstruction', 'CharacterWardrobe', 'CharacterSpecies', 'CharacterBodyArtMotifs', 'CharacterBodyArt', 'CharacterSkin', 'CharacterBodyMods', 'CharacterHair', 'CreatureGear', 'CreatureArthropods', 'CreatureFlyers', 'CreatureReptiles', 'CreatureForms', 'CreatureBody', 'CharacterGlb', 'CharacterShading', 'CharacterDetail', 'CharacterPoses', 'MerfolkBody', 'CharacterCentaur', 'CharacterCloth', 'CharacterExpressions', 'SlimeBody']) require('./' + name + '.js');
     const Model = require('./CharacterModel.js'), Body = require('./HumanBody.js');
     const Wardrobe = require('./CharacterWardrobe.js'), Taken = require('./CharacterOutfitTransfer.js');
     if (workerData.dataDir) Body.dataFolder = () => require('node:path').resolve(workerData.dataDir);
     const pack = await Body.loadPack(workerData.dataDir && Body.dataFolder());
     let context = {}, contextError = null;
     const caches = new Map(), dynamic = new Set();
+    // The builder's own view (`options.live`): the whole build as the page would have made it, in its own warm cache.
+    // Arrays cross once; what the cache kept travels as a reference, so the view skips its upload.
+    const packLive = createPacker();
+    let liveCache = null;
     const configure = next => {
         for (const key of dynamic) Taken.unregister(Wardrobe, key);
-        dynamic.clear(); caches.clear();
+        dynamic.clear(); caches.clear(); liveCache = null;
         context = next || {};
         if (context.projectPath) {
             Taken.registerProject(Wardrobe, context.projectPath);
@@ -225,6 +230,14 @@ async function serve() {
         if (message.type !== 'build') return;
         try {
             if (contextError) throw contextError;
+            if (message.options?.live) {
+                if (!liveCache) liveCache = { wardrobe: { emblemPictures: context.emblemPictures || new Map() } };
+                const start = performance.now(), built = Model.build(pack, message.recipe, liveCache, { ...message.options, eyeSource: context.eyeSource });
+                built.skinKey = liveCache.skinKey;
+                const { result, fresh, transfers } = packLive(built);
+                parentPort.postMessage({ id: message.id, live: true, result, fresh, ms: performance.now() - start }, transfers);
+                return;
+            }
             const start = performance.now(), key = String(message.cacheKey || 'thumbnail');
             let cache = caches.get(key);
             if (!cache) { cache = { wardrobe: { emblemPictures: context.emblemPictures || new Map() } }; caches.set(key, cache); }

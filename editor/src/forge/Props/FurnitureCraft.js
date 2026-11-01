@@ -32,7 +32,7 @@ if(f==='sink'){
  for(const side of [-1,1]){box('paint',[side*W*.245,H*.41,D*.50],[W*.47,H*.69,.025],.012);bar('metal',[side*W*.08,H*.56,D*.53],[side*W*.08,H*.39,D*.53],.007);}
  const g=new CM.Geo(),N=96,profile=[[1,top+.012],[.96,top+.014],[.91,top-.012],[.82,bottom+.04],[.68,bottom],[0,bottom]];
  const at=(i,k)=>{const a=k/N*Math.PI*2,[t,y]=profile[i];return[Math.sign(Math.cos(a))*Math.abs(Math.cos(a))**.40*hw*t,y,Math.sign(Math.sin(a))*Math.abs(Math.sin(a))**.40*hd*t];};
- for(let i=0;i+1<profile.length;i++)for(let k=0;k<N;k++)g.poly([at(i,k),at(i,(k+1)%N),at(i+1,(k+1)%N),at(i+1,k)],null,[Math.cos((k+.5)/N*Math.PI*2)*(profile[i+1][1]-profile[i][1]),profile[i][0]-profile[i+1][0],Math.sin((k+.5)/N*Math.PI*2)*(profile[i+1][1]-profile[i][1])]);put('metal',CM.smoothNormals(g.done(),.75));
+ for(let i=0;i+1<profile.length;i++)for(let k=0;k<N;k++)g.poly([at(i,k),at(i,(k+1)%N),at(i+1,(k+1)%N),at(i+1,k)],null,[Math.cos((k+.5)/N*Math.PI*2)*(profile[i+1][1]-profile[i][1]),profile[i][0]-profile[i+1][0],Math.sin((k+.5)/N*Math.PI*2)*(profile[i+1][1]-profile[i][1])]);put('sinkInterior',CM.smoothNormals(g.done(),.75));
  round('metal',[0,bottom+.002,0],[[0,0],[.027,0],[.027,.004],[0,.004]],48);if(r.details)for(let j=0;j<6;j++){const a=j/6*Math.PI*2;round('dark',[Math.cos(a)*.015,bottom+.007,Math.sin(a)*.015],[[0,0],[.0025,0],[.0025,.001],[0,.001]],12);}
  tube('metal',[[0,top,-D*.37],[0,top+.21,-D*.37],[0,top+.27,-D*.27],[0,top+.26,-D*.12],[0,top+.20,-D*.09]],.013,32);round('metal',[0,top,-D*.37],[[0,0],[.032,0],[.028,.035],[0,.035]],48);bar('metal',[.025,top+.06,-D*.37],[.075,top+.10,-D*.37],.009);return {};
 }
@@ -156,18 +156,32 @@ if(f==='surgicalLamp'){
 }
 if(f==='tv'||f==='computer'||f==='wallPanel'){
  if(f==='tv'){
-  const sw=W*.97,sh=Math.min(H*.74,sw*9/16),y=H-sh/2-.015;box('trim',[0,y,0],[sw+.025,sh+.025,.045],.018);screen([0,y,.026],[1,0,0],[0,1,0],sw,sh);for(const x of [-1,1])tube('metal',[[x*W*.30,y-sh/2+.02,-.005],[x*W*.39,.025,D*.30],[x*W*.45,.018,D*.40]],.012);vents([0,y+sh*.35,-.026],W*.55,.012,21);box('keys',[0,y-sh/2-.008,.028],[.04,.008,.006],.003);return {};
+  // Rustic: the set sits in a timber surround on splayed wooden legs.
+  const rustic=r.style==='rustic',sw=rustic?Math.max(W*.7,W-.13):W*.97,sh=Math.min(H*.74,sw*9/16),y=H-sh/2-(rustic?.065:.015);box('trim',[0,y,0],[sw+.025,sh+.025,.045],.018);screen([0,y,.026],[1,0,0],[0,1,0],sw,sh);
+  if(rustic){for(const s of [-1,1]){box('frame',[s*(sw/2+.034),y,-.006],[.062,sh+.13,.07],.008);box('frame',[0,y+s*(sh/2+.034),-.006],[sw+.006,.062,.07],.008);bar('frame',[s*W*.33,y-sh/2-.05,-.006],[s*W*.42,.016,D*.36],.017);bar('frame',[s*W*.33,y-sh/2-.05,-.006],[s*W*.42,.016,-D*.36],.017);}}
+  else for(const x of [-1,1])tube('metal',[[x*W*.30,y-sh/2+.02,-.005],[x*W*.39,.025,D*.30],[x*W*.45,.018,D*.40]],.012);vents([0,y+sh*.35,-.026],W*.55,.012,21);box('keys',[0,y-sh/2-.008,.028],[.04,.008,.006],.003);return {};
  }
  if(f==='computer'){
   const mx=-W*.18,my=H*.65,mw=W*.59,mh=H*.57;box('trim',[mx,.025,D*.0],[W*.43,.035,D*.40],.025);bar('metal',[mx,.04,-D*.08],[mx,my-mh*.24,-D*.08],.022);display([mx,my,0],mw,mh);vents([mx,my+mh*.40,-.058],mw*.65,.012,17);
   box('paint',[W*.38,H*.43,-D*.06],[W*.25,H*.85,D*.65],.025);for(let j=0;j<2;j++){round('trim',[W*.38,H*(.28+j*.33),D*.273],[[0,0],[W*.085,0],[W*.085,.012],[0,.012]],64,[1,0,0],[0,1,0]);for(let k=0;k<12;k++){const a=k/12*Math.PI*2;bar('metal',[W*.38+Math.cos(a)*W*.04,H*(.28+j*.33)+Math.sin(a)*W*.04,D*.273+.014],[W*.38+Math.cos(a+.35)*W*.075,H*(.28+j*.33)+Math.sin(a+.35)*W*.075,D*.273+.014],.0025);}}
-  for(let j=0;j<4;j++)box('dark',[W*.29+j*.022,H*.75,D*.275],[.012,.006,.004],.001);box('light',[W*.42,H*.76,D*.277],[.005,.005,.004],.001);
-  box('trim',[-W*.16,.025,D*.30],[W*.62,.032,D*.24],.015);for(let row=0;row<4;row++)for(let k=0;k<13;k++)box('keys',[-W*.43+k*W*.044,.046,D*(.22+row*.047)],[W*.038,.012,D*.039],.003);box('keys',[-W*.17,.045,D*.42],[W*.22,.012,D*.034],.004);box('trim',[W*.25,.025,D*.37],[.075,.045,.11],.025);return {};
+  for(let j=0;j<4;j++)box('dark',[W*.29+j*.022,H*.75,D*.275],[.012,.006,.004],.001);box('accent',[W*.42,H*.76,D*.277],[.005,.005,.004],.001);
+  // Rustic: a timber-cased monitor and wooden cheeks on the tower.
+  if(r.style==='rustic'){for(const s of [-1,1]){box('frame',[mx+s*(mw/2+.034),my,-.02],[.03,mh+.10,.075],.006);box('frame',[mx,my+s*(mh/2+.034),-.02],[mw+.04,.03,.075],.006);box('frame',[W*.38+s*(W*.125+.005),H*.43,-D*.06],[.012,H*.87,D*.67],.004);}}
+  box('trim',[-W*.16,.025,D*.30],[W*.62,.032,D*.24],.015);
+  // The same keycap assembly as a console: fitted modifiers, a space bar, legends and the Key rows setting.
+  if(r.details)c.keycaps(CM.frame([-W*.16,.041,D*.30],[1,0,0],[0,0,-1]),W*.59,D*.21,.012);
+  else{for(let row=0;row<4;row++)for(let k=0;k<13;k++)box('keys',[-W*.43+k*W*.044,.046,D*(.22+row*.047)],[W*.038,.012,D*.039],.003);box('keys',[-W*.17,.045,D*.42],[W*.22,.012,D*.034],.004);}
+  box('trim',[W*.25,.025,D*.37],[.075,.045,.11],.025);return {};
  }
  // Recessed service panel with independently seated controls, vents, fasteners and conduit glands.
  box('trim',[0,H*.5,0],[W,H,D*.70],.04);box('paint',[0,H*.51,D*.36],[W*.92,H*.91,D*.08],.025);display([0,H*.72,D*.42],W*.78,H*.34);
- for(let j=0;j<3;j++){box('trim',[-W*.18,H*(.17+j*.12),D*.415],[W*.50,H*.085,.02],.008);for(let k=0;k<7;k++)box(k===0?'light':'keys',[-W*.38+k*W*.065,H*(.17+j*.12),D*.43],[W*.038,.012,.008],.003);}
- for(let j=0;j<5;j++)round(j%2?'accent':'metal',[W*.38,H*(.19+j*.075),D*.44],[[0,0],[.013,0],[.013,.012],[0,.012]],32,[1,0,0],[0,1,0]);for(const x of [-1,1])for(const y of [.07,.94])screw([x*W*.43,H*y,D*.42]);vents([0,H*.055,D*.42],W*.60,H*.025,23);return {};
+ for(let j=0;j<3;j++){box('trim',[-W*.18,H*(.17+j*.12),D*.415],[W*.50,H*.085,.02],.008);for(let k=0;k<7;k++)box(k?'keys':r.style==='scifi'?'light':'accent',[-W*.38+k*W*.065,H*(.17+j*.12),D*.43],[W*.038,.012,.008],.003);}
+ for(let j=0;j<5;j++)round(j%2?'accent':'metal',[W*.38,H*(.19+j*.075),D*.44],[[0,0],[.013,0],[.013,.012],[0,.012]],32,[1,0,0],[0,1,0]);for(const x of [-1,1])for(const y of [.07,.94])screw([x*W*.43,H*y,D*.42]);
+ // Sci-fi is the panel as drawn. Modern trades the vents for slim metal rails and a kick plate; rustic is boxed in timber with iron corners.
+ if(r.style==='modern'){for(const s of [-1,1])box('metal',[0,H*(.5+s*.468),D*.405],[W*.92,H*.012,.012],.003);box('metal',[0,H*.055,D*.41],[W*.70,H*.045,.01],.003);}
+ else vents([0,H*.055,D*.42],W*.60,H*.025,23);
+ if(r.style==='rustic')for(const s of [-1,1]){box('frame',[s*W*.46,H*.5,D*.40],[W*.08,H,D*.09],.008);box('frame',[0,H*(.5+s*.47),D*.40],[W*.84,H*.06,D*.09],.008);for(const t of [-1,1]){box('metal',[s*W*.46,H*(.5+t*.47),D*.448],[W*.085,H*.065,.004],.001);screw([s*W*.46,H*(.5+t*.47),D*.45]);}}
+ return {};
 }
 if(f==='holoTable'){
  box('paint',[0,H*.27,0],[W*.72,H*.52,D*.72],.08);box('trim',[0,H*.55,0],[W,.10,D],.045);

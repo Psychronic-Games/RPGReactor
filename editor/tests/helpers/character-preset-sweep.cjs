@@ -3,11 +3,15 @@
 // each checked sound. Alone it took 18 minutes of one core (most of an hour on a CI runner), and a file's tests run
 // one after another, so it is dealt across character-3d-model-presets-1..N.test.cjs, which run side by side.
 const assert = require('node:assert/strict');
+const { sample } = require('./coverage.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
 const dir = path.join(__dirname, '..', '..', 'src', 'forge', 'Character3D');
 const load = name => require(path.join(dir, name + '.js'));
+
+// The sweep judges geometry, skinning and coordinates, not pixels: small pictures, and the same layout code runs.
+const SOUND = { quality: 'preview', atlasSize: 256, skinSize: 64 };
 
 /** Every part well formed: finite numbers, skin indices in range, weights summing to one. */
 function assertSound(result, label) {
@@ -46,10 +50,11 @@ function presetSweep(part, parts) {
         const presets = Wardrobe.PRESETS.filter((preset, i) => i % parts === part - 1);
         assert.ok(presets.length > 0, 'this part has presets');
         const bodies = [{}, { gender: 1, weight: 3, muscle: 2.2, headSize: 1.6 }, { gender: 0, weight: -0.3, height: -0.5, cup: 4 }];
-        for (const body of bodies) {
+        for (const [turn, body] of bodies.entries()) {
             const cache = {};
-            for (const preset of presets) assertSound(Model.build(pack, Object.assign({}, body, { outfit: preset.items }), cache, { quality: 'preview' }), preset.id + ' on ' + JSON.stringify(body));
-            if (part === parts) assertSound(Model.build(pack, Object.assign({}, body, { props: Props.PROPS.map(p => ({ id: p.id })) }), cache, { quality: 'preview' }), 'accessories on ' + JSON.stringify(body));
+            // Every preset on one body here, every preset on all three on CI; each body keeps its share of them.
+            for (const preset of sample(presets, bodies.length, turn)) assertSound(Model.build(pack, Object.assign({}, body, { outfit: preset.items }), cache, SOUND), preset.id + ' on ' + JSON.stringify(body));
+            if (part === parts) assertSound(Model.build(pack, Object.assign({}, body, { props: Props.PROPS.map(p => ({ id: p.id })) }), cache, SOUND), 'accessories on ' + JSON.stringify(body));
         }
     });
 }

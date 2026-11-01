@@ -1,7 +1,7 @@
 /* Classic Worker entry: every full model build and its lazy asset decode stays off the page. */
 (function(scope) {
     'use strict';
-    const modules = ['HumanTargets', 'HumanBody', 'CharacterDrape', 'CharacterOutfit', 'CharacterFabric', 'CharacterWear', 'CharacterMarks', 'CharacterAtlas', 'CharacterSimplify',
+    const modules = ['HumanTargets', 'FaceFieldData', 'HeadMeshData', 'HumanBody', 'CharacterHeadMesh', 'CharacterDrape', 'CharacterOutfit', 'CharacterFabric', 'CharacterWear', 'CharacterMarks', 'CharacterAtlas', 'CharacterSimplify',
         'CharacterOutfitTransfer', 'CharacterClothes', 'CharacterPowerArmor', 'CharacterWasteland', 'ConstructionSurface', 'ConstructionPatterns', 'CharacterCyberGear', 'CharacterProps', 'CharacterGarmentDetails', 'CharacterReconConstruction', 'CharacterWardrobe', 'CharacterSpecies', 'CharacterBodyArtMotifs', 'CharacterBodyArt', 'CharacterSkin', 'CharacterBodyMods',
         'CharacterHair', 'CreatureGear', 'CreatureArthropods', 'CreatureFlyers', 'CreatureReptiles', 'CreatureForms', 'CreatureBody', 'CharacterGlb', 'CharacterShading', 'CharacterDetail', 'CharacterPoses',
         'MerfolkBody', 'CharacterCentaur', 'CharacterCloth', 'CharacterExpressions', 'SlimeBody', 'CharacterModel'];
@@ -10,8 +10,8 @@
     const Taken = scope.RRCharacterOutfitTransfer;
     const caches = new Map(), dynamic = new Set(), fetched = new Map();
     let context = {}, contextError = null, packPromise = null, packURL = null;
-    const PART_FIELDS = ['name', 'kind', 'color', 'texture', 'keepColors', 'normalTexture', 'normalScale', 'normalTexCoord', 'metallicRoughnessTexture', 'metallicRoughnessTexCoord', 'occlusionTexture', 'occlusionTexCoord', 'occlusionStrength', 'sheen', 'fabric', 'iridescence', 'iridescenceIOR', 'iridescenceThicknessRange', 'iridescenceThicknessTexture', 'emissive', 'emissiveIntensity', 'emissiveTexture', 'roughness', 'metalness', 'doubleSided', 'opacity', 'cutout', 'alphaCutoff', 'onSkin', 'envMapIntensity', 'wet'];
-    const GEOMETRY_FIELDS = ['positions', 'normals', 'uvs', 'uvs1', 'colors', 'index'];
+    const PART_FIELDS = ['name', 'softGloss', 'kind', 'color', 'texture', 'keepColors', 'normalTexture', 'normalScale', 'normalTexCoord', 'metallicRoughnessTexture', 'metallicRoughnessTexCoord', 'occlusionTexture', 'occlusionTexCoord', 'occlusionStrength', 'sheen', 'fabric', 'iridescence', 'iridescenceIOR', 'iridescenceThicknessRange', 'iridescenceThicknessTexture', 'emissive', 'emissiveIntensity', 'emissiveTexture', 'roughness', 'metalness', 'doubleSided', 'opacity', 'cutout', 'alphaCutoff', 'onSkin', 'envMapIntensity', 'wet'];
+    const GEOMETRY_FIELDS = ['positions', 'normals', 'uvs', 'uvs1', 'colors', 'index', 'edge', 'lidWall', 'tone'];
     async function checkedFetch(url) {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Character preview asset failed (' + response.status + '): ' + url);

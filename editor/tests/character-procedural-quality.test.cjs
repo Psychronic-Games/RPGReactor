@@ -98,7 +98,9 @@ test('changing between helper and detailed body cuts cannot reuse the other surf
 
 test('every modeled garment has compact body-weighted fabric confined to its authored coverage', () => {
     const catalog = Clothes.load(pack), models = Wardrobe.GARMENTS.filter(g => g.modeled), neighbors = Body.neighbors(pack);
-    assert.equal(models.length, 17);
+    // 16 since 2026-10-29: Tall boots (mh_boots) left the modeled set for the continuous laced procedural boot upper.
+    assert.equal(models.length, 16);
+    assert.ok(!models.some(g => g.id === 'mh_boots') && !Wardrobe.BY_ID.get('mh_boots').modeled);
     for (const fixture of BODY_STRATA.filter(s => ['preset-female', 'heavy-female'].includes(s.id))) {
         const body = Body.build(pack, Body.normalizeRecipe(fixture.patch));
         const poses = ['walk', 'sit', 'kneel'].map(id => {

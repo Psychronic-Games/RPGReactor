@@ -1,0 +1,8 @@
+const root=process.argv[2],dir=root+'/src/forge/Character3D/',fs=require('fs');global.THREE=require(root+'/tests/helpers/three.cjs');globalThis.RR_NO_EYE_SEAT=true;globalThis.RR_NO_HEAD_MESH=true;globalThis.RR_DEFAULT_PICTURES={atlas:256,picture:256,skin:64,prop:512};
+(async()=>{const Body=require(dir+'HumanBody.js');for(const n of ['HumanTargets','CharacterOutfit','CharacterAtlas','CharacterWardrobe','CharacterProps','CharacterSpecies','CharacterSkin','CharacterHair'])require(dir+n+'.js');
+const M=require(dir+'CharacterModel.js'),W=require(dir+'CharacterWardrobe.js'),F=require(dir+'CharacterFit.js');const pack=await Body.loadPack();const base=JSON.parse(fs.readFileSync(process.argv[3])).recipe;
+const out=process.argv[3].replace(/grey.json$/,'refs/');const HF=Body.headFields(pack);
+const ix=Array.from(pack.body.index,i=>pack.body.source[i]);
+for(const [n,g] of [['F',0],['M',1]]){const b=Body.build(pack,Body.normalizeRecipe({gender:g}));const X=require(dir+'CharacterExpressions.js'),R=M.build(pack,{gender:g},{},{quality:'preview',skinSize:32,atlasSize:64,noHair:true}),jd=X.field(pack,R,{units:{jawDrop:1}}).delta;fs.writeFileSync(out+'final_'+n+'.json',JSON.stringify({jaw:Array.from({length:pack.vertexCount},(_,v)=>+(jd[v*3+1]||0).toFixed(5)),P:Array.from(b.shaped,x=>+x.toFixed(5)),w:Array.from(HF.w,x=>+x.toFixed(3)),eye:[...HF.eyeIds],tri:ix,n:pack.vertexCount,uv:(()=>{const u=new Array(pack.vertexCount*2).fill(-1);pack.body.source.forEach((v,i)=>{if(u[v*2]<0){u[v*2]=+pack.body.uv[i*2].toFixed(5);u[v*2+1]=+pack.body.uv[i*2+1].toFixed(5);}});return u;})()}));}
+console.log('ok',pack.vertexCount);
+})().catch(e=>console.log(e.stack.slice(0,300)));

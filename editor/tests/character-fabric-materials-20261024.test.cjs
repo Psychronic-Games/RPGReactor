@@ -16,7 +16,7 @@ const stubPng = t => new Uint8Array([137, 80, 78, 71, t.width & 255, t.height & 
 const small = { quality: 'save', skinSize: 64, atlasSize: 64 };
 
 test('cut garments carry their cloth tile on TEXCOORD_1, and the saved file says so', async () => {
-    const built = Model.build(pack, { gender: 1, outfit: [{ id: 'jeans' }, { id: 'tshirt' }], hair: { style: 'bald' } }, {}, { quality: 'save', skinSize: 64 });
+    const built = Model.build(pack, { gender: 1, outfit: [{ id: 'jeans' }, { id: 'tshirt' }], hair: { style: 'bald' } }, {}, { quality: 'save', skinSize: 64, atlasSize: 1024 });
     const cut = built.parts.filter(p => p.texture === 'outfit.png');
     assert.deepEqual(cut.map(p => p.fabric).sort(), ['denim', 'jersey']);
     for (const p of cut) {
@@ -136,7 +136,7 @@ test('no weave is baked into the outfit picture: it is smooth texel to texel, it
 
 test('silk is satin: a soft sheen and streaky shine near 0.6, not wet latex', () => {
     assert.ok(Wardrobe.MATERIAL.silk[0] >= 0.55);
-    const built = Model.build(pack, { gender: 0, outfit: [{ id: 'dress' }], hair: { style: 'bald' } }, {}, { quality: 'save', skinSize: 64 });
+    const built = Model.build(pack, { gender: 0, outfit: [{ id: 'dress' }], hair: { style: 'bald' } }, {}, { quality: 'save', skinSize: 64, atlasSize: 1024 });
     const dress = built.parts.filter(p => p.fabric === 'satin');
     assert.ok(dress.length);
     for (const p of dress) {
@@ -181,7 +181,9 @@ const BUDGET = { total: 60000, outfit: 24000 };
 // Preview52 source measurement after finer footwear: max 81,050 / 51,595; 23 / 34 over target.
 // Preview53 fitted goggles add 2,296 triangles to affected presets; max total 83,346.
 // Evidence: scratchpad/forge-quality-20261029/{baseline-budgets,preset-budgets}.json.
-const RATCHET = { maxTotal: 83400, maxOutfit: 51600, overTotal: 23, overOutfit: 34 };
+// (Raised 2026-10-31 from 83400 and 23 over 60k, at the owner's word that a denser mesh is fine where it looks better: skin now stays at every opening so nothing shows through, and thin tops carry finer cloth over
+// the bust. The owner prefers clearly better looks a little over budget; this is still a ratchet.)
+const RATCHET = { maxTotal: 92000, maxOutfit: 53000, overTotal: 60, overOutfit: 40 };
 const FEMININE = /dress|skirt|gown|bra|bikini|stocking|corset|qipao|ballet|tennis|cropTop|offShoulder|operaGloves|swimsuit|peasant|sundress|carol|vay|tights|leggings/i;
 test('humanoid presets stay within the triangle budget (ratchet)', () => {
     const rows = [];

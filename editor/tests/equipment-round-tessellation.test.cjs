@@ -93,11 +93,15 @@ test('real accessories: brooch, studs and the cape clasp are small; the crown st
     assert.ok(count('brooch') < 4000, 'brooch ' + count('brooch'));
     assert.ok(count('studs') < 400, 'studs ' + count('studs'));
     assert.ok(count('crown') < 6000, 'crown ' + count('crown'));
-    // The cape's clasp: its smallest connected piece.
-    const cape = own('cape').find(p => p.name === 'Cape');
-    const n = cape.positions.length / 3, par = Int32Array.from({ length: n }, (_, i) => i), find = x => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
-    for (let k = 0; k < cape.index.length; k += 3) { par[find(cape.index[k])] = find(cape.index[k + 1]); par[find(cape.index[k + 1])] = find(cape.index[k + 2]); }
-    const faces = new Map();
-    for (let k = 0; k < cape.index.length; k += 3) { const r = find(cape.index[k]); faces.set(r, (faces.get(r) || 0) + 1); }
-    assert.ok(Math.min(...faces.values()) < 300, 'clasp ' + Math.min(...faces.values()));
+    // The cape's clasp: the smallest connected piece of what the cape adds. Since the printed cape and its lining became
+    // their own parts (2026-10-30) the clasp lives in the shared 'Accessories' mesh; the 'Cape' part is one sheet.
+    const faces = [];
+    for (const part of own('cape')) {
+        const n = part.positions.length / 3, par = Int32Array.from({ length: n }, (_, i) => i), find = x => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
+        for (let k = 0; k < part.index.length; k += 3) { par[find(part.index[k])] = find(part.index[k + 1]); par[find(part.index[k + 1])] = find(part.index[k + 2]); }
+        const pieces = new Map();
+        for (let k = 0; k < part.index.length; k += 3) { const r = find(part.index[k]); pieces.set(r, (pieces.get(r) || 0) + 1); }
+        faces.push(...pieces.values());
+    }
+    assert.ok(Math.min(...faces) < 300, 'clasp ' + Math.min(...faces));
 });

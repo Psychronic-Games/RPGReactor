@@ -1,4 +1,5 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 // Cyberware (RRCharacterCyberGear): cyber faces, masks, HUD eyewear and implants laid on the shaped body.
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -41,7 +42,7 @@ function sound(part, bones, label) {
 test('every piece builds sound in every style on varied heads, within its triangle budget', () => {
     for (const [name, recipe] of Object.entries(HEADS)) {
         const built = Body.build(pack, Body.normalizeRecipe(recipe));
-        for (const def of ALL) for (const [style] of Cyber.STYLE_CHOICES) {
+        for (const [def, [style]] of cover(ALL, Cyber.STYLE_CHOICES)) {
             if (name !== 'man' && style !== 'military') continue;
             const r = Props.build(pack, built, [{ id: def.id, style }], []);
             assert.ok(r.parts.length, `${def.id} ${style} on ${name}`);

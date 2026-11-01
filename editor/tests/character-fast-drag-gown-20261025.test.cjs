@@ -47,10 +47,11 @@ test('a ball gown dragged much taller keeps its skirt whole: no edge of the skir
     b._fast = b._fastStart(built);
     const shaped = Q.Body.shape(pack, end);
     b._fastApply(shaped, Q.Body.normals(shaped, pack.body.source, pack.body.index, pack.vertexCount), Q.Body.joints(pack, shaped).map(j => j.head));
-    // The skirt is the part named for the gown alone (the bodice shares its part with the lining and gloves).
-    // Before the fix its hem tore: 326 edges over three times their length, the worst 13.4 times.
-    const k = built.parts.findIndex(p => p.name === 'Ball gown');
-    assert.ok(k > 0, 'the gown has a skirt part: ' + built.parts.map(p => p.name).join(', '));
+    // Since the closed-waist rework (2026-10-30) bodice, pelvis lining and skirt share one cut part, so measure that part;
+    // its free skirt is the cloth a fast drag can tear.
+    // Before the fix the hem tore: 326 edges over three times their length, the worst 13.4 times.
+    const k = built.parts.findIndex(p => p.name.startsWith('Ball gown lining, Ball gown'));
+    assert.ok(k > 0 && built.parts[k].hang && built.parts[k].hang.some(h => h > 0), 'the gown has a skirt part: ' + built.parts.map(p => p.name).join(' | '));
     const stretch = worstStretch(built.parts[k].index, built.parts[k].positions, meshes[k].geometry.getAttribute('position').array);
     assert.ok(stretch < 4, `an edge of the skirt stretched ${stretch.toFixed(2)} times`);
     meshes.forEach(m => m.geometry.dispose());

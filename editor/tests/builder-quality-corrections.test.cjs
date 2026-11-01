@@ -1,9 +1,10 @@
 'use strict';
+const { cover, sample, exhaustive } = require('./helpers/coverage.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const V=require('../src/forge/Props/VehicleProp.js'),F=require('../src/forge/Props/FurnitureProp.js'),M=require('../src/forge/Props/PropModel.js'),W=require('../src/forge/Character3D/CharacterWardrobe.js'),B=require('../src/forge/Character3D/HumanBody.js'),P=require('../src/forge/Character3D/CharacterProps.js'),Creature=require('../src/forge/Character3D/CreatureBody.js'),Forms=require('../src/forge/Character3D/CreatureForms.js'),Cloth=require('../src/forge/Character3D/CharacterCloth.js');
 const digest=t=>crypto.createHash('sha256').update(t.data).digest('hex');
 test('road access panels and supported steps fit wholly between the actual adjacent wheels',()=>{
- for(const form of ['compact','sport','truck','rover'])for(const axles of [2,3])for(const cabinLength of [.75,1.25])for(const wheelSize of [.75,1.3]){
+ for(const [form,axles,cabinLength,wheelSize] of cover(['compact','sport','truck','rover'],[2,3],[.75,1.25],[.75,1.3])){
   const recipe=V.normalize({form,axles,cabinLength,wheelSize}),r=V.build(recipe),door=r.parts.find(p=>p.name==='Access door'),tires=r.sidecarExtra.vehicle.wheels;
   assert.ok(door,form+' access panel');
   const lo=Math.min(...door.positions.filter((_,i)=>i%3===2)),hi=Math.max(...door.positions.filter((_,i)=>i%3===2));

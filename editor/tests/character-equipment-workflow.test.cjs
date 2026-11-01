@@ -55,13 +55,18 @@ test('armor presets include the matching helmet and conceal hair and facial hair
         assert.ok(result.parts.some(p=>p.name===(id==='marine'?'Cyber chest armor plates':'Power armor plating')));
         assert.ok(result.parts.some(p=>p.name==='Power helmet plating'));
         assert.ok(!result.parts.some(p=>/^(Hair|Beard)/.test(p.name)));
-        assert.ok(result.parts.reduce((n,p)=>n+p.index.length/3,0)<40000);
+        // Ratchet, raised from 40k on 2026-10-31: the Forge helmet fittings and armor panels added 7k visible triangles
+        // (Trooper 39,406 to 47,104, Marine 39,069 to 44,596). Spend the rest on detail, not on hidden geometry.
+        assert.ok(result.parts.reduce((n,p)=>n+p.index.length/3,0)<50000);
     }
 });
 test('every accessory is searchable in the prop catalog and exports without its fitting body',()=>{
     assert.equal(Catalog.TYPES.filter(t=>t.kind==='accessory').length,Props.PROPS.length);
     for(const def of Props.PROPS) {
-        const type=Catalog.TYPES.find(t=>t.id==='accessory-'+def.id),r=type.start(),snapshot=JSON.stringify(r);
+        const type=Catalog.TYPES.find(t=>t.id==='accessory-'+def.id),r=type.start();
+        // The scouter's animated readout has its own bones and clip (prop-refinement-20261030). Off, it is as rigid as the rest.
+        if(def.id==='earScouter'){assert.equal(Model.build(r).clips.length,1);r.accessory.animate=false;}
+        const snapshot=JSON.stringify(r);
         assert.equal(Catalog.typeOf(r).id,type.id);
         // Swords, daggers and books are listed once, under their own builders: their accessories stay unlisted.
         assert.equal(Catalog.grouped(def.label).some(g=>g.types.includes(type)),!type.hidden,def.id);
