@@ -1,0 +1,17 @@
+{
+  "species": "human",
+  "gender": 0,
+  "hair": {
+    "style": "bald",
+    "brows": {
+      "style": "natural"
+    },
+    "lashes": true
+  },
+  "outfit": [
+    {
+      "id": "tshirt",
+      "color": "#315e85"
+    }
+  ]
+}

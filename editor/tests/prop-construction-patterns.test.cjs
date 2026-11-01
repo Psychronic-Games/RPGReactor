@@ -75,7 +75,13 @@ test('character chokers follow the actual neck below the jaw instead of a displa
 test('cap crown contains sampled crew hair above its lower band on both body types',async()=>{
  const B=require('../src/forge/Character3D/HumanBody.js'),P=require('../src/forge/Character3D/CharacterProps.js'),Hair=require('../src/forge/Character3D/CharacterHair.js'),T=global.THREE,pack=await B.loadPack();
  for(const gender of [0,1]){const built=B.build(pack,B.normalizeRecipe({gender})),hair=Hair.build(pack,built,{style:'crew'},{seed:11,budget:.5,gender}),r=P.build(pack,built,[{id:'cap'}],hair),cap=r.parts[0],tris=[];
-  for(let k=0;k<cap.index.length;k+=3)tris.push(new T.Triangle(...[0,1,2].map(j=>new T.Vector3(...cap.positions.subarray(cap.index[k+j]*3,cap.index[k+j]*3+3)))));
+  // Test the crown surface. A ray can cross a stitched tube immediately
+  // beside it; merging those nearby hits changes parity without a hair leak.
+  const parent=Int32Array.from({length:cap.positions.length/3},(_,i)=>i),find=v=>{while(parent[v]!==v){parent[v]=parent[parent[v]];v=parent[v];}return v;};
+  for(let k=0;k<cap.index.length;k+=3){const a=find(cap.index[k]);parent[find(cap.index[k+1])]=a;parent[find(cap.index[k+2])]=a;}
+  const components=new Map();
+  for(let k=0;k<cap.index.length;k+=3){const id=find(cap.index[k]);let c=components.get(id);if(!c){c={triangles:[],area:0,lo:Infinity,hi:-Infinity};components.set(id,c);}const points=[0,1,2].map(j=>new T.Vector3(...cap.positions.subarray(cap.index[k+j]*3,cap.index[k+j]*3+3))),tri=new T.Triangle(...points);c.triangles.push(tri);c.area+=tri.getArea();for(const point of points){c.lo=Math.min(c.lo,point.y);c.hi=Math.max(c.hi,point.y);}}
+  const crown=[...components.values()].filter(c=>c.hi-c.lo>.03).sort((a,b)=>b.area-a.area)[0];assert.ok(crown,'the cap has a crown surface');tris.push(...crown.triangles);
   let checked=0;for(const part of hair.filter(p=>/^Hair/.test(p.name)))for(let v=0;v<part.positions.length/3;v+=Math.max(1,Math.ceil(part.positions.length/3/160))){const p=new T.Vector3(...part.positions.subarray(v*3,v*3+3));if(p.y<r.landmarks.brow+.03)continue;const ray=new T.Ray(p,new T.Vector3(.913,.271,.303).normalize()),q=new T.Vector3(),hits=[];for(const tri of tris)if(ray.intersectTriangle(tri.a,tri.b,tri.c,false,q)){const d=p.distanceTo(q);if(!hits.some(x=>Math.abs(x-d)<1e-5))hits.push(d);}assert.equal(hits.length%2,1,'hair pierces cap on body '+gender+' at '+p.toArray().join(','));checked++;}assert.ok(checked>10,'crew coverage not sampled');
  }
 });

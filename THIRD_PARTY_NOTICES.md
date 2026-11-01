@@ -249,7 +249,9 @@ and lockfile.
 
 ## Character face base heads
 
-The default human faces in the Character Builder (`editor/src/forge/Character3D/FaceFieldData.js`) are derived from these models, adapted to the engine's own mesh with averaged proportions.
+The shared human face sculpt in `editor/src/forge/Character3D/HeadMeshData.js` is derived and reworked from **Woman head** by zhuoyi0904 (https://sketchfab.com/zhuoyi0904), from https://sketchfab.com/3d-models/woman-head-34af2e5bf1464a5fa87ef37db5389f23, licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Adaptations include a shared feminine/masculine sculpt, skin bindings, Reactor skin coordinates and shading normals. No source textures, hair or rig are included. The generated data records source, driver and generator hashes.
+
+The earlier face-warp data retained in `editor/src/forge/Character3D/FaceFieldData.js` derives from these models, adapted to the engine's own mesh with averaged proportions. The shared sculpt does not apply that warp.
 
 - Male head base by alkalor (https://sketchfab.com/alkalor), from https://sketchfab.com/3d-models/male-head-base-3bcf954d4f6846d6b665b057c7c8d795, licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Adapted.
 

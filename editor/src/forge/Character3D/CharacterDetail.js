@@ -297,7 +297,7 @@
             // The lip's roundness, fullest in the lower lip's middle.
             const round = Math.sqrt(Math.max(0, 1 - q * q));
             // (A head's own lips are lit by their real form: the upper faces down and the lower up, so the picture evens them out a little.)
-            const tone = fit?.measured ? (t > 0 ? 1.16 : 0.86) : 1;
+            const tone = 1;
             let rgb = base.map(c => c * tone * (0.82 + 0.24 * round) * (1 - 0.08 * deep) * (1 + 0.03 * grain));
             // The mouth's line, darkest in the middle, carried out to the corner and just past it as a soft fold.
             const line = (1 - smooth(0.03, 0.11 * (1 - 0.35 * side), Math.abs(t))) * (1 - smooth(0.98, 1.13, side));
@@ -306,7 +306,7 @@
             const o4 = (y * W + x) * 4;
             data[o4] = toByte(rgb[0]); data[o4 + 1] = toByte(rgb[1]); data[o4 + 2] = toByte(rgb[2]);
             data[o4 + 3] = Math.round(255 * Math.max(alpha, line) * smooth(0, 0.04, x / W) * smooth(0, 0.04, 1 - x / W));
-            if (relief) relief[y * W + x] = alpha * (0.00042 * round - 0.00004 * deep + 0.000006 * grain) - 0.0002 * line;
+            if (relief) relief[y * W + x] = alpha * ((own ? 0 : 0.00042) * round - 0.00004 * deep + 0.000006 * grain) - (own ? 0.00002 : 0.0002) * line;
         }
         const picture = { width: W, height: Ht, data, name: 'lips.png' };
         if (relief) {
@@ -1104,10 +1104,10 @@
                 if (ids.every(i => eligible(pack.body.source[i]))) index.push(...ids.map(add));
                 else keep.push(...ids);
             }
-            if (!index.length || index.length > (recipe.morph.noseFolds ? 9600 : 4800)) return null;
+            if (!index.length || index.length > (recipe.morph.noseFolds ? 12000 : 4800)) return null;
             mesh = { stencils, uvs, keys, index };
             // Broader faces take one step: at most 6,400 triangles for the
-            // forehead alone, 12,800 when nose folds also cover the bridge.
+            // forehead alone, 16,000 when nose folds also cover the bridge.
             const steps = index.length <= 1200 ? 2 : 1;
             for (let step = 0; step < steps; step++) {
                 const next = [], midpoints = new Map();

@@ -1,0 +1,56 @@
+[
+  {
+    "name": "female-nose",
+    "reset": true,
+    "view": {
+      "target": "face",
+      "yaw": 0.12,
+      "pitch": -0.25,
+      "distance": 0.34
+    },
+    "js": "return true;",
+    "patch": {
+      "gender": 0
+    }
+  },
+  {
+    "name": "male-nose",
+    "reset": true,
+    "view": {
+      "target": "face",
+      "yaw": 0.12,
+      "pitch": -0.25,
+      "distance": 0.34
+    },
+    "js": "return true;",
+    "patch": {
+      "gender": 1
+    }
+  },
+  {
+    "name": "female-left",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "view": {
+      "target": "face",
+      "yaw": -1.25,
+      "pitch": 0.04,
+      "distance": 0.48
+    }
+  },
+  {
+    "name": "male-right",
+    "reset": true,
+    "patch": {
+      "gender": 1
+    },
+    "view": {
+      "target": "face",
+      "yaw": 1.25,
+      "pitch": 0.04,
+      "distance": 0.48
+    }
+  }
+]

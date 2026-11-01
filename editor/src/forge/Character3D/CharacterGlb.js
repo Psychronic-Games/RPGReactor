@@ -75,7 +75,7 @@
                 clearcoatRoughness: 0.35, envMapIntensity: 0.55 });
         } else if (kind === 'eye') {
             // (A head's eyeballs fill its lid openings: a mirror-sharp coat on one that size lays whole shards of the room over the iris.)
-            Object.assign(look, part.softGloss ? { roughness: 0.25, clearcoat: 0.6, clearcoatRoughness: 0.2, envMapIntensity: 0.3 } : { roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.03 });
+            Object.assign(look, part.softGloss ? { roughness: 0.18, clearcoat: 0.9, clearcoatRoughness: 0.08, envMapIntensity: 0.45 } : { roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.03 });
         } else if (kind === 'glass') {
             Object.assign(look, { roughness: 0.02, metalness: 0, clearcoat: 1, envMapIntensity: 2 });
         }

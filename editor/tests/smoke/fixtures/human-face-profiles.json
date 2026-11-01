@@ -1,0 +1,87 @@
+[
+  {
+    "name": "young-quarter",
+    "reset": true,
+    "patch": {
+      "gender": 0.3,
+      "age": 15
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true
+  },
+  {
+    "name": "older-quarter",
+    "reset": true,
+    "patch": {
+      "gender": 0.7,
+      "age": 62,
+      "hair": {
+        "style": "combedBack",
+        "color": "#857f76"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true
+  },
+  {
+    "name": "african-female",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "ancestry": {
+        "people": "subSaharan",
+        "african": 1,
+        "asian": 0,
+        "caucasian": 0
+      },
+      "skin": "#744b35",
+      "eyes": {
+        "color": "#8a693e"
+      },
+      "hair": {
+        "style": "pixie"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true
+  },
+  {
+    "name": "asian-male",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "ancestry": {
+        "people": "eastAsian",
+        "african": 0,
+        "asian": 1,
+        "caucasian": 0
+      },
+      "skin": "#cfa17c",
+      "eyes": {
+        "color": "#536b44"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true
+  }
+]

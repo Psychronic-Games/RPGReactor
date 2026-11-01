@@ -1,0 +1,69 @@
+[
+  {
+    "name": "female-right-ear-controls",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "age": 42,
+      "shapes": {
+        "earOut": 0.6,
+        "earSize": 0.4,
+        "earLobe": 0.4
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 1.25,
+      "pitch": 0.12,
+      "distance": 0.48
+    }
+  },
+  {
+    "name": "male-left-ear-controls",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "shapes": {
+        "earsPointed": 0.5,
+        "earSize": 0.5
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": -1.25,
+      "pitch": 0.12,
+      "distance": 0.48
+    }
+  },
+  {
+    "name": "saved-intermediate",
+    "reset": true,
+    "patch": {
+      "gender": 0.5
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.85,
+      "pitch": 0.12,
+      "distance": 0.48
+    },
+    "exportModel": true
+  },
+  {
+    "name": "saved-blink",
+    "reset": true,
+    "patch": {
+      "gender": 0.5
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.12,
+      "pitch": 0.05,
+      "distance": 0.46
+    },
+    "exportModel": true,
+    "exportFrom": "saved-intermediate",
+    "exportBlink": true,
+    "expectClosedEyes": true
+  }
+]

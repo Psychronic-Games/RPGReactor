@@ -4,11 +4,11 @@ Read [STATUS.md](STATUS.md) for open work. Earlier: [archive/handoff](archive/ha
 
 Changes belong in the editor changelog; behavior goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-10-30)
+## Where things stand (2026-10-31)
 
 - **0.99.3 source release:** runtime **20261028.11**, [release notes](posts/release-notes-0.99.3.md) and [editor changelog](../editor/changelog/0.99.3.md). **0.99.4** is open after the release push; binary publishing is separate.
-- **Forge** (2026-10-30): Preview 62 adds eight Wasteland vehicles, seven-seat minivan and non-clothing construction repairs; Preview 61’s full clothing audit remains documented. Reload/re-export models. [Props](PROP-BUILDER.md), [clothing](CHARACTER-QUALITY.md).
-- **0.99.4:** runtime **20261030.3**, PixiJS **8.22.0**, Three.js **0.187.0**; [legacy import audit](IMPORTING-LEGACY-PROJECTS.md#reliability-audit). Shared skins (20261029.8) raised North Haven Tactical from 76–81 to 158 pictures/s on RTX; CPU throttling and iGPU acceptance remain. [Performance](PERFORMANCE.md).
+- **Forge:** Character Preview **65** is checkpointed for morning review; the owner has not reviewed it. Ear coverage and head joins are repaired; nostril shape and overall appearance remain open. [Resume checklist](HUMAN-FACE-HANDOFF.md#resume-in-the-morning). Props stay Preview **62**; clothing stays Preview 61.
+- **0.99.4:** runtime **20261031.1**, PixiJS **8.22.0**, Three.js **0.187.0**; [legacy import audit](IMPORTING-LEGACY-PROJECTS.md#reliability-audit). Shared skins (20261029.8) raised North Haven Tactical from 76–81 to 158 pictures/s on RTX; CPU throttling and iGPU acceptance remain. [Performance](PERFORMANCE.md).
 - **Battle/world presentation:** occupant-only cutaways, grapple arms, sleeping combat ragdolls and target hit badges pass native checks. Auto keeps cheaper shadows. Roof flicker needs a house/location; no fix claimed. Evidence: [PERFORMANCE.md](PERFORMANCE.md).
 - **Border feedback:** a deferred cube face inherited its own sampler before plain water drew. Fixed at capture entry. Reproduce with `smoke/nw-border-feedback.cjs --uncapped` (continue west through Forest Road); short edge trips miss it. Evidence: `scratchpad/border-feedback-20261029/`.
 - **Database/pop-out audit:** `smoke/nw-popout-audit.cjs`, evidence `scratchpad/popout-audit-20261029/`: all 25 pages and 136 command entries; nested and save/cancel flows. Menus, animation placement, Common Events and Fadein fixed. Rapid Database hide/reopen hung once on RTX; still open (STATUS).
@@ -49,7 +49,7 @@ The suite took 21 minutes and later runs hit 26 GB, which systemd-oomd killed. `
 
 Costs are generator work, not checks: clipping is already math, and a fight file with 42 world boots runs in 0.4 s. Slowest files by CPU: `character-3d-model` 340 s, `prop-nature` 198 s, `prop-catalog` 184 s, `vehicle-bodywork` 171 s, `character-species-quality` 164 s, `character-fabric-materials` 162 s, `prop-vehicles` 130 s.
 
-Everything from 2026-10-31 is uncommitted: the test failures fixed, the Prop Builder worker, the live character worker (`_rebuildOffPage`) and the generator speedups. The last full run had 6 failures, since fixed and passing individually, not in another full run. The cloth floor limit is doubled to 0.1% for the hard-leaning clip sample. The character slider worker has one Node test and has not been driven in the real editor.
+Historical checkpoint (subsequently committed in `c0be9b8a`): the test failures fixed, the Prop Builder worker, the live character worker (`_rebuildOffPage`) and the generator speedups. The last full run had 6 failures, since fixed and passing individually, not in another full run. The cloth floor limit is doubled to 0.1% for the hard-leaning clip sample. The character slider worker has one Node test and has not been driven in the real editor.
 
 ## 2026-10-31 — Talking animals
 
@@ -79,6 +79,24 @@ Budget policy (owner, 2026-10-31): reach the look first, then cut from the good 
 
 Known limits: hanging skirts can still touch skin by a vertex or two; the drifter's open-coat-edge limit is widened for extreme bodies only (0.046); chest and belt parts fit before CharacterFit runs. Expression review found three open flaws: the smile crease curls sharply past the mouth corners; open-mouth teeth need better placement (a visible center gap, gum above them); crying tears render as bright jagged shards. A small bright tick can remain at the lip corners. Her saved thumbnail for Robust Grey Alien Female is stale until re-saved in the editor.
 
-## 2026-10-31 — Human face, unfinished
+## 2026-10-31 — Human face recovery, Preview 64
 
-The owner does not accept the faces yet and is handing this to someone else. Start at [HUMAN-FACE-HANDOFF.md](HUMAN-FACE-HANDOFF.md): how the face mask is built, how the owner judges, verified lessons, known faults and the test state. This replaces the Face form paragraph above: `FaceFieldData` is no longer blended by gender, and `CharacterHeadMesh.js` draws the visible face.
+The owner later rejected Preview 64 for obscured ears and unnatural nostrils; the current follow-up is Preview 65. The earlier two-mask result was also rejected. Preview 64 replaces it with a shared sculpt derived/reworked from the CC-BY Woman head by `zhuoyi0904`. Gender now interpolates continuously, including at 0.5. Native controls, colors, ancestry and expressions still drive the surface; other species retain their heads. The upper forehead blends across a broad band to meet the native scalp and hair. Folded lids unfold over fitted eyes for a full blink; a closed oral cap is removed so speech opens a cavity instead of stretching painted skin across it. Neutral lip rims meet.
+
+The live preview rejects results for an older recipe. Review captures wait for the current worker build, skin painting and shading; exported captures undo the game reader’s recentering to keep the same camera. Actual Save/PNG-bearing GLB reload checks cover pore maps, UV1, speech and eyelid morphs. Reload the editor and regenerate saved models. Runtime remains **20261031.1**; Prop Preview remains **62**.
+
+Validation: 100 focused checks, a final 22-check expression/shared-head recheck, 28 native control changes and 24 final captures. Two saved GLBs decode and reload with all 28 named morphs. The existing morph and triangle ceilings remain. The inherited crown containment assertion now isolates the crown surface from stitched tubes.
+
+See [HUMAN-FACE-HANDOFF.md](HUMAN-FACE-HANDOFF.md) for current validation and the preserved previous handoff. Rendered comparisons and saved exports stay under ignored `scratchpad/face-recovery-20261031/`. Owner visual acceptance is pending; Windows and macOS have not been checked.
+
+## 2026-10-31 — Human face checkpoint for morning review
+
+The owner has no time to review Preview **65** now and asked to commit the current work. Overall face appearance remains unaccepted. Preview 64 was rejected for obscured ears and unnatural nostrils; its passing checks are historical evidence, not acceptance.
+
+This checkpoint includes the continuous shared human sculpt, fitted eyelids and mouth, worker/color-cache repairs, and the later ear/head-join follow-up. Runtime remains **20261031.1**. Restart the editor and regenerate older saved characters before judging it.
+
+Resume with [the morning checklist](HUMAN-FACE-HANDOFF.md#resume-in-the-morning). Prioritize the rough inner nostril shapes and contrast, whole-face appearance against the finished references, both bald profiles, and the temple/scalp joins. Then verify expressions, sliders, colors, hair/headwear and fresh female/male exports in the actual game. The owner has not seen or accepted the latest result.
+
+Latest validation: **24 focused checks**, four saved-quality geometry profiles without reported issues, eight native captures, and one saved intermediate GLB reopened in two studio views with all 28 morphs and a complete blink. Documentation/runtime-copy checks pass 10. The 900,000-byte morph ceiling is unchanged; an oversized candidate was rejected and reduced. No full repository suite or Windows/macOS check was run.
+
+Code, generated data, attribution, fixtures and evidence manifests are part of this commit. Local renders, references and sample exports stay ignored under `scratchpad/face-ear-nose-20261031/`; open `comparison.html` or `comparison.png` first. [Tracked evidence](archive/evidence/human-face-ears-nose-20261031.json) identifies the current folders and source hashes. Earlier numbered folders are rejected experiments.

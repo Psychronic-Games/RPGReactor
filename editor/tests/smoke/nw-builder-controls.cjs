@@ -2,7 +2,7 @@
 /**
  * Every control on a Character Builder tab, used as a person uses it: the real panel in the real editor, each slider moved
  * and each option picked through its own element. A control fails if the setting doesn't stay, the character doesn't change,
- * or an error appears. --recipe=<file> --out=<dir> [--tab=face] [--only=<path parts, comma separated>]. Output stays out of the repository.
+ * or an error appears. --recipe=<file> --out=<dir> [--tab=face] [--only=<path parts, comma separated>] [--exact]. Output stays out of the repository.
  */
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawn}=require('node:child_process');
@@ -28,11 +28,11 @@ async function run(code,args=[]){const r=await driver.executeAsync(`const done=a
     // In short steps, one setting at a time: a long script times out, and this way every result is kept and shown as it comes.
     await driver.setScriptTimeout?.(30000);
     const paths=await run(`const b=__b;window.__wait=ms=>new Promise(r=>setTimeout(r,ms));
-        window.__print=()=>{let sum=0,count=0;b._view.scene.traverse(o=>{if(!o.isMesh||!o.visible)return;count++;const p=o.geometry?.getAttribute?.('position');if(p)for(let i=0;i<p.array.length;i+=1)sum+=p.array[i]*(i%7+1);if(o.morphTargetInfluences)for(const w of o.morphTargetInfluences)sum+=w*3;const m=o.material;if(m){if(m.map)sum+=m.map.version*.001;if(m.color)sum+=m.color.r+m.color.g*2+m.color.b*3;}});return count+':'+sum.toFixed(4)+':'+String(b.cache.skinKey||'').length+String(b.cache.skinKey||'').slice(-24);};
-        window.__settle=async()=>{let last='',same=0;for(let i=0;i<16;i++){await __wait(200);const now=__print(),busy=b._pending||b._painter?.busy||b._painter?.next||b._settle;if(now===last&&!busy)same++;else same=0;last=now;if(same>=2)break;}return last;};
+        window.__pictureHash=new WeakMap();window.__print=()=>{let sum=0,count=0;b._view.scene.traverse(o=>{if(!o.isMesh||!o.visible)return;count++;const p=o.geometry?.getAttribute?.('position');if(p)for(let i=0;i<p.array.length;i+=1)sum+=p.array[i]*(i%7+1);if(o.morphTargetInfluences)for(const w of o.morphTargetInfluences)sum+=w*3;const m=o.material;if(m){if(m.map){sum+=m.map.version*.001;const data=m.map.image?.data;if(data){let hash=__pictureHash.get(data);if(hash===undefined){hash=2166136261;for(let i=0;i<data.length;i++)hash=Math.imul(hash^data[i],16777619);hash>>>=0;__pictureHash.set(data,hash);}sum+=hash*.0000001;}}if(m.color)sum+=m.color.r+m.color.g*2+m.color.b*3;}});return count+':'+sum.toFixed(4)+':'+String(b.cache.skinKey||'').length+String(b.cache.skinKey||'').slice(-24);};
+        window.__settle=async()=>{let last='',same=0;for(let i=0;i<100;i++){await __wait(200);const now=__print(),busy=b._pending||b._painter?.busy||b._painter?.next||b._settle||b._liveJob?.busy||b._liveJob?.owed;if(now===last&&!busy)same++;else same=0;last=now;if(same>=2)return last;}throw Error('Character did not settle');};
         window.__controls=()=>[...b.root.querySelectorAll('[data-path]')].filter(e=>e.matches('input,select'));
         b.tab=arguments[0];b._renderPanel();await __wait(100);window.__start=JSON.stringify(b.recipe);await __settle();
-        return [...new Set(__controls().map(e=>e.dataset.path))].filter(p=>!arguments[1]||arguments[1].split(',').some(q=>p.includes(q)));`,[opt('tab','face'),opt('only','')]);
+        return [...new Set(__controls().map(e=>e.dataset.path))].filter(p=>!arguments[1]||arguments[1].split(',').some(q=>arguments[2]?p===q:p.includes(q)));`,[opt('tab','face'),opt('only',''),process.argv.includes('--exact')]);
     const report={controls:paths.length,tried:0,bad:[]};
     for(const p of paths){
         const wants=await run(`const el=__controls().find(e=>e.dataset.path===arguments[0]);if(!el)return [];return el.tagName==='SELECT'?[...el.options].map(o=>o.value).filter(v=>v!==el.value).slice(0,4):el.type==='range'?[String(+el.value+(+el.max-+el.min)*.6>+el.max?+el.min:+el.value+(+el.max-+el.min)*.6)]:el.type==='checkbox'?['toggle']:[];`,[p]);

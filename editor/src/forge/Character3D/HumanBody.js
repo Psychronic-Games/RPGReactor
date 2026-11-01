@@ -660,14 +660,27 @@
      */
     function faceField(pack, P, recipe) {
         if (root.RR_RAW_FACE) return;
+        const head = root.RR_HEAD_MESH || (typeof require === 'function' ? require('./HeadMeshData.js') : null);
+        // The shared sculpt follows native target deformations. Applying the
+        // retired face warp as well would reshape its cage a second time.
+        if (head?.version === 2) {
+            if ((!recipe.species || recipe.species === 'human') && !recipe.head?.kind) {
+                const F = headFields(pack);
+                let eye = 0, chin = Infinity;
+                for (const v of F.eyeIds) eye += P[v * 3 + 1] / F.eyeIds.length;
+                for (const v of pack.body.source) if (F.w[v] > 0.3 && Math.abs(P[v * 3]) < 0.012 && P[v * 3 + 2] > 0.02) chin = Math.min(chin, P[v * 3 + 1]);
+                sealMouth(pack, P, eye - chin);
+            }
+            return;
+        }
         const D = root.RR_FACE_FIELD || (typeof require === 'function' ? require('./FaceFieldData.js') : null);
         if (!D || (recipe.species && recipe.species !== 'human')) return;
         const F = headFields(pack), eyeIds = F.eyeIds, chinOf = () => { let c = Infinity; for (const v of pack.body.source) if (F.w[v] > 0.5 && Math.abs(P[v * 3]) < 0.012 && P[v * 3 + 2] > 0 && P[v * 3 + 1] < c) c = P[v * 3 + 1]; return c; };
         let eyeY = 0;
         for (const v of eyeIds) eyeY += P[v * 3 + 1] / eyeIds.length;
         const E = eyeY - chinOf(), g = recipe.gender ?? 0.5;
-        // (The one head's own field, not a blend: its lids and lips are bound to this shape, and half of another head's moves tears them off the eye and mouth.)
-        for (const [set, k] of [[D.F, g < 0.5 ? 1 : 0], [D.M, g < 0.5 ? 0 : 1]]) {
+        // The visible head uses one topology across the slider. Its driving skin must be continuous too.
+        for (const [set, k] of [[D.F, 1 - g], [D.M, g]]) {
             if (k <= 0) continue;
             const { ids, d } = set;
             for (let i = 0; i < ids.length; i++) { const v = ids[i] * 3; P[v] += d[i * 3] * E * k; P[v + 1] -= d[i * 3 + 1] * E * k; P[v + 2] += d[i * 3 + 2] * E * k; }
@@ -735,7 +748,7 @@
     function seatEyes(pack, P, recipe, E) {
         if (root.RR_NO_EYE_SEAT || root.RR_NO_HEAD_MESH || (recipe.head && recipe.head.kind)) return;
         const D = root.RR_HEAD_MESH || (typeof require === 'function' ? require('./HeadMeshData.js') : null);
-        if (!D) return;
+        if (!D || D.version === 2) return;
         const seats = ((recipe.gender ?? 0.5) < 0.5 ? D.F : D.M).eye, ids = headFields(pack).eyeIds, sides = [1, -1];
         sides.forEach((side, k) => {
             const own = ids.filter(v => P[v * 3] * side > 0), s = seats[k], low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];

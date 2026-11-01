@@ -1,0 +1,59 @@
+[
+  {
+    "name": "female-smile",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "view": {
+      "target": "face",
+      "yaw": -0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "js": "b.expression='neutral';b._showExpression();RRCharacterExpressions.apply(b,'happy',1);return 1;"
+  },
+  {
+    "name": "female-surprise",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "view": {
+      "target": "face",
+      "yaw": -0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "js": "b.expression='neutral';b._showExpression();RRCharacterExpressions.apply(b,'surprised',1);return 1;"
+  },
+  {
+    "name": "male-sad",
+    "reset": true,
+    "patch": {
+      "gender": 1
+    },
+    "view": {
+      "target": "face",
+      "yaw": -0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "js": "b.expression='neutral';b._showExpression();RRCharacterExpressions.apply(b,'sad',1);return 1;"
+  },
+  {
+    "name": "male-blink",
+    "reset": true,
+    "patch": {
+      "gender": 1
+    },
+    "view": {
+      "target": "face",
+      "yaw": -0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "js": "b.expression='neutral';b._showExpression();RRCharacterExpressions.apply(b,'blink',1);return 1;",
+    "expectClosedEyes": true
+  }
+]

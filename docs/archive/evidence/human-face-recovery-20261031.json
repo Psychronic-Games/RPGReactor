@@ -1,0 +1,105 @@
+{
+  "date": "2026-10-31",
+  "preview": 64,
+  "runtime": "20261031.1",
+  "visualAcceptance": "rejected by owner: obscured ears and unnatural nostrils",
+  "baseline": {
+    "commit": "c0be9b8a",
+    "galleryImages": [
+      "baseline/female0.png",
+      "baseline/male0.png"
+    ],
+    "note": "Initial editor captures at yaw 0, pitch 0, distance 0.46. A separate synchronous checkpoint reconstruction is retained in baseline-verified; the comparison uses the original initial captures."
+  },
+  "data": {
+    "file": "editor/src/forge/Character3D/HeadMeshData.js",
+    "sha256": "78db1298df57e5e6af892278d291a5b1caafa60a5644af24b07251ee19e6a815",
+    "provenance": {
+      "title": "Woman head",
+      "author": "zhuoyi0904",
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/woman-head-34af2e5bf1464a5fa87ef37db5389f23",
+      "sourceSha256": "42cc81cdc96cd0f05e2f626f386e18c259762fc2a018d1859dc74f4c14e07193",
+      "driverSha256": "ee03cd1db5fc8ed32cbcb3363088bd5912776269a989d7f85de9b3fb93bc26ec",
+      "generatorSha256": "db85168d02f866d6630ca6933a33846c0be105b8866f0582237b8deaf93e64ca"
+    },
+    "verticesPerEndpoint": 2375,
+    "trianglesPerEndpoint": 4527,
+    "skinBindingsPerVertex": 12,
+    "hiddenNativeVertices": 2949
+  },
+  "validation": {
+    "focused": {
+      "pass": 100,
+      "files": 11,
+      "log": "final-focused.log",
+      "note": "Final inner lip root refinement followed by the 22-check expression/shared-head recheck."
+    },
+    "mouthRecheck": {
+      "pass": 22,
+      "log": "final-mouth-recheck.log"
+    },
+    "catalogModelRegressions": {
+      "pass": 5,
+      "log": "final-inherited.log",
+      "note": "The sixth, crown containment test miscounted near-coincident stitch intersections. The corrected crown-surface check passes separately; no cap generator change was retained."
+    },
+    "crownRecheck": {
+      "pass": 1,
+      "log": "final-cap.log"
+    },
+    "nativeControls": {
+      "settings": 28,
+      "problems": 0,
+      "report": "controls-final/report.json"
+    },
+    "nativeCaptures": {
+      "count": 24,
+      "cases": [
+        "defaults",
+        "profiles",
+        "expressions",
+        "exports",
+        "colors",
+        "headgear"
+      ],
+      "uniqueSavedModels": 2,
+      "reloadedExportViews": 4,
+      "morphNames": 28,
+      "note": "Actual Save, embedded PNG decoding and the game GLB reader in studio inspection mode. Blinks reuse the same saved source bytes. Neutral mouth and blink pixel checks pass; no window or GL errors."
+    },
+    "geometry": {
+      "profiles": 4,
+      "issues": 0,
+      "report": "quality.json"
+    },
+    "colors": {
+      "report": "final-colors/report.json",
+      "cacheKeyPixelsPaired": true,
+      "maximumAllowedByteDifference": 1,
+      "note": "Returning to the same color differs by at most one 8-bit level; observed one byte among 4,194,304."
+    },
+    "fullRepositorySuite": "not rerun",
+    "documentationAndRuntimeCopies": {
+      "pass": 10,
+      "log": "final-docs.log"
+    }
+  },
+  "evidenceRoot": "scratchpad/face-recovery-20261031/",
+  "gallery": "comparison.html",
+  "comparison": "comparison.png",
+  "limits": [
+    "Owner rejected this visual checkpoint. Numeric checks did not catch the bald side-view defects. Superseded by the Preview 65 follow-up ledger.",
+    "Hair artwork and extreme expression polish remain broader visual work.",
+    "Windows and macOS were not exercised; this is not a full game playthrough."
+  ],
+  "finalSourceSha256": {
+    "Character3DBuilder.js": "ac6527edefe5036abc19760a8e5ad193d2eff129f4ba42a0d09d92a0bb4428a4",
+    "CharacterHeadMesh.js": "55dd6e4e93a472d6023324ef96b3cf70aa5c2a9f09caae8097490b6710cf47d9",
+    "CharacterExpressions.js": "5846326b1fb53ddd595546968cbf303b970aeedc79630354b75314266a8f6170",
+    "CharacterModel.js": "f5f10e0100ee01d8088b03acd8fbba53f724f807c345e5d1f9996ef77c9b436a",
+    "HumanBody.js": "64cea8d299b5e6d663d8cb15ab4c42167f8a2a30cb2283d6f15692abb055c233",
+    "CharacterDetail.js": "17888fef06805895fe11bdd15f581a27701c172e886d090e7b08b4368616d446",
+    "CharacterGlb.js": "1884fa6bab3abadf5bb319b96bef58d65351a756b2a722bc87b620f79c1b36db"
+  }
+}

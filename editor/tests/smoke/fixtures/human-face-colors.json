@@ -1,0 +1,114 @@
+[
+  {
+    "name": "dark",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "ancestry": {
+        "people": "subSaharan",
+        "african": 1,
+        "asian": 0,
+        "caucasian": 0
+      },
+      "skin": "#744b35",
+      "eyes": {
+        "color": "#8a693e"
+      },
+      "hair": {
+        "style": "pixie"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true,
+    "js": "const data=b._result.textures['skin.png'].data;if(b.cache.skin?.data!==data)throw Error('The page skin cache holds old pixels');let hash=2166136261;for(let i=0;i<data.length;i++)hash=Math.imul(hash^data[i],16777619);const key=b.recipe.skin;window.__paintSamples ||= new Map();const old=__paintSamples.get(key);let maxDifference=0,changed=0;if(old)for(let i=0;i<data.length;i++){const d=Math.abs(data[i]-old[i]);maxDifference=Math.max(maxDifference,d);if(d)changed++;}else __paintSamples.set(key,data.slice());if(maxDifference>1)throw Error('Skin color changed across rebuilds: '+maxDifference);return {textureHash:hash>>>0,cacheConsistent:true,maxDifference,changed,bytes:data.length};"
+  },
+  {
+    "name": "dark-rebuild",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "ancestry": {
+        "people": "subSaharan",
+        "african": 1,
+        "asian": 0,
+        "caucasian": 0
+      },
+      "skin": "#744b35",
+      "eyes": {
+        "color": "#8a693e"
+      },
+      "hair": {
+        "style": "pixie"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true,
+    "js": "const data=b._result.textures['skin.png'].data;if(b.cache.skin?.data!==data)throw Error('The page skin cache holds old pixels');let hash=2166136261;for(let i=0;i<data.length;i++)hash=Math.imul(hash^data[i],16777619);const key=b.recipe.skin;window.__paintSamples ||= new Map();const old=__paintSamples.get(key);let maxDifference=0,changed=0;if(old)for(let i=0;i<data.length;i++){const d=Math.abs(data[i]-old[i]);maxDifference=Math.max(maxDifference,d);if(d)changed++;}else __paintSamples.set(key,data.slice());if(maxDifference>1)throw Error('Skin color changed across rebuilds: '+maxDifference);return {textureHash:hash>>>0,cacheConsistent:true,maxDifference,changed,bytes:data.length};"
+  },
+  {
+    "name": "light",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "ancestry": {
+        "people": "subSaharan",
+        "african": 1,
+        "asian": 0,
+        "caucasian": 0
+      },
+      "skin": "#cfa17c",
+      "eyes": {
+        "color": "#8a693e"
+      },
+      "hair": {
+        "style": "pixie"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true,
+    "js": "const data=b._result.textures['skin.png'].data;if(b.cache.skin?.data!==data)throw Error('The page skin cache holds old pixels');let hash=2166136261;for(let i=0;i<data.length;i++)hash=Math.imul(hash^data[i],16777619);const key=b.recipe.skin;window.__paintSamples ||= new Map();const old=__paintSamples.get(key);let maxDifference=0,changed=0;if(old)for(let i=0;i<data.length;i++){const d=Math.abs(data[i]-old[i]);maxDifference=Math.max(maxDifference,d);if(d)changed++;}else __paintSamples.set(key,data.slice());if(maxDifference>1)throw Error('Skin color changed across rebuilds: '+maxDifference);return {textureHash:hash>>>0,cacheConsistent:true,maxDifference,changed,bytes:data.length};"
+  },
+  {
+    "name": "dark-return",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "ancestry": {
+        "people": "subSaharan",
+        "african": 1,
+        "asian": 0,
+        "caucasian": 0
+      },
+      "skin": "#744b35",
+      "eyes": {
+        "color": "#8a693e"
+      },
+      "hair": {
+        "style": "pixie"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.4,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "expectClosedMouth": true,
+    "js": "const data=b._result.textures['skin.png'].data;if(b.cache.skin?.data!==data)throw Error('The page skin cache holds old pixels');let hash=2166136261;for(let i=0;i<data.length;i++)hash=Math.imul(hash^data[i],16777619);const key=b.recipe.skin;window.__paintSamples ||= new Map();const old=__paintSamples.get(key);let maxDifference=0,changed=0;if(old)for(let i=0;i<data.length;i++){const d=Math.abs(data[i]-old[i]);maxDifference=Math.max(maxDifference,d);if(d)changed++;}else __paintSamples.set(key,data.slice());if(maxDifference>1)throw Error('Skin color changed across rebuilds: '+maxDifference);return {textureHash:hash>>>0,cacheConsistent:true,maxDifference,changed,bytes:data.length};"
+  }
+]

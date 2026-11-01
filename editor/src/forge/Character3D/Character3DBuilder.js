@@ -2416,7 +2416,12 @@ class Character3DBuilder {
             if (k === 0) {
                 g.getAttribute('normal').array.set(normals);
                 g.getAttribute('normal').needsUpdate = true;
-            } else if (part.interpolation) g.computeVertexNormals();
+            } else if (part.interpolation) {
+                if (part.headMesh && window.RRHeadMesh) {
+                    g.getAttribute('normal').array.set(RRHeadMesh.posedNormals(part, a));
+                    g.getAttribute('normal').needsUpdate = true;
+                } else g.computeVertexNormals();
+            }
         });
         // The skeleton: each joint by how far the body's own joint moved, bound again standing on the
         // floor, then the pose playing taken up again where it was (stopping it would start it over).
@@ -2546,9 +2551,13 @@ class Character3DBuilder {
         })().then(result => {
             if (this._thumbEpoch !== epoch || !this._view) return;
             job.busy = false;
+            // Painting can finish a previous recipe after a newer on-page
+            // build. Never replace the current character with that result.
+            if (JSON.stringify(this.recipe) !== JSON.stringify(recipe)) { job.owed = false; this._queueRebuild(); return; }
             // A body drag came back while this was building: the drag's own shape stands until it rests.
             if (this._settle) return;
             this.cache.skinKey = result.skinKey;
+            if (result.textures?.['skin.png']) this.cache.skin = result.textures['skin.png'];
             this._applyBuild(result);
             if (job.owed) { job.owed = false; this._queueRebuild(); }
         }, error => {
@@ -2743,8 +2752,6 @@ class Character3DBuilder {
         const ownRoom = () => {
             // A tile meant for the second coordinates is never drawn over the first (a part handed over without them).
             if (part.normalTexCoord === 1 && !second) m.normalMap = null;
-            // A head's eyes keep a light of their own: lit only by the room, the whites and iris grey over as they turn from it.
-            if (part.softGloss && m.map) { m.emissive = new THREE.Color(0xffffff); m.emissiveMap = m.map; m.emissiveIntensity = 0.34; m.needsUpdate = true; }
             if (part.envMapIntensity != null) m.envMapIntensity = part.envMapIntensity;
             if (scene && scene.environment && m.envMapIntensity !== 1) { m.envMap = scene.environment; m.envMapIntensity *= scene.environmentIntensity; }
             return m;
@@ -3050,10 +3057,10 @@ class Character3DBuilder {
             const fs = require('fs'), path = require('path');
             const dir = path.join(RRHumanBody.dataFolder(), '..');
             // Body art (CharacterBodyArtMotifs, CharacterBodyArt): tattoos, paint and scars painted with the skin, and their finer charts.
-            const code = ['HumanTargets', 'FaceFieldData', 'HumanBody', 'CharacterOutfit', 'CharacterHair', 'CharacterBodyArtMotifs', 'CharacterBodyArt', 'CharacterSkin'].filter(f => fs.existsSync(path.join(dir, f + '.js'))).map(f => fs.readFileSync(path.join(dir, f + '.js'), 'utf8')).join('\n;\n') + `
+            const code = ['HumanTargets', 'FaceFieldData', 'HeadMeshData', 'HumanBody', 'CharacterOutfit', 'CharacterHair', 'CharacterBodyArtMotifs', 'CharacterBodyArt', 'CharacterSkin', 'CharacterExpressions'].filter(f => fs.existsSync(path.join(dir, f + '.js'))).map(f => fs.readFileSync(path.join(dir, f + '.js'), 'utf8')).join('\n;\n') + `
                 let pack = null;
                 self.onmessage = e => {
-                    if (e.data.init) { pack = self.RRHumanBody.openPack(e.data.json, new Uint8Array(e.data.bin)); return; }
+                    if (e.data.init) { pack = self.RRHumanBody.openPack(e.data.json, new Uint8Array(e.data.bin)); pack._expressionUnits = e.data.units; return; }
                     const a = e.data.args, t = self.RRCharacterSkin.paint(pack, a.skin, a.pattern, a.options), list = [];
                     const pk = q => { if (!q) return null; list.push(q.data.buffer); return { width: q.width, height: q.height, name: q.name, data: q.data.buffer }; };
                     const normal = pk(t.normal), emissive = pk(t.emissive);
@@ -3064,7 +3071,10 @@ class Character3DBuilder {
             const data = RRHumanBody.dataFolder();
             const bin = fs.readFileSync(path.join(data, 'human.bin'));
             const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength);
-            worker.postMessage({ init: true, json: JSON.parse(fs.readFileSync(path.join(data, 'human.json'), 'utf8')), bin: buffer }, [buffer]);
+            // The painter's anatomical rest field must use the same closed
+            // mouth and head schema as the page and full model worker.
+            const units = window.RRCharacterExpressions?.units(this.pack);
+            worker.postMessage({ init: true, json: JSON.parse(fs.readFileSync(path.join(data, 'human.json'), 'utf8')), bin: buffer, units }, [buffer]);
             this._skinWorkerRef = worker;
         } catch (error) {
             console.warn('[Character3DBuilder] skin painter', error);
@@ -3804,7 +3814,7 @@ Character3DBuilder.bodyPath = function(path) {
 };
 
 /** Bumped when the previews' look changes, so pictures kept on disk are drawn again. */
-Character3DBuilder.PREVIEW_VERSION = 63;
+Character3DBuilder.PREVIEW_VERSION = 65;
 
 /** Rigidly fit authored grip markers in the hand's rest frame; its bone carries every pose. */
 Character3DBuilder.fitHeldPreview = function(object, shape, frame, T) {

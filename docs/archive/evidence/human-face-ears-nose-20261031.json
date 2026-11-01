@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-31",
+  "preview": 65,
+  "runtime": "20261031.1",
+  "visualAcceptance": "open; owner rejected Preview 64, no acceptance of this follow-up is implied",
+  "ownerFeedback": "ears are horrible; inner nostrils being dark does not make sense",
+  "supersedes": "human-face-recovery-20261031.json",
+  "changes": [
+    "native outer ears protected from hidden skin; face ends in front of ears",
+    "radial seam bindings, refined seam triangles and exact native triangle UVs",
+    "brow overlay excludes temple triangles behind the eye plane",
+    "narrower nasal folds, recessed lower-wall bulges and bounded local visibility using the skin material",
+    "sculpt shading softened before blending, preserving exact native shade at the join"
+  ],
+  "data": {
+    "file": "editor/src/forge/Character3D/HeadMeshData.js",
+    "sha256": "a1a409e11083f896e912594f833e6a50bc640267cb60d109efdf25fdf96bc1e1",
+    "provenance": {
+      "title": "Woman head",
+      "author": "zhuoyi0904",
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/woman-head-34af2e5bf1464a5fa87ef37db5389f23",
+      "sourceSha256": "42cc81cdc96cd0f05e2f626f386e18c259762fc2a018d1859dc74f4c14e07193",
+      "driverSha256": "69c4e752e93e160599d0f08215618c9a6d8ebcd0e10455e81a8f61aee1fc4455",
+      "generatorSha256": "2739c6542038c68123a35f1b3b7f537aed12994f692df5de0592a733abf1ec9a"
+    },
+    "verticesPerEndpoint": 2036,
+    "trianglesPerEndpoint": 3863,
+    "hiddenNativeVertices": 2541
+  },
+  "sourceSha256": {
+    "Character3DBuilder.js": "193a0c23a9f2105411aee435a868e0378f7d7fafe36f44d6a1db2e80cd4d2e9c",
+    "CharacterHeadMesh.js": "b5725938809722d2eba9eec4ed8bcd285c5d2a6f7b9b4f342d930121dcce124f",
+    "HeadMeshData.js": "a1a409e11083f896e912594f833e6a50bc640267cb60d109efdf25fdf96bc1e1",
+    "CharacterShading.js": "b61558fe2cd7b9e527b9eeee89b548a2358d6ffcfb6659c947410dab0cd7afe4"
+  },
+  "evidenceRoot": "scratchpad/face-ear-nose-20261031/",
+  "baseline": "before/",
+  "current": "final-core-4/",
+  "additionalChecks": "final-extras-3/",
+  "validation": {
+    "earlierCandidateSizeFailure": {
+      "log": "focused.log",
+      "morphBytes": 1104696,
+      "note": "Rejected candidate; reduced seam refinement and removed folded native skin hidden under the replacement. Existing 900000-byte ceiling unchanged."
+    },
+    "focused": {
+      "pass": 24,
+      "files": 2,
+      "log": "focused-final.log",
+      "morphCeilingBytes": 900000
+    },
+    "geometry": {
+      "profiles": 4,
+      "issues": 0,
+      "report": "quality.json"
+    },
+    "nativeCaptures": {
+      "count": 8,
+      "problems": 0,
+      "batches": [
+        "final-core-4/report.json",
+        "final-extras-3/report.json"
+      ],
+      "uniqueSavedModels": 1,
+      "savedViews": 2,
+      "embeddedPngsDecoded": 20,
+      "morphNames": 28,
+      "blinkCoverage": [
+        1,
+        1
+      ]
+    },
+    "documentationAndRuntimeCopies": {
+      "pass": 10,
+      "log": "checkpoint-docs.log"
+    },
+    "fullRepositorySuite": "not rerun"
+  },
+  "limits": [
+    "Overall human face appearance is not accepted.",
+    "The nasal folds still have rough inner shapes in the low-angle close-up; the temple blend remains visible.",
+    "Only selected default/ear-control and saved-model cases were exercised in this follow-up; the earlier broad audit is historical.",
+    "No full repository suite or Windows/macOS run."
+  ],
+  "gallery": "comparison.html",
+  "comparison": "comparison.png",
+  "reviewStatus": "Owner deferred review and requested a commit; resume with docs/HUMAN-FACE-HANDOFF.md#resume-in-the-morning.",
+  "reproduction": {
+    "recipe": "editor/tests/smoke/fixtures/human-face-bald-recipe.json",
+    "shots": [
+      "editor/tests/smoke/fixtures/human-face-ears-nose.json",
+      "editor/tests/smoke/fixtures/human-face-ear-controls-exports.json"
+    ]
+  }
+}

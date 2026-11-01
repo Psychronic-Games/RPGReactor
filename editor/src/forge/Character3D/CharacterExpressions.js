@@ -435,7 +435,8 @@
         const M = measure(pack, result);
         let b = spec && spec.units && spec.gaze ? spec : blend([[spec, weight]]);
         // A character's own strength (an expression's; a viseme or the blink is asked for without it).
-        if (emotion) b = strengthen(b, emotion);
+        const physical = typeof spec === 'string' && (spec === 'blink' || spec.startsWith('viseme_') || VISEME_BY_ID.has(spec));
+        if (emotion && !physical) b = strengthen(b, emotion);
         const delta = new Float32Array(pack.vertexCount * 3);
         const out = { delta, units: b.units, gaze: b.gaze, blush: b.blush, tears: b.tears, blushColor: b.blushColor || EMOTION.blushColor, moved: false };
         if (!M || !M.ok) return out;
@@ -589,7 +590,7 @@
      * canines, premolars and molars of their own widths, each crown rounded
      * and tapering to its edge, set in a gum.
      */
-    function mouthParts(pack, built, recipe) {
+    function mouthParts(pack, built, recipe, faceFit) {
         if (recipe && recipe.head && recipe.head.kind) return [];
         const S = built.shaped, F = packFields(pack);
         const head = built.bones.findIndex(b => b.name === 'Head');
@@ -605,6 +606,8 @@
         let lipLow = Infinity, lipHigh = -Infinity;
         for (const v of F.lips) { if (Math.abs(S[v * 3]) > 0.005) continue; if (F.upperLip[v] > F.lowerLip[v]) lipLow = Math.min(lipLow, S[v * 3 + 1]); else lipHigh = Math.max(lipHigh, S[v * 3 + 1]); }
         if (isFinite(lipLow) && isFinite(lipHigh)) base.line = (lipLow + lipHigh) / 2;
+        const lineShift = faceFit ? faceFit.center - base.line : 0;
+        if (faceFit) { base.line = faceFit.center; base.closedFace = true; base.squeeze *= Math.min(1.2, faceFit.corner / Math.max(1e-6, corner)); }
         base.upperEdge = arch(S, F.upperTeeth, 'upper', teeth, base);
         arch(S, F.lowerTeeth, 'lower', teeth, base);
         if (teeth.idx.length) {
@@ -622,7 +625,7 @@
         // At rest its tip lies low behind the lower teeth, under the lip line.
         let tf = -Infinity, tb = Infinity;
         for (let i = 0; i < tpos.length; i += 3) { tf = Math.max(tf, tpos[i + 2]); tb = Math.min(tb, tpos[i + 2]); }
-        for (let i = 0; i < tpos.length; i += 3) { const t = smooth(0.4, 1, (tpos[i + 2] - tb) / Math.max(1e-4, tf - tb)); tpos[i + 1] -= 0.005 + 0.003 * t; tpos[i + 2] -= 0.0075 * t; }
+        for (let i = 0; i < tpos.length; i += 3) { const t = smooth(0.4, 1, (tpos[i + 2] - tb) / Math.max(1e-4, tf - tb)); tpos[i + 1] += lineShift - 0.005 - 0.003 * t; tpos[i + 2] -= 0.0075 * t; }
         const tn = tg.source.length, tcol = new Float32Array(tn * 3);
         // Deep in the mouth and in its shadow: a dull, dark red (a glossy one lit up as a pale ball in an open mouth).
         for (let i = 0; i < tn; i++) { tcol[i * 3] = 0.17; tcol[i * 3 + 1] = 0.04; tcol[i * 3 + 2] = 0.045; }
@@ -683,7 +686,7 @@
         const sign = upper ? -1 : 1; // from gum to edge: down for the upper teeth, up for the lower.
         // The upper edges just under the lip line; the lower edges 1.5 mm over them, 3 mm behind, the lower arch inside the upper.
         // Both a little behind the helper's front, clear of the lips' inner folds.
-        const edgeY = upper ? (base.line !== undefined ? base.line - 3 * mm : y0 + (y1 - y0) * 0.01) : base.upperEdge + 1.5 * mm;
+        const edgeY = upper ? (base.line !== undefined ? base.line + (base.closedFace ? 2 : -3) * mm : y0 + (y1 - y0) * 0.01) : base.upperEdge + 1.5 * mm;
         // (Far enough back that the hairline between closed lips shows the dark of the mouth, not white teeth.)
         const back = upper ? 3 * mm : 5.5 * mm;
         const ivory = [0.7, 0.65, 0.54], edge = [0.72, 0.72, 0.69], gum = [0.38, 0.1, 0.11];
@@ -943,6 +946,13 @@
 
     function posePartsWith(pack, result, M, f) {
         const D = f.delta, b = bind(pack, result);
+        const Head = root.RRHeadMesh || (typeof require === 'function' ? require('./CharacterHeadMesh.js') : null);
+        const head = result.parts.find(p => p.name === 'Head skin');
+        let headDelta = D;
+        if (head && (f.units.eyeCloseL || f.units.eyeCloseR)) {
+            const units = { ...f.units, eyeCloseL: 0, eyeCloseR: 0 };
+            headDelta = field(pack, result, { ...f, units }).delta;
+        }
         const positions = [], normals = [];
         const still = !f.moved && !(f.gaze && (f.gaze[0] || f.gaze[1]));
         result.parts.forEach((part, k) => {
@@ -951,18 +961,20 @@
             const base = part.positions, n = base.length / 3;
             if (m.mode === 'interpolation') {
                 const P = Float32Array.from(base), bind = m.map;
+                const delta = part.headMesh ? headDelta : D;
                 for (let i = 0; i < n; i++) for (let j = bind.offsets[i]; j < bind.offsets[i + 1]; j++) {
                     const v = bind.vertices[j], w = bind.weights[j];
-                    for (let c = 0; c < 3; c++) P[i * 3 + c] += D[v * 3 + c] * w;
+                    for (let c = 0; c < 3; c++) P[i * 3 + c] += delta[v * 3 + c] * w;
                 }
-                positions.push(P); normals.push(Body.normals(P, Uint32Array.from({ length: n }, (_, i) => i), part.index, n));
+                positions.push(P); normals.push(Head && part.headMesh ? Head.posedNormals(part, P) : Body.normals(P, Uint32Array.from({ length: n }, (_, i) => i), part.index, n));
             } else if (m.mode === 'source') {
                 const P = Float32Array.from(base), map = m.map;
+                const delta = part.name === 'Lashes' && head ? headDelta : D;
                 let any = false;
                 for (let i = 0; i < n; i++) {
                     const v = map[i];
                     if (v < 0) continue;
-                    const dx = D[v * 3], dy = D[v * 3 + 1], dz = D[v * 3 + 2];
+                    const dx = delta[v * 3], dy = delta[v * 3 + 1], dz = delta[v * 3 + 2];
                     if (dx || dy || dz) { P[i * 3] += dx; P[i * 3 + 1] += dy; P[i * 3 + 2] += dz; any = true; }
                 }
                 positions.push(any ? P : null);
@@ -1035,6 +1047,11 @@
                 }
                 positions.push(P); normals.push(null);
             } else { positions.push(null); normals.push(null); }
+        });
+        if (head && Head) result.parts.forEach((part, k) => {
+            if (!(part.lidRows || part.name === 'Lashes')) return;
+            const P = positions[k] || Float32Array.from(part.positions);
+            if (Head.closeLids(head, part, P, f.units)) { positions[k] = P; normals[k] = part.lidRows ? Head.normalsOf(P, part.index) : Head.posedNormals(part, P); }
         });
         // The body's normals from its moved shape.
         if (positions[0]) {
@@ -1159,6 +1176,13 @@
         if (!supports(pack, result)) return [];
         const list = names || MORPH_NAMES;
         const out = [];
+        // Hidden skin remains in the source position array for fast slider
+        // fitting. It needs no saved morph data when no triangle uses it.
+        const used = result.parts.map(part => {
+            const mask = new Uint8Array(part.positions.length / 3);
+            for (const vertex of part.index) mask[vertex] = 1;
+            return mask;
+        });
         for (const name of list) {
             // The expressions at the character's own strength and blush; the mouth shapes as they are.
             const own = String(name).startsWith('expression_') ? emotionOf(result.recipe) : undefined;
@@ -1174,6 +1198,7 @@
                 if (hair && most < 0.0025) return;
                 // Under a tenth of a millimeter is left out.
                 for (let i = 0; i < base.length / 3; i++) {
+                    if (!used[k][i]) continue;
                     const dx = P[i * 3] - base[i * 3], dy = P[i * 3 + 1] - base[i * 3 + 1], dz = P[i * 3 + 2] - base[i * 3 + 2];
                     if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 1e-4) { idx.push(i); d.push(dx, dy, dz); }
                 }

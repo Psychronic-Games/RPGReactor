@@ -1,0 +1,90 @@
+[
+  {
+    "name": "female-cap-front",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "hair": {
+        "style": "crew"
+      },
+      "props": [
+        {
+          "id": "cap",
+          "color": "#8c3e35"
+        }
+      ]
+    },
+    "view": {
+      "target": "head",
+      "yaw": 0.4,
+      "pitch": 0.05,
+      "distance": 0.6
+    }
+  },
+  {
+    "name": "female-cap-back",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "hair": {
+        "style": "crew"
+      },
+      "props": [
+        {
+          "id": "cap",
+          "color": "#8c3e35"
+        }
+      ]
+    },
+    "view": {
+      "target": "head",
+      "yaw": 2.7,
+      "pitch": 0.05,
+      "distance": 0.6
+    }
+  },
+  {
+    "name": "male-cap-front",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "hair": {
+        "style": "crew"
+      },
+      "props": [
+        {
+          "id": "cap",
+          "color": "#8c3e35"
+        }
+      ]
+    },
+    "view": {
+      "target": "head",
+      "yaw": 0.4,
+      "pitch": 0.05,
+      "distance": 0.6
+    }
+  },
+  {
+    "name": "male-cap-back",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "hair": {
+        "style": "crew"
+      },
+      "props": [
+        {
+          "id": "cap",
+          "color": "#8c3e35"
+        }
+      ]
+    },
+    "view": {
+      "target": "head",
+      "yaw": 2.7,
+      "pitch": 0.05,
+      "distance": 0.6
+    }
+  }
+]

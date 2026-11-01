@@ -1,0 +1,72 @@
+[
+  {
+    "name": "female-export",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.25,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "exportModel": true,
+    "exportBlink": false,
+    "expectClosedEyes": false,
+    "expectClosedMouth": true
+  },
+  {
+    "name": "female-export-blink",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.25,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "exportModel": true,
+    "exportBlink": true,
+    "expectClosedEyes": true,
+    "expectClosedMouth": true,
+    "exportFrom": "female-export"
+  },
+  {
+    "name": "male-export",
+    "reset": true,
+    "patch": {
+      "gender": 1
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.25,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "exportModel": true,
+    "exportBlink": false,
+    "expectClosedEyes": false,
+    "expectClosedMouth": true
+  },
+  {
+    "name": "male-export-blink",
+    "reset": true,
+    "patch": {
+      "gender": 1
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.25,
+      "pitch": 0,
+      "distance": 0.46
+    },
+    "exportModel": true,
+    "exportBlink": true,
+    "expectClosedEyes": true,
+    "expectClosedMouth": true,
+    "exportFrom": "male-export"
+  }
+]

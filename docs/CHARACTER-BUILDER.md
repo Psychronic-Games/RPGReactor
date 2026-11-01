@@ -1,5 +1,7 @@
 # 3D Character Builder
 
+Preview **65** repairs human ear coverage and refines nostril folds following the shared-sculpt update. The default human face uses one sculpt: feminine, masculine and intermediate bodies use continuous shapes. Human defaults include finer skin detail and a centre-parted long hairstyle on a newly created female recipe. Existing hairstyle choices stay as authored. Sliders, skin patterns, eye colors, expressions, speech and saved face shapes remain editable; blinking uses fitted lids. Other species retain their own heads. Restart the editor for new previews, and rebuild/re-export existing characters to update their saved geometry. [Current face implementation and verification](HUMAN-FACE-HANDOFF.md).
+
 Preview52 adds independent **Emblem** controls to procedural torso clothing and to cape/scarf accessories: built-in symbols or a project picture, with size, position, rotation and color. Garments offer left/right chest, front and back placement. Fabric patterns remain independent. Cape hems and scarf stripes are painted sharply; procedural soles receive a finer, smoother outer contour. Reload and re-export existing models to update their baked materials and geometry. See [wearable customization](PROP-BUILDER.md#wearable-symbols-and-patterns).
 
 Preview51 smooths procedural boot and shoe soles in Character Builder and Props → Wearables, retaining foot clearance and the existing sole mesh density. Reload and re-export older models for the corrected outlines.

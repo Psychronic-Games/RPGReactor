@@ -168,9 +168,10 @@
         for (let i = 0; i + 1 < offsets.length; i++) {
             let sum = 0, weight = 0;
             for (let j = offsets[i]; j < offsets[i + 1]; j++) { const k = at.get(vertices[j]); if (k !== undefined && k < under.length) { sum += under[k] * weights[j]; weight += weights[j]; } }
-            if (weight > 0) ao[headAt][i] = ao[headAt][i] * edge[i] + (sum / weight) * (1 - edge[i]);
-            // Gentler than on the body, the mask's sculpted hollows being deep; the lid's inner wall in shade, as it would be, round the eyeball.
-            ao[headAt][i] = 1 - (1 - ao[headAt][i]) * 0.45;
+            // Soften only the sculpt's own shade. Softening the inherited
+            // body shade after blending left a lighter, jagged patch edge.
+            const own = 1 - (1 - ao[headAt][i]) * 0.45;
+            ao[headAt][i] = weight > 0 ? own * edge[i] + (sum / weight) * (1 - edge[i]) : own;
             if (parts[headAt].tone) ao[headAt][i] *= parts[headAt].tone[i];
             const inner = parts[headAt].lidWall ? parts[headAt].lidWall[i] : 0;
             if (inner) ao[headAt][i] *= inner === 2 ? 0.45 : 0.42;     // the lid's wall, and a nostril's dark

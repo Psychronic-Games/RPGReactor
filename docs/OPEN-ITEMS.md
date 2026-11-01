@@ -14,7 +14,7 @@ Open during 0.99.4, runtime 20261030.3. Builder export/loading, Database zoom/or
 
 7. **Imported wearable artwork and cuts.** Previews 60–61 repair shared garment construction, fabric finishes and seams; the close-up review still identifies source-art defects. Carol/Jolt/Max/Vay still have irregular source panel cuts and rough edge painting that need asset work. Preserve intentional armor segmentation while rebuilding damaged cuts; verify source meshes as well as fitted/exported pieces. [Audit and evidence](CHARACTER-QUALITY.md#clothing-texture-and-seam-close-ups--2026-10-30-preview-61).
 
-8. **Human faces.** Unfinished and not accepted by the owner. [Handoff](HUMAN-FACE-HANDOFF.md).
+8. **Human faces.** The owner rejected Preview 64 for obscured ears and unnatural nostrils. Preview 65 repairs ear coverage and refines the nasal folds; inspect the temple join and nose closely. Overall visual acceptance remains open. [Handoff and validation](HUMAN-FACE-HANDOFF.md).
 
 Harness notes: a temp Demo copy must keep the Demo's own `js/reactor_plugins.js` (copying `runtime/*.js` over it empties the plugin list, and the Demo's plugins matter: PSYCHRONIC_KeyboardConfigMZ swaps the key map on every Input.clear). Run substantial suites through `/home/doug/.local/bin/codex-check node --test --test-concurrency=1` with literal test filenames, as required by the workstation's resource limits.
 

@@ -1,0 +1,10 @@
+{
+  "species": "human",
+  "gender": 0,
+  "outfit": [
+    {
+      "id": "tshirt",
+      "color": "#315e85"
+    }
+  ]
+}

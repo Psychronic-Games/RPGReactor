@@ -59,7 +59,7 @@
             // A pattern without regions of its own: a woman's Natural and Light are a woman's.
             bodyHair: Skin.normalizeBodyHair(r.bodyHair && !r.bodyHair.regions && Body.sexOf(body) === 'female' && Skin.HAIR_PRESETS[(r.bodyHair.pattern || 'natural') + 'Female']
                 ? Object.assign({}, r.bodyHair, { regions: Skin.HAIR_PRESETS[(r.bodyHair.pattern || 'natural') + 'Female'] }) : r.bodyHair),
-            hair: Hair.normalizeHair(r.hair || (r.bald ? { style: 'bald', brows: { style: 'none' } } : undefined)),
+            hair: Hair.normalizeHair(r.hair || (r.bald ? { style: 'bald', brows: { style: 'none' } } : body.gender < 0.4 && (!r.species || r.species === 'human') ? { style: 'centerPartLong', fringe: 0 } : undefined)),
             outfit: Wardrobe.normalizeOutfit(r.outfit),
             props: Props.normalizeProps(r.props),
             // A Head choice (`headId`, from the picker) sets the head anew; otherwise the recipe's own head.
@@ -197,7 +197,7 @@
                 for (const v of ids) if (Math.hypot(S[v * 3] - at[0], S[v * 3 + 1] - at[1], S[v * 3 + 2] - at[2]) < 0.03) outfit.hidden.add(v);
             }
         }
-        const headHidden = HeadMesh?.applies(r) ? HeadMesh.hidden(r) : null;
+        const headHidden = HeadMesh?.applies(r) && !r.outfit.some(item => FACE_COVERS.has(item.id)) ? HeadMesh.hidden(r) : null;
         if (outfit.hidden.size || mer || cen || headHidden || (modHidden && modHidden.size)) {
             const keep = [];
             const src = pack.body.source, I = body.index;
@@ -247,7 +247,7 @@
         const eyes = Object.assign({}, built.parts[1], { roughness: 0.25, cutout: true });
         if (o.eyeSource) {
             // (This head's eyeballs are larger than the eye picture was drawn for: a pupil kept to a natural share of the iris.)
-            const eyePaint = headHidden ? { ...r.eyes, size: r.eyes.size * 0.72, pupilSize: (r.eyes.pupilSize ?? 1) * 0.8 } : r.eyes;
+            const eyePaint = headHidden ? { ...r.eyes, size: r.eyes.size * 0.95, pupilSize: (r.eyes.pupilSize ?? 1) * 0.8 } : r.eyes;
             const eyeKey = textureKey('eyes', [eyePaint, o.eyeSource.width, o.eyeSource.height]);
             if (cache.eyeKey !== eyeKey) {
                 cache.eyes = { width: o.eyeSource.width, height: o.eyeSource.height, data: Skin.paintEyes(o.eyeSource.data, o.eyeSource.width, eyePaint), name: 'eyes.png' };
@@ -302,15 +302,17 @@
             parts.push(patch);
         }
         const headSkin = headHidden ? HeadMesh.part(pack, built, r, body) : null;
-        if (headSkin && eyes) HeadMesh.sphereEyes(eyes, headSkin, r, pack, built.shaped);
-        if (headSkin) parts.push(headSkin);
+        let mouthFit = null;
+        if (headSkin && eyes) { HeadMesh.sphereEyes(eyes, headSkin, r, pack, built.shaped); built.parts[1] = eyes; }
+        if (headSkin) { parts.push(headSkin, HeadMesh.lidPart(headSkin)); if (headSkin.normalTexture === 'face-detail.png') textures['face-detail.png'] = HeadMesh.detailTexture(); }
         // The lips: their own patch and picture, for every humanoid. Left out where a mask or a muzzle hides the mouth.
         if (!Expressions?.mouthCovered?.(pack, outfit.hidden) && !o.noLips) {
             const size = o.static ? 256 : o.quality === 'save' ? 1024 : 768, lipColor = r.skinPattern?.lips || '';
             const fit = headSkin ? HeadMesh.lipFit(pack, built.shaped, r, headSkin) : Detail.lipFit(pack, built.shaped), lipKey = textureKey('lips', [r.skin, lipColor, size, fit && fit.up.join(), fit && fit.low.join(), fit && fit.bend.toFixed(2)]);
+            if (headSkin) mouthFit = fit;
             if (cache.lipKey !== lipKey) { cache.lips = Detail.lipTexture(pack, r.skin, { size, relief: !o.static, color: lipColor, fit }); cache.lipKey = lipKey; }
             const lips = headSkin ? HeadMesh.lipPart(headSkin, fit) : Detail.lipPart(pack, built.shaped, skinNormals);
-            if (headSkin) parts.push(HeadMesh.mouthPart(headSkin, fit, r));
+            if (headSkin) parts.push(HeadMesh.mouthPart(headSkin, fit, r, pack));
             if (lips) {
                 textures['lips.png'] = cache.lips;
                 if (cache.lips.normal) { textures['lips_n.png'] = cache.lips.normal; lips.normalTexture = 'lips_n.png'; lips.normalScale = 0.4; }
@@ -453,7 +455,7 @@
         // under a covering that hides the lips (a full-face helmet) none of the mouth is left.
         if (Expressions && !graftKind && !insectHeaded) {
             if (Expressions.mouthCovered(pack, outfit.hidden)) Expressions.hideMouth(pack, built, body, outfit.hidden);
-            else { Expressions.tintMouth(pack, built, body); parts.push(...Expressions.mouthParts(pack, built, r)); }
+            else { Expressions.tintMouth(pack, built, body); parts.push(...Expressions.mouthParts(pack, built, r, mouthFit)); }
         }
         // Body art hook: the skin under the art on its own finer picture; piercings and cyber mods.
         if (BodyArt && cache.skin.detail && art.length) {
