@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-01",
+  "kind": "source prerelease presentation",
+  "version": "0.99.4",
+  "tag": "v0.99.4-preview.20261101",
+  "functionalSourceCommit": "ff8f2feb8e6a5d154f4094222566475f7332ed33",
+  "runtime": "20261101.41",
+  "releasePolicy": "prerelease; latest stable remains 0.99.3; no native binaries attached",
+  "ci": "https://github.com/Psychronic-Games/RPGReactor/actions/runs/41395251102",
+  "ciStatus": "known failures in dependency audit and Node shards; GUI smoke passes; no clean full-suite claim",
+  "changes": [
+    "README hero and What's New now show the current preview",
+    "Public notes summarize development and use six current screenshots",
+    "Detailed engineering history remains in editor/changelog/0.99.4.md",
+    "Stable cut formatter recognizes both legacy and preview README wording",
+    "Development prerelease process documented separately from stable cuts"
+  ],
+  "pictures": [
+    {
+      "file": "01-online-town.jpg",
+      "title": "Players meeting in North Haven",
+      "caption": "Player characters, names and chat share the same online world.",
+      "width": 1280,
+      "height": 720,
+      "bytes": 137986,
+      "sha256": "294b1e1daaddb7bec49d26413084d6b2829b611e4525555d87037f6bcfc24c7d"
+    },
+    {
+      "file": "02-character-creator.jpg",
+      "title": "Character creation inside a game",
+      "caption": "Players choose their appearance with the Forge-powered character creator.",
+      "width": 1280,
+      "height": 720,
+      "bytes": 48570,
+      "sha256": "9f6718aba27b5a584b6254d4b1442a7061ef6b78b1c930c396f30961e951e5da"
+    },
+    {
+      "file": "03-online-deploy.jpg",
+      "title": "Deploying an online game",
+      "caption": "Online Server writes the game and its PHP server to a web folder.",
+      "width": 1280,
+      "height": 720,
+      "bytes": 55467,
+      "sha256": "513b19655619c23433f6c7dae9503660b873a052927ccd951cdd19e25093a702"
+    },
+    {
+      "file": "04-voice-settings.jpg",
+      "title": "Avatar voice settings",
+      "caption": "Set the speaking key, hearing range and who may use voice in Database \u2192 Online.",
+      "width": 1280,
+      "height": 720,
+      "bytes": 59336,
+      "sha256": "7deb63831434fde844f8441acb47b63f877e63782cb34ac43af79ece7a26cc34"
+    },
+    {
+      "file": "05-holographic-table.jpg",
+      "title": "An editable holographic table",
+      "caption": "Screen design, animated readouts and holographic displays remain editable in the Prop Builder.",
+      "width": 1280,
+      "height": 720,
+      "bytes": 81110,
+      "sha256": "0e98a3add874f9f77cf4d2f47cab8c8116387756d48614c9f6cb82670b43fc17"
+    },
+    {
+      "file": "06-passenger-minivan.jpg",
+      "title": "A minivan with an accessible cabin",
+      "caption": "Sliding doors reveal the seven-seat cabin in the Prop Builder.",
+      "width": 1280,
+      "height": 720,
+      "bytes": 81030,
+      "sha256": "ed7411e214dd6cbfd07de9b288e0b03ab7da0e2bdd415a79126ebc94a25d1236"
+    }
+  ],
+  "captureScope": "First four pictures were committed with ff8f2feb from the current online game and editor. Last two are new native Prop Builder captures in a disposable project; inspected before selection. No source assets or saved user designs changed.",
+  "validation": {
+    "targetedChecksPassed": 7,
+    "media": "six JPEGs; 1280x720; each under 400 KiB; nonempty frames",
+    "links": "README, public changelog and preview-note local links resolve",
+    "fullSuite": "not run locally"
+  },
+  "artifacts": "scratchpad/release-0994-20261101/"
+}

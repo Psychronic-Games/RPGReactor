@@ -25,6 +25,12 @@ scoped per runtime) so builds never share a profile, and the build refuses a dow
 `editor/build-scripts/shipped-runtime.json` (raise that version in the same
 commit that upgrades NW.js 0.107.0 to anything newer).
 
+## Development source previews
+
+A development preview can make current work visible in GitHub Releases while a stable cut is still pending. Give it a separate tag such as `v0.99.4-preview.20261101`, mark the GitHub release **Pre-release**, and leave **Latest** on the last stable version. Keep the package version, stable release links and changelog development markers unchanged. Do not attach unvalidated native binaries or claim a green CI run.
+
+Prepare the current README gallery, versioned captions and public release notes first. Link images and repository pages to the exact preview tag, not `main` or the future stable tag. Record the source commit, validation scope and remaining CI failures. Commit and push the prepared documentation, create an annotated preview tag at that commit, then publish with `gh release create <tag> --verify-tag --prerelease --latest=false --notes-file <prepared-notes>`. Verify the published prerelease flag, target commit, body and image URLs. This publishes source only; stable versions still use the ordered checklist and `cut-release.cjs` below.
+
 ## 1. Repository Configuration
 
 Configure the GitHub `release` environment with required reviewers if desired.

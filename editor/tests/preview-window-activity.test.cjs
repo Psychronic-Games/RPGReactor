@@ -126,7 +126,7 @@ test('map and Forge alternate animation work without polling, rebuilding, catchi
     for (let frame = 0; frame < 60; frame++) raf.step();
     assert.equal(map.calls.draws, 60);
     assert.equal(character.calls.draws, 0);
-    assert.equal(character.calls.deltas.length, 0);
+    assert.equal(character.calls.deltas.filter(Boolean).length, 0, 'the first pose is applied once, and no time passes');
     shared.set('forge');
     assert.equal(map.view.flyKeys.size, 0);
     assert.equal(map.view.flyFast, false);

@@ -284,7 +284,9 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
     // 61 since 2026-10-18: the humanoid motion library is shared with the Builder and loaded on demand.
     // 62 since 2026-10-25: reactor_hdr_overlay.js (opt-in HDR rendering of Effekseer effects) is its own concern.
     // 63 since 2026-10-25: reactor_features.js (which of Reactor's additions the project uses: Database › Reactor Features) is its own concern.
-    assert.ok(roots.length <= 63, `runtime js/ root has grown to ${roots.length} files`);
+    // 67 since 2026-11-01: online worlds are their own concern (reactor_online.js: players and the connection; _ui: accounts, the shared
+    // world and chat; _voice: speaking as a character), and reactor_character_creator.js serves single-player games too.
+    assert.ok(roots.length <= 67, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 test('the game boots every extension straight after the core, before anything reads them', () => {

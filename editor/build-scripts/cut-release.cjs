@@ -110,8 +110,8 @@ function rollVersionSurfaces(version, testCount, skipCount) {
 
     // The README names the newest tag and the verified test count.
     edit('README.md',
-        /The (?:current development version is [\d.]+ and is not published yet; the )?latest tagged source release is \[[\d.]+\]\(https:\/\/github\.com\/[^)]+\)\./,
-        `The latest tagged source release is [${version}]`
+        /The (?:current development version is [\d.]+ and is not published yet; the )?latest (?:tagged|stable) source release (?:is|remains) \[[\d.]+\]\(https:\/\/github\.com\/[^)]+\)\./,
+        `The latest stable source release is [${version}]`
         + `(https://github.com/${REPO}/releases/tag/v${version}).`);
     // The date and skip count are rolled with the count, so the sentence cannot claim a stale run.
     edit('README.md', /On \d{4}-\d{2}-\d{2}, [^*]*?validation completed with \*\*\d+ passing tests\*\*[^.]*\./,

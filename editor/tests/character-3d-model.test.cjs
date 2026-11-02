@@ -289,6 +289,12 @@ test('every module a builder file needs is on the page before it (in the editor,
             assert.equal(page.includes(rel + file), false, 'the worker entry never executes on the page');
             continue;
         }
+        if (file === 'CharacterGameWorker.js' || file === 'CharacterControls.js') {
+            const game = fs.readFileSync(path.join(dir, 'CharacterGameWorker.js'), 'utf8');
+            assert.ok(game.includes('CharacterControls.js'), 'the in-game builder loads its controls');
+            assert.equal(page.includes(rel + file), false, 'the in-game builder runs in a game, never on the editor page');
+            continue;
+        }
         if (file === 'CharacterPreviewTextures.js') {
             const browser = fs.readFileSync(path.join(dir, 'CharacterPreviewBrowserEntry.js'), 'utf8');
             const desktop = fs.readFileSync(path.join(dir, 'CharacterPreviewWorker.cjs'), 'utf8');

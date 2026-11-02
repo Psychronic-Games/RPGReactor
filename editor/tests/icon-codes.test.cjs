@@ -170,8 +170,8 @@ test('the <select> shim paints option labels instead of assigning raw text', () 
     // carrying an explanation is searchable by that too, so an author who knows
     // what they want but not what it is called can still find it.
     assert.match(source, /item\.dataset\.optText = searchText\(/);
-    assert.match(source, /searchText\(`\$\{opt\.textContent\} \$\{hint\}`\)/,
-        'the searchable text covers the label and its explanation');
+    assert.match(source, /searchText\(`\$\{opt\.textContent\} \$\{hint\} \$\{category\}`\)/,
+        'the searchable text covers the label, its explanation and its category');
     assert.match(source, /codes \? codes\.strip\(text\) : text/);
 });
 

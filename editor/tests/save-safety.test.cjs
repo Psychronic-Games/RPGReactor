@@ -56,7 +56,7 @@ test('DatabaseManager saveAllData propagates a file failure after attempting all
 
     assert.equal(await manager.saveAllData('/project'), false);
     // Optional Reactor catalogs are not added to a project that never authored them.
-    const optional = ['UserInterfaces.json', 'ReactorQuests.json', 'ReactorVehicles.json', 'ActionSequences.json'];
+    const optional = ['UserInterfaces.json', 'ReactorQuests.json', 'ReactorVehicles.json', 'ActionSequences.json', 'ReactorOnline.json', 'ReactorCharacters.json'];
     const expected = Array.from(manager.dataFiles, (entry) => entry[1]).filter((name) => !optional.includes(name));
     assert.deepEqual(attempted, expected);
     assert.equal(attempted.includes('MapInfos.json'), false);
@@ -66,7 +66,7 @@ test('DatabaseManager saveAllData propagates a file failure after attempting all
     manager.data.quests = [null, { id: 1, name: 'Errand', objectives: [], rewards: [] }];
     manager.data.vehicles = [null, { id: 1, name: 'Motorcycle', kind: 'motorcycle' }];
     await manager.saveAllData('/project');
-    assert.deepEqual(attempted, Array.from(manager.dataFiles, (entry) => entry[1]).filter(name => name !== 'ActionSequences.json'));
+    assert.deepEqual(attempted, Array.from(manager.dataFiles, (entry) => entry[1]).filter(name => !['ActionSequences.json', 'ReactorOnline.json', 'ReactorCharacters.json'].includes(name)));
 });
 
 test('DatabaseManager saveAllData writes only the files that changed, plus System.json', async () => {

@@ -6,7 +6,7 @@
 
 Each area keeps its latest check.
 
-- **Release:** 0.99.3 source release (2026-10-29); development is 0.99.4; signed binaries and itch channels use Release Candidate → Release. Public editor releases use NW.js **0.107.0** exactly ([checklist](RELEASE-CHECKLIST.md)); native platform acceptance remains the owner's check.
+- **Release:** [0.99.4 source preview](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4-preview.20261101); stable remains 0.99.3. CI has failures. Signed binaries/itch use Release Candidate → Release and NW.js **0.107.0** ([checklist](RELEASE-CHECKLIST.md)).
 - **Runtime:** development **0.99.4**, revision **20261101.41**, PixiJS **8.22.0**, Three.js **0.187.0**; all 20 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
 - **Legacy imports** (2026-10-29): timer/event logic, BMP/XYZ art, RTP discovery, nested assets and repeat imports refined; source gaps are reported. [Audit and limits](IMPORTING-LEGACY-PROJECTS.md#reliability-audit).
 - **Node suites** (2026-11-01): the last clean full result is 2026-10-29 (8,905 passed, 33 skipped). The 2026-10-31 run of 9,223 tests had 6 failures, fixed and passing individually only. Focused checks since then; full suites stay deferred. [Scope](OPEN-ITEMS.md); [scroll alignment evidence](archive/evidence/event-camera-drift-20261101.json).

@@ -6,55 +6,33 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-<table>
-<tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/01-character-builder.jpg" alt="Rhea Voss in the Character Builder"><br><sub>The Builder and export share their surface settings.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/02-model-inspection.jpg" alt="Database model inspection"><br><sub>Saved thumbnails load first; exported materials retain their maps and studio appearance.</sub></td>
-</tr>
-<tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/03-world-in-play.jpg" alt="North Haven in play"><br><sub>Explore North Haven’s streets and buildings in the Demo’s 3D world.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/04-face-portraits.jpg" alt="Face portraits"><br><sub>Exported faces keep their studio colors.</sub></td>
-</tr>
-<tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/05-structures.jpg" alt="Compound Structures blueprint"><br><sub>Nested buildings remain available for editing.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.3/06-mixed-blueprint.jpg" alt="A cottage and its lot"><br><sub>Rooms, paving and manually placed pieces stay together.</sub></td>
-</tr>
-</table>
-
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.4 and is not published yet; the latest tagged source release is [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3).
-
-## New in development: online worlds
-
-Turn an RPG into a multiplayer world from the editor. Deploy it to ordinary web hosting and it's running, with no database and no router setup. The server shares information and each player's own PC draws the game, so plugin-heavy projects keep working.
+The current source preview is **0.99.4**. See its [release notes](docs/posts/release-notes-0.99.4.md) and [GitHub prerelease](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4-preview.20261101). The latest stable source release remains [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3). Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/01-online-town.jpg" alt="Two players meeting in North Haven"><br><sub>Players meet in your world, with their own characters, chat and names.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/02-character-creator.jpg" alt="Creating a character in the game"><br><sub>Players build a character in the game with the same tools as the Forge. It works in single-player games too.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/01-online-town.jpg" alt="Players meeting in North Haven"><br><sub>Player characters, names and chat share the same online world.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/02-character-creator.jpg" alt="Character creation inside a game"><br><sub>Players choose their appearance with the Forge-powered character creator.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/03-online-deploy.jpg" alt="Deploying to an online server"><br><sub>Pick a web folder and deploy. A rebuild updates the live server.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/04-voice-settings.jpg" alt="Voice settings in Database › Online"><br><sub>Every game sets its own rules in Database › Online.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/05-holographic-table.jpg" alt="An editable holographic table"><br><sub>Screen design, animated readouts and holographic displays remain editable in the Prop Builder.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/06-passenger-minivan.jpg" alt="A minivan with an accessible cabin"><br><sub>Sliding doors reveal the seven-seat cabin in the Prop Builder.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/03-online-deploy.jpg" alt="Deploying an online game"><br><sub>Online Server writes the game and its PHP server to a web folder.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/04-voice-settings.jpg" alt="Avatar voice settings"><br><sub>Set the speaking key, hearing range and who may use voice in Database → Online.</sub></td>
 </tr>
 </table>
 
-- **Speak as your character:** nearby players hear each other from where they stand, and 3D mouths move with the sound.
-- **Sleep and wake:** with an account, signing off leaves your character asleep in the world, and you wake up there on any device.
-- **A shared world:** events work as they do in a single-player game. Choose which switches and variables every player shares.
-- **Accounts, chat and an owner page:** guests or accounts, map and world chat, blocked words, bans and player management.
-- **Faster where the host allows it:** with Node and a WebSocket proxy, the server pushes updates and checks movement. Every other host keeps working as it does now.
+## What's new in 0.99.4 — development preview
 
-This is early. It has been tested on one server, and voice hasn't been tried yet with real microphones or between home networks. See the [guide and design](docs/DESIGN-ONLINE.md).
+- **Online worlds:** deploy a game and PHP server together, with player characters, accounts, chat, shared world state and an owner page.
+- **In-game character creation:** let players choose an actor or edit their appearance with the Forge-powered creator, in single-player and online games.
+- **Avatar voice:** optional nearby voice and animated mouths, with project-specific controls. Hosts that support the Node engine can use pushed updates and movement checks.
+- **Characters in motion:** exercise and resting poses, independent bust/butt/fat bounce, smoother live sliders, editable skin finishes and revised body/face controls.
+- **Props and clothing:** improved fabric, seams, wearable symbols and fitted construction; medical and Wasteland props; a minivan with an accessible seven-seat cabin.
+- **Correct sprite presentation:** complete multi-frame walks, correctly cropped event previews and stationary events that stay attached to map tiles while the camera moves.
 
-## What's new in 0.99.3
-
-- **Reliable Builder exports:** character surface maps and material settings survive loading, chibi sheets keep their proportions in every frame, and face exports retain studio colors.
-- **Faster model lists:** existing thumbnails appear first; missing pictures are generated and saved. Database zoom keeps its rotation centre.
-- **Complete Structures editing:** rooms, paving and nested buildings stay present beside manually placed pieces, with shared tool controls and help that stays visible.
-- **Visible worn equipment and Tactical grappling:** wearable Prop Builder models move with their owners, and the Grappler fires a harpoon and pulls its wearer to a reachable ledge.
-- **Game and editor fixes:** configurable height reach, HDR effect previews, smaller deployments through unused-file trimming, and fixes for rendering errors and detached dialogs.
-
-Read the [0.99.3 release notes](docs/posts/release-notes-0.99.3.md) and [changelog](CHANGELOG.md) for the complete list. Pre-built downloads are published separately on itch.io.
+This is ongoing development. CI has failing checks; online features have been tested on one server, and real microphones, separate networks and production load still need review. See the [0.99.4 notes](docs/posts/release-notes-0.99.4.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
 
 ## Repository Layout
 
@@ -73,7 +51,8 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.3.md): features and fixes in 0.99.3.
+- [Current preview notes](docs/posts/release-notes-0.99.4.md): features, screenshots and limits for 0.99.4.
+- [Latest stable release notes](docs/posts/release-notes-0.99.3.md): features and fixes in 0.99.3.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Online worlds](docs/DESIGN-ONLINE.md): using Online Server today, measured capacity and the plan.

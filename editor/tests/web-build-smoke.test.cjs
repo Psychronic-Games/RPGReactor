@@ -17,6 +17,8 @@ function loadProjectManager() {
 function runWebBuild(projectPath, outputDir, projectName) {
     return new Promise((resolve, reject) => {
         const worker = new Worker(path.join(editorRoot, 'build-scripts', 'build-worker.js'), {
+            // npm test's --require is relative, and this test runs from a temporary folder.
+            execArgv: [],
             workerData: {
                 projectPath,
                 projectName,

@@ -193,7 +193,7 @@ test('both deployments prune with the analysis, and never ship the record or the
     const worker = fs.readFileSync(path.join(editor, 'build-scripts', 'build-worker.js'), 'utf8');
     assert.match(worker, /unusedAssets\.prune\(stagingDir, unusedAnalysis\)/, 'every build: the staging folder');
     assert.match(worker, /unusedAssets\.prune\(platformOutDir, unusedAnalysis\)/, 'Web builds: the web copy, before its file index');
-    assert.ok(worker.indexOf('unusedAssets.prune(platformOutDir') < worker.indexOf('webFileIndex.writeWebFileIndex(platformOutDir)'));
+    assert.ok(worker.indexOf('unusedAssets.prune(platformOutDir') < worker.indexOf('webFileIndex.writeWebFileIndex(browserDir)'));
     for (const file of ['build-worker.js', 'build.js']) {
         const source = fs.readFileSync(path.join(editor, 'build-scripts', file), 'utf8');
         assert.match(source, /'deploy\.rpgreactor\.json'/, file);

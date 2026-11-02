@@ -7,7 +7,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 ## Where things stand (2026-11-01)
 
 - **Releases:** 0.99.3 source release, runtime **20261028.11**: [release notes](posts/release-notes-0.99.3.md), [editor changelog](../editor/changelog/0.99.3.md). **0.99.4** is in development; binary publishing is separate.
-- **Verification:** five checkpoint commits are unpushed and have no CI run. The last green CI and clean full suite are from 2026-10-29. Full suites stay deferred until the visual work is accepted. [Scope](OPEN-ITEMS.md).
+- **Verification:** functional checkpoints are on GitHub; the [November 1 CI run](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41395251102) has failures. The source preview keeps these limits explicit. Full suites remain off the local workstation. [Scope](OPEN-ITEMS.md).
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Visual acceptance remains open. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner is working on them in a separate session with another model, which may be editing the same tree. Leave the face code alone unless asked, and check `git status` before scripted edits. Other work today is outside the 3D systems.
 - **Runtime:** **20261101.41**, PixiJS **8.22.0**, Three.js **0.187.0**. Tile layers and events share each rendered camera position; native Moletown drift drops from 6 px to zero. [Evidence](archive/evidence/event-camera-drift-20261101.json). Multi-frame sprites default on and preserve explicit off; re-export older sheets. [Guide](CHARACTER-BUILDER.md#sprite-sheets).

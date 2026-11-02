@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01-online-town.jpg",
+    "title": "Players meeting in North Haven",
+    "caption": "Player characters, names and chat share the same online world."
+  },
+  {
+    "file": "02-character-creator.jpg",
+    "title": "Character creation inside a game",
+    "caption": "Players choose their appearance with the Forge-powered character creator."
+  },
+  {
+    "file": "03-online-deploy.jpg",
+    "title": "Deploying an online game",
+    "caption": "Online Server writes the game and its PHP server to a web folder."
+  },
+  {
+    "file": "04-voice-settings.jpg",
+    "title": "Avatar voice settings",
+    "caption": "Set the speaking key, hearing range and who may use voice in Database \u2192 Online."
+  },
+  {
+    "file": "05-holographic-table.jpg",
+    "title": "An editable holographic table",
+    "caption": "Screen design, animated readouts and holographic displays remain editable in the Prop Builder."
+  },
+  {
+    "file": "06-passenger-minivan.jpg",
+    "title": "A minivan with an accessible cabin",
+    "caption": "Sliding doors reveal the seven-seat cabin in the Prop Builder."
+  }
+]

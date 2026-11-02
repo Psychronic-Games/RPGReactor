@@ -214,7 +214,7 @@ test('The Seventh Warrior (VX Ace, packed) imports whole', { skip: !fs.existsSyn
     } finally { fs.rmSync(dest, { recursive: true, force: true }); }
 });
 
-test('the runtime rules for imported games stay off in MV and MZ data', () => {
+test('multi-frame sheets are on unless a project turns them off', () => {
     const vm = require('node:vm');
     const read = (file) => fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', file), 'utf8');
     const objects = runtimeSource('reactor_objects.js');
@@ -230,11 +230,9 @@ test('the runtime rules for imported games stay off in MV and MZ data', () => {
         vm.runInNewContext(block, context);
         return context.Game_CharacterBase;
     };
-    for (const system of [{}, { advanced: {} }]) {
-        const G = make(system), c = new G(); c._characterName = 'Hero[f8]'; c._pattern = 0;
-        assert.equal(c.maxPattern(), 4); c.resetPattern(); assert.equal(c._pattern, 1);
-    }
-    const G = make({ rrMultiFrames: true }), c = new G(); c._characterName = 'Hero[f8]'; c._pattern = 5;
+    const off = make({ rrMultiFrames: false }), plain = new off(); plain._characterName = 'Hero[f8]'; plain._pattern = 0;
+    assert.equal(plain.maxPattern(), 4); plain.resetPattern(); assert.equal(plain._pattern, 1);
+    const G = make({}), c = new G(); c._characterName = 'Hero[f8]'; c._pattern = 5;
     assert.equal(c.maxPattern(), 8); assert.equal(c.pattern(), 5); c.resetPattern(); assert.equal(c._pattern, 0);
     const sprites = read('reactor_sprites.js');
     assert.match(sprites, /const w = \(\$dataSystem && Number\(\$dataSystem\.rrBalloonSize\)\) \|\| 48;/);

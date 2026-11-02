@@ -307,8 +307,8 @@ test('the editor\'s own worker reads a packed project under browser-saved edits,
     assert.ok(dist.indexOf('webPack.packFolder(projectRoot)') < dist.indexOf('const outputFiles = walkWebFiles(webRoot)'), 'and before the build is counted');
     assert.match(read('editor/src/web/WebHost.js'), /if \(this\.manifest\.packed && !navigator\.serviceWorker\?\.controller\) \{\s*\n\s*throw new Error\(/);
     const build = read('editor/build-scripts/build-worker.js');
-    assert.ok(build.indexOf('webFileIndex.writeWebFileIndex(platformOutDir)') < build.indexOf('webPack.packGame(platformOutDir)'));
-    assert.ok(build.indexOf('webPack.packGame(platformOutDir)') < build.indexOf('webFileIndex.storefrontWarnings(platformOutDir)'), 'the warnings count what is left');
+    assert.ok(build.indexOf('webFileIndex.writeWebFileIndex(browserDir)') < build.indexOf('webPack.packGame(browserDir)'));
+    assert.ok(build.indexOf('webPack.packGame(browserDir)') < build.indexOf('webFileIndex.storefrontWarnings(platformOutDir)'), 'the warnings count what is left');
 });
 
 test('CRC-32 is the zip one, with or without zlib\'s own', () => {

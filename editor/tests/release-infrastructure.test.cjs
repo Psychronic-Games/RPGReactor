@@ -12,6 +12,30 @@ const cli = require('../build-scripts/release-editor.cjs');
 const publication = require('../build-scripts/publish-release.cjs');
 const readRepo = relativePath => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 
+test('a stable source cut updates both the legacy and preview README release wording', () => {
+    const source = readRepo('editor/build-scripts/cut-release.cjs');
+    const start = source.indexOf('function rollVersionSurfaces(');
+    const end = source.indexOf('\n}\n', start) + 3;
+    const vm = require('node:vm');
+    for (const sentence of [
+        'The latest tagged source release is [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3).',
+        'The current development version is 0.99.4 and is not published yet; the latest tagged source release is [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3).',
+        'The latest stable source release remains [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3).'
+    ]) {
+        const writes = new Map([[path.join(repoRoot, 'README.md'), sentence]]);
+        const virtualFs = {
+            existsSync: file => writes.has(file) || fs.existsSync(file),
+            readFileSync: file => writes.get(file) ?? fs.readFileSync(file, 'utf8'),
+            writeFileSync: (file, text) => writes.set(file, text)
+        };
+        const roll = vm.runInNewContext(source.slice(start, end) + '\nrollVersionSurfaces;', {
+            fs: virtualFs, path, repoRoot, REPO: 'Psychronic-Games/RPGReactor', today: () => '2026-11-01'
+        });
+        roll('0.99.4', 1, 0);
+        assert.equal(writes.get(path.join(repoRoot, 'README.md')), 'The latest stable source release is [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4).');
+    }
+});
+
 test('release CLI config pins trusted NW.js and bundled Demo staging', () => {
     for (const target of Object.keys(config.TARGETS)) {
         const workerData = config.createWorkerData({
