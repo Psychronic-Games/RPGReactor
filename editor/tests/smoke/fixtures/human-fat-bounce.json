@@ -1,0 +1,64 @@
+[
+  {
+    "name": "live-fat-slider",
+    "reset": true,
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.05,
+      "distance": 3
+    },
+    "js": "b.pose='run';b._syncPose();b.tab='body';b.extreme=true;b._renderPanel();const input=b.root.querySelector('input[type=range][data-path=fatBounce]');if(!input||+input.max!==4)throw Error('Missing Fat bounce slider');const bust=b.recipe.bustBounce,butt=b.recipe.buttBounce,meshes=v.meshes.slice(),positions=meshes.map(m=>m.geometry.attributes.position.array),textures=meshes.map(m=>m.material.map),queue=b._queueRebuild;let rebuilds=0;b._queueRebuild=()=>{rebuilds++;};const records=[];meshes.forEach(mesh=>{const g=mesh.geometry,skin=g.attributes.skinIndex,weight=g.attributes.skinWeight;for(const i of new Set(g.index.array)){let region;for(let k=0;k<4;k++){const tissue=v.boneDefs[skin.array[i*4+k]]?.softTissue;if(tissue?.kind==='fat'&&weight.array[i*4+k]>.03)region=tissue.region;}if(region)records.push({mesh,i,region});}});const capture=amount=>{const start=performance.now();input.value=amount;input.dispatchEvent(new Event('input',{bubbles:true}));const ms=performance.now()-start;v.action.paused=true;const samples=[];for(let f=0;f<5;f++){v.action.time=v.action.getClip().duration*f/5;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);for(const mesh of meshes)mesh.skeleton.update();samples.push(records.map(r=>r.mesh.applyBoneTransform(r.i,new THREE.Vector3().fromBufferAttribute(r.mesh.geometry.attributes.position,r.i)).toArray()));}return {ms,samples};};let off,on;try{off=capture(0);on=capture(4);input.dispatchEvent(new Event('change',{bubbles:true}));}finally{b._queueRebuild=queue;}const regions={};records.forEach((r,i)=>{const group=regions[r.region]||(regions[r.region]={vertices:0,maxDisplacement:0});group.vertices++;for(let f=0;f<5;f++)group.maxDisplacement=Math.max(group.maxDisplacement,Math.hypot(...on.samples[f][i].map((x,k)=>x-off.samples[f][i][k])));});for(const region of ['belly','hip','thigh','calf'])if(!(regions[region]?.maxDisplacement>.003))throw Error('Fat region not moving: '+JSON.stringify(regions));const sameMeshes=meshes.every((m,i)=>v.meshes[i]===m&&m.geometry.attributes.position.array===positions[i]&&m.material.map===textures[i]);if(rebuilds||!sameMeshes||b.recipe.bustBounce!==bust||b.recipe.buttBounce!==butt)throw Error('Fat slider rebuilt geometry or changed another control');v.action.time=.2;v.mixer.update(0);b._plant();return {target:[0,.8,.05],regions,rebuilds,sameMeshes,inputMs:[off.ms,on.ms]};"
+  },
+  {
+    "name": "female-run",
+    "reset": true,
+    "patch": {
+      "fatBounce": 4
+    },
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.05,
+      "distance": 3
+    },
+    "js": "b.pose='run';b._syncPose();v.action.paused=true;v.action.time=.2;v.mixer.update(0);b._plant();return {target:[0,.8,.05],fat:b.recipe.fatBounce,pose:b.pose};"
+  },
+  {
+    "name": "male-run",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "weight": 2.5,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 0.45,
+      "pitch": 0.05,
+      "distance": 3
+    },
+    "js": "b.pose='run';b._syncPose();v.action.paused=true;v.action.time=.2;v.mixer.update(0);b._plant();return {target:[0,.8,.05],fat:b.recipe.fatBounce,pose:b.pose};"
+  },
+  {
+    "name": "saved-fat-run",
+    "reset": true,
+    "patch": {
+      "fatBounce": 4
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.05,
+      "distance": 3
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Run'),tracks=clip?.tracks.filter(t=>/Fat.*.position$/.test(t.name));if(tracks?.length!==11)throw Error('Missing fat tracks: '+tracks?.length);const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.2);object.updateMatrixWorld(true);return {target:[0,.8,.05],savedClip:clip.name,fatTracks:tracks.map(t=>t.name)};"
+  }
+]

@@ -504,29 +504,29 @@ class EventPageEditor {
             const shouldAnimate = page.stepAnime; // Check stepping animation option
             // Check if this is a big character ($ or !$ prefix)
             const isBigCharacter = RRAssetFiles.isBigCharacter(image.characterName);
+            const frameCount = RRAssetFiles.characterFrameCount(image.characterName);
+            const rows = RRAssetFiles.characterRows(image.characterName);
 
             let characterWidth, characterHeight, baseX, baseY;
 
             // Direction mapping: 2=down, 4=left, 6=right, 8=up
             const directionRow = { 2: 0, 4: 1, 6: 2, 8: 3 };
-            const dirRow = directionRow[image.direction] || 0;
+            const dirRow = rows === 1 ? 0 : (directionRow[image.direction] || 0);
 
             if (isBigCharacter) {
-                // Big characters: 3 frames x 4 directions
-                characterWidth = img.width / 3;
-                characterHeight = img.height / 4;
+                characterWidth = img.width / frameCount;
+                characterHeight = img.height / rows;
                 baseX = 0;
                 baseY = dirRow * characterHeight;
             } else {
-                // Normal sprites: 8 characters (4x2 grid), 3 frames x 4 directions each
-                characterWidth = img.width / 12; // 3 frames * 4 columns
-                characterHeight = img.height / 8; // 4 directions * 2 rows
+                characterWidth = img.width / (frameCount * 4);
+                characterHeight = img.height / (rows * 2);
 
                 const charCol = (image.characterIndex || 0) % 4;
                 const charRow = Math.floor((image.characterIndex || 0) / 4);
 
-                baseX = charCol * 3 * characterWidth;
-                baseY = (charRow * 4 + dirRow) * characterHeight;
+                baseX = charCol * frameCount * characterWidth;
+                baseY = (charRow * rows + dirRow) * characterHeight;
             }
 
             // Calculate display size - fill entire canvas
@@ -553,8 +553,8 @@ class EventPageEditor {
             };
 
             if (shouldAnimate) {
-                // Animation frames: 1-0-1-2 pattern (standing-left-standing-right)
-                const frames = [1, 0, 1, 2];
+                const frames = RRAssetFiles.isMultiFrameCharacter(image.characterName)
+                    ? Array.from({ length: frameCount }, (_, i) => i) : [1, 0, 1, 2];
                 let frameIndex = 0;
 
                 const animate = () => {

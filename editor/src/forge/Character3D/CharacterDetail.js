@@ -419,7 +419,11 @@
                 // preserved their polygonal contour even after the geometry was tessellated.
                 const projected = fit?.project(pos);
                 pigmentUvs.push(...(projected ? [0.5 + projected[1] * 0.02 / (2 * reach * stretch), 0.5 - projected[2] * 0.02 / (2 * reach * stretch)] : uv));
-                blends.push(blend);
+                // Only the raised nipple needs the tessellated patch's own
+                // normals. The surrounding skin shares the averaged body
+                // gradient, rather than reintroducing radial mesh segments.
+                const tipRadius = (Body.sexOf(recipe) === 'female' ? .0045 : .003) * Math.max(.6, Math.sqrt(recipe.anatomy.nipple));
+                blends.push(blend * (1 - smooth(tipRadius, tipRadius * 2, d)));
                 stencils.push(stencil.map(([v, w]) => [patch.ids[v], w])); keys.push(side + '/' + key);
                 vertices.set(key, at); return at;
             };
@@ -435,12 +439,33 @@
                 }
             }
         }
+        // Match the coarse body's edge endpoints. A subdivided boundary is a
+        // T junction: interpolating weights at its midpoints does not follow
+        // the posed coarse edge, especially with secondary motion.
+        const edges = new Map(), edgeKey = (a, b) => a < b ? a + ':' + b : b + ':' + a;
+        for (let t = 0; t < index.length; t += 3) for (let k = 0; k < 3; k++) {
+            const key = edgeKey(index[t + k], index[t + (k + 1) % 3]);
+            edges.set(key, (edges.get(key) || 0) + 1);
+        }
+        const boundary = new Set(), originals = new Map(), replacement = new Map();
+        for (const [key, count] of edges) if (count === 1) key.split(':').forEach(v => boundary.add(+v));
+        stencils.forEach((s, i) => { if (s.length === 1 && s[0][1] === 1) originals.set(s[0][0], i); });
+        for (const i of boundary) if (stencils[i].length > 1) {
+            const source = stencils[i].slice().sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+            if (originals.has(source)) replacement.set(i, originals.get(source));
+        }
+        const joined = [];
+        for (let t = 0; t < index.length; t += 3) {
+            const ids = [0, 1, 2].map(k => replacement.get(index[t + k]) ?? index[t + k]);
+            if (new Set(ids).size === 3) joined.push(...ids);
+        }
+        index.length = 0; for (const i of joined) index.push(i);
         if (!retained) {
             const keep = [];
             for (let t = 0; t < body.index.length; t += 3) if (!coarseFaces.has(keyOf([0, 1, 2].map(k => pack.body.source[body.index[t + k]])))) keep.push(body.index[t], body.index[t + 1], body.index[t + 2]);
             body.index = Uint32Array.from(keep);
         }
-        const normal = meshNormals({ keys, index }, positions), sourceNormals = Body.vertexNormals(pack, P);
+        const normal = meshNormals({ keys, index }, positions), sourceNormals = Body.skinNormals(pack, P, recipe);
         const joints = new Uint8Array(stencils.length * 4), weights = new Float32Array(stencils.length * 4);
         const offsets = [0], vertices = [], factors = [];
         for (let i = 0; i < stencils.length; i++) {

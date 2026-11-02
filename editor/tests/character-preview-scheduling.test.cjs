@@ -7,7 +7,7 @@ const test = require('node:test');
 const source = fs.readFileSync(path.join(__dirname, '../src/forge/Character3D/Character3DBuilder.js'), 'utf8');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 function builder(extra = {}) {
-    const scope = { window: { innerWidth: 1000, innerHeight: 800 }, console, setTimeout, clearTimeout,
+    const scope = { window: { innerWidth: 1000, innerHeight: 800 }, console, performance, setTimeout, clearTimeout,
         CSS: { escape: s => s }, ...extra };
     vm.runInNewContext(source, scope);
     const b = Object.create(scope.window.Character3DBuilder.prototype);

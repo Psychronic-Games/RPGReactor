@@ -7,7 +7,7 @@
 //   ReactorFeatures.on("quests")       true unless the project turned it off
 //
 // The flag each feature reads from System.json and its default (what a
-// project that never touched it gets, which is how Reactor always behaved).
+// project that never touched it gets; multi-frame sheets default on).
 // The editor's registry (editor/src/ReactorFeatures.js) has the labels and
 // the plugins known to do the same job; a test keeps the two in step. An id
 // not listed here is on. docs/REACTOR-FEATURES.md says how one is added.
@@ -26,7 +26,7 @@
         mapBattles: ["rrFeatures.mapBattles", true],
         equipSlotLayouts: ["rrFeatures.equipSlotLayouts", true],
         higherLimits: ["rrHigherLimits", false],
-        multiFrames: ["rrMultiFrames", false],
+        multiFrames: ["rrMultiFrames", true],
         skipTitle: ["rrSkipTitle", false]
     };
 

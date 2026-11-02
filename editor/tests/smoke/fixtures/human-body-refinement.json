@@ -1,0 +1,41 @@
+[
+  {
+    "name": "hamstring-glutes",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": 2.6,
+      "pitch": 0.1,
+      "distance": 1.9
+    },
+    "js": "b.pose='hamstringStretch';b._syncPose();v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();return {target:[0,.72,-.07]};"
+  },
+  {
+    "name": "hamstring-glutes-other",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": -2.6,
+      "pitch": 0.1,
+      "distance": 1.9
+    },
+    "js": "b.pose='hamstringStretch';b._syncPose();v.action.paused=true;v.action.time=6;v.mixer.update(0);b._plant();return {target:[0,.72,-.07]};"
+  },
+  {
+    "name": "bust-underside",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": 0.55,
+      "pitch": -0.12,
+      "distance": 0.85
+    },
+    "js": "b.pose='apose';b._syncPose();const c=b._result.bones.find(b=>b.name==='Spine2').head;return {target:[0,c[1]+.01,c[2]+.07]};"
+  }
+]

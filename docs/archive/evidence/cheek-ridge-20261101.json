@@ -1,0 +1,384 @@
+{
+  "date": "2026-11-01",
+  "preview": 98,
+  "runtime": "20261101.24",
+  "evidenceRoot": "scratchpad/cheek-ridge-20261101/",
+  "reproduction": "Default female Human, both Cheeks and Cheekbones -1 (natural slider minimum / -100%), short brown hair, side yaw -1.0. Reproduces the angular cheek ridge marked in the owner screenshot.",
+  "findings": [
+    "The angular ridge coincides with the overlap between the replacement face and retained native cheek triangles. Rendering each mesh separately and coloring their ownership distinguishes this from only anterior cheek fullness.",
+    "On the sampled female minimum-setting transition, Preview 97 penetrated the native supporting triangle by up to approximately 2.36 mm. Intermediate and male minima also penetrated. Further retracting only the replacement cannot remove that exposed edge."
+  ],
+  "changes": [
+    "A native side-cheek deformation carries the surrounding skin through the contour change, with cached source-space support and signed cheek-control response.",
+    "Replacement cheek vertices use their existing barycentric triangle bindings to bound inward clearance. A smoothly introduced margin up to 0.3 mm prevents coplanar flicker; the outer edge remains tied to the native surface.",
+    "Native cheek normals are locally averaged, and the replacement inherits those actual body normals instead of raw cage normals."
+  ],
+  "scope": "Focused repair of the minimum-slider side-cheek join. Full suites remain deferred at owner request; overall face appearance/visual acceptance remains open. Saved user designs and exports were preserved.",
+  "sourceInspection": [
+    {
+      "gender": 0,
+      "value": -1,
+      "before": {
+        "vertices": 55,
+        "minimumClearance": -0.0023630399866994287,
+        "verticesBelowNativeByMoreThanPoint2mm": 8
+      },
+      "after": {
+        "vertices": 55,
+        "minimumClearance": 0.0001340148202876334,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.006287419128689994,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 4.114043283820479e-08
+    },
+    {
+      "gender": 0,
+      "value": 0,
+      "before": {
+        "vertices": 55,
+        "minimumClearance": 9.307958457687197e-06,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "after": {
+        "vertices": 55,
+        "minimumClearance": 0.00024966893834313305,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 402,
+      "maximumBodyMove": 0.004190281062753375,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 4.235536266161688e-08
+    },
+    {
+      "gender": 0,
+      "value": -3,
+      "before": {
+        "vertices": 55,
+        "minimumClearance": -0.004542027588467413,
+        "verticesBelowNativeByMoreThanPoint2mm": 34
+      },
+      "after": {
+        "vertices": 55,
+        "minimumClearance": 8.835493946441318e-06,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.006930272065529313,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 4.028327493799111e-08
+    },
+    {
+      "gender": 0.5,
+      "value": -1,
+      "before": {
+        "vertices": 47,
+        "minimumClearance": -0.0017454657986248525,
+        "verticesBelowNativeByMoreThanPoint2mm": 4
+      },
+      "after": {
+        "vertices": 47,
+        "minimumClearance": 0.00017787865258061782,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.006650314014775411,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 3.8741136298980905e-08
+    },
+    {
+      "gender": 0.5,
+      "value": 0,
+      "before": {
+        "vertices": 47,
+        "minimumClearance": 0.0004844371354366649,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "after": {
+        "vertices": 47,
+        "minimumClearance": 0.00047766536333931334,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.004432134350788132,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 4.776262518824126e-08
+    },
+    {
+      "gender": 0.5,
+      "value": -3,
+      "before": {
+        "vertices": 47,
+        "minimumClearance": -0.002849889391981251,
+        "verticesBelowNativeByMoreThanPoint2mm": 7
+      },
+      "after": {
+        "vertices": 47,
+        "minimumClearance": 5.933961631568712e-05,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.0073302754460527015,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 4.0019920710676615e-08
+    },
+    {
+      "gender": 1,
+      "value": -1,
+      "before": {
+        "vertices": 43,
+        "minimumClearance": -0.0009619211843376516,
+        "verticesBelowNativeByMoreThanPoint2mm": 2
+      },
+      "after": {
+        "vertices": 43,
+        "minimumClearance": 0.0002062592897907117,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.00701900991449102,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 3.8566092319669565e-08
+    },
+    {
+      "gender": 1,
+      "value": 0,
+      "before": {
+        "vertices": 43,
+        "minimumClearance": 0.0006153366339192423,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "after": {
+        "vertices": 43,
+        "minimumClearance": 0.0006136469317904562,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.004677856091911117,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 4.2607115169346343e-08
+    },
+    {
+      "gender": 1,
+      "value": -3,
+      "before": {
+        "vertices": 43,
+        "minimumClearance": -0.00207850945830111,
+        "verticesBelowNativeByMoreThanPoint2mm": 5
+      },
+      "after": {
+        "vertices": 43,
+        "minimumClearance": 0.00028337649143776966,
+        "verticesBelowNativeByMoreThanPoint2mm": 0
+      },
+      "bodyVerticesMoved": 404,
+      "maximumBodyMove": 0.007736672936374079,
+      "maximumOffHeadMove": 0,
+      "maximumNormalUnitError": 3.90422670859536e-08
+    }
+  ],
+  "sourceMethod": "Nine before/after cases: female/intermediate/male with both controls -1, 0 and -3. Sample common transition vertices with fade 0.02\u20130.9, absolute x 35\u2013100 mm and 15\u201380 mm below the eye line. Signed distance uses each existing native triangle binding, rather than a proxy attractiveness metric. Positions remain finite; changes remain on head-weighted vertices and normals remain unit length.",
+  "sourceOutcome": "All sampled final transition clearances are positive in the nine inspected cases; no sampled vertex lies more than 0.2 mm below its native supporting triangle. At natural minimum, final minima are approximately 0.134 mm female, 0.178 mm intermediate and 0.206 mm male. No off-head position displacement was detected.",
+  "ownershipDiagnostics": [
+    {
+      "name": "minimum-cheeks",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "head-without-body",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "surface-ownership",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "body-without-head",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    }
+  ],
+  "finalNativeViews": [
+    {
+      "name": "minimum-cheeks",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "male-minimum-cheeks",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.5960696137377193,
+          0.11472234111811432
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "saved-minimum-cheeks",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 7210748,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-minimum-cheeks",
+        "textures": 11
+      },
+      "closedEyes": null
+    },
+    {
+      "name": "saved-minimum-cheeks",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 7210748,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-minimum-cheeks",
+        "textures": 11
+      },
+      "closedEyes": null
+    },
+    {
+      "name": "saved-minimum-blink",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4673170589974949,
+          0.09690884372219444
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 7210748,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-minimum-cheeks",
+        "textures": 11
+      },
+      "closedEyes": [
+        1,
+        1
+      ]
+    }
+  ],
+  "focusedTests": {
+    "passed": 8,
+    "failed": 0,
+    "log": "scratchpad/cheek-ridge-20261101/targeted-tests.log",
+    "names": [
+      "the browser drag shaper uses the same human head data as the complete model",
+      "the visible face and its native driver have no gender midpoint switch",
+      "Cheekbones controls the visible upper-cheek projection independently of cheek fullness",
+      "Cheeks retracts the broad front cheek below the outer eye instead of only narrowing its cage",
+      "the outside face edge meets the native skin without a raised rim",
+      "minimum cheek controls keep the shared cheek join above the native skin",
+      "human face refinement stays out of the other species and animal heads",
+      "a full blink unfolds both lids over the globe while preserving the brow surface"
+    ]
+  },
+  "fixtures": [
+    "editor/tests/smoke/fixtures/human-cheek-join-recipe.json",
+    "editor/tests/smoke/fixtures/human-cheek-join.json"
+  ],
+  "syntaxChecks": [
+    "editor/src/forge/Character3D/HumanBody.js",
+    "editor/src/forge/Character3D/CharacterHeadMesh.js",
+    "editor/src/forge/Character3D/Character3DBuilder.js",
+    "editor/tests/character-shared-head.test.cjs"
+  ],
+  "limits": [
+    "candidate/, join/ and shading/ contain intermediate trials, excluded from final visual evidence. The zero-clearance trial exposed a small coplanar patch, so the final correction uses positive separation.",
+    "The first saved blink at side yaw -1.0 failed the pixel skin-coverage heuristic on the far eye (1.0 / 0.457); the image shows closed lids at that occluded angle. It was rechecked frontally using the saved model and passed at 1.0 / 1.0. The final fixture checks the blink frontally, and the failed angled probe remains in final/report.json for provenance.",
+    "The side-view native captures cover default female and male natural minima, plus the saved female GLB. Other proportions, heritage mixes, expressions and wardrobes are not exhaustively covered.",
+    "This repairs the overlap and transition responsible for the marked ridge. It does not claim perfect facial topology or final attractiveness acceptance.",
+    "Runtime motion code, generated HeadMeshData.js and user character assets were not edited in this task. Re-saving is needed for new native cheek geometry and shading."
+  ],
+  "codeSha256": {
+    "editor/src/forge/Character3D/HumanBody.js": "fbb3a69a2a60a1fdcc13a786e2136f67b315e2aec4f8caafe05ca917b48ac146",
+    "editor/src/forge/Character3D/CharacterHeadMesh.js": "8833a19a4fb65db7292bb595a631c77ba2888e3d242e9fb6dfc4f196ab138e32",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "3753cfdd5dd1144dc125cb80534b16b00f7520b8c2889956f8e4ab28a3f121e1",
+    "editor/tests/character-shared-head.test.cjs": "d8ec29fc70c2396acd64934d4c918d12f9168d85ce04dbcdcf2f2691ea56719f"
+  }
+}

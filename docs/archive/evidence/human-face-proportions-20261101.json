@@ -1,0 +1,349 @@
+{
+  "date": "2026-11-01",
+  "preview": 66,
+  "runtime": "20261031.1",
+  "visualAcceptance": "rejected by owner: square jaw, rough inner eye and overall appearance; superseded by Preview 67",
+  "supersedes": "human-face-ears-nose-20261031.json",
+  "evidenceRoot": "scratchpad/face-refinement-20261101/",
+  "gallery": "comparison.html",
+  "baseline": "before-defaults/",
+  "retainedBatches": [
+    "final-comparison",
+    "temple-blend",
+    "final-hair-expressions",
+    "final-exports"
+  ],
+  "research": [
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC2814183/",
+      "use": "spacing equations with female-photograph scope; model ear roots are a proxy"
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9452610/",
+      "use": "limits of proposed ideal measurements in 3D"
+    }
+  ],
+  "data": {
+    "file": "editor/src/forge/Character3D/HeadMeshData.js",
+    "sha256": "f37783dfa4a928fbb166e06b770a0865e62de25b37aed07b746745f72a396b03",
+    "provenance": {
+      "title": "Woman head",
+      "author": "zhuoyi0904",
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/woman-head-34af2e5bf1464a5fa87ef37db5389f23",
+      "sourceSha256": "42cc81cdc96cd0f05e2f626f386e18c259762fc2a018d1859dc74f4c14e07193",
+      "driverSha256": "7fff1b87edece792e55b2c774f3bc78f13dd229cb5371413d9277c9d70e97e8c",
+      "generatorSha256": "d803bae19fb2361cc590e6447c18acdf0d72577f369e1798d629a42e0269c5b1"
+    },
+    "verticesPerEndpoint": 2074,
+    "trianglesPerEndpoint": 3938,
+    "hiddenNativeVertices": 2554
+  },
+  "sourceSha256": {
+    "Character3DBuilder.js": "73d97e37b4e8421a7f9a1aa4002c9458c1cd7346efa0b6b519efdfe208ac72ed",
+    "CharacterHeadMesh.js": "fab00fc2336c65a5474b0464206826257ec2e171f2561c9e79075e37dff325d8",
+    "CharacterModel.js": "cae68c017078143a1349a68b6990484c192b631438e90cd5212f66013bceeecf",
+    "HumanBody.js": "efcacfb1fc6c2f5011051a91587ed82bf8072e479dbeda16f471e69b0fa61e28",
+    "CharacterHair.js": "80abb084ebad311a771ad52549d668a71ac973243ce2d04a0b075a2e8f06b7bf",
+    "CharacterExpressions.js": "5846326b1fb53ddd595546968cbf303b970aeedc79630354b75314266a8f6170",
+    "CharacterShading.js": "b61558fe2cd7b9e527b9eeee89b548a2358d6ffcfb6659c947410dab0cd7afe4",
+    "HeadMeshData.js": "f37783dfa4a928fbb166e06b770a0865e62de25b37aed07b746745f72a396b03"
+  },
+  "metrics": [
+    {
+      "gender": 0,
+      "pupilMM": 63.10819118682827,
+      "earRootWidthProxyMM": 125.89132785797119,
+      "pupilWidthProxyRatio": 0.5012910123406279,
+      "eyeToMouthMM": 64.29635626929154
+    },
+    {
+      "gender": 0.5,
+      "pupilMM": 65.37473469174334,
+      "earRootWidthProxyMM": 129.6248883008957,
+      "pupilWidthProxyRatio": 0.504337828550257,
+      "eyeToMouthMM": 67.98194050788896
+    },
+    {
+      "gender": 1,
+      "pupilMM": 67.77073575316794,
+      "earRootWidthProxyMM": 130.6411176919937,
+      "pupilWidthProxyRatio": 0.5187550210106725,
+      "eyeToMouthMM": 71.88936812537028
+    }
+  ],
+  "validation": {
+    "focused": {
+      "pass": 67,
+      "fail": 0,
+      "files": 8,
+      "log": "final-tests.log",
+      "morphCeilingBytes": 900000
+    },
+    "geometry": {
+      "profiles": 4,
+      "issues": 0,
+      "report": "quality.json"
+    },
+    "nativeCaptures": [
+      {
+        "folder": "final-comparison",
+        "name": "female-front",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-comparison",
+        "name": "female-three-quarter",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-comparison",
+        "name": "male-front",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-comparison",
+        "name": "male-three-quarter",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "temple-blend",
+        "name": "female-right",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "temple-blend",
+        "name": "male-right",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-hair-expressions",
+        "name": "female-hair",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-hair-expressions",
+        "name": "female-smile",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-hair-expressions",
+        "name": "male-hair",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-hair-expressions",
+        "name": "male-smile",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": null
+      },
+      {
+        "folder": "final-exports",
+        "name": "female-export",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": {
+          "whiteFraction": 0
+        },
+        "exported": {
+          "bytes": 8009260,
+          "decoded": true,
+          "lid": true,
+          "morphs": 28,
+          "physical": true,
+          "pore": true,
+          "source": "female-export",
+          "textures": 20
+        }
+      },
+      {
+        "folder": "final-exports",
+        "name": "male-export",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": null,
+        "closedMouth": {
+          "whiteFraction": 0
+        },
+        "exported": {
+          "bytes": 8056700,
+          "decoded": true,
+          "lid": true,
+          "morphs": 28,
+          "physical": true,
+          "pore": true,
+          "source": "male-export",
+          "textures": 20
+        }
+      },
+      {
+        "folder": "final-exports",
+        "name": "female-export-blink",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": [
+          1,
+          1
+        ],
+        "closedMouth": null,
+        "exported": {
+          "bytes": 8009260,
+          "decoded": true,
+          "lid": true,
+          "morphs": 28,
+          "physical": true,
+          "pore": true,
+          "source": "female-export",
+          "textures": 20
+        }
+      },
+      {
+        "folder": "final-exports",
+        "name": "male-export-blink",
+        "errors": 0,
+        "glError": 0,
+        "closedEyes": [
+          1,
+          1
+        ],
+        "closedMouth": null,
+        "exported": {
+          "bytes": 8056700,
+          "decoded": true,
+          "lid": true,
+          "morphs": 28,
+          "physical": true,
+          "pore": true,
+          "source": "male-export",
+          "textures": 20
+        }
+      }
+    ],
+    "sliders": {
+      "baseline": "sliders-before/report.json",
+      "baselineMaximumDisplacementMetres": 0.012008190155029297,
+      "reports": [
+        "sliders-after-face/report.json",
+        "sliders-after-body/report.json"
+      ],
+      "cases": [
+        {
+          "path": "shapes.headWidth",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "morph.eyeWide",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "shapes.noseWidth",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "shapes.chinWidth",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "gender",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "age",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "height",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        },
+        {
+          "path": "headSize",
+          "position": 0,
+          "normal": 0,
+          "camera": 0,
+          "recipeMatches": true,
+          "topologyChanges": []
+        }
+      ],
+      "baselineContext": "New sculpt with the former drag path, before the slider fix."
+    },
+    "fullRepositorySuite": "not rerun",
+    "documentation": {
+      "pass": 8,
+      "fail": 0,
+      "log": "docs.log"
+    }
+  },
+  "limits": [
+    "Visual attractiveness remains the owner\u2019s judgment.",
+    "Hair/smiles and default/right-profile views were checked; this is not exhaustive extreme-slider, ancestry, crying or gameplay coverage.",
+    "Complete human preview builds may lag a busy generator.",
+    "Windows and macOS were not checked."
+  ],
+  "reproduction": {
+    "recipe": "editor/tests/smoke/fixtures/human-face-bald-recipe.json",
+    "shots": [
+      "editor/tests/smoke/fixtures/human-face-proportions.json",
+      "editor/tests/smoke/fixtures/human-face-proportion-exports.json"
+    ],
+    "guide": "editor/tests/tools/face-proportions/README.md"
+  },
+  "supersededBy": "human-face-followup-20261101.json"
+}

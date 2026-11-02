@@ -1,0 +1,172 @@
+[
+  {
+    "name": "jack-middle",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.04,
+      "distance": 1.65
+    },
+    "js": "b.pose='jumpingJacks';b._syncPose();v.action.paused=true;v.action.time=0.275;v.mixer.update(0);b._plant();return {target:[0,1.45,0],pose:b.pose,time:0.275};"
+  },
+  {
+    "name": "jack-top",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.04,
+      "distance": 1.65
+    },
+    "js": "b.pose='jumpingJacks';b._syncPose();v.action.paused=true;v.action.time=0.55;v.mixer.update(0);b._plant();return {target:[0,1.45,0],pose:b.pose,time:0.55};"
+  },
+  {
+    "name": "pull-bottom",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.04,
+      "distance": 1.65
+    },
+    "js": "b.pose='pullUp';b._syncPose();v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,1.45,0],pose:b.pose,time:0};"
+  },
+  {
+    "name": "pull-top",
+    "reset": true,
+    "patch": {
+      "outfit": []
+    },
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.04,
+      "distance": 1.65
+    },
+    "js": "b.pose='pullUp';b._syncPose();v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();return {target:[0,1.45,0],pose:b.pose,time:2};"
+  },
+  {
+    "name": "hamstring-right",
+    "reset": true,
+    "patch": {
+      "outfit": [
+        {
+          "id": "sportsBra",
+          "color": "#4f426e"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 0.8,
+      "pitch": 0.12,
+      "distance": 2.5
+    },
+    "js": "b.pose='hamstringStretch';b._syncPose();v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();return {target:[0,.4,.1],pose:b.pose,time:2};"
+  },
+  {
+    "name": "hamstring-left",
+    "reset": true,
+    "patch": {
+      "outfit": [
+        {
+          "id": "sportsBra",
+          "color": "#4f426e"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": -0.8,
+      "pitch": 0.12,
+      "distance": 2.5
+    },
+    "js": "b.pose='hamstringStretch';b._syncPose();v.action.paused=true;v.action.time=6;v.mixer.update(0);b._plant();return {target:[0,.4,.1],pose:b.pose,time:6};"
+  },
+  {
+    "name": "saved-hamstring-toe",
+    "reset": true,
+    "patch": {
+      "outfit": [
+        {
+          "id": "sportsBra",
+          "color": "#4f426e"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 0.65,
+      "pitch": 0.05,
+      "distance": 2.5
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Hamstring Stretch');if(!clip)throw Error('Missing exercise clip');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(2);object.updateMatrixWorld(true);return {target:[0, 0.4, 0.1],savedClip:clip.name,time:2};"
+  },
+  {
+    "name": "saved-pull-shoulders",
+    "reset": true,
+    "patch": {
+      "outfit": [
+        {
+          "id": "sportsBra",
+          "color": "#4f426e"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.05,
+      "distance": 1.8
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Pull Up');if(!clip)throw Error('Missing exercise clip');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(2);object.updateMatrixWorld(true);return {target:[0, 1.45, 0],savedClip:clip.name,time:2};",
+    "exportFrom": "saved-hamstring-toe"
+  },
+  {
+    "name": "saved-jack-shoulders",
+    "reset": true,
+    "patch": {
+      "outfit": [
+        {
+          "id": "sportsBra",
+          "color": "#4f426e"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.05,
+      "distance": 1.8
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Jumping Jacks');if(!clip)throw Error('Missing exercise clip');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(0.55);object.updateMatrixWorld(true);return {target:[0, 1.45, 0],savedClip:clip.name,time:0.55};",
+    "exportFrom": "saved-hamstring-toe"
+  }
+]

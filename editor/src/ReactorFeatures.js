@@ -10,7 +10,7 @@
  * A flag under `rrFeatures.` is stored only while it differs from the
  * default, so a project that never opened the page keeps a clean System.json.
  * A feature with an older flag of its own (rrMultiFrames, rrSkipTitle,
- * rrHigherLimits) keeps that flag, stored only while on, as the System 2 page stores it.
+ * rrHigherLimits) keeps that flag, stored while it differs from its default.
  *
  * The game reads the same flags through runtime/reactor_features.js
  * (ReactorFeatures.on(id)); a test keeps the two tables in step.
@@ -85,7 +85,7 @@
             plugins: ['VisuMZ_0_CoreEngine', 'YEP_CoreEngine', 'YEP_BaseParamControl']
         },
         {
-            id: 'multiFrames', tier: 'advanced', flag: 'rrMultiFrames', default: false,
+            id: 'multiFrames', tier: 'advanced', flag: 'rrMultiFrames', default: true,
             label: 'Multi-frame Sheets ([NF])',
             description: 'Character sheets named with [NF] have N walking frames.',
             plugins: ['Galv_CharacterFrames*', 'GALV_CharacterFrames*']

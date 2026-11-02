@@ -20,9 +20,11 @@ Reactor adds many things that MZ does not have. Plugins provide many of the same
 
 ## Storage
 
-A new feature's flag is `System.json` → `rrFeatures.<id>`. It is stored only while it differs from the default, so a project that never opens the page keeps a clean System.json. A feature that already had a flag keeps that flag: `multiFrames` uses `rrMultiFrames` and `skipTitle` uses `rrSkipTitle`, each stored only while on, as System 2's Compatibility card stores them. `higherLimits` uses `rrHigherLimits`, the flag of the Limits box System 2 had; that box is gone, so the tick on Reactor Features is its one switch.
+A new feature's flag is `System.json` → `rrFeatures.<id>`. It is stored only while it differs from the default, so a project that never opens the page keeps a clean System.json. A feature that already had a flag keeps that flag: `multiFrames` uses `rrMultiFrames` (on by default, storing `false` when unchecked), and `skipTitle` uses `rrSkipTitle` (off by default, storing `true` when checked). Both settings pages preserve those choices. `higherLimits` uses `rrHigherLimits`, the flag of the Limits box System 2 had; that box is gone, so the tick on Reactor Features is its one switch.
 
-**The default is what Reactor did before the feature had a switch.** An existing project must not change behaviour. Things Reactor always did default to `true`. Compatibility rules that an import turns on default to `false`.
+Defaults generally preserve existing behavior. Multi-frame sheets are an intentional exception: since runtime **20261101.25**, new and opened projects recognize `[NF]` and `[FN]` sheets when no preference is saved. An explicit `rrMultiFrames: false` keeps legacy three-frame slicing and survives export, save and reopen. Other import compatibility rules remain off unless enabled by an import.
+
+The [multi-frame validation record](archive/evidence/multiframe-20261101.json) covers default/opt-out persistence, picker and event previews, runtime frame rectangles, and the corrected export cycle. It records the isolated native game's plugin limits; a full project suite was deferred.
 
 ## Registering a feature
 
@@ -65,7 +67,7 @@ A new feature's flag is `System.json` → `rrFeatures.<id>`. It is stored only w
 | `mapBattles` | Advanced | `rrFeatures.mapBattles` (on) | `ReactorFight.resolveMode` and `modeInForce` return `classic` | Combat card (`RRTactics.createSection`) hidden on every page | SRPG_core*, AlphaABS*, Alpha_ABS*, QABS, MOG_ChronoEngine |
 | `equipSlotLayouts` | Advanced | `rrFeatures.equipSlotLayouts` (on) | `Game_BattlerBase.slotLayout` returns null and `Game_Actor.fitEquipSlots` sees no layouts, so a Slot Type that picked one is Normal | Types › Slot Layouts section hidden; the Slot Type trait offers Normal and Dual Wield (a saved pick stays, by number); `RREquipSlots.layouts` / `layoutFor` find none | VisuMZ_1_ItemsEquipsCore, YEP_EquipCore |
 | `higherLimits` | Advanced | `rrHigherLimits` (off) | `Game_Party.rrHigherLimits` (maxItems, maxGold, the shop's digits) | (it is the flag itself) | VisuMZ_0_CoreEngine, YEP_CoreEngine, YEP_BaseParamControl |
-| `multiFrames` | Advanced | `rrMultiFrames` (off) | already read by the sprites | (it is the flag itself) | Galv_CharacterFrames* |
+| `multiFrames` | Advanced | `rrMultiFrames` (on) | frame count and sprite slicing honor explicit off | (it is the flag itself) | Galv_CharacterFrames* |
 | `skipTitle` | Advanced | `rrSkipTitle` (off) | already read by Scene_Boot | (it is the flag itself) | \*SkipTitle\*, \*TitleSkip\* |
 
 ### Not yet registered (overlap with plugins, still always on)

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "female-abs-1",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "shapes": {
+        "abs": 1
+      }
+    },
+    "js": "const vtx=RRHumanBody.anatomyFields(b.pack).navel,i=Array.from(b.pack.body.source).indexOf(vtx),P=b._result.parts[0].positions;return {target:[0,P[i*3+1]+.065,P[i*3+2]]};",
+    "view": {
+      "yaw": 0.12,
+      "pitch": 0,
+      "distance": 0.55
+    }
+  },
+  {
+    "name": "female-abs-2",
+    "reset": true,
+    "patch": {
+      "gender": 0,
+      "shapes": {
+        "abs": 2
+      }
+    },
+    "js": "const vtx=RRHumanBody.anatomyFields(b.pack).navel,i=Array.from(b.pack.body.source).indexOf(vtx),P=b._result.parts[0].positions;return {target:[0,P[i*3+1]+.065,P[i*3+2]]};",
+    "view": {
+      "yaw": 0.12,
+      "pitch": 0,
+      "distance": 0.55
+    }
+  },
+  {
+    "name": "male-abs-1",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "shapes": {
+        "abs": 1
+      }
+    },
+    "js": "const vtx=RRHumanBody.anatomyFields(b.pack).navel,i=Array.from(b.pack.body.source).indexOf(vtx),P=b._result.parts[0].positions;return {target:[0,P[i*3+1]+.065,P[i*3+2]]};",
+    "view": {
+      "yaw": 0.12,
+      "pitch": 0,
+      "distance": 0.55
+    }
+  },
+  {
+    "name": "male-abs-2",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "shapes": {
+        "abs": 2
+      }
+    },
+    "js": "const vtx=RRHumanBody.anatomyFields(b.pack).navel,i=Array.from(b.pack.body.source).indexOf(vtx),P=b._result.parts[0].positions;return {target:[0,P[i*3+1]+.065,P[i*3+2]]};",
+    "view": {
+      "yaw": 0.12,
+      "pitch": 0,
+      "distance": 0.55
+    }
+  }
+]

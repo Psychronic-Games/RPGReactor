@@ -7382,9 +7382,8 @@ Spriteset_Map.prototype.update = function() {
 //-----------------------------------------------------------------------------
 // Character sheets with their own frame count, named "Name[8F]" (as the 3D
 // Character Builder exports them) or "Name[F8]" (the VX Ace Victor Engine
-// Multi Frames convention). Only when System.json sets rrMultiFrames, which an
-// import from such a game or such an export writes: an MV or MZ project keeps
-// three frames whatever its files are called. An [NF] sheet has N frames per
+// Multi Frames convention). On by default; an explicit false rrMultiFrames
+// in System.json restores three-frame cutting. An [NF] sheet has N frames per
 // row, cycles 0..N-1 and rests on frame 0; with [8D] too, each of its eight
 // blocks is N frames wide.
 //-----------------------------------------------------------------------------

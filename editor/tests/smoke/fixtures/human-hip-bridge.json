@@ -1,0 +1,66 @@
+[
+  {
+    "name": "female-down",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='hipBridge';b._syncPose();if(!v.action)throw Error('Missing hip bridge');v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Spine2','Head','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>{const bone=v.bones.find(q=>q.name===name);return [name,bone.getWorldPosition(new THREE.Vector3()).toArray()];}));return {target:[0,.30,-.10],points,pose:b.pose};",
+    "view": {
+      "yaw": 1.45,
+      "pitch": 0.23,
+      "distance": 2.4
+    }
+  },
+  {
+    "name": "female-raised",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='hipBridge';b._syncPose();if(!v.action)throw Error('Missing hip bridge');v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Spine2','Head','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>{const bone=v.bones.find(q=>q.name===name);return [name,bone.getWorldPosition(new THREE.Vector3()).toArray()];}));return {target:[0,.30,-.10],points,pose:b.pose};",
+    "view": {
+      "yaw": 1.45,
+      "pitch": 0.23,
+      "distance": 2.4
+    }
+  },
+  {
+    "name": "male-raised",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "js": "b.pose='hipBridge';b._syncPose();if(!v.action)throw Error('Missing hip bridge');v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Spine2','Head','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>{const bone=v.bones.find(q=>q.name===name);return [name,bone.getWorldPosition(new THREE.Vector3()).toArray()];}));return {target:[0,.30,-.10],points,pose:b.pose};",
+    "view": {
+      "yaw": 0.8,
+      "pitch": 0.23,
+      "distance": 2.4
+    }
+  },
+  {
+    "name": "saved-bridge-menu",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='hipBridge';b._syncPose();if(!v.action)throw Error('Missing hip bridge');v.action.paused=true;v.action.time=1;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Spine2','Head','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>{const bone=v.bones.find(q=>q.name===name);return [name,bone.getWorldPosition(new THREE.Vector3()).toArray()];}));const select=b.root.querySelector('.rr-c3d-pose-picker');select.parentElement.querySelector('.rr-shim-trigger').click();await new Promise(r=>setTimeout(r,80));const search=document.querySelector('.rr-shim-popup input');search.value='exercises';search.dispatchEvent(new Event('input',{bubbles:true}));const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Hip Bridge');if(!clip)throw Error('No saved Hip Bridge');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(2);object.updateMatrixWorld(true);return {target:[0,.30,-.1],points,pose:b.pose,savedClip:clip.name,headers:[...document.querySelectorAll('.rr-pose-group-header')].map(h=>({label:h.textContent,visible:h.style.display!=='none',active:h.classList.contains('is-active'),background:getComputedStyle(h).backgroundImage,stripe:getComputedStyle(h).borderLeftColor,width:getComputedStyle(h).borderLeftWidth}))};",
+    "view": {
+      "yaw": 1.2,
+      "pitch": 0.23,
+      "distance": 2.4
+    },
+    "exportModel": true,
+    "exportMotions": "useful"
+  }
+]

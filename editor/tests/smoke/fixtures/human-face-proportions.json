@@ -1,0 +1,6 @@
+[
+  { "name": "female-front", "reset": true, "patch": { "gender": 0 }, "view": { "target": "face", "yaw": 0.04, "pitch": 0.04, "distance": 0.48 } },
+  { "name": "female-three-quarter", "reset": true, "patch": { "gender": 0 }, "view": { "target": "face", "yaw": 0.85, "pitch": 0.04, "distance": 0.48 } },
+  { "name": "male-front", "reset": true, "patch": { "gender": 1 }, "view": { "target": "face", "yaw": 0.04, "pitch": 0.04, "distance": 0.48 } },
+  { "name": "male-three-quarter", "reset": true, "patch": { "gender": 1 }, "view": { "target": "face", "yaw": 0.85, "pitch": 0.04, "distance": 0.48 } }
+]

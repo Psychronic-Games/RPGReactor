@@ -1,0 +1,13 @@
+{
+  "species": "human",
+  "gender": 0,
+  "hair": {
+    "style": "pixie",
+    "color": "#372519"
+  },
+  "outfit": [],
+  "shapes": {
+    "cheeks": -1,
+    "cheekBones": -1
+  }
+}

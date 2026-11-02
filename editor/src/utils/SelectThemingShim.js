@@ -125,6 +125,8 @@
         const view = (triggerEl.ownerDocument && triggerEl.ownerDocument.defaultView) || window;
         const popup = document.createElement('div');
         popup.className = 'rr-shim-popup';
+        const poseGroups = selectEl.dataset.rrGroupHeaders === 'accent';
+        if (poseGroups) popup.classList.add('rr-pose-popup');
         // Fixed positioning, anchored to the trigger; open upward when the
         // space below is tight, and clamp the height to the viewport.
         const spaceBelow = view.innerHeight - rect.bottom - 10;
@@ -149,6 +151,7 @@
 
         // Scrollable list container (header/search stays pinned above it).
         const list = document.createElement('div');
+        if (poseGroups) list.className = 'rr-pose-option-list rr-accent-scrollbar';
         popup.tabIndex = -1;
         list.setAttribute('role', 'listbox');
         list.style.cssText = 'overflow-y: auto; flex: 1 1 auto; min-height: 0;';
@@ -161,6 +164,7 @@
             item.setAttribute('role', 'option');
             item.setAttribute('aria-disabled', String(opt.disabled || opt.parentElement?.disabled || false));
             const isActive = opt.value === selectEl.value;
+            const rowBackground = poseGroups ? 'var(--rr-pose-row-bg)' : 'transparent';
             const hint = opt.title || '';
             item.style.cssText = `
                 padding: 6px 12px;
@@ -168,7 +172,7 @@
                 font-size: var(--font-size-base);
                 font-weight: 600;
                 color: ${opt.disabled ? 'var(--color-text-dim)' : 'var(--color-text-strong)'};
-                background: ${isActive ? 'var(--color-accent-tint-25)' : 'transparent'};
+                background: ${isActive ? (poseGroups ? 'var(--rr-pose-row-selected)' : 'var(--color-accent-tint-25)') : rowBackground};
                 transition: background var(--ease-fast);
                 white-space: ${hint ? 'normal' : 'nowrap'};
                 ${hint ? 'max-width: 460px;' : ''}
@@ -218,13 +222,14 @@
             // Typing part of an explanation finds the row too, which is the
             // point of writing them: an author who knows what they want but not
             // what it is called can search for "dead" or "random".
-            item.dataset.optText = searchText(`${opt.textContent} ${hint}`);
+            const category = poseGroups && opt.parentElement?.tagName === 'OPTGROUP' ? opt.parentElement.label : '';
+            item.dataset.optText = searchText(`${opt.textContent} ${hint} ${category}`);
             if (item.getAttribute('aria-disabled') !== 'true') {
                 item.addEventListener('mouseenter', () => {
-                    if (!isActive) item.style.background = 'var(--color-accent-tint-15)';
+                    if (!isActive) item.style.background = poseGroups ? 'var(--rr-pose-row-hover)' : 'var(--color-accent-tint-15)';
                 });
                 item.addEventListener('mouseleave', () => {
-                    if (!isActive) item.style.background = 'transparent';
+                    if (!isActive) item.style.background = rowBackground;
                 });
                 item.addEventListener('click', () => {
                     selectEl.focus({ preventScroll: true });
@@ -264,6 +269,14 @@
                 Array.from(list.children).forEach(row => {
                     row.style.display = !term || (row.dataset.optText || '').includes(term) ? '' : 'none';
                 });
+                // Pose categories stay above their matching rows while filtering.
+                for (const heading of list.querySelectorAll('.rr-pose-group-header')) {
+                    let visible = false;
+                    for (let row = heading.nextElementSibling; row && !row.classList.contains('rr-pose-group-header'); row = row.nextElementSibling) {
+                        if (row.dataset.optionIndex !== undefined && row.style.display !== 'none') visible = true;
+                    }
+                    heading.style.display = visible ? '' : 'none';
+                }
             });
             // Keep focus interactions inside the popup from closing it.
             search.addEventListener('mousedown', (ev) => ev.stopPropagation());
@@ -279,12 +292,18 @@
                     padding: 4px 12px;
                     font-size: var(--font-size-xs);
                     color: var(--color-text-muted);
-                    background: var(--color-bg-base);
+                    background-color: var(--color-bg-base);
                     border-bottom: 1px solid var(--color-border);
                     font-weight: 600;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
                 `;
+                if (poseGroups) {
+                    header.className = 'database-section-header rr-pose-group-header';
+                    header.classList.toggle('is-active', child.contains(selectEl.options[selectEl.selectedIndex]));
+                    header.style.color = 'var(--rr-pose-header-text)';
+                    header.style.backgroundColor = 'var(--rr-pose-header-bg)';
+                }
                 header.textContent = child.label;
                 list.appendChild(header);
                 Array.from(child.children).forEach(opt => list.appendChild(renderOption(opt)));
@@ -314,7 +333,7 @@
         highlight();
 
         // Auto-scroll to the currently-selected option so the user lands on it.
-        const activeItem = list.querySelector('div[style*="accent-tint-25"]');
+        const activeItem = list.querySelector('[data-option-index][aria-selected="true"]');
         if (activeItem && activeItem.scrollIntoView) {
             activeItem.scrollIntoView({ block: 'nearest' });
         }
@@ -425,6 +444,7 @@
         // Build the overlay trigger.
         const trigger = document.createElement('div');
         trigger.className = 'rr-shim-trigger';
+        if (selectEl.dataset.rrGroupHeaders === 'accent') trigger.classList.add('rr-pose-picker-trigger');
         trigger.style.cssText = `
             position: relative;
             background: var(--color-bg-panel);

@@ -1,0 +1,17 @@
+{
+  "species": "human",
+  "gender": 0,
+  "hair": {
+    "style": "shortCrop"
+  },
+  "outfit": [
+    {
+      "id": "sportsBra",
+      "color": "#4f426e"
+    },
+    {
+      "id": "leggings",
+      "color": "#252831"
+    }
+  ]
+}

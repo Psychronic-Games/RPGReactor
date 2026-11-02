@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-01",
+  "preview": 75,
+  "runtime": "20261101.4",
+  "evidenceRoot": "scratchpad/crawl-ankles-20261101/",
+  "change": "Crawling feet follow the shin with ankle pitch bounded to the existing 52-degree limit; shins rise slightly toward the ankles. Applies to Crawl and Hands and knees.",
+  "scope": "Three native previews: female/male Crawl and a close-up of the still pose. Loop/ankle-angle data inspected on the default female body. No regression suite or new saved-model reload; deferred for visual iteration.",
+  "inspection": {
+    "crawl": {
+      "maximumAnkleAngleDegrees": 52.000000068002024,
+      "loopEndpointDelta": 2.5178273559996404e-18
+    },
+    "handsKnees": {
+      "maximumAnkleAngleDegrees": 52.000000068002024,
+      "loopEndpointDelta": 0
+    }
+  },
+  "views": [
+    {
+      "name": "hands-knees-feet",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "female-crawl",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "male-crawl",
+      "errors": 0,
+      "glError": 0
+    }
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "2237ec4d8842a82b643904d7dd3048357e132c40b26781ee0d8fcc1f8cd3967f",
+    "runtime/reactor_main.js": "8670aa8c123c2dec81e539e1ab6c2b26e790b77c67f7f7d622decef68f90433e",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "26c0e9a0ad06c6799b9d22c9cdab697cbfda38646b23805c0b49839c9a64d2d6"
+  }
+}

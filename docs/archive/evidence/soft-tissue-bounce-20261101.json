@@ -1,0 +1,680 @@
+{
+  "date": "2026-11-01",
+  "preview": 85,
+  "runtime": "20261101.14",
+  "evidenceRoot": "scratchpad/bust-bounce-20261101/",
+  "change": "Independent bust and butt bounce settings: 0.15 defaults, normal 0\u20131 and Extreme 0\u20134. Four joints share smooth skin/fitted-cloth bindings. Damped acceleration-driven motion is baked into ordinary animation keys. Exercises additionally respond to velocity/tilt, increasing slower reach/return movement while preserving approved walk/run spring curves. Live controls regenerate animation keys without mesh or texture rebuilds.",
+  "scope": "Four native cases: exercise default, extreme butt bounce from behind, independent live slider inputs across both ranges, and an actual saved GLB reloaded through the game reader with four translation tracks. Source motion/loop inspection covers seven poses and four strengths. Off-binding inspection compares male/female run, knees-up sitting and fast stretch against the original bindings. No regression suites, deferred at the owner\u2019s request. A single saved-model follow-up verifies the fitted-cloth correction at both sliders\u2019 maximum settings.",
+  "limits": [
+    "Baked clip motion; no collision solver or additional response to arbitrary game-world movement.",
+    "Native garment review uses sports bra/leggings; broader wardrobe/body extremes remain under visual review.",
+    "Hybrid upper-body motion is wired but not covered by this native batch; human glute joints are omitted for merfolk/centaurs.",
+    "The first native batch completed run views then stopped because its slider inspection did not select the Body tab. The corrected four-case batch passed.",
+    "Body off-binding differences remain below 0.00000012 m. Fitted-cloth four-influence reduction changes extreme bent-pose samples by at most 0.0036 m in this inspection. Broad wardrobe and extreme shape fitting remains under visual review."
+  ],
+  "inspection": {
+    "defaults": 0.15,
+    "normalization": [
+      0,
+      0,
+      0.15,
+      4,
+      4
+    ],
+    "joints": [
+      {
+        "name": "LeftBust",
+        "head": [
+          0.11160104721784592,
+          1.1484835147857666,
+          0.17960740625858307
+        ],
+        "kind": "bust",
+        "amount": 0.15,
+        "scale": 0.8566508398336523,
+        "mass": 0.9,
+        "firmness": 0.75
+      },
+      {
+        "name": "RightBust",
+        "head": [
+          -0.11160104721784592,
+          1.1484835147857666,
+          0.17960740625858307
+        ],
+        "kind": "bust",
+        "amount": 0.15,
+        "scale": 0.8566508398336523,
+        "mass": 0.9,
+        "firmness": 0.75
+      },
+      {
+        "name": "LeftGlute",
+        "head": [
+          0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ],
+        "kind": "butt",
+        "amount": 0.15,
+        "scale": 0.8566508398336523,
+        "mass": 0.95,
+        "firmness": 0.5
+      },
+      {
+        "name": "RightGlute",
+        "head": [
+          -0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ],
+        "kind": "butt",
+        "amount": 0.15,
+        "scale": 0.8566508398336523,
+        "mass": 0.95,
+        "firmness": 0.5
+      }
+    ],
+    "bindings": [
+      {
+        "name": "Body",
+        "count": 418,
+        "weightError": 4.470348358154297e-08
+      },
+      {
+        "name": "Sports bra, Leggings",
+        "count": 1070,
+        "weightError": 4.470348358154297e-08
+      },
+      {
+        "name": "Garment linings",
+        "count": 477,
+        "weightError": 4.0978193283081055e-08
+      }
+    ],
+    "clips": [
+      {
+        "amount": 0,
+        "id": "idle",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 4.795045999999957
+      },
+      {
+        "amount": 0,
+        "id": "walk",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 10.684451999999965
+      },
+      {
+        "amount": 0,
+        "id": "run",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 4.425931999999989
+      },
+      {
+        "amount": 0,
+        "id": "hipBridge",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 14.353366999999935
+      },
+      {
+        "amount": 0,
+        "id": "kneelingBackStretch",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 19.630357000000004
+      },
+      {
+        "amount": 0,
+        "id": "fastKneelingBackStretch",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 7.4279410000000325
+      },
+      {
+        "amount": 0,
+        "id": "handsKnees",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 5.626242999999931
+      },
+      {
+        "amount": 0.15,
+        "id": "idle",
+        "max": 7.424552294971834e-06,
+        "regions": {
+          "bust": 7.424552294971834e-06,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 0.1341019999999844
+      },
+      {
+        "amount": 0.15,
+        "id": "walk",
+        "max": 0.00059371174556721,
+        "regions": {
+          "bust": 0.0005799191834103532,
+          "butt": 0.00059371174556721
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 5.415990999999963
+      },
+      {
+        "amount": 0.15,
+        "id": "run",
+        "max": 0.0018369922539155602,
+        "regions": {
+          "bust": 0.0015029669073817707,
+          "butt": 0.0018369922539155602
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 4.832466000000068
+      },
+      {
+        "amount": 0.15,
+        "id": "hipBridge",
+        "max": 0.0024580885330127626,
+        "regions": {
+          "bust": 0.0024073071859698333,
+          "butt": 0.0024580885330127626
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 11.097135999999978
+      },
+      {
+        "amount": 0.15,
+        "id": "kneelingBackStretch",
+        "max": 0.0019330059571441593,
+        "regions": {
+          "bust": 0.0019330059571441593,
+          "butt": 0.0013060621934657404
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 15.605939000000035
+      },
+      {
+        "amount": 0.15,
+        "id": "fastKneelingBackStretch",
+        "max": 0.005530651687077939,
+        "regions": {
+          "bust": 0.005530651687077939,
+          "butt": 0.005039710863008452
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 7.092636999999968
+      },
+      {
+        "amount": 0.15,
+        "id": "handsKnees",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 5.3685219999999845
+      },
+      {
+        "amount": 1,
+        "id": "idle",
+        "max": 5.6407921447207345e-05,
+        "regions": {
+          "bust": 5.6407921447207345e-05,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 2.190110000000004
+      },
+      {
+        "amount": 1,
+        "id": "walk",
+        "max": 0.004602792529879963,
+        "regions": {
+          "bust": 0.0045587308376733755,
+          "butt": 0.004602792529879963
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 4.303700999999933
+      },
+      {
+        "amount": 1,
+        "id": "run",
+        "max": 0.01393550547685787,
+        "regions": {
+          "bust": 0.011931145554040061,
+          "butt": 0.01393550547685787
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 3.1129499999999553
+      },
+      {
+        "amount": 1,
+        "id": "hipBridge",
+        "max": 0.01638359856818762,
+        "regions": {
+          "bust": 0.01610024932388735,
+          "butt": 0.01638359856818762
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 11.152515999999991
+      },
+      {
+        "amount": 1,
+        "id": "kneelingBackStretch",
+        "max": 0.012932777263945204,
+        "regions": {
+          "bust": 0.012932777263945204,
+          "butt": 0.008715226846576392
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 16.193525000000022
+      },
+      {
+        "amount": 1,
+        "id": "fastKneelingBackStretch",
+        "max": 0.0183070129116843,
+        "regions": {
+          "bust": 0.01811935816524322,
+          "butt": 0.0183070129116843
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 7.237218999999982
+      },
+      {
+        "amount": 1,
+        "id": "handsKnees",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 5.780244999999923
+      },
+      {
+        "amount": 4,
+        "id": "idle",
+        "max": 0.0003091588267248193,
+        "regions": {
+          "bust": 0.0003091588267248193,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 1.9707989999999427
+      },
+      {
+        "amount": 4,
+        "id": "walk",
+        "max": 0.029451837783621124,
+        "regions": {
+          "bust": 0.029451837783621124,
+          "butt": 0.02911052029922008
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 4.218039999999974
+      },
+      {
+        "amount": 4,
+        "id": "run",
+        "max": 0.057810938217877854,
+        "regions": {
+          "bust": 0.057810938217877854,
+          "butt": 0.05731083875819629
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 2.7503260000000864
+      },
+      {
+        "amount": 4,
+        "id": "hipBridge",
+        "max": 0.05834452544771427,
+        "regions": {
+          "bust": 0.05446988157025892,
+          "butt": 0.05834452544771427
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 9.596402000000012
+      },
+      {
+        "amount": 4,
+        "id": "kneelingBackStretch",
+        "max": 0.05253185286039569,
+        "regions": {
+          "bust": 0.05253185286039569,
+          "butt": 0.035040793534761645
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 14.86622100000011
+      },
+      {
+        "amount": 4,
+        "id": "fastKneelingBackStretch",
+        "max": 0.0607480914534248,
+        "regions": {
+          "bust": 0.0607480914534248,
+          "butt": 0.05993281011271023
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 6.744693999999981
+      },
+      {
+        "amount": 4,
+        "id": "handsKnees",
+        "max": 1.3969838619232178e-09,
+        "regions": {
+          "bust": 1.3969838619232178e-09,
+          "butt": 0
+        },
+        "seam": 0,
+        "finite": true,
+        "ms": 6.255110000000059
+      }
+    ]
+  },
+  "offBindings": [
+    {
+      "gender": 0,
+      "minWeight": 0,
+      "sumError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "maximumVertexDelta": 0.0010939538478851318,
+          "bodyVertexDelta": 1.1920928955078125e-07
+        },
+        {
+          "id": "sitKneesUp",
+          "maximumVertexDelta": 0.002762429416179657,
+          "bodyVertexDelta": 5.960464477539063e-08
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "maximumVertexDelta": 0.0020635277032852173,
+          "bodyVertexDelta": 5.960464477539063e-08
+        }
+      ],
+      "defaults": {
+        "bust": 0.15,
+        "butt": 0.15
+      }
+    },
+    {
+      "gender": 1,
+      "minWeight": 0,
+      "sumError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "maximumVertexDelta": 0.0012107044458389282,
+          "bodyVertexDelta": 1.1920928955078125e-07
+        },
+        {
+          "id": "sitKneesUp",
+          "maximumVertexDelta": 0.0035624727606773376,
+          "bodyVertexDelta": 5.960464477539063e-08
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "maximumVertexDelta": 0.0019637346267700195,
+          "bodyVertexDelta": 5.960464477539063e-08
+        }
+      ],
+      "defaults": {
+        "bust": 0.15,
+        "butt": 0.15
+      }
+    }
+  ],
+  "views": [
+    {
+      "name": "exercise-bounce",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "bust": 0.15,
+        "butt": 0.15,
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      }
+    },
+    {
+      "name": "butt-extreme",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "bust": 0.15,
+        "butt": 4,
+        "target": [
+          0,
+          0.88,
+          0
+        ]
+      }
+    },
+    {
+      "name": "independent-sliders",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "rebuilds": 0,
+        "sameMesh": true,
+        "samePositions": true,
+        "sameTexture": true,
+        "samples": [
+          {
+            "amount": 0,
+            "ms": 11.400000000372529,
+            "path": "bustBounce"
+          },
+          {
+            "amount": 0.15,
+            "ms": 7.800000000745058,
+            "path": "bustBounce"
+          },
+          {
+            "amount": 1,
+            "ms": 6.900000000372529,
+            "path": "bustBounce"
+          },
+          {
+            "amount": 4,
+            "ms": 6.400000000372529,
+            "path": "bustBounce"
+          },
+          {
+            "amount": 0,
+            "ms": 7.200000001117587,
+            "path": "buttBounce"
+          },
+          {
+            "amount": 0.15,
+            "ms": 6.099999999627471,
+            "path": "buttBounce"
+          },
+          {
+            "amount": 1,
+            "ms": 5.599999999627471,
+            "path": "buttBounce"
+          },
+          {
+            "amount": 4,
+            "ms": 5.599999999627471,
+            "path": "buttBounce"
+          }
+        ]
+      }
+    },
+    {
+      "name": "saved-exercise",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 1.75,
+        "savedClip": "Fast Kneeling Back Stretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ],
+        "tracks": [
+          {
+            "keys": 106,
+            "name": "LeftBust.position"
+          },
+          {
+            "keys": 106,
+            "name": "RightBust.position"
+          },
+          {
+            "keys": 106,
+            "name": "LeftGlute.position"
+          },
+          {
+            "keys": 106,
+            "name": "RightGlute.position"
+          }
+        ]
+      },
+      "exported": {
+        "bytes": 10096220,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-exercise",
+        "textures": 17
+      }
+    }
+  ],
+  "videos": [
+    "exercise-bounce.webm",
+    "butt-extreme.webm",
+    "default-bounce.webm",
+    "extreme-bounce.webm"
+  ],
+  "savedRecipe": {
+    "bustBounce": 4,
+    "buttBounce": 4
+  },
+  "runtimeSync": "39 files updated across 20 bundled projects.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "3b61215ecf41658b07ff537b4701a5d9c74c477d0a3fdd46f908b29cc1876e08",
+    "runtime/reactor_main.js": "0b8a7de49bb5780198bf3b126971371278927e67cce524bff306148d71df529c",
+    "editor/src/forge/Character3D/HumanBody.js": "e2ae311f99c67fb2c9cc048b114f62d10d612378b0692fefd8e8d695fe2dbcc8",
+    "editor/src/forge/Character3D/CharacterModel.js": "eed3db6baf103c29e2549832892e4259cb3ceaebdd4953da8da97c4ad722ec06",
+    "editor/src/forge/Character3D/CharacterPoses.js": "de9f5b8175e5301f07b1d827438d5b7ef22ce0eb65584933a0fcdb87ebc46a9e",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "b82a7d61ae3fa727cc1ad79de685b1fca6a6a18affd43609ee5bf684060f5dec"
+  },
+  "savedClothingFollowup": {
+    "evidenceRoot": "scratchpad/bust-bounce-20261101/export-followup/",
+    "change": "Fitted cloth retains the strongest four influences instead of skipping vertices whose helper bindings already used four joints. This removes rigid patches and the visible sports-bra intersection at maximum exercise bounce. Body boundary vertices retain their original four influences.",
+    "views": [
+      {
+        "name": "saved-exercise",
+        "note": {
+          "duration": 1.75,
+          "savedClip": "Fast Kneeling Back Stretch",
+          "target": [
+            0,
+            0.23,
+            0.16
+          ],
+          "tracks": [
+            {
+              "keys": 106,
+              "name": "LeftBust.position"
+            },
+            {
+              "keys": 106,
+              "name": "RightBust.position"
+            },
+            {
+              "keys": 106,
+              "name": "LeftGlute.position"
+            },
+            {
+              "keys": 106,
+              "name": "RightGlute.position"
+            }
+          ]
+        },
+        "errors": 0,
+        "glError": 0,
+        "exported": {
+          "bytes": 10096220,
+          "decoded": true,
+          "lid": true,
+          "morphs": 28,
+          "physical": true,
+          "pore": true,
+          "source": "saved-exercise",
+          "textures": 17
+        }
+      }
+    ]
+  }
+}

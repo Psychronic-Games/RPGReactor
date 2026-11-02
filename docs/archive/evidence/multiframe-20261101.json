@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-01",
+  "runtime": "20261101.25",
+  "scope": "Multi-frame defaults, explicit opt-out, event previews and full-cycle character export",
+  "behavior": {
+    "missingPreference": "enabled for new and opened projects",
+    "explicitFalse": "preserved by both settings pages, JSON save/reopen and character/prop exports",
+    "threeFrames": "unchanged stock stepping",
+    "eightFrames": "forward complete cycle, 0..7 then 0; all walk/carry columns sample Walk",
+    "existingExports": "re-export required to replace the previous idle frame; existing PNG and map left untouched"
+  },
+  "reproduction": {
+    "project": "template/Star Shift Rebellion",
+    "map": 617,
+    "event": 372,
+    "image": "template/Star Shift Rebellion/img/characters/$Robust Grey Alien Female[8D][8F].png",
+    "pngSize": [
+      4608,
+      1152
+    ],
+    "grid": [
+      32,
+      8
+    ],
+    "frameSize": [
+      144,
+      144
+    ],
+    "sha256": "87dce586538d665a9d3217377c1970ae7e2f499d84aa8fc0d09573d7b690614e"
+  },
+  "checks": {
+    "focusedFeaturePickerExporter": {
+      "passed": 16,
+      "log": "scratchpad/multiframe-20261101/targeted-tests.log"
+    },
+    "previewRegression": {
+      "passed": 3,
+      "log": "scratchpad/multiframe-20261101/preview-tests.log",
+      "coverage": [
+        "event dialog and map marker frame 0/7 and later blocks",
+        "explicit off",
+        "ordinary sheets",
+        "single-direction props",
+        "8-frame cycle and stock stepping"
+      ]
+    },
+    "documentation": {
+      "passed": 3,
+      "log": "scratchpad/multiframe-20261101/docs-tests.log"
+    },
+    "runtimeSync": {
+      "projects": 20,
+      "match": true,
+      "log": "scratchpad/multiframe-20261101/runtime-sync.log"
+    },
+    "native": {
+      "fixture": {
+        "map": 617,
+        "event": 372,
+        "image": {
+          "tileId": 0,
+          "characterName": "$Robust Grey Alien Female[8D][8F]",
+          "direction": 2,
+          "pattern": 0,
+          "characterIndex": 0
+        },
+        "systemPreference": "absent",
+        "plugins": "disabled in temporary runtime fixture"
+      },
+      "editor": {
+        "picker": {
+          "cells": 256,
+          "firstCanvas": [
+            144,
+            144
+          ]
+        },
+        "preview": {
+          "cycle": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "eventDialog": [
+            1008,
+            0,
+            144,
+            144
+          ],
+          "height": 144,
+          "marker": {
+            "height": 144,
+            "type": "rectangle",
+            "width": 144,
+            "x": 1008,
+            "y": 0
+          },
+          "width": 144
+        },
+        "savedOff": {
+          "rrMultiFrames": false
+        }
+      },
+      "game": {
+        "defaultOn": true,
+        "event": 372,
+        "frames": [
+          {
+            "height": 144,
+            "pattern": 0,
+            "width": 144,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 1,
+            "width": 144,
+            "x": 144,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 2,
+            "width": 144,
+            "x": 288,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 3,
+            "width": 144,
+            "x": 432,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 4,
+            "width": 144,
+            "x": 576,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 5,
+            "width": 144,
+            "x": 720,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 6,
+            "width": 144,
+            "x": 864,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 7,
+            "width": 144,
+            "x": 1008,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 0,
+            "width": 144,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "height": 144,
+            "pattern": 1,
+            "width": 144,
+            "x": 144,
+            "y": 0
+          }
+        ],
+        "map": 617,
+        "off": {
+          "enabled": false,
+          "frames": 0,
+          "width": 384
+        },
+        "revision": "20261101.25"
+      }
+    },
+    "fullSuite": "deferred at user request"
+  },
+  "sourceGait": {
+    "sample": "saved Robust Grey Alien Female, joint displacement between adjacent phases relative to hips",
+    "data": {
+      "pass": 0.5416666666666666,
+      "rmsAdjacentJointDistanceBefore": [
+        0.18016617348162078,
+        0.06447208503550317,
+        0.0977693461621746,
+        0.12732187479415677,
+        0.14213467534749605,
+        0.06039929560543787,
+        0.09469522327720097,
+        0.1691575469377358
+      ],
+      "rmsAdjacentJointDistanceFullCycle": [
+        0.1367950643539058,
+        0.06447208503550317,
+        0.0977693461621746,
+        0.12732187479415677,
+        0.14213467534749605,
+        0.06039929560543787,
+        0.09469522327720097,
+        0.12495490469863516
+      ]
+    },
+    "wrapGapReductionFraction": 0.2613104945023288,
+    "limit": "joint phase measurements; not perceptual proof of final walk quality"
+  },
+  "nativeLimits": [
+    "Original plugin stack failed at fresh startup in MOG_VariableHud.maxValue reading undefined maxValue; no change made to plugin or source project data.",
+    "Successful game probe disabled third-party plugins in a temporary project and retained the actual alien PNG, runtime and Moletown map with event 372.",
+    "Checks manually advanced patterns to inspect source rectangles; continuous in-game walking with the original plugin stack remains owner verification."
+  ],
+  "artifacts": {
+    "eventPreview": "scratchpad/multiframe-20261101/event-preview.png",
+    "game": "scratchpad/multiframe-20261101/game.png",
+    "nativeHarness": "scratchpad/multiframe-20261101/native.cjs"
+  },
+  "preserved": "No changes to the existing alien PNG, System.json preference, map, event route, or saved design."
+}

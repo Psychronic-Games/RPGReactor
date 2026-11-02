@@ -16,6 +16,32 @@ import glb
 
 smooth = lambda a, b, x: (lambda t: t*t*(3-2*t))(np.clip((x-a)/(b-a), 0, 1))
 
+def smoother(a, b, x):
+    """A blend with zero first and second derivatives at both ends."""
+    t = np.clip((x-a)/(b-a), 0, 1)
+    return t*t*t*(t*(t*6-15)+10)
+
+def fair_surface(points, index, amount, passes=20):
+    """Remove transition ripples without flattening the facial features.
+
+    Paired positive/negative Laplacian steps avoid the volume loss of repeated
+    averaging. Fixed vertices include the eye/lip folds and the outside edge.
+    The operation happens once in the generator, never while a slider moves.
+    """
+    edges = np.unique(np.sort(np.vstack([index[:,[0,1]], index[:,[1,2]], index[:,[2,0]]]), axis=1), axis=0)
+    a, b = edges.T
+    weight = 1/np.maximum(1e-5, np.linalg.norm(points[a]-points[b], axis=1))
+    degree = np.bincount(np.r_[a,b], weights=np.r_[weight,weight], minlength=len(points))
+    result = points.copy()
+    for _ in range(passes):
+        for step in (.5, -.53):
+            total = np.zeros_like(result)
+            np.add.at(total, a, result[b]*weight[:,None])
+            np.add.at(total, b, result[a]*weight[:,None])
+            mean = total/np.maximum(1e-12, degree[:,None])
+            result += (mean-result)*(amount*step)[:,None]
+    return result
+
 def parts(file):
     g, data = glb.load(file)
     out = {}
@@ -106,23 +132,30 @@ for row in loops(index):
         p[row,1]=.625+np.where(q[:,1]<.625,-.0015,.0015)
         print('closed lip rim:',len(row),'vertices',flush=True)
 
-# Locate the visible rims by testing the original eye volume. Retain the
-# folded source geometry: its material is deliberately two-sided.
+# Open the original ocular folds before adding the inward lining. Keeping
+# both surfaces leaves overlapping triangles visible at the inner canthus.
 cut = np.zeros(len(index),bool)
 for side in (1,-1):
     e = (eye[0] if eye[0,0]*side>0 else eye[1]); c = np.array([(e[0]-center[0])/unit,(center[1]-e[1])/unit,(e[2]-center[2])/unit])
     d = (p-c)/[.148,.148,.123]
     inside = (d*d).sum(1)<1.012
     cut |= inside[index].sum(1)>=2
-probe = index[~cut]
-used = np.unique(index); remap=np.full(len(p),-1);remap[used]=np.arange(len(used));p,index=p[used],remap[index];probe=remap[probe]
+index = index[~cut]
+used = np.unique(index); remap=np.full(len(p),-1);remap[used]=np.arange(len(used));p,index=p[used],remap[index]
 # Identify both openings, retaining the original closed nose and mouth topology.
 eye_loops=[]
 for side in (1,-1):
-    candidates=[l for l in loops(probe) if len(l)>12 and .15<side*p[l,0].mean()<.5 and abs(p[l,1].mean())<.15]
+    candidates=[l for l in loops(index) if len(l)>12 and .15<side*p[l,0].mean()<.5 and abs(p[l,1].mean())<.15]
     if not candidates: raise ValueError('No eye opening on side '+str(side))
     eye_loops.append(max(candidates,key=len))
 print('surface',len(p),len(index),'eye loops',list(map(len,eye_loops)),flush=True)
+# The volume cut crosses an irregular triangulation. Fair each opening's
+# ordered rim before fitting the lids, so its edge is a curve rather than a
+# row of tiny triangular teeth. This is part of the neutral sculpt.
+for row in eye_loops:
+    for _ in range(3):
+        rim=p[row].copy()
+        p[row]=.5*rim+.25*(np.roll(rim,1,axis=0)+np.roll(rim,-1,axis=0))
 # Rework the source into our sculpt: fuller temples and cheek plane, a small
 # independent chin, less pointed jaw; gender changes nose, orbit and jaw together.
 female=p.copy(); x=abs(p[:,0]); y=p[:,1]
@@ -135,24 +168,56 @@ female[:,1]+=(.380-female[:,1])*.65*nostril
 # remain continuous; a broad central recess would carve a V above the lips.
 floor=np.exp(-((x-.055)/.030)**4-((y-.425)/.035)**4)*(1-smooth(.28,.32,p[:,2]))*smooth(.018,.035,x)
 female[:,2]-=.025*floor
-female[:,0] *= 1.025 + .04*smooth(.45,.95,y)
-female[:,2] += .012*np.exp(-((x-.42)/.18)**2-((y-.35)/.23)**2)
+female[:,0] *= 1.025 - .10*smooth(.40,.98,y)
+cheek=np.exp(-((x-.42)/.18)**2-((y-.35)/.23)**2)
+female[:,2] += .022*cheek
+mouth=np.exp(-(x/.28)**6-((y-.63)/.16)**4)
+female[:,0] *= 1-.07*mouth
+female[:,1] -= .012*np.exp(-((x-.19)/.06)**4-((y-.63)/.09)**4)
 male=female.copy()
 jaw=smooth(.35,.85,y)*(1-smooth(1.05,1.3,y)); side=smooth(.12,.5,x)
-male[:,0] *= 1.035 + .19*jaw*side
+male[:,0] *= 1.035 + .09*jaw*side
+male[:,2] -= .008*cheek
 # A wider nose and mouth, restrained lip volume, squarer chin and stronger brow.
 nose=np.exp(-(x/.21)**4-((y-.34)/.28)**4)
 male[:,0] *= 1+.26*nose
 male[:,2] += .024*nose
-mouth=np.exp(-(x/.28)**6-((y-.63)/.16)**4)
-male[:,0] *= 1+.10*mouth
+male[:,0] *= 1-.02*mouth
 male[:,1] = male[:,1]+(.628-male[:,1])*.24*mouth
 male[:,2] -= .018*mouth
-male[:,2] += .035*np.exp(-(x/.24)**4-((y-.91)/.13)**2)
+male[:,2] += .018*np.exp(-(x/.24)**4-((y-.91)/.13)**2)
 male[:,2] += .022*np.exp(-((x-.31)/.22)**4-((y+.12)/.09)**2)
 # Male eye-to-chin height is longer while the native skull is only slightly
 # wider. Match its transverse scale so the face cannot overhang the scalp.
 male[:,0] *= .91
+# Relax the wide-open, circular gaze into an almond opening. Keep the brow,
+# orbital rim and folded lids; their shared anchors still drive full blinks.
+# This is an authored default, not an asserted universal attractiveness ratio.
+socket=np.exp(-((x-.31)/.21)**6-(y/.18)**4)
+female[:,1] *= 1-.25*socket
+male[:,1] *= 1-.32*socket
+# The old sculpt put the pupils 77-81 mm apart on a 114-116 mm face.
+# Balance an adult-width skull with closer-set eyes and coordinated eye
+# openings. Pallett et al.'s pupil/ear-root measure is a useful guide,
+# not a universal score (their experiments used female frontal photographs).
+for q, width, brow_depth in [(female,1.10,.035),(male,1.13,.025)]:
+    q[:,0] *= width
+    ax=abs(q[:,0])
+    orbit=(1-smoother(.46,.70,ax))*np.exp(-((q[:,1]+.025)/.29)**4)
+    # A positive transverse scale preserves ordering across the nasal bridge.
+    # Translating each orbit independently can fold the strip between them.
+    q[:,0] *= 1-.27*orbit
+    # Shorten the overlong nose-to-mouth interval without scaling the lips or
+    # changing the eye line. The chin follows, fading into the native neck.
+    q[:,1] -= .060*smoother(.34,.58,q[:,1])*(1-smoother(.90,1.25,q[:,1]))
+    # Ease the frontal bone back from the source's high brow projection;
+    # the crown and native skull then meet along a rounded profile.
+    q[:,2] -= .075*smoother(-.05,-.30,q[:,1])*(1-smoother(-.70,-1.0,q[:,1]))
+    brow=smoother(-.055,-.14,q[:,1])*(1-smoother(-.22,-.38,q[:,1]))
+    q[:,2] -= brow_depth*brow*np.exp(-((abs(q[:,0])-.25)/.28)**4)
+    nasal=np.exp(-(abs(q[:,0])/.22)**4-((q[:,1]-.30)/.26)**4)
+    q[:,0] *= 1-(.20 if q is female else .12)*nasal
+    q[:,2] -= (.045 if q is female else .030)*nasal*smoother(.08,.24,q[:,2])
 # Keep the reference's eyelid folds. The ocular surface is fitted to the
 # original ellipsoid below, rather than pulling skin onto an oversized globe.
 
@@ -175,8 +240,10 @@ outer=body[N[body,2]>.05]  # outward-facing skin in the y-down frame
 K=12
 query=(female+male)/2
 def face_fade(q):
-    depth=smooth(-.35,-.08,q[:,2])*(1-smooth(.45,.60,abs(q[:,0]))*(1-smooth(-.05,.10,q[:,2])))
-    return (1-smooth(.98,1.20,q[:,1]))*smooth(-.55,-.08,q[:,1])*depth*(1-smooth(.60,.77,abs(q[:,0])))
+    depth=smoother(-.35,-.08,q[:,2])*(1-smoother(.45,.60,abs(q[:,0]))*(1-smoother(-.05,.10,q[:,2])))
+    # Keep a broad forehead transition below the crown, with flat derivatives
+    # at each end. The source's upper forehead is fitted back to the skull.
+    return (1-smoother(.98,1.20,q[:,1]))*smoother(-.70,-.15,q[:,1])*depth*(1-smoother(.67,.85,abs(q[:,0])))
 # The reference scalp has large triangles. Even with vertices on the native
 # skull, their flat interiors cut through its curved surface. Refine only the
 # seam, with shared edge midpoints so no T-junctions can open at its boundary.
@@ -215,7 +282,7 @@ bind=nearest(query,mid[body],K); bind=body[bind]
 distance=((mid[bind]-query[:,None])**2).sum(2)
 weight=np.exp(-distance/(2*.105**2))+1e-12
 # Separate the two lip rolls by their positions above/below the mouth line.
-line=.625; band=(abs(query[:,0])<.26)&(abs(query[:,1]-line)<.11)
+line=.565; band=(abs(query[:,0])<.29)&(abs(query[:,1]-line)<.11)
 for i in np.flatnonzero(band):
     lip_side=p[i,1]-.625
     candidates=body[(np.array(r['lower'])[body]>np.array(r['upper'])[body]) if lip_side>0 else (np.array(r['upper'])[body]>=np.array(r['lower'])[body])]
@@ -230,7 +297,7 @@ native_tri=np.flatnonzero((head[triangles]>.02).any(1));Tb=triangles[native_tri]
 A=mid[Tb[:,0]];B=mid[Tb[:,1]];C=mid[Tb[:,2]]
 e1=B-A;e2=C-A;origin=np.array([0.,-.05,-.35]);delta=origin-A
 seam_uv=np.full((len(query),2),np.nan)
-for v in np.flatnonzero(fade<.9999):
+for v in range(len(query)):
     direction=query[v]-origin;direction/=np.linalg.norm(direction)
     h=np.cross(direction,e2);det=(e1*h).sum(1)
     inv=np.divide(1.,det,out=np.zeros_like(det),where=abs(det)>1e-12)
@@ -238,8 +305,10 @@ for v in np.flatnonzero(fade<.9999):
     valid=(abs(det)>1e-12)&(u>=-1e-8)&(w0>=-1e-8)&(u+w0<=1+1e-8)&(depth>0)
     if not valid.any():raise ValueError('No native skull intersection for seam vertex '+str(v))
     at=int(np.where(valid,depth,-np.inf).argmax())
-    bind[v,:3]=Tb[at];bind[v,3:]=bind[v,0];weight[v]=0;weight[v,:3]=[1-u[at]-w0[at],u[at],w0[at]]
-    seam_uv[v]=(triangle_uv[native_tri[at]]*weight[v,:3,None]).sum(0)
+    barycentric=np.array([1-u[at]-w0[at],u[at],w0[at]])
+    if fade[v]<.9999:
+        bind[v,:3]=Tb[at];bind[v,3:]=bind[v,0];weight[v]=0;weight[v,:3]=barycentric
+    seam_uv[v]=(triangle_uv[native_tri[at]]*barycentric[:,None]).sum(0)
 
 # Map our surface to Reactor's original skin charts, retaining its colors and
 # ancestry/marking controls. UV neighbors may never mix opposite chart islands.
@@ -250,9 +319,12 @@ outer=body[(UV[body,0]>=0)&(N[body,2]>.05)]
 uv_ids=outer[nearest(query,mid[outer],6)];ud=((mid[uv_ids]-query[:,None])**2).sum(2)
 uvs=UV[uv_ids];compatible=np.linalg.norm(uvs-uvs[:,:1],axis=2)<.12
 uw=compatible/(ud+.001);uv=(uvs*uw[:,:,None]).sum(1)/uw.sum(1,keepdims=True)
-# At the join, sample the exact native triangle's chart, including UV splits.
-# Frontal nearest-neighbor UVs put cheek colors onto the temple/scalp edge.
-uv[fade<.9999]=seam_uv[fade<.9999]
+# Keep frontal sampling out of the native nose/lid chart folds. At the
+# boundary use its exact triangle chart, blending only within one UV island.
+# Rays over the entire face would introduce hundreds of unnecessary seams.
+same_chart=np.linalg.norm(uv-seam_uv,axis=1)<.12
+blend=np.where(same_chart,fade,smoother(.02,.18,fade))
+uv=seam_uv*(1-blend[:,None])+uv*blend[:,None]
 # Both sexes share the same outside edge and face triangles. Only a narrow
 # seam band follows the original head, leaving the cheeks free of cage facets.
 fade=face_fade(query)
@@ -294,12 +366,30 @@ for t,q in [('F',female),('M',male)]:
     # Move the outermost mask to the original skin; the authored centre remains
     # unchanged. This band lies by the temples, chin and hairline.
     pos=cage+(q-cage)*fade[:,None]
+    # A broad, fair temporal plane joins orbit, forehead and cheek. Leave the
+    # eyelid folds, lips and outermost native boundary exactly where laid.
+    temporal=smoother(.34,.48,abs(query[:,0]))*(1-smoother(.62,.76,abs(query[:,0])))
+    temporal*=smoother(-.85,-.50,query[:,1])*(1-smoother(.50,.78,query[:,1]))
+    frontal=(1-smoother(.32,.50,abs(query[:,0])))*(1-smoother(-.32,-.18,query[:,1]))
+    cheek=smoother(.22,.34,abs(query[:,0]))*(1-smoother(.56,.72,abs(query[:,0])))
+    cheek*=smoother(.08,.25,query[:,1])*(1-smoother(.80,1.02,query[:,1]))
+    fair=np.maximum(np.maximum(temporal,frontal),cheek)*smoother(.01,.12,fade)
+    # Keep the folded lids and their immediate neighbors exact. The broad
+    # temporal/forehead plane can be faired even where the sculpt owns it all.
+    pinned=set(v for row in eye_loops for v in row)
+    for _ in range(2):
+        previous=pinned.copy()
+        pinned.update(int(v) for tri in indices[0] if any(int(i) in previous for i in tri) for v in tri)
+    fair[list(pinned)]=0
+    pos=fair_surface(pos,indices[0],fair,passes=40)
     # Along the same radial field, keep the seam outside the skull. Projecting
     # on unrelated local tangent planes can create folds on a curved forehead.
     nativeN=normals(O[t],triangles)
     direction=cage-origin;direction/=np.maximum(1e-12,np.linalg.norm(direction,axis=1))[:,None]
     clearance=((pos-cage)*direction).sum(1)
-    pos+=direction*(np.maximum(0,.007-clearance)*(fade<.9999))[:,None]
+    # Clearance tends continuously to zero at the authored face. A constant
+    # offset switched at fade==1 left a narrow raised line around the patch.
+    pos+=direction*(np.maximum(0,.003*(1-fade)**2-clearance)*(1-smoother(.98,1,fade)))[:,None]
     # A sphere behind each opening. Its front intersects the upper and lower
     # edges naturally; the lid's thickness supplies its stable centre.
     centers=[]
@@ -321,6 +411,10 @@ for t,q in [('F',female),('M',male)]:
     project=lambda z:np.c_[(z[:,0]+1.1)/2.2*(size-1),(z[:,1]+1.3)/2.8*(size-1)]
     xy=project(pos0)
     for tri in index[:len(indices[0])]:draw.polygon([tuple(xy[i]) for i in tri],fill=255)
+    # The native eye folds stay hidden behind the replacement's open sockets.
+    # Otherwise opening the mask resurrects a second set of lids and exports
+    # all their unused expression deltas.
+    for row in eye_loops:draw.polygon([tuple(xy[i]) for i in row],fill=255)
     coverage=np.array(coverage.filter(ImageFilter.MinFilter(5)))
     z=O[t][source_ids];sample=np.rint(project(z)).astype(int);valid=(sample[:,0]>=0)&(sample[:,0]<size)&(sample[:,1]>=0)&(sample[:,1]<size)&(z[:,2]>-.48)
     own=np.zeros(len(source_ids),bool);own[valid]=coverage[sample[valid,1],sample[valid,0]]>0
@@ -330,8 +424,8 @@ for t,q in [('F',female),('M',male)]:
     hide=np.unique(source_ids[own & (ears[source_ids]<.02) & (z[:,2]>-.16)])
     # Lip paint comes from the sculpt's outer roll. These proportions are shared
     # with the feature mesh rather than baked onto the hidden driver's mouth.
-    corner=.207*(1 if t=='F' else 1.10*.91);line=.625
-    ts=np.linspace(0,1,41);drop=-.010*np.sin(ts*np.pi)+.006*ts**4
+    corner=(.192 if t=='F' else .182)*(1.10 if t=='F' else 1.10*.91*1.13);line=.565
+    ts=np.linspace(0,1,41);drop=-.010*np.sin(ts*np.pi)-.006*ts**4
     up=(.064 if t=='F' else .050)*(1-ts**1.8);low=(.077 if t=='F' else .058)*(1-ts**2.2)
     lip_ids=np.flatnonzero((abs(pos0[:,0])<.02)&(abs(pos0[:,1]-line)<.08))
     mid_id=int(lip_ids[np.argmax(pos0[lip_ids,2])]);ends=[int(np.argmin((pos0[:,0]-s*corner)**2+(pos0[:,1]-line)**2)) for s in (1,-1)]
@@ -339,7 +433,24 @@ for t,q in [('F',female),('M',male)]:
     # Keep the authored folds without the earlier curvature-darkening band
     # over the eyes. Only local nasal visibility and the oral interior tint
     # supplement the native cage's occlusion.
-    restN=normals(pos,index);chosen=authored+normals(q,indices[0])-sourceGeo;chosen=chosen*fade[:,None]+restN[:base_count]*(1-fade[:,None]);chosen=np.vstack([chosen,restN[base_count:]])
+    restN=normals(pos,index)
+    # Retain the reference's folded eye/lip shading, but do not carry its
+    # unrelated temple curvature onto the newly fitted skull transition.
+    detail=(1-smoother(.30,.50,abs(query[:,0])))*smoother(-.10,.10,query[:,2])
+    detail[list(pinned)]=1
+    chosen=normals(pos0,indices[0])+(authored-sourceGeo)*detail[:,None]
+    # Broad cheek and forehead planes need a continuous shading field, while
+    # the eyelids, nostrils and lip folds retain their authored detail.
+    soft=smoother(.20,.34,abs(query[:,0]))*(1-smoother(.56,.72,abs(query[:,0])))
+    soft*=smoother(.10,.25,query[:,1])*(1-smoother(.80,1.02,query[:,1]))
+    soft=np.maximum(soft,(1-smoother(.42,.62,abs(query[:,0])))*(1-smoother(-.35,-.15,query[:,1])))
+    soft*=smoother(.05,.25,fade);soft[list(pinned)]=0
+    edges=np.unique(np.sort(np.vstack([indices[0][:,[0,1]],indices[0][:,[1,2]],indices[0][:,[2,0]]]),axis=1),axis=0)
+    a,b=edges.T;degree=np.bincount(np.r_[a,b],minlength=base_count)
+    for _ in range(4):
+        total=np.zeros_like(chosen);np.add.at(total,a,chosen[b]);np.add.at(total,b,chosen[a])
+        chosen+=(total/np.maximum(1,degree[:,None])-chosen)*(soft*.55)[:,None]
+    chosen=chosen*fade[:,None]+restN[:base_count]*(1-fade[:,None]);chosen=np.vstack([chosen,restN[base_count:]])
     chosen/=np.maximum(1e-12,np.linalg.norm(chosen,axis=1))[:,None];chosen[:,1]*=-1;restN[:,1]*=-1
     tone0=np.ones(len(p))
     # Native AO misses the sculpt's small nasal folds, leaving their floors
@@ -353,7 +464,7 @@ for t,q in [('F',female),('M',male)]:
     oral=(abs(p[:,0])<.26)&(abs(p[:,1]-.62)<.09)&(authored[:,2]<-.10)
     tone0[oral]=.12
     tone_all=np.r_[tone0,np.ones(len(extended))]
-    out[t]=dict(authoredNormals=np.round(chosen.ravel(),6).tolist(),restNormals=np.round(restN.ravel(),6).tolist(),off=np.round(off.ravel(),6).tolist(),bind=ids.ravel().tolist(),w=np.round(w.ravel(),7).tolist(),uv=np.round(uv2.ravel(),6).tolist(),index=index.ravel().tolist(),hide=hide.tolist(),fade=np.round(fade2,5).tolist(),lidFrom=base_count,tone=np.round(tone_all,5).tolist(),nostril=[],lip=lip,rim=rims,low=lows,rimIn=[[rimIn[v] for v in row] for row in rims],lowIn=[[rimIn[v] for v in row] for row in lows],opening=opening,radii=[[.145,.148,.123]]*2,eyeHeight=[float(np.ptp(pos0[l,1])) for l in eye_loops],eye=[dict(s=1,dx=0,dy=0,dz=0)]*2)
+    out[t]=dict(authoredNormals=np.round(chosen.ravel(),6).tolist(),restNormals=np.round(restN.ravel(),6).tolist(),off=np.round(off.ravel(),6).tolist(),bind=ids.ravel().tolist(),w=np.round(w.ravel(),7).tolist(),uv=np.round(uv2.ravel(),6).tolist(),index=index.ravel().tolist(),hide=hide.tolist(),fade=np.round(fade2,5).tolist(),lidFrom=base_count,tone=np.round(tone_all,5).tolist(),nostril=[],lip=lip,rim=rims,low=lows,rimIn=[[rimIn[v] for v in row] for row in rims],lowIn=[[rimIn[v] for v in row] for row in lows],opening=opening,radii=[[.145*(1.10 if t=='F' else 1.13)*.73,.148*.82,.123*.90]]*2,eyeHeight=[float(np.ptp(pos0[l,1])) for l in eye_loops],eye=[dict(s=1,dx=0,dy=0,dz=0)]*2)
     print(t,'vertices',len(pos),'triangles',len(index),'hidden',len(hide),flush=True)
 # Hide the same native vertices and use the same feature anchors at every gender.
 shared_hide=sorted(set(out['F']['hide']) & set(out['M']['hide']))

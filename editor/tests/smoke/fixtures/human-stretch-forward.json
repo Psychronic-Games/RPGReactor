@@ -1,0 +1,66 @@
+[
+  {
+    "name": "rest-anchors",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();v.action.paused=true;const samples=[];for(let i=0;i<=24;i++){v.action.time=i/4;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);samples.push(Object.fromEntries(['LeftLeg','RightLeg','LeftFoot','RightFoot','LeftHand','RightHand'].map(n=>[n,v.bones.find(x=>x.name===n).getWorldPosition(new THREE.Vector3()).toArray()])));}const anchors={};for(const n of ['LeftLeg','RightLeg','LeftFoot','RightFoot'])anchors[n]=Math.max(...samples.map(s=>Math.hypot(...s[n].map((x,k)=>x-samples[0][n][k]))));for(const n of ['LeftHand','RightHand'])anchors[n+'HeightVariation']=Math.max(...samples.map(s=>s[n][1]))-Math.min(...samples.map(s=>s[n][1]));v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose,anchors};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "forward-reach",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();v.action.paused=true;v.action.time=3;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "male-forward-reach",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();v.action.paused=true;v.action.time=3;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "forward-export",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Kneeling Back Stretch');if(!clip)throw Error('Missing stretch');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(3);object.updateMatrixWorld(true);return {target:[0,.23,.16],savedClip:clip.name,duration:clip.duration};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    },
+    "exportModel": true,
+    "exportMotions": "useful"
+  }
+]

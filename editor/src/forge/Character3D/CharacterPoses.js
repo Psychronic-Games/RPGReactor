@@ -74,9 +74,13 @@
         // Centaur hook (RRCharacterCentaur): the horse stands under the humanoid motions; its own gaits are the build's clips.
         // Looked up when called (CharacterModel has loaded it by the time a centaur is built), so load order does not matter.
         const Centaur = result.recipe && result.recipe.species === 'centaur' ? root.RRCharacterCentaur || null : null;
-        const clips = Centaur ? Centaur.adaptClips(result.bones, api.gameClips(result.bones, body, set)) : api.gameClips(result.bones, body, set);
+        const clips = Centaur ? Centaur.adaptClips(result.bones, api.gameClips(result.bones, body, set)).map(c => Library.withSoftTissueMotion(result.bones, { ...c, softTissueProfile: null })) : api.gameClips(result.bones, body, set);
         const names = new Set(['Idle'].concat(clips.map(c => c.name)));
         const animations = Library.SLOTS.filter(([, , clip]) => names.has(clip)).map(([name, trigger, clip]) => ({ name, type: 'clip', trigger, clip }));
+        // Exercises and authored motions are actions outside the battle set.
+        for (const motion of Library.GAME_CLIPS) if (names.has(motion.name) && Library.POSES.some(p => p.id === motion.id && (p.group === 'exercise' || p.exportAction))) {
+            animations.push({ name: motion.id, type: 'clip', trigger: 'action', clip: motion.name });
+        }
         if (result.recipe && result.recipe.species === 'merfolk' && (result.clips || []).some(c => c.name === 'Tread')) {
             const tread = animations.find(a => a.trigger === 'treading');
             if (tread) tread.clip = 'Tread';
@@ -90,7 +94,7 @@
 
 
     const api = Object.assign(Object.create(null), Library, { savedModel, humanoidRig });
-    const follow = (bones, clip) => need('RRCharacterSpecies', './CharacterSpecies.js')?.followMotion(bones, clip) || clip;
+    const follow = (bones, clip) => Library.withSoftTissueMotion(bones, need('RRCharacterSpecies', './CharacterSpecies.js')?.followMotion(bones, clip) || clip);
     api.clip = (bones, ...args) => follow(bones, Library.clip(bones, ...args));
     api.gameClips = (bones, ...args) => Library.gameClips(bones, ...args).map(clip => follow(bones, clip));
     // The library itself keeps its own state (its data); the builder reaches it through this one name.

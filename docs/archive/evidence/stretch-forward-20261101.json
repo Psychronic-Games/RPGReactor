@@ -1,0 +1,208 @@
+{
+  "date": "2026-11-01",
+  "preview": 78,
+  "runtime": "20261101.7",
+  "evidenceRoot": "scratchpad/stretch-forward-20261101/",
+  "feature": "Forward back/shoulder articulation and arm reach with grounded palms and fixed knees/feet",
+  "scope": "Female rest/reach and male reach native captures, a 25-sample native world-joint/hand-height inspection, and one actual saved-model reload. Regression suites deferred at owner request.",
+  "inspection": {
+    "floorRange": [
+      -0.030724704265594482,
+      -0.030724680051207542
+    ],
+    "duration": 6,
+    "frames": 145,
+    "finite": true,
+    "restDelta": 0,
+    "loopEndpointDelta": 0,
+    "positions": [
+      {
+        "time": 0,
+        "points": {
+          "Hips": [
+            0,
+            0.353621244430542,
+            -0.22533220052719116
+          ],
+          "Spine2": [
+            0,
+            0.261509125146211,
+            -0.02262634135707281
+          ],
+          "LeftArm": [
+            0.15566129051148891,
+            0.22874688677308103,
+            0.18393563469572052
+          ],
+          "LeftHand": [
+            0.1556612887914235,
+            0.025699529091984752,
+            0.5758968371565992
+          ],
+          "LeftLeg": [
+            0.1937292746997043,
+            0.047115803864678424,
+            0.017133019421245732
+          ],
+          "LeftFoot": [
+            0.09191789680917835,
+            0.06277907261950955,
+            -0.3744492141335268
+          ]
+        }
+      },
+      {
+        "time": 3,
+        "points": {
+          "Hips": [
+            0,
+            0.46500271558761597,
+            -0.03686900809407234
+          ],
+          "Spine2": [
+            0,
+            0.3516415074398087,
+            0.15704658324537024
+          ],
+          "LeftArm": [
+            0.1556612905114889,
+            0.2687935172148865,
+            0.34908154029679805
+          ],
+          "LeftHand": [
+            0.15566128090687983,
+            0.025699537998038507,
+            0.7229047610704926
+          ],
+          "LeftLeg": [
+            0.19372927788673702,
+            0.04711579773983421,
+            0.017133014051802425
+          ],
+          "LeftFoot": [
+            0.09191789657936127,
+            0.06277910528576669,
+            -0.3744492170629449
+          ]
+        }
+      },
+      {
+        "time": 6,
+        "points": {
+          "Hips": [
+            0,
+            0.353621244430542,
+            -0.22533220052719116
+          ],
+          "Spine2": [
+            0,
+            0.2615091280951015,
+            -0.022626347846527034
+          ],
+          "LeftArm": [
+            0.1556612855281262,
+            0.22874689077082655,
+            0.18393562159336177
+          ],
+          "LeftHand": [
+            0.1556612819571837,
+            0.025699530175094437,
+            0.5758968287874029
+          ],
+          "LeftLeg": [
+            0.19372927308600413,
+            0.04711580344524391,
+            0.01713302338107847
+          ],
+          "LeftFoot": [
+            0.09191789721675495,
+            0.06277907188910976,
+            -0.37444920239955237
+          ]
+        }
+      }
+    ]
+  },
+  "views": [
+    {
+      "name": "rest-anchors",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "anchors": {
+          "LeftFoot": 3.963819250628937e-08,
+          "LeftHandHeightVariation": 7.86795302520904e-09,
+          "LeftLeg": 4.1360071900019736e-08,
+          "RightFoot": 3.963819250628937e-08,
+          "RightHandHeightVariation": 7.86795302520904e-09,
+          "RightLeg": 4.1360071900019736e-08
+        },
+        "pose": "kneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": null
+    },
+    {
+      "name": "forward-reach",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "kneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": null
+    },
+    {
+      "name": "male-forward-reach",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "kneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": null
+    },
+    {
+      "name": "forward-export",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 6,
+        "savedClip": "Kneeling Back Stretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": {
+        "bytes": 9797304,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "forward-export",
+        "textures": 17
+      }
+    }
+  ],
+  "limits": "Contact inspection records knee/foot joint positions and hand-bone height on the default female body, not per-vertex physical contact or a full body/outfit matrix.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "c0f854a2ad6415a9c9e8a927f820f41d2f4c8cb3dc32fab9856b45ca39099339",
+    "runtime/reactor_main.js": "5fccacab689042eec1c192525f6e66c97b8715bcf3befa60ff5cf7954fa8ee07",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "fcdc83b75a4fc43a380230c40d5c8c39ec4aa4f82f06d1f6b0b239fefb43ab8c"
+  }
+}

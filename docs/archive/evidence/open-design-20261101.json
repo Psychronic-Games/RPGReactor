@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-01",
+  "preview": 91,
+  "runtime": "20261101.19 (unchanged)",
+  "evidenceRoot": "scratchpad/open-design-20261101/",
+  "change": "Restore focus/resume subscription after _makeView tears down the old studio. Reset canceled slider settle handles during preset transitions and detach, and cancel queued rebuild frames at detach. Opening a saved design/model uses the full preset transition to retire shape jobs and caches, retaining its Extreme setting. Report Opening until the current requested recipe reaches _applyBuild, then report Opened.",
+  "reproduction": "Before the fix, studio creation removed the preview activity subscription (listener count zero), and a canceled but still-truthy settle handle suppressed the next worker result. Four new focused lifecycle regressions failed before the fix and pass afterward.",
+  "focusedTests": {
+    "command": "node --test --test-concurrency=1 editor/tests/character-open-design.test.cjs editor/tests/character-preset-isolation.test.cjs editor/tests/character-preview-scheduling.test.cjs",
+    "passed": 32,
+    "failed": 0,
+    "durationMs": 1084.865879,
+    "fullSuite": "Deferred at owner request"
+  },
+  "native": [
+    {
+      "name": "saved-design-resume",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "finalSpecies": "human",
+        "focusResume": true,
+        "reopenedBuilder": true,
+        "savedDesigns": 2,
+        "speciesAfterOpen": "dwarf",
+        "status": "Opened Saved preview A."
+      },
+      "validationError": null
+    }
+  ],
+  "harnessCorrections": [
+    "The scheduling VM now provides performance, required by the existing draw timer.",
+    "The native renderer check reads the current view after a scripted builder reopen, avoiding capture of the disposed old canvas."
+  ],
+  "limits": [
+    "Native evidence uses controlled blur/focus events in the real editor plus temporary saved JSON designs; it does not claim an exhaustive OS/window-manager focus audit.",
+    "Saved exported-model records share _openRecord, but this native pass opens Forge designs.",
+    "Runtime unchanged; no bundled runtime synchronization needed."
+  ],
+  "codeSha256": {
+    "editor/src/forge/Character3D/Character3DBuilder.js": "f704f9ca303d92ce16d952d1874851bbfb372642b4005e254e6f1aaeea65f2a8",
+    "editor/tests/character-open-design.test.cjs": "5cce2a1d35d173bfd6df7ed7e2ae7b016a3e8228c9f66df6570e53bb7900f477",
+    "editor/tests/character-preview-scheduling.test.cjs": "794cee40399644095eb6292cd923103af39270364c5be48cd150af56c77d4442",
+    "editor/tests/smoke/nw-character-review.cjs": "844e74c8a753645876d537fbb2cb55d6d9b4f1a78847ae05e914408c44a21a2a",
+    "editor/tests/smoke/fixtures/human-open-design.json": "1306b948c3028e1c7ead60fbe633e103b8587d93b013dd36690637b8e994a515"
+  }
+}

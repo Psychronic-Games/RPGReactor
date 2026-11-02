@@ -1,0 +1,150 @@
+{
+  "date": "2026-11-01",
+  "preview": 73,
+  "runtime": "20261101.2",
+  "feature": "Two resting holds and sitting left-leg correction",
+  "evidenceRoot": "scratchpad/rest-poses-20261101/",
+  "scope": "Four native preview views: female back knees apart, female sitting legs apart, corrected existing Sitting and male sitting legs apart. Two saved-GLB reload views from one actual normal save. No regression suites; deferred at owner request.",
+  "sittingBefore": {
+    "source": {
+      "frames": 61,
+      "fps": 30,
+      "Hips": 0.43174219899725613,
+      "LeftUpLeg": 0.854775708851047,
+      "LeftLeg": 0.6687365711198259,
+      "LeftFoot": 0.5069668945077753,
+      "RightUpLeg": 0.8294444126187113,
+      "RightLeg": 0.5787099171513974,
+      "RightFoot": 0.39322915791585855
+    },
+    "variants": {
+      "normal": {
+        "LeftUpLeg": 7.623686822086668,
+        "LeftLeg": 1.4647644181214199,
+        "LeftFoot": 6.020155989834361,
+        "RightUpLeg": 0.9415226734396799,
+        "RightLeg": 1.3538290104809019,
+        "RightFoot": 0.6513142882173053
+      },
+      "withoutSoleLeveling": {
+        "LeftUpLeg": 0.8837628935231343,
+        "LeftLeg": 1.4647644181214199,
+        "LeftFoot": 0.7322271806783326,
+        "RightUpLeg": 0.9313251705631349,
+        "RightLeg": 1.3538290104809019,
+        "RightFoot": 0.6562347817916033
+      }
+    }
+  },
+  "sittingAfter": {
+    "source": {
+      "frames": 61,
+      "fps": 30,
+      "Hips": 0.43174219899725613,
+      "LeftUpLeg": 0.854775708851047,
+      "LeftLeg": 0.6687365711198259,
+      "LeftFoot": 0.5069668945077753,
+      "RightUpLeg": 0.8294444126187113,
+      "RightLeg": 0.5787099171513974,
+      "RightFoot": 0.39322915791585855
+    },
+    "variants": {
+      "normal": {
+        "LeftUpLeg": 0.8837628935231343,
+        "LeftLeg": 1.4647644181214199,
+        "LeftFoot": 0.7322271806783326,
+        "RightUpLeg": 0.9313251705631349,
+        "RightLeg": 1.3538290104809019,
+        "RightFoot": 0.6562347817916033
+      },
+      "withoutSoleLeveling": {
+        "LeftUpLeg": 0.8837628935231343,
+        "LeftLeg": 1.4647644181214199,
+        "LeftFoot": 0.7322271806783326,
+        "RightUpLeg": 0.9313251705631349,
+        "RightLeg": 1.3538290104809019,
+        "RightFoot": 0.6562347817916033
+      }
+    }
+  },
+  "holdAndBridgeInspection": {
+    "acceptedBridge": {
+      "tracks": 53,
+      "priorTracks": 53,
+      "maximumDelta": 0
+    },
+    "holds": {
+      "lieBackBentWide": {
+        "keys": 2,
+        "maximumEndpointDelta": 0
+      },
+      "sitWide": {
+        "keys": 2,
+        "maximumEndpointDelta": 0
+      }
+    }
+  },
+  "views": [
+    {
+      "name": "back-knees-apart",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "sitting-legs-apart",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "sitting-settled",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "male-sitting-legs-apart",
+      "errors": 0,
+      "glError": 0
+    }
+  ],
+  "exports": [
+    {
+      "name": "rest-holds-export",
+      "clip": "Lie Back Knees Apart",
+      "errors": 0,
+      "glError": 0,
+      "reader": {
+        "bytes": 9734280,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "rest-holds-export",
+        "textures": 17
+      }
+    },
+    {
+      "name": "exported-sit-apart",
+      "clip": "Sit Legs Apart",
+      "errors": 0,
+      "glError": 0,
+      "reader": {
+        "bytes": 9734280,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "rest-holds-export",
+        "textures": 17
+      }
+    }
+  ],
+  "limits": "The sitting measurement covers adjacent samples on the default female body. New holds have identical endpoint bone keys. Hip Bridge comparison covers 53 tracks on that body, not an exhaustive body/wardrobe matrix. Initial seated preview cameras crop a foot; the exported seated view retains the whole body.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "1dde610afee5f324d64f049e9b13fccf09b298c518076383e9a22b46281bdd4b",
+    "runtime/reactor_main.js": "ed45ede772f1187bb4618f615aa629328c013063b3145502e214b4beec14b28e",
+    "editor/src/forge/Character3D/CharacterPoses.js": "21fde484932b8c0562ddc969624883a83244e23e6f395ea31746d8fbd79bd487",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "9aefe779faa29d130674602506707d4b3481fbae30baf47f2acd61e0f21c4789"
+  }
+}

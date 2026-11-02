@@ -1,0 +1,27 @@
+[
+  {
+    "name": "rest-holds-export",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name===\"Lie Back Knees Apart\");if(!clip)throw Error('Missing saved pose');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.75);object.updateMatrixWorld(true);return {target:[0, 0.28, -0.05],savedClip:clip.name};",
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.8,
+      "distance": 3.0
+    }
+  },
+  {
+    "name": "exported-sit-apart",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name===\"Sit Legs Apart\");if(!clip)throw Error('Missing saved pose');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.75);object.updateMatrixWorld(true);return {target:[0, 0.45, 0.15],savedClip:clip.name};",
+    "view": {
+      "yaw": 0.2,
+      "pitch": 0.35,
+      "distance": 3.0
+    },
+    "exportFrom": "rest-holds-export"
+  }
+]

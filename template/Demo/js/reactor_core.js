@@ -1587,7 +1587,12 @@ Graphics.FramePacing = {
             spriteset.drawReactor3D(state);
             return;
         }
-        if (!between) return;
+        if (!between) {
+            // The preceding refresh may have left the layers at an intermediate
+            // scroll position. Publish the tick's origin before this composite.
+            spriteset._tilemap?._prepareV8Frame?.();
+            return;
+        }
         // A flat map: the scroll and the sprites.
         const map = $gameMap, sprites = spriteset._characterSprites || [];
         const screenOf = sprite => { const c = sprite._character, p = this._point || (this._point = {}); p.x = c.screenX(); p.y = c.screenY(); return p; };
@@ -1604,6 +1609,11 @@ Graphics.FramePacing = {
         // tick's origin stands. Recomputing it here put every 2000/2003 panorama, which follows the
         // camera instead, at its top-left corner for the frames between ticks: a flash and a snap back.
         if (parallax && parallax.bitmap && spriteset.rrPlaceLegacyParallax) spriteset.rrPlaceLegacyParallax();
+        // PIXI 8 prepares tile geometry/placement during the game update, once
+        // per tick. Changing origin alone cannot move those prepared layers.
+        // Publish this refresh's origin before PIXI collects its render groups,
+        // with the same temporary camera the character sprites just used.
+        tilemap?._prepareV8Frame?.();
         this.swapCharacters(alpha, false);
         map._displayX = dx; map._displayY = dy;
     },

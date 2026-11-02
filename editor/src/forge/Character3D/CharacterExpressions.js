@@ -1057,7 +1057,7 @@
         if (positions[0]) {
             const S2 = Float32Array.from(M.S);
             for (let i = 0; i < S2.length; i++) S2[i] += D[i];
-            normals[0] = Body.normals(S2, pack.body.source, pack.body.index, pack.vertexCount);
+            normals[0] = Body.gather(Body.skinNormals(pack, S2, result.recipe), pack.body.source, 3);
             // The brows and other skin decals lie along the skin's new normals.
             result.parts.forEach((part, k) => {
                 const m = b.maps[k];

@@ -1,0 +1,36 @@
+[
+  {
+    "name": "athlete-front",
+    "reset": true,
+    "patch": {
+      "outfit": [],
+      "shapes": {
+        "cheekBones": 0,
+        "cheeks": 0
+      }
+    },
+    "view": {
+      "yaw": 0,
+      "pitch": 0.02,
+      "distance": 0.65
+    },
+    "js": "b.pose='apose';b._syncPose();const h=b._result.parts.find(p=>p.name==='Head skin'),eye=h.ocular.reduce((a,e)=>a.map((x,k)=>x+e.c[k]/h.ocular.length),[0,0,0]);return {target:[0,eye[1]-.025,eye[2]-.02]};"
+  },
+  {
+    "name": "athlete-quarter",
+    "reset": true,
+    "patch": {
+      "outfit": [],
+      "shapes": {
+        "cheekBones": 0,
+        "cheeks": 0
+      }
+    },
+    "view": {
+      "yaw": 0.65,
+      "pitch": 0.02,
+      "distance": 0.65
+    },
+    "js": "b.pose='apose';b._syncPose();const h=b._result.parts.find(p=>p.name==='Head skin'),eye=h.ocular.reduce((a,e)=>a.map((x,k)=>x+e.c[k]/h.ocular.length),[0,0,0]);return {target:[0,eye[1]-.025,eye[2]-.02]};"
+  }
+]

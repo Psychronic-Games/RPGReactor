@@ -43,10 +43,112 @@ test('all gender endpoints share feature anchors, topology and normalized skin b
     }
 });
 
+test('Cheekbones controls the visible upper-cheek projection independently of cheek fullness', () => {
+    for (const gender of [0, .5, 1]) {
+        const surface = value => {
+            const r = Body.normalizeRecipe({ gender, shapes: { cheekBones: value, cheeks: 0 } });
+            const built = Body.build(pack, r);
+            return Head.positions(pack, built.shaped, r);
+        };
+        const low = surface(-1), neutral = surface(0), high = surface(1);
+        const rim = Data.common.rim.flat(), eye = rim.reduce((sum, v) => sum + neutral[v * 3 + 1], 0) / rim.length;
+        let lower = 0, upper = 0, count = 0;
+        for (let v = 0; v < neutral.length / 3; v++) {
+            const x = Math.abs(neutral[v * 3]), y = eye - neutral[v * 3 + 1];
+            if (x < .035 || x > .070 || y < .015 || y > .040) continue;
+            lower += neutral[v * 3 + 2] - low[v * 3 + 2];
+            upper += high[v * 3 + 2] - neutral[v * 3 + 2]; count++;
+        }
+        assert.ok(count > 10, 'upper-cheek sample is populated');
+        assert.ok(lower / count > .001, 'lower setting retracts the visible ridge, not only its width');
+        assert.ok(upper / count > .001, 'higher setting projects the visible ridge');
+        assert.ok([...low, ...high].every(Number.isFinite), 'cheekbone geometry stays finite');
+    }
+});
+
+test('Cheeks retracts the broad front cheek below the outer eye instead of only narrowing its cage', () => {
+    for (const gender of [0, .5, 1]) {
+        const surface = value => {
+            const r = Body.normalizeRecipe({ gender, shapes: { cheeks: value, cheekBones: 0 } });
+            return Head.positions(pack, Body.build(pack, r).shaped, r);
+        };
+        const low = surface(-1), neutral = surface(0), high = surface(1);
+        const rim = Data.common.rim.flat(), eye = rim.reduce((sum, v) => sum + neutral[v * 3 + 1], 0) / rim.length;
+        let retract = 0, project = 0, count = 0;
+        for (let v = 0; v < neutral.length / 3; v++) {
+            const x = Math.abs(neutral[v * 3]), y = eye - neutral[v * 3 + 1];
+            if (x < .030 || x > .065 || y < .035 || y > .065) continue;
+            retract += neutral[v * 3 + 2] - low[v * 3 + 2];
+            project += high[v * 3 + 2] - neutral[v * 3 + 2]; count++;
+        }
+        assert.ok(count > 10, 'broad anterior cheek sample is populated');
+        assert.ok(retract / count > .002, 'low Cheeks visibly retracts the marked front surface');
+        assert.ok(project / count > .002, 'high Cheeks restores front cheek fullness');
+    }
+});
+
 test('the face replacement keeps the native outer ears visible', () => {
     const ear = Body.earMask(pack), hidden = (Data.common || Data.F).hide;
     const covered = hidden.filter(v => ear[v] >= 0.02);
     assert.equal(covered.length, 0, 'native ear vertices removed by frontal face coverage: ' + covered.slice(0, 8));
+});
+
+test('default human pupil spacing stays in proportion to the visible head', () => {
+    // An ear-root proxy, not an attractiveness score or a rule for authored
+    // faces. The former defaults had a pupil/width ratio of 0.67-0.70.
+    const ears = Body.earMask(pack), body = [...new Set(pack.body.source)];
+    for (const gender of [0, 0.5, 1]) {
+        const result = build(recipe(gender)), head = result.parts.find(p => p.name === 'Head skin'), P = result.built.shaped;
+        const eyes = head.ocular.map(eye => eye.c), eyeY = (eyes[0][1] + eyes[1][1]) / 2;
+        const roots = body.filter(v => ears[v] > 0.02 && ears[v] < 0.15 && Math.abs(P[v * 3 + 1] - eyeY) < 0.04);
+        assert.ok(roots.length > 8, 'both native ear roots are represented');
+        const width = 2 * Math.min(...roots.map(v => Math.abs(P[v * 3])));
+        const ratio = Math.abs(eyes[0][0] - eyes[1][0]) / width;
+        assert.ok(ratio > 0.42 && ratio < 0.59, 'gender ' + gender + ', pupil/ear-root width: ' + ratio);
+    }
+});
+
+test('the outside face edge meets the native skin without a raised rim', () => {
+    const common = Data.common || Data.F, K = Data.K;
+    for (const gender of [0, 0.5, 1]) {
+        const r = Body.normalizeRecipe(recipe(gender)), built = Body.build(pack, r), P = built.shaped;
+        const surface = Head.positions(pack, P, r);
+        let maximum = 0, sampled = 0;
+        for (let i = 0; i < common.fade.length; i++) {
+            if (common.fade[i] > 0.0001) continue;
+            const point = [0, 0, 0]; let sum = 0;
+            for (let k = 0; k < K; k++) {
+                const v = common.bind[i * K + k] * 3, weight = common.w[i * K + k]; sum += weight;
+                for (let a = 0; a < 3; a++) point[a] += P[v + a] * weight;
+            }
+            maximum = Math.max(maximum, Math.hypot(...point.map((value, a) => surface[i * 3 + a] - value / sum)));
+            sampled++;
+        }
+        assert.ok(sampled > 20, 'the whole outer boundary is sampled');
+        assert.ok(maximum < 0.0006, 'gender ' + gender + ', raised edge in metres: ' + maximum);
+    }
+});
+
+test('minimum cheek controls keep the shared cheek join above the native skin', () => {
+    const s = Data.common, K = Data.K;
+    for (const gender of [0, .5, 1]) {
+        const r = Body.normalizeRecipe({ gender, shapes: { cheeks: -1, cheekBones: -1 } }), built = Body.build(pack, r);
+        const P = built.shaped, Q = Head.positions(pack, P, r), rim = s.rim.flat(), eye = rim.reduce((sum, v) => sum + Q[v * 3 + 1], 0) / rim.length;
+        let sampled = 0, minimum = Infinity;
+        for (let v = 0; v < s.fade.length; v++) {
+            if (s.fade[v] < .02 || s.fade[v] > .9 || Math.abs(Q[v * 3]) < .035 || Math.abs(Q[v * 3]) > .100 || eye - Q[v * 3 + 1] < .015 || eye - Q[v * 3 + 1] > .080) continue;
+            const ids = s.bind.slice(v * K, v * K + 3), [a, b, c] = ids.map(i => i * 3);
+            const u = [0, 1, 2].map(k => P[b + k] - P[a + k]), w = [0, 1, 2].map(k => P[c + k] - P[a + k]);
+            const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], length = Math.hypot(...n);
+            if (length < 1e-12) continue;
+            const point = [0, 0, 0]; let total = 0;
+            for (let k = 0; k < K; k++) { const weight = s.w[v * K + k], i = s.bind[v * K + k]; total += weight; for (let axis = 0; axis < 3; axis++) point[axis] += P[i * 3 + axis] * weight; }
+            const distance = n.reduce((sum, x, k) => sum + x / length * (Q[v * 3 + k] - point[k] / total), 0);
+            minimum = Math.min(minimum, distance); sampled++;
+        }
+        assert.ok(sampled > 10, 'side-cheek overlap is sampled');
+        assert.ok(minimum > -.0002, 'face must not sink through retained native cheek: ' + minimum);
+    }
 });
 
 test('the face edge keeps the native skin shade at its join', () => {

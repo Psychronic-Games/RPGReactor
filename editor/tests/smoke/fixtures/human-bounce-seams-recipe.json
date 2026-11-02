@@ -1,0 +1,19 @@
+{
+  "species": "human",
+  "gender": 0,
+  "cup": 1,
+  "bustBounce": 4,
+  "buttBounce": 4,
+  "anatomy": {
+    "detail": true
+  },
+  "hair": {
+    "style": "shortCrop"
+  },
+  "outfit": [
+    {
+      "id": "leggings",
+      "color": "#526a84"
+    }
+  ]
+}

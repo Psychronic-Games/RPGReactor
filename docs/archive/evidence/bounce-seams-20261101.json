@@ -1,0 +1,317 @@
+{
+  "date": "2026-11-01",
+  "preview": 86,
+  "runtime": "20261101.15",
+  "evidenceRoot": "scratchpad/bounce-seams-20261101/",
+  "change": "Collapse subdivided chest boundary vertices onto the original body edge endpoints, and share final body skin bindings at those endpoints. Pigment overlay shares the detailed chest bindings. Remove the four-influence skin exclusion that left cheek skin rigid. Add upper-leg child glute joints driven by the pelvis joints\u2019 same world displacement. Six tissue tracks are saved.",
+  "scope": "Four native cases: maximum running chest view, rear fast-stretch view, actual visible body vertices measured with Butt bounce 0 versus 4 at an identical running time, and saved-model reload containing all six tissue tracks. Source matrix covers female cups 0.5/2.5 and male cup 0.5 over 25 samples each in running and fast stretch. No regression suites, deferred at the owner\u2019s request.",
+  "before": {
+    "glutes": [
+      {
+        "name": "LeftGlute",
+        "head": [
+          0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ]
+      },
+      {
+        "name": "RightGlute",
+        "head": [
+          -0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ]
+      }
+    ],
+    "stats": [
+      {
+        "part": "Body",
+        "affected": 8,
+        "maxWeight": 0.003067019861191511,
+        "meanWeight": 0.0014843003955320455,
+        "maxDisplacement": 0.00017515502951582706
+      },
+      {
+        "part": "Leggings",
+        "affected": 156,
+        "maxWeight": 0.43034735321998596,
+        "meanWeight": 0.0924175883095207,
+        "maxDisplacement": 0.024576728064348123
+      }
+    ],
+    "chestBoundary": {
+      "vertices": 176,
+      "subdivided": 132,
+      "maxGap": 0.025657333792760462
+    }
+  },
+  "afterUncovered": {
+    "glutes": [
+      {
+        "name": "LeftGlute",
+        "head": [
+          0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ]
+      },
+      {
+        "name": "LeftLowerGlute",
+        "head": [
+          0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ]
+      },
+      {
+        "name": "RightGlute",
+        "head": [
+          -0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ]
+      },
+      {
+        "name": "RightLowerGlute",
+        "head": [
+          -0.08236224949359894,
+          0.8205644488334656,
+          -0.0866205096244812
+        ]
+      }
+    ],
+    "stats": [
+      {
+        "part": "Body",
+        "affected": 186,
+        "maxWeight": 0.4316897690296173,
+        "meanWeight": 0.11938460281848537,
+        "maxDisplacement": 0.024653354803834692
+      },
+      {
+        "part": "Genital detail",
+        "affected": 388,
+        "maxWeight": 0.006073180586099625,
+        "meanWeight": 0.0009579334694620032,
+        "maxDisplacement": 0.000346848712432044
+      }
+    ],
+    "chestBoundary": {
+      "vertices": 44,
+      "subdivided": 0,
+      "maxGap": 0
+    }
+  },
+  "seamMatrix": [
+    {
+      "gender": 0,
+      "cup": 0.5,
+      "boundaryVertices": 44,
+      "boundarySubdivisions": 0,
+      "overlaySharesBindings": true,
+      "minWeight": 0,
+      "weightError": 4.842877388000488e-08,
+      "cases": [
+        {
+          "id": "run",
+          "gap": 0,
+          "finite": true
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "gap": 0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "gender": 0,
+      "cup": 2.5,
+      "boundaryVertices": 44,
+      "boundarySubdivisions": 0,
+      "overlaySharesBindings": true,
+      "minWeight": 0,
+      "weightError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "gap": 0,
+          "finite": true
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "gap": 0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "gender": 1,
+      "cup": 0.5,
+      "boundaryVertices": 36,
+      "boundarySubdivisions": 0,
+      "overlaySharesBindings": true,
+      "minWeight": 0,
+      "weightError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "gap": 0,
+          "finite": true
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "gap": 0,
+          "finite": true
+        }
+      ]
+    }
+  ],
+  "offBindings": [
+    {
+      "gender": 0,
+      "minWeight": 0,
+      "sumError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "maximumVertexDelta": 0.0010939538478851318,
+          "bodyVertexDelta": 0.0009732842445373535
+        },
+        {
+          "id": "sitKneesUp",
+          "maximumVertexDelta": 0.002762429416179657,
+          "bodyVertexDelta": 0.0014401376247406006
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "maximumVertexDelta": 0.0020635277032852173,
+          "bodyVertexDelta": 0.000949665904045105
+        }
+      ],
+      "defaults": {
+        "bust": 0.15,
+        "butt": 0.15
+      }
+    },
+    {
+      "gender": 1,
+      "minWeight": 0,
+      "sumError": 4.6566128730773926e-08,
+      "cases": [
+        {
+          "id": "run",
+          "maximumVertexDelta": 0.0012107044458389282,
+          "bodyVertexDelta": 0.0009998083114624023
+        },
+        {
+          "id": "sitKneesUp",
+          "maximumVertexDelta": 0.0035624727606773376,
+          "bodyVertexDelta": 0.0017928928136825562
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "maximumVertexDelta": 0.0019637346267700195,
+          "bodyVertexDelta": 0.0010456740856170654
+        }
+      ],
+      "defaults": {
+        "bust": 0.15,
+        "butt": 0.15
+      }
+    }
+  ],
+  "views": [
+    {
+      "name": "chest-seam",
+      "note": {
+        "pose": "run",
+        "target": [
+          0,
+          1.15,
+          0.05
+        ]
+      },
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "fast-stretch-rear",
+      "note": {
+        "pose": "fastKneelingBackStretch",
+        "target": [
+          0,
+          0.43,
+          0.06
+        ]
+      },
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "live-butt-mesh",
+      "note": {
+        "peak": 0.21185185015201569,
+        "target": [
+          0,
+          0.82,
+          -0.04
+        ],
+        "vertices": 138,
+        "visibleMeshDisplacement": 0.02474050274641937
+      },
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "saved-seams",
+      "note": {
+        "clip": "Fast Kneeling Back Stretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ],
+        "tracks": [
+          "LeftBust.position",
+          "RightBust.position",
+          "LeftGlute.position",
+          "LeftLowerGlute.position",
+          "RightGlute.position",
+          "RightLowerGlute.position"
+        ]
+      },
+      "errors": 0,
+      "glError": 0,
+      "exported": {
+        "bytes": 10631588,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-seams",
+        "textures": 17
+      }
+    }
+  ],
+  "videos": [
+    "chest-seam.webm",
+    "fast-stretch-rear.webm"
+  ],
+  "limits": [
+    "Extreme-strength faceting and broad wardrobe/body-shape fitting remain under visual review. This is clip-baked motion, without a collision solver.",
+    "Four-influence reduction can slightly change baseline posing: inspected body coordinates differ by at most 0.0018 m and fitted cloth by 0.0036 m from the original bindings at Off.",
+    "The saved native view covers clothed fast stretch and six-track playback. Detailed uncovered chest continuity is covered by native running and the source seam matrix.",
+    "Before butt statistics use a leggings-covered recipe; afterUncovered uses an uncovered recipe. Visible running displacement is established independently by the native live slider case, not by comparing those vertex counts."
+  ],
+  "runtimeSync": "40 files updated across 20 bundled projects.",
+  "codeSha256": {
+    "editor/src/forge/Character3D/HumanBody.js": "12d772f2104f06dbe0af92e790e662511c317f8bcc38866cda195e113a0fafcc",
+    "editor/src/forge/Character3D/CharacterDetail.js": "92786b5879ec7f3764228096e66e361795d9e72bf780b196868861fcdf5a7c23",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "f45cc32129d4b00a38746a201462585d9be9ce5b335d3bf9486741dc26eceac3",
+    "runtime/reactor_3d_motions.js": "0ecfde4ecad6fc82923114c2d5988715c91e845c9c1456e8a0da3435cded899a",
+    "runtime/reactor_main.js": "376aedaef01dbe376016cc561824f8a068a9c9547e2dc2337f623e7a3c0ce340"
+  }
+}

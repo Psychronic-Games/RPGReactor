@@ -1,0 +1,763 @@
+{
+  "date": "2026-11-01",
+  "preview": 96,
+  "runtime": "20261101.24",
+  "evidenceRoot": "scratchpad/body-face-refinement-20261101/",
+  "changes": [
+    "Hamstring stretch reduces the pelvic hinge and pelvic side tilt while retaining the deep spinal fold and explicit toe contacts. This reduces the opposing pelvis/thigh rotations that collapsed mixed glute skin.",
+    "The averaged underside occlusion gains contrast and gentle downward-facing attenuation, bounded at 0.70. Fine chest skin inherits the same field. It also applies with no anatomical detail patch.",
+    "The native Cheekbones target primarily moved lateral width. The visible human sculpt now has a smooth malar projection/width control, bounded at extreme values, with a slightly softer neutral ridge. Local normals follow the adjusted surface. Cheeks remains independent fullness."
+  ],
+  "scope": "Visual iteration; face attractiveness remains open to owner review. Full suites deferred at owner request. Saved user designs/exports preserved; native save/reload uses disposable harness projects.",
+  "sourceVerification": {
+    "face": [
+      {
+        "gender": 0,
+        "neutralAverageRidgeRetraction": 0.0009766355637581118,
+        "maximumEyeRimDisplacement": 0,
+        "controls": [
+          {
+            "value": -3,
+            "averageRidgeProjection": 0.11442396873908658
+          },
+          {
+            "value": -1,
+            "averageRidgeProjection": 0.116608627140522
+          },
+          {
+            "value": 0,
+            "averageRidgeProjection": 0.11835061554466525
+          },
+          {
+            "value": 1,
+            "averageRidgeProjection": 0.11984012011558778
+          },
+          {
+            "value": 3,
+            "averageRidgeProjection": 0.12079333694231126
+          }
+        ]
+      },
+      {
+        "gender": 0.5,
+        "neutralAverageRidgeRetraction": 0.001014850648312733,
+        "maximumEyeRimDisplacement": 0,
+        "controls": [
+          {
+            "value": -3,
+            "averageRidgeProjection": 0.12214316556165958
+          },
+          {
+            "value": -1,
+            "averageRidgeProjection": 0.12427720427513123
+          },
+          {
+            "value": 0,
+            "averageRidgeProjection": 0.12601616606116295
+          },
+          {
+            "value": 1,
+            "averageRidgeProjection": 0.1275714597311513
+          },
+          {
+            "value": 3,
+            "averageRidgeProjection": 0.12858727638577594
+          }
+        ]
+      },
+      {
+        "gender": 1,
+        "neutralAverageRidgeRetraction": 0.0010207821256839312,
+        "maximumEyeRimDisplacement": 0,
+        "controls": [
+          {
+            "value": -3,
+            "averageRidgeProjection": 0.130617127682154
+          },
+          {
+            "value": -1,
+            "averageRidgeProjection": 0.13268562836142686
+          },
+          {
+            "value": 0,
+            "averageRidgeProjection": 0.13438197511893052
+          },
+          {
+            "value": 1,
+            "averageRidgeProjection": 0.13595166687781995
+          },
+          {
+            "value": 3,
+            "averageRidgeProjection": 0.13699169657551324
+          }
+        ]
+      }
+    ],
+    "glutes": [
+      {
+        "name": "athlete",
+        "stage": "before",
+        "vertices": 82,
+        "blendDeterminantMinimum": 0.04846481579473033,
+        "blendDeterminantP10": 0.13825839037605936
+      },
+      {
+        "name": "athlete",
+        "stage": "after",
+        "vertices": 82,
+        "blendDeterminantMinimum": 0.30715892987447596,
+        "blendDeterminantP10": 0.41923008541480955
+      },
+      {
+        "name": "female",
+        "stage": "before",
+        "vertices": 108,
+        "blendDeterminantMinimum": 0.05476122455736806,
+        "blendDeterminantP10": 0.17225478188624585
+      },
+      {
+        "name": "female",
+        "stage": "after",
+        "vertices": 108,
+        "blendDeterminantMinimum": 0.3157481322473278,
+        "blendDeterminantP10": 0.4381324676692068
+      },
+      {
+        "name": "male",
+        "stage": "before",
+        "vertices": 136,
+        "blendDeterminantMinimum": 0.06233421462028088,
+        "blendDeterminantP10": 0.17709265094453353
+      },
+      {
+        "name": "male",
+        "stage": "after",
+        "vertices": 136,
+        "blendDeterminantMinimum": 0.33207939142113296,
+        "blendDeterminantP10": 0.45982596325611197
+      }
+    ],
+    "shading": {
+      "vertices": 344,
+      "averageOcclusionBefore": 0.9304894033906072,
+      "averageOcclusionAfter": 0.8871376445127088
+    }
+  },
+  "poseInspection": [
+    {
+      "name": "athlete",
+      "id": "jumpingJacks",
+      "stage": "before",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 6.089023344568854,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.3563298336705132,
+      "shoulderBlendVolumeMinimum": 0.06266718973381569,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "jumpingJacks",
+      "stage": "after",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 6.089023344568854,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.3563298336705132,
+      "shoulderBlendVolumeMinimum": 0.06266718973381569,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "pullUp",
+      "stage": "before",
+      "loop": 0,
+      "contact": 5.552043542247171e-06,
+      "maximumAdjacentTurnDegrees": 1.3980739938904978,
+      "minimumElbowForwardOffset": 0.022448387914283288,
+      "shoulderBlendVolumeP10": 0.36873946567464116,
+      "shoulderBlendVolumeMinimum": 0.20879237353659824,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "pullUp",
+      "stage": "after",
+      "loop": 0,
+      "contact": 5.552043542247171e-06,
+      "maximumAdjacentTurnDegrees": 1.3980739938904978,
+      "minimumElbowForwardOffset": 0.022448387914283288,
+      "shoulderBlendVolumeP10": 0.36873946567464116,
+      "shoulderBlendVolumeMinimum": 0.20879237353659824,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "hamstringStretch",
+      "stage": "before",
+      "loop": 0,
+      "contact": 3.496475445788045e-05,
+      "maximumAdjacentTurnDegrees": 3.150544519421267,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.23594249953420368,
+            0.015278680405832325,
+            0.1853429686430133
+          ],
+          "toeSurfaceGap": 0.002035181641122822
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.23594248441311808,
+            0.015278679242835515,
+            0.1853429824851368
+          ],
+          "toeSurfaceGap": 0.002035181522412842
+        }
+      ]
+    },
+    {
+      "name": "athlete",
+      "id": "hamstringStretch",
+      "stage": "after",
+      "loop": 0,
+      "contact": 3.594204651469007e-05,
+      "maximumAdjacentTurnDegrees": 2.826505535408854,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.2359424590719782,
+            0.015278686710824937,
+            0.18534301790945817
+          ],
+          "toeSurfaceGap": 0.002035162562930928
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.23594248131128281,
+            0.015278691876345493,
+            0.18534304615459504
+          ],
+          "toeSurfaceGap": 0.002035187560115391
+        }
+      ]
+    },
+    {
+      "name": "female",
+      "id": "jumpingJacks",
+      "stage": "before",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 5.581998408182187,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.3685827545429855,
+      "shoulderBlendVolumeMinimum": 0.06770656920208468,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "jumpingJacks",
+      "stage": "after",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 5.581998408182187,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.3685827545429855,
+      "shoulderBlendVolumeMinimum": 0.06770656920208468,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "pullUp",
+      "stage": "before",
+      "loop": 0,
+      "contact": 5.588799984037948e-06,
+      "maximumAdjacentTurnDegrees": 1.4359660576701372,
+      "minimumElbowForwardOffset": 0.02484288208909612,
+      "shoulderBlendVolumeP10": 0.37303372198078993,
+      "shoulderBlendVolumeMinimum": 0.204195824194025,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "pullUp",
+      "stage": "after",
+      "loop": 0,
+      "contact": 5.588799984037948e-06,
+      "maximumAdjacentTurnDegrees": 1.4359660576701372,
+      "minimumElbowForwardOffset": 0.02484288208909612,
+      "shoulderBlendVolumeP10": 0.37303372198078993,
+      "shoulderBlendVolumeMinimum": 0.204195824194025,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "hamstringStretch",
+      "stage": "before",
+      "loop": 0,
+      "contact": 3.297930303563463e-05,
+      "maximumAdjacentTurnDegrees": 3.091449318756384,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.23494180286525224,
+            0.015208594836850935,
+            0.1876268609348302
+          ],
+          "toeSurfaceGap": 0.0019792789538293316
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.23494180286525224,
+            0.015208594836850935,
+            0.1876268609348302
+          ],
+          "toeSurfaceGap": 0.0019792789538293316
+        }
+      ]
+    },
+    {
+      "name": "female",
+      "id": "hamstringStretch",
+      "stage": "after",
+      "loop": 0,
+      "contact": 3.633879813150052e-05,
+      "maximumAdjacentTurnDegrees": 2.8184365870491086,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.23494177342950837,
+            0.015208604727651655,
+            0.18762689380426556
+          ],
+          "toeSurfaceGap": 0.001979292651875748
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.23494177342950837,
+            0.015208604727651655,
+            0.18762689380426556
+          ],
+          "toeSurfaceGap": 0.001979292651875748
+        }
+      ]
+    },
+    {
+      "name": "male",
+      "id": "jumpingJacks",
+      "stage": "before",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 5.714433588523404,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.32495295964398013,
+      "shoulderBlendVolumeMinimum": 0.05238645564573598,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "jumpingJacks",
+      "stage": "after",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 5.714433588523404,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.32495295964398013,
+      "shoulderBlendVolumeMinimum": 0.05238645564573598,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "pullUp",
+      "stage": "before",
+      "loop": 0,
+      "contact": 6.260012625943875e-06,
+      "maximumAdjacentTurnDegrees": 1.2864160648073621,
+      "minimumElbowForwardOffset": 0.03076285600231031,
+      "shoulderBlendVolumeP10": 0.40151443475510473,
+      "shoulderBlendVolumeMinimum": 0.24208089996380547,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "pullUp",
+      "stage": "after",
+      "loop": 0,
+      "contact": 6.260012625943875e-06,
+      "maximumAdjacentTurnDegrees": 1.2864160648073621,
+      "minimumElbowForwardOffset": 0.03076285600231031,
+      "shoulderBlendVolumeP10": 0.40151443475510473,
+      "shoulderBlendVolumeMinimum": 0.24208089996380547,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "hamstringStretch",
+      "stage": "before",
+      "loop": 0,
+      "contact": 2.4452829390885563e-05,
+      "maximumAdjacentTurnDegrees": 4.923808642038608,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.2538517228046263,
+            0.018502305446430403,
+            0.209656673970414
+          ],
+          "toeSurfaceGap": 0.002746671670812311
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.2538517228046263,
+            0.018502305446430403,
+            0.209656673970414
+          ],
+          "toeSurfaceGap": 0.002746671670812311
+        }
+      ]
+    },
+    {
+      "name": "male",
+      "id": "hamstringStretch",
+      "stage": "after",
+      "loop": 0,
+      "contact": 1.8811030155717353e-05,
+      "maximumAdjacentTurnDegrees": 2.990892618803791,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.2538517189972257,
+            0.018502323840578542,
+            0.20965675213257973
+          ],
+          "toeSurfaceGap": 0.002746722850250143
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.2538517189972257,
+            0.018502323840578542,
+            0.20965675213257973
+          ],
+          "toeSurfaceGap": 0.002746722850250143
+        }
+      ]
+    }
+  ],
+  "poseScope": "49 sampled phases plus all keys for three poses on the saved Athlete, default female and default male, before/after. Contacts, finite values and loop continuity pass; Push-ups, Sit-ups, Squat, Straddle and Upright straddle keys compare unchanged on all three builds.",
+  "gluteMetric": "Determinant of the weighted rotation matrix at mixed pelvis/upper-leg vertices near each shaped glute. Six deep-reaching phases, with saved soft-tissue motion. Tenth-percentile and minimum values improve on all three builds. This is a linear-skinning compression proxy, not a full geometric Jacobian or proof of volume preservation.",
+  "faceMetric": "Forward projection is measured on the visible upper-cheek region for Cheekbones values -3, -1, 0, 1 and 3 at female/intermediate/male endpoints. It changes monotonically. Neutral ridge retraction averages about 1 mm; exact eye-rim anchors remain unchanged against Preview 95.",
+  "shadingMetric": "Same raw AO input, same saved Athlete skin. In the 344 source vertices where the underside mask exceeds 0.5, mean light transmission decreases from approximately 0.9305 to 0.8871. The new focused check verifies local bounds and operation without a detail patch.",
+  "surfaceClearance": [
+    {
+      "id": "hamstringStretch",
+      "stage": "before",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.010518154595499728,
+      "worst": null
+    },
+    {
+      "id": "hamstringStretch",
+      "stage": "after",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.0140304134672737,
+      "worst": null
+    }
+  ],
+  "surfaceMethod": "25 phases of the saved Athlete Hamstring stretch with soft-tissue bounce, 4,168 forearm/hand/finger vertices against 2,146 posed leg triangles. Local penetration threshold 3 mm within 4 cm. No detected penetration before or after this change; final minimum sampled gap about 14 mm. Sampled, not continuous collision detection.",
+  "baselineNativeViews": [
+    {
+      "name": "female-neutral",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "male-neutral",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "hamstring-glutes",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          0.95,
+          -0.07
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "bust-underside",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.0827501511573792,
+          0.07992536125704647
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    }
+  ],
+  "finalNativeViews": [
+    {
+      "name": "hamstring-glutes",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          0.72,
+          -0.07
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "hamstring-glutes-other",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          0.72,
+          -0.07
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "bust-underside",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.0827501511573792,
+          0.07992536125704647
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "female-low",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "female-neutral",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "male-low",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "male-neutral",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "saved-hamstring-glutes",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "savedClip": "Hamstring Stretch",
+        "target": [
+          0,
+          0.72,
+          -0.07
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 11747016,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-hamstring-glutes",
+        "textures": 16
+      },
+      "closedEyes": null
+    },
+    {
+      "name": "saved-bust-underside",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.0827501511573792,
+          0.07992536125704647
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 11747016,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-hamstring-glutes",
+        "textures": 16
+      },
+      "closedEyes": null
+    },
+    {
+      "name": "saved-cheekbones-low",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "exported": {
+        "bytes": 8147296,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-cheekbones-low",
+        "textures": 20
+      },
+      "closedEyes": null
+    },
+    {
+      "name": "saved-cheekbones-blink",
+      "errors": 0,
+      "glError": 0,
+      "note": {},
+      "validationError": null,
+      "exported": {
+        "bytes": 8147296,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-cheekbones-low",
+        "textures": 20
+      },
+      "closedEyes": [
+        0.9714285714285714,
+        1
+      ]
+    }
+  ],
+  "focusedTests": {
+    "passed": 6,
+    "failed": 0,
+    "log": "scratchpad/body-face-refinement-20261101/targeted-tests.log",
+    "names": [
+      "smooth underside occlusion deepens without requiring anatomical chest detail",
+      "the browser drag shaper uses the same human head data as the complete model",
+      "the visible face and its native driver have no gender midpoint switch",
+      "Cheekbones controls the visible upper-cheek projection independently of cheek fullness",
+      "the outside face edge meets the native skin without a raised rim",
+      "a full blink unfolds both lids over the globe while preserving the brow surface"
+    ]
+  },
+  "fixtures": [
+    "editor/tests/smoke/fixtures/human-body-refinement.json",
+    "editor/tests/smoke/fixtures/human-cheekbone-controls.json",
+    "editor/tests/smoke/fixtures/human-body-face-exports.json"
+  ],
+  "runtimeSync": "40 files refreshed across 20 bundled projects; --check reports all 20 match runtime/.",
+  "syntaxChecks": [
+    "runtime/reactor_3d_motions.js",
+    "runtime/reactor_main.js",
+    "editor/src/forge/Character3D/Character3DBuilder.js",
+    "editor/src/forge/Character3D/CharacterHeadMesh.js",
+    "editor/src/forge/Character3D/CharacterShading.js",
+    "editor/tests/character-shared-head.test.cjs",
+    "editor/tests/character-anatomy-controls.test.cjs"
+  ],
+  "limits": [
+    "Native glute/underside views use the saved Athlete proportions. Other female/male bodies have numeric coverage, not exhaustive visual or wardrobe coverage.",
+    "The before face captures retain the saved hair because the initial body-normalized patch omitted cosmetic fields; they are diagnostic rather than exact pixel comparisons. Final face captures explicitly use bald hair and natural skin.",
+    "The baseline rear camera cropped the lower body; final rear views use wider framing. Pose/skin metrics provide corresponding before/after measurements.",
+    "Body/face captures precede the Preview 96 cache marker. Saved captures use Preview 96. The final no-detail AO guard change preserves all pictured detailed-bust behavior and is covered by the focused no-patch check.",
+    "The malar field applies to the shared human face; other species keep their native sculpt and targets. No generated HeadMeshData.js edit or regeneration was needed.",
+    "Current face controls repair the identified feature response; this is not a claim that overall facial attractiveness or every remaining face artifact is resolved.",
+    "Re-save existing characters to receive the changed geometry, shading and baked stretch clips."
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "84fda414525c32fbb3296760e376e01105e62022777d9d076f8dcb3308735342",
+    "runtime/reactor_main.js": "eea5f1c7deccef81e18ba3489aa2ed2331d073a67bbd7dcb714eebaa41918178",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "e66410cfabbc7a427730648cf5fbf9d960ca801315fc6f18f64544b24826858b",
+    "editor/src/forge/Character3D/CharacterHeadMesh.js": "b59e30bd4b4383b401f0f17d0e926b3c665db74faf7c3387a5363d3c84133c6c",
+    "editor/src/forge/Character3D/CharacterShading.js": "045fefbb9974fbafee8ff09236bbc33b16bb1c37cde28d6cc21256fe94bd58a4",
+    "editor/tests/character-shared-head.test.cjs": "91a90c8ca36ef55fd63c6c186d2a109f631d2e8bee89fe01075b76456f275156",
+    "editor/tests/character-anatomy-controls.test.cjs": "ad38c45f83f2be150df34520e43cba534e34efba59de0599d095eba32ed9702b"
+  }
+}

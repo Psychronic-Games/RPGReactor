@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-01",
+  "preview": 70,
+  "runtime": "20261031.1",
+  "visualAcceptance": "open; owner review pending",
+  "validationPolicy": "Owner requested regression suites be deferred until the visual result is accepted. No suites run for Preview 70; Preview 69 results do not validate these changes. Abdominal/transition fixtures need updating at final validation.",
+  "changes": [
+    "Bound three abdominal pairs below the bust, around the navel; rounded stronger extreme relief with additional middle-pair mass. Natural Belly Tone unchanged.",
+    "Interpolate rig rest offsets and inverse bindings with geometry, normals, UVs, skin weights and camera. Linear streaming transitions replace repeated ease-in.",
+    "Refresh human motion clips with body dimensions and evaluate immediately to avoid a rest-pose flash."
+  ],
+  "evidenceRoot": "scratchpad/face-followup-20261101/",
+  "retained": [
+    "review-70/female-abs.png",
+    "review-70/male-abs.png",
+    "review-70/gender-idle.webm"
+  ],
+  "scope": [
+    "Two native abdominal views at extreme tone; no browser/GL errors.",
+    "The larger-bust view in final-placement-70 verifies the same placement bounds before the middle-pair gain adjustment.",
+    "Recorded gender/Idle movement has seven completed builds and 24 transition frames, ending at gender 1. This was a synthetic-input visual preview, not a real-pointer regression audit; reverse inputs used an element replaced on commit and did not exercise the reverse gesture.",
+    "Early placement-70 and rounded-70 images are intermediate appearance trials."
+  ],
+  "codeSha256": {
+    "editor/src/forge/Character3D/Character3DBuilder.js": "e116aa57857b424362a5afb9a6d013a2fc3c7e3b2f654c8af977c287e4a08446",
+    "editor/src/forge/Character3D/HumanBody.js": "3f432d9ecf356266924a45c049c3b96416adc838038ce0c06d0cdef3b4fe1a08"
+  },
+  "previewSummary": [
+    {
+      "name": "female-abs",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "male-abs",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "gender-idle-finished",
+      "errors": 0,
+      "glError": 0
+    }
+  ]
+}

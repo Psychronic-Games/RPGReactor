@@ -1,0 +1,462 @@
+{
+  "date": "2026-11-01",
+  "preview": 97,
+  "runtime": "20261101.24",
+  "evidenceRoot": "scratchpad/cheek-bulges-20261101/",
+  "changes": [
+    "Addresses the broad anterior cheek below the outer eye and beside the nose, as marked in the owner screenshot. The previous correction covered a smaller upper ridge.",
+    "The shared human sculpt has a flatter neutral anterior cheek and signed forward-fullness control from Cheeks, with a smaller contribution from Cheekbones on the adjoining plane.",
+    "Projection weights are calculated on reference vertex identities and cached per pack/head data/gender, retaining one gender per pack. Narrowing the cage cannot move the correction away from its own target.",
+    "Six local cheek-normal averaging passes soften coarse satin highlights; eyelid and native seam anchor positions remain unchanged."
+  ],
+  "scope": "Focused visual iteration on the marked cheek bulges. Full suites deferred at owner request. Overall face attractiveness and visual acceptance remain open. Saved user designs and exports preserved.",
+  "sourceInspection": [
+    {
+      "name": "athlete",
+      "vertices": 162,
+      "averageRetraction": 0.002895735894088392,
+      "maximumRetraction": 0.005856320261955261,
+      "maximumLidAnchorDisplacement": 0,
+      "maximumSeamDisplacement": 0,
+      "controls": [
+        {
+          "key": "cheeks",
+          "value": -3,
+          "meanForwardProjection": 0.11242372045914333
+        },
+        {
+          "key": "cheeks",
+          "value": -1,
+          "meanForwardProjection": 0.11390412842601906
+        },
+        {
+          "key": "cheeks",
+          "value": 0,
+          "meanForwardProjection": 0.11664046080392083
+        },
+        {
+          "key": "cheeks",
+          "value": 1,
+          "meanForwardProjection": 0.12135679389775535
+        },
+        {
+          "key": "cheeks",
+          "value": 3,
+          "meanForwardProjection": 0.12403343719096831
+        },
+        {
+          "key": "cheekBones",
+          "value": -3,
+          "meanForwardProjection": 0.11319846903652321
+        },
+        {
+          "key": "cheekBones",
+          "value": -1,
+          "meanForwardProjection": 0.11495320604723176
+        },
+        {
+          "key": "cheekBones",
+          "value": 0,
+          "meanForwardProjection": 0.11656744805751024
+        },
+        {
+          "key": "cheekBones",
+          "value": 1,
+          "meanForwardProjection": 0.11812658065263136
+        },
+        {
+          "key": "cheekBones",
+          "value": 3,
+          "meanForwardProjection": 0.11914653298847469
+        }
+      ]
+    },
+    {
+      "name": "female",
+      "vertices": 168,
+      "averageRetraction": 0.0027010923340207056,
+      "maximumRetraction": 0.005632363259792328,
+      "maximumLidAnchorDisplacement": 0,
+      "maximumSeamDisplacement": 0,
+      "controls": [
+        {
+          "key": "cheeks",
+          "value": -3,
+          "meanForwardProjection": 0.10520750075756084
+        },
+        {
+          "key": "cheeks",
+          "value": -1,
+          "meanForwardProjection": 0.106597696164889
+        },
+        {
+          "key": "cheeks",
+          "value": 0,
+          "meanForwardProjection": 0.1090508760618312
+        },
+        {
+          "key": "cheeks",
+          "value": 1,
+          "meanForwardProjection": 0.11366542002984456
+        },
+        {
+          "key": "cheeks",
+          "value": 3,
+          "meanForwardProjection": 0.11632375179656915
+        },
+        {
+          "key": "cheekBones",
+          "value": -3,
+          "meanForwardProjection": 0.10578175793801035
+        },
+        {
+          "key": "cheekBones",
+          "value": -1,
+          "meanForwardProjection": 0.10745208093985206
+        },
+        {
+          "key": "cheekBones",
+          "value": 0,
+          "meanForwardProjection": 0.1090508760618312
+        },
+        {
+          "key": "cheekBones",
+          "value": 1,
+          "meanForwardProjection": 0.11050391822521176
+        },
+        {
+          "key": "cheekBones",
+          "value": 3,
+          "meanForwardProjection": 0.11145446759959061
+        }
+      ]
+    },
+    {
+      "name": "intermediate",
+      "vertices": 162,
+      "averageRetraction": 0.002950579617862348,
+      "maximumRetraction": 0.0059744566679000854,
+      "maximumLidAnchorDisplacement": 0,
+      "maximumSeamDisplacement": 0,
+      "controls": [
+        {
+          "key": "cheeks",
+          "value": -3,
+          "meanForwardProjection": 0.11513992329990422
+        },
+        {
+          "key": "cheeks",
+          "value": -1,
+          "meanForwardProjection": 0.1166585283698859
+        },
+        {
+          "key": "cheeks",
+          "value": 0,
+          "meanForwardProjection": 0.11897991726427902
+        },
+        {
+          "key": "cheeks",
+          "value": 1,
+          "meanForwardProjection": 0.12389136266745167
+        },
+        {
+          "key": "cheeks",
+          "value": 3,
+          "meanForwardProjection": 0.12692579530455447
+        },
+        {
+          "key": "cheekBones",
+          "value": -3,
+          "meanForwardProjection": 0.11535634670728519
+        },
+        {
+          "key": "cheekBones",
+          "value": -1,
+          "meanForwardProjection": 0.11719322618510988
+        },
+        {
+          "key": "cheekBones",
+          "value": 0,
+          "meanForwardProjection": 0.11897991726427902
+        },
+        {
+          "key": "cheekBones",
+          "value": 1,
+          "meanForwardProjection": 0.12062599923875597
+        },
+        {
+          "key": "cheekBones",
+          "value": 3,
+          "meanForwardProjection": 0.12170283243428041
+        }
+      ]
+    },
+    {
+      "name": "male",
+      "vertices": 144,
+      "averageRetraction": 0.0032310843364232117,
+      "maximumRetraction": 0.006308272480964661,
+      "maximumLidAnchorDisplacement": 0,
+      "maximumSeamDisplacement": 0,
+      "controls": [
+        {
+          "key": "cheeks",
+          "value": -3,
+          "meanForwardProjection": 0.12519331985256738
+        },
+        {
+          "key": "cheeks",
+          "value": -1,
+          "meanForwardProjection": 0.12685629606453908
+        },
+        {
+          "key": "cheeks",
+          "value": 0,
+          "meanForwardProjection": 0.129398375749588
+        },
+        {
+          "key": "cheeks",
+          "value": 1,
+          "meanForwardProjection": 0.13423284179427558
+        },
+        {
+          "key": "cheeks",
+          "value": 3,
+          "meanForwardProjection": 0.13770785932946536
+        },
+        {
+          "key": "cheekBones",
+          "value": -3,
+          "meanForwardProjection": 0.12536004765166175
+        },
+        {
+          "key": "cheekBones",
+          "value": -1,
+          "meanForwardProjection": 0.12740242667496204
+        },
+        {
+          "key": "cheekBones",
+          "value": 0,
+          "meanForwardProjection": 0.129398375749588
+        },
+        {
+          "key": "cheekBones",
+          "value": 1,
+          "meanForwardProjection": 0.13125574588775635
+        },
+        {
+          "key": "cheekBones",
+          "value": 3,
+          "meanForwardProjection": 0.13247079924783772
+        }
+      ]
+    }
+  ],
+  "sourceMethod": "Compare Preview 96 and current Head.positions on identical shaped bodies. Measure the marked broad-cheek region (absolute x 30\u201370 mm, 25\u201370 mm below the eye line) on saved Athlete and female/intermediate/male defaults; inspect -3,-1,0,1,3 values of Cheeks and Cheekbones for finite and monotonic forward projection.",
+  "sourceOutcome": "Mean neutral retraction approximately 2.7\u20133.2 mm across the sampled region, maximum approximately 5.6\u20136.3 mm. Eyelid anchors and zero-fade seam positions have zero measured displacement. Both controls change forward projection monotonically in the checked cases.",
+  "baselineNativeViews": [
+    {
+      "name": "athlete-front",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "athlete-quarter",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "athlete-controls-low",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582347869873,
+          0.1015816696839673
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    }
+  ],
+  "normalDiagnostic": [
+    {
+      "name": "athlete-geometric-normals",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    }
+  ],
+  "finalNativeViews": [
+    {
+      "name": "athlete-front",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "athlete-quarter",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "male-front",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.6192816378814836,
+          0.11535501722778592
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "male-cheeks-low",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.6192816378814836,
+          0.11535501722778592
+        ]
+      },
+      "validationError": null,
+      "closedEyes": null
+    },
+    {
+      "name": "saved-cheek-surface",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 9539788,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-cheek-surface",
+        "textures": 16
+      },
+      "closedEyes": null
+    },
+    {
+      "name": "saved-cheek-blink",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.4939582375543459,
+          0.10158210131206681
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 9539788,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-cheek-surface",
+        "textures": 16
+      },
+      "closedEyes": [
+        1,
+        1
+      ]
+    }
+  ],
+  "focusedTests": {
+    "passed": 6,
+    "failed": 0,
+    "log": "scratchpad/cheek-bulges-20261101/targeted-tests.log",
+    "names": [
+      "the browser drag shaper uses the same human head data as the complete model",
+      "the visible face and its native driver have no gender midpoint switch",
+      "Cheekbones controls the visible upper-cheek projection independently of cheek fullness",
+      "Cheeks retracts the broad front cheek below the outer eye instead of only narrowing its cage",
+      "the outside face edge meets the native skin without a raised rim",
+      "a full blink unfolds both lids over the globe while preserving the brow surface"
+    ]
+  },
+  "fixtures": [
+    "editor/tests/smoke/fixtures/human-cheek-surface.json",
+    "editor/tests/smoke/fixtures/human-cheek-surface-exports.json"
+  ],
+  "syntaxChecks": [
+    "editor/src/forge/Character3D/CharacterHeadMesh.js",
+    "editor/src/forge/Character3D/Character3DBuilder.js",
+    "editor/tests/character-shared-head.test.cjs"
+  ],
+  "limits": [
+    "The first baseline harness captured three valid views before a fourth diagnostic script failed due to a duplicate local declaration. The fixed geometric-normal diagnostic ran separately and passed; its unchanged bulges support a geometry issue rather than only authored normals.",
+    "after/ and refined/ are intermediate experiments. Final evidence is final/ and saved/. The refined region was broadened and its normals averaged before those final captures.",
+    "Final source views precede only the Preview 97 cache marker. Saved and male captures use Preview 97 and final code. The saved face reload includes a complete blink.",
+    "Combined Extreme values of Cheeks and Cheekbones intentionally allow a much hollower face. They are range diagnostics, not proposed neutral defaults.",
+    "The source controls/geometry checks cover four builds; native views use the saved Athlete and a male variant. This does not exhaust every heritage, proportion, material or expression.",
+    "Only the shared human head is affected. Generated HeadMeshData.js and runtime motion files were not changed by this task.",
+    "Re-save existing characters to receive the revised face geometry and normals."
+  ],
+  "codeSha256": {
+    "editor/src/forge/Character3D/CharacterHeadMesh.js": "a8d8add70733a0d064ac45bc0b6f12d42adcdb14795ef69dbfcd0ef8013d9179",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "5f06c59b15f4fee9b2c7a9046ad5013c52f46bf84d2059cc454f9939607e2316",
+    "editor/tests/character-shared-head.test.cjs": "204abfe201afcf81555f26562fdf6691415a0ecca17f8c5e4d93f07f5eba79b3"
+  }
+}

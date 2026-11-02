@@ -1,0 +1,1031 @@
+{
+  "date": "2026-11-01",
+  "runtime": "20261101.26",
+  "report": "Stationary events drift a few pixels against map tiles when walking up/down/left/right in Star Shift Rebellion, especially burn-barrel flame events.",
+  "cause": "FramePacing changed the tilemap origin and character sprite positions between game updates, but PIXI 8 tile-layer positions remained prepared at the previous tick. The game-frame preparation stamp prevented the render fallback from correcting intermediate refreshes.",
+  "fix": "Prepare tile layers before the composite while the map and character sprites share the temporary interpolated camera. Also publish the authoritative origin when returning to alpha 1. Preserve render-time state restoration and plugin-authored sprite offsets.",
+  "before": {
+    "maxDriftPixels": 6,
+    "fixture": {
+      "map": 617,
+      "event": 316,
+      "image": {
+        "tileId": 880,
+        "characterName": "",
+        "characterIndex": 0,
+        "direction": 2,
+        "pattern": 0
+      },
+      "systemPreference": "absent",
+      "plugins": "KODERA_optimization and UltraMode7 enabled; other plugins disabled in temporary runtime fixture"
+    },
+    "samples": [
+      {
+        "alpha": 0,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 6,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 4,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          973.5,
+          732
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 3,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          975,
+          732
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 1,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          976.5,
+          732
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          978,
+          732
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": -6,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": -5,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          970.5,
+          732
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": -3,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          969,
+          732
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": -2,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          967.5,
+          732
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          966,
+          732
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 6,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 4,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          733.5
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 3,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          735
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 1,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          736.5
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          738
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": -6,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": -5,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          730.5
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": -3,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          729
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": -2,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          727.5
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          726
+        ]
+      }
+    ]
+  },
+  "after": {
+    "maxDriftPixels": 0,
+    "samples": [
+      {
+        "alpha": 0,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -974,
+          -732
+        ],
+        "origin": [
+          973.5,
+          732
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -975,
+          -732
+        ],
+        "origin": [
+          975,
+          732
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -977,
+          -732
+        ],
+        "origin": [
+          976.5,
+          732
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          978,
+          732
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -971,
+          -732
+        ],
+        "origin": [
+          970.5,
+          732
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -969,
+          -732
+        ],
+        "origin": [
+          969,
+          732
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -968,
+          -732
+        ],
+        "origin": [
+          967.5,
+          732
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "x",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          966,
+          732
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -734
+        ],
+        "origin": [
+          972,
+          733.5
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -735
+        ],
+        "origin": [
+          972,
+          735
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -737
+        ],
+        "origin": [
+          972,
+          736.5
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          738
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -731
+        ],
+        "origin": [
+          972,
+          730.5
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -729
+        ],
+        "origin": [
+          972,
+          729
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -728
+        ],
+        "origin": [
+          972,
+          727.5
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "y",
+        "chunks": true,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          726
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -974,
+          -732
+        ],
+        "origin": [
+          973.5,
+          732
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -975,
+          -732
+        ],
+        "origin": [
+          975,
+          732
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -977,
+          -732
+        ],
+        "origin": [
+          976.5,
+          732
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -978,
+          -732
+        ],
+        "origin": [
+          978,
+          732
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -971,
+          -732
+        ],
+        "origin": [
+          970.5,
+          732
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -969,
+          -732
+        ],
+        "origin": [
+          969,
+          732
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -968,
+          -732
+        ],
+        "origin": [
+          967.5,
+          732
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "x",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -966,
+          -732
+        ],
+        "origin": [
+          966,
+          732
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -734
+        ],
+        "origin": [
+          972,
+          733.5
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -735
+        ],
+        "origin": [
+          972,
+          735
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -737
+        ],
+        "origin": [
+          972,
+          736.5
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": 1,
+        "layer": [
+          -972,
+          -738
+        ],
+        "origin": [
+          972,
+          738
+        ]
+      },
+      {
+        "alpha": 0,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -732
+        ],
+        "origin": [
+          972,
+          732
+        ]
+      },
+      {
+        "alpha": 0.25,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -731
+        ],
+        "origin": [
+          972,
+          730.5
+        ]
+      },
+      {
+        "alpha": 0.5,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -729
+        ],
+        "origin": [
+          972,
+          729
+        ]
+      },
+      {
+        "alpha": 0.75,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -728
+        ],
+        "origin": [
+          972,
+          727.5
+        ]
+      },
+      {
+        "alpha": 1,
+        "axis": "y",
+        "chunks": false,
+        "deltaX": 0,
+        "deltaY": 0,
+        "direction": -1,
+        "layer": [
+          -972,
+          -726
+        ],
+        "origin": [
+          972,
+          726
+        ]
+      }
+    ],
+    "revision": "20261101.26"
+  },
+  "validation": {
+    "focusedTests": 20,
+    "files": [
+      "editor/tests/event-camera-alignment.test.cjs",
+      "editor/tests/frame-pacing.test.cjs",
+      "editor/tests/tilemap-update-replacement.test.cjs"
+    ],
+    "log": "scratchpad/event-camera-drift-20261101/focused-tests.log",
+    "regressionBefore": "Failed with 6 pixels of additional error; a 2-pixel authored offset rendered as 8 pixels.",
+    "nativeCases": 40,
+    "axes": [
+      "left",
+      "right",
+      "up",
+      "down"
+    ],
+    "phases": [
+      0,
+      0.25,
+      0.5,
+      0.75,
+      1
+    ],
+    "tileBackends": [
+      "chunked",
+      "ordinary"
+    ],
+    "stateRestoration": "authoritative camera, sprite coordinates and tilemap origins unchanged after each composite",
+    "fullSuite": "deferred at user request"
+  },
+  "limits": [
+    "Native fixture uses actual map 617/event 316 (tile 880) and the project assets with KODERA_optimization and UltraMode7 enabled. Other third-party plugins are disabled in the temporary project.",
+    "Native checks explicitly sample interpolation phases; this is a registration check, not a full playthrough or physical monitor throughput benchmark.",
+    "Original project map, events, plugin settings, saves and assets are unchanged."
+  ],
+  "artifacts": {
+    "harness": "scratchpad/event-camera-drift-20261101/native.cjs",
+    "before": "scratchpad/event-camera-drift-20261101/before.json",
+    "after": "scratchpad/event-camera-drift-20261101/after.json"
+  }
+}

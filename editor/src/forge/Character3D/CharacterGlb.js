@@ -79,6 +79,10 @@
         } else if (kind === 'glass') {
             Object.assign(look, { roughness: 0.02, metalness: 0, clearcoat: 1, envMapIntensity: 2 });
         }
+        if (kind === 'skin' && part.skinFinish) {
+            look.roughness = part.skinFinish.roughness;
+            if (!weak) Object.assign(look, part.skinFinish);
+        }
         if (part.envMapIntensity != null) look.envMapIntensity = part.envMapIntensity;
         return look;
     }

@@ -1,0 +1,318 @@
+{
+  "date": "2026-11-01",
+  "preview": 69,
+  "runtime": "20261031.1",
+  "visualAcceptance": "open; owner rejected Preview 66; no owner acceptance claimed",
+  "supersedes": "human-face-proportions-20261101.json",
+  "evidenceRoot": "scratchpad/face-followup-20261101/",
+  "gallery": "comparison.html",
+  "codeSha256": {
+    "editor/src/forge/Character3D/Character3DBuilder.js": "0a2e475adcca2377cda576b151083eb165a91a2ced9a5c0d6ec1c7079e38d8ce",
+    "editor/src/forge/Character3D/CharacterHeadMesh.js": "891c112fde67ecfb69de0d6c26d0293e6fedd5009d97b82916413782fe3bacb3",
+    "editor/src/forge/Character3D/HeadMeshData.js": "418e98f24e6588762a20eca115ecaa4814d045dabd327e5ce71d951c982d5928",
+    "editor/src/forge/Character3D/HumanBody.js": "8377ebadcf490eff8329ab4ab2957735205c3e6afe5091aa84d4250e98e20f3b",
+    "editor/src/forge/Character3D/CharacterDetail.js": "71ae935062ba220d08dd25f5b20a60561b764df9ea83b4a8bb02afe7daf70aff",
+    "editor/tests/tools/face-proportions/build_head.py": "9d5f25141d9fc74a73af2217bc007bd8b63679167c6029915370f847a5465346",
+    "editor/src/forge/Character3D/CharacterExpressions.js": "31b0aed9071bb483d867677afb5cbfa0f54bebdca70e0c4501a98525b43b94ef"
+  },
+  "retainedBatches": [
+    "final-comparison",
+    "final-details",
+    "final-hair",
+    "final-bust",
+    "final-exports",
+    "abs-final"
+  ],
+  "diagnostics": [
+    "eyes-before",
+    "face-surface",
+    "bust-before",
+    "bust-normals",
+    "bust-fine",
+    "bust-bias-valid",
+    "remaining-diagnostic"
+  ],
+  "excludedDiagnostics": "bust-bias has blank no-shadow/bias-1mm captures and is not evidence; repeated in bust-bias-valid with distinct recipes; abs-refined is a rejected dense-surface trial and is not retained. The final code keeps the original body topology.",
+  "changes": [
+    "taper jaw independently of cranial width; reduce male jaw/chin exaggeration; refine nasal and cheek/forehead shading",
+    "remove duplicate ocular folds, smooth cut rims, keep native lids hidden and fold blink sheets straight behind rim",
+    "lower-bust normal smoothing with unchanged geometry and weaker/finer preview pore relief",
+    "permit completed sampled builds only during the same active scalar drag with unchanged recipe context; reject stale work after release or another edit",
+    "interpolate compatible displayed geometry between completed worker samples with exact final geometry and cancellation cleanup",
+    "extreme Belly Tone stops extrapolating flat target and adds a cached abdominal muscle/tendon field above the natural range",
+    "repair render-structure cache ordering so compatible builds reuse meshes, skeleton and GPU attributes",
+    "lightweight body shaper uses the same skin normals as complete models, preserving bust/abs shading across input and release"
+  ],
+  "continuousSliders": {
+    "live-body": [
+      {
+        "path": "gender",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 20,
+        "updatesDuringDrag": 7
+      },
+      {
+        "path": "headSize",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 14,
+        "updatesDuringDrag": 11
+      },
+      {
+        "path": "cup",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 20,
+        "updatesDuringDrag": 13
+      },
+      {
+        "path": "firmness",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 24,
+        "updatesDuringDrag": 13
+      }
+    ],
+    "live-face": [
+      {
+        "path": "shapes.headWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 24,
+        "updatesDuringDrag": 22
+      },
+      {
+        "path": "morph.eyeWide",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 20,
+        "updatesDuringDrag": 13
+      },
+      {
+        "path": "shapes.noseWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 24,
+        "updatesDuringDrag": 14
+      },
+      {
+        "path": "shapes.chinWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "inputs": 24,
+        "updatesDuringDrag": 13
+      }
+    ]
+  },
+  "sliderScope": "Eight native continuous pointer drags passed before the last visual-only rim/brow/normal refinements; interaction code unchanged. Final unit checks cover worker parity and stale-result rejection.",
+  "open": [
+    "Overall attractiveness requires owner judgment",
+    "Exact pair of chin spikes in supplied screenshot not reproduced with default recipe; not closed",
+    "Extreme bust silhouettes remain coarse",
+    "No exhaustive control combinations, gameplay dialogue audit or Windows/macOS run",
+    "Abdominal definition remains under owner visual review after the rejected first pass."
+  ],
+  "savedModels": {
+    "folder": "final-exports",
+    "cases": 4,
+    "sourceFiles": 2,
+    "morphs": 28,
+    "scope": "Female/male saved GLBs and complete blinks through actual game reader; embedded PNGs decoded. Abdominal attribute pipeline included; numeric relief was subsequently increased for the final extreme view."
+  },
+  "sliderNotes": "smooth-body completed gender, headSize and natural Belly Tone before a WebDriver actions timeout on cup; smooth-cup rechecked cup alone and passed. smooth-abs independently passed the extreme range before final numeric relief/shading refinements. No memory-limit increase.",
+  "validationLogs": [
+    "focused-final.log",
+    "abs-final-checks.log"
+  ],
+  "cacheNote": "Final Preview 69 invalidates thumbnails from the intermediate Preview 67/68 experiments; source geometry is unchanged by the final cache bump.",
+  "dataProvenance": "HeadMeshData.js rebuilt through build_head.py using the captured native cage; generated data was never edited by hand.",
+  "smoothSliders": {
+    "smooth-body": [
+      {
+        "path": "gender",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 47,
+        "workerSamplesWhileMoving": 8,
+        "reusedBuilds": null
+      },
+      {
+        "path": "headSize",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 28,
+        "workerSamplesWhileMoving": 13,
+        "reusedBuilds": null
+      },
+      {
+        "path": "shapes.abs",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 35,
+        "workerSamplesWhileMoving": 14,
+        "reusedBuilds": null
+      }
+    ],
+    "smooth-cup": [
+      {
+        "path": "cup",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 68,
+        "workerSamplesWhileMoving": 17,
+        "reusedBuilds": null
+      }
+    ],
+    "smooth-face": [
+      {
+        "path": "shapes.headWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 69,
+        "workerSamplesWhileMoving": 16,
+        "reusedBuilds": null
+      },
+      {
+        "path": "shapes.noseWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 32,
+        "workerSamplesWhileMoving": 13,
+        "reusedBuilds": null
+      }
+    ],
+    "smooth-abs-final": [
+      {
+        "path": "shapes.abs",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 66,
+        "workerSamplesWhileMoving": 16,
+        "reusedBuilds": null
+      }
+    ],
+    "reuse-abs-final": [
+      {
+        "path": "shapes.abs",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 73,
+        "workerSamplesWhileMoving": 23,
+        "reusedBuilds": 24
+      }
+    ],
+    "reuse-face-final": [
+      {
+        "path": "shapes.headWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 60,
+        "reusedBuilds": 0
+      },
+      {
+        "path": "shapes.noseWidth",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "tweenFrames": 35,
+        "reusedBuilds": 24
+      }
+    ]
+  },
+  "bustScope": "Four retained bust captures predate later abs-only shader changes; the natural recipe has abs = 0 and those changes are inactive. Same torso geometry/shading, copied to final-bust for the gallery.",
+  "validation": {
+    "focusedChecks": 87,
+    "focusedLog": "focused-final.log",
+    "documentationRuntimeChecks": 10,
+    "docsLog": "docs.log",
+    "savedQualityProfiles": 6,
+    "quality": "quality.json",
+    "workerNormalsParity": "worker-normals-final.log"
+  },
+  "measurements": [
+    {
+      "gender": 0,
+      "pupilMM": 61.14429351208465,
+      "earRootWidthProxyMM": 125.89132785797119,
+      "pupilWidthProxyRatio": 0.4856910682606095,
+      "eyeToMouthMM": 64.2505669168063
+    },
+    {
+      "gender": 0.5,
+      "pupilMM": 63.64757802470454,
+      "earRootWidthProxyMM": 129.6248883008957,
+      "pupilWidthProxyRatio": 0.4910135611994563,
+      "eyeToMouthMM": 67.93230644294201
+    },
+    {
+      "gender": 1,
+      "pupilMM": 66.31352691911161,
+      "earRootWidthProxyMM": 130.6411176919937,
+      "pupilWidthProxyRatio": 0.5076007316123536,
+      "eyeToMouthMM": 71.84404496635688
+    }
+  ],
+  "greyFastAudit": "The initial grey-fast-shading report passed geometry/normals/camera comparisons but falsely required full-worker samples for a fast-shaper gesture. The harness now records actual changing geometry signatures for that path; see grey-fast-final for the corrected run.",
+  "greySliders": {
+    "grey-shading": [
+      {
+        "path": "cup",
+        "position": 0,
+        "normal": 0,
+        "camera": 0,
+        "recipeMatches": true,
+        "fast": false,
+        "fastUpdatesWhileMoving": null
+      }
+    ],
+    "grey-fast-final": [
+      {
+        "path": "cup",
+        "position": 2.384185791015625e-07,
+        "normal": 0.00025209784507751465,
+        "camera": 3.099441525655777e-08,
+        "recipeMatches": true,
+        "fast": true,
+        "fastUpdatesWhileMoving": 23
+      }
+    ]
+  },
+  "workerNormalsScope": "Six focused worker checks pass after the final change. The browser shaper matches page positions and gathered skin normals for human endpoints, intermediate width, extreme abs and the actual alien/Grey preset.",
+  "chinStatus": "Awaiting the affected preset/saved-character name after an asynchronous clarification request; exact spikes are not claimed fixed."
+}

@@ -660,11 +660,11 @@ Game_Interpreter.prototype.clear = function() {
 //-----------------------------------------------------------------------------
 // [NF] character sheets (see reactor_sprites.js): N frames, looping, resting on 0.
 // Named "Name[6F]" as Reactor exports them, or "Name[F6]" as Victor Engine Multi
-// Frames did; either case. Off unless System.json sets rrMultiFrames.
+// Frames did; either case. On unless System.json explicitly disables it.
 //-----------------------------------------------------------------------------
 
 Game_CharacterBase.rrFramesOf = function(name) {
-    if (!$dataSystem || !$dataSystem.rrMultiFrames) return 0;
+    if ($dataSystem && $dataSystem.rrMultiFrames != null && !$dataSystem.rrMultiFrames) return 0;
     const m = /\[(?:(\d+)F|F(\d+))\]/i.exec(String(name || ""));
     return m ? Math.max(1, Number(m[1] || m[2])) : 0;
 };

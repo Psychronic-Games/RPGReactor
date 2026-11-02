@@ -1,0 +1,64 @@
+[
+  {
+    "name": "back-knees-apart",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"lieBackBentWide\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Head','LeftLeg','RightLeg','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>[name,v.bones.find(q=>q.name===name).getWorldPosition(new THREE.Vector3()).toArray()]));return {target:[0, 0.28, -0.05],points,pose:b.pose};",
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.8,
+      "distance": 2.5
+    }
+  },
+  {
+    "name": "sitting-legs-apart",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"sitWide\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Head','LeftLeg','RightLeg','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>[name,v.bones.find(q=>q.name===name).getWorldPosition(new THREE.Vector3()).toArray()]));return {target:[0, 0.5, 0.2],points,pose:b.pose};",
+    "view": {
+      "yaw": 0.45,
+      "pitch": 0.25,
+      "distance": 2.5
+    }
+  },
+  {
+    "name": "sitting-settled",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"sit\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Head','LeftLeg','RightLeg','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>[name,v.bones.find(q=>q.name===name).getWorldPosition(new THREE.Vector3()).toArray()]));return {target:[0, 0.5, 0.2],points,pose:b.pose};",
+    "view": {
+      "yaw": 0.45,
+      "pitch": 0.25,
+      "distance": 2.5
+    }
+  },
+  {
+    "name": "male-sitting-legs-apart",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "js": "b.pose=\"sitWide\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);const points=Object.fromEntries(['Hips','Head','LeftLeg','RightLeg','LeftFoot','RightFoot','LeftHand','RightHand'].map(name=>[name,v.bones.find(q=>q.name===name).getWorldPosition(new THREE.Vector3()).toArray()]));return {target:[0, 0.5, 0.2],points,pose:b.pose};",
+    "view": {
+      "yaw": 0.45,
+      "pitch": 0.25,
+      "distance": 2.5
+    }
+  }
+]

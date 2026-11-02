@@ -323,13 +323,13 @@ class DatabaseSystem2Editor {
      * Compatibility: the rules an older engine's game needs (2000/2003
      * passability, event order, movement and arithmetic, panoramas, the
      * 2003 save screen, skipped missing files, ...). The importer turns on
-     * the ones a game needs; a new project leaves every one off, so they sit
-     * apart from the settings a project made here would use.
+     * the ones a game needs. Multi-frame sheets follow their default-on
+     * feature setting; the older engine-specific rules stay opt-in.
      */
     createCompatibilitySection(system) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const fields = [
-            { label: 'Multi-frame Sheets ([NF])', path: 'rrMultiFrames', value: system.rrMultiFrames === true, type: 'checkbox' },
+            { label: 'Multi-frame Sheets ([NF])', path: 'rrMultiFrames', value: system.rrMultiFrames == null || !!system.rrMultiFrames, type: 'checkbox' },
             { label: 'Skip Title Screen', path: 'rrSkipTitle', value: system.rrSkipTitle === true, type: 'checkbox' },
             { label: 'RPG Maker 2000/2003 Title Menu', path: 'rrLegacyTitle', value: system.rrLegacyTitle === true, type: 'checkbox' },
             { label: 'Erase Pictures on Map Change', path: 'rrPicturesEraseOnMapChange', value: system.rrPicturesEraseOnMapChange === true, type: 'checkbox' },
@@ -346,7 +346,7 @@ class DatabaseSystem2Editor {
             { label: 'Character Lift', path: 'rrCharacterShiftY', value: system.rrCharacterShiftY, placeholder: 6 }
         ];
         return this.keyedSection('compatibility', tt('Compatibility'), this.windowTextTable(fields,
-            tt('Rules for games imported from older RPG Maker versions. The importer turns on what a game needs; a new project leaves them off.')));
+            tt('Rules for games imported from older RPG Maker versions. Multi-frame sheets are on by default; other legacy rules are enabled as needed.')));
     }
 
     /** A Setting | Value table of Window & Text style fields (blank or unticked stores nothing). */
@@ -368,6 +368,11 @@ class DatabaseSystem2Editor {
 
     /** Set or clear a Window & Text value by its path; an empty object left behind goes too. */
     static setWindowTextValue(system, path, value) {
+        if (path === 'rrMultiFrames') {
+            if (value === false) system.rrMultiFrames = false;
+            else delete system.rrMultiFrames;
+            return;
+        }
         const keys = path.split('.');
         let owner = system;
         for (const key of keys.slice(0, -1)) owner = owner[key] = owner[key] && typeof owner[key] === 'object' ? owner[key] : {};

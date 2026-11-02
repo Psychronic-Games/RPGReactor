@@ -131,8 +131,11 @@
             const xs = s.rim[eye].map(v => head.positions[v * 3]), lo = Math.min(...xs), hi = Math.max(...xs);
             for (let row = 0; row <= ROWS; row++) for (let col = 0; col <= COLUMNS; col++) {
                 const x = lo + (hi - lo) * col / COLUMNS, up = point(s.rim[eye], x), low = point(s.low[eye], x), root = upper ? up : low, t = row / ROWS;
-                const y = root.p[1] + (frame.c[1] - root.p[1]) * t * 0.2;
-                pos.push(x, y, row === 0 ? root.p[2] : globeFront(frame, frame.c, x, y) - 0.001);
+                // Park the folded sheet straight behind the rim. Pulling
+                // rows towards the globe centre leaves broad
+                // triangular flaps exposed beside it at the tear duct.
+                // closeLids unfolds the sheet onto the globe during blinking.
+                pos.push(x, root.p[1], root.p[2] - t * 0.006);
                 uv.push(head.uvs[root.id * 2], head.uvs[root.id * 2 + 1]);
                 for (let k = 0; k < 4; k++) { joints.push(head.joints[root.id * 4 + k]); weights.push(head.weights[root.id * 4 + k]); }
                 const at = head.interpolation.offsets[root.id];
@@ -173,16 +176,107 @@
         for (const v of F.eyeIds) eye += P[v * 3 + 1] / F.eyeIds.length;
         return eye;
     }
-    function positions(pack, P, r) {
-        const K = bindingCount(), s = setOf(r), n = s.off.length / 3, E = scaleOf(pack, P), out = new Float32Array(n * 3);
+    /** Separate the upper ridge from the broad cheek beside the nose. Native
+     * targets mostly resize the cage beneath this sculpt, leaving its fixed
+     * anterior bulges. Both controls need their own projection field on the
+     * visible skin, with lids, nose, mouth and seam outside their support. */
+    const cheekReferences = new WeakMap();
+    function boundPositions(s, P, scale) {
+        const K = bindingCount(), n = s.off.length / 3, out = new Float32Array(n * 3);
         for (let i = 0; i < n; i++) {
-            // (Weights brought to exactly 1: these are positions a meter and a half up, and a rounded weight is a millimeter's jitter.)
             let x = 0, y = 0, z = 0, sum = 0;
             for (let k = 0; k < K; k++) sum += s.w[i * K + k];
-            for (let k = 0; k < K; k++) { const v = s.bind[i * K + k] * 3, w = s.w[i * K + k] / sum; x += P[v] * w; y += P[v + 1] * w; z += P[v + 2] * w; }
-            out[i * 3] = x + s.off[i * 3] * E; out[i * 3 + 1] = y - s.off[i * 3 + 1] * E; out[i * 3 + 2] = z + s.off[i * 3 + 2] * E;
+            for (let k = 0; k < K; k++) {
+                const v = s.bind[i * K + k] * 3, w = s.w[i * K + k] / sum;
+                x += P[v] * w; y += P[v + 1] * w; z += P[v + 2] * w;
+            }
+            out[i * 3] = x + s.off[i * 3] * scale;
+            out[i * 3 + 1] = y - s.off[i * 3 + 1] * scale;
+            out[i * 3 + 2] = z + s.off[i * 3 + 2] * scale;
         }
         return out;
+    }
+    function cheekFields(pack, s, r) {
+        const gender = Math.max(0, Math.min(1, r.gender ?? .5)), data = dataOf(), cached = cheekReferences.get(pack);
+        if (cached?.data === data && cached.gender === gender) return cached.fields;
+        // Reference-space weights follow these same vertices as sliders move.
+        // Re-evaluating a mask on narrowed cheeks moves the correction away
+        // from its own target and weakens/reverses the slider's response.
+        const reference = Body().shape(pack, Body().normalizeRecipe({ gender })), scale = scaleOf(pack, reference);
+        const P = boundPositions(s, reference, scale);
+        const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * t * (t * (t * 6 - 15) + 10); };
+        const rim = s.rim.flat(), eye = rim.reduce((sum, v) => sum + P[v * 3 + 1], 0) / rim.length;
+        const ridge = new Float32Array(P.length / 3), cheek = new Float32Array(ridge.length);
+        for (let v = 0; v < ridge.length; v++) {
+            const x = Math.abs(P[v * 3]) / scale, y = (eye - P[v * 3 + 1]) / scale;
+            ridge[v] = Math.exp(-(((x - .48) / .20) ** 2 + ((y - .25) / .15) ** 2))
+                * smooth(.18, .30, x) * (1 - smooth(.70, .84, x))
+                * smooth(.065, .13, y) * (1 - smooth(.48, .65, y)) * s.fade[v];
+            cheek[v] = Math.exp(-(((x - .42) / .32) ** 2 + ((y - .42) / .30) ** 2))
+                * smooth(.18, .30, x) * (1 - smooth(.82, .98, x))
+                * smooth(.10, .22, y) * (1 - smooth(.72, .95, y)) * s.fade[v];
+        }
+        const fields = { ridge, cheek };
+        cheekReferences.set(pack, { data, gender, fields });
+        return fields;
+    }
+    function positions(pack, P, r) {
+        const s = setOf(r), n = s.off.length / 3, E = scaleOf(pack, P), out = boundPositions(s, P, E);
+        const { ridge, cheek } = cheekFields(pack, s, r), value = 1.5 * Math.tanh((r.shapes?.cheekBones || 0) / 1.5);
+        const fullness = 1.5 * Math.tanh((r.shapes?.cheeks || 0) / 1.5);
+        for (let i = 0; i < n; i++) {
+            out[i * 3] += Math.sign(out[i * 3]) * E * (-.008 + .015 * value) * ridge[i];
+            out[i * 3 + 2] += E * ((-.020 + .035 * value) * ridge[i]
+                + (-.050 + .018 * value + .045 * fullness) * cheek[i]);
+        }
+        // The transition is bound barycentrically to native skin triangles.
+        // Retraction must not pass underneath that skin while it is still
+        // drawn at the join: its exposed triangle edges look like nodules.
+        const K = bindingCount(), cage = boundPositions(s, P, 0);
+        const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+        for (let i = 0; i < n; i++) {
+            const fade = s.fade[i];
+            if (fade <= 0 || fade >= .9999 || !cheek[i]) continue;
+            const a = s.bind[i * K] * 3, b = s.bind[i * K + 1] * 3, c = s.bind[i * K + 2] * 3;
+            const u = [P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]], v = [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]];
+            const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], length = Math.hypot(...normal);
+            if (length < 1e-12) continue;
+            for (let k = 0; k < 3; k++) normal[k] /= length;
+            const clearance = normal.reduce((sum, x, k) => sum + x * (out[i * 3 + k] - cage[i * 3 + k]), 0);
+            const edge = 1 - smooth(.95, .9999, fade), support = Math.min(1, cheek[i] / fade * 2);
+            // A small positive separation avoids coplanar native/face
+            // triangles fighting for the same pixel after the correction.
+            const margin = .0003 * smooth(0, .15, fade) * edge * support, deficit = margin - clearance;
+            if (deficit <= 0) continue;
+            const blend = smooth(0, .0005, deficit) * edge;
+            for (let k = 0; k < 3; k++) out[i * 3 + k] += normal[k] * deficit * blend;
+        }
+        return out;
+    }
+    const cheekNeighbors = new WeakMap();
+    function smoothCheekNormals(normal, index, amount) {
+        let neighbors = cheekNeighbors.get(index);
+        if (!neighbors) {
+            const sets = Array.from({ length: normal.length / 3 }, () => new Set());
+            for (let t = 0; t < index.length; t += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
+                sets[index[t + a]].add(index[t + b]); sets[index[t + b]].add(index[t + a]);
+            }
+            neighbors = sets.map(s => [...s]); cheekNeighbors.set(index, neighbors);
+        }
+        let current = normal.slice(), next = normal.slice();
+        for (let pass = 0; pass < 6; pass++) {
+            for (let v = 0; v < amount.length; v++) {
+                const weight = amount[v] * .7, list = neighbors[v];
+                if (!weight || !list.length) continue;
+                const sum = [0, 0, 0];
+                for (const u of list) for (let k = 0; k < 3; k++) sum[k] += current[u * 3 + k] / list.length;
+                for (let k = 0; k < 3; k++) next[v * 3 + k] = current[v * 3 + k] * (1 - weight) + sum[k] * weight;
+                const length = Math.hypot(...next.subarray(v * 3, v * 3 + 3)) || 1;
+                for (let k = 0; k < 3; k++) next[v * 3 + k] /= length;
+            }
+            [current, next] = [next, current];
+        }
+        normal.set(current);
     }
     function normalsOf(p, I) {
         const n = new Float32Array(p.length);
@@ -253,14 +347,25 @@
             for (let k = 0; k < K; k++) { V2[i * K + k] = vertices[was * K + k]; F2[i * K + k] = factors[was * K + k]; }
         });
         // Normals across seams of the picture as one surface, and toward the mask's edge those of the skin it settles onto, so no line shows where it ends.
-        const baseN = normalsOf(pos, index.map(i => map[i])), skinN = Body().vertexNormals(pack, built.shaped), N2 = new Float32Array(count * 3), edge = new Float32Array(count);
+        const baseN = normalsOf(pos, index.map(i => map[i])), skinN = new Float32Array(pack.vertexCount * 3), N2 = new Float32Array(count * 3), edge = new Float32Array(count);
+        // Inherit the body's actual shaded normals. Its cheek transition is
+        // smoothed too; raw cage normals reintroduced a visible angular ridge.
+        pack.body.source.forEach((v, i) => skinN.set(body.normals.subarray(i * 3, i * 3 + 3), v * 3));
+        const cheek = cheekFields(pack, s, r);
         if (s.authoredNormals) for (let v = 0; v < n; v++) {
-            for (let a = 0; a < 3; a++) baseN[v * 3 + a] += s.authoredNormals[v * 3 + a] - s.restNormals[v * 3 + a];
+            const own = 1 - Math.max(cheek.ridge[v], cheek.cheek[v]);
+            for (let a = 0; a < 3; a++) baseN[v * 3 + a] += (s.authoredNormals[v * 3 + a] - s.restNormals[v * 3 + a]) * own;
             const length = Math.hypot(...baseN.subarray(v * 3, v * 3 + 3)) || 1;
             for (let a = 0; a < 3; a++) baseN[v * 3 + a] /= length;
         }
+        // The broad corrected skin spans relatively few source triangles.
+        // Average its normals so satin highlights do not expose their edges.
+        smoothCheekNormals(baseN, s.index, cheek.cheek);
         for (let i = 0; i < count; i++) {
-            const v = map[i], t = Math.min(1, s.fade[v] * 2.2), m = [0, 0, 0];
+            // Geometry, normals and baked shade share the whole join. The
+            // former clamped 2.2x fade finished shading halfway across it,
+            // leaving a visible patch on the temple and upper forehead.
+            const v = map[i], u = s.fade[v], t = u * u * u * (u * (u * 6 - 15) + 10), m = [0, 0, 0];
             edge[i] = t;
             for (let k = 0; k < K; k++) { const q = s.bind[v * K + k] * 3; for (let a = 0; a < 3; a++) m[a] += skinN[q + a] * s.w[v * K + k]; }
             const x = baseN[v * 3] * t + m[0] * (1 - t), y = baseN[v * 3 + 1] * t + m[1] * (1 - t), z = baseN[v * 3 + 2] * t + m[2] * (1 - t), l = Math.hypot(x, y, z) || 1;
@@ -330,7 +435,7 @@
         for (const [eyeIndex, [outer, inner]] of setOf(r).opening.entries()) {
             const er = Math.abs(P[outer * 3] - P[inner * 3]) / 2 / 1.05, cx = (P[outer * 3] + P[inner * 3]) / 2, cy = (P[outer * 3 + 1] + P[inner * 3 + 1]) / 2, side = Math.sign(cx) || 1, x0 = cx - side * er * BOX[0], y0 = cy + er * BOX[2];
             // Low over the eye and full, as on the finished references, rising a little outward.
-            const lift = er * (-0.08 + 0.6 * (r.hair?.brows?.height || 0)), rise = er * (0.2 - 0.12 * g), fat = 0.85 + 0.15 * g, place = v => { const u = side * (P[v * 3] - x0) / (er * BOX[1]), w = 1 - (P[v * 3 + 1] - y0 - lift - rise * (u - 0.3)) / (er * BOX[3]); return [u, 0.62 + (w - 0.62) / fat]; };
+            const lift = er * (-0.08 + 0.14 * g + (r.hair?.brows?.height || 0)), rise = er * (0.2 - 0.12 * g), fat = 0.85 + 0.15 * g, place = v => { const u = side * (P[v * 3] - x0) / (er * BOX[1]), w = 1 - (P[v * 3 + 1] - y0 - lift - rise * (u - 0.3)) / (er * BOX[3]); return [u, 0.62 + (w - 0.62) / fat]; };
             // A front-plane box also catches the temple behind the eye.
             // Those triangles projected the brow texture as horizontal bars
             // across the side of the skull.

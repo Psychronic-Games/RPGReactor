@@ -1,0 +1,20 @@
+{
+  "species": "human",
+  "gender": 0,
+  "cup": 0.85,
+  "bustBounce": 0.15,
+  "buttBounce": 0.15,
+  "hair": {
+    "style": "shortCrop"
+  },
+  "outfit": [
+    {
+      "id": "sportsBra",
+      "color": "#4f426e"
+    },
+    {
+      "id": "leggings",
+      "color": "#252831"
+    }
+  ]
+}

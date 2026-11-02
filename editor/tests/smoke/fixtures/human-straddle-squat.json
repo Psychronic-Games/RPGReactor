@@ -1,0 +1,136 @@
+[
+  {
+    "name": "straddle-knees",
+    "reset": true,
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "b.pose='straddle';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=straddle]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,0.35,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "upright-straddle",
+    "reset": true,
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "b.pose='straddleUpright';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=straddleUpright]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,0.55,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "squat-low",
+    "reset": true,
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "b.pose='squat';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=squat]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();return {target:[0,0.5,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "squat-standing",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 3.4
+    },
+    "js": "b.pose='squat';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=squat]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,0.85,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "straddle-male",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "b.pose='straddle';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=straddle]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=1;v.mixer.update(0);b._plant();return {target:[0,0.35,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "upright-straddle-male",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "b.pose='straddleUpright';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=straddleUpright]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=1;v.mixer.update(0);b._plant();return {target:[0,0.55,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "squat-low-male",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "b.pose='squat';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=squat]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Missing grouped exercise');v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();return {target:[0,0.5,0],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "saved-exercises",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 1.1,
+      "pitch": 0.1,
+      "distance": 2.7
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clips=object.__reactorClips;for(const name of ['Straddle','Upright Straddle','Squat'])if(!clips.some(c=>c.name===name))throw Error('Missing saved '+name);const clip=clips.find(c=>c.name==='Squat'),mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(2);object.updateMatrixWorld(true);return {target:[0,.5,0],clips:clips.filter(c=>/Straddle|Squat/.test(c.name)).map(c=>c.name),duration:clip.duration};"
+  }
+]

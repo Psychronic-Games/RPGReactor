@@ -1,0 +1,227 @@
+{
+  "date": "2026-11-01",
+  "type": "development checkpoint; not a release or deployment",
+  "baselineCommit": "6d5f868400ad53315a368c0f7447ce78d6d63c55",
+  "characterPreview": 98,
+  "runtime": "20261101.26",
+  "work": [
+    "Male/female head proportions, jaw taper, eye folds, temple/cheek geometry and shading; broader Cheeks and independent Cheekbones control; native/replacement join clearance.",
+    "Live worker sample display, smooth geometry/skeleton transitions, release consistency and pose/orientation retention; saved-design/species/focus lifecycle repair.",
+    "Six abdominal sections below the bust, stronger extreme Belly Tone and averaged lower-bust normals/occlusion.",
+    "Colors skin finishes, pore textures and intensity/scale controls retained in recipes and exported materials.",
+    "Exercise/resting pose expansion, anchored standard/fast kneeling stretches, leg/knee/ankle/shoulder fixes, contact and hand-to-leg clearance, head motion and named saved actions.",
+    "Independent bust, butt and fat bounce, broader weight-dependent belly/hip/thigh/calf influence, exercise response and seamless skinned chest details.",
+    "Multi-frame default-on with explicit-off persistence, single-frame picker/event preview crops, complete exported walk/carry cycles and preserved stock three-frame stepping.",
+    "2D stationary-event/map registration across intermediate camera refreshes.",
+    "Native harness fixtures and face proportion/generation/measurement tooling."
+  ],
+  "savedUserState": {
+    "project": "template/Demo",
+    "designs": [
+      "Robust Female Sci-Fi Athlete",
+      "Robust Grey Alien Female"
+    ],
+    "files": "recipe JSON and matching PNG thumbnails; project modified timestamp",
+    "edits": [
+      "skin finishes",
+      "bounce settings",
+      "body/anatomy slider adjustments",
+      "outfit removal"
+    ],
+    "existingRebellionAssets": "map, event configuration, save files and exported alien PNG left untouched"
+  },
+  "resume": {
+    "reload": "restart editor and playtest",
+    "models": "re-save older generated characters for updated geometry/materials and embedded animation keys",
+    "sprites": "re-export older N-frame walking sheets for the corrected complete cycle",
+    "fullSuite": "deferred at user request; targeted checks only"
+  },
+  "open": [
+    "Overall human face attractiveness and final body/abdominal appearance require owner review.",
+    "Exact pointy under-chin shadow reproduction remains unresolved.",
+    "No full Rebellion playthrough with all third-party plugins; the temporary native sprite fixture encountered a MOG Variable HUD fresh-start error.",
+    "Earlier chibi/source-art/hardware/open-editor issues remain in docs/OPEN-ITEMS.md."
+  ],
+  "validation": {
+    "priorSpriteChecks": 19,
+    "priorCameraChecks": 20,
+    "nativeCamera": {
+      "beforeMaxPixels": 6,
+      "afterMaxPixels": 0,
+      "samples": 40,
+      "enabledPlugins": [
+        "KODERA_optimization",
+        "UltraMode7"
+      ],
+      "otherPlugins": "disabled only in temporary fixture"
+    },
+    "priorRecords": "individual ledgers retain their own scoped counts; overlapping runs are not added together",
+    "closingChecks": {
+      "documentationChecksPassed": 6,
+      "javascriptSyntaxFiles": 47,
+      "jsonFilesParsed": 84,
+      "pythonSyntaxFiles": 1,
+      "evidenceRecordsResolved": 31,
+      "bundledRuntimeProjectsMatch": 20,
+      "whitespace": "pass",
+      "logs": "scratchpad/checkpoint-20261101/",
+      "fullProjectSuite": "not run"
+    }
+  },
+  "records": [
+    {
+      "file": "body-face-refinement-20261101.json",
+      "preview": 96,
+      "runtime": "20261101.24"
+    },
+    {
+      "file": "bounce-seams-20261101.json",
+      "preview": 86,
+      "runtime": "20261101.15"
+    },
+    {
+      "file": "cheek-bulges-20261101.json",
+      "preview": 97,
+      "runtime": "20261101.24"
+    },
+    {
+      "file": "cheek-ridge-20261101.json",
+      "preview": 98,
+      "runtime": "20261101.24"
+    },
+    {
+      "file": "crawl-ankles-20261101.json",
+      "preview": 75,
+      "runtime": "20261101.4"
+    },
+    {
+      "file": "crawl-seated-20261101.json",
+      "preview": 74,
+      "runtime": "20261101.3"
+    },
+    {
+      "file": "event-camera-drift-20261101.json",
+      "runtime": "20261101.26"
+    },
+    {
+      "file": "exercise-arms-20261101.json",
+      "preview": 92,
+      "runtime": "20261101.20"
+    },
+    {
+      "file": "exercise-followup-20261101.json",
+      "preview": 93,
+      "runtime": "20261101.21"
+    },
+    {
+      "file": "exercise-repair-20261101.json",
+      "preview": 94,
+      "runtime": "20261101.22"
+    },
+    {
+      "file": "exercise-shoulders-20261101.json",
+      "preview": 95,
+      "runtime": "20261101.23"
+    },
+    {
+      "file": "fast-kneeling-stretch-20261101.json",
+      "preview": 80,
+      "runtime": "20261101.9"
+    },
+    {
+      "file": "fast-stretch-finish-20261101.json",
+      "preview": 83,
+      "runtime": "20261101.12"
+    },
+    {
+      "file": "fast-stretch-press-20261101.json",
+      "preview": 82,
+      "runtime": "20261101.11"
+    },
+    {
+      "file": "fast-stretch-tuning-20261101.json",
+      "preview": 81,
+      "runtime": "20261101.10"
+    },
+    {
+      "file": "hip-bridge-20261101.json",
+      "preview": 72,
+      "runtime": "20261101.1"
+    },
+    {
+      "file": "human-face-followup-20261101.json",
+      "preview": 69,
+      "runtime": "20261031.1"
+    },
+    {
+      "file": "human-face-iteration-20261101-preview70.json",
+      "preview": 70,
+      "runtime": "20261031.1"
+    },
+    {
+      "file": "human-face-proportions-20261101.json",
+      "preview": 66,
+      "runtime": "20261031.1"
+    },
+    {
+      "file": "kneeling-stretch-20261101.json",
+      "preview": 76,
+      "runtime": "20261101.5"
+    },
+    {
+      "file": "multiframe-20261101.json",
+      "runtime": "20261101.25"
+    },
+    {
+      "file": "open-design-20261101.json",
+      "preview": 91,
+      "runtime": "20261101.19 (unchanged)"
+    },
+    {
+      "file": "rest-poses-20261101.json",
+      "preview": 73,
+      "runtime": "20261101.2"
+    },
+    {
+      "file": "run-fat-bounce-20261101.json",
+      "preview": 89,
+      "runtime": "20261101.18"
+    },
+    {
+      "file": "skin-surface-20261101.json",
+      "preview": 71,
+      "runtime": "20261031.1"
+    },
+    {
+      "file": "soft-tissue-bounce-20261101.json",
+      "preview": 85,
+      "runtime": "20261101.14"
+    },
+    {
+      "file": "straddle-slider-20261101.json",
+      "preview": 87,
+      "runtime": "20261101.16"
+    },
+    {
+      "file": "straddle-squat-20261101.json",
+      "preview": 90,
+      "runtime": "20261101.19"
+    },
+    {
+      "file": "stretch-forward-20261101.json",
+      "preview": 78,
+      "runtime": "20261101.7"
+    },
+    {
+      "file": "stretch-motion-20261101.json",
+      "preview": 77,
+      "runtime": "20261101.6"
+    },
+    {
+      "file": "stretch-reach-20261101.json",
+      "preview": 79,
+      "runtime": "20261101.8"
+    }
+  ],
+  "artifactPolicy": "Evidence JSON and reproducible small smoke fixtures are committed. Local rendered galleries, temporary exports, reference downloads and scratch scripts remain ignored."
+}

@@ -442,6 +442,19 @@ test('a sheet with four frames per direction shows and returns all four', t => {
     assert.deepEqual(ui.results, [{ characterName: 'Walker[F4]', characterIndex: 1, pattern: 3, direction: 6 }]);
 });
 
+test('an eight-direction eight-frame export uses all frames by default and honors explicit off', t => {
+    const name = '$Robust Grey Alien Female[8D][8F]';
+    for (const [system, count, width, pattern] of [[{}, 256, 144, 7], [{ rrMultiFrames: false }, 96, 384, 2]]) {
+        const ui = openPicker(t, { sizes: { [name]: [4608, 1152] }, args: [name, 0, pattern, 2], system });
+        ui.load();
+        assert.equal(ui.frames().length, count);
+        assert.equal(ui.frames()[0].firstChild.width, width);
+        assert.equal(ui.frames()[0].firstChild.height, 144);
+        ui.ok().click();
+        assert.deepEqual(ui.results, [{ characterName: name, characterIndex: 0, pattern, direction: 2 }]);
+    }
+});
+
 test('the sheet is fitted to its room, refitted for another file and another room, until the user picks a zoom', t => {
     const ui = openPicker(t, { sizes: SHEETS, args: ['Vehicle', 0, 1, 2], observe: true });
     assert.equal(ui.one('.rr-char-picker-zoom').hidden, true, 'no zoom while there is no sheet to zoom');

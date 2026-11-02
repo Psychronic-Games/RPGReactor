@@ -1,0 +1,66 @@
+[
+  {
+    "name": "female-side",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();if(!v.action)throw Error('Missing stretch');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "female-angle",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();if(!v.action)throw Error('Missing stretch');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 0.4,
+      "pitch": 0.7,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "male-side",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();if(!v.action)throw Error('Missing stretch');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "stretch-export",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Kneeling Back Stretch');if(!clip)throw Error('Missing saved stretch');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.75);object.updateMatrixWorld(true);return {target:[0,.23,.16],savedClip:clip.name};",
+    "view": {
+      "yaw": 0.6,
+      "pitch": 0.5,
+      "distance": 2.7
+    },
+    "exportModel": true,
+    "exportMotions": "useful"
+  }
+]

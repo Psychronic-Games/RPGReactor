@@ -1,0 +1,153 @@
+{
+  "date": "2026-11-01",
+  "preview": 77,
+  "runtime": "20261101.6",
+  "evidenceRoot": "scratchpad/stretch-motion-20261101/",
+  "feature": "Six-second forward reach and return in Kneeling Back Stretch",
+  "scope": "Final female rest/reach native captures and an actual saved-model reload of the six-second clip. Regression suites deferred at owner request.",
+  "inspection": {
+    "duration": 6,
+    "frames": 145,
+    "finite": true,
+    "restDelta": 0,
+    "loopEndpointDelta": 0,
+    "positions": [
+      {
+        "time": 0,
+        "points": {
+          "Hips": [
+            0,
+            0.353621244430542,
+            -0.22533220052719116
+          ],
+          "LeftHand": [
+            0.1556612887914235,
+            0.025699529091984752,
+            0.5758968371565992
+          ],
+          "LeftLeg": [
+            0.1937292746997043,
+            0.047115803864678424,
+            0.017133019421245732
+          ],
+          "LeftFoot": [
+            0.09191789680917835,
+            0.06277907261950955,
+            -0.3744492141335268
+          ]
+        }
+      },
+      {
+        "time": 3,
+        "points": {
+          "Hips": [
+            0,
+            0.4495850205421448,
+            -0.08826805651187897
+          ],
+          "LeftHand": [
+            0.155661304470453,
+            0.025699529505021662,
+            0.651803081651178
+          ],
+          "LeftLeg": [
+            0.19372927785455335,
+            0.047115784043283815,
+            0.01713301313051588
+          ],
+          "LeftFoot": [
+            0.09191789676113976,
+            0.06277905400583131,
+            -0.3744492195431972
+          ]
+        }
+      },
+      {
+        "time": 6,
+        "points": {
+          "Hips": [
+            0,
+            0.353621244430542,
+            -0.22533220052719116
+          ],
+          "LeftHand": [
+            0.1556612819571837,
+            0.025699530175094437,
+            0.5758968287874029
+          ],
+          "LeftLeg": [
+            0.19372927308600413,
+            0.04711580344524391,
+            0.01713302338107847
+          ],
+          "LeftFoot": [
+            0.09191789721675495,
+            0.06277907188910976,
+            -0.37444920239955237
+          ]
+        }
+      }
+    ]
+  },
+  "views": [
+    {
+      "name": "rest",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "kneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": null
+    },
+    {
+      "name": "reach",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "kneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": null
+    },
+    {
+      "name": "motion-export",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 6,
+        "savedClip": "Kneeling Back Stretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "reader": {
+        "bytes": 9796328,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "motion-export",
+        "textures": 17
+      }
+    }
+  ],
+  "excluded": "preview/ and stretch.webm show the initial subtle motion rejected by the owner; current retained captures are more-reach/. Final source increases forward hip travel from 0.05 to 0.16 body-scale metres.",
+  "limits": "Position inspection uses the default female source body. This is not a body/wardrobe matrix; the earlier male capture predates the final amplitude increase.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "bcf6bff8a0c7acab928399bf45d6600dc567ffe83193df866925fd689660c8ef",
+    "runtime/reactor_main.js": "e82f47c91c290489798e14a2eb155289de3553cb0b26b55728b8efeae78ba162",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "1ce1564af63c8de5b66fdbdf3a8e93883541bd297f741f0f7b36d3c69274d8bc"
+  }
+}

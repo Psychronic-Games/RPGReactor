@@ -436,8 +436,7 @@
             const seconds = ((performance.now() - started) / 1000).toFixed(1);
             status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: 'characters', file: path.basename(file), s: seconds })
                 + ' ' + t('Frames are {w} × {h}.', { w: sheet.frameWidth, h: sheet.frameHeight })
-                + (sheet.shrunk < 0.999 ? ' ' + t('Too big at character scale: drawn at {n}% to keep frames within {max} px.', { n: Math.round(sheet.shrunk * 100), max: MAX_FRAME }) : '')
-                + (S.turnOnMultiFrames() ? ' ' + t('Multi-frame sheets turned on in Reactor Features.') : '');
+                + (sheet.shrunk < 0.999 ? ' ' + t('Too big at character scale: drawn at {n}% to keep frames within {max} px.', { n: Math.round(sheet.shrunk * 100), max: MAX_FRAME }) : '');
             status.dataset.kind = 'ok';
             const img = panel.querySelector('.rr-c3d-export-preview');
             if(img.src?.startsWith('blob:'))URL.revokeObjectURL(img.src);

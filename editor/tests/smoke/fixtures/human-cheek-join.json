@@ -1,0 +1,52 @@
+[
+  {
+    "name": "minimum-cheeks",
+    "reset": true,
+    "view": {
+      "yaw": -1,
+      "pitch": 0.02,
+      "distance": 0.65
+    },
+    "js": "b.pose='apose';b._syncPose();const h=b._result.parts.find(p=>p.name==='Head skin'),eye=h.ocular.reduce((a,e)=>a.map((x,k)=>x+e.c[k]/h.ocular.length),[0,0,0]);return {target:[0,eye[1]-.025,eye[2]-.02]};"
+  },
+  {
+    "name": "male-minimum-cheeks",
+    "reset": true,
+    "view": {
+      "yaw": -1,
+      "pitch": 0.02,
+      "distance": 0.65
+    },
+    "js": "b.pose='apose';b._syncPose();const h=b._result.parts.find(p=>p.name==='Head skin'),eye=h.ocular.reduce((a,e)=>a.map((x,k)=>x+e.c[k]/h.ocular.length),[0,0,0]);return {target:[0,eye[1]-.025,eye[2]-.02]};",
+    "patch": {
+      "gender": 1
+    }
+  },
+  {
+    "name": "saved-minimum-cheeks",
+    "reset": true,
+    "view": {
+      "yaw": -1,
+      "pitch": 0.02,
+      "distance": 0.65
+    },
+    "js": "b.pose='apose';b._syncPose();const h=b._result.parts.find(p=>p.name==='Head skin'),eye=h.ocular.reduce((a,e)=>a.map((x,k)=>x+e.c[k]/h.ocular.length),[0,0,0]);return {target:[0,eye[1]-.025,eye[2]-.02]};",
+    "exportModel": true,
+    "exportMotions": "none"
+  },
+  {
+    "name": "saved-minimum-blink",
+    "reset": true,
+    "view": {
+      "yaw": 0,
+      "pitch": 0.02,
+      "distance": 0.65
+    },
+    "js": "b.pose='apose';b._syncPose();const h=b._result.parts.find(p=>p.name==='Head skin'),eye=h.ocular.reduce((a,e)=>a.map((x,k)=>x+e.c[k]/h.ocular.length),[0,0,0]);return {target:[0,eye[1]-.025,eye[2]-.02]};",
+    "exportModel": true,
+    "exportMotions": "none",
+    "exportFrom": "saved-minimum-cheeks",
+    "exportBlink": true,
+    "expectClosedEyes": true
+  }
+]

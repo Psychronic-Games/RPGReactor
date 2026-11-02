@@ -1,0 +1,72 @@
+{
+  "date": "2026-11-01",
+  "preview": 76,
+  "runtime": "20261101.5",
+  "evidenceRoot": "scratchpad/kneeling-stretch-20261101/",
+  "feature": "Exercises > Kneeling back stretch",
+  "scope": "Female side/angled and male side native views, plus one actual normal save reloaded through the game reader. Regression suites deferred at owner request.",
+  "inspection": {
+    "preserved": {
+      "hipBridge": 0,
+      "crawl": 0,
+      "handsKnees": 0,
+      "sitWide": 0,
+      "sitKneesUp": 0
+    },
+    "stretch": {
+      "frames": 2,
+      "tracks": 53,
+      "finite": true,
+      "endpointDelta": 0
+    }
+  },
+  "views": [
+    {
+      "name": "female-side",
+      "errors": 0,
+      "glError": 0,
+      "exported": null
+    },
+    {
+      "name": "female-angle",
+      "errors": 0,
+      "glError": 0,
+      "exported": null
+    },
+    {
+      "name": "male-side",
+      "errors": 0,
+      "glError": 0,
+      "exported": null
+    },
+    {
+      "name": "stretch-export",
+      "errors": 0,
+      "glError": 0,
+      "exported": {
+        "bytes": 9793664,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "stretch-export",
+        "textures": 17
+      }
+    }
+  ],
+  "assignment": [
+    {
+      "name": "kneelingBackStretch",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Kneeling Back Stretch"
+    }
+  ],
+  "limits": "Default female and male bodies in fitted exercise clothes; not an exhaustive body/wardrobe matrix. Existing-key comparison uses the default female source body.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "3729691c9f82c912e46c81d0bbd1750b5431ae1583645f55e9cea55bb81e6fa4",
+    "runtime/reactor_main.js": "732e25b95c8bc121e06da0d0cd9498e1afbd91ef8f66e37922ae53e788cfac82",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "5c56d1888eac5329f9eb4105fdc6d0d5f805ed38f19745d5d54fe055a9510b11"
+  }
+}

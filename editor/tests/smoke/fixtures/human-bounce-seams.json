@@ -1,0 +1,70 @@
+[
+  {
+    "name": "chest-seam",
+    "reset": true,
+    "view": {
+      "yaw": 0.6,
+      "pitch": 0.05,
+      "distance": 1.45
+    },
+    "js": "b.pose='run';b._syncPose();v.action.paused=true;v.action.time=v.action.getClip().duration*.3;v.mixer.update(0);b._plant();return {target:[0,1.15,0.05],pose:b.pose};"
+  },
+  {
+    "name": "fast-stretch-rear",
+    "reset": true,
+    "patch": {
+      "outfit": [],
+      "anatomy": {
+        "detail": false
+      },
+      "bustBounce": 0
+    },
+    "view": {
+      "yaw": 2.5,
+      "pitch": 0.65,
+      "distance": 2.4
+    },
+    "js": "b.pose='fastKneelingBackStretch';b._syncPose();v.action.paused=true;v.action.time=v.action.getClip().duration*.3;v.mixer.update(0);b._plant();return {target:[0,0.43,0.06],pose:b.pose};"
+  },
+  {
+    "name": "live-butt-mesh",
+    "reset": true,
+    "patch": {
+      "outfit": [],
+      "anatomy": {
+        "detail": false
+      },
+      "bustBounce": 0
+    },
+    "view": {
+      "yaw": 2.8,
+      "pitch": 0.05,
+      "distance": 1.5
+    },
+    "js": "b.tab='body';b.extreme=true;b._renderPanel();b.pose='run';b._syncPose();const clip=RRCharacterPoses.clip(v.boneDefs,'run',v.bodySkin),tr=clip.tracks.find(t=>v.boneDefs[t.bone].name==='LeftGlute'&&t.path==='translation'),bone=v.boneDefs[tr.bone],rest=bone.head.map((x,k)=>x-v.boneDefs[bone.parent].head[k]);let peak=0,max=0;for(let f=0;f<tr.times.length;f++){const d=Math.hypot(...rest.map((x,k)=>x-tr.values[f*3+k]));if(d>max){max=d;peak=tr.times[f];}}const mesh=v.meshes[b._result.parts.findIndex(p=>p.name==='Body')],index=mesh.geometry.attributes.skinIndex,weight=mesh.geometry.attributes.skinWeight,position=mesh.geometry.attributes.position,ids=[];for(let i=0;i<position.count;i++)if([0,1,2,3].some(k=>/Glute$/.test(v.boneDefs[index.array[i*4+k]]?.name)&&weight.array[i*4+k]>.01))ids.push(i);const input=b.root.querySelector('input[type=range][data-path=buttBounce]'),sample=amount=>{input.value=amount;input.dispatchEvent(new Event('input',{bubbles:true}));v.action.paused=true;v.action.time=peak;v.mixer.update(0);b._plant();v.group.updateMatrixWorld(true);mesh.skeleton.update();return ids.map(i=>mesh.applyBoneTransform(i,new THREE.Vector3().fromBufferAttribute(position,i)).toArray());},off=sample(0),on=sample(4);input.dispatchEvent(new Event('change',{bubbles:true}));let displacement=0;on.forEach((p,i)=>displacement=Math.max(displacement,Math.hypot(...p.map((x,k)=>x-off[i][k]))));if(displacement<.01)throw Error('Visible butt movement remains too small: '+displacement);return {target:[0,.82,-.04],vertices:ids.length,peak,visibleMeshDisplacement:displacement};"
+  },
+  {
+    "name": "saved-seams",
+    "reset": true,
+    "patch": {
+      "outfit": [
+        {
+          "id": "sportsBra",
+          "color": "#4f426e"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Fast Kneeling Back Stretch'),tracks=clip?.tracks.filter(t=>/(Bust|Glute).position$/.test(t.name));if(tracks?.length!==6)throw Error('Missing six soft-tissue tracks');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(clip.duration*.3);object.updateMatrixWorld(true);return {target:[0,.23,.16],clip:clip.name,tracks:tracks.map(t=>t.name)};"
+  }
+]

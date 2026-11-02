@@ -15,6 +15,7 @@ const A = require(path.join(repo, 'editor', 'src', 'utils', 'AssetFiles.js'));
 const read = file => fs.readFileSync(path.join(repo, 'runtime', file), 'utf8');
 const at = (cells, col, row) => cells.find(c => c.col === col && c.row === row);
 const ON = { rrMultiFrames: true };
+const OFF = { rrMultiFrames: false };
 
 test('the file name carries the frame count number first, like [8D]; 3 frames is named as before', () => {
     assert.equal(S.fileName('8d', 'Hero'), '$Hero[8D].png');
@@ -42,7 +43,7 @@ test('at 3 frames the plan is MZ\'s, cell for cell', () => {
     assert.deepEqual([0, 1, 2].map(c => [at(mz, c, 0).clip, at(mz, c, 0).at]), [['walk', 'stepA'], ['idle', 0], ['walk', 'stepB']]);
 });
 
-test('a 6-frame 4-direction sheet: 6 × 4, each row standing on frame 0 then the walk cycle round', () => {
+test('a 6-frame 4-direction sheet samples one complete walk cycle, including frame zero', () => {
     const cells = S.plan('mz', { frames: 6 });
     assert.equal(S.columnsOf('mz', 6), 6);
     assert.equal(cells.length, 24);
@@ -50,8 +51,8 @@ test('a 6-frame 4-direction sheet: 6 × 4, each row standing on frame 0 then the
     for (const c of cells) assert.ok(c.col >= 0 && c.col < 6 && c.row >= 0 && c.row < 4);
     assert.deepEqual([0, 1, 2, 3].map(r => at(cells, 0, r).dir), [2, 4, 6, 8]);
     for (let r = 0; r < 4; r++) {
-        assert.deepEqual([at(cells, 0, r).clip, at(cells, 0, r).at], ['idle', 0], 'frame 0 stands: the frame the game rests on');
-        // Frames 1-5: the walk from its passing frame, a sixth of the cycle apart, so frame 5 leads back to 0.
+        assert.deepEqual([at(cells, 0, r).clip, at(cells, 0, r).at], ['walk', 'pass'], 'frame 0 belongs to the same walk cycle');
+        // All six frames sample equal phase steps; the final one leads back to the passing pose.
         assert.deepEqual([1, 2, 3, 4, 5].map(c => [at(cells, c, r).clip, at(cells, c, r).at, at(cells, c, r).shift]),
             [1, 2, 3, 4, 5].map(c => ['walk', 'pass', c / 6]));
     }
@@ -71,11 +72,11 @@ test('a 6-frame [8D] sheet: 48 × 8, every block 6 wide, dash and poses over 6 f
     assert.deepEqual(dirs(6), [1, 3, 7, 9], 'walk diagonals');
     assert.deepEqual(dirs(12), [2, 4, 6, 8], 'dash');
     assert.deepEqual(dirs(18), [1, 3, 7, 9], 'dash diagonals');
-    // Walk diagonals stand on 0 too; the dash never stands: its passing frame, then on round the run.
-    assert.equal(at(cells, 6, 0).clip, 'idle');
+    // Walk diagonals and dash both sample complete cycles from their passing pose.
+    assert.equal(at(cells, 6, 0).clip, 'walk');
     assert.deepEqual([0, 1, 2, 3, 4, 5].map(c => [at(cells, 12 + c, 0).clip, at(cells, 12 + c, 0).shift]), [0, 1, 2, 3, 4, 5].map(c => ['run', c / 6]));
     // Carry: the walk with the arms held up.
-    assert.equal(at(cells, 0, 4).clip, 'idle');
+    assert.equal(at(cells, 0, 4).clip, 'walk');
     assert.equal(at(cells, 3, 4).upper, 'lift');
     assert.equal(at(cells, 6, 5).upper, 'lift');
     // Attack: from its start to the key pose by the middle frame, then after it.
@@ -100,11 +101,12 @@ test('a 1-frame sheet: one standing frame a row', () => {
     assert.equal(at(eight, 2, 4).at, 'key', 'attack: its key pose');
 });
 
-test('the editor reads every spelling of the tag, beside [8D] too, only with multi-frame sheets on', () => {
+test('the editor reads tagged frame counts by default and honors an explicit opt-out', () => {
     for (const name of ['$Hero[6F]', '$Hero[6f]', '$Hero[F6]', '$Hero[f6]', '$Hero[8D][6F]', '$Hero[8D][f6]', '$Hero[F6][8D]', 'img/characters/$Hero[8D][6F]']) {
         assert.equal(A.framesTagged(name), 6, name);
         assert.equal(A.characterFrameCount(name, ON), 6, name);
-        assert.equal(A.characterFrameCount(name, {}), 3, name + ' with the feature off');
+        assert.equal(A.characterFrameCount(name, {}), 6, name + ' in an existing project with no saved preference');
+        assert.equal(A.characterFrameCount(name, OFF), 3, name + ' explicitly disabled');
     }
     assert.equal(A.characterFrameCount('$Hero[1F]', ON), 1);
     assert.equal(A.characterFrameCount('$Hero[8D]', ON), 3, '[8D] is no frame count');
@@ -165,7 +167,8 @@ test('the game reads every spelling of the tag', () => {
     for (const name of ['$Hero[6F]', '$Hero[6f]', '$Hero[F6]', '$Hero[f6]', '$Hero[8D][6F]', '$Hero[8D][f6]']) assert.equal(ctx.Game_CharacterBase.rrFramesOf(name), 6, name);
     assert.equal(ctx.Game_CharacterBase.rrFramesOf('$Hero[1F]'), 1);
     assert.equal(ctx.Game_CharacterBase.rrFramesOf('$Hero[8D]'), 0);
-    assert.equal(load({}).Game_CharacterBase.rrFramesOf('$Hero[6F]'), 0, 'off unless the project turns multi-frame sheets on');
+    assert.equal(load({}).Game_CharacterBase.rrFramesOf('$Hero[6F]'), 6, 'on with no saved preference');
+    assert.equal(load(OFF).Game_CharacterBase.rrFramesOf('$Hero[6F]'), 0, 'explicit off is respected');
 });
 
 test('the game cuts a $Name[6F] sheet 6 frames across and an $Name[8D][6F] sheet 6 frames to a block', () => {
@@ -183,25 +186,41 @@ test('the game cuts a $Name[6F] sheet 6 frames across and an $Name[8D][6F] sheet
     assert.deepEqual(cell('$Hero[8D][6F]', { index: 7, pattern: 0, direction: 2 }), [18, 4, 48, 64], 'poses block');
 });
 
-test('the export turns multi-frame sheets on in the open Database, as Reactor Features does', () => {
-    const features = require(path.join(repo, 'editor', 'src', 'ReactorFeatures.js'));
-    const system = {}, calls = [];
-    const saved = { reactor: globalThis.reactor, ReactorFeatures: globalThis.ReactorFeatures };
-    globalThis.ReactorFeatures = features;
-    globalThis.reactor = { databaseManager: { data: { system } }, databaseEditorUI: { featuresEditor: { apply: (sys, id, on) => { calls.push(id); features.set(id, on, sys); } } } };
-    try {
-        assert.equal(S.turnOnMultiFrames(), true);
-        assert.deepEqual(calls, ['multiFrames']);
-        assert.equal(system.rrMultiFrames, true);
-        assert.equal(S.turnOnMultiFrames(), false, 'already on: nothing to say');
-        // No Database page made yet: the flag is set on the loaded System.json and the change counted.
-        const other = {};
-        globalThis.reactor = { databaseManager: { data: { system: other } } };
-        assert.equal(S.turnOnMultiFrames(), true);
-        assert.equal(other.rrMultiFrames, true);
-        assert.equal(globalThis.reactor.databaseManager.mutationGeneration, 1);
-    } finally {
-        globalThis.reactor = saved.reactor;
-        globalThis.ReactorFeatures = saved.ReactorFeatures;
+test('explicitly disabled multi-frame sheets stay disabled through a settings save round trip', () => {
+    const F = require('../src/ReactorFeatures.js'), system = {};
+    assert.equal(F.on('multiFrames', system), true);
+    F.set('multiFrames', false, system);
+    const reopened = JSON.parse(JSON.stringify(system));
+    assert.equal(F.on('multiFrames', reopened), false);
+    assert.equal(A.characterFrameCount('$Hero[8D][8F]', reopened), 3);
+    assert.equal(load(reopened).Game_CharacterBase.rrFramesOf('$Hero[8D][8F]'), 0);
+    F.set('multiFrames', true, reopened);
+    assert.equal(A.characterFrameCount('$Hero[8D][8F]', reopened), 8);
+});
+
+test('an exported eight-frame walk has no idle discontinuity and plays one forward cycle', () => {
+    const cells = S.plan('8d', { frames: 8 });
+    for (const block of [0, 1, 4, 5]) {
+        const origin = S.blockOrigin(block, 8);
+        for (let row = 0; row < 4; row++) for (let frame = 0; frame < 8; frame++) {
+            const c = at(cells, origin.col + frame, origin.row + row);
+            assert.equal(c.clip, 'walk');
+            assert.equal(c.at, 'pass');
+            assert.equal(c.shift, frame / 8);
+        }
     }
+    const ctx = load({}), objects = read('reactor_objects_map.js'), legacy = read('reactor_objects_legacy.js');
+    const methods = ['maxPattern', 'pattern', 'resetPattern', 'isOriginalPattern', 'straighten', 'updatePattern']
+        .map(n => definition(objects, `Game_CharacterBase.prototype.${n} = function`)).join('\n');
+    const start = legacy.indexOf('const _rrMultiMaxPattern'), end = legacy.indexOf('\n};', legacy.indexOf('Game_CharacterBase.prototype.straighten = function', start)) + 4;
+    vm.runInContext(methods + '\n' + legacy.slice(start, end), ctx);
+    const c = new ctx.Game_CharacterBase();
+    c._characterName = '$Hero[8D][8F]'; c._pattern = 0; c._stopCount = 0; c.hasStepAnime = () => true;
+    const sequence = [];
+    for (let i = 0; i < 10; i++) { sequence.push(c.pattern()); c.updatePattern(); }
+    assert.deepEqual(sequence, [0, 1, 2, 3, 4, 5, 6, 7, 0, 1]);
+    c._characterName = 'Actor1'; c._pattern = 0;
+    const stock = [];
+    for (let i = 0; i < 6; i++) { stock.push(c.pattern()); c.updatePattern(); }
+    assert.deepEqual(stock, [0, 1, 2, 1, 0, 1]);
 });

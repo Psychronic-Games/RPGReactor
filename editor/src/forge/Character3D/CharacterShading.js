@@ -144,14 +144,36 @@
     }
 
     /**
-     * The chest's fine patch takes its shade from the body under it. Worked out on its own, on a denser mesh, it came out darker and
-     * lumpy, ending in a hard edge round each breast. Every shading pass goes through here.
+     * Smooth and deepen the body's underside shade, whether or not it has a
+     * fine chest patch. The patch inherits that same field: shading its
+     * denser mesh independently left dark lumps and a hard outside edge.
      */
     function chestFromBody(parts, ao, pack) {
         const bodyAt = parts.findIndex(p => p.name === 'Body'), chestAt = parts.findIndex(p => p.chestDetail && !p.decal);
-        if (!pack || bodyAt < 0 || chestAt < 0 || !ao[bodyAt] || !ao[chestAt] || !parts[chestAt].interpolation) return;
-        const at = new Map(), { offsets, vertices, weights } = parts[chestAt].interpolation, under = ao[bodyAt];
+        if (!pack || bodyAt < 0 || !ao[bodyAt]) return;
+        const at = new Map(), under = ao[bodyAt];
         pack.body.source.forEach((v, i) => { if (!at.has(v)) at.set(v, i); });
+        // Filter the coarse underside's occlusion before transferring it to
+        // the detail patch. Otherwise its alternating dark rows survive the
+        // normal smoothing as a segmented band under a fuller bust.
+        const Body = root.RRHumanBody;
+        if (Body?.bustShadingMask) {
+            const field = new Float32Array(pack.vertexCount * 3), mask = Body.bustShadingMask(pack);
+            for (let v = 0; v < pack.vertexCount; v++) field[v * 3] = 1;
+            for (const [v, i] of at) field[v * 3] = under[i];
+            const soft = Body.bustGradient(pack, Body.relax(pack, field, 6));
+            pack.body.source.forEach((v, i) => {
+                // Deepen the same continuous field, with extra occlusion on
+                // downward-facing skin. Its normals already follow the
+                // regional gradient, so this adds no coarse triangle bands.
+                const t = Math.max(0, Math.min(1, (-parts[bodyAt].normals[i * 3 + 1] - .10) / .70));
+                const down = t * t * (3 - 2 * t), lit = Math.max(.8, Math.min(1, soft[v * 3]));
+                const shade = Math.max(.70, 1 - (1 - lit) * 1.6 - .075 * down);
+                under[i] += (shade - under[i]) * mask[v];
+            });
+        }
+        if (chestAt < 0 || !ao[chestAt] || !parts[chestAt].interpolation) return;
+        const { offsets, vertices, weights } = parts[chestAt].interpolation;
         for (let i = 0; i + 1 < offsets.length; i++) {
             let sum = 0, weight = 0;
             for (let j = offsets[i]; j < offsets[i + 1]; j++) { const k = at.get(vertices[j]); if (k !== undefined && k < under.length) { sum += under[k] * weights[j]; weight += weights[j]; } }

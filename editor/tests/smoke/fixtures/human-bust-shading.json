@@ -1,0 +1,58 @@
+[
+  {
+    "name": "natural",
+    "reset": true,
+    "patch": {
+      "cup": 0.65,
+      "gender": 0
+    },
+    "view": {
+      "target": "chest",
+      "yaw": 0.4,
+      "pitch": -0.3,
+      "distance": 0.75
+    }
+  },
+  {
+    "name": "large",
+    "reset": true,
+    "patch": {
+      "cup": 2.5,
+      "gender": 0
+    },
+    "view": {
+      "target": "chest",
+      "yaw": 0.4,
+      "pitch": -0.3,
+      "distance": 0.75
+    }
+  },
+  {
+    "name": "male",
+    "reset": true,
+    "patch": {
+      "cup": 0.65,
+      "gender": 1
+    },
+    "view": {
+      "target": "chest",
+      "yaw": 0.4,
+      "pitch": -0.3,
+      "distance": 0.75
+    }
+  },
+  {
+    "name": "mid",
+    "reset": true,
+    "patch": {
+      "cup": 0.65,
+      "gender": 0.5
+    },
+    "view": {
+      "target": "chest",
+      "yaw": 0.4,
+      "pitch": -0.3,
+      "distance": 0.75
+    }
+  }
+]

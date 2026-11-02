@@ -1,0 +1,115 @@
+{
+  "date": "2026-11-01",
+  "preview": 74,
+  "runtime": "20261101.3",
+  "feature": "Separate seated knees-up hold, hands-and-knees hold and Crawl loop",
+  "evidenceRoot": "scratchpad/crawl-seated-20261101/",
+  "scope": "Four native preview cases and three saved-model reload views from one normal character save. The female crawl includes a short native motion recording. No regression suites; deferred at owner request.",
+  "inspection": {
+    "preserved": {
+      "hipBridge": 0,
+      "sitWide": 0,
+      "lieBackBentWide": 0,
+      "sit": 0
+    },
+    "added": {
+      "sitKneesUp": {
+        "frames": 2,
+        "finite": true,
+        "seam": 0,
+        "maxFrameAngle": 0
+      },
+      "handsKnees": {
+        "frames": 2,
+        "finite": true,
+        "seam": 0,
+        "maxFrameAngle": 0
+      },
+      "crawl": {
+        "frames": 97,
+        "finite": true,
+        "seam": 2.5178273559996404e-18,
+        "maxFrameAngle": 3.465529558090982
+      }
+    }
+  },
+  "views": [
+    {
+      "name": "seated-knees-up",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "hands-and-knees",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "female-crawl",
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "male-crawl",
+      "errors": 0,
+      "glError": 0
+    }
+  ],
+  "exports": [
+    {
+      "name": "seated-knees-up-export",
+      "clip": "Sit Knees Up",
+      "errors": 0,
+      "glError": 0,
+      "reader": {
+        "bytes": 9779836,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "seated-knees-up-export",
+        "textures": 17
+      }
+    },
+    {
+      "name": "crawl-export",
+      "clip": "Crawl",
+      "errors": 0,
+      "glError": 0,
+      "reader": {
+        "bytes": 9779836,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "seated-knees-up-export",
+        "textures": 17
+      }
+    },
+    {
+      "name": "hands-knees-export",
+      "clip": "Hands and Knees",
+      "errors": 0,
+      "glError": 0,
+      "reader": {
+        "bytes": 9779836,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "seated-knees-up-export",
+        "textures": 17
+      }
+    }
+  ],
+  "limits": "Old-key comparisons use the default female source body. This is not an exhaustive body/outfit matrix. The seated preview in first/ predates the small final arm-clearance adjustment; the saved-model seated capture includes it. The crawl loops in place and does not implement gameplay navigation.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "d729ca6b3a509855e16d516ff197f12134666dd96a715d4fc0636ab551dbf790",
+    "runtime/reactor_main.js": "107131f83845bf222366e3dabcf7c5f820ae89d18a0d7a0b7309038b18284e2d",
+    "editor/src/forge/Character3D/CharacterPoses.js": "c5c542c5a7419d4de52cb8fb306e565097911a61468f8daa5271ca2de4676cd0",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "97bf068ad707d5a6fe33baa05d60c77b3f91e230f7fc5900d91bd97363535f2b"
+  }
+}

@@ -924,7 +924,8 @@
         const partComb = (p, n, c) => combFromPart(H, hair, p, n, c);
         const tidy=o=>strands({single:true,count:420,width:.009*S,roll:.06,lengthJitter:.10,toneVariation:.12,steps:12,...o});
                 const centerZone=c=>c.el>36&&Math.abs(c.az)<140?(Math.abs(c.x)-.022)*140:100;
-        const baldZone=c=>Math.min((43-hair.hairline*15-c.el)*2,Math.abs(c.az)-58);
+        // Leave room for the finished locks above their roots on broad skulls.
+        const baldZone=c=>Math.min((40-hair.hairline*15-c.el)*2,Math.abs(c.az)-58);
         const curl = hair.curl;
         switch (hair.style) {
             case 'centerPartShort': return [cap(.005,centerZone),{type:'curtain',short:true,center:true}];
@@ -2021,7 +2022,9 @@
             const rootAt = t => { const at = Math.max(0, Math.min(0.9999, t)) * (line.length - 1), i = Math.floor(at), f = at - i; return [0, 1, 2].map(k => line[i][k] + (line[i + 1][k] - line[i][k]) * f); };
             const near = skin.filter(v => Math.hypot(H.S[v * 3] - C[side][0], H.S[v * 3 + 1] - C[side][1]) < sp.r[1] * 1.6 && H.S[v * 3 + 2] > C[side][2] - 0.02);
             const nearestSkin = p => { let best = skin[0], d = Infinity; for (const v of near) { const e = (H.S[v * 3] - p[0]) ** 2 + (H.S[v * 3 + 1] - p[1]) ** 2 + (H.S[v * 3 + 2] - p[2]) ** 2; if (e < d) { d = e; best = v; } } return best; };
-            const g = H.gender || 0, count = up ? Math.round(own ? 96 - 40 * g : 130) : own ? Math.round(84 - 34 * g) : 22, length = (up ? 0.0048 : own ? 0.0026 : 0.0016) * (1 - 0.22 * g) * (own ? 0.86 - 0.14 * g : 1), width = (up ? 0.00014 : own ? 0.00007 : 0.00008) * (own ? 1 - 0.25 * g : 1), curl = up ? (own ? 0.45 : 0.62) : 0, SEGMENTS = 4;
+            // Three segments resolve these short quadratic human lashes to
+            // well below a close-up pixel, reducing duplicated blink deltas.
+            const g = H.gender || 0, count = up ? Math.round(own ? 96 - 40 * g : 130) : own ? Math.round(84 - 34 * g) : 22, length = (up ? 0.0048 : own ? 0.0026 : 0.0016) * (1 - 0.22 * g) * (own ? 0.86 - 0.14 * g : 1), width = (up ? 0.00014 : own ? 0.00007 : 0.00008) * (own ? 1 - 0.25 * g : 1), curl = up ? (own ? 0.45 : 0.62) : 0, SEGMENTS = own ? 3 : 4;
             // The lash line: where they root they crowd into one soft dark edge along the lid, which is most of what reads at a distance.
             if (up) {
                 const SEG = 22, start = m.pos.length / 3;

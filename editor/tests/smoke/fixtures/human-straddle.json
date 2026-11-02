@@ -1,0 +1,57 @@
+[
+  {
+    "name": "slider-pose",
+    "reset": true,
+    "view": {
+      "yaw": 1.2,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "js": "b.pose='fastKneelingBackStretch';b._syncPose();b.tab='body';b._renderPanel();const expected=b._view.bones.find(x=>x.name==='Hips').quaternion.clone(),renderer=v.renderer,render=renderer.render,draws=[],yaw=v.yaw,pitch=v.pitch;let fullUpdates=0,fastUpdates=0;const update=b._update,fast=b._fastApply;b._update=function(...args){fullUpdates++;return update.apply(this,args);};b._fastApply=function(...args){fastUpdates++;return fast.apply(this,args);};renderer.render=function(scene,...args){if(scene===v.scene){const hips=b._view.bones.find(x=>x.name==='Hips');draws.push({angle:hips.quaternion.angleTo(expected),yaw:v.yaw-yaw,pitch:v.pitch-pitch});}return render.call(this,scene,...args);};const settle=async()=>{const end=performance.now()+45000;while(JSON.stringify(b._result.recipe)!==JSON.stringify(b.recipe)||b._pending||b._liveJob?.busy||b._previewTween){if(performance.now()>end)throw Error('Slider rebuild timed out');await new Promise(r=>setTimeout(r,25));}};try{const input=b.root.querySelector('input[type=range][data-path=weight]');for(const value of [.65,.4]){input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));await settle();}input.dispatchEvent(new Event('change',{bubbles:true}));await settle();b._stopPreviewTween();b._fast=b._fastStart(b._result);const r=RRHumanBody.normalizeRecipe({...b.recipe,height:.6}),shaped=RRHumanBody.shape(b.pack,r),normals=RRHumanBody.gather(RRHumanBody.skinNormals(b.pack,shaped,r),b.pack.body.source,3),heads=RRHumanBody.joints(b.pack,shaped).map(j=>j.head);b._fastApply(shaped,normals,heads);}finally{renderer.render=render;b._update=update;b._fastApply=fast;}const maxAngle=Math.max(...draws.map(d=>d.angle)),maxCamera=Math.max(...draws.map(d=>Math.max(Math.abs(d.yaw),Math.abs(d.pitch))));if(maxAngle>.01||maxCamera>.0001||!fullUpdates||!fastUpdates)throw Error('Pose drift: '+JSON.stringify({maxAngle,maxCamera,fullUpdates,fastUpdates,draws:draws.length}));return {target:[0,.23,.16],maxAngle,maxCamera,fullUpdates,fastUpdates,draws:draws.length};"
+  },
+  {
+    "name": "straddle-rest",
+    "reset": true,
+    "view": {
+      "yaw": 1.2,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "js": "b.pose='straddle';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=straddle]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Straddle not grouped in poses');v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,.30,.12],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "straddle-male-peak",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 1.2,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "js": "b.pose='straddle';b._syncPose();const option=b.root.querySelector('.rr-c3d-pose-picker option[value=straddle]');if(!option||option.parentElement.tagName!=='OPTGROUP')throw Error('Straddle not grouped in poses');v.action.paused=true;v.action.time=1;v.mixer.update(0);b._plant();return {target:[0,.30,.12],pose:b.pose,duration:v.action.getClip().duration};"
+  },
+  {
+    "name": "saved-straddle",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 1.2,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Straddle');if(!clip)throw Error('Missing saved Straddle');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(1);object.updateMatrixWorld(true);return {target:[0,.30,.12],savedClip:clip.name,duration:clip.duration};"
+  }
+]

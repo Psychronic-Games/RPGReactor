@@ -1,0 +1,196 @@
+{
+  "date": "2026-11-01",
+  "preview": 92,
+  "runtime": "20261101.20",
+  "evidenceRoot": "scratchpad/exercise-arms-20261101/",
+  "change": "Upright straddle and Squat lower the arms directly from their bind orientation, avoiding the backwards upper-arm roll of the hanging-arm IK solution. Bounded forearm pronation turns palms inward with neutral wrists. Upright straddle returns farther toward the heels; its upswing is unchanged. Original Straddle and Squat leg/root keys are unchanged.",
+  "scope": "Focused source male/female direction, planted-contact, knee-bend and per-key continuity inspection; four native views including a saved male Squat reload. Full suites remain deferred at owner request.",
+  "sourceInspection": [
+    {
+      "gender": 0,
+      "id": "straddleUpright",
+      "upperArmForwardDotBefore": -0.9808256155599829,
+      "upperArmForwardDot": 0.9998884978864071,
+      "palmInwardDotBefore": -0.9626173217608498,
+      "palmInwardDot": 0.9972803273602676,
+      "hipTravelBefore": 0.012090831995010376,
+      "hipTravel": 0.0818038284778595,
+      "declineLoweredMetres": 0.06971299648284912,
+      "peakHipDeltaMetres": 0,
+      "contactDeltaMetres": 5.2739792813529526e-08,
+      "kneeBendDegrees": 135.2147141760045,
+      "maximumAdjacentTurnDegrees": 1.101136242828747,
+      "loop": 0,
+      "preserved": 0
+    },
+    {
+      "gender": 0,
+      "id": "squat",
+      "upperArmForwardDotBefore": -0.9813412605186631,
+      "upperArmForwardDot": 0.9998884977006751,
+      "palmInwardDotBefore": -0.9816403503233201,
+      "palmInwardDot": 0.9972803251345573,
+      "hipTravelBefore": -0.5838079452514648,
+      "hipTravel": -0.5838079452514648,
+      "declineLoweredMetres": 0,
+      "peakHipDeltaMetres": 0,
+      "contactDeltaMetres": 3.01914000250007e-08,
+      "kneeBendDegrees": 149.67111132117094,
+      "maximumAdjacentTurnDegrees": 3.698691604487102,
+      "loop": 0,
+      "preserved": 0
+    },
+    {
+      "gender": 0,
+      "id": "straddle",
+      "upperArmForwardDotBefore": 0.03126182908785724,
+      "upperArmForwardDot": 0.03126182908785724,
+      "palmInwardDotBefore": -9.893151292628133e-08,
+      "palmInwardDot": -9.893151292628133e-08,
+      "hipTravelBefore": 0.05960598587989807,
+      "hipTravel": 0.05960598587989807,
+      "declineLoweredMetres": 0,
+      "peakHipDeltaMetres": 0,
+      "contactDeltaMetres": 7.47139573114458e-08,
+      "kneeBendDegrees": 148.9754451540159,
+      "maximumAdjacentTurnDegrees": 0.469066540837138,
+      "loop": 0,
+      "preserved": 0
+    },
+    {
+      "gender": 1,
+      "id": "straddleUpright",
+      "upperArmForwardDotBefore": -0.9798140818939391,
+      "upperArmForwardDot": 0.9993429949458927,
+      "palmInwardDotBefore": -0.9549284802623729,
+      "palmInwardDot": 0.9928315872841385,
+      "hipTravelBefore": 0.01751631498336792,
+      "hipTravel": 0.10068753361701965,
+      "declineLoweredMetres": 0.08317121863365173,
+      "peakHipDeltaMetres": 0,
+      "contactDeltaMetres": 6.066102692179921e-08,
+      "kneeBendDegrees": 136.80306729960367,
+      "maximumAdjacentTurnDegrees": 1.0572707524819507,
+      "loop": 0,
+      "preserved": 0
+    },
+    {
+      "gender": 1,
+      "id": "squat",
+      "upperArmForwardDotBefore": -0.9792991218166902,
+      "upperArmForwardDot": 0.9993429937161029,
+      "palmInwardDotBefore": -0.9762523715942282,
+      "palmInwardDot": 0.9928315872841385,
+      "hipTravelBefore": -0.6510171592235565,
+      "hipTravel": -0.6510171592235565,
+      "declineLoweredMetres": 0,
+      "peakHipDeltaMetres": 0,
+      "contactDeltaMetres": 4.287780665847051e-08,
+      "kneeBendDegrees": 147.71546006133553,
+      "maximumAdjacentTurnDegrees": 3.6644875625697106,
+      "loop": 0,
+      "preserved": 0
+    },
+    {
+      "gender": 1,
+      "id": "straddle",
+      "upperArmForwardDotBefore": -0.06974268516086624,
+      "upperArmForwardDot": -0.06974268516086624,
+      "palmInwardDotBefore": -6.033586885667575e-08,
+      "palmInwardDot": -6.033586885667575e-08,
+      "hipTravelBefore": 0.055075645446777344,
+      "hipTravel": 0.055075645446777344,
+      "declineLoweredMetres": 0,
+      "peakHipDeltaMetres": 0,
+      "contactDeltaMetres": 7.642408000306022e-08,
+      "kneeBendDegrees": 143.90681367106527,
+      "maximumAdjacentTurnDegrees": 0.469066540837138,
+      "loop": 0,
+      "preserved": 0
+    }
+  ],
+  "orientationMethod": "Minimum dot product of the rotated upper-arm forward axis with world forward; minimum dot product of each posed palm normal with the inward body axis. A positive value near one faces the expected way. Compare at every authored key against Preview 91.",
+  "nativeViews": [
+    {
+      "name": "upright-low-female",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "straddleUpright",
+        "target": [
+          0,
+          0.5,
+          0
+        ],
+        "time": 0
+      },
+      "validationError": null
+    },
+    {
+      "name": "squat-low-female",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "squat",
+        "target": [
+          0,
+          0.5,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "upright-high-male",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "straddleUpright",
+        "target": [
+          0,
+          0.5,
+          0
+        ],
+        "time": 1
+      },
+      "validationError": null
+    },
+    {
+      "name": "saved-squat-male",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "savedClip": "Squat",
+        "target": [
+          0,
+          0.5,
+          0
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 11748808,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-squat-male",
+        "textures": 22
+      }
+    }
+  ],
+  "limits": [
+    "Male upright-high capture crops the top of the head; arms and knees remain visible.",
+    "These are targeted default male/female builds, not an exhaustive body/wardrobe collision audit.",
+    "The final optional hand-frame fallback for skeletons without finger landmarks does not affect the full-finger rigs in the native captures."
+  ],
+  "runtimeSync": "All 20 bundled projects synchronized to runtime 20261101.20.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "8af446cd6d660fc23f6b311241a92f812992a1f20a2475dd353d99a3c2f64ad2",
+    "runtime/reactor_main.js": "de75d322c5b2293eecaef415b1585d771fecb9178fe2ae70f03013930147b621",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "07b3bb7cb323c836badc98e7f17b93ceb8ea52985c1510660679eed13e9d7da7"
+  }
+}

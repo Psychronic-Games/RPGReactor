@@ -4,17 +4,29 @@ Read [STATUS.md](STATUS.md) for open work. Earlier: [archive/handoff](archive/ha
 
 Changes belong in the editor changelog; behavior goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-10-31)
+## Where things stand (2026-11-01)
 
 - **0.99.3 source release:** runtime **20261028.11**, [release notes](posts/release-notes-0.99.3.md) and [editor changelog](../editor/changelog/0.99.3.md). **0.99.4** is open after the release push; binary publishing is separate.
-- **Forge:** Character Preview **65** is checkpointed for morning review; the owner has not reviewed it. Ear coverage and head joins are repaired; nostril shape and overall appearance remain open. [Resume checklist](HUMAN-FACE-HANDOFF.md#resume-in-the-morning). Props stay Preview **62**; clothing stays Preview 61.
-- **0.99.4:** runtime **20261031.1**, PixiJS **8.22.0**, Three.js **0.187.0**; [legacy import audit](IMPORTING-LEGACY-PROJECTS.md#reliability-audit). Shared skins (20261029.8) raised North Haven Tactical from 76–81 to 158 pictures/s on RTX; CPU throttling and iGPU acceptance remain. [Performance](PERFORMANCE.md).
+- **Forge:** Character Preview **98** corrects the native/replacement side-cheek join and shares smoothed normals, including at −100% cheek settings. Visual acceptance remains open; full suites stay deferred. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98). Props **62**; clothing Preview 61.
+- **0.99.4:** runtime **20261101.26**, PixiJS **8.22.0**, Three.js **0.187.0**. Tile layers and events share each rendered camera position; native Moletown drift drops from 6 px to zero. [Evidence](archive/evidence/event-camera-drift-20261101.json). Multi-frame sprites default on, preserve explicit off, and omit the export's Idle interruption; re-export older sheets. [Guide](CHARACTER-BUILDER.md#sprite-sheets). Tactical performance and hardware limits: [PERFORMANCE.md](PERFORMANCE.md).
 - **Battle/world presentation:** occupant-only cutaways, grapple arms, sleeping combat ragdolls and target hit badges pass native checks. Auto keeps cheaper shadows. Roof flicker needs a house/location; no fix claimed. Evidence: [PERFORMANCE.md](PERFORMANCE.md).
 - **Border feedback:** a deferred cube face inherited its own sampler before plain water drew. Fixed at capture entry. Reproduce with `smoke/nw-border-feedback.cjs --uncapped` (continue west through Forest Road); short edge trips miss it. Evidence: `scratchpad/border-feedback-20261029/`.
 - **Database/pop-out audit:** `smoke/nw-popout-audit.cjs`, evidence `scratchpad/popout-audit-20261029/`: all 25 pages and 136 command entries; nested and save/cancel flows. Menus, animation placement, Common Events and Fadein fixed. Rapid Database hide/reopen hung once on RTX; still open (STATUS).
 - **Remaining work:** [OPEN-ITEMS.md](OPEN-ITEMS.md). Keep gameplay timing fixed; render available refreshes without imposing a cadence cap.
 - **Older threads:** unused-file/playtest records, Braver port and Linux pop-out transparency remain; see STATUS and [PERFORMANCE.md](PERFORMANCE.md).
 - **Testing (2026-10-31):** use `npm run test:changed`; never run the whole suite locally. See the entry below.
+
+## 2026-11-01 — Character and Rebellion checkpoint
+
+Resume with Character Preview **98** and runtime **20261101.26**. The [development changelog](../editor/changelog/0.99.4.md) records today's face/body, skin, live-slider, exercise and secondary-motion changes, saved-design opening repair, multi-frame sheets and 2D event registration. The [day's evidence index](archive/evidence/checkpoint-20261101.json) links the individual validation records and their local artifacts. Native capture fixtures and the face measurement/generator tools are included; rendered galleries, temporary project exports and large scratch assets remain ignored.
+
+The Demo checkpoint preserves the owner's latest **Robust Female Sci-Fi Athlete** and **Robust Grey Alien Female** recipe/thumbnail edits, including skin finishes, bounce settings and outfit removal, plus the project's modified timestamp. Those snapshots are editable designs, not proof that all older generated GLBs or sprite sheets have been rebuilt.
+
+Restart the editor/playtest for the updated code. Re-save generated characters for changed geometry, skin materials and embedded exercise/bounce clips. Re-export older multi-frame walk sheets to replace their separate idle column with the complete walking cycle. Existing three-frame sheets keep stock stepping. A missing multi-frame preference now means on; an explicit unchecked choice persists through both settings pages and exports.
+
+Face attractiveness and final body appearance still need owner review; the exact pointy under-chin shadow report remains open. Prior handoff candidates and counts are historical, not a fresh full-suite pass. Today's closing sprite checks passed 19 cases and camera/pacing checks passed 20; native camera registration measured 6 px before and zero afterward across 40 samples. The Rebellion fixture enabled KODERA and UltraMode7, with other plugins disabled; the complete plugin stack hit a fresh-start MOG Variable HUD error during the earlier sprite probe. A full Rebellion playthrough is not claimed. Keep full suites deferred until requested, and use `codex-check` for substantial checks.
+
+Commit closeout passes six documentation checks, syntax checks for 47 changed JavaScript files and one Python tool, parsing of 84 changed JSON files, and runtime consistency across all 20 bundled projects. The evidence index resolves all 31 linked records. Whitespace checks pass. No additional geometry generation, render sweep or full project suite was run for this checkpoint.
 
 ## 2026-10-30 — End-of-day checkpoint
 
@@ -100,3 +112,11 @@ Resume with [the morning checklist](HUMAN-FACE-HANDOFF.md#resume-in-the-morning)
 Latest validation: **24 focused checks**, four saved-quality geometry profiles without reported issues, eight native captures, and one saved intermediate GLB reopened in two studio views with all 28 morphs and a complete blink. Documentation/runtime-copy checks pass 10. The 900,000-byte morph ceiling is unchanged; an oversized candidate was rejected and reduced. No full repository suite or Windows/macOS check was run.
 
 Code, generated data, attribution, fixtures and evidence manifests are part of this commit. Local renders, references and sample exports stay ignored under `scratchpad/face-ear-nose-20261031/`; open `comparison.html` or `comparison.png` first. [Tracked evidence](archive/evidence/human-face-ears-nose-20261031.json) identifies the current folders and source hashes. Earlier numbered folders are rejected experiments.
+
+## 2026-11-01 — Human proportions, temples and slider release
+
+Character Preview **66** revises both human defaults using finished references, published proportion research and direct geometry measurements. The native human cranium and shared face coordinate eye spacing, lid/globe fit, iris scale and the middle face. Temple/forehead geometry, UVs, normals and baked shade now share a continuous transition. Other species retain their heads; runtime stays **20261031.1** and props stay **62**. Restart and regenerate baked characters. Overall attractiveness remains for the owner to judge.
+
+The owner also reported snapping sliders. Real held-input checks reproduced roughly 12 mm of vertex displacement at release on three face controls. The browser shaper lacked current head data and resting-mouth expression units; an old-binding deformation also could not refit the shared sculpt. Shared human controls now use complete worker builds throughout input and release. Eight native cases retain identical geometry, normals, recipe, topology and camera across release. Busy generators can delay preview updates.
+
+Use [the current face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-89) and [the tools guide](../editor/tests/tools/face-proportions/README.md) for evidence, equations and reproduction. Local comparisons, saved models, reports and logs live under ignored `scratchpad/face-refinement-20261101/`; intermediate folders include rejected trials. Generated head data must still come from its generator. Full-suite and Windows/macOS validation are not claimed.

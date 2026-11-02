@@ -253,16 +253,15 @@
             const f = Math.round(Number(n));
             return Number.isFinite(f) && f >= 1 && f !== 3 ? `[${f}F]` : '';
         },
-        /**
-         * Frames per character row: 3, or N for a "Name[6F]" (or "Name[F6]") sheet when the
-         * project's System.json turns multi-frame sheets on (rrMultiFrames: Database ›
-         * Reactor Features, an import of a game that used them, or an exported [NF] sheet).
-         * A stock project is always 3.
-         */
+        /** A tagged sheet uses its full cycle unless the project explicitly opts out. */
+        isMultiFrameCharacter(name, system) {
+            const sys = system !== undefined ? system : (typeof window !== 'undefined' ? window.reactor?.databaseManager?.data?.system : null);
+            const enabled = sys?.rrMultiFrames == null || !!sys.rrMultiFrames;
+            return enabled && this.framesTagged(name) > 0;
+        },
+        /** Frames per row: the filename's N, or three for untagged/disabled sheets. */
         characterFrameCount(name, system) {
-            const sys = system || (typeof window !== 'undefined' ? window.reactor?.databaseManager?.data?.system : null);
-            if (!sys || sys.rrMultiFrames !== true) return 3;
-            return this.framesTagged(name) || 3;
+            return this.isMultiFrameCharacter(name, system) ? this.framesTagged(name) : 3;
         },
         /** A "[8D]" sheet: eight blocks of 3 x 4 frames (N x 4 with [NF]), cut as an eight-character sheet whatever its "$" says. */
         isEightDirCharacter(name) {

@@ -1,6 +1,144 @@
-# Human face: handoff (2026-10-31)
+# Human face: handoff (2026-11-01)
 
-## Current follow-up — Preview 65
+## Current candidate — Preview 98
+
+This face candidate was introduced with runtime **20261101.24**. The current checkpoint uses **20261101.26** for the later sprite and scroll fixes; face geometry remains Preview 98. See the [day's checkpoint](HANDOFF.md#2026-11-01--character-and-rebellion-checkpoint) for save/re-export instructions and the remaining review scope.
+
+Preview 98 addresses the angular side-cheek ridge still visible with Cheeks and Cheekbones at −100%. A native side-cheek field now carries the skin behind the replacement face’s join through the same contour change. The replacement transition has bounded clearance above retained native triangles, with a small positive separation to avoid coplanar flicker. It inherits the body’s actual smoothed cheek normals instead of restoring raw cage normals at the edge. The screenshot’s default female side view and minimum settings are the reproduction target; male and saved/blink checks cover the candidate too. Runtime remains **20261101.24**. Full suites stay deferred and overall attractiveness/visual acceptance remain open. [Scope ledger](archive/evidence/cheek-ridge-20261101.json).
+
+## Previous candidate — Preview 97
+
+Preview 97 addresses the broad anterior cheek bulges marked in the owner’s screenshot, below the outer eyes and beside the nose. The Preview 96 correction covered a smaller, higher ridge. The shared human sculpt now has a broader cheek field with a flatter neutral contour and explicit forward fullness from **Cheeks**; **Cheekbones** retains ridge control and contributes to the adjacent plane. Both fields are cached on reference vertices, so narrowing the cheek cannot move the mask away from its own target. Local normal averaging softens triangle highlights across the corrected cheek while retaining eyelid and seam anchors. Runtime remains **20261101.24**. Focused source measurements cover the saved Athlete and female/intermediate/male defaults; native front/quarter, male and saved/blink views cover the candidate. Full suites remain deferred and overall attractiveness/visual acceptance remain open. [Scope ledger](archive/evidence/cheek-bulges-20261101.json).
+
+## Previous candidate — Preview 96
+
+Preview 96 separates Hamstring stretch’s deep spinal fold from its pelvic hinge, reducing the nearly opposing pelvis/thigh skin rotations that flattened a glute at full reach. Feet and fingertip-to-toe contact remain planted. Lower-bust occlusion gains contrast and gentle downward-facing attenuation within the existing averaged gradient. The human face’s **Cheekbones** control now retracts/projects the visible malar ridge instead of mostly changing native cage width beneath a fixed sculpt; neutral female/male ridges are slightly softer, with local geometric normals following the correction. **Cheeks** remains the fullness control. Runtime **20261101.24**. Focused pose/contact checks, source face/shading measurements and native before/after plus saved-model views cover this candidate. Full suites remain deferred, and face attractiveness/visual acceptance remain open. [Scope ledger](archive/evidence/body-face-refinement-20261101.json).
+
+## Previous candidate — Preview 95
+
+Preview 95 adds collarbone elevation to Jumping jacks and elevation/posterior tilt to Pull-ups, sharing the overhead turn across the shoulder instead of folding the attachment flat. Jumping jacks use a frontal arm-swing reference; Pull-ups keep the elbows outward and ahead of the torso. Hamstring stretch measures the shaped foot’s toe tip and reaches it with extended fingers pointing down; wrist orientation eases from the solved neutral arm so the loop closes smoothly. Runtime **20261101.23**. Focused source checks cover the saved Athlete and default female/male builds, with native shoulder/toe views and actual saved-clip reloads. Full suites remain deferred and visual acceptance stays open. [Scope ledger](archive/evidence/exercise-shoulders-20261101.json).
+
+## Previous candidate — Preview 94
+
+Preview 94 replaces the lower-bust dome approximation with regularized quadratic gradients fitted to regional averages of the actual normals and occlusion. Surrounding chest-detail skin inherits the gradient; only the raised nipple retains local patch normals. Exercise elbow planes follow the torso and bind-pose bend instead of forcing world-front elbows or flipping arm frames. Forearm pronation follows a continuous branch. Jumping jacks take **1.1 seconds** (previously 2.4), with body-sized clearance at the sides. Hamstring reaches target the instep ahead of the shin. Push-ups keep the leg chain straight, the ankle unrolled at about 20 degrees of dorsiflexion, and the toe joint extended onto the floor. Distal forefoot skin/flexible clothing follows the toe bone through the ball transition, with static geometry preserved. Runtime **20261101.22**. Focused pose/clearance, native close-ups and saved-model checks cover this candidate; full suites remain deferred. [Scope ledger](archive/evidence/exercise-repair-20261101.json).
+
+## Previous candidate — Preview 93
+
+Preview 93 adds **Jumping jacks**, alternating **Hamstring stretch** (left hand/right foot, then right hand/left foot), **Sit-ups**, **Pull-ups** and **Push-ups** under Exercises, with saved action clips. Pull-ups use fixed overhead grips for a scene’s bar. Jumping jacks retain their hop; Pull-ups retain their vertical travel. Squat arms swing outward through the descent for leg clearance. **Kneeling** is a stable authored hold with slight head motion, and Upright straddle gains a small nod/turn. Lower-bust normals and occlusion use a broader source-space band with a locally bounded lower-dome gradient; Belly Tone’s analytic normal pass retains that smoothing instead of restoring coarse underside normals. The saved Robust Female Sci-Fi Athlete design was read for native comparisons without overwriting its files. Runtime **20261101.21**. Focused source contact/continuity checks, native views and a saved-model reload cover this iteration; full suites remain deferred. [Scope ledger](archive/evidence/exercise-followup-20261101.json).
+
+## Previous candidate — Preview 92
+
+Preview 92 corrects backward upper-arm roll in **Upright straddle** and **Squat**. These arms swing down directly from the bind pose; bounded forearm rotation brings palms inward while wrists remain neutral. Upright straddle returns farther toward the heels, lowering the decline by about 7–8 cm on the checked bodies while retaining the prior upswing height and anchored knees/feet. Original Straddle and Squat leg/root keys are unchanged. Runtime **20261101.20**. Targeted female/male direction, contact and loop checks plus native views and saved-model reload cover the change; full suites remain deferred. [Scope ledger](archive/evidence/exercise-arms-20261101.json).
+
+## Previous candidate — Preview 91
+
+Preview 91 fixes intermittent saved-design/species preview stalls. Studio creation restores the focus/resume listener removed by its teardown. Preset/open transitions reset canceled slider-settle handles, and detach cancels pending rebuild frames. Saved records retire the previous shape job and caches; “Opened” is shown only after the requested current recipe reaches the view. Runtime remains **20261101.19**. Focused lifecycle regressions and native saved-design/focus/species/reopen checks cover the fix; full suites remain deferred. [Scope ledger](archive/evidence/open-design-20261101.json).
+
+## Previous candidate — Preview 90
+
+Preview 90 gives Straddle’s thigh and shin a shared knee bend plane and reduces its overfolded low point while retaining grounded palms. **Exercises → Upright straddle** adds a separate wide-knee kneeling lift with torso upright and arms at the sides. **Squat** adds a four-second deep squat/full-standing loop with planted feet. Normal saves include both new action clips. Runtime **20261101.19**. Focused male/female pose, anchor, loop and native saved-model checks cover this candidate; full regression suites remain deferred. [Scope ledger](archive/evidence/straddle-squat-20261101.json).
+
+## Previous candidate — Preview 89
+
+Preview 89 smooths the running separation correction that introduced a sharper left-hip turn, then restores clearance with outward swing rather than a new twist. The captured gait is retained; Walking's keys are unchanged. **Body → Build → Fat bounce** adds subtle-to-Extreme movement across belly, side hips, thighs and calves, independent of bust/butt settings. Abdominal bounds follow the shaped whole belly; limb radii are measured from the body so heavier thighs/calves cannot grow outside the influence. Broad central regions move together, with bounded offsets and smooth attachment falloff. Weight, muscle and abdominal tone affect the response. Live sliders reuse calculated motion samples and the active source clip; saved GLBs carry the baked tracks. Runtime **20261101.18**. Targeted female/male gait/clearance inspection, cached-versus-fresh equality checks, native visible-mesh slider measurements, run views and saved-model reload cover this candidate. Regression suites remain deferred. [Scope ledger](archive/evidence/run-fat-bounce-20261101.json).
+
+## Previous candidate — Preview 87
+
+Preview 87 fixes body-slider changes briefly rotating floor poses upright. Complete builds recreate the active animation before drawing; the lightweight drag path preserves posed rotations/animated translations across its temporary bind calculation, including constant mixer tracks. **Exercises → Straddle** adds a forward-facing, wide-knee kneeling exercise with head raised and grounded palms ahead of the body and a two-second lift/return. Normal saves include **Straddle** / **straddle**. The approved fast stretch's original keys remain unchanged. Runtime **20261101.16**. Targeted native slider/render-frame inspection, male/female Straddle views, source contact checks and saved-model reload cover this candidate; regression suites remain deferred. [Scope ledger](archive/evidence/straddle-slider-20261101.json).
+
+## Previous candidate — Preview 86
+
+Preview 86 fixes bounce opening the detailed chest boundary: it removes subdivided boundary T junctions and copies the body's final skin bindings at shared endpoints. The pigment overlay shares the detailed skin's bindings. It also removes a four-influence exclusion that left most uncovered butt skin rigid, and shares glute motion across pelvis/upper-leg child joints instead of driving only a small pelvis-weighted region. Runtime **20261101.15**. Source seam measurements, visible-mesh slider checks, native run/stretch views and a saved-model reload cover the fix. Regression suites remain deferred. [Scope ledger](archive/evidence/bounce-seams-20261101.json).
+
+## Previous candidate — Preview 85
+
+Preview 85 adds independent **Body → Bust → Bust bounce** and **Body → Torso → Butt bounce** controls: subtle 0.15 defaults, 0–1 normal ranges and 0–4 Extreme ranges. Bust and glute joints deform skin and fitted cloth smoothly. Exercises have a stronger response to slower movement and changing torso tilt; the approved walk/run spring behavior is preserved. Slider changes refresh animation keys without rebuilding meshes/textures; re-saved clips carry those keys. Zero stops secondary movement and preserves the original body posing, including bent hips; static holds remain still. Fitted cloth retains its strongest four influences to avoid rigid patches over moving skin. Runtime **20261101.14**. Targeted motion/binding inspection, native independent-slider review and saved-model reload cover the candidate; regression suites remain deferred. [Scope ledger](archive/evidence/soft-tissue-bounce-20261101.json).
+
+## Previous stretch candidate — Preview 83
+
+Preview 83 adds a little more forward travel on the fast stretch’s upswing and shortens the loop from two seconds to 1.75 seconds. The palm-supported chest/head lift and shallower return remain; the standard six-second stretch is unchanged. Palms stay down and knees/feet remain anchored. Runtime **20261101.12**. A targeted native peak view and numerical motion inspection cover this small adjustment; regression suites remain deferred. [Scope ledger](archive/evidence/fast-stretch-finish-20261101.json). [Prior chest-lift adjustment](archive/evidence/fast-stretch-press-20261101.json). Preview 80 below retains the saved-model reload coverage.
+
+## Previous candidate — Preview 80
+
+Preview 80 adds **Exercises → Fast kneeling back stretch** alongside the owner-approved original. The new loop takes four seconds rather than six, reaches farther forward, and returns less deeply. Palms stay down while knees/feet remain anchored. Normal saves include **Fast Kneeling Back Stretch** / **fastKneelingBackStretch**. Runtime **20261101.9**. Targeted native female/male views, saved-model reload and numerical motion inspection cover this variant; regression suites remain deferred. [Scope ledger](archive/evidence/fast-kneeling-stretch-20261101.json).
+
+## Approved standard stretch — Preview 79
+
+Preview 79 extends the stretch upswing a little farther, keeping the same six-second timing and resting keys. Palms stay down and knees/feet remain anchored. Runtime **20261101.8**. The small amplitude adjustment has a native peak view and source contact/loop inspection; regression suites remain deferred. [Scope ledger](archive/evidence/stretch-reach-20261101.json). Preview 78 below records the shared motion's saved-model reload coverage.
+
+## Previous candidate — Preview 78
+
+Preview 78 adds forward bending through the back/shoulders and longer arm reach to the kneeling stretch, following the owner's clarification that palms should stay on the floor. Knees/feet remain anchored and palm height remains constant. The approved resting keys are preserved. Runtime **20261101.7**. Native female/male views, a 25-sample world-position inspection and an actual saved-model reload cover the candidate; regression suites remain deferred. [Scope ledger](archive/evidence/stretch-forward-20261101.json).
+
+## Previous candidate — Preview 77
+
+Preview 77 gives the owner-approved kneeling back stretch a gentle six-second forward reach and return. The resting and final bone keys match the approved hold; knees and feet stay in place while the torso and hands advance. Runtime **20261101.6**. Native rest/reach views and an actual saved-model reload cover the stronger candidate after the owner rejected the initial subtle motion. Regression suites remain deferred at the owner's request. [Scope ledger](archive/evidence/stretch-motion-20261101.json).
+
+## Previous candidate — Preview 76
+
+Preview 76 adds **Exercises → Kneeling back stretch**, a steady knees-apart hold with hips back and hands reaching forward. It is included in normal saves as a named clip/action. Runtime **20261101.5**. Three native body views and an actual saved-model reload cover the candidate; regression suites remain deferred for visual iteration. [Scope ledger](archive/evidence/kneeling-stretch-20261101.json). Earlier face/skin review items remain open.
+
+## Previous candidate — Preview 75
+
+Preview 75 corrects the overextended ankles in Crawl and Hands and knees. The feet follow the shins within the existing 52° ankle-pitch limit instead of being forced to a world-space half-turn; the shins rise slightly toward the ankles for trailing foot clearance. The other floor-pose branches are unchanged. Runtime **20261101.4**. Three short native views cover female/male crawling and a close-up; regression suites and a new export reload are deferred for visual iteration. [Scope ledger](archive/evidence/crawl-ankles-20261101.json).
+
+## Previous candidate — Preview 74
+
+Preview 74 adds a separate knees-up seated hold with feet drawn in, a still Hands and knees pose, and an in-place Crawl loop. The owner asked to keep the earlier legs-apart seating. It and the approved Hip Bridge retain their keys; the existing Sitting correction remains. Runtime **20261101.3**; regression suites remain deferred for visual iteration. Pose scope: [preview and export ledger](archive/evidence/crawl-seated-20261101.json). The face/skin candidates and their open review items remain as recorded below.
+
+## Previous candidate — Preview 73
+
+Preview 73 adds steady back-lying with bent knees apart and sitting with legs apart. The old Sitting no longer receives the sole-leveling correction that amplified left-thigh motion from under 0.9° to about 7.6° between samples on the inspected female body. The owner approved the Hip Bridge's appearance; its 53 tracks compare exactly with Preview 72 after sharing the floor-pose builder. Runtime **20261101.2**; regression suites remain deferred at the owner's request. Face/abdominal geometry and skin controls retain the earlier candidates and their open visual issues. Rest-pose evidence: [preview and export ledger](archive/evidence/rest-poses-20261101.json).
+
+## Previous candidate — Preview 72
+
+Preview 72 adds the Exercises category and floor hip bridge, with dark pose headers, lighter rows and themed scrollbars. The face/abdominal geometry remains the Preview 70 candidate and skin controls remain Preview 71. Runtime is now **20261101.1** for the shared exercise library; generated heads are unchanged. Face attractiveness and the chin-spike report remain open. Regression suites remain deferred at the owner's request. Exercise scope: [native preview and export ledger](archive/evidence/hip-bridge-20261101.json).
+
+## Previous candidate — Preview 71
+
+Preview 71 adds humanoid **Colors → Skin surface** controls for finishes and pore textures; the face and abdominal geometry remain the Preview 70 candidate below. Natural keeps the earlier material defaults. Four short native views include a wet/porous saved model reloaded through the game reader, retaining its coating, pore map and 28 expression morphs. [Scope ledger](archive/evidence/skin-surface-20261101.json); local comparison: `scratchpad/skin-surface-20261101/comparison.html`. Regression suites remain deferred at the owner's request. Face attractiveness and chin-spike reproduction remain open; this addition does not close those reports.
+
+## Previous candidate — Preview 70
+
+The owner rejected Preview 69's pulsing slider transitions and the high, subtle abdominal relief. Preview 70 moves all three abdominal pairs into a bounded region below the bust and around the navel, with stronger, rounded relief. The natural Belly Tone range is unchanged. The middle pair has additional relief so it reads separately from the upper and lower pairs. The appearance remains a visual candidate. Local visual previews are under `scratchpad/face-followup-20261101/review-70/`; the larger-bust placement view is in `final-placement-70/` and predates only the middle-pair strength adjustment.
+
+Live transitions now interpolate the bone rest positions and inverse bindings alongside positions, normals, UVs, weights and camera framing. The active motion clip is refreshed for the changed human dimensions too. Linear interpolation avoids restarting an ease-in at each incoming worker sample. Parts with changed source vertex correspondence switch directly instead of blending unrelated vertices. This is display-only; the recipe/export model remains exact.
+
+**Iteration policy:** at the owner's request, defer regression suites until the owner accepts the visual result. The 87 focused and ten documentation checks below belong to Preview 69, not this candidate. Preview 70 uses short native visual previews only ([scope ledger](archive/evidence/human-face-iteration-20261101-preview70.json)); transition and abdominal regression fixtures still need updating and running at final validation. Runtime remains **20261031.1** and Prop Preview **62**. Restart the editor and regenerate older saved models.
+
+## Previous candidate — Preview 69
+
+The owner rejected Preview 66's square jaws, rough inner eyes and overall appearance, and reported pointy under-chin shadows, coarse underside-bust shading and missing updates during slider drags. **Overall face attractiveness remains open to owner review.** Runtime stays **20261031.1**, Prop Preview **62**. Restart the editor and regenerate older saved models.
+
+The lower face tapers independently of cranial width; mouth width and corner fit are rebalanced with the nose and cheeks. Male jaw expansion and chin projection are reduced; cheek, forehead and nasal treatment are coordinated rather than narrowing the whole head. Broad cheek/forehead normals are softened while eye and mouth folds retain detail. The generator opens the actual source eye sockets before lining them, keeps native eyelids hidden, and parks the separate blink sheet tightly along its rim at rest. Saved blinks still unfold onto the fitted globes.
+
+The bust diagnosis separated coarse preview pore relief from broad surface shading. Preview pore relief is finer and weaker. Source normals are softened locally under the bust, preserving geometry, nipple detail, UV continuity and clothing fit; the fine chest patch inherits the same boundary normals. The shared normals also reach saved models. Extreme bust silhouettes remain polygonal. The two exact chin spikes in the supplied screenshot were not reproduced with the default recipe; low-angle female/male captures are retained, without claiming that report closed.
+
+Live slider builds remain off the UI thread. A cache-ordering bug that cleared the new structure key during model disposal is corrected, so matching samples reuse their meshes, skeleton and attributes. Completed samples can display during the same active slider gesture when every other recipe field still matches. Release, another edit or a new gesture rejects stale samples and schedules the exact current value. Matching displayed geometry now interpolates between worker samples over 100–240 ms, retargeting from the current intermediate shape. Final recipe/export buffers remain exact; topology changes switch directly. Short drags can still wait for the first worker result.
+
+Beyond natural Belly Tone, the flat target stops extrapolating and a cached skin field adds continuous paired rectus columns, three muscle sections and tendon separation, with restrained crease shading. Bust smoothing yields to deliberate abdominal relief; cached analytic gradients preserve the muscle normals instead of averaging them flat. Expression posing carries the same normals. The natural range remains unchanged. This is under visual review after the owner rejected the first cramped relief.
+
+Validation passes 87 focused checks, ten documentation/runtime-copy checks and six saved-quality geometry profiles without issues. Native smoothing reports count interpolated frames and compare settled positions, normals and camera across release. Final Grey checks cover both complete builds and the lightweight shaper; the latter records 23 updates while moving and sub-micron release position differences. The exact chin-spike preset has been requested for reproduction.
+
+Current evidence: `scratchpad/face-followup-20261101/`, with retained renders, continuous pointer-drag reports and a comparison gallery. [Tracked follow-up ledger](archive/evidence/human-face-followup-20261101.json). The older sections and galleries below describe historical candidates, not aesthetic acceptance.
+
+## Previous candidate — Preview 66
+
+Both human defaults have revised proportions and a broader, smoother temple/forehead transition. The owner rejected the previous faces and requested online research as well as reference-model study. **The owner subsequently rejected Preview 66 for square jaws, rough inner eyes and overall appearance.** Runtime stays **20261031.1**, Prop Preview stays **62**. Restart the editor and regenerate older saved characters.
+
+Research, equations, scope and reproduction commands are in [the face tools guide](../editor/tests/tools/face-proportions/README.md#research-and-measurements). Published spacing models informed the changes; they do not establish a universal beauty formula. The model-space ear-root proxy ratio moves from about 0.67–0.70 to 0.50–0.52. Female/male pupil spacing is now about 63/68 mm, and eye-to-mouth distance about 64/72 mm. The proxy is not the photographic measurement in the cited research.
+
+The human native cage widens across the skull and ear roots, fading into the neck. The shared sculpt coordinates closer eye placement, smaller globes/irises, almond lid openings, a shorter nose-to-mouth interval and distinct jaw/brow endpoints. Its transverse map preserves vertex ordering. The forehead fits back toward the crown; constrained fairing and continuous clearance soften the join. Matching chart interpolation and a full-width normal/AO blend replace the earlier abrupt shading handoff. Eye/lip folds, sliders and named expression/speech morphs remain. Other species retain their own heads. Three segments resolve the short human lash curves with fewer exported morph entries; the existing 900,000-byte plain-face morph ceiling remains.
+
+**Slider snap:** reproduced with real held mouse input on Head width, Eye width and Nose width: roughly 12 mm of vertex displacement and a small camera shift between the last fast drag and complete rebuild. The browser shaper omitted `HeadMeshData` and resting-mouth expression data. Its old-binding deformation also could not refit the shared face correctly. Shared human input and release now use the same complete worker build, with stale recipes coalesced. The alternate shaper receives the proper schema and rest units. A busy generator can delay an update; it no longer substitutes an approximate face while dragging.
+
+Eight native drag/release cases pass: Head width, Eye width, Nose width, Chin width, Gender, Age, Height and Head size. Geometry, normals, recipe, topology and camera match exactly across release in these cases. The final 67 focused face, expression, worker, brow, hair and texture checks pass. Four saved-quality geometry profiles report no issues. Fourteen retained native captures cover matching bald views, right profiles, hair/smiles and actual saved female/male GLBs; both exported blinks close and all 28 morphs reload. [Tracked evidence](archive/evidence/human-face-proportions-20261101.json) records the scope; no full suite or Windows/macOS check is claimed.
+
+Local evidence: `scratchpad/face-refinement-20261101/comparison.html`. `before-defaults/` is the unchanged Preview 65 baseline; `candidate-*` and `brow-fair/` include rejected trials. Retained captures are `final-comparison/`, `temple-blend/`, `final-hair-expressions/` and `final-exports/`. The slider reports are `sliders-before/report.json`, `sliders-after-face/report.json` and `sliders-after-body/report.json`. Models and pictures stay local and ignored by Git.
+
+For review, compare both complete faces at matching cameras, then rotate bald profiles and inspect temples, ears and forehead. Exercise expressions, gender between endpoints, age/ancestry and head controls, and compare freshly saved female/male models. Passing checks do not settle attractiveness.
+
+## Previous follow-up — Preview 65
 
 Preview 64 was rejected by the owner for ear coverage and unnatural nostrils. Its front-heavy review missed the bald side-view defects. Its passing checks do not establish visual quality.
 
@@ -10,7 +148,9 @@ The reference's tall nostril folds are narrowed and their small lower-wall bulge
 
 Restart the editor and regenerate saved characters for Preview **65**. Runtime stays **20261031.1**. Visual acceptance remains open: the temple blend and nasal folds still warrant close review. This is a targeted follow-up, not a claim that the human faces are finished. Validation covers 24 focused checks, four saved-quality geometry profiles, and eight native captures, including ear controls and one actual saved GLB reopened in two views with a complete blink. No triangle or morph ceilings were relaxed. New captures and checks are recorded in [the follow-up ledger](archive/evidence/human-face-ears-nose-20261031.json); earlier numbered scratch folders are rejected experiments.
 
-## Resume in the morning
+<a id="resume-in-the-morning"></a>
+
+## Previous morning checklist (Preview 65)
 
 The owner deferred review and requested this checkpoint. **Preview 65 has not been reviewed or accepted by the owner.** Start with the current follow-up above; the sections below preserve rejected checkpoints and must not be treated as current instructions.
 

@@ -1,0 +1,570 @@
+{
+  "date": "2026-11-01",
+  "preview": 89,
+  "runtime": "20261101.18",
+  "evidenceRoot": "scratchpad/run-fat-bounce-20261101/",
+  "change": "Smooth Running hip separation around the loop and restore clearance without another twist snap. Add Body > Build > Fat bounce, independent of bust/butt controls. Fit the whole shaped abdomen and measure thigh/calf radii from shaped skin, using broad central motion and smooth attachment falloff. Bound fat displacement relative to attachment spacing, include fitted clothing in radial coverage, and cache motion samples for live slider updates.",
+  "scope": "Targeted source numeric inspections and small native render batches only. Full regression suites deferred at owner request. Visual acceptance remains open.",
+  "running": [
+    {
+      "gender": 0,
+      "maximumAdjacentHipTurnDegreesBefore": {
+        "LeftUpLeg": 20.75883097674532,
+        "RightUpLeg": 16.735649774403132
+      },
+      "maximumAdjacentHipTurnDegreesAfter": {
+        "LeftUpLeg": 14.763765676809502,
+        "RightUpLeg": 15.562495448579613
+      }
+    },
+    {
+      "gender": 1,
+      "maximumAdjacentHipTurnDegreesBefore": {
+        "LeftUpLeg": 19.5028261068381,
+        "RightUpLeg": 16.78574387504826
+      },
+      "maximumAdjacentHipTurnDegreesAfter": {
+        "LeftUpLeg": 14.808524494323787,
+        "RightUpLeg": 15.596709002564694
+      }
+    }
+  ],
+  "cacheAndClearance": {
+    "cache": [
+      {
+        "id": "idle",
+        "amount": 0,
+        "cachedMs": 3.9744159999999624,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "idle",
+        "amount": 0.15,
+        "cachedMs": 1.1912980000000175,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "idle",
+        "amount": 4,
+        "cachedMs": 1.0405159999999682,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "run",
+        "amount": 0,
+        "cachedMs": 1.049105999999938,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "run",
+        "amount": 0.15,
+        "cachedMs": 0.9671469999999545,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "run",
+        "amount": 4,
+        "cachedMs": 0.9655860000000303,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "straddle",
+        "amount": 0,
+        "cachedMs": 3.5561930000000075,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "straddle",
+        "amount": 0.15,
+        "cachedMs": 0.7955259999999953,
+        "maximumDelta": 0,
+        "samplesReused": true
+      },
+      {
+        "id": "straddle",
+        "amount": 4,
+        "cachedMs": 0.7684350000000677,
+        "maximumDelta": 0,
+        "samplesReused": true
+      }
+    ],
+    "clearance": [
+      {
+        "gender": 0,
+        "walkMaximumDelta": 0,
+        "minimumLateralKneeFoot": {
+          "Left": 0.048764642336597996,
+          "Right": 0.04856063673819695
+        }
+      },
+      {
+        "gender": 1,
+        "walkMaximumDelta": 0,
+        "minimumLateralKneeFoot": {
+          "Left": 0.05892542424711011,
+          "Right": 0.05832210504397419
+        }
+      }
+    ]
+  },
+  "finalAdaptiveCoverage": [
+    {
+      "gender": 0,
+      "weight": 0.7,
+      "softJoints": 17,
+      "regions": {
+        "belly": {
+          "vertices": 447,
+          "maxWeight": 0.7416227459907532,
+          "maxDisplacement": 0.020034565127999462,
+          "strongVertices": 279,
+          "strongMin": [
+            -0.1509164273738861,
+            0.7831214070320129,
+            -0.01396521832793951
+          ],
+          "strongMax": [
+            0.1509164273738861,
+            1.0723587274551392,
+            0.14084401726722717
+          ]
+        },
+        "hip": {
+          "vertices": 32,
+          "maxWeight": 0.41850000619888306,
+          "maxDisplacement": 0.007462707290076164,
+          "strongVertices": 28,
+          "strongMin": [
+            -0.18229641020298004,
+            0.8158029913902283,
+            0.009410790167748928
+          ],
+          "strongMax": [
+            0.18229641020298004,
+            0.914740264415741,
+            0.08296063542366028
+          ]
+        },
+        "thigh": {
+          "vertices": 526,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.03142405687541217,
+          "strongVertices": 440,
+          "strongMin": [
+            -0.18603330850601196,
+            0.5037742853164673,
+            -0.021993258967995644
+          ],
+          "strongMax": [
+            0.18603330850601196,
+            0.7950056791305542,
+            0.13842302560806274
+          ]
+        },
+        "calf": {
+          "vertices": 478,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.03145798660523966,
+          "strongVertices": 346,
+          "strongMin": [
+            -0.20375724136829376,
+            0.11767637729644775,
+            -0.0372496098279953
+          ],
+          "strongMax": [
+            0.20375724136829376,
+            0.4228803813457489,
+            0.07506431639194489
+          ]
+        }
+      },
+      "offBakeMs": 1.0435770000000275,
+      "finite": true
+    },
+    {
+      "gender": 0,
+      "weight": 2.5,
+      "softJoints": 17,
+      "regions": {
+        "belly": {
+          "vertices": 370,
+          "maxWeight": 0.6923819780349731,
+          "maxDisplacement": 0.019851753552094113,
+          "strongVertices": 292,
+          "strongMin": [
+            -0.22618842124938965,
+            0.7636289596557617,
+            -0.03148830682039261
+          ],
+          "strongMax": [
+            0.2279820442199707,
+            1.067683219909668,
+            0.25530967116355896
+          ]
+        },
+        "thigh": {
+          "vertices": 501,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.032487952674176576,
+          "strongVertices": 406,
+          "strongMin": [
+            -0.26133993268013,
+            0.5009338855743408,
+            -0.08188630640506744
+          ],
+          "strongMax": [
+            0.26141345500946045,
+            0.8091527223587036,
+            0.1965692788362503
+          ]
+        },
+        "hip": {
+          "vertices": 24,
+          "maxWeight": 0.46619999408721924,
+          "maxDisplacement": 0.008176892165505913,
+          "strongVertices": 23,
+          "strongMin": [
+            -0.26336541771888733,
+            0.7964021563529968,
+            -0.0532727986574173
+          ],
+          "strongMax": [
+            0.26353970170021057,
+            0.924831211566925,
+            0.0602472759783268
+          ]
+        },
+        "calf": {
+          "vertices": 478,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.03915429495926106,
+          "strongVertices": 342,
+          "strongMin": [
+            -0.21647489070892334,
+            0.11664474010467529,
+            -0.05506589263677597
+          ],
+          "strongMax": [
+            0.2165345847606659,
+            0.420683890581131,
+            0.08901060372591019
+          ]
+        }
+      },
+      "offBakeMs": 0.619513999999981,
+      "finite": true
+    },
+    {
+      "gender": 1,
+      "weight": 0.7,
+      "softJoints": 17,
+      "regions": {
+        "belly": {
+          "vertices": 291,
+          "maxWeight": 0.7416227459907532,
+          "maxDisplacement": 0.023953403038551525,
+          "strongVertices": 234,
+          "strongMin": [
+            -0.146672785282135,
+            0.8779752850532532,
+            -0.009860229678452015
+          ],
+          "strongMax": [
+            0.146672785282135,
+            1.1461936235427856,
+            0.13687370717525482
+          ]
+        },
+        "hip": {
+          "vertices": 48,
+          "maxWeight": 0.46080002188682556,
+          "maxDisplacement": 0.009528514784099735,
+          "strongVertices": 42,
+          "strongMin": [
+            -0.17145369946956635,
+            0.8961027264595032,
+            -0.004710428882390261
+          ],
+          "strongMax": [
+            0.17145369946956635,
+            1.0175421237945557,
+            0.08634057641029358
+          ]
+        },
+        "thigh": {
+          "vertices": 514,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.0365459551981791,
+          "strongVertices": 448,
+          "strongMin": [
+            -0.20196112990379333,
+            0.5597516894340515,
+            -0.04975701868534088
+          ],
+          "strongMax": [
+            0.20196112990379333,
+            0.8851289749145508,
+            0.12043915688991547
+          ]
+        },
+        "calf": {
+          "vertices": 432,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.03599667760851406,
+          "strongVertices": 306,
+          "strongMin": [
+            -0.23725944757461548,
+            0.12580817937850952,
+            -0.06653464585542679
+          ],
+          "strongMax": [
+            0.23725944757461548,
+            0.4641772508621216,
+            0.06289930641651154
+          ]
+        }
+      },
+      "offBakeMs": 0.5220429999999396,
+      "finite": true
+    },
+    {
+      "gender": 1,
+      "weight": 2.5,
+      "softJoints": 17,
+      "regions": {
+        "belly": {
+          "vertices": 283,
+          "maxWeight": 0.7416227459907532,
+          "maxDisplacement": 0.02204424379920723,
+          "strongVertices": 201,
+          "strongMin": [
+            -0.24330668151378632,
+            0.8433793187141418,
+            0.032693058252334595
+          ],
+          "strongMax": [
+            0.24341654777526855,
+            1.1351242065429688,
+            0.24143251776695251
+          ]
+        },
+        "hip": {
+          "vertices": 56,
+          "maxWeight": 0.4606095850467682,
+          "maxDisplacement": 0.00877002904486757,
+          "strongVertices": 47,
+          "strongMin": [
+            -0.2481333464384079,
+            0.8993070125579834,
+            -0.03738522529602051
+          ],
+          "strongMax": [
+            0.24837788939476013,
+            1.0087177753448486,
+            0.08982834219932556
+          ]
+        },
+        "thigh": {
+          "vertices": 512,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.03819244630073942,
+          "strongVertices": 430,
+          "strongMin": [
+            -0.2511364817619324,
+            0.5576797723770142,
+            -0.0879378542304039
+          ],
+          "strongMax": [
+            0.2512516975402832,
+            0.89697265625,
+            0.16949020326137543
+          ]
+        },
+        "calf": {
+          "vertices": 432,
+          "maxWeight": 0.8999999761581421,
+          "maxDisplacement": 0.042723936570199766,
+          "strongVertices": 306,
+          "strongMin": [
+            -0.24802321195602417,
+            0.12496596574783325,
+            -0.08001673221588135
+          ],
+          "strongMax": [
+            0.24808238446712494,
+            0.45852431654930115,
+            0.07486584782600403
+          ]
+        }
+      },
+      "offBakeMs": 0.48871299999996154,
+      "finite": true
+    }
+  ],
+  "coverageMethod": "Source Body vertices at female/male gender endpoints, weight 0.7 and 2.5, Fat bounce 4 and bust/butt bounce 0. Positions compared with Fat bounce 0 across 25 phases of Running. strongMin/Max bound source vertices with fat weight >0.2. Native measurement separately covers body and fitted garment meshes across five phases.",
+  "heavyweightSeams": [
+    {
+      "gender": 0,
+      "cup": 0.5,
+      "boundaryVertices": 44,
+      "boundarySubdivisions": 0,
+      "overlaySharesBindings": true,
+      "minWeight": 0,
+      "weightError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "gap": 0,
+          "finite": true
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "gap": 0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "gender": 0,
+      "cup": 2.5,
+      "boundaryVertices": 44,
+      "boundarySubdivisions": 0,
+      "overlaySharesBindings": true,
+      "minWeight": 0,
+      "weightError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "gap": 0,
+          "finite": true
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "gap": 0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "gender": 1,
+      "cup": 0.5,
+      "boundaryVertices": 36,
+      "boundarySubdivisions": 0,
+      "overlaySharesBindings": true,
+      "minWeight": 0,
+      "weightError": 4.470348358154297e-08,
+      "cases": [
+        {
+          "id": "run",
+          "gap": 0,
+          "finite": true
+        },
+        {
+          "id": "fastKneelingBackStretch",
+          "gap": 0,
+          "finite": true
+        }
+      ]
+    }
+  ],
+  "finalNativeSlider": [
+    {
+      "name": "live-fat-slider",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "inputMs": [
+          5.700000002980232,
+          4.800000000745058
+        ],
+        "rebuilds": 0,
+        "regions": {
+          "belly": {
+            "maxDisplacement": 0.01832182646946867,
+            "vertices": 1365
+          },
+          "calf": {
+            "maxDisplacement": 0.03915429069398144,
+            "vertices": 1457
+          },
+          "hip": {
+            "maxDisplacement": 0.007577211997920931,
+            "vertices": 34
+          },
+          "thigh": {
+            "maxDisplacement": 0.03177235737828795,
+            "vertices": 629
+          }
+        },
+        "sameMeshes": true,
+        "target": [
+          0,
+          0.8,
+          0.05
+        ]
+      },
+      "validationError": null
+    }
+  ],
+  "savedModelNative": [
+    {
+      "name": "saved-fat-run",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "fatTracks": [
+          "FatBelly.position",
+          "FatBellyPelvis.position",
+          "FatBellyUpper.position",
+          "LeftFatHip.position",
+          "LeftFatHipWaist.position",
+          "RightFatHip.position",
+          "RightFatHipWaist.position",
+          "LeftFatThigh.position",
+          "LeftFatCalf.position",
+          "RightFatThigh.position",
+          "RightFatCalf.position"
+        ],
+        "savedClip": "Run",
+        "target": [
+          0,
+          0.8,
+          0.05
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 11607124,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-fat-run",
+        "textures": 17
+      }
+    }
+  ],
+  "runtimeSync": "39 files updated across 20 bundled projects.",
+  "limits": [
+    "Saved-model reload precedes the final radial clothing margin change; the final native live-slider pass includes that margin. Saved Run contains all 11 Fat translation tracks.",
+    "Earlier fixed-radius and unbounded-adaptive images/videos are intermediate candidates and are excluded from final visual evidence.",
+    "Attachment limits reduce maximum translation to avoid folds; this is skeletal secondary motion, not a volume-preserving soft-body or cloth collision simulation.",
+    "Native final heavier build is female with fitted leggings; source coverage includes heavier male and female builds. Broad wardrobe/collision and all-species sweeps remain outside this check.",
+    "Existing four-influence skinning can slightly change the baseline pose when adding soft joints; no claim of bit-identical geometry at Off."
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "29b2cea594111f2ea341254d6439b734dbe5ce3cf1e87d5862bcd3e1057470cc",
+    "runtime/reactor_main.js": "7cf2dc3503ddd6bdd0b36d7cafd678c6d8a8bbb12d87b9cf0e0b5fd23700a956",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "bc447316f0e9b735d8a90bd21c3aefbb67cc4d83802efad8578d051c73801ee3",
+    "editor/src/forge/Character3D/HumanBody.js": "2b8802d9ad434657147954e1001281eb52b64c928da3782da12655b7f35509f9",
+    "editor/src/forge/Character3D/CharacterModel.js": "8a178972a260c711e19a4afa6722c721f1a238296c9e8efc604bb484b5202758"
+  }
+}

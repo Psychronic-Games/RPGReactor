@@ -55,9 +55,9 @@ test('the game reads the same flags with the same defaults as the editor', () =>
     }
 });
 
-test('defaults keep what every existing project does today', () => {
+test('missing project flags use the registered defaults', () => {
     const { ReactorFeatures } = runtimeFeatures();
-    // A stock System.json (nothing stored) has every Reactor addition it always had, and no compatibility flag.
+    // Missing flags use the registered defaults, including multi-frame sheets.
     for (const system of [{}, null]) {
         for (const f of Features.FEATURES) {
             assert.equal(Features.on(f.id, system), f.default, f.id);
@@ -79,7 +79,7 @@ test('defaults keep what every existing project does today', () => {
     assert.equal(ReactorFeatures.on('multiFrames', { rrMultiFrames: true }), true);
     // The Demo project, as shipped, is unchanged by the registry: its stored flags read back as they are.
     const demo = JSON.parse(fs.readFileSync(path.join(repoRoot, 'template', 'Demo', 'data', 'System.json'), 'utf8'));
-    assert.equal(Features.on('multiFrames', demo), demo.rrMultiFrames === true);
+    assert.equal(Features.on('multiFrames', demo), demo.rrMultiFrames !== false);
     assert.equal(Features.on('skipTitle', demo), demo.rrSkipTitle === true);
     // An id nobody registered is never gated.
     assert.equal(Features.on('nothingLikeThis', {}), true);
@@ -102,10 +102,11 @@ test('switching stores only what differs from the default, so stock stays stock'
     assert.deepEqual(system, { rrFeatures: { mapBattles: false } });
     Features.set('mapBattles', true, system);
     assert.deepEqual(system, {}, 'an empty rrFeatures goes too');
-    // An older flag: on stores true, off removes it, as System 2's Compatibility card does.
-    Features.set('multiFrames', true, system);
-    assert.deepEqual(system, { rrMultiFrames: true });
+    // Multi-frame sheets now default on; an explicit off choice must survive saving.
     Features.set('multiFrames', false, system);
+    assert.deepEqual(system, { rrMultiFrames: false });
+    assert.equal(Features.on('multiFrames', JSON.parse(JSON.stringify(system))), false);
+    Features.set('multiFrames', true, system);
     assert.deepEqual(system, {});
 });
 
@@ -274,5 +275,25 @@ test('the five later additions turned off leave the game as MZ: selling, enemies
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_models.js'), 'utf8'), /proto\.reactorRotate = function\(degrees, pivot\) \{\n[^\n]*\n\s+if \(typeof ReactorFeatures !== "undefined" && !ReactorFeatures\.on\("spriteTransforms"\)\) return;/);
     for (const file of ['reactor_windows.js', 'reactor_ui.js']) {
         assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', file), 'utf8'), /ReactorFeatures\.on\("unsellableItems"\)/, file);
+    }
+});
+
+test('multi-frame defaults apply to new and opened projects and both settings pages preserve explicit off', () => {
+    const source = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseSystem2Editor.js'), 'utf8');
+    const System2 = vm.runInNewContext(source + '\nDatabaseSystem2Editor;', { console });
+    const { ReactorFeatures } = runtimeFeatures();
+    const Assets = require('../src/utils/AssetFiles.js');
+    for (const system of [{}, { gameTitle: 'Existing project' }, { rrMultiFrames: true }]) {
+        assert.equal(Features.on('multiFrames', system), true);
+        assert.equal(ReactorFeatures.on('multiFrames', system), true);
+        assert.equal(Assets.characterFrameCount('$Hero[8D][8F]', system), 8);
+        System2.setWindowTextValue(system, 'rrMultiFrames', false);
+        const reopened = JSON.parse(JSON.stringify(system));
+        assert.equal(Features.on('multiFrames', reopened), false);
+        assert.equal(ReactorFeatures.on('multiFrames', reopened), false);
+        assert.equal(Assets.characterFrameCount('$Hero[8D][8F]', reopened), 3);
+        Features.set('multiFrames', true, reopened);
+        assert.equal(Assets.characterFrameCount('$Hero[8D][8F]', reopened), 8);
+        assert.equal(Object.hasOwn(reopened, 'rrMultiFrames'), false);
     }
 });

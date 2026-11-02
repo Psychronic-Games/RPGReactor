@@ -1,0 +1,245 @@
+{
+  "date": "2026-11-01",
+  "preview": 72,
+  "runtime": "20261101.1",
+  "evidenceRoot": "scratchpad/hip-bridge-20261101/final/",
+  "feature": "Exercises > Hip bridge; themed pose-category headers",
+  "scope": "Four native views: female lowered/raised, male raised and actual saved-model Hip Bridge reload. Search/category styling inspected through live DOM computed styles. Regression suites deferred at owner request.",
+  "shots": [
+    {
+      "name": "female-down",
+      "errors": 0,
+      "glError": 0,
+      "points": {
+        "Head": [
+          0,
+          0.241367078354223,
+          -0.6147522032260896
+        ],
+        "Hips": [
+          0,
+          0.13780605231003318,
+          0
+        ],
+        "LeftFoot": [
+          0.11234744516533046,
+          0.08212374662254995,
+          0.33006390418659504
+        ],
+        "LeftHand": [
+          0.24989287723420833,
+          0.056424224176121335,
+          -0.03427751295140882
+        ],
+        "RightFoot": [
+          -0.11234744516533046,
+          0.08212374662254995,
+          0.33006390418659504
+        ],
+        "RightHand": [
+          -0.24989287723420833,
+          0.056424224176121335,
+          -0.03427751295140882
+        ],
+        "Spine2": [
+          0,
+          0.20922117723674924,
+          -0.21088904142379766
+        ]
+      }
+    },
+    {
+      "name": "female-raised",
+      "errors": 0,
+      "glError": 0,
+      "points": {
+        "Head": [
+          0,
+          0.21325649232666777,
+          -0.6020991154617982
+        ],
+        "Hips": [
+          0,
+          0.2852420209106856,
+          0.0033847724553197622
+        ],
+        "LeftFoot": [
+          0.11234744648106737,
+          0.08212373172020127,
+          0.33006388091570754
+        ],
+        "LeftHand": [
+          0.24989287746023658,
+          0.056424217579956054,
+          -0.034277508167392445
+        ],
+        "RightFoot": [
+          -0.11234744648106737,
+          0.08212373172020127,
+          0.33006388091570754
+        ],
+        "RightHand": [
+          -0.24989287746023658,
+          0.056424217579956054,
+          -0.034277508167392445
+        ],
+        "Spine2": [
+          0,
+          0.2808195830268437,
+          -0.21922418941304317
+        ]
+      }
+    },
+    {
+      "name": "male-raised",
+      "errors": 0,
+      "glError": 0,
+      "points": {
+        "Head": [
+          0,
+          0.2354665134457083,
+          -0.6441781347643986
+        ],
+        "Hips": [
+          0,
+          0.33086667881176,
+          -0.0001505286491010338
+        ],
+        "LeftFoot": [
+          0.131789222364129,
+          0.09815274851525924,
+          0.3690314746054377
+        ],
+        "LeftHand": [
+          0.3127616629052959,
+          0.0702040283161392,
+          -0.0069327523642073174
+        ],
+        "RightFoot": [
+          -0.131789222364129,
+          0.09815274851525924,
+          0.3690314746054377
+        ],
+        "RightHand": [
+          -0.3127616629052959,
+          0.0702040283161392,
+          -0.0069327523642073174
+        ],
+        "Spine2": [
+          0,
+          0.28872360116131734,
+          -0.21099715841066746
+        ]
+      }
+    },
+    {
+      "name": "saved-bridge-menu",
+      "errors": 0,
+      "glError": 0,
+      "points": {
+        "Head": [
+          0,
+          0.22676261313669277,
+          -0.6096458317525049
+        ],
+        "Hips": [
+          0,
+          0.21137713409599235,
+          0.008092023432254791
+        ],
+        "LeftFoot": [
+          0.1123474439553776,
+          0.0821237527270246,
+          0.3300639041949833
+        ],
+        "LeftHand": [
+          0.24989288881868177,
+          0.05642422791000426,
+          -0.03427753115446952
+        ],
+        "RightFoot": [
+          -0.1123474439553776,
+          0.0821237527270246,
+          0.3300639041949833
+        ],
+        "RightHand": [
+          -0.24989288881868177,
+          0.05642422791000426,
+          -0.03427753115446952
+        ],
+        "Spine2": [
+          0,
+          0.2453822065069054,
+          -0.2119487975789277
+        ]
+      }
+    }
+  ],
+  "headers": [
+    {
+      "active": false,
+      "background": "repeating-linear-gradient(135deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 5px, rgba(255, 215, 0, 0.1) 5px, rgba(255, 215, 0, 0.1) 6px)",
+      "label": "Move",
+      "stripe": "rgb(232, 194, 82)",
+      "visible": false,
+      "width": "3px"
+    },
+    {
+      "active": false,
+      "background": "repeating-linear-gradient(135deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 5px, rgba(255, 215, 0, 0.1) 5px, rgba(255, 215, 0, 0.1) 6px)",
+      "label": "Fight",
+      "stripe": "rgb(232, 194, 82)",
+      "visible": false,
+      "width": "3px"
+    },
+    {
+      "active": false,
+      "background": "repeating-linear-gradient(135deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 5px, rgba(255, 215, 0, 0.1) 5px, rgba(255, 215, 0, 0.1) 6px)",
+      "label": "Rest",
+      "stripe": "rgb(232, 194, 82)",
+      "visible": false,
+      "width": "3px"
+    },
+    {
+      "active": true,
+      "background": "repeating-linear-gradient(135deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 5px, rgba(255, 215, 0, 0.1) 5px, rgba(255, 215, 0, 0.1) 6px)",
+      "label": "Exercises",
+      "stripe": "rgb(255, 215, 0)",
+      "visible": true,
+      "width": "3px"
+    }
+  ],
+  "export": {
+    "clip": "Hip Bridge",
+    "channels": 53,
+    "actions": [
+      {
+        "name": "hipBridge",
+        "type": "clip",
+        "trigger": "action",
+        "clip": "Hip Bridge"
+      }
+    ],
+    "reader": {
+      "bytes": 9706616,
+      "decoded": true,
+      "lid": true,
+      "morphs": 28,
+      "physical": true,
+      "pore": true,
+      "source": "saved-bridge-menu",
+      "textures": 17
+    }
+  },
+  "excluded": "Earlier root and refined folders are intermediate placement trials. Their full-UI screenshots are black compositor captures and are not visual evidence. Final menu evidence is computed styles/filter visibility.",
+  "postPreview": "Final changes preserve root translation in stateClip and place the same saved exercise assignment outside the battle SLOTS list; pose geometry and exported animation keys are unchanged. Imported-model retargeting was not audited.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "3d77dad895084b71d823ba7fa7e491dcae6892d7cae51a4e59368d3477f99daf",
+    "runtime/reactor_main.js": "0e160c2f774572dc2f3a25476efb8b81e1b556df2fa280e6460eb5d7804af47d",
+    "editor/src/forge/Character3D/CharacterPoses.js": "640a4f63026b203049fa3d9bd45ffcc19c40e7b0a8169804e20384336b30fb5a",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "d5cee4b278335587ae8425a8a737dcba1f3915ac85b97d0283cf80a10c701b37",
+    "editor/src/utils/SelectThemingShim.js": "2af0433f169865cfd3042a2d3bd437be84364761181a5358e0aae4f7ddf70530",
+    "editor/css/styles.css": "344695c5702e0daf195d2900e4b510b7f2a0528a2680c93c9a9d83e3c8cb8105"
+  },
+  "ownerReview": "Owner said the exercise looks pretty good on 2026-11-01; the later hash-pattern headers were replaced by solid dark bands at the owner\u2019s request."
+}

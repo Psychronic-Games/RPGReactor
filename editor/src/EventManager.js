@@ -3494,7 +3494,7 @@ class EventManager {
             // MZ's three frames play 0, 1, 2, 1; an [NF] sheet plays 0 to N-1 in turn, as the game does.
             const system = window.reactor?.databaseManager?.data?.system;
             const count = RRAssetFiles.characterFrameCount(image.characterName, system);
-            const multi = system?.rrMultiFrames === true && RRAssetFiles.framesTagged(image.characterName) > 0;
+            const multi = RRAssetFiles.isMultiFrameCharacter(image.characterName, system);
             const frames = Array.from({ length: count }, (_, pattern) => this.characterFrame(image, pattern)?.texture || frame.texture);
             const cycle = multi ? frames.map((_, i) => i) : [0, 1, 2, 1];
             const start = Number.isInteger(image.pattern) ? image.pattern : (multi ? 0 : 1);
@@ -4291,90 +4291,11 @@ class EventManager {
 
     // Create a PIXI sprite from character image data
     createCharacterSprite(image) {
-        if (!image || !image.characterName) {
-            return null;
-        }
-
-        const currentProject = this.projectController.getCurrentProject ? this.projectController.getCurrentProject() : this.projectController.currentProject;
-        if (!currentProject) {
-            return null;
-        }
-
-        const path = require('path');
-        const imgPath = RRAssetFiles.imageUrlFor(
-            path.join(currentProject.path, 'img', 'characters'), image.characterName);
-
         try {
-            // Load as HTML Image element first, then convert to PIXI texture
-            // This is more reliable than PIXI.Texture.from() for file:// URLs.
-            //
-            // Cached by path. A fresh Image every render meant a fresh source
-            // for PIXI, so every rebuild of the event layer allocated a new GPU
-            // texture per event and freed none of them — and a re-render is
-            // triggered by each image that finishes loading.
-            if (!this._characterImages) this._characterImages = new Map();
-            let htmlImg = this._characterImages.get(imgPath);
-            if (!htmlImg) {
-                htmlImg = new Image();
-                htmlImg.src = imgPath;
-                this._characterImages.set(imgPath, htmlImg);
-            }
-
-            // Check if already loaded (cached)
-            if (!htmlImg.complete || !htmlImg.width || !htmlImg.height) {
-                // Set up a one-time listener to re-render when the image loads
-                htmlImg.onload = () => {
-                    this.renderEvents();
-                };
-                return null;
-            }
-
-            // Create PIXI texture from the loaded HTML image
-            const baseTexture = PIXI.Texture.from(htmlImg);
-            if (!baseTexture || !baseTexture.source) {
-                return null;
-            }
-
-            const img = baseTexture.source;
-
-            const isBigCharacter = RRAssetFiles.isBigCharacter(image.characterName);
-
-            let characterWidth, characterHeight, baseX, baseY;
-
-            // Direction mapping: 2=down, 4=left, 6=right, 8=up
-            const directionRow = { 2: 0, 4: 1, 6: 2, 8: 3 };
-            const dirRow = directionRow[image.direction || 2] || 0;
-
-            if (isBigCharacter) {
-                // Big characters: 3 frames x 4 directions
-                characterWidth = img.width / 3;
-                characterHeight = img.height / 4;
-                baseX = 0;
-                baseY = dirRow * characterHeight;
-            } else {
-                // Normal sprites: 8 characters (4x2 grid), 3 frames x 4 directions each
-                characterWidth = img.width / 12; // 3 frames * 4 columns
-                characterHeight = img.height / 8; // 4 directions * 2 rows
-
-                const charCol = (image.characterIndex || 0) % 4;
-                const charRow = Math.floor((image.characterIndex || 0) / 4);
-
-                baseX = charCol * 3 * characterWidth;
-                baseY = (charRow * 4 + dirRow) * characterHeight;
-            }
-
-            // Get the frame to display (pattern 0, 1, or 2)
-            const pattern = image.pattern || 1; // Default to middle frame
-            const sourceX = baseX + pattern * characterWidth;
-            const sourceY = baseY;
-
-            // Create cropped texture using PIXI v8 API
-            const croppedTexture = new PIXI.Texture({
-                source: img,
-                frame: new PIXI.Rectangle(sourceX, sourceY, characterWidth, characterHeight)
-            });
-
-            const sprite = new PIXI.Sprite(croppedTexture);
+            const frame = this.characterFrame(image);
+            if (!frame) return null;
+            const { width: characterWidth, height: characterHeight } = frame;
+            const sprite = new PIXI.Sprite(frame.texture);
 
             // Scale to fit tile size (will be inset in createEventSprite).
             // The box this lands in is drawn at the project's tile size, so a

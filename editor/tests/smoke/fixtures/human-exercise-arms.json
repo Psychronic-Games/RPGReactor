@@ -1,0 +1,70 @@
+[
+  {
+    "name": "upright-low-female",
+    "reset": true,
+    "view": {
+      "yaw": 0.55,
+      "pitch": 0.06,
+      "distance": 2.6
+    },
+    "js": "b.pose='straddleUpright';b._syncPose();v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,.50,0],pose:b.pose,time:0};"
+  },
+  {
+    "name": "squat-low-female",
+    "reset": true,
+    "view": {
+      "yaw": 0.55,
+      "pitch": 0.06,
+      "distance": 2.6
+    },
+    "js": "b.pose='squat';b._syncPose();v.action.paused=true;v.action.time=2;v.mixer.update(0);b._plant();return {target:[0,.50,0],pose:b.pose,time:2};"
+  },
+  {
+    "name": "upright-high-male",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "view": {
+      "yaw": 0.55,
+      "pitch": 0.06,
+      "distance": 2.6
+    },
+    "js": "b.pose='straddleUpright';b._syncPose();v.action.paused=true;v.action.time=1;v.mixer.update(0);b._plant();return {target:[0,.50,0],pose:b.pose,time:1};"
+  },
+  {
+    "name": "saved-squat-male",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "leggings",
+          "color": "#526a84"
+        }
+      ]
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 0.55,
+      "pitch": 0.06,
+      "distance": 2.6
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clips=object.__reactorClips;for(const n of ['Upright Straddle','Squat'])if(!clips.some(c=>c.name===n))throw Error('Missing '+n);const clip=clips.find(c=>c.name==='Squat'),mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(2);object.updateMatrixWorld(true);return {target:[0,.50,0],savedClip:clip.name,duration:clip.duration};"
+  }
+]

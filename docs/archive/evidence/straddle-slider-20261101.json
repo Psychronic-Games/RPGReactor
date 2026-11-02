@@ -1,0 +1,339 @@
+{
+  "date": "2026-11-01",
+  "preview": 87,
+  "runtime": "20261101.16",
+  "evidenceRoot": "scratchpad/straddle-slider-20261101/",
+  "change": "Preserve posed transforms across lightweight bind recalculation and recreate full-build animation before rendering, preventing cached constant root rotations from leaving floor poses upright during body-slider edits. Add Exercises \u2192 Straddle: wide-knee kneeling, torso/head forward, arms forward with palms on the floor, two-second hip/chest lift and return. Support fingers are straightened from their resting curl for level contact. Normal saves include Straddle / straddle.",
+  "scope": "Native renderer hook covers live weight-slider input/change plus direct lightweight height reshaping on fast kneeling stretch: 11 rendered frames, one reused full-build update and one lightweight update. Corrected Straddle female/male views and final female support-hand/saved-model views cover the pose. Source female/male contact and loop inspection compares the approved fast stretch against Preview 86. No regression suites, deferred at the owner\u2019s request.",
+  "sourceInspection": [
+    {
+      "gender": 0,
+      "duration": 2,
+      "frames": 97,
+      "finite": true,
+      "fastStretchMaximumDelta": 0,
+      "loopDelta": 0,
+      "floor": -0.004679310601204634,
+      "anchors": {
+        "LeftLeg": 6.733605701936729e-08,
+        "RightLeg": 6.733605701936729e-08,
+        "LeftFoot": 6.97143675533615e-08,
+        "RightFoot": 6.97143675533615e-08,
+        "LeftHand": 6.205909410604221e-08,
+        "RightHand": 6.205909410604221e-08
+      },
+      "rest": {
+        "Hips": [
+          0,
+          0.22322075068950653,
+          -0.3255273103713989
+        ],
+        "Spine2": [
+          0,
+          0.2637933195141148,
+          -0.10957912004779481
+        ],
+        "Head": [
+          0,
+          0.5046087857441981,
+          0.2241216803926579
+        ],
+        "LeftLeg": [
+          0.22799531191688271,
+          0.04711576535032336,
+          0.017133015096506776
+        ],
+        "RightLeg": [
+          -0.22799531191688271,
+          0.04711576535032336,
+          0.017133015096506776
+        ],
+        "LeftFoot": [
+          0.12618393139259657,
+          0.06277905067166044,
+          -0.37444921711082835
+        ],
+        "RightFoot": [
+          -0.12618393139259657,
+          0.06277905067166044,
+          -0.37444921711082835
+        ],
+        "LeftHand": [
+          0.1984938247039567,
+          0.019702970116677515,
+          0.22272921523055386
+        ],
+        "RightHand": [
+          -0.1984938247039567,
+          0.019702970116677515,
+          0.22272921523055386
+        ]
+      },
+      "peak": {
+        "Hips": [
+          0,
+          0.3247675597667694,
+          -0.274128258228302
+        ],
+        "Spine2": [
+          0,
+          0.3457279351293512,
+          -0.052464164325824486
+        ],
+        "Head": [
+          0,
+          0.5412607384359551,
+          0.30918772551804924
+        ],
+        "LeftLeg": [
+          0.2279953130333978,
+          0.047115793726212135,
+          0.017133015199954027
+        ],
+        "RightLeg": [
+          -0.2279953130333978,
+          0.047115793726212135,
+          0.017133015199954027
+        ],
+        "LeftFoot": [
+          0.12618393782167156,
+          0.06277908503945906,
+          -0.37444921814897014
+        ],
+        "RightFoot": [
+          -0.12618393782167156,
+          0.06277908503945906,
+          -0.37444921814897014
+        ],
+        "LeftHand": [
+          0.19849384094724748,
+          0.019702973644787847,
+          0.22272922288951297
+        ],
+        "RightHand": [
+          -0.19849384094724748,
+          0.019702973644787847,
+          0.22272922288951297
+        ]
+      }
+    },
+    {
+      "gender": 1,
+      "duration": 2,
+      "frames": 97,
+      "finite": true,
+      "fastStretchMaximumDelta": 0,
+      "loopDelta": 0,
+      "floor": -0.009197433479130268,
+      "anchors": {
+        "LeftLeg": 4.036597694825026e-08,
+        "RightLeg": 4.036597694825026e-08,
+        "LeftFoot": 4.866708746841071e-08,
+        "RightFoot": 4.866708746841071e-08,
+        "LeftHand": 7.320449654156181e-08,
+        "RightHand": 7.320449654156181e-08
+      },
+      "rest": {
+        "Hips": [
+          0,
+          0.28656962513923645,
+          -0.354017049074173
+        ],
+        "Spine2": [
+          0,
+          0.35163828614443937,
+          -0.15331022466174193
+        ],
+        "Head": [
+          0,
+          0.5760300456378995,
+          0.23798133044569292
+        ],
+        "LeftLeg": [
+          0.2575584487364937,
+          0.051239307473383566,
+          0.018632478339978165
+        ],
+        "RightLeg": [
+          -0.2575584487364937,
+          0.051239307473383566,
+          0.018632478339978165
+        ],
+        "LeftFoot": [
+          0.14604436089117445,
+          0.0683953075124539,
+          -0.410267879110393
+        ],
+        "RightFoot": [
+          -0.14604436089117445,
+          0.0683953075124539,
+          -0.410267879110393
+        ],
+        "LeftHand": [
+          0.25686424169857286,
+          0.021427355620886768,
+          0.24222220806799782
+        ],
+        "RightHand": [
+          -0.25686424169857286,
+          0.021427355620886768,
+          0.24222220806799782
+        ]
+      },
+      "peak": {
+        "Hips": [
+          0,
+          0.36767464876174927,
+          -0.2981196343898773
+        ],
+        "Spine2": [
+          0,
+          0.4187722683390795,
+          -0.08926233011446366
+        ],
+        "Head": [
+          0,
+          0.5841739328129739,
+          0.3261624804849715
+        ],
+        "LeftLeg": [
+          0.2575584399054208,
+          0.0512393251781319,
+          0.01863249503305775
+        ],
+        "RightLeg": [
+          -0.2575584399054208,
+          0.0512393251781319,
+          0.01863249503305775
+        ],
+        "LeftFoot": [
+          0.1460443562373388,
+          0.06839529812436582,
+          -0.41026786458710657
+        ],
+        "RightFoot": [
+          -0.1460443562373388,
+          0.06839529812436582,
+          -0.41026786458710657
+        ],
+        "LeftHand": [
+          0.2568642254208051,
+          0.021427350964337233,
+          0.2422222025160667
+        ],
+        "RightHand": [
+          -0.2568642254208051,
+          0.021427350964337233,
+          0.2422222025160667
+        ]
+      }
+    }
+  ],
+  "palmContactInspection": {
+    "method": "Lowest source-skin vertices predominantly bound to Hand bones, relative to the normalized whole-body floor; rest and peak. Not a collision simulation.",
+    "femaleClearanceMetres": [
+      0.0017328341491520405,
+      0.0017328343819826841
+    ],
+    "maleClearanceMetres": [
+      0.0021649254485964775,
+      0.00216492498293519
+    ]
+  },
+  "sliderViews": [
+    {
+      "name": "slider-pose",
+      "note": {
+        "draws": 11,
+        "fastUpdates": 1,
+        "fullUpdates": 1,
+        "maxAngle": 0.0005060762204960913,
+        "maxCamera": 0,
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      },
+      "errors": 0,
+      "glError": 0
+    }
+  ],
+  "finalViews": [
+    {
+      "name": "straddle-rest",
+      "note": {
+        "duration": 2,
+        "pose": "straddle",
+        "target": [
+          0,
+          0.3,
+          0.12
+        ]
+      },
+      "errors": 0,
+      "glError": 0
+    },
+    {
+      "name": "saved-straddle",
+      "note": {
+        "duration": 2,
+        "savedClip": "Straddle",
+        "target": [
+          0,
+          0.3,
+          0.12
+        ]
+      },
+      "errors": 0,
+      "glError": 0,
+      "exported": {
+        "bytes": 10635956,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-straddle",
+        "textures": 17
+      }
+    }
+  ],
+  "maleViewBeforeFingerLeveling": [
+    {
+      "name": "straddle-male-peak",
+      "note": {
+        "duration": 2,
+        "pose": "straddle",
+        "target": [
+          0,
+          0.3,
+          0.12
+        ]
+      },
+      "errors": 0,
+      "glError": 0
+    }
+  ],
+  "savedActions": [
+    {
+      "name": "straddle",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Straddle"
+    }
+  ],
+  "video": "straddle.webm",
+  "limits": [
+    "The earlier backward-facing candidate was rejected; those initial Straddle views are excluded from final visual evidence.",
+    "Broad wardrobe/extreme body fitting and collision handling remain outside this targeted pose check.",
+    "Native slider inspection covers weight through normal input/change and height through the lightweight application path; it is not an all-sliders suite.",
+    "Male forward-pose view predates the final support-finger adjustment; final source hand-contact checks include both genders."
+  ],
+  "runtimeSync": "39 files updated across 20 bundled projects.",
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "ec9f28dfb0c5334cba8f081135a17a8c35bac10954423d1f46d185c28e0b996b",
+    "runtime/reactor_main.js": "2e0b11c6ebf23c53ec052fd186c6f623e6b1e33e4d46b2a94e536d7198fd49d9",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "e8947c49fcd1ee30598293553b7de2c0c78a87db14c6019ab2e84face197fd89"
+  }
+}

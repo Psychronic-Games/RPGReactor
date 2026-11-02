@@ -1,5 +1,11 @@
 # Performance checks
 
+## 2D event scroll registration (2026-11-01, runtime 20261101.26)
+
+The native Moletown fixture reproduced a stationary tile event moving up to **6 px** against its map as the camera moved. Interpolated sprites used the current refresh's camera, while PIXI 8 tile layers retained positions prepared during the game tick. Updating the origin alone did not reposition those layers. The presentation pass now publishes the tile layers before PIXI collects render groups, using the same temporary camera as the sprites, including when returning to a whole-tick pose.
+
+The corrected native fixture measures **zero drift in 40 samples**: four directions, five interpolation phases, chunked and ordinary tile painting. It retains Rebellion's map 617/event 316, tilesets, KODERA optimization and UltraMode7; other plugins are disabled in the temporary fixture. The 20 focused alignment, frame-pacing and tilemap replacement checks pass. Game camera, sprite and origin state restore after rendering, and authored pixel offsets remain intact. Full suites and a complete Rebellion playthrough remain deferred. [Evidence and local artifacts](archive/evidence/event-camera-drift-20261101.json).
+
 ## Tactical status panel opacity (2026-10-30, runtime 20261030.3)
 
 The North Haven native baseline reproduced the active unit panel at **0.3 alpha**, with interface transition, banner and camera-shot alpha all at 1. The map-overlap rule faded the entire status panel whenever any marked unit or the cursor projected behind it. Camera movement could change that overlap and leave the window faint during an ordinary turn.

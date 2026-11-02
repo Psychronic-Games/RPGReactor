@@ -1,0 +1,50 @@
+[
+  {
+    "name": "eye",
+    "js": "const h=b._result.parts.find(p=>p.name==='Head skin'),e=h.ocular[0];return {target:e.c.map((x,a)=>x+h.positions[e.anchor*3+a]-e.at[a])};",
+    "view": {
+      "yaw": 0.5,
+      "pitch": 0.03,
+      "distance": 0.13
+    }
+  },
+  {
+    "name": "female-underchin",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "const h=b._result.parts.find(p=>p.name==='Head skin'),y=Math.min(...Array.from(h.positions).filter((_,i)=>i%3===1));return {target:[0,y+.045,.055]};",
+    "view": {
+      "yaw": 0.14,
+      "pitch": -0.36,
+      "distance": 0.53
+    }
+  },
+  {
+    "name": "male-underchin",
+    "reset": true,
+    "patch": {
+      "gender": 1
+    },
+    "js": "const h=b._result.parts.find(p=>p.name==='Head skin'),y=Math.min(...Array.from(h.positions).filter((_,i)=>i%3===1));return {target:[0,y+.045,.055]};",
+    "view": {
+      "yaw": 0.14,
+      "pitch": -0.36,
+      "distance": 0.53
+    }
+  },
+  {
+    "name": "mid-front",
+    "reset": true,
+    "patch": {
+      "gender": 0.5
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.04,
+      "pitch": 0.04,
+      "distance": 0.48
+    }
+  }
+]

@@ -1,0 +1,51 @@
+[
+  {
+    "name": "hands-knees-feet",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"handsKnees\";b._syncPose();v.action.paused=true;v.action.time=.85;v.mixer.update(0);b._plant();return {target:[0, 0.12, -0.27],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.16,
+      "distance": 0.85
+    }
+  },
+  {
+    "name": "female-crawl",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"crawl\";b._syncPose();v.action.paused=true;v.action.time=.85;v.mixer.update(0);b._plant();return {target:[0, 0.4, 0.13],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.16,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "male-crawl",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "js": "b.pose=\"crawl\";b._syncPose();v.action.paused=true;v.action.time=.85;v.mixer.update(0);b._plant();return {target:[0, 0.4, 0.13],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.16,
+      "distance": 2.7
+    }
+  }
+]

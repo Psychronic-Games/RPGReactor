@@ -1,0 +1,43 @@
+[
+  {
+    "name": "rest",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();v.action.paused=true;v.action.time=0;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "reach",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose='kneelingBackStretch';b._syncPose();v.action.paused=true;v.action.time=3;v.mixer.update(0);b._plant();return {target:[0,.23,.16],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "motion-export",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Kneeling Back Stretch');if(!clip)throw Error('Missing stretch');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(3);object.updateMatrixWorld(true);return {target:[0,.23,.16],savedClip:clip.name,duration:clip.duration};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.7
+    },
+    "exportModel": true,
+    "exportMotions": "useful"
+  }
+]

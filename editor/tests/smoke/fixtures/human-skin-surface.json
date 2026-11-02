@@ -1,0 +1,68 @@
+[
+  {
+    "name": "natural",
+    "reset": true,
+    "patch": {
+      "skinSurface": {}
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.35,
+      "pitch": 0,
+      "distance": 0.42
+    }
+  },
+  {
+    "name": "wet-smooth",
+    "reset": true,
+    "patch": {
+      "skinSurface": {
+        "finish": "wet",
+        "texture": "smooth"
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.35,
+      "pitch": 0,
+      "distance": 0.42
+    }
+  },
+  {
+    "name": "matte-pores",
+    "reset": true,
+    "patch": {
+      "skinSurface": {
+        "finish": "matte",
+        "texture": "pores",
+        "detail": 2,
+        "scale": 1.4
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.35,
+      "pitch": 0,
+      "distance": 0.42
+    },
+    "js": "b.tab='colors';b._renderPanel();return {controls:[...b.root.querySelectorAll('[data-path]')].filter(e=>e.matches('input,select')&&e.dataset.path.startsWith('skinSurface.')).map(e=>({path:e.dataset.path,value:e.value}))};"
+  },
+  {
+    "name": "wet-pores-export",
+    "reset": true,
+    "patch": {
+      "skinSurface": {
+        "finish": "wet",
+        "texture": "pores",
+        "detail": 1.4
+      }
+    },
+    "view": {
+      "target": "face",
+      "yaw": 0.35,
+      "pitch": 0,
+      "distance": 0.42
+    },
+    "exportModel": true
+  }
+]

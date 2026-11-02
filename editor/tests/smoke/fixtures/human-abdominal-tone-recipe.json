@@ -1,0 +1,10 @@
+{
+  "species": "human",
+  "gender": 1,
+  "hair": {
+    "style": "bald"
+  },
+  "outfit": [],
+  "weight": 0.3,
+  "muscle": 0.7
+}

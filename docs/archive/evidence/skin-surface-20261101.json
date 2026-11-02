@@ -1,0 +1,109 @@
+{
+  "date": "2026-11-01",
+  "preview": 71,
+  "runtime": "20261031.1",
+  "feature": "Humanoid Colors > Skin surface",
+  "evidenceRoot": "scratchpad/skin-surface-20261101/",
+  "scope": "Four native visual previews: Natural, Wet/Smooth, Matte/Pronounced pores, and a Wet/Pronounced pores saved-model reload. UI control presence and values inspected in the Colors tab; real-pointer coverage and regression suites deferred at owner request.",
+  "shots": [
+    {
+      "name": "natural",
+      "errors": 0,
+      "glError": 0,
+      "exported": null
+    },
+    {
+      "name": "wet-smooth",
+      "errors": 0,
+      "glError": 0,
+      "exported": null
+    },
+    {
+      "name": "matte-pores",
+      "errors": 0,
+      "glError": 0,
+      "exported": null
+    },
+    {
+      "name": "wet-pores-export",
+      "errors": 0,
+      "glError": 0,
+      "exported": {
+        "bytes": 6162328,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "wet-pores-export",
+        "textures": 10
+      }
+    }
+  ],
+  "savedMaterials": [
+    {
+      "name": "Body",
+      "roughness": 0.22999999999999998,
+      "clearcoat": {
+        "clearcoatFactor": 1,
+        "clearcoatRoughnessFactor": 0.07
+      },
+      "normal": {
+        "index": 1,
+        "texCoord": 1,
+        "scale": 0.7
+      }
+    },
+    {
+      "name": "Head skin",
+      "roughness": 0.22999999999999998,
+      "clearcoat": {
+        "clearcoatFactor": 1,
+        "clearcoatRoughnessFactor": 0.07
+      },
+      "normal": {
+        "index": 1,
+        "texCoord": 1,
+        "scale": 0.7
+      }
+    },
+    {
+      "name": "Eyelids",
+      "roughness": 0.22999999999999998,
+      "clearcoat": {
+        "clearcoatFactor": 1,
+        "clearcoatRoughnessFactor": 0.07
+      },
+      "normal": {
+        "index": 1,
+        "texCoord": 1,
+        "scale": 0.7
+      }
+    },
+    {
+      "name": "Lips",
+      "roughness": 0.22999999999999998,
+      "clearcoat": {
+        "clearcoatFactor": 1,
+        "clearcoatRoughnessFactor": 0.07
+      },
+      "normal": {
+        "index": 4,
+        "scale": 0.4
+      }
+    }
+  ],
+  "recipeSaved": {
+    "finish": "wet",
+    "texture": "pores",
+    "strength": 1,
+    "detail": 1.4,
+    "scale": 1
+  },
+  "codeSha256": {
+    "CharacterSkin.js": "dc8c8859b48e3e4b40252d0246dbca830dbe0f35d9e43d4a28aca66067b71290",
+    "CharacterModel.js": "db6018d37bc6559983c70b2376a9139f52a770567823a91a5c01ac11714261eb",
+    "CharacterGlb.js": "7e26c48e53d35787e617d1d0f47666340e71a803dd6c889bd597c98b007f1110",
+    "Character3DBuilder.js": "48c37df24be335fca1b07365f072d6d94aa65ed099d6d26869379adc6c9f7e46"
+  }
+}

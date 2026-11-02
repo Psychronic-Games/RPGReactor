@@ -19,6 +19,7 @@
     const need = (name, file) => root[name] || (typeof require === 'function' ? require(file) : null);
     const Body = need('RRHumanBody', './HumanBody.js');
     const Glb = need('RRCharacterGlb', './CharacterGlb.js');
+    const Motions = need('RRCharacterPoses', './CharacterPoses.js');
     const Hair = need('RRCharacterHair', './CharacterHair.js');
     const Wardrobe = need('RRCharacterWardrobe', './CharacterWardrobe.js');
     const HeadMesh = root.RRHeadMesh || (typeof require === 'function' ? require('./CharacterHeadMesh.js') : null);
@@ -55,6 +56,7 @@
             species: Species.BY_ID.has(r.species) && !Species.BY_ID.get(r.species).plan ? r.species : 'human',
             features: Species.normalizeFeatures(r.features),
             skinPattern: Skin.normalizeSkin(r.skinPattern),
+            skinSurface: Skin.normalizeSurface(r.skinSurface),
             eyes: Skin.normalizeEyes(r.eyes),
             // A pattern without regions of its own: a woman's Natural and Light are a woman's.
             bodyHair: Skin.normalizeBodyHair(r.bodyHair && !r.bodyHair.regions && Body.sexOf(body) === 'female' && Skin.HAIR_PRESETS[(r.bodyHair.pattern || 'natural') + 'Female']
@@ -119,7 +121,7 @@
         const hairBase = was.bald || was.hair ? Hair.randomHair(((old.seed ?? 1) ^ 0x5bd1e995) >>> 0, { gender: old.gender > 0.5 ? 'male' : 'female' }) : old.hair;
         const next = Object.assign({}, preset, {
             plan: 'human', gender: old.gender, age: own('age'), ancestry: old.ancestry,
-            skin: own('skin'), skinPattern: own('skinPattern'), eyes: own('eyes'), head: own('head') || null,
+            skin: own('skin'), skinPattern: own('skinPattern'), skinSurface: old.skinSurface, bustBounce: old.bustBounce, buttBounce: old.buttBounce, fatBounce: old.fatBounce, eyes: own('eyes'), head: own('head') || null,
             bodyHair: preset.bodyHair || was.bodyHair ? (preset.bodyHair || {}) : old.bodyHair,
             anatomy: { ...old.anatomy, paired: id === 'klingon' },
             outfit: old.outfit, bodyArt: old.bodyArt, emotion: old.emotion, props: (preset.props || []).concat(old.props.filter(p => !brought.has(p.id) && !(preset.props || []).some(q => q.id === p.id))),
@@ -247,7 +249,7 @@
         const eyes = Object.assign({}, built.parts[1], { roughness: 0.25, cutout: true });
         if (o.eyeSource) {
             // (This head's eyeballs are larger than the eye picture was drawn for: a pupil kept to a natural share of the iris.)
-            const eyePaint = headHidden ? { ...r.eyes, size: r.eyes.size * 0.95, pupilSize: (r.eyes.pupilSize ?? 1) * 0.8 } : r.eyes;
+            const eyePaint = headHidden ? { ...r.eyes, size: r.eyes.size * 0.82, pupilSize: (r.eyes.pupilSize ?? 1) * 0.8 } : r.eyes;
             const eyeKey = textureKey('eyes', [eyePaint, o.eyeSource.width, o.eyeSource.height]);
             if (cache.eyeKey !== eyeKey) {
                 cache.eyes = { width: o.eyeSource.width, height: o.eyeSource.height, data: Skin.paintEyes(o.eyeSource.data, o.eyeSource.width, eyePaint), name: 'eyes.png' };
@@ -475,11 +477,13 @@
         Object.assign(textures,props.textures);
         parts.push(...outfit.parts, ...hair, ...props.parts, ...features.parts);
         const bones = built.bones.concat(features.bones.map(b => ({ ...b })));
+        Body.rigSoftTissue(pack, parts, bones, built.shaped, r);
         // Merfolk hook: the leg bones carry no skin; what they held, the hips hold.
         if (mer) parts.splice(0, parts.length, ...Merfolk.liftLegs(parts, bones));
         // Centaur hook: the person onto a horse's body at the waist; the horse's bones first, the person's under its chest.
         const horse = cen ? Centaur.build(pack, built, r, parts, bones, { skinNormals, quality: o.quality || 'save', hairBudget: o.hairBudget, textures, cache }) : null;
         if (horse) Object.assign(textures, horse.textures);
+        Skin.applySurface(parts, r.skinSurface, textures);
         // The floor: shoes and boots stand on it.
         let floor = 0;
         for (const p of parts) for (let i = 1; i < p.positions.length; i += 3) floor = Math.min(floor, p.positions[i]);
@@ -1327,9 +1331,9 @@
     /** The humanoid Idle, with a tail swaying when there is one. */
     function clipsFor(bones, r, built, pack) {
         // Merfolk hook: the tail's own clips (Idle first).
-        if (Merfolk && r.species === 'merfolk') return Merfolk.clips(bones, r, built, pack, armAngle(r, built, pack));
+        if (Merfolk && r.species === 'merfolk') return Merfolk.clips(bones, r, built, pack, armAngle(r, built, pack)).map(c => Motions.withSoftTissueMotion(bones, c));
         // Centaur hook: the horse's gaits under the person's upper body (Idle first).
-        if (Centaur && r.species === 'centaur') return Centaur.clips(bones, r, armAngle(r, built, pack));
+        if (Centaur && r.species === 'centaur') return Centaur.clips(bones, r, armAngle(r, built, pack)).map(c => Motions.withSoftTissueMotion(bones, c));
         const idle = Glb.idleClip(bones, { armAngle: armAngle(r, built, pack) });
         if (!idle) return [];
         const steps = idle.times.length;
@@ -1343,7 +1347,7 @@
             }
             idle.tracks.push({ bone: i, values });
         });
-        return [Species.followMotion(bones, Object.assign({ name: 'Idle' }, idle))];
+        return [Motions.withSoftTissueMotion(bones, Species.followMotion(bones, Object.assign({ name: 'Idle' }, idle)))];
     }
 
     /**

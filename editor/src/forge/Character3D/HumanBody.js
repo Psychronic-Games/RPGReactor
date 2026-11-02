@@ -33,6 +33,9 @@
         height: { natural: [0, 1], extreme: [-0.6, 1.8] },
         cup: { natural: [0, 1], extreme: [-0.2, 6] },
         firmness: { natural: [0, 1], extreme: [-0.5, 1.5] },
+        bustBounce: { natural: [0, 1], extreme: [0, 4] },
+        buttBounce: { natural: [0, 1], extreme: [0, 4] },
+        fatBounce: { natural: [0, 1], extreme: [0, 4] },
         // 0 MakeHuman's average build, 1 its idealized one (face and body).
         proportions: { natural: [0, 1], extreme: [0, 1.6] }
     };
@@ -46,6 +49,9 @@
         height: 0.5,
         cup: 0.5,
         firmness: 0.75,
+        bustBounce: 0.15,
+        buttBounce: 0.15,
+        fatBounce: 0.15,
         proportions: 0.7,
         ancestry: Object.freeze({ african: 1 / 3, asian: 1 / 3, caucasian: 1 / 3 }),
         shapes: Object.freeze({}),
@@ -126,6 +132,9 @@
             height: macro(r, 'height'),
             cup: macro(r, 'cup'),
             firmness: macro(r, 'firmness'),
+            bustBounce: macro(r, 'bustBounce'),
+            buttBounce: macro(r, 'buttBounce'),
+            fatBounce: macro(r, 'fatBounce'),
             proportions: macro(r, 'proportions'),
             ancestry: {},
             shapes: {},
@@ -284,7 +293,10 @@
         addBuild(shapes, r);
         for (const s of SLIDERS) {
             // Eye size past natural is a scale of the eye about its eyeball (morph), not more of the target.
+            // Beyond flat, Belly tone uses abdominal relief rather than
+            // extrapolating the flattening target through the muscle bellies.
             let v = natural || s.key === 'eyeSize' || VOLUME[s.key] ? clamp(shapes[s.key], s.paired ? -1 : 0, VOLUME[s.key] ? 1.3 : 1) : shapes[s.key];
+            if (s.key === 'abs') v = Math.min(1, v);
             if (!natural) v = eased(s.key, v);
             // Legs shorter than half the target's reach are pressed whole (shortLegs): the target crushes the thigh.
             if (s.key === 'legLength') v = Math.max(-0.5, v);
@@ -669,6 +681,20 @@
                 let eye = 0, chin = Infinity;
                 for (const v of F.eyeIds) eye += P[v * 3 + 1] / F.eyeIds.length;
                 for (const v of pack.body.source) if (F.w[v] > 0.3 && Math.abs(P[v * 3]) < 0.012 && P[v * 3 + 2] > 0.02) chin = Math.min(chin, P[v * 3 + 1]);
+                // The shared human face needs an adult-width cranium behind
+                // it. Carry the scalp and ear roots together, fading into the
+                // neck; the face generator captures this same native cage.
+                // Other species retain their own head proportions.
+                if (!root.RR_NO_HEAD_MESH) {
+                    const E = eye - chin, g = Math.max(0, Math.min(1, recipe.gender ?? 0.5));
+                    const width = 0.10 + 0.03 * g;
+                    for (const v of new Set(pack.body.source)) {
+                        if (F.w[v] <= 0.01) continue;
+                        const y = (eye - P[v * 3 + 1]) / E, t = Math.max(0, Math.min(1, (y - 0.35) / 0.65));
+                        P[v * 3] *= 1 + width * (1 - t * t * (3 - 2 * t)) * Math.min(1, F.w[v] * 3);
+                    }
+                }
+                if (!root.RR_NO_HEAD_MESH) cheekSurface(pack, P, recipe, eye - chin);
                 sealMouth(pack, P, eye - chin);
             }
             return;
@@ -690,6 +716,34 @@
         faceOutline(pack, P, recipe, E, eyeY);
         noseWidth(pack, P, recipe, E, eyeY);
         eyeSet(pack, P, recipe, E, eyeY);
+    }
+
+    /** Carry the side cheek and the visible face's join together. Retracting
+     * only the replacement surface leaves the native cheek standing proud
+     * at its edge, especially with both cheek controls at their low end. */
+    function cheekSurface(pack, P, recipe, scale) {
+        if (!pack._cheekSurface) {
+            const F = headFields(pack), B = pack.positions, ears = earMask(pack);
+            let eye = 0, front = 0, chin = Infinity;
+            for (const v of F.eyeIds) { eye += B[v * 3 + 1] / F.eyeIds.length; front += B[v * 3 + 2] / F.eyeIds.length; }
+            for (const v of pack.body.source) if (F.w[v] > .3 && Math.abs(B[v * 3]) < .012 && B[v * 3 + 2] > .02) chin = Math.min(chin, B[v * 3 + 1]);
+            const unit = eye - chin, field = new Float32Array(pack.vertexCount);
+            for (let v = 0; v < pack.vertexCount; v++) {
+                const x = Math.abs(B[v * 3]) / unit, y = (eye - B[v * 3 + 1]) / unit, z = (B[v * 3 + 2] - front) / unit;
+                field[v] = Math.exp(-(((x - .65) / .35) ** 2 + ((y - .37) / .35) ** 2))
+                    * smooth01(.28, .45, x) * (1 - smooth01(.95, 1.18, x))
+                    * smooth01(.12, .23, y) * (1 - smooth01(.70, .95, y))
+                    * smooth01(-.80, -.30, z) * (1 - ears[v]) ** 3 * Math.min(1, F.w[v] * 3);
+            }
+            pack._cheekSurface = field;
+        }
+        const cheek = Math.tanh(recipe.shapes?.cheeks || 0), bone = Math.tanh(recipe.shapes?.cheekBones || 0);
+        const recess = -.035 + .015 * cheek + .008 * bone;
+        for (let v = 0; v < pack.vertexCount; v++) {
+            const move = scale * recess * pack._cheekSurface[v];
+            P[v * 3] += Math.sign(P[v * 3]) * move * .5;
+            P[v * 3 + 2] += move;
+        }
     }
 
     /**
@@ -884,6 +938,7 @@
         shortLegs(pack, positions, r);
         volume(pack, positions, r);
         morph(pack, positions, r);
+        abdominalDefinition(pack, positions, r);
         navelDetail(pack, positions);
         const k = heightScale(r);
         if (k !== 1) {
@@ -1558,6 +1613,63 @@
         return (pack._anatomyFields = { nipples, low, crease, vulva, navel });
     }
 
+    function abdominalProfile(pack, px, py) {
+        if (!pack._abdominalFrame) {
+            const B = pack.positions, anatomy = anatomyFields(pack), v = anatomy.navel;
+            const upper = anatomy.nipples.reduce((sum, nip) => sum + B[nip.v * 3 + 1] / anatomy.nipples.length, 0) - 0.080;
+            const lower = B[v * 3 + 1] - 0.070;
+            pack._abdominalFrame = { x: B[v * 3], y: B[v * 3 + 1], lower, upper, height: upper - lower,
+                span: (meanOf(B, pack.bones.find(b => b.name === 'Neck').head)[1] - meanOf(B, pack.bones.find(b => b.name === 'Hips').head)[1]) * 0.5 };
+        }
+        const frame = pack._abdominalFrame, x = (px - frame.x) / frame.span, y = (py - frame.lower) / frame.height;
+        const envelope = smooth01(0, 0.08, y) * (1 - smooth01(0.92, 1, y)) * (1 - smooth01(0.36, 0.48, Math.abs(x)));
+        if (!envelope) return 0;
+        let columns = 0, bellies = 0;
+        for (const side of [-1, 1]) columns += Math.exp(-(((x - side * 0.19) / 0.12) ** 2));
+        for (const [row, mass] of [[0.16, 1], [0.50, 1.4], [0.84, 1]]) bellies += mass * Math.exp(-(((y - row) / 0.13) ** 2));
+        return frame.span * (columns * (0.012 + 0.083 * bellies) - 0.004 * Math.exp(-((x / 0.045) ** 2)) - 0.001 * Math.exp(-(((Math.abs(x) - 0.34) / 0.035) ** 2))) * envelope;
+    }
+
+    /** Past natural Belly tone: three paired rectus bellies and their tendons.
+     * Cache the neutral skin field; body targets carry its landmarks, and the
+     * final height scale carries its relief. Natural tone remains unchanged. */
+    function abdominalDefinition(pack, P, recipe) {
+        let strength = clamp((recipe.shapes?.abs || 0) - 1, 0, 1);
+        if (!strength) return;
+        strength = strength * strength * strength * (strength * (strength * 6 - 15) + 10);
+        if (!pack._abdominalDefinition) {
+            const B = pack.positions;
+            const N = vertexNormals(pack, B), field = new Float32Array(pack.vertexCount);
+            for (const i of new Set(pack.body.source)) {
+                if (N[i * 3 + 2] < 0.3) continue;
+                field[i] = abdominalProfile(pack, B[i * 3], B[i * 3 + 1]);
+            }
+            pack._abdominalDefinition = field;
+        }
+        for (let v = 0; v < pack.vertexCount; v++) P[v * 3 + 2] += pack._abdominalDefinition[v] * strength;
+    }
+
+    /** Restrained crease occlusion keeps the tendons readable in soft light. */
+    function abdominalShade(pack, recipe) {
+        let strength = clamp((recipe.shapes?.abs || 0) - 1, 0, 1);
+        strength = strength ** 3 * (strength * (strength * 6 - 15) + 10);
+        const colors = new Float32Array(pack.vertexCount * 3).fill(1);
+        if (!strength) return colors;
+        abdominalProfile(pack, 0, 0);
+        const B = pack.positions, f = pack._abdominalFrame, N = vertexNormals(pack, B);
+        for (const v of new Set(pack.body.source)) {
+            if (N[v * 3 + 2] < 0.3) continue;
+            const x = (B[v * 3] - f.x) / f.span, y = (B[v * 3 + 1] - f.lower) / f.height;
+            const fade = smooth01(0, 0.08, y) * (1 - smooth01(0.92, 1, y)) * (1 - smooth01(0.33, 0.45, Math.abs(x)));
+            const center = Math.exp(-((x / 0.04) ** 2));
+            const tendons = Math.exp(-(((y - 0.33) / 0.035) ** 2)) + Math.exp(-(((y - 0.67) / 0.035) ** 2));
+            const outer = Math.exp(-(((Math.abs(x) - 0.33) / 0.035) ** 2));
+            const shade = 1 - strength * fade * (0.065 * center + 0.055 * tendons + 0.025 * outer);
+            colors.fill(shade, v * 3, v * 3 + 3);
+        }
+        return colors;
+    }
+
     /** Ordinary abdominal anatomy, present independently of the explicit-detail switch. */
     function navelDetail(pack, P) {
         const v = anatomyFields(pack).navel, B = pack.positions;
@@ -2155,6 +2267,123 @@
         return n;
     }
 
+    /** A source-space band follows the underside through changes in cup,
+     * firmness and weight. A fixed sphere on the shaped nipple left gaps
+     * between smoothed and unsmoothed rows on fuller, pointed busts. */
+    function bustShadingMask(pack) {
+        if (pack._bustShadingMask) return pack._bustShadingMask;
+        const B = pack.positions, mask = new Float32Array(pack.vertexCount);
+        for (const nip of anatomyFields(pack).nipples) for (const v of pack.body.source) {
+            if (B[v * 3] * B[nip.v * 3] < 0) continue;
+            const dx = B[v * 3] - B[nip.v * 3], dy = B[v * 3 + 1] - B[nip.v * 3 + 1], dz = B[v * 3 + 2] - B[nip.v * 3 + 2];
+            const distance = Math.hypot(dx, dy, dz);
+            const band = smooth01(.003, .010, distance) * (1 - smooth01(.13, .22, Math.hypot(dx, dy * .8, dz * .35)))
+                * (1 - smooth01(-.005, .04, dy)) * smooth01(-.16, -.07, dz);
+            mask[v] = Math.max(mask[v], band);
+        }
+        return (pack._bustShadingMask = mask);
+    }
+
+    /** Fit one smooth quadratic field per breast from regional averages.
+     * Reference coordinates keep the field continuous through shape changes;
+     * fitted values follow this body's normals or baked occlusion. */
+    function bustGradient(pack, values, size = 3) {
+        const ids = [...new Set(pack.body.source)], B = pack.positions, mask = bustShadingMask(pack);
+        const out = values.slice(), terms = (v, c) => {
+            const x = (B[v * 3] - c[0]) / .12, y = (B[v * 3 + 1] - c[1]) / .12, z = (B[v * 3 + 2] - c[2]) / .12;
+            return [1, x, y, z, x * x, x * y, x * z, y * y, y * z, z * z];
+        };
+        for (const nip of anatomyFields(pack).nipples) {
+            const c = Array.from(B.subarray(nip.v * 3, nip.v * 3 + 3)), own = ids.filter(v => B[v * 3] * c[0] >= 0 && mask[v] > .001);
+            const n = 10, matrix = Array.from({ length: n }, () => new Float64Array(n + size));
+            for (const v of own) {
+                const row = terms(v, c), weight = mask[v] * mask[v];
+                for (let j = 0; j < n; j++) {
+                    for (let k = 0; k < n; k++) matrix[j][k] += row[j] * row[k] * weight;
+                    for (let k = 0; k < size; k++) matrix[j][n + k] += row[j] * values[v * size + k] * weight;
+                }
+            }
+            const ridge = Math.max(.00001, matrix[0][0] * .002);
+            for (let j = 1; j < n; j++) matrix[j][j] += ridge * (j < 4 ? 1 : 3);
+            let valid = true;
+            for (let j = 0; j < n; j++) {
+                let pivot = j;
+                for (let k = j + 1; k < n; k++) if (Math.abs(matrix[k][j]) > Math.abs(matrix[pivot][j])) pivot = k;
+                [matrix[j], matrix[pivot]] = [matrix[pivot], matrix[j]];
+                const scale = matrix[j][j];
+                if (Math.abs(scale) < 1e-12) { valid = false; break; }
+                for (let k = j; k < n + size; k++) matrix[j][k] /= scale;
+                for (let k = 0; k < n; k++) if (k !== j) {
+                    const factor = matrix[k][j];
+                    for (let a = j; a < n + size; a++) matrix[k][a] -= factor * matrix[j][a];
+                }
+            }
+            if (!valid) continue;
+            for (const v of own) {
+                const row = terms(v, c);
+                for (let k = 0; k < size; k++) out[v * size + k] = row.reduce((sum, x, j) => sum + x * matrix[j][n + k], 0);
+            }
+        }
+        return out;
+    }
+
+    /** Gentle shading over the lower bust, preserving the nipple and chest fold.
+     * Use source vertices so UV seams share exactly the same normals. */
+    function skinNormals(pack, positions, recipe) {
+        const normal = vertexNormals(pack, positions), soft = relax(pack, normal.slice(), 24), mask = bustShadingMask(pack);
+        if (pack._cheekSurface && recipe && (!recipe.species || recipe.species === 'human') && !recipe.head?.kind && !root.RR_NO_HEAD_MESH) {
+            for (const v of new Set(pack.body.source)) {
+                const weight = Math.min(1, pack._cheekSurface[v] * 2);
+                if (!weight) continue;
+                const length = Math.hypot(...soft.subarray(v * 3, v * 3 + 3)) || 1;
+                for (let k = 0; k < 3; k++) normal[v * 3 + k] += (soft[v * 3 + k] / length - normal[v * 3 + k]) * weight;
+                const unit = Math.hypot(...normal.subarray(v * 3, v * 3 + 3)) || 1;
+                for (let k = 0; k < 3; k++) normal[v * 3 + k] /= unit;
+            }
+        }
+        const smoothBust = (values, average) => {
+            const gradient = bustGradient(pack, average);
+            let tone = clamp((recipe?.shapes?.abs || 0) - 1, 0, 1);
+            tone = tone ** 3 * (tone * (tone * 6 - 15) + 10);
+            for (const v of new Set(pack.body.source)) {
+                let blend = mask[v];
+                if (pack._abdominalDefinition) blend *= 1 - smooth01(.00001, .001, Math.abs(pack._abdominalDefinition[v])) * tone;
+                if (!blend) continue;
+                const length = Math.hypot(...gradient.subarray(v * 3, v * 3 + 3)) || 1;
+                for (let k = 0; k < 3; k++) values[v * 3 + k] += (gradient[v * 3 + k] / length - values[v * 3 + k]) * blend;
+                const unit = Math.hypot(...values.subarray(v * 3, v * 3 + 3)) || 1;
+                for (let k = 0; k < 3; k++) values[v * 3 + k] /= unit;
+            }
+        };
+        smoothBust(normal, soft);
+        if (recipe?.shapes?.abs > 1 && pack._abdominalDefinition) {
+            let tone = clamp(recipe.shapes.abs - 1, 0, 1);
+            tone = tone ** 3 * (tone * (tone * 6 - 15) + 10);
+            if (!pack._abdominalGradient) {
+                const B = pack.positions, gradient = pack._abdominalGradient = new Float32Array(pack.vertexCount * 2), e = 0.0005;
+                for (let v = 0; v < pack.vertexCount; v++) if (pack._abdominalDefinition[v]) {
+                    gradient[v * 2] = (abdominalProfile(pack, B[v * 3] + e, B[v * 3 + 1]) - abdominalProfile(pack, B[v * 3] - e, B[v * 3 + 1])) / (2 * e);
+                    gradient[v * 2 + 1] = (abdominalProfile(pack, B[v * 3], B[v * 3 + 1] + e) - abdominalProfile(pack, B[v * 3], B[v * 3 + 1] - e)) / (2 * e);
+                }
+            }
+            // Evaluate the continuous muscle normal, rather than averaging
+            // its relief away across the torso's coarse triangles.
+            const base = positions.slice(), scale = heightScale(normalizeRecipe(recipe));
+            for (let v = 0; v < pack.vertexCount; v++) base[v * 3 + 2] -= pack._abdominalDefinition[v] * tone * scale;
+            const under = vertexNormals(pack, base), underSoft = relax(pack, under.slice(), 24), f = pack._abdominalGradient;
+            // The abdominal field has a broad, fading support. Its tiny upper
+            // tail must not restore raw coarse normals under the bust after
+            // that area's smoothing has already run.
+            smoothBust(under, underSoft);
+            for (let v = 0; v < pack.vertexCount; v++) if (pack._abdominalDefinition[v]) {
+                const z = under[v * 3 + 2], x = under[v * 3] - f[v * 2] * z * tone, y = under[v * 3 + 1] - f[v * 2 + 1] * z * tone;
+                const length = Math.hypot(x, y, z) || 1;
+                normal.set([x / length, y / length, z / length], v * 3);
+            }
+        }
+        return normal;
+    }
+
     /**
      * The eyeballs' own shade (linear vertex colors, 1 lit): the white darkens
      * up under the upper lid and toward the corners, a little under the lower
@@ -2197,8 +2426,9 @@
         const parts = [{
             name: 'Body',
             bodyUV: 'reactor-human-1',
+            ...(recipe.shapes?.abs > 1 ? { colors: gather(abdominalShade(pack, recipe), body.source, 3), keepColors: true } : {}),
             positions: gather(shaped, body.source, 3),
-            normals: normals(shaped, body.source, body.index, pack.vertexCount),
+            normals: gather(skinNormals(pack, shaped, recipe), body.source, 3),
             uvs: body.uv,
             index: body.index,
             joints: gather(pack.skinJoints, body.source, 4),
@@ -2220,10 +2450,257 @@
             keepColors: true
         });
         const bones = joints(pack, shaped);
+        rigToes(parts, bones);
         let top = 0;
         for (let i = 1; i < parts[0].positions.length; i += 3) top = Math.max(top, parts[0].positions[i]);
         // `shaped` (every pack vertex, helpers included, floor at 0) is what garments and hair are built on.
         return { parts, bones, height: top, shaped };
+    }
+
+    /** Skin beyond the ball belongs to the toe joint. The source rig kept
+     * some distal sole vertices on Foot, pulling them below a planted toe
+     * when the heel rises. Rest geometry is unchanged. */
+    function rigToes(parts, bones) {
+        const scale = Math.max(...bones.map(b => b.head[1])) / 1.7 || 1;
+        for (const part of parts) {
+            if (part.toeBound || !part.joints || !part.weights || part.metalness >= .45) continue;
+            let joints, weights;
+            for (const S of ['Left', 'Right']) {
+                const foot = bones.findIndex(b => b.name === S + 'Foot'), toe = bones.findIndex(b => b.name === S + 'ToeBase');
+                if (foot < 0 || toe < 0) continue;
+                const c = bones[toe].head, a = bones[foot].head, length = Math.hypot(c[0] - a[0], c[2] - a[2]) || 1;
+                const axis = [(c[0] - a[0]) / length, (c[2] - a[2]) / length];
+                for (let v = 0; v < part.positions.length / 3; v++) {
+                    if (part.positions[v * 3] * c[0] <= 0 || part.positions[v * 3 + 1] > c[1] + .11 * scale) continue;
+                    const along = (part.positions[v * 3] - c[0]) * axis[0] + (part.positions[v * 3 + 2] - c[2]) * axis[1];
+                    const blend = smooth01(-.025 * scale, 0, along);
+                    if (!blend) continue;
+                    let share = 0;
+                    for (let k = 0; k < 4; k++) if (part.joints[v * 4 + k] === foot) share += part.weights[v * 4 + k] * blend;
+                    if (share < .00001) continue;
+                    if (!joints) { joints = Uint16Array.from(part.joints); weights = Float32Array.from(part.weights); }
+                    const skin = new Map([[toe, share]]);
+                    for (let k = 0; k < 4; k++) {
+                        const j = part.joints[v * 4 + k], w = part.weights[v * 4 + k] * (j === foot ? 1 - blend : 1);
+                        skin.set(j, (skin.get(j) || 0) + w);
+                    }
+                    const top = [...skin].sort((a, b) => b[1] - a[1]).slice(0, 4), total = top.reduce((s, [, w]) => s + w, 0);
+                    for (let k = 0; k < 4; k++) { joints[v * 4 + k] = top[k]?.[0] || 0; weights[v * 4 + k] = (top[k]?.[1] || 0) / total; }
+                }
+            }
+            if (joints) { part.joints = joints; part.weights = weights; }
+            part.toeBound = true;
+        }
+    }
+
+    /** Soft-tissue joints share smooth bindings with skin and fitted clothing.
+     * Rest transforms change nothing. Copy bindings to preserve garment caches. */
+    function rigSoftTissue(pack, parts, bones, shaped, recipe) {
+        rigToes(parts, bones);
+        const chest = bones.findIndex(b => b.name === 'Spine2'), hips = bones.findIndex(b => b.name === 'Hips');
+        if (chest < 0 || hips < 0) return;
+        const scale = Math.max(...bones.map(b => b.head[1])) / 1.7 || 1;
+        const fields = [];
+        const add = (name, c, parent, kind, front, rx, ry, mass, firmness) => {
+            const bone = bones.length;
+            bones.push({ name, parent, head: c, tail: [c[0], c[1], c[2] + front * .04 * scale],
+                softTissue: { kind, amount: recipe[kind + 'Bounce'], scale, mass, firmness } });
+            fields.push({ c, anchors: [{ bone, parent }], front, rx, ry, kind });
+        };
+        const follow = (field, name, parent) => {
+            const primary = bones[field.anchors[0].bone], bone = bones.length;
+            bones.push({ ...primary, name, parent, head: primary.head.slice(), tail: primary.tail.slice(),
+                softTissue: { ...primary.softTissue, driver: primary.name } });
+            field.anchors.push({ bone, parent });
+        };
+        for (const n of anatomyFields(pack).nipples) {
+            const c = Array.from(shaped.subarray(n.v * 3, n.v * 3 + 3)), side = c[0] >= 0 ? 'Left' : 'Right';
+            add(side + 'Bust', c, chest, 'bust', 1, Math.max(.07 * scale, Math.abs(c[0]) * 1.25), .14 * scale,
+                (1 - recipe.gender) * Math.max(.25, Math.min(2, .6 + recipe.cup * .4)), recipe.firmness);
+        }
+        // Human buttocks are absent on fish tails and horse bodies.
+        if (!['merfolk', 'centaur'].includes(recipe.species)) for (const side of ['Left', 'Right']) {
+            const hip = bones.find(b => b.name === side + 'UpLeg').head, target = [hip[0] * 1.1, bones[hips].head[1] - .035 * scale];
+            let pick = -1, best = Infinity;
+            for (const v of pack.body.source) {
+                const x = shaped[v * 3], y = shaped[v * 3 + 1], z = shaped[v * 3 + 2];
+                if (x * hip[0] <= 0 || Math.abs(x) < .03 * scale || Math.abs(y - target[1]) > .12 * scale) continue;
+                const score = z + (6 * (x - target[0]) ** 2 + 5 * (y - target[1]) ** 2) / scale;
+                if (score < best) { best = score; pick = v; }
+            }
+            if (pick < 0) continue;
+            const c = Array.from(shaped.subarray(pick * 3, pick * 3 + 3));
+            add(side + 'Glute', c, hips, 'butt', -1, Math.max(.085 * scale, Math.abs(c[0]) * 1.3), .17 * scale,
+                Math.max(.5, Math.min(1.5, .7 + recipe.weight * .5)), recipe.muscle);
+            // Most of the cheek follows the upper leg, rather than Hips.
+            // Give that influence its own child, driven by the same world
+            // displacement as the pelvis child, so the whole volume responds.
+            follow(fields[fields.length - 1], side + 'LowerGlute', bones.findIndex(b => b.name === side + 'UpLeg'));
+        }
+        const spine = bones.findIndex(b => b.name === 'Spine'), upper = bones.findIndex(b => b.name === 'Spine1');
+        const mass = Math.max(.15, Math.min(1.8, .25 + Math.max(0, recipe.weight) * .9 - Math.max(0, recipe.muscle) * .15));
+        const bodyIds = pack._bodyIds || (pack._bodyIds = [...new Set(pack.body.source)]);
+        const surface = (target, axis, sign, parents) => {
+            let point = target, best = -Infinity;
+            for (const v of bodyIds) {
+                const p = Array.from(shaped.subarray(v * 3, v * 3 + 3));
+                if (Math.abs(p[1] - target[1]) > .10 * scale || Math.abs(p[axis === 0 ? 2 : 0] - target[axis === 0 ? 2 : 0]) > .13 * scale) continue;
+                if (axis === 0 && p[0] * sign <= 0) continue;
+                let bound = 0;
+                for (let k = 0; k < 4; k++) if (parents.includes(pack.skinJoints[v * 4 + k])) bound += pack.skinWeights[v * 4 + k];
+                if (bound < .3) continue;
+                const other = axis === 0 ? 2 : 0;
+                const score = sign * p[axis] - (6 * (p[1] - target[1]) ** 2 + 4 * (p[other] - target[other]) ** 2) / scale;
+                if (score > best) { best = score; point = p; }
+            }
+            return point;
+        };
+        if (spine >= 0 && upper >= 0) {
+            // Select the anatomical abdomen on the source mesh, then fit its
+            // current extent. A heavy or hanging belly must not outgrow a
+            // fixed-radius patch centred on the navel.
+            if (!pack._bellyTissueIds) {
+                const reference = joints(pack, pack.positions), parents = [hips, spine, upper];
+                let low = Infinity, high = -Infinity;
+                for (const v of bodyIds) { low = Math.min(low, pack.positions[v * 3 + 1]); high = Math.max(high, pack.positions[v * 3 + 1]); }
+                const unit = (high - low) / 1.7;
+                pack._bellyTissueIds = bodyIds.filter(v => {
+                    const y = pack.positions[v * 3 + 1], z = pack.positions[v * 3 + 2];
+                    if (y < reference[hips].head[1] - .08 * unit || y > reference[chest].head[1] + .02 * unit || z < reference[hips].head[2] + .025 * unit) return false;
+                    let bound = 0;
+                    for (let k = 0; k < 4; k++) if (parents.includes(pack.skinJoints[v * 4 + k])) bound += pack.skinWeights[v * 4 + k];
+                    return bound > .35;
+                });
+            }
+            let low = Infinity, high = -Infinity, width = 0, front = -Infinity;
+            for (const v of pack._bellyTissueIds) {
+                low = Math.min(low, shaped[v * 3 + 1]); high = Math.max(high, shaped[v * 3 + 1]);
+                width = Math.max(width, Math.abs(shaped[v * 3])); front = Math.max(front, shaped[v * 3 + 2]);
+            }
+            const c = [0, (low + high) / 2, front];
+            add('FatBelly', c, spine, 'fat', 1, Math.max(.20 * scale, width * 1.1), Math.max(.16 * scale, (high - low) * .55),
+                mass * (1 - .65 * clamp(recipe.shapes?.abs || 0, 0, 1)), recipe.muscle);
+            const field = fields[fields.length - 1]; field.region = 'belly'; field.plateau = .75;
+            field.depthStart = bones[hips].head[2] + .015 * scale; field.depthSpan = .12 * scale;
+            follow(field, 'FatBellyPelvis', hips); follow(field, 'FatBellyUpper', upper);
+            if (!['merfolk', 'centaur'].includes(recipe.species)) for (const [side, sign] of [['Left', 1], ['Right', -1]]) {
+                const c = surface([sign * .16 * scale, bones[hips].head[1] + .025 * scale, bones[hips].head[2] + .06 * scale], 0, sign, [hips, spine]);
+                add(side + 'FatHip', c, hips, 'fat', sign, .14 * scale, .13 * scale, mass * .8, recipe.muscle);
+                const field = fields[fields.length - 1]; field.axis = 0; field.region = 'hip'; field.minZ = bones[hips].head[2] + .01 * scale;
+                field.rx = Math.max(field.rx, (front - bones[hips].head[2]) * .55); field.plateau = .6;
+                follow(field, side + 'FatHipWaist', spine);
+            }
+        }
+        if (!['merfolk', 'centaur'].includes(recipe.species)) for (const side of ['Left', 'Right']) for (const [region, top, bottom, radius, gain] of [
+            ['Thigh', 'UpLeg', 'Leg', .14, .9], ['Calf', 'Leg', 'Foot', .105, .8]]) {
+            const parent = bones.findIndex(b => b.name === side + top), end = bones.find(b => b.name === side + bottom);
+            if (parent < 0 || !end) continue;
+            const a = bones[parent].head, d = end.head.map((v, k) => v - a[k]), length = Math.hypot(...d), c = a.map((v, k) => v + d[k] * .5);
+            if (length < 1e-5) continue;
+            const axis = d.map(v => v / length);
+            let extent = 0;
+            for (const v of bodyIds) {
+                let bound = 0;
+                for (let k = 0; k < 4; k++) if (pack.skinJoints[v * 4 + k] === parent) bound += pack.skinWeights[v * 4 + k];
+                if (bound < .4) continue;
+                const delta = c.map((x, k) => shaped[v * 3 + k] - x), along = delta.reduce((sum, x, k) => sum + x * axis[k], 0);
+                if (Math.abs(along) > length * .45) continue;
+                extent = Math.max(extent, Math.hypot(...delta.map((x, k) => x - along * axis[k])));
+            }
+            add(side + 'Fat' + region, c, parent, 'fat', 1, Math.max(radius * scale, extent * 1.15 + .01 * scale), length * .46, mass * gain, recipe.muscle);
+            const field = fields[fields.length - 1]; field.along = axis; field.region = region.toLowerCase(); field.plateau = .45;
+        }
+        for (const field of fields) for (const anchor of field.anchors) if (field.region) {
+            const tissue = bones[anchor.bone].softTissue;
+            tissue.region = field.region;
+            if (field.kind === 'fat') tissue.maxOffset = field.along
+                ? Math.min(field.ry * .30, field.rx * .35 + .01 * scale)
+                : Math.max(.025 * scale, Math.min(.06 * scale, Math.min(field.rx, field.ry) * .25));
+        }
+        const smooth = x => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
+        parts.forEach((part, pi) => {
+            if (!part.joints || !part.weights || part.metalness >= .45) return;
+            let joints, weights;
+            for (let v = 0; v < part.positions.length / 3; v++) {
+                const p = [part.positions[v * 3], part.positions[v * 3 + 1], part.positions[v * 3 + 2]];
+                let chosen, share = 0, fatFade = 1;
+                for (const field of fields) {
+                    const { c, rx, ry, front, anchors, kind } = field;
+                    const sameSide = !c[0] || p[0] * c[0] > 0;
+                    if (!sameSide && kind === 'fat') continue;
+                    const axis = field.axis ?? 2, other = axis === 0 ? 2 : 0;
+                    const dy = (p[1] - c[1]) * (kind === 'fat' ? 1 : p[1] > c[1] ? 1.2 : .9);
+                    const delta = p.map((x, k) => x - c[k]), along = field.along ? delta.reduce((sum, x, k) => sum + x * field.along[k], 0) : 0;
+                    const radial = field.along ? delta.reduce((sum, x, k) => sum + (x - along * field.along[k]) ** 2, 0) : 0;
+                    const d2 = field.along ? (along / ry) ** 2 : field.region === 'belly'
+                        ? Math.sqrt(((p[other] - c[other]) / rx) ** 4 + (dy / ry) ** 4)
+                        : ((p[other] - c[other]) / rx) ** 2 + (dy / ry) ** 2;
+                    const layer = field.along ? 1 - smooth((Math.sqrt(radial) / rx - 1.1) / .4)
+                        : field.depthStart !== undefined ? smooth((p[2] - field.depthStart) / field.depthSpan)
+                        : smooth((front * (p[axis] - c[axis]) + .13 * scale) / (.08 * scale));
+                    // Keep dedicated bust/butt motion in charge of their own
+                    // volumes, with a smooth fade into the general fat fields.
+                    if (kind !== 'fat' && layer > .5) fatFade = Math.min(fatFade, smooth((d2 - 1) / .6));
+                    if (d2 >= 1 || !sameSide) continue;
+                    let bound = 0, anchor;
+                    for (const candidate of anchors) {
+                        let weight = 0;
+                        for (let k = 0; k < 4; k++) if (part.joints[v * 4 + k] === candidate.parent) weight += part.weights[v * 4 + k];
+                        if (weight > bound) { bound = weight; anchor = candidate; }
+                    }
+                    const envelope = field.plateau === undefined ? (1 - d2) ** 2 : 1 - smooth((Math.sqrt(d2) - field.plateau) / (1 - field.plateau));
+                    const w = (kind === 'butt' ? .75 : .9) * envelope * layer * bound
+                        * (kind === 'fat' ? fatFade : smooth(Math.abs(p[0]) / Math.max(.01, Math.abs(c[0]) * .65)))
+                        * (field.minZ === undefined ? 1 : smooth((p[2] - field.minZ) / (.05 * scale)));
+                    if (w > share) { share = w; chosen = anchor; }
+                }
+                if (share < .0001) continue;
+                // Split only the anchor's influence. With no secondary offset
+                // its child transforms exactly as the original anchor did.
+                // Keep the strongest four influences on both skin and cloth.
+                // Skipping skin vertices that already used four joints left
+                // most of the cheeks rigid and created abrupt chest patches.
+                if (!joints) { joints = Uint16Array.from(part.joints); weights = Float32Array.from(part.weights); }
+                const skin = [[chosen.bone, share]];
+                let remaining = share;
+                for (let k = 0; k < 4; k++) {
+                    const joint = part.joints[v * 4 + k], weight = part.weights[v * 4 + k];
+                    const cut = joint === chosen.parent ? Math.min(weight, remaining) : 0;
+                    remaining -= cut; skin.push([joint, weight - cut]);
+                }
+                skin.sort((a, b) => b[1] - a[1]);
+                const sum = skin.slice(0, 4).reduce((s, x) => s + x[1], 0);
+                for (let k = 0; k < 4; k++) { joints[v * 4 + k] = skin[k][0]; weights[v * 4 + k] = skin[k][1] / sum; }
+            }
+            if (joints) parts[pi] = { ...part, joints, weights };
+        });
+        // The detailed chest replaces body triangles. Its outer endpoints
+        // must have exactly the body's final bindings, including vertices
+        // where the four-influence limit prevented a new tissue influence.
+        const body = parts.find(p => p.name === 'Body');
+        if (body) {
+            const source = new Map(Array.from(pack.body.source, (v, i) => [v, i]));
+            for (let pi = 0; pi < parts.length; pi++) {
+                const part = parts[pi], bind = part.interpolation;
+                if ((!part.chestDetail && !part.anatomicalDetail) || part.decal || !bind) continue;
+                const joints = Uint16Array.from(part.joints), weights = Float32Array.from(part.weights);
+                for (let v = 0; v < part.positions.length / 3; v++) {
+                    const start = bind.offsets[v], end = bind.offsets[v + 1];
+                    if (end - start !== 1 || bind.weights[start] !== 1) continue;
+                    const base = source.get(bind.vertices[start]);
+                    if (base === undefined) continue;
+                    joints.set(body.joints.subarray(base * 4, base * 4 + 4), v * 4);
+                    weights.set(body.weights.subarray(base * 4, base * 4 + 4), v * 4);
+                }
+                parts[pi] = { ...part, joints, weights };
+            }
+            for (let pi = 0; pi < parts.length; pi++) {
+                const part = parts[pi];
+                if (!part.chestDetail || !part.decal) continue;
+                const base = parts.find(p => p.name === part.shadeFrom);
+                if (base) parts[pi] = { ...part, joints: base.joints, weights: base.weights };
+            }
+        }
     }
 
     /** A seeded random recipe within per-field ranges ({gender:[0,1], age:[18,60], ...}). */
@@ -2279,7 +2756,7 @@
         return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0');
     }
 
-    const api = { PEOPLES, PEOPLE_BY_ID, withPeople, irisFor, earMask, noseFoldAt, cranialRidgeAt, foreheadSpoonAt, neckCords, almondEye: { frame: almondFrame, half: almondHalf, at: almondAt }, VOLUME, maskOf, fatMask, volume, sexOf, anatomyFields, nippleSurface, MORPHS, morph, headFields, vertexNormals, gather, normals, fittedSkin, naturalRecipe, neighbors, relax, SLIDERS, SHAPES, SLIDER_BY_KEY, MACRO_RANGES, ANCESTRY, DEFAULT_RECIPE, MIN_AGE, MAX_AGE, DATA_PATH, dataFolder, normalizeRecipe, targetWeights, openPack, loadPack, prepareAuthoring, shape, joints, fit, build, randomRecipe, useExpressions };
+    const api = { PEOPLES, PEOPLE_BY_ID, withPeople, irisFor, earMask, noseFoldAt, cranialRidgeAt, foreheadSpoonAt, neckCords, almondEye: { frame: almondFrame, half: almondHalf, at: almondAt }, VOLUME, maskOf, fatMask, volume, sexOf, anatomyFields, nippleSurface, MORPHS, morph, headFields, vertexNormals, skinNormals, bustShadingMask, bustGradient, abdominalDefinition, abdominalShade, gather, normals, fittedSkin, naturalRecipe, neighbors, relax, SLIDERS, SHAPES, SLIDER_BY_KEY, MACRO_RANGES, ANCESTRY, DEFAULT_RECIPE, MIN_AGE, MAX_AGE, DATA_PATH, dataFolder, rigSoftTissue, normalizeRecipe, targetWeights, openPack, loadPack, prepareAuthoring, shape, joints, fit, build, randomRecipe, useExpressions };
     root.RRHumanBody = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

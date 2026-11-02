@@ -84,6 +84,78 @@
         return s;
     }
 
+    const FINISHES = [
+        { id: 'natural', label: 'Natural' },
+        { id: 'matte', label: 'Matte', roughness: 0.88, specular: 0.22, sheen: 0.18, coat: 0 },
+        { id: 'satin', label: 'Satin', roughness: 0.43, specular: 0.48, sheen: 0.18, coat: 0.12, coatRoughness: 0.35 },
+        { id: 'oily', label: 'Oily', roughness: 0.30, specular: 0.62, sheen: 0.08, coat: 0.45, coatRoughness: 0.18 },
+        { id: 'wet', label: 'Wet', roughness: 0.23, specular: 0.65, sheen: 0.04, coat: 1, coatRoughness: 0.07 }
+    ];
+    const SURFACE_TEXTURES = [['natural', 'Natural'], ['smooth', 'Smooth'], ['fine', 'Fine pores'], ['pores', 'Pronounced pores'], ['weathered', 'Weathered']];
+    function normalizeSurface(input) {
+        const s = input || {}, number = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+        return { finish: FINISHES.some(f => f.id === s.finish) ? s.finish : 'natural',
+            texture: SURFACE_TEXTURES.some(t => t[0] === s.texture) ? s.texture : 'natural',
+            strength: number(s.strength, 1, 0, 1), detail: number(s.detail, 1, 0, 3), scale: number(s.scale, 1, 0.5, 2) };
+    }
+
+    const surfacePictures = new Map();
+    /** Small deterministic, seamless normal tiles; no body-size texture repaint. */
+    function surfaceTexture(style) {
+        if (surfacePictures.has(style)) return surfacePictures.get(style);
+        const size = 256, h = new Float32Array(size * size), data = new Uint8Array(size * size * 4);
+        let seed = 917;
+        const rand = () => { seed = Math.imul(seed, 1664525) + 1013904223 | 0; return (seed >>> 0) / 4294967296; };
+        const at = (x, y) => ((y + size) % size) * size + (x + size) % size;
+        if (style !== 'smooth') {
+            const count = style === 'fine' || style === 'natural' ? 1500 : 700;
+            for (let i = 0; i < count; i++) {
+                const cx = rand() * size, cy = rand() * size, radius = (style === 'fine' || style === 'natural' ? 0.8 : 1.3) + rand() * 1.4, depth = 0.25 + rand() * 0.25;
+                for (let y = Math.floor(cy - radius); y <= cy + radius; y++) for (let x = Math.floor(cx - radius); x <= cx + radius; x++) {
+                    const d = Math.hypot(x - cx, y - cy) / radius;
+                    if (d < 1) h[at(x, y)] -= depth * (1 - d * d) ** 2;
+                }
+            }
+            if (style === 'weathered') for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+                const a = 2 * Math.PI * x / size, b = 2 * Math.PI * y / size;
+                h[at(x, y)] += 0.09 * Math.sin(a * 19 + 0.7 * Math.sin(b * 7)) + 0.06 * Math.sin(b * 23 + 0.8 * Math.sin(a * 5));
+            }
+        }
+        for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+            const dx = h[at(x + 1, y)] - h[at(x - 1, y)], dy = h[at(x, y + 1)] - h[at(x, y - 1)], length = Math.hypot(dx, dy, 1), o = at(x, y) * 4;
+            data[o] = Math.round(127.5 - dx / length * 127.5); data[o + 1] = Math.round(127.5 - dy / length * 127.5);
+            data[o + 2] = Math.round(127.5 + 127.5 / length); data[o + 3] = 255;
+        }
+        const picture = { name: 'skin-surface-' + style + '.png', width: size, height: size, data, repeat: true };
+        surfacePictures.set(style, picture);
+        return picture;
+    }
+
+    /** Apply to exposed skin and its overlays after fitting; clothing keeps its own materials. */
+    function applySurface(parts, input, textures) {
+        const s = normalizeSurface(input), finish = FINISHES.find(f => f.id === s.finish);
+        const detail = s.texture !== 'natural' || s.detail !== 1 || s.scale !== 1;
+        for (const p of parts) {
+            if (p.kind !== 'skin') continue;
+            if (finish.id !== 'natural') {
+                const mix = (a, b) => a + (b - a) * s.strength;
+                p.skinFinish = { roughness: mix(Math.max(0.52, p.roughness ?? 0.62), finish.roughness),
+                    specularIntensity: mix(0.4, finish.specular), sheen: mix(0.3, finish.sheen),
+                    clearcoat: finish.coat * s.strength, clearcoatRoughness: finish.coatRoughness ?? 0.4 };
+                p.roughness = p.skinFinish.roughness;
+                p.wet = finish.id === 'wet' || finish.id === 'oily';
+            }
+            // Preserve authored scales, scars and lip/areola relief. The pore
+            // controls replace the ordinary skin's microdetail only.
+            if (!detail || !p.uvs || p.decal || (p.normalTexture && p.normalTexture !== 'face-detail.png')) continue;
+            const picture = surfaceTexture(s.texture);
+            textures[picture.name] = picture;
+            p.normalTexture = picture.name; p.normalTexCoord = 1;
+            p.normalScale = s.texture === 'smooth' ? 0 : s.detail * (s.texture === 'pores' ? 0.5 : s.texture === 'weathered' ? 0.65 : 0.18);
+            p.uvs1 = Float32Array.from(p.uvs, v => v * 80 / s.scale);
+        }
+    }
+
     /** Per pack vertex, how much a set of targets moves it, 0..1 (lips, eyelids). */
     function regionOf(pack, names) {
         const out = new Float32Array(pack.vertexCount);
@@ -1250,6 +1322,7 @@
     }
 
     const api = { ageStep, wrinkles, fieldsOf: fields, HAIR_REGIONS, HAIR_PRESETS, BODY_HAIR_PATTERNS, DEFAULT_BODY_HAIR, normalizeBodyHair, hairDensity, hairField, hairCover, paintFur, PATTERNS, LOOKS, PUPILS, DEFAULT_SKIN, DEFAULT_EYES, normalizeSkin, normalizeEyes, paint, paintEyes, shadeSkin, genitalProfile, regionOf };
+    Object.assign(api, { FINISHES, SURFACE_TEXTURES, normalizeSurface, surfaceTexture, applySurface });
     root.RRCharacterSkin = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

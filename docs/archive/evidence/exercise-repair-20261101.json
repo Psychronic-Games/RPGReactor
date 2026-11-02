@@ -1,0 +1,412 @@
+{
+  "date": "2026-11-01",
+  "preview": 94,
+  "runtime": "20261101.22",
+  "evidenceRoot": "scratchpad/exercise-repair-20261101/",
+  "changes": [
+    "Lower-bust normals and occlusion use smooth quadratic fields fitted to regional averages. Chest-detail skin inherits that field outside the raised nipple; Belly Tone preserves the smoothing.",
+    "Exercise arm IK carries the posed torso bind elbow plane instead of flipping shoulder frames. Wrist pronation is shared with the forearm and unwrapped across keys.",
+    "Jumping jacks cycle shortened from 2.4 seconds to 1.1 seconds, with body-width-aware hand clearance and denser keys.",
+    "Hamstring stretch keeps the balance arm outside the thigh and reaches toward the instep, forward of the shin.",
+    "Push-ups maintain a straight leg chain with bounded ankle dorsiflexion, zero local ankle roll and planted toe joints. Distal forefoot bindings follow the toe joint without moving rest geometry."
+  ],
+  "scope": "Focused visual iteration, with the saved Robust Female Sci-Fi Athlete as read-only input. Full suites deferred at owner request. Visual acceptance remains open.",
+  "sourceInspection": [
+    {
+      "name": "athlete",
+      "id": "pushUp",
+      "duration": 4,
+      "contact": 6.059099340460367e-06,
+      "loop": 0,
+      "jump": 1.372954946644397,
+      "shoulderRollDegrees": 1.100689302174021,
+      "shoulderRollBeforeDegrees": 179.95925928465533,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 20.05352209428814,
+      "toeExtensionDegrees": 67.01539878632175,
+      "floor": -0.00038792926352471113
+    },
+    {
+      "name": "athlete",
+      "id": "pullUp",
+      "duration": 4,
+      "contact": 1.1996027696091384e-05,
+      "loop": 0,
+      "jump": 1.9091764340695658,
+      "shoulderRollDegrees": 93.61383583249516,
+      "shoulderRollBeforeDegrees": 90.03769314253985,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": 0.08017875254154205
+    },
+    {
+      "name": "athlete",
+      "id": "jumpingJacks",
+      "duration": 1.100000023841858,
+      "contact": 0,
+      "loop": 1.836970237518721e-18,
+      "jump": 6.908491846258496,
+      "shoulderRollDegrees": 65.4207877483965,
+      "shoulderRollBeforeDegrees": 77.10964280034237,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": -2.372722640586744e-08
+    },
+    {
+      "name": "athlete",
+      "id": "hamstringStretch",
+      "duration": 8,
+      "contact": 3.496475445788045e-05,
+      "loop": 0,
+      "jump": 3.1426790695708404,
+      "shoulderRollDegrees": 10.254251688439227,
+      "shoulderRollBeforeDegrees": 134.35553259971257,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": -3.220230064471252e-05
+    },
+    {
+      "name": "female",
+      "id": "pushUp",
+      "duration": 4,
+      "contact": 1.0962660327394714e-05,
+      "loop": 0,
+      "jump": 1.840701385528332,
+      "shoulderRollDegrees": 0.9180484269681052,
+      "shoulderRollBeforeDegrees": 179.99893651774346,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 20.053522438420803,
+      "toeExtensionDegrees": 69.81586619521164,
+      "floor": -0.00040513701969757676
+    },
+    {
+      "name": "female",
+      "id": "pullUp",
+      "duration": 4,
+      "contact": 1.1861297578499184e-05,
+      "loop": 0,
+      "jump": 1.9146689006287352,
+      "shoulderRollDegrees": 90.3663001821059,
+      "shoulderRollBeforeDegrees": 90.70065000374777,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": 0.07381793856620789
+    },
+    {
+      "name": "female",
+      "id": "jumpingJacks",
+      "duration": 1.100000023841858,
+      "contact": 0,
+      "loop": 1.836970237518721e-18,
+      "jump": 6.769368622035461,
+      "shoulderRollDegrees": 66.06928798154772,
+      "shoulderRollBeforeDegrees": 76.21879402953721,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": -2.3604843080171634e-10
+    },
+    {
+      "name": "female",
+      "id": "hamstringStretch",
+      "duration": 8,
+      "contact": 3.297930303563463e-05,
+      "loop": 0,
+      "jump": 3.091449318756384,
+      "shoulderRollDegrees": 10.096700408332794,
+      "shoulderRollBeforeDegrees": 134.50294106168812,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": -3.0148432415444404e-05
+    },
+    {
+      "name": "male",
+      "id": "pushUp",
+      "duration": 4,
+      "contact": 1.0886835308557607e-05,
+      "loop": 0,
+      "jump": 1.6214478599880104,
+      "shoulderRollDegrees": 5.157309742603479,
+      "shoulderRollBeforeDegrees": 171.65298797930143,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 20.05352209428815,
+      "toeExtensionDegrees": 69.71369611082869,
+      "floor": -0.004547296091914177
+    },
+    {
+      "name": "male",
+      "id": "pullUp",
+      "duration": 4,
+      "contact": 1.2696761349502354e-05,
+      "loop": 0,
+      "jump": 1.8435108794117097,
+      "shoulderRollDegrees": 96.430019397384,
+      "shoulderRollBeforeDegrees": 96.62143890591462,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": 0.06144547834992409
+    },
+    {
+      "name": "male",
+      "id": "jumpingJacks",
+      "duration": 1.100000023841858,
+      "contact": 0,
+      "loop": 1.836970237518721e-18,
+      "jump": 6.931371597876537,
+      "shoulderRollDegrees": 72.33633667581486,
+      "shoulderRollBeforeDegrees": 87.79601562552234,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": -1.0282361628810577e-09
+    },
+    {
+      "name": "male",
+      "id": "hamstringStretch",
+      "duration": 8,
+      "contact": 2.4452829390885563e-05,
+      "loop": 0,
+      "jump": 2.9915153829922367,
+      "shoulderRollDegrees": 15.358298885341641,
+      "shoulderRollBeforeDegrees": 133.79301402339792,
+      "ankleSideDegrees": 0,
+      "anklePitchDegrees": 0,
+      "toeExtensionDegrees": 0,
+      "floor": -2.0767289242940024e-05
+    }
+  ],
+  "sourceVerification": {
+    "sourceCases": 12,
+    "handLegSurfaceAudit": "Before reproduced penetration; after has zero in 25 phases per exercise, including saved bounce.",
+    "bodyRestPositionsMaxDeltaMetres": 0,
+    "maximumWeightSumError": 4.470348358154297e-08,
+    "bodyVerticesWithUpdatedForefootBindings": 1656
+  },
+  "surfaceClearance": [
+    {
+      "id": "jumpingJacks",
+      "stage": "before",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 6772,
+      "maxDepth": 0.03999285316179289,
+      "minSurfaceGap": 4.14617777073987e-06,
+      "worst": {
+        "time": 0,
+        "vertex": 10365,
+        "owner": "LeftHandPinky1",
+        "point": [
+          0.1548723727464676,
+          0.7623814344406128,
+          -0.00356181594543159
+        ]
+      }
+    },
+    {
+      "id": "jumpingJacks",
+      "stage": "after",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.011635114471426181,
+      "worst": null
+    },
+    {
+      "id": "hamstringStretch",
+      "stage": "before",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 3484,
+      "maxDepth": 0.03615321097865807,
+      "minSurfaceGap": 1.8572115286506997e-06,
+      "worst": {
+        "time": 7,
+        "vertex": 3579,
+        "owner": "RightHand",
+        "point": [
+          -0.12170656025409698,
+          0.4694189429283142,
+          0.18307285010814667
+        ]
+      }
+    },
+    {
+      "id": "hamstringStretch",
+      "stage": "after",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.006754282596819373,
+      "worst": null
+    }
+  ],
+  "surfaceMethod": "25 phases per exercise, saved Athlete build including saved soft-tissue bounce; 4,168 forearm/hand/finger render vertices against 2,146 actual posed leg triangles. Signed nearest-triangle penetration threshold 3 mm, local search range 4 cm. Previous poses reproduce the reported penetration. This is sampled evidence, not continuous collision detection.",
+  "finalNativeViews": [
+    {
+      "name": "jack-open",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 1.100000023841858,
+        "pose": "jumpingJacks",
+        "target": [
+          0,
+          1,
+          0
+        ],
+        "time": 0.55
+      },
+      "validationError": null
+    },
+    {
+      "name": "hamstring-right",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 8,
+        "pose": "hamstringStretch",
+        "target": [
+          0,
+          0.5,
+          0.1
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "hamstring-left",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 8,
+        "pose": "hamstringStretch",
+        "target": [
+          0,
+          0.5,
+          0.1
+        ],
+        "time": 6
+      },
+      "validationError": null
+    },
+    {
+      "name": "push-up-toes",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "pushUp",
+        "target": [
+          0,
+          0.25,
+          -0.6
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "saved-exercise-repair",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "jackDuration": 1.100000023841858,
+        "savedClip": "Push Up",
+        "target": [
+          0,
+          0.3,
+          0
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 12317628,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-exercise-repair",
+        "textures": 17
+      }
+    },
+    {
+      "name": "bust-gradient",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.0827501511573792,
+          0.07992536125704647
+        ]
+      },
+      "validationError": null
+    },
+    {
+      "name": "pull-up-top",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "pullUp",
+        "target": [
+          0,
+          1,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    }
+  ],
+  "targetedTests": {
+    "passed": 3,
+    "failed": 0,
+    "log": "scratchpad/exercise-repair-20261101/targeted-tests.log",
+    "names": [
+      "lower bust shading smooths coarse normal changes without moving skin or softening the head",
+      "abdominal shading retains continuous muscle normals instead of smoothing the relief away",
+      "the browser drag shaper uses the same human head data as the complete model"
+    ]
+  },
+  "runtimeSync": "40 files updated across 20 projects; --check reports all 20 match runtime/.",
+  "syntaxChecks": [
+    "runtime/reactor_3d_motions.js",
+    "runtime/reactor_main.js",
+    "editor/src/forge/Character3D/Character3DBuilder.js",
+    "editor/src/forge/Character3D/HumanBody.js",
+    "editor/src/forge/Character3D/CharacterShading.js",
+    "editor/src/forge/Character3D/CharacterDetail.js"
+  ],
+  "limits": [
+    "The averaged shading is visibly smoother, but shiny skin still exposes some coarse surface detail. This does not add mesh resolution or claim a perfect surface.",
+    "Final native views cover the saved Athlete; default male and female are additionally covered by source pose inspection. Other proportions and wardrobes are not exhaustively checked.",
+    "Pull-up overhead external arm rotation is expected; the absolute axial shoulder-roll metric is not a failure threshold. Key continuity and native appearance were checked.",
+    "Male Push-ups retains a small approximately 4.55 mm support-hand floor overlap; female/Athlete floor minimum is approximately 0.4 mm below the plane.",
+    "Forefoot rebinding applies to skin and flexible fitted parts. Rigid metal parts are skipped. Existing character assets need re-saving to receive bindings and updated clips.",
+    "native-a contains intermediate shading/pose experiments and is excluded from final evidence. Final native-b and native-c were captured with the current code.",
+    "Saved user designs and exports were not overwritten; exported reload evidence uses the harness temporary project."
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "edc340650aa359268ac38e7c4ba4d5fcc828023881d67b2d32b74e4d4b5c511c",
+    "runtime/reactor_main.js": "ed11a786ec963fb781bba282245e029392451e933f0545c388b6b5300221b931",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "c9d7d90c1d7fd93786af72dad8a16f95466cdabe998046cf3f38528ff12fc738",
+    "editor/src/forge/Character3D/HumanBody.js": "0a681b0f734c6a4da2e8768e8f18db13c74ed7fd3e4b35cc23d437065dd9db81",
+    "editor/src/forge/Character3D/CharacterShading.js": "f6bf93038230b02ceceaf412d350e890d95410b2c9e85db245e7e6a459aa2842",
+    "editor/src/forge/Character3D/CharacterDetail.js": "ec9cc5491ef741bc8f4d6577489c131cf4ef6986ab51d298ec5e6ddb1cc2d693"
+  }
+}

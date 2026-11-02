@@ -32,10 +32,10 @@
  * With n frames per row other than three ('8d' and 'mz' only), the sheet is
  * an [NF] sheet ($Name[8D][6F], $Name[6F]; frameTag): every block is n frames
  * wide, in the order the game plays them, 0 to n - 1 round again, resting on
- * 0. A walk or carry row stands on frame 0 and walks the clip's cycle over the
- * rest in even steps from its passing frame, so the loop comes back round to
- * standing; a dash row is the run's cycle the same way, frame 0 its passing
- * frame. Attack and the poses spread their motion over the n frames. A [1F]
+ * 0. A walk or carry row samples the clip's full cycle in even steps from
+ * its passing frame, including frame 0, with no unrelated idle pose at the
+ * wrap. A dash row samples the run's full cycle the same way. Attack and
+ * the poses spread their motion over the n frames. A [1F]
  * sheet is one frame a row: standing, the run's passing frame, each pose's key.
  * The side-view sheet is MZ's 9 × 6 cells, 18 motions down three columns in
  * Sprite_Actor.MOTIONS order; the face sheet MZ's 4 × 2 portraits.
@@ -126,7 +126,7 @@
     const columnsOf = (id, n) => { const l = layout(id), f = framesOf(id, n); return f === 3 ? l.columns : l.columns / 3 * f; };
     // n-frame rows ([NF] order: 0 to n - 1, resting on 0). `to` and `u` mean a time u of the way from `at` to `to`;
     // `shift` a time that much further round the clip.
-    const cycleRow = (n, clip, stand) => Array.from({ length: n }, (_, i) => (i === 0 && stand ? { clip: 'idle', at: 0 } : { clip, at: 'pass', shift: i / n }));
+    const cycleRow = (n, clip, stand) => Array.from({ length: n }, (_, i) => (n === 1 && stand ? { clip: 'idle', at: 0 } : { clip, at: 'pass', shift: i / n }));
     const spreadRow = (n, clip, from, to) => Array.from({ length: n }, (_, i) => ({ clip, at: from, to, u: n > 1 ? i / (n - 1) : 0.5 }));
     /** A one-time motion over n frames: from its start up to the key pose by the middle frame, then on after it. */
     const onceRow = (n, clip) => {
@@ -926,22 +926,6 @@
         return Number.isInteger(n) && n >= 16 && n <= 512 ? n : 144;
     }
 
-    /**
-     * An [NF] sheet plays its n frames only while the project has multi-frame
-     * sheets on (Reactor Features › Multi-Frame Character Sheets): switched on
-     * in the open Database as that page does it, so it is saved with the
-     * project and shows ticked there. Returns whether it was off and is on now.
-     */
-    function turnOnMultiFrames() {
-        const reactor = root.reactor, manager = reactor && reactor.databaseManager, features = root.ReactorFeatures;
-        const system = manager && manager.data && manager.data.system;
-        if (!system || !features || features.on('multiFrames', system)) return false;
-        const page = reactor.databaseEditorUI && reactor.databaseEditorUI.featuresEditor;
-        if (page && typeof page.apply === 'function') page.apply(system, 'multiFrames', true);
-        else if (features.set('multiFrames', true, system)) manager.mutationGeneration = (manager.mutationGeneration || 0) + 1;
-        return features.on('multiFrames', system);
-    }
-
     async function exportNow(builder, panel, state, preview) {
         const t = (text, params) => builder._t(text, params);
         const project = builder._project && builder._project();
@@ -978,8 +962,7 @@
             fs.mkdirSync(path.dirname(file), { recursive: true });
             atomic(fs, file, png);
             const seconds = ((performance.now() - started) / 1000).toFixed(1);
-            status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds })
-                + (frames !== 3 && turnOnMultiFrames() ? ' ' + t('Multi-frame sheets turned on in Reactor Features.') : '');
+            status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds });
             status.dataset.kind = 'ok';
             const img = preview(panel);
             img.src = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
@@ -998,7 +981,7 @@
 
     const api = {
         LAYOUTS, CLIPS, SV_MOTIONS, SV_CLIPS, FACE_PRESETS, YAW, SV_YAW, CARDINAL, DIAGONAL,
-        STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, columnsOf, turnOnMultiFrames, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
+        STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, columnsOf, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
         downsample, outline, grade, skinLike, threshold, quantize, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
     };
     root.RRCharacterSpriteSheet = api;

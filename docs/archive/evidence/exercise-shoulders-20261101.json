@@ -1,0 +1,646 @@
+{
+  "date": "2026-11-01",
+  "preview": 95,
+  "runtime": "20261101.23",
+  "evidenceRoot": "scratchpad/exercise-shoulders-20261101/",
+  "changes": [
+    "Jumping jacks shares elevation with the clavicles and carries a frontal-plane arm reference, reducing shoulder collapse while preserving the 1.1-second cadence.",
+    "Pull-ups shares elevation and posterior tilt with the clavicles. Explicit outward/forward elbow poles replace the previous behind-torso bend.",
+    "Hamstring stretch measures the actual shaped toe surface and the extended middle-finger chain, aiming fingertips at the toe end with a 4 mm bone-point skin allowance. Wrist turns blend from the solved neutral arm and return to the same orientation at the loop seam."
+  ],
+  "scope": "Focused visual iteration. Saved Athlete read as input without overwriting user designs/exports. Full test suites deferred at owner request; visual acceptance remains open.",
+  "sourceInspection": [
+    {
+      "name": "athlete",
+      "id": "jumpingJacks",
+      "stage": "before",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 6.908491846258496,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.2871508442034939,
+      "shoulderBlendVolumeMinimum": 0.06416187683245084,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "jumpingJacks",
+      "stage": "after",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 6.089023344568854,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.3563298336705132,
+      "shoulderBlendVolumeMinimum": 0.06266718973381569,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "pullUp",
+      "stage": "before",
+      "loop": 0,
+      "contact": 1.1996027696091384e-05,
+      "maximumAdjacentTurnDegrees": 1.9091764340695658,
+      "minimumElbowForwardOffset": -0.21203436327167233,
+      "shoulderBlendVolumeP10": 0.18133074799202029,
+      "shoulderBlendVolumeMinimum": 0.16681802565094989,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "pullUp",
+      "stage": "after",
+      "loop": 0,
+      "contact": 5.552043542247171e-06,
+      "maximumAdjacentTurnDegrees": 1.3980739938904978,
+      "minimumElbowForwardOffset": 0.022448387914283288,
+      "shoulderBlendVolumeP10": 0.36873946567464116,
+      "shoulderBlendVolumeMinimum": 0.20879237353659824,
+      "toeContacts": []
+    },
+    {
+      "name": "athlete",
+      "id": "hamstringStretch",
+      "stage": "before",
+      "loop": 0,
+      "contact": 3.496475445788045e-05,
+      "maximumAdjacentTurnDegrees": 3.1426790695708404,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.334128904885485,
+            0.10342704895564452,
+            0.04447906363543391
+          ],
+          "toeSurfaceGap": 0.17942276567027807
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.3341314624600997,
+            0.10343016036196916,
+            0.04448160564736857
+          ],
+          "toeSurfaceGap": 0.17942368404064493
+        }
+      ]
+    },
+    {
+      "name": "athlete",
+      "id": "hamstringStretch",
+      "stage": "after",
+      "loop": 0,
+      "contact": 3.496475445788045e-05,
+      "maximumAdjacentTurnDegrees": 3.150544519421267,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.23594249953420368,
+            0.015278680405832325,
+            0.1853429686430133
+          ],
+          "toeSurfaceGap": 0.002035181641122822
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.23594248441311808,
+            0.015278679242835515,
+            0.1853429824851368
+          ],
+          "toeSurfaceGap": 0.002035181522412842
+        }
+      ]
+    },
+    {
+      "name": "female",
+      "id": "jumpingJacks",
+      "stage": "before",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 6.769368622035461,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.2996444335584286,
+      "shoulderBlendVolumeMinimum": 0.06945284423251978,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "jumpingJacks",
+      "stage": "after",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 5.581998408182187,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.3685827545429855,
+      "shoulderBlendVolumeMinimum": 0.06770656920208468,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "pullUp",
+      "stage": "before",
+      "loop": 0,
+      "contact": 1.1861297578499184e-05,
+      "maximumAdjacentTurnDegrees": 1.9146689006287352,
+      "minimumElbowForwardOffset": -0.2041453757886046,
+      "shoulderBlendVolumeP10": 0.18950430470379875,
+      "shoulderBlendVolumeMinimum": 0.17195614693460487,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "pullUp",
+      "stage": "after",
+      "loop": 0,
+      "contact": 5.588799984037948e-06,
+      "maximumAdjacentTurnDegrees": 1.4359660576701372,
+      "minimumElbowForwardOffset": 0.02484288208909612,
+      "shoulderBlendVolumeP10": 0.37303372198078993,
+      "shoulderBlendVolumeMinimum": 0.204195824194025,
+      "toeContacts": []
+    },
+    {
+      "name": "female",
+      "id": "hamstringStretch",
+      "stage": "before",
+      "loop": 0,
+      "contact": 3.297930303563463e-05,
+      "maximumAdjacentTurnDegrees": 3.091449318756384,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.32680972851912865,
+            0.09650039058523996,
+            0.04260251431685696
+          ],
+          "toeSurfaceGap": 0.17629163957977323
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.3268097285191286,
+            0.09650039058523995,
+            0.04260251431685697
+          ],
+          "toeSurfaceGap": 0.17629163957977323
+        }
+      ]
+    },
+    {
+      "name": "female",
+      "id": "hamstringStretch",
+      "stage": "after",
+      "loop": 0,
+      "contact": 3.297930303563463e-05,
+      "maximumAdjacentTurnDegrees": 3.091449318756384,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.23494180286525224,
+            0.015208594836850935,
+            0.1876268609348302
+          ],
+          "toeSurfaceGap": 0.0019792789538293316
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.23494180286525224,
+            0.015208594836850935,
+            0.1876268609348302
+          ],
+          "toeSurfaceGap": 0.0019792789538293316
+        }
+      ]
+    },
+    {
+      "name": "male",
+      "id": "jumpingJacks",
+      "stage": "before",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 6.931371597876537,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.2456862895957604,
+      "shoulderBlendVolumeMinimum": 0.048861881757265295,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "jumpingJacks",
+      "stage": "after",
+      "loop": 1.836970237518721e-18,
+      "contact": 0,
+      "maximumAdjacentTurnDegrees": 5.714433588523404,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": 0.32495295964398013,
+      "shoulderBlendVolumeMinimum": 0.05238645564573598,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "pullUp",
+      "stage": "before",
+      "loop": 0,
+      "contact": 1.2696761349502354e-05,
+      "maximumAdjacentTurnDegrees": 1.8435108794117097,
+      "minimumElbowForwardOffset": -0.22875316211247637,
+      "shoulderBlendVolumeP10": 0.19158603537623223,
+      "shoulderBlendVolumeMinimum": 0.17001258969076727,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "pullUp",
+      "stage": "after",
+      "loop": 0,
+      "contact": 6.260012625943875e-06,
+      "maximumAdjacentTurnDegrees": 1.2864160648073621,
+      "minimumElbowForwardOffset": 0.03076285600231031,
+      "shoulderBlendVolumeP10": 0.40151443475510473,
+      "shoulderBlendVolumeMinimum": 0.24208089996380547,
+      "toeContacts": []
+    },
+    {
+      "name": "male",
+      "id": "hamstringStretch",
+      "stage": "before",
+      "loop": 0,
+      "contact": 2.4452829390885563e-05,
+      "maximumAdjacentTurnDegrees": 2.9915153829922367,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.3811385200071789,
+            0.09075771704959855,
+            0.03392862001437766
+          ],
+          "toeSurfaceGap": 0.2110021448894923
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.3811385200071789,
+            0.09075771704959855,
+            0.03392862001437765
+          ],
+          "toeSurfaceGap": 0.2110021448894923
+        }
+      ]
+    },
+    {
+      "name": "male",
+      "id": "hamstringStretch",
+      "stage": "after",
+      "loop": 0,
+      "contact": 2.4452829390885563e-05,
+      "maximumAdjacentTurnDegrees": 4.923808642038608,
+      "minimumElbowForwardOffset": null,
+      "shoulderBlendVolumeP10": null,
+      "shoulderBlendVolumeMinimum": null,
+      "toeContacts": [
+        {
+          "hand": "Left",
+          "fingertip": [
+            -0.2538517228046263,
+            0.018502305446430403,
+            0.209656673970414
+          ],
+          "toeSurfaceGap": 0.002746671670812311
+        },
+        {
+          "hand": "Right",
+          "fingertip": [
+            0.2538517228046263,
+            0.018502305446430403,
+            0.209656673970414
+          ],
+          "toeSurfaceGap": 0.002746671670812311
+        }
+      ]
+    }
+  ],
+  "sourceVerification": {
+    "afterCases": 9,
+    "beforeCases": 9,
+    "phasesPerCase": 49,
+    "allKeysFinite": true,
+    "loopsCloseWithin": 1e-05,
+    "plantedHandsOrFeetWithinMetres": 0.0001,
+    "unchangedTracks": [
+      "pushUp",
+      "sitUp",
+      "squat",
+      "straddle",
+      "straddleUpright"
+    ],
+    "unchangedTrackBuilds": [
+      "athlete",
+      "female",
+      "male"
+    ],
+    "log": "scratchpad/exercise-shoulders-20261101/audit.log"
+  },
+  "shoulderMetric": "The determinant of each mixed shoulder vertex\u2019s weighted rotation matrix is sampled across the loop as a linear-skinning compression proxy. Its tenth percentile increases on all three builds for both overhead exercises. It is not a full geometric Jacobian or a proof of anatomical volume preservation.",
+  "toeMetric": "Posed middle-finger bone-tip distance to the actual distal foot skin, sampled at both reaching peaks. Saved Athlete/default female/default male all measure approximately 2\u20133 mm after the change; the previous poses measure approximately 176\u2013211 mm.",
+  "surfaceClearance": [
+    {
+      "id": "jumpingJacks",
+      "stage": "before",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.011635114471426181,
+      "worst": null
+    },
+    {
+      "id": "jumpingJacks",
+      "stage": "after",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.01279858201161003,
+      "worst": null
+    },
+    {
+      "id": "hamstringStretch",
+      "stage": "before",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.006754282596819373,
+      "worst": null
+    },
+    {
+      "id": "hamstringStretch",
+      "stage": "after",
+      "handVertices": 4168,
+      "legTriangles": 2146,
+      "samples": 25,
+      "penetratingSamples": 0,
+      "maxDepth": 0,
+      "minSurfaceGap": 0.010518154595499728,
+      "worst": null
+    }
+  ],
+  "surfaceMethod": "25 sampled phases per exercise on the saved Athlete with soft-tissue bounce, 4,168 forearm/hand/finger vertices against 2,146 posed leg triangles. Deep local penetration threshold 3 mm within a 4 cm neighbourhood. Both final poses retain zero detected penetration; this is sampled evidence rather than continuous collision detection.",
+  "beforeNativeViews": [
+    {
+      "name": "jack-middle",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "jumpingJacks",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0.275
+      },
+      "validationError": null
+    },
+    {
+      "name": "jack-top",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "jumpingJacks",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0.55
+      },
+      "validationError": null
+    },
+    {
+      "name": "pull-bottom",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "pullUp",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0
+      },
+      "validationError": null
+    },
+    {
+      "name": "pull-top",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "pullUp",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    }
+  ],
+  "finalNativeViews": [
+    {
+      "name": "jack-middle",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "jumpingJacks",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0.275
+      },
+      "validationError": null
+    },
+    {
+      "name": "jack-top",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "jumpingJacks",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0.55
+      },
+      "validationError": null
+    },
+    {
+      "name": "pull-bottom",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "pullUp",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0
+      },
+      "validationError": null
+    },
+    {
+      "name": "pull-top",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "pullUp",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "hamstring-left",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "hamstringStretch",
+        "target": [
+          0,
+          0.4,
+          0.1
+        ],
+        "time": 6
+      },
+      "validationError": null
+    },
+    {
+      "name": "saved-hamstring-toe",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "savedClip": "Hamstring Stretch",
+        "target": [
+          0,
+          0.4,
+          0.1
+        ],
+        "time": 2
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 12319528,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-hamstring-toe",
+        "textures": 17
+      }
+    },
+    {
+      "name": "saved-pull-shoulders",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "savedClip": "Pull Up",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 12319528,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-hamstring-toe",
+        "textures": 17
+      }
+    },
+    {
+      "name": "saved-jack-shoulders",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "savedClip": "Jumping Jacks",
+        "target": [
+          0,
+          1.45,
+          0
+        ],
+        "time": 0.55
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 12319528,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-hamstring-toe",
+        "textures": 17
+      }
+    }
+  ],
+  "syntaxChecks": [
+    "runtime/reactor_3d_motions.js",
+    "runtime/reactor_main.js",
+    "editor/src/forge/Character3D/Character3DBuilder.js"
+  ],
+  "runtimeSync": "40 bundled files refreshed; --check reports all 20 bundled projects match runtime/.",
+  "limits": [
+    "Native renders cover the saved Athlete proportions; default female and male have numeric pose/contact coverage. All proportions and wardrobes are not exhaustively checked.",
+    "Overhead shoulder shape improves by distributing motion across existing joints; the source mesh and linear skinning remain unchanged. No perfect-volume or final visual-acceptance claim.",
+    "after/pull images predate the final clavicle-tilt/pole adjustment and contact/hamstring images predate the final fingertip/wrist refinement; these are excluded from final evidence.",
+    "after/jack and contact/pull images use final pose code, before the Preview version marker changed. All four saved/ captures use Preview 95 and final code.",
+    "Saved-model captures reload one actual exported GLB through the game reader and play its Hamstring Stretch, Pull Up and Jumping Jacks clips. Existing user assets were preserved; re-saving is needed for updated baked clips."
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "32555b26fd9f520ce2971e555bc9232edd1ae47cd819694a66dc9b49c7909f29",
+    "runtime/reactor_main.js": "d937168944cf4d8bff8fad5e29eec6f7003e7b90dc4605b3f874d47d653ebe68",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "c5bd536c2b7ba5d3ac3e6eda7f2c5a5f62ca8a391780a555daf1af1d54736a13"
+  }
+}

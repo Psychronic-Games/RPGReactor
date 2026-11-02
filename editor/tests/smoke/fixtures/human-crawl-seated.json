@@ -1,0 +1,64 @@
+[
+  {
+    "name": "seated-knees-up",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"sitKneesUp\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0, 0.5, 0.15],pose:b.pose};",
+    "view": {
+      "yaw": 0.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "hands-and-knees",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"handsKnees\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0, 0.4, 0.13],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "female-crawl",
+    "reset": true,
+    "patch": {
+      "gender": 0
+    },
+    "js": "b.pose=\"crawl\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0, 0.4, 0.13],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "male-crawl",
+    "reset": true,
+    "patch": {
+      "gender": 1,
+      "outfit": [
+        {
+          "id": "tanktop",
+          "color": "#357f90"
+        },
+        {
+          "id": "shorts",
+          "color": "#252831"
+        }
+      ]
+    },
+    "js": "b.pose=\"crawl\";b._syncPose();if(!v.action)throw Error('Missing pose');v.action.paused=true;v.action.time=.75;v.mixer.update(0);b._plant();return {target:[0, 0.4, 0.13],pose:b.pose};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    }
+  }
+]

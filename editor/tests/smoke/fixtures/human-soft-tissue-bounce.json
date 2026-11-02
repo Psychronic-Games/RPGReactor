@@ -1,0 +1,52 @@
+[
+  {
+    "name": "exercise-bounce",
+    "reset": true,
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "js": "b.pose='fastKneelingBackStretch';b._syncPose();v.action.paused=true;v.action.time=v.action.getClip().duration*.3;v.mixer.update(0);b._plant();return {target:[0,.23,.16],bust:b.recipe.bustBounce,butt:b.recipe.buttBounce};"
+  },
+  {
+    "name": "butt-extreme",
+    "reset": true,
+    "patch": {
+      "buttBounce": 4
+    },
+    "view": {
+      "yaw": 2.7,
+      "pitch": 0.05,
+      "distance": 1.7
+    },
+    "js": "b.pose='run';b._syncPose();v.action.paused=true;v.action.time=.35;v.mixer.update(0);b._plant();return {target:[0,.88,0],bust:b.recipe.bustBounce,butt:b.recipe.buttBounce};"
+  },
+  {
+    "name": "independent-sliders",
+    "reset": true,
+    "view": {
+      "yaw": 0.85,
+      "pitch": 0.05,
+      "distance": 1.8,
+      "target": "chest"
+    },
+    "js": "b.tab='body';b.extreme=true;b._renderPanel();b.pose='run';b._syncPose();const mesh=v.meshes[0],positions=mesh.geometry.attributes.position.array,texture=mesh.material.map,queue=b._queueRebuild;let rebuilds=0;b._queueRebuild=()=>{rebuilds++;};const samples=[];try{for(const path of ['bustBounce','buttBounce']){const input=b.root.querySelector('input[type=range][data-path='+path+']');if(!input||+input.max!==4)throw Error('Missing Extreme slider '+path);const other=path==='bustBounce'?'buttBounce':'bustBounce',before=b.recipe[other];for(const amount of [0,.15,1,4]){const start=performance.now();input.value=amount;input.dispatchEvent(new Event('input',{bubbles:true}));if(b.recipe[path]!==amount||b.recipe[other]!==before)throw Error('Bounce controls are not independent');samples.push({path,amount,ms:performance.now()-start});}input.dispatchEvent(new Event('change',{bubbles:true}));}}finally{b._queueRebuild=queue;}const sameMesh=v.meshes[0]===mesh,samePositions=mesh.geometry.attributes.position.array===positions,sameTexture=mesh.material.map===texture;if(rebuilds||!sameMesh||!samePositions||!sameTexture)throw Error('Bounce slider rebuilt the model');v.action.paused=true;v.action.time=.25;v.mixer.update(0);b._plant();return {rebuilds,sameMesh,samePositions,sameTexture,samples};"
+  },
+  {
+    "name": "saved-exercise",
+    "reset": true,
+    "patch": {
+      "bustBounce": 4,
+      "buttBounce": 4
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.2,
+      "distance": 2.8
+    },
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Fast Kneeling Back Stretch'),tracks=clip?.tracks.filter(t=>/(Bust|Glute).position$/.test(t.name));if(tracks?.length!==6)throw Error('Missing six saved soft-tissue tracks');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(clip.duration*.3);object.updateMatrixWorld(true);return {target:[0,.23,.16],savedClip:clip.name,tracks:tracks.map(t=>({name:t.name,keys:t.times.length})),duration:clip.duration};"
+  }
+]

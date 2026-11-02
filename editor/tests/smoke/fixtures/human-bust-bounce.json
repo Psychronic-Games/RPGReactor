@@ -1,0 +1,54 @@
+[
+  {
+    "name": "default-bounce",
+    "reset": true,
+    "view": {
+      "yaw": 0.85,
+      "pitch": 0.05,
+      "distance": 1.8,
+      "target": "chest"
+    },
+    "js": "b.pose='run';b._syncPose();v.action.paused=true;const clip=RRCharacterPoses.clip(v.boneDefs,'run',v.bodySkin),t=clip.tracks.find(t=>v.boneDefs[t.bone].name==='LeftBust'&&t.path==='translation'),rest=v.boneDefs[t.bone].head.map((x,k)=>x-v.boneDefs[v.boneDefs[t.bone].parent].head[k]);let peak=0,max=0;for(let f=0;f<t.times.length;f++){const d=Math.hypot(...rest.map((x,k)=>t.values[f*3+k]-x));if(d>max){max=d;peak=t.times[f];}}v.action.time=peak;v.mixer.update(0);b._plant();return {bounce:b.recipe.bustBounce,peak,jointDisplacement:max};"
+  },
+  {
+    "name": "extreme-bounce",
+    "reset": true,
+    "patch": {
+      "bustBounce": 4
+    },
+    "view": {
+      "yaw": 0.85,
+      "pitch": 0.05,
+      "distance": 1.8,
+      "target": "chest"
+    },
+    "js": "b.pose='run';b._syncPose();v.action.paused=true;const clip=RRCharacterPoses.clip(v.boneDefs,'run',v.bodySkin),t=clip.tracks.find(t=>v.boneDefs[t.bone].name==='LeftBust'&&t.path==='translation'),rest=v.boneDefs[t.bone].head.map((x,k)=>x-v.boneDefs[v.boneDefs[t.bone].parent].head[k]);let peak=0,max=0;for(let f=0;f<t.times.length;f++){const d=Math.hypot(...rest.map((x,k)=>t.values[f*3+k]-x));if(d>max){max=d;peak=t.times[f];}}v.action.time=peak;v.mixer.update(0);b._plant();return {bounce:b.recipe.bustBounce,peak,jointDisplacement:max};"
+  },
+  {
+    "name": "live-slider",
+    "reset": true,
+    "view": {
+      "yaw": 0.85,
+      "pitch": 0.05,
+      "distance": 1.8,
+      "target": "chest"
+    },
+    "js": "b.tab='body';b.extreme=true;b._renderPanel();const input=b.root.querySelector('input[type=range][data-path=bustBounce]');if(!input)throw Error('Missing bust bounce slider');b.pose='run';b._syncPose();const mesh=v.meshes[0],positions=mesh.geometry.attributes.position.array,texture=mesh.material.map,queue=b._queueRebuild;let rebuilds=0;b._queueRebuild=()=>{rebuilds++;};const samples=[];try{for(const amount of [0,.15,1,4]){const start=performance.now();input.value=amount;input.dispatchEvent(new Event('input',{bubbles:true}));const tr=v.action.getClip().tracks.find(t=>/LeftBust.position$/.test(t.name));if(!tr)throw Error('Missing live bounce track');samples.push({amount,recipe:b.recipe.bustBounce,ms:performance.now()-start});}input.dispatchEvent(new Event('change',{bubbles:true}));}finally{b._queueRebuild=queue;}const sameMesh=v.meshes[0]===mesh,samePositions=mesh.geometry.attributes.position.array===positions,sameTexture=mesh.material.map===texture;if(rebuilds||!sameMesh||!samePositions||!sameTexture||b.recipe.bustBounce!==4)throw Error('Bounce slider rebuilt mesh or lost setting');v.action.paused=true;v.action.time=.25;v.mixer.update(0);b._plant();return {rebuilds,sameMesh,samePositions,sameTexture,samples};"
+  },
+  {
+    "name": "saved-extreme",
+    "reset": true,
+    "patch": {
+      "bustBounce": 4
+    },
+    "view": {
+      "yaw": 0.85,
+      "pitch": 0.05,
+      "distance": 1.8,
+      "target": "chest"
+    },
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name==='Run'),tracks=clip?.tracks.filter(t=>/Bust.position$/.test(t.name));if(tracks?.length!==2)throw Error('Missing saved bust tracks');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.25);object.updateMatrixWorld(true);return {savedClip:clip.name,bustTracks:tracks.map(t=>({name:t.name,keys:t.times.length})),duration:clip.duration};"
+  }
+]

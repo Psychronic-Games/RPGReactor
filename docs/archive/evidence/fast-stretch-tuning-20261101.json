@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-01",
+  "preview": 81,
+  "runtime": "20261101.10",
+  "evidenceRoot": "scratchpad/fast-stretch-tuning-20261101/",
+  "change": "Fast stretch now loops in two seconds (previously four), with extension 0.50\u20131.60 (previously 0.18\u20131.20). More forward reach and a shallower return. Arm reach is capped below full extension to maintain floor targets. Original standard stretch keys are unchanged.",
+  "scope": "Two native female endpoint previews, 25-sample bone contact inspection and numerical comparison with the previous standard clip. No regression suites or repeated export reload for this numeric adjustment; Preview 80 retains shared export coverage.",
+  "limits": "Bone anchors and palm height are measured, not per-vertex physical floor contacts.",
+  "inspection": {
+    "normalDuration": 6,
+    "originalMaximumDelta": 0,
+    "fastDuration": 2,
+    "fastFrames": 97,
+    "finite": true,
+    "loopEndpointDelta": 0,
+    "anchors": {
+      "LeftLeg": 3.503662723467859e-08,
+      "LeftFoot": 5.2166368603408574e-08,
+      "palmHeightVariation": 6.353614709353472e-08
+    },
+    "floorRange": [
+      -0.03072470799088478,
+      -0.030724631622433662
+    ],
+    "normalBottom": {
+      "Hips": [
+        0,
+        0.353621244430542,
+        -0.22533220052719116
+      ],
+      "LeftArm": [
+        0.15566129051148891,
+        0.22874688677308103,
+        0.18393563469572052
+      ],
+      "LeftHand": [
+        0.1556612887914235,
+        0.025699529091984752,
+        0.5758968371565992
+      ],
+      "LeftLeg": [
+        0.1937292746997043,
+        0.047115803864678424,
+        0.017133019421245732
+      ],
+      "LeftFoot": [
+        0.09191789680917835,
+        0.06277907261950955,
+        -0.3744492141335268
+      ]
+    },
+    "normalPeak": {
+      "Hips": [
+        0,
+        0.47069209814071655,
+        -0.0026029753498733044
+      ],
+      "LeftArm": [
+        0.1556612905114889,
+        0.27448289976798707,
+        0.3833475730409971
+      ],
+      "LeftHand": [
+        0.15566129845970075,
+        0.025699528881149236,
+        0.7534088078269194
+      ],
+      "LeftLeg": [
+        0.19372927499888565,
+        0.04711579453981529,
+        0.017133010483576048
+      ],
+      "LeftFoot": [
+        0.09191789217342508,
+        0.06277909361976886,
+        -0.3744492205751087
+      ]
+    },
+    "fastBottom": {
+      "Hips": [
+        0,
+        0.43845662474632263,
+        -0.11396758258342743
+      ],
+      "LeftArm": [
+        0.15566129051148886,
+        0.27727671485387134,
+        0.28567097117269763
+      ],
+      "LeftHand": [
+        0.1556612980019874,
+        0.025699529313941927,
+        0.6511214432098992
+      ],
+      "LeftLeg": [
+        0.19372927507979054,
+        0.047115807911969454,
+        0.017133035524875107
+      ],
+      "LeftFoot": [
+        0.09191789277766652,
+        0.06277909014640498,
+        -0.3744491963436982
+      ]
+    },
+    "fastPeak": {
+      "Hips": [
+        0,
+        0.4601413309574127,
+        0.13103455305099487
+      ],
+      "LeftArm": [
+        0.15566129051148897,
+        0.22423823877029844,
+        0.4954521555054773
+      ],
+      "LeftHand": [
+        0.15566128527773404,
+        0.02569952230323308,
+        0.895728329446381
+      ],
+      "LeftLeg": [
+        0.19372927859253886,
+        0.047115781258996015,
+        0.01713303359656232
+      ],
+      "LeftFoot": [
+        0.09191789796621277,
+        0.0627790444477723,
+        -0.374449199469544
+      ]
+    }
+  },
+  "views": [
+    {
+      "name": "fast-return",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "anchors": {
+          "LeftFoot": 5.1073849986673395e-08,
+          "LeftHandHeightVariation": 1.1948108724624262e-08,
+          "LeftLeg": 3.7680275256218945e-08,
+          "RightFoot": 5.1073849986673395e-08,
+          "RightHandHeightVariation": 1.1948108724624262e-08,
+          "RightLeg": 3.7680275256218945e-08
+        },
+        "pose": "fastKneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      }
+    },
+    {
+      "name": "fast-reach",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "pose": "fastKneelingBackStretch",
+        "target": [
+          0,
+          0.23,
+          0.16
+        ]
+      }
+    }
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "b06ea41493ad8ce7311b50a79541b24ae9e455e3d69cf9535b150c08ea69cb4e",
+    "runtime/reactor_main.js": "852b90fa0a38cc880c7b635f83d0e2c280578bdf61cee1bc8d586d0390e0fdc1",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "e4ceea5d9aaeaa7ddfdd10fc36d253a1286d31dc26b0628d96e4dab1644f93c7"
+  }
+}

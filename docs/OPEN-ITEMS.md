@@ -1,6 +1,6 @@
-# Open items (2026-10-30)
+# Open items (2026-11-01)
 
-Open during 0.99.4, runtime 20261030.3. Builder export/loading, Database zoom/orbit, chibi frame consistency and portrait grading fixes are recorded in the [changelog](../editor/changelog/0.99.3.md).
+Open during 0.99.4, runtime 20261101.26. Current Builder, exercise, sprite-preview and scroll-alignment changes are recorded in the [development changelog](../editor/changelog/0.99.4.md); released export/loading fixes remain in [0.99.3](../editor/changelog/0.99.3.md).
 
 1. **Chibi visual quality (later; not the top priority).** The owner rejected the current chibi output as visually poor. Frame-to-frame consistency is fixed in 0.99.3; the style itself needs a quality pass. Improve head/body/hair balance, outfit silhouettes and facial readability at the target sprite size. Review complete exported front/side/back walking sheets at native size and enlarged, across representative bodies and outfits, before featuring chibi output publicly.
 
@@ -14,7 +14,7 @@ Open during 0.99.4, runtime 20261030.3. Builder export/loading, Database zoom/or
 
 7. **Imported wearable artwork and cuts.** Previews 60–61 repair shared garment construction, fabric finishes and seams; the close-up review still identifies source-art defects. Carol/Jolt/Max/Vay still have irregular source panel cuts and rough edge painting that need asset work. Preserve intentional armor segmentation while rebuilding damaged cuts; verify source meshes as well as fitted/exported pieces. [Audit and evidence](CHARACTER-QUALITY.md#clothing-texture-and-seam-close-ups--2026-10-30-preview-61).
 
-8. **Human faces.** The owner rejected Preview 64 for obscured ears and unnatural nostrils. Preview 65 repairs ear coverage and refines the nasal folds; inspect the temple join and nose closely. Overall visual acceptance remains open. [Handoff and validation](HUMAN-FACE-HANDOFF.md).
+8. **Human faces and body appearance.** Preview 98 follows the face, lower-bust shading and abdominal iterations with broader Cheeks control, independent Cheekbones projection and a corrected native/replacement side-cheek join. Overall attractiveness and final face/body visual acceptance remain open. The exact pointy under-chin shadow reproduction has not been closed. Full suites remain deferred at the owner's request; focused checks and native views do not establish aesthetic acceptance. [Current candidate and evidence](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 
 Harness notes: a temp Demo copy must keep the Demo's own `js/reactor_plugins.js` (copying `runtime/*.js` over it empties the plugin list, and the Demo's plugins matter: PSYCHRONIC_KeyboardConfigMZ swaps the key map on every Input.clear). Run substantial suites through `/home/doug/.local/bin/codex-check node --test --test-concurrency=1` with literal test filenames, as required by the workstation's resource limits.
 

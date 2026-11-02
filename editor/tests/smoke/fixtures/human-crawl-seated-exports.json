@@ -1,0 +1,40 @@
+[
+  {
+    "name": "seated-knees-up-export",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name===\"Sit Knees Up\");if(!clip)throw Error('Missing saved pose');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.85);object.updateMatrixWorld(true);return {target:[0, 0.5, 0.15],savedClip:clip.name};",
+    "view": {
+      "yaw": 0.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    }
+  },
+  {
+    "name": "crawl-export",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name===\"Crawl\");if(!clip)throw Error('Missing saved pose');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.85);object.updateMatrixWorld(true);return {target:[0, 0.4, 0.13],savedClip:clip.name};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    },
+    "exportFrom": "seated-knees-up-export"
+  },
+  {
+    "name": "hands-knees-export",
+    "reset": true,
+    "exportModel": true,
+    "exportMotions": "useful",
+    "js": "const object=v.scene.getObjectByName('swap'),clip=object.__reactorClips.find(c=>c.name===\"Hands and Knees\");if(!clip)throw Error('Missing saved pose');const mixer=new THREE.AnimationMixer(object);mixer.clipAction(clip).play();mixer.setTime(.85);object.updateMatrixWorld(true);return {target:[0, 0.4, 0.13],savedClip:clip.name};",
+    "view": {
+      "yaw": 1.25,
+      "pitch": 0.25,
+      "distance": 2.7
+    },
+    "exportFrom": "seated-knees-up-export"
+  }
+]

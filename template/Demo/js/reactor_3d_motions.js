@@ -51,11 +51,27 @@
      * the wrists bend when not relaxed, `aim` the hands and feet it sets on
      * each body (AIMS).
      */
-    const GROUPS = [{ id: 'move', label: 'Move' }, { id: 'fight', label: 'Fight' }, { id: 'rest', label: 'Rest' }];
+    const GROUPS = [{ id: 'move', label: 'Move' }, { id: 'fight', label: 'Fight' }, { id: 'rest', label: 'Rest' }, { id: 'exercise', label: 'Exercises' }];
     /** The wrists' relaxed bend (degrees toward the palm, toward the little finger). */
     const WRIST = { flex: 8, bend: 6 };
     const both = shape => ({ Left: shape, Right: shape });
     const POSES = [
+        { id: 'hipBridge', label: 'Hip bridge', group: 'exercise', hands: both('flat') },
+        { id: 'kneelingBackStretch', label: 'Kneeling back stretch', group: 'exercise', hands: both('flat') },
+        { id: 'fastKneelingBackStretch', label: 'Fast kneeling back stretch', group: 'exercise', hands: both('flat') },
+        { id: 'straddle', label: 'Straddle', group: 'exercise', hands: both('flat') },
+        { id: 'straddleUpright', label: 'Upright straddle', group: 'exercise', hands: both('relaxed') },
+        { id: 'squat', label: 'Squat', group: 'exercise', hands: both('relaxed') },
+        { id: 'jumpingJacks', label: 'Jumping jacks', group: 'exercise', hands: both('relaxed') },
+        { id: 'hamstringStretch', label: 'Hamstring stretch', group: 'exercise', hands: both('relaxed') },
+        { id: 'sitUp', label: 'Sit-ups', group: 'exercise', hands: both('relaxed') },
+        { id: 'pullUp', label: 'Pull-ups', group: 'exercise', hands: both('fist') },
+        { id: 'pushUp', label: 'Push-ups', group: 'exercise', hands: both('flat') },
+        { id: 'lieBackBentWide', label: 'Lying on the back, knees apart', group: 'rest', hands: both('flat'), exportAction: true },
+        { id: 'sitWide', label: 'Sitting, legs apart', group: 'rest', hands: both('flat'), exportAction: true },
+        { id: 'sitKneesUp', label: 'Sitting, knees up and apart', group: 'rest', hands: both('flat'), exportAction: true },
+        { id: 'handsKnees', label: 'Hands and knees', group: 'rest', hands: both('flat'), exportAction: true },
+        { id: 'crawl', label: 'Crawling', group: 'move', hands: both('flat'), exportAction: true },
         { id: 'walk', label: 'Walking', group: 'move', hands: both('relaxed') }, { id: 'run', label: 'Running', group: 'move', hands: both('looseFist'), wrist: { flex: 4, bend: 2 } },
         { id: 'crouch', label: 'Crouching', group: 'rest', hands: both('relaxed') }, { id: 'jump', label: 'Jumping', group: 'move', hands: both('relaxed') },
         { id: 'fall', label: 'Falling', group: 'move', hands: both('open'), aim: 'fall', wrist: { flex: -10, bend: 0 } }, { id: 'fight', label: 'Fighting stance', group: 'fight', hands: both('fist'), wrist: { flex: 0, bend: 4 } },
@@ -85,9 +101,9 @@
         { id: 'swim', label: 'Swimming', group: 'move', hands: both('flat'), wrist: { flex: 0, bend: 0 } }, { id: 'tread', label: 'Treading water', group: 'move', hands: both('flat'), aim: 'tread' }
     ];
     // The panel's order: by group, then as a person would look for them.
-    const ORDER = ['walk', 'run', 'crouchWalk', 'jump', 'fall', 'roll', 'frontFlip', 'backFlip', 'climbLadder', 'climbWall', 'swim', 'tread',
+    const ORDER = ['walk', 'run', 'crouchWalk', 'crawl', 'jump', 'fall', 'roll', 'frontFlip', 'backFlip', 'climbLadder', 'climbWall', 'swim', 'tread',
         'fight', 'defend', 'sword', 'swordThrust', 'bow', 'pistol', 'pistolTwo', 'rifle', 'kneelAim', 'proneAim', 'throw', 'cast', 'dodge', 'hit', 'death',
-        'crouch', 'kneel', 'sit', 'lieBack', 'lieSide', 'prone', 'wave', 'armsUp'];
+        'crouch', 'kneel', 'sit', 'sitWide', 'sitKneesUp', 'handsKnees', 'lieBack', 'lieBackBentWide', 'lieSide', 'prone', 'wave', 'armsUp', 'hipBridge', 'kneelingBackStretch', 'fastKneelingBackStretch', 'straddle', 'straddleUpright', 'squat', 'jumpingJacks', 'hamstringStretch', 'sitUp', 'pullUp', 'pushUp'];
     POSES.sort((x, y) => ORDER.indexOf(x.id) - ORDER.indexOf(y.id));
 
     const quat = (x, y, z, a) => { const s = Math.sin(a / 2); return [x * s, y * s, z * s, Math.cos(a / 2)]; };
@@ -736,7 +752,7 @@
      * the ankle keeps its captured motion. */
     /** The most a thigh turns on itself to bring a foot out (degrees). */
     const STRIDE_TWIST = 30;
-    function separateStride(bones, index, names, world, steps, place, scale) {
+    function separateStride(bones, index, names, world, steps, place, scale, allowTwist = true) {
         const hips = index.get('Hips');
         for (let f = 0; f < steps; f++) for (const [S, sign] of [['Left', 1], ['Right', -1]]) {
             const thigh = index.get(S + 'UpLeg'), knee = index.get(S + 'Leg'), foot = index.get(S + 'Foot');
@@ -753,7 +769,7 @@
             if (out(pos[knee]) >= gap && out(pos[foot]) >= gap) continue;
             // Only a well bent knee (a heel kicked up): on a leg near straight the turn moves the foot little and its toes a lot.
             const along = unit(sub(pos[knee], origin)), bend = Math.acos(Math.max(-1, Math.min(1, dot(along, unit(sub(pos[foot], pos[knee]))))));
-            const most = STRIDE_TWIST * DEG * smooth(70 * DEG, 95 * DEG, bend);
+            const most = allowTwist ? STRIDE_TWIST * DEG * smooth(70 * DEG, 95 * DEG, bend) : 0;
             if (out(pos[knee]) >= gap && most > 0) {
                 const footAt = t => out(moved(quat(...along, t), foot));
                 const way = footAt(0.01) > footAt(-0.01) ? 1 : -1;
@@ -779,6 +795,26 @@
         }
     }
 
+    /** Smooth the correction, not the captured gait. A foot crossing the
+     * clearance boundary can switch between thigh twist and hip swing in one
+     * frame. Filter that correction around the loop, then restore clearance
+     * with outward swing alone so a new twist cannot reintroduce the snap. */
+    function smoothStrideCorrection(bones, index, names, world, original, steps, place, scale) {
+        const count = steps - 1, weights = [1, 4, 6, 4, 1];
+        for (const S of ['Left', 'Right']) {
+            const thigh = names.indexOf(S + 'UpLeg');
+            if (thigh < 0) continue;
+            const chain = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(n => names.indexOf(S + n)).filter(k => k >= 0);
+            const turns = world[thigh].map((q, f) => logOf(mul(q, conj(original[thigh][f]))));
+            for (let f = 0; f < steps; f++) {
+                const v = [0, 1, 2].map(k => weights.reduce((sum, w, j) => sum + w * turns[(f + j - 2 + count) % count][k], 0) / 16);
+                const q = expOf(v);
+                for (const k of chain) world[k][f] = mul(q, original[k][f]);
+            }
+        }
+        separateStride(bones, index, names, world, steps, place, scale, false);
+    }
+
     // ── soles level across ─────────────────────────────────────────────
     /**
      * The capture's feet carry a sideways roll their markers never pinned
@@ -801,7 +837,9 @@
     const SOLE_TURN = 18;
     const ANKLE_TILT = LEG_RANGE.Foot.z, ANKLE_TURN = SOLE_TURN, THIGH_ROLL = LEG_RANGE.UpLeg.y, LEVEL_MOST = 60;
     /** Motions that set the feet on holds or kick them in the water: their feet are left as they are. */
-    const FREE_FEET = new Set(['climbLadder', 'climbWall', 'swim', 'tread']);
+    // A seated capture already has quiet foot orientations. Sole leveling
+    // amplified its small marker movements into alternating thigh rolls.
+    const FREE_FEET = new Set(['climbLadder', 'climbWall', 'swim', 'tread', 'sit']);
     const smooth = (lo, hi, v) => { const u = Math.max(0, Math.min(1, (v - lo) / (hi - lo))); return u * u * (3 - 2 * u); };
     /** The rest heel-to-toe line of a foot (its ankle-to-ball line along the floor). */
     const footLine = (bones, foot, toe) => { const d = sub(bones[toe].head, bones[foot].head); return unit([d[0], 0, d[2]]); };
@@ -952,12 +990,22 @@
         const slots = chain.map(n => names.indexOf(S + n)), [top, mid, end] = slots;
         if (top < 0 || mid < 0 || end < 0 || !rest[S + chain[0]] || !rest[S + chain[1]]) return;
         const w = weight === undefined ? 1 : weight;
-        const { pos } = place(f), at = n => pos[index.get(S + n)], restAt = n => bones[index.get(S + n)].head;
+        const { pos, rot } = place(f), at = n => pos[index.get(S + n)], restAt = n => bones[index.get(S + n)].head;
         const sh = at(chain[0]);
         const a = Math.hypot(...sub(restAt(chain[1]), restAt(chain[0]))), b = Math.hypot(...sub(restAt(chain[2]), restAt(chain[1])));
-        const off = sub(to, sh), d = Math.max(Math.abs(a - b) + 1e-4, Math.min(a + b - 1e-4, Math.hypot(...off))), u = unit(off);
+        const off = sub(to, sh), d = Math.max(Math.abs(a - b) + 1e-4, Math.min(a + b - (ctx.reachMargin || 1e-4), Math.hypot(...off))), u = unit(off);
+        if (limb === 'arm' && ctx.bindElbows && !ctx.elbowPole?.[S]) {
+            // Carry the rest elbow's bend plane with a minimal shoulder swing.
+            // The elbow lies opposite the forearm's bend from the reach line;
+            // forcing it toward world-front rolled these shoulders backwards.
+            const parent = ctx.armReference?.[S] || rot[bones[index.get(S + 'Arm')].parent] || [0, 0, 0, 1];
+            const restUp = rotate(parent, unit(sub(restAt('ForeArm'), restAt('Arm')))), restLow = rotate(parent, unit(sub(restAt('Hand'), restAt('ForeArm'))));
+            const swing = fromTo(restUp, u), bend = square(rotate(swing, restLow), u);
+            pole = bend.map(x => -x);
+        }
+        if (limb === 'arm' && ctx.elbowPole?.[S]) pole = ctx.elbowPole[S];
         let v = square(pole, u);
-        if (limb === 'arm') {
+        if (limb === 'arm' && !ctx.bindElbows) {
             let normal = unit(cross(u, v));
             if (ctx.bendFrame[S] !== f) { ctx.bendReference[S] = ctx.bendNormals[S]; ctx.bendFrame[S] = f; }
             const previous = ctx.bendReference[S];
@@ -1004,6 +1052,14 @@
             turn = mul(quat(...turn.along, roll), follow);
         }
         let qEnd = turn || mul(qMid, mul(conj(old[1]), old[2]));
+        if (limb === 'arm' && turn && ctx.bindElbows) {
+            const along = unit(sub(restAt('Hand'), restAt('ForeArm'))), local = mul(conj(qMid), qEnd);
+            const twist = 2 * Math.atan2(dot(local, along), local[3]), angle = Math.atan2(Math.sin(twist), Math.cos(twist));
+            const history = ctx.forearmRoll || (ctx.forearmRoll = {});
+            const continuous = history[S] === undefined ? angle : angle + 2 * Math.PI * Math.round((history[S] - angle) / (2 * Math.PI));
+            history[S] = continuous;
+            qMid = mul(qMid, quat(...along, Math.max(-85 * DEG, Math.min(85 * DEG, continuous))));
+        }
         if (limb === 'arm' && turn && !ctx.pose.freeWrist) {
             // The forearm carries pronation within its anatomical range.
             // The roll is followed from frame to frame (never jumping a whole turn) and held within reach.
@@ -1412,7 +1468,11 @@
             }
         }
         const stride = id === 'walk' || id === 'run' || id === 'crouchWalk';
-        if (stride) separateStride(bones, index, names, world, steps, place, scale);
+        if (stride) {
+            const original = id === 'run' ? world.map(frames => frames.map(q => q.slice())) : null;
+            separateStride(bones, index, names, world, steps, place, scale);
+            if (original) smoothStrideCorrection(bones, index, names, world, original, steps, place, scale);
+        }
         // A stride's feet point a little out (STRIDE_TOE_OUT); a stance's may turn further (TOE_OUT).
         limitLegs(index, names, world, steps, turnAt, bones, !cap.hang, cap.once, stride ? STRIDE_TOE_OUT : TOE_OUT, stride);
         if (!(options && options.rawFeet) && !FREE_FEET.has(id)) levelSoles(bones, index, names, world, steps, place, cap.skin ? stand() : null, scale, !!cap.once);
@@ -1471,11 +1531,530 @@
     }
     const dot4 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
 
+    /** Arms hanging at the sides: swing down from the bind pose without
+     * rolling the upper arm through an IK elbow frame. Turn the forearm
+     * toward an inward palm while the wrist retains its neutral bind turn. */
+    function relaxedArms(ctx, f, S, spread = .16, direction) {
+        const { bones, index, names, world, F } = ctx, sign = S === 'Left' ? 1 : -1;
+        const at = n => bones[index.get(S + n)].head;
+        const top = fromTo(unit(sub(at('ForeArm'), at('Arm'))), unit(direction || [sign * spread, -1, .025]));
+        const lower = unit(rotate(top, sub(at('Hand'), at('ForeArm'))));
+        const palm = square(rotate(top, F[S]?.palm || [0, 0, 1]), lower), inward = square([-sign, 0, 0], lower);
+        const angle = Math.atan2(dot(cross(palm, inward), lower), dot(palm, inward));
+        const forearm = mul(quat(...lower, Math.max(-80 * DEG, Math.min(80 * DEG, angle))), top);
+        world[names.indexOf(S + 'Arm')][f] = top;
+        world[names.indexOf(S + 'ForeArm')][f] = forearm;
+        world[names.indexOf(S + 'Hand')][f] = forearm;
+    }
+
+    function supportFingers(bones, index, frames, times) {
+        const fingers = handTracks(frames, both('flat'), times);
+        for (const S of ['Left', 'Right']) {
+            const turns = new Map([[index.get(S + 'Hand'), [0, 0, 0, 1]]]);
+            for (const joint of frames[S]?.joints || []) {
+                const b = bones[joint.bone], along = dir(b), flat = square(along, frames[S].palm);
+                const turn = fromTo(along, flat), local = mul(conj(turns.get(b.parent) || [0, 0, 0, 1]), turn);
+                turns.set(joint.bone, turn);
+                const track = fingers.find(t => t.bone === joint.bone);
+                if (track) for (let f = 0; f < times.length; f++) track.values.set(local, f * 4);
+            }
+        }
+        return fingers;
+    }
+
+    /** Floor holds and the hip bridge share planted limb targets fitted to
+     * the body. Static holds keep their contacts; the bridge, crawl and stretch move in place. */
+    function floorPose(bones, id) {
+        const index = new Map(bones.map((b, i) => [b.name, i])), rest = restFrames(bones, index);
+        const hips = index.get('Hips'), chest = index.get('Spine2') ?? index.get('Spine1') ?? index.get('Spine');
+        if (hips === undefined || chest === undefined || !['Left', 'Right'].every(S => ['Arm', 'ForeArm', 'Hand', 'UpLeg', 'Leg', 'Foot'].every(n => index.has(S + n)))) return null;
+        const bridge = id === 'hipBridge', tucked = id === 'sitKneesUp', seated = id === 'sitWide' || tucked;
+        const crawling = id === 'crawl' || id === 'handsKnees', moving = id === 'crawl';
+        const fastStretch = id === 'fastKneelingBackStretch', stretch = id === 'kneelingBackStretch' || fastStretch;
+        const kneeling = id === 'kneel', upright = id === 'straddleUpright' || kneeling, straddle = id === 'straddle' || upright;
+        const spread = kneeling ? .035 : .16;
+        const steps = kneeling ? 145 : fastStretch || straddle ? 97 : stretch ? 145 : bridge || moving ? 97 : 2, duration = kneeling ? 6 : straddle ? 2 : fastStretch ? 1.75 : stretch ? 6 : 4;
+        const times = Float32Array.from({ length: steps }, (_, f) => duration * f / (steps - 1));
+        const scale = Math.max(...bones.map(b => b.head[1])) / 1.7 || 1, flat = quat(1, 0, 0, -Math.PI / 2);
+        const base = straddle ? quat(1, 0, 0, upright ? 0 : 1.15) : stretch ? quat(1, 0, 0, Math.PI / 2 + 0.10) : crawling ? quat(1, 0, 0, Math.PI / 2 - 0.08) : seated ? quat(1, 0, 0, tucked ? -0.14 : -0.08) : flat;
+        const names = Object.keys(rest), slot = new Map(names.map((n, k) => [index.get(n), k]));
+        const world = names.map(() => Array.from({ length: steps }, () => base.slice())), roots = new Float32Array(steps * 3);
+        const pivot = bones[index.get('LeftArm')].head.map((v, k) => (v + bones[index.get('RightArm')].head[k]) / 2);
+        const offset = sub(pivot, bones[hips].head), anchor = add3([0, 0.13 * scale, 0], rotate(base, offset));
+        if (seated) for (const name of ['Neck', 'Head']) if (slot.has(index.get(name))) world[slot.get(index.get(name))] = Array.from({ length: steps }, () => [0, 0, 0, 1]);
+        if (crawling) for (const [name, pitch] of [['Neck', 1.05], ['Head', 0.60]]) if (slot.has(index.get(name))) world[slot.get(index.get(name))] = Array.from({ length: steps }, () => quat(1, 0, 0, pitch));
+        if (stretch) for (const [name, pitch] of [['Neck', 1.50], ['Head', 1.40]]) if (slot.has(index.get(name))) world[slot.get(index.get(name))] = Array.from({ length: steps }, () => quat(1, 0, 0, pitch));
+        const turnAt = (i, f) => {
+            for (let b = i; b >= 0; b = bones[b].parent) if (slot.has(b)) return world[slot.get(b)][f];
+            return [0, 0, 0, 1];
+        };
+        const place = f => {
+            const rot = [], pos = [];
+            bones.forEach((b, i) => {
+                rot[i] = turnAt(i, f);
+                pos[i] = b.parent < 0 ? Array.from(roots.subarray(f * 3, f * 3 + 3))
+                    : add3(pos[b.parent], rotate(rot[b.parent], sub(b.head, bones[b.parent].head)));
+            });
+            return { rot, pos };
+        };
+        const F = handFrames(bones, index), ctx = { bones, index, rest, names, world, place, F, pose: { freeWrist: true },
+            bendFrame: {}, bendReference: {}, bendNormals: {} };
+        const at = name => bones[index.get(name)].head;
+        const legs = ['Left', 'Right'].map(S => {
+            const torso = sub(pivot, at(S + 'UpLeg'));
+            return { S, along: torso[1] + Math.hypot(...sub(at(S + 'Leg'), at(S + 'UpLeg'))), depth: torso[2],
+                shin: Math.hypot(...sub(at(S + 'Foot'), at(S + 'Leg'))), thigh: Math.hypot(...sub(at(S + 'Leg'), at(S + 'UpLeg'))) };
+        });
+        const peak = legs.reduce((sum, leg) => sum + Math.asin(Math.max(-0.9, Math.min(0.9,
+            (0.065 * scale + leg.shin - anchor[1]) / Math.hypot(leg.along, leg.depth)))) + Math.atan2(leg.depth, leg.along), 0) / 2;
+        // Smooth contact/swing phases with a long grounded share.
+        const cycle = phase => {
+            if (!moving) return { stride: 0, lift: 0 };
+            const u = (phase % 1 + 1) % 1, swing = u > 0.65, t = swing ? (u - 0.65) / 0.35 : u / 0.65;
+            const ease = t * t * (3 - 2 * t);
+            return { stride: swing ? -1 + 2 * ease : 1 - 2 * ease, lift: swing ? Math.sin(Math.PI * t) ** 2 : 0 };
+        };
+        for (let f = 0; f < steps; f++) {
+            const phase = f / (steps - 1);
+            const swing = stretch || straddle ? (1 - Math.cos(2 * Math.PI * phase)) / 2 : 0;
+            // The fast variant stays farther into the stretch on its return
+            // and reaches beyond the normal pose on the upswing.
+            const extension = fastStretch ? 0.65 + 0.95 * swing : swing;
+            const rise = bridge ? (1 - Math.cos(2 * Math.PI * f / (steps - 1))) / 2 : 0;
+            const trunk = bridge ? quat(1, 0, 0, -Math.PI / 2 - peak * rise) : base;
+            for (const name of ['Hips', 'Spine', 'Spine1', 'Spine2', 'LeftShoulder', 'RightShoulder']) if (slot.has(index.get(name))) world[slot.get(index.get(name))][f] = trunk;
+            if (upright) {
+                const amount = kneeling ? .35 : 1, nod = Math.sin(2 * Math.PI * phase);
+                for (const [name, pitch, yaw] of [['Neck', .025, .012], ['Head', .06, .025]]) if (slot.has(index.get(name))) {
+                    world[slot.get(index.get(name))][f] = mul(quat(0, 1, 0, yaw * amount * nod), quat(1, 0, 0, pitch * amount * nod));
+                }
+            }
+            if (straddle && !upright) for (const [name, pitch] of [['Spine', 1.15 + .10 * swing], ['Spine1', 1.08 + .17 * swing],
+                ['Spine2', 1.05 + .20 * swing], ['LeftShoulder', 1.05 + .20 * swing], ['RightShoulder', 1.05 + .20 * swing],
+                ['Neck', .65 - .05 * swing], ['Head', .45 - .10 * swing]]) {
+                if (slot.has(index.get(name))) world[slot.get(index.get(name))][f] = quat(1, 0, 0, pitch);
+            }
+            if (stretch) {
+                // Reach through the back and shoulders as the pelvis rocks
+                // forward. This keeps the chest low enough for the palms to
+                // glide forward on the floor with the arms extended.
+                // In the fast variant, press through the grounded palms to
+                // open the upper back and raise the chest on the upswing.
+                for (const [name, bend, lift] of [['Spine', 0.10, 0.12], ['Spine1', 0.20, 0.30], ['Spine2', 0.25, 0.45], ['LeftShoulder', 0.25, 0.45], ['RightShoulder', 0.25, 0.45]]) {
+                    if (slot.has(index.get(name))) world[slot.get(index.get(name))][f] = quat(1, 0, 0, Math.PI / 2 + 0.10 + bend * extension - (fastStretch ? lift * swing : 0));
+                }
+                if (fastStretch) for (const [name, pitch] of [['Neck', 1.50], ['Head', 1.40]]) {
+                    if (slot.has(index.get(name))) world[slot.get(index.get(name))][f] = quat(1, 0, 0, pitch - 0.20 * swing);
+                }
+            }
+            // Translating along the arc keeps the upper-back pivot fixed,
+            // rather than dragging the shoulders as the pelvis rises.
+            roots.set(sub(anchor, rotate(trunk, offset)), f * 3);
+            if (crawling) {
+                const x = moving ? 0.012 * scale * Math.sin(2 * Math.PI * phase) : 0;
+                let y = -Infinity;
+                for (const leg of legs) {
+                    const sign = leg.S === 'Left' ? 1 : -1, local = rotate(trunk, sub(at(leg.S + 'UpLeg'), bones[hips].head));
+                    const step = cycle(phase + (leg.S === 'Left' ? 0.5 : 0));
+                    const dx = sign * 0.025 * scale - x, dz = (0.02 + 0.07 * step.stride) * scale;
+                    y = Math.max(y, 0.055 * scale + Math.sqrt(Math.max(0.01 * scale * scale, leg.thigh ** 2 - dx * dx - dz * dz)) - local[1]);
+                }
+                roots.set([x, y, 0], f * 3);
+            }
+            if (stretch || straddle) {
+                // Add forward travel without increasing the fast stretch’s back bend.
+                const z = straddle ? (kneeling ? -.22 : upright ? -.33 + .23 * swing : -.33 + .06 * swing) * scale
+                    : -0.62 * (legs[0].thigh + legs[1].thigh) / 2 + 0.26 * scale * extension + (fastStretch ? 0.04 * scale * swing : 0);
+                let y = -Infinity;
+                for (const leg of legs) {
+                    const sign = leg.S === 'Left' ? 1 : -1, local = rotate(trunk, sub(at(leg.S + 'UpLeg'), bones[hips].head));
+                    const dx = sign * (straddle ? spread : .12) * scale, dz = 0.02 * scale - z - local[2];
+                    y = Math.max(y, 0.055 * scale + Math.sqrt(Math.max(0.01 * scale * scale, leg.thigh ** 2 - dx * dx - dz * dz)) - local[1]);
+                }
+                roots.set([0, y, z], f * 3);
+            }
+            for (const leg of legs) {
+                const S = leg.S;
+                const sign = S === 'Left' ? 1 : -1;
+                const hip = place(f).pos[index.get(S + 'UpLeg')];
+                const length = Math.hypot(...sub(at(S + 'Leg'), at(S + 'UpLeg'))) + leg.shin;
+                const foot = tucked ? [hip[0] + sign * 0.14 * scale, 0.065 * scale, hip[2] + length * 0.45]
+                    : seated ? [hip[0] + sign * length * 0.53, 0.085 * scale, hip[2] + length * 0.82]
+                    : [at(S + 'UpLeg')[0] + sign * (bridge ? 0.025 : 0.13) * scale, 0.065 * scale,
+                        (anchor[2] + leg.along * Math.cos(peak) + leg.depth * Math.sin(peak)) * (bridge ? 1 : 0.85)];
+                const footTurn = tucked ? quat(0, 1, 0, sign * 0.15) : seated ? mul(quat(0, 1, 0, sign * 0.55), quat(1, 0, 0, -Math.PI / 2 + 0.15))
+                    : bridge ? [0, 0, 0, 1] : quat(0, 1, 0, sign * 0.3);
+                if (crawling || stretch || straddle) {
+                    const step = cycle(phase + (S === 'Left' ? 0.5 : 0));
+                    const local = rotate(trunk, sub(at(S + 'UpLeg'), bones[hips].head));
+                    const dx = at(S + 'UpLeg')[0] + sign * (straddle ? spread : stretch ? 0.12 : 0.025) * scale - hip[0];
+                    const dz = stretch || straddle ? 0.02 * scale - hip[2] : local[2] + (0.02 + 0.07 * step.stride) * scale - hip[2];
+                    const upper = unit([dx, -Math.sqrt(Math.max(0.01 * scale * scale, leg.thigh ** 2 - dx * dx - dz * dz)), dz]);
+                    const lower = unit([kneeling ? -sign * .06 : stretch || straddle ? -sign * 0.26 : 0, 0.04, -1]);
+                    // Both segments must share the same hinge plane. Giving
+                    // each its own world-facing frame twists a spread knee
+                    // sideways and folds the thigh through the calf.
+                    const normal = straddle ? unit(cross(upper, lower)) : null;
+                    world[names.indexOf(S + 'UpLeg')][f] = mul(frameQuat(upper, normal ? cross(upper, normal) : [0, 0, 1]), conj(rest[S + 'UpLeg']));
+                    world[names.indexOf(S + 'Leg')][f] = mul(frameQuat(lower, normal ? cross(lower, normal) : [0, -1, 0]), conj(rest[S + 'Leg']));
+                    // Follow the shin within the ankle's existing pitch range.
+                    // A world-space half-turn overextended it and lifted the toes.
+                    const trailing = mul(world[names.indexOf(S + 'Leg')][f], quat(1, 0, 0, LEG_RANGE.Foot.x[1] * DEG));
+                    world[names.indexOf(S + 'Foot')][f] = trailing;
+                    if (names.includes(S + 'ToeBase')) world[names.indexOf(S + 'ToeBase')][f] = trailing;
+                } else reachLimb(ctx, f, S, 'leg', foot, footTurn, [bridge ? 0 : sign * (tucked ? 0.65 : seated ? 0.3 : 0.85), 1, 0.15]);
+                const arm = Math.hypot(...sub(at(S + 'ForeArm'), at(S + 'Arm'))) + Math.hypot(...sub(at(S + 'Hand'), at(S + 'ForeArm')));
+                let hand = [at(S + 'Arm')[0] + sign * (seated ? 0.06 : 0.11) * scale, 0.035 * scale, seated ? anchor[2] - 0.05 * scale : anchor[2] + arm * 0.86];
+                if (tucked) hand = [at(S + 'Arm')[0] + sign * 0.10 * scale, 0.035 * scale, -0.10 * scale];
+                if (crawling) {
+                    const step = cycle(phase + (S === 'Left' ? 0 : 0.5)), shoulder = place(f).pos[index.get(S + 'Arm')];
+                    hand = [at(S + 'Arm')[0] + sign * 0.03 * scale, (0.035 + 0.055 * step.lift) * scale, shoulder[2] + (0.06 + 0.10 * step.stride) * scale];
+                }
+                if (stretch) {
+                    const shoulder = place(f).pos[index.get(S + 'Arm')], drop = shoulder[1] - 0.03 * scale;
+                    const reach = Math.sqrt(Math.max(0.15 * arm * arm, (Math.min(0.997, 0.985 + 0.01 * extension) * arm) ** 2 - drop * drop));
+                    hand = [shoulder[0], 0.03 * scale, shoulder[2] + reach];
+                }
+                if (straddle) hand = [at(S + 'Arm')[0] + sign * .05 * scale, .023 * scale, .26 * scale];
+                const palm = F[S] ? mul(frameQuat([0, 0, 1], [0, -1, 0]), conj(frameQuat(F[S].along, F[S].palm))) : flat;
+                if (upright) relaxedArms(ctx, f, S);
+                else reachLimb(ctx, f, S, 'arm', hand, palm, [sign, stretch || straddle ? 0.25 : -0.10, 0]);
+            }
+        }
+        const tracks = names.map((name, k) => {
+            const bone = index.get(name), values = new Float32Array(steps * 4);
+            let previous;
+            for (let f = 0; f < steps; f++) {
+                let q = unit4(mul(conj(bones[bone].parent >= 0 ? turnAt(bones[bone].parent, f) : [0, 0, 0, 1]), world[k][f]));
+                if (previous && dot4(previous, q) < 0) q = q.map(v => -v);
+                values.set(q, f * 4); previous = q;
+            }
+            return { bone, values };
+        });
+        const fingers = handTracks(F, both(upright ? 'relaxed' : 'flat'), times);
+        if (straddle && !upright) for (const S of ['Left', 'Right']) {
+            // Neutralize the mesh's resting finger curl for floor support.
+            // A generic open hand otherwise touches at its tips while the
+            // palm floats above the floor, despite a level wrist target.
+            const turns = new Map([[index.get(S + 'Hand'), [0, 0, 0, 1]]]);
+            for (const joint of F[S]?.joints || []) {
+                const b = bones[joint.bone], along = dir(b), flat = square(along, F[S].palm);
+                const turn = fromTo(along, flat), local = mul(conj(turns.get(b.parent) || [0, 0, 0, 1]), turn);
+                turns.set(joint.bone, turn);
+                const track = fingers.find(t => t.bone === joint.bone);
+                if (track) for (let f = 0; f < steps; f++) track.values.set(local, f * 4);
+            }
+        }
+        tracks.push(...fingers, { bone: hips, path: 'translation', values: roots });
+        return { name: id, times, tracks, heights: new Float32Array(steps), skin: true, once: false, lift: () => 0 };
+    }
+
+    /** A deep, planted squat followed by full standing extension. The feet
+     * stay fixed; limb lengths determine the root's standing height. */
+    function squatPose(bones) {
+        const index = new Map(bones.map((b, i) => [b.name, i])), rest = restFrames(bones, index);
+        const hips = index.get('Hips');
+        if (hips === undefined || !['Left', 'Right'].every(S => ['Arm', 'ForeArm', 'Hand', 'UpLeg', 'Leg', 'Foot'].every(n => index.has(S + n)))) return null;
+        const steps = 121, duration = 4, scale = Math.max(...bones.map(b => b.head[1])) / 1.7 || 1;
+        const times = Float32Array.from({ length: steps }, (_, f) => duration * f / (steps - 1));
+        const names = Object.keys(rest), slot = new Map(names.map((n, k) => [index.get(n), k]));
+        const world = names.map(() => Array.from({ length: steps }, () => [0, 0, 0, 1])), roots = new Float32Array(steps * 3);
+        const turnAt = (i, f) => {
+            for (let b = i; b >= 0; b = bones[b].parent) if (slot.has(b)) return world[slot.get(b)][f];
+            return [0, 0, 0, 1];
+        };
+        const place = f => {
+            const rot = [], pos = [];
+            bones.forEach((b, i) => {
+                rot[i] = turnAt(i, f);
+                pos[i] = b.parent < 0 ? Array.from(roots.subarray(f * 3, f * 3 + 3))
+                    : add3(pos[b.parent], rotate(rot[b.parent], sub(b.head, bones[b.parent].head)));
+            });
+            return { rot, pos };
+        };
+        const F = handFrames(bones, index), ctx = { bones, index, rest, names, world, place, F, pose: { freeWrist: true }, bendFrame: {}, bendReference: {}, bendNormals: {} };
+        const at = name => bones[index.get(name)].head;
+        const legs = ['Left', 'Right'].map(S => {
+            const sign = S === 'Left' ? 1 : -1, hip = at(S + 'UpLeg'), knee = at(S + 'Leg'), ankle = at(S + 'Foot');
+            return { S, sign, a: Math.hypot(...sub(knee, hip)), b: Math.hypot(...sub(ankle, knee)),
+                foot: [hip[0] + sign * .09 * scale, ankle[1], ankle[2]] };
+        });
+        const high = Math.min(...legs.map(l => {
+            const off = sub(at(l.S + 'UpLeg'), bones[hips].head), dx = l.foot[0] - off[0], dz = l.foot[2] - off[2];
+            return l.foot[1] + Math.sqrt(Math.max(0, (l.a + l.b - .0002 * scale) ** 2 - dx * dx - dz * dz)) - off[1];
+        }));
+        for (let f = 0; f < steps; f++) {
+            const depth = (1 - Math.cos(2 * Math.PI * f / (steps - 1))) / 2;
+            for (const [name, pitch] of [['Hips', .12], ['Spine', .32], ['Spine1', .43], ['Spine2', .50], ['LeftShoulder', .50], ['RightShoulder', .50], ['Neck', .25], ['Head', .12]]) {
+                if (slot.has(index.get(name))) world[slot.get(index.get(name))][f] = quat(1, 0, 0, pitch * depth);
+            }
+            roots.set([0, high * (1 - depth) + .30 * scale * depth, -.16 * scale * depth], f * 3);
+            for (const l of legs) {
+                const { S, sign, a, b, foot } = l, hip = place(f).pos[index.get(S + 'UpLeg')];
+                const delta = sub(foot, hip), distance = Math.hypot(...delta), u = unit(delta), v = square([sign * .32, 0, 1], u);
+                const cos = Math.max(-1, Math.min(1, (a * a + distance * distance - b * b) / (2 * a * distance)));
+                const knee = add3(hip, u.map((x, k) => a * (x * cos + v[k] * Math.sqrt(1 - cos * cos))));
+                const upper = unit(sub(knee, hip)), lower = unit(sub(foot, knee)), normal = unit(cross(upper, lower));
+                world[names.indexOf(S + 'UpLeg')][f] = mul(frameQuat(upper, cross(upper, normal)), conj(rest[S + 'UpLeg']));
+                world[names.indexOf(S + 'Leg')][f] = mul(frameQuat(lower, cross(lower, normal)), conj(rest[S + 'Leg']));
+                world[names.indexOf(S + 'Foot')][f] = quat(0, 1, 0, sign * .18);
+                if (slot.has(index.get(S + 'ToeBase'))) world[names.indexOf(S + 'ToeBase')][f] = quat(0, 1, 0, sign * .18);
+                relaxedArms(ctx, f, S, .18 + .72 * depth);
+            }
+        }
+        const tracks = names.map((name, k) => {
+            const bone = index.get(name), values = new Float32Array(steps * 4);
+            let previous;
+            for (let f = 0; f < steps; f++) {
+                let q = unit4(mul(conj(bones[bone].parent >= 0 ? turnAt(bones[bone].parent, f) : [0, 0, 0, 1]), world[k][f]));
+                if (previous && dot4(previous, q) < 0) q = q.map(v => -v);
+                values.set(q, f * 4); previous = q;
+            }
+            return { bone, values };
+        });
+        tracks.push(...handTracks(F, both('relaxed'), times), { bone: hips, path: 'translation', values: roots });
+        return { name: 'squat', times, tracks, heights: new Float32Array(steps), skin: true, once: false, lift: () => 0 };
+    }
+
+    /** Exercise loops authored against this rig, with explicit contact points. */
+    function exercisePose(bones, id, body) {
+        const index = new Map(bones.map((b, i) => [b.name, i])), rest = restFrames(bones, index), hips = index.get('Hips');
+        if (hips === undefined || !['Left', 'Right'].every(S => ['Arm', 'ForeArm', 'Hand', 'UpLeg', 'Leg', 'Foot'].every(n => index.has(S + n)))) return null;
+        const jack = id === 'jumpingJacks', stretch = id === 'hamstringStretch', sit = id === 'sitUp', pull = id === 'pullUp', push = id === 'pushUp';
+        const duration = jack ? 1.1 : stretch ? 8 : 4, steps = Math.round(duration * (jack ? 80 : 40)) + 1;
+        const times = Float32Array.from({ length: steps }, (_, f) => duration * f / (steps - 1));
+        const scale = Math.max(...bones.map(b => b.head[1])) / 1.7 || 1, at = name => bones[index.get(name)].head;
+        const names = Object.keys(rest), slot = new Map(names.map((n, k) => [index.get(n), k]));
+        const world = names.map(() => Array.from({ length: steps }, () => [0, 0, 0, 1])), roots = new Float32Array(steps * 3);
+        const turnAt = (i, f) => {
+            for (let b = i; b >= 0; b = bones[b].parent) if (slot.has(b)) return world[slot.get(b)][f];
+            return [0, 0, 0, 1];
+        };
+        const place = f => {
+            const rot = [], pos = [];
+            bones.forEach((b, i) => {
+                rot[i] = turnAt(i, f);
+                pos[i] = b.parent < 0 ? Array.from(roots.subarray(f * 3, f * 3 + 3))
+                    : add3(pos[b.parent], rotate(rot[b.parent], sub(b.head, bones[b.parent].head)));
+            });
+            return { rot, pos };
+        };
+        const F = handFrames(bones, index), ctx = { bones, index, rest, names, world, place, F, bindElbows: true, reachMargin: stretch ? .025 * scale : 0,
+            pose: { freeWrist: true }, bendFrame: {}, bendReference: {}, bendNormals: {} };
+        if (jack) ctx.armReference = {};
+        if (pull) ctx.elbowPole = { Left: [1, -.3, .25], Right: [-1, -.3, .25] };
+        const set = (name, q, f) => { if (slot.has(index.get(name))) world[slot.get(index.get(name))][f] = q; };
+        const legs = ['Left', 'Right'].map(S => ({ S, sign: S === 'Left' ? 1 : -1,
+            a: Math.hypot(...sub(at(S + 'Leg'), at(S + 'UpLeg'))), b: Math.hypot(...sub(at(S + 'Foot'), at(S + 'Leg'))) }));
+        const armLength = S => Math.hypot(...sub(at(S + 'ForeArm'), at(S + 'Arm'))) + Math.hypot(...sub(at(S + 'Hand'), at(S + 'ForeArm')));
+        const legLength = Math.min(...legs.map(l => l.a + l.b));
+        const toeTips = {}, fingerTips = {};
+        if (stretch) {
+            const flat = new Map(handTracks(F, both('flat'), Float32Array.of(0)).map(t => [t.bone, Array.from(t.values)]));
+            for (const S of ['Left', 'Right']) {
+                let point = [0, 0, 0], q = [0, 0, 0, 1], parent = at(S + 'Hand');
+                for (const k of [1, 2, 3]) {
+                    const i = index.get(S + 'HandMiddle' + k), b = bones[i];
+                    point = add3(point, rotate(q, sub(b.head, parent)));
+                    q = mul(q, flat.get(i) || [0, 0, 0, 1]); parent = b.head;
+                    if (k === 3) point = add3(point, rotate(q, sub(b.tail, b.head)));
+                }
+                fingerTips[S] = point;
+            }
+        }
+        if (stretch) for (const S of ['Left', 'Right']) {
+            const foot = at(S + 'Foot'), ball = index.has(S + 'ToeBase') ? at(S + 'ToeBase') : add3(foot, [0, 0, .10 * scale]);
+            const along = unit([ball[0] - foot[0], 0, ball[2] - foot[2]]);
+            let far = -Infinity, tip = along3([0, .012 * scale - foot[1], 0], along, Math.hypot(ball[0] - foot[0], ball[2] - foot[2]) + .06 * scale);
+            if (body?.positions) for (let v = 0; v < body.positions.length / 3; v++) {
+                let share = 0;
+                for (let k = 0; k < 4; k++) if ([S + 'Foot', S + 'ToeBase'].includes(bones[body.joints[v * 4 + k]]?.name)) share += body.weights[v * 4 + k];
+                const point = sub(Array.from(body.positions.subarray(v * 3, v * 3 + 3)), foot), distance = dot(point, along);
+                if (share > .4 && distance > far) { far = distance; tip = add3(point, [0, .004 * scale, 0]); }
+            }
+            toeTips[S] = tip;
+        }
+        const gripY = Math.max(at('LeftArm')[1], at('RightArm')[1]) + Math.min(armLength('Left'), armLength('Right')) * .95 + .06 * scale;
+        const pushFootTurn = quat(1, 0, 0, 1.05), pushFootY = {}, pushToes = {};
+        let thighWidth = Math.max(Math.abs(at('LeftUpLeg')[0]), Math.abs(at('RightUpLeg')[0])) + .10 * scale;
+        if ((jack || stretch) && body?.positions) for (let v = 0; v < body.positions.length / 3; v++) {
+            let thigh = 0;
+            for (let k = 0; k < 4; k++) {
+                let j = body.joints[v * 4 + k];
+                while (bones[j]?.softTissue) j = bones[j].parent;
+                if (/^(Left|Right)UpLeg$/.test(bones[j]?.name)) thigh += body.weights[v * 4 + k];
+            }
+            if (thigh > .4) thighWidth = Math.max(thighWidth, Math.abs(body.positions[v * 3]));
+        }
+        for (const l of legs) {
+            const toe = index.has(l.S + 'ToeBase') ? at(l.S + 'ToeBase') : at(l.S + 'Foot');
+            let low = -.015 * scale;
+            if (push && body?.positions && body.joints && body.weights) for (let v = 0; v < body.positions.length / 3; v++) {
+                let weight = 0;
+                for (let k = 0; k < 4; k++) if (bones[body.joints[v * 4 + k]]?.name === l.S + 'ToeBase') weight += body.weights[v * 4 + k];
+                if (weight < .5) continue;
+                low = Math.min(low, body.positions[v * 3 + 1] - toe[1]);
+            }
+            pushToes[l.S] = [toe[0], -low + .002 * scale, -.85 * scale];
+            pushFootY[l.S] = pushToes[l.S][1] - rotate(pushFootTurn, sub(toe, at(l.S + 'Foot')))[1];
+        }
+        let pushLow = .28 * scale;
+        if (push && body?.positions) for (let v = 0; v < body.positions.length / 3; v++) {
+            const y = body.positions[v * 3 + 1];
+            if (y < bones[hips].head[1] - .02 * scale || y > at('LeftArm')[1]) continue;
+            let torso = 0;
+            for (let k = 0; k < 4; k++) {
+                let j = body.joints[v * 4 + k];
+                while (bones[j]?.softTissue) j = bones[j].parent;
+                if (/^(Hips|Spine|Spine1|Spine2)$/.test(bones[j]?.name)) torso += body.weights[v * 4 + k];
+            }
+            if (torso > .4) pushLow = Math.max(pushLow, body.positions[v * 3 + 2] - bones[hips].head[2] + .01 * scale);
+        }
+        pushLow = Math.min(pushLow, .43 * scale);
+        const footOf = (l, width, lift = 0) => [l.sign * width * scale, at(l.S + 'Foot')[1] + lift, at(l.S + 'Foot')[2]];
+        const solveLeg = (l, f, foot, turn, pole = [l.sign * .15, 0, 1]) => {
+            const hip = place(f).pos[index.get(l.S + 'UpLeg')], delta = sub(foot, hip), u = unit(delta);
+            const d = Math.max(Math.abs(l.a - l.b) + 1e-5, Math.min(l.a + l.b - 1e-5, Math.hypot(...delta))), v = square(pole, u);
+            const cos = Math.max(-1, Math.min(1, (l.a * l.a + d * d - l.b * l.b) / (2 * l.a * d)));
+            const knee = add3(hip, u.map((x, k) => l.a * (x * cos + v[k] * Math.sqrt(1 - cos * cos))));
+            const upper = unit(sub(knee, hip)), lower = unit(sub(add3(hip, u.map(x => x * d)), knee)), normal = unit(cross(upper, lower));
+            set(l.S + 'UpLeg', mul(frameQuat(upper, cross(upper, normal)), conj(rest[l.S + 'UpLeg'])), f);
+            set(l.S + 'Leg', mul(frameQuat(lower, cross(lower, normal)), conj(rest[l.S + 'Leg'])), f);
+            set(l.S + 'Foot', turn, f); set(l.S + 'ToeBase', turn, f);
+        };
+        for (let f = 0; f < steps; f++) {
+            const phase = f / (steps - 1), cycle = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+            const bend = stretch ? (1 - Math.cos(4 * Math.PI * phase)) / 2 : cycle, side = Math.sin(2 * Math.PI * phase);
+            const hop = jack ? .08 * scale * Math.sin(2 * Math.PI * phase) ** 2 : 0;
+            let trunk = [0, 0, 0, 1], root = bones[hips].head.slice();
+            if (stretch) {
+                // The spine supplies the deep fold. Turning the pelvis as far
+                // as the chest puts nearly opposite rotations on the hip and
+                // thigh skin, collapsing the glute between those influences.
+                trunk = mul(quat(0, 0, 1, -.24 * bend * side), mul(quat(0, 1, 0, -.15 * bend * side), quat(1, 0, 0, 1.10 * bend)));
+                root = [-.08 * scale * bend * side, bones[hips].head[1] - .055 * scale * bend, -.10 * scale * bend];
+                for (const l of legs) {
+                    const off = rotate(trunk, sub(at(l.S + 'UpLeg'), bones[hips].head)), foot = footOf(l, .25);
+                    const dx = foot[0] - root[0] - off[0], dz = foot[2] - root[2] - off[2];
+                    root[1] = Math.min(root[1], foot[1] + Math.sqrt(Math.max(.01, (l.a + l.b - .002 * scale) ** 2 - dx * dx - dz * dz)) - off[1]);
+                }
+            } else if (sit) {
+                trunk = quat(1, 0, 0, -Math.PI / 2 * (1 - .95 * cycle)); root = [0, .18 * scale, 0];
+            } else if (pull) {
+                root[1] += (.06 + .30 * cycle) * scale;
+            } else if (push) {
+                const y = pushLow + (.48 * scale - pushLow) * cycle, toeY = pushToes.Left[1];
+                const shinOffset = sub(at('LeftFoot'), bones[hips].head), toeOffset = index.has('LeftToeBase') ? sub(at('LeftToeBase'), at('LeftFoot')) : [0, 0, 0];
+                let low = .8, high = 1.75;
+                for (let pass = 0; pass < 24; pass++) {
+                    const pitch = (low + high) / 2, q = quat(1, 0, 0, pitch), footQ = mul(q, quat(1, 0, 0, -.35));
+                    const height = y + rotate(q, shinOffset)[1] + rotate(footQ, toeOffset)[1];
+                    if (height < toeY) low = pitch; else high = pitch;
+                }
+                trunk = quat(1, 0, 0, (low + high) / 2);
+                const off = add3(rotate(trunk, shinOffset), rotate(mul(trunk, quat(1, 0, 0, -.35)), toeOffset));
+                root = [0, y, pushToes.Left[2] - off[2]];
+            } else if (jack) {
+                const width = .07 + .27 * cycle;
+                root[1] = Math.min(...legs.map(l => {
+                    const off = sub(at(l.S + 'UpLeg'), bones[hips].head), foot = footOf(l, width, hop);
+                    return foot[1] + Math.sqrt(Math.max(.01, (l.a + l.b - .008 * scale) ** 2 - (foot[0] - off[0]) ** 2 - (foot[2] - off[2]) ** 2)) - off[1];
+                }));
+            }
+            roots.set(root, f * 3);
+            for (const n of ['Hips', 'Spine', 'Spine1', 'Spine2', 'LeftShoulder', 'RightShoulder', 'Neck', 'Head']) set(n, trunk, f);
+            if (jack || pull) for (const { S, sign } of legs) {
+                // Share overhead elevation with the clavicle. Keeping it fixed
+                // makes blended shoulder skin fold flat against a raised arm.
+                const elevation = quat(0, 0, 1, sign * (jack ? .65 * cycle : .42 - .22 * cycle));
+                set(S + 'Shoulder', pull ? mul(elevation, quat(1, 0, 0, -.5)) : elevation, f);
+                if (jack) {
+                    const up = sub(at(S + 'ForeArm'), at(S + 'Arm'));
+                    const restAngle = Math.atan2(up[1], Math.abs(up[0]));
+                    ctx.armReference[S] = quat(0, 0, 1, sign * (-Math.PI / 2 + Math.PI * cycle - restAngle));
+                }
+            }
+            if (pull || jack) {
+                const nod = pull ? -.05 * cycle : .025 * Math.sin(2 * Math.PI * phase);
+                set('Neck', quat(1, 0, 0, nod * .4), f); set('Head', quat(1, 0, 0, nod), f);
+            }
+            if (stretch) for (const n of ['Spine', 'Spine1', 'Spine2', 'LeftShoulder', 'RightShoulder', 'Neck', 'Head']) {
+                set(n, mul(quat(0, 0, 1, -.40 * bend * side), mul(quat(0, 1, 0, -.25 * bend * side), quat(1, 0, 0, (n === 'Head' ? 2.05 : 2.20) * bend))), f);
+            }
+            for (const l of legs) {
+                const { S, sign } = l;
+                if (pull) {
+                    const upper = quat(1, 0, 0, -.10), lower = quat(1, 0, 0, .65 + .08 * cycle);
+                    set(S + 'UpLeg', upper, f); set(S + 'Leg', lower, f); set(S + 'Foot', lower, f); set(S + 'ToeBase', lower, f);
+                } else if (push && index.has(S + 'ToeBase')) {
+                    set(S + 'UpLeg', trunk, f); set(S + 'Leg', trunk, f);
+                    set(S + 'Foot', mul(trunk, quat(1, 0, 0, -.35)), f);
+                    set(S + 'ToeBase', [0, 0, 0, 1], f);
+                } else {
+                    const foot = sit ? [at(S + 'UpLeg')[0] + sign * .03 * scale, .065 * scale, .48 * scale]
+                        : push ? [at(S + 'UpLeg')[0], pushFootY[S], -.85 * scale]
+                        : footOf(l, jack ? .07 + .27 * cycle : .25, hop);
+                    solveLeg(l, f, foot, push ? pushFootTurn : quat(0, 1, 0, sign * .10), sit ? [0, 1, .1] : [sign * .15, 0, 1]);
+                }
+                const shoulder = place(f).pos[index.get(S + 'Arm')], arm = armLength(S);
+                if (jack) {
+                    const a = Math.PI * cycle, tuck = cycle ** 3, closed = (1 - cycle) ** 2;
+                    const clearance = Math.max(.07 * scale, thighWidth + .055 * scale - Math.abs(shoulder[0]));
+                    const hand = [shoulder[0] * (1 - tuck) + sign * (.06 * scale * tuck + arm * .95 * Math.sin(a) + clearance * closed),
+                        shoulder[1] - arm * .90 * Math.cos(a), shoulder[2] + .025 * scale];
+                    reachLimb(ctx, f, S, 'arm', hand, null, [0, 0, 1]);
+                } else if (stretch) {
+                    const spread = Math.max(.28, (thighWidth + .06 * scale - Math.abs(shoulder[0])) / arm * 1.3);
+                    relaxedArms(ctx, f, S, spread, [sign * (spread + .5 * bend), -1 + 1.4 * bend, -.35 * bend]);
+                    let hand = place(f).pos[index.get(S + 'Hand')];
+                    let touch = null;
+                    if ((side >= 0 && S === 'Left') || (side < 0 && S === 'Right')) {
+                        const opposite = legs.find(l => l.S !== S), foot = footOf(opposite, .25);
+                        const tip = add3(foot, rotate(quat(0, 1, 0, opposite.sign * .10), toeTips[opposite.S]));
+                        touch = F[S] ? palmTurn(F[S], unit([0, -1, .35]), [0, 0, -1]) : null;
+                        const target = touch ? sub(tip, rotate(touch, fingerTips[S])) : add3(tip, [0, .13 * scale, 0]);
+                        hand = hand.map((x, k) => x + (target[k] - x) * bend);
+                    }
+                    // Blend the target position, not independent arm rotations:
+                    // a quaternion blend can switch branches during the fold.
+                    reachLimb(ctx, f, S, 'arm', hand, null, [0, 0, 1]);
+                    if (touch && bend > 1e-8) {
+                        const turn = slerp4(world[names.indexOf(S + 'Hand')][f], touch, bend);
+                        reachLimb(ctx, f, S, 'arm', hand, turn, [0, 0, 1]);
+                    }
+                } else if (sit) relaxedArms(ctx, f, S, .16, [sign * .12, .8 * (1 - cycle) + .2 * cycle, .4 + .5 * cycle]);
+                else if (pull) {
+                    const hand = [at(S + 'Arm')[0] + sign * .065 * scale, gripY, .025 * scale];
+                    const turn = F[S] ? palmTurn(F[S], [0, 1, 0], [0, 0, -1]) : null;
+                    reachLimb(ctx, f, S, 'arm', hand, turn, [sign, -.5, 0]);
+                } else {
+                    const hand = [at(S + 'Arm')[0] + sign * .035 * scale, .028 * scale, .50 * scale];
+                    const turn = F[S] ? palmTurn(F[S], [0, 0, 1], [0, -1, 0]) : null;
+                    reachLimb(ctx, f, S, 'arm', hand, turn, [sign * .6, 0, -1]);
+                }
+            }
+        }
+        const tracks = names.map((name, k) => {
+            const bone = index.get(name), values = new Float32Array(steps * 4); let previous;
+            for (let f = 0; f < steps; f++) {
+                let q = unit4(mul(conj(bones[bone].parent >= 0 ? turnAt(bones[bone].parent, f) : [0, 0, 0, 1]), world[k][f]));
+                if (previous && dot4(previous, q) < 0) q = q.map(v => -v);
+                values.set(q, f * 4); previous = q;
+            }
+            return { bone, values };
+        });
+        tracks.push(...(push ? supportFingers(bones, index, F, times) : handTracks(F, both(pull ? 'fist' : stretch ? 'flat' : 'relaxed'), times)), { bone: hips, path: 'translation', values: roots });
+        return { name: id, times, tracks, heights: new Float32Array(steps), skin: !jack && !pull, once: false, lift: () => 0 };
+    }
+
     /** `options.inPlace`: the body's height off the floor leaves out the capture's own flight (a jump's, a run's). */
     function clip(bones, id, body, options) {
         if (!POSES.some(p => p.id === id)) return null;
         const index = new Set(bones.map(b => b.name));
         if (!index.has('LeftArm') || !index.has('LeftForeArm') || !index.has('LeftUpLeg')) return null;
+        if (['hipBridge', 'lieBackBentWide', 'sitWide', 'sitKneesUp', 'handsKnees', 'crawl', 'kneelingBackStretch', 'fastKneelingBackStretch', 'straddle', 'straddleUpright', 'kneel'].includes(id)) return floorPose(bones, id);
+        if (id === 'squat') return squatPose(bones);
+        if (['jumpingJacks', 'hamstringStretch', 'sitUp', 'pullUp', 'pushUp'].includes(id)) return exercisePose(bones, id, body);
         const authored = id === 'swordThrust' || id === 'bow' || id === 'sword';
         const source = take(authored ? 'fight' : id);
         let cap = authored && source ? Object.assign({}, source, { once: true }) : source;
@@ -1501,18 +2080,20 @@
         ['pistolTwo', 'Pistol Aim Two Hands', false], ['kneelAim', 'Kneel Aim', false], ['proneAim', 'Prone Aim', false], ['roll', 'Roll', false],
         ['frontFlip', 'Front Flip', false], ['backFlip', 'Back Flip', false], ['climbWall', 'Climb Wall', false], ['crouch', 'Crouch', false],
         ['kneel', 'Kneel', false], ['sit', 'Sit', false], ['prone', 'Prone', false], ['lieBack', 'Lie Back', false], ['lieSide', 'Lie Side', false],
-        ['fall', 'Fall', false], ['wave', 'Wave', false]
+        ['fall', 'Fall', false], ['wave', 'Wave', false], ['hipBridge', 'Hip Bridge', true], ['lieBackBentWide', 'Lie Back Knees Apart', true], ['sitWide', 'Sit Legs Apart', true], ['sitKneesUp', 'Sit Knees Up', true], ['handsKnees', 'Hands and Knees', true], ['crawl', 'Crawl', true], ['kneelingBackStretch', 'Kneeling Back Stretch', true], ['fastKneelingBackStretch', 'Fast Kneeling Back Stretch', true], ['straddle', 'Straddle', true], ['straddleUpright', 'Upright Straddle', true], ['squat', 'Squat', true],
+        ['jumpingJacks', 'Jumping Jacks', true], ['hamstringStretch', 'Hamstring Stretch', true], ['sitUp', 'Sit Up', true], ['pullUp', 'Pull Up', true], ['pushUp', 'Push Up', true]
     ].map(([id, name, useful]) => ({ id, name, useful }));
 
     /** The lowest point of the body's skin at each frame of a clip (a sample of its vertices skinned). */
     function skinLows(bones, clip, body) {
         const P = body.positions, J = body.joints, W = body.weights, n = P.length / 3, every = Math.max(1, Math.floor(n / 1500));
+        const rootMove = clip.tracks.find(t => t.path === 'translation' && bones[t.bone].parent < 0);
         const local = bones.map(() => [0, 0, 0, 1]), lows = new Float32Array(clip.times.length);
         for (let f = 0; f < clip.times.length; f++) {
             for (const t of clip.tracks) if (!t.path) local[t.bone] = [t.values[f * 4], t.values[f * 4 + 1], t.values[f * 4 + 2], t.values[f * 4 + 3]];
             const rot = [], pos = [];
             bones.forEach((b, i) => {
-                if (b.parent < 0) { rot[i] = local[i]; pos[i] = [b.head[0], b.head[1] + clip.heights[f], b.head[2]]; return; }
+                if (b.parent < 0) { rot[i] = local[i]; pos[i] = rootMove ? Array.from(rootMove.values.subarray(f * 3, f * 3 + 3)) : b.head.slice(); pos[i][1] += clip.heights[f]; return; }
                 rot[i] = mul(rot[b.parent], local[i]);
                 pos[i] = along3(pos[b.parent], rotate(rot[b.parent], sub(b.head, bones[b.parent].head)), 1);
             });
@@ -1592,9 +2173,13 @@
                 const lows = skinLows(bones, c, body);
                 for (let f = 0; f < heights.length; f++) heights[f] -= lows[f];
             }
-            const move = new Float32Array(heights.length * 3), h = bones[hips].head;
-            for (let f = 0; f < heights.length; f++) move.set([h[0], h[1] + heights[f], h[2]], f * 3);
-            const tracks = c.tracks.concat([{ bone: hips, path: 'translation', values: move }]);
+            const rootMove = c.tracks.find(t => t.bone === hips && t.path === 'translation');
+            const move = rootMove ? Float32Array.from(rootMove.values) : new Float32Array(heights.length * 3), h = bones[hips].head;
+            for (let f = 0; f < heights.length; f++) {
+                if (rootMove) move[f * 3 + 1] += heights[f];
+                else move.set([h[0], h[1] + heights[f], h[2]], f * 3);
+            }
+            const tracks = c.tracks.filter(t => t !== rootMove).concat([{ bone: hips, path: 'translation', values: move }]);
             out.push({ name: g.name, times: c.times, tracks: reduceKeys(c.times, tracks, 0.4 * DEG, 0.002), loop: !c.once });
         }
         return out;
@@ -1644,13 +2229,161 @@
         const n = to - from + 1, times = new Float32Array(n);
         for (let i = 0; i < n; i++) times[i] = c.times[from + i] - c.times[from];
         const hips = bones.findIndex(b => b.parent < 0), h = bones[hips].head, move = new Float32Array(n * 3);
-        for (let f = 0; f < n; f++) move.set([h[0], h[1] + c.heights[from + f], h[2]], f * 3);
-        const tracks = c.tracks.map(t => ({ bone: t.bone, values: t.values.slice(from * 4, (to + 1) * 4) })).concat([{ bone: hips, path: 'translation', values: move }]);
+        const rootMove = c.tracks.find(t => t.bone === hips && t.path === 'translation');
+        for (let f = 0; f < n; f++) {
+            const p = rootMove ? Array.from(rootMove.values.subarray((from + f) * 3, (from + f + 1) * 3)) : h.slice();
+            p[1] += c.heights[from + f]; move.set(p, f * 3);
+        }
+        const tracks = c.tracks.filter(t => t !== rootMove).map(t => {
+            const size = t.path ? 3 : 4;
+            return { bone: t.bone, ...(t.path ? { path: t.path } : {}), values: t.values.slice(from * size, (to + 1) * size) };
+        }).concat([{ bone: hips, path: 'translation', values: move }]);
         return { name: id, times, tracks: reduceKeys(times, tracks, 0.4 * DEG, 0.002), loop: !flight && !c.once };
     }
+    /** Bake damped secondary motion into bust, glute and body-fat joints. Torso acceleration
+     * drives the springs; a still pose has no artificial oscillation. Saved
+     * files play these ordinary translation keys on the GPU, like the preview. */
+    function withSoftTissueMotion(bones, clip) {
+        const soft = bones.map((b, i) => b.softTissue ? i : -1).filter(i => i >= 0);
+        if (!clip || !soft.length) return clip;
+        const duration = clip.times[clip.times.length - 1];
+        if (!(duration > 0)) return clip;
+        const geometry = JSON.stringify(bones.map(b => [b.parent, b.head]));
+        const profile = JSON.stringify([geometry, soft.map(i => [i, bones[i].softTissue])]);
+        if (clip.softTissueProfile === profile) return clip;
+        const looping = !clip.once && clip.loop !== false;
+        const exercise = POSES.some(p => p.group === 'exercise' && (p.id === clip.name || GAME_CLIPS.some(g => g.id === p.id && g.name === clip.name)));
+        const steps = Math.max(2, Math.ceil(duration * 60)), dt = duration / steps;
+        const times = Float32Array.from({ length: steps + 1 }, (_, f) => f * dt);
+        const cachedSamples = clip.softTissueProfile && clip.softTissueGeometry === geometry ? clip.softTissueSamples : null, samples = {};
+        const tracks = clip.tracks.filter(t => !soft.includes(t.bone));
+        const byBone = new Map();
+        for (const t of tracks) { if (!byBone.has(t.bone)) byBone.set(t.bone, []); byBone.get(t.bone).push(t); }
+        const sample = (track, time, n) => {
+            const ts = track.times || clip.times;
+            let lo = 0, hi = ts.length - 1;
+            while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (ts[mid] > time) hi = mid; else lo = mid; }
+            const u = Math.max(0, Math.min(1, (time - ts[lo]) / (ts[hi] - ts[lo] || 1)));
+            const sign = n === 4 && dot4(track.values.subarray(lo * n, lo * n + n), track.values.subarray(hi * n, hi * n + n)) < 0 ? -1 : 1;
+            const v = Array.from({ length: n }, (_, k) => track.values[lo * n + k] * (1 - u) + sign * track.values[hi * n + k] * u);
+            return n === 4 ? unit4(v) : v;
+        };
+        const at = (joint, time) => {
+            time = looping ? (time % duration + duration) % duration : Math.max(0, Math.min(duration, time));
+            const chain = []; for (let i = joint; i >= 0; i = bones[i].parent) chain.unshift(i);
+            let p = [0, 0, 0], q = [0, 0, 0, 1];
+            for (const i of chain) {
+                const b = bones[i]; let local = b.parent < 0 ? b.head : sub(b.head, bones[b.parent].head), turn = [0, 0, 0, 1];
+                for (const t of byBone.get(i) || []) {
+                    if (t.path === 'translation') local = sample(t, time, 3);
+                    else if (!t.path) turn = sample(t, time, 4);
+                }
+                p = add3(p, rotate(q, local)); q = mul(q, turn);
+            }
+            // Preview clips carry planting height separately; saved clips
+            // have that same height already in the root translation track.
+            if (clip.heights?.length) {
+                const f = time / duration * (clip.heights.length - 1), lo = Math.floor(f), hi = Math.min(lo + 1, clip.heights.length - 1);
+                p[1] += clip.heights[lo] + (clip.heights[hi] - clip.heights[lo]) * (f - lo);
+            }
+            return { p, q };
+        };
+        for (const joint of soft) {
+            const bone = bones[joint], o = bone.softTissue, rest = sub(bone.head, bones[bone.parent].head);
+            if (o.driver) {
+                const driver = bones.findIndex(b => b.name === o.driver), track = tracks.find(t => t.bone === driver && t.path === 'translation');
+                if (driver >= 0 && track) {
+                    const origin = sub(bones[driver].head, bones[bones[driver].parent].head), values = new Float32Array(times.length * 3);
+                    const data = cachedSamples?.[joint] || { basis: Array.from(times, time => mul(conj(at(joint, time).q), at(driver, time).q)) };
+                    samples[joint] = data;
+                    for (let f = 0; f <= steps; f++) {
+                        const offset = origin.map((v, k) => track.values[f * 3 + k] - v);
+                        const local = rotate(data.basis[f], offset);
+                        values.set(add3(rest, local), f * 3);
+                    }
+                    tracks.push({ bone: joint, path: 'translation', times, values });
+                    continue;
+                }
+            }
+            const amount = Math.max(0, Math.min(4, o.amount)), mass = o.mass ?? 1;
+            const values = new Float32Array(times.length * 3), drives = [], gravity = [];
+            const omega = 20 / (1 + .1 * amount) * (.9 + .2 * Math.max(0, Math.min(1, o.firmness ?? .75)));
+            // A broad derivative filters capture/key interpolation noise.
+            const h = .05;
+            let data = cachedSamples?.[joint];
+            if (!data) {
+                data = { acceleration: [], velocity: [], gravity: [] };
+                for (let f = 0; f < steps; f++) {
+                    const t = f * dt, center = at(joint, t), before = at(joint, t - h), after = at(joint, t + h);
+                    const a = center.p.map((v, k) => (after.p[k] - 2 * v + before.p[k]) / (h * h));
+                    data.acceleration.push(rotate(conj(center.q), a));
+                    if (exercise) {
+                        data.gravity.push(rotate(conj(center.q), [0, -9.81, 0]));
+                        data.velocity.push(rotate(conj(center.q), after.p.map((v, k) => (v - before.p[k]) / (2 * h))));
+                    }
+                }
+            }
+            samples[joint] = data;
+            for (let f = 0; f < steps; f++) {
+                drives.push(data.acceleration[f].map((v, k) => -Math.max(-40 * o.scale, Math.min(40 * o.scale, v)) * amount * .45 * mass * [.65, 1, .45][k]));
+                if (exercise) {
+                    gravity.push(data.gravity[f]);
+                    const velocity = data.velocity[f];
+                    for (let k = 0; k < 3; k++) drives[f][k] -= velocity[k] * omega * omega * .08 * amount * mass * [.5, 1, .45][k] / 3;
+                }
+            }
+            if (exercise) {
+                // Slow stretches have little acceleration. Their changing
+                // chest tilt shifts soft tissue under gravity, with visible
+                // lag through the reach/return. Centre the gravity load over
+                // the cycle so held poses keep their shape.
+                const mean = [0, 1, 2].map(k => gravity.reduce((sum, g) => sum + g[k], 0) / steps);
+                for (let f = 0; f < steps; f++) for (let k = 0; k < 3; k++) {
+                    drives[f][k] = 3 * drives[f][k] + (gravity[f][k] - mean[k]) * omega * omega * .012 * o.scale * amount * mass * [.5, 1, .45][k];
+                }
+            }
+            // Broad fat regions should move as a volume, without folding the
+            // skin at an anchored knee/ankle or waist. Smoothly bound the load
+            // by the available transition length, rather than pushing a small
+            // surface patch arbitrarily far away from its attachment.
+            const maxOffset = o.maxOffset == null ? null : o.maxOffset * amount / 4;
+            if (maxOffset != null) for (const drive of drives) {
+                const length = Math.hypot(...drive), force = omega * omega * maxOffset * .7;
+                const gain = length > 0 && force > 0 ? force * Math.tanh(length / force) / length : 0;
+                for (let k = 0; k < 3; k++) drive[k] *= gain;
+            }
+            const damping = .70 - .07 * amount, limit = o.scale * (.006 + .016 * amount) * Math.min(1.4, mass);
+            const x = [0, 0, 0], velocity = [0, 0, 0];
+            const cycles = looping ? Math.max(2, Math.ceil(4 / duration) + 1) : 1;
+            for (let cycle = 0; cycle < cycles; cycle++) {
+                for (let f = 0; f < steps; f++) {
+                    values.set(rest.map((v, k) => v + x[k]), f * 3);
+                    // Fixed substeps keep high slider values bounded and
+                    // independent of the editor/game display refresh rate.
+                    const substeps = Math.max(1, Math.ceil(dt * 120)), delta = dt / substeps;
+                    for (let s = 0; s < substeps; s++) {
+                        for (let k = 0; k < 3; k++) {
+                            velocity[k] += (drives[f][k] - omega * omega * x[k] - 2 * damping * omega * velocity[k]) * delta;
+                            x[k] += velocity[k] * delta;
+                            if (Math.abs(x[k]) > limit) { x[k] = Math.sign(x[k]) * limit; velocity[k] = 0; }
+                        }
+                        const length = Math.hypot(...x);
+                        if (maxOffset != null && length > maxOffset) {
+                            const normal = x.map(v => v / length), outward = Math.max(0, dot(velocity, normal));
+                            for (let k = 0; k < 3; k++) { x[k] = normal[k] * maxOffset; velocity[k] -= normal[k] * outward; }
+                        }
+                    }
+                }
+            }
+            values.set(looping ? values.subarray(0, 3) : rest.map((v, k) => v + x[k]), steps * 3);
+            tracks.push({ bone: joint, path: 'translation', times, values });
+        }
+        return { ...clip, tracks, softTissueProfile: profile, softTissueGeometry: geometry, softTissueSamples: samples };
+    }
+
     const frameOf = bones => handFrames(bones, new Map(bones.map((b, i) => [b.name, i])));
     const api = {
-        POSES, GROUPS, clip, soleRolls, SOLE_TURN, gameClips, GAME_CLIPS, SLOTS, STATE_MOTIONS, stateClip, LEG_RANGE, TOE_OUT, load, loadAsync, open, ready: () => !!DATA, dataPath: null, HAND_SHAPES, FINGER_RANGE, handFrames: frameOf,
+        POSES, GROUPS, clip, withSoftTissueMotion, soleRolls, SOLE_TURN, gameClips, GAME_CLIPS, SLOTS, STATE_MOTIONS, stateClip, LEG_RANGE, TOE_OUT, load, loadAsync, open, ready: () => !!DATA, dataPath: null, HAND_SHAPES, FINGER_RANGE, handFrames: frameOf,
         /** One still frame of both hands in a shape: the finger tracks. */
         handShape: (bones, shape) => handTracks(frameOf(bones), both(shape), [0])
     };

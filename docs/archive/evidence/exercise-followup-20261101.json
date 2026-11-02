@@ -1,0 +1,592 @@
+{
+  "date": "2026-11-01",
+  "preview": 93,
+  "runtime": "20261101.21",
+  "evidenceRoot": "scratchpad/exercise-followup-20261101/",
+  "changes": [
+    "Squat progressively abducts the relaxed arms during its descent for leg clearance.",
+    "Exercises adds Jumping jacks (2.4 s), alternating hand-to-opposite-foot Hamstring stretch (8 s), Sit-ups, Pull-ups and Push-ups (4 s each), included in default saved clips/actions.",
+    "Pull-ups use planted overhead grips; Jumping jacks and Pull-ups bypass skin-floor normalization so their airborne movement survives preview and export.",
+    "Kneeling uses a stable narrow-knee authored pose instead of the jittery capture; Upright straddle gains a gentle nod and turn.",
+    "Lower-bust normals use a broader source-space band, smooth averaging and a locally bounded dome gradient; the abdominal normal pass retains that smoothing. Underside occlusion is filtered before the chest patch inherits it. Skin positions and clothing fit are unchanged."
+  ],
+  "scope": "Focused visual iteration using the saved Robust Female Sci-Fi Athlete design as input, without overwriting its design/export files. Numeric source inspection covers default female, the saved Athlete build and default male. Full suites remain deferred at owner request; visual acceptance is open.",
+  "sourceInspection": [
+    {
+      "name": "female",
+      "id": "squat",
+      "duration": 4,
+      "contact": 3.01914000250007e-08,
+      "loop": 0,
+      "jump": 3.698691604487102,
+      "floor": -3.311454932486413e-08,
+      "headTurn": 6.875494292542568,
+      "armHits": 0,
+      "beforeArmHits": 0
+    },
+    {
+      "name": "female",
+      "id": "straddleUpright",
+      "duration": 2,
+      "contact": 5.1934331706163e-08,
+      "loop": 4.286263818611965e-18,
+      "jump": 1.101136242828747,
+      "floor": -0.00858872476965189,
+      "headTurn": 3.724143055259783
+    },
+    {
+      "name": "female",
+      "id": "kneel",
+      "duration": 6,
+      "contact": 2.730187068788514e-08,
+      "loop": 1.5001923365141877e-18,
+      "jump": 0.04471130597286315,
+      "floor": -0.0038640734273940325,
+      "headTurn": 1.303475427869572
+    },
+    {
+      "name": "female",
+      "id": "jumpingJacks",
+      "duration": 2.4000000953674316,
+      "contact": 0,
+      "loop": 1.836970237518721e-18,
+      "jump": 6.198926075880023,
+      "floor": -2.3604845855729195e-10,
+      "headTurn": 1.4323945120299653
+    },
+    {
+      "name": "female",
+      "id": "hamstringStretch",
+      "duration": 8,
+      "contact": 3.297930303563463e-05,
+      "loop": 0,
+      "jump": 3.5161300442437957,
+      "floor": -3.0148432415444404e-05,
+      "headTurn": 116.53522955542887,
+      "LeftHandToRightFoot": 0.08001778004476509,
+      "RightHandToLeftFoot": 0.08001778004476509
+    },
+    {
+      "name": "female",
+      "id": "sitUp",
+      "duration": 4,
+      "contact": 9.112271701639987e-06,
+      "loop": 0,
+      "jump": 2.0703726911608835,
+      "floor": -0.010330844670534134,
+      "headTurn": 85.49999970582289
+    },
+    {
+      "name": "female",
+      "id": "pullUp",
+      "duration": 4,
+      "contact": 1.1446509504862342e-05,
+      "loop": 0,
+      "jump": 1.9144617990879371,
+      "floor": 0.07381793856620789,
+      "headTurn": 2.864788872916914
+    },
+    {
+      "name": "female",
+      "id": "pushUp",
+      "duration": 4,
+      "contact": 4.93305764842107e-06,
+      "loop": 0,
+      "jump": 1.3164103244144474,
+      "floor": -0.0004006481321994215,
+      "headTurn": 9.773627777961211
+    },
+    {
+      "name": "athlete",
+      "id": "squat",
+      "duration": 4,
+      "contact": 5.355688970852337e-08,
+      "loop": 0,
+      "jump": 3.7238377840017285,
+      "floor": -1.3464207526681093e-08,
+      "headTurn": 6.875494292542568,
+      "armHits": 0,
+      "beforeArmHits": 0
+    },
+    {
+      "name": "athlete",
+      "id": "straddleUpright",
+      "duration": 2,
+      "contact": 6.750331215468777e-07,
+      "loop": 4.286263818611965e-18,
+      "jump": 1.1016240357092049,
+      "floor": -0.008448570035398006,
+      "headTurn": 3.724143055259783
+    },
+    {
+      "name": "athlete",
+      "id": "kneel",
+      "duration": 6,
+      "contact": 1.4203256704221214e-08,
+      "loop": 1.5001923365141877e-18,
+      "jump": 0.04471130597286315,
+      "floor": -0.0025820534210652113,
+      "headTurn": 1.303475427869572
+    },
+    {
+      "name": "athlete",
+      "id": "jumpingJacks",
+      "duration": 2.4000000953674316,
+      "contact": 0,
+      "loop": 1.836970237518721e-18,
+      "jump": 6.308946749602486,
+      "floor": -2.372722640586744e-08,
+      "headTurn": 1.4323945120299653
+    },
+    {
+      "name": "athlete",
+      "id": "hamstringStretch",
+      "duration": 8,
+      "contact": 3.496475445788045e-05,
+      "loop": 0,
+      "jump": 3.5171555310593363,
+      "floor": -3.220230064471252e-05,
+      "headTurn": 116.53522955542887,
+      "LeftHandToRightFoot": 0.08125773606972307,
+      "RightHandToLeftFoot": 0.08125772988757236
+    },
+    {
+      "name": "athlete",
+      "id": "sitUp",
+      "duration": 4,
+      "contact": 1.0578920834661209e-05,
+      "loop": 0,
+      "jump": 2.131677094188097,
+      "floor": -0.01111462153494358,
+      "headTurn": 85.49999970582289
+    },
+    {
+      "name": "athlete",
+      "id": "pullUp",
+      "duration": 4,
+      "contact": 1.1654828246642412e-05,
+      "loop": 0,
+      "jump": 1.9094881352838433,
+      "floor": 0.08017875254154205,
+      "headTurn": 2.864788872916914
+    },
+    {
+      "name": "athlete",
+      "id": "pushUp",
+      "duration": 4,
+      "contact": 4.405614601592333e-06,
+      "loop": 0,
+      "jump": 1.2367962741230496,
+      "floor": -0.0003868233470711857,
+      "headTurn": 9.68154362684088
+    },
+    {
+      "name": "male",
+      "id": "squat",
+      "duration": 4,
+      "contact": 4.352969110172618e-08,
+      "loop": 0,
+      "jump": 3.6644875625697106,
+      "floor": -1.7494535597961658e-08,
+      "headTurn": 6.875494292542568,
+      "armHits": 0,
+      "beforeArmHits": 0
+    },
+    {
+      "name": "male",
+      "id": "straddleUpright",
+      "duration": 2,
+      "contact": 4.666916424059088e-08,
+      "loop": 4.286263818611965e-18,
+      "jump": 1.0572707524819507,
+      "floor": -0.016706246882677078,
+      "headTurn": 3.724143055259783
+    },
+    {
+      "name": "male",
+      "id": "kneel",
+      "duration": 6,
+      "contact": 2.1302395004958184e-09,
+      "loop": 1.5001923365141877e-18,
+      "jump": 0.04471130597286315,
+      "floor": -0.007319342810660601,
+      "headTurn": 1.303475427869572
+    },
+    {
+      "name": "male",
+      "id": "jumpingJacks",
+      "duration": 2.4000000953674316,
+      "contact": 0,
+      "loop": 1.836970237518721e-18,
+      "jump": 6.437950955573971,
+      "floor": -1.0282361628810577e-09,
+      "headTurn": 1.4323945120299653
+    },
+    {
+      "name": "male",
+      "id": "hamstringStretch",
+      "duration": 8,
+      "contact": 2.3046382926033536e-05,
+      "loop": 0,
+      "jump": 3.445460995621785,
+      "floor": -2.0767289242940024e-05,
+      "headTurn": 116.53522955542887,
+      "LeftHandToRightFoot": 0.08702084350665665,
+      "RightHandToLeftFoot": 0.08702084350665665
+    },
+    {
+      "name": "male",
+      "id": "sitUp",
+      "duration": 4,
+      "contact": 6.172233363931895e-06,
+      "loop": 0,
+      "jump": 1.9091688677695127,
+      "floor": -0.010952172800898552,
+      "headTurn": 85.49999970582289
+    },
+    {
+      "name": "male",
+      "id": "pullUp",
+      "duration": 4,
+      "contact": 1.2535540436403453e-05,
+      "loop": 0,
+      "jump": 1.8435314590163565,
+      "floor": 0.06144547834992409,
+      "headTurn": 2.864788872916914
+    },
+    {
+      "name": "male",
+      "id": "pushUp",
+      "duration": 4,
+      "contact": 5.216395316951701e-06,
+      "loop": 0,
+      "jump": 1.1467820945200593,
+      "floor": -0.0045426953583955765,
+      "headTurn": 9.416951760529042
+    }
+  ],
+  "verification": {
+    "sourceCases": 24,
+    "savedClips": [
+      "Jumping Jacks",
+      "Hamstring Stretch",
+      "Sit Up",
+      "Pull Up",
+      "Push Up"
+    ],
+    "pullRise": 0.25957603639990423,
+    "jackFootLift": 0.0680825461061414,
+    "kneelingMaximumAdjacentTurnDegreesBefore": 11.754364813584672,
+    "kneelingMaximumAdjacentTurnDegreesAfter": 0.04471130597286315,
+    "bustNormal": {
+      "vertices": 414,
+      "edges": 2242,
+      "rmsBefore": 0.22550756332860974,
+      "rmsAfter": 0.1973694956960616,
+      "unitError": 4.488990601458909e-08
+    }
+  },
+  "focusedTests": {
+    "passed": 3,
+    "failed": 0,
+    "names": [
+      "lower bust shading smooths coarse normal changes without moving skin or softening the head",
+      "abdominal shading retains continuous muscle normals instead of smoothing the relief away",
+      "the browser drag shaper uses the same human head data as the complete model"
+    ],
+    "command": "node --test --test-concurrency=1 --test-name-pattern=\"lower bust shading|abdominal shading retains|browser drag shaper\" editor/tests/character-anatomy-controls.test.cjs editor/tests/character-abdominal-definition.test.cjs editor/tests/character-live-worker.test.cjs"
+  },
+  "finalBustView": [
+    {
+      "name": "athlete-bust-after",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "target": [
+          0,
+          1.0827501511573792,
+          0.07992536125704647
+        ]
+      },
+      "validationError": null
+    }
+  ],
+  "finalHamstringViews": [
+    {
+      "name": "hamstring-right-final",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 8,
+        "pose": "hamstringStretch",
+        "target": [
+          0,
+          0.52,
+          0.1
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "hamstring-left-final",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 8,
+        "pose": "hamstringStretch",
+        "target": [
+          0,
+          0.52,
+          0.1
+        ],
+        "time": 6
+      },
+      "validationError": null
+    }
+  ],
+  "finalHeadAndFloorViews": [
+    {
+      "name": "pull-up-final",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "pullUp",
+        "target": [
+          0,
+          1,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "sit-up-floor-final",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "sitUp",
+        "target": [
+          0,
+          0.3,
+          0
+        ],
+        "time": 0
+      },
+      "validationError": null
+    },
+    {
+      "name": "upright-head-motion",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "headSamples": [
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0.017498736879035984,
+            0.0064940847192562325,
+            -0.00027616490334501855,
+            0.9998257572218489
+          ],
+          [
+            2.1431319093059825e-18,
+            7.960204086854254e-19,
+            -4.143086303953993e-36,
+            1
+          ],
+          [
+            -0.017498736879035984,
+            -0.0064940847192562325,
+            -0.00027616490334501855,
+            0.9998257572218489
+          ],
+          [
+            -4.286263818611965e-18,
+            -1.5920408173708508e-18,
+            -1.6572345215815973e-35,
+            1
+          ]
+        ],
+        "target": [
+          0,
+          0.55,
+          0
+        ]
+      },
+      "validationError": null
+    }
+  ],
+  "squatPushupAndSavedViews": [
+    {
+      "name": "push-up-high",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "pushUp",
+        "target": [
+          0,
+          0.3,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "squat-clearance",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "squat",
+        "target": [
+          0,
+          0.5,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "saved-exercises",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "savedClips": [
+          "Jumping Jacks",
+          "Hamstring Stretch",
+          "Sit Up",
+          "Pull Up",
+          "Push Up"
+        ],
+        "target": [
+          0,
+          0.3,
+          0
+        ]
+      },
+      "validationError": null,
+      "exported": {
+        "bytes": 12334800,
+        "decoded": true,
+        "lid": true,
+        "morphs": 28,
+        "physical": true,
+        "pore": true,
+        "source": "saved-exercises",
+        "textures": 17
+      }
+    }
+  ],
+  "kneelAndSitupViews": [
+    {
+      "name": "sit-up-high",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 4,
+        "pose": "sitUp",
+        "target": [
+          0,
+          0.45,
+          0
+        ],
+        "time": 2
+      },
+      "validationError": null
+    },
+    {
+      "name": "kneeling-rest",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 6,
+        "pose": "kneel",
+        "target": [
+          0,
+          0.55,
+          0
+        ],
+        "time": 0
+      },
+      "validationError": null
+    }
+  ],
+  "jumpingJackView": [
+    {
+      "name": "jumping-jacks-open",
+      "errors": 0,
+      "glError": 0,
+      "note": {
+        "duration": 2.4000000953674316,
+        "pose": "jumpingJacks",
+        "target": [
+          0,
+          1,
+          0
+        ],
+        "time": 1.2
+      },
+      "validationError": null
+    }
+  ],
+  "savedActions": [
+    {
+      "name": "jumpingJacks",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Jumping Jacks"
+    },
+    {
+      "name": "hamstringStretch",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Hamstring Stretch"
+    },
+    {
+      "name": "sitUp",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Sit Up"
+    },
+    {
+      "name": "pullUp",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Pull Up"
+    },
+    {
+      "name": "pushUp",
+      "type": "clip",
+      "trigger": "action",
+      "clip": "Push Up"
+    }
+  ],
+  "runtimeSync": "40 files updated across 20 bundled projects.",
+  "limits": [
+    "Bust shading is softer, but coarse surface/lighting facets remain visible with the saved satin finish; this is not a mesh-retopology or perfect-surface claim.",
+    "The broader unbounded dome-gradient trial produced an abdominal lighting band and was rejected. Intermediate shading captures are excluded from final bust evidence.",
+    "Saved-model native reload precedes the final hamstring torso-angle and lower-bust gradient refinements. Final source saved-clip checks cover the current pose code; final bust native capture covers current shading.",
+    "Native views use the saved female Athlete proportions and workout clothing for exercises. Male coverage here is numeric; this is not an all-wardrobe or all-body collision audit.",
+    "Arm/leg collider counts in the numeric report are a coarse proxy and did not reproduce the reported surface overlap before the change. Squat clearance is judged in the native view, not proved by those counts.",
+    "Contact inspection samples 25 phases, with per-key angular checks; tiny interpolation/skin planting offsets remain. Pull-up grips assume a bar supplied by the game scene."
+  ],
+  "codeSha256": {
+    "runtime/reactor_3d_motions.js": "46d475a70c1557b63437eba25d36efe7d4ac773a30ca285ef4782ae35a65745e",
+    "runtime/reactor_main.js": "dfe1a1e428f71c063993d313bc47dbc8d74e5885046194cc75907af4f23b37d0",
+    "editor/src/forge/Character3D/Character3DBuilder.js": "7369ee554965bdb2979ec351dab2b6032c71d8c70e2707ec6b9ab926f7666913",
+    "editor/src/forge/Character3D/HumanBody.js": "105b6aae766a7a0ba61b383ff3d8081f6ae82b108782be18dfd3287497fda49b",
+    "editor/src/forge/Character3D/CharacterShading.js": "1b408b3616b4d75a5b84de2b0c27adec5c24fadcf670327b0ef0748f2b2a3ff7"
+  }
+}
