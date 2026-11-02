@@ -184,9 +184,15 @@ const ReactorCharacters = {
 
     // ---- In the 3D world ----
 
+    /** Installed and still held: changing maps lets go of models the new map doesn't use, and those must be installed again. */
+    isInstalled(id) {
+        const spec = this.models.get(id), R = typeof Reactor3D !== "undefined" ? Reactor3D : null;
+        return !!spec && !!R?._glbCache?.[R.modelCacheKey(spec.name, spec.ext, spec.file)];
+    },
+
     /** Hands a package to the 3D runtime as if it were a model on disk. Returns its model spec. */
     async install(id, buffer) {
-        if (this.models.has(id)) return this.models.get(id);
+        if (this.isInstalled(id)) return this.models.get(id);
         const R = Reactor3D;
         await R.ensureLoaded();
         const unpacked = this.unpack(buffer), file = "Character-" + id.slice(0, 16), name = "Characters/" + file;
@@ -216,7 +222,7 @@ const ReactorCharacters = {
     /** This save's model, loaded before its map is shown. */
     prepareCurrent() {
         const character = this.current();
-        if (!character || !character.id || this.models.has(character.id) || this._modelLoading === character.id) return;
+        if (!character || !character.id || this.isInstalled(character.id) || this._modelLoading === character.id) return;
         this._modelLoading = character.id;
         this.fetch(character.id).then(buffer => {
             if (buffer) return this.install(character.id, buffer);

@@ -8362,6 +8362,31 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }
 
+// Character Builder and Database phrases from the 0.99.4 cycle.
+{
+ const keys=["Apply skin look", "Bust bounce", "Butt bounce", "Fat bounce", "Finish strength", "Opening {name}…", "Pore detail", "Pore size", "Rules for games imported from older RPG Maker versions. Multi-frame sheets are on by default; other legacy rules are enabled as needed.", "Skin surface"];
+ const rows={
+ "ja":["肌の見た目を適用", "胸の揺れ", "お尻の揺れ", "脂肪の揺れ", "仕上げの強さ", "{name} を開いています…", "毛穴の細かさ", "毛穴の大きさ", "古いRPGツクールから取り込んだゲーム用のルールです。複数フレームのシートは既定でオン、その他の旧ルールは必要に応じて有効になります。", "肌の表面"],
+ "zh-Hant":["套用膚質外觀", "胸部彈跳", "臀部彈跳", "脂肪彈跳", "表面處理強度", "正在開啟 {name}…", "毛孔細節", "毛孔大小", "適用於從舊版 RPG Maker 匯入之遊戲的規則。多影格圖表預設開啟，其他舊版規則視需要啟用。", "皮膚表面"],
+ "zh-Hans":["应用皮肤外观", "胸部弹跳", "臀部弹跳", "脂肪弹跳", "表面处理强度", "正在打开 {name}…", "毛孔细节", "毛孔大小", "适用于从旧版 RPG Maker 导入的游戏的规则。多帧图表默认开启，其他旧版规则按需启用。", "皮肤表面"],
+ "ko":["피부 모습 적용", "가슴 흔들림", "엉덩이 흔들림", "지방 흔들림", "마감 강도", "{name} 여는 중…", "모공 디테일", "모공 크기", "이전 RPG Maker 버전에서 가져온 게임의 규칙입니다. 멀티 프레임 시트는 기본으로 켜져 있고, 다른 이전 규칙은 필요할 때 활성화됩니다.", "피부 표면"],
+ "es":["Aplicar aspecto de piel", "Rebote del pecho", "Rebote de los glúteos", "Rebote de la grasa", "Intensidad del acabado", "Abriendo {name}…", "Detalle de poros", "Tamaño de poros", "Reglas para juegos importados de versiones antiguas de RPG Maker. Las hojas de varios fotogramas están activadas por defecto; otras reglas antiguas se activan según sea necesario.", "Superficie de la piel"],
+ "pt":["Aplicar aparência da pele", "Balanço do peito", "Balanço dos glúteos", "Balanço da gordura", "Força do acabamento", "Abrindo {name}…", "Detalhe dos poros", "Tamanho dos poros", "Regras para jogos importados de versões antigas do RPG Maker. Folhas de vários quadros vêm ativadas; outras regras antigas são ativadas conforme necessário.", "Superfície da pele"],
+ "fr":["Appliquer l'aspect de la peau", "Rebond de la poitrine", "Rebond des fesses", "Rebond de la graisse", "Intensité de la finition", "Ouverture de {name}…", "Détail des pores", "Taille des pores", "Règles pour les jeux importés d'anciennes versions de RPG Maker. Les planches à plusieurs images sont activées par défaut ; les autres règles anciennes le sont selon les besoins.", "Surface de la peau"],
+ "de":["Hautbild anwenden", "Brustwippen", "Gesäßwippen", "Fettwippen", "Finish-Stärke", "{name} wird geöffnet…", "Porendetail", "Porengröße", "Regeln für Spiele aus älteren RPG-Maker-Versionen. Mehrbild-Bögen sind standardmäßig aktiv; andere alte Regeln werden bei Bedarf aktiviert.", "Hautoberfläche"],
+ "it":["Applica aspetto pelle", "Rimbalzo del seno", "Rimbalzo dei glutei", "Rimbalzo del grasso", "Intensità della finitura", "Apertura di {name}…", "Dettaglio dei pori", "Dimensione dei pori", "Regole per i giochi importati da vecchie versioni di RPG Maker. I fogli a più fotogrammi sono attivi per impostazione predefinita; le altre vecchie regole si attivano quando servono.", "Superficie della pelle"],
+ "ru":["Применить вид кожи", "Колебание груди", "Колебание ягодиц", "Колебание жира", "Сила отделки", "Открывается {name}…", "Детализация пор", "Размер пор", "Правила для игр, импортированных из старых версий RPG Maker. Многокадровые листы включены по умолчанию; другие старые правила включаются по необходимости.", "Поверхность кожи"],
+ "pl":["Zastosuj wygląd skóry", "Podskakiwanie biustu", "Podskakiwanie pośladków", "Podskakiwanie tłuszczu", "Siła wykończenia", "Otwieranie {name}…", "Szczegółowość porów", "Rozmiar porów", "Reguły dla gier zaimportowanych ze starszych wersji RPG Maker. Arkusze wieloklatkowe są domyślnie włączone; inne stare reguły włączają się w razie potrzeby.", "Powierzchnia skóry"],
+ "el":["Εφαρμογή όψης δέρματος", "Αναπήδηση στήθους", "Αναπήδηση γλουτών", "Αναπήδηση λίπους", "Ένταση φινιρίσματος", "Άνοιγμα {name}…", "Λεπτομέρεια πόρων", "Μέγεθος πόρων", "Κανόνες για παιχνίδια από παλαιότερες εκδόσεις του RPG Maker. Τα φύλλα πολλών καρέ είναι ενεργά από προεπιλογή· οι άλλοι παλιοί κανόνες ενεργοποιούνται όταν χρειάζεται.", "Επιφάνεια δέρματος"],
+ "ar":["تطبيق مظهر البشرة", "ارتداد الصدر", "ارتداد الأرداف", "ارتداد الدهون", "قوة اللمسة النهائية", "جارٍ فتح {name}…", "تفاصيل المسام", "حجم المسام", "قواعد للألعاب المستوردة من إصدارات RPG Maker القديمة. الأوراق متعددة الإطارات مفعلة افتراضيًا، وتُفعّل القواعد القديمة الأخرى عند الحاجة.", "سطح البشرة"],
+ "tr":["Cilt görünümünü uygula", "Göğüs sekmesi", "Kalça sekmesi", "Yağ sekmesi", "Bitiş gücü", "{name} açılıyor…", "Gözenek ayrıntısı", "Gözenek boyutu", "Eski RPG Maker sürümlerinden aktarılan oyunlar için kurallar. Çok kareli sayfalar varsayılan olarak açıktır; diğer eski kurallar gerektiğinde etkinleşir.", "Cilt yüzeyi"],
+ "id":["Terapkan tampilan kulit", "Pantulan dada", "Pantulan pinggul", "Pantulan lemak", "Kekuatan hasil akhir", "Membuka {name}…", "Detail pori", "Ukuran pori", "Aturan untuk game yang diimpor dari versi RPG Maker lama. Lembar multi-bingkai aktif secara bawaan; aturan lama lainnya diaktifkan sesuai kebutuhan.", "Permukaan kulit"],
+ "vi":["Áp dụng vẻ ngoài da", "Độ nảy ngực", "Độ nảy mông", "Độ nảy mỡ", "Độ mạnh hoàn thiện", "Đang mở {name}…", "Chi tiết lỗ chân lông", "Kích thước lỗ chân lông", "Quy tắc cho trò chơi nhập từ các phiên bản RPG Maker cũ. Trang nhiều khung hình được bật mặc định; các quy tắc cũ khác được bật khi cần.", "Bề mặt da"],
+ "th":["ใช้ลักษณะผิว", "การเด้งของหน้าอก", "การเด้งของสะโพก", "การเด้งของไขมัน", "ความแรงของการตกแต่งผิว", "กำลังเปิด {name}…", "รายละเอียดรูขุมขน", "ขนาดรูขุมขน", "กฎสำหรับเกมที่นำเข้าจาก RPG Maker รุ่นเก่า แผ่นหลายเฟรมเปิดเป็นค่าเริ่มต้น ส่วนกฎเก่าอื่น ๆ จะเปิดเมื่อจำเป็น", "พื้นผิวผิวหนัง"],
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
 // Original procedural field clothing and equipment.
 {
  const keys=['Field coat','Courier','Pathfinder','Utility harness'];

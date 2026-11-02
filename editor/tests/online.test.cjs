@@ -593,3 +593,22 @@ test('voice costs a single-player game nothing, and is off until a project turns
     assert.equal(Editor.VOICE.enabled, false);
     assert.equal(new Editor({}).settings(null).voice.mode, 'push');
 });
+
+test('a player\'s model released by a map change is installed again, so nobody turns invisible', async () => {
+    const world = onlineWorld(() => ({}));
+    const { ReactorCharacters: characters, ReactorOnline: online, Reactor3D: R } = world;
+    const spec = { name: 'Characters/Character-one', ext: '.glb', file: 'Character-one' };
+    let installs = 0;
+    R._glbCache = {};
+    R.modelCacheKey = () => 'one';
+    characters.fetch = async () => new ArrayBuffer(8);
+    characters.install = async id => { installs++; R._glbCache.one = {}; characters.models.set(id, spec); return spec; };
+    const look = async () => { const peer = { modelId: '', modelSpec: null }; online.fetchLook(peer, 'one'); await online._lookQueue; return peer; };
+    assert.equal((await look()).modelSpec, spec);
+    assert.equal((await look()).modelSpec, spec);
+    assert.equal(installs, 1, 'held: nothing to do');
+    delete R._glbCache.one;     // what ModelUse.release does on a transfer
+    assert.equal(characters.isInstalled('one'), false);
+    assert.equal((await look()).modelSpec, spec);
+    assert.equal(installs, 2, 'released: installed again');
+});

@@ -11,7 +11,7 @@
     "walkableTiles": 28207
   },
   "machines": {
-    "server": "AMD EPYC 7401P, 24 cores, 32 GB, Node 20.19.2, PHP 8.4.27 under mod_fcgid, Apache mpm_event",
+    "server": "AMD EPYC 7401P, 24 cores, 32 GB, Node 20, PHP 8.4",
     "desktop": "AMD Ryzen 9 9950X3D, Node 26.12.1"
   },
   "method": "Real runtime loaded through editor/tests/helpers/follower-world.cjs. Zero-dependency RFC 6455 WebSocket over plain TCP on loopback (no TLS). Bots walk at random with 10 inputs a second; 10 snapshots a second; 16-tile interest grid; at most 64 neighbours. All players on one map in one thread. On the server, Node was started by PHP as the site user and the bots ran on the same machine.",

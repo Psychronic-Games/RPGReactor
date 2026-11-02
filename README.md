@@ -23,6 +23,29 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 
 Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.99.4 and is not published yet; the latest tagged source release is [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3).
 
+## New in development: online worlds
+
+Turn an RPG into a multiplayer world from the editor. Deploy it to ordinary web hosting and it's running, with no database and no router setup. The server shares information and each player's own PC draws the game, so plugin-heavy projects keep working.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/01-online-town.jpg" alt="Two players meeting in North Haven"><br><sub>Players meet in your world, with their own characters, chat and names.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/02-character-creator.jpg" alt="Creating a character in the game"><br><sub>Players build a character in the game with the same tools as the Forge. It works in single-player games too.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/03-online-deploy.jpg" alt="Deploying to an online server"><br><sub>Pick a web folder and deploy. A rebuild updates the live server.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.4/04-voice-settings.jpg" alt="Voice settings in Database › Online"><br><sub>Every game sets its own rules in Database › Online.</sub></td>
+</tr>
+</table>
+
+- **Speak as your character:** nearby players hear each other from where they stand, and 3D mouths move with the sound.
+- **Sleep and wake:** with an account, signing off leaves your character asleep in the world, and you wake up there on any device.
+- **A shared world:** events work as they do in a single-player game. Choose which switches and variables every player shares.
+- **Accounts, chat and an owner page:** guests or accounts, map and world chat, blocked words, bans and player management.
+- **Faster where the host allows it:** with Node and a WebSocket proxy, the server pushes updates and checks movement. Every other host keeps working as it does now.
+
+This is early. It has been tested on one server, and voice hasn't been tried yet with real microphones or between home networks. See the [guide and design](docs/DESIGN-ONLINE.md).
+
 ## What's new in 0.99.3
 
 - **Reliable Builder exports:** character surface maps and material settings survive loading, chibi sheets keep their proportions in every frame, and face exports retain studio colors.
@@ -80,7 +103,7 @@ RPGReactor/
 - **Authorable HD-2D maps and a 3D world builder**: maps can opt into a perspective 3D presentation while retaining RPG Maker's grid, passability, events, and data format. Map Properties carries the 3D switch, a room (parallax floor, walls, ceiling, sky) and the camera. A **Build** bar over the 3D view lays walls, floors, doors, windows, stairs, roofs, shapes and saved buildings with a snapping ghost, terrain brushes shape rolling ground, water is poured into hollows, and the party walks inside: roofs cut away, walls between the camera and the party go see-through, and stairs lead to a second floor. Buildings are plans in `3d/Structures`, readable JSON that an editor page, a validator and a shell command all understand.
 - **Battles on the map**: beside the Classic battle screen, a game, map or troop can fight in Tactical (turn-based on the grid, with range, flanking, cover, height, line of sight, overwatch and a forecast), Action (real time, in third person or from above) or First Person, on 2D and 3D maps. Events become units through Battle Setup, map events keep running during the fight, Action Sequences play on the map, a cinematic camera films Tactical battles, and each mode has its own HUD as an ordinary User Interfaces record. See the [battle modes guide](docs/BATTLE-MODES.md).
 - **Vehicles**: Database vehicles with a sprite or 3D model, starting positions, engine sound, an optional class for stats, skills and equipment, and a rider's seat marked on the model. The party rides its own vehicles behind the leader, vehicles travel between maps and are saved where they are parked, and in Tactical and Classic battles a mounted unit fights with the vehicle's range, weapon and skills while the vehicle takes its own damage.
-- **Online worlds (early)**: choose Online in Database › Online, then tick Online Server when deploying, and the game and a small PHP server go into a web folder, with no database or router setup. Players build their own 3D character in the game, which everyone else on the map then sees walking around, on the web or a desktop build. Accounts, chat, sleeping and waking, shared switches and variables, and an owner's admin page are included. Nearby players can speak to each other, and their characters' mouths move with the sound. Where the host allows Node and a WebSocket proxy, a small server process adds faster updates and movement checks by itself; see the [design](docs/DESIGN-ONLINE.md).
+- **Online worlds (early)**: choose Online in Database › Online, then tick Online Server when deploying, and the game and a small PHP server go into a web folder, with no database or router setup. Players build their own 3D character in the game, which everyone else on the map then sees walking around, on the web or a desktop build. Accounts, chat, voice, sleeping and waking, and a shared world are included. See [New in development](#new-in-development-online-worlds).
 - **Seamless neighboring maps**: each side of a map can name the map that lies past it. Neighbors stand on the horizon two maps out and are entered with no fade or loading, on foot or riding, on 3D and 2D maps; only the maps around the party are in memory.
 - **Model optimization**: GLB import can cap textures at 2K, pack skin weights, reduce geometry, and reorder triangles for the GPU vertex cache. The 3D database also offers Optimize for existing models and reports geometry, materials, textures, and rig costs. Both presets can change geometry; aggressive reduction targets fewer triangles. Separate distance-level file generation is disabled in both presets, while the runtime still supports existing authored LOD files. The 3D world is drawn at three quarters of game resolution and enlarged with a sharpening filter, without MSAA; lighting and light haze are worked out at a quarter size and filtered up by surface, and dense models are drawn at simplified distance levels in shadows, and in the view on weak GPUs. Adaptive resolution is opt-in.
 - **Quests and BGM sequences**: author quests in the database, import VisuStella/Yanfly/GS definitions, and manage objectives through events. Quest progress saves with the game, rewards can give gold, items, EXP or a common event, and the tracked quest shows on the map. Music sequences, kept in a database library or on a map and playable in battle, repeat ordered track, silence, and palette entries; palette layers choose tracks from random pools with timing and fade controls. Native track loop points are ignored inside a sequence.

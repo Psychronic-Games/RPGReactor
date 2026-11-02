@@ -2,7 +2,7 @@
  "date": "2026-11-01",
  "type": "online Engine and voice verification",
  "runtime": "20261101.40",
- "server": "demo.rpgreactor.org: EPYC 7401P, Node 20.19.2, PHP 8.4.27 under mod_fcgid",
+ "server": "demo.rpgreactor.org: EPYC 7401P, Node 20, PHP 8.4",
  "engine": {
   "firstJoinMs": 228,
   "laterJoinMs": 13,

@@ -552,8 +552,7 @@ const ReactorOnline = {
         peer.modelId = id;
         this._lookQueue = (this._lookQueue || Promise.resolve()).then(async () => {
             if (peer.modelId !== id) return;
-            const known = ReactorCharacters.models.get(id);
-            if (known) { peer.modelSpec = known; return; }
+            if (ReactorCharacters.isInstalled(id)) { peer.modelSpec = ReactorCharacters.models.get(id); return; }
             const buffer = await ReactorCharacters.fetch(id);
             if (buffer && peer.modelId === id) peer.modelSpec = await ReactorCharacters.install(id, buffer);
         }).catch(error => console.warn("A player's character could not be loaded.", error));
