@@ -37,6 +37,37 @@
 
     const need = (name, file) => root[name] || (typeof require === 'function' ? (() => { try { return require(file); } catch (e) { return null; } })() : null);
 
+    /** How far (meters) a saved soft-tissue key may be left to interpolation: well under the 8 mm the default bounce reaches. */
+    const SOFT_KEY_TOLERANCE = 0.0005;
+
+    /**
+     * A saved clip's soft tissue on the keys its motion needs. The bake keys
+     * every joint 60 times a second, and on most joints most keys lie on the
+     * line between their neighbors; a joint that barely moves needs two.
+     */
+    function leanSoftTissue(bones, clip) {
+        const shared = new Map();
+        const tracks = clip.tracks.map(t => {
+            if (!bones[t.bone]?.softTissue || !t.times) return t;
+            const { times, values } = t, keep = [0];
+            const fits = (a, b) => {
+                for (let i = a + 1; i < b; i++) {
+                    const u = (times[i] - times[a]) / (times[b] - times[a]);
+                    for (let k = 0; k < 3; k++) if (Math.abs(values[a * 3 + k] + (values[b * 3 + k] - values[a * 3 + k]) * u - values[i * 3 + k]) > SOFT_KEY_TOLERANCE) return false;
+                }
+                return true;
+            };
+            let a = 0;
+            for (let b = 2; b < times.length; b++) if (!fits(a, b)) { keep.push(b - 1); a = b - 1; }
+            keep.push(times.length - 1);
+            const lean = new Float32Array(keep.length * 3), key = keep.join(',');
+            keep.forEach((i, j) => lean.set(values.subarray(i * 3, i * 3 + 3), j * 3));
+            if (!shared.has(key)) shared.set(key, Float32Array.from(keep, i => times[i]));
+            return { ...t, times: shared.get(key), values: lean };
+        });
+        return { ...clip, tracks };
+    }
+
     /**
      * A humanoid rig for a saved character, as Database › 3D Models' Rig
      * tool binds one to a model with a skeleton of its own: every marker on
@@ -74,7 +105,7 @@
         // Centaur hook (RRCharacterCentaur): the horse stands under the humanoid motions; its own gaits are the build's clips.
         // Looked up when called (CharacterModel has loaded it by the time a centaur is built), so load order does not matter.
         const Centaur = result.recipe && result.recipe.species === 'centaur' ? root.RRCharacterCentaur || null : null;
-        const clips = Centaur ? Centaur.adaptClips(result.bones, api.gameClips(result.bones, body, set)).map(c => Library.withSoftTissueMotion(result.bones, { ...c, softTissueProfile: null })) : api.gameClips(result.bones, body, set);
+        const clips = Centaur ? Centaur.adaptClips(result.bones, api.gameClips(result.bones, body, set)).map(c => leanSoftTissue(result.bones, Library.withSoftTissueMotion(result.bones, { ...c, softTissueProfile: null }))) : api.gameClips(result.bones, body, set);
         const names = new Set(['Idle'].concat(clips.map(c => c.name)));
         const animations = Library.SLOTS.filter(([, , clip]) => names.has(clip)).map(([name, trigger, clip]) => ({ name, type: 'clip', trigger, clip }));
         // Exercises and authored motions are actions outside the battle set.
@@ -96,7 +127,7 @@
     const api = Object.assign(Object.create(null), Library, { savedModel, humanoidRig });
     const follow = (bones, clip) => Library.withSoftTissueMotion(bones, need('RRCharacterSpecies', './CharacterSpecies.js')?.followMotion(bones, clip) || clip);
     api.clip = (bones, ...args) => follow(bones, Library.clip(bones, ...args));
-    api.gameClips = (bones, ...args) => Library.gameClips(bones, ...args).map(clip => follow(bones, clip));
+    api.gameClips = (bones, ...args) => Library.gameClips(bones, ...args).map(clip => leanSoftTissue(bones, follow(bones, clip)));
     // The library itself keeps its own state (its data); the builder reaches it through this one name.
     for (const key of Object.keys(Library)) if (typeof Library[key] !== 'function') Object.defineProperty(api, key, { get: () => Library[key], set: v => { Library[key] = v; }, enumerable: true });
     root.RRCharacterPoses = api;

@@ -126,7 +126,8 @@ test('the clips loop: Idle, Walk, Trot and Run, the horse\'s legs and the person
     const B = name => result.bones.findIndex(b => b.name === name);
     for (const clip of result.clips) {
         for (const t of clip.tracks) {
-            const w = t.path === 'translation' || t.path === 'scale' ? 3 : 4, last = clip.times.length - 1;
+            // Baked soft tissue is keyed on times of its own.
+            const w = t.path === 'translation' || t.path === 'scale' ? 3 : 4, last = (t.times || clip.times).length - 1;
             for (let k = 0; k < w; k++) assert.ok(Math.abs(t.values[k] - t.values[last * w + k]) < 1e-3 || (w === 4 && Math.abs(t.values[k] + t.values[last * w + k]) < 1e-3), clip.name + ' ' + result.bones[t.bone].name + ' loops');
             for (const v of t.values) assert.ok(Number.isFinite(v));
         }

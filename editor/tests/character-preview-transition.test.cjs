@@ -7,8 +7,8 @@ function fixture() {
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/forge/Character3D/Character3DBuilder.js'), 'utf8'), scope);
     const b = Object.create(scope.window.Character3DBuilder.prototype);
     const position = { array: new Float32Array(9) }, normal = { array: new Float32Array(9).fill(1) };
-    const geometry = { index: { array: Uint32Array.of(0, 1, 2) }, getAttribute: name => name === 'position' ? position : normal };
-    b._view = { meshes: [{ geometry }] }; b._result = { parts: [{ name: 'Body', positions: new Float32Array(9) }] }; b._render = () => {};
+    const geometry = { index: { array: Uint32Array.of(0, 1, 2) }, getAttribute: name => name === 'position' ? position : name === 'normal' ? normal : undefined };
+    b._view = { meshes: [{ geometry }] }; b._result = { parts: [{ name: 'Body', positions: new Float32Array(9) }] }; b._render = () => b._stepPreviewTween(now);
     return { b, position, normal, geometry, frames, step(time) { now = time; const pending = [...frames.values()]; frames.clear(); for (const fn of pending) fn(time); } };
 }
 test('worker samples interpolate in the view and finish on the exact result without mutating export data', () => {

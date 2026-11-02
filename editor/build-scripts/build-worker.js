@@ -150,6 +150,8 @@ const EXCLUDED = new Set([
 // release (13-15 MB on a mature project) and leaks the developer's test party.
 function isStagingExcluded(relPath) {
     if (EXCLUDED.has(relPath)) return true;
+    // A playtest's copy of the Forge. A game that builds characters is given a fresh one below.
+    if (relPath === onlineDeploy.BUILDER_FOLDER) return true;
     if (/^rpgmaker-runtime-backup(-\d+)?\.zip$/.test(relPath)) return true;
     // The Character Generator's recipe beside each sheet it saved: the editor's, not the game's.
     if (relPath.startsWith('img' + path.sep) && /\.character\.json$/i.test(relPath)) return true;

@@ -449,9 +449,12 @@
         }
         const boundary = new Set(), originals = new Map(), replacement = new Map();
         for (const [key, count] of edges) if (count === 1) key.split(':').forEach(v => boundary.add(+v));
-        stencils.forEach((s, i) => { if (s.length === 1 && s[0][1] === 1) originals.set(s[0][0], i); });
+        // Large patches overlap across the breastbone: each side's edge joins
+        // that side's own copy, since the other's may be fitted off the body.
+        const sideOf = i => keys[i].slice(0, keys[i].indexOf('/'));
+        stencils.forEach((s, i) => { if (s.length === 1 && s[0][1] === 1) originals.set(sideOf(i) + '/' + s[0][0], i); });
         for (const i of boundary) if (stencils[i].length > 1) {
-            const source = stencils[i].slice().sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+            const source = sideOf(i) + '/' + stencils[i].slice().sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
             if (originals.has(source)) replacement.set(i, originals.get(source));
         }
         const joined = [];

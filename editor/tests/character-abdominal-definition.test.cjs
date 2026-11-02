@@ -26,22 +26,26 @@ test('abdominal relief leaves natural tone intact and blends continuously beyond
         assert.equal(i % 3, 2, 'relief preserves horizontal and vertical skin coordinates');
     }
     assert.ok(changed > 50 && changed < 1000, 'local abdominal vertices: ' + changed);
-    assert.ok(maximum > 0.010 && maximum < 0.022, 'bounded muscle relief: ' + maximum);
+    // Preview 70: the owner rejected the subtle relief, whose ceiling was 0.022. The profile's own peak, span * (0.012 + 0.083 * 1.4), is 0.0342.
+    assert.ok(maximum > 0.022 && maximum < 0.035, 'bounded muscle relief: ' + maximum);
 });
 
 test('extreme tone has six raised abdominal bellies separated by a central groove', () => {
     const B = pack.positions, P = B.slice(), navel = Body.anatomyFields(pack).navel;
     Body.abdominalDefinition(pack, P, { shapes: { abs: 2 } });
-    const cy = B[navel * 3 + 1], at = name => { const b = pack.bones.find(b => b.name === name); return b.head.reduce((sum, v) => sum + B[v * 3 + 1] / b.head.length, 0); };
-    const span = (at('Neck') - at('Hips')) * 0.5;
+    const { lower, height, span } = pack._abdominalFrame;
     const front = [...new Set(pack.body.source)].filter(v => B[v * 3 + 2] > B[navel * 3 + 2] - 0.035);
     const nearest = (x, y) => front.reduce((a, v) => ((B[v * 3] - x) ** 2 + (B[v * 3 + 1] - y) ** 2) < ((B[a * 3] - x) ** 2 + (B[a * 3 + 1] - y) ** 2) ? v : a);
     const relief = v => P[v * 3 + 2] - B[v * 3 + 2];
-    for (const row of [0.16, 0.39, 0.62]) {
-        const y = cy + row * span;
-        for (const side of [-1, 1]) assert.ok(relief(nearest(side * 0.19 * span, y)) > 0.004, 'raised pair at row ' + row);
-        assert.ok(relief(nearest(0, y)) < 0, 'central tendon at row ' + row);
+    // Preview 70 sets the rows between navel and bust and lifts the whole front, so the groove is measured against the bellies beside it.
+    const pair = row => Math.min(...[-1, 1].map(side => relief(nearest(side * 0.19 * span, lower + row * height))));
+    const rows = [0.16, 0.50, 0.84];
+    for (const row of rows) {
+        assert.ok(pair(row) > 0.004, 'raised pair at row ' + row);
+        assert.ok(pair(row) - relief(nearest(0, lower + row * height)) > 0.015, 'central groove at row ' + row);
     }
+    for (const row of [0.33, 0.67]) assert.ok(pair(row) < pair(row - 0.17) && pair(row) < pair(row + 0.17), 'tendon between the rows at ' + row);
+    assert.ok(pair(0.50) > pair(0.16) && pair(0.50) > pair(0.84), 'the middle pair stands out from the other two');
     const head = Body.headFields(pack);
     for (const v of head.eyeIds) assert.equal(P[v * 3 + 2], B[v * 3 + 2]);
 });

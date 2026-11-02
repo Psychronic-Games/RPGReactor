@@ -56,6 +56,8 @@ temp/
 /template/*
 !/template/Demo/
 !/template/Demo/**
+# The Forge, copied in for a playtest of a project that builds characters.
+/template/Demo/reactor-builder/
 /save/
 /editor/save/
 

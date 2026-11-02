@@ -6,13 +6,28 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-02)
 
-- **Development:** 0.99.5 is open. Desktop/web manifests, About text, import scaffolding and the Demo metadata are updated. Runtime revision **20261101.41** is unchanged; all bundled runtime headers identify engine 0.99.5. Next changes go under 0.99.5 and stay local until the owner asks to push.
-- **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release. The [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live, with prepared Markdown/plain-text copies in `docs/posts/` and six JPGs in `docs/media/releases/0.99.4/`.
-- **Release preference:** publish regular Latest source releases when the owner asks for a release; use a prerelease only when explicitly requested. Signed native binaries remain a separate pipeline.
-- **Verification:** the [0.99.4 release CI](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41398393353) failed: 24 character tests and the dependency audit remain open. No green full-suite result is claimed. [Working list](OPEN-ITEMS.md).
+- **Development:** 0.99.5 is open, runtime revision **20261102.1**. Changes stay local until the owner asks to push `main`.
+- **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
+- **Verification:** see [OPEN-ITEMS.md](OPEN-ITEMS.md) item 1 for the CI result. Substantial checks go through `codex-check`.
+- **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test accounts, sleepers and chat.
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
-- **Faces:** the owner is working on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
-- **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering. Full local suites remain deferred; substantial checks go through `codex-check`.
+- **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
+- **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering.
+
+## 2026-11-02 — Character creation as game windows, sign-in, CI
+
+The owner's New Game error was the worker missing from playtests: only deploys wrote `reactor-builder/`, and a game's page (a `chrome-extension://` origin under NW.js) cannot start a worker from the editor's folder. `stagePlaytestCharacterBuilder` now copies the Forge in when a playtest starts.
+
+The creator and sign-in are now menu scenes, so they take the project's window skin, font and window plugins. `ReactorCharacterStudio` holds the recipe, worker and view and outlives its scene so `Scene_Name` can be visited. How it fits together, and the event command's options, are in [Online worlds](DESIGN-ONLINE.md#after-an-intro).
+
+Traps:
+
+- A temp Demo copy has the Demo's old `js/`: overlay `runtime/` or you test the previous runtime. On the headless display the game runs at about 2 FPS, under 1 with the creator's view, so hold keys until `Graphics.frameCount` advances.
+- The Demo's two settings files are tracked, and a new project deletes them (`updateCopiedTemplateProject`), or it would join the demo server.
+- `System.json` `versionId` and `project.rpgreactor` churn in the Demo whenever the editor saves. They were left out of these commits.
+- `limitLegs` now runs on floor, squat and exercise poses. The kneeling stretches skip it on purpose: bringing them into range moved the approved hold's feet up to 17 cm.
+
+Not done: a real `nwbuild` on the overridden `glob` and `minimatch`, a User Interfaces role for the creator (the same skin and font reach custom menus, their layout does not), translating the creator's in-game labels, and password reset by email (accounts have no email; the owner resets on the admin page). Two owner questions are new: B2 and B3.
 
 ## 2026-11-02 — Start 0.99.5 development
 

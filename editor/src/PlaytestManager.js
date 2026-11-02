@@ -191,6 +191,22 @@ class PlaytestManager {
         }
     }
 
+    /**
+     * Character Creation builds with the Forge's own files, which a deployed game carries.
+     * A playtest runs from the project's folder, so they go there first. A failure here
+     * still lets the game start; its creator then says it could not load them.
+     */
+    stageCharacterBuilder(projectPath) {
+        try {
+            const path = require('path'), fs = require('fs');
+            const appRoot = [__dirname, path.resolve(__dirname, '..'), process.cwd()]
+                .find(root => fs.existsSync(path.join(root, 'build-scripts', 'online-deploy.cjs')));
+            if (appRoot) require(path.join(appRoot, 'build-scripts', 'online-deploy.cjs')).stagePlaytestCharacterBuilder(projectPath, appRoot);
+        } catch (error) {
+            console.error('Could not make the character builder ready for this playtest:', error);
+        }
+    }
+
     launchPlaytestWindow(projectPath, mode) {
         if (mode === undefined) mode = 'test';
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
@@ -207,6 +223,8 @@ class PlaytestManager {
                 return false;
             }
         }
+
+        this.stageCharacterBuilder(projectPath);
 
         // Close existing playtest process if any
         if (this.playtestProcess) {

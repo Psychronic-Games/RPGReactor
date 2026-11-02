@@ -79,5 +79,13 @@
     "esbuild": "0.28.2",
     "nw-builder": "^4.17.13",
     "png-to-ico": "^3.0.1"
+  },
+  "overrides": {
+    "nw-builder": {
+      "glob": "^14.0.3"
+    },
+    "readdir-glob": {
+      "minimatch": "^11.0.4"
+    }
   }
 }

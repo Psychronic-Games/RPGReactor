@@ -69,7 +69,11 @@ test('choosing flexible footwear preserves the original foot bindings under powe
         const under=new Map();for(let v=0;v<body.positions.length/3;v++)under.set(place(body,v),v);
         const pairs=Array.from({length:suit.positions.length/3},(_,v)=>under.get(place(suit,v)));
         assert.ok(pairs.every(b=>b!==undefined),'every undersuit vertex comes from a body vertex');
-        same.push(pairs.every((b,v)=>[0,1,2,3].every(k=>suit.joints[v*4+k]===body.joints[b*4+k]&&suit.weights[v*4+k]===body.weights[b*4+k])));
+        // Footwear decides what the feet do. Soft tissue (2026-11-01) fits its own shares to the trunk and thighs of a layer that
+        // stands off the skin, so the whole binding is no longer equal; none of them hangs from a foot or a toe.
+        const feetBones=result.bones.map((b,i)=>/(Foot|ToeBase)$/.test(b.name)?i:-1).filter(i=>i>=0);
+        const share=(p,v,j)=>{let w=0;for(let k=0;k<4;k++)if(p.joints[v*4+k]===j)w+=p.weights[v*4+k];return w;};
+        same.push(pairs.every((b,v)=>feetBones.every(j=>Math.abs(share(suit,v,j)-share(body,b,j))<.002)));
     }
     assert.ok(!same[0]&&!same[1],'hard boots and their lining retain a rigid foot');
     assert.ok(same[2],'flexible boots keep the original underlying articulation');

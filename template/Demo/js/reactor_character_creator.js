@@ -96,11 +96,32 @@ const ReactorCharacters = {
         this.pending = !!(config && config.onNewGame !== false && (config.mode === "build" || this.choices().length));
     },
 
-    open() {
+    /**
+     * The event command. `once` skips it for a player who already has their character
+     * (an intro replayed, an account that has one); `required` takes away the way back,
+     * for an intro that can't go on without one; `switchId` says how it ended.
+     */
+    open(options = {}) {
         const config = this.config();
         if (!config) return false;
+        this.call = { required: !!options.required, switchId: Number(options.switchId) || 0 };
+        if (options.once && this.current()) {
+            this.settle(true);
+            return true;
+        }
         SceneManager.push(config.mode === "build" ? Scene_CharacterCreator : Scene_CharacterChoice);
         return true;
+    },
+
+    /** Whether the player must finish: an intro that asked for that. */
+    isRequired() {
+        return !this.starting && !!this.call?.required;
+    },
+
+    /** An event's call is over: its switch says whether the player has their character. */
+    settle(done) {
+        if (this.call?.switchId) $gameSwitches.setValue(this.call.switchId, done);
+        this.call = null;
     },
 
     /** The party the player chose leads, or is alone, as the game is set up. */
@@ -334,6 +355,11 @@ Scene_CharacterChoice.prototype.onChosen = function() {
 };
 
 Scene_CharacterChoice.prototype.onBack = function() {
+    if (ReactorCharacters.isRequired()) {
+        SoundManager.playBuzzer();
+        this._listWindow.activate();
+        return;
+    }
     ReactorCharacters.leave();
 };
 
@@ -345,6 +371,7 @@ ReactorCharacters.finish = function() {
         SceneManager._scene.fadeOutAll();
         SceneManager.goto(Scene_Map);
     } else {
+        this.settle(true);
         SceneManager.pop();
     }
 };
@@ -355,6 +382,7 @@ ReactorCharacters.leave = function() {
         if (typeof ReactorOnline !== "undefined") ReactorOnline.gameStarted = false;
         SceneManager.goto(Scene_Title);
     } else {
+        this.settle(false);
         SceneManager.pop();
     }
 };
@@ -373,7 +401,7 @@ ReactorCharacters.worker = function() {
             if (call) { if (event.data.error) call.reject(new Error(event.data.error)); else call.resolve(event.data.value); }
         };
         this._worker.onerror = event => {
-            for (const call of this._calls.values()) call.reject(new Error(event.message || "The character builder could not start."));
+            for (const call of this._calls.values()) call.reject(new Error(event.message || "The character builder's files did not load."));
             this._calls.clear();
             this._worker = null;
         };
@@ -389,115 +417,56 @@ ReactorCharacters.ask = function(message) {
     });
 };
 
-function Scene_CharacterCreator() {
-    this.initialize(...arguments);
-}
-
-Scene_CharacterCreator.prototype = Object.create(Scene_Base.prototype);
-Scene_CharacterCreator.prototype.constructor = Scene_CharacterCreator;
-
-Scene_CharacterCreator.prototype.create = function() {
-    Scene_Base.prototype.create.call(this);
-    this._panel = new ReactorCharacterPanel();
-};
-
-Scene_CharacterCreator.prototype.start = function() {
-    Scene_Base.prototype.start.call(this);
-    this._panel.open();
-};
-
-Scene_CharacterCreator.prototype.stop = function() {
-    Scene_Base.prototype.stop.call(this);
-    this._panel.close();
-};
-
 /**
- * The creator's page: controls beside a turning character. It is ordinary HTML over
- * the game, which gives players real sliders, text and color pickers, and it has its
- * own small 3D view because the game's renderer is busy being the game.
+ * What is being built, and the small 3D view of it. It outlives its scene, because
+ * typing a name is a scene of its own and leaving a scene makes a fresh one. The view
+ * has its own canvas, laid over the game's inside a window's frame, because the game's
+ * renderer is busy being the game.
  */
-class ReactorCharacterPanel {
+class ReactorCharacterStudio {
     constructor() {
         this.config = ReactorCharacters.config();
         this.rules = this.config.rules || {};
         this.recipe = { hair: {}, eyes: {} };
         this.request = {};
-        this.building = 0;
+        this.chosen = {};
+        this.tabs = [];
+        this.name = "";
+        this.message = "";
+        this.bad = false;
     }
 
+    /** Loads the Forge once; the scene hears of it through onReady and onStatus. */
     async open() {
-        this.buildPage();
+        if (this.opened) return;
+        this.opened = true;
         this.status("Loading the character builder…");
         const character = ReactorCharacters.current(), profile = ReactorCharacters.profile();
-        this.nameInput.value = character?.name || profile.name || "";
+        const account = typeof ReactorOnline !== "undefined" ? ReactorOnline.account?.name : "";
+        this.name = character?.name || profile.name || account || "";
         try {
             if (character?.id) {
                 const buffer = await ReactorCharacters.fetch(character.id);
                 if (buffer) this.recipe = ReactorCharacters.unpack(buffer).recipe;
             }
             this.tabs = await ReactorCharacters.ask({ type: "tabs", rules: this.rules });
+            this.dressFirst();
             await Reactor3D.ensureLoaded();
+            if (this.closed) return;
             this.startView();
-            this.showTabs();
+            this.onReady?.();
             this.rebuild();
         } catch (error) {
             this.status("The character builder could not start: " + error.message, true);
         }
     }
 
-    element(tag, style, text) {
-        const node = document.createElement(tag);
-        if (style) node.style.cssText = style;
-        if (text != null) node.textContent = text;
-        return node;
-    }
-
-    buildPage() {
-        const root = this.root = this.element("div", "position:fixed;inset:0;z-index:900;display:flex;background:#0b0c14;color:#e8e9f2;font:14px/1.35 system-ui,sans-serif");
-        root.id = "reactorCharacterCreator";
-        const side = this.element("div", "flex:0 0 min(420px,44vw);display:flex;flex-direction:column;background:#141626;border-right:1px solid #2a2e4a;min-height:0");
-        side.appendChild(this.element("div", "padding:14px 16px 8px;font-size:18px;font-weight:600", this.config.prompt || "Create your character"));
-        this.tabBar = this.element("div", "display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 8px");
-        this.body = this.element("div", "flex:1;overflow-y:auto;padding:4px 16px 16px;min-height:0");
-        side.append(this.tabBar, this.body);
-        const footer = this.element("div", "padding:12px 16px;border-top:1px solid #2a2e4a;display:flex;flex-direction:column;gap:8px");
-        this.nameInput = this.element("input", "padding:8px;background:#0b0c14;color:inherit;border:1px solid #39406a;border-radius:4px;font:inherit");
-        this.nameInput.placeholder = "Your name";
-        this.nameInput.maxLength = Number(this.config.nameLength) || 16;
-        this.nameInput.autocomplete = "off";
-        if (this.config.askName === false) this.nameInput.style.display = "none";
-        const row = this.element("div", "display:flex;gap:8px");
-        this.cancelButton = this.button("Back", () => this.back());
-        this.doneButton = this.button("Done", () => this.finish(), true);
-        row.append(this.cancelButton, this.doneButton);
-        footer.append(this.nameInput, row);
-        side.appendChild(footer);
-        const stage = this.stage = this.element("div", "flex:1;position:relative;min-width:0;cursor:grab;touch-action:none");
-        this.canvas = this.element("canvas", "width:100%;height:100%;display:block");
-        this.message = this.element("div", "position:absolute;left:0;right:0;bottom:16px;text-align:center;color:#aab0d6;pointer-events:none");
-        stage.append(this.canvas, this.message);
-        root.append(side, stage);
-        document.body.appendChild(root);
-        for (const type of ["keydown", "keyup", "wheel", "pointerdown"]) root.addEventListener(type, event => event.stopPropagation());
-    }
-
-    button(label, action, main) {
-        const node = this.element("button", "flex:1;padding:9px;border-radius:4px;font:inherit;font-weight:600;cursor:pointer;color:#fff;border:1px solid #4a52a0;background:" + (main ? "#3a3fa8" : "transparent"), label);
-        node.type = "button";
-        node.addEventListener("click", action);
-        return node;
-    }
-
-    showTabs() {
-        this.tabBar.textContent = "";
-        this.tabs.forEach((tab, index) => {
-            const node = this.element("button", "padding:6px 10px;border:1px solid #39406a;border-radius:4px;color:inherit;font:inherit;cursor:pointer;background:transparent", tab.label);
-            node.type = "button";
-            node.addEventListener("click", () => this.showTab(index));
-            tab.node = node;
-            this.tabBar.appendChild(node);
-        });
-        this.showTab(0);
+    /** A new character starts in everyday clothes, whatever the project lets a player take off later. */
+    dressFirst() {
+        if (this.recipe.outfit?.length) return;
+        const control = this.tabs.flatMap(tab => tab.controls).find(entry => entry.path === "outfitPreset");
+        const first = control?.options.find(option => option.group === "Everyday") || control?.options[0];
+        if (first) this.chosen.outfitPreset = this.request.preset = first.id;
     }
 
     valueAt(path) {
@@ -512,58 +481,24 @@ class ReactorCharacterPanel {
         this.edits = (this.edits || 0) + 1;
     }
 
-    showTab(index) {
-        this.tabs.forEach((tab, i) => { tab.node.style.background = i === index ? "#3a3fa8" : "transparent"; });
-        this.body.textContent = "";
-        let group = null;
-        for (const control of this.tabs[index].controls) {
-            if (control.group && control.group !== group) {
-                group = control.group;
-                this.body.appendChild(this.element("div", "margin:14px 0 4px;color:#8f96c8;font-size:12px;text-transform:uppercase;letter-spacing:.04em", group));
-            }
-            this.body.appendChild(this.control(control));
-        }
+    /** A slider's value, or where it rests until the Forge has given one. */
+    sliderValue(control) {
+        const value = this.valueAt(control.path);
+        if (typeof value === "number") return value;
+        return control.path.startsWith("shapes.") ? 0 : (control.min + control.max) / 2;
     }
 
-    control(control) {
-        const row = this.element("label", "display:block;margin:10px 0"), title = this.element("div", "margin-bottom:3px", control.label);
-        row.appendChild(title);
-        if (control.kind === "slider") {
-            const input = this.element("input", "width:100%");
-            Object.assign(input, { type: "range", min: control.min, max: control.max, step: control.step });
-            const value = this.valueAt(control.path);
-            input.value = typeof value === "number" ? value : (control.min + control.max) / 2;
-            if (control.path.startsWith("shapes.") && typeof value !== "number") input.value = 0;
-            input.addEventListener("input", () => { this.setValue(control.path, Number(input.value)); this.rebuildSoon(); });
-            row.appendChild(input);
-        } else if (control.kind === "select") {
-            const input = this.element("select", "width:100%;padding:6px;background:#0b0c14;color:inherit;border:1px solid #39406a;border-radius:4px;font:inherit");
-            const groups = new Map();
-            for (const option of control.options) {
-                let parent = groups.get(option.group);
-                if (!parent) { parent = this.element("optgroup"); parent.label = option.group || ""; groups.set(option.group, parent); input.appendChild(parent); }
-                const node = this.element("option", null, option.label);
-                node.value = option.id;
-                parent.appendChild(node);
-            }
-            const value = control.path === "outfitPreset" ? this.request.preset : this.valueAt(control.path);
-            if (value != null) input.value = value;
-            input.addEventListener("change", () => {
-                if (control.path === "outfitPreset") this.request.preset = input.value;
-                else if (control.path === "species") this.request.species = input.value;
-                else this.setValue(control.path, input.value);
-                this.rebuild();
-            });
-            row.appendChild(input);
-        } else {
-            const input = this.element("input", "width:100%;height:32px;padding:0;background:none;border:1px solid #39406a;border-radius:4px");
-            input.type = "color";
-            const value = this.valueAt(control.path);
-            if (/^#[0-9a-f]{6}$/i.test(value || "")) input.value = value;
-            input.addEventListener("input", () => { this.setValue(control.path, input.value); this.rebuildSoon(); });
-            row.appendChild(input);
-        }
-        return row;
+    /** What a list control holds now. An outfit is a set of garments, so its name is only known from the choice. */
+    optionValue(control) {
+        return control.path === "outfitPreset" ? this.chosen.outfitPreset : this.valueAt(control.path);
+    }
+
+    choose(control, id) {
+        this.chosen[control.path] = id;
+        if (control.path === "outfitPreset") this.request.preset = id;
+        else if (control.path === "species") this.request.species = id;
+        else this.setValue(control.path, id);
+        this.rebuild();
     }
 
     rebuildSoon() {
@@ -573,6 +508,7 @@ class ReactorCharacterPanel {
 
     /** One build at a time: the latest settings win, and those in between are skipped. */
     async rebuild() {
+        if (this.closed) return;
         if (this.busy) { this.again = true; return; }
         this.busy = true;
         this.status("Building…");
@@ -587,6 +523,7 @@ class ReactorCharacterPanel {
             await this.show(made);
             if (this.closed) return;
             this.status("");
+            this.onRecipe?.();
         } catch (error) {
             if (!this.closed) this.status("That could not be built: " + error.message, true);
         } finally {
@@ -596,7 +533,11 @@ class ReactorCharacterPanel {
     }
 
     startView() {
-        const canvas = this.canvas, renderer = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        const canvas = this.canvas = document.createElement("canvas");
+        canvas.id = "reactorCharacterView";
+        canvas.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;z-index:2;cursor:grab;touch-action:none";
+        document.body.appendChild(canvas);
+        const renderer = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
         renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         const scene = this.scene = new THREE.Scene();
@@ -610,26 +551,42 @@ class ReactorCharacterPanel {
         this.camera = new THREE.PerspectiveCamera(30, 1, 0.05, 40);
         this.turn = 0;
         let dragging = null;
-        this.stage.addEventListener("pointerdown", event => { dragging = event.clientX; this.stage.setPointerCapture(event.pointerId); });
-        this.stage.addEventListener("pointermove", event => { if (dragging !== null) { this.turn += (event.clientX - dragging) * 0.01; dragging = event.clientX; } });
-        this.stage.addEventListener("pointerup", () => { dragging = null; });
-        const clock = new THREE.Timer ? new THREE.Timer() : null;
-        const frame = () => {
+        canvas.addEventListener("pointerdown", event => { dragging = event.clientX; this.turned = true; canvas.setPointerCapture(event.pointerId); });
+        canvas.addEventListener("pointermove", event => { if (dragging !== null) { this.turn += (event.clientX - dragging) * 0.01; dragging = event.clientX; } });
+        canvas.addEventListener("pointerup", () => { dragging = null; });
+        let last = performance.now();
+        const frame = now => {
             if (this.closed) return;
             this._frame = requestAnimationFrame(frame);
-            const size = this.stage.getBoundingClientRect();
+            const seconds = Math.min(0.1, Math.max(0, (now - last) / 1000)), size = canvas.getBoundingClientRect();
+            last = now;
             if (size.width !== this._width || size.height !== this._height) {
                 this._width = size.width; this._height = size.height;
                 renderer.setSize(size.width, size.height, false);
                 this.camera.aspect = size.width / Math.max(1, size.height);
                 this.camera.updateProjectionMatrix();
             }
-            clock?.update?.();
-            if (this.mixer) this.mixer.update(clock?.getDelta?.() || 1 / 60);
+            // It turns by itself for a player on keys or a gamepad, until someone takes hold of it.
+            if (!this.turned) this.turn += seconds * 0.35;
+            if (this.mixer) this.mixer.update(seconds);
             if (this.model) this.model.rotation.y = this.turn;
             renderer.render(scene, this.camera);
         };
-        frame();
+        frame(last);
+    }
+
+    /** Lays the view over a place in the game's own coordinates, however the game is scaled in its window. */
+    place(x, y, width, height) {
+        if (!this.canvas || !Graphics._canvas) return;
+        const box = Graphics._canvas.getBoundingClientRect(), scale = box.width / Math.max(1, Graphics.width), style = this.canvas.style;
+        style.left = box.left + x * scale + "px";
+        style.top = box.top + y * scale + "px";
+        style.width = width * scale + "px";
+        style.height = height * scale + "px";
+    }
+
+    setShown(shown) {
+        if (this.canvas) this.canvas.style.display = shown ? "" : "none";
     }
 
     /** The newest build in the view; the last goes only once this one is ready to replace it. */
@@ -654,44 +611,30 @@ class ReactorCharacterPanel {
     }
 
     status(text, bad) {
-        this.message.textContent = text;
-        this.message.style.color = bad ? "#ff9a9a" : "#aab0d6";
+        this.message = text;
+        this.bad = !!bad;
+        this.onStatus?.();
     }
 
-    back() {
-        ReactorCharacters.leave();
-    }
-
+    /** The finished character: built whole, kept, sent to the server when there is one, and worn. */
     async finish() {
-        if (this.finishing) return;
-        const name = this.nameInput.value.trim();
-        if (this.config.askName !== false && !name) { this.status("Enter a name first.", true); this.nameInput.focus(); return; }
-        this.finishing = true;
-        this.doneButton.disabled = this.cancelButton.disabled = true;
-        try {
-            this.status("Finishing your character…");
-            const times = ReactorCharacters.lastTimes = { started: performance.now() };
-            const made = await ReactorCharacters.ask(Object.assign({ type: "build", recipe: this.recipe, rules: this.rules, final: true, quality: this.config.quality }, this.request));
-            times.built = performance.now();
-            const buffer = ReactorCharacters.pack(made), actorId = ReactorCharacters.baseActorId();
-            ReactorCharacters.applyActor(actorId, name);
-            let id = ReactorCharacters.localId();
-            if (typeof ReactorOnline !== "undefined" && ReactorOnline.config()) {
-                id = await ReactorOnline.uploadCharacter(buffer, percent => this.status("Sending your character… " + percent + "%"));
-            }
-            times.uploaded = performance.now();
-            await ReactorCharacters.store(id, buffer);
-            await ReactorCharacters.install(id, buffer);
-            times.installed = performance.now();
-            times.bytes = buffer.byteLength;
-            ReactorCharacters.setCurrent({ actorId, id, name });
-            ReactorCharacters.saveProfile({ actorId, name });
-            ReactorCharacters.finish();
-        } catch (error) {
-            this.finishing = false;
-            this.doneButton.disabled = this.cancelButton.disabled = false;
-            this.status("Your character could not be saved: " + error.message, true);
+        this.status("Finishing your character…");
+        const times = ReactorCharacters.lastTimes = { started: performance.now() };
+        const made = await ReactorCharacters.ask(Object.assign({ type: "build", recipe: this.recipe, rules: this.rules, final: true, quality: this.config.quality }, this.request));
+        times.built = performance.now();
+        const buffer = ReactorCharacters.pack(made), actorId = ReactorCharacters.baseActorId(), name = this.name;
+        ReactorCharacters.applyActor(actorId, name);
+        let id = ReactorCharacters.localId();
+        if (typeof ReactorOnline !== "undefined" && ReactorOnline.config()) {
+            id = await ReactorOnline.uploadCharacter(buffer, percent => this.status("Sending your character… " + percent + "%"));
         }
+        times.uploaded = performance.now();
+        await ReactorCharacters.store(id, buffer);
+        await ReactorCharacters.install(id, buffer);
+        times.installed = performance.now();
+        times.bytes = buffer.byteLength;
+        ReactorCharacters.setCurrent({ actorId, id, name });
+        ReactorCharacters.saveProfile({ actorId, name });
     }
 
     close() {
@@ -700,9 +643,588 @@ class ReactorCharacterPanel {
         cancelAnimationFrame(this._frame);
         if (this.model) this.dispose(this.model);
         if (this.renderer) this.renderer.dispose();
-        this.root?.remove();
+        this.canvas?.remove();
     }
 }
+
+// The creator's windows are the game's own, so they wear the project's window skin and
+// font, answer keys, gamepads, mouse and touch, and take on what a window plugin changes.
+
+/** Body, Face, Hair and the rest, then Name and Done. */
+function Window_CreatorTabs() {
+    this.initialize(...arguments);
+}
+
+Window_CreatorTabs.prototype = Object.create(Window_Command.prototype);
+Window_CreatorTabs.prototype.constructor = Window_CreatorTabs;
+
+Window_CreatorTabs.prototype.initialize = function(rect, studio, columns) {
+    this._studio = studio;
+    this._columns = columns;
+    Window_Command.prototype.initialize.call(this, rect);
+};
+
+Window_CreatorTabs.prototype.maxCols = function() {
+    return this._columns;
+};
+
+Window_CreatorTabs.prototype.makeCommandList = function() {
+    for (const tab of this._studio.tabs) this.addCommand(tab.label, "tab", true, tab);
+    if (this._studio.config.askName !== false) this.addCommand("Name", "name", this._studio.tabs.length > 0);
+    this.addCommand("Done", "done", this._studio.tabs.length > 0);
+};
+
+Window_CreatorTabs.prototype.tab = function() {
+    return this.currentSymbol() === "tab" ? this.currentExt() : null;
+};
+
+Window_CreatorTabs.prototype.select = function(index) {
+    const changed = index !== this.index();
+    Window_Command.prototype.select.call(this, index);
+    if (this._controls) this._controls.setTab(this.tab());
+    if (changed) SceneManager._scene?.onTabChanged?.();
+};
+
+Window_CreatorTabs.prototype.setControls = function(controls) {
+    this._controls = controls;
+    controls.setTab(this.tab());
+};
+
+/** Down from the last row of tabs moves into the list, as the cursor would expect. */
+Window_CreatorTabs.prototype.cursorDown = function(wrap) {
+    const lastRow = this.row() >= this.maxRows() - 1;
+    if (!lastRow) Window_Command.prototype.cursorDown.call(this, wrap);
+    else if (this.tab() && this._controls?.maxItems()) this.processOk();
+};
+
+/** One row for each thing a tab lets a player change, with the Forge's own group headings. */
+function Window_CreatorControls() {
+    this.initialize(...arguments);
+}
+
+Window_CreatorControls.prototype = Object.create(Window_Selectable.prototype);
+Window_CreatorControls.prototype.constructor = Window_CreatorControls;
+
+Window_CreatorControls.GAUGE_HEIGHT = 12;
+
+Window_CreatorControls.prototype.initialize = function(rect, studio) {
+    this._studio = studio;
+    this._rows = [];
+    this._dragRow = -1;
+    Window_Selectable.prototype.initialize.call(this, rect);
+};
+
+Window_CreatorControls.prototype.setTab = function(tab) {
+    if (this._tab === tab) return;
+    this._tab = tab;
+    this._rows = [];
+    let group = null;
+    for (const control of tab?.controls || []) {
+        if (control.group && control.group !== group) {
+            group = control.group;
+            this._rows.push({ kind: "group", label: group });
+        }
+        this._rows.push(control);
+    }
+    this.refresh();
+    this.scrollTo(0, 0);
+    this.select(this.active ? this.firstRow() : -1);
+};
+
+Window_CreatorControls.prototype.firstRow = function() {
+    return this._rows.findIndex(row => row.kind !== "group");
+};
+
+Window_CreatorControls.prototype.maxItems = function() {
+    return this._rows.length;
+};
+
+Window_CreatorControls.prototype.currentRow = function() {
+    return this._rows[this.index()];
+};
+
+Window_CreatorControls.prototype.isCurrentItemEnabled = function() {
+    const row = this.currentRow();
+    return !!row && row.kind !== "group";
+};
+
+/** A heading can't be landed on, by key or by pointer. */
+Window_CreatorControls.prototype.hitIndex = function() {
+    const hit = Window_Selectable.prototype.hitIndex.call(this);
+    return this._rows[hit]?.kind === "group" ? -1 : hit;
+};
+
+Window_CreatorControls.prototype.cursorDown = function(wrap) {
+    let index = this.index() + 1;
+    while (this._rows[index]?.kind === "group") index++;
+    if (index < this._rows.length) this.smoothSelect(index);
+    else if (wrap) this.smoothSelect(this.firstRow());
+};
+
+/** Up from the top row goes back to the tabs. */
+Window_CreatorControls.prototype.cursorUp = function() {
+    let index = this.index() - 1;
+    while (this._rows[index]?.kind === "group") index--;
+    if (index >= 0) this.smoothSelect(index);
+    else if (Input.isTriggered("up")) { this.playCursorSound(); this.backToTabs(); }
+};
+
+Window_CreatorControls.prototype.backToTabs = function() {
+    this.updateInputData();
+    this.deactivate();
+    this.callCancelHandler();
+};
+
+Window_CreatorControls.prototype.cursorLeft = function() {
+    this.adjust(-1);
+};
+
+Window_CreatorControls.prototype.cursorRight = function() {
+    this.adjust(1);
+};
+
+/** Left and right change the row. Shift makes it fine. */
+Window_CreatorControls.prototype.adjust = function(direction) {
+    const row = this.currentRow();
+    if (!row) return;
+    if (row.kind === "slider") {
+        const coarse = (row.max - row.min) / 40, step = Input.isPressed("shift") ? row.step : Math.max(row.step, coarse);
+        this.setSlider(row, this.sliderValue(row) + direction * step);
+        this.playCursorSound();
+    } else if (row.kind === "select") {
+        const options = row.options, at = options.findIndex(option => option.id === this._studio.optionValue(row));
+        const next = options[(Math.max(at, 0) + direction + options.length) % options.length];
+        this._studio.choose(row, next.id);
+        this.redrawCurrentItem();
+        this.playCursorSound();
+    }
+};
+
+Window_CreatorControls.prototype.sliderValue = function(row) {
+    return this._studio.sliderValue(row);
+};
+
+Window_CreatorControls.prototype.setSlider = function(row, value) {
+    const step = row.step || 0.01, held = Math.max(row.min, Math.min(row.max, Math.round(value / step) * step));
+    this._studio.setValue(row.path, Number(held.toFixed(4)));
+    this._studio.rebuildSoon();
+    this.redrawItem(this._rows.indexOf(row));
+};
+
+/** OK has nothing to open on a slider, and says nothing. */
+Window_CreatorControls.prototype.processOk = function() {
+    if (this.currentRow()?.kind === "slider") return;
+    Window_Selectable.prototype.processOk.call(this);
+};
+
+Window_CreatorControls.prototype.gaugeRect = function(index) {
+    const rect = this.itemLineRect(index), width = Math.floor(rect.width * 0.5), height = Window_CreatorControls.GAUGE_HEIGHT;
+    return new Rectangle(rect.x + rect.width - width, rect.y + Math.floor((rect.height - height) / 2), width, height);
+};
+
+Window_CreatorControls.prototype.update = function() {
+    Window_Selectable.prototype.update.call(this);
+    this.updateSliderDrag();
+};
+
+Window_CreatorControls.prototype.isTouchScrollEnabled = function() {
+    return this._dragRow < 0 && Window_Selectable.prototype.isTouchScrollEnabled.call(this);
+};
+
+/** Press on a slider's bar and drag: the value follows the pointer. */
+Window_CreatorControls.prototype.updateSliderDrag = function() {
+    if (this._dragRow < 0) {
+        if (!this.isOpenAndActive() || !TouchInput.isTriggered()) return;
+        const hit = this.hitIndex();
+        if (this._rows[hit]?.kind !== "slider" || this.touchFraction(hit) === null) return;
+        this._dragRow = hit;
+    }
+    if (!TouchInput.isPressed()) { this._dragRow = -1; return; }
+    const row = this._rows[this._dragRow], fraction = this.touchFraction(this._dragRow, true);
+    if (fraction !== null) this.setSlider(row, row.min + (row.max - row.min) * fraction);
+};
+
+/** Where the pointer is along a row's bar, 0 to 1. Null when off it, unless already dragging it. */
+Window_CreatorControls.prototype.touchFraction = function(index, dragging) {
+    const local = this.worldTransform.applyInverse(new Point(TouchInput.x, TouchInput.y));
+    const gauge = this.gaugeRect(index), x = this.origin.x + local.x - this.padding;
+    if (!dragging && (x < gauge.x - 8 || x > gauge.x + gauge.width + 8)) return null;
+    return Math.max(0, Math.min(1, (x - gauge.x) / gauge.width));
+};
+
+Window_CreatorControls.prototype.drawItem = function(index) {
+    const row = this._rows[index], rect = this.itemLineRect(index);
+    this.resetTextColor();
+    if (row.kind === "group") {
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(row.label, rect.x, rect.y, rect.width);
+        this.resetTextColor();
+        return;
+    }
+    const half = Math.floor(rect.width * 0.5) - this.itemPadding();
+    this.drawText(row.label, rect.x, rect.y, row.kind === "select" ? half : rect.width);
+    if (row.kind === "slider") this.drawSlider(index, row);
+    else if (row.kind === "select") this.drawOption(rect, half, row);
+    else this.drawSwatch(rect, row);
+};
+
+Window_CreatorControls.prototype.drawItemBackground = function(index) {
+    if (this._rows[index]?.kind !== "group") Window_Selectable.prototype.drawItemBackground.call(this, index);
+};
+
+Window_CreatorControls.prototype.drawSlider = function(index, row) {
+    const gauge = this.gaugeRect(index), fraction = (this.sliderValue(row) - row.min) / Math.max(0.0001, row.max - row.min);
+    const fill = Math.round(gauge.width * Math.max(0, Math.min(1, fraction)));
+    this.contents.fillRect(gauge.x, gauge.y, gauge.width, gauge.height, ColorManager.gaugeBackColor());
+    this.contents.gradientFillRect(gauge.x, gauge.y, fill, gauge.height, ColorManager.tpGaugeColor1(), ColorManager.tpGaugeColor2());
+};
+
+Window_CreatorControls.prototype.drawOption = function(rect, half, row) {
+    const value = this._studio.optionValue(row), option = row.options.find(entry => entry.id === value);
+    this.changeTextColor(ColorManager.systemColor());
+    this.drawText("< " + (option ? option.label : "Choose") + " >", rect.x + half, rect.y, rect.width - half, "right");
+    this.resetTextColor();
+};
+
+Window_CreatorControls.prototype.drawSwatch = function(rect, row) {
+    const width = Math.floor(rect.width * 0.5), height = rect.height - 8, x = rect.x + rect.width - width, y = rect.y + 4;
+    const color = this._studio.valueAt(row.path);
+    this.contents.fillRect(x, y, width, height, ColorManager.gaugeBackColor());
+    if (/^#[0-9a-f]{6}$/i.test(color || "")) this.contents.fillRect(x + 2, y + 2, width - 4, height - 4, color);
+};
+
+/** All of a list control's choices at once, over the controls. */
+function Window_CreatorOptions() {
+    this.initialize(...arguments);
+}
+
+Window_CreatorOptions.prototype = Object.create(Window_Selectable.prototype);
+Window_CreatorOptions.prototype.constructor = Window_CreatorOptions;
+
+Window_CreatorOptions.prototype.initialize = function(rect) {
+    this._options = [];
+    Window_Selectable.prototype.initialize.call(this, rect);
+    this.hide();
+};
+
+Window_CreatorOptions.prototype.setup = function(control, value) {
+    this._options = control.options;
+    this.refresh();
+    this.scrollTo(0, 0);
+    this.select(Math.max(0, this._options.findIndex(option => option.id === value)));
+    this.show();
+    this.activate();
+};
+
+Window_CreatorOptions.prototype.maxItems = function() {
+    return this._options.length;
+};
+
+Window_CreatorOptions.prototype.option = function() {
+    return this._options[this.index()];
+};
+
+Window_CreatorOptions.prototype.drawItem = function(index) {
+    const option = this._options[index], rect = this.itemLineRect(index);
+    this.resetTextColor();
+    this.drawText(option.label, rect.x, rect.y, rect.width);
+    if (option.group) {
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(option.group, rect.x, rect.y, rect.width, "right");
+        this.resetTextColor();
+    }
+};
+
+/** A color by its hue, strength and brightness, on the same bars as every other slider. */
+function Window_CreatorColor() {
+    this.initialize(...arguments);
+}
+
+Window_CreatorColor.prototype = Object.create(Window_CreatorControls.prototype);
+Window_CreatorColor.prototype.constructor = Window_CreatorColor;
+
+Window_CreatorColor.prototype.initialize = function(rect, studio) {
+    Window_CreatorControls.prototype.initialize.call(this, rect, studio);
+    this._hsv = [0, 0, 1];
+    this.hide();
+};
+
+Window_CreatorColor.prototype.setup = function(control) {
+    this._control = control;
+    this._start = this._studio.valueAt(control.path) || "#808080";
+    this._hsv = ReactorCharacters.toHsv(this._start);
+    this._rows = [{ kind: "group", label: control.label },
+        { kind: "slider", label: "Hue", part: 0, min: 0, max: 360, step: 1 },
+        { kind: "slider", label: "Strength", part: 1, min: 0, max: 1, step: 0.01 },
+        { kind: "slider", label: "Brightness", part: 2, min: 0, max: 1, step: 0.01 }];
+    this.refresh();
+    this.scrollTo(0, 0);
+    this.select(1);
+    this.show();
+    this.activate();
+};
+
+Window_CreatorColor.prototype.sliderValue = function(row) {
+    return this._hsv[row.part];
+};
+
+Window_CreatorColor.prototype.setSlider = function(row, value) {
+    this._hsv[row.part] = Math.max(row.min, Math.min(row.max, value));
+    this._studio.setValue(this._control.path, ReactorCharacters.toHex(this._hsv));
+    this._studio.rebuildSoon();
+    this.refresh();
+};
+
+/** The heading wears the color being mixed. */
+Window_CreatorColor.prototype.drawItem = function(index) {
+    if (index === 0) this.drawSwatch(this.itemLineRect(0), this._control);
+    Window_CreatorControls.prototype.drawItem.call(this, index);
+};
+
+Window_CreatorColor.prototype.cursorUp = function(wrap) {
+    if (this.index() > 1) this.smoothSelect(this.index() - 1);
+    else if (wrap) this.smoothSelect(3);
+};
+
+Window_CreatorColor.prototype.processOk = function() {
+    this.playOkSound();
+    this.updateInputData();
+    this.deactivate();
+    this.callOkHandler();
+};
+
+Window_CreatorColor.prototype.revert = function() {
+    this._studio.setValue(this._control.path, this._start);
+    this._studio.rebuildSoon();
+};
+
+ReactorCharacters.toHsv = function(hex) {
+    const value = parseInt(String(hex).slice(1), 16) || 0;
+    const r = (value >> 16 & 255) / 255, g = (value >> 8 & 255) / 255, b = (value & 255) / 255;
+    const max = Math.max(r, g, b), span = max - Math.min(r, g, b);
+    const hue = !span ? 0 : max === r ? ((g - b) / span + 6) % 6 : max === g ? (b - r) / span + 2 : (r - g) / span + 4;
+    return [hue * 60, max ? span / max : 0, max];
+};
+
+ReactorCharacters.toHex = function([hue, strength, brightness]) {
+    const channel = shift => {
+        const k = (shift + hue / 60) % 6;
+        return Math.round((brightness - brightness * strength * Math.max(0, Math.min(k, 4 - k, 1))) * 255);
+    };
+    return "#" + [channel(5), channel(3), channel(1)].map(part => part.toString(16).padStart(2, "0")).join("");
+};
+
+function Scene_CharacterCreator() {
+    this.initialize(...arguments);
+}
+
+Scene_CharacterCreator.prototype = Object.create(Scene_MenuBase.prototype);
+Scene_CharacterCreator.prototype.constructor = Scene_CharacterCreator;
+
+Scene_CharacterCreator.prototype.create = function() {
+    Scene_MenuBase.prototype.create.call(this);
+    const studio = this._studio = ReactorCharacters.studio || (ReactorCharacters.studio = new ReactorCharacterStudio());
+    this._helpWindow = new Window_Help(new Rectangle(0, this.helpAreaTop(), Graphics.boxWidth, this.helpAreaHeight()));
+    this.addWindow(this._helpWindow);
+    const top = this.mainAreaTop(), height = this.mainAreaHeight();
+    const left = Math.max(Math.min(360, Graphics.boxWidth - 160), Math.floor(Graphics.boxWidth * 0.46));
+    this.createTabs(left, top);
+    const below = top + this._tabsWindow.height, rest = new Rectangle(0, below, left, height - this._tabsWindow.height);
+    this._controlsWindow = new Window_CreatorControls(rest, studio);
+    this._optionsWindow = new Window_CreatorOptions(rest);
+    this._colorWindow = new Window_CreatorColor(rest, studio);
+    this._stageWindow = new Window_Base(new Rectangle(left, top, Graphics.boxWidth - left, height));
+    for (const entry of [this._controlsWindow, this._optionsWindow, this._colorWindow, this._stageWindow]) this.addWindow(entry);
+    this._controlsWindow.setHandler("ok", this.onControlOk.bind(this));
+    this._controlsWindow.setHandler("cancel", this.onControlCancel.bind(this));
+    this._controlsWindow.setHandler("pageup", () => this.changeTab(-1));
+    this._controlsWindow.setHandler("pagedown", () => this.changeTab(1));
+    this._optionsWindow.setHandler("ok", this.onOptionOk.bind(this));
+    this._optionsWindow.setHandler("cancel", this.onPopupCancel.bind(this));
+    this._colorWindow.setHandler("ok", this.onPopupCancel.bind(this));
+    this._colorWindow.setHandler("cancel", this.onColorCancel.bind(this));
+    this._tabsWindow.setControls(this._controlsWindow);
+    this._tabsWindow.activate();
+};
+
+/** As many tabs to a row as read well; a narrow screen takes two rows. */
+Scene_CharacterCreator.prototype.createTabs = function(width, top) {
+    const studio = this._studio, count = studio.tabs.length + (studio.config.askName !== false ? 2 : 1);
+    // Six tabs and Name and Done is the most there can be: room for those is kept before they are known.
+    const columns = Math.max(3, Math.min(Math.max(count, 8), Math.floor(width / 104))), rows = Math.ceil(Math.max(count, 8) / columns);
+    this._tabsWindow = new Window_CreatorTabs(new Rectangle(0, top, width, this.calcWindowHeight(rows, true)), studio, columns);
+    this._tabsWindow.setHandler("ok", this.onTabOk.bind(this));
+    this._tabsWindow.setHandler("cancel", this.onBack.bind(this));
+    this.addWindow(this._tabsWindow);
+};
+
+Scene_CharacterCreator.prototype.needsCancelButton = function() {
+    return !ReactorCharacters.isRequired();
+};
+
+Scene_CharacterCreator.prototype.start = function() {
+    Scene_MenuBase.prototype.start.call(this);
+    const studio = this._studio;
+    studio.onReady = () => this.onStudioReady();
+    studio.onRecipe = () => this._controlsWindow.refresh();
+    studio.onStatus = () => this.showStatus();
+    if (studio.opened) this.onStudioReady();
+    studio.setShown(true);
+    this.showStatus();
+    if (ReactorCharacters.naming) this.onNamed();
+    studio.open();
+};
+
+Scene_CharacterCreator.prototype.stop = function() {
+    Scene_MenuBase.prototype.stop.call(this);
+    const studio = this._studio;
+    studio.onReady = studio.onRecipe = studio.onStatus = null;
+    if (ReactorCharacters.naming) { studio.setShown(false); return; }
+    studio.close();
+    ReactorCharacters.studio = null;
+};
+
+Scene_CharacterCreator.prototype.onStudioReady = function() {
+    this._tabsWindow.refresh();
+    this._controlsWindow.setTab(this._tabsWindow.tab());
+};
+
+Scene_CharacterCreator.prototype.update = function() {
+    Scene_MenuBase.prototype.update.call(this);
+    const stage = this._stageWindow, inset = stage.padding;
+    this._studio.place(this._windowLayer.x + stage.x + inset, this._windowLayer.y + stage.y + inset, stage.width - inset * 2, stage.height - inset * 2);
+    this.updateTouchFocus();
+};
+
+/** The tabs and the controls take turns holding the cursor; a click or tap goes where it lands. */
+Scene_CharacterCreator.prototype.updateTouchFocus = function() {
+    if (this._finishing || !TouchInput.isTriggered() || this._optionsWindow.visible || this._colorWindow.visible) return;
+    const tabs = this._tabsWindow, controls = this._controlsWindow;
+    if (!tabs.active && tabs.hitIndex() >= 0) { controls.deactivate(); tabs.activate(); tabs.onTouchSelect(true); }
+    else if (!controls.active && controls.hitIndex() >= 0) { tabs.deactivate(); controls.activate(); controls.onTouchSelect(true); controls.updateSliderDrag(); }
+};
+
+Scene_CharacterCreator.prototype.showStatus = function() {
+    const studio = this._studio, title = studio.config.prompt || "Create your character";
+    const hint = studio.message ? (studio.bad ? "\\C[2]" : "") + studio.message.replace(/\\/g, "") : this.nameLine();
+    this._helpWindow.setText(title.replace(/\\/g, "") + "\n" + hint);
+};
+
+Scene_CharacterCreator.prototype.nameLine = function() {
+    const name = this._studio.name;
+    return this._studio.config.askName === false || !name ? "" : "Name: " + name.replace(/\\/g, "");
+};
+
+Scene_CharacterCreator.prototype.onTabOk = function() {
+    const symbol = this._tabsWindow.currentSymbol();
+    if (symbol === "tab") {
+        this._controlsWindow.activate();
+        if (this._controlsWindow.index() < 0) this._controlsWindow.select(this._controlsWindow.firstRow());
+    } else if (symbol === "name") this.openName();
+    else this.finish();
+};
+
+Scene_CharacterCreator.prototype.changeTab = function(direction) {
+    const tabs = this._tabsWindow, count = this._studio.tabs.length;
+    if (count > 1) {
+        tabs.select((tabs.index() + direction + count) % count);
+        SoundManager.playCursor();
+    }
+    this._controlsWindow.activate();
+    if (this._controlsWindow.index() < 0) this._controlsWindow.select(this._controlsWindow.firstRow());
+};
+
+Scene_CharacterCreator.prototype.onControlCancel = function() {
+    this._controlsWindow.deselect();
+    this._tabsWindow.activate();
+};
+
+Scene_CharacterCreator.prototype.onControlOk = function() {
+    const row = this._controlsWindow.currentRow(), studio = this._studio;
+    this._controlsWindow.hide();
+    if (row.kind === "select") this._optionsWindow.setup(row, studio.optionValue(row));
+    else this._colorWindow.setup(row);
+};
+
+Scene_CharacterCreator.prototype.onOptionOk = function() {
+    this._studio.choose(this._controlsWindow.currentRow(), this._optionsWindow.option().id);
+    this.onPopupCancel();
+};
+
+/** Closes the list or color page, back to the controls; a color stays as it was mixed. */
+Scene_CharacterCreator.prototype.onPopupCancel = function() {
+    this._optionsWindow.hide();
+    this._colorWindow.hide();
+    this._controlsWindow.show();
+    this._controlsWindow.refresh();
+    this._controlsWindow.activate();
+};
+
+Scene_CharacterCreator.prototype.onColorCancel = function() {
+    this._colorWindow.revert();
+    this.onPopupCancel();
+};
+
+/** The project's own name screen, on the actor this character plays as. */
+Scene_CharacterCreator.prototype.openName = function() {
+    const id = ReactorCharacters.baseActorId(), actor = $gameActors.actor(id);
+    if (this._studio.name) actor.setName(this._studio.name);
+    ReactorCharacters.naming = true;
+    SceneManager.push(Scene_Name);
+    SceneManager.prepareNextScene(id, Number(this._studio.config.nameLength) || 16);
+};
+
+Scene_CharacterCreator.prototype.onNamed = function() {
+    ReactorCharacters.naming = false;
+    this._studio.name = $gameActors.actor(ReactorCharacters.baseActorId()).name();
+    this.showStatus();
+    this._tabsWindow.activate();
+    if (ReactorCharacters.finishAfterName) {
+        ReactorCharacters.finishAfterName = false;
+        if (this._studio.name) this.finish();
+    }
+};
+
+Scene_CharacterCreator.prototype.finish = async function() {
+    if (this._finishing) return;
+    const studio = this._studio;
+    if (studio.config.askName !== false && !studio.name) {
+        ReactorCharacters.finishAfterName = true;
+        return this.openName();
+    }
+    this._finishing = true;
+    this._tabsWindow.deactivate();
+    try {
+        await studio.finish();
+        ReactorCharacters.finish();
+    } catch (error) {
+        this._finishing = false;
+        this._tabsWindow.activate();
+        studio.status("Your character could not be saved: " + error.message, true);
+    }
+};
+
+Scene_CharacterCreator.prototype.onBack = function() {
+    if (ReactorCharacters.isRequired()) {
+        SoundManager.playBuzzer();
+        this._tabsWindow.activate();
+        return;
+    }
+    // Back is one key from a lot of slider work, so it asks once.
+    if (this._studio.edits && !this._leaving) {
+        this._leaving = true;
+        this._tabsWindow.activate();
+        this._studio.status("Press Back again to leave without keeping this character.");
+        return;
+    }
+    ReactorCharacters.leave();
+};
+
+Scene_CharacterCreator.prototype.onTabChanged = function() {
+    if (!this._leaving) return;
+    this._leaving = false;
+    this._studio.status("");
+};
 
 ReactorCharacters.localId = function() {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -773,7 +1295,7 @@ if (typeof Reactor3D !== "undefined") {
 }
 
 if (typeof PluginManager !== "undefined") {
-    PluginManager.registerCommand("RPGReactor", "CharacterCreation", function() {
-        ReactorCharacters.open();
+    PluginManager.registerCommand("RPGReactor", "CharacterCreation", function(args) {
+        ReactorCharacters.open(args);
     });
 }

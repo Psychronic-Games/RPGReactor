@@ -220,13 +220,20 @@
         const groups = new Map();
         COLLIDERS.forEach(([name], k) => { if (index.has(name)) groups.set(index.get(name), { k, pts: [] }); });
         const ownerOf = bones.map(b => (index.has(owner(b.name)) ? index.get(owner(b.name)) : -1));
+        // A soft-tissue joint is a share of the bone it hangs from: the flesh it moves still counts for that bone's collider.
+        const carrier = bones.map((b, i) => { while (bones[i].softTissue) i = bones[i].parent; return i; });
         result.parts.forEach((p, pi) => {
             if (SKIP_KIND.has(p.kind) || SKIP_NAME.has(p.name) || p.cloth || p.sewnRoots) return;
             const skip = exclude && exclude.get(pi), n = p.positions.length / 3;
             for (let v = 0; v < n; v++) {
                 if (skip && skip[v]) continue;
-                let j = p.joints[v * 4], w = p.weights[v * 4];
-                for (let k = 1; k < 4; k++) if (p.weights[v * 4 + k] > w) { w = p.weights[v * 4 + k]; j = p.joints[v * 4 + k]; }
+                let j = carrier[p.joints[v * 4]], w = 0;
+                for (let a = 0; a < 4; a++) {
+                    const c = carrier[p.joints[v * 4 + a]];
+                    let share = 0;
+                    for (let k = 0; k < 4; k++) if (carrier[p.joints[v * 4 + k]] === c) share += p.weights[v * 4 + k];
+                    if (share > w) { w = share; j = c; }
+                }
                 const g = groups.get(ownerOf[j]);
                 if (g) g.pts.push(p.positions[v * 3], p.positions[v * 3 + 1], p.positions[v * 3 + 2]);
             }

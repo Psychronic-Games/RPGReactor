@@ -4,6 +4,8 @@ Design, 2026-11-01. **Built so far: steps 1 and 2 of the [build order](#build-or
 
 ## Using it today
 
+**The Demo is set up for this.** The bundled Demo is an Online project pointed at demo.rpgreactor.org, with accounts or guests, chat, voice, sleeping and waking, four shared values and **Connect during playtest** on, so a playtest of it joins the live world. A new project made from it starts single player and leaves those settings behind.
+
 **Choose the game type.** Open **Database › Online** and choose **Single player** or **Online**. A project starts as single player and runs no online code. Settings live in their own file, `data/ReactorOnline.json`, which exists only once a project has set something; `System.json` and RPG Maker's other data files stay untouched. Character settings are likewise in `data/ReactorCharacters.json`.
 
 | Setting | What it does |
@@ -25,7 +27,7 @@ Rebuilding updates the server and keeps its secret and player data. **Pack files
 
 **In the game.** The game goes online once a player starts or loads a game, so title and intro maps stay offline.
 
-**Accounts.** A project that uses them asks players to sign in, create an account or (if allowed) play as a guest. An account remembers its character, so signing in on another device brings it back and skips creation. Passwords are stored hashed, sent only in request bodies and locked out after repeated failures (8 per name, 40 per address, for 15 minutes). A guest can't take a registered player's name. Use https: the build warns about an `http` address.
+**Accounts.** New Game asks a new player what they want: **Create an account**, **I have an account** or (if allowed) **Play as a guest**. Creating one asks for a name of 3 to 20 letters or numbers and the password twice; the page states the shortest password the project allows. There is no email, so a lost password is reset by the owner on the admin page, and the sign-in page says so. A device that remembers an account greets it by name with **Wake up** or **Continue**, and **Sign out** for someone else on that device. These are game windows, so they wear the project's window skin and font. An account remembers its character, so signing in on another device brings it back and skips creation. Passwords are stored hashed, sent only in request bodies and locked out after repeated failures (8 per name, 40 per address, for 15 minutes). A guest can't take a registered player's name. Use https: the build warns about an `http` address.
 
 **Sleeping and waking.** A player with an account lives on the server, not their device. The whole game saves on the beat (every 60 seconds by default, never during an event), and a small note of where they stand goes up every five seconds and as the game closes. Signing back in on any device offers **Wake up**, which restores everything and returns them to that spot; **Start over** is optional per project. After a sudden crash they may wake a few seconds' walk back. Meanwhile other players see them asleep on the floor where they stopped. Signing in on a second device signs out the first, so one account is only ever one body. Returning to the title signs off. Guests keep their usual local saves.
 
@@ -40,7 +42,7 @@ Rebuilding updates the server and keeps its secret and player data. **Pack files
 | Setting | What it does |
 | --- | --- |
 | How players get their character | Off, choose from a list of actors, or build with sliders |
-| Open on New Game | Otherwise only the **Character Creation** event command opens it, for a mirror, barber or tailor |
+| When players get their character | As a new game starts, or when an event calls it: see [below](#after-an-intro) |
 | Screen title, ask for a name, longest name | The creator's wording and rules |
 | Characters to choose from | The list, and for built characters the actor they play as (its class and stats) |
 | What players can change | Body, face, hair, outfit, colors, species, extreme proportions, anatomical detail |
@@ -54,14 +56,26 @@ A built character works like this:
 4. A single-player game keeps that file on the player's machine (`save/characters/` on desktop, IndexedDB in a browser), linked from the save file.
 5. An online game also uploads it to the server in 1 MB pieces, so a host's upload limit doesn't matter. The server checks it and stores it under a hash of its contents, and everyone who meets that player downloads it once.
 
-A build copies the Forge's files straight from the editor's source into `reactor-builder/` (36 MB), so an update to the Forge reaches games at their next build. A game that doesn't build characters ships none of it.
+A build copies the Forge's files straight from the editor's source into `reactor-builder/` (36 MB), so an update to the Forge reaches games at their next build. A game that doesn't build characters ships none of it. A playtest needs the same files beside the game, because a game's page can only start a worker from its own folder: the editor copies them into the project's `reactor-builder/` when a playtest starts, only when the Forge has changed, and leaves that folder out of builds.
+
+The creator is a menu scene of game windows: tabs, a list of controls, and the 3D view in a window's frame. It wears the project's window skin and font, follows anything a plugin changes about windows, and works by keys, gamepad, mouse and touch. Left and right move a slider (Shift for fine steps) or step through a list, OK opens a whole list or a color, Q and W change tabs, and dragging a slider's bar or the character works too. A name is typed on the project's own Name Input screen. A character starts in everyday clothes even where a project allows anatomical detail, and Back warns once before leaving a character behind.
+
+<a id="after-an-intro"></a>**After an intro.** Set **When players get their character** to **When an event calls it**, then put the **Character Creation** event command where the intro hands over. Sign-in still comes first, because New Game is when a player's account is needed; the map and its intro follow, with the player as the first actor until they choose. The command's options:
+
+| Option | What it does |
+| --- | --- |
+| Only if the player has no character yet | Skips it for someone who already has one, such as an account coming back, so a replayed intro doesn't ask twice |
+| The player must finish it | Takes away the way back, for an intro that can't go on without a character |
+| Switch set when it ends | On if the player has their character, off if they backed out, so the event can branch |
+
+The same command with none of these is a mirror, barber or tailor.
 
 Unless a project allows anatomical detail, characters start dressed and stay dressed, and the server refuses undressed ones. Player characters are 18 or older in every project.
 
 **Limits of this version:**
 
 - Built characters are 3D models, so a 2D map shows the actor's own sprite.
-- The creator's labels are in English, and the model's face is whatever the Forge's current face is.
+- The creator's labels are in English, and the model's face is whatever the Forge's current face is. A project whose menus are custom User Interfaces gets the same window skin and font as those menus, but not their layout: the creator has no User Interfaces role yet.
 - Without an account, a character lives on one device, and a player on a new device starts again.
 - The server checks a character's recipe and that the file is a self-contained model. It cannot prove the model matches the recipe, so a modified client could upload a different model.
 - On polling, the server trusts positions from clients. With the Engine connected it checks them ([below](#engine-mode)), and it still can't prove a save: only a server running game logic could.

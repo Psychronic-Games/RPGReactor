@@ -402,6 +402,13 @@ test('every pose to try a character in plays on the built skeleton, its turns wh
         assert.ok(clip && clip.tracks.length >= 4, pose.id);
         for (const t of clip.tracks) {
             assert.ok(t.bone >= 0 && t.bone < built.bones.length, `${pose.id} bone`);
+            // A floor pose moves its hips, and baked soft tissue moves its joints on times of its own (2026-11-01).
+            if (t.path) {
+                assert.ok(t.path === 'translation' && (built.bones[t.bone].parent < 0 || built.bones[t.bone].softTissue), `${pose.id}: only the hips and soft tissue move`);
+                assert.equal(t.values.length, (t.times || clip.times).length * 3, `${pose.id} move length`);
+                assert.ok(t.values.every(Number.isFinite), `${pose.id} finite move`);
+                continue;
+            }
             assert.equal(t.values.length, clip.times.length * 4, `${pose.id} track length`);
             for (let i = 0; i < t.values.length; i += 4) assert.ok(Math.abs(Math.hypot(t.values[i], t.values[i + 1], t.values[i + 2], t.values[i + 3]) - 1) < 1e-5, `${pose.id} unit quaternion`);
         }
@@ -417,7 +424,7 @@ test('the poses are motion capture fitted to each body: loops close, feet meet t
     /** Every joint's place at frame f, the body lifted as the clip says. */
     const place = (bones, clip, f) => {
         const local = bones.map(() => [0, 0, 0, 1]), W = [], pos = [];
-        for (const t of clip.tracks) local[t.bone] = Array.from(t.values.slice(f * 4, f * 4 + 4));
+        for (const t of clip.tracks) if (!t.path) local[t.bone] = Array.from(t.values.slice(f * 4, f * 4 + 4));
         bones.forEach((b, i) => {
             if (b.parent < 0) { W[i] = local[i]; pos[i] = [b.head[0], b.head[1] + clip.heights[f], b.head[2]]; return; }
             W[i] = mul(W[b.parent], local[i]);
@@ -445,6 +452,11 @@ test('the poses are motion capture fitted to each body: loops close, feet meet t
             // A motion played once (a fall, a flip) ends where it ends.
             if (clip.once) continue;
             for (const t of clip.tracks) {
+                if (t.path) {
+                    const end = (t.times || clip.times).length - 1;
+                    for (let k = 0; k < 3; k++) assert.ok(Math.abs(t.values[k] - t.values[end * 3 + k]) < 1e-3, `${pose.id} ${bones[t.bone].name} moves back to its first frame`);
+                    continue;
+                }
                 const a = t.values.slice(0, 4), b = t.values.slice(last * 4, last * 4 + 4);
                 assert.ok(Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]) > 0.9999, `${pose.id} loops back to its first frame`);
             }

@@ -578,6 +578,12 @@ class ProjectManager {
             if(ReactorBattleData.addStarters(records).length)this.writeJson(file,records);
         }
 
+        // The Demo is set up to play on the demo server. A new project is the author's own, and single player.
+        for (const file of ['ReactorOnline.json', 'ReactorCharacters.json']) {
+            const settings = this.path.join(targetPath, 'data', file);
+            if (this.fs.existsSync(settings)) this.fs.unlinkSync(settings);
+        }
+
         const packagePath = this.path.join(targetPath, 'package.json');
         if (this.fs.existsSync(packagePath)) {
             const packageData = RRJson.parse(this.fs.readFileSync(packagePath));

@@ -42,7 +42,7 @@ test('a ball gown dragged much taller keeps its skirt whole: no edge of the skir
         return { geometry };
     });
     const b = Object.create(scope.window.Character3DBuilder.prototype);
-    Object.assign(b, { pack, recipe: end, _result: built, _view: { meshes, bones: built.bones.map(() => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion() })),
+    Object.assign(b, { pack, recipe: end, _result: built, _view: { meshes, bones: built.bones.map(() => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion() , scale: new THREE.Vector3(1, 1, 1), userData: { rest: { p: new THREE.Vector3() } } })),
         group: { position: { y: 0 }, updateMatrixWorld() {} }, skeleton: { calculateInverses() {} } }, _resumePose() {}, _draw() {} });
     b._fast = b._fastStart(built);
     const shaped = Q.Body.shape(pack, end);

@@ -25,7 +25,7 @@ function creatorWorld(character, system = {}) {
     world.localStorage = { store: {}, getItem(key) { return this.store[key] ?? null; }, setItem(key, value) { this.store[key] = value; } };
     world.TextEncoder = TextEncoder; world.TextDecoder = TextDecoder;
     vm.runInContext(`
-        for (const name of ["Scene_Map", "Scene_Title", "Scene_Load", "Scene_MenuBase", "Scene_Base", "Window_Selectable"]) {
+        for (const name of ["Scene_Map", "Scene_Title", "Scene_Load", "Scene_MenuBase", "Scene_Base", "Window_Selectable", "Window_Command"]) {
             if (typeof globalThis[name] === "undefined") globalThis[name] = ({ [name]: function() {} })[name];
         }
         Scene_Title.prototype.commandNewGame = function() { DataManager.setupNewGame(); SceneManager.goto(Scene_Map); };
@@ -92,6 +92,55 @@ test('New Game opens the chosen way, single player included, and only when asked
     assert.equal(eventOnly.SceneManager.pushed.at(-1), 'goto:Scene_Map');
     assert.equal(eventOnly.ReactorCharacters.open(), true, 'the event command still can');
     assert.equal(eventOnly.SceneManager.pushed.at(-1), 'Scene_CharacterCreator');
+});
+
+test('an event calls it after an intro, and can skip it, require it and report how it ended', () => {
+    const world = creatorWorld({ mode: 'build', onNewGame: false }), switches = {};
+    world.$gameSwitches = { setValue(id, value) { switches[id] = value; } };
+    const characters = world.ReactorCharacters;
+    world.$gameSystem = {};
+    world.Scene_Title.prototype.commandNewGame.call({});
+    assert.equal(world.SceneManager.pushed.at(-1), 'goto:Scene_Map', 'the intro plays first');
+
+    characters.open({ required: true, switchId: 5 });
+    assert.equal(world.SceneManager.pushed.at(-1), 'Scene_CharacterCreator');
+    assert.equal(characters.isRequired(), true, 'an intro can take the way back away');
+    world.SceneManager.pop = () => {};
+    characters.leave();
+    assert.equal(switches[5], false, 'backing out is told apart from finishing');
+
+    characters.open({ switchId: 5 });
+    assert.equal(characters.isRequired(), false);
+    characters.setCurrent({ actorId: 1, id: 'abc', name: 'Ada' });
+    world.ReactorOnline = undefined;
+    characters.finish();
+    assert.equal(switches[5], true);
+    assert.equal(characters.call, null, 'a finished call leaves nothing behind');
+
+    const pushes = world.SceneManager.pushed.length;
+    assert.equal(characters.open({ once: true, switchId: 6 }), true);
+    assert.equal(world.SceneManager.pushed.length, pushes, 'a player who has their character skips it');
+    assert.equal(switches[6], true);
+    assert.equal(characters.isRequired(), false, 'a new game is never held by an old call');
+});
+
+test('colors survive the trip through hue, strength and brightness', () => {
+    const { ReactorCharacters: characters } = creatorWorld({ mode: 'build' });
+    for (const hex of ['#c8321e', '#000000', '#ffffff', '#1e90ff', '#808080']) {
+        assert.equal(characters.toHex(characters.toHsv(hex)), hex);
+    }
+});
+
+test('the creator and sign-in are the game\'s own windows, not a page of their own', () => {
+    const creator = fs.readFileSync(path.join(runtimeRoot, 'reactor_character_creator.js'), 'utf8');
+    const account = fs.readFileSync(path.join(runtimeRoot, 'reactor_online_ui.js'), 'utf8');
+    assert.match(creator, /Scene_CharacterCreator\.prototype = Object\.create\(Scene_MenuBase\.prototype\)/);
+    assert.match(creator, /Window_CreatorControls\.prototype = Object\.create\(Window_Selectable\.prototype\)/);
+    assert.match(account, /Scene_OnlineAccount\.prototype = Object\.create\(Scene_MenuBase\.prototype\)/);
+    for (const [name, source] of [['creator', creator], ['account', account.slice(account.indexOf('function Window_OnlineForm'), account.indexOf('// ---- The world lane'))]]) {
+        assert.equal(/background:#|font:\d+px/.test(source), false, `the ${name} sets no look of its own: the project's windows do`);
+    }
+    assert.match(creator, /SceneManager\.push\(Scene_Name\)/, 'a name is typed on the project\'s own screen');
 });
 
 test('the boot and intro setup of a game is not a New Game', () => {
@@ -162,9 +211,8 @@ test('a map waits for this save\'s character, and a missing one falls back to th
 test('the event command opens it, with nothing to set', () => {
     const Editor = vm.runInNewContext(read('src/event/commands/CharacterCommandEditor.js') + '\nCharacterCommandEditor;', { window: {} });
     assert.equal(Editor.supports('CharacterCreation'), true);
-    let built;
-    new Editor().show({ indent: 2 }, command => { built = command; });
-    assert.deepEqual(JSON.parse(JSON.stringify(built)), { code: 357, indent: 2, parameters: ['RPGReactor', 'CharacterCreation', 'Character Creation', {}] });
+    assert.deepEqual(JSON.parse(JSON.stringify(Editor.build(2))), { code: 357, indent: 2, parameters: ['RPGReactor', 'CharacterCreation', 'Character Creation', {}] });
+    assert.deepEqual(JSON.parse(JSON.stringify(Editor.build(0, { once: true, required: true, switchId: '7' }).parameters[3])), { once: true, required: true, switchId: 7 });
     assert.match(read('src/event/EventCommandPicker.js'), /name: 'Character Creation', code: 357, reactor: 'CharacterCreation'/);
     assert.match(fs.readFileSync(path.join(runtimeRoot, 'reactor_character_creator.js'), 'utf8'), /registerCommand\("RPGReactor", "CharacterCreation"/);
 });
@@ -178,6 +226,21 @@ test('the Database page keeps its settings in a file of their own, each project 
     assert.equal(Editor.RULES.face, true, 'the defaults are not shared');
     assert.equal(new Editor({}).settings({ mode: 'build' }).actors.length, 0);
     assert.match(read('src/DatabaseManager.js'), /\['characterCreation', 'ReactorCharacters\.json'\]/);
+});
+
+test('a playtest of a project that builds characters has the Forge beside it, and only copies it when it changed', t => {
+    const project = scratch(t);
+    fs.mkdirSync(path.join(project, 'data'));
+    fs.mkdirSync(path.join(project, 'js'));
+    fs.copyFileSync(path.join(runtimeRoot, 'reactor_3d_motions.js'), path.join(project, 'js/reactor_3d_motions.js'));
+    fs.copyFileSync(path.join(runtimeRoot, 'reactor_3d_motions.bin'), path.join(project, 'js/reactor_3d_motions.bin'));
+    assert.equal(deploy.stagePlaytestCharacterBuilder(project, appRoot), false, 'a project without the setting gets nothing');
+    fs.writeFileSync(path.join(project, 'data/ReactorCharacters.json'), JSON.stringify({ mode: 'build' }));
+    assert.equal(deploy.stagePlaytestCharacterBuilder(project, appRoot), true);
+    assert.ok(fs.existsSync(path.join(project, 'reactor-builder/src/forge/Character3D/CharacterGameWorker.js')), 'where the game looks for its worker');
+    assert.equal(deploy.stagePlaytestCharacterBuilder(project, appRoot), false, 'the next playtest copies nothing');
+    assert.match(read('src/PlaytestManager.js'), /stagePlaytestCharacterBuilder\(projectPath, appRoot\)/);
+    assert.match(read('build-scripts/build-worker.js'), /relPath === onlineDeploy\.BUILDER_FOLDER/, 'a playtest\'s copy never ships');
 });
 
 test('a game that builds characters ships the Forge from the editor\'s own source', t => {

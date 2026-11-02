@@ -1,0 +1,10 @@
+{
+  "mode": "build",
+  "onNewGame": true,
+  "prompt": "",
+  "askName": true,
+  "nameLength": 16,
+  "quality": "standard",
+  "rules": {"species":"all","body":true,"face":true,"hair":true,"outfit":true,"colors":true,"extreme":true,"anatomy":true},
+  "actors": []
+}

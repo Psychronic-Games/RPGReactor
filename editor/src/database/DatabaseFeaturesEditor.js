@@ -44,12 +44,15 @@ class DatabaseFeaturesEditor {
         wrapper.appendChild(banner);
 
         const body = document.createElement('div');
-        body.style.cssText = 'display: flex; flex-direction: column; gap: 16px; padding: 16px; max-width: 900px;';
+        body.style.cssText = 'display: flex; flex-direction: column; gap: 4px; padding: 12px 0 0;';
         const note = document.createElement('div');
-        note.style.cssText = 'font-size: 12px; color: var(--color-text-muted);';
+        note.style.cssText = 'font-size: 12px; color: var(--color-text-muted); padding: 0 12px;';
         note.textContent = tt("Reactor's own additions to MZ. Turn one off when a plugin does the same job: its Database fields are hidden, the game behaves as MZ does, and data already entered is kept.");
         body.appendChild(note);
 
+        const flow = document.createElement('div');
+        flow.className = 'rr-flow-page';
+        body.appendChild(flow);
         const features = ReactorFeatures.listed();
         for (const tier of ['basic', 'advanced']) {
             const rows = features.filter(feature => (feature.tier === 'basic') === (tier === 'basic'));
@@ -58,7 +61,7 @@ class DatabaseFeaturesEditor {
             section.className = 'database-section';
             section.innerHTML = `<div class="database-section-header" data-section-key="features-${tier}">${tt(tier === 'basic' ? 'Basic' : 'Advanced')}</div>
                 <div class="database-section-content">${rows.map(feature => this.rowHtml(feature, system, plugins)).join('')}</div>`;
-            body.appendChild(section);
+            flow.appendChild(section);
         }
         wrapper.appendChild(body);
         container.appendChild(wrapper);

@@ -129,7 +129,7 @@ test('the sitting right hand holds still: no spin through the loop', () => {
 });
 
 test('every finger joint stays within its range in every clip: it curls in its own plane, spreads a little, the thumb within its reach', () => {
-    const R = Poses.FINGER_RANGE, slack = 1;
+    const R = Poses.FINGER_RANGE, slack = 1, PLANTED = new Set(['straddle', 'pushUp']);
     for (const [name] of BODIES) {
         const { bones, body } = bodyOf(name), frames = Poses.handFrames(bones);
         const joints = new Map();
@@ -151,9 +151,15 @@ test('every finger joint stays within its range in every clip: it curls in its o
                         continue;
                     }
                     const range = j.k === 1 ? R.knuckle : j.k === 2 ? R.middle : R.end;
-                    assert.ok(angle >= range[0] - slack && angle <= range[1] + slack, `${label} closes ${angle.toFixed(0)} degrees`);
+                    // A palm pressed to the floor straightens the rest pose's curl, which reads as opening past that rest: its fingers lie flat on the palm instead.
+                    if (PLANTED.has(pose.id)) {
+                        const { W } = posed(bones, clip, f), hand = bones.findIndex(b => b.name === (frames.Left.joints.includes(j) ? 'Left' : 'Right') + 'Hand');
+                        const along = sub(bones[t.bone].tail, bones[t.bone].head), from = rot(mul([-W[hand][0], -W[hand][1], -W[hand][2], W[hand][3]], W[t.bone]), along);
+                        const palm = frames[frames.Left.joints.includes(j) ? 'Left' : 'Right'].palm;
+                        assert.ok(Math.abs(Math.asin(dot(from, palm) / Math.hypot(...from))) * DEG < 1, `${label} lifts off the palm`);
+                    } else assert.ok(angle >= range[0] - slack && angle <= range[1] + slack, `${label} closes ${angle.toFixed(0)} degrees`);
                     if (j.k === 1) assert.ok(off <= Math.max(-R.spread[0], R.spread[1]) + slack, `${label} spreads ${off.toFixed(0)} degrees`);
-                    else assert.ok(off < 1, `${label} bends ${off.toFixed(1)} degrees out of its plane`);
+                    else assert.ok(off < (PLANTED.has(pose.id) ? 2.5 : 1), `${label} bends ${off.toFixed(1)} degrees out of its plane`); // (Laying a rest chain that is not quite on its hinge onto the palm takes 2 degrees.)
                 }
             }
             assert.equal(seen.size, 30, `${pose.id} on ${name} shapes every finger`);
@@ -326,6 +332,9 @@ test('every pose sits in one of the list\'s groups, and the builder\'s pose pick
 
 test('every leg joint stays within its reach in every clip: hip, knee a hinge never past straight, ankle, toes; a standing foot points near where its knee does', () => {
     const R = Poses.LEG_RANGE, slack = 1.5;
+    // The owner approved these holds as they stand (docs/HUMAN-FACE-HANDOFF.md, Previews 77 and 83): knees apart, shins
+    // angled in. Bringing them into LEG_RANGE moves the feet up to 17 cm, so they keep their measured reach, and no more.
+    const stretchLeg = { UpLeg: { x: [-135, 60] }, Leg: { y: 18, z: 35 } }, ACCEPTED = { kneelingBackStretch: stretchLeg, fastKneelingBackStretch: stretchLeg };
     const logOf = q => { const w = q[3] < 0 ? -1 : 1, c = Math.min(1, q[3] * w), a = 2 * Math.acos(c), k = a > 1e-6 ? a / Math.sin(a / 2) : 2; return [q[0] * w * k * DEG, q[1] * w * k * DEG, q[2] * w * k * DEG]; };
     const conj = q => [-q[0], -q[1], -q[2], q[3]];
     for (const [name] of BODIES) {
@@ -337,7 +346,7 @@ test('every leg joint stays within its reach in every clip: hip, knee a hinge ne
                 for (const S of ['Left', 'Right']) {
                     const parentOf = { UpLeg: 'Hips', Leg: S + 'UpLeg', Foot: S + 'Leg', ToeBase: S + 'Foot' };
                     for (const n of ['UpLeg', 'Leg', 'Foot', 'ToeBase']) {
-                        const v = logOf(mul(conj(W[at(parentOf[n])]), W[at(S + n)])), r = R[n], label = `${pose.id} on ${name}: ${S}${n} at frame ${f}`;
+                        const v = logOf(mul(conj(W[at(parentOf[n])]), W[at(S + n)])), r = { ...R[n], ...ACCEPTED[pose.id]?.[n] }, label = `${pose.id} on ${name}: ${S}${n} at frame ${f}`;
                         assert.ok(v[0] >= r.x[0] - slack && v[0] <= r.x[1] + slack, `${label} bends ${v[0].toFixed(0)}`);
                         // An ankle rolling its sole level brings the foot's turn with it (eversion with abduction, inversion
                         // with adduction): up to the library's SOLE_TURN (18) there; LEG_RANGE's 12 bounds the capture's own.

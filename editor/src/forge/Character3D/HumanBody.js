@@ -2457,13 +2457,19 @@
         return { parts, bones, height: top, shaped };
     }
 
+    /** Hardware: every vertex on one bone. A plate stays rigid whatever its finish. */
+    function ridesOneBone(part) {
+        for (let v = 0; v < part.weights.length; v += 4) if (part.weights[v] < .999) return false;
+        return true;
+    }
+
     /** Skin beyond the ball belongs to the toe joint. The source rig kept
      * some distal sole vertices on Foot, pulling them below a planted toe
      * when the heel rises. Rest geometry is unchanged. */
     function rigToes(parts, bones) {
         const scale = Math.max(...bones.map(b => b.head[1])) / 1.7 || 1;
         for (const part of parts) {
-            if (part.toeBound || !part.joints || !part.weights || part.metalness >= .45) continue;
+            if (part.toeBound || !part.joints || !part.weights || part.metalness >= .45 || ridesOneBone(part)) continue;
             let joints, weights;
             for (const S of ['Left', 'Right']) {
                 const foot = bones.findIndex(b => b.name === S + 'Foot'), toe = bones.findIndex(b => b.name === S + 'ToeBase');
@@ -2619,7 +2625,7 @@
         }
         const smooth = x => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
         parts.forEach((part, pi) => {
-            if (!part.joints || !part.weights || part.metalness >= .45) return;
+            if (!part.joints || !part.weights || part.metalness >= .45 || ridesOneBone(part)) return;
             let joints, weights;
             for (let v = 0; v < part.positions.length / 3; v++) {
                 const p = [part.positions[v * 3], part.positions[v * 3 + 1], part.positions[v * 3 + 2]];

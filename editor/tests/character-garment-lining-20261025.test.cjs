@@ -140,7 +140,9 @@ test('the drifter\'s shirt stays under its duster standing, walking and running;
         // The fringe is skinned to the shoulders and spine like the cape, never to a hand or a knee.
         const fringe = result.parts.find(p => p.name === 'Shoulder cape fringe');
         assert.ok(fringe);
-        for (let v = 0; v < fringe.positions.length / 3; v++) for (let k = 0; k < 4; k++) if (fringe.weights[v * 4 + k] > 0.05) assert.match(result.bones[fringe.joints[v * 4 + k]].name, /Spine|Neck|Head|Shoulder|^(Left|Right)Arm$|Hips/);
+        // Soft-tissue joints share fitted clothing's bindings (2026-11-01): each counts as the bone it hangs from, so the fringe moves with a bust under it.
+        const carrier = j => { while (result.bones[j].softTissue) j = result.bones[j].parent; return j; };
+        for (let v = 0; v < fringe.positions.length / 3; v++) for (let k = 0; k < 4; k++) if (fringe.weights[v * 4 + k] > 0.05) assert.match(result.bones[carrier(fringe.joints[v * 4 + k])].name, /Spine|Neck|Head|Shoulder|^(Left|Right)Arm$|Hips/);
         const poses = [null];
         for (const name of ['walk', 'run']) { const clip = Poses.clip(result.bones, name, result.parts[0]); if (clip) poses.push(Cloth.pose(result.bones, clip, clip.times.at(-1) * 0.3)); }
         assert.equal(poses.length, 3, 'walk and run clips');

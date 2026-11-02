@@ -477,9 +477,10 @@
         Object.assign(textures,props.textures);
         parts.push(...outfit.parts, ...hair, ...props.parts, ...features.parts);
         const bones = built.bones.concat(features.bones.map(b => ({ ...b })));
-        Body.rigSoftTissue(pack, parts, bones, built.shaped, r);
         // Merfolk hook: the leg bones carry no skin; what they held, the hips hold.
+        // Before the soft tissue: skin and tail then share the same bindings along the cut.
         if (mer) parts.splice(0, parts.length, ...Merfolk.liftLegs(parts, bones));
+        Body.rigSoftTissue(pack, parts, bones, built.shaped, r);
         // Centaur hook: the person onto a horse's body at the waist; the horse's bones first, the person's under its chest.
         const horse = cen ? Centaur.build(pack, built, r, parts, bones, { skinNormals, quality: o.quality || 'save', hairBudget: o.hairBudget, textures, cache }) : null;
         if (horse) Object.assign(textures, horse.textures);

@@ -21,7 +21,7 @@ test('warrior waist roots remain attached while the panels bend around walking, 
  for(const id of ['walk','sit','kneel']){
   const clip=Cloth.bake(r,Poses.clip(r.bones,id,r.parts[0]),{quality:'preview'});
   for(const u of [.2,.5,.8]){const pose=Cloth.pose(r.bones,clip,clip.times.at(-1)*u),P=Cloth.skin(p,r.bones,pose);assert.ok(P.every(Number.isFinite));
-   for(const v of roots){assert.equal(p.joints[v*4],hip,'upper edge belongs to belt anchor');assert.ok(Math.abs(P[v*3+1]-p.positions[v*3+1])<.10,'root does not whip upward');}
+   for(const v of roots){let anchor=p.joints[v*4];/* Soft tissue (2026-11-01) splits a child off the hips here: with the belt and skin under it, the same joint. */while(r.bones[anchor].softTissue)anchor=r.bones[anchor].parent;assert.equal(anchor,hip,'upper edge belongs to belt anchor');/* Kneel is an authored floor pose since Preview 93, its hips carried down: the root is measured against them. */assert.ok(Math.abs(P[v*3+1]-p.positions[v*3+1]-(pose.P[hip][1]-r.bones[hip].head[1]))<.10,'root does not whip upward');}
   }
  }
 });

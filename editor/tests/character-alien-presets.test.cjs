@@ -192,7 +192,7 @@ test('live forehead slider dragging matches a fresh model without retaining the 
             geometry.setIndex(Array.from(p.index)); return { geometry };
         });
         const b = Object.create(scope.window.Character3DBuilder.prototype);
-        Object.assign(b, { pack, recipe: end, _result: result, _view: { meshes, bones: result.bones.map(() => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion() })),
+        Object.assign(b, { pack, recipe: end, _result: result, _view: { meshes, bones: result.bones.map(() => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion() , scale: new THREE.Vector3(1, 1, 1), userData: { rest: { p: new THREE.Vector3() } } })),
             group: { position: { y: 0 }, updateMatrixWorld() {} }, skeleton: { calculateInverses() {} } }, _resumePose() {}, _draw() {} });
         b._fast = b._fastStart(result);
         const shaped = Q.Body.shape(pack, end), normals = Q.Body.normals(shaped, pack.body.source, pack.body.index, pack.vertexCount);

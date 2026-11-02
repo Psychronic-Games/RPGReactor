@@ -27,6 +27,15 @@ Object.assign(ReactorOnline, {
         try { return localStorage.getItem(this.sessionKey()) || ""; } catch (error) { return ""; }
     },
 
+    /** The last name signed in with here, so a returning player only types a password. */
+    lastName() {
+        try { return localStorage.getItem(this.sessionKey() + ".name") || ""; } catch (error) { return ""; }
+    },
+
+    rememberName(name) {
+        try { localStorage.setItem(this.sessionKey() + ".name", name); } catch (error) { /* it is only a convenience */ }
+    },
+
     /** Passwords and passes go in the body of a request, never its address, which servers log. */
     async post(action, body, params) {
         const response = await fetch(this.request(Object.assign({ a: action }, params)),
@@ -148,137 +157,339 @@ Object.assign(ReactorOnline, {
     }
 });
 
+/**
+ * The sign-in pages, in the game's own window: the project's skin and font, and keys, gamepad,
+ * mouse and touch like any menu. A field is drawn here and typed into a real input laid over it,
+ * so a phone's keyboard opens and a password manager or paste works. Nothing typed is ever
+ * written into the game's text codes.
+ */
+function Window_OnlineForm() {
+    this.initialize(...arguments);
+}
+
+Window_OnlineForm.prototype = Object.create(Window_Selectable.prototype);
+Window_OnlineForm.prototype.constructor = Window_OnlineForm;
+
+Window_OnlineForm.prototype.initialize = function(rect) {
+    this._rows = [];
+    this._values = {};
+    Window_Selectable.prototype.initialize.call(this, rect);
+};
+
+/** rows: { field, label, secret, complete } or { action, label }. */
+Window_OnlineForm.prototype.setRows = function(rows, values = {}) {
+    this.setField(null);
+    this._rows = rows;
+    this._values = values;
+    this.refresh();
+    this.select(0);
+};
+
+Window_OnlineForm.prototype.maxItems = function() {
+    return this._rows.length;
+};
+
+Window_OnlineForm.prototype.value = function(key) {
+    return this._values[key] || "";
+};
+
+Window_OnlineForm.prototype.currentRow = function() {
+    return this._rows[this.index()] || null;
+};
+
+Window_OnlineForm.prototype.select = function(index) {
+    Window_Selectable.prototype.select.call(this, index);
+    const row = this.currentRow();
+    this.setField(this.active && row?.field ? row : null);
+};
+
+Window_OnlineForm.prototype.activate = function() {
+    Window_Selectable.prototype.activate.call(this);
+    this.setField(this.currentRow()?.field ? this.currentRow() : null);
+};
+
+Window_OnlineForm.prototype.deactivate = function() {
+    Window_Selectable.prototype.deactivate.call(this);
+    this.setField(null);
+};
+
+/** Typing goes to the selected field only; on a button, keys belong to the game again. */
+Window_OnlineForm.prototype.setField = function(row) {
+    if (this._field === row) return;
+    this._field = row;
+    if (!this._input && !row) return;
+    const input = this._input || this.createInput();
+    if (!row) { input.blur(); input.style.display = "none"; return; }
+    input.type = row.secret ? "password" : "text";
+    input.autocomplete = row.complete || "off";
+    input.maxLength = row.max || 72;
+    input.value = this.value(row.field);
+    input.style.display = "";
+    this.placeInput();
+    Input.clear();
+    input.focus();
+};
+
+Window_OnlineForm.prototype.createInput = function() {
+    const input = this._input = document.createElement("input");
+    input.id = "reactorOnlineField";
+    input.spellcheck = false;
+    input.style.cssText = "position:fixed;z-index:3;opacity:.01;padding:0;margin:0;border:0;background:none;color:transparent;font-size:16px";
+    input.addEventListener("input", () => {
+        if (!this._field) return;
+        this._values[this._field.field] = input.value;
+        this.redrawCurrentItem();
+    });
+    input.addEventListener("keydown", event => this.onFieldKey(event));
+    // Clicking the game's canvas takes the focus away; typing should still land here.
+    input.addEventListener("blur", () => setTimeout(() => { if (this._field && this._input === input) input.focus(); }, 0));
+    document.body.appendChild(input);
+    return input;
+};
+
+/** The field's keys stay in it, except those that move between rows. */
+Window_OnlineForm.prototype.onFieldKey = function(event) {
+    event.stopPropagation();
+    const down = event.key === "ArrowDown" || event.key === "Tab" && !event.shiftKey, up = event.key === "ArrowUp" || event.key === "Tab" && event.shiftKey;
+    if (down || up) {
+        event.preventDefault();
+        const index = this.index() + (down ? 1 : -1);
+        if (index >= 0 && index < this._rows.length) { SoundManager.playCursor(); this.select(index); }
+    } else if (event.key === "Enter" && !event.isComposing) {
+        event.preventDefault();
+        const next = this._rows[this.index() + 1];
+        if (next?.field) { this.select(this.index() + 1); return; }
+        this.callHandler("submit");
+    } else if (event.key === "Escape") {
+        event.preventDefault();
+        this.processCancel();
+    }
+};
+
+Window_OnlineForm.prototype.placeInput = function() {
+    if (!this._input || !this._field || !Graphics._canvas) return;
+    const box = Graphics._canvas.getBoundingClientRect(), scale = box.width / Math.max(1, Graphics.width);
+    const rect = this.itemRect(this.index()), origin = this.worldTransform.apply(new Point(this.padding + rect.x, this.padding + rect.y));
+    const style = this._input.style;
+    style.left = box.left + origin.x * scale + "px";
+    style.top = box.top + origin.y * scale + "px";
+    style.width = rect.width * scale + "px";
+    style.height = rect.height * scale + "px";
+};
+
+Window_OnlineForm.prototype.update = function() {
+    Window_Selectable.prototype.update.call(this);
+    this.placeInput();
+    if (this._field) {
+        const on = Math.floor(performance.now() / 500) % 2 === 0;
+        if (on !== this._caret) { this._caret = on; this.redrawCurrentItem(); }
+    }
+};
+
+Window_OnlineForm.prototype.drawItem = function(index) {
+    const row = this._rows[index], rect = this.itemLineRect(index);
+    this.resetTextColor();
+    if (!row.field) {
+        this.drawText(row.label, rect.x, rect.y, rect.width, "center");
+        return;
+    }
+    const label = Math.floor(rect.width * 0.42), x = rect.x + label, width = rect.width - label;
+    this.changeTextColor(ColorManager.systemColor());
+    this.drawText(row.label, rect.x, rect.y, label);
+    this.resetTextColor();
+    const value = this.value(row.field), shown = row.secret ? "*".repeat(value.length) : value;
+    const selected = this._field === row && this._caret;
+    this.contents.fillRect(x, rect.y + rect.height - 3, width, 2, ColorManager.gaugeBackColor());
+    this.drawText(shown + (selected ? "_" : ""), x + 4, rect.y, width - 8);
+};
+
+Window_OnlineForm.prototype.destroy = function(options) {
+    this.closeInput();
+    Window_Selectable.prototype.destroy.call(this, options);
+};
+
+Window_OnlineForm.prototype.closeInput = function() {
+    this._field = null;
+    this._input?.remove();
+    this._input = null;
+};
+
 function Scene_OnlineAccount() {
     this.initialize(...arguments);
 }
 
-Scene_OnlineAccount.prototype = Object.create(Scene_Base.prototype);
+Scene_OnlineAccount.prototype = Object.create(Scene_MenuBase.prototype);
 Scene_OnlineAccount.prototype.constructor = Scene_OnlineAccount;
 
+Scene_OnlineAccount.WIDTH = 720;
+
+Scene_OnlineAccount.prototype.needsCancelButton = function() {
+    return false;
+};
+
+Scene_OnlineAccount.prototype.create = function() {
+    Scene_MenuBase.prototype.create.call(this);
+    this._helpWindow = new Window_Help(new Rectangle(0, this.helpAreaTop(), Graphics.boxWidth, this.helpAreaHeight()));
+    this.addWindow(this._helpWindow);
+    const width = Math.min(Scene_OnlineAccount.WIDTH, Graphics.boxWidth);
+    this._formWindow = new Window_OnlineForm(new Rectangle(Math.floor((Graphics.boxWidth - width) / 2), this.mainAreaTop(), width, this.calcWindowHeight(5, true)));
+    this._formWindow.setHandler("ok", this.onFormOk.bind(this));
+    this._formWindow.setHandler("cancel", this.onFormCancel.bind(this));
+    this._formWindow.setHandler("submit", this.submit.bind(this));
+    this.addWindow(this._formWindow);
+    this._page = null;
+};
+
 Scene_OnlineAccount.prototype.start = function() {
-    Scene_Base.prototype.start.call(this);
-    this._page = new ReactorAccountPage();
-    this._page.open();
+    Scene_MenuBase.prototype.start.call(this);
+    this.resume();
 };
 
 Scene_OnlineAccount.prototype.stop = function() {
-    Scene_Base.prototype.stop.call(this);
-    this._page?.close();
+    Scene_MenuBase.prototype.stop.call(this);
+    this._formWindow.closeInput();
 };
 
-class ReactorAccountPage {
-    async open() {
-        const session = ReactorOnline.storedSession();
-        if (session) {
-            try { return this.enter(await ReactorOnline.post("me", { session })); } catch (error) { ReactorOnline.signOut(); }
-        }
-        this.build();
+/** A device that remembers an account greets it; anyone else is asked who they are. */
+Scene_OnlineAccount.prototype.resume = async function() {
+    const session = ReactorOnline.storedSession();
+    if (!session) return this.showStart();
+    this.setMessage("Signing in…");
+    this._formWindow.hide();
+    try {
+        this.showWelcome(await ReactorOnline.post("me", { session }));
+    } catch (error) {
+        ReactorOnline.signOut();
+        this.showStart();
     }
+    this._formWindow.show();
+};
 
-    node(tag, style, text) {
-        const node = document.createElement(tag);
-        if (style) node.style.cssText = style;
-        if (text != null) node.textContent = text;
-        return node;
+Scene_OnlineAccount.prototype.title = function() {
+    const title = ReactorOnline.config()?.accounts?.title || $dataSystem.gameTitle || "Sign in";
+    return title.replace(/\\/g, "");
+};
+
+Scene_OnlineAccount.prototype.setMessage = function(text, bad) {
+    this._helpWindow.setText(this.title() + "\n" + (bad ? "\\C[2]" : "") + String(text || "").replace(/\\/g, ""));
+};
+
+Scene_OnlineAccount.prototype.showPage = function(page, rows, message, values) {
+    this._page = page;
+    const form = this._formWindow, height = this.calcWindowHeight(rows.length, true);
+    form.move(form.x, this.mainAreaTop() + Math.floor((this.mainAreaHeight() - height) / 2), form.width, height);
+    form.createContents();
+    form.setRows(rows, values);
+    form.activate();
+    this.setMessage(message);
+};
+
+Scene_OnlineAccount.prototype.showStart = function() {
+    const accounts = ReactorOnline.config().accounts || {}, rows = [], guests = ReactorOnline.accountMode() === "optional";
+    if (accounts.registration !== false) rows.push({ action: "new", label: "Create an account" });
+    rows.push({ action: "old", label: "I have an account" });
+    if (guests) rows.push({ action: "guest", label: "Play as a guest" });
+    rows.push({ action: "back", label: "Back" });
+    this.showPage("start", rows, guests ? "An account keeps your character and progress on any device." : "This game needs an account. It keeps your character and progress on any device.");
+};
+
+Scene_OnlineAccount.prototype.showSignIn = function(values) {
+    this.showPage("signin", [{ field: "username", label: "Name", complete: "username", max: 20 }, { field: "password", label: "Password", secret: true, complete: "current-password" },
+        { action: "login", label: "Sign in" }, { action: "start", label: "Back" }], "Lost your password? The game's owner can reset it.", values);
+};
+
+Scene_OnlineAccount.prototype.showCreate = function() {
+    const shortest = Math.max(4, Number(ReactorOnline.config().accounts?.minPassword) || 8);
+    this.showPage("create", [{ field: "username", label: "Choose a name", complete: "username", max: 20 }, { field: "password", label: "Password", secret: true, complete: "new-password" },
+        { field: "repeat", label: "Password again", secret: true, complete: "new-password" }, { action: "register", label: "Create account" }, { action: "start", label: "Back" }],
+        "A name of 3 to 20 letters or numbers, and a password of at least " + shortest + " characters.");
+};
+
+/** Signed in: wake up where they left off, or start, or be someone else on this device. */
+Scene_OnlineAccount.prototype.showWelcome = function(account) {
+    this._account = account;
+    const config = ReactorOnline.config(), rows = [], asleep = account.progress && config.accounts?.persist !== false;
+    rows.push({ action: asleep ? "wake" : "enter", label: asleep ? "Wake up" : "Continue" });
+    if (asleep && config.accounts?.restart !== false) rows.push({ action: "over", label: "Start over" });
+    rows.push({ action: "signout", label: "Sign out" });
+    this.showPage("welcome", rows, "Welcome back, " + account.name + ".");
+};
+
+Scene_OnlineAccount.prototype.onFormOk = function() {
+    const row = this._formWindow.currentRow();
+    this._formWindow.activate();
+    if (row?.field) return;
+    this.run(row?.action);
+};
+
+/** Enter in the last field means the page's own button. */
+Scene_OnlineAccount.prototype.submit = function() {
+    const action = this._formWindow._rows.find(row => row.action)?.action;
+    if (action) this.run(action);
+};
+
+Scene_OnlineAccount.prototype.run = function(action) {
+    const form = this._formWindow;
+    switch (action) {
+        case "new": return this.showCreate();
+        case "old": return this.showSignIn({ username: ReactorOnline.lastName() });
+        case "start": return this.showStart();
+        case "guest": ReactorOnline.guest = true; return SceneManager.goto(Scene_Map);
+        case "back": ReactorOnline.gameStarted = false; ReactorCharacters.pending = false; return SceneManager.goto(Scene_Title);
+        case "login": return this.send("login");
+        case "register":
+            if (form.value("password") !== form.value("repeat")) return this.fail("Those passwords are not the same.");
+            return this.send("register");
+        case "enter": return this.enterWorld(this._account);
+        case "wake": return this.wakeUp(this._account);
+        case "over": return this.enterWorld(Object.assign({}, this._account, { character: null, progress: null }));
+        case "signout": ReactorOnline.signOut(); return this.showStart();
     }
+};
 
-    input(type, placeholder, complete) {
-        const input = this.node("input", "padding:10px;background:#0b0c14;color:inherit;border:1px solid #39406a;border-radius:4px;font:inherit");
-        Object.assign(input, { type, placeholder, autocomplete: complete });
-        input.addEventListener("keydown", event => { event.stopPropagation(); if (event.key === "Enter") this.submit("login"); });
-        input.addEventListener("keyup", event => event.stopPropagation());
-        return input;
+Scene_OnlineAccount.prototype.fail = function(text) {
+    SoundManager.playBuzzer();
+    this.setMessage(text, true);
+};
+
+Scene_OnlineAccount.prototype.send = async function(action) {
+    if (this._busy) return;
+    this._busy = true;
+    const form = this._formWindow, username = form.value("username");
+    this.setMessage(action === "login" ? "Signing in…" : "Creating your account…");
+    try {
+        const account = await ReactorOnline.post(action, { username, password: form.value("password") });
+        ReactorOnline.rememberName(username);
+        if (account.progress && ReactorOnline.config().accounts?.persist !== false) this.showWelcome(account);
+        else this.enterWorld(account);
+    } catch (error) {
+        this.fail(error.message || "The server could not be reached.");
+    } finally {
+        this._busy = false;
     }
+};
 
-    button(label, action, main) {
-        const node = this.node("button", "flex:1;padding:10px;border-radius:4px;font:inherit;font-weight:600;cursor:pointer;color:#fff;border:1px solid #4a52a0;background:" + (main ? "#3a3fa8" : "transparent"), label);
-        node.type = "button";
-        node.addEventListener("click", action);
-        return node;
-    }
+Scene_OnlineAccount.prototype.enterWorld = function(account) {
+    ReactorOnline.useAccount(account);
+    SceneManager.goto(Scene_Map);
+};
 
-    build() {
-        const config = ReactorOnline.config();
-        const root = this.root = this.node("div", "position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:#0b0c14;color:#e8e9f2;font:15px/1.4 system-ui,sans-serif");
-        root.id = "reactorOnlineAccount";
-        const card = this.node("form", "width:min(360px,90vw);display:flex;flex-direction:column;gap:10px;padding:24px;background:#141626;border:1px solid #2a2e4a;border-radius:8px");
-        card.addEventListener("submit", event => event.preventDefault());
-        card.appendChild(this.node("div", "font-size:20px;font-weight:600;margin-bottom:6px", config.accounts?.title || $dataSystem.gameTitle || "Sign in"));
-        this.name = this.input("text", "Name", "username");
-        this.password = this.input("password", "Password", "current-password");
-        this.message = this.node("div", "min-height:20px;color:#ff9a9a;font-size:13px");
-        const row = this.node("div", "display:flex;gap:8px");
-        row.appendChild(this.button("Sign in", () => this.submit("login"), true));
-        if (config.accounts?.registration !== false) row.appendChild(this.button("Create account", () => this.submit("register")));
-        card.append(this.name, this.password, this.message, row);
-        if (ReactorOnline.accountMode() === "optional") {
-            card.appendChild(this.button("Play as a guest", () => { ReactorOnline.guest = true; SceneManager.goto(Scene_Map); }));
-        }
-        card.appendChild(this.button("Back", () => { ReactorOnline.gameStarted = false; ReactorCharacters.pending = false; SceneManager.goto(Scene_Title); }));
-        root.appendChild(card);
-        document.body.appendChild(root);
-        this.name.focus();
-    }
-
-    async submit(action) {
-        if (this.busy) return;
-        this.busy = true;
-        this.message.textContent = "";
-        try {
-            this.enter(await ReactorOnline.post(action, { username: this.name.value, password: this.password.value }));
-        } catch (error) {
-            this.message.textContent = error.message || "The server could not be reached.";
-        } finally {
-            this.busy = false;
-        }
-    }
-
-    /** Signed in: wake up where they left off, or, if the project lets them, start again. */
-    enter(account) {
-        const config = ReactorOnline.config();
-        if (account.progress && config.accounts?.persist !== false) {
-            if (config.accounts?.restart === false) return this.wakeUp(account);
-            return this.offerWaking(account);
-        }
-        ReactorOnline.useAccount(account);
+Scene_OnlineAccount.prototype.wakeUp = async function(account) {
+    ReactorOnline.useAccount(account);
+    try {
+        await ReactorOnline.wake(account);
         SceneManager.goto(Scene_Map);
+    } catch (error) {
+        this.fail("Your game could not be loaded: " + error.message);
     }
+};
 
-    async wakeUp(account) {
-        ReactorOnline.useAccount(account);
-        try {
-            await ReactorOnline.wake(account);
-            SceneManager.goto(Scene_Map);
-        } catch (error) {
-            this.build();
-            this.message.textContent = "Your game could not be loaded: " + error.message;
-        }
-    }
-
-    offerWaking(account) {
-        this.close();
-        const root = this.root = this.node("div", "position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:#0b0c14;color:#e8e9f2;font:15px/1.4 system-ui,sans-serif");
-        root.id = "reactorOnlineAccount";
-        const card = this.node("div", "width:min(360px,90vw);display:flex;flex-direction:column;gap:10px;padding:24px;background:#141626;border:1px solid #2a2e4a;border-radius:8px");
-        card.appendChild(this.node("div", "font-size:20px;font-weight:600;margin-bottom:6px", "Welcome back, " + account.name));
-        card.appendChild(this.button("Wake up", () => this.wakeUp(account), true));
-        card.appendChild(this.button("Start over", () => {
-            ReactorOnline.useAccount(Object.assign({}, account, { character: null, progress: null }));
-            SceneManager.goto(Scene_Map);
-        }));
-        card.appendChild(this.button("Sign out", () => {
-            ReactorOnline.signOut();
-            this.close();
-            this.build();
-        }));
-        root.appendChild(card);
-        document.body.appendChild(root);
-    }
-
-    close() {
-        this.root?.remove();
-    }
-}
+Scene_OnlineAccount.prototype.onFormCancel = function() {
+    const page = this._page;
+    this._formWindow.activate();
+    if (page === "signin" || page === "create") this.showStart();
+    else if (page === "start") this.run("back");
+};
 
 const _reactorOnlineAccountGoto = SceneManager.goto;
 SceneManager.goto = function(sceneClass) {

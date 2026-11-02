@@ -31,7 +31,7 @@ function onlineWorld(answer, config = { enabled: true, url: 'reactor-online/api.
     world.calls = calls;
     world.localStorage = { store: {}, getItem(key) { return this.store[key] ?? null; }, setItem(key, value) { this.store[key] = value; } };
     vm.runInContext(`
-        for (const name of ["Scene_Map", "Scene_Title", "Scene_Load", "Scene_MenuBase", "Scene_Base", "Spriteset_Map", "Sprite_Character", "Window_Selectable"]) {
+        for (const name of ["Scene_Map", "Scene_Title", "Scene_Load", "Scene_MenuBase", "Scene_Base", "Spriteset_Map", "Sprite_Character", "Window_Selectable", "Window_Command"]) {
             if (typeof globalThis[name] === "undefined") globalThis[name] = ({ [name]: function() {} })[name];
         }
         Scene_Map.prototype.start = Scene_Map.prototype.start || function() {};
@@ -224,6 +224,26 @@ test('another player shows their actor until their own model arrives, then that 
     assert.equal(peer.modelSpec, spec);
     assert.equal(world.Reactor3D.characterModelSpec(peer).name, spec.name);
     assert.equal(world.Reactor3D.modelInstanceKey(peer), 'r3:' + spec.name, 'a new look is a new model instance');
+});
+
+test('the Demo plays on the demo server, and a project made from it is the author\'s own', () => {
+    const demo = JSON.parse(fs.readFileSync(path.join(appRoot, '../template/Demo/data/ReactorOnline.json'), 'utf8'));
+    assert.equal(demo.enabled, true);
+    assert.equal(demo.address, 'https://demo.rpgreactor.org');
+    assert.equal(demo.playtest, true, 'a playtest of the Demo reaches the server');
+    assert.equal(demo.accounts.mode, 'optional');
+    assert.match(fs.readFileSync(path.join(appRoot, 'src/ProjectManager.js'), 'utf8'), /\['ReactorOnline\.json', 'ReactorCharacters\.json'\][\s\S]{0,160}unlinkSync/);
+});
+
+test('the option pages flow across the window instead of running down one column', () => {
+    const css = fs.readFileSync(path.join(appRoot, 'css/styles.css'), 'utf8');
+    assert.match(css, /\.rr-flow-page \{ column-width: \d+px/);
+    for (const file of ['DatabaseOnlineEditor.js', 'DatabaseCharacterCreationEditor.js']) {
+        const source = fs.readFileSync(path.join(appRoot, 'src/database', file), 'utf8');
+        assert.match(source, /DatabaseFlowForm\.page\(/, file);
+        assert.equal(/max-width/.test(source), false, `${file} leaves the window's width to the page`);
+    }
+    assert.ok(fs.readFileSync(path.join(appRoot, 'index.html'), 'utf8').indexOf('DatabaseFlowForm.js') < fs.readFileSync(path.join(appRoot, 'index.html'), 'utf8').indexOf('DatabaseOnlineEditor.js'));
 });
 
 test('a project\'s online settings are its own file, and looking at the page writes nothing', () => {

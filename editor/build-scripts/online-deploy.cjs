@@ -7,6 +7,7 @@ const path = require('node:path');
 const { copyWebForgeAssets } = require('./web-forge-assets.cjs');
 
 const SERVER_FOLDER = 'reactor-online';
+const BUILDER_FOLDER = 'reactor-builder';
 const API_PATH = SERVER_FOLDER + '/api.php';
 const ENGINE_DEFAULTS = Object.freeze({ enabled: true, rate: 15, movement: 'speed', maxSpeed: 16 });
 
@@ -38,7 +39,38 @@ function stampOnlineClient(stagingDir, publicAddress, settings = {}, characters 
  */
 function stageCharacterBuilder(stagingDir, appRoot) {
     if (readData(stagingDir, 'ReactorCharacters.json').mode !== 'build') return false;
-    copyWebForgeAssets(appRoot, path.join(stagingDir, 'reactor-builder'), path.join(stagingDir, 'js'));
+    copyWebForgeAssets(appRoot, path.join(stagingDir, BUILDER_FOLDER), path.join(stagingDir, 'js'));
+    return true;
+}
+
+/** What the Forge's files are right now, by name, size and date, to tell a copy that is still current. */
+function forgeFingerprint(appRoot, stagingDir) {
+    const folders = [path.join(appRoot, 'src/forge/Character3D'), path.join(appRoot, 'src/forge/Character3D/data')];
+    const hash = crypto.createHash('sha256');
+    for (const folder of folders) {
+        for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+            if (!entry.isFile()) continue;
+            const stat = fs.statSync(path.join(folder, entry.name));
+            hash.update(`${entry.name}:${stat.size}:${stat.mtimeMs}\n`);
+        }
+    }
+    const motions = path.join(stagingDir, 'js/reactor_3d_motions.bin');
+    if (fs.existsSync(motions)) hash.update(String(fs.statSync(motions).size));
+    return hash.digest('hex');
+}
+
+/**
+ * A playtest runs from the project's own folder, so a project that builds characters needs the
+ * Forge there too: a game's page may only start a worker from its own folder. Only the first
+ * playtest after the Forge changes copies anything. The folder is never part of a build.
+ */
+function stagePlaytestCharacterBuilder(projectPath, appRoot) {
+    if (readData(projectPath, 'ReactorCharacters.json').mode !== 'build') return false;
+    const target = path.join(projectPath, BUILDER_FOLDER), stamp = path.join(target, '.forge-version');
+    const version = forgeFingerprint(appRoot, projectPath);
+    if (fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === version) return false;
+    copyWebForgeAssets(appRoot, target, path.join(projectPath, 'js'));
+    fs.writeFileSync(stamp, version);
     return true;
 }
 
@@ -114,4 +146,4 @@ function writeOnlineServer(folder, { appRoot, project, title, runtime, maxPlayer
     return { folder: target, newSecret: !kept, adminKey: keptAdmin ? '' : adminKey, grids };
 }
 
-module.exports = { SERVER_FOLDER, API_PATH, ENGINE_DEFAULTS, apiUrl, readData, stampOnlineClient, stageCharacterBuilder, passabilityGrid, writeOnlineServer };
+module.exports = { SERVER_FOLDER, BUILDER_FOLDER, API_PATH, ENGINE_DEFAULTS, apiUrl, readData, stampOnlineClient, stageCharacterBuilder, stagePlaytestCharacterBuilder, passabilityGrid, writeOnlineServer };

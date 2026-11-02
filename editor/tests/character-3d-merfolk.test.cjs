@@ -187,14 +187,15 @@ test('every clip loops, holds whole turns and no NaN, and the poses on the floor
             for (let i = 1; i < n; i++) assert.ok(clip.times[i] > clip.times[i - 1], clip.name + ' times rise');
             assert.ok(clip.tracks.some(t => tailBones.has(t.bone)), clip.name + ' moves the tail');
             for (const t of clip.tracks) {
-                const size = t.path === 'translation' ? 3 : 4;
-                assert.equal(t.values.length, n * size, clip.name + ' track length');
+                // Baked soft tissue is keyed on times of its own.
+                const size = t.path === 'translation' ? 3 : 4, keys = (t.times || clip.times).length;
+                assert.equal(t.values.length, keys * size, clip.name + ' track length');
                 for (const x of t.values) assert.ok(Number.isFinite(x), clip.name + ' finite');
                 if (size === 4) {
                     for (let f = 0; f < n; f++) assert.ok(Math.abs(Math.hypot(...t.values.slice(f * 4, f * 4 + 4)) - 1) < 1e-3, clip.name + ' whole quaternion');
                     const a = t.values.slice(0, 4), b = t.values.slice((n - 1) * 4);
                     assert.ok(Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]) > 0.9995, `${clip.name} ${result.bones[t.bone].name} ends where it starts`);
-                } else for (let k = 0; k < 3; k++) assert.ok(Math.abs(t.values[k] - t.values[(n - 1) * 3 + k]) < 1e-4, clip.name + ' move loops');
+                } else for (let k = 0; k < 3; k++) assert.ok(Math.abs(t.values[k] - t.values[(keys - 1) * 3 + k]) < 1e-4, clip.name + ' move loops');
             }
         }
         // Standing, moving, sitting, lying and propped: the lowest skin on the floor (a few centimeters either way).
@@ -218,7 +219,8 @@ test('the builder\'s poses play on a merfolk skeleton: its own motions and the u
     for (const p of Mer.POSES) {
         const clip = Mer.poseClip(result.bones, p.id, body, result.recipe);
         assert.ok(clip && clip.tracks.length, p.id + ' plays');
-        for (const t of clip.tracks) { assert.ok(!t.path, p.id + ': the view\'s clip only turns'); for (const x of t.values) assert.ok(Number.isFinite(x), p.id + ' finite'); }
+        // Beyond the baked soft tissue's own translations.
+        for (const t of clip.tracks) { assert.ok(!t.path || result.bones[t.bone].softTissue, p.id + ': the view\'s clip only turns'); for (const x of t.values) assert.ok(Number.isFinite(x), p.id + ' finite'); }
         for (const s of [0, 0.4, 1.1]) assert.ok(Number.isFinite(clip.lift(s)), p.id + ' lift');
         // The upper body's humanoid poses leave the legs' bones alone and keep the tail at its rest on the floor.
         if (Mer.UPPER.includes(p.id)) assert.ok(!clip.tracks.some(t => Mer.LEG_BONES.test(result.bones[t.bone].name)), p.id + ' leaves the legs');
