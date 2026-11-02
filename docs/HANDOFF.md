@@ -6,10 +6,10 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-02)
 
-- **Development:** 0.99.5 is open. Desktop/web manifests, About text, import scaffolding and the Demo metadata are updated. Runtime revision **20261101.41** is unchanged; all bundled runtime headers identify engine 0.99.5.
+- **Development:** 0.99.5 is open. Desktop/web manifests, About text, import scaffolding and the Demo metadata are updated. Runtime revision **20261101.41** is unchanged; all bundled runtime headers identify engine 0.99.5. Next changes go under 0.99.5 and stay local until the owner asks to push.
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release. The [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live, with prepared Markdown/plain-text copies in `docs/posts/` and six JPGs in `docs/media/releases/0.99.4/`.
 - **Release preference:** publish regular Latest source releases when the owner asks for a release; use a prerelease only when explicitly requested. Signed native binaries remain a separate pipeline.
-- **Verification:** the [0.99.4 release CI](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41398393353) failed. Character checks and the dependency audit remain open. No green full-suite result is claimed. [Working list](OPEN-ITEMS.md).
+- **Verification:** the [0.99.4 release CI](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41398393353) failed: 24 character tests and the dependency audit remain open. No green full-suite result is claimed. [Working list](OPEN-ITEMS.md).
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner is working on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering. Full local suites remain deferred; substantial checks go through `codex-check`.

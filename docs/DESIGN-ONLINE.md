@@ -243,7 +243,7 @@ Each step is usable and fun on its own, and demo.rpgreactor.org hosts each one.
 8. **Shared state scopes, then shared battles.**
 9. **God mode.**
 
-0.99.4 still needs to be pushed and verified ([open items](OPEN-ITEMS.md)).
+Steps 1 to 4 and 7 shipped in 0.99.4, with [real-world testing still open](OPEN-ITEMS.md).
 
 ## Player-built structures
 
