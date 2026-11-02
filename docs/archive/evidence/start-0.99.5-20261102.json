@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-02",
+  "kind": "development-cycle closeout",
+  "developmentVersion": "0.99.5",
+  "publishedSourceRelease": "0.99.4",
+  "releaseTag": "v0.99.4",
+  "runtimeRevision": "20261101.41",
+  "runtimeBehaviorChanged": false,
+  "previewRevisions": {
+    "character": 98,
+    "props": 62,
+    "clothing": 61
+  },
+  "announcement": {
+    "url": "https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released",
+    "ownerReportedUploadsComplete": true,
+    "publicListingVerified": true,
+    "markdown": "docs/posts/itch-devlog-0.99.4.md",
+    "plainText": "docs/posts/itch-devlog-0.99.4-plain.txt",
+    "images": "docs/media/releases/0.99.4/",
+    "imageCount": 6,
+    "binaryValidation": "not inferred from the devlog upload"
+  },
+  "changedSurfaces": [
+    "editor package and lockfile root versions",
+    "desktop About text and localization version constant",
+    "web host version",
+    "legacy import scaffold version",
+    "Demo project version and engineVersion",
+    "runtime header and bundled runtime copies",
+    "paired 0.99.5 changelogs and indexes",
+    "current status, handoff, working list and next-release command examples"
+  ],
+  "releasePreference": "Regular Latest source release when requested; prereleases only on explicit request. Native binary publication remains separate.",
+  "openIssues": [
+    "Character checks and dependency audit still fail in release CI.",
+    "Human face/body visual acceptance and exact under-chin shadow reproduction remain open.",
+    "Online voice across real microphones/networks, production load and complete Rebellion plugin-stack playthrough remain unverified."
+  ],
+  "ci": "https://github.com/Psychronic-Games/RPGReactor/actions/runs/41398393353",
+  "validation": {
+    "scope": "version consistency, documentation and runtime-copy checks",
+    "fullSuite": "not run locally",
+    "targetedChecksPassed": 8,
+    "bundledRuntimeProjectsMatch": 20,
+    "versionConsistency": "pass",
+    "changedJavaScriptSyntax": "pass",
+    "devlogImages": "six matching Markdown references and plain-text markers",
+    "whitespace": "pass"
+  },
+  "artifacts": "scratchpad/start-0995-20261102/"
+}

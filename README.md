@@ -6,7 +6,7 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-The latest tagged source release is [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4). Read the [release notes](docs/posts/release-notes-0.99.4.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
+The current development version is 0.99.5 and is not published yet; the latest tagged source release is [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4). Read the [release notes](docs/posts/release-notes-0.99.4.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
@@ -204,17 +204,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.99.4 changes have been committed:
+`main` worktree after all 0.99.5 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.99.4 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.4
+node editor/build-scripts/cut-release.cjs 0.99.5 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.5
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.99.4` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.99.5` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary
