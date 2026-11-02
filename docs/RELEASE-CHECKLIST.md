@@ -25,6 +25,10 @@ scoped per runtime) so builds never share a profile, and the build refuses a dow
 `editor/build-scripts/shipped-runtime.json` (raise that version in the same
 commit that upgrades NW.js 0.107.0 to anything newer).
 
+## Owner-directed source publication
+
+An owner may explicitly request a regular source release while known checks still fail. Record that exception and the actual CI status in the release notes and evidence; update the version surfaces and archive the handoff, then publish the exact source tag as Latest. Do not report a passing full suite or attach unvalidated native binaries. This exception covers source publication only; the signing and native-candidate requirements remain unchanged.
+
 ## Development source previews
 
 A development preview can make current work visible in GitHub Releases while a stable cut is still pending. Give it a separate tag such as `v0.99.4-preview.20261101`, mark the GitHub release **Pre-release**, and leave **Latest** on the last stable version. Keep the package version, stable release links and changelog development markers unchanged. Do not attach unvalidated native binaries or claim a green CI run.

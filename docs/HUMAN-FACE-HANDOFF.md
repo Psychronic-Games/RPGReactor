@@ -2,7 +2,7 @@
 
 ## Current candidate — Preview 98
 
-This face candidate was introduced with runtime **20261101.24**. The current checkpoint uses **20261101.26** for the later sprite and scroll fixes; face geometry remains Preview 98. See the [day's checkpoint](HANDOFF.md#2026-11-01--character-and-rebellion-checkpoint) for save/re-export instructions and the remaining review scope.
+This face candidate was introduced with runtime **20261101.24**. The release checkpoint uses **20261101.41** for later sprite, camera and online changes; face geometry remains Preview 98. See the [day's checkpoint](archive/handoff/0.99.4.md#2026-11-01--character-and-rebellion-checkpoint) for save/re-export instructions and the remaining review scope.
 
 Preview 98 addresses the angular side-cheek ridge still visible with Cheeks and Cheekbones at −100%. A native side-cheek field now carries the skin behind the replacement face’s join through the same contour change. The replacement transition has bounded clearance above retained native triangles, with a small positive separation to avoid coplanar flicker. It inherits the body’s actual smoothed cheek normals instead of restoring raw cage normals at the edge. The screenshot’s default female side view and minimum settings are the reproduction target; male and saved/blink checks cover the candidate too. Runtime remains **20261101.24**. Full suites stay deferred and overall attractiveness/visual acceptance remain open. [Scope ledger](archive/evidence/cheek-ridge-20261101.json).
 

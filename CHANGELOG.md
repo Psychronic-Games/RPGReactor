@@ -2,7 +2,7 @@
 
 One file per release or labeled development checkpoint, newest first. Each is that release's GitHub release notes; the [editor changelog](editor/CHANGELOG.md) has the full technical list for the same version.
 
-- [0.99.4](changelog/0.99.4.md) (in development) — [source preview](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4-preview.20261101)
+- [0.99.4](changelog/0.99.4.md) - 2026-11-02
 - [0.99.3](changelog/0.99.3.md) - 2026-10-29
 - [0.99.2](changelog/0.99.2.md) - 2026-10-25
 - [0.99.1](changelog/0.99.1.md) - 2026-10-24

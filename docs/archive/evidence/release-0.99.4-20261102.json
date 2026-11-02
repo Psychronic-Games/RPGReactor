@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-02",
+  "version": "0.99.4",
+  "runtime": "20261101.41",
+  "tag": "v0.99.4",
+  "publication": "regular source release marked Latest; not a prerelease",
+  "authorization": "Owner explicitly requested the actual regular release so 0.99.4 appears in the repository Releases sidebar, after the prior explanation of the preview and open CI failures.",
+  "sourceBaseCommit": "6fc4fb3435a10bd17b8abc8d6303afb3bb422235",
+  "knownIssues": [
+    "The baseline CI run failed; follow-up runs are pending.",
+    "Twenty-five character tests and five moderate dependency-audit advisories remain documented in OPEN-ITEMS.",
+    "Human face/body visual acceptance remains open.",
+    "No clean full-suite or signed native-binary validation is claimed."
+  ],
+  "ci": "https://github.com/Psychronic-Games/RPGReactor/actions/runs/41395251102",
+  "repairCi": "https://github.com/Psychronic-Games/RPGReactor/actions/runs/41397145405",
+  "changes": [
+    "Publish exact v0.99.4 source tag as regular Latest release.",
+    "Roll both changelog headers/indexes, README, release notes and current status from preview to source release.",
+    "Archive ten dated handoff sections using archive-handoff.cjs and repair inbound links.",
+    "Keep all six versioned screenshots and pin release-body image links to v0.99.4.",
+    "Retain the old preview tag as historical; no tag is moved or overwritten."
+  ],
+  "validation": {
+    "scope": "focused documentation, release formatting, image links, exact publication flags and source tag verification; no new full-suite run",
+    "nativeBinaries": "not part of this source publication",
+    "targetedChecksPassed": 6
+  },
+  "artifacts": "scratchpad/release-0994-final/"
+}

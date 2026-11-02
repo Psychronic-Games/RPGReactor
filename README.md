@@ -6,7 +6,7 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-The current source preview is **0.99.4**. See its [release notes](docs/posts/release-notes-0.99.4.md) and [GitHub prerelease](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4-preview.20261101). The latest stable source release remains [0.99.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.3). Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
+The latest tagged source release is [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4). Read the [release notes](docs/posts/release-notes-0.99.4.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
@@ -23,7 +23,7 @@ The current source preview is **0.99.4**. See its [release notes](docs/posts/rel
 </tr>
 </table>
 
-## What's new in 0.99.4 — development preview
+## What's new in 0.99.4
 
 - **Online worlds:** deploy a game and PHP server together, with player characters, accounts, chat, shared world state and an owner page.
 - **In-game character creation:** let players choose an actor or edit their appearance with the Forge-powered creator, in single-player and online games.
@@ -32,7 +32,7 @@ The current source preview is **0.99.4**. See its [release notes](docs/posts/rel
 - **Props and clothing:** improved fabric, seams, wearable symbols and fitted construction; medical and Wasteland props; a minivan with an accessible seven-seat cabin.
 - **Correct sprite presentation:** complete multi-frame walks, correctly cropped event previews and stationary events that stay attached to map tiles while the camera moves.
 
-This is ongoing development. CI has failing checks; online features have been tested on one server, and real microphones, separate networks and production load still need review. See the [0.99.4 notes](docs/posts/release-notes-0.99.4.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
+Known CI failures remain; online features have been tested on one server, and real microphones, separate networks and production load still need review. See the [0.99.4 notes](docs/posts/release-notes-0.99.4.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
 
 ## Repository Layout
 
@@ -51,8 +51,8 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Current preview notes](docs/posts/release-notes-0.99.4.md): features, screenshots and limits for 0.99.4.
-- [Latest stable release notes](docs/posts/release-notes-0.99.3.md): features and fixes in 0.99.3.
+- [Latest release notes](docs/posts/release-notes-0.99.4.md): features, screenshots and known issues for 0.99.4.
+- [Previous release notes](docs/posts/release-notes-0.99.3.md): features and fixes in 0.99.3.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Online worlds](docs/DESIGN-ONLINE.md): using Online Server today, measured capacity and the plan.
