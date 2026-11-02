@@ -240,7 +240,7 @@ test('a playtest of a project that builds characters has the Forge beside it, an
     assert.ok(fs.existsSync(path.join(project, 'reactor-builder/src/forge/Character3D/CharacterGameWorker.js')), 'where the game looks for its worker');
     assert.equal(deploy.stagePlaytestCharacterBuilder(project, appRoot), false, 'the next playtest copies nothing');
     assert.match(read('src/PlaytestManager.js'), /stagePlaytestCharacterBuilder\(projectPath, appRoot\)/);
-    assert.match(read('build-scripts/build-worker.js'), /relPath === onlineDeploy\.BUILDER_FOLDER/, 'a playtest\'s copy never ships');
+    for (const script of ['build-worker.js', 'build.js']) assert.match(read('build-scripts/' + script), /'reactor-builder', \/\/ a playtest/, 'a playtest\'s copy never ships');
 });
 
 test('a game that builds characters ships the Forge from the editor\'s own source', t => {

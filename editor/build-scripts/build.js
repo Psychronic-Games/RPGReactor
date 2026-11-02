@@ -70,6 +70,7 @@ console.log('========================================\n');
 
 // Paths/files to exclude when staging (relative to project root)
 const EXCLUDED = new Set([
+    'reactor-builder', // a playtest's copy of the Forge; a game that builds characters is given a fresh one
     'Backup',
     'BACKUP',
     'backup',
