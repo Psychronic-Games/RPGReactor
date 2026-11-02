@@ -77,6 +77,8 @@ class DatabaseManager {
             ['actionSequences', 'ActionSequences.json'],
             ['quests', 'ReactorQuests.json'],
             ['vehicles', 'ReactorVehicles.json'],
+            ['online', 'ReactorOnline.json'],
+            ['characterCreation', 'ReactorCharacters.json'],
             ['system', 'System.json']
         ];
 
@@ -163,6 +165,8 @@ class DatabaseManager {
             }
             if (!Array.isArray(loaded.vehicles)) throw new Error('ReactorVehicles.json must be an array');
             if (!loaded.vehicles.length) loaded.vehicles = [null];
+            // Settings objects; an absent file reads as [], which here means none.
+            for (const key of ['online', 'characterCreation']) if (Array.isArray(loaded[key])) loaded[key] = null;
             loaded.battlePresentation = await this.loadJSON(dataPath, 'BattlePresentation.json');
             loaded.structures = await this.loadStructures(projectPath);
             loaded.tileset3d = await this.loadTileset3D(projectPath);
@@ -764,6 +768,16 @@ class DatabaseManager {
         return (this.data.vehicles || [])[id] || null;
     }
 
+    /** Database › Online's settings, or null for a project that has never set them. */
+    getOnlineSettings() {
+        return this.data.online || null;
+    }
+
+    /** Database › Character Creation's settings, or null likewise. */
+    getCharacterCreationSettings() {
+        return this.data.characterCreation || null;
+    }
+
     hasVehicles() {
         return (this.data.vehicles || []).some(Boolean);
     }
@@ -1094,6 +1108,8 @@ class DatabaseManager {
             // Optional Reactor data leaves imported RPG Maker projects unchanged.
             if (key === 'vehicles' && !this.hasVehicles()
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) continue;
+            // A project that never set these up has no such file; one that did keeps its choices.
+            if ((key === 'online' || key === 'characterCreation') && !this.data[key]) continue;
             // System.json is part of dataFiles and gets its own fresh
             // versionId when its turn comes — skip the companion rewrite
             // that would otherwise re-save it after every other file.

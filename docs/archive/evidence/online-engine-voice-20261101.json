@@ -1,0 +1,63 @@
+{
+ "date": "2026-11-01",
+ "type": "online Engine and voice verification",
+ "runtime": "20261101.40",
+ "server": "demo.rpgreactor.org: EPYC 7401P, Node 20.19.2, PHP 8.4.27 under mod_fcgid",
+ "engine": {
+  "firstJoinMs": 228,
+  "laterJoinMs": 13,
+  "launchedBy": "PHP, as the site user",
+  "publicPortReachable": false,
+  "sharedAdds": "deltas 1+1+2 from 0 gave 4 through PHP",
+  "webSocketThroughApache": "not tested: proxy_wstunnel is not enabled"
+ },
+ "engineClient": {
+  "setup": "two real game clients on the live site in headless Chromium, sockets redirected to an Engine on the development machine",
+  "pollsWhileConnectedIn2s": 0,
+  "cheatPutBack": true,
+  "otherPlayerSawCheat": false,
+  "sameMapTeleportStood": true,
+  "simultaneousAdds": {
+   "made": 20,
+   "counted": 20
+  },
+  "afterEngineKilled": "both online by polling, no errors",
+  "walkingSmoothness": "not judged: 12 frames drawn in 8 s"
+ },
+ "voice": {
+  "setup": "two headless Chromium browsers on the live site with Chromium's simulated microphone",
+  "connectSeconds": [
+   4.0,
+   11.0
+  ],
+  "candidatePair": "host to host, same machine",
+  "blockEndedCall": true,
+  "unblockReconnected": true,
+  "voiceOffEndedBothEnds": true,
+  "remoteMouth": {
+   "framesWithMouthData": 47,
+   "framesDrawn": 47,
+   "mostOpen": 0.58,
+   "shapes": {
+    "ih": 30,
+    "ou": 8,
+    "ee": 4,
+    "aa": 5
+   }
+  }
+ },
+ "mouthShapes": {
+  "before": "0 morph targets in an in-game character",
+  "after": "58 targets across 6 meshes, 12 names",
+  "addedBuildMs": 120,
+  "addedGlbMB": 0.23,
+  "addedGzipMB": 0.08
+ },
+ "notMeasured": [
+  "real microphones and speech",
+  "two different networks",
+  "TURN",
+  "the Engine under load",
+  "real displays"
+ ]
+}

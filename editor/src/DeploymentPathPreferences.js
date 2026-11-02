@@ -3,6 +3,7 @@ class DeploymentPathPreferences {
         const keys = {
             game: 'rpg-reactor.deployGameOutputPath',
             editor: 'rpg-reactor.deployEditorOutputPath',
+            onlineFolder: 'rpg-reactor.deployOnlineFolder',
         };
         if (!keys[type]) throw new Error(`Unknown deployment path type: ${type}`);
         return keys[type];

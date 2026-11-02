@@ -276,6 +276,8 @@ async function nested(item,index) {
    {type:'types',selector:'.rr-types-name-editor'},
    {type:'terms',selector:'#database-detail input[type="text"]'},
    {type:'controls',selector:'.rr-controls-add[data-kind="key"][data-action="ok"]',key:true},
+   {type:'online',selector:'input[name="online-type"]',toggle:true},
+   {type:'characterCreation',selector:'#character-mode',toggle:false},
    {type:'reactorFeatures',selector:'.rr-feature-toggle',toggle:true},
    {type:'actors',selector:'#database-detail input[data-field="name"]',file:'Actors.json'},
    {type:'classes',selector:'#database-detail input[data-field="name"]',file:'Classes.json'},

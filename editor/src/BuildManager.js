@@ -82,6 +82,30 @@ class BuildManager {
                                             <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('A few zip archives in place of many files, for web hosts with file limits.')}</span>
                                         </span>
                                     </label>
+
+                                    <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="checkbox" id="build-platform-online" value="online" class="system-checkbox" style="margin-right: 10px;">
+                                        <div style="flex: 1;">
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Online Server')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Puts the game and its server in a web folder, ready for players')}</div>
+                                        </div>
+                                    </label>
+                                    <div id="build-online-option" style="display: none; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px;">
+                                        <label for="build-online-folder" style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Server folder')}</label>
+                                        <div style="display: flex; gap: 6px; margin-top: 4px;">
+                                            <input id="build-online-folder" class="rr-input" type="text" spellcheck="false" readonly style="flex: 1; min-width: 0; font-size: 12px; padding: 5px 7px;">
+                                            <button id="build-online-folder-btn" type="button" class="graphic-selector-button" style="padding: 4px 10px; font-size: 11px; flex-shrink: 0;">${tt('Choose...')}</button>
+                                        </div>
+                                        <div id="build-online-summary" style="margin-top: 8px; color: var(--color-text-muted); font-size: 11px; line-height: 1.35;"></div>
+                                        <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 4px;">${tt('Files in this folder stay unless the game replaces them. Desktop builds made at the same time connect to this address.')}</div>
+                                        <label style="display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; cursor: pointer;">
+                                            <input id="build-online-pack" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                            <span>
+                                                <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Pack files into archives')}</span>
+                                                <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('Leave this off unless your host limits how many files you can have.')}</span>
+                                            </span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -487,6 +511,8 @@ class BuildManager {
         document.getElementById('build-platform-linux').addEventListener('change', () => this.updateAppImageAvailability());
         document.getElementById('build-platform-web').addEventListener('change', () => this.updatePackAvailability());
         document.getElementById('build-pack-files').addEventListener('change', event => WebPackPreference.save(event.target.checked));
+        document.getElementById('build-platform-online').addEventListener('change', () => this.updateOnlineAvailability());
+        document.getElementById('build-online-folder-btn').addEventListener('click', () => this.selectOnlineFolder());
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
@@ -514,6 +540,36 @@ class BuildManager {
         const web = document.getElementById('build-platform-web').checked;
         document.getElementById('build-pack-option').style.display = web ? 'flex' : 'none';
         document.getElementById('build-pack-files').checked = web && WebPackPreference.load();
+    }
+
+    /** The server's folder and address show with Online Server, as they were left last time. */
+    updateOnlineAvailability() {
+        const online = document.getElementById('build-platform-online').checked;
+        document.getElementById('build-online-option').style.display = online ? 'block' : 'none';
+        document.getElementById('build-online-folder').value = DeploymentPathPreferences.load('onlineFolder', '');
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const settings = this.onlineSettings();
+        document.getElementById('build-online-summary').textContent = !settings?.enabled
+            ? tt('This project is single player. Choose Online in Database > Online first.')
+            : `${tt('Public address')}: ${settings.address || tt('Not set')}`;
+    }
+
+    /** The project's Database › Online settings. */
+    onlineSettings() {
+        return window.reactor?.databaseManager?.getOnlineSettings?.() || null;
+    }
+
+    selectOnlineFolder() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.nwdirectory = true;
+        input.addEventListener('change', () => {
+            if (input.files.length > 0) {
+                document.getElementById('build-online-folder').value = input.files[0].path;
+                DeploymentPathPreferences.save('onlineFolder', input.files[0].path);
+            }
+        });
+        input.click();
     }
 
     updateAppImageAvailability() {
@@ -565,6 +621,7 @@ class BuildManager {
         this.updateCodecAvailability();
         this.updateAppImageAvailability();
         this.updatePackAvailability();
+        this.updateOnlineAvailability();
         this.log(tt('Ready to build. Select platforms and click "Start Build".'), 'var(--color-text-muted)');
         this.versionPicker.load().catch(() => {});
     }
@@ -704,6 +761,7 @@ class BuildManager {
         if (document.getElementById('build-platform-mac').checked) platforms.push('mac');
         if (document.getElementById('build-platform-linux').checked) platforms.push('linux');
         if (document.getElementById('build-platform-web').checked) platforms.push('web');
+        if (document.getElementById('build-platform-online').checked) platforms.push('online');
         return platforms;
     }
 
@@ -720,6 +778,24 @@ class BuildManager {
 
         if (platforms.length === 0) {
             await RRDialog.alert(tt('Please select at least one platform to build.'), { title: tt('Deploy Game') });
+            return;
+        }
+
+        const onlineFolder = document.getElementById('build-online-folder').value.trim();
+        const onlineProject = this.onlineSettings();
+        const onlineAddress = String(onlineProject?.address || '').trim();
+        if (platforms.includes('online')) {
+            if (!onlineProject?.enabled) {
+                await RRDialog.alert(tt('This project is single player. Choose Online in Database > Online first.'), { title: tt('Deploy Game') });
+                return;
+            }
+            if (!onlineFolder) {
+                await RRDialog.alert(tt('Choose a server folder for the Online Server.'), { title: tt('Deploy Game') });
+                return;
+            }
+        }
+        if (onlineProject?.enabled && !onlineAddress && platforms.some(platform => platform !== 'online')) {
+            await RRDialog.alert(tt('Enter the public address in Database > Online so other builds can reach the server.'), { title: tt('Deploy Game') });
             return;
         }
 
@@ -817,6 +893,10 @@ class BuildManager {
                     createLinuxAppImage,
                     packWebFiles,
                     unusedFiles,
+                    online: platforms.includes('online') ? {
+                        folder: onlineFolder, address: onlineAddress, maxPlayers: onlineProject.maxPlayers,
+                        pack: document.getElementById('build-online-pack').checked,
+                    } : null,
                     appRoot: appRoot,
                     editorExecPath: process.execPath,
                 }

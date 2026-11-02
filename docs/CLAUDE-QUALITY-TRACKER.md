@@ -1,6 +1,8 @@
 # Claude quality continuation tracker
 
-Audited 2026-10-18 against the current shared working tree. This reconciles all eleven paused agents, the completed lighting and Prop Builder agents, Slimefolk, and the miscellaneous items in `scratchpad/quality-pass-resume.md`. A historical agent report is evidence of what was requested or observed, not proof that the present result passes visually.
+This is a snapshot from 2026-10-18 and is no longer maintained, so read its status words as of that date. Later character work is in [CHARACTER-QUALITY.md](CHARACTER-QUALITY.md), and the human face rows are superseded by [HUMAN-FACE-HANDOFF.md](HUMAN-FACE-HANDOFF.md).
+
+Audited 2026-10-18 against the then-current shared working tree. This reconciles all eleven paused agents, the completed lighting and Prop Builder agents, Slimefolk, and the miscellaneous items in `scratchpad/quality-pass-resume.md`. A historical agent report is evidence of what was requested or observed, not proof that the present result passes visually.
 
 Sources: the resume note; thirteen extracted natural-text transcripts at `/tmp/rr-claude-audit/<agent-id>.txt`; original JSONL under `/home/doug/.claude/projects/-mnt-sda1-Dropbox-Family-Room-SharedProduction-RPG-Reactor/4a85b200-b1b3-43cf-ad47-2976dc925de2/subagents/`; current source and tests; [CHARACTER-QUALITY.md](CHARACTER-QUALITY.md), [HANDOFF.md](HANDOFF.md), and the current changelog. Historical screenshots are under the matching Claude session's `scratchpad/` directory in `/tmp/claude-1000/`; current evidence is listed below. Temporary files can disappear; durable test and source references remain.
 
@@ -170,6 +172,6 @@ Lighting verification:137/137 focused Node tests; actual NW smoke `editor/tests/
 
 Current final species evidence: `scratchpad/species-quality/latest-frozen/report.json`; paginated256px software sheets in `frozen-species-views/species-{preset-female,preset-male,short-lean}-labelled-01..05.png` and `frozen-heads-shortlean/heads-short-lean-labelled-01..02.png`. All401 builds pass seven durable tests after the final body freeze; Merfolk/Creature focused suites31/31. Software rendering intentionally flat-shades and reduces hair budget; it cannot clear translucent/PBR/hair-density gates.
 
-New work should update the matching row with its exact regression and visual evidence. Preserve the known source-fold and seated-cloth limitations until an actual before/after clears them.
+At the time of this snapshot, new work updated the matching row with its exact regression and visual evidence. Preserve the known source-fold and seated-cloth limitations until an actual before/after clears them.
 
 Second-pass freeze: runtime20261018.9 matches all19 bundled copies. Fresh564 model,1,314 static equipment and780 moving garment reports are recorded in CHARACTER-QUALITY. Core136, motion/cloth/species42 and lighting/media/shadow137 focused checks pass, plus the new strict panel regression. Actual Reactor Room floor/walls are visible with GLerror0 and no console errors after the candidate shader was corrected. Initial failing candidate programs require an editor reload; owner profiles/processes were untouched.

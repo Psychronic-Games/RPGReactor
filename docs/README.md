@@ -7,6 +7,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [0.99.3 release notes](posts/release-notes-0.99.3.md): Builder exports, model previews, complete Structures editing, worn equipment and grappling.
 - [Current status](STATUS.md): the verified state of the tree, runtime defaults that supersede older notes, and open work. Read this before the handoff.
 - [Handoff](HANDOFF.md): dated notes for the cycle in progress: what is half-done, how to resume.
+- [Open items](OPEN-ITEMS.md): the working list for the release in progress.
 - [Waiting on the owner](OWNER-QUESTIONS.md): the one list of questions for the owner, each with a recommendation.
 - [Authoring a world](AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it. The contract for people and AI working on the same project.
 
@@ -25,6 +26,9 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [Custom user interfaces](DESIGN-USER-INTERFACES.md): the User Interfaces database section, its node set, actor bindings, opt-in stock-scene replacement and explicit boundaries.
 - [Building 3D worlds from 2D tilesets](DESIGN-3D-WORLDS.md): the tileset-class, facing and per-face model behind HD-2D maps, with the phasing table marked to what shipped.
 - [Reactor plugin API](DESIGN-PLUGIN-API.md): proposal for `@target Reactor` headers, named and ordered hooks in place of raw aliasing, and a plugin reference generated from the runtime. Not built yet.
+- [Reactor Features](REACTOR-FEATURES.md): turning Reactor's versions of plugin-provided features on and off, per project.
+- [Resource pools](RESOURCE-POOLS.md): turning MP and TP off (built) and extra pools such as Stamina or Rage (proposed).
+- [Online worlds](DESIGN-ONLINE.md): using Character Creation and Build › Online Server today, Engine mode, avatar voice, and the design for collaboration, live editing and god mode on one project server, with measured capacity.
 - [Runtime events](RUNTIME-EVENTS.md): the `ReactorEvents` feed a plugin can observe instead of wrapping battle methods; the test holds the page to the source.
 - [HDR effect overlay](HDR-EFFECT-OVERLAY.md): opt-in HDR rendering for Effekseer effects: the sidecar file, the normally graded twin, tuning, and what it does not cover.
 - [Effekseer effects in the scene](EFFEKSEER-IN-SCENE.md): screen animations drawn inside PIXI 8's scene instead of on the overlay canvas: what changes for a game (windows above effects, tint and filters, distortion), when it applies, how to switch it off, and what plugins see.
@@ -46,6 +50,7 @@ Each session writes notes, and nothing removes them unless a rule does. These ar
 | `editor/changelog/<version>.md` | What changed, in full. The record of the work. | none |
 | Commit message, guides, code comments | How it works and why. | none |
 | [STATUS.md](STATUS.md) | What is true now: one validation bullet per area, the one open-work list, decisions that stand. Replace; never append dated narrative. | 25,000 bytes |
+| [OPEN-ITEMS.md](OPEN-ITEMS.md) | The working list for the release in progress. Standing threads stay in STATUS › Open work. An item leaves when it is done. | none |
 | [HANDOFF.md](HANDOFF.md) › Where things stand | The state the next session starts from. Rewritten, not added to, each session. | 2,500 bytes |
 | [HANDOFF.md](HANDOFF.md), one dated entry | What the next session needs and can't find elsewhere: half-done work, traps, owner questions, how to resume. Not a restatement of the changelog. | 4,000 bytes |
 | [HANDOFF.md](HANDOFF.md), whole file | The cycle in progress only. | 40,000 bytes |

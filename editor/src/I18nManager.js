@@ -46,7 +46,7 @@ const RR_DB_TYPE_KEYS = {
     userInterfaces: 'menu.userInterfaces', vehicles: 'vehicle.database',
     actionSequences: 'menu.actionSequences', quests: 'menu.quests', musicSequences: 'menu.musicSequences', reactor3d: 'menu.models3d', structures: 'menu.structures',
     system: 'menu.system', system1: 'db.system1', system2: 'db.system2', types: 'menu.types', terms: 'menu.terms', controls: 'menu.controls',
-    reactorFeatures: 'db.reactorFeatures'
+    reactorFeatures: 'db.reactorFeatures', online: 'db.online', characterCreation: 'db.characterCreation'
 };
 
 const RR_EVENT_COMMAND_NAMES = {
@@ -24197,6 +24197,42 @@ Object.assign(RR_I18N_STRINGS["id"], {"db.reactorFeatures":"Fitur Reactor"});
 Object.assign(RR_I18N_STRINGS["vi"], {"db.reactorFeatures":"Tính năng Reactor"});
 Object.assign(RR_I18N_STRINGS["th"], {"db.reactorFeatures":"ฟีเจอร์ของ Reactor"});
 Object.assign(RR_I18N_STRINGS["tr"], {"db.reactorFeatures":"Reactor Özellikleri"});
+Object.assign(RR_I18N_STRINGS["en"], {"db.online":"Online"});
+Object.assign(RR_I18N_STRINGS["ja"], {"db.online":"オンライン"});
+Object.assign(RR_I18N_STRINGS["es"], {"db.online":"En línea"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"db.online":"線上"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"db.online":"在线"});
+Object.assign(RR_I18N_STRINGS["ru"], {"db.online":"Онлайн"});
+Object.assign(RR_I18N_STRINGS["pt"], {"db.online":"Online"});
+Object.assign(RR_I18N_STRINGS["de"], {"db.online":"Online"});
+Object.assign(RR_I18N_STRINGS["fr"], {"db.online":"En ligne"});
+Object.assign(RR_I18N_STRINGS["el"], {"db.online":"Διαδικτυακά"});
+Object.assign(RR_I18N_STRINGS["ko"], {"db.online":"온라인"});
+Object.assign(RR_I18N_STRINGS["ar"], {"db.online":"عبر الإنترنت"});
+Object.assign(RR_I18N_STRINGS["it"], {"db.online":"Online"});
+Object.assign(RR_I18N_STRINGS["pl"], {"db.online":"Online"});
+Object.assign(RR_I18N_STRINGS["id"], {"db.online":"Online"});
+Object.assign(RR_I18N_STRINGS["vi"], {"db.online":"Trực tuyến"});
+Object.assign(RR_I18N_STRINGS["th"], {"db.online":"ออนไลน์"});
+Object.assign(RR_I18N_STRINGS["tr"], {"db.online":"Çevrimiçi"});
+Object.assign(RR_I18N_STRINGS["en"], {"db.characterCreation":"Character Creation"});
+Object.assign(RR_I18N_STRINGS["ja"], {"db.characterCreation":"キャラクター作成"});
+Object.assign(RR_I18N_STRINGS["es"], {"db.characterCreation":"Creación de personajes"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"db.characterCreation":"角色創建"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"db.characterCreation":"角色创建"});
+Object.assign(RR_I18N_STRINGS["ru"], {"db.characterCreation":"Создание персонажа"});
+Object.assign(RR_I18N_STRINGS["pt"], {"db.characterCreation":"Criação de personagem"});
+Object.assign(RR_I18N_STRINGS["de"], {"db.characterCreation":"Charaktererstellung"});
+Object.assign(RR_I18N_STRINGS["fr"], {"db.characterCreation":"Création de personnage"});
+Object.assign(RR_I18N_STRINGS["el"], {"db.characterCreation":"Δημιουργία χαρακτήρα"});
+Object.assign(RR_I18N_STRINGS["ko"], {"db.characterCreation":"캐릭터 생성"});
+Object.assign(RR_I18N_STRINGS["ar"], {"db.characterCreation":"إنشاء الشخصية"});
+Object.assign(RR_I18N_STRINGS["it"], {"db.characterCreation":"Creazione del personaggio"});
+Object.assign(RR_I18N_STRINGS["pl"], {"db.characterCreation":"Tworzenie postaci"});
+Object.assign(RR_I18N_STRINGS["id"], {"db.characterCreation":"Pembuatan Karakter"});
+Object.assign(RR_I18N_STRINGS["vi"], {"db.characterCreation":"Tạo nhân vật"});
+Object.assign(RR_I18N_STRINGS["th"], {"db.characterCreation":"การสร้างตัวละคร"});
+Object.assign(RR_I18N_STRINGS["tr"], {"db.characterCreation":"Karakter Oluşturma"});
 // Database › System 1 › Resource Pools and Trait List (2026-10-25): turn MP or TP off, and choose the traits the trait picker offers.
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Use MP": "MPを使う", "Use TP": "TPを使う", "Resource Pools": "リソース", "A pool that is off is hidden in menus and battles, and skills priced in it cost nothing. HP is always on; rename any pool in Terms.": "オフのリソースはメニューと戦闘に表示されず、それを消費するスキルはコストなしになります。HPは常にオンです。名前は用語で変更できます。", "Trait List": "特徴リスト", "Untick the traits this game doesn't use: the trait picker leaves them out. Traits already on a record are kept.": "このゲームで使わない特徴のチェックを外すと、特徴の選択から外れます。データに付いている特徴はそのまま残ります。", "This pool is turned off in System 1: the value is ignored.": "このリソースはシステム1でオフになっています：この値は無視されます。", "off": "オフ"});
 Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Use MP": "Usar MP", "Use TP": "Usar TP", "Resource Pools": "Reservas de recursos", "A pool that is off is hidden in menus and battles, and skills priced in it cost nothing. HP is always on; rename any pool in Terms.": "Una reserva desactivada no aparece en menús ni batallas, y las habilidades que la gastan no cuestan nada. Los HP siempre están activos; cambia el nombre de cualquiera en Términos.", "Trait List": "Lista de rasgos", "Untick the traits this game doesn't use: the trait picker leaves them out. Traits already on a record are kept.": "Desmarca los rasgos que este juego no usa: el selector de rasgos los omite. Los rasgos que ya tiene un registro se conservan.", "This pool is turned off in System 1: the value is ignored.": "Esta reserva está desactivada en Sistema 1: el valor se ignora.", "off": "desactivado"});

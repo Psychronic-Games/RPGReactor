@@ -1,0 +1,298 @@
+{
+  "date": "2026-11-01",
+  "type": "throwaway measurement for DESIGN-ONLINE.md; nothing shipped",
+  "runtime": "20261101.26",
+  "map": {
+    "project": "Demo",
+    "map": "North Haven (Map005)",
+    "size": "200x200",
+    "pieces": 14153,
+    "events": 19,
+    "walkableTiles": 28207
+  },
+  "machines": {
+    "server": "AMD EPYC 7401P, 24 cores, 32 GB, Node 20.19.2, PHP 8.4.27 under mod_fcgid, Apache mpm_event",
+    "desktop": "AMD Ryzen 9 9950X3D, Node 26.12.1"
+  },
+  "method": "Real runtime loaded through editor/tests/helpers/follower-world.cjs. Zero-dependency RFC 6455 WebSocket over plain TCP on loopback (no TLS). Bots walk at random with 10 inputs a second; 10 snapshots a second; 16-tile interest grid; at most 64 neighbours. All players on one map in one thread. On the server, Node was started by PHP as the site user and the bots ran on the same machine.",
+  "engine": {
+    "fullUpdateRyzenNoGrid": [
+      {
+        "players": 1002,
+        "tickP50": 13.299,
+        "tickP99": 19.94,
+        "framesOverPct": 16.61,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 86.9,
+        "rssMB": 203,
+        "kBpsPerPlayer": 3.96,
+        "rttP50": 72.2,
+        "rttP99": 117.5,
+        "neighbours": 57,
+        "steps": 28500,
+        "blocked": 332753,
+        "offWalkable": 13
+      }
+    ],
+    "fullUpdateRyzenGrid": [
+      {
+        "players": 500,
+        "tickP50": 3.535,
+        "tickP99": 6.352,
+        "framesOverPct": 0,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 25.5,
+        "rssMB": 190,
+        "kBpsPerPlayer": 2.23,
+        "rttP50": 57.2,
+        "rttP99": 104.5,
+        "neighbours": 31.5,
+        "steps": 14183,
+        "blocked": 167518,
+        "offWalkable": 0
+      },
+      {
+        "players": 1002,
+        "tickP50": 8.512,
+        "tickP99": 17.767,
+        "framesOverPct": 2.33,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 58.6,
+        "rssMB": 195,
+        "kBpsPerPlayer": 3.94,
+        "rttP50": 59.5,
+        "rttP99": 112.4,
+        "neighbours": 56.6,
+        "steps": 26243,
+        "blocked": 354268,
+        "offWalkable": 0
+      }
+    ],
+    "fullUpdateEpyc": [
+      {
+        "players": 200,
+        "tickP50": 8.372,
+        "tickP99": 18.123,
+        "framesOverPct": 6.87,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 68.3,
+        "rssMB": 145,
+        "kBpsPerPlayer": 1,
+        "rttP50": 61.1,
+        "rttP99": 115.3,
+        "neighbours": 13.6,
+        "steps": 5414,
+        "blocked": 69469,
+        "offWalkable": 0
+      }
+    ],
+    "leanRyzenSendsTogether": [
+      {
+        "players": 1002,
+        "tickP50": 0.36,
+        "tickP99": 4.456,
+        "framesOverPct": 0,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 9.8,
+        "rssMB": 201,
+        "kBpsPerPlayer": 3.93,
+        "rttP50": 55,
+        "rttP99": 103,
+        "neighbours": 56.3,
+        "steps": 27395,
+        "blocked": 93987,
+        "offWalkable": 0
+      },
+      {
+        "players": 4000,
+        "tickP50": 0.453,
+        "tickP99": 15.449,
+        "framesOverPct": 0.11,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 25.2,
+        "rssMB": 207,
+        "kBpsPerPlayer": 4.45,
+        "rttP50": 64.3,
+        "rttP99": 112.6,
+        "neighbours": 64,
+        "steps": 111225,
+        "blocked": 362177,
+        "offWalkable": 0
+      },
+      {
+        "players": 8000,
+        "tickP50": 0.476,
+        "tickP99": 31.196,
+        "framesOverPct": 16.59,
+        "ticksPerSec": 60.1,
+        "cpuPctOfOneCore": 46.7,
+        "rssMB": 220,
+        "kBpsPerPlayer": 4.44,
+        "rttP50": 75.6,
+        "rttP99": 128.1,
+        "neighbours": 64,
+        "steps": 225048,
+        "blocked": 723828,
+        "offWalkable": 0
+      }
+    ],
+    "leanEpycSendsTogether": [
+      {
+        "players": 500,
+        "tickP50": 1.2,
+        "tickP99": 15.422,
+        "framesOverPct": 0.33,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 29.6,
+        "rssMB": 150,
+        "kBpsPerPlayer": 2.22,
+        "rttP50": 59.5,
+        "rttP99": 109.6,
+        "neighbours": 31.3,
+        "steps": 13421,
+        "blocked": 45885,
+        "offWalkable": 0
+      },
+      {
+        "players": 1002,
+        "tickP50": 1.222,
+        "tickP99": 24.083,
+        "framesOverPct": 16.65,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 47.9,
+        "rssMB": 149,
+        "kBpsPerPlayer": 3.91,
+        "rttP50": 65.1,
+        "rttP99": 117.1,
+        "neighbours": 56.2,
+        "steps": 27732,
+        "blocked": 89029,
+        "offWalkable": 0
+      }
+    ],
+    "leanEpycSendsSpread": [
+      {
+        "players": 1002,
+        "tickP50": 4.539,
+        "tickP99": 8.7,
+        "framesOverPct": 0,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 48.3,
+        "rssMB": 148,
+        "kBpsPerPlayer": 3.93,
+        "rttP50": 57,
+        "rttP99": 103.1,
+        "neighbours": 56.1,
+        "steps": 28340,
+        "blocked": 89992,
+        "offWalkable": 0
+      },
+      {
+        "players": 2000,
+        "tickP50": 7.537,
+        "tickP99": 13.143,
+        "framesOverPct": 0.33,
+        "ticksPerSec": 60,
+        "cpuPctOfOneCore": 80.6,
+        "rssMB": 158,
+        "kBpsPerPlayer": 4.4,
+        "rttP50": 56.5,
+        "rttP99": 106.5,
+        "neighbours": 63.3,
+        "steps": 56778,
+        "blocked": 178984,
+        "offWalkable": 0
+      }
+    ]
+  },
+  "engineInvalidRuns": "Full update at 500+ on the server, and at 2,000+ on the desktop, saturated: the measuring request waited 13 to 22 s and the bots had left, so their figures describe an empty server and are excluded. Lean at 4,000 on the server hit the 240 s run limit and has no result.",
+  "lite": {
+    "method": "One PHP file, one file of 8-byte records, no database, GET over HTTPS keep-alive on the LAN, 5 updates a second, 12 s warm-up",
+    "rows": [
+      {
+        "players": 100,
+        "hz": 5,
+        "wantRps": 500,
+        "gotRps": 491,
+        "p50": 0.9,
+        "p95": 2.9,
+        "p99": 6.7,
+        "p999": 1002.3,
+        "max": 1010.7,
+        "over100ms": 24,
+        "errors": 0,
+        "latePct": 0.4,
+        "kBpsPerPlayer": 3.8
+      },
+      {
+        "players": 200,
+        "hz": 5,
+        "wantRps": 1000,
+        "gotRps": 996,
+        "p50": 0.9,
+        "p95": 2.9,
+        "p99": 7,
+        "p999": 1030.7,
+        "max": 1116.5,
+        "over100ms": 39,
+        "errors": 0,
+        "latePct": 0.3,
+        "kBpsPerPlayer": 7.8
+      },
+      {
+        "players": 400,
+        "hz": 5,
+        "wantRps": 2000,
+        "gotRps": 1376,
+        "p50": 0.9,
+        "p95": 4.3,
+        "p99": 1005.3,
+        "p999": 3220.8,
+        "max": 5315.9,
+        "over100ms": 454,
+        "errors": 372,
+        "latePct": 2.3,
+        "kBpsPerPlayer": 10.8
+      },
+      {
+        "players": 800,
+        "hz": 5,
+        "wantRps": 4000,
+        "gotRps": 1479,
+        "p50": 1,
+        "p95": 558.5,
+        "p99": 4205.5,
+        "p999": 4696.5,
+        "max": 5203.5,
+        "over100ms": 1372,
+        "errors": 1472,
+        "latePct": 7.7,
+        "kBpsPerPlayer": 11.6
+      },
+      {
+        "players": 1600,
+        "hz": 5,
+        "wantRps": 8000,
+        "gotRps": 1769,
+        "p50": 2.5,
+        "p95": 1655.3,
+        "p99": 3736,
+        "p999": 7202.4,
+        "max": 9725.8,
+        "over100ms": 5736,
+        "errors": 2107,
+        "latePct": 27,
+        "kBpsPerPlayer": 13.8
+      }
+    ]
+  },
+  "notMeasured": [
+    "Internet latency and connection setup",
+    "TLS on WebSockets",
+    "A real shared host",
+    "Chat, shared events, battles, saves and plugins under load",
+    "4,000 lean players on the server"
+  ],
+  "openFinding": "In the full-update runs, 1 to 13 avatars stood on tiles around the Tank event (near 165,95) that the startup scan had marked unreachable. Cause not established.",
+  "artifacts": "Spike source and raw results stay in the ignored scratchpad/online-spike-20261101/. Everything was removed from the live server afterwards: the URL returns 404 and the site root is unchanged."
+}

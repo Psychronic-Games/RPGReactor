@@ -64,6 +64,8 @@ class DatabaseEditorUI {
             }
         };
         this.system1Editor = new DatabaseSystem1Editor(databaseManager, system1ProjectManager, this.commonUI, this);
+        this.onlineEditor = typeof DatabaseOnlineEditor !== 'undefined' ? new DatabaseOnlineEditor(databaseManager) : null;
+        this.characterCreationEditor = typeof DatabaseCharacterCreationEditor !== 'undefined' ? new DatabaseCharacterCreationEditor(databaseManager) : null;
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.featuresEditor = typeof DatabaseFeaturesEditor !== 'undefined'
             ? new DatabaseFeaturesEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
@@ -934,6 +936,20 @@ class DatabaseEditorUI {
                 // Reactor's additions a plugin may also provide, each switched on or off (ReactorFeatures).
                 const { detailEl } = this.prepareDatabaseSection('reactorFeatures', this._dbTitle('reactorFeatures', 'Reactor Features'), { showListPanel: false });
                 this.featuresEditor?.showFeaturesDetail(detailEl);
+                this.refreshDatabaseSections();
+                return;
+            }
+            case 'characterCreation': {
+                // Single-player and online games alike (DatabaseCharacterCreationEditor).
+                const { detailEl } = this.prepareDatabaseSection('characterCreation', this._dbTitle('characterCreation', 'Character Creation'), { showListPanel: false });
+                this.characterCreationEditor?.showDetail(detailEl);
+                this.refreshDatabaseSections();
+                return;
+            }
+            case 'online': {
+                // Single player or online, and how an online game behaves (DatabaseOnlineEditor).
+                const { detailEl } = this.prepareDatabaseSection('online', this._dbTitle('online', 'Online'), { showListPanel: false });
+                this.onlineEditor?.showOnlineDetail(detailEl);
                 this.refreshDatabaseSections();
                 return;
             }
@@ -2144,7 +2160,7 @@ class DatabaseEditorUI {
                 { name: 'User Interfaces', type: 'userInterfaces' }, { name: 'Music Sequences', type: 'musicSequences' }] },
             { name: 'System', pages: [
                 { name: 'System 1', type: 'system1' }, { name: 'System 2', type: 'system2' }, { name: 'Types', type: 'types' },
-                { name: 'Terms', type: 'terms' }, { name: 'Controls', type: 'controls' },
+                { name: 'Terms', type: 'terms' }, { name: 'Controls', type: 'controls' }, { name: 'Character Creation', type: 'characterCreation' }, { name: 'Online', type: 'online' },
                 { name: 'Reactor Features', type: 'reactorFeatures' }] }
         ];
     }

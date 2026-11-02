@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.99.4
-// RPG Reactor runtime revision: 20261101.26
+// RPG Reactor runtime revision: 20261101.40
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261101.26";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261101.40";
 //=============================================================================
 
 const scriptUrls = [
@@ -73,6 +73,10 @@ const scriptUrls = [
     "js/reactor_fight_menu.js",
     "js/reactor_fight_classic.js",
     "js/reactor_speaker_face.js",
+    "js/reactor_character_creator.js",
+    "js/reactor_online.js",
+    "js/reactor_online_ui.js",
+    "js/reactor_online_voice.js",
     // Vehicles: the last engine files, after every battle file, in this order (each wraps what the
     // files above left: a battle's start outermost, and the ride's camera laid over the battle
     // drivers'). None of them wraps the boot scene's start or the Show Text command, which the

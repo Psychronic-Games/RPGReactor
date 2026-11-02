@@ -93,7 +93,7 @@ the wrong scale, selecting no mouth vertices even with saved face points.
 
 ### Talking animals
 
-Four-legged creatures from the Character Builder have a real mouth: the muzzle is cut along a lip line, a `Jaw` bone carries the skin, fur and whiskers below it, and a lining, tongue and teeth sit behind the lips. **Head › Mouth opening** sets how far it rests open, and **Talk** tries it out. Saved models need rebuilding to gain the jaw.
+Four-legged creatures from the Character Builder have a real mouth: the muzzle is cut along a lip line, a `Jaw` bone carries the skin, fur and whiskers below it, and a lining, tongue and teeth sit behind the lips. **Head › Mouth opening** sets how far it rests open, and **Talk** tries it out. Saved models need rebuilding to gain the jaw. This has been checked by Node tests and software renders, not yet in the real Builder or a game.
 
 In a game a creature talks as a person does. During **Show Text** its jaw follows the letters as they print, with no voice clip needed; the speaker is found the same way (the speaker name's actor or event, else the event running). **Speak 3D Dialogue** opens it by the voice's loudness. Any model with a bone named `Jaw` or `LowerJaw` talks the same way. Eyes don't blink, and birds, reptiles and other body plans don't have this mouth yet.
 

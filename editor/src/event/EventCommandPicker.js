@@ -274,7 +274,8 @@ class EventCommandPicker {
                                     { name: 'Quest', code: 357, reactor: 'QuestSet' },
                                     { name: 'Quest Objective', code: 357, reactor: 'QuestObjective' },
                                     { name: 'Quest Reward', code: 357, reactor: 'QuestReward' },
-                                    { name: 'Open Quest Log', code: 357, reactor: 'OpenQuestLog' }
+                                    { name: 'Open Quest Log', code: 357, reactor: 'OpenQuestLog' },
+                                    { name: 'Character Creation', code: 357, reactor: 'CharacterCreation' }
                                 ]
                             }
                         ]

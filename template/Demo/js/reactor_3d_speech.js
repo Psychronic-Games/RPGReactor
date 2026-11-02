@@ -838,7 +838,7 @@
         return clear.apply(this, arguments);
     };
     R.Speech = { RATE, envelope, levelAt, prepare, attach, play, stop, tick, active, install,
-        VISEMES, LETTER_VISEMES, TALK, lineVisemes, talkRig, talk, startTalk, endTalk, stepTalk, tickTalk, speakerCharacter,
+        VISEMES, LETTER_VISEMES, TALK, lineVisemes, talkRig, talk, startTalk, endTalk, stepTalk, tickTalk, restRig, writeTalk, speakerCharacter,
         pointsShape, outlineShape, outlineFromPoints, outlineMiddles, heightOver, OPEN_SHARE, OPEN_SHARE_MAX };
     install();
     if (typeof module !== "undefined" && module.exports) module.exports = R;

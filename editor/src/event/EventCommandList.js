@@ -122,6 +122,7 @@ class EventCommandList {
         this.fightCommandEditor = typeof FightCommandEditor !== 'undefined'
             ? new FightCommandEditor(eventEditor.databaseManager) : null;
         // Party Followers: Change Follower Formation, Follower Orders.
+        this.characterCommandEditor = typeof CharacterCommandEditor !== 'undefined' ? new CharacterCommandEditor(eventEditor) : null;
         this.followerCommandEditor = typeof FollowerCommandEditor !== 'undefined'
             ? new FollowerCommandEditor(eventEditor.databaseManager, eventEditor.projectController) : null;
         this.camera3DEditor = typeof Camera3DEditor !== 'undefined' ? new Camera3DEditor() : null;
@@ -501,6 +502,7 @@ class EventCommandList {
         if (typeof QuestCommandEditor !== 'undefined' && QuestCommandEditor.supports(name)) return this.questCommandEditor;
         if (typeof FightCommandEditor !== 'undefined' && FightCommandEditor.supports(name)) return this.fightCommandEditor;
         if (typeof FollowerCommandEditor !== 'undefined' && FollowerCommandEditor.supports(name)) return this.followerCommandEditor;
+        if (typeof CharacterCommandEditor !== 'undefined' && CharacterCommandEditor.supports(name)) return this.characterCommandEditor;
         return null;
     }
 
@@ -2275,6 +2277,11 @@ class EventCommandList {
                     if (typeof QuestCommandEditor !== 'undefined' && QuestCommandEditor.supports(params[1])) {
                         info.name = this._commandName(QuestCommandEditor.LABELS[params[1]]);
                         description = QuestCommandEditor.summary(params[1], params[3], this.questCommandEditor);
+                        break;
+                    }
+                    if (typeof CharacterCommandEditor !== 'undefined' && CharacterCommandEditor.supports(params[1])) {
+                        info.name = this._commandName(CharacterCommandEditor.LABELS[params[1]]);
+                        description = '';
                         break;
                     }
                     // And the Party Followers commands ("Followers walk in a wedge, 2 tiles apart").

@@ -1,8 +1,10 @@
 # Character Builder quality audits
 
+The newest audit here is the clothing pass at Preview 61 (2026-10-30). Later face, body and exercise work through Preview 98 is recorded in [HUMAN-FACE-HANDOFF.md](HUMAN-FACE-HANDOFF.md).
+
 This pass covers every catalog entry with a bounded set of contrasting slider profiles. It is not an exhaustive Cartesian product of all sliders, outfits, accessories and animation frames. Geometry checks are supplemented by visibility rays, software contact sheets and isolated NW.js rendering.
 
-The second pass also reconciles Claude's thirteen agent reports, including the eleven paused agents, lighting and props. [The continuation tracker](CLAUDE-QUALITY-TRACKER.md) records each inherited issue separately; unresolved aesthetic and renderer limits remain explicit.
+An earlier second pass also reconciles Claude's thirteen agent reports, including the eleven paused agents, lighting and props. [The continuation tracker](CLAUDE-QUALITY-TRACKER.md) records each inherited issue separately; unresolved aesthetic and renderer limits remain explicit.
 
 ## Clothing texture and seam close-ups — 2026-10-30, Preview 61
 

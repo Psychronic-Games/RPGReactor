@@ -6,6 +6,18 @@ This face candidate was introduced with runtime **20261101.24**. The current che
 
 Preview 98 addresses the angular side-cheek ridge still visible with Cheeks and Cheekbones at −100%. A native side-cheek field now carries the skin behind the replacement face’s join through the same contour change. The replacement transition has bounded clearance above retained native triangles, with a small positive separation to avoid coplanar flicker. It inherits the body’s actual smoothed cheek normals instead of restoring raw cage normals at the edge. The screenshot’s default female side view and minimum settings are the reproduction target; male and saved/blink checks cover the candidate too. Runtime remains **20261101.24**. Full suites stay deferred and overall attractiveness/visual acceptance remain open. [Scope ledger](archive/evidence/cheek-ridge-20261101.json).
 
+## How the current face is built
+
+This describes the code at Preview 98. The sections further down keep older designs for the record.
+
+1. **One sculpt, continuous gender.** `HeadMeshData.js` (version 2) holds one topology with feminine and masculine endpoints, generated from **Woman head** by zhuoyi0904. `setOf` in `CharacterHeadMesh.js` mixes the endpoints by gender, so 0.5 is a real in-between face. The face applies only to the human species with no head of its own (`applies`); `RR_NO_HEAD_MESH` turns it off.
+2. **A mask on the native head.** The sculpt covers the face; scalp, ears and neck stay MakeHuman's. Each mask vertex is bound to 12 native skin vertices (`K`), so sliders and expressions reach it through the skin beneath, and `hide` drops the covered skin.
+3. **`faceField` at the end of `HumanBody.shape`.** With version 2 data it widens the cranium and ear roots to fit the face, fading into the neck, then runs `cheekSurface` and `sealMouth`. The older path stays in the file but does not run: `FaceFieldData.js`, `seatEyes`, `faceOutline`, `noseWidth` and `eyeSet` are retired, and their tables (`FACE_OUTLINE`, `NOSE_NARROW`, `EYE_IN`) no longer affect the face.
+4. **The cheek controls.** `cheekFields` measures ridge and cheek weights once on a reference body, cached per gender, so narrowing a cheek cannot move the field away from its target. `positions` adds **Cheekbones** and **Cheeks** on top of the bound shape; `smoothCheekNormals` softens highlights.
+5. **Parts fitted to the mask,** wired in `CharacterModel.build`: `part`, `lidPart`, `sphereEyes`, `lipFit`, `lipPart`, `mouthPart`, `browPart` and `lashRim`.
+6. **Shading.** `CharacterShading.headFromBody` blends occlusion into the skin at the mask's edge. It runs in both `CharacterModel` and `Character3DBuilder`. Fields added to a part must also go in `GEOMETRY_FIELDS` and `PART_FIELDS` in `CharacterPreviewBrowserEntry.js`.
+7. **Rebuilding.** `HeadMeshData.js` is generated and never edited by hand; see [the tools guide](../editor/tests/tools/face-proportions/README.md). Its source, `scratchpad/Attractive-Models/woman_head.glb`, is not in git, so the data can only be rebuilt where that file exists.
+
 ## Previous candidate — Preview 97
 
 Preview 97 addresses the broad anterior cheek bulges marked in the owner’s screenshot, below the outer eyes and beside the nose. The Preview 96 correction covered a smaller, higher ridge. The shared human sculpt now has a broader cheek field with a flatter neutral contour and explicit forward fullness from **Cheeks**; **Cheekbones** retains ridge control and contributes to the adjacent plane. Both fields are cached on reference vertices, so narrowing the cheek cannot move the mask away from its own target. Local normal averaging softens triangle highlights across the corrected cheek while retaining eyelid and seam anchors. Runtime remains **20261101.24**. Focused source measurements cover the saved Athlete and female/intermediate/male defaults; native front/quarter, male and saved/blink views cover the candidate. Full suites remain deferred and overall attractiveness/visual acceptance remain open. [Scope ledger](archive/evidence/cheek-bulges-20261101.json).
@@ -209,16 +221,18 @@ The reference models are in `scratchpad/Attractive-Models/` (more are being adde
 - The references are the finished, textured models. Use them as mesh inspiration, not copies: "mesh inspiration… not a direct copy", must connect to the body, keep the sliders and the skin, eye and color logic. Human only; other species keep their own heads.
 - Don't report a fix before looking at it close up, from both sides, on in-between bodies. Don't hand over half-finished renders. Keep working while faults are open: a test run is not a reason to wait.
 
-## How it is built
+## How it was built before Preview 64
+
+For the current design, see [How the current face is built](#how-the-current-face-is-built).
 
 1. `HumanBody.js` `shape`, in order at the end: `faceField` (per-vertex moves from `FaceFieldData.js`, the female or male set, not a blend), `sealMouth`, `seatEyes`, `faceOutline`, `noseWidth`, `eyeSet`. `FACE_OUTLINE`, `NOSE_NARROW` and `EYE_IN` are the tuning tables.
 2. `CharacterHeadMesh.js` plus generated `HeadMeshData.js`: a face **mask** (forehead to under the chin, in front of the ears) from two CC-BY sculpted heads. Each vertex is a weighted sum of six hidden MakeHuman skin vertices plus an offset scaled by eyes-to-chin, so sliders and expressions reach it through the skin (`interpolation`). Scalp, ears and neck stay the body's. `hide` drops the skin under it. `RR_NO_HEAD_MESH` turns the mask off.
 3. Everything on the mask is fitted there too: `lipPart`/`lipFit` (lip decal on the measured outline), `browPart`, `lashRim` (lashes on both lid edges), `sphereEyes` (the eyeball is rebuilt as one sphere from the lids on that body, turned to look out of the opening, shaded by the lids), `mouthPart` (dark behind the open mouth). Nostrils and creases darken through `tone`, applied with the baked shade.
 4. Shading: `CharacterShading.headFromBody` blends the mask's occlusion into the skin at its edge and applies `lidWall` and `tone`. It runs in `CharacterModel.shade` and separately in `Character3DBuilder.js`. Fields added to a part must also be listed in `GEOMETRY_FIELDS`/`PART_FIELDS` in both preview workers.
 
-## Rebuilding the data
+## Rebuilding the data before Preview 64
 
-Scripts are in `editor/tests/tools/face-proportions/`; see its README. They assume one scratch folder holding the scripts and `refs/`: start from `scratchpad/Face-Experiment-4/working-files/`. The generated JS files must not be edited by hand. **Read the generator's output before trusting a render:** one crash left old data in place and the render looked like a result.
+Scripts are in `editor/tests/tools/face-proportions/`; see its README. These older scripts assume one scratch folder holding the scripts and `refs/`: start from `scratchpad/Face-Experiment-4/working-files/`. The generated JS files must not be edited by hand. **Read the generator's output before trusting a render:** one crash left old data in place and the render looked like a result.
 
 ## Verified lessons
 
@@ -229,9 +243,9 @@ Scripts are in `editor/tests/tools/face-proportions/`; see its README. They assu
 - Render in-between bodies (gender 0.3 and 0.7, ages 15 and 62). Gender 0 and 1 alone hid eyeballs bursting from their sockets.
 - Earlier proportion solving from sparse landmarks was unreliable, and a polynomial muzzle made a plate. Both were dropped.
 
-## Known faults
+## Known faults before Preview 64
 
-Worst first, as of the last render:
+Worst first, as of that checkpoint's last render. Current faults are in [OPEN-ITEMS.md](OPEN-ITEMS.md).
 
 1. **The overall face is not attractive.** The two heads are bare sculpts. Compared with the references, ours lacks defined sockets and lids, real lip form and highlight, and depth and variation in the skin.
 2. **Default hair** sits like a cap with a rough hairline. It was not refitted to the wider head, and only the default style has been looked at. References have hair framing the face.
@@ -246,11 +260,11 @@ Worst first, as of the last render:
 
 ## Licenses
 
-`THIRD_PARTY_NOTICES.md` credits "Male head base" by alkalor and "Female Elf Head" by Scol3D, both CC-BY 4.0, whose derived data ships in `HeadMeshData.js` and `FaceFieldData.js`. Do not ship data from other references without checking their licenses: `mita_miside_free.glb` is NC-ND, the saree is Sketchfab Standard, and several show existing characters.
+`THIRD_PARTY_NOTICES.md` credits "Woman head" by zhuoyi0904, the source of the current `HeadMeshData.js`, and "Male head base" by alkalor and "Female Elf Head" by Scol3D, the source of the retired `FaceFieldData.js`, which still ships. All are CC-BY 4.0. Do not ship data from other references without checking their licenses: `mita_miside_free.glb` is NC-ND, the saree is Sketchfab Standard, and several show existing characters.
 
-## Test results
+## Test results before Preview 64
 
-Last full run on 2026-10-31 (`npm run test:all`): 9,238 tests, 18 failed. A worker crash and a script-order fault were then fixed, and the failed files were rerun: 13 failures remain. These were not repaired or re-baselined; each needs a decision on whether the code or the old expectation is right.
+Current verification is in [OPEN-ITEMS.md](OPEN-ITEMS.md). This run on 2026-10-31 (`npm run test:all`) covered 9,238 tests, of which 18 failed. A worker crash and a script-order fault were then fixed, and the failed files were rerun: 13 failures remain. These were not repaired or re-baselined; each needs a decision on whether the code or the old expectation is right.
 
 - Fall out of the mask directly: `default brows lie just above the eyes`, `the lips stand forward of the skin`, `eye size reaches big eyes` (`sphereEyes` now sets the eyeball's size), `short torso and neck carry the skull whole` (the skull is reshaped), `Ferengi nose folds refine connected skin`.
 - Likely the wider head: `hidden ears leave ear holes`, `cap crown contains sampled crew hair`, `requested cuts have distinct silhouettes`, `a full beard is a soft volume`, `armor presets include the matching helmet`.
