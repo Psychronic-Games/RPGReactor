@@ -3,11 +3,11 @@
   "kind": "source prerelease presentation",
   "version": "0.99.4",
   "tag": "v0.99.4-preview.20261101",
-  "functionalSourceCommit": "ff8f2feb8e6a5d154f4094222566475f7332ed33",
+  "functionalSourceCommit": "d5bff6bfa079be2e0093f3ea2309453918c137fe",
   "runtime": "20261101.41",
   "releasePolicy": "prerelease; latest stable remains 0.99.3; no native binaries attached",
   "ci": "https://github.com/Psychronic-Games/RPGReactor/actions/runs/41395251102",
-  "ciStatus": "known failures in dependency audit and Node shards; GUI smoke passes; no clean full-suite claim",
+  "ciStatus": "Baseline failed; repair CI for d5bff6bf is in progress. Twenty-five character tests and npm audit remain recorded open; no green full-suite claim.",
   "changes": [
     "README hero and What's New now show the current preview",
     "Public notes summarize development and use six current screenshots",
@@ -73,10 +73,12 @@
   ],
   "captureScope": "First four pictures were committed with ff8f2feb from the current online game and editor. Last two are new native Prop Builder captures in a disposable project; inspected before selection. No source assets or saved user designs changed.",
   "validation": {
-    "targetedChecksPassed": 7,
+    "targetedChecksPassed": 6,
     "media": "six JPEGs; 1280x720; each under 400 KiB; nonempty frames",
     "links": "README, public changelog and preview-note local links resolve",
     "fullSuite": "not run locally"
   },
-  "artifacts": "scratchpad/release-0994-20261101/"
+  "artifacts": "scratchpad/release-0994-20261101/",
+  "pictureSourceCommit": "ff8f2feb8e6a5d154f4094222566475f7332ed33",
+  "repairCi": "https://github.com/Psychronic-Games/RPGReactor/actions/runs/41397145405"
 }
