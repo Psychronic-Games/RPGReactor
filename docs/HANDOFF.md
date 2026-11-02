@@ -8,7 +8,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 - **Development:** 0.99.5 is open, runtime revision **20261102.1**. Changes stay local until the owner asks to push `main`.
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
-- **Verification:** see [OPEN-ITEMS.md](OPEN-ITEMS.md) item 1 for the CI result. Substantial checks go through `codex-check`.
+- **Verification:** CI is green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is that branch plus a documentation commit and is not pushed. Substantial checks go through `codex-check`.
 - **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test accounts, sleepers and chat.
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
