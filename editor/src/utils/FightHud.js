@@ -141,7 +141,7 @@
     };
 
     H.label = (node, key) => (node && node.fightLabels && node.fightLabels[key]) || H.LABELS[key] || '';
-    H.teamColor = (node, team) => (team === 'enemy' ? node.enemyColor : team === 'neutral' ? node.neutralColor : node.allyColor)
+    H.teamColor = (node, team) => (team === 'neutral' ? node.neutralColor : !team || team === 'ally' || team === 'any' ? node.allyColor : node.enemyColor)
         || H.TEAM_COLORS[team] || H.TEAM_COLORS.ally;
 
     //-------------------------------------------------------------------------
@@ -575,7 +575,7 @@
     /** The words for the side whose turn it is ("Player Phase"), or '' where the turns are not by side. */
     H.phaseText = function(node, reader) {
         const team = reader.currentTeam ? reader.currentTeam() : 'any';
-        return team === 'ally' ? H.label(node, 'allyPhase') : team === 'enemy' ? H.label(node, 'enemyPhase') : '';
+        return team === 'ally' ? H.label(node, 'allyPhase') : team && team !== 'any' ? H.label(node, 'enemyPhase') : '';
     };
 
     /** The text of a Battle Text node now. `menu` is the highlighted menu row (see `blockedReason`). */

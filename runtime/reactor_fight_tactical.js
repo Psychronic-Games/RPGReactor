@@ -277,7 +277,7 @@
         const skill = DataManager.isSkill(item);
         // The attack skill (whichever skill a weapon makes it) and any physical skill aimed at the other side.
         const weaponLike = skill && item.scope >= 1 && item.scope <= 6 && ((!!battler && item.id === battler.attackSkillId()) || item.hitType === 1);
-        const weapon = weaponLike && battler && battler.isActor && battler.isActor() ? battler.weapons()[0] || null : null;
+        const weapon = weaponLike && battler && battler.isActor && (battler.isActor() || battler.isRemoteActor) ? battler.weapons()[0] || null : null;
         const kept = tagCache.get(item);
         const cached = kept && kept.tactics;
         if (cached && cached.weapon === weapon && cached.weaponNote === (weapon ? weapon.note : "") && cached.weaponOwn === (weapon ? weapon.rrBattle || null : null)
@@ -2840,7 +2840,7 @@
             case "ready":
                 if (this.awaitView(character, F.BEAT_AIM) || --act.beat > 0) break;
                 // Whoever it meant to strike may have fallen or moved meanwhile: then it only turns to the fight.
-                if (!this.beginAction(unit, act.plan.kind, act.plan.id, act.plan.cx, act.plan.cy)) { this.faceNearest(unit); act.stage = "done"; }
+                if (!this.beginAction(unit, act.plan.kind, act.plan.id, act.plan.cx, act.plan.cy, act.plan.via)) { this.faceNearest(unit); act.stage = "done"; }
                 break;
             case "rest":
                 if (--act.beat <= 0) this.finishAct();
@@ -3382,7 +3382,7 @@
                 this.setCursor(plan.cx, plan.cy);
                 return;
             }
-            if (this.beginAction(unit, plan.kind, plan.id, plan.cx, plan.cy)) return;
+            if (this.beginAction(unit, plan.kind, plan.id, plan.cx, plan.cy, plan.via)) return;
         }
         if (!(plan && plan.kind === "watch" && this.armOverwatch(unit))) this.faceNearest(unit);
         // A walk that was watched is taken in before the next unit begins.
@@ -5403,7 +5403,7 @@
         // The enemies in reach of the party's middle, nearest first; with none in reach, the nearest one.
         let ex = 0, ey = 0, en = 0, nearest = null, least = Infinity;
         for (const unit of fight._units) {
-            const c = unit.gone || unit.team !== "enemy" || !fight.isAlive(unit) ? null : fight.character(unit);
+            const c = unit.gone || !F.isFoeTeam(unit.team) || !fight.isAlive(unit) ? null : fight.character(unit);
             if (!c) continue;
             const far = Math.hypot(c.x - ax, c.y - ay);
             if (far < least) { least = far; nearest = c; }
@@ -7259,7 +7259,7 @@
         if (act.stage === "pick" || act.stage === "move") {
             const pointed = fight.focusedUnit();
             if (fight.tac().threatAll) danger = fight.threatOfAll();
-            else if (pointed && pointed.team === "enemy" && fight.isAlive(pointed)) { const known = fight.threatOf(pointed); tread = known.tread; danger = known.reach; }
+            else if (pointed && F.isFoeTeam(pointed.team) && fight.isAlive(pointed)) { const known = fight.threatOf(pointed); tread = known.tread; danger = known.reach; }
         } else if (fight.tac().threatAll && (act.stage === "command" || act.stage === "skill" || act.stage === "item")) danger = fight.threatOfAll();
         if (act.stage === "pick") { const pending = fight.pendingUnits(); move = fight.withFootprints(pending.map(unit => fight.character(unit)), pending); }
         else if (act.stage === "move") { move = fight.moveCells(); path = fight.pathCells(); grapple = move.filter(cell => cell.grapple); }
@@ -7413,7 +7413,7 @@
         const all = menace.all, seen = menace.seen || (menace.seen = new Set());
         all.length = 0; seen.clear();
         for (const unit of this._units) {
-            if (unit.gone || unit.team !== "enemy" || !this.isAlive(unit)) continue;
+            if (unit.gone || !F.isFoeTeam(unit.team) || !this.isAlive(unit)) continue;
             menaceOf(this, unit, menace.tread, menace.reach);
             for (const list of [menace.tread, menace.reach]) for (const cell of list) {
                 const id = cell.y * gw + cell.x;
@@ -7782,7 +7782,7 @@
             uox[i] = f.ox + f.w / 2; uoy[i] = f.oy + f.h / 2;
             ut[i] = F.unitHeight(unit);
             uw[i] = f.w; ud[i] = f.h;
-            uteam[i] = unit.team === "ally" ? 0 : unit.team === "enemy" ? 1 : 2;
+            uteam[i] = unit.team === "ally" ? 0 : F.isFoeTeam(unit.team) ? 1 : 2;
             uhp[i] = battler && unit.team !== "neutral" ? clamp(battler.hpRate(), 0, 1) : -1;
             // Acted: in a side's turn, one of that side that is done; watch: on overwatch.
             uflags[i] = (tac.acted[unit.id] && (team === "any" || unit.team === team) ? U.ACTED_FLAG : 0) | (tac.watch && tac.watch[unit.id] ? U.WATCH_FLAG : 0);

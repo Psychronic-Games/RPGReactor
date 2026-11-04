@@ -25,6 +25,8 @@
     F.TURNS = ["team", "initiative"];
     F.HOOKS = ["battleStart", "turnStart", "turnEnd", "unitDefeated", "unitEnters"];
     F.DEFAULT_MOVE = 4;
+    /** Whether a side is against the player's. There can be more than two: online, someone may fight for themselves. */
+    F.isFoeTeam = team => !!team && team !== "ally" && team !== "neutral" && team !== "any";
     // Rounds with no step taken and no action used before a stuck battle ends as an escape.
     F.IDLE_ROUNDS = 20;
     // A fallen unit's event fades over this many frames, after waiting at most this many for a shot on it to end.
@@ -109,7 +111,9 @@
 
     F.isMode = mode => F.MODES.includes(mode);
     F.isOnMap = mode => F.ON_MAP.includes(mode);
-    F.oppose = team => (team === "ally" ? "enemy" : team === "enemy" ? "ally" : "");
+    F.oppose = team => (typeof $gameFight !== "undefined" && $gameFight && $gameFight._manySides ? "!" + team : team === "ally" ? "enemy" : team === "enemy" ? "ally" : "");
+    /** Whether a side is what `F.oppose` answered: the one other side, or with more than two ("!ally") any but that one. */
+    F.isSide = (team, oppose) => (oppose[0] === "!" ? team !== "neutral" && team !== oppose.slice(1) : team === oppose);
 
     //-------------------------------------------------------------------------
     // Which mode a battle uses: the Change Battle Mode command's next-battle
@@ -1732,7 +1736,10 @@
                 .forEach(unit => this._queue.push({ kind: "unit", unitId: unit.id }));
             this._queue.push({ kind: "turnEnd", team: "any" });
         } else {
-            for (const team of ["ally", "enemy"]) {
+            // Any other side (a player fighting for themselves online) takes its own turn after these.
+            const teams = ["ally", "enemy"];
+            for (const unit of this._units) if (!teams.includes(unit.team) && unit.team !== "neutral") teams.push(unit.team);
+            for (const team of teams) {
                 this._queue.push({ kind: "turnStart", team });
                 this.units({ team, alive: true }).forEach(unit => this._queue.push({ kind: "unit", unitId: unit.id }));
                 this._queue.push({ kind: "turnEnd", team });
@@ -2353,7 +2360,7 @@
         }
         if (goal.type === "defeatAll") {
             let left = 0;
-            for (const unit of this._units) if (unit.team === "enemy" && !unit.gone && this.isAlive(unit)) left++;
+            for (const unit of this._units) if (F.isFoeTeam(unit.team) && !unit.gone && this.isAlive(unit)) left++;
             return F.term("goalEnemiesLeft").replace("%1", left);
         }
         return this.goalText();
@@ -2652,7 +2659,7 @@
             if (!ending.quiet) {
                 if (ending.result === F.WIN) {
                     AudioManager.playMe($gameSystem.victoryMe());
-                    const enemies = this._units.filter(unit => unit.team === "enemy" && unit.enemy && !unit.gone).map(unit => unit.enemy);
+                    const enemies = this._units.filter(unit => F.isFoeTeam(unit.team) && unit.enemy && !unit.gone).map(unit => unit.enemy);
                     resultsOf = ending;
                     F.showResults(this, F.makeRewards(enemies), () => { if (resultsOf === ending) resultsOf = null; });
                 } else if (ending.result === F.LOSE) {

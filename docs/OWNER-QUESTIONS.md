@@ -25,4 +25,4 @@ The owner reviews North Haven, playtests battles and tries weaker hardware on th
 3. By hand, in third person on a 3D map: ride a vehicle and press Escape once. It should get off, not open the menu (fixed at runtime 20261024.3, checked in Node only).
 4. Name the house and location of the wall/roof flicker, and whether it shows in the game, the editor or both. It has not been reproduced without them.
 5. Share the recipe or preset behind the pointy under-chin shadows. The default recipe does not reproduce them.
-6. Turn on WebSockets for Engine mode on the demo server, as root: `a2enmod proxy_wstunnel && systemctl reload apache2`, then rebuild once. Until then games use polling. If `reactor-online` starts answering 500 afterwards, its folder needs `Options +FollowSymLinks` or `+SymLinksIfOwnerMatch`. [Details](DESIGN-ONLINE.md#engine-mode).
+6. Done 2026-11-02: WebSockets are on for Engine mode on the demo server.

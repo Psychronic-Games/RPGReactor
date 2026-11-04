@@ -9,7 +9,8 @@
  *        a model: { recipe, glb, sidecar, rig, height }. `final` carries the
  *        whole motion set; otherwise it is a quick look with its Idle.
  */
-importScripts('CharacterPreviewBrowserEntry.js', 'CharacterControls.js');
+// The rigger comes first and by name: without it savedModel makes no rig, and says nothing.
+importScripts('../../database/ModelRigger.js', '../../database/ModelAutoRig.js', 'CharacterPreviewBrowserEntry.js', 'CharacterControls.js');
 (function(scope) {
     'use strict';
     const Body = scope.RRHumanBody, Model = scope.RRCharacterModel, Poses = scope.RRCharacterPoses;
@@ -28,12 +29,15 @@ importScripts('CharacterPreviewBrowserEntry.js', 'CharacterControls.js');
         return { width: canvas.width, height: canvas.height, data };
     }
 
+    let cache = null;
+
     function ready() {
         if (!readied) readied = (async () => {
+            // None of these wait on another, so they download together.
+            const eye = picture(DATA + '/eye-brown.png'), motions = scope.RRMotionLibrary.loadAsync(DATA + '/reactor_3d_motions.bin');
             const pack = await Body.loadPack(DATA);
-            await Body.prepareAuthoring(pack, DATA);
-            await scope.RRMotionLibrary.loadAsync(DATA + '/reactor_3d_motions.bin');
-            return { pack, eyeSource: await picture(DATA + '/eye-brown.png') };
+            await Promise.all([Body.prepareAuthoring(pack, DATA), motions]);
+            return { pack, eyeSource: await eye };
         })().catch(error => { readied = null; throw error; });
         return readied;
     }
@@ -60,7 +64,11 @@ importScripts('CharacterPreviewBrowserEntry.js', 'CharacterControls.js');
     async function build(message) {
         const { pack, eyeSource } = await ready(), recipe = recipeOf(message), started = performance.now();
         const quality = message.final && message.quality === 'high' ? { quality: 'save' } : { quality: 'preview', skinSize: 1024, atlasSize: 1024 };
-        const result = Model.build(pack, recipe, {}, Object.assign(quality, { eyeSource }));
+        // Kept between builds, as the editor keeps its own: a change of shirt reuses the skin, hair and the rest.
+        if (!cache || cache._rrQuality !== quality.quality) cache = { _rrQuality: quality.quality };
+        const result = Model.build(pack, recipe, cache, Object.assign(quality, { eyeSource }));
+        const shoes = cache.wardrobe?.shoes;
+        if (shoes instanceof Map) while (shoes.size > 12) shoes.delete(shoes.keys().next().value);
         // A finished character can speak, by text or by voice. Only 'save' quality brings these by itself.
         if (message.final && !result.morphs?.length) result.morphs = scope.RRCharacterExpressions?.morphTargets(pack, result, MOUTH_SHAPES) || [];
         const made = message.final ? Poses.savedModel(result, 'useful') : null;
@@ -80,7 +88,8 @@ importScripts('CharacterPreviewBrowserEntry.js', 'CharacterControls.js');
     const forge = scope.onmessage;
     scope.onmessage = event => {
         const message = event.data;
-        if (message.type === 'tabs') { scope.postMessage({ id: message.id, value: Controls.tabs(message.rules) }); return; }
+        if (message.type === 'tabs') { scope.postMessage({ id: message.id, value: Controls.tabs(message.rules) }); ready().catch(() => null); return; }
+        if (message.type === 'warm') { ready().then(() => scope.postMessage({ id: message.id, value: true }), error => scope.postMessage({ id: message.id, error: String(error && error.message || error) })); return; }
         if (message.type !== 'build') { forge(event); return; }
         build(message).then(({ value, transfer }) => scope.postMessage({ id: message.id, value }, transfer),
             error => scope.postMessage({ id: message.id, error: String(error && error.message || error) }));

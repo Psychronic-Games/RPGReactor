@@ -1270,7 +1270,7 @@ Graphics.FramePacing = {
     _active: false, _index: 0,
     _chars: [], _prev: new Float64Array(256), _prevCount: 0, _capturedAt: -1, _live: new Float64Array(256),
     _display: new Float64Array(2), _camera: new Float64Array(8), _cameraValid: false,
-    _poses: [], _poseRoots: [], _posePrev: new Float64Array(2560), _poseLive: new Float64Array(2560), _poseCache: new WeakMap(), _poseApplied: false, _poseTick: -1, _poseSpan: 1,
+    _poses: [], _poseRoots: [], _poseEnds: [], _poseMoved: [], _posePrev: new Float64Array(2560), _poseLive: new Float64Array(2560), _poseCache: new WeakMap(), _poseApplied: false, _poseTick: -1, _poseSpan: 1,
     _applied: false, _objects: [], _objectCount: 0, _sprites: [], _spriteCount: 0, _spriteAt: new Float64Array(64),
     _cameraSaved: new Float64Array(8), _cameraObject: null, _origin: null,
 
@@ -1448,7 +1448,7 @@ Graphics.FramePacing = {
         if (models) for (const holder of models.values()) {
             const root = holder.object;
             if (!root) continue;
-            roots[rootCount++] = root;
+            roots[rootCount] = root;
             let nodes = this._poseCache.get(root);
             if (!nodes || nodes._childCount !== root.children?.length) {
                 nodes = [];
@@ -1468,8 +1468,9 @@ Graphics.FramePacing = {
                 poses[count] = node;
                 this.readPose(node, this._posePrev, count++ * 10);
             }
+            this._poseEnds[rootCount++] = count;
         }
-        poses.length = count; roots.length = rootCount;
+        poses.length = count; roots.length = rootCount; this._poseEnds.length = rootCount;
     },
     readPose(node, into, k) {
         const p = node.position, q = node.quaternion, s = node.scale;
@@ -1479,11 +1480,19 @@ Graphics.FramePacing = {
     },
     /** A draw's local transforms, then the authoritative transforms restored before any game update. */
     swapPoses(alpha, into) {
-        const prev = this._posePrev, live = this._poseLive, nodes = this._poses;
+        const prev = this._posePrev, live = this._poseLive, nodes = this._poses, ends = this._poseEnds, moved = this._poseMoved;
+        let root = 0;
+        if (into) for (let r = 0; r < ends.length; r++) moved[r] = false;
         for (let i = 0; i < nodes.length; i++) {
             const node = nodes[i], k = i * 10;
+            while (root < ends.length - 1 && i >= ends[root]) root++;
             if (into) {
                 this.readPose(node, live, k);
+                // A part the update left where it was has nothing to blend, and its model's matrices stand.
+                let same = true;
+                for (let j = 0; j < 10; j++) if (live[k + j] !== prev[k + j]) { same = false; break; }
+                if (same) continue;
+                moved[root] = true;
                 if (node.matrixAutoUpdate === false) continue;
                 if (Math.abs(live[k] - prev[k]) > this.JUMP || Math.abs(live[k + 1] - prev[k + 1]) > this.JUMP || Math.abs(live[k + 2] - prev[k + 2]) > this.JUMP) continue;
                 node.position.set(prev[k] + (live[k] - prev[k]) * alpha, prev[k + 1] + (live[k + 1] - prev[k + 1]) * alpha, prev[k + 2] + (live[k + 2] - prev[k + 2]) * alpha);
@@ -1498,6 +1507,7 @@ Graphics.FramePacing = {
                 }
                 if (node.scale) node.scale.set(prev[k + 7] + (live[k + 7] - prev[k + 7]) * alpha, prev[k + 8] + (live[k + 8] - prev[k + 8]) * alpha, prev[k + 9] + (live[k + 9] - prev[k + 9]) * alpha);
             } else {
+                if (!moved[root]) continue;
                 node.position.set(live[k], live[k + 1], live[k + 2]);
                 if (node.quaternion) node.quaternion.set(live[k + 3], live[k + 4], live[k + 5], live[k + 6]);
                 if (node.scale) node.scale.set(live[k + 7], live[k + 8], live[k + 9]);
@@ -1506,7 +1516,9 @@ Graphics.FramePacing = {
         this._poseApplied = into;
         // The viewport caches the rest of the scene's matrices by logic tick.
         // Publish these intermediate transforms on every draw, including bones.
-        for (const root of this._poseRoots) root.updateMatrixWorld?.(true);
+        // Only the models that moved: a crowd standing still was every bone's matrices twice a draw.
+        const roots = this._poseRoots;
+        for (let r = 0; r < roots.length; r++) if (moved[r]) roots[r].updateMatrixWorld?.(true);
     },
     camera() {
         const spriteset = this.spriteset(), state = spriteset && spriteset._reactor3d;

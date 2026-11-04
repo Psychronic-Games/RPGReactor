@@ -17,7 +17,8 @@ function copyWebForgeAssets(stageRoot, webRoot, runtimeRoot = path.join(stageRoo
     fs.mkdirSync(path.join(webRoot, 'runtime'), { recursive: true });
     fs.copyFileSync(path.join(runtimeRoot, 'reactor_3d_motions.js'), path.join(webRoot, 'runtime/reactor_3d_motions.js'));
     fs.copyFileSync(path.join(runtimeRoot, 'reactor_3d_motions.bin'), path.join(webRoot, base, 'data/reactor_3d_motions.bin'));
-    for (const relative of ['src/utils/QuadricDecimator.js', 'src/forge/Props/PropPaint.js']) {
+    // The rigger: a game's worker gives a finished character the same rig Save to Project does.
+    for (const relative of ['src/utils/QuadricDecimator.js', 'src/forge/Props/PropPaint.js', 'src/database/ModelRigger.js', 'src/database/ModelAutoRig.js']) {
         fs.mkdirSync(path.dirname(path.join(webRoot, relative)), { recursive: true });
         fs.copyFileSync(path.join(stageRoot, relative), path.join(webRoot, relative));
     }

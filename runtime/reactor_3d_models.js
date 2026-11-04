@@ -5010,7 +5010,36 @@ Reactor3D.readGlbClips = function(json, bin, nodes) {
  * a plain clone leaves the copy following the template's skeleton, which
  * lives outside every scene and never moves.
  */
-Reactor3D.cloneModelTemplate = function(template) {
+/**
+ * An instance's own copy of one of its template's materials: the light, the model marker and the
+ * surface data carried over by hand, since Material.clone drops them.
+ */
+Reactor3D.instanceModelMaterial = function(mat) {
+    const cloned = Reactor3D.cloneSurfaceMaterial(mat);
+    cloned.__reactorModel = mat.__reactorModel;
+    // Nor the light injection, which lives in onBeforeCompile and the
+    // program cache key — neither of which clone copies.
+    if (mat.__reactorLit) Reactor3D.litMaterial(cloned);
+    // Material.clone copies userData through JSON, which degrades a
+    // stored base colour to its hex number; rebuild it as a Colour or
+    // every later read of .r comes back undefined.
+    if (cloned.userData && cloned.userData.baseColor != null
+        && !cloned.userData.baseColor.isColor) {
+        cloned.userData.baseColor = new THREE.Color(cloned.userData.baseColor);
+    }
+    Reactor3D.carrySurfaceData(mat, cloned);
+    return cloned;
+};
+
+/** Template material -> share key -> the one instance copy every instance with that key draws with. */
+Reactor3D._sharedModelMaterials = new WeakMap();
+
+/**
+ * `options.shareKey`: instances cloned with the same key draw with the same materials until one of them
+ * needs its own (Reactor3D.ownModelMaterials). Twenty copies of one character were twenty sets of
+ * seventeen materials, and every draw switched material: 2.3 ms of a desktop GPU's frame went to it.
+ */
+Reactor3D.cloneModelTemplate = function(template, options) {
     // Object3D.copy duplicates userData through JSON, and the root's
     // glbTextures are THREE.Texture objects whose toJSON serialises every
     // image to a data URL: hundreds of milliseconds per clone, on the main
@@ -5029,23 +5058,21 @@ Reactor3D.cloneModelTemplate = function(template) {
     clone.__reactorClips = template.__reactorClips;
     this.presetSkinnedBounds(clone);
     // Materials are per instance (textures stay shared) so a model flash
-    // tints one tank, not every clone of it. Material.clone drops custom
-    // properties, so the model marker is carried by hand.
+    // tints one tank, not every clone of it; or shared by key until one
+    // instance needs its own (ownModelMaterials).
+    const share = options && options.shareKey != null ? String(options.shareKey) : null;
     const instanceMaterial = mat => {
-        const cloned = Reactor3D.cloneSurfaceMaterial(mat);
-        cloned.__reactorModel = mat.__reactorModel;
-        // Nor the light injection, which lives in onBeforeCompile and the
-        // program cache key — neither of which clone copies.
-        if (mat.__reactorLit) Reactor3D.litMaterial(cloned);
-        // Material.clone copies userData through JSON, which degrades a
-        // stored base colour to its hex number; rebuild it as a Colour or
-        // every later read of .r comes back undefined.
-        if (cloned.userData && cloned.userData.baseColor != null
-            && !cloned.userData.baseColor.isColor) {
-            cloned.userData.baseColor = new THREE.Color(cloned.userData.baseColor);
+        if (share === null) return Reactor3D.instanceModelMaterial(mat);
+        let byKey = Reactor3D._sharedModelMaterials.get(mat);
+        if (!byKey) Reactor3D._sharedModelMaterials.set(mat, byKey = new Map());
+        let shared = byKey.get(share);
+        if (!shared) {
+            shared = Reactor3D.instanceModelMaterial(mat);
+            shared.__rrShared = true;
+            shared.__rrSource = mat;
+            byKey.set(share, shared);
         }
-        Reactor3D.carrySurfaceData(mat, cloned);
-        return cloned;
+        return shared;
     };
     clone.traverse(child => {
         if (!child.isMesh || !child.material) return;
@@ -10448,8 +10475,35 @@ Reactor3D.fireModelEffect = function(effect, character, holder) {
  * flashes. Returns true on the frame the flash ends, so the caller can
  * hand the materials back to the ambient tint.
  */
+/**
+ * Before anything changes one instance's materials (a flash, a variant, a Transform 3D Model's look):
+ * its shared ones are swapped for copies of its own, made from the template's and given the instance's
+ * surface and look again, so it looks exactly as it did.
+ */
+Reactor3D.ownModelMaterials = function(holder) {
+    const object = holder && holder.object;
+    if (!object || holder.ownsMaterials || typeof object.traverse !== "function") return;
+    holder.ownsMaterials = true;
+    let swapped = false;
+    const own = mat => {
+        if (!mat || !mat.__rrShared || !mat.__rrSource) return mat;
+        swapped = true;
+        return Reactor3D.instanceModelMaterial(mat.__rrSource);
+    };
+    object.traverse(child => {
+        if (!child.isMesh || !child.material) return;
+        child.material = Array.isArray(child.material) ? child.material.map(own) : own(child.material);
+    });
+    if (!swapped) return;
+    const transform = holder.joinTransform;
+    if (transform && "surface" in transform) this.applyModelSurface(object, transform.surface);
+    if (transform && "look" in transform) this.applyModelLook(object, transform.look);
+    if (holder.scene && holder.scene.adoptModelMaterials) holder.scene.adoptModelMaterials(object);
+};
+
 Reactor3D.updateModelFlash = function(holder) {
     if (!holder || !holder.flash || !holder.object) return false;
+    this.ownModelMaterials(holder);
     const flash = holder.flash;
     const strength = (flash.color[3] / 255) * Math.max(0, 1 - flash.t / flash.duration);
     holder.object.traverse(child => {
@@ -11623,6 +11677,7 @@ Reactor3D.refreshModelVariant = function(holder, spec) {
     holder.variant = spec.variant || "";
     const json = this._sidecarJson ? this._sidecarJson[spec.name] : null;
     if (!holder.object) return;
+    this.ownModelMaterials(holder);
     this.applyModelSurface(holder.object, this.variantSurface(json, spec));
     this.applyModelLook(holder.object, this.modelLook(json, spec));
     if (!json || !this.readModelEffects) return;
@@ -12282,10 +12337,32 @@ Reactor3D.animationStride = function(x, y, z, span, camera) {
  * body and one playing an action asked of it always are; the rest by their
  * stride, each on its own frame of it so a crowd's samples are spread.
  */
+/** Whether a model stands in the camera's view, with a body's height of margin all round. The frustum is made once a frame. */
+Reactor3D.inAnimationView = function(object, span, camera) {
+    if (typeof THREE === "undefined" || !camera?.projectionMatrix || !camera.matrixWorldInverse) return true;
+    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    const view = this._animationView || (this._animationView = { frame: -1, camera: null, frustum: new THREE.Frustum(), matrix: new THREE.Matrix4(), sphere: new THREE.Sphere() });
+    if (view.frame !== frame || view.camera !== camera) {
+        view.frame = frame;
+        view.camera = camera;
+        if (typeof camera.updateMatrixWorld === "function") camera.updateMatrixWorld();
+        view.matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+        view.frustum.setFromProjectionMatrix(view.matrix);
+    }
+    view.sphere.center.set(object.position.x, object.position.y + span / 2, object.position.z);
+    view.sphere.radius = span * 1.5 + 1;
+    return view.frustum.intersectsSphere(view.sphere);
+};
+
 Reactor3D.animationDue = function(holder, character, object, camera) {
     holder.sampled = true;
+    holder.poseHeld = false;
     if (!camera || holder.action || (typeof $gamePlayer !== "undefined" && character === $gamePlayer)) return true;
     const span = Reactor3D.instanceSpan(object);
+    // Out of view, a body keeps the pose it had: sampling a clip nobody sees was most of a crowd's cost.
+    // Its first pose is always taken, and the sphere is generous, so it never steps in frozen mid-stride.
+    if (holder.posedOnce && !Reactor3D.inAnimationView(object, span, camera)) { holder.poseHeld = true; return (holder.sampled = false); }
+    holder.posedOnce = true;
     const stride = Reactor3D.animationStride(object.position.x, object.position.y + span / 2, object.position.z, span, camera);
     if (stride === 1) return true;
     if (holder.strideAt === undefined) holder.strideAt = (Reactor3D._strideSeed = (Reactor3D._strideSeed || 0) + 1);
@@ -12307,11 +12384,21 @@ Reactor3D.ModelJoins = {
     queue: [],
     limited() {
         if (Reactor3D.Arrival && Reactor3D.Arrival.pacing) return true;
+        // A map in plain view: what joins it (an event's new page, players arriving online, a crowd of
+        // sleepers) comes in a few a frame rather than as one frozen frame. Behind a load's dark screen
+        // they are built as fast as they come.
+        if (this.mapInView()) return true;
         if (Reactor3D.Neighbors && Reactor3D.Neighbors.streaming && Reactor3D.Neighbors.streaming()) return true;
         const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
         return !!(fight && typeof fight.isActive === "function" && fight.isActive());
     },
     now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); },
+    mapInView() {
+        if (typeof SceneManager === "undefined" || typeof Scene_Map === "undefined") return false;
+        const scene = SceneManager._scene;
+        return scene instanceof Scene_Map && !!scene._active && !(scene._fadeDuration > 0) && !(scene._fadeOpacity > 0)
+            && !(typeof $gamePlayer !== "undefined" && $gamePlayer && $gamePlayer.isTransferring());
+    },
     /** A model whose files are in: built now, or after those already waiting. */
     add(job) {
         if (this.limited() && (this.queue.length || this.spent >= this.BUDGET)) { this.queue.push(job); return; }
@@ -12330,6 +12417,35 @@ Reactor3D.ModelJoins = {
             this.spent += this.now() - start;
         }
     }
+};
+
+/**
+ * A body whose pose is held (asleep, or out of view: Reactor3D.animationDue) and that stands as it
+ * was placed keeps last frame's matrices, bones and all: the scene's walk leaves it out, and its bone
+ * palette is not compared again, until it moves or is posed. 150 still bodies were most of a frame.
+ */
+Reactor3D.holdModelMatrices = function(holder, character, object) {
+    const held = !!(holder.stillNow && holder.poseHeld && holder.sampled === false && object.visible
+        && !character._reactorKnockedOut && !character._reactorRagdoll && !holder.wornRest && !holder.mantlePose
+        && !(holder.effects && holder.effects.length));
+    if (held === !!holder.matricesHeld) return;
+    // three walks every child with force once any parent recomputes, so the walk is stopped at the body itself.
+    if (!object.__rrHoldable) {
+        const update = object.updateMatrixWorld;
+        object.updateMatrixWorld = function(force) { if (!this.__rrHeld) update.call(this, force); };
+        object.__rrHoldable = true;
+    }
+    if (held) object.updateMatrixWorld(true);
+    object.__rrHeld = held;
+    holder.matricesHeld = held;
+    // Measured afresh at the next hold: it may be somewhere else by then.
+    holder.heldBox = null;
+    if (!holder.skeletons || holder.skeletonsOf !== object) {
+        holder.skeletons = [];
+        holder.skeletonsOf = object;
+        object.traverse(child => { if (child.isSkinnedMesh && child.skeleton && !holder.skeletons.includes(child.skeleton)) holder.skeletons.push(child.skeleton); });
+    }
+    for (const skeleton of holder.skeletons) if (skeleton.__rrPaletteCache) skeleton.__rrPaletteCache.held = held;
 };
 
 Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
@@ -12365,8 +12481,14 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 const current = this._modelInstances.get(key);
                 if (current !== holder || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
                 Reactor3D.groundAnimatedTemplate(template, sidecar);
-                const object = Reactor3D.cloneModelTemplate(template);
-                Reactor3D.applyModelTransform(object, Reactor3D.readModelTransform(sidecar, spec));
+                // Instances that look alike draw with one set of materials (cloneModelTemplate's shareKey).
+                const joinTransform = Reactor3D.readModelTransform(sidecar, spec);
+                const shareKey = JSON.stringify([joinTransform && "surface" in joinTransform ? joinTransform.surface : null,
+                    joinTransform && "look" in joinTransform ? joinTransform.look : null, spec.variant || ""]);
+                const object = Reactor3D.cloneModelTemplate(template, { shareKey });
+                Reactor3D.applyModelTransform(object, joinTransform);
+                current.joinTransform = joinTransform;
+                current.scene = this;
                 object.userData.glbSize = template.userData.glbSize;
                 // Carved parts (or the rig's bones) must exist before the
                 // binding is prepared, or the new pieces would be invisible
@@ -12392,21 +12514,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 Reactor3D.Shadows.markCaster(object, Reactor3D.modelCasterMoves(character, current.rules));
                 // The shadow budget is measured from the player, not the eye.
                 object.userData.reactorPlayer = typeof $gamePlayer !== "undefined" && character === $gamePlayer;
-                object.traverse(child => {
-                    const mats = child.material
-                        ? (Array.isArray(child.material) ? child.material : [child.material])
-                        : [];
-                    for (const mat of mats) {
-                        mat.__reactorModel = true;
-                        mat.fog = false;
-                        if (!mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
-                        // Whatever loader or clone it came through, a model
-                        // standing on a lit map takes the lights.
-                        Reactor3D.litMaterial(mat);
-                        if (this._materials.indexOf(mat) < 0) this._materials.push(mat);
-                    }
-                });
-                this._ambientLevel = undefined;
+                this.adoptModelMaterials(object);
             })).finally(() => { holder.settled = true; });
         }
         const object = holder.object;
@@ -12434,8 +12542,10 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             if (lodEye) Reactor3D.pickLod(object, holder.placed.lodSpan, lodEye, holder.spec, lodScreen);
             Reactor3D.noteModelFacing(character, holder.smoothYaw - (spec.yaw || 0));
             still.freeze(holder, object);
+            holder.stillNow = true;
         } else {
             still.thaw(holder, object);
+            holder.stillNow = false;
             const stretch = spec.stretch || STILL_NO_STRETCH;
             object.scale.set(scale * stretch[0], scale * stretch[1], scale * stretch[2]);
             const lodSpan = Reactor3D.instanceSpan(object);
@@ -12590,6 +12700,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 if (Reactor3D.updateModelFlash(holder)) this._ambientLevel = undefined;
             }
         }
+        Reactor3D.holdModelMatrices(holder, character, object);
     }
     for (const [key, holder] of this._modelInstances) {
         if (live.has(key)) continue;
@@ -12598,6 +12709,25 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         Reactor3D.releaseModelHolder(holder);
         this._modelInstances.delete(key);
     }
+};
+
+/** A placed model's materials made the map's: lit, unfogged, their base colour kept, in the ambient list. */
+Reactor3D.MapScene.prototype.adoptModelMaterials = function(object) {
+    object.traverse(child => {
+        const mats = child.material
+            ? (Array.isArray(child.material) ? child.material : [child.material])
+            : [];
+        for (const mat of mats) {
+            mat.__reactorModel = true;
+            mat.fog = false;
+            if (!mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
+            // Whatever loader or clone it came through, a model
+            // standing on a lit map takes the lights.
+            Reactor3D.litMaterial(mat);
+            if (this._materials.indexOf(mat) < 0) this._materials.push(mat);
+        }
+    });
+    this._ambientLevel = undefined;
 };
 
 /** A character model going for good: what its copy holds on the GPU goes with it (the renderer outlives map scenes). */

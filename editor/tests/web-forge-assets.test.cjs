@@ -6,6 +6,9 @@ test('web editor carries body, clothing, expression data and every browser worke
  for(const name of ['human.json','human.bin','eye-brown.png','clothes.json','clothes.bin','expressions.json','expressions.bin','outfits/carol.json','outfits/carol.bin','outfits/carol.jpg','LICENSE.md','clothes/LICENSE.md']){const rel='src/forge/Character3D/data/'+name;assert.ok(Buffer.compare(fs.readFileSync(path.join(root,rel)),fs.readFileSync(path.join(out,rel)))===0,rel+' bytes');}
  const imports=[];vm.runInNewContext(fs.readFileSync(path.join(out,'src/forge/Character3D/CharacterPreviewBrowserEntry.js'),'utf8'),{importScripts(...files){imports.push(...files);},self:{},Map,Set});
  for(const file of imports)assert.ok(fs.existsSync(path.resolve(out,'src/forge/Character3D',file)),file+' shipped');
+ const gameImports=[];vm.runInNewContext(fs.readFileSync(path.join(out,'src/forge/Character3D/CharacterGameWorker.js'),'utf8').split('(function(scope)')[0],{importScripts(...files){gameImports.push(...files);}});
+ assert.ok(gameImports.includes('../../database/ModelRigger.js')&&gameImports.includes('../../database/ModelAutoRig.js'),'a game builds with the rigger, or its characters have no rig');
+ for(const file of gameImports)assert.ok(fs.existsSync(path.resolve(out,'src/forge/Character3D',file)),file+' shipped for games');
  assert.ok(fs.existsSync(path.join(out,'src/forge/Character3D/data/reactor_3d_motions.bin')));
  assert.ok(!fs.existsSync(path.join(out,'src/forge/Character3D/CharacterPreviewWorker.cjs')),'Node-only worker is excluded');
  }finally{fs.rmSync(out,{recursive:true,force:true});}

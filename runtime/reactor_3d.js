@@ -1132,6 +1132,15 @@ Reactor3D.GeometryDetail = {
     // vertex in every pass, so a smaller character already qualifies.
     skinned: true,
     SKINNED_MIN_INDICES: 90000,
+    /**
+     * A weak GPU always takes the levels. Any other takes them once a scene's last draw passed
+     * HEAVY_TRIANGLES: a crowd of 150-thousand-triangle characters drew 30M triangles a frame
+     * on a desktop GPU and 6M with the levels, the difference under a pixel.
+     */
+    HEAVY_TRIANGLES: 2000000,
+    wanted(scene) {
+        return Reactor3D.tier() === 'weak' || (scene?.userData?.rrDrawnTriangles || 0) > this.HEAVY_TRIANGLES;
+    },
     eligible(object) {
         const g = object.geometry, m = object.material;
         const skinned = !!object.isSkinnedMesh;
@@ -1423,7 +1432,7 @@ Reactor3D.GeometryDetail = {
     },
     begin(scene, camera, height) {
         const swapped = [];
-        if (!this.enabled || this._failed || scene.overrideMaterial || typeof Worker === 'undefined' || Reactor3D.tier() !== 'weak') return swapped;
+        if (!this.enabled || this._failed || scene.overrideMaterial || typeof Worker === 'undefined' || !this.wanted(scene)) return swapped;
         Reactor3D.SceneWalk.each(scene, object => {
             if (!this.eligible(object)) return;
             const state = this.state(object.geometry);
@@ -1458,6 +1467,8 @@ Reactor3D.SkeletonUpdates = {
         skeleton.__rrPaletteCache = state;
         skeleton.update = function() {
             if (!Reactor3D.SkeletonUpdates.enabled) { state.valid = false; return original.call(this); }
+            // Its model's matrices are held (Reactor3D.holdModelMatrices): the palette made last is the pose.
+            if (state.held && state.valid) return;
             const n = this.bones.length, matrices = this.boneMatrices;
             let same = Reactor3D.SkeletonUpdates.enabled && state.valid && state.matrices === matrices
                 && state.texture === this.boneTexture && state.pose.length === n * 32;
@@ -2157,6 +2168,9 @@ Reactor3D.ShaderWarmup = {
     // Programs started a frame at most: building each one's source is CPU
     // work too (a map's first frame spent 200 ms on it).
     COMPILES_PER_FRAME: 6,
+    // A reflection pass's own programs begun a frame (passHide): the driver builds them on its threads, and a
+    // map's few hundred materials come into the reflection over a few frames rather than a hundred.
+    PASS_COMPILES_PER_FRAME: 24,
     /**
      * Milliseconds since a material was last drawn within which a recompile is drawn as before.
      * In the game, one out of sight longer than this that comes back into a view drawn all along,
@@ -2257,6 +2271,42 @@ Reactor3D.ShaderWarmup = {
     _viewKept: false,
     show(hidden) {
         for (const object of hidden) object.visible = true;
+    },
+    /**
+     * A reflection pass (`kind`: the cube capture, a mirror) draws into a target of its own, so three
+     * builds programs of its own for it: a character that had just joined the map was compiled there on
+     * the spot, at its first reflected draw, and the frame stopped for 900 ms waiting on the driver.
+     * Called with the pass bound, just before its draw: a material not yet built for this kind of pass
+     * starts compiling (COMPILES_PER_FRAME at most) and its mesh sits out of the reflection until it is.
+     */
+    passHide(renderer, scene, camera, kind) {
+        if (!this.enabled || !this.supported(renderer) || !scene) return null;
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        let hidden = null, started = 0;
+        Reactor3D.SceneWalk.each(scene, object => {
+            if (!((object.isMesh || object.isSprite || object.isPoints || object.isLine) && object.material)) return false;
+            const materials = Array.isArray(object.material) ? object.material : null;
+            let ready = true;
+            for (let m = 0, count = materials ? materials.length : 1; m < count; m++) {
+                const material = materials ? materials[m] : object.material;
+                if (!material || !material.visible) continue;
+                const passes = material.__rrPasses || (material.__rrPasses = {});
+                let entry = passes[kind];
+                if (entry && entry.version === material.version && (entry.ready || now - entry.started > this.TIMEOUT_MS)) continue;
+                if (!entry || entry.version !== material.version) {
+                    if (started >= this.PASS_COMPILES_PER_FRAME) { ready = false; continue; }
+                    started++;
+                    entry = passes[kind] = { version: material.version, ready: false, started: now };
+                    try { this.compileGuarded(renderer, object, camera, scene).then(() => { entry.ready = true; }, () => { entry.ready = true; }); }
+                    catch (error) { entry.ready = true; }
+                    entry.version = material.version;
+                }
+                if (!entry.ready) ready = false;
+            }
+            if (!ready) { object.visible = false; (hidden || (hidden = [])).push(object); return true; }
+            return false;
+        });
+        return hidden;
     }
 };
 
@@ -2347,17 +2397,25 @@ Reactor3D.DepthFirst = {
     }
 };
 
+/** What a scene's draw cost, measured at full detail where levels were not in use (GeometryDetail.wanted). */
+Reactor3D.noteDrawnTriangles = function(renderer, scene, reduced) {
+    const drawn = renderer?.info?.render?.triangles;
+    if (!scene?.userData || !Number.isFinite(drawn)) return;
+    // With levels in, the count is the reduced one: the mark only decays, so the levels stay while the crowd does.
+    scene.userData.rrDrawnTriangles = reduced ? Math.max(drawn, (scene.userData.rrDrawnTriangles || 0) * 0.995) : drawn;
+};
+
 Reactor3D._renderScene = function(renderer, scene, camera) {
     if (this.cacheUniformArrays) this.cacheUniformArrays(renderer);
     this.SkeletonUpdates.prepare(scene);
     if (this.useSceneWater) this.useSceneWater(scene, camera);
     const detail = this.GeometryDetail;
-    if (!detail.enabled || detail._failed || this.tier() !== 'weak') {
+    if (!detail.enabled || detail._failed || !detail.wanted(scene)) {
         const auto = scene.matrixWorldAutoUpdate;
         try {
             if (auto) { scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false; }
             return this.DepthFirst.draw(renderer, scene, camera);
-        } finally { scene.matrixWorldAutoUpdate = auto; }
+        } finally { scene.matrixWorldAutoUpdate = auto; this.noteDrawnTriangles(renderer, scene, false); }
     }
     const sceneAuto = scene.matrixWorldAutoUpdate, cameraAuto = camera.matrixWorldAutoUpdate;
     const previous = detail._active;
@@ -2375,6 +2433,7 @@ Reactor3D._renderScene = function(renderer, scene, camera) {
     } finally {
         detail.end(swaps); detail._active = previous;
         scene.matrixWorldAutoUpdate = sceneAuto; camera.matrixWorldAutoUpdate = cameraAuto;
+        this.noteDrawnTriangles(renderer, scene, swaps.length > 0);
     }
 };
 
@@ -9148,9 +9207,37 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
             if (object === best.object || !object.visible || !object.parent || hidden.includes(object)) continue;
             if (object.position.distanceToSquared(position) <= far) hidden.push(object);
         }
+        Reactor3D.MapScene.prototype.hideCrowdFromReflection.call(this, hidden, position);
         return { position, hidden, toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)), reach };
     }
     return { position: camera.position, hidden: this.reflectionHidden(), toward: null };
+};
+
+/**
+ * A capture shows the few characters nearest it; the rest of a crowd stays out. Each is
+ * a whole skinned body drawn again into a small cube face: 150 sleepers on a map with a
+ * chrome vehicle cost 21M triangles a frame there, as many as the frame itself.
+ */
+Reactor3D.REFLECTED_CHARACTERS = 6;
+Reactor3D.MapScene.prototype.hideCrowdFromReflection = function(hidden, position) {
+    if (typeof this.reflectionHolders !== "function") return;
+    const crowd = this._probeCrowd || (this._probeCrowd = []);
+    crowd.length = 0;
+    const subject = typeof this.reflectionSubject === "function" ? this.reflectionSubject() : null;
+    for (const holder of this.reflectionHolders()) {
+        const object = holder && holder.object;
+        if (!object || !object.visible || !object.parent || holder === subject) continue;
+        if (holder.skinned === undefined || holder.skinnedOf !== object) {
+            let skinned = false;
+            object.traverse(child => { if (child.isSkinnedMesh) skinned = true; });
+            holder.skinned = skinned;
+            holder.skinnedOf = object;
+        }
+        if (holder.skinned) crowd.push(object);
+    }
+    if (crowd.length <= Reactor3D.REFLECTED_CHARACTERS) return;
+    crowd.sort((a, b) => a.position.distanceToSquared(position) - b.position.distanceToSquared(position));
+    for (let i = Reactor3D.REFLECTED_CHARACTERS; i < crowd.length; i++) if (!hidden.includes(crowd[i])) hidden.push(crowd[i]);
 };
 
 /** The points a mirror tries to show: the player's feet, chest and head. */

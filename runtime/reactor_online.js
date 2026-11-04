@@ -24,6 +24,9 @@ Game_RemotePlayer.prototype.initialize = function(slot) {
     this.modelId = "";
     this.modelSpec = null;
     this.asleep = false;
+    this.fight = "";
+    this.inside = false;
+    this.vehicle = null;
     this._samples = [];
     this._lateness = [];
     this._delay = ReactorOnline.pollMs() * 2;
@@ -50,6 +53,17 @@ Game_RemotePlayer.prototype.setAsleep = function(entry) {
     this.locate(entry.x, entry.y);
     this._direction = entry.d || 2;
     this._reactorPosePitch = 1;
+};
+
+/** Riding and fighting, as this player's game reports them. Inside a closed vehicle there is no body to draw. */
+Game_RemotePlayer.prototype.setState = function(ride, fight) {
+    this.fight = String(fight || "");
+    const name = ride?.name || "";
+    if (name === (this.vehicle?.modelSpec.name || "")) { this.inside = !!ride?.inside; return; }
+    this.inside = !!ride?.inside;
+    this.vehicle = null;
+    const spec = name && typeof Reactor3D !== "undefined" && Reactor3D.normalizeModelSpec ? Reactor3D.normalizeModelSpec(ride) : null;
+    if (spec) { this.vehicle = new Game_RemoteVehicle(this, spec); this.vehicle.follow(); }
 };
 
 /** Whom this player shows: an actor of the project every player already has. */
@@ -137,6 +151,31 @@ Game_RemotePlayer.prototype.advance = function(now) {
     this._rrDashing = to.dashing;
     this._stopCount = moving ? 0 : this._stopCount + 1;
     this.updateAnimation();
+    this.vehicle?.follow();
+};
+
+/** What another player is riding: only a model following them, since the vehicle itself is on their game alone. */
+function Game_RemoteVehicle() {
+    this.initialize(...arguments);
+}
+
+Game_RemoteVehicle.prototype = Object.create(Game_Character.prototype);
+Game_RemoteVehicle.prototype.constructor = Game_RemoteVehicle;
+
+Game_RemoteVehicle.prototype.initialize = function(rider, spec) {
+    Game_Character.prototype.initialize.call(this);
+    this.rider = rider;
+    this.modelSpec = spec;
+    this.setThrough(true);
+};
+
+Game_RemoteVehicle.prototype.follow = function() {
+    const rider = this.rider;
+    this._realX = rider._realX;
+    this._realY = rider._realY;
+    this._x = rider._x;
+    this._y = rider._y;
+    this._direction = rider._direction;
 };
 
 /**
@@ -192,6 +231,8 @@ const ReactorOnlineSocket = {
         } else if (message.t === "world") {
             ReactorWorldState.known = message.count;
             ReactorWorldState.apply(message.world);
+        } else if (message.t === "bf") {
+            ReactorOnlineBattle.receive(message.m, message.from);
         } else if (message.t === "chat") {
             ReactorOnlineChat.onCount(message.count);
         } else if (message.t === "fix") {
@@ -245,7 +286,11 @@ const ReactorOnline = {
     SNAPSHOT_RECORD: 11,
     PEER_GONE_MS: 2000,
     NOTE_MS: 5000,
+    FIRST_SAVE_MS: 10000,
     SLEEPER_MS: 15000,
+    // The nearest sleepers, one to a tile: a pile on one spot shows as one body.
+    SLEEPERS_SHOWN: 64,
+    WHO_MS: 3000,
     CHUNK_BYTES: 1024 * 1024,
 
     state: "off",
@@ -307,6 +352,7 @@ const ReactorOnline = {
         const model = ReactorCharacters.current()?.id || "";
         const answer = await this.post("join", { session: this.account?.session }, { n: leader ? leader.name() : "", c: leader ? leader.actorId() : 0, h: model });
         this.slot = answer.slot;
+        this.myName = answer.name || (leader ? leader.name() : "");
         this.nonce = answer.nonce;
         this.token = answer.token;
         ReactorOnlineChat.start(answer.chat);
@@ -328,6 +374,10 @@ const ReactorOnline = {
                 if (this.slot < 0) await this.join();
                 this.send();
                 ReactorWorldState.flush();
+                this.shareState();
+                ReactorOnlineParty.keepUp();
+                ReactorOnlineParty.followOn();
+                ReactorOnlineBattle.keepUp();
                 this.keepUp();
                 if (performance.now() >= (this._nextSleepers || 0)) { this._nextSleepers = performance.now() + this.SLEEPER_MS; this.fetchSleepers(); }
                 wait = this.state === "lost" ? 1000 : this.pollMs();
@@ -440,17 +490,49 @@ const ReactorOnline = {
         this.showStatus();
     },
 
-    /** Names and looks are asked for once, for players not met before. A returning slot may be someone new. */
+    /** The vehicle under this player, as a model anyone can draw. Null on foot. */
+    rideState() {
+        const vehicles = typeof ReactorVehicles !== "undefined" ? ReactorVehicles : null, event = vehicles?.ridden?.();
+        const spec = event && typeof Reactor3D !== "undefined" ? Reactor3D.characterModelSpec(event) : null;
+        if (!spec) return null;
+        const { name, file, ext, size, scale, yaw, pitch, roll, faces } = spec;
+        return { name, file, ext, size, scale, yaw, pitch, roll, faces, inside: !!vehicles.riderInside?.(event) };
+    },
+
+    /** The kind of battle this player is in, or nothing. */
+    fightState() {
+        if (typeof $gameFight !== "undefined" && $gameFight?.isHere?.() && !$gameFight._ending) return $gameFight.mode();
+        return $gameParty?.inBattle?.() ? "classic" : "";
+    },
+
+    /** Others hear of a change, not a stream: riding and fighting begin and end rarely. */
+    shareState() {
+        if (this.slot < 0 || !$gameMap?.mapId()) return;
+        const state = { ride: this.rideState(), fight: this.fightState() }, text = JSON.stringify(state) + $gameMap.mapId();
+        if (text === this._stateSent || this._stateSending || $gamePlayer.isTransferring()) return;
+        // Where they are, as of arriving: all someone following them needs to come too.
+        state.place = { map: $gameMap.mapId(), x: $gamePlayer.x, y: $gamePlayer.y };
+        this._stateSending = true;
+        this.post("state", state, { s: this.slot, g: this.nonce, t: this.token })
+            .then(() => { this._stateSent = text; }, () => null).finally(() => { this._stateSending = false; });
+    },
+
+    /** Names and looks are asked for at once for players not met before, and everyone's now and then: a look, a ride or a battle can change. */
     async learnNames() {
-        const unknown = [...this.peers.values()].filter(peer => !peer.actorId).map(peer => peer.slot);
-        if (!unknown.length || this._asking) return;
+        const now = performance.now(), refresh = now >= (this._nextWho || 0);
+        const asked = [...this.peers.values()].filter(peer => refresh || !peer.actorId).map(peer => peer.slot);
+        if (!asked.length || this._asking) return;
+        if (refresh) this._nextWho = now + this.WHO_MS;
         this._asking = true;
         try {
-            const response = await fetch(this.request({ a: "who", ids: unknown.join(",") }), { cache: "no-store" });
+            const response = await fetch(this.request({ a: "who", ids: asked.join(",") }), { cache: "no-store" });
             const players = response.ok ? (await response.json()).players : {};
             for (const [slot, player] of Object.entries(players)) {
                 const peer = this.peers.get(Number(slot));
-                if (peer) { peer.setLook(player.actor || 1, player.name || ""); if (player.model) this.fetchLook(peer, player.model); }
+                if (!peer) continue;
+                peer.setLook(player.actor || 1, player.name || "");
+                if (player.model && player.model !== peer.modelId) this.fetchLook(peer, player.model);
+                peer.setState(player.ride, player.fight);
             }
         } catch (error) {
             // Asked again with the next exchange.
@@ -462,11 +544,13 @@ const ReactorOnline = {
     stop() {
         this.leave();
         this._running = false;
+        ReactorOnlineBattle.leave?.();
         ReactorOnlineVoice.turnOff();
         this.peers.clear();
         this.sleepers.clear();
         ReactorOnlineSocket.close();
         ReactorWorldState.stop();
+        ReactorOnlineParty.stop();
         this.slot = -1;
         this._mapId = 0;
         this.setState("off");
@@ -536,6 +620,7 @@ const ReactorOnline = {
     async announceCharacter() {
         const leader = $gameParty.leader(), model = ReactorCharacters.current()?.id;
         if (!this.config()) return;
+        if (leader) this.myName = leader.name();
         if (this.account?.session) await this.post("profile", { session: this.account.session, character: ReactorCharacters.current() }).catch(() => {});
         if (this.slot < 0) return;
         await fetch(this.request({ a: "look", s: this.slot, g: this.nonce, t: this.token, n: leader ? leader.name() : "", c: leader ? leader.actorId() : 0, h: model || "" }), { cache: "no-store" }).catch(() => {});
@@ -626,7 +711,8 @@ Spriteset_Map.prototype.removeReactorOnlinePeer = function(slot, entry) {
 Spriteset_Map.prototype.placeReactorOnlineName = function(entry) {
     const peer = entry.peer, name = entry.name, config = ReactorOnline.config();
     // Someone speaking shows it, because a 2D character has no mouth to move.
-    const shown = (peer.speaking ? "♪ " : "") + peer.playerName;
+    const hidden = ReactorOnlineBattle.drawsAsUnit(peer);
+    const shown = hidden ? "" : (peer.speaking ? "♪ " : "") + (ReactorOnlineParty.has(peer.playerName) ? "[Party] " : "") + peer.playerName + (peer.fight ? " (in battle)" : "");
     if (entry.written !== shown) {
         entry.written = shown;
         name.bitmap.clear();
@@ -677,9 +763,20 @@ Spriteset_Map.prototype.reactorOnlineNamePoint = function(entry) {
 };
 
 if (typeof Reactor3D !== "undefined") {
+    // A sleeper lies still: its pose settles over its first second, then nothing more is sampled for it.
+    const animationDue = Reactor3D.animationDue;
+    Reactor3D.animationDue = function(holder, character) {
+        if (!(character instanceof Game_RemotePlayer) || !character.asleep) return animationDue.apply(this, arguments);
+        if ((holder.sleptFrames || 0) >= 60) { holder.poseHeld = true; return (holder.sampled = false); }
+        const due = animationDue.apply(this, arguments);
+        if (due) holder.sleptFrames = (holder.sleptFrames || 0) + 1;
+        return due;
+    };
     const modelSpec = Reactor3D._characterModelSpec;
     Reactor3D._characterModelSpec = function(character) {
+        if (character instanceof Game_RemoteVehicle) return character.modelSpec;
         if (character instanceof Game_RemotePlayer) {
+            if (character.inside || ReactorOnlineBattle.drawsAsUnit(character)) return null;
             if (character.modelSpec) return character.modelSpec;
             return character.actorId ? this.databaseModelSpecOfProject(character.actorId) : null;
         }
@@ -687,12 +784,16 @@ if (typeof Reactor3D !== "undefined") {
     };
     const instanceKey = Reactor3D.modelInstanceKey;
     Reactor3D.modelInstanceKey = function(character) {
+        if (character instanceof Game_RemoteVehicle) return "rv" + character.rider.slot + ":" + character.modelSpec.name;
         return character instanceof Game_RemotePlayer ? "r" + character.slot + ":" + (character.modelSpec ? character.modelSpec.name : "") : instanceKey.call(this, character);
     };
     const modelCharacters = Spriteset_Map.prototype.reactor3DModelCharacters;
     Spriteset_Map.prototype.reactor3DModelCharacters = function() {
         const characters = modelCharacters.call(this);
-        for (const [, peer] of ReactorOnline.everyone()) characters.push(peer);
+        for (const [, peer] of ReactorOnline.everyone()) {
+            characters.push(peer);
+            if (peer.vehicle) characters.push(peer.vehicle);
+        }
         return characters;
     };
 }

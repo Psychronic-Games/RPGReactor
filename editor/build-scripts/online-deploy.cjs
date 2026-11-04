@@ -54,6 +54,10 @@ function forgeFingerprint(appRoot, stagingDir) {
             hash.update(`${entry.name}:${stat.size}:${stat.mtimeMs}\n`);
         }
     }
+    for (const name of ['ModelRigger.js', 'ModelAutoRig.js']) {
+        const stat = fs.statSync(path.join(appRoot, 'src/database', name));
+        hash.update(`${name}:${stat.size}:${stat.mtimeMs}\n`);
+    }
     const motions = path.join(stagingDir, 'js/reactor_3d_motions.bin');
     if (fs.existsSync(motions)) hash.update(String(fs.statSync(motions).size));
     return hash.digest('hex');

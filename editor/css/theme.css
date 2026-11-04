@@ -325,6 +325,19 @@
     opacity: 1;
 }
 
+/* Search commands: on the tab bar's fill it needs the theme's own edge and text to read as a field. */
+.command-picker-search.rr-input {
+    background: var(--color-bg-base);
+    border-color: var(--color-accent-border);
+    color: var(--color-text-strong, var(--color-text));
+    color-scheme: inherit;
+}
+.command-picker-search.rr-input::placeholder { color: var(--color-accent); opacity: .85; }
+.command-picker-search.rr-input:focus {
+    border-color: var(--color-accent-border-strong);
+    box-shadow: 0 0 0 1px var(--color-accent-tint-25);
+}
+
 /* -----------------------------------------------------------------------------
  * Dark-surface island. Apply to areas that should stay dark and cinematic even
  * when a light theme is active — main map canvas, animation preview, animation

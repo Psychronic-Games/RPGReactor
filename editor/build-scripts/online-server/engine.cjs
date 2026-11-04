@@ -13,6 +13,7 @@ const config = JSON.parse(fs.readFileSync(path.join(dir, 'engine.json'), 'utf8')
 const { secret, settings = {} } = config;
 const engine = settings.engine || {};
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+const RELAY_BYTES = 16384, MAX_RELAYS_PER_SECOND = 120;
 const RECORD = 12, REMOVED = 0xffffffff, REPLACED = 0xfffffffe;
 const NEIGHBOURS = 64, SNAPSHOT_HZ = Math.max(5, Math.min(30, Number(engine.rate) || 15));
 const IDLE_MS = Number(config.idleMs) || 600000;
@@ -314,6 +315,21 @@ function withinSetLimit(player) {
     return ++player.sets <= MAX_SETS_PER_SECOND;
 }
 
+/** A real-time battle's messages, straight to the players in it. The game that hosts the battle decides what is true; this only carries. */
+function relay(player, message) {
+    const out = { t: 'bf', from: player.slot, m: message.m };
+    for (const slot of message.to.slice(0, 32)) {
+        const other = players.get(slot);
+        if (other && other !== player) sendText(other.socket, out);
+    }
+}
+
+function withinRelayLimit(player) {
+    const second = Math.floor(Date.now() / 1000);
+    if (player.relaySecond !== second) { player.relaySecond = second; player.relays = 0; }
+    return ++player.relays <= MAX_RELAYS_PER_SECOND;
+}
+
 function welcome(socket) {
     let player = null;
     const timer = setTimeout(() => socket.destroy(), 5000);
@@ -338,6 +354,7 @@ function welcome(socket) {
             let message = null;
             try { message = JSON.parse(payload.toString()); } catch (error) { message = null; }
             if (message?.t === 'set' && withinSetLimit(player)) applyChanges(message.changes);
+            else if (message?.t === 'bf' && Array.isArray(message.to) && payload.length <= RELAY_BYTES && withinRelayLimit(player)) relay(player, message);
         }
     });
     socket.on('data', read);

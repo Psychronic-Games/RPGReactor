@@ -1577,6 +1577,20 @@
                 side.count++;
             }
         }
+        // With more than two sides: everyone but the one named (`F.oppose`).
+        if (team && team[0] === "!") {
+            const others = kept.others || (kept.others = {}), out = others[team] || (others[team] = { list: [], count: 0, stamp: -2 });
+            if (out.stamp !== stamp) {
+                out.stamp = stamp;
+                out.count = 0;
+                for (const key of Object.keys(kept.sides)) {
+                    if (key === team.slice(1)) continue;
+                    const side = kept.sides[key];
+                    for (let i = 0; i < side.count; i++) out.list[out.count++] = side.list[i];
+                }
+            }
+            return out;
+        }
         return kept.sides[team] || A._noBodies || (A._noBodies = { list: [], count: 0 });
     };
 
@@ -1954,7 +1968,7 @@
                 // The burst's own lines start a little back from what it struck, in the open.
                 const bx = shot.x - shot.dx * 0.25, by = shot.y - shot.dy * 0.25 + (shot.flat ? 0 : 0.15), bz = shot.z - shot.dz * 0.25;
                 for (const unit of fight._units) {
-                    if (unit.gone || unit.team !== F.oppose(owner.team) || !fight.isAlive(unit)) continue;
+                    if (unit.gone || !F.isSide(unit.team, F.oppose(owner.team)) || !fight.isAlive(unit)) continue;
                     const character = fight.character(unit);
                     if (A.reachTo(fight, shot.x, shot.z, character) > shot.blast) continue;
                     if (!shot.flat || A.deep()) {
@@ -2118,7 +2132,7 @@
         const busy = !battler.canMove() || A.bodyBusy(character) || A.isActing(fight, unit.id);
         // The lock: Tab takes the opponent nearest the crosshair's line, again the next one; it lets go of one that fell.
         const held = p.lock ? fight.unit(p.lock) : null;
-        if (p.lock && (!fight.isAlive(held) || held.team !== F.oppose(unit.team))) { p.lock = 0; st.rev++; }
+        if (p.lock && (!fight.isAlive(held) || !F.isSide(held.team, F.oppose(unit.team)))) { p.lock = 0; st.rev++; }
         if (In.triggered("lock")) fight.actionLock();
         // Locked on, the look swings round to keep the target ahead: left and right circle it.
         const R3 = world3(), lookNow = R3 && R3.Camera && R3.Camera.look;
@@ -2204,7 +2218,7 @@
         if (swing.frame >= from && swing.frame <= to) {
             const yaw = aim.yaw * DEG, fx = Math.sin(yaw), fz = -Math.cos(yaw), half = Math.cos(profile.arc * DEG / 2);
             for (const other of fight._units) {
-                if (other.gone || other.team !== F.oppose(unit.team) || swing.hit.includes(other.id) || !fight.isAlive(other)) continue;
+                if (other.gone || !F.isSide(other.team, F.oppose(unit.team)) || swing.hit.includes(other.id) || !fight.isAlive(other)) continue;
                 const target = fight.character(other);
                 if (A.gap(fight, character, target) > profile.reach || A.levelGap(character, target) > A.LEVEL_REACH) continue;
                 // Within the arc: the way to the nearest part of its body (a big one's middle may be tiles off).
@@ -2438,7 +2452,7 @@
         // The opponents in sight by how far off the weapon's line they stand; the one after the one held.
         const list = [];
         for (const other of this._units) {
-            if (other.gone || other.team !== F.oppose(unit.team) || !this.isAlive(other)) continue;
+            if (other.gone || !F.isSide(other.team, F.oppose(unit.team)) || !this.isAlive(other)) continue;
             const character = this.character(other);
             const dx = character._realX + 0.5 - aim.ox, dz = character._realY + 0.5 - aim.oz, distance = Math.hypot(dx, dz);
             if (distance > 24 || !A.sees(this, $gamePlayer, character)) continue;
@@ -2488,7 +2502,7 @@
             const reach = Math.max(1.6, (tactics ? tactics.max : 4) * A.RANGE_SCALE);
             // Not at one behind a wall, a shut door or the ground, unless it needs no line (`<los: no>`).
             lobbed = !!tactics && tactics.los === false;
-            const within = other => !!other && other.team === F.oppose(unit.team) && this.isAlive(other) && A.gap(this, $gamePlayer, this.character(other)) <= reach
+            const within = other => !!other && F.isSide(other.team, F.oppose(unit.team)) && this.isAlive(other) && A.gap(this, $gamePlayer, this.character(other)) <= reach
                 && (lobbed || A.blowClear(this, $gamePlayer, this.character(other)));
             // On the one locked or under the crosshair; else on the nearest it can reach with a clear way.
             let target = p.lock ? this.unit(p.lock) : aim.target ? this.unit(aim.target) : null;
@@ -2496,7 +2510,7 @@
                 target = null;
                 let least = Infinity;
                 for (const other of this._units) {
-                    if (other.gone || other.team !== F.oppose(unit.team) || !within(other)) continue;
+                    if (other.gone || !F.isSide(other.team, F.oppose(unit.team)) || !within(other)) continue;
                     const gap = A.gap(this, $gamePlayer, this.character(other));
                     if (gap < least) { least = gap; target = other; }
                 }
@@ -2566,7 +2580,7 @@
     A.nearest = function(fight, unit, character, team, far) {
         let best = null, bestDistance = far;
         for (const other of fight._units) {
-            if (other.gone || other.team !== team || !fight.isAlive(other)) continue;
+            if (other.gone || !F.isSide(other.team, team) || !fight.isAlive(other)) continue;
             const target = fight.character(other);
             const distance = Math.hypot(target._realX - character._realX, target._realY - character._realY);
             if (distance < bestDistance) { best = other; bestDistance = distance; }
@@ -2807,13 +2821,13 @@
         A._thinks++;
         ai.late = false;
         let target = ai.targetId ? fight.unit(ai.targetId) : null;
-        if (!target || !fight.isAlive(target) || target.team !== foes) { target = null; ai.targetId = 0; }
+        if (!target || !fight.isAlive(target) || !F.isSide(target.team, foes)) { target = null; ai.targetId = 0; }
         if ((ai.state === "idle" || ai.state === "return") && A.waitsForLead(fight, st, unit, character, ai, player)) return;
         if (ai.state === "idle" || ai.state === "return") {
             let seen = null;
             if (ai.alert) seen = A.nearest(fight, unit, character, foes, 30);
             else for (const other of fight._units) {
-                if (other.gone || other.team !== foes || !fight.isAlive(other)) continue;
+                if (other.gone || !F.isSide(other.team, foes) || !fight.isAlive(other)) continue;
                 if (A.notices(fight, unit, character, other)) { seen = other; break; }
             }
             if (seen) {
@@ -3134,7 +3148,7 @@
         if (!leader) return;
         let nearest = Infinity;
         for (const unit of fight._units) {
-            if (unit.gone || unit.team !== foes || !fight.isAlive(unit)) continue;
+            if (unit.gone || !F.isSide(unit.team, foes) || !fight.isAlive(unit)) continue;
             const character = fight.character(unit);
             if (character) nearest = Math.min(nearest, Math.hypot(character._realX - leader._realX, character._realY - leader._realY));
         }
@@ -3236,7 +3250,7 @@
         let count = 0;
         const self = $gamePlayer;
         for (const other of this._units) {
-            if (other.gone || other.team !== F.oppose(unit.team) || !this.isAlive(other)) continue;
+            if (other.gone || !F.isSide(other.team, F.oppose(unit.team)) || !this.isAlive(other)) continue;
             const character = this.character(other);
             if (count >= 24 || Math.abs(character._realX - self._realX) + Math.abs(character._realY - self._realY) > 16) continue;
             const entry = hud.enemies[count] || (hud.enemies[count] = {});

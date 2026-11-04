@@ -1,5 +1,25 @@
 # Performance checks
 
+## Crowds of characters and online players (2026-11-03, runtimes 20261103.1–.8)
+
+The owner saw about 20 fps online on a slower machine that ran at 144 offline, worst while a map loaded. Measured in headless Chromium on the RTX 5070, entered through the title and guest pages. A shortcut into Scene_Map had left the screen black, so the first numbers that day were discarded. The weak tier was forced by reporting an Intel UHD 620. GPU time per pass came from `EXT_disjoint_timer_query_webgl2`; CPU time came from CDP profiles, some with the CPU slowed 4×. The harness is outside the repo, in `~/.cache/rr-tests/fps.cjs`, one browser at a time.
+
+- **Online map 5** had 150 sleepers (147 of them test accounts), and every game drew 64. **150 sleepers of the Demo's 149k-triangle actor on map 1:** before, 46.8M triangles a frame, the CPU never idle, 51 fps. After, 5–7M triangles, about 40% idle, 60 fps.
+  - The reflection capture had drawn every character again (21M triangles). It now keeps the 6 nearest.
+  - `GeometryDetail` levels now run on any tier once a draw passes 2M triangles; before, only on weak GPUs.
+  - Characters out of view keep their pose. A held body skips the matrix walk and the bone-palette compare. `swapPoses` touches only models that moved.
+- **Arriving on map 5:** the worst frame went from 916 ms to 33 ms. 20% of the profile was `getProgramParameter`: the reflection passes compiled each newcomer's shader variant on the spot. They now warm their own variants (`ShaderWarmup.passHide`), and models join a visible map a few a frame.
+- **20 characters from the in-game creator, weak tier, map 1:** they lifted the frame's 3D GPU time from 2.9 to 6.3–7.3 ms, about 18 draws each. Each step below was timed on the same frame:
+  - Halving the render scale changed little; the scale change was not confirmed to have applied.
+  - Removing their 27–28 shape keys: none. Sorting draws by program: 2%. Removing their textures: 0.6 ms. Unlit in place of lit: none.
+  - One shared material for all of them: the main draw 5.8 → 2.9 ms. Every copy had its own 17 materials, so nearly every draw switched material. Copies that look alike now share them (`cloneModelTemplate(template, { shareKey })`). A copy takes its own when one is changed for it alone (`ownModelMaterials`: a flash, a variant).
+  - Live after the change: 3.50 ms a frame, program switches 436 → 220.
+- **Not a leak:** the textures re-uploaded every frame or two on map 1 are its two video screens, uploaded per video frame. A first reading of their `texImage2D` arguments as a 6408×5121 picture was wrong: those are the format and type.
+- **Open:**
+  - A built character still costs about 0.03 ms of RTX GPU each, roughly 1 ms on a UHD 620. Its 17 materials could share fewer draws.
+  - GPU-compressed textures would cut a character's 50–90 MB of video memory.
+  - Sleepers lie half under the floor.
+
 ## 2D event scroll registration (2026-11-01, runtime 20261101.26)
 
 The native Moletown fixture reproduced a stationary tile event moving up to **6 px** against its map as the camera moved. Interpolated sprites used the current refresh's camera, while PIXI 8 tile layers retained positions prepared during the game tick. Updating the origin alone did not reposition those layers. The presentation pass now publishes the tile layers before PIXI collects render groups, using the same temporary camera as the sprites, including when returning to a whole-tick pose.

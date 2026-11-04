@@ -73,11 +73,34 @@ const ReactorOnlineVoice = {
         this._installed = true;
         document.addEventListener("keydown", event => this.onKey(event, true));
         document.addEventListener("keyup", event => this.onKey(event, false));
+        // A key let go in another window never reports it: the microphone must not stay open.
+        addEventListener("blur", () => { if (this.on && this.pushToTalk()) this.transmit(false); });
+    },
+
+    /** Whether the game has its own use for the voice key right now. */
+    keyTaken() {
+        if (typeof $gameFight === "undefined" || !$gameFight?.isAction?.()) return false;
+        const code = this.keyName().toUpperCase().charCodeAt(0);
+        return !!Input.keyMapper[code];
+    },
+
+    /** What the voice key does right now, and who can hear. */
+    hintText() {
+        if (!this.settings()) return "";
+        const key = this.keyName().toUpperCase();
+        if (this._turningOn) return "Allow the microphone";
+        if (!this.on) return this.keyTaken() ? "" : key + ": turn on voice";
+        const heard = [...this.links.values()].filter(link => link.pc.connectionState === "connected").length;
+        const who = heard ? heard + " can hear you" : "nobody nearby has voice on";
+        if (!this.pushToTalk()) return "Microphone open, " + who;
+        return (this.transmitting ? "Speaking, " : "Hold " + key + " to speak, ") + who;
     },
 
     onKey(event, down) {
         if (!this.settings() || ReactorOnline.slot < 0 || ReactorOnlineChat.typing || event.repeat) return;
         if (event.key.toLowerCase() !== this.keyName() || event.ctrlKey || event.altKey || event.metaKey) return;
+        // A real-time battle takes the key for itself (V guards): see `update`.
+        if (this.keyTaken()) return;
         if (!this.on) { if (down) this.turnOn(); return; }
         if (this.pushToTalk()) this.transmit(down);
     },
@@ -85,6 +108,7 @@ const ReactorOnlineVoice = {
     async turnOn() {
         if (this.on || this._turningOn) return;
         this._turningOn = true;
+        ReactorOnlineChat.showHint();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
             this.context = (typeof WebAudio !== "undefined" && WebAudio._context) || new AudioContext();
@@ -100,6 +124,7 @@ const ReactorOnlineVoice = {
             ReactorOnlineChat.note("The microphone could not be used. Voice stays off.");
         } finally {
             this._turningOn = false;
+            ReactorOnlineChat.showHint();
         }
     },
 
@@ -121,6 +146,7 @@ const ReactorOnlineVoice = {
     transmit(open) {
         this.transmitting = open;
         if (this.track) this.track.enabled = open;
+        ReactorOnlineChat.showHint();
     },
 
     identity() {
@@ -261,7 +287,12 @@ const ReactorOnlineVoice = {
 
     /** Each frame: everyone's volume, side and mouth. */
     update() {
-        if (!this.on) return;
+        // The line in the corner follows a battle taking the key, voice on or not.
+        if (!this.on) { if (this.keyTaken() !== !!this._keyWasTaken) { this._keyWasTaken = this.keyTaken(); ReactorOnlineChat.showHint(); } return; }
+        // With no key to hold, the microphone stays open for the length of the battle.
+        const taken = this.keyTaken();
+        if (taken !== !!this._keyWasTaken) { this._keyWasTaken = taken; this.transmit(taken || !this.pushToTalk()); }
+        ReactorOnlineChat.showHint();
         const now = performance.now(), range = this.range();
         for (const link of this.links.values()) {
             const peer = ReactorOnline.peers.get(link.slot);

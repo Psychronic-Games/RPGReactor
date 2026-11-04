@@ -48,6 +48,7 @@ Object.assign(ReactorOnline, {
     /** Signed in: the account's character comes with it, on any device. */
     useAccount(account) {
         this.account = account;
+        this._nextSave = 0;
         try { localStorage.setItem(this.sessionKey(), account.session); } catch (error) { /* signing in again works too */ }
         const character = account.character;
         if (character && character.actorId && ReactorCharacters.config()) {
@@ -73,7 +74,11 @@ Object.assign(ReactorOnline, {
         if (!this.keepsProgress() || this._saving) return false;
         this._saving = true;
         try {
-            const bytes = pako.deflate(JsonEx.stringify(DataManager.makeSaveContents()));
+            const text = JsonEx.stringify(DataManager.makeSaveContents());
+            // The browser's own compressor works off the main thread; its zlib bytes are pako's, so loading is unchanged.
+            const bytes = typeof CompressionStream === "function"
+                ? await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer()
+                : pako.deflate(text);
             const body = new Blob([this.account.session + "\n", bytes], { type: "text/plain" });
             const response = await fetch(this.request({ a: "save" }), { method: "POST", body });
             if (!response.ok) console.warn("Progress was not kept: " + await response.text());
@@ -95,17 +100,27 @@ Object.assign(ReactorOnline, {
         else fetch(this.request({ a: "wake" }), { method: "POST", body, headers: { "Content-Type": "text/plain" } }).catch(() => {});
     },
 
+    /** A save is whole only between things. A battle waiting on its next move counts: the event that started it just waits for it. */
+    canSaveNow() {
+        if ($gamePlayer.isTransferring() || $gameMessage.isBusy()) return false;
+        if (ReactorOnlineBattle.isShared()) return false;
+        const fight = typeof $gameFight !== "undefined" && $gameFight?.isHere?.() ? $gameFight : null;
+        return fight ? !fight.isBusy() && !fight._act && !fight._ending : !$gameMap.isEventRunning();
+    },
+
     /** Called on the beat: often a small note of where this player is, now and then the whole game. */
     keepUp() {
         if (!this.keepsProgress() || !(SceneManager._scene instanceof Scene_Map) || !$gameMap?.mapId()) return;
-        const now = performance.now(), settled = !$gamePlayer.isTransferring() && !$gameMap.isEventRunning() && !$gameMessage.isBusy();
-        if (now >= (this._nextNote || 0) && settled) {
+        const now = performance.now();
+        // Where someone stands is worth noting at any moment, in a cutscene or a battle too.
+        if (now >= (this._nextNote || 0) && !$gamePlayer.isTransferring()) {
             this._nextNote = now + this.NOTE_MS;
             this.noteWhereIAm(false);
         }
         const every = Math.max(10, Number(this.config().accounts?.autosave) || 60) * 1000;
-        if (!this._nextSave) this._nextSave = now + every;
-        if (now >= this._nextSave && settled) {
+        // The first save comes soon: until there is one, leaving costs the whole game.
+        if (!this._nextSave) this._nextSave = now + Math.min(every, this.FIRST_SAVE_MS);
+        if (now >= this._nextSave && this.canSaveNow()) {
             this._nextSave = now + every;
             this.saveProgress().catch(error => console.warn("Progress was not kept.", error));
         }
@@ -113,12 +128,15 @@ Object.assign(ReactorOnline, {
 
     /** Waking up: this player's game, back where they went to sleep. */
     async wake(account) {
-        const response = await fetch(this.request({ a: "load" }), { method: "POST", body: JSON.stringify({ session: account.session }), headers: { "Content-Type": "text/plain" } });
-        if (!response.ok) throw new Error(await response.text());
-        const contents = JsonEx.parse(pako.inflate(new Uint8Array(await response.arrayBuffer()), { to: "string" }));
-        DataManager.createGameObjects();
-        DataManager.extractSaveContents(contents);
-        DataManager.correctDataErrors();
+        // They left before anything was saved: a new game, but where they went to sleep.
+        if (account.progress?.saved !== false) {
+            const response = await fetch(this.request({ a: "load" }), { method: "POST", body: JSON.stringify({ session: account.session }), headers: { "Content-Type": "text/plain" } });
+            if (!response.ok) throw new Error(await response.text());
+            const contents = JsonEx.parse(pako.inflate(new Uint8Array(await response.arrayBuffer()), { to: "string" }));
+            DataManager.createGameObjects();
+            DataManager.extractSaveContents(contents);
+            DataManager.correctDataErrors();
+        }
         ReactorCharacters.pending = false;
         ReactorCharacters.starting = false;
         const place = account.progress?.wake;
@@ -141,9 +159,13 @@ Object.assign(ReactorOnline, {
         if (!map || this.config()?.accounts?.sleepers === false || this.accountMode() === "none") return;
         const response = await fetch(this.request({ a: "sleepers", m: map }), { cache: "no-store" }).catch(() => null);
         if (!response?.ok || $gameMap.mapId() !== map) return;
-        const list = (await response.json()).sleepers || [], seen = new Set();
+        const tiles = new Set(), seen = new Set(), x = $gamePlayer.x, y = $gamePlayer.y;
+        const list = ((await response.json()).sleepers || [])
+            .filter(entry => entry.id !== this.account?.id)
+            .sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))
+            .filter(entry => !tiles.has(entry.x + "," + entry.y) && tiles.add(entry.x + "," + entry.y))
+            .slice(0, this.SLEEPERS_SHOWN);
         for (const entry of list) {
-            if (entry.id === this.account?.id) continue;
             const key = "z" + entry.id;
             seen.add(key);
             let sleeper = this.sleepers.get(key);
@@ -497,6 +519,55 @@ SceneManager.goto = function(sceneClass) {
     _reactorOnlineAccountGoto.call(this, sceneClass === Scene_Map && ReactorOnline.needsSignIn() ? Scene_OnlineAccount : sceneClass);
 };
 
+// ---- Falling and saving, with other people in the world ----
+
+/**
+ * Knocked out online, the world goes on without a Game Over screen: the party gets up where the player last
+ * came onto a map, and stays signed in. Database > Online can turn this off.
+ */
+ReactorOnline.respawns = function() {
+    const config = this.config();
+    return !!config && config.respawn !== false && this.gameStarted && typeof $gameMap !== "undefined" && $gameMap?.mapId() > 0;
+};
+
+ReactorOnline.respawn = function() {
+    const place = this.arrival || { map: $dataSystem.startMapId, x: $dataSystem.startX, y: $dataSystem.startY, d: 2 };
+    for (const actor of $gameParty.members()) actor.recoverAll();
+    $gamePlayer.reserveTransfer(place.map, place.x, place.y, place.d || 2, 0);
+    this.knockedOut = true;
+};
+
+const _reactorOnlineArrive = Game_Player.prototype.performTransfer;
+Game_Player.prototype.performTransfer = function() {
+    const arriving = this.isTransferring();
+    _reactorOnlineArrive.call(this);
+    if (arriving) ReactorOnline.arrival = { map: $gameMap.mapId(), x: this.x, y: this.y, d: this.direction() };
+};
+
+const _reactorOnlineGotoOver = SceneManager.goto;
+SceneManager.goto = function(sceneClass) {
+    if (typeof Scene_Gameover !== "undefined" && sceneClass === Scene_Gameover && ReactorOnline.respawns()) {
+        ReactorOnline.respawn();
+        _reactorOnlineGotoOver.call(this, Scene_Map);
+        return;
+    }
+    _reactorOnlineGotoOver.call(this, sceneClass);
+};
+
+const _reactorOnlineRespawnStart = Scene_Map.prototype.start;
+Scene_Map.prototype.start = function() {
+    _reactorOnlineRespawnStart.call(this);
+    if (ReactorOnline.knockedOut) { ReactorOnline.knockedOut = false; ReactorOnlineChat.note("You were knocked out, and came to here."); }
+};
+
+// Save in the menu keeps the game on the server too, where waking up looks for it.
+const _reactorOnlineSaveGame = DataManager.saveGame;
+DataManager.saveGame = function(savefileId) {
+    const saving = _reactorOnlineSaveGame.call(this, savefileId);
+    if (ReactorOnline.keepsProgress()) Promise.resolve(saving).then(() => ReactorOnline.saveProgress()).catch(() => null);
+    return saving;
+};
+
 // ---- The world lane ----
 
 /**
@@ -602,12 +673,14 @@ const _reactorWorldSwitch = Game_Switches.prototype.setValue;
 Game_Switches.prototype.setValue = function(switchId, value) {
     _reactorWorldSwitch.call(this, switchId, value);
     if (ReactorWorldState.active && ReactorWorldState.switches.has(switchId)) ReactorWorldState.note("s", switchId, !!value);
+    ReactorOnlineParty.noteValue("s", switchId, !!value);
 };
 
 const _reactorWorldVariable = Game_Variables.prototype.setValue;
 Game_Variables.prototype.setValue = function(variableId, value) {
     _reactorWorldVariable.call(this, variableId, value);
     if (ReactorWorldState.active && ReactorWorldState.variables.has(variableId)) ReactorWorldState.note("v", variableId, this.value(variableId), ReactorWorldState.operation);
+    ReactorOnlineParty.noteValue("v", variableId, this.value(variableId));
 };
 
 // Control Variables' Add and Subtract say what they mean, so the lane can keep it.
@@ -642,6 +715,7 @@ const ReactorOnlineChat = {
     known: 0,
     typing: false,
     world: false,
+    place: "map",
     _built: false,
 
     settings() {
@@ -678,7 +752,7 @@ const ReactorOnlineChat = {
         this.channel = document.createElement("button");
         this.channel.type = "button";
         this.channel.style.cssText = "padding:6px 8px;border:1px solid #4a52a0;border-radius:4px;background:#141626;color:#fff;font:inherit;cursor:pointer";
-        this.channel.addEventListener("click", () => { this.world = !this.world; this.showChannel(); this.input.focus(); });
+        this.channel.addEventListener("click", () => { this.nextChannel(); this.input.focus(); });
         this.input = document.createElement("input");
         this.input.style.cssText = "flex:1;min-width:0;padding:6px 8px;border:1px solid #4a52a0;border-radius:4px;background:rgba(11,12,20,.9);color:#fff;font:inherit";
         this.input.maxLength = Number(this.settings().maxLength) || 200;
@@ -688,15 +762,43 @@ const ReactorOnlineChat = {
         this.input.addEventListener("blur", () => { if (this.typing) setTimeout(() => this.close(), 150); });
         bar.appendChild(this.channel);
         bar.appendChild(this.input);
-        box.append(this.log, bar);
+        this.hint = document.createElement("div");
+        this.hint.id = "reactorOnlineHint";
+        this.hint.style.cssText = "display:inline-block;margin-top:6px;padding:3px 8px;border-radius:4px;background:rgba(0,0,0,.55);font-size:12px;color:#fff;text-shadow:0 1px 2px #000";
+        box.append(this.log, bar, this.hint);
         document.body.appendChild(box);
         this.showChannel();
+        this.showHint();
         document.addEventListener("keydown", event => this.onGameKey(event));
     },
 
+    /** The keys, always in sight, and what the microphone is doing: nobody should have to guess either. */
+    showHint() {
+        if (!this.hint) return;
+        const key = String(this.settings()?.key || "T").toUpperCase();
+        const parts = [key + ": chat"];
+        const voice = ReactorOnlineVoice.hintText();
+        if (voice) parts.push(voice);
+        const text = parts.join("  ·  ");
+        if (this.hint.textContent !== text) this.hint.textContent = text;
+    },
+
+    /** Map, then World where the project has it, then Party for someone in one. */
+    nextChannel() {
+        const list = ["map"];
+        if (this.settings()?.world !== false) list.push("world");
+        if (ReactorOnlineParty.party) list.push("party");
+        this.place = list[(list.indexOf(this.place) + 1) % list.length];
+        this.showChannel();
+    },
+
     showChannel() {
-        if (this.settings()?.world === false) { this.world = false; this.channel.style.display = "none"; return; }
-        this.channel.textContent = this.world ? "World" : "Map";
+        if (!this.channel) return;
+        if (this.place === "party" && !ReactorOnlineParty.party) this.place = "map";
+        if (this.place === "world" && this.settings()?.world === false) this.place = "map";
+        this.world = this.place === "world";
+        this.channel.style.display = this.settings()?.world === false && !ReactorOnlineParty.party ? "none" : "";
+        this.channel.textContent = this.place === "party" ? "Party" : this.world ? "World" : "Map";
     },
 
     /** The chat key, set per project, opens it while walking around. */
@@ -710,6 +812,7 @@ const ReactorOnlineChat = {
 
     open() {
         this.typing = true;
+        this.hint.style.display = "none";
         this.bar.style.display = "flex";
         this.log.style.opacity = 1;
         Input.clear();
@@ -718,6 +821,7 @@ const ReactorOnlineChat = {
 
     close() {
         this.typing = false;
+        this.hint.style.display = "inline-block";
         this.bar.style.display = "none";
         this.input.blur();
         this.input.value = "";
@@ -736,6 +840,7 @@ const ReactorOnlineChat = {
 
     async say(text) {
         if (/^\/voice\s+off$/i.test(text)) { ReactorOnlineVoice.turnOff(); return; }
+        if (ReactorOnlineParty.command(text)) return;
         const blocking = /^\/(block|unblock)\s+(.+)$/i.exec(text);
         if (blocking) {
             const set = this.blocked(), name = blocking[2].trim();
@@ -746,7 +851,7 @@ const ReactorOnlineChat = {
             return;
         }
         try {
-            await ReactorOnline.post("say", { text, world: this.world }, { s: ReactorOnline.slot, g: ReactorOnline.nonce, t: ReactorOnline.token, m: $gameMap.mapId() });
+            await ReactorOnline.post("say", { text, world: this.world, party: this.place === "party" }, { s: ReactorOnline.slot, g: ReactorOnline.nonce, t: ReactorOnline.token, m: $gameMap.mapId() });
             this.fetch();
         } catch (error) {
             this.note(error.message || "That could not be sent.");
@@ -762,7 +867,7 @@ const ReactorOnlineChat = {
         if (this._fetching) { this._again = true; return; }
         this._fetching = true;
         try {
-            const response = await fetch(ReactorOnline.request({ a: "chat", after: this.after, m: $gameMap.mapId() }), { cache: "no-store" });
+            const response = await fetch(ReactorOnline.request({ a: "chat", after: this.after, m: $gameMap.mapId(), p: ReactorOnlineParty.party?.id || "" }), { cache: "no-store" });
             if (response.ok) this.receive(await response.json());
         } catch (error) {
             // The next count asks again.
@@ -792,8 +897,8 @@ const ReactorOnlineChat = {
         if (message.note) { line.textContent = message.text; line.style.color = "#ffd27a"; }
         else {
             const who = document.createElement("span");
-            who.textContent = (message.world ? "[World] " : "") + message.name + ": ";
-            who.style.color = message.world ? "#9fd0ff" : "#c9cdf5";
+            who.textContent = (message.party ? "[Party] " : message.world ? "[World] " : "") + message.name + ": ";
+            who.style.color = message.party ? "#bff5c4" : message.world ? "#9fd0ff" : "#c9cdf5";
             who.style.fontWeight = "600";
             line.appendChild(who);
             line.appendChild(document.createTextNode(message.text));

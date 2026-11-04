@@ -8717,3 +8717,45 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  vi:'Bề mặt vỏ|Crôm|Nhập ảnh|Không thể nhập ảnh.',
  th:'พื้นผิวโครง|โครเมียม|นำเข้ารูปภาพ|ไม่สามารถนำเข้ารูปภาพได้'
  };for(const [locale,row]of Object.entries(rows)){const words=row.split('|');if(words.length!==keys.length)throw Error('Prop finish translations '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=words[i]);}})();
+
+// Values shared within an online party.
+(()=>{const keys=['Party switches','Party variables'],rows={
+ ja:'パーティースイッチ|パーティー変数',
+ 'zh-Hant':'隊伍開關|隊伍變數',
+ 'zh-Hans':'队伍开关|队伍变量',
+ ko:'파티 스위치|파티 변수',
+ de:'Gruppenschalter|Gruppenvariablen',
+ fr:'Interrupteurs de groupe|Variables de groupe',
+ es:'Interruptores de grupo|Variables de grupo',
+ pt:'Interruptores do grupo|Variáveis do grupo',
+ it:'Interruttori del gruppo|Variabili del gruppo',
+ ru:'Переключатели группы|Переменные группы',
+ pl:'Przełączniki drużyny|Zmienne drużyny',
+ tr:'Parti anahtarları|Parti değişkenleri',
+ ar:'مفاتيح الفريق|متغيرات الفريق',
+ el:'Διακόπτες ομάδας|Μεταβλητές ομάδας',
+ id:'Sakelar party|Variabel party',
+ vi:'Công tắc nhóm|Biến nhóm',
+ th:'สวิตช์ปาร์ตี้|ตัวแปรปาร์ตี้'
+ };for(const [locale,row]of Object.entries(rows)){const words=row.split('|');if(words.length!==keys.length)throw Error('Party value translations '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=words[i]);}})();
+
+// Getting up after a defeat in an online game.
+(()=>{const keys=['Get up after a defeat', 'Instead of Game Over, a knocked-out player gets up where they last entered a map, fully recovered, and stays in the world.'],rows={
+ ja:'敗北後に起き上がる|ゲームオーバーの代わりに、倒れたプレイヤーは最後にマップに入った場所で全回復して起き上がり、ワールドに残ります。',
+ 'zh-Hant':'戰敗後起身|倒下的玩家不會遊戲結束，而是在最後進入地圖的位置完全恢復並起身，繼續留在世界中。',
+ 'zh-Hans':'战败后起身|倒下的玩家不会游戏结束，而是在最后进入地图的位置完全恢复并起身，继续留在世界中。',
+ ko:'패배 후 일어나기|게임 오버 대신, 쓰러진 플레이어는 마지막으로 맵에 들어온 곳에서 완전히 회복하여 일어나고 월드에 남습니다.',
+ de:'Nach einer Niederlage aufstehen|Statt Game Over steht ein besiegter Spieler dort, wo er zuletzt eine Karte betreten hat, vollständig erholt wieder auf und bleibt in der Welt.',
+ fr:'Se relever après une défaite|Au lieu du Game Over, un joueur mis à terre se relève là où il est entré sur une carte pour la dernière fois, entièrement rétabli, et reste dans le monde.',
+ es:'Levantarse tras una derrota|En lugar de Game Over, un jugador derribado se levanta donde entró por última vez en un mapa, totalmente recuperado, y sigue en el mundo.',
+ pt:'Levantar após uma derrota|Em vez de Game Over, um jogador derrubado levanta-se onde entrou num mapa pela última vez, totalmente recuperado, e continua no mundo.',
+ it:'Rialzarsi dopo una sconfitta|Invece del Game Over, un giocatore messo al tappeto si rialza dove è entrato per l’ultima volta in una mappa, completamente ristabilito, e resta nel mondo.',
+ ru:'Подниматься после поражения|Вместо конца игры поверженный игрок поднимается там, где последний раз вошёл на карту, полностью восстановившись, и остаётся в мире.',
+ pl:'Wstawanie po porażce|Zamiast końca gry powalony gracz wstaje w miejscu, w którym ostatnio wszedł na mapę, w pełni wyleczony, i zostaje w świecie.',
+ tr:'Yenilgiden sonra kalk|Oyun Bitti yerine, yere düşen oyuncu bir haritaya en son girdiği yerde tamamen iyileşmiş olarak kalkar ve dünyada kalır.',
+ ar:'النهوض بعد الهزيمة|بدلاً من انتهاء اللعبة، ينهض اللاعب المهزوم حيث دخل آخر خريطة، متعافياً تماماً، ويبقى في العالم.',
+ el:'Σήκωμα μετά από ήττα|Αντί για Game Over, ο παίκτης που έπεσε σηκώνεται εκεί όπου μπήκε τελευταία σε χάρτη, πλήρως αναρρωμένος, και μένει στον κόσμο.',
+ id:'Bangkit setelah kalah|Alih-alih Game Over, pemain yang tumbang bangkit di tempat terakhir ia masuk ke peta, pulih sepenuhnya, dan tetap di dunia.',
+ vi:'Đứng dậy sau thất bại|Thay vì Game Over, người chơi bị hạ gục sẽ đứng dậy ở nơi cuối cùng họ vào bản đồ, hồi phục hoàn toàn và vẫn ở trong thế giới.',
+ th:'ลุกขึ้นหลังพ่ายแพ้|แทนที่จะจบเกม ผู้เล่นที่ถูกล้มจะลุกขึ้นที่จุดที่เข้าแผนที่ครั้งล่าสุด ฟื้นฟูเต็มที่ และยังอยู่ในโลก'
+ };for(const [locale,row]of Object.entries(rows)){const words=row.split('|');if(words.length!==keys.length)throw Error('Online respawn translations '+locale);keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=words[i]);}})();

@@ -4,15 +4,49 @@ Read [STATUS.md](STATUS.md) for open work. Earlier: [archive/handoff](archive/ha
 
 Changes belong in the editor changelog; behavior goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-11-02)
+## Where things stand (2026-11-03)
 
-- **Development:** 0.99.5 is open, runtime revision **20261102.1**. Changes stay local until the owner asks to push `main`.
+- **Development:** 0.99.5 is open, runtime revision **20261103.8**. Changes stay local until the owner asks to push `main`.
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
 - **Verification:** CI is green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is that branch plus a documentation commit and is not pushed. Substantial checks go through `codex-check`.
 - **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test accounts, sleepers and chat.
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering.
+
+## 2026-11-03 — Online speed, the creator's loading, crowds
+
+The owner saw 20 fps online on a slower machine that ran at 144 offline. Runtime 20261103.8 is deployed and committed, with everything from 2026-11-02. Measurements, the method and what was ruled out are in [PERFORMANCE.md](PERFORMANCE.md#crowds-of-characters-and-online-players-2026-11-03-runtimes-202611031-8).
+
+- **Sleepers:** the nearest 64 are drawn, one to a tile.
+- **Crowds:** reflections keep 6 characters. Distance levels run on any GPU once a draw is heavy. Characters out of view or asleep keep their pose and matrices. Reflection passes warm their own shaders. Joins are paced while the map is in view.
+- **Creator-built characters:** copies share materials until one changes (`ownModelMaterials`).
+- **In-game creator:** downloads in parallel, keeps its build cache, and tries a list's highlighted choice on.
+- **Editor builder:** thumbnails show a stand-in wearer, so sliders no longer redraw them.
+- **Next:**
+  - Fewer draws per built character: 17 materials.
+  - GPU-compressed textures.
+  - Sleepers lie half under the floor; the knocked-out pose hid them, so it was not used.
+  - The in-game creator's try-on and the editor thumbnails are untried by hand.
+- **Tools:** the harness is `~/.cache/rr-tests/fps.cjs` and the deploy is `~/.cache/rr-tests/deploy.cjs`, outside the repo. One browser at a time.
+
+## 2026-11-02 — Two-player test fixes
+
+The owner tested on two computers. Runtime 20261102.2 is deployed to demo.rpgreactor.org and was committed on 2026-11-03. The owner's own Demo edits (high quality, longer chat) are in the working tree too.
+
+Verified on the live site in real browsers, with test accounts:
+
+- A character built at high quality has 17 rig bones, 88 clips and mouth shapes, and 14 MB. Earlier ones stay broken until remade.
+- A model released from memory came back and drew.
+- A player leaving with no save woke on map 5.
+- A second player saw the rider's tank and "in battle".
+- With a simulated microphone, the speaker's own mouth opened to 0.43 and the listener received sound.
+
+The wake cause is inferred: Zarcoco has one save and no `.save.bak`, which fits leaving before any save, and the failure wasn't reproduced on the old build. Not driven: a real microphone, a motorcycle ride (the tank was), and Search commands in the editor.
+
+**Parties and shared Tactical battles followed**, runtime 20261102.31, also deployed; committed on 2026-11-03. Two browsers on the live site, with on-screen choices taken through the game's input: a party formed and its chat worked. A guest joined on the host's side, the enemies' and its own, took turns through the normal commands, and HP and positions matched on both games. Forced endings finished on both with no stray units. Three players on four sides (host, enemies, two fighting alone) took turns, reinforcements reached every game, HP matched, and the host losing no longer means Game Over. [Design and limits](DESIGN-ONLINE.md#shared-battles).
+
+Then, on the same site: Classic battles on either side with matching HP and a clean return to the map on both games, party values, `/follow` across maps, Watch, a guest's retreat, and a host leaving with a guest taking over and a watcher following. A guest's order was tested through the game's commands, not by hand. The owner enabled `proxy_wstunnel`, so the Engine is live over WebSocket. Action and First Person are shared on all sides at 57 to 61 FPS with HP matching, and riders stay aboard in Tactical, attacking with the vehicle. Later, with real keys and mouse: guard, dodge, blade and pistol work for guests, as do mounting mid-battle, watching a real-time battle and a real-time host hand-over. **Not built:** hitting a guest's vehicle. Not driven by hand: a Tactical guest turn with real keys, and the challenger's Classic screen. Test runs must stay small (memory: resource-limits). Two-player test browsers must use the GPU and be muted: see the deploy memory. The owner wants the `E2E…` test accounts kept: they are planned as extra participants, and only sit as sleepers today. Bots can't yet fight as those accounts.
 
 ## 2026-11-02 — Character creation as game windows, sign-in, CI
 

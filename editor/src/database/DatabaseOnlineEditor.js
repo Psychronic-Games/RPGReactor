@@ -8,7 +8,7 @@
 class DatabaseOnlineEditor {
     static DEFAULTS = Object.freeze({ enabled: false, address: '', maxPlayers: 64, updatesPerSecond: 5, party: 'solo', showNames: true, showStatus: true, playtest: false });
     static ACCOUNTS = Object.freeze({ mode: 'none', registration: true, minPassword: 8, title: '', persist: true, autosave: 60, restart: true, sleepers: true, sleeperDays: 30 });
-    static WORLD = Object.freeze({ switches: '', variables: '' });
+    static WORLD = Object.freeze({ switches: '', variables: '', partySwitches: '', partyVariables: '' });
     static ENGINE = Object.freeze({ enabled: true, rate: 15, movement: 'speed', maxSpeed: 16 });
     static VOICE = Object.freeze({ enabled: false, mode: 'push', key: 'V', range: 20, who: 'all', servers: 'stun:stun.l.google.com:19302' });
     static CHAT = Object.freeze({ enabled: true, who: 'all', world: true, bubbles: true, cooldown: 2, maxLength: 200, history: 50, key: 'T', blockedWords: '' });
@@ -55,12 +55,14 @@ class DatabaseOnlineEditor {
             form.number('online-sleeper-days', tt('Days a sleeper stays'), accounts.sleeperDays, 1, 365))),
         form.section('online-players', tt('Players'), form.fields(
             form.choice('online-party', tt('Party'), [['solo', tt('Each player alone')], ['party', tt('Each player leads the starting party')]], settings.party === 'party' ? 'party' : 'solo'),
+            form.check('online-respawn', tt('Get up after a defeat'), settings.respawn !== false, tt('Instead of Game Over, a knocked-out player gets up where they last entered a map, fully recovered, and stays in the world.')),
             form.check('online-names', tt('Show names above players'), settings.showNames !== false),
             form.check('online-status', tt('Show connection label'), settings.showStatus !== false))),
         form.section('online-world', tt('Shared with every player'), `
             ${form.fields(form.text('online-world-switches', tt('Switches'), '1-5, 12'), form.text('online-world-variables', tt('Variables'), '20, 21'))}
             ${form.note(tt('Events run the same as in a single-player game. Whatever you list here is shared: when one player\'s game changes it, every player\'s game changes too. Everything else stays personal to each player.'))}
-            ${form.note(tt('To share an event\'s self switches, so a chest opens once for everybody, add <world> to its note.').replace('<', '&lt;').replace('>', '&gt;'))}`),
+            ${form.note(tt('To share an event\'s self switches, so a chest opens once for everybody, add <world> to its note.').replace('<', '&lt;').replace('>', '&gt;'))}
+            ${form.fields(form.text('online-party-switches', tt('Party switches'), '30-35'), form.text('online-party-variables', tt('Party variables'), '40'))}`),
         form.section('online-chat', tt('Chat'), form.fields(
             form.check('online-chat-on', tt('Players can chat'), chat.enabled !== false),
             form.choice('online-chat-who', tt('Who can chat'), [['all', tt('Everyone')], ['accounts', tt('Signed-in players only')]], chat.who === 'accounts' ? 'accounts' : 'all'),
@@ -92,6 +94,8 @@ class DatabaseOnlineEditor {
         field('online-account-title').value = accounts.title || '';
         field('online-world-switches').value = world.switches || '';
         field('online-world-variables').value = world.variables || '';
+        field('online-party-switches').value = world.partySwitches || '';
+        field('online-party-variables').value = world.partyVariables || '';
         field('online-chat-key').value = chat.key || 'T';
         field('online-voice-key').value = voice.key || 'V';
         field('online-voice-servers').value = voice.servers || '';
@@ -134,6 +138,7 @@ class DatabaseOnlineEditor {
         on('online-engine-movement', input => { engine.movement = input.value; });
         on('online-engine-speed', input => { engine.maxSpeed = whole(input, 4, 64, 16); });
         on('online-party', input => { settings.party = input.value; });
+        on('online-respawn', input => { settings.respawn = input.checked; });
         on('online-playtest', input => { settings.playtest = input.checked; });
         on('online-names', input => { settings.showNames = input.checked; });
         on('online-status', input => { settings.showStatus = input.checked; });
@@ -148,6 +153,8 @@ class DatabaseOnlineEditor {
         on('online-sleeper-days', input => { accounts.sleeperDays = whole(input, 1, 365, 30); });
         on('online-world-switches', input => { world.switches = input.value.trim(); });
         on('online-world-variables', input => { world.variables = input.value.trim(); });
+        on('online-party-switches', input => { world.partySwitches = input.value.trim(); });
+        on('online-party-variables', input => { world.partyVariables = input.value.trim(); });
         on('online-chat-on', input => { chat.enabled = input.checked; });
         on('online-chat-who', input => { chat.who = input.value; });
         on('online-chat-world', input => { chat.world = input.checked; });

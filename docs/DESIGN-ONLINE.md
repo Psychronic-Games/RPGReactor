@@ -1,6 +1,6 @@
 # Online worlds, collaboration and live editing
 
-Design, 2026-11-01. **Built so far: steps 1 and 2 of the [build order](#build-order), in Lite mode, with project settings, accounts, chat, an admin page, sleeping and waking, and a shared world lane, plus **Character Creation** for single-player and online games.** Everything else here is still a plan. [Measurements](archive/evidence/online-spike-20261101.json).
+Design, 2026-11-01. **Built so far: steps 1 to 4 and 7 of the [build order](#build-order), in Lite mode, with project settings, accounts, chat, an admin page, sleeping and waking, and a shared world lane, plus **Character Creation** for single-player and online games.** Everything else here is still a plan. [Measurements](archive/evidence/online-spike-20261101.json).
 
 ## Using it today
 
@@ -27,13 +27,15 @@ Rebuilding updates the server and keeps its secret and player data. **Pack files
 
 **In the game.** The game goes online once a player starts or loads a game, so title and intro maps stay offline.
 
+**How players are kept.** There is no database. A server holds plain files in a data folder above the web root, and each player's game is a full copy of the game. See [Where players live](#where-players-live).
+
 **Accounts.** New Game asks a new player what they want: **Create an account**, **I have an account** or (if allowed) **Play as a guest**. Creating one asks for a name of 3 to 20 letters or numbers and the password twice; the page states the shortest password the project allows. There is no email, so a lost password is reset by the owner on the admin page, and the sign-in page says so. A device that remembers an account greets it by name with **Wake up** or **Continue**, and **Sign out** for someone else on that device. These are game windows, so they wear the project's window skin and font. An account remembers its character, so signing in on another device brings it back and skips creation. Passwords are stored hashed, sent only in request bodies and locked out after repeated failures (8 per name, 40 per address, for 15 minutes). A guest can't take a registered player's name. Use https: the build warns about an `http` address.
 
-**Sleeping and waking.** A player with an account lives on the server, not their device. The whole game saves on the beat (every 60 seconds by default, never during an event), and a small note of where they stand goes up every five seconds and as the game closes. Signing back in on any device offers **Wake up**, which restores everything and returns them to that spot; **Start over** is optional per project. After a sudden crash they may wake a few seconds' walk back. Meanwhile other players see them asleep on the floor where they stopped. Signing in on a second device signs out the first, so one account is only ever one body. Returning to the title signs off. Guests keep their usual local saves.
+**Sleeping and waking.** A player with an account lives on the server, not their device. The whole game saves on the beat (every 60 seconds by default, ten seconds after entering the first time, never in the middle of an event or a battle's action, though a battle waiting on its next move saves), and a small note of where they stand goes up every five seconds, in events and battles too, and as the game closes. Someone who leaves before their first save still wakes where they stopped, in a new game. Signing back in on any device offers **Wake up**, which restores everything and returns them to that spot; **Start over** is optional per project. After a sudden crash they may wake a few seconds' walk back. Meanwhile other players see them asleep on the floor where they stopped: each game draws the 64 nearest, one to a tile, so a pile of sleepers on one spot shows as one body. Signing in on a second device signs out the first, so one account is only ever one body. Returning to the title signs off. Guests keep their usual local saves.
 
 **The world lane.** Events run on each player's own game exactly as they do in single player, and everything stays personal unless the project shares it. Under **Shared with every player**, list switches and variables (`1-5, 12`); add `<world>` to an event's note to share its self switches, so a chest opens once for everybody. When a shared value changes, it goes to the server, and every other game applies it through the same `setValue` a Control Switches command uses, so event pages respond as usual. No event command changes, and a single-player game is untouched. Several changes in a moment send only the last. The last change to arrive stands, so two players changing one value at once can overwrite each other, and a shared variable must exist in the project.
 
-**Chat.** T (or the project's key) opens it; Enter sends and Escape closes. Map and World channels are chosen beside the input. A sync carries the world's message count, so chat costs no extra requests until there is news. The server enforces who may chat, the wait between messages, length and blocked words. Players type `/block Name` and `/unblock Name` to hide someone on their own device.
+**Chat.** A line in the corner of the map always shows the chat and voice keys. T (or the project's key) opens it; Enter sends and Escape closes. Map and World channels are chosen beside the input. A sync carries the world's message count, so chat costs no extra requests until there is news. The server enforces who may chat, the wait between messages, length and blocked words. Players type `/block Name` and `/unblock Name` to hide someone on their own device.
 
 **The owner's page.** `reactor-online/admin.php` shows who is playing, accounts and recent chat, and can remove or ban a player, reset a password and take down a message. Its password is generated at the first deploy, printed once in the build log, and kept only in `reactor-online/config.php` on the server, because anything in a project reaches every player. Banning a player bans their account and their address.
 
@@ -58,7 +60,7 @@ A built character works like this:
 
 A build copies the Forge's files straight from the editor's source into `reactor-builder/` (36 MB), so an update to the Forge reaches games at their next build. A game that doesn't build characters ships none of it. A playtest needs the same files beside the game, because a game's page can only start a worker from its own folder: the editor copies them into the project's `reactor-builder/` when a playtest starts, only when the Forge has changed, and leaves that folder out of builds.
 
-The creator is a menu scene of game windows: tabs, a list of controls, and the 3D view in a window's frame. It wears the project's window skin and font, follows anything a plugin changes about windows, and works by keys, gamepad, mouse and touch. Left and right move a slider (Shift for fine steps) or step through a list, OK opens a whole list or a color, Q and W change tabs, and dragging a slider's bar or the character works too. A name is typed on the project's own Name Input screen. A character starts in everyday clothes even where a project allows anatomical detail, and Back warns once before leaving a character behind.
+The creator is a menu scene of game windows: tabs, a list of controls, and the 3D view in a window's frame. It wears the project's window skin and font, follows anything a plugin changes about windows, and works by keys, gamepad, mouse and touch. Left and right move a slider (Shift for fine steps) or step through a list, OK opens a whole list or a color, Q and W change tabs, and dragging a slider's bar or the character works too. A name is typed on the project's own Name Input screen. A character starts in everyday clothes even where a project allows anatomical detail, and Back warns once before leaving a character behind. Done takes the character's portrait from the 3D view, framed as the Forge frames a face sheet, and it replaces the actor's face in every window and travels in the character's file. It is one neutral face, not the Forge's eight expressions.
 
 <a id="after-an-intro"></a>**After an intro.** Set **When players get their character** to **When an event calls it**, then put the **Character Creation** event command where the intro hands over. Sign-in still comes first, because New Game is when a player's account is needed; the map and its intro follow, with the player as the first actor until they choose. The command's options:
 
@@ -79,8 +81,8 @@ Unless a project allows anatomical detail, characters start dressed and stay dre
 - Without an account, a character lives on one device, and a player on a new device starts again.
 - The server checks a character's recipe and that the file is a self-contained model. It cannot prove the model matches the recipe, so a modified client could upload a different model.
 - On polling, the server trusts positions from clients. With the Engine connected it checks them ([below](#engine-mode)), and it still can't prove a save: only a server running game logic could.
-- Only position, facing, walking, chat and the world lane are shared: no jumping height, vehicles, followers or shared events. A remote character stands on the ground beneath them, so someone on a roof can appear at street level.
-- Engine mode needs the host's WebSocket proxy on: see [Engine mode](#engine-mode). Without it, games use Lite.
+- Position, facing, walking, chat, the world lane, what a player rides and whether they are in a battle are shared; jumping height, followers, events and the battles themselves are not. Each game runs its own events, so a battle is shared by joining it: see [Shared battles](#shared-battles). Another player's vehicle is a model that follows them, turning in four directions, with the rider upright on it. A remote character stands on the ground beneath them, so someone on a roof can appear at street level.
+- Engine mode needs the host's WebSocket proxy on: see [Engine mode](#engine-mode). Without it, games use Lite, and Action and First Person battles play poorly when shared.
 
 **Measured:** on this desktop, in software-rendered browsers, a clothed character built in 7–8 seconds and uploaded in about a second. Packages were 11–12 MB, about 9 MB compressed for download (measured on one 12.8 MB package). Crowds of custom characters have not been load tested.
 
@@ -175,9 +177,96 @@ Beside Windows, macOS, Linux and Web in Deployment, using the existing remembere
 
 The runtime assumes one player: `$gamePlayer` is on over 200 lines in ten runtime files, and switches and variables are global. Remote players are added as extra characters, so that code keeps working for the local player.
 
-Each switch, variable and self switch is **personal** by default, so existing games behave, or **world**, set in Database › Online: see [the world lane](#using-it-today). A **party** scope is still to come. In Engine mode the server will run shared events itself; in Lite the last change to arrive stands.
+Each switch, variable and self switch is **personal** by default, so existing games behave, or **world**, set in Database › Online: see [the world lane](#using-it-today). **Party** values are [listed alongside them](#parties). In Engine mode the server will run shared events itself; in Lite the last change to arrive stands.
 
 Start with walking and chat, then personal battles, then shared on-map battles. Tactical and Action fights fit best because they already happen on the map.
+
+### Where players live
+
+| What | Where | Lasts |
+| --- | --- | --- |
+| Account: name, password hash, character's name, actor and model | `accounts/<hash of name>.json` | Until removed |
+| Progress: the whole game's save | `accounts/<hash>.save`, one step back in `.save.bak` | Replaced each save |
+| Where they stopped | `accounts/<hash>.wake`, and `sleep/m<map>/` for others to see | Replaced every 5 seconds |
+| Built character | `models/<hash of contents>.rrch` | Shared by content |
+| Who is online: slot, name, actor, model, ride, battle | `names.json` | Until the slot is reused |
+| Parties and invitations | `parties.json` | Until the party empties |
+| Running battles and their messages | `battles.json`, `battles/<id>.log` | Removed 5 minutes after they stop |
+| Where they stand | `p2m<map>.bin`: 12 bytes per slot, one file per map | About 5 seconds stale |
+| Shared switches and variables | `world.json` | Until changed |
+
+**In the running game**, a player is `$gamePlayer`, `$gameParty` and `$gameActors`, as in single player, restored from their own save. Everyone else is a `Game_RemotePlayer`: a drawn character with a name and a model, and no battler, no party and no events of its own. It isn't in `$gameMap.events()`, so event commands and Conditional Branches can't see it, and a Show Text can't name it. In a shared battle a player's actors also stand as units, with a copy of their stats.
+
+**Events** run on each player's own game. A chest, a quest or Rhea's raid happens only for the player who triggered it, unless the project shares the switch or variable it uses. Then the others' events respond through the ordinary `setValue`. Nothing on the server runs an event.
+
+### What each player has to themselves
+
+Every game runs the whole game for its own player, so most of the Database and most event commands work as in single player, separately for each person. This is the list to check when designing an online game.
+
+| Feature | Online |
+| --- | --- |
+| Actors, party, levels, items, gold, equipment, skills | Each player's own. There is no trading yet. |
+| Switches, variables, self switches | Each player's own, unless listed as world or party values, or marked `<world>` |
+| Event pages, Erase Event, Transfer Player, Show Text, choices | Run on the game of the player who triggered them |
+| NPC movement, weather, tint, timers, music | Each player's own; two players see the same NPC in different places |
+| Random encounters, Battle Processing | The player's own battle, which others nearby can join |
+| Troop and battle pages | Run only on the hosting game; guests see their results |
+| Experience, gold and drops from a battle | Each player gains them on their own game |
+| Game Over | The player gets up where they last entered a map, fully recovered (Database › Online › Get up after a defeat). Off: the title screen, which signs them out |
+| Save in the menu | Also saves to the server for an account, so Wake up finds it |
+| Shop, Name Input, menus | Pause only that player's game. In a shared battle the host's menu still pauses the battle for everyone |
+| A message on the host's screen | Holds a shared Tactical or Classic battle until answered; a real-time one carries on |
+| Fighting another player | Join their battle against them, or challenge them with `/duel Name` |
+
+### Parties
+
+**Challenges.** `/duel Name` asks another player on screen. If they accept, the challenger's game starts a battle on the map, in the mode the map or game uses (Tactical where that would be Classic), and holds it for up to a minute until the other player arrives on the other side.
+
+Type `/invite Name` in chat; the other player is asked on screen. `/accept`, `/decline`, `/leave` and `/party` do the rest. A party has up to eight players and a leader, listed in the corner of the screen, with a Party channel beside the chat box and `[Party]` on its members' names. Everyone keeps their own game, actors and save. A party member in a battle is the first choice offered to anyone who joins it. The list is `parties.json`, by name, since a slot lasts one visit.
+
+- **Party switches and variables:** Database › Online lists them under Shared with every player, beside the world's. A change reaches the other members within a few seconds through the ordinary `setValue`, so event pages respond as usual. The last change to arrive stands. The Demo shares switch 13 and variable 16.
+- **Following:** `/follow` walks after the leader, or `/follow Name` after anyone in the party, across maps too. `/stop` or walking by hand ends it; events and battles only pause it.
+
+### Shared battles
+
+**Tactical battles are shared.** Walking within 12 tiles of one offers **Join _name_'s side**, **Join the enemies**, **Fight for myself** or **Retreat** (and **Join _friend_** first, if a party member is in it). Asked once, until the player has gone 20 tiles away.
+
+- **The player whose game started a battle hosts it.** Their game rolls every hit and moves every enemy. Lite has no game on the server, and two games rolling separately would disagree.
+- **The server lists battles and carries messages.** `battles.json` holds each one's map, place, host and sides. Each has a log, `battles/<id>.log`. Players in a battle read it about three times a second; everyone else hears of battles every 3 seconds, with party news.
+- **Guests mirror it.** A guest's game runs the same battle screen in `reactor_online_battle.js`, with no queue, AI, pages or outcome of its own. It plays what the host reports: walks, actions with their results already rolled, and corrections to the numbers. On a guest's turn the normal menus work, and the finished order goes to the host. The guest's own units are its real party, so wounds last after the battle.
+- **On the host,** a guest's actors are event units with a `Game_RemoteActor` battler, built from a copy of their stats. Their turn waits where an enemy would think. After 90 seconds without orders they decide for themselves. A joiner gets a turn before the round ends.
+- **Sides** are team names. Targeting only compares names, so someone fighting for themselves is a third name with its own turn. On a mirror the names are turned so its own side is `ally`, and every side but a player's own wears the enemy color (`F.isFoeTeam`) on the turn strip, rings and goal count.
+- **Ending:** with other players in it, a Defeat All battle lasts until one side stands, even if the host's party falls. Other goals end as they would alone. A guest who leaves is removed; if the host leaves, [another player takes it on](#shared-battles).
+- **Rewards and consequences stay personal.** Each game applies its own experience, gold and event results. Only the host's events run in the battle, and a host's Show Text holds the battle until they answer it.
+- **Saving is off during a shared battle,** since half of it is on another machine. Where a player stands is still noted.
+
+**Classic battles** are shared the same way, in `reactor_online_classic.js`. Coming near one offers **Join _name_'s side**, **Fight _name_** or **Retreat**, since the screen has two sides.
+
+- **Joining the host's side:** each game adds the other's actors to its party for the battle as temporary actors, and both face the same troop.
+- **Fighting them:** each sees the other's party in the troop, wearing their character. The host's monsters are on a challenger's side, so a challenger's screen doesn't show them; what they do is told in the battle log.
+- **Turns:** the host's clock decides when an order is wanted, whichever battle system the project uses. A mirror always runs turn by turn. After 60 seconds without orders a player's battler guards.
+- **Ending:** a shared Classic battle can't be a Game Over. Fighting the host, one side's win is the other's loss.
+- **Battle screen details:** other players' numbers come from a copy of their stats and last until the battle ends.
+
+**Watching.** A Tactical battle also offers **Watch**: the same mirror with no units of your own, seen from the host's side. Cancel leaves. A Classic battle can't be watched, because its screen is built around a party.
+
+**When a host leaves** a Tactical battle, the lowest-numbered player left in it takes it on after about 12 to 20 seconds. Their game already holds every unit and number, so it starts thinking for itself from the next round and announces a new battle, naming the old one, which the others follow. The leaving host's units go with them. If only watchers remain, it ends. A Classic battle ends as an escape for its guests.
+
+**Action and First Person battles** are shared in `reactor_online_action.js`. Coming near one offers **Join _name_'s side**, **Join the enemies**, **Fight for myself** or **Retreat**. A player joins as their leader alone.
+
+- **Each player moves on their own game.** Their body reaches the others as anyone's does, and their unit stands on that body, so enemies chase it and shots stop on it.
+- **The host runs the enemies.** Guests see them walk, from ten reports a second, and see shots as pictures that land on nothing.
+- **A guest's own weapon decides what it hit**, because a shooter should hit what they saw, and reports that to the host, which rolls the damage and tells everyone. A modified game could claim hits it didn't make.
+- **Guard and dodge** are reported as they start, so they count on the host.
+- **Messages** go straight through the Engine's relay, which only carries them and says who sent them. A player without the Engine reads the battle's log, about three times a second, which works but plays badly.
+- **Every side** counts through `F.isSide`, so a third side works as it does in Tactical.
+
+**Vehicles.** A player who joins a Tactical battle riding stays aboard, with the vehicle's move range. Everyone sees the vehicle, and attacking with it works: the guest's game sends the vehicle's numbers as they join, and the host uses them. Action and First Person battles take riders off their vehicles as they start, as they do alone.
+
+**Not built:**
+
+- **Hitting a guest's vehicle.** Blows aimed at a guest land on the rider, and the host doesn't track that vehicle's HP.
+- **Mounting or dismounting partway through a shared battle** isn't tested.
 
 ## Collaboration
 
@@ -215,7 +304,7 @@ Built: see [Using it today](#using-it-today). Players upload finished **models**
 `reactor-online/engine.cjs` has no dependencies, so a deploy is still one folder. PHP starts it when a player joins, as the site's own user, on a loopback port, and it leaves after ten minutes with nobody connected. It carries movement and the world lane; accounts, chat, saves and characters stay with PHP.
 
 - **Reaching it:** the game tries `wss://<site>/reactor-online/ws`, which the folder's `.htaccess` passes to the Engine when `mod_proxy_wstunnel` is on. Nobody opens a port. Any failure, then or later, leaves the game on polling.
-- **On Apache, once, as root:** `a2enmod proxy_wstunnel && systemctl reload apache2`. Without it the Engine is reached by nobody, stops after two minutes, leaves `engine.unreached`, and is not started again until the next build.
+- **On Apache, once, as root:** `a2enmod proxy_wstunnel && systemctl reload apache2`. Without it the Engine is reached by nobody, stops after two minutes, leaves `engine.unreached`, and is not started again until the next build, so deploy again after turning it on.
 - **Mixed players:** Engine and polling players share one world. The Engine writes its players into the map files every 200 ms and reads the others from them, so a polling player sees an Engine player as usual.
 - **Rebuilds:** each build changes a stamp, and the next player to join replaces a running Engine with the new one.
 - **World lane:** the Engine is the only writer while it runs, and PHP passes polling players' changes to it. Control Variables' Add and Subtract travel as changes rather than results, in both modes, so two players adding at once both count. If PHP has to write the world itself, the Engine adopts that write.
@@ -227,13 +316,13 @@ Evidence for this section and [Voice](#voice): [online-engine-voice-20261101.jso
 
 **Tested:** the Engine's process, sockets and files by `online-engine.test.cjs`. On demo.rpgreactor.org, PHP started it in 228 ms on the first join, later joins took 13 ms, and four added changes summed correctly. Two real game clients on the live site, with sockets pointed at an Engine on this machine, saw no polling while connected. A position cheat was put back and never seen by the other player, a same-map teleport stood, and twenty simultaneous adds all counted. When the Engine was killed, both carried on by polling with no errors.
 
-**Not tested:** WebSocket through Apache, since the proxy module isn't on yet; walking smoothness over a socket, since headless browsers drew too few frames to judge; and this Engine under load.
+WebSocket through Apache now works on the test server, opening in 13 ms, and real-time battles run over it. **Not tested:** walking smoothness judged by eye, and this Engine under load.
 
 ## Voice
 
 Off until a project turns it on in Database › Online › Voice. Nearby players hear each other from where they stand, and each character's mouth moves with the sound. Audio goes directly between players over WebRTC, so voice adds almost nothing to the server: PHP only passes each pair's connection offer, once a second at most, for players who have voice on.
 
-- **For a player:** the voice key (V by default) asks for the microphone and turns voice on. After that they hold it to speak, or the microphone stays open if the project chose that. `/voice off` ends it, and `/block name` ends a call and refuses new ones.
+- **For a player:** the voice key (V by default) asks for the microphone and turns voice on. After that they hold it to speak, or the microphone stays open if the project chose that. The line in the corner says which, and how many can hear: both players must have turned voice on and be in range. `/voice off` ends it, and `/block name` ends a call and refuses new ones.
 - **The mouth:** live loudness and pitch drive the same mouth shapes a Show Text uses, on the same rig, with each speaker keeping their own state. A character talking in a Show Text keeps its mouth until that ends. In 2D, or on a model with no mouth shapes, a ♪ shows beside the name.
 - **Reach:** each player connects to their eight nearest speakers within hearing range, with volume falling off over distance and panning left or right by position.
 
@@ -254,7 +343,7 @@ Each step is usable and fun on its own, and demo.rpgreactor.org hosts each one.
 5. **Local live editing.**
 6. **Project server and collaboration.**
 7. **Character creation with server rules:** built, including uploading characters to the server.
-8. **Shared state scopes, then shared battles.**
+8. **[Parties, shared state scopes and shared battles of every mode](#shared-battles):** built.
 9. **God mode.**
 
 Steps 1 to 4 and 7 shipped in 0.99.4, with [real-world testing still open](OPEN-ITEMS.md).

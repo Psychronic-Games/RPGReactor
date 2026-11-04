@@ -8,8 +8,8 @@
   "showStatus": true,
   "playtest": true,
   "accounts": {"mode":"optional","registration":true,"minPassword":8,"title":"","persist":true,"autosave":60,"restart":true,"sleepers":true,"sleeperDays":30},
-  "chat": {"enabled":true,"who":"all","world":true,"bubbles":true,"cooldown":2,"maxLength":200,"history":50,"key":"T","blockedWords":""},
-  "world": {"switches":"10-12","variables":"15"},
+  "chat": {"enabled":true,"who":"all","world":true,"bubbles":true,"cooldown":2,"maxLength":500,"history":50,"key":"T","blockedWords":""},
+  "world": {"switches":"10-12","variables":"15","partySwitches":"13","partyVariables":"16"},
   "engine": {"enabled":true,"rate":15,"movement":"speed","maxSpeed":16},
   "voice": {"enabled":true,"mode":"push","key":"V","range":20,"who":"all","servers":"stun:stun.l.google.com:19302"}
 }

@@ -277,3 +277,10 @@ test('a character finished in the game can talk: its model carries mouth shapes'
     assert.match(worker, /message\.final && !result\.morphs\?\.length\) result\.morphs = [^\n]*morphTargets\(pack, result, MOUTH_SHAPES\)/);
     assert.match(worker, /'viseme_' \+ viseme\.id/);
 });
+
+test('a built character carries its own portrait, and a face not here yet is clear rather than a missing file', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../../runtime/reactor_character_creator.js'), 'utf8');
+    assert.match(source, /made\.face = this\.portrait\(\)/);
+    assert.match(source, /face: made\.face \|\| ""/);
+    assert.match(source, /startsWith\("Character-"\)\) return ReactorCharacters\.faces\.get\(filename\)/);
+});

@@ -2318,7 +2318,9 @@ Reactor3D.Reflections = {
             // before any mesh can read the cube it is being drawn into.
             this.bind(renderer);
             renderer.setRenderTarget(this._target, face);
-            Reactor3D.withSkyAt(scene, position, () => renderer.render(scene, camera));
+            const warming = Reactor3D.ShaderWarmup ? Reactor3D.ShaderWarmup.passHide(renderer, scene, camera, "cube") : null;
+            try { Reactor3D.withSkyAt(scene, position, () => renderer.render(scene, camera)); }
+            finally { if (warming) Reactor3D.ShaderWarmup.show(warming); }
         } finally {
             this._capturing = false;
             for (const object of hide) object.visible = true;
@@ -2975,8 +2977,10 @@ Reactor3D.Mirrors = {
             for (const object of hidden) object.visible = false;
             if (area) this.narrow(out, target, area, width, height);
             renderer.setRenderTarget(target);
+            const warming = Reactor3D.ShaderWarmup ? Reactor3D.ShaderWarmup.passHide(renderer, scene, out, "mirror") : null;
             try { Reactor3D.withSkyAt(scene, out.position, () => renderer.render(scene, out)); }
             finally {
+                if (warming) Reactor3D.ShaderWarmup.show(warming);
                 for (const object of hidden) object.visible = true; for (const object of own) object.visible = true;
                 if (area) this.widen(out, target, width, height);
                 renderer.setRenderTarget(previous);
@@ -5865,10 +5869,13 @@ Reactor3D.beamHit = function(x, y, h, ax, ay, az, length, scene, bounds) {
             const object = holder && holder.object;
             if (!object || !object.visible) continue;
             let worldBox = bounds && bounds.get(object);
+            // A body held still (Reactor3D.holdModelMatrices) has the bounds it had: measured again, it was a walk of every bone of a crowd each frame.
+            if (!worldBox && holder.matricesHeld && holder.heldBox && holder.heldBoxOf === object) worldBox = holder.heldBox;
             if (!worldBox) {
                 worldBox = bounds ? new THREE.Box3() : box;
                 worldBox.setFromObject(object);
                 if (bounds) bounds.set(object, worldBox);
+                if (holder.matricesHeld) { holder.heldBox = (holder.heldBox || new THREE.Box3()).copy(worldBox); holder.heldBoxOf = object; }
             }
             if (worldBox.isEmpty() || worldBox.containsPoint(ray.origin)) continue;
             if (!ray.intersectBox(worldBox, hit)) continue;

@@ -57,11 +57,17 @@ DataManager.isDatabaseLoaded = function() {
 
 const ReactorCharacters = {
     WORKER: "reactor-builder/src/forge/Character3D/CharacterGameWorker.js",
+    PORTRAIT_PIXELS: 288,
+    PORTRAIT_SHARE: 0.2,
+    PORTRAIT_EYES: 0.42,
+    PORTRAIT_ABOVE_HEAD: 0.13,
     MAGIC: 0x48435252, // "RRCH"
     VERSION: 1,
 
     pending: false,
     models: new Map(),
+    modelIds: new Map(),
+    faces: new Map(),
     _modelLoading: null,
 
     config() {
@@ -94,6 +100,8 @@ const ReactorCharacters = {
     onNewGame() {
         const config = this.config();
         this.pending = !!(config && config.onNewGame !== false && (config.mode === "build" || this.choices().length));
+        // The builder's 25 MB of body, clothes and motions start downloading now, while sign-in and the opening fade go on.
+        if (this.pending && config.mode === "build" && typeof Worker === "function") this.ask({ type: "warm" }).catch(() => null);
     },
 
     /**
@@ -153,7 +161,7 @@ const ReactorCharacters = {
     // ---- Packages ----
 
     pack(made) {
-        const json = new TextEncoder().encode(JSON.stringify({ recipe: made.recipe, sidecar: made.sidecar, height: made.height }));
+        const json = new TextEncoder().encode(JSON.stringify({ recipe: made.recipe, sidecar: made.sidecar, height: made.height, face: made.face || "" }));
         const rig = made.rig ? new Uint8Array(made.rig) : new Uint8Array(0), glb = new Uint8Array(made.glb);
         const out = new Uint8Array(16 + json.length + rig.length + glb.length), view = new DataView(out.buffer);
         view.setUint32(0, this.MAGIC, true);
@@ -228,10 +236,49 @@ const ReactorCharacters = {
         R._sidecarJson[name] = sidecar;
         R._sidecarCache[name] = R.whenMotionLibrary(sidecar).then(() => sidecar);
         await entry.promise;
+        this.modelIds.set(name, id);
+        if (unpacked.face) await this.keepFace(id, unpacked.face);
         const size = R.databaseModelSpecOfProject ? R.databaseModelSpecOfProject(this.baseActorId())?.size : 0;
         const spec = R.normalizeModelSpec({ name, file, ext: ".glb", size: size || 3, scale: 1, yaw: 0, pitch: 0, roll: 0, faces: {}, texture: "" });
         this.models.set(id, spec);
         return spec;
+    },
+
+    /** The name a built character's portrait goes by, where an actor's face file name would. */
+    faceName(id) {
+        return "Character-" + id.slice(0, 16);
+    },
+
+    /** Its portrait, ready for the game's windows, and worn at once by the actor it belongs to. */
+    async keepFace(id, url) {
+        const name = this.faceName(id);
+        if (!this.faces.has(name)) {
+            const picture = new Image();
+            picture.src = url;
+            await picture.decode();
+            const bitmap = new Bitmap(ImageManager.faceWidth, ImageManager.faceHeight);
+            bitmap.context.drawImage(picture, 0, 0, bitmap.width, bitmap.height);
+            bitmap.baseTexture?.update?.();
+            this.faces.set(name, bitmap);
+        }
+        const character = this.current();
+        if (character?.id === id) this.wearFace(character);
+    },
+
+    wearFace(character) {
+        const actor = $gameActors?.actor(character.actorId), name = this.faceName(character.id);
+        if (actor && this.faces.has(name)) actor.setFaceImage(name, 0);
+    },
+
+    /**
+     * A built model has no file for the runtime to read again, so once a map change lets go
+     * of it the only way back is its package. Anyone asking for it gets it, or nothing.
+     */
+    reinstall(id) {
+        const going = this._reinstalling || (this._reinstalling = new Map());
+        if (!going.has(id)) going.set(id, this.fetch(id).then(buffer => (buffer ? this.install(id, buffer) : null))
+            .catch(error => { console.warn("A character could not be loaded.", error); return null; }).finally(() => going.delete(id)));
+        return going.get(id);
     },
 
     async template(glb) {
@@ -445,13 +492,18 @@ class ReactorCharacterStudio {
         const account = typeof ReactorOnline !== "undefined" ? ReactorOnline.account?.name : "";
         this.name = character?.name || profile.name || account || "";
         try {
-            if (character?.id) {
-                const buffer = await ReactorCharacters.fetch(character.id);
+            // The builder's files, three.js and a saved character all download at once; the tabs also start the body data.
+            const three = Reactor3D.ensureLoaded(), tabs = ReactorCharacters.ask({ type: "tabs", rules: this.rules });
+            const saved = character?.id ? ReactorCharacters.fetch(character.id) : null;
+            three.catch(() => null);
+            tabs.catch(() => null);
+            if (saved) {
+                const buffer = await saved;
                 if (buffer) this.recipe = ReactorCharacters.unpack(buffer).recipe;
             }
-            this.tabs = await ReactorCharacters.ask({ type: "tabs", rules: this.rules });
+            this.tabs = await tabs;
             this.dressFirst();
-            await Reactor3D.ensureLoaded();
+            await three;
             if (this.closed) return;
             this.startView();
             this.onReady?.();
@@ -493,7 +545,32 @@ class ReactorCharacterStudio {
         return control.path === "outfitPreset" ? this.chosen.outfitPreset : this.valueAt(control.path);
     }
 
+    /** A list's highlighted choice, worn for a look before it is chosen. The first try remembers how things were. */
+    tryOn(control, id) {
+        if (!this._tried) this._tried = { recipe: JSON.parse(JSON.stringify(this.recipe)), chosen: Object.assign({}, this.chosen) };
+        this.chosen[control.path] = id;
+        if (control.path === "outfitPreset") { this.request.preset = id; delete this.request.species; }
+        else if (control.path === "species") { this.request.species = id; delete this.request.preset; }
+        else this.setValue(control.path, id);
+        clearTimeout(this._soon);
+        this._soon = setTimeout(() => this.rebuild(), 220);
+    }
+
+    /** The list closed: kept, or back as it was before the first try. */
+    endTry(keep) {
+        const tried = this._tried;
+        this._tried = null;
+        if (!tried || keep) return;
+        clearTimeout(this._soon);
+        this.recipe = tried.recipe;
+        this.chosen = tried.chosen;
+        this.request = {};
+        this.generation = (this.generation || 0) + 1;
+        this.rebuild();
+    }
+
     choose(control, id) {
+        if (this._tried) { this._tried = null; clearTimeout(this._soon); }
         this.chosen[control.path] = id;
         if (control.path === "outfitPreset") this.request.preset = id;
         else if (control.path === "species") this.request.species = id;
@@ -513,9 +590,11 @@ class ReactorCharacterStudio {
         this.busy = true;
         this.status("Building…");
         try {
-            const edits = this.edits || 0, request = this.request;
+            const edits = this.edits || 0, request = this.request, generation = this.generation || 0;
             this.request = {};
             const made = await ReactorCharacters.ask(Object.assign({ type: "build", recipe: this.recipe, rules: this.rules }, request));
+            // A try-on put back while this was building: its recipe is no longer wanted, and the rebuild after it shows the old one.
+            if ((this.generation || 0) !== generation) { this.again = true; return; }
             // The worker's recipe is the whole of it, a new species' defaults among them; a change
             // made while it was building is newer, and the rebuild that follows carries it.
             if ((this.edits || 0) === edits) this.recipe = made.recipe;
@@ -606,6 +685,36 @@ class ReactorCharacterStudio {
         if (idle) this.mixer.clipAction(idle).play();
     }
 
+    /**
+     * The character's portrait, framed as the Forge frames a face sheet: the eyes on one line, 42% of the
+     * way down a square that spans a little more than the head. Drawn from the view's own scene, so it
+     * has the same lights, then the view goes back as it was.
+     */
+    portrait() {
+        const { model, renderer, scene } = this;
+        if (!model || !renderer) return "";
+        const size = ReactorCharacters.PORTRAIT_PIXELS, turn = model.rotation.y, camera = new THREE.PerspectiveCamera(18, 1, 0.05, 40);
+        model.rotation.y = 0;
+        model.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(model), top = box.max.y, height = top - box.min.y;
+        const eye = new THREE.Vector3(), head = model.getObjectByName("Head") || model.getObjectByName("head");
+        if (head) head.getWorldPosition(eye); else eye.y = top - height * 0.08;
+        const span = height * ReactorCharacters.PORTRAIT_SHARE, eyes = head ? eye.y + span * ReactorCharacters.PORTRAIT_ABOVE_HEAD : eye.y;
+        const center = eyes + span * (0.5 - ReactorCharacters.PORTRAIT_EYES), distance = span / 2 / Math.tan(camera.fov * Math.PI / 360);
+        const front = head ? eye.z : 0;
+        camera.position.set(head ? eye.x : 0, center, front + distance);
+        camera.lookAt(head ? eye.x : 0, center, front);
+        const canvas = renderer.domElement, width = canvas.width, tall = canvas.height;
+        renderer.setPixelRatio(1);
+        renderer.setSize(size, size, false);
+        renderer.render(scene, camera);
+        const url = canvas.toDataURL("image/png");
+        renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+        renderer.setSize(this._width || width, this._height || tall, false);
+        model.rotation.y = turn;
+        return url;
+    }
+
     dispose(object) {
         object.traverse(child => { if (child.geometry) child.geometry.dispose(); });
     }
@@ -622,6 +731,7 @@ class ReactorCharacterStudio {
         const times = ReactorCharacters.lastTimes = { started: performance.now() };
         const made = await ReactorCharacters.ask(Object.assign({ type: "build", recipe: this.recipe, rules: this.rules, final: true, quality: this.config.quality }, this.request));
         times.built = performance.now();
+        made.face = this.portrait();
         const buffer = ReactorCharacters.pack(made), actorId = ReactorCharacters.baseActorId(), name = this.name;
         ReactorCharacters.applyActor(actorId, name);
         let id = ReactorCharacters.localId();
@@ -634,6 +744,7 @@ class ReactorCharacterStudio {
         times.installed = performance.now();
         times.bytes = buffer.byteLength;
         ReactorCharacters.setCurrent({ actorId, id, name });
+        ReactorCharacters.wearFace(ReactorCharacters.current());
         ReactorCharacters.saveProfile({ actorId, name });
     }
 
@@ -916,6 +1027,13 @@ Window_CreatorOptions.prototype.setup = function(control, value) {
     this.activate();
 };
 
+/** Moving through the list tries each choice on. */
+Window_CreatorOptions.prototype.select = function(index) {
+    const before = this.index();
+    Window_Selectable.prototype.select.call(this, index);
+    if (index !== before && index >= 0 && this.visible && this.active && this._options[index]) this._onHighlight?.(this._options[index]);
+};
+
 Window_CreatorOptions.prototype.maxItems = function() {
     return this._options.length;
 };
@@ -1040,7 +1158,8 @@ Scene_CharacterCreator.prototype.create = function() {
     this._controlsWindow.setHandler("pageup", () => this.changeTab(-1));
     this._controlsWindow.setHandler("pagedown", () => this.changeTab(1));
     this._optionsWindow.setHandler("ok", this.onOptionOk.bind(this));
-    this._optionsWindow.setHandler("cancel", this.onPopupCancel.bind(this));
+    this._optionsWindow.setHandler("cancel", this.onOptionCancel.bind(this));
+    this._optionsWindow._onHighlight = option => studio.tryOn(this._controlsWindow.currentRow(), option.id);
     this._colorWindow.setHandler("ok", this.onPopupCancel.bind(this));
     this._colorWindow.setHandler("cancel", this.onColorCancel.bind(this));
     this._tabsWindow.setControls(this._controlsWindow);
@@ -1148,6 +1267,12 @@ Scene_CharacterCreator.prototype.onControlOk = function() {
 
 Scene_CharacterCreator.prototype.onOptionOk = function() {
     this._studio.choose(this._controlsWindow.currentRow(), this._optionsWindow.option().id);
+    this.onPopupCancel();
+};
+
+/** Back without choosing: whatever was tried on comes off. */
+Scene_CharacterCreator.prototype.onOptionCancel = function() {
+    this._studio.endTry(false);
     this.onPopupCancel();
 };
 
@@ -1280,6 +1405,12 @@ Scene_Map.prototype.isReady = function() {
 
 if (typeof Reactor3D !== "undefined") {
     // A built character is that actor's model, on the map, in menus and in battle alike.
+    const loadFace = ImageManager.loadFace;
+    ImageManager.loadFace = function(filename) {
+        // Its package isn't here yet, or never will be: a clear face, not a missing file.
+        if (String(filename).startsWith("Character-")) return ReactorCharacters.faces.get(filename) || (ReactorCharacters._noFace ||= new Bitmap(ImageManager.faceWidth, ImageManager.faceHeight));
+        return loadFace.apply(this, arguments);
+    };
     const actorSpec = Reactor3D.databaseModelSpec;
     Reactor3D.databaseModelSpec = function(section, id) {
         if (section === "actors" && !ReactorCharacters._bypass) {
@@ -1287,6 +1418,12 @@ if (typeof Reactor3D !== "undefined") {
             if (character && character.actorId === id && ReactorCharacters.models.has(character.id)) return ReactorCharacters.models.get(character.id);
         }
         return actorSpec.call(this, section, id);
+    };
+    const loadModel = Reactor3D.loadModel;
+    Reactor3D.loadModel = function(name, ext, file, texture) {
+        const id = ReactorCharacters.modelIds.get(name);
+        if (!id || this._glbCache[this.modelCacheKey(name, ext, file)]) return loadModel.call(this, name, ext, file, texture);
+        return ReactorCharacters.reinstall(id).then(spec => (spec ? loadModel.call(this, name, ext, file, texture) : null));
     };
     Reactor3D.databaseModelSpecOfProject = function(id) {
         ReactorCharacters._bypass = true;

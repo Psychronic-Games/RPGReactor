@@ -573,10 +573,13 @@
         if(!(PluginManager._scripts||[]).some(name=>/PSYCHRONIC_ATB-MZ/i.test(name))||typeof Window_Base==='undefined')return;
         const initialize=Window_Base.prototype.initialize;
         const present=(folder,name)=>{
-            if(!name)return false;if(!Utils.isNwjs())return true;
-            const fs=require('fs'),path=require('path'),dir=path.join(path.dirname(process.mainModule.filename),'img',folder);
+            if(!name)return false;
             const extensions=ImageManager._imageExtensions||['.png'];
             const names=extensions.some(ext=>name.toLowerCase().endsWith(ext))?[name,name+'.png']:extensions.map(ext=>name+ext);
+            // In a browser the build's file list says what shipped; without it, try the file.
+            if(!Utils.isNwjs()){Utils.loadWebFileIndex();const index=Utils._webFileIndex;if(!index)return true;
+                return names.some(file=>[file,file+'_',file.replace(/\.png$/i,'.png_')].some(candidate=>index.has(('img/'+folder+'/'+candidate).toLowerCase())));}
+            const fs=require('fs'),path=require('path'),dir=path.join(path.dirname(process.mainModule.filename),'img',folder);
             return names.some(file=>[file,file+'_',file.replace(/\.png$/i,'.rpgmvp')].some(candidate=>fs.existsSync(path.join(dir,candidate))));
         };
         Window_Base.prototype.initialize=function(...args){

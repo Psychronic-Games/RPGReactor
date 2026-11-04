@@ -295,7 +295,8 @@ class Character3DBuilder {
         panel.addEventListener('input', e => this._onInput(e, false));
         panel.addEventListener('change', e => this._onInput(e, true));
         panel.addEventListener('click', e => this._onClick(e));
-        panel.addEventListener('scroll', () => this._refreshThumbs(), { passive: true, capture: true });
+        // Once a frame at most: each look measures every tile.
+        panel.addEventListener('scroll', () => { if (this._scrollFrame) return; this._scrollFrame = requestAnimationFrame(() => { this._scrollFrame = 0; this._refreshThumbs(); }); }, { passive: true, capture: true });
         this._renderPanel();
         this._syncHistory();
     }
@@ -1233,6 +1234,25 @@ class Character3DBuilder {
         return html;
     }
 
+    /**
+     * Who wears a picture of clothes, hair or a prop: this species and gender, in this skin,
+     * hair, eyes, head and body hair, at its default shape. Body and face sliders don't change it, so the pictures
+     * stay made, and their files are found again for any character alike. The big view
+     * shows the character exactly.
+     */
+    _thumbWearer() {
+        const r = this.recipe;
+        if (!this.human || this.slime || r.plan === 'slime' || typeof RRCharacterModel === 'undefined') return r;
+        const gender = Math.round((r.gender ?? .5) * 4) / 4;
+        const key = JSON.stringify([r.species, gender, r.skin, r.skinPattern, r.hair, r.eyes, r.features, r.head, r.bodyHair, r.seed]);
+        if (this._wearerKey !== key) {
+            this._wearerKey = key;
+            this._wearer = Object.assign(RRCharacterModel.withSpecies({ gender, seed: r.seed }, r.species),
+                { skin: r.skin, skinPattern: r.skinPattern, hair: r.hair, eyes: r.eyes, features: r.features, head: r.head, bodyHair: r.bodyHair });
+        }
+        return this._wearer;
+    }
+
     /** What a kind of picture depends on: the recipe, less what the picture itself varies. */
     _thumbSig(kind) {
         const project = this._project()?.path || '';
@@ -1241,7 +1261,8 @@ class Character3DBuilder {
         }
         const values = this._thumbSignatures.values;
         if (!values.has(kind)) {
-            const r = Object.assign({}, this.recipe);
+            const worn = ['hair', 'facial', 'brows', 'garment', 'prop', 'cyberlook', 'dress'].includes(kind);
+            const r = Object.assign({}, worn ? this._thumbWearer() : this.recipe);
             if (['hair', 'facial', 'brows', 'garment', 'prop', 'cyberlook'].includes(kind)) { delete r.outfit; delete r.props; }
             if (kind === 'dress') delete r.outfit;
             if (kind === 'gear' || kind === 'gearset') delete r.gear;
@@ -1527,12 +1548,13 @@ class Character3DBuilder {
             return { recipe: Object.assign({}, r, { gear }), frame: 'side' };
         }
         if (item.kind === 'species') return { recipe: RRCharacterModel.withSpecies({gender:this.human&&!this.slime?r.gender??.5:.5}, item.id), frame: 'body' };
+        const wearer = this._thumbWearer();
         if (item.kind === 'dress') {
             const preset = RRCharacterWardrobe.PRESETS.find(p => p.id === item.id);
-            return { recipe: Object.assign({}, r, { outfit: RRCharacterWardrobe.dressFor(preset.items, RRHumanBody.sexOf(r) === 'female') }), frame: 'body' };
+            return { recipe: Object.assign({}, wearer, { outfit: RRCharacterWardrobe.dressFor(preset.items, RRHumanBody.sexOf(r) === 'female') }), frame: 'body' };
         }
-        // The rest show one thing on the character as it stands, without its outfit or other accessories.
-        const base = Object.assign({}, r, { outfit: [], props: [] });
+        // The rest show one thing on this species' stand-in, without its outfit or other accessories.
+        const base = Object.assign({}, wearer, { outfit: [], props: [] });
         if (item.kind === 'hair') base.hair = RRCharacterHair.withStyle(r.hair, item.id);
         if (item.kind === 'facial') base.hair = Object.assign({}, r.hair, { facial: Object.assign({}, r.hair.facial, { style: item.id }) });
         if (item.kind === 'brows') base.hair = Object.assign({}, r.hair, { brows: Object.assign({}, r.hair.brows, { style: item.id }) });

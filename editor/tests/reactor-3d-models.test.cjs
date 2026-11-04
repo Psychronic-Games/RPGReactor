@@ -927,7 +927,7 @@ test('the sync loop binds instances, loads rules, and plays queued actions', () 
     // the skinning (rest hid it as a uniform shrink; motion shredded).
     assert.match(source, /skinned\.bind\(skeleton, new THREE\.Matrix4\(\)\)/);
     assert.match(source, /Reactor3D\.cloneModelTemplate = function/);
-    assert.match(source, /const object = Reactor3D\.cloneModelTemplate\(template\)/, 'instances clone through the rebinder');
+    assert.match(source, /const object = Reactor3D\.cloneModelTemplate\(template(?:, \{ shareKey \})?\)/, 'instances clone through the rebinder');
     assert.match(source, /new THREE\.AnimationMixer\(inner\)/);
     assert.match(source, /rule\.type === "clip"/);
     assert.match(source, /Reactor3D\.loadModelSidecar\(spec\.name\)/);

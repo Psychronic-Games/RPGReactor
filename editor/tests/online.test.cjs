@@ -45,6 +45,10 @@ function onlineWorld(answer, config = { enabled: true, url: 'reactor-online/api.
     vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online.js'), 'utf8') + '\nglobalThis.ReactorOnline = ReactorOnline; globalThis.Game_RemotePlayer = Game_RemotePlayer;', world);
     vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online_ui.js'), 'utf8') + '\nglobalThis.ReactorOnlineChat = ReactorOnlineChat; globalThis.ReactorWorldState = ReactorWorldState; globalThis.Scene_OnlineAccount = Scene_OnlineAccount;', world);
     vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online_voice.js'), 'utf8') + '\nglobalThis.ReactorOnlineVoice = ReactorOnlineVoice;', world);
+    vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online_party.js'), 'utf8') + '\nglobalThis.ReactorOnlineParty = ReactorOnlineParty;', world);
+    vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online_battle.js'), 'utf8') + '\nglobalThis.ReactorOnlineBattle = ReactorOnlineBattle;', world);
+    vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online_classic.js'), 'utf8') + '\nglobalThis.ReactorOnlineClassic = ReactorOnlineClassic;', world);
+    vm.runInContext(fs.readFileSync(path.join(runtimeRoot, 'reactor_online_action.js'), 'utf8') + '\nglobalThis.ReactorOnlineAction = ReactorOnlineAction;', world);
     return world;
 }
 
@@ -469,6 +473,299 @@ test('a game saves itself on the beat, but never mid-event or to a guest', () =>
     assert.equal(saves, 1);
 });
 
+test('a note goes up in a cutscene or a battle; a save only between moves', () => {
+    const world = onlineWorld(() => ({}), { enabled: true, accounts: { mode: 'optional', autosave: 10 } });
+    const online = world.ReactorOnline;
+    world.navigator = {};
+    let saves = 0, notes = 0;
+    online.saveProgress = async () => { saves++; return true; };
+    online.noteWhereIAm = () => { notes++; };
+    online.account = { session: 's' };
+    world.SceneManager._scene = new world.Scene_Map();
+    world.$gameMap.isEventRunning = () => true;
+    online._nextSave = 0.001;
+    online.keepUp();
+    assert.equal(notes, 1, 'where a player stands is noted whatever is running');
+    assert.equal(saves, 0);
+    // A battle's start waits on the event that called it: its turns are still a safe place to save.
+    const fight = world.$gameFight = { isHere: () => true, isBusy: () => false, _act: null, _ending: null };
+    online.keepUp();
+    assert.equal(saves, 1, 'between moves of a battle');
+    online._nextSave = 0.001;
+    fight._act = {};
+    online.keepUp();
+    assert.equal(saves, 1, 'not in the middle of an action');
+});
+
+test('the first save comes soon after entering, however long the beat', () => {
+    const world = onlineWorld(() => ({}), { enabled: true, accounts: { mode: 'optional', autosave: 300 } });
+    const online = world.ReactorOnline;
+    online.saveProgress = async () => true;
+    online.noteWhereIAm = () => {};
+    online.account = { session: 's' };
+    world.SceneManager._scene = new world.Scene_Map();
+    const before = world.performance.now();
+    online.keepUp();
+    assert.ok(online._nextSave - before <= online.FIRST_SAVE_MS + 50);
+});
+
+test('someone who left before their first save wakes where they stopped, in a new game', async () => {
+    const world = onlineWorld(() => { throw new Error('nothing to fetch'); }, { enabled: true, accounts: { mode: 'optional' } });
+    const calls = [];
+    world.$gamePlayer.reserveTransfer = (...args) => calls.push(args);
+    await world.ReactorOnline.wake({ session: 's', progress: { saved: false, wake: { map: 5, x: 11, y: 12, d: 6 } } });
+    assert.deepEqual(Array.from(calls[0]), [5, 11, 12, 6, 0]);
+    const common = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/common.php'), 'utf8');
+    assert.match(common, /if \(!\$saved && !is_array\(\$wake\)\) return null;/);
+});
+
+test('a player tells others what they ride and fight once, when it changes', async () => {
+    const asked = [];
+    const world = onlineWorld(url => { asked.push(url); return { ok: true, json: async () => ({ ok: true }) }; }, { enabled: true, accounts: { mode: 'optional' } });
+    const online = world.ReactorOnline;
+    online.slot = 2; online.nonce = 'n'; online.token = 't';
+    let posts = 0;
+    online.post = async () => { posts++; return {}; };
+    online.shareState();
+    await new Promise(done => setTimeout(done, 5));
+    online.shareState();
+    await new Promise(done => setTimeout(done, 5));
+    assert.equal(posts, 1);
+    world.$gameParty.inBattle = () => true;
+    online.shareState();
+    await new Promise(done => setTimeout(done, 5));
+    assert.equal(posts, 2);
+    assert.equal(online.fightState(), 'classic');
+});
+
+test('another player in battle says so, and a ridden model is only a plain name from the project', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const peer = new world.Game_RemotePlayer(1);
+    peer.setState(null, 'tactical');
+    assert.equal(peer.fight, 'tactical');
+    peer.setState(null, '');
+    assert.equal(peer.fight, '');
+    const common = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/common.php'), 'utf8');
+    assert.match(common, /function cleanRide/);
+    assert.match(common, /strpos\(\$name, '\.\.'\) !== false/);
+});
+
+test('a real-time battle keeps the voice key for itself, and leaves the microphone open', () => {
+    const world = onlineWorld(() => ({}), { enabled: true, voice: { enabled: true, mode: 'push', key: 'V' } });
+    const voice = world.ReactorOnlineVoice;
+    world.Input.keyMapper = { 86: 'guard' };
+    assert.equal(voice.keyTaken(), false, 'outside a battle the key is the voice key');
+    world.$gameFight = { isAction: () => true };
+    assert.equal(voice.keyTaken(), true);
+    let asked = 0;
+    voice.turnOn = () => { asked++; };
+    world.ReactorOnline.slot = 1;
+    voice.onKey({ key: 'v', ctrlKey: false, altKey: false, metaKey: false, repeat: false }, true);
+    assert.equal(asked, 0, 'guarding is not asking for the microphone');
+});
+
+test('voice says what its key does and who can hear', () => {
+    const world = onlineWorld(() => ({}), { enabled: true, voice: { enabled: true, mode: 'push', key: 'V' } });
+    const voice = world.ReactorOnlineVoice;
+    assert.equal(voice.hintText(), 'V: turn on voice');
+    voice.on = true;
+    assert.equal(voice.hintText(), 'Hold V to speak, nobody nearby has voice on');
+    voice.links.set(3, { pc: { connectionState: 'connected' } });
+    voice.transmitting = true;
+    assert.equal(voice.hintText(), 'Speaking, 1 can hear you');
+    voice.links.clear();
+    voice.on = false;
+});
+
+test('a party command is a chat line, and an invitation asks on screen once', async () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const party = world.ReactorOnlineParty, sent = [];
+    world.ReactorOnline.post = async (action, body) => { sent.push([action, body.do, body.name]); return {}; };
+    assert.equal(party.command('/invite Ada Lovelace'), true);
+    assert.equal(party.command('/leave'), true);
+    assert.equal(party.command('hello there'), false, 'ordinary talk is not a command');
+    await new Promise(done => setTimeout(done, 5));
+    assert.deepEqual(JSON.parse(JSON.stringify(sent.slice(0, 2))), [['party', 'invite', 'Ada Lovelace'], ['party', 'leave', null]]);
+    world.ReactorOnlineBattle.canAsk = () => true;
+    let asked = 0;
+    world.$gameMessage.setChoices = () => { asked++; };
+    world.$gameMessage.setChoiceCallback = () => {};
+    world.$gameMessage.add = () => {};
+    party.onInvite('Bea');
+    party.onInvite('Bea');
+    assert.equal(asked, 1);
+    party.onInvite('');
+    party.onInvite('Bea');
+    assert.equal(asked, 2, 'a new invitation asks again');
+});
+
+test('on a mirror its own side is the ally, whatever the host calls it', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const battle = world.ReactorOnlineBattle;
+    battle.side = 'ally';
+    assert.deepEqual(['ally', 'enemy', 'side3'].map(team => battle.localTeam(team)), ['ally', 'enemy', 'side3']);
+    battle.side = 'enemy';
+    assert.deepEqual(['ally', 'enemy', 'side3'].map(team => battle.localTeam(team)), ['enemy', 'ally', 'side3']);
+    battle.side = 'side3';
+    assert.deepEqual(['ally', 'enemy', 'side3', 'side4', 'neutral'].map(team => battle.localTeam(team)), ['enemy', 'sideHost', 'ally', 'side4', 'neutral']);
+});
+
+test('a guest in a battle hears only what is meant for it, and a host only believes orders from the unit\'s own player', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const battle = world.ReactorOnlineBattle, online = world.ReactorOnline;
+    online.slot = 4;
+    battle.reset();
+    battle.role = 'guest';
+    battle.receive({ t: 'turn', u: 1, to: 9 }, 0);
+    battle.receive({ t: 'turn', u: 2, to: 4 }, 0);
+    battle.receive({ t: 'walk', u: 3 }, 0);
+    assert.deepEqual(Array.from(battle.inbox, message => message.u), [2, 3]);
+    battle.reset();
+    battle.role = 'host';
+    const fight = { _act: { unitId: 7, deadline: Infinity }, unit: () => ({ remoteSlot: 3 }), character: () => ({}), actOnPlan() { this.acted = true; }, startWalk() {} };
+    battle.plans.set(7, { from: 2, kind: 'skill', id: 1 });
+    battle.awaitOrders(fight);
+    assert.ok(!fight.acted, 'someone else\'s orders do nothing');
+    battle.plans.set(7, { from: 3, kind: 'skill', id: 1, cx: 1, cy: 2, steps: [] });
+    battle.awaitOrders(fight);
+    assert.ok(fight.acted);
+    battle.reset();
+});
+
+test('the server keeps battles and parties beside players, and refuses a bad battle id', () => {
+    const api = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/api.php'), 'utf8');
+    const common = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/common.php'), 'utf8');
+    for (const action of ['party', 'news', 'bOpen', 'bBeat', 'bClose', 'bSay', 'bRead']) assert.match(api, new RegExp(`\\$action === '${action}'`));
+    assert.match(common, /\/\^\[a-f0-9\]\{16\}\$\//, 'a battle id can name no other file');
+    assert.match(api, /'from' => \$slot, 'm' => \$message/, 'who said it is the server\'s word, not the sender\'s');
+});
+
+test('a game loads the party and battle files, and every kind of build ships them', () => {
+    const main = fs.readFileSync(path.join(runtimeRoot, 'reactor_main.js'), 'utf8');
+    assert.ok(main.indexOf('reactor_online_voice.js') < main.indexOf('reactor_online_party.js') && main.indexOf('reactor_online_party.js') < main.indexOf('reactor_online_battle.js'));
+    for (const script of ['build.js', 'build-worker.js', 'dist-editor-worker.js']) {
+        assert.match(fs.readFileSync(path.join(appRoot, 'build-scripts', script), 'utf8'), /'reactor_online_battle\.js'/);
+    }
+});
+
+test('whoever is not on your side wears the enemy color, on the turn strip and the unit rings alike', () => {
+    const hud = fs.readFileSync(path.join(runtimeRoot, 'reactor_ui_fight.js'), 'utf8');
+    const line = /H\.teamColor = (\(node, team\) => \(.*?\))\s*$/m.exec(hud)[1];
+    const color = eval(line), node = { allyColor: 'blue', enemyColor: 'red', neutralColor: 'grey' };
+    assert.deepEqual(['ally', 'enemy', 'side2', 'sideHost', 'neutral'].map(team => color(node, team)), ['blue', 'red', 'red', 'red', 'grey']);
+    const tactical = fs.readFileSync(path.join(runtimeRoot, 'reactor_fight_tactical.js'), 'utf8');
+    assert.match(tactical, /uteam\[i\] = unit\.team === "ally" \? 0 : F\.isFoeTeam\(unit\.team\) \? 1 : 2;/);
+});
+
+test('the next host is the lowest slot still in the battle, and someone watching never is', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const battle = world.ReactorOnlineBattle;
+    world.ReactorOnline.slot = 5;
+    battle.reset();
+    battle.side = 'ally';
+    battle.hostSlot = 1;
+    battle.slots = new Set([1, 3, 8]);
+    assert.equal(battle.successor(), 3);
+    battle.slots = new Set([1, 8]);
+    assert.equal(battle.successor(), 5);
+    battle.side = 'watch';
+    assert.equal(battle.successor(), 8);
+    battle.slots = new Set([1]);
+    assert.equal(battle.successor(), Infinity, 'nobody but watchers left: the battle ends');
+    assert.equal(battle.localTeam('enemy'), 'enemy', 'a watcher sees it as the host does');
+    battle.reset();
+});
+
+test('only values the project lists go between party members', () => {
+    const world = onlineWorld(() => ({}), { enabled: true, world: { partySwitches: '13, 20-21', partyVariables: '16' } });
+    const party = world.ReactorOnlineParty;
+    assert.equal(party.shares('s', 21), true);
+    assert.equal(party.shares('s', 14), false);
+    assert.equal(party.shares('v', 16), true);
+    party.party = null;
+    party.noteValue('s', 13, true);
+    assert.equal(party.changes.size, 0, 'nobody to tell');
+    party.party = { members: [] };
+    party.noteValue('s', 13, true);
+    party.noteValue('s', 14, true);
+    assert.deepEqual([...party.changes.keys()], ['s:13']);
+    clearTimeout(party._valuesSoon);
+    party.changes.clear();
+});
+
+test('a Classic mirror takes the host\'s word: a challenger wins what the host loses', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const classic = world.ReactorOnlineClassic, seen = [];
+    world.BattleManager = { processVictory() { seen.push('won'); }, processDefeat() { seen.push('lost'); }, endBattle(result) { seen.push('left' + result); } };
+    classic.side = 'ally';
+    classic.finish(0); classic.finish(2); classic.finish(1);
+    classic.side = 'enemy';
+    classic.finish(0); classic.finish(2);
+    assert.deepEqual(seen, ['won', 'lost', 'left1', 'lost', 'won']);
+});
+
+test('with more than two sides, everyone but your own is against you', () => {
+    const source = fs.readFileSync(path.join(runtimeRoot, 'reactor_fight.js'), 'utf8');
+    const line = /F\.isSide = (\(team, oppose\) => .*);$/m.exec(source)[1], isSide = eval(line);
+    assert.equal(isSide('enemy', 'enemy'), true);
+    assert.equal(isSide('ally', 'enemy'), false);
+    assert.deepEqual(['ally', 'enemy', 'side3', 'neutral'].map(team => isSide(team, '!ally')), [false, true, true, false]);
+});
+
+test('in real time a message takes the Engine\'s line, and the log too for anyone without one', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const { ReactorOnlineAction: action, ReactorOnlineBattle: battle } = world, socket = vm.runInContext('ReactorOnlineSocket', world), sent = [];
+    battle.reset();
+    assert.equal(action.fast({ t: 'apos' }), false, 'no line: the log carries it');
+    socket.socket = { send: text => sent.push(JSON.parse(text)) };
+    battle.role = 'guest';
+    battle.hostSlot = 2;
+    assert.equal(action.fast({ t: 'ahit' }), true);
+    assert.deepEqual(Array.from(sent[0].to), [2]);
+    battle.role = 'host';
+    battle.guests.set(5, { slow: false });
+    assert.equal(action.fast({ t: 'apos' }), true);
+    battle.guests.set(6, { slow: true });
+    assert.equal(action.fast({ t: 'apos' }), false, 'a guest on polling still hears it');
+    assert.deepEqual(Array.from(sent[2].to), [5, 6]);
+    socket.socket = null;
+    battle.reset();
+});
+
+test('a guest\'s own shot lands by their report, and only the host rolls it', () => {
+    const world = onlineWorld(() => ({}), { enabled: true });
+    const { ReactorOnlineAction: action, ReactorOnlineBattle: battle } = world;
+    const sent = [], result = { used: true, hpDamage: 9, mpDamage: 0 };
+    battle.reset();
+    battle.send = message => sent.push(message);
+    const target = { id: 3 }, subject = { id: 4, party: true };
+    const fight = { _mirror: true, unit: () => subject, battler: () => ({ result: () => result, clearResult() {}, hp: 1, mp: 0, tp: 0, states: () => [] }) };
+    let rolled = 0;
+    const roll = () => { rolled++; };
+    action.landHits(fight, roll, { subjectId: 4, kind: 'skill', itemId: 1 }, {}, [target], 1, 1, 1);
+    assert.equal(rolled, 0, 'a guest rolls nothing');
+    assert.equal(sent[0].t, 'ahit');
+    fight._mirror = false;
+    battle.role = 'host';
+    battle.guests.set(5, {});
+    subject.remoteSlot = 5;
+    action.landHits(fight, roll, { subjectId: 4 }, {}, [target], 1, 1, 1);
+    assert.equal(rolled, 0, 'the picture of their shot on the host lands on nothing');
+    action.fromGuest = true;
+    action.landHits(fight, roll, { subjectId: 4 }, {}, [target], 1, 1, 1);
+    action.fromGuest = false;
+    assert.equal(rolled, 1);
+    assert.equal(sent[1].t, 'ares');
+    delete battle.send;
+    battle.reset();
+});
+
+test('the Engine only carries a real-time battle\'s messages, and limits them', () => {
+    const engine = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/engine.cjs'), 'utf8');
+    assert.match(engine, /message\?\.t === 'bf'.*withinRelayLimit\(player\)/);
+    assert.match(engine, /from: player\.slot/, 'who sent it is the Engine\'s word');
+});
+
 test('a project can keep progress on each device instead', () => {
     const world = onlineWorld(() => ({}), { enabled: true, accounts: { mode: 'optional', persist: false } });
     world.ReactorOnline.account = { session: 's' };
@@ -631,4 +928,20 @@ test('a player\'s model released by a map change is installed again, so nobody t
     assert.equal(characters.isInstalled('one'), false);
     assert.equal((await look()).modelSpec, spec);
     assert.equal(installs, 2, 'released: installed again');
+});
+
+test('a built model let go of while someone is drawing it comes back from its package, once', async () => {
+    const world = onlineWorld(() => ({}));
+    const { ReactorCharacters: characters } = world;
+    let fetched = 0, installed = 0;
+    characters.fetch = async () => { fetched++; return new ArrayBuffer(8); };
+    characters.install = async () => { installed++; return { name: 'model' }; };
+    const [first, second] = await Promise.all([characters.reinstall('one'), characters.reinstall('one')]);
+    assert.equal(first.name, 'model');
+    assert.equal(second, first);
+    assert.deepEqual([fetched, installed], [1, 1], 'two asking at once share one download');
+    characters.fetch = async () => null;
+    assert.equal(await characters.reinstall('gone'), null, 'a package nobody has draws nothing rather than failing');
+    const source = fs.readFileSync(path.join(appRoot, '../runtime/reactor_character_creator.js'), 'utf8');
+    assert.match(source, /const id = ReactorCharacters\.modelIds\.get\(name\);/);
 });

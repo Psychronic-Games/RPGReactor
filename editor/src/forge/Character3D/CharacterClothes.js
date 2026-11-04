@@ -70,12 +70,13 @@
     /** Reads the clothes and decodes their pictures over fetch (a page without the file system). */
     async function preload(pack, dir) {
         const base = dir || Body.DATA_PATH;
-        const json = await (await fetch(base + '/clothes.json')).json();
-        const bytes = new Uint8Array(await (await fetch(base + '/clothes.bin')).arrayBuffer());
+        const [json, bytes] = await Promise.all([fetch(base + '/clothes.json').then(r => r.json()), fetch(base + '/clothes.bin').then(r => r.arrayBuffer()).then(b => new Uint8Array(b))]);
         const clothes = open(json, bytes);
-        for (const g of clothes.garments.values()) {
-            const blob = await (await fetch(base + '/' + g.texture)).blob();
-            const bitmap = await createImageBitmap(blob);
+        // The pictures download and decode together; only drawing them out stays one at a time.
+        const garments = [...clothes.garments.values()];
+        const bitmaps = await Promise.all(garments.map(g => fetch(base + '/' + g.texture).then(r => r.blob()).then(blob => createImageBitmap(blob))));
+        for (const [i, g] of garments.entries()) {
+            const bitmap = bitmaps[i];
             const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(bitmap.width, bitmap.height) : Object.assign(document.createElement('canvas'), { width: bitmap.width, height: bitmap.height });
             const ctx = canvas.getContext('2d');
             ctx.drawImage(bitmap, 0, 0);

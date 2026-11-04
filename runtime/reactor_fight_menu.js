@@ -147,7 +147,7 @@
             this.resetTextColor();
             this.changePaintOpacity(this.isCommandEnabled(index));
             const rightWidth = right ? Math.min(Math.floor(rect.width * 0.6), this.textWidth(right) + 8) : 0;
-            if (ext && ext.team) this.changeTextColor(ext.team === "enemy" ? ColorManager.deathColor() : ColorManager.normalColor());
+            if (ext && ext.team) this.changeTextColor(F.isFoeTeam(ext.team) ? ColorManager.deathColor() : ColorManager.normalColor());
             this.drawText(this.commandName(index), rect.x, rect.y, rect.width - rightWidth - (right ? 8 : 0), right ? "left" : this.itemTextAlign());
             if (right) {
                 this.changeTextColor(ColorManager.systemColor());
