@@ -144,7 +144,7 @@ test('a sheet is watched as it is laid, and the mirrors pass by one out of sight
 test('mirror pictures are drawn at the size the frame is', () => {
     const lighting = source('reactor_3d_lighting.js');
     assert.match(lighting, /Math\.min\(1080, size\.y\) \* \(Reactor3D\.MIRROR_AT_VIEW_SCALE !== false && scale > 0 && scale < 1 \? scale : 1\)/);
-    assert.match(source('reactor_3d.js'), /Reactor3D\.Mirrors\.update\(renderer, scene, camera, mirrors, null, [^\n]+, scale\);/);
+    assert.match(source('reactor_3d.js'), /Reactor3D\.Mirrors\.update\(renderer, scene, camera, mirrors, crowd, [^\n]+, scale\);/);
     assert.equal(Reactor3D.MIRROR_AT_VIEW_SCALE, true);
 });
 

@@ -2347,6 +2347,9 @@
         proto.autoplay = function() {
             autoplay.apply(this, arguments);
             const data = mapData(), p = player();
+            // A battle here playing the battle music keeps it (reactor_fight.js's autoplay).
+            const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+            if (fight && fight.isHere() && fight._options && fight._options.bgm === "battle") return;
             if (data && data.autoplayBgm && p && ridesSilent(p)) AudioManager.playBgm(AudioManager.mapBgmObject(data, this.mapId()));
         };
     };

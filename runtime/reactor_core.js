@@ -1448,6 +1448,11 @@ Graphics.FramePacing = {
         if (models) for (const holder of models.values()) {
             const root = holder.object;
             if (!root) continue;
+            // A body out of view or small on screen (Reactor3D.animationDue) shows the update's own pose and place:
+            // blending each of its bones, and walking them twice a draw, was most of a crowd's presentation cost
+            // (62 players online, 2.5 to 4 ms a frame), for a figure under a twentieth of the view's height.
+            // A body whose matrices are held (still, its pose settled: a sleeper) has nothing to blend either.
+            if (holder.blendPose === false || holder.matricesHeld) continue;
             roots[rootCount] = root;
             let nodes = this._poseCache.get(root);
             if (!nodes || nodes._childCount !== root.children?.length) {

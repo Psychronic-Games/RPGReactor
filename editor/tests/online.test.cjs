@@ -393,6 +393,25 @@ test('deploying keeps everything else in the folder, and a rebuild keeps the sec
     assert.deepEqual(fs.readdirSync(path.join(folder, 'reactor-online')).filter(name => name.endsWith('.tmp')), []);
 });
 
+test('the room for players\' characters is the project\'s to set, with no limit unless it asks for one', t => {
+    const folder = scratch(t);
+    deploy.writeOnlineServer(folder, { appRoot, project: 'g', title: 'g', runtime: '', settings: { storage: { characterMB: 40, totalGB: 5 } } });
+    const config = fs.readFileSync(path.join(folder, 'reactor-online/config.php'), 'utf8');
+    const written = JSON.parse(/'settings' => '([^\n]*)',\n/.exec(config)[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'));
+    assert.deepEqual(written.storage, { characterMB: 40, totalGB: 5 });
+    const api = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/api.php'), 'utf8');
+    const common = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/common.php'), 'utf8');
+    assert.match(common, /\$settings\['storage'\] = array_merge\(\['characterMB' => 0, 'totalGB' => 0\]/, 'none set: no limit');
+    assert.doesNotMatch(api, /maxStorageBytes|maxModelBytes|2147483648|33554432/, 'no fixed caps left in the server');
+    assert.match(api, /\$characterMb > 0 \? \(int\)\(\$characterMb \* 1048576\) : PHP_INT_MAX/);
+    assert.match(api, /if \(\$roomGb > 0\) \{/);
+    assert.doesNotMatch(api, /gzencode\(\(string\)file_get_contents/, 'a character is squeezed a piece at a time');
+    const editor = fs.readFileSync(path.join(appRoot, 'src/database/DatabaseOnlineEditor.js'), 'utf8');
+    assert.match(editor, /static STORAGE = Object\.freeze\(\{ characterMB: 0, totalGB: 0 \}\)/);
+    assert.match(editor, /form\.number\('online-character-mb'/);
+    assert.match(editor, /form\.number\('online-storage-gb'/);
+});
+
 test('two servers never share a secret', t => {
     const a = scratch(t), b = scratch(t);
     for (const folder of [a, b]) deploy.writeOnlineServer(folder, { appRoot, project: 'g', title: 'g', runtime: '' });

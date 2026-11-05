@@ -4,15 +4,34 @@ Read [STATUS.md](STATUS.md) for open work. Earlier: [archive/handoff](archive/ha
 
 Changes belong in the editor changelog; behavior goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-11-03)
+## Where things stand (2026-11-04)
 
-- **Development:** 0.99.5 is open, runtime revision **20261103.8**. Changes stay local until the owner asks to push `main`.
+- **Development:** 0.99.5 is open, runtime revision **20261104.9**, deployed to demo.rpgreactor.org and committed on `main` (not pushed).
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
 - **Verification:** CI is green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is that branch plus a documentation commit and is not pushed. Substantial checks go through `codex-check`.
-- **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test accounts, sleepers and chat.
+- **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test sleepers and chat; keep the `E2E…` accounts, which are planned as extra battle participants.
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering.
+
+## 2026-11-04 — Crowd speed, built characters in a few draws
+
+Runtimes 20261104.1–.9, all deployed to demo.rpgreactor.org and committed at the end of the day. What changed is in the [changelog](../editor/changelog/0.99.5.md); the crowd numbers are in [PERFORMANCE.md](PERFORMANCE.md#built-characters-in-a-few-draws-2026-11-04-runtime-202611049).
+
+- **Owner reports fixed:** battle music after waking mid-battle, a shadow flickering behind a running player, waking inside a building after sleeping on its roof, the WebGL start failure (the game waits and retries), and a configurable storage cap (Database › Online, no limit by default).
+- **Crowd speed:** online and offline measured the same, and nothing is rebuilt per frame. The real costs were textures uploaded at full size, draws not grouped by shader, two-pass soft hair, and a built character being 17–39 draws. `Reactor3D.LayeredParts` now merges a built character's parts at load: North Haven's square went from 1,080 to 512 draws and 13.4 to 5.2 ms a frame.
+- **Open puzzle:** the owner still saw about 30 fps in the square before .9 while the test browser measured about 90 fps of headroom. Ask for their F2 numbers on .9, whether DevTools is open, and their monitor's refresh rate.
+- **LayeredParts trap:** with all four picture-array samplers declared, a merged program carrying the metal shine drew cloth washed grey: the water sheen term came out non-zero. Declaring only the arrays a group uses ended it, and metal stays in its own group (`SPLIT_SHINE`). The cause isn't understood; merging metal with cloth (one draw fewer per character) needs it found first. Overlays win depth ties by file order inside one mesh, and merged meshes draw after the body (`renderOrder`).
+- **Harness traps:** the runtime turns off three's shader error checks, so a broken debug shader draws nothing silently. A patched shader needs its own program key. `layered-ab.cjs` + `ab-diff.py` compare one character drawn alone, parts apart against merged.
+- **GPU:** the NVIDIA driver logged channel failures again at 17:37 and 19:18 (`GspRmAlloc failed`) with none of the test browsers running. A reboot clears the WebGL error if it returns.
+
+**Next (owner's queue):**
+
+1. In-game creator: slow to load, sometimes shows another outfit than the one picked, no previews of species or outfits.
+2. A blocky, blurry light outline around characters in front of lights, plainest in the first Reactor room (likely HalfLight's quarter-size light).
+3. "Connecting…" stays in the top right while connected.
+4. More speed: every material carries 64 uniforms, 60 of them the scene's, walked on every draw. Vehicles (about 40 draws each) are low priority: there are few of them.
+5. Resume `build-looks.cjs` for the 22 bots still without a look.
 
 ## 2026-11-03 — Online speed, the creator's loading, crowds
 

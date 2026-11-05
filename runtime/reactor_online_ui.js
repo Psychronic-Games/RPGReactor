@@ -74,6 +74,11 @@ Object.assign(ReactorOnline, {
         if (!this.keepsProgress() || this._saving) return false;
         this._saving = true;
         try {
+            // What a save in the menu records before it is written (onBeforeSave), short of counting a save:
+            // the clock and the music playing, so waking plays on from them.
+            $gameSystem._framesOnSave = Graphics.frameCount;
+            $gameSystem._bgmOnSave = AudioManager.saveBgm();
+            $gameSystem._bgsOnSave = AudioManager.saveBgs();
             const text = JsonEx.stringify(DataManager.makeSaveContents());
             // The browser's own compressor works off the main thread; its zlib bytes are pako's, so loading is unchanged.
             const bytes = typeof CompressionStream === "function"
@@ -89,7 +94,11 @@ Object.assign(ReactorOnline, {
     },
 
     wakeNote() {
-        return { session: this.account.session, map: $gameMap.mapId(), x: $gamePlayer.x, y: $gamePlayer.y, d: $gamePlayer.direction(), slot: Math.max(0, this.slot) };
+        const note = { session: this.account.session, map: $gameMap.mapId(), x: $gamePlayer.x, y: $gamePlayer.y, d: $gamePlayer.direction(), slot: Math.max(0, this.slot) };
+        // The floor stood on, on a 3D map: a roof and the room under it are one tile, and a wake would land in the room.
+        const ground = $gamePlayer._reactorGround;
+        if (Number.isFinite(ground)) note.g = Math.round(ground * 1000) / 1000;
+        return note;
     },
 
     /** Where this player stands. As the game closes there is only time for a beacon, so it goes as one. */
@@ -136,12 +145,16 @@ Object.assign(ReactorOnline, {
             DataManager.createGameObjects();
             DataManager.extractSaveContents(contents);
             DataManager.correctDataErrors();
+            // As a load does: the play time and the music go on from the save.
+            $gameSystem.onAfterLoad();
         }
         ReactorCharacters.pending = false;
         ReactorCharacters.starting = false;
         const place = account.progress?.wake;
         const map = place?.map || $gameMap.mapId(), x = place ? place.x : $gamePlayer.x, y = place ? place.y : $gamePlayer.y;
         $gamePlayer.reserveTransfer(map, x, y, place?.d || $gamePlayer.direction(), 0);
+        // The transfer lands on a tile's ground floor (locate forgets the floor); the one slept on is put back after it.
+        this._wakeGround = place && Number.isFinite(place.g) ? { map, x, y, g: place.g } : null;
     },
 
     /** Leaving for the title: a last save and a note of the place, then this player is asleep. */
@@ -558,6 +571,16 @@ const _reactorOnlineRespawnStart = Scene_Map.prototype.start;
 Scene_Map.prototype.start = function() {
     _reactorOnlineRespawnStart.call(this);
     if (ReactorOnline.knockedOut) { ReactorOnline.knockedOut = false; ReactorOnlineChat.note("You were knocked out, and came to here."); }
+};
+
+// Waking where the player slept: on the floor they slept on (a roof, an upper storey), not the tile's ground floor.
+const _reactorOnlinePerformTransfer = Game_Player.prototype.performTransfer;
+Game_Player.prototype.performTransfer = function() {
+    const wake = ReactorOnline._wakeGround, arriving = wake && this.isTransferring() && this._newMapId === wake.map && this._newX === wake.x && this._newY === wake.y;
+    _reactorOnlinePerformTransfer.apply(this, arguments);
+    if (!wake || !arriving) return;
+    ReactorOnline._wakeGround = null;
+    this._reactorGround = wake.g;
 };
 
 // Save in the menu keeps the game on the server too, where waking up looks for it.

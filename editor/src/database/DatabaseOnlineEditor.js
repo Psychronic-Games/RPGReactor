@@ -11,6 +11,8 @@ class DatabaseOnlineEditor {
     static WORLD = Object.freeze({ switches: '', variables: '', partySwitches: '', partyVariables: '' });
     static ENGINE = Object.freeze({ enabled: true, rate: 15, movement: 'speed', maxSpeed: 16 });
     static VOICE = Object.freeze({ enabled: false, mode: 'push', key: 'V', range: 20, who: 'all', servers: 'stun:stun.l.google.com:19302' });
+    // Characters players send the server: the largest one (MB) and the room for all of them (GB). 0 is no limit.
+    static STORAGE = Object.freeze({ characterMB: 0, totalGB: 0 });
     static CHAT = Object.freeze({ enabled: true, who: 'all', world: true, bubbles: true, cooldown: 2, maxLength: 200, history: 50, key: 'T', blockedWords: '' });
 
     constructor(databaseManager) {
@@ -20,13 +22,13 @@ class DatabaseOnlineEditor {
     /** A copy with every field present. Nothing reaches the project until something is changed. */
     settings(saved) {
         return { ...DatabaseOnlineEditor.DEFAULTS, ...saved,
-            accounts: { ...DatabaseOnlineEditor.ACCOUNTS, ...saved?.accounts }, chat: { ...DatabaseOnlineEditor.CHAT, ...saved?.chat }, world: { ...DatabaseOnlineEditor.WORLD, ...saved?.world }, engine: { ...DatabaseOnlineEditor.ENGINE, ...saved?.engine }, voice: { ...DatabaseOnlineEditor.VOICE, ...saved?.voice } };
+            accounts: { ...DatabaseOnlineEditor.ACCOUNTS, ...saved?.accounts }, chat: { ...DatabaseOnlineEditor.CHAT, ...saved?.chat }, world: { ...DatabaseOnlineEditor.WORLD, ...saved?.world }, engine: { ...DatabaseOnlineEditor.ENGINE, ...saved?.engine }, voice: { ...DatabaseOnlineEditor.VOICE, ...saved?.voice }, storage: { ...DatabaseOnlineEditor.STORAGE, ...saved?.storage } };
     }
 
     showOnlineDetail(container) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const settings = this.settings(this.databaseManager.getOnlineSettings());
-        const accounts = settings.accounts, chat = settings.chat, world = settings.world, engine = settings.engine, voice = settings.voice;
+        const accounts = settings.accounts, chat = settings.chat, world = settings.world, engine = settings.engine, voice = settings.voice, storage = settings.storage;
         container.innerHTML = '';
         const { wrapper, form } = DatabaseFlowForm.page(container, tt('Online'));
         // Any change writes the whole settings object, the first one creating the project's file.
@@ -42,6 +44,8 @@ class DatabaseOnlineEditor {
             form.text('online-address', tt('Public address'), 'https://example.com', tt('Where the game is hosted. Desktop builds use it to find the server.'), true),
             form.number('online-max', tt('Most players'), settings.maxPlayers, 1, 1024, tt('A server with no room left turns new players away. Takes effect the next time you deploy.')),
             form.number('online-rate', tt('Updates per second'), settings.updatesPerSecond, 1, 20, tt('Higher is more responsive and works the server harder. 5 suits most web hosts.')),
+            form.number('online-character-mb', tt('Largest character (MB)'), storage.characterMB, 0, 100000, tt('The most one player\'s character may take on the server. 0 is no limit. Takes effect the next time you deploy.')),
+            form.number('online-storage-gb', tt('Room for characters (GB)'), storage.totalGB, 0, 100000, tt('The most all players\' characters may take on the server together. 0 is no limit. Takes effect the next time you deploy.')),
             form.check('online-playtest', tt('Connect during playtest'), settings.playtest, tt('Playtests stay offline unless this is on.')))),
         form.section('online-accounts', tt('Accounts'), form.fields(
             form.choice('online-account-mode', tt('Signing in'), [['none', tt('Guests only, no accounts')], ['optional', tt('Accounts or guests')], ['required', tt('Accounts required')]], accounts.mode, tt('An account keeps a player\'s character across devices. Use https, because passwords travel to your server.')),
@@ -127,6 +131,8 @@ class DatabaseOnlineEditor {
         on('online-address', input => { settings.address = input.value.trim(); });
         on('online-max', input => { settings.maxPlayers = whole(input, 1, 1024, 64); });
         on('online-rate', input => { settings.updatesPerSecond = whole(input, 1, 20, 5); });
+        on('online-character-mb', input => { storage.characterMB = whole(input, 0, 100000, 0); });
+        on('online-storage-gb', input => { storage.totalGB = whole(input, 0, 100000, 0); });
         on('online-voice-on', input => { voice.enabled = input.checked; });
         on('online-voice-mode', input => { voice.mode = input.value; });
         on('online-voice-key', input => { voice.key = input.value.trim().slice(0, 1).toUpperCase() || 'V'; input.value = voice.key; });

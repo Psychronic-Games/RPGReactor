@@ -2478,6 +2478,8 @@ Reactor3D.withSkyAt = function(scene, position, draw) {
 
 /** How many reflections deep two facing mirrors go (each level another, smaller draw of the scene). */
 Reactor3D.MIRROR_DEPTH = 2;
+/** The share of the frame's size water's mirror picture is drawn at (1: the frame's). */
+Reactor3D.MIRROR_WATER_SCALE = 1;
 /** How far off a panel's plane (tiles) a fragment still takes the mirror picture. */
 Reactor3D.MIRROR_TOLERANCE = 0.3;
 /**
@@ -2975,11 +2977,18 @@ Reactor3D.Mirrors = {
             const own = plane.object && plane.object.userData && plane.object.userData.water && plane.object.visible ? [plane.object] : [];
             for (const object of own) object.visible = false;
             for (const object of hidden) object.visible = false;
+            // The distance levels the frame's own draw uses, chosen from this camera at the picture's size
+            // (before `narrow` crops the view). Without them the mirror drew every character at full
+            // detail: 8.7M triangles in North Haven's raid, four times the frame's own draw.
+            const detail = Reactor3D.GeometryDetail;
+            const swaps = detail && !detail._active ? detail.begin(scene, out, height) : null;
+            if (swaps) detail._active = swaps;
             if (area) this.narrow(out, target, area, width, height);
             renderer.setRenderTarget(target);
             const warming = Reactor3D.ShaderWarmup ? Reactor3D.ShaderWarmup.passHide(renderer, scene, out, "mirror") : null;
             try { Reactor3D.withSkyAt(scene, out.position, () => renderer.render(scene, out)); }
             finally {
+                if (swaps) { detail.end(swaps); detail._active = null; }
                 if (warming) Reactor3D.ShaderWarmup.show(warming);
                 for (const object of hidden) object.visible = true; for (const object of own) object.visible = true;
                 if (area) this.widen(out, target, width, height);
@@ -3110,7 +3119,11 @@ Reactor3D.Mirrors = {
         const size = renderer.getDrawingBufferSize(new THREE.Vector2());
         // At the size the frame itself is drawn at (`scale`: the view's render scale): its fragments
         // read the picture at their own place on screen, and more texels than fragments are never read.
-        const height = Math.max(16, Math.round(Math.min(1080, size.y) * (Reactor3D.MIRROR_AT_VIEW_SCALE !== false && scale > 0 && scale < 1 ? scale : 1))), width = Math.round(height * (camera.aspect || size.x / size.y));
+        // Water's picture is drawn smaller (MIRROR_WATER_SCALE): its ripples bend the reflection more than a texel,
+        // and in North Haven's square it was 6 ms and 600 draws a frame of a crowd. A real mirror keeps its size.
+        const water = planes.every(p => p.object && p.object.userData && p.object.userData.rrMirrorPlane);
+        const waterScale = water && Reactor3D.MIRROR_WATER_SCALE > 0 ? Math.min(1, Reactor3D.MIRROR_WATER_SCALE) : 1;
+        const height = Math.max(16, Math.round(Math.min(1080, size.y) * (Reactor3D.MIRROR_AT_VIEW_SCALE !== false && scale > 0 && scale < 1 ? scale : 1) * waterScale)), width = Math.round(height * (camera.aspect || size.x / size.y));
         const shadowSentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
         const hide = (hidden || []).concat(shadowSentinel ? [shadowSentinel] : []).filter(object => object && object.visible);
         this._eye = camera;
@@ -3488,6 +3501,8 @@ Reactor3D.litMaterial = function(material) {
         if (Reactor3D.injectLook) Reactor3D.injectLook(this, shader);
         // What a surface gives off over its light, last: its glow and a hair strand's sheen.
         Reactor3D.injectSurfaceGlow(this, shader);
+        // A character's merged parts: every map above taken from each part's own layer (Reactor3D.LayeredParts).
+        if (Reactor3D.LayeredParts) Reactor3D.LayeredParts.inject(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
@@ -3498,7 +3513,8 @@ Reactor3D.litMaterial = function(material) {
             + (Reactor3D.facesLight(this) ? (Reactor3D.normalOnUv1(this) ? "|face-nmap1" : this.userData && this.userData.rrNormalMap && this.userData.rrNormalMap.isTexture && this.map ? "|face-nmap" : "|face") + (Reactor3D.facesPerLight() ? "" : "-share") : "")
             + (Reactor3D.glowKey ? Reactor3D.glowKey(this) : "")
             + (Reactor3D.lookOf && Reactor3D.lookOf(this) ? "|look" : "")
-            + (Reactor3D.detailProgramKey ? Reactor3D.detailProgramKey(this) : "");
+            + (Reactor3D.detailProgramKey ? Reactor3D.detailProgramKey(this) : "")
+            + (Reactor3D.LayeredParts ? Reactor3D.LayeredParts.programKey(this) : "");
     };
     return material;
 };
@@ -3673,8 +3689,216 @@ Reactor3D.SHADOW_SLOTS = 8;
  * makes of one) in a few milliseconds on the frames it moves. The weak
  * budget takes one such character, the full tier a party of them.
  */
+// The full tier redraws every dynamic row a frame (`dynamicPerFrame` = `dynamicSlots`). With two of three, a
+// player walking where three lights cast (North Haven's square: the sun and two lanterns) had one light's
+// shadow of them a frame or two old on every refresh, a different light each time: a shadow flickering
+// behind them as they ran, settled once they stopped (63 of 66 refreshes while walking, 2026-11-04).
+/**
+ * A moving caster's parts as few draws in its shadow rows. In a row a part is drawn with its depth material
+ * (Shadows.casterMaterialFor): every part not cut out shares one per side, and a cut-out (hair cards, an eye,
+ * stitching) its own. A character made in the game is 17 to 39 parts, each a draw in every face and cascade it
+ * stands in, against the Demo actor's one; parts with one depth material and one skeleton draw the same depth as
+ * one mesh, so they are merged into a stand-in (position, skin and, for a cut-out, uv), bound to the same skeleton.
+ * A skin bound "attached" (three's default) lands where its bones and bind matrix put it, whatever node holds the
+ * part, so each part's positions are taken through its bind matrix and the stand-in is bound at the identity.
+ * Lossless by construction:
+ *  - a part that changes shape (expressions, speech: morph targets) joins its stand-in only on frames all its
+ *    shapes rest at zero; otherwise those parts draw themselves as before, and their stand-in waits;
+ *  - a part drawn at a distance level in rows (GeometryDetail) keeps its own draw, and so its level;
+ *  - a stand-in is on the moving-caster layer only, hidden but in these passes, out of the model's own tree
+ *    (code that walks a model's parts never meets it), and hides with its character in a face that cannot see it.
+ * Built once a character casts, again when its parts change (an outfit, a look); `enabled` false: as before.
+ */
+Reactor3D.CasterMerge = {
+    enabled: true,
+    // Fewer parts than this in a group are left alone: nothing to save.
+    MIN_PARTS: 2,
+    group(scene) {
+        let group = scene.userData.rrCasterStandIns;
+        if (!group || group.parent !== scene) {
+            group = new THREE.Group();
+            group.name = "caster-stand-ins";
+            group.matrixAutoUpdate = false;
+            group.matrixWorldAutoUpdate = false;
+            // Kept by Shadows._hideNonCasters, which gathers before the stand-ins are shown.
+            group.userData.rrCasterGroup = true;
+            scene.add(group);
+            scene.userData.rrCasterStandIns = group;
+        }
+        return group;
+    },
+    /** What the parts of `root` are now: a stand-in made for other parts is made again. */
+    signature(root) {
+        let text = "";
+        // Not their visibility, which a pass may change for a frame (warming, a split): a part hidden now sits its group out.
+        root.traverse(child => { if (child.isSkinnedMesh) text += child.id + ":" + (child.material && child.material.id) + ":" + (child.geometry && child.geometry.id) + ","; });
+        return text;
+    },
+    hasShapes(mesh) {
+        const morph = mesh.geometry && mesh.geometry.morphAttributes;
+        return !!(morph && morph.position && morph.position.length);
+    },
+    resting(mesh) {
+        const w = mesh.morphTargetInfluences;
+        if (w) for (let i = 0; i < w.length; i++) if (w[i] !== 0) return false;
+        return true;
+    },
+    isIdentity(m) {
+        const e = m.elements;
+        for (let i = 0; i < 16; i++) if (e[i] !== (i % 5 === 0 ? 1 : 0)) return false;
+        return true;
+    },
+    /** The parts of `root` that may be merged, grouped by what they are drawn with in a row. */
+    groups(root, shadows) {
+        const detail = Reactor3D.GeometryDetail, groups = new Map();
+        root.traverse(child => {
+            if (!child.isSkinnedMesh || !child.castShadow || Array.isArray(child.material)) return;
+            const g = child.geometry, position = g && g.attributes.position;
+            if (!position || !g.attributes.skinIndex || !g.attributes.skinWeight || g.groups.length) return;
+            const count = g.index ? g.index.count : position.count;
+            if (g.drawRange.start !== 0 || g.drawRange.count < count) return;
+            // One drawn at a distance level in rows keeps its own draw.
+            const state = detail && detail._states && detail._states.get(g);
+            if (state && state.levels && state.levels.length) return;
+            const caster = child.customDepthMaterial && child.customDepthMaterial.__rrCaster ? child.customDepthMaterial : shadows.casterMaterialFor(child.material, true);
+            if (caster.__rrCutout && !g.attributes.uv) return;
+            if (child.bindMode !== THREE.AttachedBindMode || !child.skeleton) return;
+            const shapes = this.hasShapes(child);
+            const key = caster.id + "|" + child.skeleton.uuid + "|" + (shapes ? "s" : "r");
+            let entry = groups.get(key);
+            if (!entry) groups.set(key, entry = { caster, skeleton: child.skeleton, parts: [], shapes });
+            entry.parts.push(child);
+        });
+        return [...groups.values()].filter(entry => entry.parts.length >= this.MIN_PARTS);
+    },
+    /** One geometry of the parts: their positions, skins and (a cut-out's) uvs, one after another. */
+    merge(parts, withUv) {
+        let vertices = 0, indices = 0;
+        for (const part of parts) {
+            const g = part.geometry, n = g.attributes.position.count;
+            vertices += n; indices += g.index ? g.index.count : n;
+        }
+        const position = new Float32Array(vertices * 3), skinIndex = new Uint16Array(vertices * 4), skinWeight = new Float32Array(vertices * 4);
+        const uv = withUv ? new Float32Array(vertices * 2) : null, index = new Uint32Array(indices);
+        const at = new THREE.Vector3();
+        let v = 0, k = 0;
+        for (const part of parts) {
+            const g = part.geometry, p = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, t = g.attributes.uv, n = p.count;
+            // Through its bind matrix: what its bones are given, so the stand-in is bound at the identity.
+            const bind = part.bindMatrix, identity = this.isIdentity(bind);
+            for (let i = 0; i < n; i++) {
+                const o = v + i;
+                at.set(p.getX(i), p.getY(i), p.getZ(i));
+                if (!identity) at.applyMatrix4(bind);
+                position[o * 3] = at.x; position[o * 3 + 1] = at.y; position[o * 3 + 2] = at.z;
+                skinIndex[o * 4] = si.getX(i); skinIndex[o * 4 + 1] = si.getY(i); skinIndex[o * 4 + 2] = si.getZ(i); skinIndex[o * 4 + 3] = si.getW(i);
+                skinWeight[o * 4] = sw.getX(i); skinWeight[o * 4 + 1] = sw.getY(i); skinWeight[o * 4 + 2] = sw.getZ(i); skinWeight[o * 4 + 3] = sw.getW(i);
+                if (uv) { uv[o * 2] = t.getX(i); uv[o * 2 + 1] = t.getY(i); }
+            }
+            if (g.index) { const src = g.index; for (let i = 0; i < src.count; i++) index[k++] = src.getX(i) + v; }
+            else for (let i = 0; i < n; i++) index[k++] = v + i;
+            v += n;
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
+        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
+        if (uv) geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+        geometry.setIndex(new THREE.BufferAttribute(index, 1));
+        geometry.userData.rrCasterStandIn = true;
+        return geometry;
+    },
+    build(root, shadows) {
+        const scene = (() => { let o = root; while (o.parent) o = o.parent; return o; })();
+        const list = [];
+        for (const entry of this.groups(root, shadows)) {
+            const mesh = new THREE.SkinnedMesh(this.merge(entry.parts, !!entry.caster.__rrCutout), entry.caster);
+            mesh.name = "caster-stand-in";
+            // Bound at the identity, its positions already in bind space; given the matrix outright, so three never
+            // recalculates the skeleton's inverses from the pose it stands in (bind with none does).
+            mesh.bindMode = THREE.AttachedBindMode;
+            mesh.bind(entry.skeleton, new THREE.Matrix4());
+            mesh.matrixAutoUpdate = false;
+            mesh.matrixWorldAutoUpdate = false;
+            mesh.frustumCulled = false;
+            mesh.castShadow = true;
+            mesh.layers.set(Reactor3D.SHADOW_LAYER_DYNAMIC);
+            mesh.visible = false;
+            mesh.customDepthMaterial = entry.caster;
+            mesh.userData.rrStandInFor = root;
+            this.group(scene).add(mesh);
+            list.push({ mesh, parts: entry.parts, shapes: entry.shapes });
+        }
+        return list;
+    },
+    release(record) {
+        if (!record) return;
+        for (const entry of record.list) { if (entry.mesh.parent) entry.mesh.parent.remove(entry.mesh); entry.mesh.geometry.dispose(); }
+    },
+    /**
+     * This pass's stand-ins for `root`, shown and placed where their parts are; returns the parts they draw for
+     * (the pass leaves those alone), or null. The stand-ins shown are added to `live` for `done`.
+     */
+    use(root, shadows, live) {
+        let record = root.userData.rrCasterStandIns;
+        const signature = this.signature(root);
+        if (!record || record.signature !== signature) {
+            this.release(record);
+            record = root.userData.rrCasterStandIns = { signature, list: this.build(root, shadows), parts: new Set() };
+        }
+        if (!record.list.length) return null;
+        const merged = record.parts;
+        merged.clear();
+        for (const entry of record.list) {
+            // Parts that change shape join only while every shape rests; else they draw themselves. A group with a part
+            // hidden or not casting now (a pass's warming, the caster budget) sits this pass out the same way.
+            if (entry.shapes && !entry.parts.every(part => this.resting(part))) continue;
+            if (!entry.parts.every(part => part.visible && part.parent && (part.layers.mask & (1 << Reactor3D.SHADOW_LAYER_DYNAMIC)))) continue;
+            // At the identity, world and bind both: an attached skin's own place cancels, so its bones alone place it.
+            const mesh = entry.mesh;
+            mesh.matrixWorld.identity();
+            mesh.bindMatrixInverse.identity();
+            mesh.visible = true;
+            live.push(mesh);
+            // Its parts are drawn by it this pass, not by themselves.
+            for (const part of entry.parts) { merged.add(part); part.visible = false; (live.parts || (live.parts = [])).push(part); }
+        }
+        return merged.size ? merged : null;
+    },
+    done(live) {
+        for (const mesh of live) mesh.visible = false;
+        live.length = 0;
+        if (live.parts) { for (const part of live.parts) part.visible = true; live.parts.length = 0; }
+    },
+    /** Stand-ins of characters gone from the scene go too (now and then: a map's crowd comes and goes). */
+    sweep(scene) {
+        const group = scene && scene.userData && scene.userData.rrCasterStandIns;
+        if (!group || (this._swept = (this._swept || 0) + 1) % 120) return;
+        for (const mesh of group.children.slice()) {
+            const root = mesh.userData.rrStandInFor;
+            let attached = root; while (attached && attached.parent) attached = attached.parent;
+            if (attached === scene) continue;
+            group.remove(mesh);
+            mesh.geometry.dispose();
+            if (root && root.userData) delete root.userData.rrCasterStandIns;
+        }
+    },
+    /** In one face: the stand-ins of characters the face hid go with them. */
+    follow(live) {
+        let hidden = null;
+        for (const mesh of live) {
+            const root = mesh.userData.rrStandInFor;
+            if (mesh.visible && root && !root.visible) { mesh.visible = false; (hidden || (hidden = [])).push(mesh); }
+        }
+        return hidden;
+    },
+    unfollow(hidden) {
+        for (const mesh of hidden) mesh.visible = true;
+    }
+};
+
 Reactor3D.SHADOW_QUALITY = {
-    full: { slots: 8, dynamicSlots: 3, size: 512, taps: 5, dynamicTriangles: 600000, staticPerFrame: 2, dynamicPerFrame: 2, dynamicInterval: 1, sunSize: 1024, sunSpans: [24, 96], dynamicRowsWithSun: true },
+    full: { slots: 8, dynamicSlots: 3, size: 512, taps: 5, dynamicTriangles: 600000, staticPerFrame: 2, dynamicPerFrame: 3, dynamicInterval: 1, sunSize: 1024, sunSpans: [24, 96], dynamicRowsWithSun: true },
     weak: { slots: 4, dynamicSlots: 2, size: 256, taps: 1, dynamicTriangles: 200000, staticPerFrame: 1, dynamicPerFrame: 1, dynamicInterval: 2, sunSize: 768, sunSpans: [16, 64], dynamicRowsWithSun: false }
 };
 // A CPU-limited Auto profile retains character shadows. Keep the atlas and
@@ -4020,7 +4244,9 @@ Reactor3D.Shadows = {
             }
             return pool[key];
         }
-        if (first && first.alphaTest > 0) {
+        // A merged character's cut-out parts (Reactor3D.LayeredParts) cast whole: their pictures are layers the depth
+        // material cannot read, and they are seams, stitching and frayed edges lying on the garment they cast onto.
+        if (first && first.alphaTest > 0 && !(first.userData && first.userData.rrLayers)) {
             if (!first.__reactorCasterMaterial) {
                 const cutout = make();
                 cutout.__rrCutout = true;
@@ -5216,12 +5442,16 @@ Reactor3D.Shadows = {
      * caster follows the source's map, which a sprite sheet swaps as it
      * animates.
      */
-    _swapCasters(roots) {
+    _swapCasters(roots, dynamic) {
         const swapped = [];
+        const live = this._liveStandIns || (this._liveStandIns = []);
+        live.length = 0;
         for (const root of roots) {
             if (!root.parent || !root.visible) continue;
+            // A moving caster's parts that draw alike in depth draw as one (CasterMerge): the same pixels, fewer draws.
+            const merged = dynamic && Reactor3D.CasterMerge.enabled ? Reactor3D.CasterMerge.use(root, this, live) : null;
             root.traverse(child => {
-                if (!child.isMesh) return;
+                if (!child.isMesh || (merged && merged.has(child))) return;
                 let caster = child.customDepthMaterial;
                 if (!caster || !caster.__rrCaster) {
                     const layers = (1 << Reactor3D.SHADOW_LAYER_STATIC) | (1 << Reactor3D.SHADOW_LAYER_DYNAMIC);
@@ -5249,6 +5479,7 @@ Reactor3D.Shadows = {
 
     _unswap(swapped) {
         for (let i = 0; i < swapped.length; i += 2) swapped[i].material = swapped[i + 1];
+        if (this._liveStandIns && this._liveStandIns.length) Reactor3D.CasterMerge.done(this._liveStandIns);
     },
 
     /**
@@ -5277,7 +5508,8 @@ Reactor3D.Shadows = {
                 // Hidden already (a half of the split, a mesh still compiling): left as it is.
                 if (object.visible === false) { flags[i] = GONE; i = ends[i]; continue; }
                 const layers = object.layers;
-                flags[i] = layers && (layers.mask & bit) !== 0 && (object.isMesh || object.isLine || object.isPoints || object.isSprite) ? CASTS : 0;
+                // The casters' stand-ins (CasterMerge) are shown after this list was gathered: their group stays.
+                flags[i] = (layers && (layers.mask & bit) !== 0 && (object.isMesh || object.isLine || object.isPoints || object.isSprite)) || (object.userData && object.userData.rrCasterGroup) ? CASTS : 0;
                 i++;
             }
             for (let i = count - 1; i > 0; i--) if (!(flags[i] & GONE)) flags[parents[i]] |= flags[i];
@@ -5356,11 +5588,12 @@ Reactor3D.Shadows = {
     /** One face of a row: characters the face cannot see are not skinned into it (InstanceCull). */
     renderFace(renderer, scene, camera) {
         const cull = Reactor3D.InstanceCull, hidden = cull ? cull.hide(scene, camera) : null;
+        const standIns = hidden && this._liveStandIns && this._liveStandIns.length ? Reactor3D.CasterMerge.follow(this._liveStandIns) : null;
         // A face holds depth only, the same whatever order it is drawn in: three's sort of the face's
         // list (and the garbage it makes) is skipped. `sortFaces = true` sorts them as before.
         const sorted = renderer.sortObjects;
         if (!this.sortFaces) renderer.sortObjects = false;
-        try { renderer.render(scene, camera); } finally { renderer.sortObjects = sorted; if (hidden) cull.show(hidden); }
+        try { renderer.render(scene, camera); } finally { renderer.sortObjects = sorted; if (hidden) cull.show(hidden); if (standIns) Reactor3D.CasterMerge.unfollow(standIns); }
     },
     sortFaces: false,
 
@@ -5448,7 +5681,8 @@ Reactor3D.Shadows = {
                 }
                 if (dynamics.length || sunDynamics.length) {
                     const roots = this._casting || this._dynamic;
-                    const swapped = this._swapCasters(roots);
+                    if (Reactor3D.CasterMerge.enabled) Reactor3D.CasterMerge.sweep(scene);
+                    const swapped = this._swapCasters(roots, true);
                     let others = null;
                     try {
                         others = this._hideNonCasters(scene, Reactor3D.SHADOW_LAYER_DYNAMIC);

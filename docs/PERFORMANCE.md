@@ -1,5 +1,41 @@
 # Performance checks
 
+## Built characters in a few draws (2026-11-04, runtime 20261104.9)
+
+North Haven's square, 64 sleepers and awake bots (47 built characters drawn), RTX 5070, 1920×1080, headless Chromium with the frame cap off, the same live data each run.
+
+| Runtime | Frame | Draws a frame | Pieces per built character |
+| --- | --- | --- | --- |
+| .8 (draws by program, one-pass soft hair) | 13.4 ms | 1,080 | 26 |
+| .9 (`LayeredParts`) | 5.2 ms (6.2 on the live site) | 512 | about 8 (13 counting vehicles) |
+
+Ruled out first, with the network loop stopped and every character left in place: online against offline (21.6 / 21.0 ms), and anything made per frame (three's id counters for objects, materials, geometries and textures did not move).
+
+What went, in order:
+
+- **Textures at full size (.5):** model pictures over the cap reached the GPU whole on every tier, and other players' characters kept 2048 sheets. Video memory dropped from about 9.1 to 7.5 GB, and battle GPU time from 30–47 to 18 ms.
+- **Draw order (.8):** draws sorted by material id switched shader program on 890 of about 1,250. Sorted by program, about 375 switches.
+- **Two-pass transparent parts (.8):** soft hair, lips and brows were drawn twice per frame with their program worked out twice. `forceSinglePass` took that to one draw each.
+- **Built characters as their parts (.9):** 17–39 meshes each; now about 8.
+
+What remains a frame: about 500 draws, of which parked vehicles are about 40 each. Each material also carries 64 uniforms, 60 of them the scene's, walked on every draw.
+
+Visual check: `~/.cache/rr-tests/layered-ab.cjs` draws one character alone in the game's light, parts apart and merged, and `ab-diff.py` compares them. Of eight characters, five match within 90 pixels; the rest show hairline edges on plate armour and a hem that no longer lets the body show through.
+
+## Mirrors and water in a crowd (2026-11-04, runtime 20261104.1)
+
+The owner saw about 30 fps in North Haven's raid online. Measured where they stood (map 5 at 73,60, 50 sleepers, the Tactical raid started as Rhea's "Defend the square" starts it) in one headless Chromium on the RTX 5070 at 1280×720, as a guest on the live demo. The A/B served this checkout's `runtime/` in place of the site's `js/` through CDP request interception (`~/.cache/rr-tests/fps.cjs --map=5 --at=73,60 --raid --local`), so nothing was deployed to measure it.
+
+| Same scene | Before | After |
+| --- | --- | --- |
+| Mirror pass (the square's water) | 8.67M triangles, 5.70 ms GPU | 0.78M, 2.71 ms |
+| Frame's own draw | 2.2M triangles, 4.26 ms GPU | 2.5M, 4.42 ms |
+| Whole frame GPU | 11.0 ms | 7.95 ms |
+| Draw calls / triangles a frame | 1,193 / 12.4M | 602 / 3.5M |
+| Frames (1,200 sampled) | 50.3 fps, p95 33.4 ms, 234 over 25 ms | 60 fps (headless cap), p95 16.8 ms, 1 over 25 ms |
+
+The mirror pass called `renderer.render` itself, so neither the distance levels (`_renderScene`) nor the crowd limit reached it: every character was drawn again at full detail. It now takes the levels from its own camera and keeps the 12 characters nearest the player (`MIRRORED_CHARACTERS`). Left: the mirror is still a full lit draw at the frame's size (2.7 ms, mostly fill); the main draw's CPU (4.4 ms, uniform uploads and the scene walk) is the next cost. A larger window than 1280×720 scales the GPU share, which fits the owner's 30 fps.
+
 ## Crowds of characters and online players (2026-11-03, runtimes 20261103.1–.8)
 
 The owner saw about 20 fps online on a slower machine that ran at 144 offline, worst while a map loaded. Measured in headless Chromium on the RTX 5070, entered through the title and guest pages. A shortcut into Scene_Map had left the screen black, so the first numbers that day were discarded. The weak tier was forced by reporting an Intel UHD 620. GPU time per pass came from `EXT_disjoint_timer_query_webgl2`; CPU time came from CDP profiles, some with the CPU slowed 4×. The harness is outside the repo, in `~/.cache/rr-tests/fps.cjs`, one browser at a time.

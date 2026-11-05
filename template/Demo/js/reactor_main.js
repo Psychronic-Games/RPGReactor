@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.99.5
-// RPG Reactor runtime revision: 20261103.8
+// RPG Reactor runtime revision: 20261104.9
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261103.8";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261104.9";
 //=============================================================================
 
 const scriptUrls = [
@@ -105,7 +105,51 @@ class Main {
         this.showLoadingSpinner();
         this.testXhr();
         this.hookNwjsClose();
-        this.loadMainScripts();
+        // Plugins check for WebGL as they load (UltraMode7 turns itself off without it), so the wait comes first.
+        this.waitForWebGL(() => this.loadMainScripts());
+    }
+
+    /**
+     * WebGL that is there in a moment: a graphics driver that refuses the GPU process for a second (it ran out of
+     * GPU channels, a reset) left the game stopped at "Your browser does not support WebGL" while the next try
+     * would have had it. Asked every half second for ten seconds, each test context given back at once; then one
+     * reload of the page (a new page asks for a new GPU process); then on, to the usual message.
+     */
+    waitForWebGL(then) {
+        const probe = () => {
+            try {
+                const canvas = document.createElement("canvas");
+                const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+                if (!gl) return false;
+                const lose = gl.getExtension("WEBGL_lose_context");
+                if (lose) lose.loseContext();
+                return true;
+            } catch (error) {
+                return false;
+            }
+        };
+        if (probe()) { then(); return; }
+        const key = "rrWebGLReloaded", started = Date.now();
+        const retry = () => {
+            if (probe()) {
+                try { sessionStorage.removeItem(key); } catch (error) { /* none kept */ }
+                console.warn("WebGL came back after " + (Date.now() - started) + " ms.");
+                then();
+                return;
+            }
+            if (Date.now() - started < 10000) { setTimeout(retry, 500); return; }
+            let reloaded = false;
+            try { reloaded = sessionStorage.getItem(key) === "1"; } catch (error) { reloaded = true; }
+            if (!reloaded) {
+                try { sessionStorage.setItem(key, "1"); } catch (error) { /* reload once regardless */ }
+                location.reload();
+                return;
+            }
+            try { sessionStorage.removeItem(key); } catch (error) { /* none kept */ }
+            then();
+        };
+        console.warn("WebGL is not available yet; trying again for a few seconds.");
+        setTimeout(retry, 500);
     }
 
     showLoadingSpinner() {

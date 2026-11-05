@@ -68,8 +68,26 @@ test('model textures over the cap are resampled down at load', async () => {
         assert.equal(calls[0].resizeQuality, 'high');
         assert.equal(big.closed, true, 'the oversized bitmap is released');
         assert.equal(Reactor3D.capImage({ naturalWidth: 4096, naturalHeight: 4096 }).naturalWidth, 4096, 'without a document the image is returned as is');
-        assert.match(r3d, /loaded\.image = Reactor3D\.capImage\(loaded\.image\);/, 'embedded data-URI textures are capped');
-        assert.match(r3d, /map\.image = Reactor3D\.capImage\(img\);/, 'file textures are capped');
+        assert.match(r3d, /Reactor3D\.fitModelTexture\(loaded, loaded\.image, ownCap\);/, 'embedded data-URI textures are capped');
+        assert.match(r3d, /Reactor3D\.fitModelTexture\(map, img, ownCap\);/, 'file textures are capped');
+        // An oversized picture is resized before it reaches the texture: a stand-in meanwhile, never the full picture.
+        const made = [];
+        global.document = { createElement: () => ({ width: 0, height: 0, getContext: () => ({ fillRect() {}, set fillStyle(v) {} }) }) };
+        global.createImageBitmap = (source, options) => { made.push(options); return Promise.resolve({ width: options.resizeWidth, height: options.resizeHeight, close() {} }); };
+        Reactor3D._fitStandIn = null;
+        const texture = { image: null, needsUpdate: false, flipY: false, premultiplyAlpha: false, disposed: 0, dispose() { this.disposed++; } };
+        const picture = { naturalWidth: 2048, naturalHeight: 2048 };
+        Reactor3D.fitModelTexture(texture, picture, 1024);
+        assert.notEqual(texture.image, picture, 'the full picture is never put on the texture');
+        assert.equal(texture.image.width, 1, 'a one-pixel stand-in until the resize comes back');
+        await new Promise(r => setTimeout(r, 0));
+        assert.deepEqual([texture.image.width, texture.image.height], [1024, 1024], 'at its own cap');
+        assert.equal(made[0].resizeQuality, 'high');
+        assert.equal(texture.disposed, 1, 'storage made again at the picture\'s size');
+        const under = { naturalWidth: 512, naturalHeight: 512 }, plain = { image: null, needsUpdate: false };
+        Reactor3D.fitModelTexture(plain, under, 1024);
+        assert.equal(plain.image, under, 'under the cap: as it is');
+        delete global.document;
     } finally {
         delete global.createImageBitmap;
         Reactor3D.maxTextureSize = previous;

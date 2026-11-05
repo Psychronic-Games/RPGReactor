@@ -1,7 +1,8 @@
 /**
  * A crowd of skinned characters (150 sleepers on one online map) costs what is seen of it:
- * a body held still keeps its matrices, the reflection capture shows the few nearest, and
- * dense geometry takes its levels on any GPU once a scene is heavy.
+ * a body held still keeps its matrices, the reflection capture and the mirrors show the few
+ * nearest, and dense geometry takes its levels on any GPU once a scene is heavy, in the
+ * mirrors' pictures too.
  */
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -10,6 +11,7 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '..', '..');
 require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
 const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+require(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'));
 const THREE = global.THREE;
 
 function body() {
@@ -49,6 +51,76 @@ test('the reflection capture keeps the nearest characters and leaves the rest of
     assert.equal(hidden.length, 20 - 1 - Reactor3D.REFLECTED_CHARACTERS, 'the nearest few and the player stay in');
     assert.ok(!hidden.includes(holders[0].object) && !hidden.includes(holders[19].object));
     assert.ok(hidden.includes(holders[18].object));
+});
+
+test('a mirror or water keeps the characters nearest the player and leaves the rest of a crowd out', () => {
+    const holders = [];
+    for (let i = 0; i < 30; i++) { const { root } = body(); root.position.set(i, 0, 0); new THREE.Group().add(root); holders.push({ object: root }); }
+    const scene = { reflectionHolders: () => holders, reflectionSubject: () => holders[0] };
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(29, 10, 0);
+    const hidden = Reactor3D.MapScene.prototype.mirrorHidden.call(scene, camera);
+    assert.equal(hidden.length, 30 - 1 - Reactor3D.MIRRORED_CHARACTERS, 'the player and the nearest to them stay in');
+    assert.ok(Reactor3D.MIRRORED_CHARACTERS >= Reactor3D.REFLECTED_CHARACTERS, 'a sharp mirror keeps at least what the capture does');
+    assert.ok(Reactor3D.MIRRORED_CHARACTERS_WEAK < Reactor3D.MIRRORED_CHARACTERS, 'fewer on a weak GPU');
+    assert.ok(!hidden.includes(holders[0].object) && !hidden.includes(holders[Reactor3D.MIRRORED_CHARACTERS].object));
+    assert.ok(hidden.includes(holders[29].object), 'the farthest from the player is left out, though nearest the camera');
+    assert.equal(Reactor3D.MapScene.prototype.mirrorHidden.call(scene, camera), hidden, 'one list, filled again each frame');
+    assert.equal(hidden.length, 30 - 1 - Reactor3D.MIRRORED_CHARACTERS);
+});
+
+test('a mirror draws with the distance levels, chosen from its own camera, and puts the full geometry back', () => {
+    const detail = Reactor3D.GeometryDetail, warmup = Reactor3D.ShaderWarmup, begin = detail.begin;
+    const full = new THREE.BufferGeometry(), level = new THREE.BufferGeometry();
+    const mesh = new THREE.Mesh(full, new THREE.MeshBasicMaterial());
+    const scene = new THREE.Scene();
+    scene.add(mesh);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 5, 5);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld(true);
+    const asked = [], drawn = [];
+    let target = null;
+    const renderer = {
+        getRenderTarget: () => target, setRenderTarget: t => { target = t; },
+        render: (s, c) => drawn.push({ geometry: mesh.geometry, camera: c, active: detail._active })
+    };
+    try {
+        Reactor3D.ShaderWarmup = undefined;
+        detail.begin = (s, c, height) => { asked.push({ camera: c, height }); mesh.geometry = level; return [[mesh, full]]; };
+        const plane = { normal: new THREE.Vector3(0, 1, 0), point: new THREE.Vector3(0, 0, 0), object: null };
+        const seen = Reactor3D.Mirrors.renderLevel(renderer, scene, camera, [plane], 0, 64, 48, []);
+        assert.equal(seen.length, 1);
+        assert.equal(drawn.length, 1);
+        assert.equal(drawn[0].geometry, level, 'the mirror drew the level');
+        assert.equal(asked[0].camera, drawn[0].camera, 'chosen from the reflected camera');
+        assert.notEqual(asked[0].camera, camera);
+        assert.equal(asked[0].height, 48, 'at the picture\'s own height');
+        assert.ok(drawn[0].active, 'what is swapped is known while it draws (withOriginal)');
+        assert.equal(mesh.geometry, full, 'the full geometry is back after');
+        assert.equal(detail._active, null);
+    } finally { detail.begin = begin; Reactor3D.ShaderWarmup = warmup; }
+});
+
+test('a body small on screen or out of view keeps the update\'s pose between updates; a near one is blended', () => {
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 500);
+    camera.position.set(0, 2, 10); camera.lookAt(0, 1, 0); camera.updateMatrixWorld(true);
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    const place = (x, y, z) => { const { root } = body(); root.position.set(x, y, z); root.userData.glbSize = { x: 0.5, y: 1.7, z: 0.5 }; root.updateMatrixWorld(true); return root; };
+    const near = { posedOnce: true }, far = { posedOnce: true }, behind = { posedOnce: true };
+    Reactor3D.animationDue(near, {}, place(0, 0, 4), camera);
+    Reactor3D.animationDue(far, {}, place(0, 0, -150), camera);
+    Reactor3D.animationDue(behind, {}, place(0, 0, 60), camera);
+    assert.equal(near.blendPose, true, 'near the camera: blended');
+    assert.equal(far.blendPose, false, 'a speck in the distance: the update\'s pose');
+    assert.equal(behind.blendPose, false, 'behind the camera: the update\'s pose');
+    const player = { posedOnce: true };
+    global.$gamePlayer = {};
+    try { Reactor3D.animationDue(player, global.$gamePlayer, place(0, 0, -150), camera); } finally { delete global.$gamePlayer; }
+    assert.equal(player.blendPose, true, 'the player\'s own body always is');
+    const core = require('node:fs').readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const capture = core.slice(core.indexOf('    capturePoses() {'), core.indexOf('    readPose(node, into, k) {'));
+    assert.match(capture, /if \(holder\.blendPose === false \|\| holder\.matricesHeld\) continue;/, 'left out of the blend, and out of its bone walks');
 });
 
 test('distance levels are wanted on a weak GPU always, on another once a scene draws heavy', () => {

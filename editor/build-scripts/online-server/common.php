@@ -40,6 +40,7 @@ function settingsOf(array $config): array {
     $settings['accounts'] = array_merge(['mode' => 'none', 'registration' => true, 'minPassword' => 8, 'persist' => true, 'sleepers' => true, 'sleeperDays' => 30], is_array($settings['accounts'] ?? null) ? $settings['accounts'] : []);
     $settings['chat'] = array_merge(['enabled' => true, 'who' => 'all', 'world' => true, 'cooldown' => 2, 'maxLength' => 200, 'history' => 50, 'blockedWords' => ''], is_array($settings['chat'] ?? null) ? $settings['chat'] : []);
     $settings['voice'] = array_merge(['enabled' => false, 'who' => 'all'], is_array($settings['voice'] ?? null) ? $settings['voice'] : []);
+    $settings['storage'] = array_merge(['characterMB' => 0, 'totalGB' => 0], is_array($settings['storage'] ?? null) ? $settings['storage'] : []);
     $settings['engine'] = array_merge(['enabled' => true, 'rate' => 15, 'movement' => 'speed', 'maxSpeed' => 16], is_array($settings['engine'] ?? null) ? $settings['engine'] : []);
     return $settings;
 }
@@ -297,10 +298,15 @@ function noteWake(string $dir, string $key, array $note, array $look): void {
     $file = $dir . '/accounts/' . $key . '.wake';
     $before = @json_decode((string)@file_get_contents($file), true);
     if (is_array($before) && (int)($before['map'] ?? 0) !== $note['map']) @unlink(sleepFile($dir, (int)($before['map'] ?? 0), $key));
-    file_put_contents($file, json_encode($note));
+    // Written aside and swapped in: the sleepers list read a note half written, and dropped that sleeper.
+    $swap = function (string $path, string $text): void {
+        $temporary = $path . '.' . getmypid() . '.tmp';
+        if (file_put_contents($temporary, $text) !== false) rename($temporary, $path);
+    };
+    $swap($file, json_encode($note));
     $sleeper = sleepFile($dir, $note['map'], $key);
     if (!is_dir(dirname($sleeper))) @mkdir(dirname($sleeper), 0770, true);
-    file_put_contents($sleeper, json_encode($note + $look + ['id' => substr($key, 0, 16), 'at' => time()]));
+    $swap($sleeper, json_encode($note + $look + ['id' => substr($key, 0, 16), 'at' => time()]));
 }
 
 function forgetAccount(string $dir, string $key): void {

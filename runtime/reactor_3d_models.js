@@ -2309,6 +2309,14 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                     // synchronous parser.
                     this.parseGlbAsync(xhr.response).then(parsed => {
                         if (parsed && parsed.json) {
+                            // A character from the Character Builder: its parts merged before anything clones it (LayeredParts).
+                            if (this.LayeredParts && this.isBuilderGlb(parsed.json) && (parsed.json.skins || []).length) {
+                                let template = null;
+                                try { template = this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, parsed.bitmaps); } catch (error) { buildFrom(() => { throw error; }); return; }
+                                this.LayeredParts.apply(template).catch(error => console.warn("Reactor3D: " + name + "'s parts stay apart:", error && error.message || error))
+                                    .then(() => buildFrom(() => template));
+                                return;
+                            }
                             buildFrom(() => this.buildGlbTemplate(
                                 parsed.json, parsed.bin, baseUrl, parsed.bitmaps));
                             // Distance levels, if the import wrote any: listed
@@ -2600,10 +2608,11 @@ Reactor3D.modelAnisotropy = function() {
 };
 
 /** The main-thread twin of capBitmapSize for images decoded by the browser: a canvas at the capped size. */
-Reactor3D.capImage = function(image) {
+Reactor3D.capImage = function(image, own) {
     // Only a picture the browser draws: a compressed texture's levels are capped where they are transcoded.
     if (!image || !(image.tagName || typeof image.getContext === "function" || typeof image.close === "function")) return image;
-    const cap = this.textureCap();
+    // `own`: a smaller cap for this picture (another player's character: Reactor3D.remoteTextureCap).
+    const cap = own > 0 ? Math.min(this.textureCap(), own) : this.textureCap();
     const width = image && (image.naturalWidth || image.width);
     const height = image && (image.naturalHeight || image.height);
     if (!image || !(width > cap || height > cap) || typeof document === "undefined") return image;
@@ -2620,6 +2629,33 @@ Reactor3D.capImage = function(image) {
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     return canvas;
+};
+
+/**
+ * A model picture, decoded, onto its texture at no more than its cap (the machine's, or the texture's own:
+ * another player's character). An oversized one is resized off the main thread first and the texture holds a
+ * one-pixel stand-in until then, so the full picture is never uploaded. capImage's way of leaving it to
+ * ShaderWarmup's decode did not hold for a GLB's own pictures: three uploaded them at full size the frame they
+ * were drawn, before any decode asked for them (2048 sheets on every tier, and video memory full in a crowd).
+ */
+Reactor3D.fitModelTexture = function(texture, image, own) {
+    const cap = own > 0 ? Math.min(this.textureCap(), own) : this.textureCap();
+    const width = image && (image.naturalWidth || image.width), height = image && (image.naturalHeight || image.height);
+    if (!image || !(width > cap || height > cap)) { texture.image = image; texture.needsUpdate = true; return; }
+    if (typeof createImageBitmap !== "function" || typeof document === "undefined") { texture.image = this.capImage(image, own); texture.needsUpdate = true; return; }
+    const stand = this._fitStandIn || (this._fitStandIn = (() => { const c = document.createElement("canvas"); c.width = c.height = 1; const g = c.getContext("2d"); g.fillStyle = "#808080"; g.fillRect(0, 0, 1, 1); return c; })());
+    texture.image = stand;
+    texture.needsUpdate = true;
+    const scale = cap / Math.max(width, height);
+    createImageBitmap(image, { resizeWidth: Math.max(1, Math.round(width * scale)), resizeHeight: Math.max(1, Math.round(height * scale)),
+        resizeQuality: "high", imageOrientation: texture.flipY ? "flipY" : "from-image", premultiplyAlpha: texture.premultiplyAlpha ? "premultiply" : "none", colorSpaceConversion: "none" })
+        .then(bitmap => {
+            if (texture.image !== stand) { if (bitmap.close) bitmap.close(); return; }
+            // Its storage was made one pixel square: made again at the picture's size.
+            texture.dispose();
+            texture.image = bitmap;
+            texture.needsUpdate = true;
+        }, () => { if (texture.image === stand) { texture.image = this.capImage(image, own); texture.needsUpdate = true; } });
 };
 
 Reactor3D.capBitmapSize = function(bitmap) {
@@ -3682,14 +3718,19 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     if (bitmaps && bitmaps[textureDef.source]) {
         if (usedBitmaps) usedBitmaps.add(textureDef.source);
         const decoded = new THREE.Texture(bitmaps[textureDef.source]);
+        decoded.userData.rrGlbImage = textureDef.source;
         decoded.flipY = false;
         if (THREE.SRGBColorSpace) decoded.colorSpace = THREE.SRGBColorSpace;
         decoded.needsUpdate = true;
         textures.push(decoded);
         return decoded;
     }
+    // The cap of the template being built (buildGlbTemplate's `textureCap`): it travels with the texture to its decode.
+    const ownCap = this._buildTextureCap > 0 ? this._buildTextureCap : 0;
     const map = new THREE.Texture();
     map.userData.rrModelTexture = true;
+    map.userData.rrGlbImage = textureDef.source;
+    if (ownCap) map.userData.rrTextureCap = ownCap;
     map.flipY = false;
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
     // An embedded picture's Blob goes with its <img> to the image worker, which decodes from it (its
@@ -3708,8 +3749,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         try {
             embedded = new THREE.TextureLoader().load(primary, loaded => {
                 if (blob && Reactor3D.ImageWorker && Reactor3D.ImageWorker.blobs) Reactor3D.ImageWorker.blobs.set(loaded.image, blob);
-                loaded.image = Reactor3D.capImage(loaded.image);
-                loaded.needsUpdate = true;
+                Reactor3D.fitModelTexture(loaded, loaded.image, ownCap);
                 releaseObjectUrl();
                 if (loaded.userData) delete loaded.userData.reactorObjectUrl;
             }, undefined, releaseObjectUrl);
@@ -3719,6 +3759,8 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         }
         embedded.flipY = false;
         embedded.userData.rrModelTexture = true;
+        embedded.userData.rrGlbImage = textureDef.source;
+        if (ownCap) embedded.userData.rrTextureCap = ownCap;
         if (THREE.SRGBColorSpace) embedded.colorSpace = THREE.SRGBColorSpace;
         if (ownedObjectUrl && !objectUrlReleased) embedded.userData.reactorObjectUrl = primary;
         textures.push(embedded);
@@ -3733,8 +3775,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         if (index >= candidates.length) return;
         const img = new Image();
         img.onload = () => {
-            map.image = Reactor3D.capImage(img);
-            map.needsUpdate = true;
+            Reactor3D.fitModelTexture(map, img, ownCap);
         };
         img.onerror = () => tryAt(index + 1);
         img.src = candidates[index];
@@ -3778,6 +3819,7 @@ Reactor3D.carrySurfaceData = function(from, to) {
     for (const key of ["rrSurfaceMap", "rrOcclusionMap"]) if (a[key]?.isTexture) b[key] = a[key];
     if (a.rrEmissive && a.rrEmissive.isColor) b.rrEmissive = a.rrEmissive.clone();
     if (a.rrHair) b.rrHair = true;
+    if (a.rrLayers) b.rrLayers = a.rrLayers;
     return to;
 };
 
@@ -3787,6 +3829,7 @@ Reactor3D.cloneSurfaceMaterial = function(material) {
     for (const key of ["rrNormalMap", "rrEmissiveMap", "rrSurfaceMap", "rrOcclusionMap"]) {
         if (data?.[key]?.isTexture) delete material.userData[key];
     }
+    delete material.userData.rrLayers;
     let cloned;
     try {
         cloned = material.clone();
@@ -4143,6 +4186,35 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps, options) {
  * view's height; a quarter of its triangles is not a visible change there,
  * and at ten spans a twentieth is not.
  */
+/**
+ * options.textureCap: the largest side this template's pictures keep (under the machine's own cap). Another
+ * player's character is one of a crowd: its 2048 sheets (four or more, 60 to 100 MB of video memory with their
+ * mipmaps) became the stalls of a battle camera sweeping a crowd, each uploading as it came into view.
+ */
+(function() {
+    const build = Reactor3D.buildGlbTemplate;
+    Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps, options) {
+        const was = this._buildTextureCap;
+        this._buildTextureCap = options && options.textureCap > 0 ? options.textureCap : 0;
+        let template;
+        try { template = build.apply(this, arguments); } finally { this._buildTextureCap = was; }
+        // A transparent part seen from both sides is drawn in one pass. three draws such a material twice (its back,
+        // then its front) and marks it changed around each (needsUpdate), working its program out again twice a draw,
+        // every frame: a built character's soft hair, lips and brows, 54 of them a frame in North Haven's square.
+        if (template && template.traverse) template.traverse(child => {
+            if (child.isMesh) for (const m of [].concat(child.material || [])) if (m && m.transparent && m.side === THREE.DoubleSide) m.forceSinglePass = true;
+        });
+        return template;
+    };
+})();
+
+/** The largest side of another player's character pictures: 1024, 512 on a weak GPU (`remoteTextureSize`). */
+Reactor3D.remoteTextureSize = { full: 1024, weak: 512 };
+Reactor3D.remoteTextureCap = function() {
+    const weak = typeof this.isWeakGpu === "function" && this.isWeakGpu();
+    return Math.max(64, Math.floor((weak ? this.remoteTextureSize.weak : this.remoteTextureSize.full) || 1024));
+};
+
 Reactor3D.LOD_DISTANCES = [4, 10];
 /** Come back a level only once this much nearer than the switch, so a hovering distance does not flicker. */
 Reactor3D.LOD_HYSTERESIS = 0.85;
@@ -12357,17 +12429,291 @@ Reactor3D.inAnimationView = function(object, span, camera) {
 Reactor3D.animationDue = function(holder, character, object, camera) {
     holder.sampled = true;
     holder.poseHeld = false;
+    // Whether the frames between game updates blend this body's pose (Graphics.FramePacing.capturePoses): not
+    // for one out of view or small on screen, whose pose and place of the update stand until the next.
+    holder.blendPose = true;
     if (!camera || holder.action || (typeof $gamePlayer !== "undefined" && character === $gamePlayer)) return true;
     const span = Reactor3D.instanceSpan(object);
     // Out of view, a body keeps the pose it had: sampling a clip nobody sees was most of a crowd's cost.
     // Its first pose is always taken, and the sphere is generous, so it never steps in frozen mid-stride.
-    if (holder.posedOnce && !Reactor3D.inAnimationView(object, span, camera)) { holder.poseHeld = true; return (holder.sampled = false); }
+    if (holder.posedOnce && !Reactor3D.inAnimationView(object, span, camera)) { holder.poseHeld = true; holder.blendPose = false; return (holder.sampled = false); }
     holder.posedOnce = true;
     const stride = Reactor3D.animationStride(object.position.x, object.position.y + span / 2, object.position.z, span, camera);
     if (stride === 1) return true;
+    holder.blendPose = false;
     if (holder.strideAt === undefined) holder.strideAt = (Reactor3D._strideSeed = (Reactor3D._strideSeed || 0) + 1);
     // Kept for what is laid over the motion each frame (the look's lean): a frame not sampled keeps last frame's pose whole.
     return (holder.sampled = ((typeof Graphics !== "undefined" ? Graphics.frameCount : 0) + holder.strideAt) % stride === 0);
+};
+
+/**
+ * A body small on screen leaves out the parts nobody can see at that size: what is inside the head (teeth, tongue,
+ * the mouth's inside) and trims under a pixel (seams, stitching, zip teeth, fasteners, indicator lights, lashes,
+ * brows, eyelids). A built character is 17 to 39 parts, each a draw and a material in every pass that sees it, and a
+ * crowd of them was thousands of draws a frame; this is about half of them, at under a twentieth of the view's height
+ * (Reactor3D.animationDue's `blendPose`). The parts leave the view's layer only, so whatever else shows or hides them
+ * is untouched, and they still cast. The parts are known by the Forge's names for them.
+ */
+Reactor3D.FarParts = {
+    enabled: true,
+    PATTERN: /\b(teeth|tongue|mouth inside|seams?|stitch|stitching|zip|zipper|fasteners?|indicators?|lashes|brows|eyelids|controls)\b/i,
+    VIEW_LAYER: 0,
+    partsOf(object) {
+        let list = object.userData.rrFarParts;
+        if (list && list.of === object.children.length) return list;
+        list = [];
+        object.traverse(child => {
+            if (!child.isMesh || child === object) return;
+            const names = (child.name || "") + " " + [].concat(child.material || []).map(m => m && m.name || "").join(" ");
+            if (this.PATTERN.test(names)) list.push(child);
+        });
+        list.of = object.children.length;
+        object.userData.rrFarParts = list;
+        return list;
+    },
+    apply(holder, object, far) {
+        if (!object || !object.userData) return;
+        const want = !!(far && this.enabled);
+        if (holder.farParts === want && object.userData.rrFarPartsApplied === want) return;
+        holder.farParts = want;
+        object.userData.rrFarPartsApplied = want;
+        for (const part of this.partsOf(object)) {
+            if (want) part.layers.disable(this.VIEW_LAYER); else part.layers.enable(this.VIEW_LAYER);
+        }
+    }
+};
+(function() {
+    const due = Reactor3D.animationDue;
+    Reactor3D.animationDue = function(holder, character, object, camera) {
+        const answer = due.apply(this, arguments);
+        Reactor3D.FarParts.apply(holder, object, holder.blendPose === false);
+        return answer;
+    };
+})();
+
+/**
+ * The inside of a closed mouth draws nothing anyone sees: a built character's teeth, tongue and mouth lining sit
+ * behind its lips, three draws in every pass for each body. While every shape of the face (expressions, speech) is
+ * at rest they leave the view's layer; the moment one moves (talking, a smile, a yawn) they come back. Lossless at
+ * any size. Parts known by the Forge's names; the face's shapes are read from the parts that carry them.
+ */
+Reactor3D.ClosedMouth = {
+    enabled: true,
+    PATTERN: /\b(teeth|tongue|mouth inside)\b/i,
+    partsOf(object) {
+        let record = object.userData.rrMouth;
+        if (record && record.of === object.children.length) return record;
+        record = { of: object.children.length, inside: [], faces: [] };
+        object.traverse(child => {
+            if (!child.isMesh) return;
+            const names = (child.name || "") + " " + [].concat(child.material || []).map(m => m && m.name || "").join(" ");
+            if (this.PATTERN.test(names)) record.inside.push(child);
+            else if (child.morphTargetInfluences && child.morphTargetInfluences.length) record.faces.push(child);
+        });
+        object.userData.rrMouth = record;
+        return record;
+    },
+    resting(record) {
+        for (const face of record.faces) { const w = face.morphTargetInfluences; for (let i = 0; i < w.length; i++) if (w[i] > 0.001) return false; }
+        // Its own shapes too (a tongue that moves): any of them off zero shows the inside.
+        for (const part of record.inside) { const w = part.morphTargetInfluences; if (w) for (let i = 0; i < w.length; i++) if (w[i] > 0.001) return false; }
+        return true;
+    },
+    update(object) {
+        if (!object || !object.userData) return;
+        const record = this.partsOf(object);
+        if (!record.inside.length) return;
+        // A body whose parts the far body stands for leaves them all out already.
+        const hide = this.enabled && !object.userData.rrFarHidden && this.resting(record);
+        if (record.hidden === hide) return;
+        record.hidden = hide;
+        for (const part of record.inside) { if (hide) part.layers.disable(0); else part.layers.enable(0); }
+    }
+};
+
+/**
+ * Another player far off, as one draw. A built character is 17 to 39 parts, each a draw, a material and its lights'
+ * uniforms in every pass that sees it; a crowd of them was the frame (1,700 draws, the CPU never idle). Under a
+ * twentieth of the view's height (Reactor3D.animationStride above 1) a remote player or sleeper is drawn instead as
+ * its model's parts merged into one skinned mesh, coloured per vertex from each part's picture and colour, on the
+ * copy's own skeleton (so it walks and lies as the copy does), with one lit material shared by every such body: the
+ * same light, the outline the same, no texture detail (none shows at that size). Its parts leave the view's layer
+ * only: they still cast, and nothing that shows or hides them is touched. It lives in the scene's `far-bodies` group,
+ * outside the model's tree; distance levels (GeometryDetail) take it further when it is a speck. A battle unit is
+ * never one (its fades and flashes are its parts'). `enabled` false: as before.
+ */
+Reactor3D.FarBody = {
+    // Off until its look is judged against the real parts: the scenes measured (the raid's camera, a walk in the
+    // square) showed every player 130 to 300 pixels tall, where a flat-coloured body would be seen.
+    enabled: false,
+    MIN_PARTS: 6,
+    SAMPLE: 128,
+    _merged: new WeakMap(),
+    material() {
+        if (this._material) return this._material;
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, fog: false });
+        material.name = "far-body";
+        if (Reactor3D.litMaterial) Reactor3D.litMaterial(material);
+        material.__reactorModel = true;
+        return (this._material = material);
+    },
+    group(scene) {
+        let group = scene.userData.rrFarBodies;
+        if (!group || group.parent !== scene) {
+            group = new THREE.Group();
+            group.name = "far-bodies";
+            group.matrixAutoUpdate = false;
+            group.matrixWorldAutoUpdate = false;
+            scene.add(group);
+            scene.userData.rrFarBodies = group;
+        }
+        return group;
+    },
+    /** A picture's pixels, small, for colouring vertices: null until it is decoded (a one-pixel stand-in is not). */
+    pixels(texture) {
+        const image = texture && texture.image;
+        const w = image && (image.width || image.naturalWidth), h = image && (image.height || image.naturalHeight);
+        if (!image || !(w > 1) || !(h > 1) || typeof document === "undefined") return null;
+        const cache = this._pixels || (this._pixels = new WeakMap());
+        const key = texture.source || texture;
+        if (cache.has(key)) return cache.get(key);
+        const size = this.SAMPLE, canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        try { context.drawImage(image, 0, 0, size, size); } catch (error) { return null; }
+        const data = { size, rgba: context.getImageData(0, 0, size, size).data, flipY: !!texture.flipY, srgb: texture.colorSpace === (THREE.SRGBColorSpace || "srgb") };
+        cache.set(key, data);
+        return data;
+    },
+    /**
+     * The merged body of a template: every skinned part on one skeleton, in bind space, with a colour per vertex.
+     * Null while a part's picture is still decoding (asked again later), or when the model is not one of these.
+     */
+    mergedOf(template) {
+        if (this._merged.has(template)) return this._merged.get(template);
+        const parts = [];
+        let skeleton = null, ok = true;
+        template.traverse(child => {
+            if (!child.isSkinnedMesh || !child.geometry || !child.geometry.attributes.position) return;
+            if (Array.isArray(child.material) || child.bindMode !== THREE.AttachedBindMode) { ok = false; return; }
+            if (!skeleton) skeleton = child.skeleton; else if (child.skeleton !== skeleton) ok = false;
+            if (Reactor3D.FarParts && Reactor3D.FarParts.PATTERN.test((child.name || "") + " " + ((child.material && child.material.name) || ""))) return;
+            parts.push(child);
+        });
+        if (!ok || parts.length < this.MIN_PARTS - 1) { this._merged.set(template, null); return null; }
+        const colours = [];
+        for (const part of parts) {
+            const m = part.material, map = m && m.map;
+            const px = map ? this.pixels(map) : null;
+            if (map && !px) return null;    // not decoded yet: asked again
+            colours.push({ px, base: m && m.color ? m.color : new THREE.Color(1, 1, 1), uv: part.geometry.attributes.uv });
+        }
+        let vertices = 0, indices = 0;
+        for (const part of parts) { const g = part.geometry, n = g.attributes.position.count; vertices += n; indices += g.index ? g.index.count : n; }
+        const position = new Float32Array(vertices * 3), normal = new Float32Array(vertices * 3), color = new Float32Array(vertices * 3);
+        const skinIndex = new Uint16Array(vertices * 4), skinWeight = new Float32Array(vertices * 4), index = new Uint32Array(indices);
+        const at = new THREE.Vector3(), nm = new THREE.Vector3(), normalMatrix = new THREE.Matrix3();
+        const lin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+        let v = 0, k = 0;
+        parts.forEach((part, p) => {
+            const g = part.geometry, P = g.attributes.position, N = g.attributes.normal, J = g.attributes.skinIndex, W = g.attributes.skinWeight, n = P.count;
+            const bind = part.bindMatrix, identity = bind.elements.every((e, i) => e === (i % 5 === 0 ? 1 : 0));
+            if (!identity) normalMatrix.getNormalMatrix(bind);
+            const { px, base, uv } = colours[p];
+            for (let i = 0; i < n; i++) {
+                const o = v + i;
+                at.fromBufferAttribute(P, i); if (!identity) at.applyMatrix4(bind);
+                position[o * 3] = at.x; position[o * 3 + 1] = at.y; position[o * 3 + 2] = at.z;
+                if (N) { nm.fromBufferAttribute(N, i); if (!identity) nm.applyMatrix3(normalMatrix).normalize(); normal[o * 3] = nm.x; normal[o * 3 + 1] = nm.y; normal[o * 3 + 2] = nm.z; }
+                let r = base.r, gg = base.g, b = base.b;
+                if (px && uv) {
+                    let u = uv.getX(i), w = uv.getY(i);
+                    u -= Math.floor(u); w -= Math.floor(w);
+                    if (px.flipY) w = 1 - w;
+                    const x = Math.min(px.size - 1, Math.floor(u * px.size)), y = Math.min(px.size - 1, Math.floor(w * px.size)), q = (y * px.size + x) * 4;
+                    const cr = px.rgba[q] / 255, cg = px.rgba[q + 1] / 255, cb = px.rgba[q + 2] / 255;
+                    r *= px.srgb ? lin(cr) : cr; gg *= px.srgb ? lin(cg) : cg; b *= px.srgb ? lin(cb) : cb;
+                }
+                color[o * 3] = r; color[o * 3 + 1] = gg; color[o * 3 + 2] = b;
+                if (J && W) {
+                    skinIndex[o * 4] = J.getX(i); skinIndex[o * 4 + 1] = J.getY(i); skinIndex[o * 4 + 2] = J.getZ(i); skinIndex[o * 4 + 3] = J.getW(i);
+                    skinWeight[o * 4] = W.getX(i); skinWeight[o * 4 + 1] = W.getY(i); skinWeight[o * 4 + 2] = W.getZ(i); skinWeight[o * 4 + 3] = W.getW(i);
+                }
+            }
+            if (g.index) { const src = g.index; for (let i = 0; i < src.count; i++) index[k++] = src.getX(i) + v; }
+            else for (let i = 0; i < n; i++) index[k++] = v + i;
+            v += n;
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
+        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
+        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
+        geometry.setIndex(new THREE.BufferAttribute(index, 1));
+        geometry.computeBoundingSphere();
+        geometry.name = "far-body";
+        const merged = { geometry, parts: parts.length };
+        this._merged.set(template, merged);
+        return merged;
+    },
+    /** The copy's parts in or out of the view's layer (they keep their shadow layers). */
+    showParts(object, on) {
+        if (object.userData.rrFarHidden === !on) return;
+        object.userData.rrFarHidden = !on;
+        object.traverse(child => { if (child.isMesh) { if (on) child.layers.enable(0); else child.layers.disable(0); } });
+        // FarParts' own choice for the parts it leaves out is made again on its next update.
+        object.userData.rrFarPartsApplied = undefined;
+        if (object.userData.rrMouth) object.userData.rrMouth.hidden = undefined;
+    },
+    release(holder) {
+        const far = holder.farBody;
+        if (!far) return;
+        if (far.mesh.parent) far.mesh.parent.remove(far.mesh);
+        if (far.object && far.object.userData) this.showParts(far.object, true);
+        holder.farBody = null;
+    },
+    /** Each update: far remote players (and sleepers) as their merged body, the rest as themselves. */
+    update(mapScene, camera) {
+        const instances = mapScene && mapScene._modelInstances;
+        if (!instances || typeof THREE === "undefined") return;
+        let scene = null;
+        for (const holder of instances.values()) {
+            const object = holder.object, character = holder.character;
+            const remote = typeof Game_RemotePlayer !== "undefined" && character instanceof Game_RemotePlayer;
+            if (holder.farBody && (holder.farBody.object !== object || !object || !object.parent)) this.release(holder);
+            if (!remote || !object || !object.parent) continue;
+            let far = false;
+            if (this.enabled && camera && object.visible && !character.fight) {
+                const span = Reactor3D.instanceSpan(object), p = object.position;
+                far = Reactor3D.animationStride(p.x, p.y + span / 2, p.z, span, camera) > 1;
+            }
+            if (!far) { if (holder.farBody && holder.farBody.on) { holder.farBody.mesh.visible = false; holder.farBody.on = false; this.showParts(object, true); } continue; }
+            if (!holder.farBody) {
+                const entry = Reactor3D._glbCache && Reactor3D._glbCache[holder.spec], template = entry && entry.template;
+                const merged = template ? this.mergedOf(template) : null;
+                if (!merged) continue;
+                let skeleton = null;
+                object.traverse(child => { if (!skeleton && child.isSkinnedMesh && child.skeleton) skeleton = child.skeleton; });
+                if (!skeleton) continue;
+                if (!scene) { scene = object; while (scene.parent) scene = scene.parent; }
+                const mesh = new THREE.SkinnedMesh(merged.geometry, this.material());
+                mesh.name = "far-body";
+                mesh.bindMode = THREE.AttachedBindMode;
+                mesh.bind(skeleton, new THREE.Matrix4());
+                mesh.matrixAutoUpdate = false;
+                mesh.matrixWorldAutoUpdate = false;
+                mesh.frustumCulled = false;
+                mesh.castShadow = false;
+                mesh.userData.rrFarBodyFor = object;
+                this.group(scene).add(mesh);
+                holder.farBody = { mesh, object, on: false };
+            }
+            const far0 = holder.farBody;
+            far0.mesh.visible = !!object.visible;
+            if (!far0.on) { far0.on = true; this.showParts(object, false); }
+        }
+    }
 };
 
 /**
@@ -12712,6 +13058,22 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
 };
 
 /** A placed model's materials made the map's: lit, unfogged, their base colour kept, in the ambient list. */
+// After syncCharacterModels is defined (a wrapper above it was overwritten by it): far bodies and closed mouths.
+(function() {
+    const sync = Reactor3D.MapScene.prototype.syncCharacterModels;
+    Reactor3D.MapScene.prototype.syncCharacterModels = function() {
+        const out = sync.apply(this, arguments);
+        try {
+            const viewport = Reactor3D.viewport && Reactor3D.viewport(), camera = viewport && viewport.camera ? viewport.camera() : null;
+            Reactor3D.FarBody.update(this, camera);
+        } catch (error) { console.warn("Reactor3D.FarBody", error); Reactor3D.FarBody.enabled = false; }
+        try {
+            if (Reactor3D.ClosedMouth.enabled && this._modelInstances) for (const holder of this._modelInstances.values()) if (holder.character && holder.object) Reactor3D.ClosedMouth.update(holder.object);
+        } catch (error) { console.warn("Reactor3D.ClosedMouth", error); Reactor3D.ClosedMouth.enabled = false; }
+        return out;
+    };
+})();
+
 Reactor3D.MapScene.prototype.adoptModelMaterials = function(object) {
     object.traverse(child => {
         const mats = child.material
@@ -13554,6 +13916,530 @@ Reactor3D.installPropHooks = function() {
         return result;
     };
     Game_Map.prototype.setupEvents.__reactorProps = true;
+};
+
+//-----------------------------------------------------------------------------
+// Layered parts: a character made in the game, drawn in a few pieces
+//
+// The Character Builder saves a character as the parts it built it from: the body, each garment, its seams,
+// stitching, buckles and linings, 17 to 39 meshes, each with its own material and pictures. Each is a draw in
+// every view, mirror and capture, and a crowd of forty is a thousand draws a frame where forty of the Demo's
+// actor would be forty. Here the parts that draw alike become one mesh: their vertices one after another, in the
+// file's order, each carrying its part's row (`rrLayer`) in a small table of what that part had: which picture,
+// which relief and surface maps, their scales, its shine and glow, the alpha it is cut out at and the side it is
+// drawn from (a single-sided part's back faces are discarded, as culling would have).
+//
+// Pictures go into texture arrays, a layer each. Large ones (an outfit sheet, the skin, the shoes) by their exact
+// size, one array per size, copied as they are; small ones (fabric weaves, seams, stitching, all 512 or under)
+// together at the largest one's size, each still repeating on its own coordinates; relief, surface and cavity maps
+// in one array of their own. Every picture is drawn at its own resolution or more, every part keeps its own maps
+// and values, and nothing is seen to change; the draws are a few per character.
+//
+// One mesh holds the whole outfit, in the file's order: a pocket, a collar or a seam lies exactly on the garment
+// under it, and wins that tie by being drawn after it, as it did when each was its own draw.
+//
+// Parts with shapes (the face: eyes, lids, teeth, tongue, lashes, its skin) make a group of their own, whose
+// shapes are the union of theirs by name, zero where a part has none: speech and expressions find them by name
+// on whatever mesh holds them (reactor_3d_speech.js), as before. Left as they are: the body (a worn piece masks
+// its skin, Worn), hair and facial hair (a helmet hides them by name), blended parts (they sort by distance) and
+// a glow with a picture. Done once per character, when its template is made (ReactorCharacters.template and
+// loadModel for a library character), before anything is drawn.
+
+Reactor3D.LayeredParts = {
+    enabled: true,
+    // Fewer parts than this in a group are left alone.
+    MIN_PARTS: 2,
+    // The largest side a picture may have to share an array with others of other sizes.
+    ARRAY_MAX: 512,
+    // Picture arrays one group draws from (samplers rrBase0..3): the small pictures' and the large ones', by size.
+    CLASSES: 4,
+    // Rows in one table (a part each), under a byte.
+    MAX_ROWS: 250,
+    // How long a picture may take to decode before its parts are left out.
+    READY_MS: 20000,
+    // Whether parts with shapes merge (into their own group).
+    SHAPES: true,
+    SPLIT_SHINE: true,
+    // Parts other code finds by name: worn pieces hide hair and beards (Worn), and mask the body's skin.
+    KEEP_NAMED: /^(body|hair|hairsoft|facialhair|facialhairsoft|beard|beardsoft)$/,
+    NONE: -1,
+
+    /** The pictures a part's material draws with, by slot. */
+    maps(material) {
+        const d = material.userData || {};
+        const tex = t => (t && t.isTexture ? t : null);
+        return { base: tex(material.map), normal: tex(d.rrNormalMap), surface: tex(d.rrSurfaceMap), occlusion: tex(d.rrOcclusionMap) };
+    },
+
+    hasShapes(mesh) {
+        const morph = mesh.geometry && mesh.geometry.morphAttributes;
+        return !!(morph && morph.position && morph.position.length);
+    },
+
+    /** Whether a part may join a group: what it is drawn with is all in the table. */
+    eligible(mesh) {
+        if (!mesh.isSkinnedMesh || !mesh.skeleton || Array.isArray(mesh.material) || mesh.bindMode !== THREE.AttachedBindMode) return false;
+        const g = mesh.geometry, m = mesh.material, d = m && m.userData;
+        if (!g || !g.index || !g.attributes.position || !g.attributes.normal || !g.attributes.skinIndex || !g.attributes.skinWeight || g.groups.length) return false;
+        if (g.drawRange.start !== 0 || g.drawRange.count < g.index.count) return false;
+        const named = String(mesh.name || (mesh.parent && mesh.parent.name) || "").replace(/[^a-z]/gi, "").toLowerCase();
+        if (this.KEEP_NAMED.test(named) || g.userData.rrBodyUV) return false;
+        if (this.hasShapes(mesh)) {
+            // Shapes merge as relative moves of the places alone, bound at the identity.
+            if (!this.SHAPES || !g.morphTargetsRelative || Object.keys(g.morphAttributes).some(k => k !== "position" && g.morphAttributes[k].length)) return false;
+            if (!(Reactor3D.CasterMerge && Reactor3D.CasterMerge.isIdentity(mesh.bindMatrix))) return false;
+        }
+        if (!m.isMeshBasicMaterial || !m.__reactorLit || !m.__reactorModel || m.__reactorSelfLit || !d || d.rrInspectionPbr) return false;
+        if (m.transparent || m.blending !== THREE.NormalBlending || d.rrHair || d.rrLook || d.rrDetail || d.rrLayers) return false;
+        // A glow is a color in the table; one with a picture of its own stays apart.
+        if (d.rrEmissive && d.rrEmissiveMap && d.rrEmissiveMap.isTexture) return false;
+        for (const t of Object.values(this.maps(m))) {
+            if (t && (t.isCompressedTexture || t.isDataArrayTexture || t.isCubeTexture || t.isVideoTexture)) return false;
+            // A picture moved, turned or scaled on its part (offset, repeat) is read as it is: not through a layer.
+            if (t && !t.matrix.equals(new THREE.Matrix3())) return false;
+        }
+        return true;
+    },
+
+    imageSize(texture) {
+        const i = texture && texture.image;
+        return i ? [i.naturalWidth || i.width || 0, i.naturalHeight || i.height || 0] : [0, 0];
+    },
+
+    /** Resolves when a texture holds its decoded picture (not the one-pixel stand-in of fitModelTexture), false on timeout. */
+    ready(texture) {
+        const decoded = () => {
+            const i = texture.image;
+            return !!i && i !== Reactor3D._fitStandIn && (i.complete !== false) && this.imageSize(texture)[0] > 0;
+        };
+        if (decoded()) return Promise.resolve(true);
+        const until = performance.now() + this.READY_MS;
+        return new Promise(resolve => {
+            const look = () => { if (decoded()) resolve(true); else if (performance.now() > until) resolve(false); else setTimeout(look, 40); };
+            setTimeout(look, 40);
+        });
+    },
+
+    /** The array class of a picture: "small" (shares one array, resized to its largest), or its exact size. */
+    classOf(texture) {
+        const [w, h] = this.imageSize(texture);
+        return w > this.ARRAY_MAX || h > this.ARRAY_MAX ? w + "x" + h : "small";
+    },
+
+    /** The groups of eligible parts: { parts }. A group per skeleton and kind (shapes or not), in the file's order. */
+    plan(parts) {
+        const families = new Map();
+        for (const part of parts) {
+            const maps = this.maps(part.material);
+            // A relief or surface map over the array's size would be shrunk on a layer: its part stays as it is.
+            if ([maps.normal, maps.surface, maps.occlusion].some(t => t && this.classOf(t) !== "small")) continue;
+            // Parts that shine (the Builder's metal) draw together: the shine's code in a program changed what the
+            // rest of a group read (cloth beside a buckle came out grey), and a group without it never compiles it.
+            const d = part.material.userData, shines = !!(d.glbShineOwn && d.glbShine && d.glbShine.reflect > 0);
+            const family = part.skeleton.uuid + (this.hasShapes(part) ? "|shapes" : "") + (shines && this.SPLIT_SHINE ? "|shines" : "");
+            if (!families.has(family)) families.set(family, []);
+            families.get(family).push(part);
+        }
+        const groups = [];
+        for (const list of families.values()) {
+            // In order, a new group only where a part would bring one picture class too many (rare: CLASSES sizes in one outfit).
+            let group = null;
+            for (const part of list) {
+                const base = this.maps(part.material).base, kind = base ? this.classOf(base) : null;
+                if (!group || group.parts.length >= this.MAX_ROWS || (kind && !group.classes.has(kind) && group.classes.size >= this.CLASSES)) {
+                    group = { parts: [], classes: new Set() };
+                    groups.push(group);
+                }
+                group.parts.push(part);
+                if (kind) group.classes.add(kind);
+            }
+        }
+        return groups.filter(group => group.parts.length >= this.MIN_PARTS);
+    },
+
+    /** Pixels of every picture at width x height, one after another (RGBA bytes, top row first as the GLB reads them). */
+    async pixels(images, width, height) {
+        const out = new Uint8Array(width * height * 4 * images.length);
+        const bitmaps = await Promise.all(images.map(image => createImageBitmap(image, { resizeWidth: width, resizeHeight: height, resizeQuality: "high",
+            premultiplyAlpha: "none", colorSpaceConversion: "none" })));
+        const worker = this.worker();
+        if (worker) {
+            const id = (this._jobs = (this._jobs || 0) + 1);
+            const data = await new Promise(resolve => {
+                (this._pending || (this._pending = new Map())).set(id, resolve);
+                worker.postMessage({ id, width, height, bitmaps }, bitmaps);
+            });
+            if (data) { out.set(new Uint8Array(data)); return out; }
+        }
+        // Without a worker (or if it failed): here, on a canvas.
+        const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(width, height) : Object.assign(document.createElement("canvas"), { width, height });
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        bitmaps.forEach((bitmap, i) => {
+            context.clearRect(0, 0, width, height);
+            try { context.drawImage(bitmap, 0, 0); out.set(context.getImageData(0, 0, width, height).data, i * width * height * 4); } catch (error) { /* closed by a failed worker: left empty */ }
+            if (bitmap.close) bitmap.close();
+        });
+        return out;
+    },
+
+    /** The worker that reads the pictures' pixels, off the main thread. */
+    worker() {
+        if (this._worker !== undefined) return this._worker;
+        this._worker = null;
+        if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined" || typeof Blob === "undefined") return null;
+        const source = "onmessage = e => { const { id, width, height, bitmaps } = e.data; try { const canvas = new OffscreenCanvas(width, height), c = canvas.getContext('2d', { willReadFrequently: true });"
+            + " const size = width * height * 4, out = new Uint8Array(size * bitmaps.length); bitmaps.forEach((b, i) => { c.clearRect(0, 0, width, height); c.drawImage(b, 0, 0); out.set(c.getImageData(0, 0, width, height).data, i * size); b.close(); });"
+            + " postMessage({ id, data: out.buffer }, [out.buffer]); } catch (error) { postMessage({ id, data: null }); } };";
+        try {
+            const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+            this._worker = new Worker(url);
+            URL.revokeObjectURL(url);
+            this._worker.onmessage = e => { const done = this._pending && this._pending.get(e.data.id); if (done) { this._pending.delete(e.data.id); done(e.data.data); } };
+            this._worker.onerror = () => { for (const done of (this._pending || new Map()).values()) done(null); if (this._pending) this._pending.clear(); this._worker = null; };
+        } catch (error) {
+            this._worker = null;
+        }
+        return this._worker;
+    },
+
+    /** A texture array of these pictures at one size: their own for a large class, the largest one's (a power of two) for small ones. */
+    async array(images, kind, color) {
+        if (!images.length) return null;
+        let width, height;
+        if (kind === "small") {
+            let side = 1;
+            for (const image of images) side = Math.max(side, image.naturalWidth || image.width || 1, image.naturalHeight || image.height || 1);
+            width = height = Math.min(this.ARRAY_MAX, Math.pow(2, Math.ceil(Math.log2(side))));
+        } else {
+            [width, height] = kind.split("x").map(Number);
+        }
+        const data = await this.pixels(images, width, height);
+        const array = new THREE.DataArrayTexture(data, width, height, images.length);
+        array.format = THREE.RGBAFormat;
+        array.type = THREE.UnsignedByteType;
+        array.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        array.wrapS = array.wrapT = THREE.RepeatWrapping;
+        array.magFilter = THREE.LinearFilter;
+        array.minFilter = THREE.LinearMipmapLinearFilter;
+        array.generateMipmaps = true;
+        array.flipY = false;
+        array.anisotropy = Reactor3D.modelAnisotropy ? Reactor3D.modelAnisotropy() : 1;
+        array.userData.rrLayeredArray = true;
+        array.needsUpdate = true;
+        return array;
+    },
+
+    /** One-layer stand-ins for an array a group has none of, and the white picture its material's `map` is. */
+    blank(kind) {
+        const cache = this._blank || (this._blank = {});
+        if (cache[kind]) return cache[kind];
+        let texture;
+        if (kind === "map") {
+            texture = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+            texture.colorSpace = THREE.SRGBColorSpace;
+        } else {
+            texture = new THREE.DataArrayTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, 1);
+            if (kind === "base") texture.colorSpace = THREE.SRGBColorSpace;
+        }
+        texture.needsUpdate = true;
+        return (cache[kind] = texture);
+    },
+
+    /** The group's parts as one geometry: places and normals through each bind matrix, every attribute laid end to end. */
+    geometry(parts, colorOf) {
+        let vertices = 0, indices = 0;
+        for (const part of parts) { vertices += part.geometry.attributes.position.count; indices += part.geometry.index.count; }
+        const position = new Float32Array(vertices * 3), normal = new Float32Array(vertices * 3), uv = new Float32Array(vertices * 2), uv1 = new Float32Array(vertices * 2);
+        const color = new Float32Array(vertices * 3), skinIndex = new Uint16Array(vertices * 4), skinWeight = new Float32Array(vertices * 4), layer = new Uint8Array(vertices);
+        const index = vertices > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
+        const at = new THREE.Vector3(), turn = new THREE.Matrix3();
+        let v = 0, k = 0;
+        parts.forEach((part, row) => {
+            const g = part.geometry, a = g.attributes, n = a.position.count, bind = part.bindMatrix;
+            const identity = Reactor3D.CasterMerge ? Reactor3D.CasterMerge.isIdentity(bind) : false;
+            turn.getNormalMatrix(bind);
+            const tint = colorOf(part), c = part.material.vertexColors ? a.color : null;
+            for (let i = 0; i < n; i++) {
+                const o = v + i;
+                at.set(a.position.getX(i), a.position.getY(i), a.position.getZ(i));
+                if (!identity) at.applyMatrix4(bind);
+                position[o * 3] = at.x; position[o * 3 + 1] = at.y; position[o * 3 + 2] = at.z;
+                at.set(a.normal.getX(i), a.normal.getY(i), a.normal.getZ(i));
+                if (!identity) at.applyMatrix3(turn).normalize();
+                normal[o * 3] = at.x; normal[o * 3 + 1] = at.y; normal[o * 3 + 2] = at.z;
+                if (a.uv) { uv[o * 2] = a.uv.getX(i); uv[o * 2 + 1] = a.uv.getY(i); }
+                if (a.uv1) { uv1[o * 2] = a.uv1.getX(i); uv1[o * 2 + 1] = a.uv1.getY(i); }
+                color[o * 3] = (c ? c.getX(i) : 1) * tint.r; color[o * 3 + 1] = (c ? c.getY(i) : 1) * tint.g; color[o * 3 + 2] = (c ? c.getZ(i) : 1) * tint.b;
+                for (let j = 0; j < 4; j++) { skinIndex[o * 4 + j] = a.skinIndex.getComponent(i, j); skinWeight[o * 4 + j] = a.skinWeight.getComponent(i, j); }
+                layer[o] = row;
+            }
+            const src = g.index;
+            for (let i = 0; i < src.count; i++) index[k++] = src.getX(i) + v;
+            v += n;
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
+        geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+        geometry.setAttribute("uv1", new THREE.BufferAttribute(uv1, 2));
+        geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
+        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
+        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
+        geometry.setAttribute("rrLayer", new THREE.BufferAttribute(layer, 1));
+        geometry.setIndex(new THREE.BufferAttribute(index, 1));
+        // Shapes: every name any part has, each part's moves at its own vertices.
+        const names = [];
+        for (const part of parts) for (const a of (part.geometry.morphAttributes.position || [])) if (names.indexOf(a.name) < 0) names.push(a.name);
+        if (names.length) {
+            geometry.morphAttributes.position = names.map(name => {
+                const values = new Float32Array(vertices * 3);
+                let start = 0;
+                for (const part of parts) {
+                    const list = part.geometry.morphAttributes.position || [], a = list.find(x => x.name === name), n = part.geometry.attributes.position.count;
+                    if (a) for (let i = 0; i < n; i++) { values[(start + i) * 3] = a.getX(i); values[(start + i) * 3 + 1] = a.getY(i); values[(start + i) * 3 + 2] = a.getZ(i); }
+                    start += n;
+                }
+                const attribute = new THREE.BufferAttribute(values, 3);
+                attribute.name = name;
+                return attribute;
+            });
+            geometry.morphTargetsRelative = true;
+        }
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+        return geometry;
+    },
+
+    /**
+     * The table: a row per part, five texels. A: its picture's layer (NONE: white), relief, surface and cavity
+     * layers (NONE: it has none). B: the relief's scale, the cavities' strength, which maps ride the second
+     * coordinates (1 relief, 2 surface, 4 cavities) and its side (8 front only, 16 back only). C: its shine
+     * (reflect, roughness, metal, how much paint stays), zero where it does not shine. D: its clear coat (strength,
+     * roughness) and the alpha it is cut out under (0: opaque). E: its glow, and which array its picture is in.
+     */
+    table(rows) {
+        const data = new Float32Array(rows.length * 20);
+        rows.forEach((row, r) => data.set([].concat(row.a, row.b, row.c, row.d, row.e), r * 20));
+        const table = new THREE.DataTexture(data, 5, rows.length, THREE.RGBAFormat, THREE.FloatType);
+        table.magFilter = table.minFilter = THREE.NearestFilter;
+        table.generateMipmaps = false;
+        table.needsUpdate = true;
+        return table;
+    },
+
+    /** Merge the template's parts that draw alike. Returns how many meshes went and how many came. */
+    async apply(template) {
+        if (!this.enabled || !template || typeof THREE === "undefined" || !THREE.DataArrayTexture || typeof createImageBitmap !== "function") return null;
+        const candidates = [];
+        template.traverse(child => { if (child.isMesh && this.eligible(child)) candidates.push(child); });
+        if (candidates.length < this.MIN_PARTS) return null;
+        // Every picture decoded first: a layer is copied from it.
+        const waits = new Map();
+        for (const part of candidates) for (const t of Object.values(this.maps(part.material))) if (t && !waits.has(t)) waits.set(t, this.ready(t));
+        const settled = new Map();
+        for (const [t, wait] of waits) settled.set(t, await wait);
+        const parts = candidates.filter(p => Object.values(this.maps(p.material)).every(t => !t || settled.get(t)));
+        const report = { before: 0, after: 0, groups: 0 };
+        template.traverse(child => { if (child.isMesh) report.before++; });
+        const made = [];
+        for (const group of this.plan(parts)) {
+            const one = await this.mergeGroup(group);
+            if (one) made.push(one);
+        }
+        // Swapped in all at once, after every await: the template is whole the moment anything clones it. Each merged
+        // mesh takes its first part's place among the parts that stay, so the model's own order is kept.
+        for (const { mesh, parts: merged } of made) {
+            const lead = merged[0], parent = lead.parent;
+            parent.add(mesh);
+            parent.children.splice(parent.children.indexOf(mesh), 1);
+            parent.children.splice(parent.children.indexOf(lead), 0, mesh);
+            for (const part of merged) { if (part.parent) part.parent.remove(part); part.geometry.dispose(); }
+            const list = template.userData.glbTextures;
+            if (Array.isArray(list)) for (const t of mesh.material.userData.rrLayers.own) list.push(t);
+            report.groups++;
+        }
+        template.traverse(child => { if (child.isMesh) report.after++; });
+        template.userData.rrLayered = report;
+        return report;
+    },
+
+    async mergeGroup(group) {
+        const { parts } = group;
+        // Pictures by class (one array each), the same picture once however many parts or textures show it.
+        // A picture is known by the file's image it came from: each texture over it was decoded on its own.
+        const classes = [], detail = { images: [], keys: [] };
+        const keyOf = texture => (texture.userData && texture.userData.rrGlbImage != null ? "glb" + texture.userData.rrGlbImage : texture.image);
+        const place = (list, texture) => { const key = keyOf(texture); let i = list.keys.indexOf(key); if (i < 0) { i = list.keys.length; list.keys.push(key); list.images.push(texture.image); } return i; };
+        const baseOf = texture => {
+            const kind = this.classOf(texture);
+            let entry = classes.find(c => c.kind === kind);
+            if (!entry) classes.push(entry = { kind, images: [], keys: [] });
+            return [place(entry, texture), classes.indexOf(entry)];
+        };
+        const rows = parts.map(part => {
+            const m = part.material, d = m.userData, maps = this.maps(m);
+            const [base, array] = maps.base ? baseOf(maps.base) : [this.NONE, -1];
+            const slot = t => (t ? place(detail, t) : this.NONE);
+            const normal = slot(maps.normal), surface = slot(maps.surface), occlusion = slot(maps.occlusion);
+            const scale = d.rrNormalScale && d.rrNormalScale.isVector2 ? d.rrNormalScale : new THREE.Vector2(1, 1);
+            const flags = (maps.normal && d.rrNormalUv1 ? 1 : 0) + (maps.surface && d.rrSurfaceUv1 ? 2 : 0) + (maps.occlusion && d.rrOcclusionUv1 ? 4 : 0)
+                + (m.side === THREE.FrontSide ? 8 : m.side === THREE.BackSide ? 16 : 0);
+            const shine = d.glbShineOwn && d.glbShine && d.glbShine.reflect > 0 ? d.glbShine : null;
+            const coat = d.rrClearcoat || null, glow = d.rrEmissive && d.rrEmissive.isColor ? d.rrEmissive : null;
+            return {
+                a: [base, normal, surface, occlusion],
+                b: [scale.x, scale.y, d.rrOcclusionStrength != null ? d.rrOcclusionStrength : 1, flags],
+                c: shine ? [shine.reflect, 1 - shine.gloss, shine.metal, Reactor3D.BUILDER_METAL_KEEP || 0] : [0, 0, 0, 0],
+                d: [coat ? coat.factor || 0 : 0, coat ? coat.roughness || 0 : 0, m.alphaTest > 0 ? m.alphaTest : 0, 0],
+                e: glow ? [glow.r, glow.g, glow.b, array] : [0, 0, 0, array]
+            };
+        });
+        if (classes.length > this.CLASSES || classes.some(c => c.images.length > 255) || detail.images.length > 255) return null;
+        let arrays, detailArray;
+        try {
+            [detailArray, ...arrays] = await Promise.all([this.array(detail.images, "small", false)].concat(classes.map(c => this.array(c.images, c.kind, true))));
+        } catch (error) {
+            console.warn("Reactor3D: a character's parts stay apart:", error && error.message || error);
+            return null;
+        }
+        const geometry = this.geometry(parts, part => part.material.color || new THREE.Color(1, 1, 1));
+        // Drawn from both sides when any part is (the rest discard their back faces); cut out per part, in the shader.
+        const sides = new Set(parts.map(p => p.material.side)), side = sides.size === 1 ? parts[0].material.side : THREE.DoubleSide;
+        // `map` only asks three for the picture coordinates (vMapUv): every picture comes from an array.
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side, fog: false, map: this.blank("map") });
+        material.name = "Layered parts";
+        material.__reactorModel = true;
+        material.userData.baseColor = material.color.clone();
+        const table = this.table(rows), base = [0, 1, 2, 3].map(i => arrays[i] || this.blank("base"));
+        material.userData.rrLayers = { table, base, detail: detailArray || this.blank("detail"), rows: rows.length,
+            own: [table].concat(arrays, detailArray ? [detailArray] : []), cut: rows.some(r => r.d[2] > 0), sided: sides.size > 1, classes: classes.length };
+        const any = k => rows.some(r => r.a[k] >= 0);
+        const detailTexture = material.userData.rrLayers.detail;
+        // The light's code samples these where they are set (injectLightShader, injectShine, injectSurfaceOcclusion); here
+        // they say only that some part has one, and inject() points each at its layer.
+        if (any(1)) { material.userData.rrNormalMap = detailTexture; material.userData.rrNormalUv1 = true; material.userData.rrNormalScale = new THREE.Vector2(1, 1); }
+        if (any(2)) { material.userData.rrSurfaceMap = detailTexture; material.userData.rrSurfaceUv1 = true; }
+        if (any(3)) { material.userData.rrOcclusionMap = detailTexture; material.userData.rrOcclusionUv1 = true; material.userData.rrOcclusionStrength = 1; }
+        // Any part that shines: the group takes the Builder's own shine (applyModelSurface), each part its own row's.
+        const shiny = rows.filter(r => r.c[0] > 0);
+        if (shiny.length) {
+            const top = shiny.reduce((a, r) => (r.c[0] > a.c[0] ? r : a));
+            material.userData.glbShine = { reflect: top.c[0], gloss: 1 - top.c[1], metal: top.c[2], tint: "#ffffff" };
+            material.userData.glbShineOwn = true;
+            if (rows.some(r => r.d[0] > 0)) material.userData.rrClearcoat = { factor: 1, roughness: 0 };
+        }
+        // A glow in some part: the light's glow code is asked for (injectSurfaceGlow), and reads each part's own.
+        if (rows.some(r => r.e[0] > 0 || r.e[1] > 0 || r.e[2] > 0)) material.userData.rrEmissive = new THREE.Color(1, 1, 1);
+        Reactor3D.litMaterial(material);
+        const mesh = new THREE.SkinnedMesh(geometry, material);
+        const lead = parts[0];
+        mesh.name = "Layered parts";
+        mesh.frustumCulled = false;
+        mesh.castShadow = parts.some(p => p.castShadow);
+        mesh.receiveShadow = parts.some(p => p.receiveShadow);
+        mesh.layers.mask = lead.layers.mask;
+        // After the parts that stay apart (the body: a tight garment lies on its skin and won that tie by being drawn
+        // after it), and the metal after the cloth (a buckle or a plate on a garment).
+        mesh.renderOrder = lead.renderOrder + 1 + (shiny.length === rows.length && this.SPLIT_SHINE ? 1 : 0);
+        mesh.position.copy(lead.position); mesh.quaternion.copy(lead.quaternion); mesh.scale.copy(lead.scale);
+        mesh.userData.rrLayeredParts = parts.map(p => p.name || (p.parent && p.parent.name) || "");
+        if (geometry.morphAttributes.position) mesh.updateMorphTargets();
+        mesh.bindMode = THREE.AttachedBindMode;
+        mesh.bind(lead.skeleton, new THREE.Matrix4());
+        return { mesh, parts };
+    },
+
+    /** The GLSL that picks each part's own: before the fragment's main, where every map it reads is declared. */
+    FRAGMENT_GLSL: [
+        "vec2 rrLayerUv(float bit) { return mod(floor(vRRLayerB.w / bit), 2.0) > 0.5 ? vRRUv1 : vMapUv; }",
+        "vec4 rrLayerTexel(highp sampler2DArray s, float k, float bit, vec4 none) {",
+        "\tvec2 uv = rrLayerUv(bit), dx = dFdx(uv), dy = dFdy(uv);",
+        "\treturn k < -0.5 ? none : textureGrad(s, vec3(uv, k), dx, dy);",
+        "}",
+        "%BASE%",
+        // A single-sided part's other side, as culling would have left it.
+        "bool rrLayerCulled() {",
+        "\tfloat sides = floor(vRRLayerB.w / 8.0);",
+        "\treturn (mod(sides, 2.0) > 0.5 && !gl_FrontFacing) || (mod(floor(sides / 2.0), 2.0) > 0.5 && gl_FrontFacing);",
+        "}"
+    ].join("\n"),
+
+    /** The picture picker for a group with `count` arrays (a sampler each: none declared that no part reads). */
+    baseGlsl(count) {
+        const lines = ["vec4 rrLayerBase(vec2 uv) {", "\tfloat k = vRRLayerA.x;", "\tif (k < -0.5 || " + count + " == 0) return vec4(1.0);"];
+        if (count > 0) {
+            lines.push("\tvec2 dx = dFdx(uv), dy = dFdy(uv);", "\tvec3 at = vec3(uv, k);", "\tfloat c = vRRLayerE.w;");
+            for (let i = 0; i < count - 1; i++) lines.push("\tif (c < " + (i + 0.5).toFixed(1) + ") return textureGrad(rrBase" + i + ", at, dx, dy);");
+            lines.push("\treturn textureGrad(rrBase" + (count - 1) + ", at, dx, dy);");
+        }
+        lines.push("}");
+        return lines.join("\n");
+    },
+
+    /** Last in a lit material's chain (litMaterial): the part's row read in the vertex stage, and every map taken from its layer. */
+    inject(material, shader) {
+        const layers = material && material.userData && material.userData.rrLayers;
+        if (!layers || !layers.table || shader.vertexShader.indexOf("rrLayerTable") >= 0) return;
+        Reactor3D.injectUv1(shader);
+        shader.uniforms.rrLayerTable = { value: layers.table };
+        const count = layers.classes || 0;
+        for (let i = 0; i < count; i++) shader.uniforms["rrBase" + i] = { value: layers.base[i] };
+        shader.uniforms.rrDetailArray = { value: layers.detail };
+        // Only the row travels from the vertex (the same on every vertex of a part, so it arrives whole); the fragment
+        // reads the row itself. Five flat vectors from the vertex were packed by the driver beside the light's own
+        // varyings and came out as another row's where the shine's code was in the program.
+        shader.vertexShader = "attribute float rrLayer;\nvarying float vRRLayerRow;\n" + shader.vertexShader.replace("void main() {", "void main() {\n\tvRRLayerRow = rrLayer;");
+        let fs = shader.fragmentShader;
+        const swap = (from, to) => { fs = fs.split(from).join(to); };
+        // The picture: the part's layer, or white.
+        swap("#include <map_fragment>", "#ifdef USE_MAP\n\tdiffuseColor *= rrLayerBase(vMapUv);\n#endif");
+        // Each part's side and cut, before anything is worked out for a fragment that goes.
+        // (Only where some part needs it: a discard in the program can cost the GPU its early depth test.)
+        if (layers.sided) swap("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\n\tif (rrLayerCulled()) discard;");
+        if (layers.cut) swap("#include <alphatest_fragment>", "if (diffuseColor.a < vRRLayerD.z) discard;");
+        // Glow (injectSurfaceGlow): each part's own color, black where it has none.
+        swap("uniform vec3 rrEmissive;", "#define rrEmissive vRRLayerE.rgb");
+        // Relief (injectLightShader's faceGlsl and PERTURB_NORMAL_GLSL).
+        swap("uniform sampler2D rrNormalMap;", "");
+        swap("uniform vec2 rrNormalScale;", "#define rrNormalScale vRRLayerB.xy");
+        swap("texture2D(rrNormalMap, vRRUv1).xyz * 2.0 - 1.0, vRRUv1)", "rrLayerTexel(rrDetailArray, vRRLayerA.y, 1.0, vec4(0.5, 0.5, 1.0, 1.0)).xyz * 2.0 - 1.0, rrLayerUv(1.0))");
+        // Surface and shine (injectShine): a part that does not shine skips it.
+        swap("uniform sampler2D rrSurfaceMap;", "");
+        swap("texture2D(rrSurfaceMap, vRRUv1).rgb", "rrLayerTexel(rrDetailArray, vRRLayerA.z, 2.0, vec4(1.0)).rgb");
+        swap("uniform vec2 rrModelCoat;", "#define rrModelCoat vRRLayerD.xy");
+        swap("{\n\tvec3 rrN = rrFaceN;", "if (vRRLayerC.x > 0.0) {\n\tvec3 rrN = rrFaceN;");
+        swap("{\n\tvec3 rrN = normalize(vRRWorldNormal);", "if (vRRLayerC.x > 0.0) {\n\tvec3 rrN = normalize(vRRWorldNormal);");
+        // The part's shine inside the shine's own block only: a name for all the program would also rename the water's
+        // local `float rrShine` (reactor_3d_world.js), and that local would then stand in for every part's row.
+        const start = fs.indexOf("if (vRRLayerC.x > 0.0) {");
+        if (start >= 0) {
+            let depth = 0, end = fs.indexOf("{", start);
+            for (; end < fs.length; end++) { if (fs[end] === "{") depth++; else if (fs[end] === "}" && --depth === 0) break; }
+            fs = fs.slice(0, start) + fs.slice(start, end + 1).replace(/\brrShine\b/g, "vRRLayerC") + fs.slice(end + 1);
+        }
+        // Cavities (injectSurfaceOcclusion).
+        swap("uniform sampler2D rrOcclusionMap;\nuniform float rrOcclusionStrength;\n", "#define rrOcclusionStrength vRRLayerB.z\n");
+        swap("texture2D(rrOcclusionMap, vRRUv1).r", "rrLayerTexel(rrDetailArray, vRRLayerA.w, 4.0, vec4(1.0)).r");
+        fs = fs.replace("void main()", this.FRAGMENT_GLSL.replace("%BASE%", this.baseGlsl(count)) + "\nvoid main()").replace("void main() {", [
+            "void main() {",
+            "\tint rrRow = int(vRRLayerRow + 0.5);",
+            "\tvRRLayerA = texelFetch(rrLayerTable, ivec2(0, rrRow), 0);",
+            "\tvRRLayerB = texelFetch(rrLayerTable, ivec2(1, rrRow), 0);",
+            "\tvRRLayerC = texelFetch(rrLayerTable, ivec2(2, rrRow), 0);",
+            "\tvRRLayerD = texelFetch(rrLayerTable, ivec2(3, rrRow), 0);",
+            "\tvRRLayerE = texelFetch(rrLayerTable, ivec2(4, rrRow), 0);"
+        ].join("\n"));
+        const row = "varying float vRRLayerRow;\nuniform highp sampler2D rrLayerTable;\nvec4 vRRLayerA;\nvec4 vRRLayerB;\nvec4 vRRLayerC;\nvec4 vRRLayerD;\nvec4 vRRLayerE;\n";
+        let samplers = "";
+        for (let i = 0; i < count; i++) samplers += "uniform highp sampler2DArray rrBase" + i + ";\n";
+        if (fs.indexOf("rrDetailArray") >= 0) samplers += "uniform highp sampler2DArray rrDetailArray;\n";
+        shader.fragmentShader = row + samplers + fs;
+    },
+
+    programKey(material) {
+        const layers = material && material.userData && material.userData.rrLayers;
+        return layers ? "|layers" + (layers.classes || 0) + (layers.cut ? "-cut" : "") + (layers.sided ? "-sided" : "") : "";
+    }
 };
 
 Reactor3D.Models = { file: "reactor_3d_models.js" };

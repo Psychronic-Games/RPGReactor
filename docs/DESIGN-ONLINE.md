@@ -147,7 +147,7 @@ The build writes one folder, and the game picks the best mode it can find on fir
 | **Engine** | PHP that can start Node, and a WebSocket proxy | Up to about 2,000 per map on the test server, measured with the spike server, not this Engine | Pushed updates, movement checks, and one writer for the world lane |
 | **Game on the server** | Not built | | Shared events and proof of what a player did |
 
-On the test server, PHP starts Node as the site's own user with no admin step. Plain WebSocket on port 443 needs Apache's `proxy_wstunnel`, which is installed there but not enabled. Once enabled, the folder's own `.htaccess` should be enough; this is not tested. Without it, the client talks to Node through PHP.
+On the test server, PHP starts Node as the site's own user with no admin step. Plain WebSocket on port 443 needs Apache's `proxy_wstunnel`, which is on there since 2026-11-02; with it, the folder's own `.htaccess` is enough ([Engine mode](#engine-mode)). Without it, the client talks to Node through PHP.
 
 **Self-hosting:** the same folder runs on the author's own PC with `node server/start.cjs`, or a Host button in the editor. That is immediate on a LAN. Reaching the internet from home needs port forwarding, so a later option is a home machine connecting outward to a small relay on any web server.
 

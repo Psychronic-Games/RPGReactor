@@ -3165,6 +3165,23 @@
         };
     }
 
+    // Arriving on a map whose battle plays the battle music (a load that reloads the map, an online wake, a
+    // transfer within the battle's map): the battle's music goes on, and the map's own is what it gives back at
+    // the end. Its background sound plays as usual.
+    if (typeof Game_Map !== "undefined") {
+        const autoplay = Game_Map.prototype.autoplay;
+        Game_Map.prototype.autoplay = function() {
+            const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+            if (!fight || !fight.isHere() || !fight._options || fight._options.bgm !== "battle"
+                || typeof AudioManager === "undefined") return autoplay.call(this);
+            if ($dataMap.autoplayBgm && !$gamePlayer.isInVehicle()) {
+                fight._savedBgm = AudioManager.mapBgmObject($dataMap, this.mapId());
+            }
+            AudioManager.playBgm($gameSystem.battleBgm());
+            if ($dataMap.autoplayBgs) AudioManager.playBgs($dataMap.bgs);
+        };
+    }
+
     // Battle Processing in an on-map mode fights here, and an event that starts a battle can wait for it. One
     // battle at a time: a command that would start one while a battle runs on this map joins it.
 

@@ -833,11 +833,28 @@ Reactor3D.setShaderErrorChecks = function(renderer) {
  */
 Reactor3D.IntegerSort = {
     enabled: true,
-    /** three's painterSortStable. */
+    /**
+     * Draws that share a shader program go together (`byProgram`), then by material, then near to far. three's own
+     * order is by material id: a built character's 27 materials, made together, use a dozen programs between them,
+     * and a square of such characters switched program on 890 of its 1,250 draws a frame, each switch sending the
+     * program's uniforms (the lights' arrays among them) again. The program is the one three last drew the material
+     * with; a material not drawn yet has none and sorts first.
+     */
+    byProgram: true,
+    _renderer: null,
+    programOf(material) {
+        const renderer = Reactor3D.IntegerSort._renderer;
+        if (!renderer || !material) return 0;
+        const props = renderer.properties.get(material), program = props && props.currentProgram;
+        return program ? program.id : 0;
+    },
+    /** three's painterSortStable, with the program first (`byProgram`). */
     opaque(a, b) {
         let d;
+        const sort = Reactor3D.IntegerSort;
         if (a.groupOrder !== b.groupOrder) d = a.groupOrder - b.groupOrder;
         else if (a.renderOrder !== b.renderOrder) d = a.renderOrder - b.renderOrder;
+        else if (sort.byProgram && a.material !== b.material && (d = sort.programOf(a.material) - sort.programOf(b.material)) !== 0) { /* d is the programs' order */ }
         else if (a.material.id !== b.material.id) d = a.material.id - b.material.id;
         else if (a.materialVariant !== b.materialVariant) d = a.materialVariant - b.materialVariant;
         else if (a.z !== b.z) d = a.z - b.z;
@@ -855,6 +872,7 @@ Reactor3D.IntegerSort = {
     },
     install(renderer) {
         if (!this.enabled || !renderer || typeof renderer.setOpaqueSort !== "function" || typeof renderer.setTransparentSort !== "function") return;
+        this._renderer = renderer;
         renderer.setOpaqueSort(this.opaque);
         renderer.setTransparentSort(this.transparent);
     }
@@ -1893,7 +1911,8 @@ Reactor3D.ShaderWarmup = {
                     premultiplyAlpha: texture.premultiplyAlpha ? "premultiply" : "none", colorSpaceConversion: "none" };
                 // A picture over this machine's cap is resampled as it is decoded, off the main thread:
                 // a model's sheet (Reactor3D.textureCap) and, on a low-memory machine, a scene picture.
-                const cap = texture.userData.rrModelTexture && typeof Reactor3D.textureCap === "function" ? Reactor3D.textureCap()
+                const own = texture.userData.rrTextureCap > 0 ? texture.userData.rrTextureCap : Infinity;
+                const cap = texture.userData.rrModelTexture && typeof Reactor3D.textureCap === "function" ? Math.min(Reactor3D.textureCap(), own)
                     : texture.userData.rrScenePicture ? Reactor3D.ScenePictures.cap() : 0;
                 const wide = image.naturalWidth || 0, tall = image.naturalHeight || 0;
                 if (cap > 0 && Math.max(wide, tall) > cap) {
@@ -3082,7 +3101,8 @@ Reactor3D.prepareReflections = function(renderer, mapScene, scene, camera, scale
         if (probe) F.update(renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius, probe.reach);
     }
     if (Reactor3D.Mirrors) {
-        Reactor3D.Mirrors.update(renderer, scene, camera, mirrors, null, mirrors.length && mapScene.mirrorSubject ? mapScene.mirrorSubject() : null, scale);
+        const crowd = mirrors.length && mapScene.mirrorHidden ? mapScene.mirrorHidden(camera) : null;
+        Reactor3D.Mirrors.update(renderer, scene, camera, mirrors, crowd, mirrors.length && mapScene.mirrorSubject ? mapScene.mirrorSubject() : null, scale);
     }
 };
 
@@ -9219,7 +9239,7 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
  * chrome vehicle cost 21M triangles a frame there, as many as the frame itself.
  */
 Reactor3D.REFLECTED_CHARACTERS = 6;
-Reactor3D.MapScene.prototype.hideCrowdFromReflection = function(hidden, position) {
+Reactor3D.MapScene.prototype.hideCrowdFromReflection = function(hidden, position, keep = Reactor3D.REFLECTED_CHARACTERS) {
     if (typeof this.reflectionHolders !== "function") return;
     const crowd = this._probeCrowd || (this._probeCrowd = []);
     crowd.length = 0;
@@ -9235,9 +9255,27 @@ Reactor3D.MapScene.prototype.hideCrowdFromReflection = function(hidden, position
         }
         if (holder.skinned) crowd.push(object);
     }
-    if (crowd.length <= Reactor3D.REFLECTED_CHARACTERS) return;
+    if (crowd.length <= keep) return;
     crowd.sort((a, b) => a.position.distanceToSquared(position) - b.position.distanceToSquared(position));
-    for (let i = Reactor3D.REFLECTED_CHARACTERS; i < crowd.length; i++) if (!hidden.includes(crowd[i])) hidden.push(crowd[i]);
+    for (let i = keep; i < crowd.length; i++) if (!hidden.includes(crowd[i])) hidden.push(crowd[i]);
+};
+
+/**
+ * A planar mirror or water shows the characters nearest the player (else the camera); the rest of a crowd
+ * stays out of its picture, as it does the capture's. More than the capture keeps: a mirror's picture is sharp
+ * and the size of the screen. The list is this scene's own, filled again each frame.
+ */
+Reactor3D.MIRRORED_CHARACTERS = 6;
+/** On a weak GPU a mirror shows fewer. */
+Reactor3D.MIRRORED_CHARACTERS_WEAK = 3;
+Reactor3D.MapScene.prototype.mirrorHidden = function(camera) {
+    const hidden = this._mirrorCrowd || (this._mirrorCrowd = []);
+    hidden.length = 0;
+    const subject = typeof this.reflectionSubject === "function" ? this.reflectionSubject() : null;
+    const position = subject && subject.object ? subject.object.position : camera.position;
+    const weak = typeof Reactor3D.isWeakGpu === "function" && Reactor3D.isWeakGpu();
+    Reactor3D.MapScene.prototype.hideCrowdFromReflection.call(this, hidden, position, weak ? Reactor3D.MIRRORED_CHARACTERS_WEAK : Reactor3D.MIRRORED_CHARACTERS);
+    return hidden;
 };
 
 /** The points a mirror tries to show: the player's feet, chest and head. */

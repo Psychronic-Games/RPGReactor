@@ -379,7 +379,10 @@ if ($action === 'wake') {
     if (!$account) fail(401, 'Please sign in again.');
     $number = function (string $name, int $high) use ($body): int { return max(0, min($high, (int)($body[$name] ?? 0))); };
     $character = $account['character'] ?? [];
-    noteWake($dir, (string)$account['key'], ['map' => max(1, $number('map', 9999)), 'x' => $number('x', 9999), 'y' => $number('y', 9999), 'd' => $number('d', 9), 'slot' => $number('slot', SLOTS - 1)],
+    $note = ['map' => max(1, $number('map', 9999)), 'x' => $number('x', 9999), 'y' => $number('y', 9999), 'd' => $number('d', 9), 'slot' => $number('slot', SLOTS - 1)];
+    // The floor slept on (a roof over a room is one tile): kept as given, a height in tiles.
+    if (isset($body['g']) && is_numeric($body['g']) && is_finite((float)$body['g'])) $note['g'] = round(max(-1000.0, min(10000.0, (float)$body['g'])), 3);
+    noteWake($dir, (string)$account['key'], $note,
         ['name' => (string)($character['name'] ?? $account['username']), 'actor' => (int)($character['actorId'] ?? 0), 'model' => (string)($character['id'] ?? ''), 'account' => (string)$account['username']]);
     respond(['ok' => true]);
 }
@@ -555,7 +558,10 @@ if ($action === 'upload') {
     $part = $models . '/up-' . $id;
     $index = intParam('i', 0, 4096);
     $count = intParam('n', 1, 4096);
-    $limit = (int)($config['maxModelBytes'] ?? 33554432);
+    // Database › Online › Server: the largest character and the room for all of them, in megabytes and
+    // gigabytes; 0, the default, is no limit. A piece is a request's size, which hosts limit themselves.
+    $characterMb = (float)$settings['storage']['characterMB'];
+    $limit = $characterMb > 0 ? (int)($characterMb * 1048576) : PHP_INT_MAX;
     $piece = (string)file_get_contents('php://input');
     if ($piece === '' || strlen($piece) > 4194304) fail(413, 'That piece is the wrong size.');
     if ($index === 0) @unlink($part);
@@ -569,14 +575,22 @@ if ($action === 'upload') {
     $rules = json_decode((string)($config['rules'] ?? '{}'), true);
     checkPackage($part, is_array($rules) ? $rules : []);
     foreach (glob($models . '/up-*') ?: [] as $old) { if (filemtime($old) < time() - 3600) @unlink($old); }
-    $used = 0;
-    foreach (glob($models . '/*.rrch') ?: [] as $kept) $used += (int)filesize($kept);
-    if ($used + filesize($part) > (int)($config['maxStorageBytes'] ?? 2147483648)) fail(507, 'This server has no room for more characters.');
+    $roomGb = (float)$settings['storage']['totalGB'];
+    if ($roomGb > 0) {
+        $used = 0;
+        foreach (glob($models . '/*.rrch') ?: [] as $kept) $used += (int)filesize($kept);
+        if ($used + filesize($part) > $roomGb * 1073741824) fail(507, 'This server has no room for more characters.');
+    }
     $hash = hash_file('sha256', $part);
     $target = $models . '/' . $hash . '.rrch';
     if (!is_file($target)) {
         // Kept squeezed too: everyone who meets this player downloads it once.
-        @file_put_contents($target . '.gz', gzencode((string)file_get_contents($part), 6));
+        // A piece at a time, so a character of any size never has to fit in PHP's memory.
+        $in = fopen($part, 'rb');
+        $out = gzopen($target . '.gz.' . getmypid(), 'wb6');
+        if ($in && $out) { while (!feof($in)) gzwrite($out, (string)fread($in, 1048576)); }
+        if ($in) fclose($in);
+        if ($out) { gzclose($out); @rename($target . '.gz.' . getmypid(), $target . '.gz'); }
         rename($part, $target);
     }
     respond(['hash' => $hash]);

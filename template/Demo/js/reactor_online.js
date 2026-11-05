@@ -51,6 +51,8 @@ Game_RemotePlayer.prototype.setAsleep = function(entry) {
     this.asleep = true;
     this.setLook(entry.actor || 1, (entry.name || "") + " (asleep)");
     this.locate(entry.x, entry.y);
+    // On the floor they slept on: a roof's sleeper was drawn in the room under it.
+    if (Number.isFinite(entry.g)) this._reactorGround = entry.g;
     this._direction = entry.d || 2;
     this._reactorPosePitch = 1;
 };

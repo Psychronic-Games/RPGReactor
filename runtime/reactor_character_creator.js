@@ -220,14 +220,16 @@ const ReactorCharacters = {
     },
 
     /** Hands a package to the 3D runtime as if it were a model on disk. Returns its model spec. */
-    async install(id, buffer) {
+    async install(id, buffer, own) {
         if (this.isInstalled(id)) return this.models.get(id);
         const R = Reactor3D;
         await R.ensureLoaded();
         const unpacked = this.unpack(buffer), file = "Character-" + id.slice(0, 16), name = "Characters/" + file;
         const key = R.modelCacheKey(name, ".glb", file);
         const entry = { promise: null, template: null, failed: false };
-        entry.promise = this.template(unpacked.glb).then(template => (entry.template = template));
+        // Another player's character keeps smaller pictures (Reactor3D.remoteTextureCap); this player's own, the full ones.
+        const mine = own || id === this.current()?.id;
+        entry.promise = this.template(unpacked.glb, mine ? 0 : (R.remoteTextureCap ? R.remoteTextureCap() : 0)).then(template => (entry.template = template));
         R._glbCache[key] = entry;
         R._sidecarCache = R._sidecarCache || {};
         R._sidecarJson = R._sidecarJson || {};
@@ -281,10 +283,20 @@ const ReactorCharacters = {
         return going.get(id);
     },
 
-    async template(glb) {
+    /**
+     * The character's model, ready to clone. In the world its parts that draw alike are merged first
+     * (Reactor3D.LayeredParts: a few draws, not 17 to 39); the creator's own view (`preview`) shows each
+     * build at once and leaves them apart.
+     */
+    async template(glb, textureCap, preview) {
         const parsed = await Reactor3D.parseGlbAsync(glb.slice(0));
-        if (parsed && parsed.json) return Reactor3D.buildGlbTemplate(parsed.json, parsed.bin, "", parsed.bitmaps);
-        return Reactor3D.readModel(glb, ".glb", "", "");
+        const template = parsed && parsed.json
+            ? Reactor3D.buildGlbTemplate(parsed.json, parsed.bin, "", parsed.bitmaps, textureCap > 0 ? { textureCap } : undefined)
+            : Reactor3D.readModel(glb, ".glb", "", "");
+        if (!preview && Reactor3D.LayeredParts) {
+            try { await Reactor3D.LayeredParts.apply(template); } catch (error) { console.warn("Reactor3D: a character's parts stay apart:", error && error.message || error); }
+        }
+        return template;
     },
 
     /** This save's model, loaded before its map is shown. */
@@ -670,7 +682,7 @@ class ReactorCharacterStudio {
 
     /** The newest build in the view; the last goes only once this one is ready to replace it. */
     async show(made) {
-        const template = await ReactorCharacters.template(made.glb);
+        const template = await ReactorCharacters.template(made.glb, 0, true);
         if (this.closed) return;
         const model = Reactor3D.cloneModelTemplate(template);
         const box = new THREE.Box3().setFromObject(model), height = Math.max(0.5, box.max.y - box.min.y);
@@ -740,7 +752,7 @@ class ReactorCharacterStudio {
         }
         times.uploaded = performance.now();
         await ReactorCharacters.store(id, buffer);
-        await ReactorCharacters.install(id, buffer);
+        await ReactorCharacters.install(id, buffer, true);
         times.installed = performance.now();
         times.bytes = buffer.byteLength;
         ReactorCharacters.setCurrent({ actorId, id, name });
