@@ -290,10 +290,13 @@ test('a map scene that ends takes its light volume with it, and leaves another s
     } finally { V.reset = reset; V._scene = scene; }
 });
 
-test('the GLB worker splits and parses a model and decodes none of its pictures', async () => {
+test('the GLB worker splits and parses a model and decodes none of its pictures unless asked', async () => {
     const R = load();
     const source = R._glbWorkerSource();
-    assert.doesNotMatch(source, /createImageBitmap|Reactor3D/, 'nothing the worker cannot reach, and no decode it would drop');
+    assert.doesNotMatch(source, /Reactor3D/, 'nothing the worker cannot reach');
+    // A built character asks (`decode`: the largest side, ReactorCharacters.template): its pictures are all read at once
+    // when its parts are merged. Any other model's are decoded when first drawn, as before.
+    assert.match(source, /if \(!\(data\.decode > 0\) \|\| typeof createImageBitmap !== 'function'\) \{ send\(null\); return; \}/, 'no decode unless asked');
     // Run the worker's own source against a GLB with an embedded picture.
     const json = Buffer.from(JSON.stringify({ asset: { version: '2.0' }, images: [{ bufferView: 0, mimeType: 'image/png' }], bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 8 }] }));
     const pad = Buffer.alloc((4 - json.length % 4) % 4, 0x20), bin = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8]);

@@ -588,6 +588,13 @@ Reactor3D.Quality = {
     /** Retained for callers of older quality APIs; detail never imposes a frame cap. */
     drawEvery() { return 1; },
 
+    /** The graphics device the levels were found on (the renderer's name, as F2 shows it), and its thread count. */
+    device() {
+        const name = typeof Graphics !== "undefined" && Graphics.gpuDescription ? String(Graphics.gpuDescription) : "";
+        const threads = typeof navigator !== "undefined" && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 0;
+        return name ? name.slice(0, 160) + " / " + threads : "";
+    },
+
     /** The machine's own levels from its last session. */
     load() {
         // The options file is read while the game boots, after its first frames are drawn: until it has been,
@@ -596,7 +603,9 @@ Reactor3D.Quality = {
         this._loaded = true;
         const kept = typeof ConfigManager !== "undefined" && ConfigManager.graphicsAuto;
         if (!kept || typeof kept !== "object") return;
-        if (kept.version !== this.PROFILE_VERSION) {
+        // Levels another machine settled on are its own: a project folder shared between two computers (Dropbox)
+        // carries one options file, and a laptop took the desktop's levels, or the desktop the laptop's.
+        if (kept.version !== this.PROFILE_VERSION || String(kept.device || "") !== this.device()) {
             this._gpu = 0; this._cpu = 0; this._half = false; this._taken = [];
             this.keep();
             return;
@@ -614,7 +623,7 @@ Reactor3D.Quality = {
         this.refresh();
         const config = typeof ConfigManager !== "undefined" ? ConfigManager : null;
         if (!config) return;
-        config.graphicsAuto = { version: this.PROFILE_VERSION, gpu: this._gpu, cpu: this._cpu, half: false };
+        config.graphicsAuto = { version: this.PROFILE_VERSION, gpu: this._gpu, cpu: this._cpu, half: false, device: this.device() };
         try { if (typeof config.save === "function") config.save(); } catch (e) { /* a config that cannot be written is not worth a frame */ }
     },
 
@@ -1822,7 +1831,9 @@ Reactor3D.ShaderWarmup = {
     TIMEOUT_MS: 5000,
     // Pixels uploaded per frame at most. A decoded picture over what is left goes up in bands of
     // rows over the frames after (`bands`); any other picture goes whole, one a frame at least.
-    UPLOAD_BYTES_PER_FRAME: 16 * 1024 * 1024,
+    // 4 MB (it was 16): a 2048 sheet is 16 MB, so it fitted and went up whole with its mip levels in one frame
+    // (79 to 178 ms on a crowd's first seconds, RTX 5070); now it goes in bands like any larger one.
+    UPLOAD_BYTES_PER_FRAME: 4 * 1024 * 1024,
     // A weak GPU's budget (0: the one above): about 15 ms of upload on an Intel UHD 630.
     WEAK_UPLOAD_BYTES_PER_FRAME: 4 * 1024 * 1024,
     bands: true,
@@ -2101,8 +2112,19 @@ Reactor3D.ShaderWarmup = {
     /** Whether a material's pictures are on the GPU (queueing any that are not). */
     picturesReady(renderer, material) {
         let ready = true;
-        for (const key in material) {
-            const texture = material[key];
+        // Its own maps, and those its shader is handed through userData (a piece's detail map, a ground's layers): those
+        // went up on first use, an <img> decoded there on the main thread, in a reflection on a map's first frames.
+        const textures = [];
+        const take = value => { if (value && value.isTexture) textures.push(value); else if (value && value.value && value.value.isTexture) textures.push(value.value); };
+        for (const key in material) take(material[key]);
+        const data = material.userData;
+        if (data) for (const key in data) {
+            const value = data[key];
+            if (!value || typeof value !== "object" || value.isTexture || value.isColor || value.isVector2 || value.isVector3 || value.isVector4) { take(value); continue; }
+            take(value);
+            if (!Array.isArray(value)) for (const inner in value) take(value[inner]);
+        }
+        for (const texture of textures) {
             if (!texture || !texture.isTexture || texture.isVideoTexture || texture.isRenderTargetTexture || texture.isDataTexture || texture.isData3DTexture) continue;
             // A picture still being made (a compressed copy in the transcoder) holds what wears it.
             if (texture.userData && texture.userData.rrPending) { ready = false; continue; }
@@ -2311,6 +2333,10 @@ Reactor3D.ShaderWarmup = {
                 if (!material || !material.visible) continue;
                 const passes = material.__rrPasses || (material.__rrPasses = {});
                 let entry = passes[kind];
+                // Its pictures on the GPU too, as the view asks (`picturesReady` queues them for the pump): drawn first
+                // in a reflection, a ground's or a prop's <img> went up there whole, decoded on the main thread
+                // (13 to 29 ms each, on a map's first frames). Already confirmed by the view's own draw: nothing to ask.
+                if (!(material.__rrWarm === material.version && material.__rrWarmMap === material.map) && !this.picturesReady(renderer, material)) ready = false;
                 if (entry && entry.version === material.version && (entry.ready || now - entry.started > this.TIMEOUT_MS)) continue;
                 if (!entry || entry.version !== material.version) {
                     if (started >= this.PASS_COMPILES_PER_FRAME) { ready = false; continue; }

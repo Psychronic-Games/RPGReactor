@@ -441,8 +441,13 @@ Reactor3D.collectMapModelSpecs = function(mapData) {
  * site; safe to call for maps with nothing to load.
  */
 Reactor3D.preloadMapModels = function(mapData) {
-    const specs = this.collectMapModelSpecs(mapData);
-    if (!specs.length) return Promise.resolve([]);
+    const all = this.collectMapModelSpecs(mapData);
+    if (!all.length) return Promise.resolve([]);
+    // Only what can stand on the map when it opens is waited for: its own models and the party's. Every other
+    // actor's model comes after, one at a time (a first visit fetched all 33 of Reactor One's, 109 MB, ahead of
+    // the map's own pictures, and over a slow line the map took minutes to open).
+    const later = this.laterActorSpecs(all, mapData), held = new Set(later);
+    const specs = all.filter(spec => !held.has(spec));
     return this.ensureLoaded().then(ok => {
         if (!ok) return [];
         // What a battle here will show, readied under the same fade (a preparation, never a reason to fail the load).
@@ -464,9 +469,38 @@ Reactor3D.preloadMapModels = function(mapData) {
             // One model at another size (a captain a fifth taller than his men) has a footprint of its own, kept per
             // pose: taken here too, or it was walked out on the frame its event first stood on the map (a battle's first).
             for (const spec of this.collectMapPoseSpecs(mapData)) { try { this.modelCollisionMask(spec); } catch (error) { /* the box remains */ } }
+            this.loadLaterModels(later);
             return loaded;
         }));
     });
+};
+
+/**
+ * Of a map's specs, the actors' models no one in the party wears and no event of the map places: wanted only if an
+ * actor joins, or another player wears one. Without a party yet (a title map), none are put off.
+ */
+Reactor3D.laterActorSpecs = function(specs, mapData) {
+    const party = typeof $gameParty !== "undefined" && $gameParty && typeof $gameParty.allMembers === "function" ? $gameParty.allMembers() : null;
+    if (!party || !party.length) return [];
+    const key = spec => spec ? this.modelCacheKey(spec.name, spec.ext, spec.file) : "";
+    const needed = new Set();
+    for (const actor of party) if (actor && typeof actor.actorId === "function") needed.add(key(this.actorSlotSpec(actor.actorId(), "character")));
+    const events = (mapData && mapData.reactor3d && mapData.reactor3d.events) || {};
+    for (const pages of Object.values(events)) for (const raw of Object.values(pages || {})) needed.add(key(this.normalizeModelSpec(raw)));
+    this.loadDatabaseSidecar();
+    const actors = new Set();
+    for (const entry of Object.values((this._databaseSidecar && this._databaseSidecar.actors) || {})) actors.add(key(this.normalizeModelSpec(this.actorEntrySlots(entry).character)));
+    return specs.filter(spec => { const k = key(spec); return actors.has(k) && !needed.has(k); });
+};
+
+/** Models fetched behind the map, one at a time, so they never share the line with what it is waiting for. */
+Reactor3D.loadLaterModels = function(specs) {
+    for (const spec of specs || []) {
+        const load = () => Promise.all([this.loadModel(spec.name, spec.ext, spec.file, spec.texture), this.loadModelSidecar(spec.name)])
+            .then(loaded => { this.boundModelTemplate(loaded[0]); return loaded; }).catch(() => null);
+        this._laterModels = (this._laterModels || Promise.resolve()).then(load, load);
+    }
+    return this._laterModels || Promise.resolve();
 };
 
 /** Every size and pose the map's events give their models, one spec for each (a footprint is kept per pose). */
@@ -2242,6 +2276,35 @@ Reactor3D.loadGlb = function(name) {
     return this.loadModel(name, ".glb");
 };
 
+/**
+ * Model files downloaded a few at a time. The browser ranks a script's downloads above pictures, and a map starts
+ * every model it names at once: over a slow line some seventy shared it, and the map's own pictures (its floor, the
+ * HUD, the window frame), which it waits for, came last: a first visit at 8 Mbit/s took three minutes to open.
+ */
+Reactor3D.ModelDownloads = {
+    LIMIT: 4,
+    active: 0,
+    waiting: [],
+
+    /** Runs `start(release)` once a place is free; `release` (once) frees it. */
+    take(start) {
+        this.waiting.push(start);
+        this.next();
+    },
+
+    next() {
+        // From the disk (a playtest, an installed game) there is no line to share.
+        const limit = typeof Utils !== "undefined" && typeof Utils.isLocal === "function" && Utils.isLocal() ? Infinity : this.LIMIT;
+        while (this.active < limit && this.waiting.length) {
+            const start = this.waiting.shift();
+            let held = true;
+            this.active++;
+            const release = () => { if (!held) return; held = false; this.active--; this.next(); };
+            try { start(release); } catch (error) { release(); throw error; }
+        }
+    }
+};
+
 Reactor3D.loadModel = function(name, ext, file, texture) {
     const key = this.modelCacheKey(name, ext, file);
     const cached = this._glbCache[key];
@@ -2283,10 +2346,13 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                 return;
             }
             const job = jobs[index];
+            this.ModelDownloads.take(release => {
             const xhr = new XMLHttpRequest();
             xhr.open("GET", job.url);
             xhr.responseType = "arraybuffer";
+            xhr.onloadend = release;
             xhr.onload = () => {
+                release();
                 if (xhr.status >= 400 || !xhr.response) {
                     tryAt(index + 1);
                     return;
@@ -2333,8 +2399,9 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                 }
                 buildFrom(() => this.readModel(xhr.response, job.ext, baseUrl, texture));
             };
-            xhr.onerror = () => tryAt(index + 1);
+            xhr.onerror = () => { release(); tryAt(index + 1); };
             xhr.send();
+            });
         };
         tryAt(0);
     });
@@ -2442,6 +2509,11 @@ Reactor3D.GlbCompact = { enabled: true };
 // The worker splits the container and parses its JSON. A model's pictures are
 // not decoded here: each one is decoded when it is first drawn (ShaderWarmup),
 // at this machine's size, and that copy is closed once it is on the GPU.
+// Asked to (`decode`: the largest side), it decodes them too, at no more than that
+// side, and hands them back as bitmaps: a character made in the game, whose
+// pictures are all read at once when its parts are merged (LayeredParts). Decoded
+// on the main thread, a crowd arriving in North Haven's square spent a sixth of
+// its first half minute there, at 11 to 80 frames a second.
 Reactor3D._glbWorkerSource = function() {
     return reactorSplitGlb.toString() + "\n" + reactorCompactGlb.toString() + "\n"
         + "self.onmessage = function(event) {\n"
@@ -2451,7 +2523,21 @@ Reactor3D._glbWorkerSource = function() {
         + "        var parsed = reactorSplitGlb(buffer);\n"
         + "        if (data.compact) {\n"
         + "            var packed = reactorCompactGlb(parsed.json, buffer, parsed.bin.offset, parsed.bin.length);\n"
-        + "            self.postMessage({ id: data.id, json: parsed.json, binOffset: 0, binLength: packed.byteLength, buffer: packed }, [packed]);\n"
+        + "            var send = function(bitmaps) { var list = [packed]; for (var k in bitmaps) list.push(bitmaps[k]);\n"
+        + "                self.postMessage({ id: data.id, json: parsed.json, binOffset: 0, binLength: packed.byteLength, buffer: packed, bitmaps: bitmaps }, list); };\n"
+        + "            if (!(data.decode > 0) || typeof createImageBitmap !== 'function') { send(null); return; }\n"
+        + "            var bitmaps = {}, jobs = [], options = { premultiplyAlpha: 'none', colorSpaceConversion: 'none', imageOrientation: 'none' };\n"
+        + "            (parsed.json.images || []).forEach(function(image, index) {\n"
+        + "                if (!image.rrBlob) return;\n"
+        + "                jobs.push(createImageBitmap(image.rrBlob, options).then(function(full) {\n"
+        + "                    var side = Math.max(full.width, full.height);\n"
+        + "                    if (side <= data.decode) { bitmaps[index] = full; return; }\n"
+        + "                    var k = data.decode / side;\n"
+        + "                    return createImageBitmap(full, { resizeWidth: Math.max(1, Math.round(full.width * k)), resizeHeight: Math.max(1, Math.round(full.height * k)), resizeQuality: 'high', premultiplyAlpha: 'none', colorSpaceConversion: 'none', imageOrientation: 'none' })\n"
+        + "                        .then(function(small) { full.close(); bitmaps[index] = small; });\n"
+        + "                }).catch(function() { /* decoded later, as any model's */ }));\n"
+        + "            });\n"
+        + "            Promise.all(jobs).then(function() { send(bitmaps); });\n"
         + "            return;\n"
         + "        }\n"
         + "        self.postMessage({ id: data.id, json: parsed.json,\n"
@@ -2525,7 +2611,7 @@ Reactor3D.packJsonArrays = function(value) {
     return value;
 };
 
-Reactor3D.parseGlbAsync = function(buffer) {
+Reactor3D.parseGlbAsync = function(buffer, options) {
     const worker = this._ensureParseWorker();
     if (!worker) return Promise.resolve(null);
     this._parseId = (this._parseId || 0) + 1;
@@ -2543,7 +2629,7 @@ Reactor3D.parseGlbAsync = function(buffer) {
             });
         });
         try {
-            worker.postMessage({ id, buffer, compact: !!(this.GlbCompact && this.GlbCompact.enabled) }, [buffer]);
+            worker.postMessage({ id, buffer, compact: !!(this.GlbCompact && this.GlbCompact.enabled), decode: options && options.decode > 0 ? options.decode : 0 }, [buffer]);
             Reactor3D.IdleWorkers?.touch("glb", () => this._parsePending.size > 0, () => { const idle = this._parseWorker; this._parseWorker = undefined; if (idle) idle.terminate(); });
         } catch (error) {
             this._parsePending.delete(id);
@@ -8704,6 +8790,47 @@ Reactor3D.DownedPose = {
 };
 
 /**
+ * A body laid down by turning it about its feet (a sleeper on its back, a Face Ceiling or Face Ground route step)
+ * had the half of it behind that line under the floor: sleepers lay half sunk into the ground. The posed body's
+ * lowest point is found from a sample of its skinned vertices and the body raised to rest on the floor, as a
+ * fall's is (DownedPose). Found again only while its pose may still change (a sleeper settles in its first
+ * second) or its turn, size or floor does; a body held still costs nothing.
+ */
+Reactor3D.LyingLift = {
+    SAMPLES: 1500,
+    // How far above the floor the lowest point rests (a little, so it never flickers through).
+    CLEAR: 0.02,
+    lowest(object) {
+        const vertex = new THREE.Vector3();
+        let low = Infinity, total = 0;
+        const meshes = [];
+        object.traverse(o => { if (o.isMesh && o.visible && o.geometry && o.geometry.attributes.position) { meshes.push(o); total += o.geometry.attributes.position.count; } });
+        for (const mesh of meshes) {
+            const count = mesh.geometry.attributes.position.count, step = Math.max(1, Math.ceil(total / this.SAMPLES));
+            for (let i = 0; i < count; i += step) {
+                mesh.getVertexPosition(i, vertex).applyMatrix4(mesh.matrixWorld);
+                if (vertex.y < low) low = vertex.y;
+            }
+        }
+        return low;
+    },
+    // A pose still playing (an event lying with its idle) is measured again this often, in frames.
+    EVERY: 30,
+    apply(holder, object, floor) {
+        const state = holder.lyingLift || (holder.lyingLift = { lift: 0, key: "", age: 0 });
+        const q = object.quaternion, key = [q.x, q.y, q.z, q.w, object.scale.y, floor].map(v => v.toFixed(3)).join(",");
+        // Measured with the body where it was just placed, before any lift.
+        if (state.key !== key || (!holder.poseHeld && ++state.age >= this.EVERY)) {
+            object.updateMatrixWorld(true);
+            const low = this.lowest(object);
+            if (Number.isFinite(low)) state.lift = floor + this.CLEAR - low;
+            state.key = key; state.age = 0;
+        }
+        object.position.y += state.lift;
+    }
+};
+
+/**
  * A body pulling itself up a ledge keeps its hands on the edge
  * (`ReactorPhysics.updateMantle` moves the body; this poses the arms). Each
  * frame of a grapple, the firing arm aims along the line and the free hand
@@ -12950,6 +13077,9 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             if (fallAxis) object.rotateOnWorldAxis(fallAxis, posePitch * Math.PI / 2);
             else if (posePitch) object.rotateX(-posePitch * Math.PI / 2);
             if (poseSpin) object.rotateZ(-poseSpin * Math.PI / 180);
+            // Laid down (a sleeper, Face Ceiling / Face Ground) and not by a fall, which lifts its own (DownedPose).
+            if (posePitch && !character._reactorKnockedOut) Reactor3D.LyingLift.apply(holder, object, ground + (character._reactorLift || 0) + air);
+            else if (holder.lyingLift) holder.lyingLift = null;
             if (still.enabled) still.note(holder, character, object, spec, extent, ground, dir8, lodSpan, targetYaw);
         }
         object.visible = !(character.isTransparent && character.isTransparent())
@@ -13960,6 +14090,9 @@ Reactor3D.LayeredParts = {
     // Whether parts with shapes merge (into their own group).
     SHAPES: true,
     SPLIT_SHINE: true,
+    // Whether a merged character is drawn once offscreen before it is shown (warm), and the longest its programs are waited for.
+    WARM: true,
+    WARM_WAIT_MS: 3000,
     // Parts other code finds by name: worn pieces hide hair and beards (Worn), and mask the body's skin.
     KEEP_NAMED: /^(body|hair|hairsoft|facialhair|facialhairsoft|beard|beardsoft)$/,
     NONE: -1,
@@ -14058,10 +14191,12 @@ Reactor3D.LayeredParts = {
     },
 
     /** Pixels of every picture at width x height, one after another (RGBA bytes, top row first as the GLB reads them). */
-    async pixels(images, width, height) {
+    async pixels(images, width, height, give) {
         const out = new Uint8Array(width * height * 4 * images.length);
-        const bitmaps = await Promise.all(images.map(image => createImageBitmap(image, { resizeWidth: width, resizeHeight: height, resizeQuality: "high",
-            premultiplyAlpha: "none", colorSpaceConversion: "none" })));
+        // A bitmap nothing else will draw goes to the worker itself; any other is copied (a copy of a 1024 sheet
+        // was most of a merge's main-thread time). The worker draws each to the layer's size.
+        const bitmaps = await Promise.all(images.map((image, i) => (give && give[i] && typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap
+            ? image : createImageBitmap(image, { premultiplyAlpha: "none", colorSpaceConversion: "none" }))));
         const worker = this.worker();
         if (worker) {
             const id = (this._jobs = (this._jobs || 0) + 1);
@@ -14074,9 +14209,10 @@ Reactor3D.LayeredParts = {
         // Without a worker (or if it failed): here, on a canvas.
         const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(width, height) : Object.assign(document.createElement("canvas"), { width, height });
         const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.imageSmoothingQuality = "high";
         bitmaps.forEach((bitmap, i) => {
             context.clearRect(0, 0, width, height);
-            try { context.drawImage(bitmap, 0, 0); out.set(context.getImageData(0, 0, width, height).data, i * width * height * 4); } catch (error) { /* closed by a failed worker: left empty */ }
+            try { context.drawImage(bitmap, 0, 0, width, height); out.set(context.getImageData(0, 0, width, height).data, i * width * height * 4); } catch (error) { /* closed by a failed worker: left empty */ }
             if (bitmap.close) bitmap.close();
         });
         return out;
@@ -14088,7 +14224,8 @@ Reactor3D.LayeredParts = {
         this._worker = null;
         if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined" || typeof Blob === "undefined") return null;
         const source = "onmessage = e => { const { id, width, height, bitmaps } = e.data; try { const canvas = new OffscreenCanvas(width, height), c = canvas.getContext('2d', { willReadFrequently: true });"
-            + " const size = width * height * 4, out = new Uint8Array(size * bitmaps.length); bitmaps.forEach((b, i) => { c.clearRect(0, 0, width, height); c.drawImage(b, 0, 0); out.set(c.getImageData(0, 0, width, height).data, i * size); b.close(); });"
+            + " c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';"
+            + " const size = width * height * 4, out = new Uint8Array(size * bitmaps.length); bitmaps.forEach((b, i) => { c.clearRect(0, 0, width, height); c.drawImage(b, 0, 0, width, height); out.set(c.getImageData(0, 0, width, height).data, i * size); b.close(); });"
             + " postMessage({ id, data: out.buffer }, [out.buffer]); } catch (error) { postMessage({ id, data: null }); } };";
         try {
             const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
@@ -14103,7 +14240,7 @@ Reactor3D.LayeredParts = {
     },
 
     /** A texture array of these pictures at one size: their own for a large class, the largest one's (a power of two) for small ones. */
-    async array(images, kind, color) {
+    async array(images, kind, color, give) {
         if (!images.length) return null;
         let width, height;
         if (kind === "small") {
@@ -14113,7 +14250,7 @@ Reactor3D.LayeredParts = {
         } else {
             [width, height] = kind.split("x").map(Number);
         }
-        const data = await this.pixels(images, width, height);
+        const data = await this.pixels(images, width, height, give);
         const array = new THREE.DataArrayTexture(data, width, height, images.length);
         array.format = THREE.RGBAFormat;
         array.type = THREE.UnsignedByteType;
@@ -14125,6 +14262,10 @@ Reactor3D.LayeredParts = {
         array.flipY = false;
         array.anisotropy = Reactor3D.modelAnisotropy ? Reactor3D.modelAnisotropy() : 1;
         array.userData.rrLayeredArray = true;
+        // Its pixels go once they are on the GPU: a crowd's arrays held a gigabyte in the page, and NW.js's renderer
+        // ran out of memory and stopped about fifteen seconds into North Haven's square.
+        // (After the last of its layers when they go up a frame at a time: `preload`.)
+        array.onUpdate = () => { if (array.image && !(array.userData.rrLayersLeft > 0)) array.image.data = null; };
         array.needsUpdate = true;
         return array;
     },
@@ -14159,6 +14300,27 @@ Reactor3D.LayeredParts = {
             const identity = Reactor3D.CasterMerge ? Reactor3D.CasterMerge.isIdentity(bind) : false;
             turn.getNormalMatrix(bind);
             const tint = colorOf(part), c = part.material.vertexColors ? a.color : null;
+            // Whole arrays at once where they are plain (a GLB's always are): reading a vertex at a time through
+            // getX was most of a merge's 5 to 15 ms, a character at a time as a crowd arrived.
+            const plain = x => !x || (!x.isInterleavedBufferAttribute && !x.normalized && x.array && x.array.length === x.count * x.itemSize);
+            if (identity && [a.position, a.normal, a.uv, a.uv1, a.skinIndex, a.skinWeight].every(plain) && (!c || plain(c))) {
+                position.set(a.position.array, v * 3);
+                normal.set(a.normal.array, v * 3);
+                if (a.uv && a.uv.itemSize === 2) uv.set(a.uv.array, v * 2);
+                if (a.uv1 && a.uv1.itemSize === 2) uv1.set(a.uv1.array, v * 2);
+                skinIndex.set(a.skinIndex.array, v * 4);
+                skinWeight.set(a.skinWeight.array, v * 4);
+                const ca = c ? c.array : null, cs = c ? c.itemSize : 0;
+                for (let i = 0; i < n; i++) {
+                    const o = (v + i) * 3;
+                    color[o] = (ca ? ca[i * cs] : 1) * tint.r; color[o + 1] = (ca ? ca[i * cs + 1] : 1) * tint.g; color[o + 2] = (ca ? ca[i * cs + 2] : 1) * tint.b;
+                }
+                layer.fill(row, v, v + n);
+                const src = g.index.array;
+                for (let i = 0; i < src.length; i++) index[k++] = src[i] + v;
+                v += n;
+                return;
+            }
             for (let i = 0; i < n; i++) {
                 const o = v + i;
                 at.set(a.position.getX(i), a.position.getY(i), a.position.getZ(i));
@@ -14241,10 +14403,13 @@ Reactor3D.LayeredParts = {
         const parts = candidates.filter(p => Object.values(this.maps(p.material)).every(t => !t || settled.get(t)));
         const report = { before: 0, after: 0, groups: 0 };
         template.traverse(child => { if (child.isMesh) report.before++; });
+        // Arriving in a crowd, each step its own frame: a group's arrays, its geometry, the bounds, each layer's upload.
+        const groups = this.plan(parts), shared = this.sharing(template, groups);
         const made = [];
-        for (const group of this.plan(parts)) {
-            const one = await this.mergeGroup(group);
+        for (const group of groups) {
+            const one = await this.mergeGroup(group, shared);
             if (one) made.push(one);
+            await this.nextFrame();
         }
         // Swapped in all at once, after every await: the template is whole the moment anything clones it. Each merged
         // mesh takes its first part's place among the parts that stay, so the model's own order is kept.
@@ -14260,10 +14425,176 @@ Reactor3D.LayeredParts = {
         }
         template.traverse(child => { if (child.isMesh) report.after++; });
         template.userData.rrLayered = report;
+        if (made.length) this.release(template, made);
+        // The first clone would work these out (every vertex of each part): here, in a frame of their own.
+        if (Reactor3D.presetSkinnedBounds) { Reactor3D.presetSkinnedBounds(template); await this.nextFrame(); }
+        await this.within(this.preload(made.map(entry => entry.mesh.material.userData.rrLayers.own)), this.WARM_WAIT_MS * 4);
+        await this.within(this.warm(template), this.WARM_WAIT_MS + 1000);
         return report;
     },
 
-    async mergeGroup(group) {
+    /**
+     * The character drawn once where nobody sees it, before it is first shown: its programs compiled off the main
+     * thread (compileAsync), then a draw into a few pixels that sends what three otherwise sends at a model's first
+     * draw: its geometry, the face's shape texture (a float array of every shape) and the pictures of the parts that
+     * stay. Turning the camera onto a square of sleepers not yet seen sent those for each as it came into view: 164
+     * array uploads, 443 ms, a frame of 250 ms in ten seconds of turning. On the uploads' queue: one character a turn.
+     */
+    warm(template) {
+        const run = () => this.warmNow(template);
+        const turn = (this._uploads || Promise.resolve()).then(run, run);
+        this._uploads = turn.catch(() => null);
+        return turn;
+    },
+
+    async warmNow(template) {
+        const viewport = Reactor3D.viewport && Reactor3D.viewport(), renderer = viewport && viewport._renderer;
+        const camera = viewport && typeof viewport.camera === "function" ? viewport.camera() : null;
+        const target = viewport && typeof viewport.scene === "function" ? viewport.scene() : null;
+        if (!this.WARM || !renderer || !camera || typeof renderer.compileAsync !== "function" || !template || template.parent) return;
+        const scene = this._warmScene || (this._warmScene = new THREE.Scene());
+        // Set up as the view's own target is (Viewport: sRGB written in the shader, RGBA8): a plain target makes three
+        // write linear colour, another program for every material, compiled on the spot and waited for.
+        let pixels = this._warmTarget;
+        if (!pixels) {
+            pixels = this._warmTarget = new THREE.WebGLRenderTarget(4, 4);
+            pixels.isXRRenderTarget = true;
+            pixels.texture.internalFormat = "RGBA8";
+        }
+        // As an instance will wear it: the Builder's metal shines (applyModelSurface), another program.
+        if (Reactor3D.applyModelSurface) Reactor3D.applyModelSurface(template, null);
+        scene.add(template);
+        try {
+            template.updateMatrixWorld(true);
+            // Never waited for long: the player's own character waits on this, and the map on it (a lost context
+            // answers no program's status, and three's wait would poll it for ever).
+            const ready = await this.within(renderer.compileAsync(scene, camera, target || null).then(() => true), this.WARM_WAIT_MS);
+            this.handBack(viewport);
+            // Not ready in time: drawing now would wait on those same programs, so it is drawn where first seen instead.
+            if (ready !== true) return;
+            await this.nextFrame();
+            this.plainUnpack(renderer);
+            const was = renderer.getRenderTarget();
+            renderer.setRenderTarget(pixels);
+            try { renderer.render(scene, camera); } finally { renderer.setRenderTarget(was); this.handBack(viewport); }
+        } catch (error) {
+            // Drawn for the first time where it is first seen, as before.
+        } finally {
+            scene.remove(template);
+        }
+    },
+
+    /**
+     * The unpack state a texture array's upload needs, set outright: the 2D layer (PIXI) shares the context and
+     * leaves UNPACK_FLIP_Y / PREMULTIPLY_ALPHA on, three's own record of them says off and sets nothing, and WebGL
+     * refuses either for a 3D upload ("texSubImage3D: FLIP_Y or PREMULTIPLY_ALPHA isn't allowed"): the layer
+     * stayed empty and the character drew without its pictures.
+     */
+    plainUnpack(renderer) {
+        // three's record of the context matched to what is really set, and the flags cleared (as Viewport does
+        // before its own pass), then, once done (handBack), PIXI's record matched too: this runs between frames.
+        try { renderer.resetState(); } catch (error) { /* a lost context */ }
+        try { Reactor3D.clearUnpackState(renderer.getContext()); } catch (error) { /* likewise */ }
+    },
+
+    /** PIXI's caches after three has driven the shared context outside the frame. */
+    handBack(viewport) {
+        try { if (viewport && typeof viewport._resetPixi === "function") viewport._resetPixi(); } catch (error) { /* a lost context */ }
+    },
+
+    /** Resolves with `promise`, or with nothing after `ms`: a wait in a character's loading never holds it for ever. */
+    within(promise, ms) {
+        return Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))]);
+    },
+
+    /** A frame from now (or a moment, where frames do not come: a hidden window). */
+    nextFrame() {
+        return new Promise(resolve => {
+            let done = false;
+            const go = () => { if (!done) { done = true; resolve(); } };
+            if (typeof requestAnimationFrame === "function") requestAnimationFrame(go);
+            setTimeout(go, 50);
+        });
+    },
+
+    /**
+     * Which pictures may go to the merge's worker whole: those no part that stays draws, at their last use among the
+     * groups. `uses` counts what each group still needs; `kept` the pictures a remaining part shows.
+     */
+    sharing(template, groups) {
+        const merged = new Set(), uses = new Map(), kept = new Set();
+        for (const group of groups) for (const part of group.parts) {
+            merged.add(part);
+            for (const t of Object.values(this.maps(part.material))) if (t && t.image) uses.set(t.image, (uses.get(t.image) || 0) + 1);
+        }
+        template.traverse(child => {
+            if (!child.isMesh || merged.has(child)) return;
+            for (const m of [].concat(child.material || [])) {
+                if (!m) continue;
+                for (const t of Object.values(this.maps(m))) if (t && t.image) kept.add(t.image);
+                if (m.userData && m.userData.rrEmissiveMap && m.userData.rrEmissiveMap.image) kept.add(m.userData.rrEmissiveMap.image);
+            }
+        });
+        return { uses, kept };
+    },
+
+    /**
+     * Each array's layers up to the GPU a frame at a time, before the character is first drawn: drawn first, three
+     * sent a whole array in that frame (20 to 50 ms for a crowd's arrival each second). Without the game's renderer
+     * (the editor's views) they go up whole when first drawn, as before.
+     */
+    preload(lists) {
+        // One layer a frame for the whole game: characters arriving together take turns.
+        const run = () => this.preloadNow(lists);
+        const turn = (this._uploads || Promise.resolve()).then(run, run);
+        this._uploads = turn.catch(() => null);
+        return turn;
+    },
+
+    async preloadNow(lists) {
+        const viewport = Reactor3D.viewport && Reactor3D.viewport(), renderer = viewport && viewport._renderer;
+        if (!renderer || typeof renderer.initTexture !== "function") return;
+        for (const list of lists) for (const array of list) {
+            if (!array || !array.isDataArrayTexture || !array.image || !array.image.data || typeof array.addLayerUpdate !== "function") continue;
+            const depth = array.image.depth, mips = array.generateMipmaps;
+            array.userData.rrLayersLeft = depth;
+            for (let layer = 0; layer < depth; layer++) {
+                array.addLayerUpdate(layer);
+                array.userData.rrLayersLeft--;
+                // The mip levels made once, after the last layer: three makes them for the whole array after every
+                // upload (49 ms a layer for a 1024 array). The first upload keeps them on, which sizes the storage with its levels.
+                array.generateMipmaps = mips && (layer === 0 || layer === depth - 1);
+                array.needsUpdate = true;
+                this.plainUnpack(renderer);
+                try { renderer.initTexture(array); } catch (error) { array.userData.rrLayersLeft = 0; array.clearLayerUpdates(); array.generateMipmaps = mips; array.needsUpdate = true; break; }
+                finally { this.handBack(viewport); }
+                await this.nextFrame();
+            }
+            array.generateMipmaps = mips;
+        }
+    },
+
+    /**
+     * The pictures only merged parts drew from: copied into the arrays, never uploaded, still decoded in memory.
+     * Let go of each one no part that stays draws (by the picture itself: two textures may show one).
+     */
+    release(template, made) {
+        const kept = new Set();
+        template.traverse(child => {
+            if (!child.isMesh || (child.material && child.material.userData && child.material.userData.rrLayers)) return;
+            for (const m of [].concat(child.material || [])) if (m) for (const t of Object.values(this.maps(m))) if (t && t.image) kept.add(t.image);
+            const m = child.material;
+            if (m) for (const t of [m.map, m.userData && m.userData.rrEmissiveMap]) if (t && t.image) kept.add(t.image);
+        });
+        for (const { parts } of made) for (const part of parts) for (const t of Object.values(this.maps(part.material))) {
+            if (!t || !t.image || kept.has(t.image)) continue;
+            const image = t.image;
+            t.image = null;
+            if (typeof image.close === "function") image.close();
+        }
+    },
+
+    async mergeGroup(group, shared) {
         const { parts } = group;
         // Pictures by class (one array each), the same picture once however many parts or textures show it.
         // A picture is known by the file's image it came from: each texture over it was decoded on its own.
@@ -14295,9 +14626,17 @@ Reactor3D.LayeredParts = {
             };
         });
         if (classes.length > this.CLASSES || classes.some(c => c.images.length > 255) || detail.images.length > 255) return null;
+        // A picture is given away at its last use (no later group needs it), unless a part that stays draws it or
+        // this group reads it twice (as a picture and as a map).
+        const counted = new Map(), lists = new Map();
+        if (shared) for (const part of parts) for (const t of Object.values(this.maps(part.material))) if (t && t.image) counted.set(t.image, (counted.get(t.image) || 0) + 1);
+        for (const list of [detail.images].concat(classes.map(c => c.images))) for (const image of list) lists.set(image, (lists.get(image) || 0) + 1);
+        const give = list => list.map(image => !!shared && lists.get(image) === 1 && !shared.kept.has(image)
+            && (shared.uses.get(image) || 0) - (counted.get(image) || 0) <= 0);
         let arrays, detailArray;
         try {
-            [detailArray, ...arrays] = await Promise.all([this.array(detail.images, "small", false)].concat(classes.map(c => this.array(c.images, c.kind, true))));
+            [detailArray, ...arrays] = await Promise.all([this.array(detail.images, "small", false, give(detail.images))].concat(classes.map(c => this.array(c.images, c.kind, true, give(c.images)))));
+            if (shared) for (const [image, n] of counted) shared.uses.set(image, (shared.uses.get(image) || 0) - n);
         } catch (error) {
             console.warn("Reactor3D: a character's parts stay apart:", error && error.message || error);
             return null;

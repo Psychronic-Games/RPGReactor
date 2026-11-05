@@ -171,3 +171,70 @@ test('without decoded pictures or texture arrays nothing is merged', async () =>
     try { assert.equal(await L.apply(root), null); } finally { if (had) global.createImageBitmap = had; }
     assert.equal(meshes(root).length, 2);
 });
+
+test('pictures leave memory once the arrays hold them; a picture a part that stays still shows is kept', async t => {
+    stubPictures(t);
+    const shared = { width: 1024, height: 1024, close() { this.closed = true; } }, own = { width: 512, height: 512, close() { this.closed = true; } };
+    const skin = new THREE.Texture(shared), bodySkin = new THREE.Texture(shared), weave = new THREE.Texture(own);
+    skin.userData.rrGlbImage = 0; bodySkin.userData.rrGlbImage = 0; weave.userData.rrGlbImage = 1;
+    const { root } = character([{ name: 'Body', map: bodySkin }, { name: 'Eyelids', map: skin }, { name: 'Shirt', map: weave }]);
+    await L.apply(root);
+    assert.equal(weave.image, null, 'only merged parts drew the weave: let go');
+    assert.equal(own.closed, true);
+    assert.equal(skin.image, shared, 'the body still draws the same picture');
+    assert.ok(!shared.closed);
+    const layers = meshes(root).find(m => m.material.userData.rrLayers).material.userData.rrLayers;
+    const array = layers.base[0];
+    assert.ok(array.image.data, 'pixels until the upload');
+    array.onUpdate(array);
+    assert.equal(array.image.data, null, 'and none after it');
+});
+
+/** A view whose renderer records what is asked of it (runtime 20261105.6: a remote sign-in that never loaded). */
+function fakeView({ parallel, compile }) {
+    const calls = [];
+    const gl = { UNPACK_FLIP_Y_WEBGL: 1, UNPACK_PREMULTIPLY_ALPHA_WEBGL: 2, pixelStorei: (k, v) => calls.push(['pixelStorei', k, v]) };
+    const renderer = {
+        extensions: { has: name => name === 'KHR_parallel_shader_compile' && parallel },
+        compileAsync: () => { calls.push(['compileAsync']); return compile(); },
+        getContext: () => gl,
+        resetState: () => calls.push(['resetState']),
+        initTexture: () => calls.push(['initTexture']),
+        getRenderTarget: () => null,
+        setRenderTarget: () => {},
+        render: () => calls.push(['render']),
+    };
+    const viewport = { _renderer: renderer, camera: () => new THREE.PerspectiveCamera(), scene: () => null, _resetPixi: () => calls.push(['resetPixi']) };
+    return { calls, viewport };
+}
+
+test('a character is never held waiting for programs: given up on after a while, and not drawn on programs not ready', async () => {
+    const was = { viewport: Reactor3D.viewport, wait: L.WARM_WAIT_MS };
+    try {
+        L.WARM_WAIT_MS = 30;
+        const view = fakeView({ parallel: true, compile: () => new Promise(() => {}) });
+        Reactor3D.viewport = () => view.viewport;
+        const started = Date.now();
+        await L.warmNow(new THREE.Group());
+        assert.ok(Date.now() - started < 1000, 'gave up on the wait');
+        assert.equal(view.calls.some(c => c[0] === 'render'), false, 'not drawn on programs that are not ready');
+    } finally { Reactor3D.viewport = was.viewport; L.WARM_WAIT_MS = was.wait; }
+});
+
+test('a staged layer is sent with the 2D layer\'s unpack flags cleared, and PIXI\'s record put right after', async () => {
+    const was = { viewport: Reactor3D.viewport, next: L.nextFrame };
+    try {
+        const view = fakeView({ parallel: true, compile: () => Promise.resolve() });
+        Reactor3D.viewport = () => view.viewport;
+        L.nextFrame = () => Promise.resolve();
+        const array = new THREE.DataArrayTexture(new Uint8Array(4 * 4 * 4 * 2), 4, 4, 2);
+        await L.preloadNow([[array]]);
+        const sends = view.calls.map((c, i) => [c, i]).filter(([c]) => c[0] === 'initTexture').map(([, i]) => i);
+        assert.equal(sends.length, 2);
+        for (const i of sends) {
+            const before = view.calls.slice(Math.max(0, i - 3), i).map(c => c.join(':'));
+            assert.deepEqual(before, ['resetState', 'pixelStorei:1:false', 'pixelStorei:2:false']);
+            assert.equal(view.calls[i + 1][0], 'resetPixi');
+        }
+    } finally { Reactor3D.viewport = was.viewport; L.nextFrame = was.next; }
+});

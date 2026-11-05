@@ -1,13 +1,13 @@
 # Current status
 
-**0.99.4**, runtime 20261101.41, adds online worlds, player-created avatars, exercise motion, skin finishes and sprite/camera fixes. See the [release notes](posts/release-notes-0.99.4.md) and [changelog](../CHANGELOG.md). This source release retains known CI and visual issues. Signed binaries and itch publication are separate; the previous binary release is 0.99.2 (2026-10-25). Current development is 0.99.5, runtime **20261104.9**; see [HANDOFF.md](HANDOFF.md).
+**0.99.4**, runtime 20261101.41, adds online worlds, player-created avatars, exercise motion, skin finishes and sprite/camera fixes. See the [release notes](posts/release-notes-0.99.4.md) and [changelog](../CHANGELOG.md). This source release retains known CI and visual issues. Signed binaries and itch publication are separate; the previous binary release is 0.99.2 (2026-10-25). Current development is 0.99.5, runtime **20261105.9**; see [HANDOFF.md](HANDOFF.md).
 
 ## Version and validation
 
 Each area keeps its latest check.
 
 - **Release:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is Latest source; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is published. Development is 0.99.5. Native binaries use the [release checklist](RELEASE-CHECKLIST.md).
-- **Runtime:** development **0.99.5**, revision **20261104.9**, PixiJS **8.22.0**, Three.js **0.187.0**; all 20 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
+- **Runtime:** development **0.99.5**, revision **20261105.9**, PixiJS **8.22.0**, Three.js **0.187.0**; all 20 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
 - **Legacy imports** (2026-10-29): timer/event logic, BMP/XYZ art, RTP discovery, nested assets and repeat imports refined; source gaps are reported. [Audit and limits](IMPORTING-LEGACY-PROJECTS.md#reliability-audit).
 - **Node suites** (2026-11-02): 9,328 passed, 35 skipped, none failed, across CI's eight shards on Node 22 ([run](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959)). [Scroll alignment evidence](archive/evidence/event-camera-drift-20261101.json).
 - **Editor performance** (2026-10-19): inactive previews pause; thumbnails/skin builds are faster; steady lights/cameras skip repeat work. Streaming grass merges 388→55 times, with identical final geometry. 160 focused tests and native game/map/Forge checks pass. Generic matrix caching was not a consistent win and is removed. Shaders/large jobs/traversal remain; weak-PC/two-monitor checks await owner. [Measurements](PERFORMANCE.md).

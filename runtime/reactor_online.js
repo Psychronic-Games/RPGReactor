@@ -634,15 +634,23 @@ const ReactorOnline = {
         return response.arrayBuffer();
     },
 
-    /** Another player's model, one download at a time; until it comes, they show their actor. */
+    /**
+     * Another player's model, one download at a time. Until it comes they show no body (`_characterModelSpec`): shown
+     * as their actor meanwhile, a square of sleepers came up as the Demo's actor and changed into their own one by one.
+     * A character that cannot be had (gone from the server, or broken) leaves them their actor.
+     */
     fetchLook(peer, id) {
         peer.modelId = id;
+        peer.lookFailed = false;
         this._lookQueue = (this._lookQueue || Promise.resolve()).then(async () => {
             if (peer.modelId !== id) return;
             if (ReactorCharacters.isInstalled(id)) { peer.modelSpec = ReactorCharacters.models.get(id); return; }
             const buffer = await ReactorCharacters.fetch(id);
-            if (buffer && peer.modelId === id) peer.modelSpec = await ReactorCharacters.install(id, buffer);
-        }).catch(error => console.warn("A player's character could not be loaded.", error));
+            if (peer.modelId !== id) return;
+            const spec = buffer ? await ReactorCharacters.install(id, buffer) : null;
+            if (peer.modelId !== id) return;
+            if (spec) peer.modelSpec = spec; else peer.lookFailed = true;
+        }).catch(error => { if (peer.modelId === id) peer.lookFailed = true; console.warn("A player's character could not be loaded.", error); });
     }
 };
 
@@ -780,6 +788,8 @@ if (typeof Reactor3D !== "undefined") {
         if (character instanceof Game_RemotePlayer) {
             if (character.inside || ReactorOnlineBattle.drawsAsUnit(character)) return null;
             if (character.modelSpec) return character.modelSpec;
+            // Their own character on its way: nothing yet, rather than the actor it would replace.
+            if (character.modelId && !character.lookFailed) return null;
             return character.actorId ? this.databaseModelSpecOfProject(character.actorId) : null;
         }
         return modelSpec.call(this, character);

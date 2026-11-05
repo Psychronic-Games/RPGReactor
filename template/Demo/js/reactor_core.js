@@ -3294,8 +3294,34 @@ Graphics.FPSCounter.prototype._update = function() {
     // The PIXI app initializes asynchronously, so the mode is read here
     // (every 15 ticks) rather than once at creation. Blank until known.
     const app = Graphics.app;
-    const mode = app && app.renderer ? Graphics.rendererModeName(app.renderer) : "";
+    let mode = app && app.renderer ? Graphics.rendererModeName(app.renderer) : "";
+    // And what draws it: a graphics card, or the browser drawing in software when it could not get one
+    // (SwiftShader, llvmpipe), which runs a quiet map fast and a crowd at a crawl.
+    const device = mode ? Graphics.graphicsDeviceName(app.renderer) : "";
+    if (device) mode += " · " + device;
     if (this._modeDiv.textContent !== mode) this._modeDiv.textContent = mode;
+};
+
+/** The graphics device's name, short ("RTX 5070", "SwiftShader"), read once; "" when it will not say. */
+Graphics.graphicsDeviceName = function(renderer) {
+    if (this._deviceName !== undefined) return this._deviceName;
+    let name = "";
+    try {
+        const gl = renderer && (renderer.gl || (renderer.context && renderer.context.gl));
+        if (!gl) return "";
+        const info = gl.getExtension("WEBGL_debug_renderer_info");
+        name = String((info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || "");
+    } catch (e) {
+        name = "";
+    }
+    const software = /SwiftShader|llvmpipe|softpipe|Software/i.exec(name);
+    if (software) return (this._deviceName = "software (" + software[0] + ")");
+    // "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070/PCIe/SSE2, OpenGL 4.5.0)" -> "RTX 5070".
+    const inner = /^ANGLE \((.*)\)$/.exec(name);
+    if (inner) { const parts = inner[1].split(", "); name = parts.length > 1 ? parts[1] : parts[0]; }
+    name = name.replace(/\/PCIe.*$|\(R\)|\(TM\)|NVIDIA |GeForce |AMD |Intel |Mesa |Direct3D11 vs_5_0 ps_5_0|, D3D11.*$|\(0x[0-9A-Fa-f]+\)/g, "").replace(/\s+/g, " ").trim();
+    this._deviceName = name.slice(0, 32);
+    return this._deviceName;
 };
 
 /**

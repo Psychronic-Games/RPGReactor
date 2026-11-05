@@ -88,7 +88,7 @@ test('a slow graphics card is stepped down along the picture\'s size, and the ma
         assert.deepEqual([Q.g, Q.c, Q.h], [2, 0, false], 'down to the size it holds 60 at, and no further');
         assert.ok(rate >= 59 && rate <= 61, 'sixty a second again: ' + rate);
         assert.ok(Q.scale() < 0.7);
-        assert.deepEqual(saves[saves.length - 1], { version: 2, gpu: 2, cpu: 0, half: false }, 'the machine\'s levels are kept for its next session');
+        assert.deepEqual(saves[saves.length - 1], { version: 2, gpu: 2, cpu: 0, half: false, device: '' }, 'the machine\'s levels are kept for its next session');
     });
 });
 
@@ -251,7 +251,7 @@ test('choosing Auto again starts from the full picture', () => {
         Q.refresh();
         Q.reset();
         assert.deepEqual([Q.g, Q.c, Q.h], [0, 0, false]);
-        assert.deepEqual(saves[saves.length - 1], { version: 2, gpu: 0, cpu: 0, half: false });
+        assert.deepEqual(saves[saves.length - 1], { version: 2, gpu: 0, cpu: 0, half: false, device: '' });
         assert.equal(Q._ceiling, false);
     });
 });
@@ -354,7 +354,7 @@ test('Auto discards a profile learned under the old refresh-rate target once', (
         Q.refresh();
         assert.deepEqual([Q.g, Q.c], [0, 0]);
         assert.equal(Q.shadows(), true);
-        assert.deepEqual(ConfigManager.graphicsAuto, { version: Q.PROFILE_VERSION, gpu: 0, cpu: 0, half: false });
+        assert.deepEqual(ConfigManager.graphicsAuto, { version: Q.PROFILE_VERSION, gpu: 0, cpu: 0, half: false, device: '' });
         Q.refresh();
         assert.equal(saves.length, 1, 'migration is written once');
     });
@@ -379,4 +379,21 @@ test('saved Auto CPU level two keeps cheaper shadows and switching quality refre
         ConfigManager.graphicsQuality = 'auto'; Q.refresh();
         assert.equal(Q.shadows(), true); assert.equal(S.quality() === profiles.fullCpu, true);
     });
+});
+
+test('levels another machine settled on are not taken: a shared project folder carries one options file', () => {
+    const had = global.Graphics;
+    global.Graphics = { gpuDescription: 'NVIDIA GeForce RTX 3060 Laptop GPU' };
+    try {
+        inGame({ graphicsAuto: { version: 2, gpu: 2, cpu: 2, half: false, device: 'NVIDIA GeForce RTX 5070 / 32' } }, saves => {
+            Q.refresh();
+            assert.deepEqual([Q.g, Q.c], [0, 0], 'another device: measured afresh');
+            assert.match(saves[saves.length - 1].device, /^NVIDIA GeForce RTX 3060 Laptop GPU \/ \d+$/, 'and kept as this one\'s');
+        });
+        const own = Q.device();
+        inGame({ graphicsAuto: { version: 2, gpu: 2, cpu: 1, half: false, device: own } }, () => {
+            Q.refresh();
+            assert.deepEqual([Q.g, Q.c], [2, 1], 'its own levels are taken');
+        });
+    } finally { global.Graphics = had; }
 });

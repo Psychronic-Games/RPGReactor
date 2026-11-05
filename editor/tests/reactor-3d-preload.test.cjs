@@ -77,6 +77,17 @@ test('a map lists every model it can show before its first frame', () => {
         ], 'events dedupe, character slots join, face-only slots stay out');
         assert.deepEqual(Reactor3D.collectMapModelSpecs({}).map(spec => spec.name).sort(),
             ['Actors/hero', 'Actors/legacy-flat'], 'a flat map still preloads the party models it draws as sprites');
+        // A map waits for the party's models and its own; other actors' come after it (runtime 20261105.7).
+        const savedParty = global.$gameParty;
+        try {
+            global.$gameParty = { allMembers: () => [{ actorId: () => 1 }] };
+            assert.deepEqual(Reactor3D.laterActorSpecs(Reactor3D.collectMapModelSpecs(map), map).map(spec => spec.name), ['Actors/legacy-flat'],
+                'an actor outside the party is put off');
+            const placed = { reactor3d: { events: { '3': { '0': { name: 'Actors/legacy-flat', ext: '.glb' } } } } };
+            assert.deepEqual(Reactor3D.laterActorSpecs(Reactor3D.collectMapModelSpecs(placed), placed), [], 'one an event of the map wears is not');
+            global.$gameParty = undefined;
+            assert.deepEqual(Reactor3D.laterActorSpecs(Reactor3D.collectMapModelSpecs(map), map), [], 'without a party, nothing is put off');
+        } finally { global.$gameParty = savedParty; }
         Reactor3D._databaseSidecar = null;
         assert.deepEqual(Reactor3D.collectMapModelSpecs({}), [], 'nothing bound, nothing preloaded');
     } finally {
@@ -141,4 +152,22 @@ test('the boot scene waits for the async database sidecar', () => {
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /isPartySprite && Reactor3D\.isDatabaseSidecarReady/,
         'party sprites never commit to a sheet before the sidecar answers');
+});
+
+test('model files download a few at a time, so a map\'s own pictures are not left last on a slow line', () => {
+    const D = Reactor3D.ModelDownloads, was = { limit: D.LIMIT, active: D.active, waiting: D.waiting };
+    try {
+        D.LIMIT = 2; D.active = 0; D.waiting = [];
+        const started = [], releases = [];
+        for (let i = 0; i < 4; i++) D.take(release => { started.push(i); releases.push(release); });
+        assert.deepEqual(started, [0, 1], 'two at once');
+        releases[0](); releases[0]();
+        assert.deepEqual(started, [0, 1, 2], 'one freed place starts one more, however often it is freed');
+        releases[1]();
+        assert.deepEqual(started, [0, 1, 2, 3]);
+        assert.equal(D.active, 2);
+    } finally { Object.assign(D, { LIMIT: was.limit, active: was.active, waiting: was.waiting }); }
+    const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'runtime', 'reactor_3d_models.js'), 'utf8');
+    assert.match(source, /this\.ModelDownloads\.take\(release => \{\s*const xhr = new XMLHttpRequest\(\);/);
+    assert.match(source, /xhr\.onloadend = release;\s*xhr\.onload = \(\) => \{\s*release\(\);/);
 });

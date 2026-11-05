@@ -267,6 +267,20 @@ const ReactorCharacters = {
         if (character?.id === id) this.wearFace(character);
     },
 
+    /** The character being made, as a face its actor wears until the finished one replaces it (`wearFace`). */
+    async wearPreviewFace(actor, url) {
+        const picture = new Image();
+        picture.src = url;
+        await picture.decode();
+        const name = "Character-preview", bitmap = this.faces.get(name) || new Bitmap(ImageManager.faceWidth, ImageManager.faceHeight);
+        bitmap.clear();
+        bitmap.context.drawImage(picture, 0, 0, bitmap.width, bitmap.height);
+        bitmap.baseTexture?.update?.();
+        if (bitmap._baseTexture?.update) bitmap._baseTexture.update();
+        this.faces.set(name, bitmap);
+        if (actor) actor.setFaceImage(name, 0);
+    },
+
     wearFace(character) {
         const actor = $gameActors?.actor(character.actorId), name = this.faceName(character.id);
         if (actor && this.faces.has(name)) actor.setFaceImage(name, 0);
@@ -289,12 +303,15 @@ const ReactorCharacters = {
      * build at once and leaves them apart.
      */
     async template(glb, textureCap, preview) {
-        const parsed = await Reactor3D.parseGlbAsync(glb.slice(0));
+        // Its pictures decoded in the parse worker at this character's size, off the main thread (merged at once below).
+        const machine = Reactor3D.textureCap ? Reactor3D.textureCap() : 2048, cap = textureCap > 0 ? Math.min(machine, textureCap) : machine;
+        const parsed = await Reactor3D.parseGlbAsync(glb.slice(0), preview ? undefined : { decode: cap });
         const template = parsed && parsed.json
             ? Reactor3D.buildGlbTemplate(parsed.json, parsed.bin, "", parsed.bitmaps, textureCap > 0 ? { textureCap } : undefined)
             : Reactor3D.readModel(glb, ".glb", "", "");
         if (!preview && Reactor3D.LayeredParts) {
-            try { await Reactor3D.LayeredParts.apply(template); } catch (error) { console.warn("Reactor3D: a character's parts stay apart:", error && error.message || error); }
+            // The build and the merge in frames of their own (a crowd arrives one character after another).
+            try { await Reactor3D.LayeredParts.nextFrame(); await Reactor3D.LayeredParts.apply(template); } catch (error) { console.warn("Reactor3D: a character's parts stay apart:", error && error.message || error); }
         }
         return template;
     },
@@ -1302,13 +1319,24 @@ Scene_CharacterCreator.prototype.onColorCancel = function() {
     this.onPopupCancel();
 };
 
-/** The project's own name screen, on the actor this character plays as. */
-Scene_CharacterCreator.prototype.openName = function() {
-    const id = ReactorCharacters.baseActorId(), actor = $gameActors.actor(id);
-    if (this._studio.name) actor.setName(this._studio.name);
-    ReactorCharacters.naming = true;
-    SceneManager.push(Scene_Name);
-    SceneManager.prepareNextScene(id, Number(this._studio.config.nameLength) || 16);
+/**
+ * The project's own name screen, on the actor this character plays as, wearing the character being made: the actor
+ * kept its own face until the character was finished, so the name screen showed the Demo's actor.
+ */
+Scene_CharacterCreator.prototype.openName = async function() {
+    if (this._openingName) return;
+    this._openingName = true;
+    try {
+        const id = ReactorCharacters.baseActorId(), actor = $gameActors.actor(id);
+        if (this._studio.name) actor.setName(this._studio.name);
+        const url = typeof this._studio.portrait === "function" ? this._studio.portrait() : "";
+        if (url) await ReactorCharacters.wearPreviewFace(actor, url).catch(() => null);
+        ReactorCharacters.naming = true;
+        SceneManager.push(Scene_Name);
+        SceneManager.prepareNextScene(id, Number(this._studio.config.nameLength) || 16);
+    } finally {
+        this._openingName = false;
+    }
 };
 
 Scene_CharacterCreator.prototype.onNamed = function() {

@@ -6,13 +6,23 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-04)
 
-- **Development:** 0.99.5 is open, runtime revision **20261104.9**, deployed to demo.rpgreactor.org and committed on `main` (not pushed).
+- **Development:** 0.99.5 is open, runtime revision **20261105.9** in the tree and the bundled projects; demo.rpgreactor.org runs **20261105.8** (.9 not deployed: the Demo is now single player, creator off, and a deploy would carry that to the live site). 20261105.9 is committed on `main` (not pushed); the Demo's single-player settings are left uncommitted on purpose.
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
 - **Verification:** CI is green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is that branch plus a documentation commit and is not pushed. Substantial checks go through `codex-check`.
 - **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test sleepers and chat; keep the `E2E…` accounts, which are planned as extra battle participants.
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering.
+
+## 2026-11-05 — Crowd smoothness, slow first visits, and an open laptop puzzle
+
+Runtimes 20261105.1–.9; what changed and the measurements are in the [changelog](../editor/changelog/0.99.5.md). Committed, not pushed.
+
+- **OPEN, next session on the laptop:** the owner's laptop (RTX 3060 Laptop, i5 12 threads, Windows, D3D11 ANGLE) runs the Demo from the Dropbox folder (now single player, creator off) at an uneven 30–80 fps in the first Reactor room, where it held 144. F2 shows the RTX. Task Manager: ~3 GB in 14 processes, at least 50% CPU constantly (~6 threads). Its auto quality (written back through Dropbox: gpu 0, cpu 2) found the main thread short. On the desktop the room holds 144 at ~2.9 ms of main thread a frame, unchanged from 0.99.4 to .9 (A/B of old runtimes); the whole game ~0.7 of one core across 10 processes, ~3.5 GB, workers idle in play. So six busy threads is not the game alone. Suspects: the editor open behind the playtest (4 extra processes), Dropbox syncing today's runtime churn (~380 MB per bump, nine bumps), power or heat throttling, a Windows-only cost. First: Task Manager › Details by CPU while playing; F2's ms while fps jumps (low ms: something else holds the CPU or screen); the game alone with the editor closed; a DevTools Performance recording in the room. The owner's question: this week's work made online play faster on the desktop, so why is single player much worse on the laptop? Compare both modes on the laptop (Demo `data/ReactorOnline.json` `enabled`, `data/ReactorCharacters.json` `mode`; the owner left the Demo in single player, creator off, for this). One difference: online, the player wears a built character (merged into a few draws); single player, a Database actor's GLB. The Linux harness (`~/.cache/rr-tests`) is not on the laptop.
+- **Crowd arrival (.1–.5):** square ~150 fps settled; arrival spread over frames, characters warmed offscreen, sleepers lifted out of the floor (`LyingLift`), no actor stand-ins while a look loads, the name screen wears the new character. First seconds of .5 not yet measured in NW.js.
+- **Slow first visit (.6–.8):** 196 s at 8 Mbit/s before the first map; the map's pictures queued behind ~70 model downloads. Other actors' models now come after the map, four model downloads at a time: 57 s. Merged arrays were also sent with PIXI's unpack flags set (WebGL refused them); fixed. Open: a stalled audio retry piles up parallel fetches into one buffer; a first visit is ~220 MB.
+- **Auto quality per device (.9):** `save/config.rmmzsave` is shared through Dropbox, so the desktop and laptop loaded each other's levels; now keyed by device.
+- **Harness:** `cdp-game.cjs` refuses a busy port and closes its window when no map is reached (stray NW windows were left on the title on the owner's screen); `RR_NW_DIR=` runs another copy; `room-prof`, `proc-cpu`, `room-stats`, `slow-start`, `no-parallel`. The Demo needs `--nw` (a plugin uses `require`). Headless or one NW window at a time while the owner plays.
 
 ## 2026-11-04 — Crowd speed, built characters in a few draws
 
