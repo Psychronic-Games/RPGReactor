@@ -2428,7 +2428,7 @@ class Character3DBuilder {
                     const out = Float32Array.from(shaped);
                     self.postMessage({ result: e.data.result, shaped: out.buffer, normals: normals.buffer, heads }, [out.buffer, normals.buffer]);
                 };`;
-            const worker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+            const worker = (() => { const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' })); const made = new Worker(url); URL.revokeObjectURL(url); return made; })();
             const data = RRHumanBody.dataFolder(), bin = fs.readFileSync(path.join(data, 'human.bin'));
             const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength);
             const expressionUnits = window.RRCharacterExpressions?.units(this.pack) || null;
@@ -2650,8 +2650,13 @@ class Character3DBuilder {
             await this._configurePreview(pool, recipe, '_liveMarks');
             return pool.build({ key: 'live', cacheKey: 'live', recipe, options: { live: true, ...this._buildOptions() } });
         })().then(result => {
-            if (this._thumbEpoch !== epoch || !this._view) return;
+            // Free again whatever became of the result: a build left "busy" (the epoch moved on while it ran: a swatch,
+            // a scroll) would hold every later live build back until the tool was opened again.
             job.busy = false;
+            if (this._thumbEpoch !== epoch || !this._view) {
+                if (this._view) { job.owed = false; this._queueRebuild(); }
+                return;
+            }
             // A complete sampled shape can be shown while the same slider is
             // still moving. Discarding every older sample starved continuous
             // drags until release. Other recipe edits and ended drags still
@@ -3259,6 +3264,12 @@ class Character3DBuilder {
             if (P.next) this._pumpPainter();
             else this._queueRebuild();
         };
+        // A paint that throws answers nothing: the painter is freed (the skin keeps its tint) so the next ask is painted.
+        worker.onerror = event => {
+            console.warn('[Character3DBuilder] skin painter failed', event && event.message);
+            if (P.busy === job) P.busy = null;
+            if (P.next) this._pumpPainter();
+        };
         worker.postMessage({ key: job.key, args: job.args });
     }
 
@@ -3294,7 +3305,7 @@ class Character3DBuilder {
                     const detail = t.detail ? Object.assign(pk(t.detail), { normal: pk(t.detail.normal), emissive: pk(t.detail.emissive), layout: t.detail.layout }) : null;
                     self.postMessage({ key: e.data.key, width: t.width, height: t.height, data: t.data.buffer, normal, emissive, detail }, [t.data.buffer, ...list]);
                 };`;
-            const worker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+            const worker = (() => { const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' })); const made = new Worker(url); URL.revokeObjectURL(url); return made; })();
             const data = RRHumanBody.dataFolder();
             const bin = fs.readFileSync(path.join(data, 'human.bin'));
             const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength);
@@ -3319,7 +3330,7 @@ class Character3DBuilder {
             const file = [path.join(RRHumanBody.dataFolder(), '..', 'CharacterShading.js')].find(f => fs.existsSync(f));
             const source = fs.readFileSync(file, 'utf8') + `
                 self.onmessage = e => { const ao = self.RRCharacterShading.ambientOcclusion(e.data.parts); self.postMessage({ id: e.data.id, ao }); };`;
-            this._worker = new Worker(URL.createObjectURL(new Blob([source.replace("typeof window !== 'undefined' ? window : globalThis", 'self')], { type: 'text/javascript' })));
+            this._worker = (() => { const url = URL.createObjectURL(new Blob([source.replace("typeof window !== 'undefined' ? window : globalThis", 'self')], { type: 'text/javascript' })); const made = new Worker(url); URL.revokeObjectURL(url); return made; })();
         } catch (error) {
             console.warn('[Character3DBuilder] shading worker', error);
             this._worker = null;
@@ -3831,6 +3842,8 @@ class Character3DBuilder {
         const fs = require('fs'), path = require('path');
         try {
             this._openRecord(name, JSON.parse(fs.readFileSync(path.join(this._charactersDir(), name, 'character.json'), 'utf8')));
+            // An exported model, not a design: a later Save Design must not take a design of the same name as this one's own.
+            this._openedDesign = null;
         } catch (error) {
             console.error('[Character3DBuilder] open', error);
             this._status(this._t('{name} could not be opened.', { name }), 'error');

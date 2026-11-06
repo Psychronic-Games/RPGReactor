@@ -205,6 +205,8 @@ class ForgeManager {
             if (!instance) continue;
             if (typeof instance.detach === 'function') instance.detach();
             if ('projectPath' in instance) instance.projectPath = null;
+            // The design last opened was another project's: saving under its name here must ask, and never move (delete) a file.
+            if ('_openedDesign' in instance) instance._openedDesign = null;
             if (instance.imageCache && typeof instance.imageCache.clear === 'function') instance.imageCache.clear();
         }
         this._mountedTool = null;

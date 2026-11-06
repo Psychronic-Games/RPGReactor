@@ -91,10 +91,44 @@ function intParam(string $name, int $low, int $high): int {
 
 /** The player a request speaks for, or a refusal. */
 function player(string $secret): int {
+    global $config;
     $slot = intParam('s', 0, SLOTS - 1);
     $nonce = (string)($_GET['g'] ?? '');
     if ($nonce === '' || !hash_equals(tokenFor($slot, $nonce, $secret), (string)($_GET['t'] ?? ''))) fail(401, 'Unknown player.');
+    $dir = dataDir($config);
+    // A token is for one visit: once its slot is given to someone else, the old one no longer speaks for it.
+    $current = slotNonce($dir, $slot);
+    if ($current !== '' && !hash_equals($current, strtolower($nonce))) fail(401, 'Unknown player.');
+    // Removed, or signed in elsewhere: nothing this token asks is done (chat, parties, uploads, leaving) any more.
+    $state = aliveAt($dir, $slot);
+    if ($state === REMOVED) fail(403, 'You have been removed from this world.');
+    if ($state === REPLACED) fail(403, 'You signed in somewhere else.');
     return $slot;
+}
+
+/** The nonce the slot's current visit was given at join (nonce.bin, 8 bytes a slot), or '' when none was kept. */
+function slotNonce(string $dir, int $slot): string {
+    $file = @fopen($dir . '/nonce.bin', 'rb');
+    if (!$file) return '';
+    fseek($file, $slot * 8);
+    $bytes = (string)fread($file, 8);
+    fclose($file);
+    return strlen($bytes) === 8 && $bytes !== str_repeat("\0", 8) ? bin2hex($bytes) : '';
+}
+
+function setSlotNonce(string $dir, int $slot, string $nonce): void {
+    $file = fopen($dir . '/nonce.bin', 'c+b');
+    if (!$file) return;
+    fseek($file, $slot * 8);
+    fwrite($file, (string)hex2bin($nonce));
+    fclose($file);
+}
+
+/** JSON to keep in a file, or a refusal: a value JSON cannot hold (a number too large, INF) must never write an empty file over a good one. */
+function jsonText($value): string {
+    $text = json_encode($value);
+    if ($text === false) fail(400, 'That value cannot be kept.');
+    return $text;
 }
 
 function clearRecord(string $dir, int $map, int $slot): void {
@@ -133,7 +167,7 @@ function setPlayer(string $dir, int $slot, string $name, int $actor, string $mod
     $names = readNames($dir);
     $names[$slot] = ['name' => $name !== '' ? $name : 'Player ' . ($slot + 1), 'actor' => $actor, 'model' => $model, 'account' => $account, 'ip' => $ip];
     $temporary = $dir . '/names.' . getmypid() . '.tmp';
-    if (file_put_contents($temporary, json_encode($names)) !== false) rename($temporary, $dir . '/names.json');
+    if (file_put_contents($temporary, jsonText($names)) !== false) rename($temporary, $dir . '/names.json');
 }
 
 function setPlayerState(string $dir, int $slot, ?array $ride, string $fight, array $place): void {
@@ -143,7 +177,7 @@ function setPlayerState(string $dir, int $slot, ?array $ride, string $fight, arr
     $names[$slot]['fight'] = $fight;
     $names[$slot]['place'] = $place;
     $temporary = $dir . '/names.' . getmypid() . '.tmp';
-    if (file_put_contents($temporary, json_encode($names)) !== false) rename($temporary, $dir . '/names.json');
+    if (file_put_contents($temporary, jsonText($names)) !== false) rename($temporary, $dir . '/names.json');
 }
 
 /** A vehicle's model as a game described it: other players' games will ask for that name, so only a plain one passes. */
@@ -420,7 +454,7 @@ function readParties(string $dir): array {
 
 function writeParties(string $dir, array $state): void {
     $temporary = $dir . '/parties.' . getmypid() . '.tmp';
-    if (file_put_contents($temporary, json_encode($state)) !== false) rename($temporary, $dir . '/parties.json');
+    if (file_put_contents($temporary, jsonText($state)) !== false) rename($temporary, $dir . '/parties.json');
 }
 
 /** The party someone is in, as [id, party], or nothing. People are known by name, because a slot lasts one visit. */
@@ -457,7 +491,7 @@ function readBattles(string $dir): array {
 
 function writeBattles(string $dir, array $battles): void {
     $temporary = $dir . '/battles.' . getmypid() . '.tmp';
-    if (file_put_contents($temporary, json_encode((object)$battles)) !== false) rename($temporary, $dir . '/battles.json');
+    if (file_put_contents($temporary, jsonText((object)$battles)) !== false) rename($temporary, $dir . '/battles.json');
 }
 
 function lockBattles(string $dir) {
@@ -601,7 +635,7 @@ function postChat(string $dir, string $channel, array $message, int $keep): arra
     $list[] = $message;
     $list = array_slice($list, -max(1, $keep));
     $temporary = chatFile($dir, $channel) . '.' . getmypid() . '.tmp';
-    file_put_contents($temporary, json_encode($list));
+    file_put_contents($temporary, jsonText($list));
     rename($temporary, chatFile($dir, $channel));
     setChatCount($dir, $id);
     flock($lock, LOCK_UN);

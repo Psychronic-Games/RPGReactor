@@ -532,7 +532,7 @@ Window_Base.prototype.drawCurrencyValue = function(value, unit, x, y, width) {
     const unitWidth = Math.min(80, this.textWidth(unit));
     this.resetTextColor();
     this.drawText(value, x, y, width - unitWidth - 6, "right");
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(unit, x + width - unitWidth, y, unitWidth, "right");
 };
 
@@ -1831,7 +1831,7 @@ Window_StatusBase.prototype.drawActorNickname = function(actor, x, y, width) {
 };
 
 Window_StatusBase.prototype.drawActorLevel = function(actor, x, y) {
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(TextManager.levelA, x, y, 48);
     this.resetTextColor();
     this.drawText(actor.level, x + 60, y, 60, "right");
@@ -2597,7 +2597,7 @@ Window_EquipStatus.prototype.drawItem = function(x, y, paramId) {
 
 Window_EquipStatus.prototype.drawParamName = function(x, y, paramId) {
     const width = this.paramX() - this.itemPadding() * 2;
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(TextManager.param(paramId), x, y, width);
 };
 
@@ -2609,7 +2609,7 @@ Window_EquipStatus.prototype.drawCurrentParam = function(x, y, paramId) {
 
 Window_EquipStatus.prototype.drawRightArrow = function(x, y) {
     const rightArrowWidth = this.rightArrowWidth();
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText("\u2192", x, y, rightArrowWidth, "center");
 };
 
@@ -2718,7 +2718,7 @@ Window_EquipSlot.prototype.drawItem = function(index) {
         const slotNameWidth = this.slotNameWidth();
         const rect = this.itemLineRect(index);
         const itemWidth = rect.width - slotNameWidth;
-        this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+        this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
         this.changePaintOpacity(this.isEnabled(index));
         this.drawText(slotName, rect.x, rect.y, slotNameWidth, rect.height);
         this.drawItemName(item, rect.x + slotNameWidth, rect.y, itemWidth);
@@ -2912,7 +2912,7 @@ Window_Status.prototype.drawExpInfo = function(x, y) {
     const lineHeight = this.lineHeight();
     const expTotal = TextManager.expTotal.format(TextManager.exp);
     const expNext = TextManager.expNext.format(TextManager.level);
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(expTotal, x, y + lineHeight * 0, 270);
     this.drawText(expNext, x, y + lineHeight * 2, 270);
     this.resetTextColor();
@@ -2973,7 +2973,7 @@ Window_StatusParams.prototype.drawItem = function(index) {
     const paramId = index + 2;
     const name = TextManager.param(paramId);
     const value = this._actor.param(paramId);
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(name, rect.x, rect.y, 160);
     this.resetTextColor();
     this.drawText(value, rect.x + 160, rect.y, 60, "right");
@@ -3021,7 +3021,7 @@ Window_StatusEquip.prototype.drawItem = function(index) {
     const item = equips[index];
     const slotName = this.actorSlotName(this._actor, index);
     const sw = 138;
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(slotName, rect.x, rect.y, sw, rect.height);
     this.drawItemName(item, rect.x + sw, rect.y, rect.width - sw);
 };
@@ -3764,7 +3764,7 @@ Window_ShopStatus.prototype.isEquipItem = function() {
 Window_ShopStatus.prototype.drawPossession = function(x, y) {
     const width = this.innerWidth - this.itemPadding() - x;
     const possessionWidth = this.textWidth("0000");
-    this.changeTextColor(ColorManager.textColor(1), 1);   // the 2003 system colour
+    this.changeTextColor(ColorManager.systemColor(), 1);   // slot 16 in MZ; the 2003 system colour (slot 1) when legacy windows are on
     this.drawText(TextManager.possession, x, y, width - possessionWidth);
     this.resetTextColor();
     this.drawText($gameParty.numItems(this._item), x, y, width, "right");

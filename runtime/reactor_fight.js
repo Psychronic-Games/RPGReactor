@@ -445,6 +445,8 @@
 
     Game_Fight.prototype.clear = function() {
         this._active = false;
+        // An online battle's "more than two sides" is that battle's: later local ones oppose ally and enemy again.
+        this._manySides = false;
         this._mode = "";
         this._mapId = 0;
         this._units = [];
@@ -2621,8 +2623,10 @@
         }
         if (objective.type === "defeatUnit") {
             const target = this.unitOfEvent(objective.eventId) || this._units.find(unit => unit.eventId === objective.eventId);
-            if (target && target.defeated) this.end(F.WIN);
-            return;
+            if (target && target.defeated) { this.end(F.WIN); return; }
+            // A goal unit that left without falling (Remove Unit, an event erasing it) can no longer be beaten:
+            // the battle is won as a defeat-all one would be, rather than going on with no way to win.
+            if (!target || !target.gone) return;
         }
         if (objective.type === "switch") {
             if ($gameSwitches.value(objective.switchId)) this.end(F.WIN);

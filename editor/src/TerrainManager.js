@@ -1398,7 +1398,8 @@ class TerrainManager {
         const text = JSON.stringify({ biomes: list }, null, 2) + '\n';
         try {
             const write = typeof window !== 'undefined' && window.RRWriteFileAtomicSync;
-            if (write) write(file, text); else require('fs').writeFileSync(file, text);
+            // RRWriteFileAtomicSync(fs, file, data, options): the fs module comes first.
+            if (write) write(require('fs'), file, text, 'utf8'); else require('fs').writeFileSync(file, text);
         } catch (error) { console.warn('data/Biomes.json could not be written.', error); return false; }
         this._biomesRead = { file, list };
         return true;

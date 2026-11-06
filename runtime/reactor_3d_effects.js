@@ -2265,7 +2265,8 @@ Reactor3D.registerPluginCommands = function() {
                 for (const parked of this._reactorParked.slice()) {
                     parked.update();
                     if (!parked.isRunning()) {
-                        if (parked.eventId && parked.eventId() > 0) this.unlockEvent(parked.eventId());
+                        // Only on the map it was parked on: after a transfer that number is another event.
+                        if (parked.eventId && parked.eventId() > 0 && (!parked.isOnCurrentMap || parked.isOnCurrentMap())) this.unlockEvent(parked.eventId());
                         const at = this._reactorParked.indexOf(parked);
                         if (at >= 0) this._reactorParked.splice(at, 1);
                     }
@@ -2291,7 +2292,8 @@ Reactor3D.registerPluginCommands = function() {
                 return;
             }
             if (map && map._reactorParked
-                && map._reactorParked.some(parked => parked.eventId && parked.eventId() === this.eventId())) {
+                && map._reactorParked.some(parked => parked.eventId && parked.eventId() === this.eventId()
+                    && (!parked.isOnCurrentMap || parked.isOnCurrentMap()))) {
                 return;
             }
             baseStart.apply(this, arguments);

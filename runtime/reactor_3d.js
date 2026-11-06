@@ -2304,7 +2304,9 @@ Reactor3D.ShaderWarmup = {
     hide(renderer, scene, camera) {
         if (!this.enabled || !this.supported(renderer)) return null;
         const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-        this._startedThisFrame = 0;
+        // The budget is a frame's, not a pass's: hide runs once per render (below, above, lights, battlers).
+        const frame = typeof Graphics !== "undefined" && Graphics && Number.isFinite(Graphics.frameCount) ? Graphics.frameCount : null;
+        if (frame === null || frame !== this._budgetFrame) { this._budgetFrame = frame; this._startedThisFrame = 0; }
         // Whether this renderer has drawn all along (SEEN_MS), in the game.
         const last = this._drawnAt.get(renderer);
         this._viewKept = last !== undefined && now - last <= this.SEEN_MS && !this.inEditor();

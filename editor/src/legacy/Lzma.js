@@ -27,7 +27,9 @@
 
         // range decoder
         let range = 0xFFFFFFFF, code = 0;
-        const next = () => (inPos < input.length ? input[inPos++] : 0);
+        // Bytes asked for past the end are counted (inPos stops at the end), so a stream with no end marker stops.
+        let overrun = 0;
+        const next = () => (inPos < input.length ? input[inPos++] : (overrun++, 0));
         if (next() !== 0) throw new Error('LZMA: bad stream start');
         for (let i = 0; i < 4; i++) code = ((code << 8) | next()) >>> 0;
         const normalize = () => { if (range < 0x1000000) { range = (range << 8) >>> 0; code = ((code << 8) | next()) >>> 0; } };
@@ -76,7 +78,7 @@
         let state = 0, rep0 = 0, rep1 = 0, rep2 = 0, rep3 = 0;
         const lpMask = (1 << lp) - 1, pbMask = posStates - 1;
         while (outSize === undefined || outPos < outSize) {
-            if (inPos >= input.length + 4) break;   // input exhausted
+            if (overrun > 4) break;   // input exhausted
             const ps = outPos & pbMask;
             if (bit(isMatch, (state << 4) + ps) === 0) {
                 const prev = outPos > 0 ? out[outPos - 1] : 0;

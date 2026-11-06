@@ -169,6 +169,8 @@ WebAudio._fadeOut = function(duration) {
  */
 WebAudio.prototype.clear = function() {
     this.stop();
+    // A request still running for what was here is let go (_onFetch, _startXhrLoading).
+    this._loadGeneration = (this._loadGeneration || 0) + 1;
     this._data = null;
     this._fetchedSize = 0;
     this._fetchedData = [];
@@ -500,6 +502,12 @@ WebAudio.prototype._startLoading = function() {
             if (mv !== this._url && Utils.localAssetExists(mv)) this._mvEncryptedUrl = Utils.correctFileCase(mv) || mv;
         }
         const url = this._realUrl();
+        // A retry starts from nothing: what an earlier, failed or stalled request
+        // brought must not be joined to the new one's bytes.
+        this._loadGeneration = (this._loadGeneration || 0) + 1;
+        this._fetchedData = [];
+        this._fetchedSize = 0;
+        this._data = null;
         if (Utils.isLocal()) {
             this._startXhrLoading(url);
         } else {
@@ -619,18 +627,20 @@ WebAudio.prototype._realUrl = function() {
 
 WebAudio.prototype._startXhrLoading = function(url) {
     const xhr = new XMLHttpRequest();
+    const generation = this._loadGeneration;
     xhr.open("GET", url);
     xhr.responseType = "arraybuffer";
-    xhr.onload = () => this._onXhrLoad(xhr);
-    xhr.onerror = this._onError.bind(this);
+    xhr.onload = () => { if (generation === this._loadGeneration) this._onXhrLoad(xhr); };
+    xhr.onerror = () => { if (generation === this._loadGeneration) this._onError(); };
     xhr.send();
 };
 
 WebAudio.prototype._startFetching = function(url) {
     const options = { credentials: "same-origin" };
+    const generation = this._loadGeneration;
     fetch(url, options)
-        .then(response => this._onFetch(response))
-        .catch(() => this._onError());
+        .then(response => this._onFetch(response, generation))
+        .catch(() => { if (generation === this._loadGeneration) this._onError(); });
 };
 
 WebAudio.prototype._onXhrLoad = function(xhr) {
@@ -643,10 +653,20 @@ WebAudio.prototype._onXhrLoad = function(xhr) {
     }
 };
 
-WebAudio.prototype._onFetch = function(response) {
+WebAudio.prototype._onFetch = function(response, generation) {
+    // A request a retry replaced (or the buffer destroyed) is let go.
+    const stale = () => generation !== undefined && generation !== this._loadGeneration;
+    if (stale()) {
+        try { response.body && response.body.cancel(); } catch (error) { /* already closed */ }
+        return;
+    }
     if (response.ok) {
         const reader = response.body.getReader();
         const readChunk = ({ done, value }) => {
+            if (stale()) {
+                try { reader.cancel(); } catch (error) { /* already closed */ }
+                return 0;
+            }
             if (done) {
                 this._isLoaded = true;
                 if (this._fetchedSize > 0) {
@@ -663,7 +683,7 @@ WebAudio.prototype._onFetch = function(response) {
         reader
             .read()
             .then(readChunk)
-            .catch(() => this._onError());
+            .catch(() => { if (!stale()) this._onError(); });
     } else {
         this._onError();
     }

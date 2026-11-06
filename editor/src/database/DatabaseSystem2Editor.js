@@ -508,7 +508,10 @@ class DatabaseSystem2Editor {
                 const editorField = e.target.dataset.editorField;
                 if (editorField) {
                     if (!system.editor) system.editor = {};
-                    system.editor[editorField] = parseFloat(e.target.value);
+                    // A cleared or unreadable number keeps the value it had (NaN would be saved as null).
+                    const number = parseFloat(e.target.value);
+                    if (!Number.isFinite(number)) { e.target.value = system.editor[editorField] ?? ''; return; }
+                    system.editor[editorField] = number;
                     console.debug(`Updated editor.${editorField} to:`, system.editor[editorField]);
                 }
             });
@@ -544,6 +547,9 @@ class DatabaseSystem2Editor {
                         }
                         system.advanced[advField] = advField === 'camera2DZoom' ? Math.max(1, Math.min(8, val)) : val;
                         e.target.value = system.advanced[advField];
+                    } else if (e.target.type === 'number' && !Number.isFinite(val)) {
+                        // A cleared screen size or font size would be saved as null, and the game could not start.
+                        e.target.value = system.advanced[advField] ?? '';
                     } else system.advanced[advField] = val;
                 }
             });

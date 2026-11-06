@@ -68,12 +68,14 @@ if ($action === 'join') {
         }
     }
     touchAlive($dir, $slot, $now);
+    // The visit's nonce is kept with the slot before its token is handed out: tokens of earlier visits to it stop working.
+    $nonce = bin2hex(random_bytes(8));
+    setSlotNonce($dir, $slot, $nonce);
     $name = cleanName();
     // A guest cannot take a registered player's name.
     if (!$account && readAccount($dir, accountKey($name))) $name = textStart($name, 16) . ' (guest)';
     setPlayer($dir, $slot, $name, intParam('c', 0, 9999), knownModel($dir, (string)($_GET['h'] ?? '')), $account ? (string)$account['username'] : '', $ip);
     flock($lock, LOCK_UN);
-    $nonce = bin2hex(random_bytes(8));
     $answer = ['slot' => $slot, 'name' => (string)(readNames($dir)[$slot]['name'] ?? ''), 'nonce' => $nonce, 'token' => tokenFor($slot, $nonce, $secret), 'protocol' => PROTOCOL, 'chat' => chatCount($dir), 'world' => worldCount($dir)];
     if (ensureEngine($config, $dir, $settings)) $answer['engine'] = engineAddress();
     respond($answer);
@@ -260,7 +262,7 @@ if ($action === 'bSay') {
     $body = jsonBody();
     $file = battleFile($dir, (string)($body['id'] ?? ''));
     $lines = '';
-    foreach (is_array($body['lines'] ?? null) ? array_slice($body['lines'], 0, 64) : [] as $message) $lines .= json_encode(['from' => $slot, 'm' => $message]) . "\n";
+    foreach (is_array($body['lines'] ?? null) ? array_slice($body['lines'], 0, 64) : [] as $message) $lines .= jsonText(['from' => $slot, 'm' => $message]) . "\n";
     if ((int)@filesize($file) + strlen($lines) > BATTLE_LOG_BYTES) fail(413, 'This battle has said too much.');
     file_put_contents($file, $lines, FILE_APPEND | LOCK_EX);
     respond(['ok' => true]);
@@ -466,7 +468,7 @@ if ($action === 'set') {
         elseif ($kind === 'e' && preg_match('/^\d{1,4},\d{1,6},[A-Da-d]$/', $id) && count($state['e'] ?? []) < 5000) $state['e'][$id] = (bool)$value;
     }
     $temporary = $dir . '/world.' . getmypid() . '.tmp';
-    file_put_contents($temporary, json_encode($state));
+    file_put_contents($temporary, jsonText($state));
     rename($temporary, $dir . '/world.json');
     $count = worldCount($dir) + 1;
     $temporary = $dir . '/worldseq.' . getmypid() . '.tmp';

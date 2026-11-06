@@ -64,6 +64,8 @@ class PropBuilder {
     detach() {
         const view = this._view;
         if (this._worker) { this._worker.terminate(); this._worker = null; }
+        // Bakes the worker was running are refused, so an export waiting on them ends (with its error) instead of hanging.
+        this._failBakes(new Error('The prop builder was closed while a loop was baking.'));
         this._closeOffPage();
         if (!view) return;
         cancelAnimationFrame(view.loop);
@@ -1128,11 +1130,23 @@ class PropBuilder {
         return Promise.all(jobs).then(per => RRPropModel.assemble(result, per));
     }
 
+    _failBakes(error) {
+        const waiting = this._waiting;
+        if (!waiting || !waiting.size) return;
+        this._waiting = new Map();
+        for (const job of waiting.values()) job.reject(error);
+    }
+
     _bakeWorker() {
         if (this._worker !== undefined && this._worker !== null) return this._worker;
         try {
             const fs = require('fs'), path = require('path');
-            const dir = path.join(path.dirname(decodeURIComponent(window.location.pathname)), 'src', 'forge', 'Props');
+            // NW.js serves the page from chrome-extension://, so its address names no folder (it gave "/src/…",
+            // and every bake ran on the page): the app folder is asked for instead.
+            const roots = [typeof nw !== 'undefined' ? nw.__dirname : null, process.cwd(), path.join(process.cwd(), 'editor'),
+                path.dirname(decodeURIComponent(window.location.pathname))].filter(Boolean);
+            const dir = roots.map(root => path.join(root, 'src', 'forge', 'Props')).find(candidate => fs.existsSync(path.join(candidate, 'PropCloth.js')));
+            if (!dir) throw new Error('PropCloth.js was not found beside the editor.');
             const source = fs.readFileSync(path.join(dir, 'PropCloth.js'), 'utf8') + `
                 self.onmessage = e => {
                     const C = self.RRPropCloth, { id, setup, grid } = e.data;
@@ -1143,7 +1157,14 @@ class PropBuilder {
                         self.postMessage({ id, times: t.times, T: t.T, Q: t.Q }, buffers);
                     } catch (error) { self.postMessage({ id, error: String(error && error.message || error) }); }
                 };`;
-            const worker = new Worker(URL.createObjectURL(new Blob([source.replace("typeof window !== 'undefined' ? window : globalThis", 'self')], { type: 'text/javascript' })));
+            const url = URL.createObjectURL(new Blob([source.replace("typeof window !== 'undefined' ? window : globalThis", 'self')], { type: 'text/javascript' }));
+            const worker = new Worker(url);
+            URL.revokeObjectURL(url);
+            // A worker that fails to load or throws outside a job answers nothing: the jobs waiting on it are refused.
+            worker.onerror = event => {
+                this._failBakes(new Error(event && event.message || 'The bake worker failed.'));
+                if (this._worker === worker) { worker.terminate(); this._worker = null; }
+            };
             worker.onmessage = e => {
                 const job = this._waiting && this._waiting.get(e.data.id);
                 if (!job) return;

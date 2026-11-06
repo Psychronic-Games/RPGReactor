@@ -231,7 +231,7 @@
                 case 118: push(118, indent, [str(p[0])]); break;
                 case 119: push(119, indent, [str(p[0])]); break;
                 case 121: case 123: case 124: case 125: case 126: case 127: case 128: case 129:
-                case 134: case 135: case 136: case 314: case 315: case 316: case 320: case 321: case 351: case 352: case 353: case 354:
+                case 134: case 135: case 136: case 320: case 321: case 351: case 352: case 353: case 354:
                     push(code, indent, p.map(x => (x && typeof x === 'object' ? audio(x) : x)));
                     break;
                 case 122: {
@@ -294,6 +294,9 @@
                 case 303: push(303, indent, [num(p[0]), num(p[1], 8)]); break;
                 case 311: case 312: push(code, indent, [0, num(p[0]), num(p[1]), num(p[2]), num(p[3]), code === 311]); break;
                 case 313: push(313, indent, [0, num(p[0]), num(p[1]), num(p[2])]); break;
+                // XP names the actor alone (0: the whole party); MZ puts a fixed-or-variable flag before it.
+                case 314: push(314, indent, [0, num(p[0])]); break;
+                case 315: case 316: push(code, indent, [0, num(p[0]), num(p[1]), num(p[2]), num(p[3]), false]); break;
                 case 317: push(317, indent, [0, num(p[0]), [0, 1, 2, 7, 6, 4][num(p[1])] ?? 0, num(p[2]), num(p[3]), num(p[4])]); tag(notes, 'parameterMapped'); break;
                 case 318: push(318, indent, [0, num(p[0]), num(p[1]), num(p[2])]); break;
                 case 319: push(319, indent, [num(p[0]), num(p[1]) + 1, num(p[2])]); break;

@@ -45,7 +45,8 @@ test('a second interaction parks the waiting script instead of queueing behind i
     assert.match(three, /this\._reactorParked\.push\(this\._interpreter\);\n\s*this\._interpreter = new Game_Interpreter\(\);/, 'the waiting script moves to its own runner');
     assert.match(three, /parked\.update\(\);\n\s*if \(!parked\.isRunning\(\)\) \{/, 'and keeps ticking there until done');
     assert.match(three, /this\.unlockEvent\(parked\.eventId\(\)\);/, 'its event unlocks when it finishes');
-    assert.match(three, /map\._reactorParked\.some\(parked => parked\.eventId && parked\.eventId\(\) === this\.eventId\(\)\)/, 'a parked event cannot be re-triggered either');
+    assert.match(three, /map\._reactorParked\.some\(parked => parked\.eventId && parked\.eventId\(\) === this\.eventId\(\)\s*&& \(!parked\.isOnCurrentMap \|\| parked\.isOnCurrentMap\(\)\)\)/, 'a parked event cannot be re-triggered either (on its own map only)');
+    assert.match(three, /parked\.eventId\(\) > 0 && \(!parked\.isOnCurrentMap \|\| parked\.isOnCurrentMap\(\)\)\) this\.unlockEvent/, 'after a transfer, the same number is another event: it is neither held nor unlocked');
 });
 
 test('Scoped Wait is a background wait: the player walks on while it holds', () => {

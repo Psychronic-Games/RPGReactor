@@ -32,7 +32,8 @@
         Table(bytes) {
             const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
             const dims = view.getInt32(0, true), xsize = view.getInt32(4, true), ysize = view.getInt32(8, true), zsize = view.getInt32(12, true), size = view.getInt32(16, true);
-            const data = new Int16Array(size);
+            // No larger than the cells the bytes hold: the size is the file's word, up to 2^31.
+            const data = new Int16Array(Math.max(0, Math.min(size, Math.floor((bytes.length - 20) / 2))));
             for (let i = 0; i < size && 20 + i * 2 + 1 < bytes.length; i++) data[i] = view.getInt16(20 + i * 2, true);
             return { __class: 'Table', dims, xsize, ysize, zsize, data };
         },
@@ -67,7 +68,8 @@
             let n = 0; for (let i = 0; i < -c; i++) n += byte() * 2 ** (8 * i);
             return n - 2 ** (8 * -c);
         };
-        const raw = () => { const n = long(); const out = bytes.subarray(pos, pos + n); pos += n; return out; };
+        // A length below zero or past the end is a damaged (or made-up) file: read on, it moved backwards and looped.
+        const raw = () => { const n = long(); if (n < 0 || pos + n > bytes.length) throw new Error('Marshal: a length runs past the data.'); const out = bytes.subarray(pos, pos + n); pos += n; return out; };
         const symbol = () => {
             const t = byte();
             if (t === 0x3a) { const s = latin(raw()); const decoded = text(bytes.subarray(pos - s.length, pos)); const name = decoded !== null ? decoded : s; symbols.push(name); return name; }   // ':'

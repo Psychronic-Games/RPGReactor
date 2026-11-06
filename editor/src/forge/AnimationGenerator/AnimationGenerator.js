@@ -1284,6 +1284,7 @@ class AnimationGenerator {
                 }
                 this._drawPreviewCanvas();
                 // Debounce config save + sheet redraw so dragging stays fluid.
+                this._scheduleSaveConfig();
                 this._scheduleSheetUpdate();
             }
         });

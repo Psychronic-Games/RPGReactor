@@ -262,16 +262,22 @@
                 .finally(() => pending.delete(operation));
         };
 
+        // Settled when the transaction commits, not when its request succeeds: a full quota aborts the
+        // transaction after the request's success, and the save must not be reported as kept.
+        const commit = (transaction, request) => new Promise((resolve, reject) => {
+            transaction.oncomplete = () => resolve();
+            transaction.onabort = () => reject(transaction.error || request.error || new Error('The browser did not keep the change.'));
+            transaction.onerror = () => reject(transaction.error || request.error);
+        });
+
         const persist = (relativePath, data) => {
-            track(new Promise((resolve, reject) => {
-                const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put({
-                    path: relativePath,
-                    data,
-                    updatedAt: Date.now(),
-                });
-                request.onsuccess = resolve;
-                request.onerror = () => reject(request.error);
-            }), relativePath);
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const request = transaction.objectStore(STORE_NAME).put({
+                path: relativePath,
+                data,
+                updatedAt: Date.now(),
+            });
+            track(commit(transaction, request), relativePath);
         };
 
         const fs = {
@@ -395,11 +401,10 @@
                 entries.delete(relativePath);
                 contents.delete(relativePath);
                 storedPaths.delete(relativePath);
-                track(new Promise((resolve, reject) => {
-                    const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(relativePath);
-                    request.onsuccess = resolve;
-                    request.onerror = () => reject(request.error);
-                }), relativePath);
+                {
+                    const transaction = db.transaction(STORE_NAME, 'readwrite');
+                    track(commit(transaction, transaction.objectStore(STORE_NAME).delete(relativePath)), relativePath);
+                }
             },
             rmSync(filePath, options = {}) {
                 const relativePath = projectRelative(filePath);
@@ -451,11 +456,10 @@
                 if (bundledContents.has(relativePath)) contents.set(relativePath, bundledContents.get(relativePath));
                 else contents.delete(relativePath);
                 storedPaths.delete(relativePath);
-                track(new Promise((resolve, reject) => {
-                    const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(relativePath);
-                    request.onsuccess = resolve;
-                    request.onerror = () => reject(request.error);
-                }), relativePath);
+                {
+                    const transaction = db.transaction(STORE_NAME, 'readwrite');
+                    track(commit(transaction, transaction.objectStore(STORE_NAME).delete(relativePath)), relativePath);
+                }
             },
             _entryIdentity(filePath) { return entries.get(projectRelative(filePath)) || null; },
             _applyStored(record) {

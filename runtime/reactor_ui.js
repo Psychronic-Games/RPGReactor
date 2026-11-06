@@ -2475,7 +2475,7 @@
             case "title2": bitmap = node.file ? ImageManager.loadTitle2(node.file) : null; break;
         }
         this._uiBitmap = bitmap;
-        if (bitmap && !bitmap.isReady()) bitmap.addLoadListener(() => this.refresh());
+        if (bitmap && !bitmap.isReady()) bitmap.addLoadListener(() => { if (!this.destroyed && this.contents) this.refresh(); });
     };
 
     Window_ReactorUINode.prototype.refresh = function() {
@@ -3165,7 +3165,8 @@
             const settle = () => {
                 const redraws = bitmap._rrRedraws;
                 bitmap._rrRedraws = null;
-                if (redraws) for (const fn of redraws) fn();
+                // One part's failure must not stop the others (or reach the error screen from a load listener).
+                if (redraws) for (const fn of redraws) { try { fn(); } catch (error) { console.warn("ReactorUI: a redraw after a picture loaded failed", error); } }
             };
             bitmap.addLoadListener(settle);
             // A picture that fails calls no load listener; its parts redraw then, with their fallback.
@@ -3342,11 +3343,11 @@
             } else {
                 const data=element.gauge?ReactorUI.actorGaugeData(actor,element.gauge,element):null;
                 const numberText=!data?'':element.valueFormat==='percent'?String(Math.round(data.rate*100)):element.valueFormat==='current'?String(data.value):data.value+'/'+data.max;
-                if(element.kind==='gauge' && element.meterImage && ReactorUI.drawImageMeter(bitmap,r,element.meterImage,data.rate,()=>this.refresh(),element.meterRows,data.rate)) {
+                if(element.kind==='gauge' && element.meterImage && ReactorUI.drawImageMeter(bitmap,r,element.meterImage,data.rate,()=>{if(!this.destroyed&&this.contents)this.refresh();},element.meterRows,data.rate)) {
                     // drawn from the picture
                 } else if(element.kind==='gauge') {
                     ReactorUI.drawActorGauge(ctx,r,element,data.rate,[data.color,data.color2,ColorManager.gaugeBackColor()]);
-                } else if(element.kind==='value' && element.numberImage && ReactorUI.drawImageNumber(bitmap,r,element.numberImage,numberText,element.align,()=>this.refresh())) {
+                } else if(element.kind==='value' && element.numberImage && ReactorUI.drawImageNumber(bitmap,r,element.numberImage,numberText,element.align,()=>{if(!this.destroyed&&this.contents)this.refresh();})) {
                     // drawn from the digit sheet
                 } else {
                     let label=element.kind==='value'?(element.valueFormat==='percent'?Math.round(data.rate*100)+'%':element.valueFormat==='current'?String(data.value):data.value+' / '+data.max)
@@ -3356,7 +3357,7 @@
                     // drawTextEx on the list itself resets the authored font.
                     const renderer=ReactorUI.gaugeLabelRenderer({bitmap,textHeight:()=>r.height,
                         setupLabelFont:()=>{this.resetFontSettings(); bitmap.fontSize=element.fontSize; if(element.color) bitmap.textColor=element.color;},
-                        redraw:()=>this.refresh()});
+                        redraw:()=>{if(!this.destroyed&&this.contents)this.refresh();}});
                     const measured=renderer.textSizeEx(label).width;
                     const x=r.x+(element.align==='right'?Math.max(0,r.width-measured):element.align==='center'?Math.max(0,(r.width-measured)/2):0);
                     renderer.drawTextEx(label,x,r.y,r.width);

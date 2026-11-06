@@ -3690,6 +3690,8 @@ class DatabaseAnimationEditor {
         document.addEventListener('keydown', handleKeyDown);
         this._registerDetailCleanup(() => {
             document.removeEventListener('keydown', handleKeyDown);
+            // A playing preview stops with the record: its loop would go on playing sounds after a switch or close.
+            if (animationInterval) { cancelAnimationFrame(animationInterval); animationInterval = null; }
         });
 
         // Add/Remove frame buttons

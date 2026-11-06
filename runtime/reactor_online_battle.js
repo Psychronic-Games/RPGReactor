@@ -143,7 +143,15 @@ const ReactorOnlineBattle = {
             bytes += size;
             lines.push(this.outbox.shift());
         }
-        if (lines.length) await ReactorOnline.post("bSay", { id: this.id, lines }, this.identity());
+        if (lines.length) {
+            try {
+                await ReactorOnline.post("bSay", { id: this.id, lines }, this.identity());
+            } catch (error) {
+                // Not sent: back to the front of the outbox for the next exchange (a "too much" refusal would only repeat).
+                if (error?.status !== 413) this.outbox.unshift(...lines);
+                throw error;
+            }
+        }
         if (this.role === "host" && now >= (this._nextBeat || 0)) {
             this._nextBeat = now + this.BEAT_MS;
             await ReactorOnline.post("bBeat", this.listing(), Object.assign(this.identity(), { m: $gameMap.mapId() }));
@@ -152,7 +160,11 @@ const ReactorOnlineBattle = {
         if (!response.ok) { const error = new Error(await response.text()); error.status = response.status; throw error; }
         const answer = await response.json();
         this.offset = answer.next;
-        for (const line of answer.lines) if (line.from !== ReactorOnline.slot) this.receive(line.m, line.from);
+        // Each line on its own: one that is not a message, or that a handler cannot take, must not lose the rest.
+        for (const line of answer.lines || []) {
+            if (!line || line.from === ReactorOnline.slot || !line.m || typeof line.m !== "object") continue;
+            try { this.receive(line.m, line.from); } catch (error) { console.warn("A shared battle's message could not be read.", error); }
+        }
     },
 
     listing() {
@@ -402,7 +414,7 @@ const ReactorOnlineBattle = {
 
     /** Any enemy record: a guest's unit needs one to be made, then wears its own battler. */
     anyEnemyId() {
-        return $dataEnemies.findIndex(enemy => enemy && enemy.name) || 0;
+        return Math.max(0, $dataEnemies.findIndex(enemy => enemy && enemy.name));
     },
 
     /** An event standing for a player's actor looks like them. */

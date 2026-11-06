@@ -4136,9 +4136,11 @@
             A.aimBlend = ease(A.aimBlend, st && st.player.aim ? 1 : 0, 0.2);
             A.battleBlend = ease(A.battleBlend, st && !fight._ending ? 1 : 0, 0.08);
             // A shot's kick: the look jumps up and settles back most of the way.
-            if (st && st.player.recoil > 0.01 && R.Camera.look && R.Camera.look.pitch !== null) {
+            // The kick wears off whether or not the look has a pitch yet (no mouse moved: a pad or the keys), or the aim help
+            // (A.lookToNear waits for it to settle) would be lost for the rest of the battle.
+            if (st && st.player.recoil > 0.01) {
                 const kick = st.player.recoil * 0.35;
-                R.Camera.look.pitch -= kick * 0.5;
+                if (R.Camera.look && R.Camera.look.pitch !== null) R.Camera.look.pitch -= kick * 0.5;
                 st.player.recoil -= kick;
             }
             const current = view.cameraCurrent, mode = A.cameraMode(), battle = A.battleBlend, aiming = A.aimBlend;

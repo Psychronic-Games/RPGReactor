@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-04)
 
-- **Development:** 0.99.5 is open, runtime revision **20261105.18** in the tree and the bundled projects (not committed; .9 is committed on `main`, not pushed); demo.rpgreactor.org runs **20261105.8**. The Demo is single player, creator off, uncommitted on purpose: a deploy would carry that to the live site.
+- **Development:** 0.99.5 is open, runtime revision **20261106.1** in the tree and the bundled projects (not committed; .9 is committed on `main`, not pushed); demo.rpgreactor.org runs **20261105.8**. The Demo is single player, creator off, uncommitted on purpose: a deploy would carry that to the live site.
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
 - **Verification:** CI is green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is that branch plus a documentation commit and is not pushed. Substantial checks go through `codex-check`.
 - **Live demo:** demo.rpgreactor.org runs this cycle's Demo, and a playtest of the Demo joins it. It still holds test sleepers and chat; keep the `E2E…` accounts, which are planned as extra battle participants.
@@ -14,9 +14,21 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering.
 
+## 2026-11-06 — Audit pass, third splash screen, faster test runs
+
+Runtime 20261106.1, synced, not committed. Eleven read-only reviews covered the runtime and the editor; every finding was re-read in the code before it was changed. About fifty fixes are listed in the [changelog](../editor/changelog/0.99.5.md).
+
+- **Fixed:** the third splash image never showed in NW.js (the page's chrome-extension:// address hid the images folder). The same address mistake meant the Prop Builder's bake worker never ran on the desktop.
+- **Highest-impact runtime fixes:** a start stuck on the spinner after a late WebGL; models that ignored an event page's model change outside battles; a menu-open crash with shared muted videos; online tokens that outlived their slot, and JSON writes that could empty `parties.json` or `world.json` (the server changes need a deploy to take effect).
+- **Checked:** the whole suite through `run-tier.cjs all` passed 9,472 of 9,489 tests in 596 s. All 7 failures also fail at `e18cd9e2` or come from the Demo's single-player settings. The Demo booted in NW.js on a hidden display on 20261106.1 and on 20261105.18, reached map 1 and opened and closed the menu on both. Both showed the same shader validation error from software GL there. demo.rpgreactor.org did not answer during the session.
+- **Found, not changed (owner's call or larger work):** parties and invites are keyed by display name, which any client can set; any player can write into any battle log and flood the Engine's relay; a host replays guests' shots without checking them; NPCs walk onto below/above-priority events (MZ blocks them); foliage chunks laid from the queue can stay hidden; neighbouring maps draw in the above/lights passes; resizing a map that isn't open is undone by the open map's next save; Plugin Manager edits are lost on close without asking. The reviewers' full lists are summarized in the session, not kept in the repo.
+- **Tests:** `test-tiers.json` now lists every file of 20 s or more (54). The bare `node --test editor/tests/*.test.cjs` that CLAUDE.md named skipped the small-pictures preload and took about 25 minutes; CLAUDE.md now points to `npm run test:changed`, `test:fast` and `test:all`.
+- **Harness:** `~/.cache/rr-tests/cdp-game.cjs --nw` now passes `--mute-audio`; two unmuted boot checks played the Demo's music on the owner's speakers.
+
 ## 2026-11-05 (laptop) — Why the laptop lost its 144, and lighter moving shadows
 
-Runtime 20261105.10, synced, not committed. Measured on the laptop in NW.js with Demo copies, one muted window at a time; numbers and method are in the [changelog](../editor/changelog/0.99.5.md). The harness is on the laptop in `%LOCALAPPDATA%r-tests` (`ab.cjs` interleaves variants in one window; `--project`, `--map`, `--start`, `--profile` for a warm browser profile).
+Runtime 20261105.10, synced, not committed. Measured on the laptop in NW.js with Demo copies, one muted window at a time; numbers and method are in the [changelog](../editor/changelog/0.99.5.md). The harness is on the laptop in `%LOCALAPPDATA%
+r-tests` (`ab.cjs` interleaves variants in one window; `--project`, `--map`, `--start`, `--profile` for a warm browser profile).
 
 - **Cause: the Demo's content, not the runtime.** Whole Demos from git on the same walk: the first room held 142 fps on 15 and 24 Oct and dropped to 78–99 on 28 Oct; the 24 Oct Demo on the 28 Oct runtime still holds 142, the 28 Oct Demo on the 24 Oct runtime does not. On 26–28 Oct the party grew to 7 (Elija, a Builder character) and the `scattered` formation shows all seven; the Grappler is worn by nearly everyone; Builder-made militia and raiders stand in North Haven. Party of 7/6/4/1 in the first room: 116/136/143/144 fps. Single player costs more than online because online the player's own character is the whole party.
 - **Fixed (lossless):** rigid parts merge into one shadow stand-in (the parked tank 82 → 4 shadow draws a frame), skeletons checked once per shadow flush, depth materials keyed by morph layout. First room walking: 107 → 128 fps on the laptop.

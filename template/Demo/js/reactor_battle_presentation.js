@@ -919,7 +919,10 @@
             if(!sequence||problem){const result=start.call(this);beginCamera(this);return result;}
             P.cancelStates(this._spriteset);this._reactorSequence?.cancel();this._reactorStarting=true;
             try{start.call(this);}finally{this._reactorStarting=false;}
-            const adapter=P.adapter(this,subject,this._targets.slice());adapter.hitPolicy=sequence.hitPolicy;this._reactorSequence=new B.Player(sequence,adapter);beginCamera(this);
+            const adapter=P.adapter(this,subject,this._targets.slice());adapter.hitPolicy=sequence.hitPolicy;
+            // A sequence that fails its checks once its called routines are put in (two hits, none) plays as the stock action instead of stopping the battle.
+            try{this._reactorSequence=new B.Player(sequence,adapter);}catch(error){P.warn(error);adapter.cleanup?.(true);this._reactorSequence=null;}
+            beginCamera(this);
         };
         BattleManager.updateAction=function(){
             const player=this._reactorSequence;

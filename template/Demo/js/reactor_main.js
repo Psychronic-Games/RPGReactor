@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.99.5
-// RPG Reactor runtime revision: 20261105.18
+// RPG Reactor runtime revision: 20261106.1
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261105.18";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261106.1";
 //=============================================================================
 
 const scriptUrls = [
@@ -193,16 +193,36 @@ class Main {
             script.onload = this.onScriptLoad.bind(this);
             script.onerror = this.onScriptError.bind(this);
             script._url = url;
+            script._rrMain = true;
             document.body.appendChild(script);
         }
         this.numScripts = scriptUrls.length;
-        window.addEventListener("load", this.onWindowLoad.bind(this));
+        // After a wait for WebGL the page's load event has already passed: the start follows the scripts instead.
+        this.lateStart = document.readyState === "complete";
+        if (!this.lateStart) window.addEventListener("load", this.onWindowLoad.bind(this));
         window.addEventListener("error", this.onWindowError.bind(this));
     }
 
     onScriptLoad() {
         if (++this.loadCount === this.numScripts) {
             PluginManager.setup($plugins);
+            if (this.lateStart) this.afterPluginScripts(() => this.onWindowLoad());
+        }
+    }
+
+    /** Once every plugin script just added has loaded or failed, as the load event would have waited. */
+    afterPluginScripts(then) {
+        const scripts = [...document.querySelectorAll("script")].filter(script => script._url && !script._rrMain && !script._rrSettled);
+        let left = scripts.length;
+        if (!left) { then(); return; }
+        const settle = script => () => {
+            if (script._rrSettled) return;
+            script._rrSettled = true;
+            if (--left === 0) then();
+        };
+        for (const script of scripts) {
+            script.addEventListener("load", settle(script));
+            script.addEventListener("error", settle(script));
         }
     }
 

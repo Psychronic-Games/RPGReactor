@@ -1427,7 +1427,11 @@
      */
     function stand(object, spec, yaw, kindName, lean) {
         if (!object || typeof THREE === "undefined") return null;
-        const block = blockOf(object, kindName, spec);
+        // The model's name is the key a front is remembered by (as a map holder's spec): never the spec object,
+        // whose text would be the same for every model and lend the first one's front to all of its kind.
+        const key = typeof spec === "string" ? spec
+            : spec && spec.name ? Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file) : undefined;
+        const block = blockOf(object, kindName, key);
         const draw = object.__reactorStand || (object.__reactorStand = { base: new THREE.Quaternion(), baseSpec: undefined, baseFront: undefined });
         // (`lean`: over on its side by that much, a wreck.)
         attitude(object.quaternion, num(yaw), 0, num(lean), baseTurn(draw, spec, block, draw.base));

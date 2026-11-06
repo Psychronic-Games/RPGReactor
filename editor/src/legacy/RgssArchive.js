@@ -78,12 +78,15 @@
         for (let i = 0; i < MAGIC.length; i++) if (bytes[i] !== MAGIC[i]) throw new Error('Not an RGSS archive (no RGSSAD header).');
         const version = bytes[7];
         if (version !== 1 && version !== 3) throw new Error(`RGSS archive version ${version} is not one this reader knows.`);
-        const entries = version === 3 ? indexV3(bytes) : indexV1(bytes);
-        const byPath = new Map();
-        for (const entry of entries) {
+        // Only names that stay inside the game's folder: an entry naming "..", ".", an empty part, a root or a
+        // drive would be joined onto the new project's folder by the importers and written outside it.
+        const safe = (path) => !/^\//.test(path) && !/:/.test(path) && path.split('/').every(part => part !== '' && part !== '.' && part !== '..');
+        const entries = (version === 3 ? indexV3(bytes) : indexV1(bytes)).filter(entry => {
             entry.path = entry.name.replace(/\\/g, '/');
-            byPath.set(entry.path.toLowerCase(), entry);
-        }
+            return safe(entry.path);
+        });
+        const byPath = new Map();
+        for (const entry of entries) byPath.set(entry.path.toLowerCase(), entry);
         return {
             version,
             list: () => entries.map(e => e.path),

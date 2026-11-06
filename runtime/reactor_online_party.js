@@ -118,6 +118,8 @@ const ReactorOnlineParty = {
         if (!member?.online) return;
         const place = member.place;
         if (place?.map > 0 && place.map !== $gameMap.mapId()) {
+            // A map this game does not have (another version of it, or a wrong report) would stop the game on loading it.
+            if (!$dataMapInfos[place.map]) { this.unfollow(false); return; }
             $gamePlayer.reserveTransfer(place.map, place.x, place.y, $gamePlayer.direction(), 0);
             return;
         }

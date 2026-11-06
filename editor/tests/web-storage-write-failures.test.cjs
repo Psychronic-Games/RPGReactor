@@ -11,39 +11,44 @@ const hostSource = fs.readFileSync(path.join(editorRoot, 'src', 'web', 'WebHost.
  * Runs the real createFileSystem() against a stub IndexedDB whose writes can be
  * made to fail, which is what a browser does when the storage quota is hit.
  */
-function makeFileSystem({ failPaths = new Set() } = {}) {
+function makeFileSystem({ failPaths = new Set(), abortPaths = new Set() } = {}) {
     const stored = new Map();
+    // As a browser does: a request settles first, then its transaction completes (or, after an error, aborts).
     const db = {
-        transaction: () => ({
-            objectStore: () => ({
+        transaction: () => {
+            const transaction = {};
+            const settle = (request, fails, apply) => queueMicrotask(() => {
+                if (fails) {
+                    request.error = new Error('QuotaExceededError');
+                    request.onerror && request.onerror();
+                    transaction.error = request.error;
+                    transaction.onerror && transaction.onerror();
+                    transaction.onabort && transaction.onabort();
+                } else if (abortPaths.has(request.path)) {
+                    // The request succeeds, then the transaction aborts as it commits (a full quota).
+                    request.onsuccess && request.onsuccess();
+                    transaction.error = new Error('QuotaExceededError');
+                    transaction.onabort && transaction.onabort();
+                } else {
+                    apply();
+                    request.onsuccess && request.onsuccess();
+                    transaction.oncomplete && transaction.oncomplete();
+                }
+            });
+            transaction.objectStore = () => ({
                 put(record) {
-                    const request = {};
-                    queueMicrotask(() => {
-                        if (failPaths.has(record.path)) {
-                            request.error = new Error('QuotaExceededError');
-                            request.onerror && request.onerror();
-                        } else {
-                            stored.set(record.path, record.data);
-                            request.onsuccess && request.onsuccess();
-                        }
-                    });
+                    const request = { path: record.path };
+                    settle(request, failPaths.has(record.path), () => stored.set(record.path, record.data));
                     return request;
                 },
                 delete(key) {
-                    const request = {};
-                    queueMicrotask(() => {
-                        if (failPaths.has(key)) {
-                            request.error = new Error('QuotaExceededError');
-                            request.onerror && request.onerror();
-                        } else {
-                            stored.delete(key);
-                            request.onsuccess && request.onsuccess();
-                        }
-                    });
+                    const request = { path: key };
+                    settle(request, failPaths.has(key), () => stored.delete(key));
                     return request;
                 }
-            })
-        })
+            });
+            return transaction;
+        }
     };
 
     const sandbox = {
@@ -129,4 +134,15 @@ test('the shared atomic writer uses complete browser records and flush reports t
     assert.equal(stored.get('3d/Characters/Web/source/Web.glb').byteLength,4);
     const bad=makeFileSystem({failPaths:new Set(['data/Map001.json'])});atomic(bad.fs,'/project/data/Map001.json','{}');
     await assert.rejects(bad.fs.flush(),/browser storage/);
+});
+
+test('a write whose transaction aborts after the request succeeded is reported, not kept as saved', async () => {
+    const { fs: vfs, stored } = makeFileSystem({ abortPaths: new Set(['data/Map001.json']) });
+    vfs.writeFileSync('/project/data/Map001.json', '{"lost":true}');
+    await assert.rejects(() => vfs.flush(), error => {
+        assert.equal(error.failures.length, 1);
+        assert.equal(error.failures[0].path, 'data/Map001.json');
+        return true;
+    });
+    assert.equal(stored.has('data/Map001.json'), false);
 });

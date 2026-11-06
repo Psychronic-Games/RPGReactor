@@ -521,6 +521,9 @@ function normalizeShowArgs(raw, interpreter) {
                 if (typeof source[handler] === "function") video.removeEventListener(type, source[handler], !!capture);
             }
         }
+        // Stops its frame callback while the element is still there: the source's destroy() asks
+        // _configureAutoUpdate, which reads resource.paused and throws once resource is null.
+        try { source.autoUpdate = false; } catch (error) { /* an older source has no switch */ }
         try { source.resource = null; } catch (error) { /* a read-only resource keeps it */ }
     }
 

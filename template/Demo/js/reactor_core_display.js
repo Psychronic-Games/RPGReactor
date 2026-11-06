@@ -26,6 +26,8 @@ Sprite.prototype.initialize = function(bitmap) {
     }
     const frame = new Rectangle();
     const texture = PIXICreateTexture(Sprite._emptyBaseTexture, frame);
+    // This sprite's own: destroyed when a bitmap's texture replaces it, or it would stay subscribed to the shared empty source.
+    texture.__rrSpriteOwned = true;
     PIXISuper(PIXI.Sprite, this, [texture]);
     this.spriteId = Sprite._counter++;
     this._bitmap = bitmap;
@@ -3260,6 +3262,8 @@ TilingSprite.prototype.initialize = function(bitmap) {
     }
     const frame = new Rectangle();
     const texture = PIXICreateTexture(TilingSprite._emptyBaseTexture, frame);
+    // This sprite's own: destroyed when a bitmap's texture replaces it, or it would stay subscribed to the shared empty source.
+    texture.__rrSpriteOwned = true;
     PIXISuper(PIXI.TilingSprite, this, [texture]);
     this._bitmap = bitmap;
     this._width = 0;

@@ -3218,6 +3218,8 @@ Graphics._restoreEffekseerContext = function() {
     const gl = this._effekseerGL;
     if (!gl || !window.effekseer || gl.isContextLost()) return;
     globalThis.ReactorHdrOverlay?.contextRestored();
+    // The copy pass's program, buffer and texture belonged to the lost context: made again at its next use.
+    this._efxBlit = null;
     try {
         const context = effekseer.createContext();
         if (!context) return;
@@ -4442,6 +4444,9 @@ Bitmap.prototype._startLoading = function() {
     this._revokeObjectUrl();
     this._triedMvEncrypted = false;
     this._triedPlain = false;
+    // A retry (the stall watchdog's included) lets the earlier request go: its late answer
+    // would otherwise finish this load with the new, still empty image.
+    this._dropPendingRequest();
     this._image = new Image();
     this._image.onload = this._onLoad.bind(this);
     this._image.onerror = this._onError.bind(this);
@@ -4493,8 +4498,19 @@ Bitmap.prototype._startDecrypting = function() {
     this._requestEncrypted(this._url + "_");
 };
 
+Bitmap.prototype._dropPendingRequest = function() {
+    if (this._image) { this._image.onload = null; this._image.onerror = null; }
+    const xhr = this._xhr;
+    this._xhr = null;
+    if (xhr) {
+        xhr.onload = null;
+        xhr.onerror = null;
+        try { xhr.abort(); } catch (error) { /* already settled */ }
+    }
+};
+
 Bitmap.prototype._requestEncrypted = function(url) {
-    const xhr = new XMLHttpRequest();
+    const xhr = this._xhr = new XMLHttpRequest();
     xhr.open("GET", url);
     xhr.responseType = "arraybuffer";
     xhr.onload = () => this._onXhrLoad(xhr);
@@ -4504,7 +4520,7 @@ Bitmap.prototype._requestEncrypted = function(url) {
 
 Bitmap.prototype._requestBytes = function(url) {
     this._animationDecodeUrl = url;
-    const xhr = new XMLHttpRequest();
+    const xhr = this._xhr = new XMLHttpRequest();
     xhr.open("GET", url);
     xhr.responseType = "arraybuffer";
     xhr.onload = () => {

@@ -26,7 +26,7 @@
             z-index: 10000;
             flex-direction: column;
         ">
-            <img id="splash-image" data-splash-images="splash-screen-01.png,splash-screen-02.png" alt="RPG Reactor" width="1920" height="1200" style="width: 100%; height: auto; margin-bottom: 24px;">
+            <img id="splash-image" data-splash-images="splash-screen-01.png,splash-screen-02.png,splash-screen-03.png" alt="RPG Reactor" width="1920" height="1200" style="width: 100%; height: auto; margin-bottom: 24px;">
             <script>
                 (() => {
                     const image = document.getElementById('splash-image');
@@ -35,9 +35,19 @@
                     try {
                         if (typeof nw !== 'undefined' && typeof require === 'function') {
                             const fs = require('fs');
-                            const { fileURLToPath } = require('url');
-                            const folder = fileURLToPath(new URL('images/', window.location.href));
-                            const discovered = fs.readdirSync(folder, { withFileTypes: true })
+                            const path = require('path');
+                            // NW.js serves this page from chrome-extension://, so the page address
+                            // cannot name the folder; ask NW.js for the app folder instead.
+                            const roots = [
+                                nw.__dirname,
+                                typeof __dirname !== 'undefined' ? __dirname : null,
+                                window.location.protocol === 'file:' ? require('url').fileURLToPath(new URL('.', window.location.href)) : null,
+                                path.join(process.cwd(), 'package.nw'),
+                                process.cwd()
+                            ].filter(Boolean);
+                            const folder = roots.map(root => path.join(root, 'images'))
+                                .find(candidate => fs.existsSync(path.join(candidate, 'icon.png')));
+                            const discovered = !folder ? [] : fs.readdirSync(folder, { withFileTypes: true })
                                 .filter(entry => entry.isFile() && /^splash-screen-\d+\.png$/i.test(entry.name))
                                 .map(entry => entry.name).sort();
                             if (discovered.length) images = discovered;

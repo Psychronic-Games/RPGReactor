@@ -409,9 +409,9 @@ class ShowChoicesCommandEditor {
     save() {
         if (this.callback) {
             const commands = this.buildCommands();
-            if (commands) {
-                this.callback(commands);
-            }
+            // Refused (fewer than two choices, after the warning): the dialog stays open with what was typed.
+            if (!commands) return;
+            this.callback(commands);
         }
         this.close();
     }

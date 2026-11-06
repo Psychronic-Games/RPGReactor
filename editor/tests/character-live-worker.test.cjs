@@ -22,7 +22,7 @@ test('the browser drag shaper uses the same human head data as the complete mode
     }
     const scope = { window: { RRCharacterExpressions: require(path.join(dir, 'CharacterExpressions.js')) }, console, process, require, RRHumanBody: Body,
         Blob: class { constructor(parts) { this.code = parts.join(''); } },
-        URL: { createObjectURL: blob => blob }, Worker: BrowserWorker };
+        URL: { createObjectURL: blob => blob, revokeObjectURL() {} }, Worker: BrowserWorker };
     vm.runInNewContext(fs.readFileSync(path.join(dir, 'Character3DBuilder.js'), 'utf8'), scope);
     const pack = await Body.loadPack(), builder = Object.create(scope.window.Character3DBuilder.prototype);
     builder.pack = pack;

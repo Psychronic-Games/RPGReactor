@@ -63,7 +63,10 @@
      * release clears the name it gives by then. So every name a change takes away is let go at the change.
      */
     ReactorControls.letGo = function(name) {
-        if (name && typeof Input !== "undefined" && Input._currentState) Input._currentState[name] = false;
+        if (!name || typeof Input === "undefined") return;
+        if (Input._currentState) Input._currentState[name] = false;
+        // The keyboard's own record too: a pad merges it in each frame, which would press the name again.
+        if (Input._keyboardState) Input._keyboardState[name] = false;
     };
 
     /**

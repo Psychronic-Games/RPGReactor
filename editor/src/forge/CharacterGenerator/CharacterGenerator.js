@@ -5174,11 +5174,15 @@ ${sheetJs}
             if (byName.has(name) && !seen.has(name)) { ordered.push(byName.get(name)); seen.add(name); }
         }
         const final = [...discovered.filter(d => !seen.has(d.name)).sort((a, b) => a.name.localeCompare(b.name)), ...ordered];
+        // Read again on every redraw of the tab (a direction, Walk): the parts chosen stay chosen, found again by file.
+        const chosen = new Map((this.categories || []).filter(cat => cat.selected != null && cat.variations?.[cat.selected])
+            .map(cat => [cat.name, cat.variations[cat.selected].file]));
         this.categories = final.map(({ name, abs }) => {
             let files = [];
             try { files = require('fs').readdirSync(abs).filter(f => /\.png$/i.test(f)).sort(); } catch {}
             const displayName = name.split('/').map(s => s.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(' > ');
-            return { name, displayName, folder: abs, variations: files.map(f => ({ name: f.replace(/\.png$/i, '').replace(/[_-]+/g, ' '), file: f, path: require('path').join(abs, f) })), selected: null };
+            const kept = chosen.has(name) ? files.indexOf(chosen.get(name)) : -1;
+            return { name, displayName, folder: abs, variations: files.map(f => ({ name: f.replace(/\.png$/i, '').replace(/[_-]+/g, ' '), file: f, path: require('path').join(abs, f) })), selected: kept >= 0 ? kept : null };
         });
         this.activeCategoryIndex = Math.min(this.activeCategoryIndex, Math.max(0, this.categories.length - 1));
     }

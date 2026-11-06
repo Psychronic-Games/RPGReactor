@@ -8618,7 +8618,9 @@ Reactor3D.MapHeld = {
     unbind(state) {
         const object = state.record && state.record.object;
         if (object && object.parent) object.parent.remove(object);
-        state.owner = null; state.slots.length = 0; state.pinned.length = 0; state.local = null;
+        // Each grip is let go too (unpin): a grip left pinned counts as held and never leaves HandGrip's list.
+        this.unpin(state);
+        state.owner = null; state.slots.length = 0; state.local = null;
         state.solved = !state.shown;
     },
     scratch() {
@@ -11034,7 +11036,7 @@ Reactor3D.actorFaceState = function(actorId) {
             state.bitmap.baseTexture.update();
             state.ready = true;
             for (const waiter of state.waiters.slice()) {
-                if (waiter && typeof waiter.refresh === "function" && !waiter._destroyed) {
+                if (waiter && typeof waiter.refresh === "function" && !waiter._destroyed && !waiter.destroyed) {
                     waiter.refresh();
                 }
             }
@@ -13049,8 +13051,18 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         const key = Reactor3D.modelInstanceKey(character);
         live.add(key);
         let holder = this._modelInstances.get(key);
+        const specKey = Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file);
+        // Another model for the same character (a page turned to one, a party member swapped in): the one
+        // it wore is let go and the new one loads, as A.remodel does in a battle. A variant only is below.
+        if (holder && holder.spec !== specKey) {
+            if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+            if (Reactor3D.MapHeld.count) Reactor3D.MapHeld.detach(holder);
+            Reactor3D.releaseModelHolder(holder);
+            this._modelInstances.delete(key);
+            holder = null;
+        }
         if (!holder) {
-            holder = { character, spec: Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file), object: null };
+            holder = { character, spec: specKey, object: null };
             this._modelInstances.set(key, holder);
             Promise.all([
                 Reactor3D.loadModel(spec.name, spec.ext, spec.file, spec.texture),

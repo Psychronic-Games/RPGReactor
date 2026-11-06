@@ -330,6 +330,21 @@ function withinRelayLimit(player) {
     return ++player.relays <= MAX_RELAYS_PER_SECOND;
 }
 
+/** The nonce the API kept for the slot's current visit (nonce.bin, 8 bytes a slot), or '' when none was kept. */
+function slotNonce(slot) {
+    let handle = null;
+    try {
+        handle = fs.openSync(path.join(dir, 'nonce.bin'), 'r');
+        const bytes = Buffer.alloc(8);
+        const read = fs.readSync(handle, bytes, 0, 8, slot * 8);
+        return read === 8 && bytes.some(byte => byte !== 0) ? bytes.toString('hex') : '';
+    } catch (error) {
+        return '';
+    } finally {
+        if (handle !== null) fs.closeSync(handle);
+    }
+}
+
 function welcome(socket) {
     let player = null;
     const timer = setTimeout(() => socket.destroy(), 5000);
@@ -339,6 +354,9 @@ function welcome(socket) {
             try { hello = opcode === 1 ? JSON.parse(payload.toString()) : null; } catch (error) { hello = null; }
             const slot = Number(hello?.slot), token = Buffer.from(String(hello?.token || '')), right = Number.isInteger(slot) && slot >= 0 ? Buffer.from(tokenFor(slot, String(hello?.nonce || ''))) : Buffer.alloc(0);
             if (!right.length || token.length !== right.length || !crypto.timingSafeEqual(token, right)) { sendText(socket, { t: 'refused' }); socket.end(); return; }
+            // A token from an earlier visit to this slot (the slot given to someone else since) is refused, as the API refuses it.
+            const current = slotNonce(slot);
+            if (current && current !== String(hello?.nonce || '').toLowerCase()) { sendText(socket, { t: 'refused' }); socket.end(); return; }
             clearTimeout(timer);
             players.get(slot)?.socket.destroy();
             player = { socket, slot, map: 0, x: 0, y: 0, flags: 0, clock: 0, heard: Date.now(), lastMessage: Date.now(), seen: false };

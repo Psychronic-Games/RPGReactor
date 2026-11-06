@@ -645,7 +645,9 @@
     Spriteset_Base.prototype._rrParticleHolder = function(layer) {
         const n = this._tilemap ? spriteLayer(layer) : 0;
         let holder = this._rrParticleHolders[n];
-        if (holder && holder.parent && (n < 9 || holder.parent === SceneManager._scene)) return holder;
+        // Layers 9 and up sit in the top layer, which stays in this spriteset's own scene: already there, nothing to do
+        // (this runs once per live particle per frame; re-adding and sorting each time cost thousands of sorts a frame).
+        if (holder && holder.parent && (n < 9 || (holder.parent === this._rrTop && this._rrTop.parent && this._rrTop.parent === this.parent))) return holder;
         holder = holder || (this._rrParticleHolders[n] = new Sprite());
         if (!this._tilemap) { this.addChild(holder); return holder; }
         const slot = layerZ(n);
