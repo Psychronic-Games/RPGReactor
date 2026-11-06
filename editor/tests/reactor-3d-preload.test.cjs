@@ -171,3 +171,26 @@ test('model files download a few at a time, so a map\'s own pictures are not lef
     assert.match(source, /this\.ModelDownloads\.take\(release => \{\s*const xhr = new XMLHttpRequest\(\);/);
     assert.match(source, /xhr\.onloadend = release;\s*xhr\.onload = \(\) => \{\s*release\(\);/);
 });
+
+test('a single-player game from its own disk makes other actors\' models when asked, not after the map opens', async () => {
+    const hadUtils = 'Utils' in global, hadOnline = 'ReactorOnline' in global;
+    const utils = global.Utils, online = global.ReactorOnline, load = Reactor3D.loadModel;
+    let loads = 0;
+    Reactor3D.loadModel = () => { loads++; return Promise.resolve(null); };
+    try {
+        global.Utils = { isNwjs: () => true };
+        global.ReactorOnline = { config: () => null };
+        await Reactor3D.loadLaterModels([{ name: 'Actors/Someone', ext: '.glb', file: 'Someone' }]);
+        assert.equal(loads, 0, 'NW.js, offline: nothing made after the map opens');
+        global.ReactorOnline = { config: () => ({ enabled: true }) };
+        await Reactor3D.loadLaterModels([{ name: 'Actors/Someone', ext: '.glb', file: 'Someone' }]);
+        assert.equal(loads, 1, 'online: other players may wear it');
+        global.Utils = { isNwjs: () => false }; global.ReactorOnline = { config: () => null };
+        await Reactor3D.loadLaterModels([{ name: 'Actors/Other', ext: '.glb', file: 'Other' }]);
+        assert.equal(loads, 2, 'over the web: fetched behind the map as before');
+    } finally {
+        Reactor3D.loadModel = load;
+        if (hadUtils) global.Utils = utils; else delete global.Utils;
+        if (hadOnline) global.ReactorOnline = online; else delete global.ReactorOnline;
+    }
+});

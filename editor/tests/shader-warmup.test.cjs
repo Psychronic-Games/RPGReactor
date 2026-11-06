@@ -191,3 +191,27 @@ test('a new material in a game that has run a while is compiled once and shows o
         assert.equal(W.hide(r, scene, {}), null, 'ready: drawn');
     } finally { performance.now = real; r.finishCompiles(); }
 });
+
+test('a material whose program was begun elsewhere and is still compiling is held, not waited for, until it links', () => {
+    const scene = new THREE.Scene(), mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+    scene.add(mesh);
+    const r = fakeRenderer();
+    let linked = false;
+    // A merged character's warm began its compile: the program is there, the driver has not finished it.
+    r.properties.get(mesh.material).currentProgram = { isReady: () => linked };
+    r.properties.get(mesh.material).__version = mesh.material.version;
+    const hidden = W.hide(r, scene, {});
+    assert.ok(hidden && hidden.includes(mesh), 'held while it compiles: its first draw would wait on the main thread');
+    W.show(hidden);
+    linked = true;
+    assert.equal(W.hide(r, scene, {}), null, 'drawn once linked');
+    W.holdUnlinked = false;
+    try {
+        const other = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()); scene.add(other);
+        r.properties.get(other.material).currentProgram = { isReady: () => false };
+        r.properties.get(other.material).__version = other.material.version;
+        const h = W.hide(r, scene, {});
+        assert.ok(!h || !h.includes(other), 'off: drawn as before');
+        if (h) W.show(h);
+    } finally { W.holdUnlinked = true; }
+});

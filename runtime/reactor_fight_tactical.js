@@ -8378,6 +8378,9 @@
     Rope.grapplerOf = function(holder) {
         if (!holder || !holder.object) return null;
         if (holder._reactorGrappler !== undefined) return holder._reactorGrappler;
+        // A worn grappler drawn as merged pieces (Reactor3D.LayeredParts.WORN) is put on again as its pieces: its
+        // harpoon is hidden on its own while it flies.
+        if (typeof Reactor3D !== "undefined" && Reactor3D.Worn && Reactor3D.Worn.apart) Reactor3D.Worn.apart(holder, /^grapple[\s_]?spike/i);
         let mesh = null;
         // By its name: the mesh's own (a skinned character file), or the part's a flattened file keeps (a worn prop).
         const named = child => /^grapple[\s_]?spike/i.test(child.name || "") || (child.userData && Array.isArray(child.userData.parts) && child.userData.parts.some(part => /^grapple[\s_]?spike/i.test(part && part.name || "")));

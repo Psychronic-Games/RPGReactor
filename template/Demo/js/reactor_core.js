@@ -484,6 +484,20 @@ Utils.hasEncryptedAudio = function() {
  * @param {string} url - The relative URL that failed to load.
  * @returns {?string} The corrected URL, or null if no distinct match exists.
  */
+/**
+ * Whether a file is on disk, a yes kept for the session: a sound effect asked the disk two to four times each time
+ * it played (its case, its extension, whether it is there), 1-2 ms each in a Dropbox folder on the owner's laptop,
+ * on the main thread mid-play (a door opening, 2026-11-05). A no is asked again each time, so a file added while
+ * the game runs is found.
+ */
+Utils._onDisk = new Set();
+Utils.existsOnDisk = function(file) {
+    if (this._onDisk.has(file)) return true;
+    const there = require("fs").existsSync(file);
+    if (there) { if (this._onDisk.size > 8192) this._onDisk.clear(); this._onDisk.add(file); }
+    return there;
+};
+
 Utils.correctFileCase = function(url) {
     if (!this.isNwjs()) return this.correctFileCaseFromIndex(url);
     try {
@@ -496,7 +510,7 @@ Utils.correctFileCase = function(url) {
         if (segments.some(s => s === "..")) return null;
         // One stat keeps the common exactly-cased case off the directory
         // walk below, so this is cheap enough to run before every request.
-        if (fs.existsSync(path.join(base, ...segments))) return null;
+        if (this.existsOnDisk(path.join(base, ...segments))) return null;
         let dir = base;
         const corrected = [];
         for (const segment of segments) {
@@ -750,7 +764,7 @@ Utils.resolveAudioExtension = function(url, suffix) {
             if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(clean)) return url;
             const segments = clean.split("/").filter(s => s && s !== ".");
             if (segments.some(s => s === "..")) return url;
-            if (fs.existsSync(path.join(base, ...segments))
+            if (this.existsOnDisk(path.join(base, ...segments))
                 || this.correctFileCase(candidateUrl + suffix)) {
                 return candidateUrl;
             }
@@ -1852,6 +1866,11 @@ ReactorProfiler.start = function() {
     this._spikes = [];
     this._acc = {};
     this._hits = {};
+    // Every frame, not only the spikes: how long frames took from one to the next (what the screen shows), how
+    // much of that was the game's own work, and how much was waiting outside it (the browser, the GPU, Windows).
+    this._hist = { interval: {}, work: {}, wait: {} };
+    this._presentedAtStart = Graphics._fpsCounter ? Graphics._fpsCounter._presentedTotal || 0 : 0;
+    this._pacedFrames = 0;
     this._active = true;
     console.info(
         "[ReactorProfiler] Recording frame timings... " +
@@ -1885,6 +1904,14 @@ ReactorProfiler.frameEnd = function() {
     const heap = performance.memory ? performance.memory.usedJSHeapSize : 0;
     const heapDelta = this._lastHeap ? heap - this._lastHeap : 0;
     this._lastHeap = heap;
+    const bucket = ms => ms < 7.5 ? "<7.5" : ms < 9 ? "7.5-9" : ms < 14.5 ? "9-14.5" : ms < 21.5 ? "14.5-21.5" : ms < 34 ? "21.5-34" : ms < 50 ? "34-50" : ">50";
+    if (this._hist) {
+        const h = this._hist, interval = total + gap;
+        if (gap > 0) h.interval[bucket(interval)] = (h.interval[bucket(interval)] || 0) + 1;
+        h.work[bucket(total)] = (h.work[bucket(total)] || 0) + 1;
+        if (gap > 0) h.wait[bucket(gap)] = (h.wait[bucket(gap)] || 0) + 1;
+        if (Graphics.FramePacing && Graphics.FramePacing._paced) this._pacedFrames++;
+    }
     const isSpike = total > this.frameThreshold || gap > this.gapThreshold;
     if (isSpike && this._spikes.length < 400) {
         const phases = {};
@@ -2022,6 +2049,31 @@ ReactorProfiler._install = function() {
     }
 };
 
+/** What the machine and the game were set to while recording: read with the report, so a slow run can be told from a slow machine. */
+ReactorProfiler.context = function(elapsed) {
+    const c = {};
+    try {
+        const counter = Graphics._fpsCounter;
+        if (counter) c.newPicturesPerSecond = Math.round(((counter._presentedTotal || 0) - (this._presentedAtStart || 0)) / Math.max(0.001, elapsed));
+        c.pacedShare = this._frames ? Math.round(100 * (this._pacedFrames || 0) / this._frames) / 100 : null;
+        c.revision = globalThis.RPG_REACTOR_RUNTIME_REVISION;
+        c.gpu = Graphics.gpuDescription || null;
+        c.window = [window.innerWidth, window.innerHeight, window.devicePixelRatio];
+        c.canvas = Graphics._canvas ? [Graphics._canvas.width, Graphics._canvas.height] : null;
+        c.fullscreen = !!document.fullscreenElement;
+        c.test = !!(Utils.isOptionValid && Utils.isOptionValid("test"));
+        c.quality = typeof ConfigManager !== "undefined" ? ConfigManager.graphicsQuality : null;
+        const Q = typeof Reactor3D !== "undefined" && Reactor3D.Quality;
+        if (Q) c.levels = { gpu: Q.g, cpu: Q.c, refreshMs: Q._refreshMs };
+        c.online = !!(typeof ReactorOnline !== "undefined" && ReactorOnline.config && ReactorOnline.config());
+        c.hidden = document.hidden, c.focused = document.hasFocus ? document.hasFocus() : null;
+        c.cores = navigator.hardwareConcurrency || null;
+        c.heapMB = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
+        c.followers = typeof $gamePlayer !== "undefined" && $gamePlayer && $gamePlayer.followers ? $gamePlayer.followers()._data.filter(f => f.isVisible()).length : null;
+    } catch (e) { c.error = String(e); }
+    return c;
+};
+
 ReactorProfiler.dump = function() {
     const elapsed = (performance.now() - this._t0) / 1000;
     const report = {
@@ -2035,6 +2087,8 @@ ReactorProfiler.dump = function() {
         frameThresholdMs: this.frameThreshold,
         gapThresholdMs: this.gapThreshold,
         spikeCount: this._spikes.length,
+        histograms: this._hist || null,
+        context: this.context(elapsed),
         spikes: this._spikes
     };
     console.info(
@@ -3207,7 +3261,7 @@ Graphics.FPSCounter.prototype.startTick = function() {
 // Count new pictures, rather than ticker callbacks which can reuse the same world frame.
 Graphics.FPSCounter.prototype.endTick = function(presented = true) {
     const time = performance.now();
-    if (presented) this._presented++;
+    if (presented) { this._presented++; this._presentedTotal = (this._presentedTotal || 0) + 1; }
     const elapsed = time - this._sampleStart;
     if (elapsed >= 500) {
         this.fps = this._presented * 1000 / elapsed;

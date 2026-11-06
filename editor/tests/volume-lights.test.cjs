@@ -67,7 +67,8 @@ test('a lit material composes with earlier injections and keys its program apart
     assert.equal(Reactor3D.litMaterial(material), material);
     assert.equal(material.__reactorLit, true);
     assert.equal(Reactor3D.litMaterial(material), material, 'idempotent');
-    assert.equal(material.customProgramCacheKey(), 'earlier-key|reactor3d-lit');
+    // The scene uniform block (on by default) keys its programs apart too.
+    assert.equal(material.customProgramCacheKey(), 'earlier-key|reactor3d-lit' + Reactor3D.SceneUniformBlock.programKey(material));
 
     const shader = {
         uniforms: {},
@@ -89,7 +90,7 @@ test('a lit material composes with earlier injections and keys its program apart
 
     const bare = {};
     Reactor3D.litMaterial(bare);
-    assert.equal(bare.customProgramCacheKey(), '|reactor3d-lit');
+    assert.equal(bare.customProgramCacheKey(), '|reactor3d-lit' + Reactor3D.SceneUniformBlock.programKey(bare));
     assert.equal(Reactor3D.litMaterial(null), null);
 });
 

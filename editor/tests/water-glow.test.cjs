@@ -11,6 +11,8 @@ const read = p => fs.readFileSync(path.join(repoRoot, p), 'utf8');
 global.self = global; global.window = global;
 require(path.join(repoRoot, 'runtime/libs/three.js'));
 const R = require(path.join(repoRoot, 'runtime/reactor_3d.js'));
+// The volume runs where the GPU is the limit (LightVolume.on); these tests are about its bake: on.
+R.LightVolume.ALWAYS = true;
 const E = require(path.join(repoRoot, 'editor/src/utils/MapElevation.js'));
 
 const steps = Array.from({ length: 101 }, (_, i) => i / 100);

@@ -7,6 +7,8 @@ const root = path.join(__dirname, '..', '..');
 require(path.join(root, 'runtime', 'libs', 'three.js'));
 const Reactor3D = require(path.join(root, 'runtime', 'reactor_3d.js'));
 const V = Reactor3D.LightVolume;
+// These tests are about the volume itself: on whatever the GPU (in the game it runs where the GPU is the limit, `on`).
+V.ALWAYS = true;
 
 const light = (id, extra = {}) => ({ id, type: Reactor3D.LIGHT_POINT, x: 3, y: 4, height: 2, radius: 5, intensity: 1, colour: 0xffffff, ...extra });
 function fresh() { V._records.clear(); V._frame = 0; V._front = V._back = null; }
@@ -41,13 +43,51 @@ test('a light with a moving-caster shadow row stays live; a static row that re-r
     fresh();
     const S = Reactor3D.Shadows, tiles = S._tiles, dyn = S._dynTiles;
     try {
+        S._staticDrawn = new Map(); S._cutEpoch = 0; S._cutSerials = new Map();
         S._tiles = [{ id: 'lamp', valid: true, stamp: 1, key: 'k' }]; S._dynTiles = [];
-        assert.equal(V.shadowKey('lamp'), 'row0:1:k');
+        S.noteStaticDrawn('lamp', 'k', false);
+        assert.equal(V.shadowKey('lamp'), 'lit:k:0:0.0');
+        // Another row, drawn at another time, holding the same shadow: the same key (rows trade lamps as the player walks).
+        S._tiles = [{ id: 'other', valid: true, stamp: 5, key: 'o' }, { id: 'lamp', valid: true, stamp: 9, key: 'k' }];
+        S.noteStaticDrawn('lamp', 'k', false);
+        assert.equal(V.shadowKey('lamp'), 'lit:k:0:0.0', 'which row holds it is not what it holds');
+        // Drawn again where it stood valid: something it shadows changed.
+        S.noteStaticDrawn('lamp', 'k', true);
+        assert.equal(V.shadowKey('lamp'), 'lit:k:1:0.0', 'a static row that re-renders resets it');
+        S.cutChanged();
+        assert.equal(V.shadowKey('lamp'), 'lit:k:1:1.0', 'and so does the storey cut');
         S._dynTiles = [{ id: 'lamp', valid: true }];
         assert.equal(V.shadowKey('lamp'), null, 'the party\'s shadows stay sharp and live');
         S._dynTiles = [];
-        assert.equal(V.shadowKey('other'), 'none');
+        assert.equal(V.shadowKey('nobody'), 'none');
     } finally { S._tiles = tiles; S._dynTiles = dyn; }
+});
+
+test('a light baked with its static shadow is still served after its row goes to another light', () => {
+    fresh();
+    // No change of the cut since the bake (its last field), unless said below.
+    Reactor3D.Shadows._cutEpoch = 0; Reactor3D.Shadows._cutSerials = new Map();
+    assert.equal(V.shadowServes('lit:k:0:0.0', 'none'), true, 'its baked shadow is still right');
+    assert.equal(V.shadowServes('none', 'lit:k:0:0.0'), true, 'one that gained a shadow is served as it was until the bake that has it lands');
+    assert.equal(V.shadowServes('lit:k:0:0.0', 'lit:k:1:0.0'), false, 'one whose shadow changed is baked again');
+    assert.equal(V.shadowServes('lit:k:0:0.0', null), false, 'one that took a moving-caster row goes live');
+    const snap = (id, shadow, key = 'k') => ({ id, key, shadow, packed: { col: [1, 1, 1, 0] } });
+    const front = { regionKey: 'r', water: null, want: { statics: [snap('a', 'lit:a:0:0.0'), snap('b', 'none')], flickers: [], pulses: [] } };
+    V._records.set('a', { id: 'a', key: 'k', shadow: 'none' });
+    V._records.set('b', { id: 'b', key: 'k', shadow: 'none' });
+    // 'a' lost its row and is settling (left out of what is wanted): still served.
+    assert.equal(V.stillServes(front, { statics: [snap('b', 'none')], flickers: [], pulses: [] }, 'r', null), true);
+    assert.equal(V.stillServes(front, { statics: [snap('a', 'none'), snap('b', 'none')], flickers: [], pulses: [] }, 'r', null), true);
+    assert.equal(V.stillServes(front, { statics: [snap('a', 'none'), snap('b', 'none'), snap('c', 'none')], flickers: [], pulses: [] }, 'r', null), false, 'a new light is baked');
+    assert.equal(V.stillServes(front, { statics: [snap('a', 'none'), snap('b', 'none')], flickers: [], pulses: [] }, 'elsewhere', null), false, 'a moved region is baked');
+    V._records.set('a', { id: 'a', key: 'k2', shadow: 'none' });
+    assert.equal(V.stillServes(front, { statics: [snap('b', 'none')], flickers: [], pulses: [] }, 'r', null), false, 'a changed light is baked');
+    // The cut changed within the light's reach since it was baked: what it baked may show a roof no longer there.
+    Reactor3D.Shadows._cutSerials.set('lamp', 1);
+    assert.equal(V.shadowServes('lit:k:0:0.0', 'none', 'lamp'), false, 'baked again after the cut changed near it');
+    assert.equal(V.shadowServes('lit:k:0:0.0', 'none', 'elsewhere'), true, 'not after a change it does not reach');
+    V.KEEP_LIT_BAKE = false;
+    try { assert.equal(V.shadowServes('lit:k:0:0.0', 'none'), false, 'off: as before'); } finally { V.KEEP_LIT_BAKE = true; }
 });
 
 test('the light loop reads the volume, drops the cached lights, and turns its lookup toward the eye', () => {
@@ -145,4 +185,19 @@ test('moving lights are baked into one atlas in one draw, on a coarser grid, onl
         u.rrLightShadow.value.set(saved.shadow); u.rrShadowInfo.value.set(saved.info);
         u.rrLightCached.value = 0; V._supported = undefined; V._scene = null; V._dynSig = null; if (V._dynAtlas) { V._dynAtlas.dispose(); V._dynAtlas = null; }
     }
+});
+
+test('the volume runs where the graphics card is the limit: a weak GPU, or Auto stepped down for the GPU', () => {
+    const Q = Reactor3D.Quality, weak = Reactor3D.isWeakGpu, g = Q.g;
+    V.ALWAYS = false;
+    try {
+        Reactor3D.isWeakGpu = () => false; Q.g = 0;
+        assert.equal(V.on(), false, 'a discrete card at full quality lights per pixel');
+        Q.g = 1;
+        assert.equal(V.on(), true, 'Auto stepped down for the GPU');
+        Q.g = 0; Reactor3D.isWeakGpu = () => true;
+        assert.equal(V.on(), true, 'a weak GPU');
+        V.enabled = false;
+        assert.equal(V.on(), false, 'the kill switch');
+    } finally { V.enabled = true; V.ALWAYS = true; Reactor3D.isWeakGpu = weak; Q.g = g; }
 });

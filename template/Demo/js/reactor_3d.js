@@ -1487,6 +1487,18 @@ Reactor3D.GeometryDetail = {
 /** Avoid rebuilding and uploading an unchanged bone palette for every pass. */
 Reactor3D.SkeletonUpdates = {
     enabled: true,
+    /**
+     * Non-zero while nothing may move a bone (the shadow flush: every face of every row is a render of its own, and
+     * three updates each skin's skeleton once a render). A palette checked in this epoch is not checked again; 0: every call checks.
+     */
+    epoch: 0,
+    _epochs: 0,
+    /** Runs `draw` in an epoch of its own (nested: the outer one stands). */
+    still(draw) {
+        if (this.epoch) return draw();
+        this.epoch = ++this._epochs;
+        try { return draw(); } finally { this.epoch = 0; }
+    },
     install(skeleton) {
         if (!skeleton || skeleton.__rrPaletteCache || skeleton.update !== THREE.Skeleton.prototype.update) return;
         const original = skeleton.update;
@@ -1496,6 +1508,10 @@ Reactor3D.SkeletonUpdates = {
             if (!Reactor3D.SkeletonUpdates.enabled) { state.valid = false; return original.call(this); }
             // Its model's matrices are held (Reactor3D.holdModelMatrices): the palette made last is the pose.
             if (state.held && state.valid) return;
+            // Checked already in this epoch (the shadow rows' faces: one render each, and no bone moves between them).
+            const epoch = Reactor3D.SkeletonUpdates.epoch;
+            if (epoch && state.valid && state.epoch === epoch) return;
+            state.epoch = epoch;
             const n = this.bones.length, matrices = this.boneMatrices;
             let same = Reactor3D.SkeletonUpdates.enabled && state.valid && state.matrices === matrices
                 && state.texture === this.boneTexture && state.pose.length === n * 32;
@@ -1827,6 +1843,9 @@ Reactor3D.ImageWorker = {
 
 Reactor3D.ShaderWarmup = {
     enabled: true,
+    /** False draws a material whose program exists but is still compiling, waiting for it, as before. */
+    holdUnlinked: true,
+    _unlinked: new WeakMap(),
     // A compile the driver never answers (a lost context) must not hide a thing forever.
     TIMEOUT_MS: 5000,
     // Pixels uploaded per frame at most. A decoded picture over what is left goes up in bands of
@@ -2224,7 +2243,18 @@ Reactor3D.ShaderWarmup = {
     materialReady(renderer, material, mesh, scene, camera, now) {
         const props = renderer.properties.get(material);
         const program = props && props.currentProgram;
-        if (program && props.__version === material.version) return true;
+        if (program && props.__version === material.version) {
+            // Its program begun elsewhere (a merged character's warm, the capture) and still compiling: its first draw
+            // would wait for the driver on the main thread. Held until linked (asked without waiting), as a new
+            // compile is. On a cold shader cache the first Reactor room's first seconds waited 1.27 s this way (2026-11-05).
+            // Only one never drawn: a material drawn before is never held (one that changes every frame would stay hidden).
+            if (this.holdUnlinked && !material.__rrSeen && typeof program.isReady === "function" && !program.isReady()) {
+                const since = this._unlinked.get(material);
+                if (since === undefined) { this._unlinked.set(material, now); return false; }
+                return now - since > this.TIMEOUT_MS;
+            }
+            return true;
+        }
         let state = this._materials.get(material);
         // Coming back into view with its program to change: held while it compiles, the wait counted from now.
         // A new material whose first compile began here and that has not been drawn since is still
@@ -2766,6 +2796,8 @@ Reactor3D.Viewport.prototype._resetPixi = function() {
     // texture — sampled or not. three's own binding cache is reset before
     // its next pass, so clearing the units costs it nothing.
     Reactor3D.Shadows.unbindFrom(this._renderer);
+    // The scene's uniform buffer stays on its binding point; PIXI is told to bind its own there if it uses that point.
+    if (Reactor3D.SceneUniformBlock) Reactor3D.SceneUniformBlock.releaseTo(pixi, this._renderer);
 };
 
 Reactor3D.Viewport.prototype._initializeCanvas = function() {
@@ -3111,7 +3143,10 @@ Reactor3D.prepareReflections = function(renderer, mapScene, scene, camera, scale
     const mirrors = Reactor3D.Mirrors && mapScene.mirrorCandidates ? mapScene.mirrorCandidates(camera) : [];
     const F = Reactor3D.Reflections;
     if (reflections) F._frame++;
-    const wanted = reflections && !F.idle();
+    // One face every UPDATES_PER_FACE updates once the cube is whole (characters stay in it, refreshed a little less
+    // often on surfaces that blur them): the capture was ~2 ms of a 12 ms frame walking North Haven's square.
+    const turn = !F._ready || !(F.UPDATES_PER_FACE > 1) || ((F._turn = (F._turn || 0) + 1) % F.UPDATES_PER_FACE) === 0;
+    const wanted = reflections && !F.idle() && turn;
     // The update's face waits for a refresh with no update (`takeOwed`); one still owed from the last
     // update is drawn now. So each update draws at most one face, and on a screen faster than the
     // updates most faces fall on the refreshes that draw the world and nothing else.

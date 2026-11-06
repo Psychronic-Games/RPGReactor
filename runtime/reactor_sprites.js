@@ -256,11 +256,25 @@ Sprite_Character.prototype.update = function() {
     this.updateVisibility();
 };
 
+/**
+ * `visible` is written once a frame. Set true and then false again in one update, as the base and the 3D layer
+ * below used to do for every hidden character, PIXI 8 marks the stage's draw list changed on each write and
+ * builds it afresh on the next render: once every update on any map with a hidden character sprite (measured
+ * 2026-11-05: every update, on the laptop 0.1-0.2 ms). The 3D layer's own decision (`_reactor3dHides`) is taken
+ * here first, so its later writes find the value already in place; every wrapper still runs and sees the same
+ * result. A plugin that replaced `Sprite.prototype.updateVisibility` is called as before.
+ */
+Sprite_Character._spriteUpdateVisibility = Sprite.prototype.updateVisibility;
 Sprite_Character.prototype.updateVisibility = function() {
-    Sprite.prototype.updateVisibility.call(this);
-    if (this.isEmptyCharacter() || this._character.isTransparent()) {
-        this.visible = false;
+    const hide = this.isEmptyCharacter() || this._character.isTransparent()
+        || (typeof this._reactor3dHides === "function" && this._reactor3dHides());
+    if (Sprite.prototype.updateVisibility === Sprite_Character._spriteUpdateVisibility) {
+        const visible = !this._hidden && !hide;
+        if (this.visible !== visible) this.visible = visible;
+        return;
     }
+    Sprite.prototype.updateVisibility.call(this);
+    if (hide) this.visible = false;
 };
 
 Sprite_Character.prototype.isTile = function() {
@@ -543,6 +557,15 @@ Sprite_Character.prototype.updateReactor3DPosition = function() {
  * position it last had and slid about the screen as the camera moved. Six of
  * them on Moletown looked exactly like sprites trailing the party.
  */
+/** Whether the 3D layer below hides this sprite (its world draws it, or it is a prop): asked by the base first. */
+Sprite_Character.prototype._reactor3dHides = function() {
+    if (typeof Reactor3D === "undefined" || typeof $dataMap === "undefined") return false;
+    const character = this._character;
+    if (!character || !Reactor3D.shouldRender3D($dataMap)) return false;
+    if (Reactor3D.hasEventModels($dataMap)) return true;
+    if (typeof character.eventId === "function" && Reactor3D.isEventProp(character.eventId())) return true;
+    return Reactor3D.hasCharacterModel(character);
+};
 Sprite_Character.prototype._reactor3dBaseVisibility = Sprite_Character.prototype.updateVisibility;
 Sprite_Character.prototype.updateVisibility = function() {
     this._reactor3dBaseVisibility();

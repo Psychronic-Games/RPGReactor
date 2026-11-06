@@ -1891,7 +1891,8 @@ AudioManager.isMissingLocalSe = function(name) {
         const resolved = Utils.resolveFileCase(Utils.resolveAudioExtension(url, suffix), suffix);
         const local = decodeURIComponent(resolved.split("?")[0]) + suffix;
         if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(local) || local.split("/").includes("..")) return false;
-        const missing = !fs.existsSync(path.join(path.dirname(process.mainModule.filename), local));
+        const file = path.join(path.dirname(process.mainModule.filename), local);
+        const missing = !(Utils.existsOnDisk ? Utils.existsOnDisk(file) : fs.existsSync(file));
         this._missingSeWarnings ||= new Set();
         if (missing && !this._missingSeWarnings.has(url)) {
             this._missingSeWarnings.add(url);

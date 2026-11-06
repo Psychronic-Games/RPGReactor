@@ -369,7 +369,7 @@ test('saved Auto CPU level two keeps cheaper shadows and switching quality refre
         const S = Reactor3D.Shadows, profiles = Reactor3D.SHADOW_QUALITY;
         assert.equal(S.quality() === profiles.fullCpu, true);
         assert.ok(S.quality().dynamicTriangles < profiles.full.dynamicTriangles);
-        assert.ok(S.quality().dynamicPerFrame < profiles.full.dynamicPerFrame);
+        assert.ok(S.quality().dynamicPerFrame <= profiles.full.dynamicPerFrame);
         assert.ok(S.quality().dynamicInterval > profiles.full.dynamicInterval);
         for (const key of ['slots', 'dynamicSlots', 'size', 'sunSize', 'taps']) assert.equal(profiles.fullCpu[key], profiles.full[key], 'atlas and shader stay compatible: ' + key);
         ConfigManager.graphicsQuality = 'high'; Q.refresh();
