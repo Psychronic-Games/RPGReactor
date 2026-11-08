@@ -2932,6 +2932,7 @@ Game_Enemy.prototype.setup = function(enemyId, x, y) {
     this._screenX = x;
     this._screenY = y;
     this._rrRoll = null;
+    this._rrEquips = null;
     this.recoverAll();
 };
 
@@ -2963,6 +2964,99 @@ Game_Enemy.prototype.rrRoll = function() {
     return this._rrRoll;
 };
 
+// Enemy equipment (Database > Enemies > Equipment...), off unless Database >
+// Reactor Features turns it on. Each enemy keeps a plain copy of its authored
+// rows, tagged with the enemy it was read from: a change made in battle stays
+// on this one enemy and is saved with it, a Transform to another enemy reads
+// that enemy's rows, and an enemy from an older save reads its rows on first
+// use. Off, every enemy has an empty list and the authored rows stay unread.
+Game_Enemy.prototype.rrEquipOn = function() {
+    return typeof ReactorFeatures !== "undefined" && ReactorFeatures.on("enemyEquipment");
+};
+
+Game_Enemy.prototype.rrEquipRows = function() {
+    const held = this._rrEquips;
+    if (held && held.enemyId === this._enemyId) return held.slots;
+    const enemy = this.enemy();
+    const rows = enemy && Array.isArray(enemy.rrEquipment) ? enemy.rrEquipment : [];
+    const slots = rows.filter(Boolean).map(row => ({
+        etypeId: Number(row.etypeId) || 0,
+        kind: Number(row.kind) || 0,
+        itemId: Number(row.itemId) || 0
+    }));
+    this._rrEquips = { enemyId: this._enemyId, slots };
+    return slots;
+};
+
+// A row's item, or null when the row is empty, the entry no longer exists, or
+// the entry is no longer of the slot's equipment type.
+Game_Enemy.prototype.rrEquipItem = function(row) {
+    const table = row.kind === 2 ? $dataWeapons : row.kind === 3 ? $dataArmors : null;
+    const item = table && row.itemId > 0 ? table[row.itemId] : null;
+    return item && item.etypeId === row.etypeId ? item : null;
+};
+
+Game_Enemy.prototype.equipSlots = function() {
+    return this.rrEquipOn() ? this.rrEquipRows().map(row => row.etypeId) : [];
+};
+
+// One entry per slot, null where the slot is empty, as Game_Actor.equips.
+Game_Enemy.prototype.equips = function() {
+    return this.rrEquipOn() ? this.rrEquipRows().map(row => this.rrEquipItem(row)) : [];
+};
+
+Game_Enemy.prototype.weapons = function() {
+    return this.equips().filter(item => item && DataManager.isWeapon(item));
+};
+
+Game_Enemy.prototype.armors = function() {
+    return this.equips().filter(item => item && DataManager.isArmor(item));
+};
+
+// Puts `item` (a weapon or armor of the slot's type, or null to empty it) in
+// a slot. Nothing moves to or from the party's inventory. Refreshing clamps
+// HP and MP to the new maximums without healing or reviving. Returns whether
+// the slot changed hands; anything invalid leaves the enemy as it was.
+Game_Enemy.prototype.changeEquip = function(slotIndex, item) {
+    if (!this.rrEquipOn() || item === undefined) return false;
+    const row = this.rrEquipRows()[slotIndex];
+    if (!row) return false;
+    if (item) {
+        const kind = DataManager.isWeapon(item) ? 2 : DataManager.isArmor(item) ? 3 : 0;
+        if (!kind || item.etypeId !== row.etypeId) return false;
+        row.kind = kind;
+        row.itemId = item.id;
+    } else {
+        row.kind = 0;
+        row.itemId = 0;
+    }
+    this.refresh();
+    return true;
+};
+
+// The animation an equipped weapon gives this enemy's attack, or 0. A plugin
+// with its own idea of an enemy's attack animation replaces this.
+Game_Enemy.prototype.rrWeaponAnimationId = function() {
+    const weapon = this.weapons()[0];
+    return (weapon && weapon.animationId) || 0;
+};
+
+if (typeof PluginManager !== "undefined" && PluginManager.registerCommand) {
+    // Change Enemy Equipment: one troop member's slot. An enemy, slot or item
+    // that does not exist does nothing, as does an item of another type.
+    PluginManager.registerCommand("RPGReactor", "ChangeEnemyEquipment", function(args) {
+        const enemy = $gameTroop.members()[parseInt(args.enemyIndex, 10)];
+        const kind = Number(args.kind), itemId = parseInt(args.itemId, 10);
+        if (!enemy || !Number.isInteger(itemId)) return;
+        let item = null;
+        if (itemId > 0) {
+            item = kind === 2 ? $dataWeapons[itemId] : kind === 3 ? $dataArmors[itemId] : null;
+            if (!item) return;
+        }
+        enemy.changeEquip(parseInt(args.slotIndex, 10), item);
+    });
+}
+
 Game_Enemy.prototype.isEnemy = function() {
     return true;
 };
@@ -2992,7 +3086,15 @@ Game_Enemy.prototype.enemy = function() {
 };
 
 Game_Enemy.prototype.traitObjects = function() {
-    return Game_Battler.prototype.traitObjects.call(this).concat(this.enemy());
+    return Game_Battler.prototype.traitObjects.call(this).concat(this.enemy(), this.equips().filter(Boolean));
+};
+
+Game_Enemy.prototype.paramPlus = function(paramId) {
+    let value = Game_Battler.prototype.paramPlus.call(this, paramId);
+    for (const item of this.equips()) {
+        if (item) value += item.params[paramId];
+    }
+    return value;
 };
 
 Game_Enemy.prototype.paramBase = function(paramId) {

@@ -163,6 +163,10 @@ class DatabaseReferenceFinder {
                 const type = DatabaseReferenceFinder.dropKinds[drop?.kind];
                 if (type) emit('enemies', enemy.id, type, Number(drop.dataId), 'Drop Items');
             });
+            (enemy.rrEquipment || []).forEach(row => {
+                const type = DatabaseReferenceFinder.dropKinds[row?.kind];
+                if (type && Number(row.itemId) > 0) emit('enemies', enemy.id, type, Number(row.itemId), 'Equipment');
+            });
             this._traits('enemies', enemy, emit);
         });
 

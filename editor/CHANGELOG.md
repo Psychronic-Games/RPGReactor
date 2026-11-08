@@ -1,5 +1,7 @@
 # Editor changelog
 
+- Enemies can wear equipment. Turn on **Database › Reactor Features › Enemy Equipment** (off by default), then **Equipment...** on an enemy opens a window of slots: add, repeat, reorder and remove equipment types, pick from the weapons and armors that fit, and see each item's details and the parameter totals. The enemy's page shows read-only **Equipment Bonus** and **Equipped Total** beside each **Base** value. In battle an enemy's equipment adds its parameters and traits and its first weapon drives the attack animation and weapon-bound sequences, unless the Battle Presentation page names a weapon or animation of its own. Cleared Weapon 1/2 fields on that page no longer hide what the enemy holds. A new event command, **Change Enemy Equipment**, swaps one troop member's slot without touching the party's inventory; a change lasts for that enemy, is kept in a Map Battle save, and a Transform to another enemy takes that enemy's loadout. Referenced by lists equipped items. With the feature off nothing changes and entered data is kept.
+
 The full technical list, one file per release or labeled development checkpoint, newest first. The short version of each release is in the [root changelog](../CHANGELOG.md).
 
 - [0.99.4](changelog/0.99.4.md) - 2026-11-02

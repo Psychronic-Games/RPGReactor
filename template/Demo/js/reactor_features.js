@@ -25,6 +25,7 @@
         spriteTransforms: ["rrFeatures.spriteTransforms", true],
         mapBattles: ["rrFeatures.mapBattles", true],
         equipSlotLayouts: ["rrFeatures.equipSlotLayouts", true],
+        enemyEquipment: ["rrFeatures.enemyEquipment", false],
         higherLimits: ["rrHigherLimits", false],
         multiFrames: ["rrMultiFrames", true],
         skipTitle: ["rrSkipTitle", false]

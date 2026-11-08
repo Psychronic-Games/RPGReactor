@@ -128,6 +128,8 @@ class EventCommandList {
         this.camera3DEditor = typeof Camera3DEditor !== 'undefined' ? new Camera3DEditor() : null;
         this.transformModel3DEditor = typeof TransformModel3DEditor !== 'undefined' ? new TransformModel3DEditor() : null;
         this.lightCommandEditor = typeof LightCommandEditor !== 'undefined' ? new LightCommandEditor() : null;
+        this.enemyEquipmentCommandEditor = typeof EnemyEquipmentCommandEditor !== 'undefined'
+            ? new EnemyEquipmentCommandEditor(eventEditor.databaseManager) : null;
         this.waitForModel3DEditor = typeof WaitForModel3DEditor !== 'undefined' ? new WaitForModel3DEditor() : null;
         this.playModelEffectEditor = typeof PlayModelEffectEditor !== 'undefined' ? new PlayModelEffectEditor() : null;
         this.speakModel3DEditor = typeof SpeakModel3DEditor !== 'undefined' ? new SpeakModel3DEditor() : null;
@@ -495,6 +497,7 @@ class EventCommandList {
         if (name === 'ChangeCamera3D') return this.camera3DEditor;
         if (name === 'TransformModel3D') return this.transformModel3DEditor;
         if (typeof LightCommandEditor !== 'undefined' && LightCommandEditor.supports(name)) return this.lightCommandEditor;
+        if (typeof EnemyEquipmentCommandEditor !== 'undefined' && EnemyEquipmentCommandEditor.supports(name)) return this.enemyEquipmentCommandEditor;
         if (name === 'WaitForModelAnimation' || name === 'ScopedWait') return this.waitForModel3DEditor;
         if (name === 'PlayModelEffect') return this.playModelEffectEditor;
         if (name === 'SpeakModel3D') return this.speakModel3DEditor;
@@ -2260,6 +2263,10 @@ class EventCommandList {
                     // ("#alarm → off"), instead of the raw argument dump.
                     if (typeof LightCommandEditor !== 'undefined' && LightCommandEditor.supports(params[1])) {
                         description = LightCommandEditor.summary(params[1], params[3]);
+                        break;
+                    }
+                    if (typeof EnemyEquipmentCommandEditor !== 'undefined' && EnemyEquipmentCommandEditor.supports(params[1])) {
+                        description = EnemyEquipmentCommandEditor.summary(params[3], this.eventEditor?.databaseManager);
                         break;
                     }
                     // So do the on-map battle commands ("Enemy 0002: Bat at (12, 8)").
