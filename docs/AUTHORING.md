@@ -32,7 +32,7 @@ project; a person can use it to find where anything lives.
 | Lights and time of day | `MapNNN.r3d.json` › `lights`, `lighting` (a sun follows the ambient unless `daylight: "fixed"`) | Lighting tool | — |
 | Model variants (one model, several looks) | `3d/<model>/model.json` › `variants`; a use names one with `variant` in its model spec, or `variant(Name)` in an `<r3d>` note | Database › 3D Models › Variants; the Variant row wherever a model is chosen | `editor/tests/model-variants.test.cjs` |
 | Events | `MapNNN.json` › `events` (RPG Maker data) | Event tool | — |
-| Vehicles: placements, classes, equipment and motorcycle riding | `data/ReactorVehicles.json`; class/vehicle `traits`; model `model.json` › `vehicle` / `parts`; legacy event `rrVehicle` | Database → Vehicles → Starting Position; Classes → Traits; System 1 for native starts; Reactor commands | `validate-vehicles.cjs` |
+| Vehicles: placements, classes, equipment and motorcycle riding | `data/ReactorVehicles.json`; class/vehicle `traits`; model `model.json` › `vehicle` / `parts`; an event's own `rrVehicle` | Database → Vehicles → Starting Position; Event Editor → Vehicle; Classes → Traits; System 1 for native starts; Reactor commands | `validate-vehicles.cjs` |
 | Equipment slots of a class (how many, of which types, in what order) | `data/Classes.json` › `rrEquipSlots` | Database › Classes › Equipment Slots | `editor/tests/trait-effect-choices.test.cjs` |
 | Event size (footprint) | `MapNNN.r3d.json` › `eventSize[id] = [w, h]` with `eventSizeAnchor: "center"`; `eventSizeAuto[id]` is the editor's measured picture | Event Editor › Size (W, H, Auto) | `editor/tests/event-marker-centre.test.cjs` |
 | A record's battle settings (reach, area, sight, Move range, Climb, how it fights, how a weapon fires, cooldown, an enemy's picture on the map) | `rrBattle` on the record, in `data/Skills.json`, `Items.json`, `Weapons.json`, `Armors.json`, `States.json`, `Actors.json`, `Classes.json`, `Enemies.json` ([BATTLE-MODES.md](BATTLE-MODES.md#a-records-battle-settings)); tags in its Note are also read | Database › the record's **Combat** section | `battle-tags-to-fields.cjs` (lists a project's tags, `--write` moves them into the records) |
@@ -234,7 +234,7 @@ An action for an area lands on both. A rider kept **Inside the vehicle** is
 behind it: the other side's actions land on the vehicle until it is wrecked.
 A vehicle at 0 HP is a wreck: its rider is put on foot beside it, nobody
 rides it, and a revival brings it back. After a battle that is won a wreck
-stands again at 1 HP, unless System › Battles turns off **The fallen get up
+stands again at 1 HP, unless System 1 › Battles turns off **The fallen get up
 after a win**; **Recover All** for the entire party mends the party's
 vehicles on the map. A unit's panel shows its vehicle's HP under its own, and
 on the map the vehicle's bar sits over its rider's.
@@ -279,26 +279,26 @@ node editor/build-scripts/place-vehicle.cjs <project> <mapId> --vehicle 1 --at x
 node editor/build-scripts/validate-vehicles.cjs <project>
 ```
 
-The Demo already contains that type and placement; rerunning the placement
-command would add another event. No map generator is needed to place a
+The Demo already contains that type, placed as Starting Positions; the
+placement command would add a vehicle event beside them. No map generator is needed to place a
 vehicle, and North Haven's terrain, structures, foliage and residents
 are preserved.
 
 ## Class equipment slots
 
 ```json
-{ "id": 11, "name": "Motorcycle", "rrEquipSlots": [1, 6, 1, 1, 1] }
+{ "id": 11, "name": "Motorcycle", "rrEquipSlots": [1, 2, 3, 4, 5, 6] }
 ```
 
 `rrEquipSlots` on a class is its slots: the equipment type id of each slot, in order (ids are places in `System.json` › `equipTypes`). A type listed twice is two slots of it, so `[1, 3, 3, 4]` is Weapon, Head, Head, Body. Actors and vehicles of the class have these slots, and their `equips` holds one item id per slot in the same order. Change Equipment fills the first slot of the type it names.
 
-A class with no `rrEquipSlots` has one slot per equipment type, with a second weapon in place of the second slot under Dual Wield. A class with a list ignores Dual Wield: list Weapon twice.
+A class with no `rrEquipSlots` has one slot per equipment type, with a second weapon in place of the second slot under Dual Wield. A class with a list ignores Dual Wield: list Weapon twice. A Slot Type trait that picks a layout (Types › Slot Layouts) replaces the class's list while it holds.
 
 In the editor: Database › Classes › **Equipment Slots**. Add a slot, pick its type from the dropdown, drag a slot by its grip (or use the arrow keys on the grip) to change the order, delete it with ×. A new class starts with Weapon, Shield, Head, Body and Accessory. An equipment type added under Types is a slot of no class until it is added there. Changing a class's slots moves the starting equipment of its actors and vehicles with each slot's type.
 
 ## 8-direction character sheets
 
-A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eight blocks of 3 × 4 frames, whatever its `$` says. Block 0 walks down, left, right and up; block 1 holds its diagonals (rows down-left, down-right, up-left, up-right); block 2 is the dash, block 3 its diagonals. A character set to block 0 dashes on block 2, and shows the block to the right while it steps or faces diagonally; blocks 2 and 4 take their own diagonals the same way. Blocks 1, 3, 5, 6 and 7 show as picked in the event's graphic. The player, followers and events all follow it (the player steps diagonally with Database › System 1 › Options › Diagonal movement on). Sheets without the tag are cut as in MZ. Forge › 3D Character Builder › Export sprite sheet makes one.
+A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eight blocks of 3 × 4 frames, whatever its `$` says. Block 0 walks down, left, right and up; block 1 holds its diagonals (rows down-left, down-right, up-left, up-right); block 2 is the dash, block 3 its diagonals. A character set to block 0 dashes on block 2, and shows the block to the right while it steps or faces diagonally; blocks 2 and 4 take their own diagonals the same way. Blocks 1, 3, 5, 6 and 7 show as picked in the event's graphic. The player, followers and events all follow it (the player steps diagonally with Database › System 1 › Options › Diagonal movement on). Sheets without the tag are cut as in MZ. Forge › 3D Character Builder › Export Sprite Sheet makes one.
 
 ## Pieces
 
@@ -319,8 +319,9 @@ A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eig
   `ring`: they carry `size: [w, h, d]` in tiles (the cell is the middle of
   the footprint), `angle` in degrees and optional `tilt` and `roll`, stand
   at any quarter tile, and some take settings (`sides`, `taper`, `sweep`,
-  `thick`; see `Reactor3D.SHAPE_PARAMS`). A shape blocks every cell its
-  footprint covers, as a wall of its height. `rock` is a shape drawn as
+  `thick`; see `Reactor3D.SHAPE_PARAMS`). A shape blocks the cells its
+  solid part covers, as a wall of its height (a round one its ellipse; a
+  tube, ring, arch or tunnel only its walls). `rock` is a shape drawn as
   rock: every rock on a map is one mass (neighbours melt together, a
   noise fixed to the world makes it craggy, its top stays nearly flat),
   with an optional `rough` from 0 to 1 (0.5 by default), `cap` (the
@@ -331,7 +332,7 @@ A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eig
   reads the rock's surface over its middle; a raised rock is walked
   under), and one standing on the ground reaches a tile into it. Cliffs are rocks side by side and
   stacked: in the Build bar a drag lays a row and a Ctrl-drag fills an
-  area, each rock varied a little unless Vary is off.
+  area, each rock varied a little unless **Vary each rock** is off.
 - `x, y`: the cell. `z`: the level the piece's foot stands at, in tiles
   above the ground, up to 240 (forty-eight storeys of five): a whole level,
   or any quarter tile for a `floor`, a `block` and a shape. `rot`: quarter
@@ -382,7 +383,7 @@ staircase of cells. The **Level** card (− and +, or Q and E) is where the
 next piece goes above the ground: zero sits on the ground. The bottom bar calls
 this **Placement height**; it is a height offset, not a storey number. Selected,
 it raises and lowers what is selected, as Q and E do, and a placed piece's **Position** card moves it by typing. The
-**Size** card sets a wall's, glass's or pillar's height, of one in hand, one
+**Size** card sets a wall's, glass's, pillar's, doorway's, window's or fence's height, of one in hand, one
 placed or every one in a selection. A **Window**, **Doorway**, **Glass** or
 **Door** pointed at a wall goes into it, in place of the piece of wall
 pointed at, keeping the wall's material, building and height: a window
@@ -600,8 +601,9 @@ A building as a person describes it. Everything else is derived.
   `every: 0` leaves only the windows placed by hand.
 - `stairs`: `from` is the bottom step's cell, `dir` the way it climbs, one
   cell per tile of rise; the floor above is left open over the run.
-- `roof`: ramps step up `pitch` rows from each eave, a flat top between,
-  gables closed with blocks. `style: "flat"` is a flat top with a parapet;
+- `roof`: ramps step up `pitch` rows from each eave (6 when absent), a
+  flat top between, gables closed with blocks; `overhang` (0 to 1 tile, 1
+  when absent) carries the eaves past the walls. `style: "flat"` is a flat top with a parapet;
   `style: "shed"` is one slope rising `pitch` levels to `high` (`north`
   unless said, or `south`, `east`, `west`), a wedge of wall under a slab
   of roof with eaves. `windows`: a pair every `every` cells along
@@ -836,7 +838,7 @@ Terrain › **Room and Sky**, shown on the view as they change.
 
 ## Getting up high
 
-A character walks a rise of up to 0.75 tile, jumps onto anything up to its jump height plus that (2 tiles by default), and mantles a ledge up to its jump height plus its reach (4.25 by default): Jump while walking into it. The top must be level, with three tiles of room over it and nothing over the climber. A railing, a ridge or a pillar is not a place to stand. A roof is a place to be: a gable's pitch (45 degrees) and a slanted roof are walked; steeper than 45 degrees is not stood on. An eave within reach is mantled: Jump while walking toward it, a step or two before it. A one-storey eave is within reach from level ground; a two-storey one needs a `ladder` (one piece per level, turned to the wall) or something to climb from. A party member walks off the edge of a roof, a wall top or a crate when the fall is no deeper than the safe fall (6 tiles by default); a deeper one, and a cliff of the ground itself, takes a Jump. An event with `<climb>` in its note hops or mantles a ledge in the way of its route. In third person the camera rides over the roof the player stands on and never sits inside a roof: it rises over the tiles. Events more than three tiles below the player are not shown through the floor or roof the player stands on. Two ramps in a row are a slope walked. A climber's hands stay on the edge it takes and its body against the wall; what it carries is put away for the climb and comes back to the hand on top. In first person nobody is shown through a wall. The map view's **Edges** tick labels each edge of the tile under the pointer in the 3D view: Walk, Hop, Mantle, Climb ladder, Drop or Blocked, with the height and, when blocked, why (Too high, No room to stand, Something overhead, Too steep, Map edge). `ReactorPhysics.edge(mapData, x, y, d, height)` answers what a body can do at any edge (`walk`, `ladder`, `hop`, `mantle`, `drop` or `blocked` with a reason). Database › System 2 › Physics: Climb onto ledges within reach, Reach above a jump. In a Tactical battle a mantle costs 2 move, a ladder 1 plus one per 2.5 tiles climbed.
+A character walks a rise of up to 0.75 tile, jumps onto anything up to its jump height plus that (2 tiles by default), and mantles a ledge up to its jump height plus its reach (4.25 by default): Jump while walking into it. A low ledge of the ground (a bank, a terrace, a pond's rim) up to the height climbed by walking (1.5 tiles by default) is climbed, or stepped down, by walking into it for a moment, without Jump. The top must be level, with three tiles of room over it and nothing over the climber. A railing, a ridge or a pillar is not a place to stand. A roof is a place to be: a gable's pitch (45 degrees) and a slanted roof are walked; steeper than 45 degrees is not stood on. An eave within reach is mantled: Jump while walking toward it, a step or two before it. A one-storey eave is within reach from level ground; a two-storey one needs a `ladder` (one piece per level, turned to the wall) or something to climb from. A party member walks off the edge of a roof, a wall top or a crate when the fall is no deeper than the safe fall (6 tiles by default); a deeper one, and a cliff of the ground deeper than the height climbed by walking, takes a Jump. An event with `<climb>` in its note hops or mantles a ledge in the way of its route. In third person the camera rides over the roof the player stands on and never sits inside a roof: it rises over the tiles. Events more than three tiles below the player are not shown through the floor or roof the player stands on. Two ramps in a row are a slope walked. A climber's hands stay on the edge it takes and its body against the wall; what it carries is put away for the climb and comes back to the hand on top. In first person nobody is shown through a wall. The map bar's **Passage** tick marks, in the 3D view, every side of every place a character can get to (a hop, a mantle, a ladder, a drop or blocked) and labels the tile under the pointer: Walk, Hop, Mantle, Climb ladder, Drop or Blocked, with the height and, when blocked, why (Too high, No room to stand, Something overhead, Too steep, Map edge, Deep water and others). `ReactorPhysics.edge(mapData, x, y, d, height)` answers what a body can do at any edge (`walk`, `ladder`, `hop`, `mantle`, `climb` (a battler up a wall), `drop` or `blocked` with a reason). Database › System 2 › Physics (3D maps): Climb onto ledges within reach, Reach above a jump, Climb low ledges by walking into them, Height climbed by walking. In a Tactical battle a mantle costs 2 move, a ladder 1 plus one per 2.5 tiles climbed, and a wall climbed without a ladder (Battlers climb walls without a ladder, up to Highest wall climbed, 6 by default) Climb cost a tile, 0.75 by default, never under 2.
 
 ## Ground types
 
@@ -859,9 +861,9 @@ With **Level the ground under the road** (on by default) the ground under it
 is smoothed along its length and made flat across, easing back into the
 hills at its edges, and Ctrl+Z takes back the road and the levelling as one;
 the Eraser slot takes it away and Ground changes its look. A road of floor
-pieces instead: Build › Floor with a **Size** of 2×2 to 5×5 (a Line of
+pieces instead: Build › Floor with a **Size** of up to 9×9 (a Line of
 floor is that wide), or one slab of any size from Shape › Box. Build bar ›
-Terrain › **Ground** (Paint or Erase, + Add a ground from any material or a preset, the material tile, Tint, Scale, Nothing grows here; Radius, Strength, Soft edge, Coverage; Fill the whole map, and **Fill where…** by height, slope, nearness to water and a patchy edge, as `paint-ground.cjs` does). Its **Draw** card paints under the brush, along a **Line**, or over a **Rectangle** filled or outlined (as wide as the brush), and **Level the ground under it** (off by default) flattens a filled rectangle at its own height or smooths a line or stroke as a road is, in the paint's undo step. A rock capped with `"ground"` wears the type painted under it, and bushes are not stood on bare ground by the brush. **Dunes** raises wind-shaped ridges (Wind direction, Ridge spacing, Height). **Biome** sets a map's ground, cliff tint, plant colors and water together (its switches leave the plants already planted, the water or the cliffs as they are); **Save this map's look as a biome…** keeps the map's grounds, cliff tint, plant and water colors in `data/Biomes.json` (`{ "biomes": [ { name, base, grounds, cliffTint, palette, water } ] }`), listed under Your biomes with a button to take each out. **Rock** is in the Terrain group. By rule:
+Terrain › **Ground** (Paint or Erase, + Add a ground from any material or a preset; **Edit this ground**: the material tile, Tint, Scale, Nothing grows here, changed everywhere it lies; Radius, Strength, Soft edge, Coverage; under **Whole map**, Fill the whole map, and **Fill where…** by height, slope, nearness to water and a patchy edge, as `paint-ground.cjs` does). Its **Draw** card paints under the brush, along a **Line**, or over a **Rectangle** filled or outlined (as wide as the brush), and **Level the ground under it** (off by default) flattens a filled rectangle at its own height or smooths a line or stroke as a road is, in the paint's undo step. A rock capped with `"ground"` wears the type painted under it, and bushes are not stood on bare ground by the brush. **Dunes** raises wind-shaped ridges (Wind direction, Ridge spacing, Height). **Biome** sets a map's ground, cliff tint, plant colors and water together (its switches leave the plants already planted, the water or the cliffs as they are); **Save this map's look as a biome…** keeps the map's grounds, cliff tint, plant and water colors in `data/Biomes.json` (`{ "biomes": [ { name, base, grounds, cliffTint, palette, water } ] }`), listed under Your biomes with a button to take each out. **Rock** is in the Terrain group. By rule:
 
 ```
 node editor/build-scripts/paint-ground.cjs <project> <mapId> <spec.json> [--check]
@@ -888,7 +890,7 @@ node editor/build-scripts/make-ground-materials.cjs <project> [--force] [--only 
 "surround": { "style": "continue", "neighbors": { "north": { "map": 7 }, "east": { "map": 9, "shift": 12 } } }
 ```
 
-The neighbor is shown and entered without a break. As a map starts, the maps past its borders are read in the background and their worlds built beside it, in place of each side's style: ground and paint, pieces, rocks, water, plants and placed models; then the maps past those, so two maps out stand in every direction and nothing on the horizon changes as the party nears a border. Walking or driving over the border then goes on in that map with no fade: the party, a ridden vehicle, its speed and the camera carry over, what stood ahead and behind stays standing, and only a map more than two maps away is let go. Where two neighbors' lands past their other sides meet (the land north of each, say), each eases over 40 tiles into hills both maps share, whatever style either chose. `shift` is the tile of this map the neighbor's first tile lies against (0 when absent). A neighbor shorter than the side leaves this map's own land along the rest of it. Only the map being played runs its events: a neighbor's events that stand as models within 48 tiles of the shared side stand still past the border before it is crossed (a parked vehicle does not pop in), and its other events and its lights wait until it is entered, so maps of one world should share a sun and an ambient light. A border reached before its neighbor is ready (a teleport to the border, a map still being read) is crossed with a fade, onto the nearest tile along the border that can be stood on. With the mouse, click the border tile the player stands on, facing out. A side with no neighbor is a border as before, an event's Set Movement Route never leaves the map, and nothing leaves by a border during a battle on the map. `Reactor3D.Neighbors.enabled = false` crosses every border with a fade and shows each side's own style.
+The neighbor is shown and entered without a break. As a map starts, the maps past its borders are read in the background and their worlds built beside it, in place of each side's style: ground and paint, pieces, rocks, water, plants and placed models; then the maps past those, so two maps out stand in every direction (three past the side the party is within 48 tiles of; eight worlds at most) and nothing on the horizon changes as the party nears a border. Walking or driving over the border then goes on in that map with no fade: the party, a ridden vehicle, its speed and the camera carry over, what stood ahead and behind stays standing, and only a map more than two maps away is let go. Where two neighbors' lands past their other sides meet (the land north of each, say), each eases over 40 tiles into hills both maps share, whatever style either chose. `shift` is the tile of this map the neighbor's first tile lies against (0 when absent). A neighbor shorter than the side leaves this map's own land along the rest of it. Only the map being played runs its events: a neighbor's events that stand as models within 48 tiles of the shared side stand still past the border before it is crossed (a parked vehicle does not pop in), and its other events and its lights wait until it is entered, so maps of one world should share a sun and an ambient light. A border reached before its neighbor is ready (a teleport to the border, a map still being read) is crossed with a fade, onto the nearest tile along the border that can be stood on. With the mouse, click the border tile the player stands on, facing out. A side with no neighbor is a border as before, an event's Set Movement Route never leaves the map, and nothing leaves by a border during a battle on the map. `Reactor3D.Neighbors.enabled = false` crosses every border with a fade and shows each side's own style.
 
 For borders that read as one world: give both maps the same height along the shared border (the terrain is a grid of corners, and each border corner belongs to both), carry roads and painted ground across, and keep trees, rocks and buildings a few tiles back from the border. The Demo's Open Road (maps 8 to 12) is five maps in a row built this way, joined to North Haven's east side: ride out of the village by the east lane, or enter from the Reactor Room.
 

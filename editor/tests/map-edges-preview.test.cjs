@@ -116,7 +116,7 @@ test('the panel shows a map as stored: Automatic and the defaults where the map 
         neighbors: { north: null, east: null, south: null, west: null } });
     const view = edges.read({ reactor3d: { surround: { style: 'mountains', distance: 320, rough: 1, edges: { south: 'ocean' }, height: 60 } } });
     assert.deepEqual([view.style, view.distance, view.rough, view.edges.south, view.edges.north, view.height, view.seed], ['mountains', 320, 1, 'ocean', '', 60, null]);
-    assert.deepEqual(plain(edges.STYLES.map(style => style.id)), ['none', 'continue', 'ocean', 'mountains', 'plateau', 'void']);
+    assert.deepEqual(plain(edges.STYLES.map(style => style.id)), ['none', 'continue', 'ocean', 'mountains', 'cliffs', 'plateau', 'void']);
     assert.match(edges.icon('mountains'), /^<svg viewBox="0 0 24 24" width="30" height="24"[^>]*><path d="M2 18l6-10 4 6 3-4 7 8z"\/><\/svg>$/);
 });
 

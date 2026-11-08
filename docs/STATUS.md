@@ -1,14 +1,15 @@
 # Current status
 
-**0.99.4**, runtime 20261101.41, adds online worlds, player-created avatars, exercise motion, skin finishes and sprite/camera fixes. See the [release notes](posts/release-notes-0.99.4.md) and [changelog](../CHANGELOG.md). This source release retains known CI and visual issues. Signed binaries and itch publication are separate; the previous binary release is 0.99.2 (2026-10-25). Current development is 0.99.5, runtime **20261105.9**; see [HANDOFF.md](HANDOFF.md).
+**0.99.4**, runtime 20261101.41, adds online worlds, player-created avatars, exercise motion, skin finishes and sprite/camera fixes. See the [release notes](posts/release-notes-0.99.4.md) and [changelog](../CHANGELOG.md). This source release retains known CI and visual issues. Signed binaries and itch publication are separate; the previous binary release is 0.99.2 (2026-10-25). Current development is 0.99.5, runtime **20261107.15**; see [HANDOFF.md](HANDOFF.md).
 
 ## Version and validation
 
 Each area keeps its latest check.
 
 - **Release:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is Latest source; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is published. Development is 0.99.5. Native binaries use the [release checklist](RELEASE-CHECKLIST.md).
-- **Runtime:** development **0.99.5**, revision **20261105.18**, PixiJS **8.22.0**, Three.js **0.187.0**; all 20 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
+- **Runtime:** development **0.99.5**, revision **20261107.15**, PixiJS **8.22.0**, Three.js **0.187.0**; all 20 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
 - **Legacy imports** (2026-10-29): timer/event logic, BMP/XYZ art, RTP discovery, nested assets and repeat imports refined; source gaps are reported. [Audit and limits](IMPORTING-LEGACY-PROJECTS.md#reliability-audit).
+- **Node suites, local** (2026-11-06): the whole suite through `run-tier.cjs all` at 8 workers took 596 s, 9,472 of 9,489 passed; the 7 failures also fail at `e18cd9e2` or come from the Demo's single-player settings (listed in CLAUDE.md).
 - **Node suites** (2026-11-02): 9,328 passed, 35 skipped, none failed, across CI's eight shards on Node 22 ([run](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959)). [Scroll alignment evidence](archive/evidence/event-camera-drift-20261101.json).
 - **Editor performance** (2026-10-19): inactive previews pause; thumbnails/skin builds are faster; steady lights/cameras skip repeat work. Streaming grass merges 388→55 times, with identical final geometry. 160 focused tests and native game/map/Forge checks pass. Generic matrix caching was not a consistent win and is removed. Shaders/large jobs/traversal remain; weak-PC/two-monitor checks await owner. [Measurements](PERFORMANCE.md).
 - **CI** (`.github/workflows/ci.yml`): green on [run 41513263959](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959) (2026-11-02, branch `ci/0.99.5-check`): audit, clean checkout, GUI smokes and all eight Node shards. Tests use CPU-time budgets and poll asynchronous work.
@@ -86,7 +87,7 @@ The standing threads; the release in progress has its own list in [OPEN-ITEMS.md
 - **Custom interfaces:** MOG's meter flow animation is not carried over.
 - **Worn equipment:** not drawn yet in a Classic battle's Battle Room or the Database previews; a wearable is sized by its part's length, not the wearer's girth ([PROP-BUILDER.md](PROP-BUILDER.md#worn-by-a-hero)).
 - **WebGPU, held by the owner until the CPU basics are done (2026-10-14):** only as an opt-in second renderer with WebGL the default. Found: NW.js 0.107 on Linux gives no WebGPU adapter by default (software SwiftShader with `--enable-unsafe-webgpu`; the RTX only with Vulkan flags that also move WebGL onto ANGLE-Vulkan); 53 bundled plugin files carry GLSL filters WebGPU cannot run; the 3D renderer's custom GLSL (about 700 lines, `onBeforeCompile` in 6 files) would be rewritten in TSL; Effekseer is WebGL-only. Proposed first step: PIXI's own WebGPU renderer for 2D projects, falling back to WebGL for 3D maps, GLSL plugins and software adapters, measured before anything more.
-- **Demo content:** actors 6 to 8, enemies 3 to 5 and troops 2 to 5 are unused leftovers (troop 3 names a missing `battlebacks1/Grassland.png`). Every sound the Demo names exists on disk (`demo-template-completeness.test.cjs`).
+- **Demo content:** actors 6 (Snu Snu) and 7 (Elija) are in the starting party and 8 (Rosanna) has a model and face; enemies 3 to 5 and troops 2 to 5 are unused leftovers (troop 3 names a missing `battlebacks1/Grassland.png`). Every sound the Demo names exists on disk (`demo-template-completeness.test.cjs`).
 
 ## Decisions that stand
 

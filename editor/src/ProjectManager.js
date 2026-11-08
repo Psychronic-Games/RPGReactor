@@ -162,6 +162,13 @@ class ProjectManager {
     static GPU_CHROMIUM_ARGS = Object.freeze(['--force-high-performance-gpu', '--ignore-gpu-blocklist']);
 
     /**
+     * No vsync and no frame-rate limit: the game draws as fast as the machine allows (its logic still runs at 60).
+     * Locked to the screen, a frame that missed its refresh waited for the next one, and a 180 Hz screen showed
+     * every slightly slow frame as a drop to 90. `"reactorVsync": true` in the manifest takes them out.
+     */
+    static UNCAPPED_CHROMIUM_ARGS = Object.freeze(['--disable-gpu-vsync', '--disable-frame-rate-limit']);
+
+    /**
      * What a new project leaves behind when it copies the template: the template's own
      * editor lock (held while the template is open), its saves, backups, screenshots and
      * battle-test copies of the database.
@@ -876,7 +883,7 @@ class ProjectManager {
             name: this.getProjectPackageName(projectName),
             version: engineVersion,
             main: 'index.html',
-            'chromium-args': ['--force-color-profile=srgb', '--window-size=1280,720', ...ProjectManager.GPU_CHROMIUM_ARGS].join(' '),
+            'chromium-args': ['--force-color-profile=srgb', '--window-size=1280,720', ...ProjectManager.GPU_CHROMIUM_ARGS, ...ProjectManager.UNCAPPED_CHROMIUM_ARGS].join(' '),
             window: {
                 title: projectName,
                 width: 1280,
@@ -1129,19 +1136,22 @@ class ProjectManager {
     }
 
     /**
-     * Put the GPU switches in a game manifest's chromium-args, after the
-     * project's own arguments; `"reactorHighPerformanceGpu": false` in the
-     * manifest takes them out instead. Returns true when the manifest changed.
+     * Put the GPU switches and the no-vsync switches in a game manifest's chromium-args, after the project's own
+     * arguments; `"reactorHighPerformanceGpu": false` takes the GPU ones out instead, `"reactorVsync": true` the
+     * no-vsync ones. Returns true when the manifest changed.
      */
     applyGpuChromiumArgs(packageData) {
         if (!packageData || typeof packageData !== 'object') return false;
         const current = typeof packageData['chromium-args'] === 'string' ? packageData['chromium-args'] : '';
         const args = current.split(/\s+/).filter(Boolean);
-        const wanted = ProjectManager.GPU_CHROMIUM_ARGS;
-        const next = packageData.reactorHighPerformanceGpu === false
+        const wanted = ProjectManager.GPU_CHROMIUM_ARGS, uncapped = ProjectManager.UNCAPPED_CHROMIUM_ARGS;
+        let next = packageData.reactorHighPerformanceGpu === false
             ? args.filter(arg => !wanted.includes(arg))
             : args.concat(wanted.filter(arg => !args.includes(arg)));
-        if (next.length === args.length) return false;
+        next = packageData.reactorVsync === true
+            ? next.filter(arg => !uncapped.includes(arg))
+            : next.concat(uncapped.filter(arg => !next.includes(arg)));
+        if (next.length === args.length && next.every((arg, i) => arg === args[i])) return false;
         packageData['chromium-args'] = next.join(' ');
         return true;
     }

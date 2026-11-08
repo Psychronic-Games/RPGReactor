@@ -179,3 +179,15 @@ test('both editors use the shared field, save the list before the numeric arm, a
     const templates = read('editor/src/DatabaseEditorUI.js');
     assert.doesNotMatch(templates, /elementIds/, 'a new skill or item gains no list key');
 });
+
+test('None (element 0) is kept apart from Normal Attack (-1), and can be chosen', () => {
+    const A = require(path.join(__dirname, '..', 'src', 'database', 'ActionElements.js'));
+    const none = { elementId: 0 }, normal = { elementId: -1 };
+    assert.equal(A.isNone(none), true);
+    assert.equal(A.isNormalAttack(none), false, 'an MZ skill with no element is not Normal Attack');
+    assert.equal(A.isNormalAttack(normal), true);
+    assert.equal(A.summary([], none, ''), 'None');
+    assert.equal(A.write({ elementId: 2 }, [0]).elementId, 0, 'None written as 0');
+    assert.equal(A.write({ elementId: 2 }, []).elementId, -1, 'Normal Attack written as -1');
+    assert.equal(A.write({ elementId: 0 }, [3, 0]).elementId, 3, 'an element chosen replaces None');
+});

@@ -726,6 +726,7 @@ class RPGReactor {
         const saved = await this.projectController.saveAll();
         if (!saved) {
             this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.playtestSaveFailed') : 'Playtest cancelled: project could not be saved');
+            // (saveAll says itself what could not be saved.)
             return;
         }
 
@@ -1004,7 +1005,7 @@ class RPGReactor {
                 if (!moved) return;
                 this.tilesetPaletteViewer.renderCurrentLayer?.();
                 const openMap = tilemapManager?.currentMap?.id;
-                if (openMap != null) this.projectController?.loadMap(openMap, { force: true });
+                if (openMap != null) this.projectController?.loadMap(openMap, { forceReload: true });
             };
             this.projectController.setTilesetPaletteViewer(this.tilesetPaletteViewer);
 

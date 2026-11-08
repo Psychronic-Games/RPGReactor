@@ -496,3 +496,35 @@ test('MZ3D spacer lines parse as spacer|section instead of a glued @text @desc n
     assert.equal(manager.isPluginParameterGroupHeader('renderDistOptionName', metadata.renderDistOptionName, true), false);
     assert.equal(manager.isPluginParameterGroupHeader('cellSize', metadata.cellSize, false), false);
 });
+
+test('Plugin Manager edits count as unsaved until Save Changes, so closing asks about them', async () => {
+    const PluginManager = loadBrowserClass(path.join(repoRoot, 'src', 'PluginManager.js'), 'PluginManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-plugin-dirty-'));
+    const jsPath = path.join(tempRoot, 'Project', 'js');
+    fs.mkdirSync(jsPath, { recursive: true });
+    try {
+        const manager = new PluginManager({ getCurrentProject: () => ({ path: path.dirname(jsPath) }) });
+        manager.fs = fs;
+        manager.path = path;
+        manager._pluginsFilePath = path.join(jsPath, 'reactor_plugins.js');
+        manager.plugins = [{ name: 'A', status: true, description: '', parameters: { Speed: '1' } }];
+        assert.equal(manager.isDirty(), false, 'never loaded: nothing to lose');
+        manager._markPluginsSaved();
+        assert.equal(manager.isDirty(), false, 'as loaded');
+        manager.plugins[0].parameters.Speed = '2';
+        assert.equal(manager.isDirty(), true, 'a parameter changed');
+        manager.plugins[0].parameters.Speed = '1';
+        assert.equal(manager.isDirty(), false, 'changed back');
+        manager.plugins[0].status = false;
+        assert.equal(await manager.savePlugins({ quiet: true }), true);
+        assert.equal(manager.isDirty(), false, 'saved');
+        manager.onProjectChanged = PluginManager.prototype.onProjectChanged;
+        manager.hide = () => {};
+        manager.clearPluginSelection = () => {};
+        manager.plugins.push({ name: 'B', status: true, description: '', parameters: {} });
+        manager.onProjectChanged();
+        assert.equal(manager.isDirty(), false, 'another project starts clean');
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});

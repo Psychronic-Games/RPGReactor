@@ -197,11 +197,6 @@ class PluginCommandEditor {
      * Load available plugins from reactor_plugins.js
      */
     async loadAvailablePlugins() {
-        // If already loaded, skip
-        if (this.availablePlugins.length > 0) {
-            console.log('Plugins already loaded, using cached data');
-            return;
-        }
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         try {
@@ -224,6 +219,15 @@ class PluginCommandEditor {
             if (!this.fs.existsSync(pluginsPath)) {
                 throw new Error(`${tt('Plugins file not found:')} ${pluginsFile}`);
             }
+
+            // Read again when the project or its plugin list changed since (plugins turned on, another project):
+            // the list was kept for the whole session.
+            let stamp = '';
+            try { stamp = String(this.fs.statSync(pluginsPath).mtimeMs); } catch (_) { /* read it anyway */ }
+            const key = pluginsPath + '|' + stamp;
+            if (this.availablePlugins.length > 0 && this._pluginsKey === key) return;
+            this._pluginsKey = key;
+            this.availablePlugins = [];
 
             const text = this.fs.readFileSync(pluginsPath, 'utf8');
 

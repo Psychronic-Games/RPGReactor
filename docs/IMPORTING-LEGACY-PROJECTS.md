@@ -13,14 +13,14 @@ The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace), [XP](#rpg-m
 
 ## Running it
 
-In the editor: **File › Import Project…**, choose the game's folder (the one with `RPG_RT.ldb` for 2000/2003, or the `Data` folder or game archive for XP, VX and VX Ace), where to create the new project and its name, and press Import. The dialog shows the importer's log and opens the project when it is done. From a shell:
+In the editor: **File › Import Project…**, choose the game's folder (the one with `RPG_RT.ldb` for 2000/2003, or the one with a `Data` folder or game archive for XP, VX and VX Ace), where to create the new project and its name, and press Import. The dialog shows the importer's log and opens the project when it is done. From a shell:
 
 ```bash
 # What the project holds and what an import will do with it; writes nothing
 node editor/build-scripts/import-legacy-project.cjs <source> --report [--json report.json]
 
 # Write a new Reactor project
-node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding 932] [--language english] [--rtp <folder>]
+node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding 932] [--language english] [--rtp <folder> | --download-rtp] [--font <file or folder>] [--graphics remaster|original]
 ```
 
 **The RTP.** A 2000/2003 game not built as a full package takes standard
@@ -212,7 +212,7 @@ Verification and evidence are recorded under `scratchpad/legacy-audit-20261029/`
 | Scaling | System 2's **Pixelated Rendering** is on: the 320×240 frame scales up with nearest-neighbour sampling | Off, the stock smoothing blurs every pixel |
 | Terms the author never touched | RPG Maker's Japanese defaults, read through a Western code page, are mojibake; MZ's stock word stays for those | |
 | Terrain backgrounds | Each map's battleback is the background its most common terrain names | 2003 chose it per tile |
-| Picture ids | The game's own ids stay (2003 allowed 1000); `advanced.picturesUpperLimit` is set past the highest id used plus 400 slots, and named sprites take the slots above the game's ids (`advanced.rrNamedSpriteBase`) | |
+| Picture ids | The game's own ids stay (2003 allowed 1000); `advanced.picturesUpperLimit` is set 400 slots past the highest id used (or past 100, if higher), and named sprites take the slots above the game's ids (`advanced.rrNamedSpriteBase`) | |
 | Picture effects | Rotation (power/256 of a turn a frame) and the scanline wave (four times the power in pixels, phase advancing 8/256 of a turn a frame) as `$gameScreen.rrPictureEffect(id, mode, power)`; the wave is a WebGL filter | The wave stays still on a renderer without PIXI's GlProgram |
 | Music and sound files named `Song.ogg.ogg` | Copied as `Song.ogg` | The old engine tried extensions; the runtime wants one |
 | Title screen | The title image, or none when the game hides its title screen (`rrSkipTitle` in System.json boots straight into a new game, the way 2003 did for games that draw their own title from events). The menu is the old engines' (`rrLegacyTitle`): New Game, Continue and the game's exit command (`rrTitleShutdown`), one line each in a window as wide as the widest command, centred with its bottom at 53/60 of the screen; no game title is drawn over the picture | A title image the game names but does not ship is left blank and noted |
@@ -229,7 +229,7 @@ engine methods that the runtime carries for any project:
 | 2003 command | Call |
 | --- | --- |
 | Call Event (map event, page) | `this.rrCallMapEvent(eventId, page)` |
-| Key Input Processing | `this.rrKeyInput(variableId, keys, wait, timeVariableId)`; keys are 1 down, 2 left, 3 right, 4 up, 5 decision, 6 cancel, 7 shift |
+| Key Input Processing | `this.rrKeyInput(variableId, keys, wait, timeVariableId)`; keys are 1 down, 2 left, 3 right, 4 up, 5 decision, 6 cancel, 7 shift, 10 the number keys (10–19 for 0–9), 20 the operators (20–24 for + − * / .) |
 | Proceed with Movement | `this.rrWaitForAllMoves()` |
 | Halt All Movement | `this.rrHaltAllMoves()` |
 | Flash Sprite | `this.rrFlashCharacter(characterId, [r, g, b, strength], frames, wait)` |
@@ -249,13 +249,13 @@ features any project can use:
 | Plugin | Commands | Reactor |
 | --- | --- | --- |
 | Text plugin | write_text, append_line, append_text, change_text, change_position, set_text_alignment, remove_text, remove_all | `$gameScreen.rrWriteText(id, x, y, text, fixed, color, pictureId)` and the rrAppendLine, rrAppendText, rrChangeText, rrMoveText, rrTextAlign, rrRemoveText, rrRemoveAllTexts family: text at a screen position, or a map position when fixed, in the game font and a skin text colour, shown while its picture is shown and at that picture's opacity, with \V, \N, \P, \G and \C codes; lines stack at the glyph height plus 2, "center" puts the text's middle on x, "right" its end |
-| Sprite plugin | add_sprite, remove_sprite, bind_sprite_to, set_sprite_layer, set_sprite_z, set_sprite_image, set_sprite_position, set_sprite_opacity, shift_sprite_opacity_to, move_sprite_to, move_sprite_by, move_x/y_sprite_by, move_x/y_sprite_to, scale_sprite_to, scale_x/y_sprite_to, rotate_sprite_by, rotate_sprite_to, rotate_sprite_forever, set_sprite_color, shift_sprite_color_to, set_sprite_blend_mode, get_sprite_position | `$gameScreen.rrSpriteAdd(name, image, blend, layer, x, y, scale, angle, z)` and the rrSprite* family: pictures addressed by name. A sprite sits over the windows until set_sprite_layer puts it on one of 2003 1.12's picture map layers (1 over the panorama, 2 over the lower tiles, 3 under the characters, 4 with the player, 5 over the upper tiles, 6 over the flying characters, 7 with the pictures, 8 over them, 9 over the windows); add_sprite's fifth argument and set_sprite_z order it within its layer. An added angle is clockwise, rotate_sprite_by turns counter-clockwise, rotate_sprite_to takes a direction and an angle, and colours are percent with 100 unchanged. Also a map binding that scrolls with the map, and moves, scales, opacity, rotation and colour fades that each run on their own clock, so a fade keeps going under a later move. Times are milliseconds, easing names as the plugin wrote them. When every named slot is taken the oldest invisible, finished sprite gives up its slot |
-| Particle Effects V2 | pfx_create_effect, pfx_set_texture, amount, simul_effects, velocity, angle, secondary_angle, initial_color, final_color, growth, random_position, timeout, layer, gravity_direction, acceleration_point, generating_function, radius, random_radius, interval, use_screen_relative, pfx_burst, pfx_start, pfx_stop, pfx_stopall, pfx_set_position, pfx_destroy_effect, pfx_destroy_all, pfx_does_effect_exist | `$gameScreen.rrPfxCreate(name, "burst" or "stream")`, `rrPfxSet(name, setting, …)`, `rrPfxBurst(name, x, y)`, `rrPfxStart`, `rrPfxStop`, `rrPfxStopAll`, `rrPfxSetPosition`, `rrPfxDestroy`: bursts and streams of textured particles with velocity, spread, colour fade, growth, timeout, gravity and an acceleration point |
+| Sprite plugin | add_sprite, remove_sprite, remove_all_sprites, bind_sprite_to, set_sprite_layer, set_sprite_z, set_sprite_image, set_sprite_position, set_sprite_opacity, shift_sprite_opacity_to, move_sprite_to, move_sprite_by, move_x/y_sprite_by, move_x/y_sprite_to, scale_sprite_to, scale_x/y_sprite_to, rotate_sprite_by, rotate_sprite_to, rotate_sprite_forever, stop_sprite_rotation, set_sprite_color, shift_sprite_color_to, set_sprite_blend_mode, get_sprite_position | `$gameScreen.rrSpriteAdd(name, image, blend, layer, x, y, scale, angle, z)` and the rrSprite* family: pictures addressed by name. A sprite sits over the windows until set_sprite_layer puts it on one of 2003 1.12's picture map layers (1 over the panorama, 2 over the lower tiles, 3 under the characters, 4 with the player, 5 over the upper tiles, 6 over the flying characters, 7 with the pictures, 8 over them, 9 over the windows); add_sprite's fifth argument and set_sprite_z order it within its layer. An added angle is clockwise, rotate_sprite_by turns counter-clockwise, rotate_sprite_to takes a direction and an angle, and colours are percent with 100 unchanged. Also a map binding that scrolls with the map, and moves, scales, opacity, rotation and colour fades that each run on their own clock, so a fade keeps going under a later move. Times are milliseconds, easing names as the plugin wrote them. When every named slot is taken the oldest invisible, finished sprite gives up its slot |
+| Particle Effects V2 | pfx_create_effect, pfx_set_texture, pfx_unload_texture, amount, simul_effects, velocity, angle, secondary_angle, initial_color, final_color, growth, random_position, timeout, layer, z, gravity_direction, acceleration_point, generating_function, radius, random_radius, interval, use_screen_relative, pfx_burst, pfx_start, pfx_stop, pfx_stopall, pfx_set_position, pfx_destroy_effect, pfx_destroy_all, pfx_does_effect_exist | `$gameScreen.rrPfxCreate(name, "burst" or "stream")`, `rrPfxSet(name, setting, …)`, `rrPfxBurst(name, x, y)`, `rrPfxStart`, `rrPfxStop`, `rrPfxStopAll`, `rrPfxSetPosition`, `rrPfxDestroy`: bursts and streams of textured particles with velocity, spread, colour fade, growth, timeout, gravity and an acceleration point |
 
-An argument written `Vn` reads variable n at run time. A comment that is
-not one of these commands stays a comment and is counted in the report
-(on Deep 8: EasyRPG's own language switch, and one event on an older
-particle plugin). The sprite plugin's argument order is read from how
+An argument written `Vn` reads variable n at run time. EasyRPG's own
+`@easyrpg_set_language` becomes `this.rrSetLanguage(…)` (see `--language`
+above). A comment that is not one of these commands stays a comment and is
+counted in the report (on Deep 8: one event on an older particle plugin). The sprite plugin's argument order is read from how
 games use it, since its documentation is not published; the text plugin's
 follows EasyRPG Player's native implementation and the particle plugin's
 its published reference. Particle motion is visual, not a physics match:
@@ -263,8 +263,8 @@ velocity is pixels per second, gravity and acceleration are scaled to look
 right rather than measured against the original.
 
 Pictures erase when the party changes map, as in 2000 and 2003
-(`rrPicturesEraseOnMapChange` in System.json, Database › System 2 › Window &
-Text). A 2003 v1.12 Show Picture whose own flag keeps it across maps is
+(`rrPicturesEraseOnMapChange` in System.json, Database › System 2 ›
+Compatibility). A 2003 v1.12 Show Picture whose own flag keeps it across maps is
 followed by `$gameScreen.rrKeepPicture(id)`. Named sprites leave with the map
 too.
 
@@ -285,8 +285,10 @@ fast-forward: hold F for 3× speed, G for 10× (plugin parameters).
 - **Two water types in one tile.** 2003 could show the coast of one water
   kind inside another. MZ has one autotile per tile; the tile keeps its
   main water kind. About 2% of Deep 8's water tiles.
-- **Animated tiles.** The three animated chipset tiles are placed as their
-  first frame in sheet B. They do not animate.
+- **Animated tiles.** MZ has no animated B tiles. The three animated chipset
+  tiles go into sheet B with all four frames, and the tileset's
+  `rrTileFrames` (a Reactor field) cycles them at run time; the tileset's
+  `rrWater` sets the water's frame time and cycle the chipset asked for.
 - **Commands with no equivalent** become comments naming the original:
   Teleport and Escape targets, Change Battle Commands and the video options.
   Change System Graphics and teleport transition settings have runtime
@@ -368,7 +370,9 @@ picture-built battle system are untested.
 ## RPG Maker VX Ace
 
 A project folder (`Data/*.rvdata2`) or a released game (`Game.rgss3a`) imports
-the same way; the archive is read as the engine reads it. The corpus is
+the same way; the archive is read as the engine reads it (`RgssArchive.js`),
+except that an entry whose name holds `..`, `.`, an empty part, a leading `/`
+or a drive is dropped, so nothing is written outside the new project. The corpus is
 The Seventh Warrior (640×480, 299 script sections, 82 maps).
 
 **Converts one for one:** the database (Ace's records, traits, effects and
@@ -438,7 +442,15 @@ Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
 Options. A journal whose quests are data (Nicke's Simple Journal, the CSCA Quest
 System) becomes Reactor's own quests instead: they are in Database › Quests, the game's calls
 drive them, and its journal scene is Reactor's quest log. Hime's Parameter Tables (stats per level in CSV files) become the database's
-class and enemy stats.
+class and enemy stats. Whole games' own scripts are ported the same way:
+Thrall (VX) as the `RR_Thrall*` plugins, and Pinnacle - The Five Kingdoms
+(VX Ace), with GubiD's GTBS grid battles, as the `RR_Pinnacle*` plugins.
+`editor/src/legacy/plugins/` holds every port.
+
+**Languages.** A game that keeps its text in `Local/<Language>.csv` files with
+keys in its data (Pinnacle) offers those languages in the Language field
+(`--language`): the chosen one is written into the data, and
+RR_KeyedLocalization resolves the keys the game only builds while it runs.
 
 **RR_AceCompat**, installed with every VX Ace game, draws VX Ace's main menu,
 item screen and list rows, and gives windows VX Ace's drawing methods
@@ -452,7 +464,8 @@ scripts that use stock calls or a ported script are translated to JavaScript
 game's script sections are copied to `legacy/Scripts` for porting by hand.
 
 **Not yet:** a baked translation choice for games that switch language from
-a script, and further script families as the corpus shows them.
+a script some other way, switching language during play, and further script
+families as the corpus shows them.
 
 ## RPG Maker XP
 

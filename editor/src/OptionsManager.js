@@ -29,6 +29,8 @@ class OptionsManager {
         this.modal = null;
         this.SETTINGS_KEY = 'rr-settings';
         this.settings = this._loadSettings();
+        // What this copy held when last read or written: a key that differs from it was changed here (see _saveSettings).
+        this._settingsBaseline = { ...this.settings };
         // 3D takes temporary ownership of PIXI's WebGL context and must never
         // auto-enter from a previous process. A failed driver initialization
         // can end the renderer before JavaScript gets a chance to roll the
@@ -90,7 +92,20 @@ class OptionsManager {
 
     _saveSettings() {
         try {
-            localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(this.settings));
+            // Merged with what is stored: other parts of the editor keep their own choices in the same record (the
+            // animation preview's background), which this copy, read at start-up, would write back over.
+            let stored = {};
+            try { stored = JSON.parse(localStorage.getItem(this.SETTINGS_KEY) || '{}') || {}; } catch (_) { stored = {}; }
+            // A key this copy changed since it was last read or written is this copy's; any other key is as stored
+            // (another part of the editor may have written it since), so no list of this manager's keys is needed.
+            const baseline = this._settingsBaseline || {};
+            const merged = { ...this.settings, ...stored };
+            for (const key of Object.keys(this.settings)) {
+                if (!(key in stored) || this.settings[key] !== baseline[key]) merged[key] = this.settings[key];
+            }
+            localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(merged));
+            Object.assign(this.settings, merged);
+            this._settingsBaseline = { ...this.settings };
         } catch (e) { /* localStorage full or disabled — ignore */ }
     }
 

@@ -187,9 +187,9 @@ test('a model will not turn into the player', () => {
     }
 });
 
-test('a modeled event does not collide with its own footprint', () => {
+test('a modeled event does not collide with its own footprint, and an event is stopped by any non-Through event as in MZ', () => {
     const source = runtimeSource('reactor_objects.js');
-    assert.match(source, /event !== this && event\.isNormalPriority/);
+    assert.match(source, /events\.some\(event => event !== this\)/);
 });
 
 test('sprites hide when a character model is ready', () => {

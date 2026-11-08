@@ -218,6 +218,42 @@ function cleanName(): string {
     return textStart(cleanText((string)($_GET['n'] ?? '')), 24);
 }
 
+/**
+ * The name a player shows, made fair. Parties, invites and challenges know people by name, so a name must not
+ * pass for someone else's: a registered name is its account's own (anyone else is shown as a guest of it), and
+ * two players online never share one (a number is added). Asked at join and at every change of look.
+ */
+function fairName(string $dir, int $slot, string $name, string $account): string {
+    if ($name === '') $name = 'Player ' . ($slot + 1);
+    if (nameOfAnother($dir, $name, $account)) $name = textStart($name, 16) . ' (guest)';
+    // The names in use are read once (this runs under the players lock): every numbered try is checked against them,
+    // and a numbered name that is someone else's account is passed over as the plain name would be.
+    $taken = namesInUse($dir, $slot);
+    $base = $name;
+    for ($n = 2; $n < 100 && (isset($taken[textFold($name)]) || ($n > 2 && nameOfAnother($dir, $name, $account))); $n++) {
+        $name = textStart($base, 19) . ' (' . $n . ')';
+    }
+    return $name;
+}
+
+/** Whether `name` is a registered account other than `account`. */
+function nameOfAnother(string $dir, string $name, string $account): bool {
+    $owner = readAccount($dir, accountKey($name));
+    return $owner && textFold((string)($owner['username'] ?? '')) !== textFold($account);
+}
+
+/** The folded names of players online now, other than `not`'s, as keys. */
+function namesInUse(string $dir, int $not = -1): array {
+    $alive = (string)@file_get_contents($dir . '/alive.bin');
+    $taken = [];
+    foreach (readNames($dir) as $slot => $known) {
+        if ((int)$slot === $not || strlen($alive) < ((int)$slot + 1) * 4) continue;
+        $seen = (int)unpack('V', substr($alive, (int)$slot * 4, 4))[1];
+        if ($seen > time() - ALIVE_SECONDS && $seen < REPLACED) $taken[textFold((string)($known['name'] ?? ''))] = true;
+    }
+    return $taken;
+}
+
 /** A model this server holds, or nothing. */
 function knownModel(string $dir, string $hash): string {
     return preg_match('/^[a-f0-9]{64}$/', $hash) && is_file($dir . '/models/' . $hash . '.rrch') ? $hash : '';

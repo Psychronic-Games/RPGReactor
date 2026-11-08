@@ -21,6 +21,7 @@
         { id: 'continue', label: 'Land', icon: '<path d="M2 16c3-5 5-5 8-1s5 2 7-2 3-2 5 1"/>' },
         { id: 'ocean', label: 'Ocean', icon: '<path d="M2 10c4 0 5 6 9 6"/><path d="M11 14c2-2 3 0 5-1s3-1 6 0M12 18c2-2 3 0 5-1s3-1 5 0"/>' },
         { id: 'mountains', label: 'Mountains', icon: '<path d="M2 18l6-10 4 6 3-4 7 8z"/>' },
+        { id: 'cliffs', label: 'Cliffs', icon: '<path d="M2 18h4l1-11h3l1 4h3l1-6h3l1 13h3"/>' },
         { id: 'plateau', label: 'Plateau', icon: '<path d="M2 8h9v9h11"/>' },
         { id: 'void', label: 'Floating island', icon: '<path d="M4 9h16l-3 5-5 5-5-5z"/>' }
     ];
@@ -112,10 +113,10 @@
             return {
                 sides: !island,
                 distance: any && !island,
-                rough: island || sides.some(style => style === 'continue' || style === 'mountains' || style === 'plateau'),
+                rough: island || sides.some(style => style === 'continue' || style === 'mountains' || style === 'cliffs' || style === 'plateau'),
                 seed: any,
                 level: !island && sides.includes('ocean'),
-                height: !island && sides.includes('mountains'),
+                height: !island && (sides.includes('mountains') || sides.includes('cliffs')),
                 drop: island || sides.includes('plateau'),
                 haze: any && !island
             };

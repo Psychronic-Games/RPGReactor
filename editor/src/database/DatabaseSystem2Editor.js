@@ -165,10 +165,20 @@ class DatabaseSystem2Editor {
         return true;
     }
 
+    /**
+     * The weapon pictures MZ draws: ids 1-12 from Weapons1, 13-24 from Weapons2, 25-36 from Weapons3
+     * (Sprite_Weapon). Only 0-12 were offered, and a row using 13 or more was saved back as None.
+     */
+    static weaponImageNames() {
+        const names = ['None', 'Dagger', 'Sword', 'Flail', 'Axe', 'Whip', 'Staff', 'Bow', 'Crossbow', 'Gun', 'Claw', 'Glove', 'Spear'];
+        for (let id = 13; id <= 36; id++) names.push(`Weapons${Math.floor((id - 1) / 12) + 1} #${(id - 1) % 12 + 1}`);
+        return names;
+    }
+
     createAttackMotionsSection(system) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const motionNames = ['Thrust', 'Swing', 'Missile'];
-        const weaponImageNames = ['None', 'Dagger', 'Sword', 'Flail', 'Axe', 'Whip', 'Staff', 'Bow', 'Crossbow', 'Gun', 'Claw', 'Glove', 'Spear'];
+        const weaponImageNames = DatabaseSystem2Editor.weaponImageNames();
         const weaponTypes = system.weaponTypes || [''];
         const attackMotions = system.attackMotions || [];
 
@@ -184,7 +194,9 @@ class DatabaseSystem2Editor {
                     </thead>
                     <tbody>`;
 
-        for (let i = 0; i < attackMotions.length; i++) {
+        // A row for every weapon type (a type added in Types had none, and the game drew no swing for it).
+        const rows = Math.max(attackMotions.length, weaponTypes.length);
+        for (let i = 0; i < rows; i++) {
             const typeName = weaponTypes[i] !== undefined ? weaponTypes[i] : `${tt('Type')} ${i}`;
             const motion = attackMotions[i] || { type: 0, weaponImageId: 0 };
             html += `
@@ -559,7 +571,7 @@ class DatabaseSystem2Editor {
     showAttackMotionEditor(system, index, parentContainer) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const motionNames = ['Thrust', 'Swing', 'Missile'];
-        const weaponImageNames = ['None', 'Dagger', 'Sword', 'Flail', 'Axe', 'Whip', 'Staff', 'Bow', 'Crossbow', 'Gun', 'Claw', 'Glove', 'Spear'];
+        const weaponImageNames = DatabaseSystem2Editor.weaponImageNames();
         const weaponTypes = system.weaponTypes || [''];
         const motion = system.attackMotions[index] || { type: 0, weaponImageId: 0 };
         const typeName = weaponTypes[index] !== undefined ? weaponTypes[index] : `${tt('Type')} ${index}`;
@@ -616,6 +628,9 @@ class DatabaseSystem2Editor {
         modal.querySelector('.atk-modal-ok').addEventListener('click', () => {
             const newType = parseInt(modal.querySelector('#atk-motion-type').value);
             const newImage = parseInt(modal.querySelector('#atk-weapon-image').value);
+            if (!Array.isArray(system.attackMotions)) system.attackMotions = [];
+            // Rows past the stored list (newer weapon types) fill the gap with plain thrusts, so no hole is saved as null.
+            for (let i = system.attackMotions.length; i < index; i++) system.attackMotions[i] = { type: 0, weaponImageId: 0 };
             system.attackMotions[index] = { type: newType, weaponImageId: newImage };
             console.debug(`Updated attackMotions[${index}]:`, system.attackMotions[index]);
             close();

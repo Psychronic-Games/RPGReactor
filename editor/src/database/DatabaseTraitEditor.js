@@ -606,6 +606,8 @@ class DatabaseTraitEditor {
                 zIndex: 22000,
                 // Choosing nothing is how the system default is restored.
                 onOk: result => {
+                    // A changed sound is a change: OK on an existing Collapse trait saves it (it closed untouched before).
+                    container._rrTraitTouched = true;
                     this._collapseSe = result && result.name
                         ? {
                             name: result.name,

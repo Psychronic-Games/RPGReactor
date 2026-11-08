@@ -193,6 +193,23 @@ test('the merged mesh stands at the model root and shows only while the model do
     assert.equal(Reactor3D.GeometryDetail.eligible(mesh), false, 'it takes no distance levels of its own');
 });
 
+test('the merged mesh follows its model when the model alone is walked, as the frames between updates do', () => {
+    // FramePacing.swapPoses blends a moving model's place between two updates and walks only that model's matrices.
+    // The merged mesh sits beside the model in its group: it stood at the update's place, and a ridden motorcycle's
+    // frame showed in steps while its wheels and rider moved on (an echo on a fast screen).
+    const v = vehicle({ rules: [WHEEL_RULE] });
+    settle(v);
+    const mesh = merged(v)[0];
+    assert.ok(mesh, 'merged');
+    v.object.position.x += 0.04;
+    v.object.updateMatrixWorld(true);
+    const e = mesh.matrixWorld.elements, f = v.binding.root.matrixWorld.elements;
+    for (let i = 0; i < 16; i++) assert.ok(Math.abs(e[i] - f[i]) < 1e-12, 'placed with the model it stands for');
+    // Released, the model's walk still runs and places nothing.
+    S.release(v.holder.rrStillParts);
+    assert.doesNotThrow(() => v.object.updateMatrixWorld(true));
+});
+
 test('a part that moves outside every rule draws itself from then on', () => {
     const v = vehicle({ rules: [TURRET_RULE] });
     settle(v);

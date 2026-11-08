@@ -43,6 +43,9 @@ class ShowChoicesCommandEditor {
         const params = command.parameters;
         this.choices = params[0] ? [...params[0]] : ['', ''];
         this.cancelType = params[1] !== undefined ? params[1] : 1;
+        // A cancel at or past the number of choices is Branch to the interpreter (older projects store it that way):
+        // read as a choice index it showed "Choice 3", and OK turned it to Disallow and dropped the When Cancel body.
+        if (this.cancelType >= this.choices.length) this.cancelType = -2;
         this.defaultType = params[2] !== undefined ? params[2] : 0;
         this.positionType = params[3] !== undefined ? params[3] : 2;
         this.background = params[4] !== undefined ? params[4] : 0;

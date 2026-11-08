@@ -229,7 +229,7 @@ Ordered by payoff per unit of work, not by dependency. Each step is shippable.
 | 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | **Done** as blueprints (`3d/Structures`, Database › Structures, Blueprint slot), plans of plans included (0.98.7) |
 | 7 | **Direct manipulation in the 3D view** | Select, box-select, drag, turn, paint and a specs panel for placed pieces; gizmos on models and events. | **Done** (0.98.7) |
 | 8 | **Lights as 3D lights** | A lantern becomes a sphere, a torch a cone. | **Done** |
-| — | **Event and database meshes** (sidecar, not a tileset class) | An event, actor, enemy, weapon, armor, or item can carry a GLB/OBJ/… from `3d/<folder>/source`. Pose and facing live in `Map###.r3d.json` / `Database.r3d.json`; parts, pivots, rigs, and animations in the model's own `model.json`. Footprint collision, turn sweeps, and per-pixel character depth are done. Weapon and item bindings are drawn in the hand by Action Sequence steps in Battle Rooms; armor bindings, and equipment on map characters, are not rendered. | **Implemented; armor and map equipment open** |
+| — | **Event and database meshes** (sidecar, not a tileset class) | An event, actor, enemy, weapon, armor, or item can carry a GLB/OBJ/… from `3d/<folder>/source`. Pose and facing live in `Map###.r3d.json` / `Database.r3d.json`; parts, pivots, rigs, and animations in the model's own `model.json`. Footprint collision, turn sweeps, and per-pixel character depth are done. Weapon and item bindings are drawn in the hand by Action Sequence steps in Battle Rooms. An armor or accessory whose model is a Prop Builder wearable is worn by a rigged humanoid on the map and in battle (`Reactor3D.Worn`); weapons on map characters are not drawn. | **Implemented; weapons on the map open** |
 
 Steps 1–3 are corrections to what exists and touch the runtime almost
 exclusively. Steps 4–7 are new authoring surface and are mostly editor work.
@@ -291,11 +291,15 @@ defect, and a gap that holds is not.
 ## Current lighting in three dimensions
 
 The original implementation drew flat light pools. The default volume path now
-packs up to 32 volume lights (`SHADER_LIGHTS`) into shared shader uniforms. `litMaterial` patches
+packs the 32 lights nearest the focus (`SHADER_LIGHTS`) into shared shader
+uniforms, and a light grid (`LightGrid`) skips those that cannot reach a
+fragment's cell. `litMaterial` patches
 basic materials to evaluate `rrLight(worldPosition)` from distance, color,
 intensity, and point/spot/beam/sun shape. Tiles, room surfaces, models, and character
-surfaces receive this field. Surface normals and normal maps do not contribute
-an N·L lighting term. The old flat path remains an explicit alternative.
+surfaces receive this field. Tiles, pieces and terrain are lit by distance
+alone; models are also lit by which way each face points (`MODEL_FACING`, on by
+default: a wrapped N·L term with a floor of 0.3, bent by the model's normal map
+where it has one). The old flat path remains an explicit alternative.
 
 Native map lights, supported plugin adapters (MV Nova Lighting and RaveLighting),
 and model-attached light effects supply the field. `Reactor3D.setLights(lights)`
@@ -304,8 +308,10 @@ The current implementation and normalization are in `runtime/reactor_3d_lighting
 use the native Lighting tool and effect editor for persistent authored lights.
 
 Shadows use one static and one dynamic depth atlas. Each assigned light gets
-six face tiles in a row. Full quality provides 8 static and 3 dynamic rows at
-512 pixels per face; weak quality provides 4 and 2 at 256. A light's casting
+six face tiles in a row. Full quality provides 8 static rows and 1 moving-caster
+row at 512 pixels per face; weak quality provides 4 and 1 at 256
+(`SHADOW_QUALITY`). A sun casts through two orthographic cascades in a band
+under the rows instead (`SUN_SHADOW_MAP`). A light's casting
 flag makes it eligible, not guaranteed: row and triangle budgets still apply.
 Rows prioritize light incident on the player, skip empty faces, and refresh
 when relevant casters or lights move within per-frame limits. Model effect

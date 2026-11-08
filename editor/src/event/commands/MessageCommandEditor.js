@@ -149,7 +149,9 @@ class MessageCommandEditor {
             // The whole run, read by RRMessageBoxes.collectRun.
             this.boxes = messageData.boxes.map(box => ({
                 header: { ...box.header },
-                lines: (box.lines || []).slice()
+                lines: (box.lines || []).slice(),
+                // What was on disk: a box left as it was is written back exactly (RRMessageBoxes.untouched).
+                ...(Array.isArray(box.source) ? { source: box.source.slice() } : {})
             }));
             // Open on the box that was actually clicked, not always the first.
             const asked = Number(messageData.activeIndex);

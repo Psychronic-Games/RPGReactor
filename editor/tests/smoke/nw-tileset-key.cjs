@@ -46,7 +46,7 @@ const driver = new WebDriverClient(path.join(root, 'nwjs-linux/chromedriver'));
         const result = await driver.executeAsync(`const done=arguments[arguments.length-1];(async()=>{
             const db=reactor.databaseEditorUI,dm=reactor.databaseManager,checks=[];
             const check=(name,ok)=>{if(!ok)throw new Error(name);checks.push(name);};
-            const show=()=>{db.openDatabase('tilesets');db.showDatabaseDetail(dm.data.tilesets.find(t=>t&&t.id>0),'tilesets');};
+            const show=()=>{db.openDatabase('tilesets');db.showDatabaseDetail(dm.data.tilesets.find(t=>t&&t.id>0&&t.tilesetNames?.some(Boolean)),'tilesets');};
             const editor=()=>db.tilesetEditor.tilesetEditor;
             const press=mode=>document.querySelector('.compact-flag-btn[data-mode="'+mode+'"]').click();
             const reset=()=>editor().currentEditMode===null&&editor().passageBrush===null

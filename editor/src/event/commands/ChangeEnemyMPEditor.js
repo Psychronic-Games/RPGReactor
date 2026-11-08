@@ -243,7 +243,7 @@ class ChangeEnemyMPEditor {
 
         if (this.operandType === 1) {
             const varInput = document.createElement('input');
-            varInput.type = 'number'; varInput.min = 1; varInput.max = 9999; varInput.value = this.operand || 1;
+            varInput.type = 'number'; varInput.min = 1; varInput.max = 9999; if (!(this.operand > 0)) this.operand = 1; varInput.value = this.operand;
             varInput.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:80px;';
             varInput.addEventListener('input', (e) => { this.operand = parseInt(e.target.value) || 1; });
             varRow.appendChild(varInput);

@@ -226,3 +226,61 @@ test('PIXI v8 asks every window each frame: a hidden one, and a closed one laid 
     context.Window.SKIP_UNSEEN_LAYOUT = false; win._openness = 0; updateTransform.call(win); updateTransform.call(win);
     assert.equal(laid, 5, 'the switch off lays out every window every frame');
 });
+
+test('batches are made at most BUILD_MS a refresh; the rest wait, drawn as before, or as their chunks once one was taken', () => {
+    // After a border crossing every region was made again in one frame, 8 to 19 ms a frame (2026-11-07).
+    const map = wideMap([block(1, 1, 1), block(2, 20, 1), block(3, 70, 1), block(4, 90, 1), block(5, 130, 1), block(6, 150, 1)]);
+    const scene = sceneFor(map);
+    const saved = B.BUILD_MS;
+    try {
+        B.BUILD_MS = -1;   // one batch a refresh
+        B.flush();
+        assert.equal(drawn(scene).filter(m => m.userData.rrBatch).length, 1, 'one batch made this refresh');
+        assert.equal(scene._drawBatches.more, true, 'the rest owed');
+        assert.equal(drawn(scene).filter(m => !m.userData.rrBatch).length, 4, 'their chunks drawn as themselves meanwhile');
+        B.flush(); B.flush();
+        assert.equal(drawn(scene).filter(m => m.userData.rrBatch).length, 3, 'one more each refresh, with nothing new laid');
+        assert.equal(drawn(scene).filter(m => !m.userData.rrBatch).length, 0);
+        // A chunk taken from a batch that must wait: the batch is taken apart until it is made again, never drawn with it.
+        const batch = scene._pieceMeshes[0].userData.rrBatchedIn;
+        const other = scene._pieceMeshes.find(m => m.userData.rrBatchedIn && m.userData.rrBatchedIn !== batch);
+        other.parent.remove(other);
+        scene._pieceMeshes[0].parent.remove(scene._pieceMeshes[0]);
+        B.flush();
+        const waiting = [...scene._drawBatches.batches.values()].filter(b => b.dirty);
+        for (const b of waiting) assert.equal(b.mesh, null, 'a batch that lost a chunk and waits is not drawn');
+        B.BUILD_MS = saved;
+        B.flush(); B.flush();
+        assert.equal(scene._drawBatches.more, false);
+    } finally { B.BUILD_MS = saved; forget(scene); }
+});
+
+test('a region of plants merges as a job over refreshes, to exactly the order it merges in at once', () => {
+    // A region of grass was 9 to 11 ms in one frame, frame after frame after a border crossing (2026-11-07).
+    const template = new THREE.BufferAttribute(new Float32Array(9), 3);
+    const member = (count, seed) => {
+        const g = new THREE.InstancedBufferGeometry();
+        g.setAttribute('position', template);
+        const shape = new Float32Array(count * 4), base = new Float32Array(count * 4);
+        let r = seed;
+        const ranks = Array.from({ length: count }, () => (r = (r * 16807) % 2147483647) / 2147483647).sort((a, b) => a - b);
+        ranks.forEach((v, i) => { shape[i * 4 + 3] = v; base[i * 4] = seed; base[i * 4 + 1] = i; });
+        g.setAttribute('aFolShape', new THREE.InstancedBufferAttribute(shape, 4));
+        g.setAttribute('aFolBase', new THREE.InstancedBufferAttribute(base, 4));
+        g.instanceCount = count;
+        g.boundingBox = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1));
+        const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial());
+        m.userData.rrBatchCell = { x: 0, y: 0, sort: { name: 'aFolShape', component: 3 } };
+        return m;
+    };
+    const members = [member(3000, 7), member(2500, 11), member(4000, 13), member(10, 17)];
+    const whole = B.mergeInstanced(members);
+    const job = B.mergeInstancedJob(members);
+    let steps = 0;
+    while (!job.step(-Infinity)) steps++;   // a deadline already past: as little as it can each step
+    assert.ok(steps > 5, `taken in ${steps} steps`);
+    for (const name of ['aFolShape', 'aFolBase']) assert.deepEqual(Array.from(job.geometry.attributes[name].array), Array.from(whole.attributes[name].array), name + ' the same');
+    assert.equal(job.geometry.instanceCount, 9510);
+    const shares = job.geometry.attributes.aFolShape.array;
+    for (let i = 1; i < 9510; i++) assert.ok(shares[i * 4 + 3] >= shares[(i - 1) * 4 + 3], 'ascending');
+});

@@ -294,8 +294,10 @@ class BuildManager {
         const selection = document.getElementById('build-locale-selection');
         const list = document.getElementById('build-locale-list');
         const selected = new Set(preference.locales);
+        // Each language named in the editor's own language: the browser holds those names for every locale.
+        const shown = (window.I18n && typeof window.I18n.currentLanguage === 'function' && window.I18n.currentLanguage()) || 'en';
         let displayNames = null;
-        try { displayNames = new Intl.DisplayNames(['en'], { type: 'language' }); } catch {}
+        try { displayNames = new Intl.DisplayNames([shown, 'en'], { type: 'language' }); } catch {}
         const locales = DeploymentLocalePreferences.locales().map(locale => {
             let name = locale;
             try { name = (displayNames && displayNames.of(locale)) || locale; } catch {}
@@ -303,7 +305,7 @@ class BuildManager {
         }).sort((a, b) => {
             if (a.locale === DeploymentLocalePreferences.FALLBACK_LOCALE) return -1;
             if (b.locale === DeploymentLocalePreferences.FALLBACK_LOCALE) return 1;
-            return a.name.localeCompare(b.name);
+            return a.name.localeCompare(b.name, shown);
         });
 
         for (const { locale, name } of locales) {
@@ -320,6 +322,7 @@ class BuildManager {
                 checkbox.disabled = true;
             }
             const text = document.createElement('span');
+            text.setAttribute('data-rr-i18n-skip', '');
             text.textContent = `${name} (${locale})`;
             text.title = text.textContent;
             text.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';

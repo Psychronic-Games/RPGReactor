@@ -24,12 +24,12 @@ function inGame(config, fn) {
     const saves = [];
     global.ConfigManager = Object.assign({ graphicsQuality: 'auto', graphicsAuto: null, save() { saves.push(JSON.parse(JSON.stringify(this.graphicsAuto))); } }, config);
     Object.assign(Q, { enabled: true, _gpu: 0, _cpu: 0, _half: false, g: 0, c: 0, h: false, _taken: [], _loaded: false, _ceiling: false, _probe: null, _probeLeft: 0,
-        _rest: 0, _calm: 0, _slowRun: 0, _mapId: 0, _last: 0, _lastDraw: 0, _refreshMs: Infinity, _tickLast: 0, _intervalCount: 0 });
+        _rest: 0, _calm: 0, _slowRun: 0, _mapId: 0, _last: 0, _lastDraw: 0, _refreshMs: Infinity, _tickLast: 0, _intervalCount: 0, _restUntil: 0 });
     Q.clearWindow();
     try { return fn(saves); } finally {
         global.ConfigManager = saved.ConfigManager; global.document = saved.document;
         Object.assign(Q, { enabled: saved.enabled, _gpu: 0, _cpu: 0, _half: false, g: 0, c: 0, h: false, _taken: [], _loaded: false, _ceiling: false, _probe: null, _mapId: 0, _last: 0, _lastDraw: 0, _rest: 0,
-            _refreshMs: Infinity, _tickLast: 0, _intervalCount: 0 });
+            _refreshMs: Infinity, _tickLast: 0, _intervalCount: 0, _restUntil: 0 });
         Q.clearWindow();
     }
 }
@@ -396,4 +396,23 @@ test('levels another machine settled on are not taken: a shared project folder c
             assert.deepEqual([Q.g, Q.c], [2, 1], 'its own levels are taken');
         });
     } finally { global.Graphics = had; }
+});
+
+test('on a fast screen a map\'s arrival is rested in seconds, not frames: its loading is not judged as play', () => {
+    inGame({}, () => {
+        // 180 Hz: the first REST_TICKS frames pass in 0.7 s, and the arrival's loading frames came after them.
+        const clock = { now: 1000 }, fast = 1000 / 180;
+        title(2, clock, fast);
+        Q.tickBegin(clock.now); Q.mapOpened(5);
+        play(0.7, () => ({ frame: fast, busy: 2 }), clock, fast);
+        // Two and a half seconds of loading (North Haven's arrival settles in about that): 40 ms frames, the main thread busy.
+        play(2.5, () => ({ frame: 40, busy: 35 }), clock, fast);
+        assert.deepEqual([Q.g, Q.c], [0, 0], 'the arrival is not a slow machine');
+        // Then the play itself, fast: nothing changes.
+        play(10, () => ({ frame: fast, busy: 3 }), clock, fast);
+        assert.deepEqual([Q.g, Q.c], [0, 0]);
+        // The same stall well after the rest is judged.
+        play(5, () => ({ frame: 40, busy: 35 }), clock, fast);
+        assert.equal(Q.c, 1, 'a real slow stretch still steps the main thread down');
+    });
 });

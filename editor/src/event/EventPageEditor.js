@@ -185,7 +185,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;"
                         ${!conditions.selfSwitchValid ? 'disabled' : ''}>
-                    <option value="" ${!conditions.selfSwitchValid ? 'selected' : ''}></option>
+                    <option value="" disabled hidden ${!conditions.selfSwitchValid ? 'selected' : ''}></option>
                     ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(ch => `<option value="${ch}" ${conditions.selfSwitchCh === ch ? 'selected' : ''}>${ch}</option>`).join('')}
                 </select>
             </div>
@@ -1564,7 +1564,9 @@ class EventPageEditor {
                     page.image.pattern,
                     page.image.direction,
                     (result) => {
-                        // Update page image data
+                        // Update page image data. A character (or Clear) replaces a tile graphic: MZ draws the tile
+                        // while tileId > 0, so the pick never showed on an event made with a tile.
+                        page.image.tileId = 0;
                         page.image.characterName = result.characterName;
                         page.image.characterIndex = result.characterIndex;
                         page.image.pattern = result.pattern;

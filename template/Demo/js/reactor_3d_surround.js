@@ -57,7 +57,7 @@
     //-------------------------------------------------------------------------
     // The format
 
-    R.SURROUND_STYLES = ["continue", "ocean", "mountains", "plateau", "void", "none"];
+    R.SURROUND_STYLES = ["continue", "ocean", "mountains", "cliffs", "plateau", "void", "none"];
     R.SURROUND_SIDES = ["north", "east", "south", "west"];
     /** How far the land reaches past the border, in tiles; less on weak graphics. */
     R.SURROUND_DISTANCE = { full: 160, weak: 96, min: 24, max: 320 };
@@ -225,8 +225,9 @@
     };
 
     /** Ring distances out to `distance`, close together at the border, and each ring's ray step. */
-    R.surroundRings = function(distance) {
-        const ds = [0, 1, 2, 4, 8, 16];
+    R.surroundRings = function(distance, steep = false) {
+        // A cliff's face (`steep`) takes rings between the near ones, so it stands as a face and not one long ramp.
+        const ds = steep ? [0, 1, 2, 3, 4, 5, 6, 8, 11, 16] : [0, 1, 2, 4, 8, 16];
         let d = 16;
         while (d < distance - 0.5) { d = Math.min(distance, d < 32 ? 32 : d * 1.4); ds.push(d); }
         return ds.filter(v => v <= distance).map(v => ({ d: v, step: v <= 2 ? 1 : v <= 4 ? 2 : v <= 8 ? 4 : v <= 16 ? 8 : 16 }));
@@ -280,6 +281,15 @@
             const ridge = 1 - Math.abs(R.surroundNoise(c.x / 46, c.z / 46, seed + 23));
             return c.hC + lean + rise * s.height * (0.35 + 0.65 * ridge * ridge) + n2 * (1.5 + 5 * s.rough) * grow;
         }
+        if (style === "cliffs") {
+            // High hills that rise at the border: a steep face a tile or two out (where, along the border, by the
+            // noise), half the height in six tiles, then on up over ridges. The land a road runs between.
+            const foot = 0.6 + 1.6 * (0.5 + 0.5 * R.surroundNoise(c.x / 11, c.z / 11, seed + 31));
+            const wall = smooth(foot, foot + 6, d), beyond = smooth(foot + 6, Math.max(foot + 12, D * 0.35), d);
+            const ridge = 1 - Math.abs(R.surroundNoise(c.x / 34, c.z / 34, seed + 23));
+            const top = s.height * (0.5 + 0.5 * ridge * ridge);
+            return c.hC + lean * (1 - wall) + top * (0.55 * wall + 0.45 * beyond) + (n2 * (1.5 + 4 * s.rough) + n1 * 4 * s.rough) * wall;
+        }
         if (style === "plateau") {
             const edge = 1.5 + 3 * (0.5 + 0.5 * R.surroundNoise(c.x / 9, c.z / 9, seed + 5));
             const fall = smooth(edge, edge + 6, d);
@@ -292,13 +302,23 @@
 
     /** Tiles along a side, from a corner a neighbor stands past, over which the side's own style gives way to the land both maps agree on. */
     R.SURROUND_SEAM = 40;
+    /** Tiles out from the border over which a side's land eases into that line's. */
+    R.SURROUND_SEAM_EASE = 6;
 
     /**
      * The land along the line out from a corner two neighboring maps share: hills of the world's own, from
      * the corner's height, the same whatever style, seed or roughness either map chose. Each map's land
      * beside that line eases into it (`SURROUND_SEAM`), so the two lands are one land where they meet.
      */
-    R.surroundSeamHeight = function(corner, x, z, d) {
+    /** The height the land along a shared corner's line climbs to where both maps raise it (cliffs, mountains): one number for every map. */
+    R.SURROUND_SEAM_HEIGHT = 50;
+    R.surroundSeamHeight = function(corner, x, z, d, style) {
+        // Raised land on this side: raised along the line too, by the world's own numbers (seed, height, reach), so
+        // two maps of high land side by side meet in high land, not in a valley at their border.
+        if (style === "cliffs" || style === "mountains") {
+            const s = { seed: 1, rough: 0.5, height: R.SURROUND_SEAM_HEIGHT, drop: 20 };
+            return R.surroundHeight(style, s, { d, D: R.SURROUND_DISTANCE.full, x, z, h0: corner, hC: corner, slope: 0, level: null, mean: corner, low: corner });
+        }
         const amp = 0.5 * (3 + 15 * smooth(8, 112, d));
         return corner + (R.surroundNoise(x / 38, z / 38, 1) * amp + R.surroundNoise(x / 13, z / 13, 8) * amp * 0.28) * smooth(0, 14, d);
     };
@@ -376,6 +396,9 @@
             return null;
         };
         const seams = named.includes(true) ? rays.map(seamOf) : null;
+        // The raised land the line out from each corner climbs, when both maps beside it raise that edge
+        // (Reactor3D.surroundSeamStyles): null, the low hills of the world's own.
+        const seamStyles = options.seamStyles || null;
         const cornerHeights = seams ? cornerAt.map(([x, z]) => terrain(x, z)) : null;
         const anyOcean = styles.includes("ocean");
         let sea = surround.level;
@@ -385,7 +408,7 @@
         }
         if (surround.style === "void" && !none) return R.surroundUnderside(mapData, surround, { rays, heights, levels, mean, low, W, H });
 
-        const rings = R.surroundRings(D);
+        const rings = R.surroundRings(D, styles.includes("cliffs"));
         const ids = rings.map(() => new Int32Array(n).fill(-1));
         const positions = [], uvs = [], fade = [], rayOf = [], ringOf = [];
         const c = { d: 0, D, x: 0, z: 0, h0: 0, hC: 0, slope: 0, level: sea, mean, low };
@@ -400,7 +423,14 @@
             if (sa === sb || sa === "none" || sb === "none") h = R.surroundHeight(sa === "none" ? sb : sa, surround, c);
             else { const t = smooth(0, 1, ray.t); h = R.surroundHeight(sa, surround, c) * (1 - t) + R.surroundHeight(sb, surround, c) * t; }
             const seam = seams ? seams[i] : null;
-            if (seam && seam[0] < 1) h = h * seam[0] + R.surroundSeamHeight(cornerHeights[seam[1]], c.x, c.z, d) * (1 - seam[0]);
+            // The line's land starts from this border's own height and comes to the corner's over the first tiles
+            // out: from the corner's at once, it stood a tile out 3 to 7 tiles over the map's edge beside Open Road's
+            // corners. On the line itself the border is the corner, so two maps still lay one land there.
+            if (seam && seam[0] < 1) {
+                const corner = cornerHeights[seam[1]];
+                const line = R.surroundSeamHeight(corner, c.x, c.z, d, seamStyles ? seamStyles[seam[1]] : null) + (heights[i] - corner) * (1 - smooth(0, R.SURROUND_SEAM_EASE, d));
+                h = h * seam[0] + line * (1 - seam[0]);
+            }
             // A lake at the border is banked: the land past it climbs over the water's level.
             const level = wet[i];
             if (level !== null && sa !== "ocean" && sb !== "ocean") {
@@ -641,7 +671,7 @@
         const floor = floorMeshOf(this);
         if (!floor) return false;
         const built = R.surroundGeometry(mapData, surround, { floorY: R.PARALLAX_GROUND_DROP - R.PARALLAX_LAYER_STEP, weak: !!(R.isWeakGpu && R.isWeakGpu()),
-            none: this._surroundNone || null, origin: this._surroundOrigin || null });
+            none: this._surroundNone || null, origin: this._surroundOrigin || null, seamStyles: R.surroundSeamStyles ? R.surroundSeamStyles(this, surround) : null });
         if (!built || !built.ground.index.length) return false;
         const g = built.ground;
         const position = new THREE.BufferAttribute(g.positions, 3);
@@ -815,6 +845,52 @@
         stats: { read: 0, built: 0, adopted: 0, crossed: 0, faded: 0, buildMs: 0 }
     };
     N.OPPOSITE = { north: "south", east: "west", south: "north", west: "east" };
+
+    /**
+     * For each corner a neighbor is named past (corner k lies between side k and the next), the raised style the
+     * line out from it climbs: when this map and the neighbor both raise the edge that runs on past the corner
+     * (cliffs, mountains), cliffs if both are cliffs, else mountains (the same answer from either map); else null.
+     * A neighbor not read yet is waited for (`_surroundSeamWait`): its land is laid again once it is (N.seamsKnown).
+     */
+    R.surroundSeamStyles = function(scene, surround) {
+        const raised = style => style === "cliffs" || style === "mountains";
+        const out = [null, null, null, null], wait = [];
+        for (let k = 0; k < 4; k++) {
+            const a = R.SURROUND_SIDES[k], b = R.SURROUND_SIDES[(k + 1) % 4];
+            const na = surround.neighbors && surround.neighbors[a], nb = surround.neighbors && surround.neighbors[b];
+            if (!!na === !!nb) continue;
+            const edge = na ? (k + 1) % 4 : k, entry = na || nb, mine = R.surroundStyleOf(surround, edge);
+            if (!raised(mine)) continue;
+            const theirs = N.edgeStyleOf(entry.map, edge);
+            if (theirs === undefined) { wait.push(entry.map); continue; }
+            if (raised(theirs)) out[k] = theirs === mine ? mine : "mountains";
+        }
+        if (scene) scene._surroundSeamWait = wait.length ? wait : null;
+        return out;
+    };
+
+    /** A map's style past one side (an index into SURROUND_SIDES), from what is read of it; undefined while it is not. */
+    N.edgeStyleOf = function(mapId, side) {
+        let map = null;
+        const record = N.records.get(mapId);
+        if (record && record.state === "ready" && record.map) map = record.map;
+        else if (root.$gameMap && typeof root.$gameMap.mapId === "function" && root.$gameMap.mapId() === mapId && N.live && N.live.scene) map = N.live.scene._surroundMap || null;
+        if (!map) return undefined;
+        const surround = R.surroundOf(map);
+        return surround ? R.surroundStyleOf(surround, side) : "none";
+    };
+
+    /** A map has been read: the lands that waited on its edges (R.surroundSeamStyles) are laid again. */
+    N.seamsKnown = function(mapId) {
+        const live = N.live && N.live.scene;
+        if (!live) return;
+        const again = (scene, map, globals) => {
+            if (!scene || !scene._scene || !scene._surroundSeamWait || !scene._surroundSeamWait.includes(mapId) || !scene._surroundMap) return;
+            try { N.within(map || scene._surroundMap, globals || null, () => scene.addSurround(scene._surroundMap)); } catch (error) { /* keeps the land it had */ }
+        };
+        again(live, null, null);
+        for (const body of Object.values(live._neighborBodies || {})) if (body && body.scene) again(body.scene, body.record && body.record.map, body.scene._neighborGlobals);
+    };
     const ZERO = { x: 0, z: 0 };
 
     /** Where a neighbor's first tile lies, in this map's tiles. */
@@ -893,6 +969,7 @@
                 // (The copy the game enters by is made on a later frame: N.update.)
                 record.state = "ready";
                 N.stats.read++;
+                N.seamsKnown(mapId);
             } catch (error) {
                 record.state = "failed";
                 if (typeof console !== "undefined") console.warn("Reactor3D: the neighboring map " + mapId + " could not be read.", error);
@@ -1086,7 +1163,7 @@
         try {
             // The floor now; its pieces, then its water with the land and the plants, on the frames after (N.stage).
             scene = N.inBody(map, at, null, () => {
-                const made = new R.MapScene(map, bitmaps, Object.assign({}, host && host.settings, { body: true, staged: true, tilesetId: map.tilesetId, flags,
+                const made = new R.MapScene(map, bitmaps, Object.assign({}, host && host.settings, { body: true, staged: true, deferTiles: true, tilesetId: map.tilesetId, flags,
                     surroundNone: theirs ? { [N.OPPOSITE[side]]: theirs } : null, surroundOrigin: { x: base.x + offset.x, z: base.z + offset.z } }));
                 made._neighborGlobals = globalsOf();
                 return made;
@@ -1130,6 +1207,16 @@
         const map = body.record && body.record.map, scene = body.scene;
         if (!map || !scene._scene) { body.stage = 0; return; }
         const load = body.load || (name => R.defaultMaterialLoader(name));
+        // Its tiles first, a step a part: the build, then its meshes (MapScene `deferTiles`).
+        if (scene._deferredTiles) {
+            try {
+                N.inBody(map, body.at || body.offset, scene._neighborGlobals, () => { scene._deferredTiles(); scene._neighborGlobals = globalsOf(); });
+            } catch (error) {
+                scene._deferredTiles = null;
+                if (typeof console !== "undefined") console.warn("Reactor3D: the tiles of the neighboring map " + body.mapId + " could not be laid.", error);
+            }
+            return;
+        }
         const stage = body.stage;
         // (A part that fails is not tried again: the next one is laid.)
         body.stage = stage === 1 ? 2 : stage === 2 ? 3 : 0;
@@ -1533,7 +1620,7 @@
     };
 
     /** The models of the party go with it: out of the scene left, into the one entered, as they are. */
-    N.carryParty = function(from, to, ride, riddenNow, others) {
+    N.carryParty = function(from, to, ride, riddenNow, others, shift) {
         const held = from._modelInstances;
         if (!held || !to.modelsGroup) return;
         if (!to._modelInstances) to._modelInstances = new Map();
@@ -1555,7 +1642,16 @@
                 const event = root.$gameMap.event(Number(String(as).slice(1)));
                 if (event) holder.character = event;
             }
-            if (holder.object) group.add(holder.object);
+            if (holder.object) {
+                group.add(holder.object);
+                // Into the entered map's tiles at once: the first frame of that map is drawn before an update syncs
+                // the models, and the party stood a map's width from the camera for it (2026-11-07).
+                if (shift && (shift.x || shift.z)) {
+                    holder.object.position.x += shift.x;
+                    holder.object.position.z += shift.z;
+                    holder.object.updateMatrixWorld(true);
+                }
+            }
         }
     };
 
@@ -1575,7 +1671,7 @@
         const riding = root.$gamePlayer && root.$gamePlayer._rrRide;
         const V = root.ReactorVehicles, vehicles = V && V.list && cross.convoy ? V.list() : [];
         const convoy = (cross.convoy || []).map(pair => { const now = vehicles.find(event => V.idOf(event) === pair[1]); return [pair[0], now ? "e" + now._eventId : null]; });
-        N.carryParty(old.scene, scene, cross.ride, riding && riding.id ? "e" + riding.id : null, convoy);
+        N.carryParty(old.scene, scene, cross.ride, riding && riding.id ? "e" + riding.id : null, convoy, { x: -cross.offset.x, z: -cross.offset.z });
         N.keepAhead(scene);
         // The map entered is the one everything reads now; what the map left read is kept for a way back.
         old.scene._neighborGlobals = globalsOf();

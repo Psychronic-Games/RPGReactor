@@ -43,7 +43,7 @@
     // (`rrBattle.heightReach`, the Database's Combat card): `most` 0 is no more reach at all.
     F.HEIGHT_REACH_LEVELS = 2;
     F.HEIGHT_REACH_MAX = 3;
-    F.HEIGHT_REACH_LIMITS = { levels: [1, 10], most: [0, 10] };
+    F.HEIGHT_REACH_LIMITS = { levels: [1, 10], most: [0, 50] };
     F.HEIGHT_OVER_COVER = 2;
     // A blow struck from beside its target (reach 1) lands only when the two stand within this many levels.
     F.MELEE_HEIGHT = 2;

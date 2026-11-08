@@ -679,7 +679,8 @@ class MapEditor {
         // The 3D object tab does not touch `map.data` at all, so the ordinary
         // snapshot would record a change that never happened and miss the one
         // that did.
-        if (this.tilesetPaletteViewer?.currentLayer === 'O') {
+        // A stroke that does write tiles from that tab (the shadow pen, a copied area stamped) takes the tile snapshot.
+        if (this.tilesetPaletteViewer?.currentLayer === 'O' && !this.shadowPenMode && !this.mapStamp) {
             this.beginObject3DState();
             return;
         }
@@ -2350,13 +2351,33 @@ class MapEditor {
     fillArea(startX, startY) {
         if (!this.tilemapManager.currentMap) return;
 
-        if (this.eraserMode) {
+        const { width, height, data } = this.tilemapManager.currentMap;
+        const currentLayer = this.tilesetPaletteViewer.currentLayer;
+
+        // The eraser takes what the tab shows, as the pencil does: the region on R, the grouping on O. Erasing the
+        // map tiles under the overlay instead (with no undo step for them on O) was never what was meant.
+        if (this.eraserMode && currentLayer === 'O') {
+            const manager = this.object3DManager;
+            if (!manager) return;
+            const target = manager.readCell(startX, startY).id;
+            const cells = new Set(), stack = [{ x: startX, y: startY }];
+            let x0 = startX, x1 = startX, y0 = startY, y1 = startY;
+            while (stack.length) {
+                const cell = stack.pop();
+                if (cell.x < 0 || cell.y < 0 || cell.x >= width || cell.y >= height) continue;
+                const key = cell.y * width + cell.x;
+                if (cells.has(key) || manager.readCell(cell.x, cell.y).id !== target) continue;
+                cells.add(key);
+                x0 = Math.min(x0, cell.x); x1 = Math.max(x1, cell.x); y0 = Math.min(y0, cell.y); y1 = Math.max(y1, cell.y);
+                stack.push({ x: cell.x + 1, y: cell.y }, { x: cell.x - 1, y: cell.y }, { x: cell.x, y: cell.y + 1 }, { x: cell.x, y: cell.y - 1 });
+            }
+            this.eraseObject3DArea(x0, x1, y0, y1, (x, y) => cells.has(y * width + x));
+            return;
+        }
+        if (this.eraserMode && currentLayer !== 'R') {
             this.eraseFillArea(startX, startY);
             return;
         }
-
-        const { width, height, data } = this.tilemapManager.currentMap;
-        const currentLayer = this.tilesetPaletteViewer.currentLayer;
 
         /*
          * Filling by object number, which is how a building gets grouped in
@@ -2391,13 +2412,13 @@ class MapEditor {
         // Region fill (z5): flood by region value; the tile path below would
         // default the 'R' tab to layer 0 and fill tiles instead.
         if (currentLayer === 'R') {
-            if (!this.regionManager || !this.regionManager.selectedTiles ||
-                this.regionManager.selectedTiles.length === 0) {
+            if (!this.eraserMode && (!this.regionManager || !this.regionManager.selectedTiles ||
+                this.regionManager.selectedTiles.length === 0)) {
                 return;
             }
             const layerSize = width * height;
             const targetRegion = data[5 * layerSize + startY * width + startX];
-            const fillRegion = this.regionManager.selectedRegion;
+            const fillRegion = this.eraserMode ? 0 : this.regionManager.selectedRegion;
             if (targetRegion === fillRegion) return;
             const stack = [{ x: startX, y: startY }];
             const filled = [];
@@ -2413,7 +2434,7 @@ class MapEditor {
                 stack.push({ x, y: y + 1 });
                 stack.push({ x, y: y - 1 });
             }
-            if (this.regionManager.enabled) {
+            if (this.regionManager?.enabled) {
                 this.regionManager.updateRegionCells(filled);
             }
             return;
@@ -3581,7 +3602,10 @@ class MapEditor {
         // Shift B-E tile layers: layer 2 → layer 1, layer 3 → layer 2
         // Layer 0 is preserved (contains autotiles A1-A5)
         // The oldest B-E tile on layer 1 is discarded to make room
-        data[1 * layerSize + basePos] = data[2 * layerSize + basePos];
+        // Only as far as it must: with layer 2 free, layer 1 is kept; an A tile on layer 1 (a decoration autotile,
+        // which this editor and MZ maps put there) is never pushed out: the older B-E tile on layer 2 goes instead.
+        const z1 = data[1 * layerSize + basePos], z2 = data[2 * layerSize + basePos];
+        if (z2 !== 0 && !(z1 >= 1536)) data[1 * layerSize + basePos] = z2;
         data[2 * layerSize + basePos] = data[3 * layerSize + basePos];
 
         // Place new tile on layer 3 (topmost B-E layer)

@@ -1095,7 +1095,10 @@ class ResourceManager {
     }
 
     handleKeyDown(event) {
-        if (this.overlay?.style.display === 'none' || document.getElementById('rr-themed-dialog')) return;
+        // A dialog opened over it (a themed question, the 3D model import options) takes its own keys: Escape closes
+        // that one, not the Resource Manager under it.
+        if (this.overlay?.style.display === 'none' || document.getElementById('rr-themed-dialog')
+            || document.getElementById('rr-model-optimize-dialog')) return;
         if (document.querySelector('.rr-shim-popup')?.contains(event.target)
             || event.target.closest?.('.rr-search-select-panel')) return;
         if (event.key === 'Escape') {

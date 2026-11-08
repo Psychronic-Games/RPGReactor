@@ -44,22 +44,33 @@ test('applyGpuChromiumArgs appends after the project arguments, once', () => {
     const manager = new (loadProjectManager())();
     const pkg = { 'chromium-args': '--force-color-profile=srgb --window-size=816,624 --my-flag' };
     assert.equal(manager.applyGpuChromiumArgs(pkg), true);
-    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --window-size=816,624 --my-flag --force-high-performance-gpu --ignore-gpu-blocklist');
+    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --window-size=816,624 --my-flag --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit');
     assert.equal(manager.applyGpuChromiumArgs(pkg), false, 'nothing to add the second time');
     const partial = { 'chromium-args': '--ignore-gpu-blocklist' };
     manager.applyGpuChromiumArgs(partial);
-    assert.equal(partial['chromium-args'], '--ignore-gpu-blocklist --force-high-performance-gpu');
+    assert.equal(partial['chromium-args'], '--ignore-gpu-blocklist --force-high-performance-gpu --disable-gpu-vsync --disable-frame-rate-limit');
     const none = {};
     manager.applyGpuChromiumArgs(none);
-    assert.equal(none['chromium-args'], GPU_ARGS.join(' '));
+    assert.equal(none['chromium-args'], GPU_ARGS.join(' ') + ' --disable-gpu-vsync --disable-frame-rate-limit');
 });
 
 test('reactorHighPerformanceGpu: false takes the switches out and keeps the rest', () => {
     const manager = new (loadProjectManager())();
     const pkg = { reactorHighPerformanceGpu: false, 'chromium-args': '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist' };
     assert.equal(manager.applyGpuChromiumArgs(pkg), true);
-    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb');
+    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --disable-gpu-vsync --disable-frame-rate-limit', 'the GPU switches go; no vsync has its own opt-out');
     assert.equal(manager.applyGpuChromiumArgs(pkg), false);
+});
+
+test('reactorVsync: true keeps vsync: the no-vsync switches stay out, the GPU ones stay in', () => {
+    const manager = new (loadProjectManager())();
+    const pkg = { reactorVsync: true, 'chromium-args': '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit' };
+    assert.equal(manager.applyGpuChromiumArgs(pkg), true);
+    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist');
+    assert.equal(manager.applyGpuChromiumArgs(pkg), false);
+    // A new project draws uncapped.
+    const starter = new (loadProjectManager())().getStarterPackage('Game', '1');
+    assert.match(starter['chromium-args'], /--disable-gpu-vsync --disable-frame-rate-limit/);
 });
 
 test('opening a project adds the switches without rewriting the rest of package.json', async () => {
@@ -71,7 +82,7 @@ test('opening a project adds the switches without rewriting the rest of package.
         manager.getRuntimePath = () => null;
         await manager.refreshReactorRuntime(dir, { engineVersion: 'x' });
         const after = fs.readFileSync(path.join(dir, 'package.json'), 'utf8');
-        assert.equal(after, text.replace('--window-size=1280,720"', '--window-size=1280,720 --force-high-performance-gpu --ignore-gpu-blocklist"'),
+        assert.equal(after, text.replace('--window-size=1280,720"', '--window-size=1280,720 --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit"'),
             'only the chromium-args value changed: indentation, BOM and layout stay');
         const mtime = fs.statSync(path.join(dir, 'package.json')).mtimeMs;
         await manager.refreshReactorRuntime(dir, { engineVersion: 'x' });
@@ -87,7 +98,7 @@ test('an opted-out project keeps no switches after opening', async () => {
         const manager = new ProjectManager();
         manager.getRuntimePath = () => null;
         await manager.refreshReactorRuntime(dir, { engineVersion: 'x' });
-        assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))['chromium-args'], '--force-color-profile=srgb');
+        assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))['chromium-args'], '--force-color-profile=srgb --disable-gpu-vsync --disable-frame-rate-limit');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -71,9 +71,7 @@ if ($action === 'join') {
     // The visit's nonce is kept with the slot before its token is handed out: tokens of earlier visits to it stop working.
     $nonce = bin2hex(random_bytes(8));
     setSlotNonce($dir, $slot, $nonce);
-    $name = cleanName();
-    // A guest cannot take a registered player's name.
-    if (!$account && readAccount($dir, accountKey($name))) $name = textStart($name, 16) . ' (guest)';
+    $name = fairName($dir, $slot, cleanName(), $account ? (string)$account['username'] : '');
     setPlayer($dir, $slot, $name, intParam('c', 0, 9999), knownModel($dir, (string)($_GET['h'] ?? '')), $account ? (string)$account['username'] : '', $ip);
     flock($lock, LOCK_UN);
     $answer = ['slot' => $slot, 'name' => (string)(readNames($dir)[$slot]['name'] ?? ''), 'nonce' => $nonce, 'token' => tokenFor($slot, $nonce, $secret), 'protocol' => PROTOCOL, 'chat' => chatCount($dir), 'world' => worldCount($dir)];
@@ -86,9 +84,11 @@ if ($action === 'look') {
     $dir = dataDir($config);
     $lock = lockPlayers($dir);
     $known = readNames($dir)[$slot] ?? [];
-    setPlayer($dir, $slot, cleanName(), intParam('c', 0, 9999), knownModel($dir, (string)($_GET['h'] ?? '')), (string)($known['account'] ?? ''), (string)($known['ip'] ?? ''));
+    // A new look may carry a new name: held to the same rules as at join (no one else's registered name, none in use).
+    $name = fairName($dir, $slot, cleanName(), (string)($known['account'] ?? ''));
+    setPlayer($dir, $slot, $name, intParam('c', 0, 9999), knownModel($dir, (string)($_GET['h'] ?? '')), (string)($known['account'] ?? ''), (string)($known['ip'] ?? ''));
     flock($lock, LOCK_UN);
-    respond(['ok' => true]);
+    respond(['ok' => true, 'name' => $name]);
 }
 
 if ($action === 'state') {
@@ -238,7 +238,9 @@ if ($action === 'bOpen' || $action === 'bBeat') {
     foreach (is_array($body['sides'] ?? null) ? array_slice($body['sides'], 0, 32, true) : [] as $who => $side) $sides[textStart(cleanText((string)$who), 24)] = preg_replace('/[^a-z0-9]/', '', (string)$side);
     $battles[$id] = ['map' => intParam('m', 1, 9999), 'x' => max(0, min(9999, (int)($body['x'] ?? 0))), 'y' => max(0, min(9999, (int)($body['y'] ?? 0))),
         'mode' => cleanFight((string)($body['mode'] ?? '')), 'host' => $slot, 'name' => (string)(readNames($dir)[$slot]['name'] ?? ''), 'sides' => (object)$sides, 'at' => time(),
-        'was' => preg_replace('/[^a-f0-9]/', '', (string)($body['was'] ?? ($battles[$id]['was'] ?? '')))];
+        'was' => preg_replace('/[^a-f0-9]/', '', (string)($body['was'] ?? ($battles[$id]['was'] ?? ''))),
+        // The players the host's game has let in (their slots): only they, and the host, may write more than a join.
+        'members' => array_values(array_unique(array_map('intval', array_filter(is_array($body['members'] ?? null) ? array_slice($body['members'], 0, 64) : [], 'is_numeric'))))];
     writeBattles($dir, $battles);
     flock($lock, LOCK_UN);
     respond(['id' => $id]);
@@ -260,9 +262,20 @@ if ($action === 'bSay') {
     $slot = player($secret);
     $dir = dataDir($config);
     $body = jsonBody();
-    $file = battleFile($dir, (string)($body['id'] ?? ''));
+    $id = (string)($body['id'] ?? '');
+    $file = battleFile($dir, $id);
+    // Only a battle still listed has a log, and only its host and the players it let in say more than asking to
+    // join or leave: a made-up id cannot fill the disk, and a stranger cannot speak in someone else's battle.
+    $battle = readBattles($dir)[$id] ?? null;
+    if (!$battle || (int)$battle['at'] < time() - 300) fail(404, 'That battle has ended.');
+    $member = (int)$battle['host'] === $slot || in_array($slot, array_map('intval', (array)($battle['members'] ?? [])), true);
+    $sent = is_array($body['lines'] ?? null) ? array_slice($body['lines'], 0, 64) : [];
+    if (!$member) {
+        $sent = array_slice($sent, 0, 2);
+        foreach ($sent as $message) if (!is_array($message) || !in_array($message['t'] ?? '', ['join', 'leave'], true)) fail(403, 'You are not in this battle.');
+    }
     $lines = '';
-    foreach (is_array($body['lines'] ?? null) ? array_slice($body['lines'], 0, 64) : [] as $message) $lines .= jsonText(['from' => $slot, 'm' => $message]) . "\n";
+    foreach ($sent as $message) $lines .= jsonText(['from' => $slot, 'm' => $message]) . "\n";
     if ((int)@filesize($file) + strlen($lines) > BATTLE_LOG_BYTES) fail(413, 'This battle has said too much.');
     file_put_contents($file, $lines, FILE_APPEND | LOCK_EX);
     respond(['ok' => true]);

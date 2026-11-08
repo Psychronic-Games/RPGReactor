@@ -334,7 +334,7 @@ test('grouping gets its own kind of undo entry', () => {
     assert.match(editor, /this\.undoStack\[this\.undoStack\.length - 1\]\?\.kind === 'object3d'/);
     assert.match(editor, /this\.redoStack\[this\.redoStack\.length - 1\]\?\.kind === 'object3d'/);
     // And a stroke on that tab must take the right kind of snapshot.
-    assert.match(editor, /currentLayer === 'O'\) \{\s*\n\s*this\.beginObject3DState\(\);/);
+    assert.match(editor, /currentLayer === 'O' && !this\.shadowPenMode && !this\.mapStamp\) \{\s*\n\s*this\.beginObject3DState\(\);/);
     assert.match(editor, /snapshot && snapshot\.kind === 'object3d'/, 'the stale-entry guard knows it');
 });
 

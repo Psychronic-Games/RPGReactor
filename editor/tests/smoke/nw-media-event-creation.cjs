@@ -15,6 +15,7 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
  await driver.execute(`document.getElementById('toolbar-event-manager-btn').click();`);
  const state=await driver.execute(`return {mode:reactor.eventManager.eventMode,authoring:!!reactor.mediaSurfacePreviewManager.authoring,panel:!!reactor.mediaSurfaceManager.panel,selected:!!reactor.mediaSurfaceManager.panel,map:reactor.eventManager.currentMap.id};`);
  const mediaBefore=await driver.execute('return reactor.mediaSurfaceManager.rows();');
+ const eventsAtStart=await driver.execute('return reactor.eventManager.currentMap.events.filter(Boolean).map(e=>e.id);');
  assert.equal(mediaBefore.length,5);
  console.log('Event mode after media:',state);
  const point=await driver.execute(`const m=reactor.mapEditor3D,r=(m.inputSurface||m.canvas).getBoundingClientRect();for(let y=.25;y<.8;y+=.1)for(let x=.2;x<.8;x+=.1){const px=Math.round(r.left+x*r.width),py=Math.round(r.top+y*r.height),tile=m.tileAt(px,py);if(tile&&!m.eventAt(px,py))return {x:px,y:py,tile};}return null;`);assert.ok(point);
@@ -24,7 +25,8 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
  assert.deepEqual(state,{authoring:false,map:2,mode:true,panel:false,selected:false});
  await checkOpened('Double-click creates on the clicked tile');
  await driver.execute('reactor.eventManager.eventEditor.cancelChanges();');
- assert.equal(await driver.execute('return reactor.eventManager.currentMap.events.filter(Boolean).length;'),0);
+ // Demo Map002 already holds its Door event: Cancel must leave only what was there.
+ const eventsBefore=await driver.execute('return reactor.eventManager.currentMap.events.filter(Boolean).map(e=>e.id);');assert.deepEqual(eventsBefore,eventsAtStart,'cancelled new event was discarded');
  // An unfinished Place gesture must also release input when Event mode is selected.
  await driver.execute(`reactor.mediaSurfaceManager.open();reactor.mediaSurfaceManager.place();document.getElementById('toolbar-event-manager-btn').click();`);
  assert.equal(await driver.execute('return !!reactor.mediaSurfaceManager.cancelPlacement;'),false);
@@ -37,8 +39,8 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
  assert.equal(await driver.execute(`const row=[...document.querySelectorAll('#event-context-menu .context-menu-item')].find(e=>/New Event/i.test(e.textContent));if(!row)return false;row.click();return true;`),true);
  await checkOpened('Right-click New Event opens on the clicked tile');
  const saved=await driver.execute(`const manager=reactor.eventManager;manager.eventEditor.currentEvent.name='Media Event Check';document.getElementById('event-editor-ok-btn').click();return {saved:reactor.tilemapManager.saveMap(),events:manager.currentMap.events.filter(Boolean).map(e=>({id:e.id,name:e.name,x:e.x,y:e.y})),surfaces:reactor.mediaSurfaceManager.rows().length};`);
- assert.equal(saved.saved,true);assert.equal(saved.events.length,1);assert.equal(saved.events[0].name,'Media Event Check');assert.equal(saved.events[0].x,point.tile.x);assert.equal(saved.events[0].y,point.tile.y);
- const disk=JSON.parse(fs.readFileSync(path.join(project,'data/Map002.json'),'utf8'));assert.equal(disk.events.filter(Boolean).length,1);assert.equal(disk.events.find(Boolean).name,'Media Event Check');
+ assert.equal(saved.saved,true);assert.equal(saved.events.length,eventsBefore.length+1);const made=saved.events.find(e=>e.name==='Media Event Check');assert.ok(made);assert.equal(made.x,point.tile.x);assert.equal(made.y,point.tile.y);
+ const disk=JSON.parse(fs.readFileSync(path.join(project,'data/Map002.json'),'utf8'));assert.equal(disk.events.filter(Boolean).length,eventsBefore.length+1);assert.ok(disk.events.some(e=>e&&e.name==='Media Event Check'));
  assert.deepEqual(await driver.execute('return reactor.mediaSurfaceManager.rows();'),mediaBefore);
  const sidecar=JSON.parse(fs.readFileSync(path.join(project,'data/Map002.r3d.json'),'utf8'));assert.deepEqual(sidecar.mediaSurfaces,mediaBefore);
  const logs=await driver.sessionRequest('POST','/log',{type:'browser'});assert.deepEqual(logs.filter(e=>/ERR_FILE_NOT_FOUND|does not belong|GL_INVALID|TypeError/.test(e.message)),[]);

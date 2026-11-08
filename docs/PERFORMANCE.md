@@ -18,7 +18,7 @@ What went, in order:
 - **Two-pass transparent parts (.8):** soft hair, lips and brows were drawn twice per frame with their program worked out twice. `forceSinglePass` took that to one draw each.
 - **Built characters as their parts (.9):** 17–39 meshes each; now about 8.
 
-What remains a frame: about 500 draws, of which parked vehicles are about 40 each. Each material also carries 64 uniforms, 60 of them the scene's, walked on every draw.
+What remains a frame: about 500 draws, of which parked vehicles are about 40 each. Each material also carried 64 uniforms, 60 of them the scene's, walked on every draw; since runtime 20261105.16 the scene's values are one uniform block (`Reactor3D.SceneUniformBlock`), so a bind walks only the material's own.
 
 Visual check: `~/.cache/rr-tests/layered-ab.cjs` draws one character alone in the game's light, parts apart and merged, and `ab-diff.py` compares them. Of eight characters, five match within 90 pixels; the rest show hairline edges on plate armour and a hem that no longer lets the body show through.
 
@@ -34,7 +34,7 @@ The owner saw about 30 fps in North Haven's raid online. Measured where they sto
 | Draw calls / triangles a frame | 1,193 / 12.4M | 602 / 3.5M |
 | Frames (1,200 sampled) | 50.3 fps, p95 33.4 ms, 234 over 25 ms | 60 fps (headless cap), p95 16.8 ms, 1 over 25 ms |
 
-The mirror pass called `renderer.render` itself, so neither the distance levels (`_renderScene`) nor the crowd limit reached it: every character was drawn again at full detail. It now takes the levels from its own camera and keeps the 12 characters nearest the player (`MIRRORED_CHARACTERS`). Left: the mirror is still a full lit draw at the frame's size (2.7 ms, mostly fill); the main draw's CPU (4.4 ms, uniform uploads and the scene walk) is the next cost. A larger window than 1280×720 scales the GPU share, which fits the owner's 30 fps.
+The mirror pass called `renderer.render` itself, so neither the distance levels (`_renderScene`) nor the crowd limit reached it: every character was drawn again at full detail. It now takes the levels from its own camera and keeps the characters nearest the player: 6 (`MIRRORED_CHARACTERS`), 3 on the weak tier (`MIRRORED_CHARACTERS_WEAK`). This section first said 12; the committed code has had 6. Left: the mirror is still a full lit draw at the frame's size (2.7 ms, mostly fill); the main draw's CPU (4.4 ms, uniform uploads and the scene walk) is the next cost. A larger window than 1280×720 scales the GPU share, which fits the owner's 30 fps.
 
 ## Crowds of characters and online players (2026-11-03, runtimes 20261103.1–.8)
 
@@ -603,7 +603,7 @@ The owner's rule: a game runs well on any hardware, looks good on the weakest an
 
 - **What is measured:** the world frames a second of play delivers, against the screen's own refresh (read from the game's quickest frames, so a 50 Hz panel showing 50 is not short). A two-second window short by 12% twice running, or by 40% once, takes a step. The main thread is the cause when its work fills 60% of the frame or 75% of a refresh's budget, the graphics card otherwise. Loading, a window out of focus and the two seconds after a step are not judged.
 - **Back up:** only as another map opens, after ten calm seconds, one step; a step that does not hold is not tried again that session.
-- **Kept:** the levels a machine settles at are saved with the player's options (`ConfigManager.graphicsAuto`) and start its next session.
+- **Kept:** the levels a machine settles at are saved with the player's options (`ConfigManager.graphicsAuto`) and start its next session. Since runtime 20261105.9 they are kept with the graphics device they were found on: levels saved by another machine (a project shared through Dropbox) start again from the top.
 - **The player's say:** Options, Graphics: Auto (the default), High, Medium, Low (`ConfigManager.graphicsQuality`; High is level 0, Medium is GPU 1 and CPU 1, Low is GPU 3 and CPU 2). The row appears once the machine has drawn a 3D map. A project whose options plugin builds its own list adds the entry there: the Demo's is in the Visual category. `Window_Options.GRAPHICS_TEXT` holds the words.
 - **Switches:** `Reactor3D.Quality.enabled = false` draws level 0 always; `Reactor3D.Quality.reset()` returns the automatic levels to the top.
 
@@ -639,16 +639,16 @@ The levels above move a few of these; all remain engine defaults a script call o
 | `Reactor3D.renderScale` | 0.75 | The 3D is drawn at this fraction of the screen each way and enlarged. The saving is the pixels not drawn (0.75 draws 56% of them); fine texture softens a little. 1 = native. | native 11.2 ms, 0.75 9.3 ms; walking about 100 → 117 fps |
 | `Reactor3D.SharpUpscale.mode` | `"cas"` | How the smaller picture is enlarged: `"crisp"` keeps each pixel flat with a hard, slightly stepped edge; `"cas"` filters and sharpens within each pixel's neighbours (softer, no steps). `enabled = false` lets PIXI enlarge it pixel for pixel (blocky). | crisp 9.3, cas 9.4, PIXI nearest 8.3 ms |
 | `Reactor3D.SharpUpscale.sharpness` | 0.5 | 0–1. Crisp: how hard the edge blend is (1: half a screen pixel). CAS: how strongly it sharpens. | no cost difference |
-| `Reactor3D.HalfLight.SCALE` | 0.25 | The size the lighting and shadows are worked out at, each way, before being filtered up. Surfaces keep their full detail; only the light is coarser. 0.125 and below put light rims on models against much brighter or darker ground. `enabled = false` lights every pixel (the old way). | full 20.3, 1/4 10.6, 1/8 9.9, 1/16 9.8 ms (three places, before `renderScale`) |
+| `Reactor3D.HalfLight.SCALE` | 0.25 | The size the lighting and shadows are worked out at, each way, before being filtered up. Surfaces keep their full detail; only the light is coarser. 0.125 and below put light rims on models against much brighter or darker ground. `enabled = false` lights every pixel (the old way). Since runtime 20261015.2 only on the weak tier (`HalfLight.WEAK_ONLY`). | full 20.3, 1/4 10.6, 1/8 9.9, 1/16 9.8 ms (three places, before `renderScale`) |
 | `Reactor3D.HalfLight.matchSurfaces` | true | The small light is filtered up from the samples on each pixel's own surface, and a pixel with none (a rim, a thin part) is lit at full size. `false` filters plainly: a blocky rim of the ground's light on models. `PLAIN_SPREAD` (0.02) lets pixels whose four samples agree skip the depth read; `exactEdges = false` drops the full-size fallback. | harness iGPU, 0.75 of 1080p: combine 0.48 → 1.1 ms; pixels 24+ levels off full-size light 9,139 → 538 |
 | `Reactor3D.HalfHaze.SCALE` | 0.25 | The size the lights' haze (cones, balls) is drawn at. `enabled = false` draws it full size. | 3.8 → about 0.8 ms for eleven cones |
 | `Reactor3D.GeometryDetail.pixelError` | 1 | How far, in screen pixels, a simplified model may stray from the full one before the finer level is drawn. | 0.35 → 1: 0.85 ms, single texels moved |
-| `Reactor3D.SHADOWS`, `Reactor3D.SHADOW_QUALITY` | `"auto"`, weak/full tiers | Shadow rows, their size and filtering. The tier is picked from the GPU. | rows about 1.3 ms walking |
+| `Reactor3D.SHADOWS`, `Reactor3D.SHADOW_QUALITY` | `"auto"`, weak/full tiers (`fullCpu` under Auto at CPU level 2) | Shadow rows, their size and filtering. The tier is picked from the GPU. | rows about 1.3 ms walking |
 | `Reactor3D.LightVolume.dynamicEnabled` | true | Moving lights baked once a frame instead of per pixel. Evens out on average, saves up to 3.5 ms where many swing across the view. | |
 | `Reactor3D.FOLIAGE_LOD` | full: near 22, far 64, scale 1; weak: near 12, far 38, scale 0.5 | Grass, flowers, ferns and reeds: tiles from the eye where the field starts to thin and where it is gone, and the share drawn at all. Chunks past `far` are not drawn; the blades are drawn before the ground (whatever they hide is never shaded) and stay out of reflections. | harness iGPU (weak tier), North Haven with about 100,000 clumps painted, 3D update with `gl.finish`: +0.2 to +1 ms across meadow, cliff, wide and high views (runtime 20261002.6 + foliage) |
 | `Reactor3D.adaptiveResolution` | false | Let the scale fall when frames run long and climb back when calm. Off: a scale that moves reads as the picture changing under the player. | |
 
-A menu would most naturally offer presets over these (for example Low: renderScale 0.6, lighting 1/8; Medium: 0.75, 1/4; High: 1, 1/4; Ultra: 1 with `HalfLight` and `HalfHaze` off and pixelError 0.35), saved per player with the other options.
+The Options menu's Graphics row (Quality levels, above) is the player-facing preset over some of these: High, Medium and Low hold a level, saved with the other options. The rest stay script settings.
 
 ## Editor memory
 

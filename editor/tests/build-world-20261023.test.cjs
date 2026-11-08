@@ -269,7 +269,7 @@ test('a neighbor\'s events by the shared side stand before the crossing, and the
         global.Game_Event = savedEvent; R.characterModelSpec = savedSpec; global.ReactorVehicles = savedVehicles;
     }
     const surround = read('runtime/reactor_3d_surround.js');
-    assert.match(surround, /N\.carryParty\(old\.scene, scene, cross\.ride, riding && riding\.id \? "e" \+ riding\.id : null, convoy\);\s*N\.keepAhead\(scene\);/);
+    assert.match(surround, /N\.carryParty\(old\.scene, scene, cross\.ride, riding && riding\.id \? "e" \+ riding\.id : null, convoy, \{ x: -cross\.offset\.x, z: -cross\.offset\.z \}\);\s*N\.keepAhead\(scene\);/);
     assert.match(surround, /if \(depth === 1 && !body\.ahead && body\.record && body\.record\.state === "ready" && N\.upkeep\(frame\)\) \{/, 'beside the map played only, once');
     assert.match(read('runtime/reactor_vehicles.js'), /V\.addVisitingVehicles = mapId => visitingVehicles\(\{ _mapId: mapId \}\);/);
 });

@@ -85,9 +85,12 @@ class TransformModel3DEditor {
                 <input type="number" class="tm3d-num" data-key="${key}" data-no-stepper step="${step}" value="${escape(current)}" title="${escape(unit)}"
                     style="width:100%;box-sizing:border-box;padding:4px 6px;background:var(--color-bg-input);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;">
             </div>`;
-        const targetOptions = [['0', this._t('cam3d.thisEvent')], ['-1', this._tx('Player')]]
+        const targetList = [['0', this._t('cam3d.thisEvent')], ['-1', this._tx('Player')]]
             .concat(events.map(event => [String(event.id), String(event.id).padStart(3, '0') + (event.name ? ': ' + event.name : '')]))
-            .concat(props.map(prop => [String(prop.id), `${this._tx('Prop')} ${prop.label}`]))
+            .concat(props.map(prop => [String(prop.id), `${this._tx('Prop')} ${prop.label}`]));
+        // A target this map does not list (a follower, another map's event from a common event, a deleted one) stays as saved.
+        if (!targetList.some(([id]) => id === target)) targetList.push([target, `${this._tx('Target')} ${target}`]);
+        const targetOptions = targetList
             .map(([id, label]) => `<option value="${id}"${id === target ? ' selected' : ''}>${escape(label)}</option>`).join('');
         modal.innerHTML = `
             <div class="rr-modal" style="width:min(520px,92vw);display:flex;flex-direction:column;">

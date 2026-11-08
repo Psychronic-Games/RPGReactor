@@ -36,7 +36,8 @@ const driver=new WebDriverClient(path.join(root,'nwjs-linux/chromedriver'));
             const assertMode=()=>{check(m.active,'3D-M is active');check(!app.eventManager.eventMode,'Events inactive');check(!app.mapEditor.enabled,'tile painter inactive');check(m._listeners.every(([c])=>c===pc.tilemapManager.container),'listeners use current canvas');};
             for(let i=0;i<2;i++){
                 app.toggleEventMode();check(!m.active&&app.eventManager.eventMode,'event mode owns input');
-                if(i===0)app.disableEventModeIfActive();else app.toggleEventMode();
+                // A drawing button (disableEventModeIfActive) returns to painting by design (main.js claimMapTool); then back to 3D-M.
+                if(i===0){app.disableEventModeIfActive();check(app.mapEditor.enabled&&!m.active&&!app.eventManager.eventMode,'drawing button returns to painting');app.tilesetPaletteViewer.selectLayer('M');}else app.toggleEventMode();
                 assertMode();
             }
             // Use the real copy/paste path with an in-app clipboard, preserving the desktop clipboard.

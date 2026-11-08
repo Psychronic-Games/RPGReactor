@@ -35,9 +35,14 @@ class ActionElements {
         return one > 0 ? [one] : [];
     }
 
-    /** Whether the block means Normal Attack: no element chosen at all. */
+    /** Whether the block means Normal Attack: no element chosen, and not None (MZ's -1, against None's 0). */
     static isNormalAttack(damage) {
-        return ActionElements.ids(damage).length === 0;
+        return ActionElements.ids(damage).length === 0 && !ActionElements.isNone(damage);
+    }
+
+    /** Whether the block means None (MZ's element 0): no element at all, not even the user's attack elements. */
+    static isNone(damage) {
+        return !!damage && ActionElements.ids(damage).length === 0 && Number(damage.elementId) === 0;
     }
 
     /**
@@ -48,13 +53,15 @@ class ActionElements {
     static write(damage, ids) {
         const seen = new Set();
         const list = [];
+        // A lone 0 is None (elementId 0); an empty list is Normal Attack (-1).
+        const none = Array.isArray(ids) && ids.some(id => Number(id) === 0);
         for (const raw of Array.isArray(ids) ? ids : []) {
             const id = Number(raw);
             if (!(id > 0) || seen.has(id)) continue;
             seen.add(id);
             list.push(id);
         }
-        damage.elementId = list.length ? list[0] : -1;
+        damage.elementId = list.length ? list[0] : (none ? 0 : -1);
         if (list.length >= 2) damage.elementIds = list;
         else delete damage.elementIds;
         return damage;
@@ -98,7 +105,7 @@ class ActionElements {
         const chosen = ActionElements.ids(damage);
         const extra = ActionElements.fromNote(note, names).filter(id => !chosen.includes(id));
         const all = chosen.concat(extra);
-        if (!all.length) return ActionElements._t('Normal Attack');
+        if (!all.length) return ActionElements._t(ActionElements.isNone(damage) ? 'None' : 'Normal Attack');
         if (all.length > ActionElements.SUMMARY_NAMES) return ActionElements._t('{count} elements', { count: all.length });
         return all.map(id => ActionElements.plainName((names || [])[id]) || `#${id}`).join(', ');
     }
@@ -174,7 +181,8 @@ class ActionElements {
         const record = options.record(id) || {};
         const names = options.names || [];
         const fromNote = ActionElements.fromNote(record.note, names);
-        let chosen = ActionElements.ids(record.damage);
+        // [0] stands for None in the popup, as write() takes it.
+        let chosen = ActionElements.isNone(record.damage) ? [0] : ActionElements.ids(record.damage);
         const nameHtml = name => (typeof window !== 'undefined' && window.RRIconCodes
             ? window.RRIconCodes.html(name)
             : (typeof globalThis.rrEscapeHtml === 'function' ? globalThis.rrEscapeHtml(name) : String(name)));
@@ -235,6 +243,8 @@ class ActionElements {
         // Normal Attack is a mode, pinned first: checking it clears the
         // elements, and checking any element clears it.
         const normal = row(nameHtml(ActionElements._t('Normal Attack')), chosen.length === 0, false, '');
+        // None: MZ's element 0, the choice for a heal or an item that has no element (178 of the Demo's skills).
+        const none = row(nameHtml(ActionElements._t('None')), chosen.length === 1 && chosen[0] === 0, false, '');
         const separator = document.createElement('div');
         separator.style.cssText = 'height:1px;margin:4px 0;background:var(--color-border);';
         list.appendChild(separator);
@@ -256,6 +266,8 @@ class ActionElements {
         const paint = () => {
             normal.box.checked = chosen.length === 0;
             tint(normal);
+            none.box.checked = chosen.length === 1 && chosen[0] === 0;
+            tint(none);
             for (const entry of rows) {
                 if (!fromNote.includes(entry.id)) {
                     entry.box.checked = chosen.includes(entry.id);
@@ -276,11 +288,15 @@ class ActionElements {
             chosen = [];
             commit();
         });
+        none.box.addEventListener('change', () => {
+            chosen = none.box.checked ? [0] : [];
+            commit();
+        });
         for (const entry of rows) {
             if (fromNote.includes(entry.id)) continue;
             entry.box.addEventListener('change', () => {
                 // Selection order is the stored order.
-                chosen = chosen.filter(v => v !== entry.id);
+                chosen = chosen.filter(v => v !== entry.id && v !== 0);
                 if (entry.box.checked) chosen.push(entry.id);
                 commit();
             });

@@ -354,3 +354,30 @@ test('a floor in hand lays a square of tiles at a click, and a line of floor tha
     stroke(manager, { x: 10, y: 2, z: 0 }, { x: 14, y: 2, z: 0 });
     assert.equal(E.pieces(map).filter(p => p.kind === 'floor' && p.x >= 10).length, 10, 'two tiles wide, five long');
 });
+
+test('ramps carrying one slope across tuck the side faces between them under it, so no seam flickers on a roof', () => {
+    // A plaster gable's ramp beside the tile ramps of its roof: same level, height and turn. Their side triangles
+    // lay back to back with their top edges in the roof's surface, and the two materials took turns along the seam.
+    const ramp = (id, x, y, rot, material) => R.normalizePiece({ id, kind: 'ramp', x, y, z: 7, rot, material });
+    for (const rot of [0, 1, 2, 3]) {
+        // The neighbour along the ramp's own east side (u 1): east, south, west, north as it turns.
+        const [dx, dy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][rot];
+        const gable = ramp(1, 5, 5, rot, 'Plaster'), tile = ramp(2, 5 + dx, 5 + dy, rot, 'RoofTile');
+        const data = { width: 20, height: 20, reactor3d: { version: 1, pieces: [gable, tile] } };
+        assert.deepEqual(R.hiddenFacesOf(gable, data), { rampEast: true, rampWest: false }, 'turn ' + rot);
+        assert.deepEqual(R.hiddenFacesOf(tile, data), { rampEast: false, rampWest: true }, 'turn ' + rot);
+        // The shared side stays (the sun's shadow pass draws far faces: without it a gable let light through,
+        // a lit strip under the verge), its top corner tucked under the slope; the alone piece's corner is on it.
+        const top = data2 => { const P = R.pieceGeometry([gable], data2).attributes.position.array; let y = -Infinity; for (let i = 1; i < P.length; i += 3) y = Math.max(y, P[i]); return { count: P.length / 3, top: y }; };
+        const alone = top({ width: 20, height: 20, reactor3d: { version: 1, pieces: [gable] } }), joined = top(data);
+        assert.equal(joined.count, alone.count, 'turn ' + rot + ': no face is left out');
+        const P = R.pieceGeometry([gable], data).attributes.position.array, highs = [];
+        for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i + 1] - (gable.z + 1 - R.RAMP_SEAM_TUCK)) < 1e-6) highs.push(i);
+        assert.equal(highs.length, 1, 'turn ' + rot + ': one corner, the shared side\'s, tucked under the slope\'s top');
+    }
+    // Another turn, height or level beside it: both sides stay.
+    const a = ramp(1, 5, 5, 0, 'Plaster');
+    for (const other of [ramp(2, 6, 5, 1, 'RoofTile'), R.normalizePiece({ id: 2, kind: 'ramp', x: 6, y: 5, z: 8, rot: 0 })]) {
+        assert.equal(R.hiddenFacesOf(a, { width: 20, height: 20, reactor3d: { version: 1, pieces: [a, other] } }), null);
+    }
+});

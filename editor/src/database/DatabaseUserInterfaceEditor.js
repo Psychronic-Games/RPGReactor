@@ -1433,7 +1433,13 @@ class DatabaseUserInterfaceEditor {
         if (!node) return;
         const roots = this.selectedIds?.has(id) ? this.selectionRoots() : [node];
         const source = this.current.nodes.filter(candidate => roots.some(root => candidate === root || this.wouldCycle(root.id, candidate.id)));
-        const ids = new Map(source.map((candidate, index) => [candidate.id, this.nextNodeId(this.current) + index]));
+        // One free id at a time: the lowest free id plus an index ran into ids in use (two layers sharing one).
+        const assigned = new Set(), ids = new Map();
+        for (const candidate of source) {
+            const id = this.nextNodeId(this.current, assigned);
+            assigned.add(id);
+            ids.set(candidate.id, id);
+        }
         this.pushUndo();
         const copies = source.map(candidate => {
             const copy = JSON.parse(JSON.stringify(candidate));

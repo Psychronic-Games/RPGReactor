@@ -23,11 +23,11 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
  assert.equal(JSON.parse(fs.readFileSync(path.join(project,'data',stem+'.json'),'utf8')).reactor3d,undefined);
  await loadMap(mapResult.id);const loadedSidecar=await driver.execute('return reactor.tilemapManager.currentMap.reactor3d;');assert.deepEqual(loadedSidecar.eventZ,expected.eventZ);assert.deepEqual(loadedSidecar.props,expected.props);assert.deepEqual(loadedSidecar.lighting,expected.lighting);
  await loadMap(2);
- await driver.executeAsync(`const done=arguments[arguments.length-1];window.confirm=()=>true;reactor.projectController.deleteMap(arguments[0]).then(done,e=>done({error:String(e.stack)}));`,[mapResult.id]);
+ await driver.executeAsync(`const done=arguments[arguments.length-1];window.confirm=()=>true;RRDialog.confirm=async()=>true;reactor.projectController.deleteMap(arguments[0]).then(done,e=>done({error:String(e.stack)}));`,[mapResult.id]);
  assert.equal(fs.existsSync(path.join(project,'data',stem+'.json')),false);assert.equal(fs.existsSync(path.join(project,'data',stem+'.r3d.json')),false);
  console.log('Map copy/load/delete: copied sidecar matches and both new files are removed.');
  // Check the older region tool after map changes, including a destroyed PIXI container.
- await driver.execute(`reactor.projectController.regionManager.toggleRegions();`);await loadMap(1);await loadMap(2);
+ await driver.execute(`reactor.tilesetPaletteViewer.selectLayer('R');`);await loadMap(1);await loadMap(2);
  const regions=await driver.execute(`const r=reactor.projectController.regionManager;r.renderRegions();return {enabled:r.enabled,live:!r.regionLayer.destroyed,parent:r.regionLayer.parent===reactor.tilemapManager.container};`);
  assert.deepEqual(regions,{enabled:true,live:true,parent:true});console.log('Region overlay survives map transitions:',regions);
  assert.deepEqual(await driver.execute('return __auditErrors;'),[]);

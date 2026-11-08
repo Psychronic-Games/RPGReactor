@@ -842,6 +842,11 @@ class EventCommandList {
     }
 
     renderCommandList(container, page, pageIndex) {
+        // A selection belongs to the page it was made on: another page or event starts with none (a row 10 kept
+        // for a 3-row page made Paste throw, and an index still in range acted on an unrelated row). The same page
+        // drawn again keeps it, within its rows.
+        if (this._selectionPage !== page) { this.selectedIndices = []; this._selectionPage = page; }
+        else this.selectedIndices = this.selectedIndices.filter(index => index >= 0 && index < (page.list || []).length);
         // Store current page for keyboard shortcuts
         this.currentPage = page;
         this.currentPageIndex = pageIndex;
@@ -2040,10 +2045,9 @@ class EventCommandList {
                     const directionNames = { 0: '', 2: ' ▼', 4: ' ◄', 6: ' ►', 8: ' ▲' };
                     description = `${charName} → (${this._fmtVarBracket(xVar)}, ${this._fmtVarBracket(yVar)})${directionNames[direction]}`;
                 } else if (type === 2) {
-                    // Exchange with event
-                    const mapId = params[2] || 1;
-                    const eventId = params[3] || 1;
-                    description = `${charName} ⇄ Map${mapId.toString().padStart(3, '0')} Event${eventId.toString().padStart(3, '0')}`;
+                    // Exchange with event: params[2] is the event swapped with (0 = this event), as the interpreter reads it.
+                    const other = Number(params[2]) || 0;
+                    description = `${charName} ⇄ ${other === 0 ? tt('This Event') : this._fmtEvent(other)}`;
                 }
                 break;
             }
@@ -3858,6 +3862,13 @@ class EventCommandList {
                     insertIndex = maxSelected;
                 } else {
                     insertIndex = maxSelected + 1;
+                    // A folded block's header: the new command goes after the block, where it can be seen
+                    // (inside, it went into the hidden body and only the count badge changed).
+                    const opener = page.list[maxSelected];
+                    if (opener && this.collapsedBlocks?.has(opener)) {
+                        const end = EventCommandList.findBlockEndIndex(page.list, maxSelected);
+                        if (end > maxSelected) insertIndex = end + 1;
+                    }
                 }
             } else {
                 insertIndex = page.list.length - 1; // Before the final End command
@@ -4713,6 +4724,18 @@ class EventCommandList {
                     this.refreshCommandList(page, pageIndex);
                 }
             }, page.list, index);
+            return;
+        }
+
+        // A branch row (When…, When Cancel, Else, If Win/Escape/Lose, End) edits the command it belongs to: its
+        // header, the nearest one before it at the same indent.
+        const headerCode = { 402: 102, 403: 102, 404: 102, 411: 111, 412: 111, 601: 301, 602: 301, 603: 301, 604: 301 }[command.code];
+        if (headerCode) {
+            for (let i = index - 1; i >= 0; i--) {
+                const row = page.list[i];
+                if (row && row.indent === command.indent && row.code === headerCode) { this.editCommand(i, page, pageIndex); return; }
+                if (row && row.indent < command.indent) break;
+            }
             return;
         }
 

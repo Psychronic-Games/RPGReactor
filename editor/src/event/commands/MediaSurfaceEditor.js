@@ -1930,7 +1930,7 @@ class MediaSurfaceEditor {
         };
         this._listen(closeButton, 'click', cancelEdit);
         this._listen(cancel, 'click', cancelEdit);
-        this._listen(overlay, 'pointerdown', event => { if (event.target === overlay) cancelEdit(); });
+        // (No cancel on a backdrop click: as in every other command dialog, a stray click must not throw the work away.)
         const accept = after => {
             this._resolveBinding();
             const errors = MediaSurfaceEditor.validate(this.operation, this.data, this.context,

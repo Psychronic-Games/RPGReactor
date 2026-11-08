@@ -23,7 +23,7 @@ const done=arguments[arguments.length-1];
  };
  for(const code of [11,12,13,14,21,22,23,31,32,33,34,41,42,43,44,51,52,53,54,55,61,62,63,64]){
   const entry=first('classes');entry.traits=[{code,dataId:1,value:1}];
-  await run(`Trait ${code}`,cb=>db.classEditor.traitEditor.showTraitEditorModal(entry,0,cb),entry,true);
+  await run(`Trait ${code}`,cb=>{db.classEditor.traitEditor.showTraitEditorModal(entry,0,cb);document.querySelector('input[name="trait-type"]:checked')?.dispatchEvent(new Event('change'));},entry,true);
  }
  for(const code of [11,12,13,21,22,31,32,33,34,41,42,43,44]){
   const entry=first('items');entry.effects=[{code,dataId:1,value1:1,value2:0}];

@@ -24,8 +24,9 @@ their runtime revision changes. Game and editor distribution preflights require
 the module, and the bundled Demo carries the same runtime.
 
 The file defines two globals. `ReactorHdrRenderer` is the light pipeline itself
-(float targets, bloom, one grade, the composite), one instance per WebGL1
-context and free of game state. `ReactorHdrOverlay` is the game's adapter:
+(float targets, bloom, one grade, the composite), one instance per WebGL
+context (the overlay's WebGL1, or PIXI's WebGL2 for the in-scene path) and free
+of game state. `ReactorHdrOverlay` is the game's adapter:
 sidecar requests, animation selection, the fallback twin and the overlay
 canvas. The editor loads the same file for its previews and keeps only the
 renderer (see Editor previews).
@@ -164,8 +165,9 @@ complete `ReactorHdrOverlay.overrides[effectName]` entry, including fallback.
   invalidates them, restoration creates them on the next HDR animation. The
   native module ends active HDR effects at context loss; it does not preserve
   their clock. New animations wait until the context is restored.
-- This supports the PixiJS 8 WebGL1 effect overlay. Scene-owned 3D effects and
-  older inline Pixi render paths do not use it. Refraction/distortion nodes must
+- This supports the WebGL1 effect overlay and the in-scene path on PIXI 8's
+  WebGL2 context. Effects the 3D scene draws on its own context (`Reactor3D.GpuEffects`) do
+  not use it. Refraction/distortion nodes must
   be excluded from HDR assets. A future authoring approach can start a separate
   ordinary refraction twin alongside the HDR effect; Effekseer cannot filter
   individual nodes during a draw. That synchronized twin is not implemented here.

@@ -198,6 +198,13 @@ class EventManager {
     }
 
     _restoreEventSelection() {
+        // The event window open over the map writes OK into the event it was opened on: after an undo or redo that
+        // is a copy the map no longer holds, so it follows the map's event of the same id (or OK saved to nothing).
+        const editor = this.eventEditor;
+        if (editor?.sourceEvent && (typeof editor.isOpen !== 'function' || editor.isOpen())) {
+            const now = (this.currentMap?.events || []).find(e => e && e.id === editor.sourceEvent.id);
+            if (now) editor.sourceEvent = now;
+        }
         if (!this.selectedEvent) return;
         this.selectedEvent = this.currentMap.events.find(e => e && e.id === this.selectedEvent.id) || null;
         this.selectedTileX = this.selectedEvent?.x ?? null;

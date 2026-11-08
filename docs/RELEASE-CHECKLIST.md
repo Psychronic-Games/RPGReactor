@@ -151,7 +151,7 @@ node editor/build-scripts/sync-runtime.cjs --check
 ```
 
 Run the real editor smokes with matching browser and SDK drivers before the
-candidate is cut. CI performs persistence, interaction-order, keyboard-navigation and event double-click checks in its `gui-smokes` job;
+candidate is cut. CI performs persistence, interaction-order, keyboard-navigation, menu and event double-click checks in its `gui-smokes` job;
 the UI-layout smoke remains a local release gate:
 
 ```bash
@@ -249,7 +249,8 @@ node editor/build-scripts/cut-release.cjs 0.99.5
 The second command stops if GitHub's `main` has commits the checkout lacks,
 runs CI's syntax check and the full test suite again, dates both changelog
 files for the version and their index lines, updates the package version and root README release link/count
-sentence, creates a release commit when needed, creates `v0.99.5`, and pushes
+sentence, moves the cycle's dated handoff entries to `docs/archive/handoff/<version>.md`,
+creates a release commit when needed, creates `v0.99.5`, and pushes
 the branch and tag. The editor README, status page, other version prose, and
 validation dates are not automatically refreshed; review those before cutting
 the release. The tag starts **Publish Release**, which publishes

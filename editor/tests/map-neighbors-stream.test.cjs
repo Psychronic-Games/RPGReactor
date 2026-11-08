@@ -140,6 +140,13 @@ test('the party\'s models go with it into the map entered; everybody else stays'
     assert.equal(to._modelInstances.get('e31'), bike, 'what it rides, as it is');
     assert.equal(to._modelInstances.get('p'), leader, 'the same model, as it is');
     assert.equal(leader.object.parent, group);
+    // Shifted into the entered map's tiles as they are carried: its first frame is drawn before an update syncs them.
+    const again = { _modelInstances: new Map([['p', holder()]]) }, into = { _modelInstances: new Map(), modelsGroup: () => group };
+    again._modelInstances.get('p').object.position.set(119.25, 2, 60.5);
+    N.carryParty(again, into, null, null, [], { x: -120, z: 0 });
+    const p = into._modelInstances.get('p').object;
+    assert.deepEqual([p.position.x, p.position.y, p.position.z], [-0.75, 2, 60.5]);
+    assert.equal(p.matrixWorld.elements[12], -0.75, 'its matrices too');
 });
 
 function crossingWorld() {
@@ -373,4 +380,37 @@ test('two neighbors of different styles, seeds and roughness have one land along
         if (plainLand[i] > 60 && plainLand[i] < 120 && (plainLand[i + 2] < 0 || plainLand[i + 2] > 120)) { if (Math.abs(plainLand[i + 1] - named[i + 1]) < 1e-6) same++; else changed++; }
     }
     assert.ok(same > 50 && changed === 0, `far from the neighbor the land is unchanged (${same} same, ${changed} changed)`);
+});
+
+test('cliffs rise at the border; high land meets high land along a shared corner\'s line, and low where either map is low', () => {
+    // Open Road's unconnected sides read as flat land to an invisible wall (owner, 2026-11-07).
+    const cliffs = flatMap(120, 120, { style: 'cliffs', rough: 0.5, seed: 9, height: 60 });
+    const g = R.surroundGeometry(cliffs, R.surroundOf(cliffs), { floorY: 0 });
+    const p = g.ground.positions;
+    let near = 0, out8 = 0;
+    for (let i = 0; i < p.length; i += 3) {
+        if (p[i] < 50 || p[i] > 70) continue;
+        if (p[i + 2] === -1) near = Math.max(near, p[i + 1]);
+        if (p[i + 2] === -8) out8 = Math.max(out8, p[i + 1]);
+    }
+    assert.ok(near < 3, `a tile out it is still near the map's height (${near})`);
+    assert.ok(out8 > 15, `eight tiles out it has climbed (${out8})`);
+    assert.deepEqual(R.surroundRings(160, true).slice(0, 10).map(r => r.d), [0, 1, 2, 3, 4, 5, 6, 8, 11, 16], 'rings for a face');
+    // The style the shared line climbs: both maps raise the edge, or neither line is raised; a map not read yet is waited for.
+    const N = R.Neighbors, records = new Map(N.records);
+    try {
+        // Corner k lies between side k and the next (north, east, south, west): corner 0 is north and east.
+        const scene = {};
+        const surround = R.normalizeSurround({ style: 'continue', edges: { north: 'cliffs' }, neighbors: { east: { map: 7 } } });
+        N.records.delete(7);
+        assert.deepEqual(R.surroundSeamStyles(scene, surround), [null, null, null, null], 'map 7 not read: low');
+        assert.deepEqual(scene._surroundSeamWait, [7], 'and waited for');
+        N.records.set(7, { state: 'ready', map: { reactor3d: { surround: { style: 'continue', edges: { north: 'cliffs' } } } } });
+        assert.deepEqual(R.surroundSeamStyles(scene, surround), ['cliffs', null, null, null], 'both maps\' cliffs: the line climbs as cliffs');
+        assert.equal(scene._surroundSeamWait, null);
+        N.records.set(7, { state: 'ready', map: { reactor3d: { surround: { style: 'mountains' } } } });
+        assert.equal(R.surroundSeamStyles(scene, surround)[0], 'mountains', 'cliffs beside mountains: mountains, from either map');
+        N.records.set(7, { state: 'ready', map: { reactor3d: { surround: { style: 'continue' } } } });
+        assert.equal(R.surroundSeamStyles(scene, surround)[0], null, 'beside low land: low');
+    } finally { N.records.clear(); for (const [k, v] of records) N.records.set(k, v); }
 });

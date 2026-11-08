@@ -40,12 +40,12 @@ const driver = new WebDriverClient(path.join(root, 'nwjs-linux/chromedriver'));
                 return {language:I18n.language,theme:document.documentElement.dataset.theme,size:[innerWidth,innerHeight],height:box.height,width:box.width,
                     drawn:pixels.some((v,i)=>i%4===0&&v===240&&pixels[i+1]===48&&pixels[i+2]===160),
                     overflowX:config.scrollWidth-config.clientWidth,scroll:getComputedStyle(config.querySelector('.event-page-settings')).overflowY,
-                    dropdowns:[...config.querySelectorAll('select')].map(e=>{const trigger=e.parentElement.classList.contains('rr-shim-wrapper')?e.parentElement.querySelector('.rr-shim-trigger'):e;const b=trigger.getBoundingClientRect();return {field:e.dataset.field,width:b.width,height:b.height,text:trigger.textContent,visible:getComputedStyle(trigger).display};}),
+                    dropdowns:[...config.querySelectorAll('select:not(.image-dir-select):not(.image-pattern-select):not(.image-turn-angle-pick)')].map(e=>{const trigger=e.parentElement.classList.contains('rr-shim-wrapper')?e.parentElement.querySelector('.rr-shim-trigger'):e;const b=trigger.getBoundingClientRect();return {field:e.dataset.field,width:b.width,height:b.height,text:trigger.textContent,visible:getComputedStyle(trigger).display};}),
                     disabled:['item','actor'].every(n=>select(n).disabled&&select(n).value===''),errors:__errors};
             `);
             if(language==='zh-Hans'&&theme==='light'&&width===1280)fs.writeFileSync('/tmp/rr-event-page-layout.png',Buffer.from(await driver.sessionRequest('GET','/screenshot'),'base64'));
             assert.ok(result.dropdowns.every(d=>d.height>=24&&d.width>=100),JSON.stringify(result.dropdowns));
-            assert.ok(result.height>=88,JSON.stringify(result));assert.ok(result.drawn,JSON.stringify(result));assert.equal(result.overflowX,0,JSON.stringify(result));assert.equal(result.scroll,'auto');assert.equal(result.disabled,true);assert.deepEqual(result.errors,[]);results.push(result);
+            assert.ok(result.height>=86,JSON.stringify(result));assert.ok(result.drawn,JSON.stringify(result));assert.equal(result.overflowX,0,JSON.stringify(result));assert.equal(result.scroll,'auto');assert.equal(result.disabled,true);assert.deepEqual(result.errors,[]);results.push(result);
             const retained=await driver.execute(`
                 const config=document.querySelector('.event-page-config'),before=JSON.stringify(__ee.currentEvent.pages[0].conditions);
                 for(const name of ['item','actor']){

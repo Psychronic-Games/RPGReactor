@@ -702,8 +702,15 @@ Game_Switches.prototype.setValue = function(switchId, value) {
 const _reactorWorldVariable = Game_Variables.prototype.setValue;
 Game_Variables.prototype.setValue = function(variableId, value) {
     _reactorWorldVariable.call(this, variableId, value);
-    if (ReactorWorldState.active && ReactorWorldState.variables.has(variableId)) ReactorWorldState.note("v", variableId, this.value(variableId), ReactorWorldState.operation);
-    ReactorOnlineParty.noteValue("v", variableId, this.value(variableId));
+    // The value is read back only when a shared world or party takes it: plugins replace Game_Variables.value
+    // (YEP, Olivia), and reading it on every write, offline included, crashed Star Shift Origins, Rebellion and
+    // Legacy at New Game.
+    const world = ReactorWorldState.active && ReactorWorldState.variables.has(variableId);
+    const party = ReactorOnlineParty.takesValue("v", variableId);
+    if (!world && !party) return;
+    const now = this.value(variableId);
+    if (world) ReactorWorldState.note("v", variableId, now, ReactorWorldState.operation);
+    if (party) ReactorOnlineParty.noteValue("v", variableId, now);
 };
 
 // Control Variables' Add and Subtract say what they mean, so the lane can keep it.

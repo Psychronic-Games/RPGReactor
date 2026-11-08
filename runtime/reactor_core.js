@@ -1365,6 +1365,10 @@ Graphics.FramePacing = {
         if (spriteset._reactor3dPending) return null;
         return spriteset;
     },
+    /** A border crossing without a break is under way (Reactor3D.Neighbors). */
+    crossing() {
+        return typeof Reactor3D !== "undefined" && !!(Reactor3D.Neighbors && Reactor3D.Neighbors.crossing);
+    },
     /** Whether this frame's map can be paced at all. */
     allowed() {
         if (!this.enabled || typeof SceneManager === "undefined" || SceneManager.trueSpeed === false) return false;
@@ -1373,6 +1377,7 @@ Graphics.FramePacing = {
     },
     /** A frame begins: its interval, and whether its map is paced (drawn by `draw`, not in the update). */
     begin(now) {
+        this._frameStart = now;
         this.noteInterval(now);
         const allowed = this.allowed();
         this._active = allowed && (this._paced || this._ease > 0);
@@ -1383,7 +1388,9 @@ Graphics.FramePacing = {
         if (this._active) {
             this._index++;
             if (Graphics.frameCount === 0) this._ease = this.EASE_FRAMES;
-        } else this._ease = 0;
+        } else if (!this.crossing()) this._ease = 0;
+        // (Over a border crossed without a break the pacing stands as it was: eased in again from nothing, the
+        // entered map's first frames were drawn at each update's own moment, up to an update ahead, and slid back.)
     },
     /** Whether `spriteset`'s world waits for a paced frame rather than drawing in its update. */
     drawsWorld(spriteset) {
@@ -1402,8 +1409,12 @@ Graphics.FramePacing = {
     /** How far between the update before last and the last this frame stands: 1 at the last. */
     alpha() {
         if (this._capturedAt !== Graphics.frameCount - 1) return 1;
-        // An update is made a tenth of a tick early (SceneManager.determineRepeatNumber).
-        const phase = (SceneManager._elapsedTime || 0) + 0.1;
+        // An update is made a tenth of a tick early (SceneManager.determineRepeatNumber). The picture is drawn when
+        // the frame's own work is done, not when the frame began: on a frame carrying an update that is 3 to 4 ms
+        // later, and a picture timed for the frame's start showed a fast camera turn 0.6 degrees behind, then
+        // caught up (owner's screen, 2026-11-07). So it is timed for now.
+        const late = Graphics.REAL_CLOCK && this._frameStart > 0 ? Math.max(0, performance.now() - this._frameStart) * 0.06 : 0;
+        const phase = (SceneManager._elapsedTime || 0) + 0.1 + late;
         const at = phase <= 0 ? 0 : phase >= 1 ? 1 : phase;
         // Eased from the updates' own moment (1) to the paced one over EASE_FRAMES, and back.
         const ease = this._ease / this.EASE_FRAMES;
@@ -1496,6 +1507,13 @@ Graphics.FramePacing = {
         into[k] = p.x; into[k + 1] = p.y; into[k + 2] = p.z;
         into[k + 3] = q?.x || 0; into[k + 4] = q?.y || 0; into[k + 5] = q?.z || 0; into[k + 6] = q?.w ?? 1;
         into[k + 7] = s?.x ?? 1; into[k + 8] = s?.y ?? 1; into[k + 9] = s?.z ?? 1;
+    },
+    /** Whether the draw under way shows a model at a place between two updates (swapPoses moved one). */
+    movedNow() {
+        if (!this._poseApplied) return false;
+        const moved = this._poseMoved;
+        for (let r = 0; r < this._poseRoots.length; r++) if (moved[r]) return true;
+        return false;
     },
     /** A draw's local transforms, then the authoritative transforms restored before any game update. */
     swapPoses(alpha, into) {
@@ -1727,6 +1745,23 @@ Graphics.FramePacing = {
 /** The screen refreshes ticked so far: work that may wait for a refresh with no update reads it. */
 Graphics.refreshCount = 0;
 
+/**
+ * The frame's step in updates by the clock the picture is shown by (`performance.now`), not the frame callback's
+ * timestamp. With no vsync those timestamps bunch and spread: a frame 1.1 ms after the last was stepped as if
+ * 4.9 ms had passed, one 9.3 ms after as if 1.2 ms, and the place drawn between updates (FramePacing.alpha, from
+ * the elapsed steps) wandered off the time it was shown at: a fast turn of the camera jittered by up to 0.4
+ * degrees (owner's screen, 2026-11-07; 14% of the frames between updates). A long gap (a pause, a stall) keeps
+ * the callback's own capped step. `REAL_CLOCK` false steps as before.
+ */
+Graphics.REAL_CLOCK = true;
+Graphics.realClockDelta = function(tickerDelta) {
+    const now = performance.now(), last = this._realTickAt;
+    this._realTickAt = now;
+    if (!this.REAL_CLOCK || !(last > 0)) return tickerDelta;
+    const real = (now - last) * 60 / 1000;
+    return real >= 0 && real <= 6 ? real : tickerDelta;
+};
+
 Graphics._onTick = function(deltaTime) {
     const prof = ReactorProfiler._active ? ReactorProfiler : null;
     if (prof) prof.frameBegin();
@@ -1758,12 +1793,12 @@ Graphics._onTick = function(deltaTime) {
     if (this._tickHandler) {
         // v5/v6/v7: callback receives delta as a number.
         // v8: callback receives the Ticker instance; extract its deltaTime.
-        const dt =
+        const dt = this.realClockDelta(
             typeof deltaTime === "number"
                 ? deltaTime
                 : (deltaTime && typeof deltaTime.deltaTime === "number"
                     ? deltaTime.deltaTime
-                    : 1);
+                    : 1));
         const tUpdate = prof ? performance.now() : 0;
         updates = this._tickHandler(dt);
         // Send any batched canvas->GPU uploads now that the frame's drawing is

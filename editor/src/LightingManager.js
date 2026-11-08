@@ -431,9 +431,16 @@ class LightingManager {
 
     ambient() {
         const map = this.map();
-        return map && typeof RRMapLights !== 'undefined'
-            ? RRMapLights.ambient(map)
-            : { ambient: 0.25, ambientColour: '#ffffff' };
+        if (!map || typeof RRMapLights === 'undefined') return { ambient: 0.25, ambientColour: '#ffffff' };
+        const held = RRMapLights.ambient(map);
+        // A map the game draws unlit (no lights, nothing turning lighting on, no ambient set) is fully lit there: the
+        // panel and the view show that, not the 25% the runtime gives a lit map. Placing a light or setting the
+        // ambient makes it a lit map, with the runtime's defaults.
+        const lighting = map.reactor3d && map.reactor3d.lighting;
+        const stored = !!(lighting && lighting.ambient !== undefined);
+        const modelLights = typeof Reactor3D !== 'undefined' && Array.isArray(Reactor3D._editorEffectLights) ? Reactor3D._editorEffectLights.length : 0;
+        if (!stored && !this.lit(map, modelLights, false, false)) return Object.assign({}, held, { ambient: 1 });
+        return held;
     }
 
     /**
@@ -442,13 +449,15 @@ class LightingManager {
      * `modelLights` being how many the caller resolved), or this tool is open
      * and shows the darkness its panel sets. `threeD` reads the note as the
      * 3D view does (`<3d lights>` only). An unlit map is drawn fully lit.
+     * `countOpen` false asks only what the game does, the open tool aside.
      */
-    lit(map = this.map(), modelLights = 0, threeD = false) {
+    lit(map = this.map(), modelLights = 0, threeD = false, countOpen = true) {
         if (!map || typeof Reactor3D === 'undefined') return false;
-        if (!Reactor3D.mapLightingChoice) return this.active || modelLights > 0 || this.lights().length > 0;
+        const open = countOpen && this.active;
+        if (!Reactor3D.mapLightingChoice) return open || modelLights > 0 || this.lights().length > 0;
         const said = Reactor3D.mapLightingChoice(map);
         if (said !== null) return said;
-        if (this.active || modelLights > 0) return true;
+        if (open || modelLights > 0) return true;
         const meta = Reactor3D.mapMeta(map);
         return !!(meta && (meta['3d lights'] || (!threeD && meta.lighting)));
     }

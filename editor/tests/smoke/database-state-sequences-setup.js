@@ -84,7 +84,7 @@ const phase=arguments[0],done=arguments[arguments.length-1];
   db.showImagePicker('Sequence picker',[],()=>picks++,()=>'',null,{allowNone:true});
   show('actors');check('image picker retired on section switch',document.getElementById('image-picker-modal').style.display==='none'&&picks===0);
   db.showChangeMaximumModal('Actors','actors',dm.getMaxEntries('actors'),()=>picks++);
-  const maximum=[...document.querySelectorAll('body > div')].find(e=>e.querySelector('.rr-database-maximum-input'));
+  const maximum=document.querySelector('.rr-dialog-input')?.closest('.rr-dialog-overlay');
   const maximumOK=maximum.querySelector('.rr-button-primary');show('items');maximumOK.click();
   check('maximum dialog retired on section switch',!maximum.isConnected&&picks===0);
   const icon=db.showIconPicker(0,()=>picks++,require('path').join(db.currentProject.path,'img/system/IconSet.png'));

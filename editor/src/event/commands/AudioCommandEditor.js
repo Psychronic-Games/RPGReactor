@@ -142,7 +142,8 @@ class AudioCommandEditor {
         // live for preview, and OK hands the clone back to the caller —
         // Cancel must leave the original command untouched.
         this.command = command ? JSON.parse(JSON.stringify(command)) : this.createDefaultCommand(code);
-        this.applyCurrentTrackDefaults();
+        // Only a new command starts on the track playing in the editor: an existing "(None)" (stop the music) stays none.
+        if (!command) this.applyCurrentTrackDefaults();
         this.callback = callback;
 
         if (this.commandType.folder && !this.commandType.fadeout) {
@@ -1078,7 +1079,7 @@ class AudioCommandEditor {
             tt('Duration (seconds):'),
             this.command.parameters[0] ?? 1,
             0,
-            10,
+            60,
             0.1,
             's',
             (value) => {

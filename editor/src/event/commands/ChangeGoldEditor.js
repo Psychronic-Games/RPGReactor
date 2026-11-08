@@ -315,7 +315,8 @@ class ChangeGoldEditor {
         input.type = 'number';
         input.min = 1;
         input.max = 9999;
-        input.value = this.operand || 1;
+        if (!(this.operand > 0)) this.operand = 1;
+        input.value = this.operand;
         input.style.cssText = `
             padding: 6px 10px;
             background-color: var(--color-bg-input);

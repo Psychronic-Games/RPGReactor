@@ -380,7 +380,8 @@ class DatabaseControlsEditor {
         root.querySelectorAll('.rr-controls-num').forEach(input => input.addEventListener('change', () => {
             const p = this.physics();
             const n = Number(input.value);
-            if (!Number.isFinite(n)) return;
+            // A cleared field keeps the value it had (Number('') is 0: no jumping, the least gravity).
+            if (input.value.trim() === '' || !Number.isFinite(n)) { input.value = p[input.dataset.field] ?? ''; return; }
             p[input.dataset.field] = Math.max(Number(input.min), Math.min(Number(input.max), n));
             this.savePhysics(p);
             if (input.dataset.field === 'gravity') this.renderPhysics();

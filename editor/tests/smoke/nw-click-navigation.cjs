@@ -17,8 +17,8 @@ const driver=new WebDriverClient(path.join(root,'nwjs-linux/chromedriver'));
     await driver.setScriptTimeout(60000);
     await driver.waitForScript('return window.SceneManager?._scene && window.$dataSystem && !SceneManager.isSceneChanging() && (SceneManager._scene instanceof Scene_Title || SceneManager._scene._role === "title");',[],{timeout:90000});
     await driver.execute('nw.Window.get().focus(); DataManager.setupNewGame(); SceneManager.goto(Scene_Map);');
-    await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && !!SceneManager._scene._spriteset?._reactor3d && $gamePlayer.canMove() && !SceneManager._scene.isBusy();',[],{timeout:60000});
-    await driver.executeAsync(`const done=arguments[arguments.length-1];$gameMap.setReactorCamera3D({mode:'firstPerson',pitch:20,yaw:0},0,false);Object.assign(Reactor3D.Camera.look,{yaw:0,pitch:20,lastX:null,lastY:null});setTimeout(done,150);`);
+    await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && SceneManager._scene.isStarted() && SceneManager._scene._fadeDuration===0 && !!SceneManager._scene._spriteset?._reactor3d && $gamePlayer.canMove() && !SceneManager._scene.isBusy();',[],{timeout:60000});
+    await driver.executeAsync(`const done=arguments[arguments.length-1];$gameMap.setReactorCamera3D({mode:'firstPerson',pitch:20,yaw:0},0,false);Object.assign(Reactor3D.Camera.look,{yaw:0,pitch:20,lastX:null,lastY:null});const start=Graphics.frameCount;setTimeout(function settle(){Graphics.frameCount-start>=5?done():setTimeout(settle,20);},150);`);
     const target=await driver.execute(`
         const camera=SceneManager._scene._spriteset._reactor3d.camera,canvas=Graphics._canvas.getBoundingClientRect();
         const queue=[{x:$gamePlayer.x,y:$gamePlayer.y,d:0}],seen=new Set();

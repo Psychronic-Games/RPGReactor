@@ -39,7 +39,7 @@ test('a project\'s rule stands for every shot; an action\'s own, or its weapon\'
     const flat = F.tactics(actor, w.$dataSkills[70]);
     assert.equal(F.reachAt(flat, 20, 0), 4);
     // Out-of-range numbers are held to the card's limits; a rule that is not one is not read.
-    assert.deepEqual(plain(F.readHeightReach({ levels: 0, most: 99 })), { levels: 1, most: 10 });
+    assert.deepEqual(plain(F.readHeightReach({ levels: 0, most: 99 })), { levels: 1, most: 50 });
     assert.equal(F.readHeightReach({ levels: 'x', most: 2 }), null);
     // Without a rule of its own an action has no key: the value reads as before.
     w.$dataSkills[71] = Object.assign({}, w.$dataSkills[1], { id: 71, hitType: 2, rrBattle: { range: { min: 1, max: 4 } } });

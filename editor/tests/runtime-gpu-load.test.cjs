@@ -95,7 +95,8 @@ test('model textures over the cap are resampled down at load', async () => {
 });
 
 test('the world is frozen once built and windows clip with a stencil rect on PIXI 8', () => {
-    assert.match(r3d, /this\._materials\.push\(material\);\s*\}\s*this\.freezeStaticMeshes\(\);/);
+    // The tiles' meshes, laid now (or on a neighbor's later part, `_deferredTiles`), then frozen with the rest.
+    assert.match(r3d, /this\._materials\.push\(material\);\s*\}\s*\};\s*if \(built\) layTiles\(built\);[\s\S]{0,400}?layTiles\(later\); this\.freezeStaticMeshes\(\);[\s\S]{0,40}?\};\s*this\.freezeStaticMeshes\(\);/);
     assert.match(r3d, /mesh\.updateMatrix\(\);\s*mesh\.matrixAutoUpdate = false;/);
     assert.match(core, /Window\.clipWithMask = true;/);
     assert.match(core, /this\._clientArea\.filters = \[\];\s*this\._clientArea\.filterArea = new Rectangle\(\);\s*this\._clipMask = new PIXI\.Graphics\(\);/);

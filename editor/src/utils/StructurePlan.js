@@ -719,7 +719,9 @@
         for (const [xa, xb] of [[bx0 - o, bx0 + 1], [bx1, bx1 + 1 + o]]) {
             slope(xa, xb, by0 + 1, 1, roofZ + 1, pitch - 1);
             slope(xa, xb, by1, -1, roofZ + 1, pitch - 1);
-            if (flat1 > flat0) box((xa + xb) / 2, (flat0 + flat1) / 2, roofZ + pitch - 0.25, [xb - xa, 0.25 + 0.1 + LIFT, flat1 - flat0]);
+            // A hair longer than the flat top at each end: the gable's top slabs end there, and faces in one plane
+            // took turns as the view moved (a plaster line flickering across the verge's end).
+            if (flat1 > flat0) box((xa + xb) / 2, (flat0 + flat1) / 2, roofZ + pitch - 0.25, [xb - xa, 0.25 + 0.1 + LIFT, flat1 - flat0 + 0.04]);
         }
     }
 

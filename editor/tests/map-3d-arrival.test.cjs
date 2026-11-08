@@ -226,6 +226,26 @@ test('a neighbor\'s pieces are laid a few chunks a part, then its water', () => 
     assert.equal(N.measured(record), true);
 });
 
+test('a neighbor\'s tiles are laid on parts of their own before its pieces: the build, then its meshes', () => {
+    // Made with its scene, they were two thirds of a 24 ms frame as the party rode toward a border (2026-11-07).
+    const R = load();
+    const N = R.Neighbors;
+    const calls = [];
+    const scene = { _scene: {}, _neighborGlobals: null,
+        addPieces() { calls.push('pieces'); }, layQueuedPieces() { calls.push('lay'); return true; }, addWater() { calls.push('water'); } };
+    scene._deferredTiles = () => { calls.push('tiles: build'); scene._deferredTiles = () => { calls.push('tiles: meshes'); scene._deferredTiles = null; }; };
+    const body = { stage: 1, scene, record: { map: { width: 4, height: 4 } }, at: { x: 0, z: 0 }, mapId: 2 };
+    const stages = [];
+    while (body.stage) { N.stage(body); stages.push(body.stage); }
+    assert.deepEqual(calls, ['tiles: build', 'tiles: meshes', 'pieces', 'lay', 'water']);
+    assert.deepEqual(stages, [1, 1, 2, 3, 0], 'not ready to be crossed into until all of it is laid');
+    // Only a neighbor's scene puts them off.
+    const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'runtime', 'reactor_3d_surround.js'), 'utf8');
+    assert.match(source, /\{ body: true, staged: true, deferTiles: true,/);
+    const world = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(world, /const tilesNow = !settings\.deferTiles;\n\s*const built = tilesNow \? buildTiles\(\) : null;/);
+});
+
 /** One `Name.prototype.method = function...` block of a runtime file, as written. */
 const block = (file, head) => {
     const source = fs.readFileSync(path.join(runtimeRoot, file), 'utf8');

@@ -14,6 +14,10 @@ const { secret, settings = {} } = config;
 const engine = settings.engine || {};
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const RELAY_BYTES = 16384, MAX_RELAYS_PER_SECOND = 120;
+// What one player's relays may send in a second, counted once per message whatever the number of recipients: a
+// host's real-time battle is tens of kilobytes a second (apos ten times a second), and 120 relays of 16 KB to 32
+// slots (about 60 MB a second) would back up everyone. At most 32 copies of this budget leave the server a second.
+const RELAY_BYTES_PER_SECOND = 262144;
 const RECORD = 12, REMOVED = 0xffffffff, REPLACED = 0xfffffffe;
 const NEIGHBOURS = 64, SNAPSHOT_HZ = Math.max(5, Math.min(30, Number(engine.rate) || 15));
 const IDLE_MS = Number(config.idleMs) || 600000;
@@ -318,9 +322,20 @@ function withinSetLimit(player) {
 /** A real-time battle's messages, straight to the players in it. The game that hosts the battle decides what is true; this only carries. */
 function relay(player, message) {
     const out = { t: 'bf', from: player.slot, m: message.m };
-    for (const slot of message.to.slice(0, 32)) {
+    const size = JSON.stringify(out).length;
+    const second = Math.floor(Date.now() / 1000);
+    if (player.relayBytesSecond !== second) { player.relayBytesSecond = second; player.relayBytes = 0; }
+    // The budget counts what the sender sends, once per message: counted per recipient, a host of a large battle
+    // (apos ten times a second to every guest) ran out each second and the guests last in `to` lost the rest of it.
+    // What one message can cost the server is held by the 32 recipients at most and the relay count.
+    if (player.relayBytes + size > RELAY_BYTES_PER_SECOND) return;
+    player.relayBytes += size;
+    for (const slot of new Set(message.to.slice(0, 32))) {
         const other = players.get(slot);
-        if (other && other !== player) sendText(other.socket, out);
+        if (!other || other === player) continue;
+        // A recipient already backed up misses this one, rather than being cut off for someone else's traffic.
+        if (other.socket.writableLength > MAX_QUEUE / 2) continue;
+        sendText(other.socket, out);
     }
 }
 

@@ -20,6 +20,9 @@
  */
 (function(root) {
     'use strict';
+    // The outfit picture's size when the caller names none. Test runs set smaller defaults (tests/helpers/small-pictures.cjs)
+    // for builds that judge geometry, as Model.build already honours; nothing in the editor sets them.
+    const atlasSize = cache => cache.atlasSize || globalThis.RR_DEFAULT_PICTURES?.atlas || 1024;
 
     const Marks=root.RRCharacterMarks||(typeof require==='function'?require('./CharacterMarks.js'):null);
     const front = a => Math.max(0, Math.cos(a));
@@ -1085,9 +1088,9 @@
         let cutParts = [], atlasTexture = null, key = null;
         if (entries.length) {
             const Atlas = root.RRCharacterAtlas || require('./CharacterAtlas.js');
-            key = JSON.stringify([items.filter(i => !BY_ID.get(i.id).modeled && !BY_ID.get(i.id).transfer).map(i => Object.fromEntries(Object.entries(i).filter(([k]) => !DETAIL_KEYS.has(k)))), cache.atlasSize || 1024, detailedCuts]);
+            key = JSON.stringify([items.filter(i => !BY_ID.get(i.id).modeled && !BY_ID.get(i.id).transfer).map(i => Object.fromEntries(Object.entries(i).filter(([k]) => !DETAIL_KEYS.has(k)))), atlasSize(cache), detailedCuts]);
             const store = cache.atlas || (cache.atlas = { key: null, layout: null });
-            if (store.key !== key) { store.layout = Atlas.layout(pack, entries, { size: cache.atlasSize || 1024 }); store.key = key; }
+            if (store.key !== key) { store.layout = Atlas.layout(pack, entries, { size: atlasSize(cache) }); store.key = key; }
             cutParts = Atlas.apply(store.layout, entries);
             atlasTexture = store.layout.texture;
             if (store.layout.emission) textures.push(store.layout.emission);
@@ -1820,7 +1823,7 @@
         // An armored boot's liner wears its own look (leather under the plates).
         if (raw.look) item = Object.assign({}, item, raw.look);
         const look = { kind: raw.kind, color: item.color, color2: item.color2, trim: item.trim, material: item.material, laces: !!raw.shoe.laces, lames: raw.shoe.lames, ...(item.wear > 0 ? { wear: item.wear } : {}) };
-        const pictureSize = cache.pictureSize || 512;
+        const pictureSize = cache.pictureSize || globalThis.RR_DEFAULT_PICTURES?.picture || 512;
         const key = JSON.stringify([made.template.key, look, pictureSize]);
         const store = cache.shoes || (cache.shoes = new Map());
         const name = 'shoes' + (n ? n + 1 : '') + '.png';

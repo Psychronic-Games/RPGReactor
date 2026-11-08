@@ -69,7 +69,10 @@ const ReactorOnlineClassic = {
     addAlly(snapshot, slot) {
         let id = this.FIRST_ACTOR_ID;
         while ($dataActors[id]) id++;
-        $dataActors[id] = Object.assign({}, $dataActors[snapshot.actorId], { id, name: snapshot.name, rrTemporary: true });
+        // An actor this game does not have (another version of it, or a made-up id) borrows the first party member's
+        // record: an actor with no class would stop the battle.
+        const base = $dataActors[snapshot.actorId] || $dataActors[$dataSystem.partyMembers?.[0]] || $dataActors.find(actor => actor);
+        $dataActors[id] = Object.assign({}, base, { id, name: snapshot.name, rrTemporary: true });
         const ally = new Game_RemoteAlly(id, snapshot);
         $gameActors._data[id] = ally;
         $gameParty._actors.push(id);

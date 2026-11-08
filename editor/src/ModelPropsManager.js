@@ -308,6 +308,8 @@ class ModelPropsManager {
         if (list.length) elevation.ensure(this.currentMap).props = list;
         else if (this.currentMap.reactor3d) delete this.currentMap.reactor3d.props;
         if (this.selectedId && !this.prop(this.selectedId)) this.selectedId = null;
+        // The view shows what is selected now: a model made later with the old id must not come back in rings.
+        this.mapEditor3D()?.selectProp?.(this.selectedId || null);
         this._changed();
     }
 
@@ -335,6 +337,8 @@ class ModelPropsManager {
         if (!prop) return false;
         const copy = JSON.parse(JSON.stringify(prop));
         delete copy.id;
+        // A copy is the map's own, not the stamped building's: removing or re-stamping that building took copies too.
+        delete copy.structure;
         ModelPropsManager.clipboard = copy;
         return true;
     }
@@ -382,6 +386,8 @@ class ModelPropsManager {
         // so changing them does not reach back into the one just placed.
         if (id) {
             this.selectedId = null;
+            // The 3D view lets go of the one it showed selected too (its rings stayed, while Delete did nothing).
+            this.mapEditor3D()?.selectProp?.(null);
             this._changed([id]);
         }
         return id;
@@ -420,7 +426,7 @@ class ModelPropsManager {
         this.pushUndo();
         const removed = elevation.removeProp(this.currentMap, id);
         if (removed) {
-            if (this.selectedId === id) this.selectedId = null;
+            if (this.selectedId === id) { this.selectedId = null; this.mapEditor3D()?.selectProp?.(null); }
             this._changed([id]);
         }
         return removed;

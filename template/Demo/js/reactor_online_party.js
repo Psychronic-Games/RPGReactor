@@ -67,8 +67,13 @@ const ReactorOnlineParty = {
         return !!text && ReactorWorldState.ids(text).has(id);
     },
 
+    /** Whether a change to this switch or variable is shared with the party now (so worth reading back). */
+    takesValue(kind, id) {
+        return !this.applying && !!this.party && this.shares(kind, id);
+    },
+
     noteValue(kind, id, value) {
-        if (this.applying || !this.party || !this.shares(kind, id)) return;
+        if (!this.takesValue(kind, id)) return;
         this.changes.set(kind + ":" + id, { kind, id: String(id), value });
         clearTimeout(this._valuesSoon);
         this._valuesSoon = setTimeout(() => this.flushValues(), 100);

@@ -227,8 +227,11 @@
         return tiles ? Object.keys(tiles).length : 0;
     };
 
+    // Empty only when no section holds anything: objects, roles (materials) and stand-ins are kept apart from the
+    // tile classes, and work in them alone was never written while `tilesets` was empty.
+    const hasEntries = section => !!section && typeof section === 'object' && Object.keys(section).length > 0;
     const isEmpty = data =>
-        !data || !data.tilesets || Object.keys(data.tilesets).length === 0;
+        !data || !['tilesets', 'objects', 'materials', 'standIns'].some(key => hasEntries(data[key]));
 
     /**
      * The tile a foliage cut-out draws. Autotiles answer for themselves; a B-E

@@ -13,7 +13,7 @@ const done=arguments[arguments.length-1];
    {separator:true},{label:I18n.tText('Delete'),enabled:false}
   ]);
   const menu=db._databaseActionMenu,rect=menu.getBoundingClientRect(),buttons=[...menu.querySelectorAll('button')];
-  const row={theme,language,labels:buttons.map(b=>b.querySelector('span').textContent),inViewport:rect.left>=0&&rect.top>=0&&rect.right<=innerWidth&&rect.bottom<=innerHeight};
+  const row={theme,language,labels:buttons.map(b=>b.querySelector('span').textContent),inViewport:(view=>rect.left>=0&&rect.top>=0&&rect.right<=view.innerWidth&&rect.bottom<=view.innerHeight)(menu.ownerDocument.defaultView)};
   row.localized=row.labels[0]===I18n.tText('Copy')&&(language==='en'||row.labels[0]!=='Copy');
   if(window.__auditTheme)row.sample=window.__auditTheme();
   buttons[0].click();row.actionInvoked=invoked;row.dismissed=!menu.isConnected;

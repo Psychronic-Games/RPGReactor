@@ -852,6 +852,19 @@ class ShowPictureEditor {
         input.addEventListener('input', (e) => {
             this[property] = Number(e.target.value) || 0;
         });
+        // When the field is left (OK blurs it first): within its range, and whole where the game wants a whole number.
+        // A cleared picture number saved 0, an opacity over 255 or a period under 1 left the picture undrawn.
+        const whole = ['pictureId', 'x', 'y', 'opacity', 'scaleX', 'scaleY'].includes(property);
+        let kept = Number(this[property]) || 0;
+        input.addEventListener('change', (e) => {
+            let value = Number(e.target.value);
+            // Emptied or unreadable: the last value it had.
+            if (e.target.value === '' || !Number.isFinite(value)) value = kept;
+            value = Math.max(Number(min), Math.min(Number(max), value));
+            if (whole) value = Math.round(value);
+            this[property] = kept = value;
+            e.target.value = String(value);
+        });
 
         section.appendChild(labelEl);
         section.appendChild(input);

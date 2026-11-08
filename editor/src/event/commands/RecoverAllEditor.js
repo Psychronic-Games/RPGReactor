@@ -161,7 +161,8 @@ class RecoverAllEditor {
         const varRadio = document.createElement('input');
         varRadio.type = 'radio'; varRadio.name = 'actor-select-314'; varRadio.id = 'actor-variable-314';
         varRadio.checked = (this.actorSelect === 1);
-        varRadio.addEventListener('change', () => { this.actorSelect = 1; this.renderContent(); });
+        // Entire Party (0) is no variable: the field showed 1 while 0 was saved, and Variable 0 recovered the whole party.
+        varRadio.addEventListener('change', () => { this.actorSelect = 1; if (!(this.actorId > 0)) this.actorId = 1; this.renderContent(); });
         const varLabel = document.createElement('label');
         varLabel.htmlFor = 'actor-variable-314'; varLabel.textContent = tt('Variable');
         varLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
@@ -169,7 +170,7 @@ class RecoverAllEditor {
 
         if (this.actorSelect === 1) {
             const varInput = document.createElement('input');
-            varInput.type = 'number'; varInput.min = 1; varInput.max = 9999; varInput.value = this.actorId || 1;
+            varInput.type = 'number'; varInput.min = 1; varInput.max = 9999; if (!(this.actorId > 0)) this.actorId = 1; varInput.value = this.actorId;
             varInput.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:80px;';
             varInput.addEventListener('input', (e) => { this.actorId = parseInt(e.target.value) || 1; });
             varRow.appendChild(varInput);

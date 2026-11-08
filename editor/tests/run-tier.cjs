@@ -52,6 +52,14 @@ function storeDir() {
     return dir;
 }
 
+/** Merges the last run's seconds into times.json; files not in that run keep their earlier record. */
+function keepTimes(dir, lastFile) {
+    let last = null, times = {};
+    try { last = JSON.parse(fs.readFileSync(lastFile, 'utf8')); } catch (error) { return; }
+    try { times = JSON.parse(fs.readFileSync(path.join(dir, 'times.json'), 'utf8')); } catch (error) { /* first run */ }
+    fs.writeFileSync(path.join(dir, 'times.json'), JSON.stringify(Object.assign(times, last), null, 1));
+}
+
 /** Passes as { file: fingerprint }, taking in whatever the last run recorded before it ended, however it ended. */
 function loadPasses(dir = storeDir()) {
     const store = path.join(dir, 'passed.json'), journal = path.join(dir, 'run.jsonl'), plan = path.join(dir, 'run.json');
@@ -94,8 +102,10 @@ function main(argv) {
     if (own.includes('--list')) { console.log(files.join('\n')); return 0; }
     // Ten workers at most, under a gigabyte each: a whole run takes minutes, and `npm run test:all` runs it at the lowest priority.
     const flags = ['--require=' + path.join(here, 'helpers', 'small-pictures.cjs'), '--test', '--test-concurrency=' + (option('concurrency') || Math.min(10, Math.max(2, os.availableParallelism() >> 1)))];
-    const measure = option('measure');
-    if (measure) flags.push('--test-reporter=' + path.join(here, 'helpers', 'file-times-reporter.mjs'), '--test-reporter-destination=' + path.resolve(measure), '--test-reporter=spec', '--test-reporter-destination=stdout');
+    // Every run records each file's seconds (times-last.json, merged into times.json after): what each file costs on
+    // this machine, kept current without a separate measuring run; --measure also writes them where asked.
+    const measure = option('measure'), lastTimes = path.join(dir, 'times-last.json');
+    flags.push('--test-reporter=' + path.join(here, 'helpers', 'file-times-reporter.mjs'), '--test-reporter-destination=' + (measure ? path.resolve(measure) : lastTimes), '--test-reporter=spec', '--test-reporter-destination=stdout');
     // Each test process reports as it ends, so what passed is kept even if this run never finishes.
     const facts = plan ? plan.facts : (({ nodes, salt }) => allTestFiles().map(file => Graph.describe(nodes, file, salt)))(graphOf());
     fs.writeFileSync(path.join(dir, 'run.json'), JSON.stringify(Object.fromEntries(facts.map(fact => [fact.file, fact.fingerprint]))));
@@ -104,6 +114,7 @@ function main(argv) {
     const run = spawnSync(process.execPath, [...flags, ...passed, ...files], { cwd: editor, stdio: 'inherit', env });
     if (run.error) throw run.error;
     loadPasses(dir);
+    keepTimes(dir, measure ? path.resolve(measure) : lastTimes);
     return run.status === null ? 1 : run.status;
 }
 

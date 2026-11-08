@@ -201,7 +201,8 @@ async function launch(app, profile) {
             ]}]});
         };
         const key = async name => {
-            await driver.executeAsync(`const done=arguments[arguments.length-1], key=arguments[0]; Input._currentState[key]=true; setTimeout(()=>{Input._currentState[key]=false; setTimeout(done,80);},60);`,[name]);
+            // Held for two game frames and released for two: a fixed 60 ms press was missed at a low frame rate.
+            await driver.executeAsync(`const done=arguments[arguments.length-1], key=arguments[0]; Input._currentState[key]=true; const after=(frames,next)=>{const start=Graphics.frameCount;const check=()=>Graphics.frameCount-start>=frames?next():setTimeout(check,10);check();}; after(2,()=>{Input._currentState[key]=false; after(2,done);});`,[name]);
         };
         assert.equal(await driver.execute(`
             const node=ReactorUI.normalizeNode({type:'gauge',gauge:'exp',width:300,height:32,label:'\\\\i[305] Knowledge'});

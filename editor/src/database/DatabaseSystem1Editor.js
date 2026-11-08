@@ -508,11 +508,11 @@ class DatabaseSystem1Editor {
                     ${tt('Enable Autosave')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
-                    <input type="checkbox" class="system-checkbox" data-field="optSplashScreen">
+                    <input type="checkbox" class="system-checkbox" ${system.optSplashScreen ? 'checked' : ''} data-field="optSplashScreen">
                     ${tt('Show Splash Screen')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
-                    <input type="checkbox" class="system-checkbox" data-field="optMessageSkip">
+                    <input type="checkbox" class="system-checkbox" ${system.optMessageSkip ? 'checked' : ''} data-field="optMessageSkip">
                     ${tt('Enable Message Skip')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;" title="${rrEscapeHtml(tt('A Show Text with no face picture shows the face of whoever speaks: an actor or an event of that name.'))}">
@@ -758,7 +758,7 @@ class DatabaseSystem1Editor {
         const held = battle && typeof battle === 'object' ? battle.heightReach : null;
         const levels = Math.trunc(Number(held && held.levels)), most = Math.trunc(Number(held && held.most));
         if (!Number.isFinite(levels) || !Number.isFinite(most)) return { levels: 2, most: 3 };
-        return { levels: Math.max(1, Math.min(10, levels)), most: Math.max(0, Math.min(10, most)) };
+        return { levels: Math.max(1, Math.min(10, levels)), most: Math.max(0, Math.min(50, most)) };
     }
 
     /** A stored `reactorBattle.partySize` as the game reads it: 1 to 99, or 0 for none. */
@@ -955,7 +955,7 @@ class DatabaseSystem1Editor {
                 </span>
                 <label for="system-battle-height-most" data-tactical${tactical}${keyed('db.battles.heightMost')}</label>
                 <span class="system-battle-inline" data-tactical${tactical}>
-                    <input type="number" id="system-battle-height-most" class="database-field-value system-battle-height-most" min="0" max="10" step="1" value="${height.most}">
+                    <input type="number" id="system-battle-height-most" class="database-field-value system-battle-height-most" min="0" max="50" step="1" value="${height.most}">
                     <span${keyed('db.battles.heightTiles')}</span>
                 </span>
                 <div class="system-battle-mode-hint" data-tactical${tactical}${keyed('db.battles.heightHint')}</div>

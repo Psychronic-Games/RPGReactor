@@ -4161,8 +4161,10 @@ Game_Event.prototype.isCollidedWithEvents = function(x, y) {
         // does not plow through anyone, and nobody walks into its side.
         return Reactor3D.bodyMeetsEvents(this, x, y, this._reactorMoveDirection(x, y));
     }
+    // As MZ: an event is stopped by any event that is not Through, whatever its priority (only the player ignores
+    // events below and above the characters).
     const events = $gameMap.eventsXyNt(x, y);
-    return events.some(event => event !== this && event.isNormalPriority());
+    return events.some(event => event !== this);
 };
 
 /** The facing a step onto (x, y) implies, for footprint sweep tests. */

@@ -261,6 +261,33 @@ test('a frame of the game reuses its vectors: who walks through, which chunks ar
     } finally { R._viewport = saved; }
 });
 
+test('a chunk alone in its region is culled like any other: one hidden far off is shown again near', () => {
+    const scene = Object.create(R.MapScene.prototype);
+    const group = new THREE.Group();
+    const lone = new THREE.Mesh(new THREE.BufferGeometry()), merged = new THREE.Mesh(new THREE.BufferGeometry());
+    lone.userData.rrFoliageChunk = { x0: 400, z0: 400, x1: 416, z1: 416, y0: 0, y1: 1 };
+    merged.userData.rrFoliageChunk = { x0: 0, z0: 0, x1: 16, z1: 16, y0: 0, y1: 1 };
+    // Listed in a batch of one, which never makes a mesh; the other drawn in its region's batch.
+    lone.userData.rrBatchedIn = { members: [lone], mesh: null };
+    merged.userData.rrBatchedIn = { members: [merged], mesh: {} };
+    merged.visible = false;
+    group.add(lone, merged);
+    group.updateMatrixWorld();
+    scene._foliageGroup = group;
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(8, 10, 8); camera.updateMatrixWorld();
+    const saved = R._viewport;
+    R._viewport = { camera: () => camera };
+    try {
+        scene.updateFoliageFrame([]);
+        assert.equal(lone.visible, false, 'past the fade');
+        camera.position.set(408, 10, 408); camera.updateMatrixWorld();
+        scene.updateFoliageFrame([]);
+        assert.equal(lone.visible, true, 'near again: shown');
+        assert.equal(merged.visible, false, 'a chunk its batch draws stays hidden');
+    } finally { R._viewport = saved; }
+});
+
 test('foliage is an extension the game, the editor and the builds all load', () => {
     assert.ok(R.EXTENSIONS.some(e => e.file === 'reactor_3d_foliage.js' && e.namespace === 'Foliage'));
     assert.ok(R.Foliage);

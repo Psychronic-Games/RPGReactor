@@ -707,3 +707,29 @@ test('the map objects ask the body rule, and say so where a plugin would look', 
     assert.equal(w.$gamePlayer.isCollidedWithEvents(9, 8), false);
     assert.equal(w.$gameMap.event(1).pos(8, 8), true);
 });
+
+test('a one-tile event is stopped by an event below the characters, as in MZ; the player is not', () => {
+    // MZ's Game_Event.isCollidedWithEvents: any event that is not Through (a wandering NPC never steps onto a
+    // Quick Event transfer); only the player ignores events below and above the characters.
+    const w = world({ events: [event(1, 5, 5), event(2, 5, 6, { pages: [page({ priorityType: 0 })] }), event(3, 6, 5, { pages: [page({ through: true })] })] });
+    const npc = w.at(1), player = w.$gamePlayer;
+    player.locate(2, 2);
+    w.tick();
+    assert.equal(npc.canPass(5, 5, 2), false, 'not onto the event below the characters');
+    assert.equal(npc.canPass(5, 5, 6), true, 'onto a Through event');
+    player.locate(5, 7);
+    w.tick();
+    assert.equal(player.canPass(5, 7, 8), true, 'the player walks onto it');
+});
+
+test('an event below the characters stops a one-tile walker on its own tile only, not over its model\'s footprint', () => {
+    // MZ has no footprints: a below-characters event is in the way on its tile. A floor-level model (a rug, a dock)
+    // laid wide must not wall off wandering NPCs.
+    const w = world({ events: [unit(3, 15, 11, 1, { pages: [page({ priorityType: 0 })] }), event(4, 15, 14), event(5, 14, 11)] });
+    const R = w.Reactor3D, floor = w.at(3);
+    w.$gamePlayer.locate(2, 2);
+    w.tick();
+    assert.equal(R._bodyCovers(floor, 15, 12, R._bodyRead()), true, 'the model covers the tile below its own');
+    assert.equal(w.at(4).isCollidedWithEvents(15, 12), false, 'a walker steps onto its footprint');
+    assert.equal(w.at(5).isCollidedWithEvents(15, 11), true, 'but not onto the event\'s own tile');
+});

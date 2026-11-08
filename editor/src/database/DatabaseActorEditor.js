@@ -922,6 +922,8 @@ class DatabaseActorEditor {
 
         this.databaseManager.updateActor(actorId, actor);
         console.log(`Updated actor ${actorId} field ${fieldName} to ${value}`);
+        // The Equipment section lists what the class can wear: drawn again for the new class.
+        if (fieldName === 'classId') this.refreshActorDetail(actor);
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.commonUI.updateStatus(`${fieldName} ${tt('updated')}`);

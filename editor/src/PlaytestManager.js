@@ -207,6 +207,13 @@ class PlaytestManager {
         }
     }
 
+    /** Said where it is seen: the status bar this used to write to is gone, so a failed launch did nothing visible. */
+    _tellLaunchFailed(message) {
+        // The reason is technical and stays in English (an install problem, or the system's own error text).
+        const tt = text => (typeof window !== 'undefined' && window.I18n ? window.I18n.tText(text) : text);
+        if (typeof RRDialog !== 'undefined' && RRDialog.alert) RRDialog.alert(String(message), { title: tt('Playtest'), kind: 'error' });
+    }
+
     launchPlaytestWindow(projectPath, mode) {
         if (mode === undefined) mode = 'test';
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
@@ -248,6 +255,7 @@ class PlaytestManager {
             if (this.lastResolveDebug) {
                 console.error('NW.js playtest resolver diagnostics:', this.lastResolveDebug);
             }
+            this._tellLaunchFailed('No NW.js program was found to run the game. A packaged editor needs nw.exe or nw beside it, or an nwjs-* folder.');
             return false;
         }
 
@@ -283,6 +291,7 @@ class PlaytestManager {
         child.on('error', (err) => {
             console.error('Failed to launch playtest:', err);
             if (this.playtestProcess === child) this.playtestProcess = null;
+            this._tellLaunchFailed(`The game could not be started: ${err && err.message ? err.message : err}`);
         });
 
         child.on('exit', (code, signal) => {

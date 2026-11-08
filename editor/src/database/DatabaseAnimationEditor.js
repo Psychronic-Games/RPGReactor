@@ -2188,6 +2188,8 @@ class DatabaseAnimationEditor {
                         duration: duration,
                         color: [red, green, blue, intensity]
                     };
+                    // Screen (2) and Hide Target (3) are kept as the runtime reads them; without it every flash was a target's.
+                    if (flashType === 2 || flashType === 3) flashData.scope = flashType;
 
                     animation.flashTimings.push(flashData);
                 }
@@ -3654,6 +3656,10 @@ class DatabaseAnimationEditor {
             if (!canvas.offsetParent) return;
             // Beside a live map, the keys are the Database's only after a click or Tab into it.
             if (typeof RRDatabaseWindow !== 'undefined' && !RRDatabaseWindow.ownsKeys()) return;
+            // Typing belongs to the field typed in: Delete in the Name box or a dialog's field deleted the selected
+            // cell (in Cell Properties, the cell being edited), and Ctrl+Z/C/X/V acted on frames.
+            const target = e.target;
+            if (target && (target.closest?.('input, textarea, select, [contenteditable="true"], #cell-properties-modal, #timing-modal'))) return;
 
             // Ctrl+Z - Undo
             if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {

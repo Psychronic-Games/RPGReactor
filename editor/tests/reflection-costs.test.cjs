@@ -209,7 +209,7 @@ test('the viewport hands a refresh with no update the owed face, once, and the e
     const at = core.indexOf('Reactor3D.Viewport.prototype.renderPass = function');
     const body = core.slice(at, core.indexOf('\n};', at));
     assert.match(body, /this\._matrixFrame = frame;\n\s*if \(typeof Graphics !== "undefined"\) this\._spareRefresh = Graphics\.refreshCount;/, 'the update\'s own refresh is not a spare one');
-    assert.match(body, /\} else if \(Reactor3D\.Reflections && typeof Graphics !== "undefined" && this\._spareRefresh !== Graphics\.refreshCount\) \{\n[^\n]*\n\s*this\._spareRefresh = Graphics\.refreshCount;\n\s*Reactor3D\.Reflections\.takeOwed\(this\._renderer, mapScene, scene\);/);
+    assert.match(body, /\} else if \(typeof Graphics !== "undefined" && this\._spareRefresh !== Graphics\.refreshCount\) \{\n[^\n]*\n\s*this\._spareRefresh = Graphics\.refreshCount;\n\s*const owed = this\._owedWork && this\._owedWork\.length \? this\._owedWork\.shift\(\) : null;\n\s*if \(owed\) owed\(\);\n\s*else if \(Reactor3D\.Reflections\) Reactor3D\.Reflections\.takeOwed\(this\._renderer, mapScene, scene\);/, 'a spare refresh takes the update\'s owed work first, then a reflection face');
     const coreJs = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
     const tickAt = coreJs.indexOf('Graphics._onTick = function'), tick = coreJs.slice(tickAt, coreJs.indexOf('\n};', tickAt));
     const start = tick.indexOf('this._fpsCounter.startTick();'), refresh = tick.indexOf('this.refreshCount++;'), pacing = tick.indexOf('pacing.begin(');

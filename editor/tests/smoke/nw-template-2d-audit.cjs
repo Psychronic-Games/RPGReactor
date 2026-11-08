@@ -8,7 +8,9 @@ const root=path.resolve(__dirname,'../../..');
 const option=(key,fallback)=>process.argv.find(a=>a.startsWith('--'+key+'='))?.slice(key.length+3)||fallback;
 const out=path.resolve(option('out','/tmp/rr-template-2d-audit'));fs.mkdirSync(out,{recursive:true});
 const selected=option('projects','').split('|').filter(Boolean);
-const projects=fs.readdirSync(path.join(root,'template')).filter(n=>!['Demo','MZ3D'].includes(n)&&(!selected.length||selected.includes(n)));
+// template/ also holds the original legacy games (RPG Maker 2000-VX Ace) that the
+// importer reads, and tool folders; only folders that are game projects are audited.
+const projects=fs.readdirSync(path.join(root,'template')).filter(n=>!['Demo','MZ3D'].includes(n)&&fs.existsSync(path.join(root,'template',n,'index.html'))&&(!selected.length||selected.includes(n)));
 const report=[];
 const battle=process.argv.includes('--battle');
 async function audit(name){

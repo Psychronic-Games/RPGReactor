@@ -4,7 +4,7 @@ Written 2026-10-02 as a proposal; the owner approved it the same day. Phase 1 (t
 
 The owner's ask: more combat types in one game (tactical, action, first person), switched by an event command, working on 2D and 3D maps with every camera, easy for a human to set up in an interface. The owner added a hard requirement: a tactical (and action) battle uses the whole map and event toolset, seamlessly, with as much power as possible.
 
-## What exists today
+## What existed when this was written
 
 | Part | Where | What it does |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ The owner's ask: more combat types in one game (tactical, action, first person),
 
 Reference systems in the tree:
 
-- **PSYCHRONIC_PTBS** (the owner's own, v1.0.4, 11,352 lines; enabled in the Demo and Project4): `template/Demo/js/plugins/PSYCHRONIC_PTBS.js`. Grid battles on the live map; `PTBS_Actor: X` / `PTBS_Enemy: Y` comments make events battlers; `<PTBS>` note blocks give skills `scope: circle(max,min)`, `aoe:`, `scope_select:`, action sequences; front/side/back damage multipliers; blocked regions; win conditions (defeat all, switch, variable, turn count) with commands. The closest match to this design and the likely "basic tactical battle plugin".
+- **PSYCHRONIC_PTBS** (the owner's own, v1.0.4, 11,352 lines; in the Demo's and Project4's plugin folders, turned off in the Demo's plugin list and not listed in Project4's): `template/Demo/js/plugins/PSYCHRONIC_PTBS.js`. Grid battles on the live map; `PTBS_Actor: X` / `PTBS_Enemy: Y` comments make events battlers; `<PTBS>` note blocks give skills `scope: circle(max,min)`, `aoe:`, `scope_select:`, action sequences; front/side/back damage multipliers; blocked regions; win conditions (defeat all, switch, variable, turn count) with commands. The closest match to this design and the likely "basic tactical battle plugin".
 - **LeTBS** (Star Shift Rebellion, about 30 add-ons): `template/Star Shift Rebellion/js/plugins/LeTBS*.js`. Battles on the map with turn order, line of sight, summoning, marks and auras, win conditions.
 - **GubiD GTBS** port (Pinnacle): `editor/src/legacy/plugins/RR_PinnacleGtbs*.js` (8,109 lines). Team turns, ranges, facing, terrain, knockback, armies, AI.
 - **Hendrix Action Combat MZ** (real-time, event-driven): `template/Hendrix RPG Maker Action Combat MZ (v166a)/js/plugins/Hendrix_Action_Engine.js` and its hotbar, animation and pixel-movement plugins. A reference for action combat built on events.
@@ -121,11 +121,11 @@ Action mode with the `firstPerson` camera and pointer lock: crosshair, aim by mo
 
 1. **The on-map battle framework** (built 2026-10-02, `runtime/reactor_fight.js`; the turn driver moves every unit itself, the player's controls come with phase 2). The mode switch (System, map, troop, Change Battle Mode), `$gameFight` beside the map with save and load mid-battle, events and party members as units with Database battlers, damage, skills, items and states applied on the map, victory, defeat and escape into the existing rewards and the Battle Processing branch, objectives, the pause rules for messages and events, the first commands and conditions (Start Battle on Map, Spawn Unit, Remove Unit, End Battle, unit defeated, turn start, unit enters area), and a minimal turn driver to exercise it. PTBS tags read. Classic untouched. *Playable:* a scripted fight on a Demo map with a reinforcement, saved and loaded mid-fight.
 2. **Tactical** (first version built 2026-10-03, `runtime/reactor_fight_tactical.js`). Grid movement and ranges, team or initiative turns, default skill ranges, simple AI, then the 3D world's height, line of sight, cover, water, doors and foliage costs, facing, the Range grid editor, AI presets, the tactical camera, HUD nodes. *Playable:* a fight across North Haven's square and lanes.
-3. **Action on 3D maps** (third person, top-down, isometric; first version built 2026-10-03, `runtime/reactor_fight_action.js`, switching the controlled character not built). Attack, dodge, guard, hotbar, lock-on, enemy presets, followers as allies, Action Sequences in real time. 2D action deferred. *Playable:* clearing the gorge.
+3. **Action on 3D maps** (third person, top-down, isometric; first version built 2026-10-03, `runtime/reactor_fight_action.js`, switching the controlled character not built). Attack, dodge, guard, hotbar, lock-on, enemy presets, followers as allies, Action Sequences in real time. 2D action was deferred here; Action and First Person battles now play on 2D maps too, aiming at the pointer ([BATTLE-MODES.md](BATTLE-MODES.md#action-and-first-person)). *Playable:* clearing the gorge.
 4. **First person** (first version built 2026-10-03). Crosshair, weapons, projectiles, aim, on the same framework and Action data. *Playable:* the same fight in first person.
 5. **2D action and polish.** Pixel movement for 2D action, controller tuning, accessibility (slow time, auto-target), more AI presets, tutorials in the Demo.
 
-Deferred throughout: networked play, mounted combat, destructible pieces.
+Deferred throughout, as written: networked play, mounted combat, destructible pieces. Shared battles between online players ([DESIGN-ONLINE.md](DESIGN-ONLINE.md#shared-battles)) and fighting from land vehicles in Tactical battles have since been built; destructible pieces have not.
 
 ## Decisions (owner, 2026-10-02)
 
@@ -138,7 +138,7 @@ Deferred throughout: networked play, mounted combat, destructible pieces.
 
 ## Decisions (owner, 2026-10-04)
 
-These replace decision 3 above. They are being built in the 0.98.9 cycle; STATUS.md says what has landed.
+These replace decision 3 above. They were built in the 0.98.9 cycle (`runtime/reactor_fight_flow.js`, `reactor_fight_classic.js`).
 
 1. Fight on sight is the default. Enemy units placed on a map start their fight when the party comes within 6 tiles and can see them. A map that has a Start Battle on Map command waits for its events instead. The start is held while an event runs, a message is open, the party is in a vehicle, swimming or moved by a route, while encounters are off, and after a battle until the leader has left every enemy's start distance once.
 2. The same holds on a Classic map: walking up to placed enemies opens a Classic battle against the placed enemies the start rule takes (at most eight, the nearest first), as a troop made for that battle from those units' records. Placing enemies never changes a map's mode.

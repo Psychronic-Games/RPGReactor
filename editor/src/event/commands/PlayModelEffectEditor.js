@@ -165,6 +165,8 @@ class PlayModelEffectEditor {
             ['-1', this._t('Player')]
         ].concat(events.map(event => [String(event.id),
             String(event.id).padStart(3, '0') + (event.name ? ': ' + event.name : '')]));
+        // A target this map does not list (another map's event, from a common event; a deleted one) stays as it was saved.
+        if (!targetOptions.some(([id]) => id === target)) targetOptions.push([target, `${this._t('Target')} ${target}`]);
         const control = 'flex:1;min-width:0;padding:4px 6px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);';
         modal.innerHTML = `
             <div class="rr-modal" style="width:min(440px,90vw);display:flex;flex-direction:column;">

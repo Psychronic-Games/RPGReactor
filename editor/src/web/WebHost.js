@@ -986,9 +986,9 @@
             }), { title: tt(feature) });
         },
         applyBrowserUi() {
-            for (const action of ['build-deployment', 'dist-editor', 'exit', 'new-project', 'open-project', 'close-project']) {
-                const item = document.querySelector(`[data-action="${action}"]`);
-                if (item) item.style.display = 'none';
+            // Every control for it, the toolbar's buttons as well as the menu's item (querySelector hid only the first).
+            for (const action of ['build-deployment', 'dist-editor', 'exit', 'new-project', 'open-project', 'close-project', 'save-project-as']) {
+                for (const item of document.querySelectorAll(`[data-action="${action}"]`)) item.style.display = 'none';
             }
             const buildMenu = document.querySelector('[data-menu="build"]');
             if (buildMenu) buildMenu.style.display = 'none';

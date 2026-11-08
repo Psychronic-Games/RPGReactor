@@ -181,6 +181,21 @@ test('a flood of shared changes is cut off at a limit', async t => {
     a.socket.close();
 });
 
+test('a battle host\'s relays reach every guest: the byte budget counts what the host sends, not each copy', async t => {
+    const engine = await start(t);
+    const players = [];
+    for (let slot = 0; slot <= 12; slot++) players.push(await join(engine, slot));
+    for (const player of players) assert.ok(await player.heard(m => m.t === 'ready'));
+    const [host, ...guests] = players, to = guests.map(guest => guest.slot);
+    // 25 messages of about 8 KB to 12 guests: 200 KB sent, 2.4 MB of copies. Counted per copy, the guests last in `to`
+    // lost all but the first two each second.
+    for (let i = 0; i < 25; i++) host.socket.send(JSON.stringify({ t: 'bf', to, m: { t: 'apos', i, pad: 'x'.repeat(8000) } }));
+    const last = guests.at(-1);
+    for (let waited = 0; waited < 3000 && last.inbox.filter(m => m.t === 'bf').length < 25; waited += 20) await sleep(20);
+    for (const guest of guests) assert.equal(guest.inbox.filter(m => m.t === 'bf').length, 25, `slot ${guest.slot} heard every message`);
+    for (const player of players) player.socket.close();
+});
+
 test('a rebuild can ask it to stop, and nobody else can', async t => {
     const engine = await start(t, {}, { stamp: 'build-1' });
     assert.equal(JSON.parse((await ask(engine.port, '/health')).text).stamp, 'build-1');

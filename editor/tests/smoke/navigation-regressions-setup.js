@@ -147,11 +147,12 @@ const done = arguments[arguments.length - 1];
     check('3D view opens',await view.setEnabled(true));
     const zoom3D=[];
     for(const fx of [0.2,0.5,0.8])for(const fy of [0.25,0.6])for(const deltaY of [-100,100]){
-        const rect=view.canvas.getBoundingClientRect(),x=rect.left+rect.width*fx,y=rect.top+rect.height*fy;
+        // Whole pixels: a fractional client position reaches the wheel handler rounded, and the anchor moves with it.
+        const rect=view.canvas.getBoundingClientRect(),x=Math.round(rect.left+rect.width*fx),y=Math.round(rect.top+rect.height*fy);
         const point=view.zoomAnchor(x,y);if(!point)continue;
         (view.inputSurface||view.canvas).dispatchEvent(new WheelEvent('wheel',{clientX:x,clientY:y,deltaY,bubbles:true,cancelable:true}));
         view.camera.updateMatrixWorld();const projected=point.clone().project(view.camera);
-        zoom3D.push(Math.hypot(projected.x-(fx*2-1),projected.y-(-fy*2+1)));
+        zoom3D.push(Math.hypot(projected.x-((x-rect.left)/rect.width*2-1),projected.y-(-(y-rect.top)/rect.height*2+1)));
     }
     measurements.zoom3D=zoom3D;
     check('3D cursor anchor across map',zoom3D.length===12&&zoom3D.every(d=>d<1e-7),zoom3D);

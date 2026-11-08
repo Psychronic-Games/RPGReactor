@@ -79,6 +79,9 @@ const ReactorOnlineAction = {
             const unit = fight._units.find(entry => entry.remoteSlot === from && !entry.gone);
             if (unit) { unit.remoteGuard = !!message.guard; unit.remoteSafeUntil = performance.now() + (message.safe || 0); }
         } else if (message.t === "afire" || message.t === "amotion") {
+            // Only for the unit this guest plays: a shot or a motion for anyone else's is not shown or passed on.
+            const unit = fight.unit(message.u);
+            if (!unit || unit.remoteSlot !== from) return;
             this.play(fight, message);
             ReactorOnlineBattle.send(message);
         }
@@ -88,10 +91,12 @@ const ReactorOnlineAction = {
     rollGuestHit(fight, message, from) {
         const unit = fight.unit(message.u), A = ReactorFight.Action;
         if (unit?.remoteSlot !== from || !fight.isAlive(unit)) return;
-        const targets = message.targets.map(id => fight.unit(id)).filter(target => target && fight.isAlive(target));
+        const targets = (Array.isArray(message.targets) ? message.targets.slice(0, 32) : []).map(id => fight.unit(id)).filter(target => target && fight.isAlive(target));
         if (!targets.length) return;
         this.fromGuest = true;
-        try { A.land(fight, unit, targets, message.kind, message.id, message.rate, 0, true); } finally { this.fromGuest = false; }
+        // A blow's share is at most a whole one (a pellet's is a part of it): a larger one sent is not believed.
+        const rate = Number.isFinite(message.rate) ? Math.max(0, Math.min(1, message.rate)) : 1;
+        try { A.land(fight, unit, targets, message.kind, message.id, rate, 0, true); } finally { this.fromGuest = false; }
     },
 
     /**
@@ -173,8 +178,27 @@ const ReactorOnlineAction = {
         const unit = fight.unit(message.u), character = unit ? fight.character(unit) : null;
         if (!character || fight.playerUnit() === unit) return;
         if (message.t === "amotion") { fight.playMotion(character, message.motion); return; }
+        const args = this.fairShot(message.args);
+        if (!args) return;
         this.echoing = true;
-        try { ReactorFight.Action.fire(fight, unit, ...message.args); } finally { this.echoing = false; }
+        try { ReactorFight.Action.fire(fight, unit, ...args); } finally { this.echoing = false; }
+    },
+
+    /**
+     * Another game's shot, as numbers this game can draw: every number finite, and the weapon's within what any
+     * weapon has (pellets, range, speed, blast, spread). A shot with a million pellets would stop every game shown it.
+     */
+    fairShot(args) {
+        if (!Array.isArray(args) || !args[0] || typeof args[0] !== "object") return null;
+        const n = (value, low, high, fallback) => Number.isFinite(value) ? Math.max(low, Math.min(high, value)) : fallback;
+        const p = args[0], profile = Object.assign({}, p, {
+            pellets: Math.round(n(p.pellets, 1, 16, 1)), range: n(p.range, 0, 200, 0), speed: n(p.speed, 0, 400, 0),
+            blast: n(p.blast, 0, 10, 0), damage: n(p.damage, 0, 1, 1), spread: n(p.spread, 0, 90, 2), aimSpread: n(p.aimSpread, 0, 90, 0.5)
+        });
+        // After the profile, as A.fire takes them: skillId, ox, oy, oz, dx, dy, dz, flat, spreadDegrees, mx, my, mz.
+        const rest = args.slice(1, 13).map(value => typeof value === "number" ? (Number.isFinite(value) ? value : 0) : value);
+        if (rest.length > 8) rest[8] = n(rest[8], 0, 90, 0);
+        return [profile, ...rest];
     }
 };
 

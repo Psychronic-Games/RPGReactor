@@ -139,10 +139,12 @@ test('text-code reference translates and searches Chinese without changing inser
     assert.equal(field.value, '\\G', 'insertion uses the original code');
 
     filter.value = '';
+    // English shows the source, Simplified Chinese its curated wording, every other language its catalogue's.
     for (const language of ['en', 'zh-Hant', 'ja', 'fr', 'zh-Hans']) {
         context.I18n.setLanguage(language, { persist: false });
         panel.refresh();
-        assert.equal(variableRow().children[1].textContent,
-            language === 'zh-Hans' ? '替换为第 n 个变量的值。' : source, language);
+        const expected = language === 'zh-Hans' ? '替换为第 n 个变量的值。' : language === 'en' ? source : context.I18n.tText(source);
+        if (language !== 'en' && language !== 'zh-Hans') assert.notEqual(expected, source, language + ' has its own wording');
+        assert.equal(variableRow().children[1].textContent, expected, language);
     }
 });

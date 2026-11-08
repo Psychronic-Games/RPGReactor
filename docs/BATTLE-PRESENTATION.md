@@ -2,7 +2,7 @@
 
 The 2026-09-11 reports on [phases and battler graphics](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held items and throws](archive/sessions/HELD-ITEMS-AND-THROWS-2026-09-11.md) record how those parts arrived; this page is the current guide.
 
-`BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System › Options › Announce enemies at battle start); `"escapeMessages": false` escapes, or fails to, without the Terms escape messages (System › Options › Show escape messages).
+`BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System 1 › Options › Announce enemies at battle start); `"escapeMessages": false` escapes, or fails to, without the Terms escape messages (System 1 › Options › Show escape messages).
 
 ## Battle party size
 
@@ -15,7 +15,7 @@ Old projects retain their existing runtime behavior until the field is edited. T
 1. Open **Database → Troops** and select a troop.
 2. In **Battle Scene**, choose **Battle Room**, then select the map. Demo map 004, **Reactor Room - Battle Map**, is the initial authored arena.
 3. Open **Set Up Room**. Select a party slot or enemy member, drag its marker, or enter exact X/Y/Z and facing values. Reset restores the default opposing formations. Positions belong to this troop; they do not edit the map or the old battleback positions.
-4. **Use Map Camera** inherits the map's camera preset and angles, including isometric, third-person and first-person modes for 3D maps. Third/first-person cameras follow the first party slot. Choose **Override This Troop** for a different camera. Ordinary 2D rooms use a top-down orthographic view. While dragging a marker, the setup camera stays fixed so following the marker cannot change the picking ray. On release, third-person framing eases back behind the first party slot.
+4. **Use Map Camera** inherits the map's camera preset and angles, including isometric, third-person and first-person modes for 3D maps. Third/first-person cameras follow the first party slot. Choose **Override for This Troop** for a different camera. Ordinary 2D rooms use a top-down orthographic view. While dragging a marker, the setup camera stays fixed so following the marker cannot change the picking ray. On release, third-person framing eases back behind the first party slot.
 5. Apply the setup, save the database and use the existing Battle Test. Switching back to **Battleback** restores conventional presentation.
 
 As of runtime **20260906.8**, room battles skip unused battleback files while keeping the background sprites expected by battle plugins. Map props retain the map editor’s authored direction, rotation and scale. Conventional battles keep their existing background loading.
@@ -165,7 +165,7 @@ A state's **Motion** (Database › States › Motion: a side-view motion, anothe
 
 In an older per-phase assignment, each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
 
-The builder lists **Where Used** references. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments, graphic settings and 3D model bindings travel with copied and duplicated records inside the same project; copying into another project does not carry unrelated sequence IDs.
+The builder lists the records that use a sequence under **Used by:**, and a click previews it as that record uses it. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments, graphic settings and 3D model bindings travel with copied and duplicated records inside the same project; copying into another project does not carry unrelated sequence IDs.
 
 ## Compatibility and storage
 

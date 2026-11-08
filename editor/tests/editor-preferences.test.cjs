@@ -102,6 +102,23 @@ test('a persisted 3D view is cleared before a new process can open a project', (
         'the next process requires an explicit 3D opt-in');
 });
 
+test('a save keeps keys another part of the editor wrote since start-up, and this manager\'s own changes win', () => {
+    const loaded = loadOptionsManager({ theme: 'dark', showGrid: true });
+    const manager = new loaded.OptionsManager();
+    // Written behind the manager's back after it read the record (the animation preview's background, a later option).
+    const stored = JSON.parse(loaded.store.get('rr-settings') || '{}');
+    loaded.store.set('rr-settings', JSON.stringify({ ...stored, previewBackground: '#123456', showGrid: false }));
+    manager.applyTheme('light');
+    const saved = JSON.parse(loaded.store.get('rr-settings'));
+    assert.equal(saved.theme, 'light', 'changed here: this copy wins');
+    assert.equal(saved.previewBackground, '#123456', 'a key this manager never had survives');
+    assert.equal(saved.showGrid, false, 'a key this manager did not change since it read the record is left as stored');
+    // A key this manager has that the source does not list by name is saved like any other.
+    manager.settings.someNewOption = 3;
+    manager.applyTheme('dark');
+    assert.equal(JSON.parse(loaded.store.get('rr-settings')).someNewOption, 3);
+});
+
 test('database list label preference validates, persists, dispatches, and exposes all three modes', () => {
     const loaded = loadOptionsManager();
     const manager = new loaded.OptionsManager();

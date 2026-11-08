@@ -10,11 +10,7 @@ None open.
 
 ## B. Decisions (recommendation in bold)
 
-1. Height reach "no limit": Most extra reach is 0–10 tiles (0 = off), and you asked for no limit. Either add a No limit checkbox, or **raise the maximum to 30, the reach cap, which behaves the same with no new control.**
-
-2. The Demo's Character Creation has **Anatomical detail** on, set in the project before this work and left as found. The Demo is on a public server and is the starter people see first, and a player can choose Nothing as an outfit. **Turn it off in the Demo** (Database › Character Creation); projects that want it can opt in.
-
-3. Exercise and floor poses now stay within the legs' reach, which moves the feet: sit knees up 5.9 cm, straddle 5.1, squat 4.8, straddle upright 4.4, lie back 3.7, sit-up 3.3, hip bridge 3.0, kneel 2.8, crawl 2.3, hands and knees 1.7. The kneeling stretches are unchanged. **Keep these unless one looks wrong in the Builder**; a pose you prefer as it was can take the same labelled allowance as the stretches.
+None open.
 
 ## C. Only the owner can do these
 
@@ -23,6 +19,4 @@ The owner reviews North Haven, playtests battles and tries weaker hardware on th
 1. Look at the weak-GPU picture on the UHD 630: edges, beams, and the `"cas"` against the `"crisp"` upscale (later).
 2. Look at the Preview 62 vehicles and props (`scratchpad/prop-audit-wasteland-20261030/comparison.html`) for visual acceptance (later). This replaces the Preview 47 vehicle review, whose gallery is gone.
 3. By hand, in third person on a 3D map: ride a vehicle and press Escape once. It should get off, not open the menu (fixed at runtime 20261024.3, checked in Node only).
-4. Name the house and location of the wall/roof flicker, and whether it shows in the game, the editor or both. It has not been reproduced without them.
-5. Share the recipe or preset behind the pointy under-chin shadows. The default recipe does not reproduce them.
-6. Done 2026-11-02: WebSockets are on for Engine mode on the demo server.
+4. Share the recipe or preset behind the pointy under-chin shadows. The default recipe does not reproduce them.

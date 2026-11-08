@@ -539,8 +539,13 @@ Reactor3D.Quality = {
     /** The main thread is what a frame waits for when its work takes this share of the frame, or of a refresh's budget. */
     BOUND: 0.6,
     BOUND_OF_BUDGET: 0.75,
-    /** Ticks not judged after a step or a new map (loading, new programs), and a gap this long (ms) is not play. */
+    /**
+     * Ticks not judged after a step or a new map (loading, new programs), and a gap this long (ms) is not play.
+     * The rest is also at least REST_MS: counted in frames alone it was 2 s at 60 Hz but 0.7 s at 180 Hz (less
+     * with no vsync), so a fast screen judged a map's arrival as play and stepped its quality down for good.
+     */
     REST_TICKS: 120,
+    REST_MS: 2500,
     GAP_MS: 250,
     /** Calm windows before a step up is tried at the next map, and the windows it must then hold for. */
     PROBE_CALM: 5,
@@ -552,7 +557,7 @@ Reactor3D.Quality = {
     _gpu: 0, _cpu: 0, _half: false,
     g: 0, c: 0, h: false,
     _taken: [], _loaded: false, _ceiling: false, _probe: null, _probeLeft: 0,
-    _rest: 0, _calm: 0, _slowRun: 0, _mapId: 0,
+    _rest: 0, _restUntil: 0, _calm: 0, _slowRun: 0, _mapId: 0,
     _last: 0, _elapsed: 0, _ticks: 0, _draws: 0, _busy: 0, _busyTicks: 0, _tickStart: 0, _worldTick: false, _drew: false, _lastDraw: 0,
     _refreshMs: Infinity, _tickLast: 0, _intervals: null, _sorted: null, _intervalCount: 0,
 
@@ -632,10 +637,16 @@ Reactor3D.Quality = {
         this._gpu = 0; this._cpu = 0; this._half = false;
         this._taken = []; this._ceiling = false; this._probe = null; this._calm = 0; this._slowRun = 0;
         this.clearWindow();
-        this._rest = this.REST_TICKS;
+        this.rest();
         this.keep();
     },
 
+    /** A rest begins: REST_TICKS frames and REST_MS, whichever ends later. */
+    rest() {
+        this._rest = this.REST_TICKS;
+        // From the clock the frames are judged on (tickBegin's), so a rest and the windows read the same time.
+        this._restUntil = (this._tickStart || 0) + this.REST_MS;
+    },
     clearWindow() {
         this._elapsed = 0; this._ticks = 0; this._draws = 0; this._busy = 0; this._busyTicks = 0;
     },
@@ -658,7 +669,7 @@ Reactor3D.Quality = {
         this._taken.push(step);
         // A step up that did not hold is not tried again this session.
         if (this._probe) { this._probe = null; this._ceiling = true; }
-        this._rest = this.REST_TICKS;
+        this.rest();
         this._calm = 0;
         this.keep();
         return step;
@@ -669,7 +680,7 @@ Reactor3D.Quality = {
         const step = this._taken.pop();
         if (!step) return null;
         if (step === "cpu") this._cpu--; else if (step === "gpu") this._gpu--; else this._half = false;
-        this._rest = this.REST_TICKS;
+        this.rest();
         this.keep();
         return step;
     },
@@ -680,7 +691,7 @@ Reactor3D.Quality = {
         const first = !this._mapId;
         this._mapId = mapId;
         this.clearWindow();
-        this._rest = this.REST_TICKS;
+        this.rest();
         this._slowRun = 0;
         if (first || this.enabled === false || this.setting() !== "auto") { this._calm = 0; return; }
         if (!this._ceiling && !this._probe && this._taken.length && this._calm >= this.PROBE_CALM) {
@@ -745,7 +756,9 @@ Reactor3D.Quality = {
         if (!this._worldTick) return;
         if (this._drew) { this._busy += now - this._tickStart; this._busyTicks++; }
         if (this.enabled === false || this.setting() !== "auto") { this.clearWindow(); return; }
-        if (this._rest > 0) { this._rest--; this.clearWindow(); return; }
+        // A rest's end further ahead than a rest lasts is a clock that started again (a new session): not a rest.
+        const resting = now < this._restUntil && this._restUntil - now <= this.REST_MS;
+        if (this._rest > 0 || resting) { if (this._rest > 0) this._rest--; this.clearWindow(); return; }
         if (this._elapsed < this.WINDOW_MS || this._ticks < this.MIN_TICKS) return;
         const perSecond = this._draws * 1000 / this._elapsed, wanted = this.wantedPerSecond();
         const short = Math.max(0, 1 - perSecond / wanted);
@@ -3184,6 +3197,29 @@ Reactor3D.prepareWorldFrame = function(renderer, mapScene, scene, camera, shadow
 };
 
 /**
+ * Whether an update's shadow rows and reflections go to the refreshes after it (`SPREAD_UPDATE_WORK`): only while
+ * the frames are paced and come at least twice an update, so there is a spare refresh to take them.
+ */
+Reactor3D.SPREAD_UPDATE_WORK = true;
+/** Moving casters' shadows are drawn again on a refresh between updates that moved a model (Viewport.renderPass). */
+Reactor3D.SHADOWS_FOLLOW_REFRESH = true;
+Reactor3D.Viewport.prototype.shadowsFollowRefresh = function() {
+    const pacing = typeof Graphics !== "undefined" ? Graphics.FramePacing : null;
+    return Reactor3D.SHADOWS_FOLLOW_REFRESH && !!pacing && typeof pacing.movedNow === "function" && pacing.movedNow();
+};
+Reactor3D.Viewport.prototype.spreadsUpdateWork = function() {
+    const pacing = typeof Graphics !== "undefined" ? Graphics.FramePacing : null;
+    return Reactor3D.SPREAD_UPDATE_WORK && !!pacing && !!pacing._active && pacing.ratio() >= 2;
+};
+
+/** Work an earlier update left for spare refreshes, done now (a new update came first, or the view is torn down). */
+Reactor3D.Viewport.prototype.runOwedWork = function() {
+    const owed = this._owedWork;
+    this._owedWork = null;
+    if (owed) for (const work of owed) work();
+};
+
+/**
  * Draw one pass on its own, over a cleared canvas.
  *
  * The two passes sandwich the character sprites: the ground goes down, PIXI
@@ -3202,18 +3238,45 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
     const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : -1;
     if (scene) {
         if (scene.matrixWorldAutoUpdate !== false) scene.matrixWorldAutoUpdate = false;
+        const map = typeof $dataMap !== "undefined" ? $dataMap : null, scale = this.upscaled() ? this._scale : 1;
+        const shadowWork = () => {
+            // The shadow maps, while every group is still visible, then the map's still lights from the volume
+            // (after the rows are chosen).
+            if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null, undefined);
+            if (Reactor3D.LightVolume) Reactor3D.LightVolume.frame(this._renderer, mapScene, map);
+        };
+        const reflectionWork = () => Reactor3D.prepareReflections(this._renderer, mapScene, scene, this._camera, scale);
         if (this._matrixFrame !== frame) {
             this._matrixFrame = frame;
             if (typeof Graphics !== "undefined") this._spareRefresh = Graphics.refreshCount;
+            // Work an update left owed and no spare refresh took: done now, before this update's own.
+            this.runOwedWork();
             scene.updateMatrixWorld();
-            // The shadow maps, while every group is still visible, then the reflections.
-            Reactor3D.prepareWorldFrame(this._renderer, mapScene, scene, this._camera, undefined, this.upscaled() ? this._scale : 1);
-            // The map's still lights, from the volume (after the rows are chosen).
-            if (Reactor3D.LightVolume) Reactor3D.LightVolume.frame(this._renderer, mapScene, typeof $dataMap !== "undefined" ? $dataMap : null);
-        } else if (Reactor3D.Reflections && typeof Graphics !== "undefined" && this._spareRefresh !== Graphics.refreshCount) {
-            // A refresh with no update: the reflection face the last update left.
+            // A scene new to this view (the first frame of a map, or of one crossed into) draws its shadows and
+            // reflections in its own frame: put off a refresh, that frame took the shadows laid for the map before.
+            const freshScene = this._spreadScene !== mapScene;
+            this._spreadScene = mapScene;
+            if (!freshScene && this.spreadsUpdateWork()) {
+                // A screen faster than the game's 60: the shadow rows and the reflections go to the refreshes
+                // between this update and the next, one each, so the frame carrying the update costs what the
+                // others do. Seen a refresh later (2 to 8 ms), they show the same moment.
+                if (Reactor3D.DrawBatches) Reactor3D.DrawBatches.flush(this._renderer);
+                shadowWork.shadows = true;
+                this._owedWork = [shadowWork, reflectionWork];
+            } else {
+                Reactor3D.prepareWorldFrame(this._renderer, mapScene, scene, this._camera, undefined, scale);
+                if (Reactor3D.LightVolume) Reactor3D.LightVolume.frame(this._renderer, mapScene, map);
+            }
+        } else if (typeof Graphics !== "undefined" && this._spareRefresh !== Graphics.refreshCount) {
+            // A refresh with no update: the next piece of work the last update left, else a reflection face.
             this._spareRefresh = Graphics.refreshCount;
-            Reactor3D.Reflections.takeOwed(this._renderer, mapScene, scene);
+            const owed = this._owedWork && this._owedWork.length ? this._owedWork.shift() : null;
+            if (owed) owed();
+            else if (Reactor3D.Reflections) Reactor3D.Reflections.takeOwed(this._renderer, mapScene, scene);
+            // The moving casters' shadows follow the models this refresh moved (Graphics.FramePacing.swapPoses):
+            // drawn once an update, a ridden motorcycle's shadow stood behind it and caught up, by more the faster
+            // it went. The shadow pass redraws only what moved past SHADOW_DYNAMIC_MOVE; the still half stands.
+            if (!(owed && owed.shadows) && this.shadowsFollowRefresh() && mapScene.renderShadows) mapScene.renderShadows(this._renderer, null, undefined);
         }
     }
     mapScene.setPass(which);
@@ -7837,6 +7900,18 @@ Reactor3D.MapScene.prototype.setPass = function(which) {
     // Never with the others: the light pass is composited by addition and the
     // rest by covering, so drawing them together would blend one as the other.
     if (this._lightGroup) this._lightGroup.visible = which === "lights";
+    // Neighbouring maps (Reactor3D.Neighbors) hang their whole scene off this one: they take the same pass, or
+    // their ground was drawn into the above and overlay passes (over the player) and added into the lights pass.
+    const bodies = this._neighborBodies;
+    if (bodies && !this._settingPass) {
+        this._settingPass = true;
+        try {
+            for (const side in bodies) {
+                const neighbor = bodies[side] && bodies[side].scene;
+                if (neighbor && neighbor !== this && typeof neighbor.setPass === "function") neighbor.setPass(which);
+            }
+        } finally { this._settingPass = false; }
+    }
 };
 
 Reactor3D.MapScene.prototype.scene = function() {
@@ -8321,37 +8396,6 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
         console.warn("Reactor3D: event props skipped —", error);
         Reactor3D._eventProps = null;
     }
-    const built = Reactor3D.Geometry.build(mapData, {
-        tileSize,
-        elevationAt: (x, y) => Reactor3D.elevationAt(mapData, x, y),
-        // Authored classification where it exists, flags as the guess where it
-        // does not.
-        isUpright: Reactor3D.uprightPredicate(tilesetId, flags),
-        // An authored upright is never second-guessed by the facade cap.
-        isAuthored: tileId => Reactor3D.isClassified(tilesetId, tileId),
-        isScenery: Reactor3D.sceneryPredicate(tilesetId),
-        isFoliage: Reactor3D.foliagePredicate(tilesetId),
-        isPanel: Reactor3D.panelPredicate(tilesetId),
-        // The same flag the 2D tilemap's upper layer uses, so a character walks
-        // behind the same things in both views.
-        isAbove: Reactor3D.abovePredicate(flags),
-        standInFor: tileId => Reactor3D.standInFor(tilesetId, tileId),
-        topFaceFor: tileId => Reactor3D.topFaceFor(tilesetId, tileId),
-        declaredAt: tileId => Reactor3D.objectAt(tilesetId, tileId),
-        // Painted on the map rather than derived from the tileset: which cells
-        // the author says are one building.
-        paintedAt: (x, y, layer) => Reactor3D.objectIdAt(mapData, x, y, layer),
-        isPaintedGround: (x, y, layer) => Reactor3D.objectGroundAt(mapData, x, y, layer),
-        sheetSize: setNumber => {
-            const bitmap = bitmaps && bitmaps[setNumber];
-            // The sheet's real size, so a non-standard sheet still maps its
-            // pixels correctly rather than being stretched to an assumed 768.
-            return {
-                width: (bitmap && bitmap.width) || 768,
-                height: (bitmap && bitmap.height) || 768
-            };
-        }
-    });
 
     // The floor and the parallax grounds are one quad each; on a shaped map
     // they are cut into a grid and bent through the terrain like the tiles.
@@ -8361,24 +8405,64 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
     // The map when ground types are painted on it: the floor then wears them (groundLayers, reactor_3d_world.js).
     this._groundMap = Reactor3D.hasGround && Reactor3D.hasGround(mapData) ? mapData : null;
     this._ground = null;
-    if (this._terrainMap) {
-        for (const group of built.groups) {
-            if (group.positions) group.baseY = Reactor3D.terrainBaseY(group.positions);
+    // The 2D tiles as 3D ground and walls (Geometry.build), with what each cell's surface ended up at. A
+    // neighboring map's world (`deferTiles`, Reactor3D.Neighbors) does this on frames of its own after the rest
+    // of its scene: in the frame that made the scene it was two thirds of a 24 ms frame mid-ride (2026-11-07).
+    const buildTiles = () => {
+        const built = Reactor3D.Geometry.build(mapData, {
+            tileSize,
+            elevationAt: (x, y) => Reactor3D.elevationAt(mapData, x, y),
+            // Authored classification where it exists, flags as the guess where it
+            // does not.
+            isUpright: Reactor3D.uprightPredicate(tilesetId, flags),
+            // An authored upright is never second-guessed by the facade cap.
+            isAuthored: tileId => Reactor3D.isClassified(tilesetId, tileId),
+            isScenery: Reactor3D.sceneryPredicate(tilesetId),
+            isFoliage: Reactor3D.foliagePredicate(tilesetId),
+            isPanel: Reactor3D.panelPredicate(tilesetId),
+            // The same flag the 2D tilemap's upper layer uses, so a character walks
+            // behind the same things in both views.
+            isAbove: Reactor3D.abovePredicate(flags),
+            standInFor: tileId => Reactor3D.standInFor(tilesetId, tileId),
+            topFaceFor: tileId => Reactor3D.topFaceFor(tilesetId, tileId),
+            declaredAt: tileId => Reactor3D.objectAt(tilesetId, tileId),
+            // Painted on the map rather than derived from the tileset: which cells
+            // the author says are one building.
+            paintedAt: (x, y, layer) => Reactor3D.objectIdAt(mapData, x, y, layer),
+            isPaintedGround: (x, y, layer) => Reactor3D.objectGroundAt(mapData, x, y, layer),
+            sheetSize: setNumber => {
+                const bitmap = bitmaps && bitmaps[setNumber];
+                // The sheet's real size, so a non-standard sheet still maps its
+                // pixels correctly rather than being stretched to an assumed 768.
+                return {
+                    width: (bitmap && bitmap.width) || 768,
+                    height: (bitmap && bitmap.height) || 768
+                };
+            }
+        });
+        if (this._terrainMap) {
+            for (const group of built.groups) {
+                if (group.positions) group.baseY = Reactor3D.terrainBaseY(group.positions);
+            }
         }
-    }
-    Reactor3D.displaceByTerrain(built, mapData);
+        Reactor3D.displaceByTerrain(built, mapData);
 
-    // What each cell's surface ended up at, so a sprite standing on a shop's
-    // roof is drawn on the roof rather than on the street below it.
-    Reactor3D._surface = built.surface
-        ? { heights: built.surface, width: built.width, height: built.height }
-        : null;
-    Reactor3D._facade = built.facade
-        ? Object.assign({ width: built.width, height: built.height }, built.facade)
-        : null;
-    // Kept on the scene as well as globally: the editor builds a scene without
-    // running a game, and rebuilds it on every edit.
-    this._facade = Reactor3D._facade;
+        // What each cell's surface ended up at, so a sprite standing on a shop's
+        // roof is drawn on the roof rather than on the street below it.
+        Reactor3D._surface = built.surface
+            ? { heights: built.surface, width: built.width, height: built.height }
+            : null;
+        Reactor3D._facade = built.facade
+            ? Object.assign({ width: built.width, height: built.height }, built.facade)
+            : null;
+        // Kept on the scene as well as globally: the editor builds a scene without
+        // running a game, and rebuilds it on every edit.
+        this._facade = Reactor3D._facade;
+        return built;
+    };
+    const tilesNow = !settings.deferTiles;
+    const built = tilesNow ? buildTiles() : null;
+    if (!tilesNow) { Reactor3D._surface = null; Reactor3D._facade = null; this._facade = null; }
 
     // A parallax map's art is the parallax, not its tiles. Laid down first so
     // everything the tiles do contribute draws over it. The loader is handed in
@@ -8397,6 +8481,7 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
     // The 3D tileset: blocks on cells, on top of the ground just laid. Far rocks mesh in the
     // background unless the view draws only on a change (the editor).
     this._rockWorkers = settings.rockWorkers !== false;
+    this._staged = !!settings.staged;
     if (settings.rockChunkCache) this._rockChunkCache = settings.rockChunkCache;
     // (`staged`: the world of a neighboring map is laid over several frames; its pieces and its water,
     // with the land and the plants that follow the water, are asked for one after the other: Reactor3D.Neighbors.)
@@ -8405,153 +8490,161 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
         this.addWater(mapData, settings.loadMaterial || (name => Reactor3D.defaultMaterialLoader(name)));
     }
 
-    for (const group of built.groups) {
-        const texture = this.textureFor(bitmaps && bitmaps[group.setNumber]);
-        if (!texture) continue;
+    const layTiles = built => {
+        for (const group of built.groups) {
+            const texture = this.textureFor(bitmaps && bitmaps[group.setNumber]);
+            if (!texture) continue;
 
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", new THREE.BufferAttribute(group.positions, 3));
-        geometry.setAttribute("uv", new THREE.BufferAttribute(group.uvs, 2));
-        // Where each vertex sits before the terrain lifts it, so a brush
-        // stroke can lift it again in place (`updateTerrain`).
-        if (group.baseY) geometry.userData.terrainBaseY = group.baseY;
-        // What each quad may sample. See `clampToTile`: this is what keeps a
-        // tile inside its own square of the sheet at any zoom.
-        if (group.bounds) {
-            geometry.setAttribute("uvBounds", new THREE.BufferAttribute(group.bounds, 4));
-        }
-        if (group.offsets) {
-            geometry.setAttribute("offset", new THREE.BufferAttribute(group.offsets, 2));
-        }
-        geometry.setIndex(new THREE.BufferAttribute(
-            group.anim ? group.indices : Reactor3D.InvisibleTiles.cull(group.indices, group.bounds, bitmaps && bitmaps[group.setNumber]), 1));
-        geometry.computeVertexNormals();
-        /*
-         * A cut-out is not where its vertices say it is.
-         *
-         * Its quad is built in the vertex shader — every vertex of one object
-         * sits at the same anchor, and the `offset` attribute carries the
-         * corners out from it. Three.js computes the bounding sphere from the
-         * positions, so it measures the anchors and nothing else: for a whole
-         * building grouped onto one anchor that is very nearly a point, and
-         * the structure vanished the moment the point left the frustum while
-         * its art was still filling the screen.
-         *
-         * So the sphere is grown by the furthest any corner is pushed, plus
-         * the half tile the shader steps everything towards the camera.
-         * Culling still works — it is simply told the truth about the size.
-         */
-        if (group.offsets) {
-            geometry.computeBoundingSphere();
-            if (geometry.boundingSphere) {
-                let reach = 0;
-                for (let i = 0; i < group.offsets.length; i += 2) {
-                    const corner = Math.hypot(group.offsets[i], group.offsets[i + 1]);
-                    if (corner > reach) reach = corner;
-                }
-                geometry.boundingSphere.radius += reach + 0.5;
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(group.positions, 3));
+            geometry.setAttribute("uv", new THREE.BufferAttribute(group.uvs, 2));
+            // Where each vertex sits before the terrain lifts it, so a brush
+            // stroke can lift it again in place (`updateTerrain`).
+            if (group.baseY) geometry.userData.terrainBaseY = group.baseY;
+            // What each quad may sample. See `clampToTile`: this is what keeps a
+            // tile inside its own square of the sheet at any zoom.
+            if (group.bounds) {
+                geometry.setAttribute("uvBounds", new THREE.BufferAttribute(group.bounds, 4));
             }
+            if (group.offsets) {
+                geometry.setAttribute("offset", new THREE.BufferAttribute(group.offsets, 2));
+            }
+            geometry.setIndex(new THREE.BufferAttribute(
+                group.anim ? group.indices : Reactor3D.InvisibleTiles.cull(group.indices, group.bounds, bitmaps && bitmaps[group.setNumber]), 1));
+            geometry.computeVertexNormals();
+            /*
+             * A cut-out is not where its vertices say it is.
+             *
+             * Its quad is built in the vertex shader — every vertex of one object
+             * sits at the same anchor, and the `offset` attribute carries the
+             * corners out from it. Three.js computes the bounding sphere from the
+             * positions, so it measures the anchors and nothing else: for a whole
+             * building grouped onto one anchor that is very nearly a point, and
+             * the structure vanished the moment the point left the frustum while
+             * its art was still filling the screen.
+             *
+             * So the sphere is grown by the furthest any corner is pushed, plus
+             * the half tile the shader steps everything towards the camera.
+             * Culling still works — it is simply told the truth about the size.
+             */
+            if (group.offsets) {
+                geometry.computeBoundingSphere();
+                if (geometry.boundingSphere) {
+                    let reach = 0;
+                    for (let i = 0; i < group.offsets.length; i += 2) {
+                        const corner = Math.hypot(group.offsets[i], group.offsets[i + 1]);
+                        if (corner > reach) reach = corner;
+                    }
+                    geometry.boundingSphere.radius += reach + 0.5;
+                }
+            }
+            if (group.anim) {
+                // Keep the frame-0 UVs; every later frame is computed from them
+                // rather than accumulated, so rounding cannot drift over an hour.
+                this._animated.push({
+                    geometry,
+                    base: Float32Array.from(group.uvs),
+                    // The fragment shader clamps each tile to these bounds. They
+                    // must move with animated UVs or later A1 frames collapse onto
+                    // frame 0's edge pixels and look like block-colour chunks.
+                    baseBounds: group.bounds ? Float32Array.from(group.bounds) : null,
+                    stride: group.anim
+                });
+            }
+
+            // Unlit to begin with, so colours match the 2D view exactly and any
+            // difference on screen is geometry rather than shading. Lighting is a
+            // later pass. Every surface keeps its painted alpha in colour; a
+            // separate opaque-core pass below supplies both colour and depth.
+            const material = group.billboard
+                ? Reactor3D.billboardMaterial(texture, group.edgeHinged)
+                // Unlit, with the ambient level applied as a plain multiplier on
+                // the material's colour.
+                //
+                // Lambert under an AmbientLight was the obvious choice and it came
+                // out visibly darker than the same map in 2D: three's shading
+                // divides diffuse by pi, so "ambient 1" is nowhere near "unlit",
+                // and the exact factor moves between three releases. Nothing here
+                // needs a light model — the lights are additive quads drawn in
+                // their own pass — so the scene is shaded the one way that is
+                // guaranteed to match the 2D tilemap pixel for pixel: not at all.
+                : new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    depthWrite: false,
+                    alphaTest: 0,
+                    // Upright panels are seen from either side as the camera turns,
+                    // and double-siding also means ground winding cannot silently
+                    // hide a whole sheet.
+                    side: THREE.DoubleSide,
+                    // Flat quads: one pass. three renders a double-sided transparent
+                    // material twice a frame otherwise, toggling needsUpdate each time,
+                    // which rebuilds its shader parameters every frame.
+                    forceSinglePass: true
+                });
+            // Every material now takes the ambient level, not just the cut-outs.
+            material.opacity = group.underlay ? 0.6 : 1;
+            material.__reactorShaded = true;
+            // Two keys, because the billboard material injects a vertex shader the
+            // flat one does not and they must not share a compiled program.
+            Reactor3D.clampToTile(material,
+                group.billboard ? "reactor3d-billboard-clamped" : "reactor3d-tile-clamped");
+            Reactor3D.litMaterial(material);
+
+            const target = group.above ? this.aboveGroup() : this.belowGroup();
+
+            /*
+             * Opaque texels supply colour and depth before fractional alpha blends.
+             *
+             * The old colorless alpha>=0.5 prepass wrote a foreground depth without
+             * its colour. It then rejected the background that a 50% shadow needed
+             * to blend over, leaving a hard cut or a blend against clear. Only
+             * genuinely opaque source pixels belong in this pass, and they must
+             * write their colour at the same time as their depth.
+             */
+            const opaqueCore = group.billboard
+                ? Reactor3D.billboardMaterial(texture, group.edgeHinged)
+                : new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+            opaqueCore.transparent = false;
+            opaqueCore.opacity = group.underlay ? 0.6 : 1;
+            opaqueCore.depthWrite = true;
+            // Three discards only values below the threshold, so 1.0 admits exact
+            // alpha-255 texels and keeps alpha 254 plus filtered edge samples out of
+            // depth. Those fractional pixels belong exclusively to the blend pass.
+            opaqueCore.alphaTest = 1.0;
+            opaqueCore.colorWrite = true;
+            opaqueCore.__reactorShaded = true;
+            Reactor3D.clampToTile(opaqueCore,
+                group.billboard ? "reactor3d-billboard-clamped" : "reactor3d-tile-clamped");
+            Reactor3D.litMaterial(opaqueCore);
+            const coreMesh = new THREE.Mesh(geometry, opaqueCore);
+            coreMesh.renderOrder = -20 + (group.layer || 0);
+            target.add(coreMesh);
+            this._meshes.push(coreMesh);
+            this._materials.push(opaqueCore);
+
+            Reactor3D.TransparentPixels.install(material);
+            const mesh = new THREE.Mesh(geometry, material);
+            // Two passes: the ground, and the part the 2D tilemap would have drawn
+            // over the characters. They are separate groups so the renderer can
+            // draw one, let PIXI put the characters down, and then draw the other.
+            // The editor shows both groups in one render. Their billboard materials
+            // are transparent, so without an explicit order three.js sorts whole
+            // sheet meshes by centroid and can put an ordinary crater over the
+            // starred structure that surrounds it. Match the 2D tilemap there too:
+            // every upper-pass colour mesh draws after every lower-pass one.
+            mesh.renderOrder = (group.above ? 10 : 0) + (group.layer || 0);
+            target.add(mesh);
+            this._meshes.push(mesh);
+            this._materials.push(material);
         }
-        if (group.anim) {
-            // Keep the frame-0 UVs; every later frame is computed from them
-            // rather than accumulated, so rounding cannot drift over an hour.
-            this._animated.push({
-                geometry,
-                base: Float32Array.from(group.uvs),
-                // The fragment shader clamps each tile to these bounds. They
-                // must move with animated UVs or later A1 frames collapse onto
-                // frame 0's edge pixels and look like block-colour chunks.
-                baseBounds: group.bounds ? Float32Array.from(group.bounds) : null,
-                stride: group.anim
-            });
-        }
-
-        // Unlit to begin with, so colours match the 2D view exactly and any
-        // difference on screen is geometry rather than shading. Lighting is a
-        // later pass. Every surface keeps its painted alpha in colour; a
-        // separate opaque-core pass below supplies both colour and depth.
-        const material = group.billboard
-            ? Reactor3D.billboardMaterial(texture, group.edgeHinged)
-            // Unlit, with the ambient level applied as a plain multiplier on
-            // the material's colour.
-            //
-            // Lambert under an AmbientLight was the obvious choice and it came
-            // out visibly darker than the same map in 2D: three's shading
-            // divides diffuse by pi, so "ambient 1" is nowhere near "unlit",
-            // and the exact factor moves between three releases. Nothing here
-            // needs a light model — the lights are additive quads drawn in
-            // their own pass — so the scene is shaded the one way that is
-            // guaranteed to match the 2D tilemap pixel for pixel: not at all.
-            : new THREE.MeshBasicMaterial({
-                map: texture,
-                transparent: true,
-                depthWrite: false,
-                alphaTest: 0,
-                // Upright panels are seen from either side as the camera turns,
-                // and double-siding also means ground winding cannot silently
-                // hide a whole sheet.
-                side: THREE.DoubleSide,
-                // Flat quads: one pass. three renders a double-sided transparent
-                // material twice a frame otherwise, toggling needsUpdate each time,
-                // which rebuilds its shader parameters every frame.
-                forceSinglePass: true
-            });
-        // Every material now takes the ambient level, not just the cut-outs.
-        material.opacity = group.underlay ? 0.6 : 1;
-        material.__reactorShaded = true;
-        // Two keys, because the billboard material injects a vertex shader the
-        // flat one does not and they must not share a compiled program.
-        Reactor3D.clampToTile(material,
-            group.billboard ? "reactor3d-billboard-clamped" : "reactor3d-tile-clamped");
-        Reactor3D.litMaterial(material);
-
-        const target = group.above ? this.aboveGroup() : this.belowGroup();
-
-        /*
-         * Opaque texels supply colour and depth before fractional alpha blends.
-         *
-         * The old colorless alpha>=0.5 prepass wrote a foreground depth without
-         * its colour. It then rejected the background that a 50% shadow needed
-         * to blend over, leaving a hard cut or a blend against clear. Only
-         * genuinely opaque source pixels belong in this pass, and they must
-         * write their colour at the same time as their depth.
-         */
-        const opaqueCore = group.billboard
-            ? Reactor3D.billboardMaterial(texture, group.edgeHinged)
-            : new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
-        opaqueCore.transparent = false;
-        opaqueCore.opacity = group.underlay ? 0.6 : 1;
-        opaqueCore.depthWrite = true;
-        // Three discards only values below the threshold, so 1.0 admits exact
-        // alpha-255 texels and keeps alpha 254 plus filtered edge samples out of
-        // depth. Those fractional pixels belong exclusively to the blend pass.
-        opaqueCore.alphaTest = 1.0;
-        opaqueCore.colorWrite = true;
-        opaqueCore.__reactorShaded = true;
-        Reactor3D.clampToTile(opaqueCore,
-            group.billboard ? "reactor3d-billboard-clamped" : "reactor3d-tile-clamped");
-        Reactor3D.litMaterial(opaqueCore);
-        const coreMesh = new THREE.Mesh(geometry, opaqueCore);
-        coreMesh.renderOrder = -20 + (group.layer || 0);
-        target.add(coreMesh);
-        this._meshes.push(coreMesh);
-        this._materials.push(opaqueCore);
-
-        Reactor3D.TransparentPixels.install(material);
-        const mesh = new THREE.Mesh(geometry, material);
-        // Two passes: the ground, and the part the 2D tilemap would have drawn
-        // over the characters. They are separate groups so the renderer can
-        // draw one, let PIXI put the characters down, and then draw the other.
-        // The editor shows both groups in one render. Their billboard materials
-        // are transparent, so without an explicit order three.js sorts whole
-        // sheet meshes by centroid and can put an ordinary crater over the
-        // starred structure that surrounds it. Match the 2D tilemap there too:
-        // every upper-pass colour mesh draws after every lower-pass one.
-        mesh.renderOrder = (group.above ? 10 : 0) + (group.layer || 0);
-        target.add(mesh);
-        this._meshes.push(mesh);
-        this._materials.push(material);
-    }
+    };
+    if (built) layTiles(built);
+    // Deferred: one step a call (Neighbors.stage), the build, then its meshes; null once laid.
+    else this._deferredTiles = () => {
+        const later = buildTiles();
+        this._deferredTiles = () => { this._deferredTiles = null; layTiles(later); this.freezeStaticMeshes(); };
+    };
     this.freezeStaticMeshes();
 };
 

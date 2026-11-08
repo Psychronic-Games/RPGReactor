@@ -611,3 +611,28 @@ test('creature Body section captions have translations in every non-English loca
         for (const key of ['Fins', 'Appendages']) assert.ok(text[key] && text[key] !== key, `${locale}: ${key}`);
     }
 });
+
+test('a label translated by one language goes back to English in a language that leaves it as English', () => {
+    const { manager } = loadI18nForTest();
+    const attrs = new Map();
+    const label = {
+        textContent: 'Swing', children: [],
+        hasAttribute: name => attrs.has(name), getAttribute: name => attrs.has(name) ? attrs.get(name) : null,
+        setAttribute: (name, value) => attrs.set(name, String(value)),
+        closest: () => null, querySelector: () => null
+    };
+    manager.setLanguage('tr', { persist: false, force: true });
+    manager._applyTextElement(label);
+    assert.equal(label.textContent, 'Salınım', 'translated by Turkish');
+    // Pretend a second language has no entry of its own for this label: it formats as the English.
+    const format = manager.formatText;
+    manager.setLanguage('de', { persist: false, force: true });
+    manager.formatText = source => source;
+    try {
+        manager._applyTextElement(label);
+    } finally {
+        manager.formatText = format;
+    }
+    assert.equal(label.textContent, 'Swing', 'not left in Turkish');
+    manager.setLanguage('en', { persist: false, force: true });
+});

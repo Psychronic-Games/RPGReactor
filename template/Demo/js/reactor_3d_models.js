@@ -1775,6 +1775,20 @@ Reactor3D._bodyFar = function(event, x, y, margin, now) {
  * to be put down (`strict`).
  */
 Reactor3D._bodyAt = { x: 0, y: 0 };
+
+/**
+ * Whether `other` can stand in the way of a one-tile walker. As MZ's Game_Event.isCollidedWithEvents: a moving
+ * event is stopped by any event that is not Through, below and above the characters included (a wandering NPC
+ * does not step onto a Quick Event transfer); the player and followers only by normal-priority ones. Where a unit
+ * can be put down (`strict`) keeps to normal priority. A hull with a body of its own is not asked (_bodyMeetsEvents).
+ * Such an event stops a walker only on its own tile (bodyBlocksTile), not over its model's footprint.
+ */
+Reactor3D._bodyStops = function(mover, other, strict) {
+    if (other.isThrough()) return false;
+    if (other.isNormalPriority()) return true;
+    return !strict && typeof Game_Event !== "undefined" && mover instanceof Game_Event;
+};
+
 Reactor3D.bodyBlocksTile = function(mover, x, y, strict) {
     const now = this._bodyRead();
     const events = now.map && now.map.events ? now.map.events() : null;
@@ -1785,7 +1799,10 @@ Reactor3D.bodyBlocksTile = function(mover, x, y, strict) {
     for (let i = 0; i < events.length; i++) {
         const event = events[i];
         if (event === mover || this._bodyFar(event, x, y, 0, now)) continue;
-        if (!event.isNormalPriority() || event.isThrough()) continue;
+        if (!this._bodyStops(mover, event, strict)) continue;
+        // An event below or above the characters stops a walker on its own tile only, as in MZ: a floor-level
+        // model's wide footprint (a rug, a dock) is not a wall to wandering NPCs.
+        if (!event.isNormalPriority() && !(event.x === x && event.y === y)) continue;
         if (!this._bodyCovers(event, x, y, now)) continue;
         if (!this._bodyHeights(mover, event, at)) continue;
         if (this.eventIsFallen(event) || (!strict && this.bodyLetsOut(mover, event, x, y))) continue;
@@ -1875,6 +1892,7 @@ Reactor3D._bodyMeetsEvents = function(mover, x, y, direction, strict) {
         const other = events[i];
         if (other === mover) continue;
         if (this._bodyFar(other, x, y, reach, now) && (!swept || this._bodyFar(other, mover._x, mover._y, reach, now))) continue;
+        // A hull (a body of its own: a vehicle, a unit's model) drives over events below and above the characters.
         if (!other.isNormalPriority() || other.isThrough()) continue;
         if (!this._bodyOverlap(moved, x, y, other, now) && !(swept && this._bodyOverlap(swept, mover._x, mover._y, other, now))) continue;
         // A wall light nine tiles up does not stop a tank underneath it.
@@ -9373,6 +9391,8 @@ Reactor3D.prepareModelInstance = function(object, clips) {
             acc: null
         });
     });
+    // One rest value per bone and property for every clip of this model (Reactor3D.keepClipRest).
+    if (clips && clips.length) Reactor3D.keepClipRest(inner);
     return {
         root: inner,
         meshes,
@@ -9663,6 +9683,34 @@ Reactor3D.chestForward = function(holder) {
 Reactor3D.isClimbing = function(character) {
     // (Over the edge of a ledge the body steps onto the top: a walk, not a climb.)
     return !!(character && (character._reactorOnLadder || (character._reactorMantle && !character._reactorMantle.over)));
+};
+
+/**
+ * A model's clips name its bones in their own ways (the file's "mixamorigHips", the shared library's "Hips"),
+ * and three keeps a binding, with an original value to fall back to, for each name. A binding made while
+ * another clip held the bone took that pose as its original: a party member who climbed out of the water
+ * started its run clip there for the first time, and from then on every fade of the run went back to the
+ * swim's tilt, and with no idle clip it stood (or floated) in it (2026-11-07). Under `root`, every binding's
+ * original is the value the bone had the first time any binding of it was made: before anything moved it.
+ */
+Reactor3D.keepClipRest = function(root) {
+    if (!root || !root.userData) return;
+    if (!root.userData.__rrClipRest) root.userData.__rrClipRest = new Map();
+    const PM = THREE.PropertyMixer && THREE.PropertyMixer.prototype;
+    if (!PM || PM.saveOriginalState.__rrClipRest) return;
+    const save = PM.saveOriginalState;
+    PM.saveOriginalState = function() {
+        save.call(this);
+        const binding = this.binding, node = binding && binding.node, kept = binding && binding.rootNode && binding.rootNode.userData && binding.rootNode.userData.__rrClipRest;
+        if (!kept || !node || !node.uuid) return;
+        const path = binding.parsedPath || {}, key = node.uuid + "|" + path.propertyName + "|" + (path.propertyIndex === undefined ? "" : path.propertyIndex);
+        const stride = this.valueSize, buffer = this.buffer, offset = stride * this._origIndex, had = kept.get(key);
+        if (!had || had.length !== stride) { kept.set(key, Array.prototype.slice.call(buffer, offset, offset + stride)); return; }
+        for (let i = 0; i < stride; i++) buffer[offset + i] = had[i];
+        // As three's own save does: the accumulators start from the original, so a change is told from it.
+        for (let i = stride; i !== offset; ++i) buffer[i] = buffer[offset + (i % stride)];
+    };
+    PM.saveOriginalState.__rrClipRest = true;
 };
 
 /** Whether a character is swimming by the physics. */
@@ -14010,6 +14058,24 @@ Reactor3D.StillParts = {
             else out.multiply(node.matrix);
         }
     },
+    /**
+     * The merged meshes are placed again whenever their model's own matrices are walked, not only when the whole
+     * scene's are: the frames between game updates (Graphics.FramePacing.swapPoses) move a model and walk it alone,
+     * and its merged meshes, beside it in the group, stood where the update left them. A ridden motorcycle's frame
+     * showed at each update's place while its wheels and rider moved on: an echo at a fast screen's rate (2026-11-07).
+     */
+    follow(record) {
+        const object = record.object, self = this;
+        if (object.__rrStillFollow !== undefined) { object.__rrStillFollow = record; return; }
+        const update = object.updateMatrixWorld;
+        object.__rrStillFollow = record;
+        object.updateMatrixWorld = function(force) {
+            update.call(this, force);
+            const own = this.__rrStillFollow;
+            if (!own || !own.groups.length) return;
+            for (const group of own.groups) if (group.mesh && group.mesh.parent) self.place(own, group.mesh);
+        };
+    },
     /** Whether the model a merged mesh stands for is shown, every node down to its root. */
     shown(record, mesh) {
         const object = record.object;
@@ -14175,6 +14241,7 @@ Reactor3D.StillParts = {
         group.entry = this.take(group.parts.map(part => ({ geometry: part.geometry, matrix: part.matrix })));
         for (const part of group.parts) part.matrix = null;
         group.mesh = this.makeMesh(record, group);
+        this.follow(record);
         record.object.parent.add(group.mesh);
         for (const part of group.parts) part.mesh.layers.disable(0);
         record.groups.push(group);

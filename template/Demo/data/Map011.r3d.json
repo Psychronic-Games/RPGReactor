@@ -340,5 +340,5 @@
       {"name":"Paving","material":"Cobble","tint":"#b8b0a4","bare":true,"paint":""}
     ]
   },
-  "surround": {"style":"mountains","edges":{"west":"continue"},"rough":1,"seed":11,"height":60,"neighbors":{"east":{"map":12},"west":{"map":10}}}
+  "surround": {"style":"mountains","edges":{"north":"cliffs","south":"cliffs","west":"continue"},"rough":1,"seed":11,"height":60,"neighbors":{"east":{"map":12},"west":{"map":10}}}
 }

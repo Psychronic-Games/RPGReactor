@@ -20172,15 +20172,19 @@ class I18nManager {
         if (next === 'en') this._stopObserving();
         this._relabelServed(served);
         this.apply(document);
+        for (const doc of this._watchedDocuments || []) { this._relabelServed(served, doc); this.apply(doc); }
         if (next !== 'en' && this._observeWanted) this.observe();
         window.dispatchEvent(new CustomEvent('rr-language-changed', { detail: { language: next } }));
     }
 
     apply(root = document) {
         if (!root || !root.querySelectorAll) return;
-        document.documentElement.lang = this.language;
-        document.documentElement.dir = this.language === 'ar' ? 'rtl' : 'ltr';
-        this.applyApplicationTitle();
+        const page = root.ownerDocument || root;
+        for (const html of new Set([document.documentElement, page.documentElement].filter(Boolean))) {
+            html.lang = this.language;
+            html.dir = this.language === 'ar' ? 'rtl' : 'ltr';
+        }
+        if (page === document) this.applyApplicationTitle();
 
         root.querySelectorAll('[data-i18n]').forEach(el => {
             el.textContent = this.t(el.getAttribute('data-i18n'));
@@ -20208,12 +20212,12 @@ class I18nManager {
      * `data-rr-i18n-skip` stay untouched, and stamped elements are left to
      * applyText.
      */
-    _relabelServed(served) {
-        if (!served || !served.size || typeof document === 'undefined' || !document.body
-            || typeof document.createTreeWalker !== 'function') return;
+    _relabelServed(served, doc = (typeof document !== 'undefined' ? document : null)) {
+        if (!served || !served.size || !doc || !doc.body
+            || typeof doc.createTreeWalker !== 'function') return;
         const render = source => (source.key ? this.t(source.key) : this.tText(source.text));
         const frozen = element => !element || !!element.closest('[data-rr-i18n-skip], [data-i18n], [data-i18n-text-source], textarea, [contenteditable="true"], script, style');
-        const walker = document.createTreeWalker(document.body, 4);
+        const walker = doc.createTreeWalker(doc.body, 4);
         const texts = [];
         for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node);
         for (const node of texts) {
@@ -20225,7 +20229,7 @@ class I18nManager {
             if (next !== trimmed) node.nodeValue = value.replace(trimmed, next);
         }
         for (const attribute of ['title', 'aria-label', 'placeholder']) {
-            document.body.querySelectorAll(`[${attribute}]`).forEach(element => {
+            doc.body.querySelectorAll(`[${attribute}]`).forEach(element => {
                 if (element.closest('[data-rr-i18n-skip]')) return;
                 if (attribute === 'placeholder' && element.hasAttribute('data-i18n-placeholder-source')) return;
                 const source = served.get(element.getAttribute(attribute));
@@ -20269,7 +20273,9 @@ class I18nManager {
         let values = {};
         if (params) { try { values = JSON.parse(params) || {}; } catch {} }
         const translated = this.formatText(source, values);
-        if (translated === source && this.language !== 'en') return;
+        // Untranslated in this language: left alone, unless an earlier language wrote over it (a source is stored),
+        // in which case it goes back to the English (Turkish, then a language with no entry, kept the Turkish).
+        if (translated === source && this.language !== 'en' && !stored) return;
         const wanted = translated;
         // Write only what changes. Replacing a text node is itself a
         // childList mutation, and `observe()` re-runs this pass on the
@@ -20288,7 +20294,9 @@ class I18nManager {
         let values = {};
         if (params) { try { values = JSON.parse(params) || {}; } catch {} }
         const translated = this.formatText(source, values);
-        if (translated === source && this.language !== 'en') return;
+        // Untranslated in this language: left alone, unless an earlier language wrote over it (a source is stored),
+        // in which case it goes back to the English (Turkish, then a language with no entry, kept the Turkish).
+        if (translated === source && this.language !== 'en' && !stored) return;
         const wanted = translated;
         if (stored !== source) el.setAttribute('data-i18n-placeholder-source', source);
         if (el.getAttribute('placeholder') !== wanted) el.setAttribute('placeholder', wanted);
@@ -20312,24 +20320,57 @@ class I18nManager {
      */
     observe() {
         this._observeWanted = true;
-        if (this._observer || typeof MutationObserver === 'undefined' || typeof document === 'undefined' || !document.body) return;
+        if (typeof MutationObserver === 'undefined' || typeof document === 'undefined' || !document.body) return;
         if (this.language === 'en') return;
         this._observerTargets = this._observerTargets || new Set();
         this._observerAdded = this._observerAdded || new Set();
-        this._observer = new MutationObserver((mutations) => {
-            for (const m of mutations) {
-                if (!m.addedNodes || !m.addedNodes.length) continue;
-                for (const node of m.addedNodes) {
-                    if (node.nodeType === 1) this._observerAdded.add(node);
-                    else if (node.nodeType === 3 && m.target && m.target.nodeType === 1) this._observerTargets.add(m.target);
-                }
+        if (!this._observer) {
+            this._observer = new MutationObserver(mutations => this._onMutations(mutations));
+            this._observer.observe(document.body, { childList: true, subtree: true });
+        }
+        for (const doc of this._watchedDocuments || []) this._observeDocument(doc);
+    }
+
+    _onMutations(mutations) {
+        for (const m of mutations) {
+            if (!m.addedNodes || !m.addedNodes.length) continue;
+            for (const node of m.addedNodes) {
+                if (node.nodeType === 1) this._observerAdded.add(node);
+                else if (node.nodeType === 3 && m.target && m.target.nodeType === 1) this._observerTargets.add(m.target);
             }
-            if (!this._observerAdded.size && !this._observerTargets.size) return;
-            if (this._observerPending) return;
-            this._observerPending = true;
-            setTimeout(() => this._flushObserved(), 0);
-        });
-        this._observer.observe(document.body, { childList: true, subtree: true });
+        }
+        if (!this._observerAdded.size && !this._observerTargets.size) return;
+        if (this._observerPending) return;
+        this._observerPending = true;
+        setTimeout(() => this._flushObserved(), 0);
+    }
+
+    /**
+     * A pop-out window (the Database, the Forge, the Event Editor…) is a document of its own: what is built in it
+     * after it opens was never seen by the main window's observer, so its labels stayed in English unless their code
+     * translated them itself. Each one is translated on attach and watched like the main document while it is open.
+     */
+    watchDocument(doc) {
+        if (!doc || doc === document) return () => {};
+        (this._watchedDocuments = this._watchedDocuments || new Set()).add(doc);
+        if (this.language !== 'en') {
+            this.apply(doc);
+            if (this._observeWanted) this.observe();
+        }
+        return () => {
+            this._watchedDocuments.delete(doc);
+            const observer = this._documentObservers && this._documentObservers.get(doc);
+            if (observer) observer.disconnect();
+            if (this._documentObservers) this._documentObservers.delete(doc);
+        };
+    }
+
+    _observeDocument(doc) {
+        this._documentObservers = this._documentObservers || new Map();
+        if (this._documentObservers.has(doc) || !doc.body) return;
+        const observer = new MutationObserver(mutations => this._onMutations(mutations));
+        observer.observe(doc.body, { childList: true, subtree: true });
+        this._documentObservers.set(doc, observer);
     }
 
     _flushObserved() {
@@ -20355,6 +20396,8 @@ class I18nManager {
     _stopObserving() {
         if (this._observer) this._observer.disconnect();
         this._observer = null;
+        for (const observer of (this._documentObservers || new Map()).values()) observer.disconnect();
+        if (this._documentObservers) this._documentObservers.clear();
         this._observerPending = false;
         if (this._observerAdded) this._observerAdded.clear();
         if (this._observerTargets) this._observerTargets.clear();
@@ -21277,6 +21320,10 @@ Object.assign(RR_TEXT_TRANSLATIONS.th, {"Building":"อาคาร","Other plan
 Object.assign(RR_TEXT_TRANSLATIONS.tr, {"Building":"Bina","Other plans placed on this one, and paved paths between them.":"Bunun üzerine yerleştirilmiş başka planlar ve aralarındaki taş döşeli yollar.","Parts":"Parçalar","Click the plan to place it; on another shape, it sits on top. A tower is a cylinder with a dome on it.":"Yerleştirmek için plana tıklayın; başka bir şeklin üstüne tıklarsanız onun üstüne oturur. Kule, kubbeli bir silindirdir.","Draw a room to start the building, or place a shape.":"Binaya başlamak için bir oda çizin ya da bir şekil yerleştirin."});
 
 window.I18n = new I18nManager();
+// Each pop-out window (Database, Forge, Event Editor…) is translated and watched while it is attached.
+if (typeof window !== 'undefined' && window.RRPopoutBridge && typeof window.RRPopoutBridge.onAttach === 'function') {
+    window.RRPopoutBridge.onAttach(child => window.I18n.watchDocument(child.document));
+}
 
 // Early language apply: set <html lang> before the full app initializes.
 (function () {

@@ -33,6 +33,8 @@ const root=path.resolve(__dirname,'../../..'),source=path.join(root,'template/De
    if(owner==='models')assert.deepEqual([row.bar,row.barGroup],[true,'models'],label+' Build bar models');
    if(owner!=='models')assert.equal(row.propsListeners,0,label+' stale model handlers');
    assert.equal(row.placement,false,label+' placement handler');results.push({mode:mode?'3D':'2D',from,to,...row});
+   // Progress, so a run cut off by a time limit shows how far it got and how fast.
+   if(results.length%22===0)console.log('transitions',results.length,label,new Date().toISOString());
   }
  }
  // Toggling a panel off restores the prior palette context. Over the Build bar's Models group, Lighting and

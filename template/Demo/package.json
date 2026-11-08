@@ -1,7 +1,7 @@
 {
     "name": "rpg-reactor-game",
     "main": "index.html",
-    "chromium-args": "--force-color-profile=srgb --window-size=1280,720 --force-high-performance-gpu --ignore-gpu-blocklist",
+    "chromium-args": "--force-color-profile=srgb --window-size=1280,720 --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit",
     "window": {
         "title": "Reactor One",
         "width": 1280,

@@ -513,7 +513,7 @@ Reactor3D.shadowGlsl = function(taps) {
         "uniform float rrSunShade;",
         "float rrSunShaded = 0.0;",
         // The surface's own facing, from rrLight's derivatives (taken where every pixel runs them).
-        "vec3 rrSunNormal;",
+        "vec3 rrSunNormal = vec3(0.0);",
         "float rrSunCascade(int c, vec3 s) {",
         "\tfloat ref = s.z - (c == 0 ? rrSunShadowBias.x : rrSunShadowBias.y);",
         "\tbool dyn = mod(floor(rrSunShadowInfo.z / (c == 0 ? 1.0 : 2.0)), 2.0) > 0.5;",
@@ -656,7 +656,17 @@ Reactor3D.lightGlsl = function(shadows, taps) {
         "\t\t\tif (fall <= 0.0) continue;",
         "\t\t}",
         "\t\t}",
-        shadows ? "\t\tfloat sh = rrLightShadow[i];\n\t\tif (sh > " + ((this.SUN_SHADOW_ROW || 64) - 0.5).toFixed(1) + ") { float sv = rrSunShadowAt(p); rrSunShaded = fall * (1.0 - sv); fall *= sv; }\n\t\telse if (sh >= 0.0) fall *= rrShadowAt(int(sh + 0.5), p);" : "",
+        // A casting sun lights the side of a face turned to it only (Reactor3D.SUN_FACING): the side
+        // turned away is in the face's own shade, which the map cannot be trusted to hold — a
+        // building's shade there is stored from those very faces. A point with no face (the light
+        // volume's air) takes it all.
+        shadows ? "\t\tfloat sh = rrLightShadow[i];\n\t\tif (sh > " + ((this.SUN_SHADOW_ROW || 64) - 0.5).toFixed(1) + ") { float rrSF = 1.0;\n"
+            + "#ifdef RR_SUN_FACING\n"
+            + "\t\t\tvec3 rrSN = rrSunNormal; float rrSL = dot(rrSN, rrSN);"
+            + " if (rrSL > 0.0) { if (dot(rrSN, cameraPosition - p) < 0.0) rrSN = -rrSN;"
+            + " rrSF = smoothstep(0.0, " + (this.SUN_FACING || 0.1).toFixed(3) + ", dot(rrSN, rrLightAim[i].xyz) * inversesqrt(rrSL * max(dot(rrLightAim[i].xyz, rrLightAim[i].xyz), 1e-8))); }\n"
+            + "#endif\n"
+            + "\t\t\tfloat sv = rrSF > 0.0 ? rrSF * rrSunShadowAt(p) : 0.0; rrSunShaded = fall * (1.0 - sv); fall *= sv; }\n\t\telse if (sh >= 0.0) fall *= rrShadowAt(int(sh + 0.5), p);" : "",
         // Toward the light (a sun's direction is its aim): the side facing away keeps a floor of it.
         "\t\tif (rrFace > 0.0) {",
         "\t\t\tvec3 rrDL = lc.w > 2.5 ? rrLightAim[i].xyz : -d;",
@@ -1518,10 +1528,13 @@ Reactor3D.injectLightShader = function(shader, renderer, material) {
     const normalUv1 = faces && Reactor3D.normalOnUv1(material);
     const normalMap = faces && !!(material.userData && material.userData.rrNormalMap && material.userData.rrNormalMap.isTexture) && (!!material.map || normalUv1);
     let face = "", faceDecl = "";
+    // A building's pieces take a casting sun on the side turned to it only (SUN_FACING): flat walls and roofs. Not
+    // the terrain, foliage or water: a hillside's triangles straddle the turn and cut it into teeth (2026-11-07).
+    if (material.__reactorPieces && !material.__reactorRock && this.SUN_FACING > 0) faceDecl += "#define RR_SUN_FACING\n";
     if (faces) {
         this.injectWorldNormal(shader);
         this.injectVertexFacing(shader);
-        faceDecl = "#define RR_VERTEX_FACE\n";
+        faceDecl += "#define RR_VERTEX_FACE\n";
         face = this.faceGlsl(normalMap, normalUv1);
         if (normalMap && normalUv1) this.injectUv1(shader);
         // On the weak tier the loop does not weigh each light: the whole light takes the direct light's and the
@@ -4023,7 +4036,7 @@ Reactor3D.litMaterial = function(material) {
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
-        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
+        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? (this.__reactorRock ? "|cutaway|rock" : "|cutaway") : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "")
             + (Reactor3D.shineOf(this) ? "|shine" : "")
             + Reactor3D.surfaceMapsKey(this)
@@ -5000,6 +5013,8 @@ Reactor3D.SUN_SHADOW_RECENTER = 0.125;
 Reactor3D.SUN_SHADOW_TURN = 0.0175;
 /** How far the cascade's box reaches toward the sun and away from it from the focus, in tiles. */
 Reactor3D.SUN_SHADOW_REACH = 64;
+/** How far ahead of the eye each cascade is laid, as a share of its span (turns of up to about 35 degrees lay none again). */
+Reactor3D.SUN_SHADOW_AHEAD = 0.2;
 /**
  * The compare offset toward the sun: this many texels of the cascade, and
  * never less than `SUN_SHADOW_BIAS_MIN` tiles. The receiver also steps off
@@ -5008,6 +5023,22 @@ Reactor3D.SUN_SHADOW_REACH = 64;
  * (SHADOW_SLOPE_BIAS), so the depth offset itself stays small and shadows
  * stay under what casts them.
  */
+/**
+ * How far a face must turn toward a casting sun, as the cosine of its angle to
+ * it, before the sun reaches it in full; turned away, it takes none. Without
+ * this the side of a building away from the sun was lit except where the
+ * shadow map happened to cover it: a band under a gable's roof edge, lit
+ * plaster above it (2026-11-07).
+ */
+Reactor3D.SUN_FACING = 0.1; // building pieces only (RR_SUN_FACING); 0 turns it off
+/**
+ * The side the sun draws building pieces from, for its cascades only: both, so
+ * what is stored is the face nearest the sun and an overhang's shade starts at
+ * the wall it overhangs. Faces turned away from the sun take none of it
+ * (SUN_FACING), so they need no back-face trick against shading themselves.
+ * null keeps the lamps' rule (back faces).
+ */
+Reactor3D.SUN_CASTER_SIDE = 2; // THREE.DoubleSide
 Reactor3D.SUN_SHADOW_BIAS_TEXELS = 0.75;
 Reactor3D.SUN_SHADOW_BIAS_MIN = 0.02;
 Reactor3D.SUN_SHADOW_NORMAL_OFFSET = 1.5;
@@ -5213,8 +5244,43 @@ Reactor3D.Shadows = {
     },
 
     /** Something in the static rows changed in a way the transform hash cannot see. */
-    invalidate() {
-        this._generation++;
+    /**
+     * Something static changed and its shadow must be drawn again. Named (an object, a point `{ x, y, z, r }`, or a
+     * list of them), only the rows and the sun's cascades that reach it are; unnamed, every one. While the party
+     * rode, the plants and batches laid as it went asked for every one, every frame: the near cascade was drawn
+     * again each time and the far one waited, so trees ahead had no shadow until they were near (2026-11-07).
+     */
+    invalidate(what) {
+        if (!what) { this._generation++; return; }
+        const list = this._invalidPoints || (this._invalidPoints = []);
+        const add = item => { const point = this.pointOf(item); if (point) list.push(point); else this._generation++; };
+        if (Array.isArray(what)) for (const item of what) add(item); else add(what);
+    },
+
+    /** Where an object or a point stands, as the change lists keep places: `{ x, y, z, r }`; null when it cannot be told. */
+    pointOf(item) {
+        if (!item) return null;
+        if (item.isObject3D) {
+            if (item.updateMatrixWorld) item.updateMatrixWorld(false);
+            const geometry = item.geometry, e = item.matrixWorld.elements;
+            // The whole of it: an instanced chunk's own box (set to its plants' reach) or an instanced mesh's
+            // sphere, never the one template plant's.
+            let sphere = null;
+            if (item.isInstancedMesh) { if (!item.boundingSphere && item.computeBoundingSphere) item.computeBoundingSphere(); sphere = item.boundingSphere || null; }
+            else if (geometry && geometry.boundingBox && !geometry.boundingBox.isEmpty()) sphere = geometry.boundingBox.getBoundingSphere(this._pointSphere || (this._pointSphere = new THREE.Sphere()));
+            else if (geometry && !geometry.isInstancedBufferGeometry) {
+                if (!geometry.boundingSphere && geometry.computeBoundingSphere) geometry.computeBoundingSphere();
+                sphere = geometry.boundingSphere;
+            }
+            if (sphere && Number.isFinite(sphere.radius)) {
+                const c = sphere.center, x = c.x, y = c.y, z = c.z;
+                const scale = Math.max(Math.hypot(e[0], e[1], e[2]), Math.hypot(e[4], e[5], e[6]), Math.hypot(e[8], e[9], e[10]));
+                return { x: e[0] * x + e[4] * y + e[8] * z + e[12], y: e[1] * x + e[5] * y + e[9] * z + e[13], z: e[2] * x + e[6] * y + e[10] * z + e[14], r: sphere.radius * scale };
+            }
+            return null;
+        }
+        if (Number.isFinite(item.x) && Number.isFinite(item.z)) return { x: item.x, y: Number(item.y) || 0, z: item.z, r: Number(item.r) || 0 };
+        return null;
     },
 
     /**
@@ -5712,6 +5778,7 @@ Reactor3D.Shadows = {
     _changedStatics() {
         const points = this._changedRoots(this._static, false);
         if (this._cutPoints && this._cutPoints.length) { for (const p of this._cutPoints) points.push(p); this._cutPoints.length = 0; }
+        if (this._invalidPoints && this._invalidPoints.length) { for (const p of this._invalidPoints) points.push(p); this._invalidPoints.length = 0; }
         // A distance-level swap in the view is not a change here: static rows
         // are always drawn at each model's coarsest level (`withOriginal`),
         // whatever level the view shows. Counting swaps re-rendered every
@@ -6399,9 +6466,9 @@ Reactor3D.Shadows = {
             state.up = [dy * rz - dz * ry, dz * rx - dx * rz, dx * ry - dy * rx];
         }
         const D = state.dir, R = state.right, U = state.up, band = this._atlas.band;
-        const fa = focus.x * R[0] + focus.y * R[1] + focus.z * R[2];
-        const fb = focus.x * U[0] + focus.y * U[1] + focus.z * U[2];
-        const fc = focus.x * D[0] + focus.y * D[1] + focus.z * D[2];
+        // Each cascade is laid a share of its span ahead of the eye along the ground (SUN_SHADOW_AHEAD), not round
+        // the party: the half behind the camera was shadows nobody looked at, and trees ahead lacked them.
+        const ahead = this._sunAhead();
         const recenter = Reactor3D.SUN_SHADOW_RECENTER, reach = Reactor3D.SUN_SHADOW_REACH;
         // Kept on the state: read by this frame's flush, filled again by the next frame's plan.
         const jobs = state.jobs || (state.jobs = { statics: [], dynamics: [] });
@@ -6409,6 +6476,11 @@ Reactor3D.Shadows = {
         jobs.dynamics.length = 0;
         for (let k = 0; k < state.cascades.length; k++) {
             const cascade = state.cascades[k], texel = cascade.span / band, pose = cascade.pose;
+            const shift = ahead ? Reactor3D.SUN_SHADOW_AHEAD * cascade.span : 0;
+            const px = focus.x + (ahead ? ahead[0] * shift : 0), pz = focus.z + (ahead ? ahead[1] * shift : 0);
+            const fa = px * R[0] + focus.y * R[1] + pz * R[2];
+            const fb = px * U[0] + focus.y * U[1] + pz * U[2];
+            const fc = px * D[0] + focus.y * D[1] + pz * D[2];
             const strayed = !cascade.valid || !pose || pose.dir !== D || Math.abs(fa - pose.a) > cascade.span * recenter
                 || Math.abs(fb - pose.b) > cascade.span * recenter || Math.abs(fc - pose.c) > reach * 0.25;
             if (strayed) {
@@ -6429,7 +6501,9 @@ Reactor3D.Shadows = {
             // (A cut just changed: every cascade it left stale, this frame.)
             if (rush && cascade.dirty) { jobs.statics.push(cascade); jobs.dynamics.push(cascade); continue; }
             if (!cascade.dirty || (cascade.valid && this._frame - cascade.stamp < interval && !cascade.want)) continue;
-            if (!chosen || (chosen.valid && !cascade.valid)) chosen = cascade;
+            // An undrawn one first, then the one drawn longest ago: the nearest first every time starved the far
+            // cascade while the near one strayed and changes came in as the party rode.
+            if (!chosen || (chosen.valid && !cascade.valid) || (chosen.valid === cascade.valid && cascade.stamp < chosen.stamp)) chosen = cascade;
         }
         if (chosen && !rush) {
             jobs.statics.push(chosen);
@@ -6442,6 +6516,15 @@ Reactor3D.Shadows = {
             jobs.dynamics.push(cascade);
         }
         return jobs;
+    },
+
+    /** Where the eye looks along the ground, as a unit [x, z]; null for a view straight down or none. */
+    _sunAhead() {
+        if (!Reactor3D.SUN_SHADOW_AHEAD) return null;
+        const view = Reactor3D._viewport, camera = view && typeof view.camera === "function" ? view.camera() : null;
+        if (!camera || !camera.matrixWorld) return null;
+        const e = camera.matrixWorld.elements, x = -e[8], z = -e[10], length = Math.hypot(x, z);
+        return length > 0.3 ? [x / length, z / length] : null;
     },
 
     /** Whether any reported place lies over a cascade's square, as posed at `pose`. */
@@ -6502,12 +6585,25 @@ Reactor3D.Shadows = {
                 });
             }
         }
+        // A building's pieces cast from the face nearest the sun (Reactor3D.SUN_CASTER_SIDE): drawn from the back, a
+        // roof's overhang stored its underside, and the wall right under it read lit within the compare offset.
+        const pieces = this.sunPieceCasters(), sides = pieces.map(m => m.side);
+        for (const m of pieces) m.side = Reactor3D.SUN_CASTER_SIDE;
         try {
             this.renderFace(renderer, scene, camera);
         } finally {
+            pieces.forEach((m, i) => { m.side = sides[i]; });
             if (swapped.length) detail.end(swapped);
         }
         return camera;
+    },
+
+    /** The building pieces' caster materials (Shadows.casterMaterialFor), which the sun draws from another side. */
+    sunPieceCasters() {
+        const pool = this._casterMaterials, list = this._sunPieceList || (this._sunPieceList = []);
+        list.length = 0;
+        if (pool && Reactor3D.SUN_CASTER_SIDE !== null) for (const key in pool) if (key.startsWith("pieces")) list.push(pool[key]);
+        return list;
     },
 
     /** Whether a casting character stands over a cascade's square at `pose`. */

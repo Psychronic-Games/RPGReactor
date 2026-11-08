@@ -114,7 +114,7 @@ test('the shadow variant of the light shader reads two atlases, however many lig
     assert.match(Reactor3D.lightGlsl(true, 1), /float s = texture\(rrShadowAtlas, vec3\(base \+ q \* scale, dp\)\);\n\tif \(dynamic\) s = min\(s, texture\(rrShadowDynAtlas, vec3\(dynBase \+ q \* dynScale, dp\)\)\);/);
     assert.equal((soft.match(/face = d\.x > 0\.0/g) || []).length, 1, 'one face selection, not one per atlas');
     // Sampled inside the light loop, before the light adds in.
-    assert.match(soft, /float sh = rrLightShadow\[i\];\n\t\tif \(sh > 63\.5\) \{ float sv = rrSunShadowAt\(p\); rrSunShaded = fall \* \(1\.0 - sv\); fall \*= sv; \}\n\t\telse if \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);\n\t\tif \(rrFace > 0\.0\) \{[\s\S]*?\n\t\t\}\n\t\tsum \+= lc\.rgb \* fall;/);
+    assert.match(soft, /float sh = rrLightShadow\[i\];\n\t\tif \(sh > 63\.5\) \{ float rrSF = 1\.0;\n#ifdef RR_SUN_FACING\n[^#]*#endif\n\t\t\tfloat sv = rrSF > 0\.0 \? rrSF \* rrSunShadowAt\(p\) : 0\.0; rrSunShaded = fall \* \(1\.0 - sv\); fall \*= sv; \}\n\t\telse if \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);\n\t\tif \(rrFace > 0\.0\) \{[\s\S]*?\n\t\t\}\n\t\tsum \+= lc\.rgb \* fall;/);
     // Each row measures from where it was rendered, not from the light.
     assert.match(soft, /vec3 d = p - rrShadowPos\[slot\]\.xyz;/);
 
@@ -488,7 +488,7 @@ test('the dynamic budget is measured from the player, and a party of two reduced
 
 test('both viewports render the maps once a frame before the first pass, and the game marks its casters', () => {
     const three = source3D();
-    assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible, then the reflections\.\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/);
+    assert.match(three, /scene\.updateMatrixWorld\(\);[\s\S]{0,400}?if \(!freshScene && this\.spreadsUpdateWork\(\)\) \{[\s\S]{0,700}?this\._owedWork = \[shadowWork, reflectionWork\];\n\s*\} else \{\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, scale\);/, 'the maps before the reflections, spread over the spare refreshes or in the update');
     assert.match(three, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\(renderer, \(shadows && shadows\.mapData\) \|\| null, shadows \|\| undefined\);/);
     assert.match(three, /Reactor3D\.Shadows\.markCaster\(object, Reactor3D\.modelCasterMoves\(character, current\.rules\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.

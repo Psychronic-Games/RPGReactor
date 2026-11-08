@@ -146,14 +146,24 @@ const ReactorOnlineBattle = {
         if (lines.length) {
             try {
                 await ReactorOnline.post("bSay", { id: this.id, lines }, this.identity());
+                this._refusedSince = 0;
             } catch (error) {
                 // Not sent: back to the front of the outbox for the next exchange (a "too much" refusal would only repeat).
                 if (error?.status !== 413) this.outbox.unshift(...lines);
-                throw error;
+                // Refused as not yet in the battle: the host's next beat names this player; read on meanwhile.
+                if (error?.status !== 403) throw error;
+                // Still refused long after any beat would have named this player: the host dropped them (dropGuest).
+                // Sending the same lines for the rest of the battle would only grow the outbox; this player is out.
+                this._refusedSince = this._refusedSince || now;
+                if (now - this._refusedSince > this.GONE_MS * 2) { this.onLost(); return; }
             }
         }
-        if (this.role === "host" && now >= (this._nextBeat || 0)) {
+        // The players let in are told to the server with each beat, and at once when they change: only they
+        // (and the host) may say more than a join in this battle's log.
+        const members = this.role === "host" ? [...this.guests.keys()].sort((a, b) => a - b).join(",") : "";
+        if (this.role === "host" && (now >= (this._nextBeat || 0) || members !== this._beatMembers)) {
             this._nextBeat = now + this.BEAT_MS;
+            this._beatMembers = members;
             await ReactorOnline.post("bBeat", this.listing(), Object.assign(this.identity(), { m: $gameMap.mapId() }));
         }
         const response = await fetch(ReactorOnline.request(Object.assign(this.identity(), { a: "bRead", id: this.id, after: this.offset })), { cache: "no-store" });
@@ -170,7 +180,7 @@ const ReactorOnlineBattle = {
     listing() {
         const sides = { [ReactorOnline.myName || "?"]: "ally" }, leader = $gamePlayer;
         for (const guest of this.guests.values()) if (guest.team !== "watch") sides[guest.name] = guest.team;
-        return { id: this.id, x: leader.x, y: leader.y, mode: this.hostMode, sides };
+        return { id: this.id, x: leader.x, y: leader.y, mode: this.hostMode, sides, members: [...this.guests.keys()] };
     },
 
     receive(message, from) {
@@ -179,7 +189,10 @@ const ReactorOnlineBattle = {
             else if (message.t === "leave") { if (this.hostMode === "classic") ReactorOnlineClassic.dropGuest(from); else this.dropGuest(from); }
             else if (this.realTime && $gameFight?.isAction?.()) ReactorOnlineAction.onHost($gameFight, message, from);
             else if (message.t === "plan") this.plans.set(message.u, Object.assign(message, { from }));
-            else if (message.t === "orders") for (const order of message.orders) ReactorOnlineClassic.orders.set(order.key, order);
+            // A guest orders only its own battlers ("g<slot>.<actor>"): an order for anyone else's is not taken.
+            else if (message.t === "orders" && Array.isArray(message.orders)) {
+                for (const order of message.orders.slice(0, 16)) if (order && typeof order.key === "string" && order.key.startsWith("g" + from + ".")) ReactorOnlineClassic.orders.set(order.key, order);
+            }
         } else if (this.role === "joining") {
             if (message.t === "roster" && message.to === ReactorOnline.slot) this.beginMirror(message);
             else if (message.t === "croster" && message.to === ReactorOnline.slot) ReactorOnlineClassic.begin(message);
@@ -196,6 +209,7 @@ const ReactorOnlineBattle = {
         this.realTime = false;
         this.id = "";
         this.offset = 0;
+        this._refusedSince = 0;
         this.outbox.length = 0;
         this.inbox.length = 0;
         this.plans.clear();
@@ -761,7 +775,7 @@ const ReactorOnlineBattle = {
         for (const guest of guests.values()) guest.seen = performance.now() + this.GONE_MS;
         this.send({ t: "rehost", host: ReactorOnline.slot, sides, units: fight._units.filter(unit => !unit.gone).map(unit => [unit.id, unit.team]) });
         this.sendSlots();
-        ReactorOnline.post("bOpen", { x: $gamePlayer.x, y: $gamePlayer.y, mode, was, sides: Object.assign({ [ReactorOnline.myName || "?"]: "ally" }) }, Object.assign(this.identity(), { m: $gameMap.mapId() }))
+        ReactorOnline.post("bOpen", { x: $gamePlayer.x, y: $gamePlayer.y, mode, was, sides: Object.assign({ [ReactorOnline.myName || "?"]: "ally" }), members: [...guests.keys()] }, Object.assign(this.identity(), { m: $gameMap.mapId() }))
             .then(answer => { if (this.role === "host") this.id = answer.id; }, () => null);
         ReactorOnlineChat.note("The host left, so this battle now runs on your game.");
     },

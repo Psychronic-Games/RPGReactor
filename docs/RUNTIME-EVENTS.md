@@ -1,12 +1,13 @@
 # Runtime events: `ReactorEvents`
 
-The runtime emits synchronous notifications at fixed points of a battle, of a battle on the map, and when a door on a 3D map opens or shuts. This
+The runtime emits synchronous notifications at fixed points of a battle, of a battle on the map, when a door on a 3D map opens or shuts, and when a vehicle is boarded, left, bumped, landed or sunk. This
 feed is intended for read-only observers, so a plugin that tracks combat can
 subscribe to it instead of wrapping prototype methods it never meant to change.
 
-Defined in `runtime/reactor_core.js`, which loads before every other runtime
-file and before any plugin, so it is available at plugin load time. Also
-reachable from the console as `$reactorEvents`.
+Defined in `runtime/reactor_core.js`, which loads ahead of the rest of the
+runtime (only the libraries and `reactor_json.js` come first) and before any
+plugin, so it is available at plugin load time. Also reachable from the
+console as `$reactorEvents`.
 
 ```js
 const off = ReactorEvents.on("hpChanged", ({ battler, delta, before, after }) => {
@@ -566,6 +567,23 @@ Emitted when a unit other than the player winds up an attack.
 | `targetId` | `number` |
 | `frames` | `number` |
 
+## Vehicle events
+
+The vehicles (`reactor_vehicles.js`, `reactor_vehicles_drive.js`) emit through
+a small helper of their own rather than a literal `ReactorEvents.emit("…")`,
+so the test above does not count them and they are listed here instead.
+Every payload has `vehicle` (the vehicle's identity, as
+`ReactorVehicles.idOf` gives it), `type` (its vehicle type id) and `eventId`.
+
+| Event | When | Extra field |
+|---|---|---|
+| `vehicleGetOn` | the player boards | |
+| `vehicleGetOff` | the ride ends | |
+| `vehicleSink` | a ridden vehicle goes down in water deeper than it wades | |
+| `vehicleSplash` | it comes down in, or is driven into, such water | `depth` |
+| `vehicleBump` | something stops it at speed (`Drive.BUMP_FROM` or more) | `speed` |
+| `vehicleLand` | it is back on the ground after being in the air | `fall`, the drop from its highest point |
+
 ## Migrating an observer
 
 An observer plugin counting battle statistics, before, wraps
@@ -643,8 +661,9 @@ number — and it never wanted to.
 
 Runtime `20260904.17` adds `RPGReactor` plugin commands `SpeakModel3D` and
 `SetModelAnimationSpeed` (code 357). Speech accepts `target`, `operation`
-(`speak`/`stop`), `audio` (relative to audio/se), `speaker`, `text`, `volume`,
-`pitch`, `pan`, and `wait`. Speed accepts `target` and `speed` (1–1000 percent).
+(`speak`/`stop`), `audio` (relative to audio/se), `volume`, `pitch`, `pan`,
+and `wait`; the words themselves go in an ordinary Show Text. Speed accepts
+`target` and `speed` (1–1000 percent).
 Target 0 is this event, -1 the player, -2 the first follower, and positive
 values event IDs; map props use `Reactor3D.PROP_EVENT_BASE + prop.id`.
 See [the authoring guide](3D-FACE-AND-SPEECH.md) for behavior and limits.

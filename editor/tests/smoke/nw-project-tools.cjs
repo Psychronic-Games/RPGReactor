@@ -63,6 +63,8 @@ const driver = new WebDriverClient(path.join(sdk, 'chromedriver'));
                         && event.data?.type === 'smoke:result') __toolResults.push(event.data);
                 });
                 window.confirm = () => true;
+                // Project Tools asks through RRDialog (9b959cee), not window.confirm.
+                RRDialog.confirm = async () => true;
                 reactor.forgeManager.openTool('project-tools');
                 const tool = reactor.forgeManager.projectTools;
                 tool._confirmAndOpen(tool._discoverTools()[0]);

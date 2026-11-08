@@ -452,7 +452,13 @@ class ProjectController {
         const mapDirty = !!this.tilemapManager?.isMapDirty?.();
         if (scope === 'map') return mapDirty;
         if (!this.currentProject) return false;
-        return mapDirty || this.isProjectDirty() || !!this.databaseManager?.isDirty?.();
+        return mapDirty || this.isProjectDirty() || !!this.databaseManager?.isDirty?.() || this._pluginsDirty();
+    }
+
+    /** The Plugin Manager's list edited and not yet saved (it keeps its own Save Changes). */
+    _pluginsDirty() {
+        const plugins = typeof window !== 'undefined' ? window.reactor?.pluginManager : null;
+        return !!plugins?.isDirty?.();
     }
 
     /** A save problem, said through the editor's themed dialog. */
@@ -466,6 +472,12 @@ class ProjectController {
     }
 
     async confirmUnsavedChanges(scope = 'project') {
+        // The event window's edits not yet applied are asked about first, as a map change asks (Exit, Close, New,
+        // Open quit or left them behind without a word); Cancel there stops the whole action.
+        if (scope === 'project') {
+            const eventEditor = this.eventManager?.eventEditor;
+            if (eventEditor?.closeForMapChange && !await eventEditor.closeForMapChange({ ask: true })) return false;
+        }
         if (!this.hasUnsavedChanges(scope)) return true;
 
         const subject = scope === 'map' ? this._tt(this.tilemapManager?.currentMap?.rrWorkshop ? 'this structure' : 'this map') : this._tt('the project');
@@ -492,7 +504,10 @@ class ProjectController {
                 if (!saved) await this._alertSaveProblem('The map could not be saved. The current view will remain open.');
                 return saved;
             }
-            return await this.saveAll();
+            if (!await this.saveAll()) return false;
+            // The Plugin Manager's edits are part of "the project" asked about here.
+            if (this._pluginsDirty()) return await window.reactor.pluginManager.savePlugins({ quiet: true });
+            return true;
         }
         return decision === 'discard';
     }
@@ -567,6 +582,11 @@ class ProjectController {
     }
 
     async newProject() {
+        // The browser edition has its one project: Ctrl+N/Ctrl+O there replaced it with an empty stand-in.
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.unsupported?.('New Project');
+            return;
+        }
         if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
             // Name and template first, in the editor's own dialog; the
@@ -637,6 +657,11 @@ class ProjectController {
     }
 
     async openProject() {
+        // The browser edition has its one project: Ctrl+N/Ctrl+O there replaced it with an empty stand-in.
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.unsupported?.('Open Project');
+            return;
+        }
         if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
             const input = document.createElement('input');
@@ -1614,14 +1639,19 @@ class ProjectController {
     }
 
     async loadMap(mapId, options = {}) {
-        const request = ++this._mapLoadRequest;
         const tilemapManager = this.tilemapManager;
         if (!tilemapManager) {
             return false;
         }
+        // The map already open is not loaded again, and nothing of its own load is cancelled: its parallax and image
+        // layers, still drawing, dropped their picture when the load counter moved for a click on the same map.
+        if (tilemapManager.currentMap?.id === mapId && !options.forceReload) {
+            // Another map still loading: a click on the open one keeps it, and that load is let go.
+            if (this._mapLoadPending) { ++this._mapLoadRequest; tilemapManager.cancelPendingMapLoad?.(); this._mapLoadPending = false; }
+            return true;
+        }
+        const request = ++this._mapLoadRequest;
         tilemapManager.cancelPendingMapLoad?.();
-
-        if (tilemapManager.currentMap?.id === mapId && !options.forceReload) return true;
         // The event window floats over the map: it closes with it, asking first about unapplied edits.
         const eventEditor = this.eventManager?.eventEditor;
         if (eventEditor?.closeForMapChange && !await eventEditor.closeForMapChange({ ask: !options.skipDirtyCheck })) return false;
@@ -1631,7 +1661,9 @@ class ProjectController {
         this.uiManager.updateStatus(`Loading map ${mapId}...`);
 
         this.mediaSurfacePreviewManager?.beforeMapChange?.();
+        this._mapLoadPending = true;
         const success = await tilemapManager.loadMap(mapId);
+        if (request === this._mapLoadRequest) this._mapLoadPending = false;
         if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager) return false;
 
         if (success) {
@@ -3882,6 +3914,11 @@ class ProjectController {
     // silently — a map we cannot scan is a map we cannot promise is correct.
     scanProjectForMapReferences(targetMapId) {
         const report = { references: [], sources: [], unreadable: [] };
+        // The open map is also held in memory, and its next save writes that copy over the file: its
+        // transfers are shifted there too (kept apart from `references`, which count what is named to the author).
+        const open = this.tilemapManager?.currentMap;
+        report.openMapReferences = open && open.id && open.id !== targetMapId
+            ? this.collectMapReferencesInEvents(open.events, targetMapId) : [];
         if (typeof nw === 'undefined' || !this.currentProject?.path) return report;
         const fs = require('fs');
         const path = require('path');
@@ -3903,6 +3940,7 @@ class ProjectController {
                 report.sources.push({ kind: 'map', id: info.id, name: info.name || `Map ${info.id}`, count: found.length, path: mapPath, data: mapData });
             }
         }
+
 
         const commonEvents = this.databaseManager?.data?.commonEvents || [];
         let commonCount = 0;
@@ -4045,17 +4083,31 @@ class ProjectController {
         return lines.join('\n');
     }
 
+    /** The open map's in-memory references when its saved file named none (so the scan of the disk found none of it). */
+    _openMapOnlyReferences(report) {
+        const open = report.openMapReferences || [];
+        const openId = this.tilemapManager?.currentMap?.id;
+        return open.length && !report.sources.some(source => source.kind === 'map' && source.id === openId) ? open : [];
+    }
+
     describeMapReferenceUpdate(report, offsetX, offsetY) {
         const lines = [
             this._t('mapResize.contentMovesBy', { x: this._signed(offsetX), y: this._signed(offsetY) }),
             ''
         ];
-        if (report.references.length > 0) {
-            lines.push(this._t('mapResize.inboundFound', { count: report.references.length }));
+        // The open map's unsaved transfers count only where its saved file names none (the same commands otherwise).
+        const open = this._openMapOnlyReferences(report);
+        if (report.references.length > 0 || open.length > 0) {
+            lines.push(this._t('mapResize.inboundFound', { count: report.references.length + open.length }));
             for (const source of report.sources) {
                 lines.push(source.kind === 'commonEvents'
                     ? `  - ${this._t('menu.commonEvents')}: ${source.count}`
                     : `  - ${source.name}: ${source.count}`);
+            }
+            if (open.length) {
+                const map = this.tilemapManager?.currentMap;
+                const info = (this.currentProject?.maps || []).find(entry => entry && entry.id === map?.id);
+                lines.push(`  - ${info?.name || `Map ${map?.id}`}: ${open.length}`);
             }
             lines.push('', this._t('mapResize.inboundUpdate'));
         }
@@ -4087,7 +4139,8 @@ class ProjectController {
         let inbound = null;
         if (analysis.shifts) {
             const report = this.scanProjectForMapReferences(sourceMap.id);
-            if (report.references.length > 0) {
+            // Unsaved transfers in the open map are asked about too: nothing on disk names them, but its next save would.
+            if (report.references.length > 0 || this._openMapOnlyReferences(report).length > 0) {
                 // Either answer resizes the map: the buttons say what becomes of the commands.
                 if (await RRDialog.confirm(this.describeMapReferenceUpdate(report, offsetX, offsetY), {
                     title: this._tt('Resize Map'), ok: this._tt('Update Commands'), cancel: this._tt('Leave Unchanged')
@@ -4132,8 +4185,20 @@ class ProjectController {
             }
 
             if (inbound) {
+                const openTilemap = this.tilemapManager, openWasClean = !openTilemap?.isMapDirty?.();
                 this.applyMapReferenceOffsets(inbound.references, offsetX, offsetY);
-                if (!this.persistScannedMapReferences(inbound)) {
+                if (inbound.openMapReferences?.length) {
+                    // The open map's own copy, so its next save keeps the shift. A map with nothing else unsaved
+                    // stays saved: its file was just given the same shift.
+                    this.applyMapReferenceOffsets(inbound.openMapReferences, offsetX, offsetY);
+                }
+                const persisted = this.persistScannedMapReferences(inbound);
+                // Marked saved only once its file has the same shift: a failed write leaves the map unsaved, so its
+                // next save still carries the shift to disk.
+                if (persisted && openWasClean && inbound.sources.some(source => source.kind === 'map' && source.id === openTilemap?.currentMap?.id)) {
+                    openTilemap?.captureSavedMapState?.();
+                }
+                if (!persisted) {
                     await RRDialog.alert(this._t('mapResize.updateFailed'), { title: this._tt('Resize Map'), kind: 'error' });
                 }
                 if (inbound.sources.some(source => source.kind === 'commonEvents')) {

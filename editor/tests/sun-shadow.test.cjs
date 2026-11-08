@@ -62,7 +62,7 @@ test('the light loop reads the sun from the same two samplers as the rows, and t
         assert.match(glsl, /uniform mat4 rrSunShadowMatrix\[2\];/);
         assert.match(glsl, /texture\(rrShadowAtlas, vec3\(u, rrSunShadowBand\.x \+ /);
         assert.match(glsl, /texture\(rrShadowDynAtlas, vec3\(u, rrSunShadowBand\.z \+ /);
-        assert.match(glsl, /if \(sh > 63\.5\) \{ float sv = rrSunShadowAt\(p\); rrSunShaded = fall \* \(1\.0 - sv\); fall \*= sv; \}\n\t\telse if \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);/);
+        assert.match(glsl, /if \(sh > 63\.5\) \{ float rrSF = 1\.0;\n#ifdef RR_SUN_FACING\n[^#]*#endif\n\t\t\tfloat sv = rrSF > 0\.0 \? rrSF \* rrSunShadowAt\(p\) : 0\.0; rrSunShaded = fall \* \(1\.0 - sv\); fall \*= sv; \}\n\t\telse if \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);/);
         assert.match(glsl, /\tsum -= rrAmbient \* \(rrSunShade \* rrSunShaded\);\n\tif \(rrFace > 0\.0\) sum -= rrAmbient \* \(rrFace \* [0-9.]+ \* \(1\.0 - rrFaceN\.y\)\);\n\treturn sum;\n\}/);
         assert.match(glsl, /\tvec3 sum = rrAmbient;\n\trrSunShaded = 0\.0;\n\trrSunNormal = cross\(dFdx\(p\), dFdy\(p\)\);\n\tfor \(int i = 0; i < 32; i\+\+\) \{\n\t\tif \(i >= rrLightCount\) break;/,
             'the anchors the light grid and the volume rewrite are still there');
@@ -91,6 +91,47 @@ test('the light loop reads the sun from the same two samplers as the rows, and t
     const source = source3D();
     assert.match(source, /"rrSunShadowMatrix", "rrSunShadowInfo", "rrSunShadowBand", "rrSunShadowBias", "rrSunShade",\n\s*"rrSunShadowDir", "rrSunShadowTexel"\]\) uniforms\[key\] = shared\[key\];/,
         'the volume bake, whose light code is the loop\'s, has the sun uniforms too');
+});
+
+test('a casting sun lights only the side of a face turned to it, and draws building pieces from both sides', () => {
+    // The gable at North Haven's (85, 101): the sun's caster stored a roof overhang's underside, and the plaster just
+    // under the roof read lit within the compare offset, a strip above the overhang's shade. A face turned away from
+    // the sun was lit wherever the map missed it, since a building's own shade there is stored from those faces.
+    const glsl = Reactor3D.lightGlsl(true, 5);
+    assert.match(glsl, /vec3 rrSunNormal = vec3\(0\.0\);/, 'a point with no face (the volume bake) takes the sun whole');
+    assert.match(glsl, /if \(rrSL > 0\.0\) \{ if \(dot\(rrSN, cameraPosition - p\) < 0\.0\) rrSN = -rrSN;/, 'the face as the eye sees it, mirrored views too');
+    assert.match(glsl, /rrSF = smoothstep\(0\.0, 0\.100, dot\(rrSN, rrLightAim\[i\]\.xyz\)/);
+    assert.match(glsl, /float sv = rrSF > 0\.0 \? rrSF \* rrSunShadowAt\(p\) : 0\.0;/, 'turned away: in shade, the map not read');
+    assert.equal(Reactor3D.SUN_FACING, 0.1);
+    // Building pieces only: a hillside's triangles straddled the turn and cut it into teeth.
+    const lightingSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
+    assert.match(lightingSource, /if \(material\.__reactorPieces && !material\.__reactorRock && this\.SUN_FACING > 0\) faceDecl \+= "#define RR_SUN_FACING\\n";/);
+    assert.match(glsl, /#ifdef RR_SUN_FACING\n[^#]*rrSF = smoothstep/, 'the facing only where the switch is set');
+    // Nor rocks: their facets straddled the turn as a hillside's did (the owner saw triangles on them).
+    const worldSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_world.js'), 'utf8');
+    assert.match(worldSource, /if \(both === "rock" \|\| both === "both"\) material\.__reactorRock = true;/);
+    assert.match(lightingSource, /this\.__reactorRock \? "\|cutaway\|rock" : "\|cutaway"/, 'a program of their own');
+    // A neighboring map's rocks are meshed in the background, the near ones too (a quarter-second frame mid-ride).
+    assert.match(worldSource, /if \(pool && \(this\._staged \|\| distance > Reactor3D\.ROCK_NEAR\)\)/);
+
+    const THREE = { FrontSide: 0, BackSide: 1, DoubleSide: 2 };
+    const shadows = Reactor3D.Shadows;
+    const saved = { pool: shadows._casterMaterials, aim: shadows._aimSun, face: shadows.renderFace, atlas: shadows._atlas };
+    try {
+        // The pool as casterMaterialFor keys it: pieces by flipped side, the rest by kind and side.
+        const pieces = { side: THREE.BackSide }, rigid = { side: THREE.BackSide };
+        shadows._casterMaterials = { ['pieces' + THREE.BackSide]: pieces, ['rigid' + THREE.BackSide]: rigid };
+        const seen = [];
+        shadows._atlas = { band: 256, size: 256, rows: 1, target: { viewport: { set() {} }, scissor: { copy() {} } } };
+        shadows._aimSun = () => ({});
+        shadows.renderFace = () => seen.push([pieces.side, rigid.side]);
+        const renderer = { setRenderTarget() {}, clear() {} };
+        shadows._renderSunCascade(renderer, {}, 0, { span: 32 }, {}, 0, [], false);
+        assert.deepEqual(seen, [[THREE.DoubleSide, THREE.BackSide]], 'pieces from both sides for the sun; models as before');
+        assert.equal(pieces.side, THREE.BackSide, 'and back for the lamps after');
+    } finally {
+        shadows._casterMaterials = saved.pool; shadows._aimSun = saved.aim; shadows.renderFace = saved.face; shadows._atlas = saved.atlas;
+    }
 });
 
 test('a cascade is centred on whole texels round the focus and laid again only past its step, a turn of the sun, or a change in it', () => {
@@ -136,6 +177,46 @@ test('a cascade is centred on whole texels round the focus and laid again only p
     } finally {
         p.restore();
     }
+});
+
+test('a change named by its place redraws only the cascades over it; the one drawn longest ago goes first; cascades lie ahead of the eye', () => {
+    // Riding, the plants and batches laid as the party went asked for every cascade, every frame: the near one was
+    // drawn each time and the far one waited, so trees ahead had no shadow until they were near (2026-11-07).
+    const p = planner();
+    const savedView = Reactor3D._viewport;
+    try {
+        Reactor3D._viewport = null;
+        const sun = sunAt(40, 150, 30), focus = { x: 46.3, y: 2.5, z: 58.7 };
+        p.land(p.plan(sun, focus)); p.shadows._frame++;
+        p.land(p.plan(sun, focus)); p.shadows._frame += 20;
+        const [near, far] = p.shadows._sun.cascades;
+        p.shadows._changedStatics();   // what was already waiting, seen
+        // A place past the near cascade's square and inside the far one's.
+        p.shadows.invalidate({ x: focus.x + p.quality.sunSpans[0] * 0.6 + 3, y: 0, z: focus.z, r: 1 });
+        const changes = p.shadows._changedStatics();
+        assert.equal(changes.all, false, 'not everything');
+        let jobs = p.plan(sun, focus, { statics: changes });
+        assert.equal(near.dirty, false, 'the near cascade does not reach it');
+        assert.deepEqual(jobs.statics, [far], 'the far one is drawn again');
+        p.land(jobs); p.shadows._frame += 20;
+        // Unnamed: every one, as before.
+        p.shadows.invalidate();
+        assert.equal(p.shadows._changedStatics().all, true);
+        // Both waiting: the one drawn longest ago first, not the near one every time.
+        near.dirty = true; far.dirty = true; near.stamp = p.shadows._frame - 5; far.stamp = p.shadows._frame - 50;
+        jobs = p.plan(sun, focus);
+        assert.deepEqual(jobs.statics, [far]);
+        // An eye looking along +x: each cascade is laid SUN_SHADOW_AHEAD of its span ahead of the party.
+        const camera = { matrixWorld: { elements: [0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1] } };
+        Reactor3D._viewport = { camera: () => camera };
+        assert.deepEqual(p.shadows._sunAhead().map(v => v + 0), [1, 0]);
+        p.shadows._sun = null;
+        jobs = p.plan(sun, focus);
+        const want = jobs.statics[0].want, R = want.right;
+        const ahead = { x: focus.x + Reactor3D.SUN_SHADOW_AHEAD * p.quality.sunSpans[0], z: focus.z };
+        const texel = p.quality.sunSpans[0] / p.quality.sunSize;
+        assert.ok(Math.abs(want.a - (ahead.x * R[0] + focus.y * R[1] + ahead.z * R[2])) <= texel, 'centred ahead of the party along the view');
+    } finally { Reactor3D._viewport = savedView; p.restore(); }
 });
 
 test('a cascade follows the casters over it: a prop that changes redraws both halves, a character that moves redraws only the moving half', () => {

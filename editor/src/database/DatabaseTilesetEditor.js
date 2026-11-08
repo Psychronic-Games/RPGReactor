@@ -1541,12 +1541,13 @@ class DatabaseTilesetEditor {
 
         if (layer === 'A1') {
             // A1: 8 cols × 2 rows layout
-            const sourceRow = Math.floor(kindIndex / 4); // 0-3 (4 autotiles per source row)
-            const blockInRow = kindIndex % 4; // Which of the 4 blocks (0,3,4,7)
-
-            // Map to actual block positions: 0->block0, 1->block3, 2->block4, 3->block7
-            const blockMap = [0, 3, 4, 7];
-            const block = blockMap[blockInRow];
+            // The kind's block and source row as MZ's Tilemap draws A1 (the map palette's table): reading kinds
+            // four to a row drew another kind's art in 10 of the 16 cells, so flags went on the wrong-looking tile.
+            const kindToBlock = [
+                [0, 0], [0, 1], [3, 0], [3, 1], [4, 0], [7, 0], [4, 1], [7, 1],
+                [0, 2], [3, 2], [0, 3], [3, 3], [4, 2], [7, 2], [4, 3], [7, 3]
+            ];
+            const [block, sourceRow] = kindToBlock[kindIndex] || [0, 0];
 
             srcX = block * tileSize * 2;  // Block position in pixels
             srcY = sourceRow * tileSize * 3;  // Source row in pixels
@@ -2329,11 +2330,7 @@ class DatabaseTilesetEditor {
             // Autotiles: mirror the flag to all 48 shape slots of the kind —
             // the runtime looks flags up by the FULL tile id (base + shape),
             // exactly as the MZ editor writes them.
-            if (tileIndex >= 2048 && tileIndex < 8192) {
-                for (let s = 1; s < 48; s++) {
-                    this.currentTileset.flags[tileIndex + s] = currentFlag;
-                }
-            }
+            if (tileIndex >= 2048 && tileIndex < 8192) DatabaseTilesetEditor.mirrorAutotileFlag(this.currentTileset.flags, tileIndex, oldFlag, currentFlag);
             console.debug(`Flag changed: ${oldFlag} (0x${oldFlag.toString(16)}) -> ${currentFlag} (0x${currentFlag.toString(16)})`);
             this.repaintClickedCanvas(canvas, imageIndex, isSplitSheet);
             // Announce it. The map canvas holds the tileset it captured when
@@ -2636,6 +2633,29 @@ class DatabaseTilesetEditor {
     }
 
     /**
+     * An autotile's edit carried to its 48 shape slots (the runtime reads each slot by the full tile id). Only the
+     * bits the edit changed are copied: an A4 wall top blocks the edges its shape shows (0xe02, 0xe08…), and copying
+     * shape 0's whole flag opened every roof and cliff edge. Passage set back to open on a wall top gives each shape
+     * its own edges again, as a new tileset has them.
+     */
+    static mirrorAutotileFlag(flags, baseId, oldFlag, newFlag) {
+        const changed = (oldFlag ^ newFlag) >>> 0;
+        if (!changed) return;
+        const kind = Math.floor((baseId - 5888) / 48);
+        const wallTop = baseId >= 5888 && baseId < 8192 && Math.floor(kind / 8) % 2 === 0;
+        const sheets = typeof RRTilesetSheets !== 'undefined' ? RRTilesetSheets : (typeof window !== 'undefined' ? window.RRTilesetSheets : null);
+        for (let shape = 1; shape < 48; shape++) {
+            const id = baseId + shape;
+            let flag = Number(flags[id]) || 0;
+            flag = (flag & ~changed) | (newFlag & changed);
+            if (wallTop && (changed & 0x0f) && (newFlag & 0x0f) === 0 && sheets?.defaultFlag) {
+                flag = (flag & ~0x0f) | (sheets.defaultFlag(id) & 0x0f);
+            }
+            flags[id] = flag >>> 0;
+        }
+    }
+
+    /**
      * Tile 0 is the empty tile of every unpainted upper layer: its passage stays a star,
      * or checkPassage stops at it and every wall under it turns walkable (O) or every
      * floor solid (X). Its other flags are free to edit.
@@ -2662,11 +2682,7 @@ class DatabaseTilesetEditor {
         this.currentTileset.flags[tileIndex] = newFlag;
         // Autotiles: mirror the flag to all 48 shape slots of the kind — the
         // runtime looks flags up by the FULL tile id (base + shape).
-        if (tileIndex >= 2048 && tileIndex < 8192) {
-            for (let s = 1; s < 48; s++) {
-                this.currentTileset.flags[tileIndex + s] = newFlag;
-            }
-        }
+        if (tileIndex >= 2048 && tileIndex < 8192) DatabaseTilesetEditor.mirrorAutotileFlag(this.currentTileset.flags, tileIndex, oldFlag, newFlag);
         this.repaintClickedCanvas(canvas, imageIndex, isSplitSheet);
         this.notifyTilesetSaved();
         return true;

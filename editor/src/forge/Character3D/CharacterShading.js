@@ -55,7 +55,10 @@
         }
         // The grid.
         const cell = o.radius, inv = 1 / cell;
-        const key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
+        // One key per cell, exactly (±4096 cells, ±327 m at the default radius). A hashed key gave most cells' lists to
+        // several cells (371 of 399 on one character), and a receiver near two of them read a list, and was shaded by
+        // its vertices, twice: creases came out darker than the disks say (owner's ruling B4, 2026-11-07).
+        const key = (x, y, z) => ((x + 4096) * 8192 + (y + 4096)) * 8192 + (z + 4096);
         // Every `step`-th vertex shades, standing for the area of the ones it skips: the receivers stay
         // every vertex, the cost falls by the step.
         const grid = new Map();

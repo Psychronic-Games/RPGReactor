@@ -1283,7 +1283,8 @@ class TilemapManager {
         // applyViewportCrop() shrinks the canvas itself to match map dimensions,
         // there's no parallax bleed at any zoom level >= floor.
         const minScale = this.minimumZoomScale(viewportWidth, viewportHeight);
-        const maxScale = 5;
+        // A map so small its fit-to-panel scale is over 5 keeps that scale as the most (a notch shrank it below the panel).
+        const maxScale = Math.max(5, minScale);
 
         let newScale = oldScale;
         for (const scaleFactor of steps) {

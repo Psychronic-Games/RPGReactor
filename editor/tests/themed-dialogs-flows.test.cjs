@@ -412,6 +412,71 @@ test('Resize Map: commands elsewhere are updated only on Update Commands, and th
     assert.deepEqual([result.resized, result.updated], [true, false]);
 });
 
+test('Resize Map: the open map\'s own transfers move too, so its next save does not put the old ones back', async () => {
+    const RRDialog = dialog([true]);
+    const { controller, source, mapData } = resizeFixture(RRDialog, 'bottom-right');
+    // Another map is open, its transfer into this one held in memory (and the same one read from its file).
+    const openTransfer = [0, 1, 2, 2, 0, 0], fileTransfer = [0, 1, 2, 2, 0, 0];
+    let captured = 0;
+    controller.tilemapManager = {
+        currentMap: { id: 7, events: [null, { id: 1, pages: [{ list: [{ code: 201, parameters: openTransfer }] }] }] },
+        isMapDirty: () => false, captureSavedMapState: () => { captured++; }
+    };
+    const scan = controller.scanProjectForMapReferences;
+    controller.scanProjectForMapReferences = function (target) {
+        const report = scan.call(this, target);   // no disk without NW.js: only the open map's copy is found
+        report.references.push({ parameters: fileTransfer, xIndex: 2, yIndex: 3 });
+        report.sources.push({ kind: 'map', id: 7, name: 'Town', count: 1 });
+        return report;
+    };
+    controller.persistScannedMapReferences = () => true;
+    assert.equal(await controller.applyMapResize(mapData, source, 4, 4), true);
+    assert.deepEqual(fileTransfer.slice(2, 4), [3, 3], 'the file\'s copy moved');
+    assert.deepEqual(openTransfer.slice(2, 4), [3, 3], 'and the copy the open map will save');
+    assert.equal(captured, 1, 'a map with nothing else unsaved stays saved');
+    assert.match(RRDialog.asked[0].message, /- Town: 1$/m, 'counted once');
+});
+
+test('Resize Map: a transfer only the open map holds (not saved yet) is asked about and moved; the map stays unsaved', async () => {
+    const RRDialog = dialog([true]);
+    const { controller, source, mapData } = resizeFixture(RRDialog, 'bottom-right');
+    const openTransfer = [0, 1, 2, 2, 0, 0];
+    let captured = 0;
+    controller.currentProject = Object.assign({}, controller.currentProject, { maps: [null, { id: 7, name: 'Town' }] });
+    controller.tilemapManager = {
+        currentMap: { id: 7, events: [null, { id: 1, pages: [{ list: [{ code: 201, parameters: openTransfer }] }] }] },
+        isMapDirty: () => false, captureSavedMapState: () => { captured++; }
+    };
+    controller.persistScannedMapReferences = () => true;
+    assert.equal(await controller.applyMapResize(mapData, source, 4, 4), true);
+    assert.equal(RRDialog.asked.length, 1, 'nothing on disk names it, and still it is asked about');
+    assert.match(RRDialog.asked[0].message, /- Town: 1$/m);
+    assert.deepEqual(openTransfer.slice(2, 4), [3, 3], 'moved in the open map');
+    assert.equal(captured, 0, 'its file was not shifted, so the map is left unsaved and its next save carries the move');
+});
+
+test('Resize Map: a failed write of the shifted files leaves the open map unsaved', async () => {
+    const RRDialog = dialog([true]);
+    const { controller, source, mapData } = resizeFixture(RRDialog, 'bottom-right');
+    const openTransfer = [0, 1, 2, 2, 0, 0], fileTransfer = [0, 1, 2, 2, 0, 0];
+    let captured = 0;
+    controller.tilemapManager = {
+        currentMap: { id: 7, events: [null, { id: 1, pages: [{ list: [{ code: 201, parameters: openTransfer }] }] }] },
+        isMapDirty: () => false, captureSavedMapState: () => { captured++; }
+    };
+    const scan = controller.scanProjectForMapReferences;
+    controller.scanProjectForMapReferences = function (target) {
+        const report = scan.call(this, target);
+        report.references.push({ parameters: fileTransfer, xIndex: 2, yIndex: 3 });
+        report.sources.push({ kind: 'map', id: 7, name: 'Town', count: 1 });
+        return report;
+    };
+    controller.persistScannedMapReferences = () => false;
+    assert.equal(await controller.applyMapResize(mapData, source, 4, 4), true);
+    assert.deepEqual(openTransfer.slice(2, 4), [3, 3]);
+    assert.equal(captured, 0, 'the file kept the old place: the map stays unsaved');
+});
+
 test('Map Properties: a size out of range is told, and the field takes the focus once the notice has been read', async () => {
     let read;
     const told = [];

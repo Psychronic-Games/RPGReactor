@@ -95,7 +95,7 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(core, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/, 'the map\'s frame step');
+    assert.match(core, /scale = this\.upscaled\(\) \? this\._scale : 1;[\s\S]{0,2400}?Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, scale\);/, 'the map\'s frame step');
     assert.match(core, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\([^\n]+\n\s*Reactor3D\.prepareReflections\(renderer, mapScene, scene, camera, scale\);/, 'the capture and the mirrors after the shadow maps');
     assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,2600}if \(capture \|\| mirrors\.length\) renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
     assert.match(core, /const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(camera\) : null;\n\s*if \(probe\) F\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
@@ -280,7 +280,7 @@ test('a capture sees no underwater wash, the ground at the feet is never cut, an
 test('the battle room reflects and casts through the map\'s own frame step, its props and lead actor included', () => {
     const main = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
-    assert.match(main, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/, 'the map viewport');
+    assert.match(main, /scale = this\.upscaled\(\) \? this\._scale : 1;[\s\S]{0,2400}?Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, scale\);/, 'the map viewport');
     assert.match(battle, /R\.prepareWorldFrame\(this\.renderer,this\.world,this\.scene,this\.camera,shadowed\?\{mapData:this\.map,lights:this\.uniforms,focus\}:false\);\s*(this\.renderer\.setRenderTarget\(this\.target\);\s*)?R\.cacheUniformArrays\?\.\(this\.renderer\);\s*this\.renderer\.render\(this\.scene,this\.camera\);/, 'the battle room, right before its draw');
     assert.match(battle, /this\.world\.guestModels = \(\) => this\.models\.values\(\);/);
     const scene = Object.create(Reactor3D.MapScene.prototype);

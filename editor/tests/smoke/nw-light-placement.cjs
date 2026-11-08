@@ -63,7 +63,7 @@ const driver=new WebDriverClient(path.join(root,'nwjs-linux/chromedriver'));
             const newId=pc.getNextAvailableMapId();pc.createNewMap();await pc.saveMapProperties();document.getElementById('map-properties-cancel-btn').click();
             check(!!pc.currentProject.maps[newId],'new map created');
             await pc.loadMap(newId,{skipDirtyCheck:true});await tick();
-            check(lights.ambient().ambient===1&&lights.ambient().ambientColour==='#ffffff','new map defaults to Day');
+            check(pc.tilemapManager.currentMap.reactor3d?.lighting?.ambient===undefined,'new 2D map writes no ambient (unlit, drawn in daylight)');
             check(Reactor3D.ambientFor(pc.tilemapManager.currentMap).intensity===1,'runtime reads the same Day setting');
             await pc.loadMap(oldId,{skipDirtyCheck:true});await tick();
             check(lights.ambient().ambient===.37,'new map did not overwrite old ambient');
@@ -77,8 +77,9 @@ const driver=new WebDriverClient(path.join(root,'nwjs-linux/chromedriver'));
     assert.ok(!resultLights.error,JSON.stringify(resultLights));assert.equal(resultLights.icons,12);
     const oldLighting=JSON.parse(fs.readFileSync(path.join(project,'data', 'Map'+String(resultLights.oldId).padStart(3,'0')+'.r3d.json'))).lighting;
     assert.equal(oldLighting.ambient,.37);assert.equal(oldLighting.ambientColour,'#c0d0e0');
-    const newLighting=JSON.parse(fs.readFileSync(path.join(project,'data', 'Map'+String(resultLights.newId).padStart(3,'0')+'.r3d.json'))).lighting;
-    assert.equal(newLighting.ambient,1);
+    // A new 2D map writes no sidecar (0.99.1); if one exists, it carries no ambient.
+    const newSidecar=path.join(project,'data', 'Map'+String(resultLights.newId).padStart(3,'0')+'.r3d.json');
+    assert.equal(fs.existsSync(newSidecar)?JSON.parse(fs.readFileSync(newSidecar)).lighting?.ambient:undefined,undefined);
     fs.writeFileSync('/tmp/rr-light-placement.png',Buffer.from(await driver.sessionRequest('GET','/screenshot'),'base64'));
     console.log('Light placement, ambient controls, persistence and Day defaults passed:',resultLights);
 } catch(error) {

@@ -141,11 +141,13 @@
         'Shows the Page Down button\'s assist text from CoreEngine.': '显示 CoreEngine 中「Page Down」按键的辅助文字。',
     };
 
+    // The reference sentences Reactor writes for each code are translated like any label; a plugin's own help
+    // (read from the project) has no entry and stays as its author wrote it.
+    // The community-reviewed Simplified Chinese wording above comes first.
     const referenceDetail = detail => {
         const source = detail || '';
-        return root.I18n?.currentLanguage() === 'zh-Hans'
-            ? (TEXT_DETAIL_ZH[source] || source)
-            : source;
+        if (root.I18n?.currentLanguage() === 'zh-Hans' && TEXT_DETAIL_ZH[source]) return TEXT_DETAIL_ZH[source];
+        return root.I18n && typeof root.I18n.tText === 'function' ? root.I18n.tText(source) : source;
     };
 
     // ------------------------------------------------------------ insertion

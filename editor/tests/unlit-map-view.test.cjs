@@ -86,14 +86,19 @@ test('the editor\'s 3D view draws an unlit map fully lit, and repaints the scene
         manager.feed3D(32);
         assert.equal(scene.synced.length, 1, 'a still unlit map costs nothing per frame');
 
-        // The Lighting tool open: the darkness its panel shows, in both views.
+        // The Lighting tool open on a map the game draws unlit: its panel shows full light, as the game does
+        // (owner's ruling 2026-11-07), not the 25% the runtime gives a lit map.
         manager.active = true;
         manager.feed3D(48);
-        assert.equal(Reactor3D.ambient().intensity, 0.25);
+        assert.equal(manager.ambient().ambient, 1, 'the panel reads full light');
+        assert.equal(Reactor3D.ambient().intensity, 1);
         manager.active = false;
         manager.feed3D(64);
         assert.equal(Reactor3D.ambient(), null);
         assert.equal(scene.synced.length, 3, 'leaving the lit look repaints again');
+        // A light placed makes it a lit map, at the runtime's ambient.
+        MapLights.add(map, { x: 2, y: 2, radius: 4 });
+        assert.equal(manager.ambient().ambient, 0.25, 'a lit map reads the runtime\'s default');
     } finally {
         cleanup();
     }

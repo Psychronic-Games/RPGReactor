@@ -2119,7 +2119,10 @@ class DatabaseEditorUI {
         if (entry.stockVehicle) return;
         if (this._snapshotForUndo) this._snapshotForUndo();
         if (this._activeDatabaseList?.type === type) this._activeDatabaseList.mutationGeneration++;
-        const cloned = JSON.parse(JSON.stringify(entry));
+        // The record as it stands now: an editor that works on a copy (Troops) has put its edits into the store,
+        // while the list may still hold the object it was drawn from.
+        const current = (this.databaseManager.data[type] || [])[entry.id] || entry;
+        const cloned = JSON.parse(JSON.stringify(current));
         delete cloned.id;
         this.releaseSharedIdentity(type, cloned, this.databaseManager.data[type]);
         cloned.name = (cloned.name || this._t('common.unnamed')) + ` (${this._t('common.copy')})`;

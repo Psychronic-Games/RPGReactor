@@ -1993,9 +1993,13 @@ class DatabaseEnemyEditor {
 
         const path = require('path');
         const fs = require('fs');
-        const searchDirs = ['enemies', 'sv_enemies', 'characters'];
+        // Only the folder a battle loads the enemy from, as MZ offers it: side view reads img/sv_enemies/, front view
+        // img/enemies/ (Sprite_Enemy.loadBitmap). A picture from another folder stopped the battle on a load error.
+        // A character sheet is set under Battle Presentation instead.
+        const sideView = !!this.databaseManager?.data?.system?.optSideView;
+        const searchDirs = [sideView ? 'sv_enemies' : 'enemies'];
 
-        // Collect files from all battler directories
+        // Collect files from the battler directory
         const fileMap = new Map(); // reference -> directory (first directory wins for preview)
         for (const dir of searchDirs) {
             const dirPath = path.join(project.path, 'img', dir);

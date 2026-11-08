@@ -53,6 +53,8 @@ class WaitForModel3DEditor {
             ['all', this._t('Everything')]
         ].concat(this.mapEvents().map(event => [String(event.id),
             String(event.id).padStart(3, '0') + (event.name ? ': ' + event.name : '')]));
+        // A target this map does not list (another map's event, from a common event; a deleted one) stays as it was saved.
+        if (!options.some(([id]) => id === target)) options.push([target, `${this._t('Target')} ${target}`]);
         // One shared grid: a label / radio column, then the controls, so
         // every row's fields sit on the same left edge.
         const control = 'padding:4px 6px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:12px;';

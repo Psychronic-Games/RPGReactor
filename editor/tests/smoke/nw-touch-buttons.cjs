@@ -47,25 +47,28 @@ async function click(expression, touch = false) {
         await driver.waitForScript('return !!window.SceneManager?._scene && window.DataManager?.isDatabaseLoaded();', [], { timeout: 60000 });
         await driver.execute(`window.__buttonErrors=[];addEventListener('error',e=>__buttonErrors.push(String(e.error||e.message)));addEventListener('unhandledrejection',e=>__buttonErrors.push(String(e.reason)));
             ConfigManager.touchUI=true;
+            // The Demo's System sets a User Interface (Main Menu) in place of Scene_Menu;
+            // this smoke checks the stock scenes' touch buttons, so the stock menu is kept.
+            $dataSystem.reactorMenuInterfaceId=0;
             const onLoad=DataManager.onLoad;DataManager.onLoad=function(data){onLoad.call(this,data);if(data===$dataMap)data.events=[null];};
             DataManager.setupNewGame();$gameSystem.enableMenu();SceneManager.goto(Scene_Map);`);
         await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && SceneManager._scene._menuButton?.visible && !SceneManager.isSceneChanging();', [], { timeout: 30000 });
         await wait();
         console.log('Button visibility:', await driver.execute('return {visible:SceneManager._scene._menuButton.visible,worldVisible:SceneManager._scene._menuButton.worldVisible??null,pixi:PIXI.VERSION};'));
         await click('SceneManager._scene._menuButton');
-        await driver.waitForScript('return SceneManager._scene instanceof Scene_Menu && !SceneManager.isSceneChanging();');
+        await driver.waitForScript('return SceneManager._scene instanceof Scene_Menu && !SceneManager.isSceneChanging() && SceneManager._scene.isActive();');
         checks.push('mouse opens the menu');
         await wait(); await click('SceneManager._scene._cancelButton', true);
-        await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && !SceneManager.isSceneChanging();');
+        await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && !SceneManager.isSceneChanging() && SceneManager._scene.isActive();');
         checks.push('touch closes the menu');
         await wait(); await click('SceneManager._scene._menuButton', true);
-        await driver.waitForScript('return SceneManager._scene instanceof Scene_Menu && !SceneManager.isSceneChanging();');
+        await driver.waitForScript('return SceneManager._scene instanceof Scene_Menu && !SceneManager.isSceneChanging() && SceneManager._scene.isActive();');
         checks.push('touch opens the menu');
         await wait(); await click('SceneManager._scene._cancelButton');
-        await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && !SceneManager.isSceneChanging();');
+        await driver.waitForScript('return SceneManager._scene instanceof Scene_Map && !SceneManager.isSceneChanging() && SceneManager._scene.isActive();');
         checks.push('mouse closes the menu');
         await driver.execute(`window.__shopItem=$dataItems.find(item=>item&&item.id>0&&item.name);$gameParty.gainGold(10000);window.__shopBefore=$gameParty.numItems(__shopItem);window.__goldBefore=$gameParty.gold();SceneManager.push(Scene_Shop);SceneManager.prepareNextScene([[0,__shopItem.id,1,10]],false);`);
-        await driver.waitForScript('return SceneManager._scene instanceof Scene_Shop && SceneManager._scene._buyWindow && !SceneManager.isSceneChanging();');
+        await driver.waitForScript('return SceneManager._scene instanceof Scene_Shop && SceneManager._scene._buyWindow && !SceneManager.isSceneChanging() && SceneManager._scene.isActive();');
         await driver.execute('const s=SceneManager._scene;s.commandBuy();s._buyWindow.select(0);s.onBuyOk();');
         await wait();
         for (const [index, number, touch] of [[2,2,false],[3,12,true],[0,2,false],[1,1,true]]) {

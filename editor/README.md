@@ -1,6 +1,6 @@
 # RPG Reactor
 
-For the consolidated update, read the [0.99.3 release notes](../docs/posts/release-notes-0.99.3.md). Battle Rooms and visual Action Sequences are opt-in systems; see the [battle guide](../docs/BATTLE-PRESENTATION.md) and the [rigging guide](../docs/RIGGING-MODELS.md) for setup and current limits.
+For the consolidated update, read the [0.99.4 release notes](../docs/posts/release-notes-0.99.4.md). Battle Rooms and visual Action Sequences are opt-in systems; see the [battle guide](../docs/BATTLE-PRESENTATION.md) and the [rigging guide](../docs/RIGGING-MODELS.md) for setup and current limits.
 
 RPG Reactor 0.99.5 (in development) is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
@@ -77,6 +77,13 @@ Comprehensive editors for all game data in a near-full-viewport workspace with f
 | **3D Models** | Browse the project's `3d/` model library in folders, carve any mesh region into a named part, rig static models with Humanoid/Quadruped/Plant/Vehicle skeletons, apply preset motions, and author every pose, swing, spin, bob, clip, keyframe timeline, and timed effect on one slider card with live preview. Bindings live in `data/Database.r3d.json` and per-model `model.json` / `model.rig.bin` sidecars; an Effects section names animations, video/image surfaces, and lights anchored on the model (placed by clicking it or dragging the marker, offset/rotate/scale on the card with a live preview) for the Play 3D Effect command and animation timelines |
 | **Vehicles** | Boat, Ship and Airship lead the list; add optional vehicle types with a 2D sprite or shared 3D model picker, movement/handling, class, starting equipment, traits and skills. Classes can define vehicle equipment slots. Assign a type in an event’s Reactor Vehicle settings; ridden vehicles travel between maps and stay where parked. Sound groups independent idle/acceleration/slowdown BGS loops, optional BGM and folded SE effects. [Authoring guide](../docs/AUTHORING.md#authoring-vehicles). Mounted combat and an in-game equipment menu remain open. |
 | **Quests** | Author quest categories, descriptions, objectives, visibility rules, and rewards that can give gold, items, EXP or a common event; import VisuStella, Yanfly, or GS definitions. Reactor stores definitions in `data/ReactorQuests.json`, separately from plugin quest files; progress saves with the game. The tracked quest shows on the map in a tracker window set up under Tracker and Labels |
+| **Action Sequences** | Author the visual steps a skill or item plays in battle, as a step list and timeline with a live preview. See the [battle guide](../docs/BATTLE-PRESENTATION.md) |
+| **Structures** | Draw building plans (rooms, doors, windows, stairs, named spots and the people at them) saved as readable files under `3d/Structures`; the Build bar and `build-scripts/build-structure.cjs` read the same files |
+| **Music Sequences** | A library of BGM sequences; see Audio Player below |
+| **Controls** | Which keys and gamepad buttons do what in the game, starting from RPG Maker's mapping; saved in `System.json` (`reactorControls`) |
+| **Character Creation** | Settings for choosing an actor or building a character in the game, in `data/ReactorCharacters.json` |
+| **Online** | Single player or Online, and the online world's settings, in `data/ReactorOnline.json`. See the [online guide](../docs/DESIGN-ONLINE.md) |
+| **Reactor Features** | Turn Reactor's own versions of plugin-provided features on or off. See [Reactor Features](../docs/REACTOR-FEATURES.md) |
 | **User Interfaces** | Author Box, Image, Text, Button, Gauge, Text Input, and typed List nodes as interactive scenes or display-only map HUDs. Generated baselines and opt-in, role-safe replacements cover Title, Main Menu, Game End, Status, Options, Save, Load, Items, Skills, Equipment, Shop, and Name Input, and a Battle HUD dresses battles; stock fallback remains automatic. Named List contexts, actor bindings, functional Options and Save/Load rows, detailed typography/state/focus styling, transitions, live visual capture, and runtime preview are built. Records live in `data/UserInterfaces.json`, invisible to stock RPG Maker |
 
 ### Rendering and model optimization
@@ -94,7 +101,7 @@ Volume lights use distance and point/spot/beam/sun shape; surface normals and no
 maps do not contribute to this lighting model. Still, flickering and pulsing
 lights are baked into a light volume and moving lights are gathered once a
 frame. Shadow atlases budget 8 static /
-3 dynamic light rows on full quality and 4 / 2 on weak quality. Rows are cached
+1 dynamic light rows on full quality and 4 / 1 on weak quality. Rows are cached
 and prioritize light incident on the player, so a light's casting flag does not
 guarantee a shadow row when the budget is full. Model lights exclude their own
 carrier from the shadow pass.
@@ -193,7 +200,7 @@ imports only through explicit Starting Layout / Add to Front actions.
 ### Playtest
 - **One-click testing**: Launch your game instantly from the editor
 - **Debug mode**: Test with development features enabled
-- **Playtest checkpoints**: Slot 99 is written after battles and map transfers in test mode; F9 on the title loads the checkpoint. This is separate from ordinary player save slots and is disabled outside test mode
+- **Playtest checkpoints**: A checkpoint save of its own (`filecheckpoint`, not a numbered slot) is written after battles and map transfers in test mode; F9 on the title loads it. This is separate from ordinary player save slots and is disabled outside test mode
 - **Built-in frame profiler**: Press F10 in any playtest (or deployed game) to record per-phase frame timings; a second press writes `save/reactor-profile.json` attributing every slow frame
 - **Process management**: Start and stop playtests easily
 - **Start-map validation**: Repairs invalid player and vehicle start-map references before launch when maps have been deleted
@@ -405,12 +412,13 @@ RPG Reactor/
 │   ├── reactor_main.js
 │   ├── reactor_managers.js
 │   ├── reactor_objects.js
-│   ├── reactor_objects_*.js     # actions, battlers, map, interpreter, legacy
+│   ├── reactor_objects_*.js     # actions, battlers, followers, map, interpreter, legacy
 │   ├── reactor_scenes.js
 │   ├── reactor_sprites.js
 │   ├── reactor_windows.js
 │   ├── reactor_mv_compat.js          # MV API gap-fills loaded before plugins
 │   ├── reactor_plugins.js
+│   ├── reactor_*.js             # 3D, battle, online, UI, vehicles and other Reactor systems
 │   └── libs/                    # PixiJS, Three.js, Effekseer, storage/compression libs
 └── editor/                      # Editor app source
     ├── src/                     # Editor JavaScript source
@@ -496,7 +504,7 @@ Database shortcuts are scoped to the active database section. The Types workspac
 ## Technical Details
 
 - **Runtime**: NW.js; deployment defaults to the editor's runtime version and also supports pinning a specific release
-- **Rendering**: PixiJS 8.20.0 for 2D and Three.js 0.185.1 for 3D maps and models, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
+- **Rendering**: PixiJS 8.22.0 for 2D and Three.js 0.187.0 for 3D maps and models, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
 - **Animation Effects**: Effekseer
 - **Data Format**: RPG Maker MZ-compatible JSON plus stock MV-compatible LZString saves. The MV compatibility layer supports synchronous YEP-style local/browser save APIs, including custom directory, filename, and web-storage key contracts
 - **Tile Size**: 64, 48, 32, 24, 16, or 8 pixels. Sheet layouts stay fixed; image dimensions scale with the tile size. B–G sheets are each 16×16 tiles.
@@ -523,14 +531,16 @@ correctness or complete game compatibility.
 
 ```bash
 cd editor
-npm test
+npm run test:changed   # while working: only what your edits reach
+npm run test:all       # every test
+npm test               # every test, as CI runs it
 ```
 
 Use **Build → Deploy Game...** for game packages and **Build → Deploy Editor...** for editor archives. The direct npm game-build scripts require an explicit project path and acknowledgment that their developer download is not release-authenticated, for example `npm run build:linux -- --project="/path/to/game" --developer-unverified-downloads`.
 
 ### Startup splash artwork
 
-Each launch randomly selects a splash image. Add PNG artwork to `editor/images/` using names such as `splash-screen-03.png`, `splash-screen-04.png`, and so on (the current artwork is 1920 × 1200). Desktop launches discover these files automatically; rebuild the Web package to include new images there. Numbering gaps are allowed, and the same image may appear on consecutive launches.
+Each launch randomly selects a splash image. Add PNG artwork to `editor/images/` using names such as `splash-screen-04.png`, `splash-screen-05.png`, and so on (the current artwork is 1920 × 1200). Desktop launches discover these files automatically; rebuild the Web package to include new images there. Numbering gaps are allowed, and the same image may appear on consecutive launches.
 
 ### Build Architecture
 Both game builds and editor distribution builds use `worker_threads` to run in background threads without blocking the UI. Workers communicate via `postMessage` with `{ type: 'log', message, color }` for build log output and `{ type: 'progress', percent, status }` for progress bar updates. ESM `import()` hangs silently in NW.js worker threads, so all build workers use CommonJS exclusively.

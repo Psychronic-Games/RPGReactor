@@ -956,7 +956,7 @@
         const bushes = this.bushChunkMesh(mapData, foliage.bushes, cx, cy);
         if (bushes) {
             group.add(bushes);
-            if (R.Shadows && R.Shadows.markCaster) { R.Shadows.markCaster(bushes, false); if (R.Shadows.invalidate) R.Shadows.invalidate(); }
+            if (R.Shadows && R.Shadows.markCaster) { R.Shadows.markCaster(bushes, false); if (R.Shadows.invalidate) R.Shadows.invalidate(bushes); }
             if (batches) batches.add(this, bushes, cx * size, cy * size);
         }
     };
@@ -973,7 +973,7 @@
             if (keys && !keys.has(key)) continue;
             group.remove(mesh);
             // A bush chunk leaves the shadow rows (the caster list drops parentless roots itself).
-            if (mesh.userData.rrBushChunk !== undefined && R.Shadows && R.Shadows.invalidate) R.Shadows.invalidate();
+            if (mesh.userData.rrBushChunk !== undefined && R.Shadows && R.Shadows.invalidate) R.Shadows.invalidate(mesh);
             mesh.geometry.dispose();
         }
     };
@@ -1016,8 +1016,11 @@
             const far = lodOf().far + 2;
             for (const mesh of group.children) {
                 const info = mesh.userData.rrFoliageChunk;
-                // A chunk drawn in its region's batch stays hidden; the batch is culled by the region.
-                if (!info || mesh.userData.rrBatchedIn) continue;
+                // A chunk drawn in its region's batch stays hidden; the batch is culled by the region. A chunk alone
+                // in its region is listed in a batch that never makes a mesh: it is drawn as itself, and culled here
+                // like any other (skipped, one hidden as it was laid far off stayed hidden however near one came).
+                const batch = mesh.userData.rrBatchedIn;
+                if (!info || (batch && batch.mesh)) continue;
                 const dx = Math.max(info.x0 - at.x, 0, at.x - info.x1), dz = Math.max(info.z0 - at.z, 0, at.z - info.z1), dy = Math.max(info.y0 - at.y, 0, at.y - info.y1);
                 mesh.visible = dx * dx + dy * dy + dz * dz < far * far;
             }

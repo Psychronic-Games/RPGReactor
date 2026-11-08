@@ -56,8 +56,11 @@ class DatabaseQuestEditor {
     }
 
     /** The project's quest log settings, stored on System.json. */
-    settings() {
+    settings(forWriting = true) {
         const system = this.databaseManager.getSystem() || {};
+        // Only read (drawing the page): the defaults are not written into System.json, or opening the page was a
+        // change (Cancel asked to discard it, OK rewrote System.json).
+        if (!forWriting && (!system.reactorQuests || typeof system.reactorQuests !== 'object')) return { menuCommand: true, commandName: 'Quests' };
         if (!system.reactorQuests || typeof system.reactorQuests !== 'object') system.reactorQuests = {};
         const stored = system.reactorQuests;
         if (stored.menuCommand === undefined) stored.menuCommand = true;
@@ -118,7 +121,7 @@ class DatabaseQuestEditor {
         const tt = text => this._t(text);
         if (this.parentEditor && typeof this.parentEditor.normalizeOnView === 'function') this.parentEditor.normalizeOnView('quests', quest, DatabaseQuestEditor.normalize);
         else DatabaseQuestEditor.normalize(quest);
-        const settings = this.settings();
+        const settings = this.settings(false);
         container.innerHTML = '';
         const wrapper = document.createElement('div');
         wrapper.className = 'database-detail-wrapper db-page';

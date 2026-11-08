@@ -125,8 +125,9 @@ class PluginManager {
                 }
             };
             document.addEventListener('keydown', this._keyHandler);
-        } else if (!shownBefore) {
-            // Raising an open manager keeps edits; reopening a closed one reloads from disk.
+        } else if (!shownBefore && !this.isDirty()) {
+            // Raising an open manager keeps edits; reopening a closed one reloads from disk, unless it holds edits
+            // not yet saved (closing the window does not ask; reloading threw them away without a word).
             this.loadPlugins();
         }
 
@@ -164,6 +165,7 @@ class PluginManager {
     onProjectChanged() {
         this.hide();
         this.plugins = [];
+        this._pluginsBaseline = null;
         this.availablePlugins = [];
         this._pluginsFilePath = null;
         this._pluginProjectPath = null;
@@ -1397,7 +1399,8 @@ class PluginManager {
             const dirPath = this.path.join(project.path, dir);
             if (this.fs.existsSync(dirPath)) {
                 const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.apng'];
-                const validExts = String(dir).includes('img') ? imageExts : RRAssetFiles.AUDIO_EXTENSIONS;
+                // A folder other than img/ or audio/ (movies, effects, fonts, data) lists its own files: every one.
+                const validExts = String(dir).includes('img') ? imageExts : String(dir).includes('audio') ? RRAssetFiles.AUDIO_EXTENSIONS : [];
                 for (const fileName of RRAssetFiles.listNames(dirPath, validExts)) {
                     const opt = document.createElement('option');
                     opt.value = fileName;
@@ -1515,7 +1518,10 @@ class PluginManager {
             button.addEventListener('click', (e) => {
                 // Open nested struct editor
                 // Get the current value or initialize as empty object
-                const currentValue = structData[fieldName] || {};
+                // An empty value is an empty list for a list type (`|| {}` turned it into an object, which opened as
+                // "[object Object]" and was saved as that text), and an empty struct otherwise.
+                const stored = structData[fieldName];
+                const currentValue = stored !== undefined && stored !== null && stored !== '' ? stored : (String(type).endsWith('[]') ? [] : {});
 
                 // We need to pass the struct definitions and avoid re-reading the plugin file
                 // So we'll handle nested structs differently - without loading from file
@@ -2133,6 +2139,7 @@ class PluginManager {
                 console.warn(`No plugins file found; ${defaultFile} will be created on first save`);
                 this._pluginsFilePath = this.path.join(projectPath, 'js', defaultFile);
                 this.plugins = [];
+                this._markPluginsSaved();
                 this.clearPluginSelection();
                 await this.scanAvailablePlugins(projectPath);
                 this.renderPluginList();
@@ -2170,6 +2177,7 @@ class PluginManager {
             } else {
                 this.plugins = [];
             }
+            this._markPluginsSaved();
 
             // Load available plugins from js/plugins folder
             await this.scanAvailablePlugins(projectPath);
@@ -4222,15 +4230,36 @@ class PluginManager {
     }
 
 
+    /** What a save would write, to tell an edited list from the one on disk. */
+    _pluginsSignature() {
+        const file = this._pluginsFilePath ? this.path.basename(this._pluginsFilePath) : '';
+        return JSON.stringify(file === 'plugins.js' ? this.serializeRpgMakerPlugins(this.plugins) : this.serializeReactorPlugins(this.plugins));
+    }
+
+    _markPluginsSaved() {
+        this._pluginsBaseline = this._pluginsSignature();
+    }
+
     /**
-     * Save plugins to the project's plugins file (reactor_plugins.js or plugins.js)
+     * Edits not yet saved (parameters, on/off, order, added or removed plugins). The manager is a floating window
+     * whose list lives until Save Changes: closing the editor or opening another project asks about these
+     * (ProjectController.hasUnsavedChanges) instead of dropping them.
      */
-    async savePlugins() {
+    isDirty() {
+        if (this._pluginsBaseline == null || this._pluginsLoadError) return false;
+        return this._pluginsSignature() !== this._pluginsBaseline;
+    }
+
+    /**
+     * Save plugins to the project's plugins file (reactor_plugins.js or plugins.js). `quiet`: no "saved" message
+     * (a save of everything). True when it was written.
+     */
+    async savePlugins({ quiet = false } = {}) {
         try {
             const currentProject = this.projectController.getCurrentProject();
             if (!currentProject || !currentProject.path) {
                 await RRDialog.alert(this._tt('No project loaded'), { title: this._tt('Plugin Manager'), kind: 'warning' });
-                return;
+                return false;
             }
 
             if (this._pluginsLoadError) {
@@ -4258,10 +4287,13 @@ ${JSON.stringify(pluginsToWrite, null, 4)};
 `;
 
             this._writeFileAtomic(this.fs, pluginsPath, content, 'utf8');
-            await RRDialog.alert(this._tt('Plugins saved successfully!'), { title: this._tt('Plugin Manager') });
+            this._markPluginsSaved();
+            if (!quiet) await RRDialog.alert(this._tt('Plugins saved successfully!'), { title: this._tt('Plugin Manager') });
+            return true;
         } catch (err) {
             console.error('Error saving plugins:', err);
             await RRDialog.alert(`${this._tt('Error saving plugins:')} ${err.message}`, { title: this._tt('Plugin Manager'), kind: 'error' });
+            return false;
         }
     }
 

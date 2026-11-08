@@ -207,7 +207,10 @@ class MediaSurfaceManager {
         if (index < 0) return false;
         const copyId = this.nextId(); if (copyId > 999999) return false;
         // Keep the exact pose: arbitrary offsets can bury copies in walls or ceilings.
-        rows.splice(index + 1, 0, {...this.copy(rows[index]), id:copyId});
+        // The map's own copy, not a stamped building's screen (which leaves with that building).
+        const copy = {...this.copy(rows[index]), id:copyId};
+        delete copy.structure;
+        rows.splice(index + 1, 0, copy);
         this.change(rows);
         this.edit(copyId);
         return copyId;

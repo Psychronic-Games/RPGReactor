@@ -142,6 +142,11 @@ class ForgeManager {
         return window.I18n ? window.I18n.t(key) : key;
     }
 
+    /** A phrase (not a key) in the editor's language. */
+    _tx(text) {
+        return window.I18n && typeof window.I18n.tText === 'function' ? window.I18n.tText(text) : text;
+    }
+
     /** Open the workspace (called by toolbar button + File>Forge>Forge Launcher). */
     showLauncher() {
         this._open();
@@ -229,7 +234,7 @@ class ForgeManager {
                         <span class="rr-forge-brand">${FORGE_ICONS.forge(22)}</span>
                         <div class="rr-modal-title"></div>
                     </div>
-                    <button type="button" class="rr-forge-close" aria-label="${this._t('common.close')}">&times;</button>
+                    <button type="button" class="rr-forge-close" aria-label="${this._tx('Close')}">&times;</button>
                 </div>
                 <div class="rr-forge-workspace-body"></div>
             </div>`;
@@ -256,7 +261,7 @@ class ForgeManager {
         const titleSuffix = activeTool ? ` | ${this._t(activeTool.nameKey)}` : '';
 
         this.workspaceModal.querySelector('.rr-modal-title').textContent = this._t('menu.forge') + titleSuffix;
-        this.workspaceModal.querySelector('.rr-forge-close').setAttribute('aria-label', this._t('common.close'));
+        this.workspaceModal.querySelector('.rr-forge-close').setAttribute('aria-label', this._tx('Close'));
         this.workspaceModal.querySelector('.rr-forge-workspace-body').innerHTML = `
                     <div class="rr-forge-sidebar">
                         <div class="rr-forge-tools-header lit-section-header">${this._t('forge.tools')}</div>

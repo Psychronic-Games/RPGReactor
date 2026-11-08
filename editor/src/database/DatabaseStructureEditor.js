@@ -1284,9 +1284,23 @@ class DatabaseStructureEditor {
         this.render();
     }
 
+    /**
+     * A record made by Change Maximum or Clear has no name yet while its Name field shows its plan's ("New Plan"):
+     * worked on, it takes that name, or the save (which skips a record with no name and no file, a deleted one)
+     * dropped what was built on it.
+     */
+    nameIfNew() {
+        const entry = this.current?.entry, plan = this.current?.plan;
+        if (entry && plan && !entry.name && !entry.file && plan.name) {
+            entry.name = String(plan.name);
+            this.parentEditor?.refreshDatabaseListLabel?.(entry, 'structures');
+        }
+    }
+
     /** An edit: the database owns the dirty state; the previews follow. */
     markDirty() {
         if (!this.current) return;
+        this.nameIfNew();
         this._paintVersion = (this._paintVersion || 0) + 1;
         this.parentEditor?._markDatabaseMutation?.();
         this._reportStale = true;
@@ -1406,7 +1420,7 @@ class DatabaseStructureEditor {
         bar.querySelector('.rr-structures-height')?.addEventListener('change', event => this.setFloorCount(event.target.value));
         bar.querySelector('.rr-structures-build')?.addEventListener('click', () => {
             const workshop = window.reactor?.structureWorkshop;
-            if (workshop && this.current) workshop.open(this.current.entry);
+            if (workshop && this.current) { this.nameIfNew(); workshop.open(this.current.entry); }
         });
         bar.querySelector('.rr-structures-use').addEventListener('click', () => this.useOnMap());
     }

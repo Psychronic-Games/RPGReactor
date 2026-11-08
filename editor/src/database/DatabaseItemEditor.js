@@ -70,6 +70,8 @@ class DatabaseItemEditor {
                             <select class="database-field-value" data-field="itypeId" data-item-id="${item.id}">
                                 <option value="1" ${item.itypeId === 1 ? 'selected' : ''}>${tt('Regular Item')}</option>
                                 <option value="2" ${item.itypeId === 2 ? 'selected' : ''}>${tt('Key Item')}</option>
+                                <option value="3" ${item.itypeId === 3 ? 'selected' : ''}>${tt('Hidden Item A')}</option>
+                                <option value="4" ${item.itypeId === 4 ? 'selected' : ''}>${tt('Hidden Item B')}</option>
                             </select>
                         </span>
                         <span class="db-col">

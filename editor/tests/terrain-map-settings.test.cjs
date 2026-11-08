@@ -204,14 +204,14 @@ function panelFor(map, slot) {
     } finally { global.RRMapEdges = previous.edges; global.Reactor3D = previous.reactor; global.RRMaterialPopup = previous.popup; }
 }
 
-test('the Beyond the Border panel: six pictures, Automatic until the distance is set, only the numbers in use', () => {
+test('the Beyond the Border panel: seven pictures, Automatic until the distance is set, only the numbers in use', () => {
     const numbers = html => [...html.matchAll(/rr-build-snumber" data-key="(\w+)"/g)].map(m => m[1]);
     const disabled = (html, cls) => new RegExp(`class="${cls}"[^>]*disabled`).test(html);
     // Nothing past the border: the sliders are off, a side can still be given a style.
     const none = panelFor(shapedMap(), 'surround');
     assert.match(none, /What is seen past the map's border\. Nobody walks there\./);
     assert.deepEqual([...none.matchAll(/rr-build-sstyle" data-style="(\w+)" aria-pressed="(\w+)"/g)].map(m => m[1] + ':' + m[2]),
-        ['none:true', 'continue:false', 'ocean:false', 'mountains:false', 'plateau:false', 'void:false']);
+        ['none:true', 'continue:false', 'ocean:false', 'mountains:false', 'cliffs:false', 'plateau:false', 'void:false']);
     assert.ok(disabled(none, 'rr-build-sdistance') && disabled(none, 'rr-build-srough'), 'the sliders are disabled');
     assert.match(none, /class="rr-build-chip rr-build-sauto" aria-pressed="true" disabled/);
     assert.deepEqual(numbers(none), []);
@@ -428,7 +428,7 @@ test('a change made whole while another is still gathering is a step of its own,
 
 test('Beyond the Border on a map that is not 3D: every control is off and no floor is offered', () => {
     const html = panelFor({ id: 9, width: 6, height: 4, note: '', data: [] }, 'surround');
-    assert.equal((html.match(/class="rr-build-chip rr-build-sstyle"[^>]* disabled>/g) || []).length, 6, 'the six tiles');
+    assert.equal((html.match(/class="rr-build-chip rr-build-sstyle"[^>]* disabled>/g) || []).length, 7, 'the seven tiles');
     assert.match(html, /class="rr-build-chip rr-build-sauto" aria-pressed="true" disabled>/);
     assert.match(html, /class="rr-build-sdistance"[^>]* disabled /);
     assert.match(html, /class="rr-build-srough"[^>]* disabled /);

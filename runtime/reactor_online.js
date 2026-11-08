@@ -622,10 +622,15 @@ const ReactorOnline = {
     async announceCharacter() {
         const leader = $gameParty.leader(), model = ReactorCharacters.current()?.id;
         if (!this.config()) return;
-        if (leader) this.myName = leader.name();
+        // Not joined: no name has been shown yet, and join() takes the one the server gives.
+        if (leader && this.slot < 0) this.myName = leader.name();
         if (this.account?.session) await this.post("profile", { session: this.account.session, character: ReactorCharacters.current() }).catch(() => {});
         if (this.slot < 0) return;
-        await fetch(this.request({ a: "look", s: this.slot, g: this.nonce, t: this.token, n: leader ? leader.name() : "", c: leader ? leader.actorId() : 0, h: model || "" }), { cache: "no-store" }).catch(() => {});
+        const answer = await fetch(this.request({ a: "look", s: this.slot, g: this.nonce, t: this.token, n: leader ? leader.name() : "", c: leader ? leader.actorId() : 0, h: model || "" }), { cache: "no-store" })
+            .then(response => response.ok ? response.json() : null).catch(() => null);
+        // The server may show this player under another name (another's registered name, or one already in use):
+        // parties and invites know them by that one. With no answer the name shown is still the one from before.
+        if (answer && typeof answer.name === "string" && answer.name) this.myName = answer.name;
     },
 
     async downloadCharacter(id) {

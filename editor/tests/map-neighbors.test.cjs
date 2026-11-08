@@ -243,3 +243,22 @@ test('a 2D map takes a neighbor: the panel\'s map and shift controls are live th
     assert.deepEqual({ ...exit }, { mapId: 91, side: 'east', along: 1, d: 6, inset: 0 });
     assert.deepEqual({ ...R.neighborArrival(exit, 12, 8, () => true) }, { x: 0, y: 1 });
 });
+
+test('a neighbouring map takes the pass its host takes: no ground in the above, overlay or lights passes', () => {
+    const groups = () => ({ _belowGroup: { visible: true }, _aboveGroup: { visible: true }, _modelsGroup: { visible: true }, _lightGroup: { visible: true } });
+    const near = Object.assign(Object.create(R.MapScene.prototype), groups());
+    const far = Object.assign(Object.create(R.MapScene.prototype), groups());
+    near._neighborBodies = { east: { scene: far } };
+    const host = Object.assign(Object.create(R.MapScene.prototype), groups(), { _neighborBodies: { north: { scene: near } } });
+    far._neighborBodies = { west: { scene: near } };   // two worlds that name each other do not pass it round forever
+    host.setPass('above');
+    for (const scene of [near, far]) {
+        assert.equal(scene._belowGroup.visible, false, 'no ground over the player');
+        assert.equal(scene._aboveGroup.visible, true, 'its own star tiles, as the host\'s');
+        assert.equal(scene._lightGroup.visible, false);
+    }
+    host.setPass('lights');
+    assert.deepEqual([near._belowGroup.visible, near._lightGroup.visible, far._lightGroup.visible], [false, true, true], 'only lamps added in');
+    host.setPass('below');
+    assert.deepEqual([near._belowGroup.visible, near._modelsGroup.visible, near._lightGroup.visible], [true, true, false]);
+});

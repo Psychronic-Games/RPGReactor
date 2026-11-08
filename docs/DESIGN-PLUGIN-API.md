@@ -1,6 +1,6 @@
 # Reactor plugin API (design)
 
-Status: **proposal, 2026-09-29.** Nothing here is built yet. It answers the need behind [PR #72](https://github.com/Psychronic-Games/RPGReactor/pull/72) (a reliable API reference for plugin authors and AI assistants) without adding a second language or a build step.
+Status: **proposal, 2026-09-29.** Nothing here is built yet (checked against the code 2026-11-06). It answers the need behind [PR #72](https://github.com/Psychronic-Games/RPGReactor/pull/72) (a reliable API reference for plugin authors and AI assistants) without adding a second language or a build step.
 
 ## Goals
 
@@ -18,10 +18,10 @@ Status: **proposal, 2026-09-29.** Nothing here is built yet. It answers the need
 
 ## Where things stand
 
-- **Headers.** `PluginAnnotations.js` recognizes `@target` and `@base` only to split annotation lines; nothing reads their values. `@orderAfter` / `@orderBefore` are not parsed, although our own `RR_WoraFog.js` port uses `@orderAfter`.
+- **Headers.** `PluginAnnotations.js` recognizes `@target` and `@base` only to split annotation lines; nothing reads their values. `@orderAfter` / `@orderBefore` are not parsed, although our own importer ports `RR_WoraFog.js` and the four `RR_PinnacleGtbs*` files use `@orderAfter`.
 - **Engine identity.** `Utils.REACTOR_NAME` is `"Reactor"`. A comment in `reactor_core.js` names `REACTOR_VERSION`, but no such constant exists; the version lives only in `reactor_main.js`'s header and the `RPG_REACTOR_RUNTIME_REVISION` global.
-- **Changing engine behavior** means replacing a prototype method, usually as an alias. The Demo's plugins make 1,824 such assignments, with no declared order between plugins that touch the same method. `PluginOverrides.js` can name which plugin replaced a method (by scanning for `.prototype.<method> =`), but not what it changed or in what order.
-- **Observing** already has a clean answer: [`ReactorEvents`](RUNTIME-EVENTS.md), an additive, isolated, synchronous feed at fixed points of a battle. Hooks follow its guarantees.
+- **Changing engine behavior** means replacing a prototype method, usually as an alias. The Demo's plugins make about 1,900 such assignments (1,935 matches of `.prototype.<method> =` in `template/Demo/js/plugins` on 2026-11-06), with no declared order between plugins that touch the same method. `PluginOverrides.js` can name which plugin replaced a method (by scanning for `.prototype.<method> =`), but not what it changed or in what order.
+- **Observing** already has a clean answer: [`ReactorEvents`](RUNTIME-EVENTS.md), an additive, isolated, synchronous feed at fixed points of a battle (and of on-map battles, doors and vehicles). Hooks follow its guarantees.
 
 ## 1. Plugin header
 

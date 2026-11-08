@@ -236,6 +236,9 @@
         if (!source) return null;
         const copy = JSON.parse(JSON.stringify(source));
         delete copy.id;
+        // The map's own, not a stamped building's (removing or re-stamping that building took the copy with it).
+        delete copy.structure;
+        if (typeof copy.tag === 'string' && copy.tag.startsWith('structure:')) copy.tag = '';
         copy.x = number(copy.x + 1, copy.x, -10000, 10000);
         return add(mapData, copy);
     };
@@ -323,6 +326,8 @@
         for (const part of members(mapData, id)) {
             const copy = JSON.parse(JSON.stringify(part));
             delete copy.id;
+            delete copy.structure;
+            if (typeof copy.tag === 'string' && copy.tag.startsWith('structure:')) copy.tag = '';
             copy.x += 1;
             copy.compoundId = compoundId;
             copy.compoundName = compoundName;
