@@ -126,16 +126,35 @@
             const factor=at===start&&total>.003?Math.max(1,Math.round(total/.003))*.003/total:1;
             for(const q of run){phase[q.id]=(q.total+(q.forward?0:q.L))*factor;advance[q.id]=(q.forward?1:-1)*q.L*factor;perimeter[q.id]=total*factor;}
         }
+        // For every vertex within four steps of a border vertex, the borders met there (`forTriangle`).
+        let nearBorders=null;
+        const bordersNear=()=>{
+            const near=new Map();
+            for(const [u,ids] of borderAt){
+                const seen=new Set([u]);let front=[u];
+                for(let pass=0;pass<5&&front.length;pass++){
+                    const next=[];
+                    for(const v of front){
+                        let list=near.get(v);if(!list)near.set(v,list=new Set());for(const id of ids)list.add(id);
+                        for(const q of piece.neighbors[v]||[])if(!seen.has(q)){seen.add(q);next.push(q);}
+                    }
+                    front=next;
+                }
+            }
+            return near;
+        };
         const field = {
             reach,
             forTriangle(ids) {
-                const seen=new Set(ids),candidates=new Set();let front=ids;
                 // Only edges reachable across this cloth can trim the face.
                 // A folded lapel or an overlapping open front must not stamp
                 // its cut onto a different panel just behind it.
-                for(let pass=0;pass<5&&front.length;pass++){
-                    const next=[];for(const v of front){for(const id of borderAt.get(v)||[])candidates.add(id);for(const q of piece.neighbors[v]||[])if(!seen.has(q)){seen.add(q);next.push(q);}}front=next;
-                }
+                // (Each vertex's borders within four steps across the cloth are worked out once for the piece, outward
+                // from the border's own vertices; a face's are its three corners' together. Walking the cloth out
+                // from every face anew was a third of laying an outfit's picture.)
+                const near=nearBorders||(nearBorders=bordersNear());
+                const candidates=new Set();
+                for(const v of ids){const list=near.get(v);if(list)for(const id of list)candidates.add(id);}
                 return candidates;
             },
             at(p, candidates, detail=null) {
@@ -796,15 +815,22 @@
             g.names.add(e.name);
             // A torn piece's holes are cut out of the picture (alpha): its part is drawn cut out.
             if (e.look.wearInfo && e.look.wearInfo.holes.length) g.holes = true;
+            const chartKey = c.entry + ':' + c.fam + ':' + (c.projection||'chain');
+            let ofChart = g.map.get(chartKey);
+            if (!ofChart) g.map.set(chartKey, ofChart = new Map());
             const vertexFor = corner => {
                 // A point exactly on the rear seam may be -PI in one
                 // triangle and +PI in the next. Both passed the old >PI
                 // test, welding opposite UV edges into a stretched fan.
-                const k = c.entry + ':' + c.fam + ':' + (c.projection||'chain') + ':' + corner.v + ':' + Math.round(corner.cu * 1e8);
-                let i = g.map.get(k);
+                // (By the chart, then the vertex, then where it lies across the chart, as numbers: one text key for
+                // each corner of each triangle was the largest single cost of a layout.)
+                const across = Math.round(corner.cu * 1e8);
+                let at = ofChart.get(corner.v);
+                if (!at) ofChart.set(corner.v, at = new Map());
+                let i = at.get(across);
                 if (i !== undefined) return i;
                 i = g.refs.length / 2;
-                g.map.set(k, i);
+                at.set(across, i);
                 g.refs.push(c.entry, corner.v);
                 g.uvs.push((c.at[0] + (corner.cu - c.min[0]) * scale) / size, (c.at[1] + (corner.cv - c.min[1]) * scale) / size);
                 // The second coordinates: the chart's own meters, in tiles of the cloth.

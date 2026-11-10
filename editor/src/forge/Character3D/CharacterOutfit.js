@@ -162,24 +162,31 @@
     // ── binding to the skin ───────────────────────────────────────────────
     /** A grid over points for nearest-point queries. */
     function pointGrid(P, ids, cell) {
-        const map = new Map();
-        const key = (x, y, z) => x + ',' + y + ',' + z;
-        for (const v of ids) {
-            const k = key(Math.floor(P[v * 3] / cell), Math.floor(P[v * 3 + 1] / cell), Math.floor(P[v * 3 + 2] / cell));
-            let list = map.get(k);
-            if (!list) map.set(k, list = []);
-            list.push(v);
+        // The points sorted into the cells of a box round them, each cell's in the order given, read by index: a query
+        // looks into 27 cells, and making a text key for each to ask a map was most of its time.
+        const list = Array.from(ids), n = list.length, cells = new Int32Array(n * 3);
+        let lx = Infinity, ly = Infinity, lz = Infinity, hx = -Infinity, hy = -Infinity, hz = -Infinity;
+        for (let q = 0; q < n; q++) {
+            const v = list[q], x = cells[q * 3] = Math.floor(P[v * 3] / cell), y = cells[q * 3 + 1] = Math.floor(P[v * 3 + 1] / cell), z = cells[q * 3 + 2] = Math.floor(P[v * 3 + 2] / cell);
+            if (x < lx) lx = x; if (x > hx) hx = x; if (y < ly) ly = y; if (y > hy) hy = y; if (z < lz) lz = z; if (z > hz) hz = z;
         }
+        const nx = n ? hx - lx + 1 : 0, ny = n ? hy - ly + 1 : 0, nz = n ? hz - lz + 1 : 0, total = nx * ny * nz;
+        const starts = new Int32Array(total + 1), order = new Int32Array(n), at = new Int32Array(n);
+        for (let q = 0; q < n; q++) { at[q] = ((cells[q * 3] - lx) * ny + (cells[q * 3 + 1] - ly)) * nz + (cells[q * 3 + 2] - lz); starts[at[q] + 1]++; }
+        for (let c = 0; c < total; c++) starts[c + 1] += starts[c];
+        const next = starts.slice(0, total);
+        for (let q = 0; q < n; q++) order[next[at[q]]++] = list[q];
         return {
             nearest(x, y, z, reach = 2) {
-                const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
+                const cx = Math.floor(x / cell) - lx, cy = Math.floor(y / cell) - ly, cz = Math.floor(z / cell) - lz;
                 let best = -1, bd = Infinity;
                 for (let r = 1; r <= reach && best < 0; r++) {
                     for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) for (let k = -r; k <= r; k++) {
-                        const list = map.get(key(cx + i, cy + j, cz + k));
-                        if (!list) continue;
-                        for (const v of list) {
-                            const d = (P[v * 3] - x) ** 2 + (P[v * 3 + 1] - y) ** 2 + (P[v * 3 + 2] - z) ** 2;
+                        const gx = cx + i, gy = cy + j, gz = cz + k;
+                        if (gx < 0 || gy < 0 || gz < 0 || gx >= nx || gy >= ny || gz >= nz) continue;
+                        const c = (gx * ny + gy) * nz + gz;
+                        for (let q = starts[c], end = starts[c + 1]; q < end; q++) {
+                            const v = order[q], d = (P[v * 3] - x) ** 2 + (P[v * 3 + 1] - y) ** 2 + (P[v * 3 + 2] - z) ** 2;
                             if (d < bd) { bd = d; best = v; }
                         }
                     }
