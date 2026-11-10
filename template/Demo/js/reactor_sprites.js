@@ -3050,7 +3050,7 @@ Sprite_Animation.SceneLayer = {
         this.install();
         this.guard(gl => {
             const context = effekseer.createContext();
-            context.init(gl);
+            context.init(gl, Graphics.effekseerContextSettings);
             // Each draw sets what it needs; PIXI's caches are reset after it.
             context.setRestorationOfStatesFlag(false);
             this.context = context;

@@ -4229,7 +4229,7 @@ class DatabaseAnimationEditor {
                 }
 
                 // Initialize Effekseer with WebGL context
-                effekseerContext.init(gl);
+                effekseerContext.init(gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
                 // This context also receives the Canvas2D scene blit before
                 // each effect draw, so Effekseer must restore its GL state.
                 effekseerContext.setRestorationOfStatesFlag(true);
@@ -5267,7 +5267,7 @@ class DatabaseAnimationEditor {
                     return false;
                 }
 
-                previewEffekseerContext.init(previewGL);
+                previewEffekseerContext.init(previewGL, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
                 if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.attach(previewEffekseerContext, previewGL.canvas);
                 else previewEffekseerContext.setRestorationOfStatesFlag(true);
                 return true;

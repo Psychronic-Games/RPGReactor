@@ -929,7 +929,7 @@ Reactor3D.GpuEffects = {
         try {
             renderer.resetState();
             context = effekseer.createContext();
-            context.init(gl);
+            context.init(gl, typeof Graphics !== 'undefined' ? Graphics.effekseerContextSettings : undefined);
             // This pass owns GL until it invalidates Three/PIXI's caches below.
             context.setRestorationOfStatesFlag(false);
             return { renderer, gl, context, samples, cache: new Map(), targets: new Set(), disposed: false, loading: 0 };

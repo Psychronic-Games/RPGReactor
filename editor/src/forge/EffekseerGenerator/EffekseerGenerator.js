@@ -2341,7 +2341,7 @@ class EffekseerGenerator {
             if (!gl) { this._overlay(this._tx('WebGL unavailable'), true); return; }
             this._gl = gl;
             this._efkContext = effekseer.createContext();
-            this._efkContext.init(gl);
+            this._efkContext.init(gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
             if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.attach(this._efkContext, gl.canvas);
             else this._efkContext.setRestorationOfStatesFlag(true);
         } catch (e) {

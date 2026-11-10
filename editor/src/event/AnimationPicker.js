@@ -621,7 +621,7 @@ class AnimationPicker {
                 console.error('Failed to create Effekseer context');
                 return;
             }
-            effekseerContext.init(gl);
+            effekseerContext.init(gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
             if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.attach(effekseerContext, gl.canvas);
             else effekseerContext.setRestorationOfStatesFlag(true);
             this._effekseerContext = effekseerContext;

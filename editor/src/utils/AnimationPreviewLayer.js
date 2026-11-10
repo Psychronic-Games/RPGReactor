@@ -399,7 +399,7 @@
             else {
                 fx.ctx = effekseer.createContext();
                 if (!fx.ctx) return false;
-                fx.ctx.init(fx.gl);
+                fx.ctx.init(fx.gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
             }
             // This context is Effekseer's alone: restore state once, and
             // again only after a focus/visibility change (see the guard).

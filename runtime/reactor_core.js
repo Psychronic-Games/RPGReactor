@@ -3619,6 +3619,21 @@ Graphics.blitSceneBehindEffects = function() {
     return drew;
 };
 
+/**
+ * What every Effekseer context the runtime creates is initialized with.
+ *
+ * Effekseer keeps a fixed pool of particle instances per context (its own
+ * default is 4000). When the pool is full a new particle is simply not made:
+ * no thinning, no error. The layers that spawn first keep everything and the
+ * later ones lose particles, and every effect playing in that context shares
+ * the pool (an HDR effect and its companion, several targets, other
+ * animations). A pool reserves about 5 KB of Effekseer's heap per instance
+ * at init (4000: ~20 MB, 8000: ~40 MB, 16000: ~80 MB per context).
+ * `squareMaxCount` is the sprite vertex buffer; it scales with the pool.
+ * A plugin can change these before the first context is created.
+ */
+Graphics.effekseerContextSettings = { instanceMaxCount: 16000, squareMaxCount: 40000 };
+
 Graphics._createEffekseerContext = function() {
     if (!window.effekseer) return;
     try {
@@ -3650,7 +3665,7 @@ Graphics._createEffekseerContext = function() {
         this._effekseerGL = efxGL;
         this._effekseer = effekseer.createContext();
         if (this._effekseer) {
-            this._effekseer.init(efxGL);
+            this._effekseer.init(efxGL, this.effekseerContextSettings);
             // ...but only until the first draw has re-asserted it. Reading
             // the state back is a synchronous round trip to the GPU process
             // per draw (15 ms a frame measured beside a 3D map), and this
@@ -3709,7 +3724,7 @@ Graphics._restoreEffekseerContext = function() {
     try {
         const context = effekseer.createContext();
         if (!context) return;
-        context.init(gl);
+        context.init(gl, this.effekseerContextSettings);
         this._effekseer = context;
         if (typeof EffectManager !== "undefined") EffectManager._cache = {};
         this.rearmEffekseerState();

@@ -147,7 +147,7 @@ class AnimationPickerModal {
             if (!fx.gl) return false;
             fx.ctx = effekseer.createContext();
             if (!fx.ctx) return false;
-            fx.ctx.init(fx.gl);
+            fx.ctx.init(fx.gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
             if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.attach(fx.ctx, fx.gl && fx.gl.canvas);
             else fx.ctx.setRestorationOfStatesFlag(true);
             fx.ready = true;
