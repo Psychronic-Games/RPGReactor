@@ -34,11 +34,34 @@ test('a change reaches the tests of what loads it, and a test edited is its own 
 test('a file that passed on this code is owed nothing, a changed one is, and an open input only a whole run reruns', () => {
     const file = 'docs-budget.test.cjs', Graph = require('./helpers/test-graph.cjs'), built = { nodes: Graph.buildGraph(), salt: 's' };
     const fact = Graph.describe(built.nodes, file, 's');
-    assert.equal(owed(false, [file], { [file]: fact.fingerprint }, built).run.length, 0);
-    assert.equal(owed(false, [file], { [file]: 'older' }, built).run.length, 1);
-    assert.equal(owed(false, [file], {}, built).run.length, 1, 'never passed');
+    assert.equal(owed(false, [file], { [file]: fact.fingerprint }, built, {}).run.length, 0);
+    assert.equal(owed(false, [file], { [file]: 'older' }, built, {}).run.length, 1);
+    assert.equal(owed(false, [file], {}, built, {}).run.length, 1, 'never passed');
     assert.equal(fact.open, true, 'it reads the docs folder');
-    assert.equal(owed(true, [file], { [file]: fact.fingerprint }, built).run.length, 1);
+    assert.equal(owed(true, [file], { [file]: fact.fingerprint }, built, {}).run.length, 1);
+});
+
+test('a test with a record of what it read is owed only when one of those has changed, whatever the graph of names says', () => {
+    const Inputs = require('./helpers/test-inputs.cjs'), { unchangedSince } = require('./run-tier.cjs');
+    const file = 'docs-budget.test.cjs', Graph = require('./helpers/test-graph.cjs'), built = { nodes: Graph.buildGraph(), salt: 's' };
+    // What a passing run would have noted: two files read, a folder listed, a path asked after that is not there.
+    const record = { reads: ['editor/package.json', 'editor/tests/test-tiers.json', 'editor/tests/helpers'], probes: ['editor/no-such-file.txt'], partial: false };
+    record.hash = Inputs.hashOf(record, new Map());
+    assert.equal(unchangedSince(record, new Map()), true);
+    // The graph's fingerprint is stale and the file reads the docs folder: the record still answers, in both kinds of run.
+    assert.equal(owed(false, [file], { [file]: 'older' }, built, { [file]: record }).run.length, 0);
+    assert.equal(owed(true, [file], { [file]: 'older' }, built, { [file]: record }).run.length, 0);
+    // A file read holds other bytes, a folder other names, a missing path is there now: each owes the test again.
+    for (const [key, state] of [['editor/package.json', 'Fchanged'], ['editor/tests/helpers', 'Dchanged'], ['editor/no-such-file.txt', 'Fnew']]) {
+        assert.equal(unchangedSince(record, new Map([[key, state]])), false, key);
+    }
+    // A test that never passed, or whose record cannot be whole (it started another process), is not excused by it.
+    assert.equal(owed(false, [file], {}, built, { [file]: record }).run.length, 1);
+    assert.equal(owed(false, [file], { [file]: 'older' }, built, { [file]: { ...record, partial: true } }).run.length, 1);
+    // Outside the repository, installed packages and git's own files are nobody's input here.
+    assert.equal(Inputs.keyOf('/etc/hostname'), null);
+    assert.equal(Inputs.keyOf(path.join(Inputs.repo, 'editor', 'node_modules', 'x', 'index.js')), null);
+    assert.equal(Inputs.keyOf(path.join(Inputs.repo, 'runtime', 'reactor_main.js')), 'runtime/reactor_main.js');
 });
 
 test('editing a source file changes the fingerprint of the tests that load it, and only those', () => {
