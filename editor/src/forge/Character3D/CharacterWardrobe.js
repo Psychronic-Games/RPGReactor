@@ -1022,7 +1022,7 @@
             }
             // LAYERED runs from the skin out: what is worn over what, whatever order the outfit lists them in.
             cache.fitReport=Fit.settle(entries,built.parts[0],O.triangleNormals,bumps,e=>{const at=order.indexOf(BY_ID.get(e.garment)?.slot);return at<0?order.length:at;},
-                e=>SHOWS_POINT.has(BY_ID.get(e.garment)?.slot)&&!e.lining);
+                e=>SHOWS_POINT.has(BY_ID.get(e.garment)?.slot)&&!e.lining,!!cache.thumb);
         }
         // Sewn last: a waist seam is made from where the fit left the cloth it joins.
         for(const [top,skirt,item,label] of seamsToSew){const seam=waistSeam(top,skirt,item,label,O,built);if(seam)shoeParts.push(seam);}
@@ -1080,7 +1080,7 @@
                 for (const v of made.hidden) hidden.add(v);
             }
         }
-        modeledParts.push(...shoeParts, ...garmentFasteners(entries,built), ...trimBands(entries,built), ...(Details?Details.build(pack,built,entries):[])); textures.push(...shoeTextures);
+        modeledParts.push(...shoeParts, ...garmentFasteners(entries,built), ...trimBands(entries,built), ...(Details&&!cache.thumb?Details.build(pack,built,entries):[])); textures.push(...shoeTextures);
         if(Details)textures.push(...Details.armorFinish(modeledParts,built),...Details.leatherFinish(modeledParts,built),...(Details.pictures?Details.pictures(modeledParts):[]));
         // Worn garments' frayed hems, sewn patches and tape (RRCharacterWear), on their laid cloth.
         if (entries.length && WearMod()) { const worn = WearMod().build(pack, built, entries, { repairsOff: item => detailsOf(item).repairs === false, garmentOf: id => BY_ID.get(id) }); modeledParts.push(...worn.parts); textures.push(...worn.textures); }

@@ -151,6 +151,20 @@ The packed, unused-trimmed Web export was checked in Chromium under a hosted sub
 
 **Save Design** keeps the settings without making a model: `forge/character_3d/characters/<name>.json` and a `<name>.png` picture, in the folder of the **Group** chosen beside it (No Group, an existing group or New Group). Saving the opened design again replaces it; choosing another group moves it. Any other same-named design asks before it is replaced, including after opening an exported model or a design from another project.
 
+### Tile pictures
+
+The pictures on the tiles (species, outfits, garments, accessories, hair) show a mannequin, not the character: one per sex, grey for what is worn, plain for hair. They are made once, kept in the editor's data folder (`character-builder-previews`) and shared by every project, so editing the character never redraws them. Until a picture exists, species, outfit and garment tiles show a drawn figure in the choice's colours. The character itself shows a choice once it is clicked.
+
+### Character Groups
+
+**Forge › Character Groups** (or **Generate Group** in the builder's toolbar) makes many characters at once to one description: a town, an army, a people.
+
+- **Who:** tick the species that may appear, set the share of women, and give ranges for age, height, weight and muscle.
+- **Dress:** tick the settings outfits come from (Everyday, Fantasy, Armor, Sci-fi, Wasteland, Cyberpunk), add up to six colours for the garments' main colour, and set how often an accessory is worn. **Everyone wears this outfit** and **Everyone has these accessories** put the open character's on every member: design one soldier, then make forty different people in the uniform.
+- **Make:** tick what each member gets: a saved design (in a design group of the group's name), a walking sheet (4 or 8 directions), a side-view battler, a portrait (eight members to a face sheet, `img/faces/<Group>_Faces.png`). Style, Look and Outline are the sheet export's.
+
+The right side shows the first members at once as drawn figures in their own colours and build, each replaced by its real picture as that is made; **Roll again** makes another group to the same description, and a click on a member opens it in the 3D Character Builder (the page keeps its description for when you come back). **Make** builds each member in turn on the builder's view (about 15 seconds each with every output on the desktop under software-assisted graphics; faster on a real card), and **Stop** ends after the one in hand. Members are named `<Group> 01`, `02`…; the same description and roll always give the same people. `forge/character_3d/groups/<Group>.json` lists each member's files. Up to 200 members; adults only; slimefolk, centaurs and merfolk are made on their own pages.
+
 **Open** shows saved characters as pictures: the Designs, by group (✕ deletes one after asking), then the Exported Models. Choosing one loads it to edit. Opening a design retires obsolete slider/build work and reports success after the requested recipe appears. Switching species or reopening the Builder restores preview updates; editing a body slider keeps the active pose and orientation.
 
 **Export Model To Project** writes `3d/Characters/<name>/`, asking before it replaces a saved character of that name:
@@ -172,7 +186,7 @@ Humanoids use the same shared motion library in the builder and game. Saved move
 
 ## Sprite sheets
 
-**Export Sprite Sheet** (beside Export Model To Project) draws the character into a sheet the game uses as it is, with transparent edges, and writes it to the project:
+**Export Sprite Sheet** (beside Export Model To Project) draws the character into a sheet the game uses as it is, with transparent edges, and writes it to the project. **Preview** draws the same sheet in the panel without saving it (click the picture for its own size); **Export** writes it:
 
 | Sheet | File | Cells |
 | --- | --- | --- |
@@ -204,7 +218,7 @@ Multi-frame sheets are enabled by default for new and opened projects. The picke
 
 ## Not yet
 
-Generating a whole group of characters ([proposed](DESIGN-ONLINE.md#group-generation)), binding a saved character to an actor from the page, automatic flight navigation, and hair that moves on its own. Cloth movement is baked into saved clips rather than simulated during the game.
+Placing a generated group on a map as events, binding a saved character to an actor from the page, automatic flight navigation, and hair that moves on its own. Cloth movement is baked into saved clips rather than simulated during the game.
 
 ## Where the body comes from
 

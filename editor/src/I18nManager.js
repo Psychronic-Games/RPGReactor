@@ -22479,6 +22479,39 @@ const RR_CHARACTER_3D_TRANSLATIONS = {
 };
 RR_I18N_STRINGS.en['menu.character3dBuilder'] = '3D Character Builder';
 RR_I18N_STRINGS.en['forge.character3dBuilder.description'] = 'Shape 3D characters with sliders and save them to the project as models.';
+RR_I18N_STRINGS.en['menu.characterGroups'] = 'Character Groups';
+RR_I18N_STRINGS.en['forge.characterGroups.description'] = 'Make a whole town, army or people at once: many characters to one description, with their sheets and portraits.';
+// Forge › Character Groups: the entry's name and description, the builder's button and its hint. A first pass by machine; review welcome.
+{
+    const source = ['Generate Group', 'Many characters at once to one description: a town, an army, a people'];
+    const rows = {
+        ja: ['キャラクターグループ', '町や軍隊、民族をまとめて作成します。ひとつの設定から多数のキャラクターを、シートと顔グラフィックつきで作ります。', 'グループを生成', 'ひとつの設定から多数のキャラクターを一度に作成：町、軍隊、民族'],
+        es: ['Grupos de personajes', 'Crea de una vez un pueblo, un ejército o una nación entera: muchos personajes a partir de una descripción, con sus hojas y retratos.', 'Generar grupo', 'Muchos personajes a la vez a partir de una descripción: un pueblo, un ejército, una nación'],
+        ru: ['Группы персонажей', 'Создайте сразу целый город, армию или народ: множество персонажей по одному описанию, с листами спрайтов и портретами.', 'Создать группу', 'Много персонажей сразу по одному описанию: город, армия, народ'],
+        pt: ['Grupos de personagens', 'Crie de uma vez uma cidade, um exército ou um povo inteiro: muitos personagens a partir de uma descrição, com suas folhas e retratos.', 'Gerar grupo', 'Muitos personagens de uma vez a partir de uma descrição: uma cidade, um exército, um povo'],
+        de: ['Charaktergruppen', 'Erstelle eine ganze Stadt, Armee oder ein Volk auf einmal: viele Charaktere nach einer Beschreibung, mit ihren Sheets und Porträts.', 'Gruppe erzeugen', 'Viele Charaktere auf einmal nach einer Beschreibung: eine Stadt, eine Armee, ein Volk'],
+        fr: ['Groupes de personnages', 'Créez d\'un coup une ville, une armée ou un peuple entier : de nombreux personnages à partir d\'une description, avec leurs planches et portraits.', 'Générer un groupe', 'De nombreux personnages à la fois à partir d\'une description : une ville, une armée, un peuple'],
+        el: ['Ομάδες χαρακτήρων', 'Φτιάξτε μονομιάς μια ολόκληρη πόλη, έναν στρατό ή έναν λαό: πολλοί χαρακτήρες από μία περιγραφή, με τα φύλλα και τα πορτρέτα τους.', 'Δημιουργία ομάδας', 'Πολλοί χαρακτήρες μαζί από μία περιγραφή: μια πόλη, ένας στρατός, ένας λαός'],
+        ko: ['캐릭터 그룹', '마을, 군대, 민족 전체를 한 번에 만듭니다. 하나의 설정으로 많은 캐릭터를 시트와 초상화와 함께 만듭니다.', '그룹 생성', '하나의 설정으로 많은 캐릭터를 한 번에: 마을, 군대, 민족'],
+        ar: ['مجموعات الشخصيات', 'أنشئ بلدة أو جيشًا أو شعبًا كاملًا دفعة واحدة: شخصيات كثيرة من وصف واحد، مع أوراقها وصورها.', 'إنشاء مجموعة', 'شخصيات كثيرة دفعة واحدة من وصف واحد: بلدة، جيش، شعب'],
+        it: ['Gruppi di personaggi', 'Crea in una volta un\'intera città, un esercito o un popolo: molti personaggi da una descrizione, con i loro fogli e ritratti.', 'Genera gruppo', 'Molti personaggi in una volta da una descrizione: una città, un esercito, un popolo'],
+        pl: ['Grupy postaci', 'Stwórz naraz całe miasto, armię lub lud: wiele postaci według jednego opisu, z ich arkuszami i portretami.', 'Generuj grupę', 'Wiele postaci naraz według jednego opisu: miasto, armia, lud'],
+        id: ['Grup Karakter', 'Buat seluruh kota, pasukan, atau bangsa sekaligus: banyak karakter dari satu deskripsi, lengkap dengan lembar sprite dan potretnya.', 'Buat Grup', 'Banyak karakter sekaligus dari satu deskripsi: kota, pasukan, bangsa'],
+        vi: ['Nhóm nhân vật', 'Tạo cả một thị trấn, đội quân hay dân tộc cùng lúc: nhiều nhân vật theo một mô tả, kèm bảng sprite và chân dung.', 'Tạo nhóm', 'Nhiều nhân vật cùng lúc theo một mô tả: thị trấn, đội quân, dân tộc'],
+        th: ['กลุ่มตัวละคร', 'สร้างทั้งเมือง กองทัพ หรือชนชาติในครั้งเดียว: ตัวละครจำนวนมากจากคำอธิบายเดียว พร้อมชีตและภาพใบหน้า', 'สร้างกลุ่ม', 'ตัวละครจำนวนมากในครั้งเดียวจากคำอธิบายเดียว: เมือง กองทัพ ชนชาติ'],
+        'zh-Hans': ['角色群组', '一次生成整个城镇、军队或民族：按一份设定生成许多角色，并附带行走图与头像。', '生成群组', '按一份设定一次生成许多角色：城镇、军队、民族'],
+        'zh-Hant': ['角色群組', '一次生成整個城鎮、軍隊或民族：依一份設定生成許多角色，並附帶行走圖與頭像。', '生成群組', '依一份設定一次生成許多角色：城鎮、軍隊、民族'],
+        tr: ['Karakter Grupları', 'Bütün bir kasabayı, orduyu ya da halkı tek seferde oluşturun: tek bir tanımdan, sayfaları ve portreleriyle birçok karakter.', 'Grup Oluştur', 'Tek bir tanımdan aynı anda birçok karakter: bir kasaba, bir ordu, bir halk']
+    };
+    for (const locale of Object.keys(RR_I18N_STRINGS)) {
+        if (locale === 'en') continue;
+        const row = rows[locale] || [RR_I18N_STRINGS.en['menu.characterGroups'], RR_I18N_STRINGS.en['forge.characterGroups.description'], source[0], source[1]];
+        RR_I18N_STRINGS[locale]['menu.characterGroups'] = row[0];
+        RR_I18N_STRINGS[locale]['forge.characterGroups.description'] = row[1];
+        RR_TEXT_TRANSLATIONS[locale] = RR_TEXT_TRANSLATIONS[locale] || {};
+        source.forEach((text, i) => { if (!RR_TEXT_TRANSLATIONS[locale][text]) RR_TEXT_TRANSLATIONS[locale][text] = row[i + 2]; });
+    }
+}
 for (const [locale, list] of Object.entries(RR_CHARACTER_3D_TRANSLATIONS)) {
     RR_I18N_STRINGS[locale] = RR_I18N_STRINGS[locale] || {};
     RR_I18N_STRINGS[locale]['menu.character3dBuilder'] = list[0];

@@ -357,7 +357,7 @@ An idea from the owner, not built. Players could build their own structures in t
 
 ## Group generation
 
-An idea from the owner, not built. A **group** is a way to generate many characters at once for a town, tribe or civilization with its own look. It uses the standard generator (`CharacterModel.random`) with ranges the author sets: which species, body shapes, ages, clothing and colors can appear. An author could fill a village with people of all shapes and sizes within those limits, or give a desert people and a mountain people a different look. It needs a Forge page for the ranges, a way to generate and save the set, and a way to place them on a map. Many unique models on one map also raises the same cost as a crowded online world, so low-detail versions would help both.
+Built on 2026-11-10 as Forge › Character Groups ([guide](CHARACTER-BUILDER.md#character-groups)); placing a group on a map is not. The idea as first written: a **group** is a way to generate many characters at once for a town, tribe or civilization with its own look. It uses the standard generator (`CharacterModel.random`) with ranges the author sets: which species, body shapes, ages, clothing and colors can appear. An author could fill a village with people of all shapes and sizes within those limits, or give a desert people and a mountain people a different look. It needs a Forge page for the ranges, a way to generate and save the set, and a way to place them on a map. Many unique models on one map also raises the same cost as a crowded online world, so low-detail versions would help both.
 
 ## Open questions
 

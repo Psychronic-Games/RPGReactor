@@ -38,6 +38,9 @@ const FORGE_ICONS = {
     // A figure in front of a cube's edges: a body built in 3D.
     character3dBuilder: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M3 7.5 L9 4.5 L15 7.5"/><path d="M3 7.5 V15"/><circle cx="15" cy="9" r="2.6"/><path d="M10.5 21v-1.5a4.5 4.5 0 0 1 9 0V21"/><path d="M15 13.5v3"/></svg>`,
 
+    // Three figures side by side: many characters made at once.
+    characterGroups: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><circle cx="12" cy="7" r="3"/><path d="M6.5 20v-1.5a5.5 5.5 0 0 1 11 0V20"/><circle cx="4.8" cy="9.5" r="2.1"/><path d="M1.5 19v-1a3.6 3.6 0 0 1 3.4-3.6"/><circle cx="19.2" cy="9.5" r="2.1"/><path d="M22.5 19v-1a3.6 3.6 0 0 0-3.4-3.6"/></svg>`,
+
     // A flag flying from its pole.
     propBuilder: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M5 21V3"/><path d="M5 4c3-1.5 5 1.5 8 0s4.5-.5 6 .5v8c-1.5-1-3-1.5-6 0s-5-1.5-8 0"/></svg>`,
 
@@ -69,6 +72,14 @@ const FORGE_TOOLS = [
         icon: FORGE_ICONS.character3dBuilder,
         ctor: () => new Character3DBuilder(),
         getter: 'character3dBuilder'
+    },
+    {
+        id: 'character-groups',
+        nameKey: 'menu.characterGroups',
+        descriptionKey: 'forge.characterGroups.description',
+        icon: FORGE_ICONS.characterGroups,
+        ctor: () => new RRCharacterGroups.Tool(),
+        getter: 'characterGroups'
     },
     {
         id: 'prop-builder',

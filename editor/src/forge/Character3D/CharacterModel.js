@@ -179,6 +179,9 @@
         cache.wardrobe.pictureSize = o.static ? o.atlasSize || 256 : small?.picture || 1024;
         cache.wardrobe.atlasSize = o.atlasSize || (o.static?256:small?.atlas || 2048);
         cache.wardrobe.quality = o.quality === 'preview' || o.static ? 'preview' : 'save';
+        // A catalog picture (`thumb`): a still, drawn a hundred pixels high. What cannot be seen at that size is left
+        // out of its build: sewn details, the last pass that keeps knuckles under gloves, and every rig.
+        cache.wardrobe.thumb = !!o.thumb;
         cache.wardrobe.anatomy = r.anatomy; cache.wardrobe.female = Body.sexOf(r) === 'female';
         const outfit = Wardrobe.build(pack, built, r.outfit, cache.wardrobe);
         if (outfit.texture) textures[outfit.texture.name] = outfit.texture;
@@ -481,7 +484,7 @@
         // Merfolk hook: the leg bones carry no skin; what they held, the hips hold.
         // Before the soft tissue: skin and tail then share the same bindings along the cut.
         if (mer) parts.splice(0, parts.length, ...Merfolk.liftLegs(parts, bones));
-        Body.rigSoftTissue(pack, parts, bones, built.shaped, r);
+        if (!o.thumb) Body.rigSoftTissue(pack, parts, bones, built.shaped, r);
         // Centaur hook: the person onto a horse's body at the waist; the horse's bones first, the person's under its chest.
         const horse = cen ? Centaur.build(pack, built, r, parts, bones, { skinNormals, quality: o.quality || 'save', hairBudget: o.hairBudget, textures, cache }) : null;
         if (horse) Object.assign(textures, horse.textures);
@@ -499,7 +502,7 @@
         }
         // Loose cloth (a cape, a skirt, a robe, a coat's tails) on cloth bones of its own, the cape settled where it hangs.
         const hung = Cloth ? { plan: 'human', parts, bones } : null;
-        if (hung && Cloth.rig(hung)) parts.splice(0, parts.length, ...hung.parts);
+        if (hung && !o.thumb && Cloth.rig(hung)) parts.splice(0, parts.length, ...hung.parts);
         let height = 0;
         for (const p of parts) for (let i = 1; i < p.positions.length; i += 3) height = Math.max(height, p.positions[i]);
         // Occlusion in the vertex colors: always in a file, in the view once the sliders rest (`shade`).

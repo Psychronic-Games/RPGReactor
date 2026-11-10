@@ -310,7 +310,7 @@ test('a recipe changed during a disk read checks the new cache entry before buil
     assert.match(shown.innerHTML, /NEW/);
 });
 
-test('thumbnail shaders stay alive until the next render and geometry and textures are released', async () => {
+test('one thumbnail material of each shader kind is kept until teardown and geometry and textures are released', async () => {
     global.self = global; global.window = global;
     require('../../runtime/libs/three.js');
     const THREE = global.THREE;
@@ -334,17 +334,18 @@ test('thumbnail shaders stay alive until the next render and geometry and textur
         textures: { 'skin.png': { width: 1, height: 1, data: new Uint8Array([255, 255, 255, 255]) } },
         parts: [{ positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), normals: new Float32Array(9), index: new Uint16Array([0, 1, 2]) }] } };
     await b._renderThumb(prepared);
-    assert.equal(materials[0].disposed, undefined);
+    assert.equal(materials[0].disposed, undefined, 'the first material of a kind keeps its compiled program');
+    assert.notEqual(materials[0].map, textures[0], 'the kept material lets go of its picture');
     await b._renderThumb(prepared);
-    assert.equal(materials[0].disposed, true);
-    assert.equal(materials[1].disposed, undefined);
-    assert.equal(view.materials.length, 1);
+    assert.equal(materials[0].disposed, undefined);
+    assert.equal(materials[1].disposed, true, 'a second material of the same kind is released');
+    assert.equal(view.kept.size, 1);
     assert.ok(geometries.every(geometry => geometry.disposed));
     assert.ok(textures.every(texture => texture.disposed));
     assert.equal(view.scene.children.length, 0);
     view.renderer.render = () => { throw new Error('render failed'); };
     await assert.rejects(b._renderThumb(prepared), /render failed/);
-    assert.equal(materials[1].disposed, undefined, 'failed renders keep the previous programs');
+    assert.equal(materials[0].disposed, undefined, 'failed renders keep the kept programs');
     assert.equal(materials[2].disposed, true);
     assert.equal(textures[2].disposed, true);
     assert.equal(view.scene.children.length, 0);
@@ -353,7 +354,7 @@ test('thumbnail shaders stay alive until the next render and geometry and textur
     b._view = { textures: new Map(), renderer: { dispose() {} } };
     b._dropHeldPreview = b._clearModel = () => {};
     b.detach();
-    assert.equal(materials[1].disposed, true, 'teardown releases the last retained programs');
+    assert.equal(materials[0].disposed, true, 'teardown releases the kept programs');
     assert.equal(b._thumbView, null);
 });
 
@@ -471,11 +472,35 @@ test('import-gallery pictures resume after an inactive compilation and stop afte
     assert.equal(listeners.size, 0);
 });
 
-test('species pictures match the selected gender and survive unrelated body and outfit edits',()=>{
+test('species pictures match the selected sex and survive body, outfit and gender-slider edits',()=>{
     const Model=require('../src/forge/Character3D/CharacterModel.js'),b=builder({RRCharacterModel:Model});
     b.recipe=Model.normalize({gender:0,weight:1.3,outfit:[{id:'robe'}]});const before=b._thumbSig('species');
-    const a=b._thumbRecipe({kind:'species',id:'andorian'}).recipe;assert.equal(a.gender,0);
+    const a=b._thumbRecipe({kind:'species',id:'andorian'}).recipe;assert.equal(a.gender,0.25);
     b.recipe=Model.normalize({...b.recipe,weight:-.5,outfit:[{id:'shirt'}],skin:'#ffffff'});assert.equal(b._thumbSig('species'),before);
     const same=b._thumbRecipe({kind:'species',id:'andorian'}).recipe;assert.equal(JSON.stringify(same),JSON.stringify(a));
-    b.recipe=Model.normalize({...b.recipe,gender:1});assert.notEqual(b._thumbSig('species'),before);assert.equal(b._thumbRecipe({kind:'species',id:'andorian'}).recipe.gender,1);
+    b.recipe=Model.normalize({...b.recipe,gender:.3});assert.equal(b._thumbSig('species'),before,'a move of the slider within one sex draws nothing again');
+    b.recipe=Model.normalize({...b.recipe,gender:1});assert.notEqual(b._thumbSig('species'),before);assert.equal(b._thumbRecipe({kind:'species',id:'andorian'}).recipe.gender,0.75);
+});
+
+test('what is worn is pictured on a mannequin, so no edit to the character draws a tile again', () => {
+    const Model = require('../src/forge/Character3D/CharacterModel.js'), Body = require('../src/forge/Character3D/HumanBody.js');
+    const Hair = require('../src/forge/Character3D/CharacterHair.js'), Wardrobe = require('../src/forge/Character3D/CharacterWardrobe.js');
+    const b = builder({ RRCharacterModel: Model, RRHumanBody: Body, RRCharacterHair: Hair, RRCharacterWardrobe: Wardrobe });
+    b.recipe = Model.normalize({ gender: 0.2 });
+    const kinds = ['garment', 'dress', 'prop', 'hair', 'facial', 'brows'], before = kinds.map(kind => b._thumbSig(kind));
+    const shirt = JSON.stringify(b._thumbRecipe({ kind: 'garment', id: 'shirt' }).recipe);
+    b.recipe = Model.normalize(Object.assign(Model.withSpecies({ gender: 0.1 }, 'andorian'), { skin: '#402010', weight: 1.2, outfit: [{ id: 'robe' }], seed: 77 }));
+    b.recipe.hair = Hair.withStyle(b.recipe.hair, 'afro');
+    assert.deepEqual(kinds.map(kind => b._thumbSig(kind)), before);
+    assert.equal(JSON.stringify(b._thumbRecipe({ kind: 'garment', id: 'shirt' }).recipe), shirt);
+    assert.equal(b._thumbRecipe({ kind: 'garment', id: 'shirt' }).recipe.skin, '#b7b4b2', 'a grey figure, not the character');
+    assert.notEqual(b._thumbRecipe({ kind: 'hair', id: 'afro' }).recipe.skin, '#b7b4b2', 'hair is shown on a plain face');
+    // One picture on disk for every project, except for a garment a project took from its own 3D model.
+    const sig = b._thumbSig('garment');
+    b._project = () => ({ path: '/elsewhere' });
+    assert.notEqual(b._thumbSig('garment'), sig);
+    assert.equal(b._thumbShared('garment:shirt', b._thumbSig('garment')), b._thumbShared('garment:shirt', sig));
+    assert.notEqual(b._thumbShared('garment:not-in-the-catalog', b._thumbSig('garment')), b._thumbShared('garment:not-in-the-catalog', sig));
+    b.recipe = Model.normalize({ gender: 0.9 });
+    assert.notEqual(b._thumbSig('garment'), b._thumbSig('garment') && before[0] && sig, 'the other sex has its own mannequin');
 });

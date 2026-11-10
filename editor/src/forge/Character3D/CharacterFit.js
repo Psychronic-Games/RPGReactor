@@ -284,7 +284,7 @@
     }
 
     /** Settles `entries` on the finished skin: innermost first, by what each garment is. `bumps`: raised skin details. */
-    function settle(entries,skin,triangleNormals,bumps,rankOf,clings){
+    function settle(entries,skin,triangleNormals,bumps,rankOf,clings,quick=false){
         const bare=Surface(),P=skin.positions,I=skin.index,at=v=>[P[v*3],P[v*3+1],P[v*3+2]];
         for(let t=0;t<I.length;t+=3)bare.add(at(I[t]),at(I[t+1]),at(I[t+2]),false);
         const beneath=[bare];
@@ -317,7 +317,8 @@
                 if(e.skirt||e.lining)continue;
                 if(open.length&&clings?.(e))tent(e.laid,open,beneath);
                 const r=settlePiece(e.laid,beneath,bumps||[],report.length?LAYER_GAP:SKIN_GAP);
-                hug(e.laid,[skin.positions,...finished.flatMap(g=>g.list.filter(x=>!x.lining).map(x=>x.laid.positions))],bare,[SKIN_GAP,LAYER_GAP],skin.normals);
+                // (`quick`, a catalog picture: skin finer than the cloth's own faces is not looked for.)
+                if(!quick)hug(e.laid,[skin.positions,...finished.flatMap(g=>g.list.filter(x=>!x.lining).map(x=>x.laid.positions))],bare,[SKIN_GAP,LAYER_GAP],skin.normals);
                 moved+=r.moved;deepest=Math.min(deepest,r.deepest);
             }
             if(seams.length)sew(seams);

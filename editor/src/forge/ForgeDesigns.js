@@ -6,7 +6,10 @@
 (function(root) {
     'use strict';
     const fs = () => require('fs'), path = () => require('path');
-    const NEW = '\u0000new';
+    // The "New Group" choice's value: characters no folder name can hold (folderName strips them), so it is never a
+    // group's own name. (It was a NUL character, which a page's markup cannot carry: the browser put U+FFFD in its
+    // place, the choice no longer matched, and picking New Group made a group called "\uFFFDnew" without asking a name.)
+    const NEW = '::new::';
 
     /** A name that can be a file or folder name. */
     function folderName(name) { return String(name || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').slice(0, 48); }

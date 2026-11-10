@@ -177,7 +177,9 @@
             });
         } else if (id === 'face') {
             const list = options.expressions || facePresets()[0].expressions;
-            for (let i = 0; i < 8; i++) cells.push({ col: i % 4, row: Math.floor(i / 4), clip: 'idle', at: 0, yaw: options.view === 'three' ? 22 : 0, kind: 'face', expression: list[i] || 'neutral' });
+            // (`only`: the first so many portraits alone, for a sheet put together from several characters.)
+            const count = Number.isInteger(options.only) ? Math.max(1, Math.min(8, options.only)) : 8;
+            for (let i = 0; i < count; i++) cells.push({ col: i % 4, row: Math.floor(i / 4), clip: 'idle', at: 0, yaw: options.view === 'three' ? 22 : 0, kind: 'face', expression: list[i] || 'neutral' });
         }
         return cells;
     }
@@ -709,7 +711,7 @@
         const restore = settings.style === 'chibi' && settings.layout !== 'face' ? showChibi(builder) : null;
         const shrink = restore ? enlarge(view, builder._result) : null;
         const elevation = settings.layout === 'face' ? l.elevation : Math.max(0, Math.min(75, Number.isFinite(settings.elevation) ? settings.elevation : l.elevation));
-        const cells = plan(settings.layout, { expressions: settings.expressions, view: settings.view, frames: settings.frames });
+        const cells = plan(settings.layout, { expressions: settings.expressions, view: settings.view, frames: settings.frames, only: settings.only });
         const poses = view.plan === 'quadruped' ? (root.RRCreatureBody && root.RRCreatureBody.POSES) : (root.RRCharacterPoses && root.RRCharacterPoses.POSES);
         const ids = new Set((poses || []).map(p => p.id));
         const has = id => id === 'idle' || (ids.has(id) && !!builder._poseAction(id));
@@ -877,9 +879,9 @@
                 <label class="rr-c3d-row rr-c3d-check"><span class="rr-c3d-label">${esc(t('Outline'))}</span><input type="checkbox" data-x="outline"${state.outline ? ' checked' : ''}></label>`}
                 <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('File'))}</span><span class="rr-c3d-export-file" title="img/${l.folder}/${esc(file)}">img/${l.folder}/${esc(file)}</span></div>
                 <div class="rr-c3d-export-progress" hidden><div></div></div>
-                <img class="rr-c3d-export-preview" alt="" hidden>
+                <img class="rr-c3d-export-preview" data-x="sheet" alt="" hidden>
                 <div class="rr-c3d-export-status" aria-live="polite"></div>
-                <div class="rr-c3d-export-foot"><button class="rr-btn-chip" data-x="close">${esc(t('Close'))}</button><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export'))}</button></div>`;
+                <div class="rr-c3d-export-foot"><button class="rr-btn-chip" data-x="close">${esc(t('Close'))}</button><button class="rr-btn-chip rr-c3d-export-look" data-x="preview" title="${esc(t('Draw the sheet here without saving it'))}">${esc(t('Preview'))}</button><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export'))}</button></div>`;
             const fill = panel.querySelector('input[type="range"]');
             if (fill) fill.style.setProperty('--rr-fill', (state.elevation / 60 * 100) + '%');
         };
@@ -914,6 +916,9 @@
             else if (b.dataset.x === 'bgcolor' && root.RRColorPopover) {
                 root.RRColorPopover.open(b, { value: state.background || '#3a3f4b', onInput: hex => { state.background = hex; b.style.setProperty('--rr-c3d-swatch', hex); }, onChange: hex => { state.background = hex; b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; } });
             } else if (b.dataset.x === 'export' && !panel.dataset.busy) exportNow(builder, panel, state, preview);
+            else if (b.dataset.x === 'preview' && !panel.dataset.busy) exportNow(builder, panel, state, preview, true);
+            // The sheet shown: a click on it shows it at its own size, another fits it to the panel again.
+            else if (b.dataset.x === 'sheet') b.classList.toggle('is-actual');
         });
         draw();
         return panel;
@@ -926,7 +931,8 @@
         return Number.isInteger(n) && n >= 16 && n <= 512 ? n : 144;
     }
 
-    async function exportNow(builder, panel, state, preview) {
+    /** The sheet drawn and saved; with `look`, drawn and shown in the panel only: nothing is asked or written. */
+    async function exportNow(builder, panel, state, preview, look = false) {
         const t = (text, params) => builder._t(text, params);
         const project = builder._project && builder._project();
         const rootElement = builder.root, view = builder._view;
@@ -934,7 +940,7 @@
         const status = panel.querySelector('.rr-c3d-export-status');
         if (!project) return;
         let name = safeName(builder.name);
-        if (!name) {
+        if (!name && !look) {
             name = safeName(await root.RRDialog.prompt(t('Name this character:'), { title: t('Export Sprite Sheet'), value: t('Villager') }));
             if (!name || !current()) return;
             builder.name = name;
@@ -944,7 +950,7 @@
         const fs = require('fs'), path = require('path'), l = layout(state.layout);
         const frames = framesOf(l.id, state.frames);
         const file = path.join(project.path, 'img', l.folder, fileName(l.id, name, frames));
-        if (fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export Sprite Sheet'), ok: t('Replace'), danger: true })) return;
+        if (!look && fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export Sprite Sheet'), ok: t('Replace'), danger: true })) return;
         if (!current()) return;
         const bar = panel.querySelector('.rr-c3d-export-progress'), go = panel.querySelector('.rr-c3d-export-go');
         panel.dataset.busy = '1';
@@ -958,13 +964,18 @@
             const sheet = await render(builder, settings, (done, total) => { bar.firstElementChild.style.width = Math.round(done / total * 100) + '%'; });
             const png = await toPng(sheet);
             if (!current()) return;
-            const atomic = root.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
-            fs.mkdirSync(path.dirname(file), { recursive: true });
-            atomic(fs, file, png);
             const seconds = ((performance.now() - started) / 1000).toFixed(1);
-            status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds });
+            if (look) status.textContent = t('Preview: {w} × {h} ({s} s). Nothing was saved.', { w: sheet.width, h: sheet.height, s: seconds });
+            else {
+                const atomic = root.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
+                fs.mkdirSync(path.dirname(file), { recursive: true });
+                atomic(fs, file, png);
+                status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds });
+            }
             status.dataset.kind = 'ok';
             const img = preview(panel);
+            // (The picture before this one is let go: each was kept for as long as the editor ran.)
+            if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
             img.src = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
             img.hidden = false;
             console.log(`[RRCharacterSpriteSheet] ${path.basename(file)} ${sheet.width}x${sheet.height} in ${seconds} s`);
