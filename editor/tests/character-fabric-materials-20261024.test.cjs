@@ -14,6 +14,8 @@ test.before(async () => { pack = await Body.loadPack(); });
 const glbJson = glb => { const len = new DataView(glb.buffer, glb.byteOffset).getUint32(12, true); return JSON.parse(Buffer.from(glb.subarray(20, 20 + len)).toString()); };
 const stubPng = t => new Uint8Array([137, 80, 78, 71, t.width & 255, t.height & 255]);
 const small = { quality: 'save', skinSize: 64, atlasSize: 64 };
+// A build made only to count triangles: the occlusion shading changes colours, never a shape, and was a quarter of this file's time.
+const counted = { ...small, shade: false };
 
 test('cut garments carry their cloth tile on TEXCOORD_1, and the saved file says so', async () => {
     const built = Model.build(pack, { gender: 1, outfit: [{ id: 'jeans' }, { id: 'tshirt' }], hair: { style: 'bald' } }, {}, { quality: 'save', skinSize: 64, atlasSize: 1024 });
@@ -191,7 +193,7 @@ test('humanoid presets stay within the triangle budget (ratchet)', () => {
         if (!preset.items.length) continue;
         const female = preset.items.some(i => FEMININE.test(i.id)) || /noble|peasantf|gala|evening|bikini|beach|swimmer|summer|undergarments/.test(preset.id);
         const recipe = { gender: female ? 0 : 1, age: female ? 28 : 30, hair: { style: female ? 'bunLow' : 'crew', color: '#3b2a1e' }, outfit: preset.items };
-        rows.push({ id: preset.id, wasteland: preset.group === 'Wasteland' || preset.group === 'Cyberpunk', ...Glb.triangles(Model.build(pack, Model.normalize(recipe), {}, small).parts) });
+        rows.push({ id: preset.id, wasteland: preset.group === 'Wasteland' || preset.group === 'Cyberpunk', ...Glb.triangles(Model.build(pack, Model.normalize(recipe), {}, counted).parts) });
     }
     // The Wasteland presets (2026-10-24) layer gear over full outfits: they are held by the ceilings above
     // and by their own budget (character-postapoc-20261024), not counted against the ratchet's tally. So are the

@@ -72,7 +72,8 @@ test('the panel layer draws seams and features as height, AO and roughness, and 
  assert.equal(keepTouched,0,'lettering regions stay clean');assert.ok(carved>200,'seams and recesses carved: '+carved);assert.ok(dark>100,'occluded grooves');
  // On a built vehicle the coating normal map now carries panel-scale relief.
  const tilt=r=>{const t=r.textures['vehicle-coating-normal.png'];let n=0;for(let i=0;i<t.data.length;i+=4)if(t.data[i+2]<244)n++;return n;};
- const on=V.build(V.fromPreset('shuttle')),off=V.build({...V.fromPreset('shuttle'),detailDensity:0});
+ // (At the full picture, asked for by name: this one judges the coating's texels.)
+ const on=V.build(V.fromPreset('shuttle'),{},{textureSize:1024}),off=V.build({...V.fromPreset('shuttle'),detailDensity:0},{},{textureSize:1024});
  assert.ok(tilt(on)>tilt(off)*1.5+5000,`panel relief: ${tilt(on)} tilted texels vs ${tilt(off)}`);
  assert.ok(on.textures['vehicle-coating-normal.png'].width<=2048&&on.textures['vehicle-coating-normal.png'].height<=2048);
 });

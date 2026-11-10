@@ -93,7 +93,14 @@ function looseShare(list, all, flush) {
         if (l < 1e-14) continue;
         const back = f.map(x => -x / l), o = [0, 1, 2].map(d => (a[d] + b[d] + c[d]) / 3);
         let best = Infinity;
-        for (const u of all) if (u !== t) best = Math.min(best, rayHit(o, back, u));
+        // Only a hit nearer than `flush` is asked about, and one that near lies within `flush` of the triangle's box:
+        // every other triangle is passed over without the ray test (the answer is the same; this loop was half the file's time).
+        for (const u of all) {
+            if (u === t) continue;
+            const box = u.box || (u.box = [0, 1, 2].flatMap(d => [Math.min(u.p[0][d], u.p[1][d], u.p[2][d]), Math.max(u.p[0][d], u.p[1][d], u.p[2][d])]));
+            if (o[0] < box[0] - flush || o[0] > box[1] + flush || o[1] < box[2] - flush || o[1] > box[3] + flush || o[2] < box[4] - flush || o[2] > box[5] + flush) continue;
+            best = Math.min(best, rayHit(o, back, u));
+        }
         n++;
         if (!(best < flush)) bad++;
     }

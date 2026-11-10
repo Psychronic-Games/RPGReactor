@@ -105,7 +105,7 @@
         if(cache.vehicleGeometry?.key!==geometryKey)cache.vehicleGeometry={key:geometryKey,parts:new Map()};
         // A window, seat or marking edit can reuse the full coating even
         // while its input is being dragged; only changed paint needs rebaking.
-        const sameCoating=cache.vehicleCoating?.key===coatingKey(r),size=sameCoating&&cache.vehicleCoating?.size===1024?1024:options.textureSize===512?512:1024,coatingCached=sameCoating&&cache.vehicleCoating?.size===size;
+        const sameCoating=cache.vehicleCoating?.key===coatingKey(r),size=sameCoating&&cache.vehicleCoating?.size===1024?1024:(options.textureSize||globalThis.RR_DEFAULT_PICTURES?.prop)===512?512:1024,coatingCached=sameCoating&&cache.vehicleCoating?.size===size;
 
         for(const p of parts){
             const material=p.surfaceRole;

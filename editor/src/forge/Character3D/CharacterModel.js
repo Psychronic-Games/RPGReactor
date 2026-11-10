@@ -309,7 +309,8 @@
         if (headSkin) { parts.push(headSkin, HeadMesh.lidPart(headSkin)); if (headSkin.normalTexture === 'face-detail.png') textures['face-detail.png'] = HeadMesh.detailTexture(); }
         // The lips: their own patch and picture, for every humanoid. Left out where a mask or a muzzle hides the mouth.
         if (!Expressions?.mouthCovered?.(pack, outfit.hidden) && !o.noLips) {
-            const size = o.static ? 256 : o.quality === 'save' ? 1024 : 768, lipColor = r.skinPattern?.lips || '';
+            // (The pictures' default under test, as the outfit's and the skin's: tests/helpers/small-pictures.cjs.)
+            const size = o.static ? 256 : globalThis.RR_DEFAULT_PICTURES?.picture || (o.quality === 'save' ? 1024 : 768), lipColor = r.skinPattern?.lips || '';
             const fit = headSkin ? HeadMesh.lipFit(pack, built.shaped, r, headSkin) : Detail.lipFit(pack, built.shaped), lipKey = textureKey('lips', [r.skin, lipColor, size, fit && fit.up.join(), fit && fit.low.join(), fit && fit.bend.toFixed(2)]);
             if (headSkin) mouthFit = fit;
             if (cache.lipKey !== lipKey) { cache.lips = Detail.lipTexture(pack, r.skin, { size, relief: !o.static, color: lipColor, fit }); cache.lipKey = lipKey; }
@@ -502,7 +503,8 @@
         let height = 0;
         for (const p of parts) for (let i = 1; i < p.positions.length; i += 3) height = Math.max(height, p.positions[i]);
         // Occlusion in the vertex colors: always in a file, in the view once the sliders rest (`shade`).
-        if (o.quality === 'save' || o.shade) shade(parts, pack);
+        // (`shade: false` leaves it out of a build made only to be measured: the shading changes colours, never a shape.)
+        if ((o.quality === 'save' && o.shade !== false) || o.shade) shade(parts, pack);
         const result = { recipe: r, parts, bones, height, bodyHeight: built.height - Math.min(0, floor), textures, clips: o.static ? [] : clipsFor(bones, r, built, pack), plan: 'human', built, cloth: hung ? hung.cloth : null };
         // Expressions hook: a saved file carries the expressions and visemes as named morph targets.
         if (Expressions && (o.quality === 'save' || o.quality == null || o.morphs)) result.morphs = Expressions.morphTargets(pack, result);

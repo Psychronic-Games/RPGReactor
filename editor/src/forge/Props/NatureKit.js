@@ -85,12 +85,16 @@
             const c = lerp(g(xi, yi, zi + 1, x, y, z - 1), g(xi + 1, yi, zi + 1, x - 1, y, z - 1), u), d = lerp(g(xi, yi + 1, zi + 1, x, y - 1, z - 1), g(xi + 1, yi + 1, zi + 1, x - 1, y - 1, z - 1), u);
             return lerp(lerp(a, b, v), lerp(c, d, v), w);
         }
+        const N2_COS = [0, 1, 2, 3, 4, 5, 6, 7].map(h => Math.cos(h * Math.PI / 4 + 0.39)), N2_SIN = [0, 1, 2, 3, 4, 5, 6, 7].map(h => Math.sin(h * Math.PI / 4 + 0.39));
         function n2(x, y, px, py) {
             const X = Math.floor(x), Y = Math.floor(y);
             x -= X; y -= Y;
             const wrap = (i, P) => (P ? ((i % P) + P) % P : i) & 255;
             const x0 = wrap(X, px), x1 = wrap(X + 1, px), y0 = wrap(Y, py), y1 = wrap(Y + 1, py), u = fade(x), v = fade(y);
-            const g = (i, j, dx, dy) => { const h = perm[i + perm[j]] & 7, a = h * Math.PI / 4 + 0.39; return Math.cos(a) * dx + Math.sin(a) * dy; };
+            // The eight directions' cosine and sine from a table (N2_COS, N2_SIN: the same expressions, worked out
+            // once): taken anew for each of a texel's four corners in every octave, they were the largest single cost
+            // of painting a nature prop's pictures.
+            const g = (i, j, dx, dy) => { const h = perm[i + perm[j]] & 7; return N2_COS[h] * dx + N2_SIN[h] * dy; };
             return lerp(lerp(g(x0, y0, x, y), g(x1, y0, x - 1, y), u), lerp(g(x0, y1, x, y - 1), g(x1, y1, x - 1, y - 1), u), v) * 1.41;
         }
         /** Fractal sum, `oct` octaves. */
