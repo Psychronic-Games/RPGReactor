@@ -1876,8 +1876,28 @@
             for (let v = 0; v < p.positions.length / 3; v += 2) if (nearSheet(p.positions[v * 3], p.positions[v * 3 + 1], p.positions[v * 3 + 2])) ids.push(v);
             if (ids.length) lists.push([p, Int32Array.from(ids)]);
         });
-        let grid = new Map(), pts = [], frame = -1;
+        // The points of a frame, sorted into the cells of a box round them: each cell's points in the order they were
+        // found, as its list in a map was, read by index. `near` asks eight cells for every vertex of every pass of
+        // every frame, and looking each up in a map was a tenth of a bake.
+        let pts = [], frame = -1, lowX = 0, lowY = 0, lowZ = 0, nx = 0, ny = 0, nz = 0, starts = new Int32Array(1), order = new Int32Array(0);
         const v3 = [0, 0, 0];
+        const sortIntoCells = () => {
+            const n = pts.length, cx = new Int32Array(n), cy = new Int32Array(n), cz = new Int32Array(n);
+            let hx = -Infinity, hy = -Infinity, hz = -Infinity;
+            lowX = lowY = lowZ = Infinity;
+            for (let i = 0; i < n; i++) {
+                const q = pts[i], x = cx[i] = Math.floor(q[0] / cell), y = cy[i] = Math.floor(q[1] / cell), z = cz[i] = Math.floor(q[2] / cell);
+                if (x < lowX) lowX = x; if (x > hx) hx = x; if (y < lowY) lowY = y; if (y > hy) hy = y; if (z < lowZ) lowZ = z; if (z > hz) hz = z;
+            }
+            if (!n) { nx = ny = nz = 0; starts = new Int32Array(1); order = new Int32Array(0); return; }
+            nx = hx - lowX + 1; ny = hy - lowY + 1; nz = hz - lowZ + 1;
+            const cells = nx * ny * nz, at = new Int32Array(n);
+            starts = new Int32Array(cells + 1); order = new Int32Array(n);
+            for (let i = 0; i < n; i++) { at[i] = ((cx[i] - lowX) * ny + (cy[i] - lowY)) * nz + (cz[i] - lowZ); starts[at[i] + 1]++; }
+            for (let c = 0; c < cells; c++) starts[c + 1] += starts[c];
+            const next = starts.slice(0, cells);
+            for (let i = 0; i < n; i++) order[next[at[i]]++] = i;
+        };
         return {
             at(f) {
                 if (f === frame) return;
@@ -1889,7 +1909,7 @@
                     for (let i = 0; i < gs.boneIds.length; i++) { const id = gs.boneIds[i]; if (id < 0 || !turns[i]) continue; const a = pointOf(gs, Math.floor(i / gs.rows), i % gs.rows); R[id] = turns[i]; P[id] = [X[a], X[a + 1], X[a + 2]]; }
                     ps = { R, P };
                 }
-                grid = new Map(); pts = [];
+                pts = [];
                 for (const [p, ids] of lists) {
                     const s = skin(p, bones, ps, ids);
                     for (let i = 0; i < ids.length; i++) {
@@ -1898,21 +1918,20 @@
                         for (let k = 1; k < 4; k++) if (p.weights[v * 4 + k] > w) { w = p.weights[v * 4 + k]; j = p.joints[v * 4 + k]; }
                         v3[0] = p.normals[v * 3]; v3[1] = p.normals[v * 3 + 1]; v3[2] = p.normals[v * 3 + 2];
                         const nrm = rotate(ps.R[j], v3), x = s[i * 3], y = s[i * 3 + 1], z = s[i * 3 + 2];
-                        const k = cellKey(Math.floor(x / cell), Math.floor(y / cell), Math.floor(z / cell));
-                        let list = grid.get(k);
-                        if (!list) grid.set(k, list = []);
-                        list.push(pts.length);
                         pts.push([x, y, z, nrm[0], nrm[1], nrm[2]]);
                     }
                 }
+                sortIntoCells();
             },
             near(x, y, z) {
                 // The eight cells round the point (the block whose corner is nearest it): every point within half a cell.
                 const cx = Math.floor(x / cell - 0.5), cy = Math.floor(y / cell - 0.5), cz = Math.floor(z / cell - 0.5);
                 let best = null, bd = cell * cell;
                 for (let i = 0; i <= 1; i++) for (let j = 0; j <= 1; j++) for (let k = 0; k <= 1; k++) {
-                    const list = grid.get(cellKey(cx + i, cy + j, cz + k));
-                    if (list) for (let q = 0; q < list.length; q++) { const p = pts[list[q]], ax = p[0] - x, ay = p[1] - y, az = p[2] - z, d = ax * ax + ay * ay + az * az; if (d < bd) { bd = d; best = p; } }
+                    const gx = cx + i - lowX, gy = cy + j - lowY, gz = cz + k - lowZ;
+                    if (gx < 0 || gy < 0 || gz < 0 || gx >= nx || gy >= ny || gz >= nz) continue;
+                    const c = (gx * ny + gy) * nz + gz;
+                    for (let q = starts[c], end = starts[c + 1]; q < end; q++) { const p = pts[order[q]], ax = p[0] - x, ay = p[1] - y, az = p[2] - z, d = ax * ax + ay * ay + az * az; if (d < bd) { bd = d; best = p; } }
                 }
                 return best;
             }
@@ -1932,6 +1951,7 @@
         // Each vertex where it was the frame before: the side it is sent back out to.
         const before = new Float32Array(bound.length * 3), now = new Float32Array(bound.length * 3), from = [0, 0, 0];
         const best = new Float32Array(rec[0].length), turned = [0, 0, 0];
+        const colBase = new Float64Array(m * 3), colMid = new Float64Array(m * 3);
         for (let f = 0; f < rec.length; f++) {
             // The frame as it checks best is kept: a move out of one limb can push the cloth into another.
             let fewest = Infinity;
@@ -1953,6 +1973,10 @@
                 if (sim.shell) sim.shell.set(f, f, 0);
                 want.fill(0); most.fill(0);
                 let bad = 0;
+                // (Held in locals: the loop below reads them for every vertex against every collider.)
+                const C = sim.C, mids = sim.mids, reach = sim.reach, floorAt = floors[f] + 0.035, gap = sim.gap * 0.6;
+                // Each collider's base and its axis times its middle, once a pass (the same products, taken once each).
+                for (let c = 0; c < m; c++) { const atc = c * 16, mid = mids[c]; colBase[c * 3] = C[atc]; colBase[c * 3 + 1] = C[atc + 1]; colBase[c * 3 + 2] = C[atc + 2]; colMid[c * 3] = C[atc + 3] * mid; colMid[c * 3 + 1] = C[atc + 4] * mid; colMid[c * 3 + 2] = C[atc + 5] * mid; }
                 for (let i = 0; i < bound.length; i += step) {
                     const B = bound[i];
                     let px = 0, py = 0, pz = 0;
@@ -1966,10 +1990,10 @@
                     let dx = 0, dy = 0, dz = 0, hit = false;
                     if (f > 0) { from[0] = before[i * 3]; from[1] = before[i * 3 + 1]; from[2] = before[i * 3 + 2]; }
                     for (let c = 0; c < m; c++) {
-                        const atc = c * 16, mx = px + dx - sim.C[atc] - sim.C[atc + 3] * sim.mids[c], my = py + dy - sim.C[atc + 1] - sim.C[atc + 4] * sim.mids[c], mz = pz + dz - sim.C[atc + 2] - sim.C[atc + 5] * sim.mids[c];
-                        if (mx * mx + my * my + mz * mz > sim.reach[c]) continue;
-                        if (py + dy < floors[f] + 0.035) break;
-                        if (insideAt(sim.C, c, cols[c], sim.gap * 0.6, px + dx, py + dy, pz + dz, push, f > 0 ? from : null) < 1) { dx = push[0] - px; dy = push[1] - py; dz = push[2] - pz; hit = true; }
+                        const c3 = c * 3, mx = px + dx - colBase[c3] - colMid[c3], my = py + dy - colBase[c3 + 1] - colMid[c3 + 1], mz = pz + dz - colBase[c3 + 2] - colMid[c3 + 2];
+                        if (mx * mx + my * my + mz * mz > reach[c]) continue;
+                        if (py + dy < floorAt) break;
+                        if (insideAt(C, c, cols[c], gap, px + dx, py + dy, pz + dz, push, f > 0 ? from : null) < 1) { dx = push[0] - px; dy = push[1] - py; dz = push[2] - pz; hit = true; }
                     }
                     if (sim.shell && sim.shell.push(px + dx, py + dy, pz + dz, sim.gap * 0.6, push)) { dx = push[0] - px; dy = push[1] - py; dz = push[2] - pz; hit = true; }
                     if (sim.under) {
