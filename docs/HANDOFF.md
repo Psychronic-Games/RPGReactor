@@ -29,6 +29,8 @@ Runtimes 20261110.11 and .12, synced into the 17 bundled projects, deployed (.12
 - **Test speed (owner asked again):** `npm run test:changed` goes by what each test process read (`tests/helpers/test-inputs.cjs`): a runtime file's change reruns tens of files, not 782 of 958. The slowest sweeps were profiled and cut with the built models' hashes unchanged: the suite's CPU 3,399 to 2,847 s. A Character Builder change still reruns about 150 files (seven minutes at six workers). Tools: `~/.cache/rr-tests/testspeed`.
 - **Left as found:** `reverse_state_effect` on a 2000/2003 skill now follows EasyRPG's rule (cure on allies, inflict on enemies, reversed by the flag); `legacy-commands.test.cjs` held the opposite for an ally skill with the flag and was changed. Re-import a game to pick it up.
 
+- **Later:** Character Groups, sheet Preview, baked tile pictures; a whole test run takes 5.4 min (changelog).
+
 ## 2026-11-10 (laptop) — Auto's smoothness, sharper small pictures, the backend by measurement, crowds, arrivals, shader changes
 
 Runtimes 20261110.1–.10, synced into the Demo, committed with the work of 11-08 and 11-09. Details and numbers in the [changelog](../editor/changelog/0.99.5.md).

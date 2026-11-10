@@ -11,6 +11,8 @@
     "character-3d-model-presets-5.test.cjs",
     "character-3d-model-presets-6.test.cjs",
     "character-3d-model.test.cjs",
+    "character-3d-model-b.test.cjs",
+    "character-3d-model-c.test.cjs",
     "character-3d-outfit-transfer.test.cjs",
     "character-3d-poses.test.cjs",
     "character-alien-presets.test.cjs",

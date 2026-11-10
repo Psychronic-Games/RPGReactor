@@ -153,7 +153,7 @@ The packed, unused-trimmed Web export was checked in Chromium under a hosted sub
 
 ### Tile pictures
 
-The pictures on the tiles (species, outfits, garments, accessories, hair) show a mannequin, not the character: one per sex, grey for what is worn, plain for hair. They are made once, kept in the editor's data folder (`character-builder-previews`) and shared by every project, so editing the character never redraws them. Until a picture exists, species, outfit and garment tiles show a drawn figure in the choice's colours. The character itself shows a choice once it is clicked.
+The pictures on the tiles (species, outfits, garments, accessories, hair) show a mannequin, not the character: one per sex, grey for what is worn, plain for hair. They are made once, kept in the editor's data folder (`character-builder-previews`) and shared by every project, so editing the character never redraws them. The editor ships them (`editor/src/forge/Character3D/previews/`, baked by `node editor/build-scripts/bake-character-previews.cjs`, about four minutes; bake again after the pictures' look changes and `PREVIEW_VERSION` is raised). Only a garment taken from a project's own 3D model is built on the spot, and shows a drawn figure in its colours until then. The character itself shows a choice once it is clicked.
 
 ### Character Groups
 

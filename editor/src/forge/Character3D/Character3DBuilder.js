@@ -1247,13 +1247,13 @@ class Character3DBuilder {
     _picker(path, label, options, kind) {
         const current = this._get(path), open = this.openPicker === path;
         const now = options.find(o => o.id === current) || options[0];
+        this._wantThumb(kind, now.id);
         const saved = this._thumbs.get(kind + ':' + now.id);
         const url = saved && (saved.sig === this._thumbSig(kind) || saved.project === (this._project()?.path || '')) ? saved.url : '';
         let html = `<div class="rr-c3d-row rr-c3d-pickrow"><span class="rr-c3d-label">${this._t(label)}</span>
             <button class="rr-c3d-pickcurrent${open ? ' is-open' : ''}" data-act="picker" data-id="${path}">`
             + `<span class="rr-c3d-thumb" data-thumb="${kind}:${rrEscapeHtml(now.id)}">${url ? `<img src="${url}" alt="">` : this._standIn(kind, now.id)}</span>`
             + `<span>${rrEscapeHtml(this._t(now.label))}</span><span class="rr-c3d-caret">${open ? '▴' : '▾'}</span></button></div>`;
-        this._wantThumb(kind, now.id);
         if (open) html += `<div class="rr-c3d-pickgrid">${this._grid(options, o => this._tile('pick', o.id, o.label, kind, o.id === current, ` data-path="${path}"`))}</div>`;
         return html;
     }
@@ -1323,6 +1323,8 @@ class Character3DBuilder {
         const key = kind + ':' + id, sig = this._thumbSig(kind);
         const have = this._thumbs.get(key);
         if (have && have.sig === sig) return;
+        const shipped = this._shippedThumb(key, sig);
+        if (shipped) { this._thumbs.set(key, { url: shipped, sig, project: this._project()?.path || '' }); return; }
         if (this._thumbJob?.key === key && this._thumbJob.sig === sig) return;
         const queued = this._thumbQueue.find(q => q.key === key);
         if (queued) {
@@ -1364,12 +1366,35 @@ class Character3DBuilder {
      */
     _thumbShared(key, sig) {
         const at = key.indexOf(':'), kind = key.slice(0, at), id = key.slice(at + 1);
-        if (!this.human || this.slime || !['species', 'hair', 'facial', 'brows', 'garment', 'prop', 'cyberlook', 'dress'].includes(kind)) return sig;
-        const T = window.RRCharacterOutfitTransfer, W = RRCharacterWardrobe;
+        if (kind !== 'kind' && kind !== 'species' && (!this.human || this.slime)) return sig;
+        if (!['kind', 'species', 'hair', 'facial', 'brows', 'garment', 'prop', 'cyberlook', 'dress'].includes(kind)) return sig;
+        const T = window.RRCharacterOutfitTransfer, W = typeof RRCharacterWardrobe === 'undefined' ? null : RRCharacterWardrobe;
+        if (!W && (kind === 'garment' || kind === 'dress')) return sig;
         const own = garment => { const def = W.BY_ID.get(garment); return !def || (!!def.transfer && !(T && T.BUILT_IN.includes(def.transfer))); };
         if (kind === 'garment' && own(id)) return sig;
         if (kind === 'dress') { const preset = W.PRESETS.find(p => p.id === id); if (!preset || preset.items.some(i => own(i.id))) return sig; }
         try { return JSON.stringify(JSON.parse(sig).slice(1)); } catch (e) { return sig; }
+    }
+
+    /**
+     * A picture that came with the editor (`previews/<kind>-<f|m|x>.json`, baked by
+     * build-scripts/bake-character-previews.cjs): there on the first opening, with nothing built. Only for what
+     * `_thumbShared` says is the same everywhere, and only while the pack is of this version of the pictures.
+     */
+    _shippedThumb(key, sig) {
+        try {
+            if (this._thumbShared(key, sig) === sig) return null;
+            const at = key.indexOf(':'), kind = key.slice(0, at), id = key.slice(at + 1);
+            const tag = kind === 'kind' || !this.human || this.slime ? 'x' : this._thumbGender() < 0.5 ? 'f' : 'm';
+            const packs = Character3DBuilder._shippedPacks || (Character3DBuilder._shippedPacks = new Map()), name = kind + '-' + tag;
+            if (!packs.has(name)) {
+                let pack = null;
+                try { pack = JSON.parse(require('fs').readFileSync(require('path').join(RRHumanBody.dataFolder(), '..', 'previews', name + '.json'), 'utf8')); } catch (error) { /* none shipped */ }
+                packs.set(name, pack && pack.version === Character3DBuilder.PREVIEW_VERSION ? pack.pictures : null);
+            }
+            const picture = (packs.get(name) || {})[id];
+            return picture ? 'data:image/webp;base64,' + picture : null;
+        } catch (error) { return null; }
     }
 
     async _storedThumb(key, sig) {
@@ -1489,7 +1514,7 @@ class Character3DBuilder {
 
     _showThumb(item, url) {
         this._thumbs.set(item.key, { url, sig: item.sig, project: this._project()?.path || '' });
-        while (this._thumbs.size > 256) this._thumbs.delete(this._thumbs.keys().next().value);
+        while (this._thumbs.size > 1024) this._thumbs.delete(this._thumbs.keys().next().value);
         this.root.querySelectorAll(`.rr-c3d-thumb[data-thumb="${CSS.escape(item.key)}"]`).forEach(el => { el.innerHTML = `<img src="${url}" alt="">`; });
     }
 

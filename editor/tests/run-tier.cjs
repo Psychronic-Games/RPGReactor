@@ -122,12 +122,28 @@ function main(argv) {
     const dir = storeDir(), plan = name === 'changed' || name === 'whole' ? owed(name === 'whole') : null;
     // --only=<pattern> narrows a run; --limit=<n> takes a slice, so a long list can be worked off in small bites.
     const only = option('only') && new RegExp(option('only')), limit = +option('limit') || Infinity;
-    const files = (plan ? plan.run.map(fact => 'tests/' + fact.file) : tier(name)).filter(file => !only || only.test(file)).slice(0, limit);
+    let files = (plan ? plan.run.map(fact => 'tests/' + fact.file) : tier(name)).filter(file => !only || only.test(file)).slice(0, limit);
+    // The longest first, by what each took last time: a three-minute file started last is three minutes on the end
+    // of the run with every other worker idle. A file never timed counts as long.
+    let took = {};
+    try { took = JSON.parse(fs.readFileSync(path.join(dir, 'times.json'), 'utf8')); } catch (error) { /* a first run */ }
+    const cost = file => { const v = took[path.basename(file)]; return typeof v === 'number' ? v : 1e6; };
+    files = files.map((file, index) => [file, index]).sort((a, b) => cost(b[0]) - cost(a[0]) || a[1] - b[1]).map(([file]) => file);
     if (plan) console.log(`${files.length} of ${plan.facts.length} test files owed; the rest already passed on exactly this code.`);
     if (!files.length) return 0;
     if (own.includes('--list')) { console.log(files.join('\n')); return 0; }
-    // Ten workers at most, under a gigabyte each: a whole run takes minutes, and `npm run test:all` runs it at the lowest priority.
-    const flags = ['--require=' + path.join(here, 'helpers', 'small-pictures.cjs'), '--test', '--test-concurrency=' + (option('concurrency') || Math.min(10, Math.max(2, os.availableParallelism() >> 1)))];
+    // Half the machine's threads, sixteen at most, and no more than the free memory holds at a gigabyte and a half
+    // each (a test process peaks under one): the other half stays the owner's, and the run is at the lowest priority.
+    // A run inside a memory limit (a systemd scope, as the desktop's check wrapper makes) is sized to that limit, not
+    // to the machine: fourteen workers under a 6 GB limit spent a run stalled on memory (2026-11-10, 10 minutes and
+    // not done, every process waiting), where the same run fits when the limit or the worker count is right.
+    let room = os.freemem();
+    try {
+        const group = fs.readFileSync('/proc/self/cgroup', 'utf8').trim().split('\n').pop().split(':').pop();
+        for (const name of ['memory.high', 'memory.max']) { const v = +fs.readFileSync('/sys/fs/cgroup' + group + '/' + name, 'utf8'); if (v > 0) room = Math.min(room, v); }
+    } catch (error) { /* no limit to read */ }
+    const workers = Math.max(2, Math.min(16, os.availableParallelism() >> 1, Math.floor(room / 1e9)));
+    const flags = ['--require=' + path.join(here, 'helpers', 'small-pictures.cjs'), '--test', '--test-concurrency=' + (option('concurrency') || workers)];
     // Every run records each file's seconds (times-last.json, merged into times.json after): what each file costs on
     // this machine, kept current without a separate measuring run; --measure also writes them where asked.
     const measure = option('measure'), lastTimes = path.join(dir, 'times-last.json');
