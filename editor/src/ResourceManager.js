@@ -205,8 +205,8 @@ class ResourceManager {
             const invalid = ['.png', '.apng'].includes(extension)
                 ? bytes.length < png.length || png.some((value, index) => bytes[index] !== value)
                 : ['.jpg', '.jpeg'].includes(extension)
+                    // (Its start only: cameras and exporters write bytes after the end marker, and such files are valid.)
                     ? bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff
-                        || bytes[bytes.length - 2] !== 0xff || bytes[bytes.length - 1] !== 0xd9
                     : extension === '.webp'
                         ? bytes.length < 12 || ascii(0, 4) !== 'RIFF' || ascii(8, 4) !== 'WEBP'
                         : extension === '.gif'

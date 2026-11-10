@@ -381,7 +381,7 @@
             const look = JSON.stringify(piece.frame);
             const same = p => p && p.frame && p.rot === piece.rot && JSON.stringify(p.frame) === look;
             let start = piece;
-            for (let prev = at.get("window:" + (start.x - u[0]) + "," + (start.y - u[1]) + "," + start.z); same(prev); prev = at.get("window:" + (start.x - u[0]) + "," + (start.y - u[1]) + "," + start.z)) start = prev;
+            for (let prev = at.get("window:" + (start.x - u[0]) + "," + (start.y - u[1]) + "," + start.z); same(prev) && !seen.has(prev); prev = at.get("window:" + (start.x - u[0]) + "," + (start.y - u[1]) + "," + start.z)) start = prev;
             let n = 0;
             for (let next = start; same(next) && n < 12; next = at.get("window:" + (start.x + u[0] * (n)) + "," + (start.y + u[1] * (n)) + "," + start.z)) {
                 seen.add(next);

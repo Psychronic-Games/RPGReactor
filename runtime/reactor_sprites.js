@@ -294,7 +294,9 @@ Sprite_Character.throttleModelSprites = function() {
         if (this._rrDrawnByModel && typeof SceneManager !== "undefined" && SceneManager._finalUpdateOfFrame === false) return;
         // On a 3D map, any character's sprite in an update that is not its frame's last (`catchUpSkips`).
         if (Sprite_Character.ONCE_A_FRAME && typeof SceneManager !== "undefined" && SceneManager._finalUpdateOfFrame === false && this.catchUpSkips()) return;
-        if (every > 1 && (this._rrDrawnByModel || elsewhere) && (!this._rrCulled || offView) && typeof Graphics !== "undefined") {
+        // Installed twice (a plugin wrapped the method after the first): the outer one has already decided this update
+        // is due and stamped it, so the inner one must not find it "updated this very update" and stop it for good.
+        if (every > 1 && !this._rrThrottlePassed && (this._rrDrawnByModel || elsewhere) && (!this._rrCulled || offView) && typeof Graphics !== "undefined") {
             // Due `every` updates after its last (not on a beat of the update count, which the skipped updates above
             // would miss); each sprite's first is put back by its own share so a crowd's are spread.
             const now = Graphics.frameCount, last = this._rrThrottledAt;
@@ -303,7 +305,11 @@ Sprite_Character.throttleModelSprites = function() {
             this._rrThrottledAt = last === undefined ? now - (seed % every) : now;
         }
         this._rrUpdatedAt = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
-        return inner.apply(this, arguments);
+        const passed = this._rrThrottlePassed;
+        this._rrThrottlePassed = true;
+        const result = inner.apply(this, arguments);
+        this._rrThrottlePassed = passed;
+        return result;
     };
     wrapped.__rrThrottle = true;
     Sprite_Character.prototype.update = wrapped;
@@ -5829,6 +5835,23 @@ Spriteset_Map.prototype.update = function() {
     // Which sprites are parked off screen is a picture's question too: asked in the frame's last update (it places
     // every character on screen to answer). `Spriteset_Map.CULL_ONCE_A_FRAME = false` asks in every update.
     if (!Spriteset_Map.CULL_ONCE_A_FRAME || !this._reactor3d || typeof SceneManager === "undefined" || SceneManager._finalUpdateOfFrame !== false) this.updateOffscreenCulling();
+    else this.updateParkedWindows();
+};
+
+/**
+ * In an update that leaves the culling pass to the frame's last: windows parked off the display list still take their
+ * update, as those on it just did, so a plugin label's fade or timer runs at the game's pace whether parked or not.
+ */
+Spriteset_Map.prototype.updateParkedWindows = function() {
+    const holder = this._rrCullHolder;
+    if (!holder || !holder.children.length) return;
+    for (let i = holder.children.length - 1; i >= 0; i--) {
+        const child = holder.children[i];
+        if (!(child instanceof Window_Base) || !child.update) continue;
+        child._rrCulled = false;
+        child.update();
+        child._rrCulled = true;
+    }
 };
 
 // Scale only the map, its weather and native world lighting. Pictures,
@@ -5882,7 +5905,9 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
     const minY = -margin;
     const maxY = Graphics.height / cameraZoom + margin;
     let reattachedToTilemap = false;
-    const tick = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    // Counted in passes of this function, not updates: on a 3D map it runs once a frame, and a frame of two or four
+    // updates would land the update count on the same beat every time, so half or more of the sprites were never asked.
+    const tick = (this._rrCullPass = ((this._rrCullPass || 0) + 1) & 0xffff);
     for (const sprite of this._characterSprites) {
         const character = sprite._character;
         // A sprite its model draws is never shown either way: whether it is parked is asked every fourth update, not

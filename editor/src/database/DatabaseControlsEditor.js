@@ -482,7 +482,7 @@ class DatabaseControlsEditor {
         this.render();
     }
 
-    detach() { this.stopCapture(); }
+    detach() { this.stopCapture(); this._moved = null; }
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = DatabaseControlsEditor;

@@ -3209,6 +3209,8 @@ class DatabaseStructureEditor {
         if (this._redraw && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._redraw);
         this._redraw = 0;
         this._disposePreview();
+        this._paintObserver?.disconnect?.();
+        this._paintObserver = null;
         this._detail = null;
     }
 }

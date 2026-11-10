@@ -1808,6 +1808,11 @@ class DatabaseTroopEditor {
                     .show(null, edited => edited && insertCommands([edited]), command.reactor, { type: 'troop' });
                 return;
             }
+            if (command.code === 357 && command.reactor === 'ChangeEnemyEquipment' && typeof EnemyEquipmentCommandEditor !== 'undefined') {
+                this.getCommandEditor('enemyEquipment', EnemyEquipmentCommandEditor)
+                    .show(null, edited => edited && insertCommands([edited]), command.reactor, this.enemySlotContext());
+                return;
+            }
             const editorMap = {
                 232: ['movePicture', MovePictureEditor],
                 356: ['pluginCommand', PluginCommandEditor],
@@ -2192,6 +2197,15 @@ class DatabaseTroopEditor {
         if (cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'
             && ['ShowVideoSurface', 'TransformVideoSurface'].includes(cmd.parameters?.[1])) {
             this.warnVideoSurfaceMapOnly();
+            return;
+        }
+        if (cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'
+            && cmd.parameters?.[1] === 'ChangeEnemyEquipment' && typeof EnemyEquipmentCommandEditor !== 'undefined') {
+            this.getCommandEditor('enemyEquipment', EnemyEquipmentCommandEditor).show(cmd, edited => {
+                if (!isCurrent() || !edited) return;
+                ECL.replaceContiguousBlock(page.list, idx, edited, 357, 657);
+                refresh();
+            }, undefined, this.enemySlotContext());
             return;
         }
         if (cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'

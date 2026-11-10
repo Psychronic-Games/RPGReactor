@@ -1577,6 +1577,13 @@ class RPGReactor {
 
     isWineRuntime() {
         if (typeof process === 'undefined' || process.platform !== 'win32') return false;
+        // Asked from more than one place at start: on real Windows the answer costs up to four `reg` processes, each
+        // waited for on the window's own thread. Worked out once.
+        if (this._wineRuntime !== undefined) return this._wineRuntime;
+        return (this._wineRuntime = this._detectWineRuntime());
+    }
+
+    _detectWineRuntime() {
 
         const env = process.env || {};
         if (env.WINEPREFIX || env.WINEARCH || env.WINELOADERNOEXEC || env.WINESERVER || env.WINEDEBUG || env.WINEESYNC || env.WINEFSYNC ||

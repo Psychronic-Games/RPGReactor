@@ -50,7 +50,7 @@ test('a flat map\'s sprites are updated in every update, as RPG Maker\'s are', (
 
 test('the skip is asked only in an update that is not the frame\'s last, and each real update is noted', () => {
     assert.match(source, /if \(Sprite_Character\.ONCE_A_FRAME && typeof SceneManager !== "undefined" && SceneManager\._finalUpdateOfFrame === false && this\.catchUpSkips\(\)\) return;/);
-    assert.match(source, /this\._rrUpdatedAt = typeof Graphics !== "undefined" \? Graphics\.frameCount : 0;\n        return inner\.apply\(this, arguments\);/);
+    assert.match(source, /this\._rrUpdatedAt = typeof Graphics !== "undefined" \? Graphics\.frameCount : 0;\n        const passed = this\._rrThrottlePassed;\n        this\._rrThrottlePassed = true;\n        const result = inner\.apply\(this, arguments\);/);
     assert.match(source, /Sprite_Character\.ONCE_A_FRAME = true;/);
 });
 

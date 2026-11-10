@@ -125,7 +125,10 @@
             const targetsEnemies = (sk.scope ?? 0) <= 1;
             const effects = [];
             const stateEffects = sk.state_effects || [];
-            stateEffects.forEach((on, i) => { if (on) effects.push({ code: sk.reverse_state_effect ? 22 : 21, dataId: i + 1, value1: 1, value2: 0 }); });
+            // A ticked condition is inflicted on enemies and cured on allies; 2003's "reverse" turns either round.
+            // (Always written as inflicted, a Cure Poison or a Revive poisoned or killed the ally it was used on.)
+            const inflicts = targetsEnemies ? !sk.reverse_state_effect : !!sk.reverse_state_effect;
+            stateEffects.forEach((on, i) => { if (on) effects.push({ code: inflicts ? 21 : 22, dataId: i + 1, value1: 1, value2: 0 }); });
             for (const [flag, param] of [['affect_attack', 2], ['affect_defense', 3], ['affect_spirit', 4], ['affect_agility', 6]]) if (sk[flag]) effects.push({ code: targetsEnemies ? 32 : 31, dataId: param, value1: 5, value2: 0 });
             if (sk.affect_spirit) effects.push({ code: targetsEnemies ? 32 : 31, dataId: 5, value1: 5, value2: 0 });
             if (sk.affect_attack || sk.affect_defense || sk.affect_spirit || sk.affect_agility) notes.skillStatEffect = (notes.skillStatEffect || 0) + 1;
@@ -224,7 +227,7 @@
         return { items, weapons, armors, kinds };
     }
 
-    function enemies(db) {
+    function enemies(db, kinds) {
         const out = [null];
         for (const e of (db.enemies || [])) {
             if (!e) continue;
@@ -232,14 +235,15 @@
                 let skillId = 1;
                 if (a.kind === 1) skillId = a.skill_id || 1;
                 else if (a.kind === 0) skillId = a.basic === 2 ? 2 : 1;
-                const cond = { 0: [0, 0, 0], 1: [6, a.condition_param1, 0], 2: [1, a.condition_param1, a.condition_param2], 4: [2, a.condition_param1, a.condition_param2], 5: [3, a.condition_param1, a.condition_param2], 6: [5, a.condition_param1, a.condition_param2] }[a.condition_type ?? 0] || [0, 0, 0];
+                const cond = { 0: [0, 0, 0], 1: [6, a.condition_param1, 0], 2: [1, a.condition_param1, a.condition_param2], 4: [2, (a.condition_param1 || 0) / 100, (a.condition_param2 || 0) / 100], 5: [3, (a.condition_param1 || 0) / 100, (a.condition_param2 || 0) / 100], 6: [5, a.condition_param1, a.condition_param2] }[a.condition_type ?? 0] || [0, 0, 0];
                 return { skillId, rating: Math.max(1, Math.min(9, Math.round((a.rating ?? 50) * 9 / 100))), conditionType: cond[0], conditionParam1: cond[1], conditionParam2: cond[2] };
             });
             out[e.id] = {
                 id: e.id, name: e.name || '', battlerName: stripExt(e.battler_name), battlerHue: e.battler_hue || 0, note: '',
                 params: [e.max_hp || 1, e.max_sp || 0, e.attack || 1, e.defense || 1, e.spirit || 1, e.spirit || 1, e.agility || 1, 50],
                 exp: e.exp || 0, gold: e.gold || 0,
-                dropItems: e.drop_id ? [{ kind: 1, dataId: e.drop_id, denominator: Math.max(1, Math.round(100 / Math.max(1, e.drop_prob || 100))) }] : [],
+                // (A weapon or armor keeps its id in its own table: dropped as an item, the game found none there and stopped at victory.)
+                dropItems: e.drop_id ? [{ kind: ({ weapons: 2, armors: 3 })[kinds && kinds[e.drop_id]] || 1, dataId: e.drop_id, denominator: Math.max(1, Math.round(100 / Math.max(1, e.drop_prob || 100))) }] : [],
                 actions: actions.length ? actions : [{ skillId: 1, rating: 5, conditionType: 0, conditionParam1: 0, conditionParam2: 0 }],
                 traits: [...rankTraits(e, db), ...(e.critical_hit ? [{ code: 22, dataId: 2, value: (e.critical_hit_chance || 30) / 100 }] : []), ...(e.miss ? [{ code: 22, dataId: 0, value: -0.1 }] : [])]
             };
@@ -415,7 +419,7 @@
             translate: translator ? translator.text : null, translateLines: translator ? translator.lines : null
         };
         const out = {
-            actors, classes, skills: skillsOut, items: itemsOut, weapons, armors, enemies: enemies(db), troops: troops(db, ctx), states: states(db, notes),
+            actors, classes, skills: skillsOut, items: itemsOut, weapons, armors, enemies: enemies(db, kinds), troops: troops(db, ctx), states: states(db, notes),
             animations: animations(db, notes), commonEvents: commonEvents(db, ctx, extra), ctx
         };
         translateRecords(out, translator);

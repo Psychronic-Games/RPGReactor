@@ -67,6 +67,9 @@
         if (Input._currentState) Input._currentState[name] = false;
         // The keyboard's own record too: a pad merges it in each frame, which would press the name again.
         if (Input._keyboardState) Input._keyboardState[name] = false;
+        // And the pad's: no button gives the name any more, so nothing would visit it again to clear it, and the
+        // next key release would read it as still held (dash stuck on after a pad button became Jump).
+        if (Input._gamepadLogicalState) Input._gamepadLogicalState[name] = false;
     };
 
     /**

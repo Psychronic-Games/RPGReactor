@@ -577,8 +577,11 @@
         // A party member struck by the other side fights back, whether or not the leader has opened the fight.
         if (st && taken !== 1 && st.ai[target.id]) st.ai[target.id].provoked = true;
         // A guard raised just as the blow lands turns it aside whole.
-        A._perfect = !!guarded && st.clock - st.player.guardAt <= A.PERFECT_GUARD && !!subject && subject.team !== target.team;
-        A._strike.damageRate = A._perfect ? 0.0001 : (run.rate > 0 ? run.rate : 1) * (guarded ? A.GUARD_RATE : 1) * taken;
+        // (Kept for the whole blow once any target turned it aside: set anew for each target, a later one that did
+        // not guard cleared it, and the attacker of an all-party skill never reeled.)
+        const perfect = !!guarded && st.clock - st.player.guardAt <= A.PERFECT_GUARD && !!subject && subject.team !== target.team;
+        if (perfect) A._perfect = true;
+        A._strike.damageRate = perfect ? 0.0001 : (run.rate > 0 ? run.rate : 1) * (guarded ? A.GUARD_RATE : 1) * taken;
         return A._strike;
     };
     A._strike = { damageRate: 1, hitRate: 1 };
@@ -2320,7 +2323,9 @@
         const battler = unit && this.battler(unit);
         if (!battler || !battler.isAlive() || !battler.canMove() || p.guard || A.bodyBusy($gamePlayer) || A.isActing(this, unit.id)) return false;
         const profile = A.profile(battler), character = $gamePlayer;
-        A.takeAim(this, unit, profile.ranged ? profile.range : 12);
+        // (Not for a ranged weapon that cannot fire this frame: the frame's aim is already taken, and with fire held
+        // the world, the props and the units were traced a second time every frame for a shot that was not leaving.)
+        if (!(profile.ranged && (p.cooldown > 0 || p.reload > 0 || p.dodge > 0))) A.takeAim(this, unit, profile.ranged ? profile.range : 12);
         // The leader has opened the fight: the rest of the party joins in (A.waitsForLead).
         st.led = true;
         if (!profile.ranged) {
@@ -3060,7 +3065,7 @@
         const kept = A._enters || (A._enters = { serial: -1, map: null, ally: false, enemy: false });
         const map = typeof $dataMap !== "undefined" ? $dataMap : null;
         if (kept.serial === fight._serial && kept.map === map) return kept;
-        kept.serial = fight._serial; kept.map = map; kept.ally = kept.enemy = false;
+        kept.serial = fight._serial; kept.map = map; kept.ally = kept.enemy = kept.any = false;
         for (const event of $gameMap.events()) {
             const data = event && event.event ? event.event() : null;
             for (const page of (data && data.pages) || []) {
@@ -3068,6 +3073,8 @@
                 if (!hook || hook.on !== "unitEnters") continue;
                 if (hook.team !== "enemy") kept.ally = true;
                 if (hook.team !== "ally") kept.enemy = true;
+                // A page for any team is also for a side of its own (a guest fighting for itself in a shared battle).
+                if (hook.team !== "enemy" && hook.team !== "ally") kept.any = true;
             }
         }
         return kept;
@@ -3126,7 +3133,7 @@
             if (unit.defeated) fight.raise(unit);
             const character = fight.character(unit), battler = fight.battler(unit);
             // Whoever has come onto another cell, the player too: the pages that run when a unit enters an area.
-            if (enters[unit.team]) fight.checkEnterHooks(unit, character);
+            if (enters[unit.team] || (enters.any && unit.team !== "ally" && unit.team !== "enemy")) fight.checkEnterHooks(unit, character);
             if (unit === playerUnit) continue;
             A.updateUnit(fight, st, unit, character, battler, A.aiOf(fight, st, unit, character), player);
         }

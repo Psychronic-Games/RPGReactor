@@ -1762,7 +1762,7 @@ class PluginManager {
                 title: this._tt('Delete Element'), ok: this._tt('Delete'), danger: true
             });
             // The question was about the element this editor shows; the editor may have closed meanwhile.
-            if (!confirmed || arrayData[index] !== element || overlay.parentNode !== document.body) return;
+            if (!confirmed || arrayData[index] !== element || !overlay.isConnected) return;
             arrayData.splice(index, 1);
             overlay.remove();
             onSave();
@@ -1832,7 +1832,7 @@ class PluginManager {
         `;
 
         const cancel = () => {
-            if (overlay.parentNode !== document.body) return;
+            if (!overlay.isConnected) return;
             if (index < arrayData.length) arrayData[index] = original;
             overlay.remove();
         };

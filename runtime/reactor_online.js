@@ -318,7 +318,10 @@ const ReactorOnline = {
 
     url() {
         const config = this.config();
-        const address = String(config.address || "").trim().replace(/\/+$/, "");
+        let address = String(config.address || "").trim().replace(/\/+$/, "");
+        // (An address typed without its scheme: a build that did not also deploy the server never had it added, and
+        // the game asked for a path beside its own page.)
+        if (address && !/^[a-z][a-z0-9+.-]*:\/\//i.test(address)) address = "https://" + address;
         return config.url || (address ? address + "/" + this.API_PATH : this.API_PATH);
     },
 
@@ -334,7 +337,9 @@ const ReactorOnline = {
 
     /** Called as a map scene starts; a game past its title with a server behind it signs in. */
     start() {
-        if (this._running || !this.config() || !this.gameStarted) return;
+        // Removed by the owner, or signed in on another device: that stands until a game is started or loaded again.
+        // (Every map scene's start came back here and joined again, taking the other device's place in turn.)
+        if (this._running || !this.config() || !this.gameStarted || this._removed) return;
         this._running = true;
         this.setState("connecting");
         if (!this._listening) {
@@ -384,6 +389,8 @@ const ReactorOnline = {
                 if (performance.now() >= (this._nextSleepers || 0)) { this._nextSleepers = performance.now() + this.SLEEPER_MS; this.fetchSleepers(); }
                 wait = this.state === "lost" ? 1000 : this.pollMs();
             } catch (error) {
+                // A join the server forbids (banned) is an answer, not a fault to retry every two seconds.
+                if (this.slot < 0 && error && error.status === 403) { this.removed(error.message); return; }
                 this.setState("lost", error && error.message);
                 wait = 2000;
             }
@@ -392,6 +399,7 @@ const ReactorOnline = {
 
     removed(message) {
         this._running = false;
+        this._removed = true;
         this.peers.clear();
         ReactorOnlineVoice.turnOff();
         this.slot = -1;
@@ -592,6 +600,7 @@ const ReactorOnline = {
     /** A game has begun, new or loaded: from here on this player is online. */
     onGameStarted() {
         this.gameStarted = true;
+        this._removed = false;
     },
 
     // ---- Characters ----

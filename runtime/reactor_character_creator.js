@@ -239,7 +239,11 @@ const ReactorCharacters = {
         R._sidecarCache[name] = R.whenMotionLibrary(sidecar).then(() => sidecar);
         await entry.promise;
         this.modelIds.set(name, id);
-        if (unpacked.face) await this.keepFace(id, unpacked.face);
+        // A portrait is a picture carried in the package itself. An address would be fetched by every game that meets
+        // this character, telling whoever made it where each of them is.
+        if (typeof unpacked.face === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(unpacked.face) && unpacked.face.length <= 4194304) {
+            try { await this.keepFace(id, unpacked.face); } catch (error) { console.warn("A character's portrait could not be read.", error); }
+        }
         const size = R.databaseModelSpecOfProject ? R.databaseModelSpecOfProject(this.baseActorId())?.size : 0;
         const spec = R.normalizeModelSpec({ name, file, ext: ".glb", size: size || 3, scale: 1, yaw: 0, pitch: 0, roll: 0, faces: {}, texture: "" });
         this.models.set(id, spec);
@@ -582,6 +586,7 @@ class ReactorCharacterStudio {
         else if (control.path === "species") { this.request.species = id; delete this.request.preset; }
         else this.setValue(control.path, id);
         clearTimeout(this._soon);
+        this._lookDue = true;
         this._soon = setTimeout(() => this.rebuild(), 220);
     }
 
@@ -609,6 +614,7 @@ class ReactorCharacterStudio {
 
     rebuildSoon() {
         clearTimeout(this._soon);
+        this._lookDue = true;
         this._soon = setTimeout(() => this.rebuild(), 120);
     }
 
@@ -618,10 +624,21 @@ class ReactorCharacterStudio {
         if (this.busy) { this.again = true; return; }
         this.busy = true;
         this.status("Building…");
+        let request = null;
         try {
-            const edits = this.edits || 0, request = this.request, generation = this.generation || 0;
+            const edits = this.edits || 0, generation = this.generation || 0, triedAtStart = this._tried;
+            request = this.request;
             this.request = {};
+            this._lookDue = false;
             const made = await ReactorCharacters.ask(Object.assign({ type: "build", recipe: this.recipe, rules: this.rules }, request));
+            // An outfit or species chosen before a list's try-on began, landing during it: it is part of "how things
+            // were" for that try. Left out, cancelling the list put the outfit from before the choice back on, while
+            // its row still named the one chosen.
+            const tried = this._tried;
+            if (tried && !triedAtStart && (this.generation || 0) === generation) {
+                if (request.species) tried.recipe = JSON.parse(JSON.stringify(made.recipe));
+                else if (request.preset) tried.recipe.outfit = JSON.parse(JSON.stringify(made.recipe.outfit || []));
+            }
             // A try-on put back while this was building: its recipe is no longer wanted, and the rebuild after it shows the old one.
             if ((this.generation || 0) !== generation) { this.again = true; return; }
             // The worker's recipe is the whole of it, a new species' defaults among them; a change
@@ -633,11 +650,25 @@ class ReactorCharacterStudio {
             this.status("");
             this.onRecipe?.();
         } catch (error) {
+            // What was asked for is still wanted: kept for the next build unless something newer was asked since.
+            if (request) this.request = Object.assign({}, request, this.request);
             if (!this.closed) this.status("That could not be built: " + error.message, true);
         } finally {
             this.busy = false;
             if (this.again && !this.closed) { this.again = false; this.rebuild(); }
         }
+    }
+
+    /** The look on screen brought up to what was last asked for, before the character is finished from it. */
+    async settle() {
+        clearTimeout(this._soon);
+        const idle = async () => { while (this.busy && !this.closed) await new Promise(done => setTimeout(done, 30)); };
+        for (let tries = 0; tries < 3 && !this.closed; tries++) {
+            await idle();
+            if (!this._lookDue && !Object.keys(this.request).length) break;
+            await this.rebuild();
+        }
+        await idle();
     }
 
     startView() {
@@ -756,6 +787,9 @@ class ReactorCharacterStudio {
 
     /** The finished character: built whole, kept, sent to the server when there is one, and worn. */
     async finish() {
+        // Not from a look still on its way: pressed before an outfit just picked had landed, Done kept the outfit and
+        // the portrait from before it (the pick had already left with that look's request).
+        await this.settle();
         this.status("Finishing your character…");
         const times = ReactorCharacters.lastTimes = { started: performance.now() };
         const made = await ReactorCharacters.ask(Object.assign({ type: "build", recipe: this.recipe, rules: this.rules, final: true, quality: this.config.quality }, this.request));

@@ -73,8 +73,9 @@ function applyMacGameIdentity(appBundle, { name, bundleId, version }) {
         if (!fs.existsSync(stringsPath)) continue;
         const { text, encoding } = readStrings(stringsPath);
         const next = text
-            .replace(/^(\s*"?CFBundle(?:Display)?Name"?\s*=\s*)"(?:[^"\\]|\\.)*";/gm, `$1"${quoteStrings(name)}";`)
-            .replace(/^(\s*"?CFBundleGetInfoString"?\s*=\s*)"(?:[^"\\]|\\.)*";/gm, `$1"${quoteStrings(name)}";`);
+            // (Replacer functions: spliced into a replacement string, a title with "$1" or "$&" in it was read as a pattern.)
+            .replace(/^(\s*"?CFBundle(?:Display)?Name"?\s*=\s*)"(?:[^"\\]|\\.)*";/gm, (match, lead) => `${lead}"${quoteStrings(name)}";`)
+            .replace(/^(\s*"?CFBundleGetInfoString"?\s*=\s*)"(?:[^"\\]|\\.)*";/gm, (match, lead) => `${lead}"${quoteStrings(name)}";`);
         if (next !== text) writeStrings(stringsPath, next, encoding);
     }
     return true;

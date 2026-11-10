@@ -417,6 +417,8 @@
     Game_Quests.prototype.setObjective = function(id, index, state) {
         const quest = ReactorQuests.find(id);
         if (!quest) return false;
+        // An objective the quest does not have changes nothing, and does not bring a hidden quest into the log.
+        if (index !== "all" && !(Number.isInteger(index) && index >= 0 && index < (quest.objectives || []).length)) return false;
         this.discover(quest.id);
         const states = this.objectiveStates(quest.id);
         const apply = (value, at) => {
@@ -664,8 +666,9 @@
     const indexOf = raw => {
         const text = String(raw == null ? "" : raw).trim().toLowerCase();
         if (!text || text === "all") return "all";
+        // (Only the word, or nothing, means all: "0", a negative or a typo is no objective, not every one of them.)
         const n = Number(text);
-        return n >= 1 ? n - 1 : "all";
+        return Number.isInteger(n) && n >= 1 ? n - 1 : -1;
     };
 
     PluginManager.registerCommand("RPGReactor", "QuestSet", function(args) {

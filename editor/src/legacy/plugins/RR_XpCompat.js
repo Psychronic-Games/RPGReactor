@@ -121,7 +121,7 @@
     const _updateWaitMode = Game_Interpreter.prototype.updateWaitMode;
     Game_Interpreter.prototype.updateWaitMode = function() {
         if (this._waitMode === 'rrKeyInput') {
-            const hit = XP_KEYS.find(([key]) => Input.isTrigger(key));
+            const hit = XP_KEYS.find(([key]) => Input.isTriggered(key));
             if (!hit) return true;
             $gameVariables.setValue(this._rrKeyVariable, hit[1]);
             this._waitMode = '';

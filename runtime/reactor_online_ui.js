@@ -71,7 +71,8 @@ Object.assign(ReactorOnline, {
 
     /** The whole game, compressed, kept against the account. A player's life is on the server, not their device. */
     async saveProgress() {
-        if (!this.keepsProgress() || this._saving) return false;
+        // (Not for a game the server has removed or replaced: two devices must not write one life in turn.)
+        if (!this.keepsProgress() || this._saving || this._removed) return false;
         this._saving = true;
         try {
             // What a save in the menu records before it is written (onBeforeSave), short of counting a save:
@@ -649,7 +650,12 @@ const ReactorWorldState = {
         try {
             await ReactorOnline.post("set", { changes }, { s: ReactorOnline.slot, g: ReactorOnline.nonce, t: ReactorOnline.token });
         } catch (error) {
-            console.warn("A shared change was not sent.", error);
+            // Kept for the next beat unless a newer change to the same value came meanwhile: thrown away, the next
+            // look at the world put this player's own switch back, and nobody else ever saw it change.
+            console.warn("A shared change was not sent; it will be sent again.", error);
+            if (!(error && error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 429)) {
+                for (const change of changes) { const key = change.kind + ":" + change.id; if (!this.pending.has(key)) this.pending.set(key, change); }
+            }
         } finally {
             this._sending = false;
         }
@@ -684,6 +690,8 @@ const ReactorWorldState = {
             }
             for (const [id, value] of Object.entries(world.e || {})) {
                 const [map, event, letter] = id.split(","), key = [Number(map), Number(event), letter];
+                // An event of the map in play that the project does not share is not the world's to set.
+                if (key[0] === $gameMap?.mapId?.() && $dataMap?.events?.[key[1]] && !$dataMap.events[key[1]].meta?.world) continue;
                 if (!this.pending.has("e:" + id) && $gameSelfSwitches.value(key) !== value) $gameSelfSwitches.setValue(key, value);
             }
         } finally {

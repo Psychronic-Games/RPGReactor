@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.99.5
-// RPG Reactor runtime revision: 20261110.10
+// RPG Reactor runtime revision: 20261110.13
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261110.10";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261110.13";
 //=============================================================================
 
 const scriptUrls = [
@@ -228,6 +228,9 @@ const ReactorBackend = {
         // A choice played out and found behind the first after all is thought over again.
         if (entry.choice && entry.choice !== first && windows(entry.choice) >= this.MIN_WINDOWS && windows(first) >= this.EARLY_WINDOWS
             && ahead(entry.choice) < -this.MARGIN) entry.choice = null;
+        // The first, kept because it held near the full picture, is thought over too once its play no longer does (a
+        // light room in its first minutes, a heavy town since): the others then get their try.
+        if (entry.choice === first && windows(first) >= this.MIN_WINDOWS && score(first) !== null && score(first) < this.HOLDS - this.MARGIN) entry.choice = null;
         if (entry.choice && usable.includes(entry.choice)) return entry.choice;
         entry.choice = null;
         const known = usable.filter(name => windows(name) >= this.EARLY_WINDOWS), byScore = (a, b) => score(b) - score(a);
@@ -321,7 +324,7 @@ const ReactorBackend = {
         } catch (error) { /* none yet, or not ours */ }
         return { version: this.VERSION, gpus: {} };
     },
-    save() {
+    save(later) {
         const env = this._env;
         if (!env || !this._store || !this._entry) return;
         this._dirty = 0;
@@ -330,7 +333,10 @@ const ReactorBackend = {
             this._entry.updated = Date.now();
             const file = this.file(env);
             env.fs.mkdirSync(env.path.dirname(file), { recursive: true });
-            env.fs.writeFileSync(file, JSON.stringify(this._store, null, 1));
+            const text = JSON.stringify(this._store, null, 1);
+            // In play (`later`) the record is written off the frame; any other write must land before this window may go.
+            if (!later || !env.fs.writeFile) env.fs.writeFileSync(file, text);
+            else env.fs.writeFile(file, text, () => {});
         } catch (error) { /* a folder that cannot be written: nothing is learned, nothing breaks */ }
     },
     /** The renderer string of a WebGL context made and let go at once, or "" where there is none. */
@@ -358,7 +364,11 @@ const ReactorBackend = {
             // No WebGL at all on a backend this asked for: it is failed for the card last seen, and the default is started.
             if (env.marked && env.marked !== this.ORDER[0] && store.last && env.host === "game" && env.hops < this.MAX_HOPS) {
                 const entry = this.entryOf(store, store.last);
-                this.markFailed(entry, env.marked);
+                // Once may be the graphics process not yet up (the game's own start waits for that): the backend is
+                // failed for good only the second time running, and a picture seen on it in between clears the count.
+                const missed = entry.noWebgl || (entry.noWebgl = {});
+                missed[env.marked] = (missed[env.marked] || 0) + 1;
+                if (missed[env.marked] >= 2) this.markFailed(entry, env.marked);
                 this._store = store; this._entry = entry; this.save();
                 return this.relaunch(this.ORDER[0]);
             }
@@ -446,7 +456,7 @@ const ReactorBackend = {
             }
         }
         if (!this._confirmed) this.checkPicture();
-        if (++this._dirty >= this.SAVE_EVERY) this.save();
+        if (++this._dirty >= this.SAVE_EVERY) this.save(true);
     },
     /** Whether a grid of the canvas's pixels holds more than one colour (asked just after a frame is drawn). */
     pictureShows() {
@@ -460,15 +470,27 @@ const ReactorBackend = {
         for (let i = 4; i < data.length; i += 4) if (Math.abs(data[i] - data[0]) + Math.abs(data[i + 1] - data[1]) + Math.abs(data[i + 2] - data[2]) > 6) return true;
         return false;
     },
+    /** Whether the game is holding the screen dark or flat itself: a fade, a transfer, a scene coming or going. */
+    fadedByGame() {
+        try {
+            if (typeof $gameScreen !== "undefined" && $gameScreen && $gameScreen.brightness() < 255) return true;
+            if (typeof $gamePlayer !== "undefined" && $gamePlayer && $gamePlayer.isTransferring && $gamePlayer.isTransferring()) return true;
+            const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+            return !!(scene && (scene._fadeDuration > 0 || scene._fadeOpacity > 0));
+        } catch (error) { return false; }
+    },
     /** The first windows on a backend: a picture seen confirms it; three windows of one flat colour on any but the first fail it. */
     checkPicture() {
         let shows = true;
         try { shows = this.pictureShows(); } catch (error) { shows = true; }
         if (shows) {
             this._confirmed = true;
+            if (this._entry.noWebgl && this._entry.noWebgl[this._current]) { delete this._entry.noWebgl[this._current]; this._dirty = this.SAVE_EVERY; }
             if (this._entry.pending && this._entry.pending.backend === this._current) { this._entry.pending = null; this.save(); }
             return;
         }
+        // A screen the game itself has faded (an intro, a night's sleep, a transfer) is one colour on any backend.
+        if (this.fadedByGame()) return;
         if (++this._blank < 3 || this._current === this.ORDER[0]) return;
         this.markFailed(this._entry, this._current);
         this._live = false;

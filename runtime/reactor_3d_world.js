@@ -2698,7 +2698,9 @@ Reactor3D.Arrival = {
             return false;
         }
         // (Built a few a frame meanwhile, Reactor3D.ModelJoins: several landing together were one long frame.)
-        if (job.stage === 4) { this.pacing = true; if (job.models) job.models(); job.stage = 5; return false; }
+        // (The wait for them is counted from here: counted from the first step, a machine that took MODELS_MS over the
+        // land had none of it left, and the map showed with its models unbuilt.)
+        if (job.stage === 4) { this.pacing = true; if (job.models) job.models(); job.since = clock(); job.stage = 5; return false; }
         const joins = Reactor3D.ModelJoins;
         if (joins) joins.drain();
         const held = scene._modelInstances;
@@ -3778,7 +3780,10 @@ Reactor3D.DrawBatches = {
             this._restored = false;
             for (const mapScene of this._scenes) {
                 const state = mapScene._drawBatches;
-                if (state) { for (const batch of state.batches.values()) batch.dirty = true; state.tick = -1; }
+                // Lost as well as dirty: a batch the time budget leaves for a later frame must not be drawn meanwhile.
+                // Its arrays were let go once sent (FREE_ARRAYS), and the new context has nothing of it: three read
+                // the missing array in the draw and the game stopped. Its chunks draw as themselves until it is made.
+                if (state) { for (const batch of state.batches.values()) { batch.dirty = true; if (batch.mesh) batch.lost = true; } state.tick = -1; }
             }
         }
         for (const mapScene of this._scenes) this.flushScene(mapScene);
@@ -3990,7 +3995,13 @@ Reactor3D.DrawBatches = {
         const state = mapScene && mapScene._drawBatches;
         if (state) {
             for (const batch of state.batches.values()) {
-                for (const m of batch.members) { this.leave(m, batch); if (!forget && m.parent) state.fresh.push(m); }
+                // A scene that is going keeps nothing: its chunks are not shown again, nor handed back to the shadows'
+                // list of still casters (they were, after the shadows had already forgotten the scene, and stayed).
+                for (const m of batch.members) {
+                    if (forget) { if (m.userData.rrBatchedIn === batch) delete m.userData.rrBatchedIn; continue; }
+                    this.leave(m, batch);
+                    if (m.parent) state.fresh.push(m);
+                }
                 this.drop(batch);
             }
             state.batches.clear();

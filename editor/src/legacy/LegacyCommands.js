@@ -528,7 +528,8 @@
                 case 13130: push(333, [p[0], p[1] ? 1 : 0, p[2]], ind); break;
                 case 13150: push(335, [p[0]], ind); break;
                 case 13210: push(283, [stem(s), ''], ind); break;
-                case 13260: push(337, [p[1] ? 1 : 0, p[2] || 0, p[0]], ind); break;
+                // 2003: animation, target (-1 for the whole troop), wait. Here: enemy index, animation, whole troop.
+                case 13260: push(337, [p[1] > 0 ? p[1] : 0, p[0] || 0, p[1] < 0], ind); break;
                 case 13310: push(111, battleBranch(p, note), ind); break;
                 case 23310: push(411, [], ind); break;
                 case 23311: push(412, [], ind); break;

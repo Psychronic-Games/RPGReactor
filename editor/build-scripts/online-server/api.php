@@ -20,9 +20,6 @@ if ($action === 'sync') {
     // Kept first and short: this runs several times a second for every player.
     $slot = player($secret);
     $dir = dataDir($config);
-    $state = aliveAt($dir, $slot);
-    if ($state === REMOVED) fail(403, 'You have been removed from this world.');
-    if ($state === REPLACED) fail(403, 'You signed in somewhere else.');
     $map = intParam('m', 1, 9999);
     $now = time();
     $file = fopen($dir . '/p2m' . $map . '.bin', 'c+b');
@@ -142,7 +139,14 @@ if ($action === 'party') {
         unset($state['invites'][$me]);
         if (!$invite || $invite['at'] < time() - 120) $refuse(410, 'That invitation has lapsed.');
         [$theirs, $group] = partyOf($state, (string)$invite['from']);
-        if ($party) { $state['parties'][$id]['members'] = array_values(array_diff($party['members'], [$me])); }
+        // Already in that party (both invited each other): nothing to do, and nobody is listed twice.
+        if ($party && $id === $theirs) { writeParties($dir, $state); flock($lock, LOCK_UN); respond(['ok' => true]); }
+        // Leaving another party for this one is a leave like any other: it keeps a leader who is in it, or ends.
+        if ($party) {
+            $left = array_values(array_diff($party['members'], [$me]));
+            if (count($left) < 2) unset($state['parties'][$id]);
+            else { $state['parties'][$id]['members'] = $left; if ($party['leader'] === $me) $state['parties'][$id]['leader'] = $left[0]; }
+        }
         if (!$group) { $theirs = bin2hex(random_bytes(6)); $group = ['leader' => $invite['from'], 'members' => [$invite['from']]]; }
         if (count($group['members']) >= PARTY_MOST) $refuse(409, 'That party is full.');
         $group['members'][] = $me;
@@ -155,6 +159,7 @@ if ($action === 'party') {
         $variables = idList((string)($world['partyVariables'] ?? ''));
         $values = is_array($party['values'] ?? null) ? $party['values'] : ['s' => [], 'v' => []];
         foreach (is_array($body['changes'] ?? null) ? array_slice($body['changes'], 0, 64) : [] as $change) {
+            if (!is_array($change)) continue;
             $changeId = (int)($change['id'] ?? 0);
             $value = $change['value'] ?? null;
             if (($change['kind'] ?? '') === 's' && isset($switches[$changeId])) $values['s'][$changeId] = (bool)$value;
@@ -177,7 +182,11 @@ if ($action === 'party') {
         if ($party) {
             $left = array_values(array_diff($party['members'], [$me]));
             if (count($left) < 2) unset($state['parties'][$id]);
-            else $state['parties'][$id] = ['leader' => $party['leader'] === $me ? $left[0] : $party['leader'], 'members' => $left];
+            else {
+                // Everything else the party holds (the values it shares) stays with those who remain.
+                $state['parties'][$id]['members'] = $left;
+                if ($party['leader'] === $me) $state['parties'][$id]['leader'] = $left[0];
+            }
         }
     } else $refuse(400, 'Unknown party request.');
     writeParties($dir, $state);
@@ -197,7 +206,7 @@ if ($action === 'news') {
     $invite = $state['invites'][$me] ?? null;
     $out = ['battles' => []];
     $out['party'] = $party ? ['id' => $id, 'leader' => $party['leader'], 'values' => $party['values'] ?? null, 'members' => array_map(function (string $name) use ($dir, $names): array {
-        $at = slotNamed($dir, $name);
+        $at = slotNamed($dir, $name, -1, $names);
         return ['name' => $name, 'online' => $at >= 0, 'place' => $at >= 0 ? ($names[$at]['place'] ?? null) : null];
     }, $party['members'])] : null;
     $out['invite'] = $invite && $invite['at'] >= time() - 120 ? (string)$invite['from'] : '';
@@ -273,6 +282,8 @@ if ($action === 'bSay') {
     if (!$member) {
         $sent = array_slice($sent, 0, 2);
         foreach ($sent as $message) if (!is_array($message) || !in_array($message['t'] ?? '', ['join', 'leave'], true)) fail(403, 'You are not in this battle.');
+        // A request to join carries one party, not a flood: a stranger cannot fill the battle's log.
+        if (strlen((string)json_encode($sent)) > 16384) fail(413, 'That is too much to ask.');
     }
     $lines = '';
     foreach ($sent as $message) $lines .= jsonText(['from' => $slot, 'm' => $message]) . "\n";
@@ -456,6 +467,8 @@ if ($action === 'set') {
     $world = is_array($settings['world'] ?? null) ? $settings['world'] : [];
     $switches = idList((string)($world['switches'] ?? ''));
     $variables = idList((string)($world['variables'] ?? ''));
+    // The events the project shares ("map,event"), listed at deploy; a server deployed before the list takes any.
+    $events = is_array($world['events'] ?? null) ? array_flip(array_map('strval', $world['events'])) : null;
     $changes = jsonBody()['changes'] ?? [];
     if (!is_array($changes) || count($changes) > 64) fail(422, 'Too many changes at once.');
     // While the Engine runs it is the world's only writer, so changes keep one order.
@@ -468,6 +481,7 @@ if ($action === 'set') {
     $state = @json_decode((string)@file_get_contents($dir . '/world.json'), true);
     $state = is_array($state) ? $state : [];
     foreach ($changes as $change) {
+        if (!is_array($change)) continue;
         $kind = (string)($change['kind'] ?? '');
         $id = (string)($change['id'] ?? '');
         $value = $change['value'] ?? null;
@@ -478,7 +492,8 @@ if ($action === 'set') {
             $state['v'][(int)$id] = (is_numeric($base) ? $base : 0) + $change['delta'];
         }
         elseif ($kind === 'v' && isset($variables[(int)$id]) && (is_int($value) || is_float($value) || is_bool($value) || (is_string($value) && strlen($value) <= 256))) $state['v'][(int)$id] = $value;
-        elseif ($kind === 'e' && preg_match('/^\d{1,4},\d{1,6},[A-Da-d]$/', $id) && count($state['e'] ?? []) < 5000) $state['e'][$id] = (bool)$value;
+        elseif ($kind === 'e' && preg_match('/^\d{1,4},\d{1,6},[A-Da-d]$/', $id) && ($events === null || isset($events[substr($id, 0, (int)strrpos($id, ','))]))
+            && (isset($state['e'][$id]) || count($state['e'] ?? []) < 5000)) $state['e'][$id] = (bool)$value;
     }
     $temporary = $dir . '/world.' . getmypid() . '.tmp';
     file_put_contents($temporary, jsonText($state));
@@ -579,7 +594,11 @@ if ($action === 'upload') {
     $limit = $characterMb > 0 ? (int)($characterMb * 1048576) : PHP_INT_MAX;
     $piece = (string)file_get_contents('php://input');
     if ($piece === '' || strlen($piece) > 4194304) fail(413, 'That piece is the wrong size.');
-    if ($index === 0) @unlink($part);
+    if ($index === 0) {
+        @unlink($part);
+        // Unfinished uploads from over an hour ago go whenever a new one starts, not only when one completes.
+        foreach (glob($models . '/up-*') ?: [] as $old) { if ((int)@filemtime($old) < time() - 3600) @unlink($old); }
+    }
     clearstatcache();
     $held = is_file($part) ? (int)filesize($part) : 0;
     if (($index > 0 && $held === 0) || $held + strlen($piece) > $limit) { @unlink($part); fail(413, 'That character is too large.'); }
@@ -593,7 +612,8 @@ if ($action === 'upload') {
     $roomGb = (float)$settings['storage']['totalGB'];
     if ($roomGb > 0) {
         $used = 0;
-        foreach (glob($models . '/*.rrch') ?: [] as $kept) $used += (int)filesize($kept);
+        // Everything in the folder takes room: each character, its squeezed twin, and uploads under way.
+        foreach (glob($models . '/*') ?: [] as $kept) if ($kept !== $part) $used += (int)@filesize($kept);
         if ($used + filesize($part) > $roomGb * 1073741824) fail(507, 'This server has no room for more characters.');
     }
     $hash = hash_file('sha256', $part);

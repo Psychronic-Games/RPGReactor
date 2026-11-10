@@ -438,10 +438,13 @@
         if (this.RESTS && typeof Game_Event !== "undefined" && character instanceof Game_Event) {
             const tick = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
             rest = REST.get(character);
-            if (!rest) REST.set(character, rest = { valid: false, map: null, x: 0, y: 0, tx: 0, ty: 0, ground: 0, alt: 0, at: 0 });
+            const fresh = !rest;
+            if (fresh) REST.set(character, rest = { valid: false, map: null, x: 0, y: 0, tx: 0, ty: 0, ground: 0, alt: 0, at: 0 });
             else if (this.atRest(character, rest, tick)) { this.rested++; return; }
             rest.valid = false;
-            rest.at = tick;
+            // A map's events all get their record in its first update: each is put back by its own share, so they do
+            // not all come due in the same update for good (the work saved, back as a spike every REST_UPDATES).
+            rest.at = fresh ? tick - ((character._eventId || 0) % this.REST_UPDATES) : tick;
         }
         // Vehicles keep their own height (an airship flies, a boat floats), and so does a player aboard one.
         const vehicle = (typeof Game_Vehicle !== "undefined" && character instanceof Game_Vehicle)

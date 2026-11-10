@@ -2082,7 +2082,6 @@ Reactor3D.updateAnchoredAnimations = function(holder) {
             if (entry.loop && !entry.restarted && track
                 && ((track.visibleFrames > 0 && entry.fx3d.frames >= track.visibleFrames - 1)
                     || (track.endIndex > 3 && entry.sprite._frameIndex >= track.endIndex - 3))) {
-                entry.restarted = true;
                 restart.push(entry);
             }
         } else {
@@ -2092,7 +2091,10 @@ Reactor3D.updateAnchoredAnimations = function(holder) {
     }
     holder.anchored = kept;
     for (const entry of restart) {
+        // (Marked restarted only once its next play has started: one that met the limit here is asked again, where
+        // the mark alone left a looping effect stopped for good.)
         if (holder.anchored.length >= this.MAX_ANCHORED_PER_MODEL) break;
+        entry.restarted = true;
         this.spawnAnchoredAnimation(Object.assign({}, entry.effect, { loop: true }), entry.character, holder);
         const again = holder.anchored[holder.anchored.length - 1];
         if (entry.triggered && again && again !== entry) again.triggered = entry.triggered;

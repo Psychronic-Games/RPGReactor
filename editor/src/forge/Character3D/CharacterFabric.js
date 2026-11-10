@@ -492,7 +492,10 @@
         let repair=!uv;
         if(uv&&part.index)for(let i=0;i<part.index.length;i+=3){const [a,b,c]=[part.index[i],part.index[i+1],part.index[i+2]];if(Math.abs((uv[b*2]-uv[a*2])*(uv[c*2+1]-uv[a*2+1])-(uv[c*2]-uv[a*2])*(uv[b*2+1]-uv[a*2+1]))<1e-10){repair=true;break;}}
         part.uvs1=repair?surfaceUvs(part,t.span,uv):uv;
-        if(o.albedo&&!part.texture&&part.colors){part.texture=t.albedo.name;part.uvs=Float32Array.from(part.uvs1);}
+        // The tile is the cloth's weave, near white: the part's colour is in its vertex colours, which must be kept
+        // with it. Without the mark the export dropped them from any textured part not baked with shading, and a game's
+        // creator (built without that bake) showed linings, pockets and sewn edges as bare white tile.
+        if(o.albedo&&!part.texture&&part.colors){part.texture=t.albedo.name;part.uvs=Float32Array.from(part.uvs1);part.keepColors=true;}
         part.fabric = kind;
         part.normalTexture = t.normal.name; part.normalTexCoord = 1; part.normalScale = o.normalScale ?? t.normalScale;
         part.metallicRoughnessTexture = t.orm.name; part.metallicRoughnessTexCoord = 1;

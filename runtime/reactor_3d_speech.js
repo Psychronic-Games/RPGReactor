@@ -798,6 +798,8 @@
                 for (const f of $gamePlayer.followers()._data || []) if (f.actor && f.actor() && f.actor().actorId() === who.id) return f;
                 return null;
             }
+            // A name several events share: the first of them speaks, not whichever event runs the command.
+            if (who.kind === "events") return (Array.isArray(who.ids) && who.ids.length ? $gameMap.event(who.ids[0]) : null) || null;
             if (who.kind === "none" && name) return null;
         }
         return running > 0 ? $gameMap.event(running) || null : null;
@@ -832,8 +834,12 @@
     };
     const clear = R.MapScene.prototype.clear;
     R.MapScene.prototype.clear = function() {
-        for (const character of Array.from(active.keys())) stop(character);
-        endTalk(true);
+        // Only when the played map's scene goes. A neighbor map's world is made and let go beside it all the time
+        // (each passes through here): that cut every voice short and let a waiting Show Text run on early.
+        if (!this._rrBody) {
+            for (const character of Array.from(active.keys())) stop(character);
+            endTalk(true);
+        }
         for (const holder of this._modelInstances?.values() || []) drivers.get(holder.object)?.dispose();
         return clear.apply(this, arguments);
     };

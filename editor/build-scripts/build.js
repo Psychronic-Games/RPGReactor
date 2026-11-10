@@ -100,8 +100,14 @@ const EXCLUDED = new Set([
 // data/ and never removes it. Those files are regenerated on the next battle
 // test and are never read outside btest mode, so shipping them only bloats the
 // release (13-15 MB on a mature project) and leaks the developer's test party.
+// Version control and IDE folders, and the editor's own half-written files: never the game's (see build-worker.js).
+const NEVER_SHIPPED = new Set(['.git', '.svn', '.hg', '.vscode', '.idea', '.DS_Store', 'Thumbs.db', 'desktop.ini']);
 function isStagingExcluded(relPath) {
     if (EXCLUDED.has(relPath)) return true;
+    const parts = relPath.split(path.sep);
+    if (NEVER_SHIPPED.has(parts[0]) || NEVER_SHIPPED.has(parts[parts.length - 1])) return true;
+    // The editor's own half-written files (a save or import interrupted).
+    if (/\.tmp-rr-|\.partial-/.test(parts[parts.length - 1])) return true;
     if (/^rpgmaker-runtime-backup(-\d+)?\.zip$/.test(relPath)) return true;
     // The Character Generator's recipe beside each sheet it saved: the editor's, not the game's.
     if (relPath.startsWith('img' + path.sep) && /\.character\.json$/i.test(relPath)) return true;

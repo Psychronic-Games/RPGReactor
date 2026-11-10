@@ -383,7 +383,9 @@ test('an in-scene effect is drawn as its own screen box at full resolution, smal
     const runtime = source3D();
     assert.match(runtime, /play\.track = tracks\[key\] \|\| \(tracks\[key\] = this\.EffekseerScene\.boxTracker\(\)\);/);
     assert.match(runtime, /if \(play\.track && play\.lastLit > 0\) play\.track\.visibleFrames = Math\.max\(play\.track\.visibleFrames \|\| 0, play\.lastLit\);/);
-    assert.match(runtime, /entry\.fx3d\.frames >= track\.visibleFrames - 1\)\n\s*\|\| \(track\.endIndex > 3 && entry\.sprite\._frameIndex >= track\.endIndex - 3\)\)\) \{\s*entry\.restarted = true;/);
+    assert.match(runtime, /entry\.fx3d\.frames >= track\.visibleFrames - 1\)\n\s*\|\| \(track\.endIndex > 3 && entry\.sprite\._frameIndex >= track\.endIndex - 3\)\)\) \{\s*restart\.push\(entry\);/);
+    // Marked restarted only when its next play has started (one that met the per-model limit is asked again).
+    assert.match(runtime, /if \(holder\.anchored\.length >= this\.MAX_ANCHORED_PER_MODEL\) break;\n\s*entry\.restarted = true;/);
     // The quad maps the box back onto the same screen pixels.
     assert.match(source3D(),
         /vec2 uv = \(gl_FragCoord\.xy \/ resolution - rectMin\) \/ rectSize;/);

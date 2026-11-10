@@ -94,9 +94,13 @@ function idList(text) {
 }
 
 const sharedSwitches = idList(settings.world?.switches), sharedVariables = idList(settings.world?.variables);
+// The events the project shares ("map,event"), listed at deploy; a server deployed before the list takes any.
+const sharedEvents = Array.isArray(settings.world?.events) ? new Set(settings.world.events.map(String)) : null;
 
 /** One change to the world, in the order it arrived. Returns what every game should now hold. */
 function applyChange(change) {
+    // Anything a game sends reaches here: an entry that is no object is passed over, never read (it ended this process).
+    if (!change || typeof change !== 'object') return null;
     const kind = String(change.kind || ''), id = String(change.id || '');
     if (kind === 's' && sharedSwitches.has(+id)) return (world.s[+id] = !!change.value, { kind, id, value: world.s[+id] });
     if (kind === 'v' && sharedVariables.has(+id)) {
@@ -111,7 +115,7 @@ function applyChange(change) {
         }
         return { kind, id, value: world.v[+id] };
     }
-    if (kind === 'e' && /^\d{1,4},\d{1,6},[A-Da-d]$/.test(id) && (id in world.e || Object.keys(world.e).length < 5000)) return (world.e[id] = !!change.value, { kind, id, value: world.e[id] });
+    if (kind === 'e' && /^\d{1,4},\d{1,6},[A-Da-d]$/.test(id) && (!sharedEvents || sharedEvents.has(id.slice(0, id.lastIndexOf(',')))) && (id in world.e || Object.keys(world.e).length < 5000)) return (world.e[id] = !!change.value, { kind, id, value: world.e[id] });
     return null;
 }
 
@@ -386,8 +390,11 @@ function welcome(socket) {
         else if (opcode === 1) {
             let message = null;
             try { message = JSON.parse(payload.toString()); } catch (error) { message = null; }
-            if (message?.t === 'set' && withinSetLimit(player)) applyChanges(message.changes);
-            else if (message?.t === 'bf' && Array.isArray(message.to) && payload.length <= RELAY_BYTES && withinRelayLimit(player)) relay(player, message);
+            // One player's malformed message must not end the Engine for everyone.
+            try {
+                if (message?.t === 'set' && withinSetLimit(player)) applyChanges(message.changes);
+                else if (message?.t === 'bf' && Array.isArray(message.to) && payload.length <= RELAY_BYTES && withinRelayLimit(player)) relay(player, message);
+            } catch (error) { console.error('message refused:', error && error.message); }
         }
     });
     socket.on('data', read);
@@ -419,8 +426,9 @@ function local(request, response) {
         request.on('data', chunk => { body += chunk; if (body.length > 65536) request.destroy(); });
         request.on('end', () => {
             let changes = [];
-            try { changes = JSON.parse(body).changes; } catch (error) { changes = []; }
-            response.end(JSON.stringify({ count: applyChanges(changes) }));
+            let count = worldCount;
+            try { changes = JSON.parse(body).changes; count = applyChanges(changes); } catch (error) { count = worldCount; }
+            response.end(JSON.stringify({ count }));
         });
         return;
     }

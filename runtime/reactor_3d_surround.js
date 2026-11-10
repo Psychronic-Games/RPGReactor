@@ -1675,6 +1675,8 @@
         N.keepAhead(scene);
         // The map entered is the one everything reads now; what the map left read is kept for a way back.
         old.scene._neighborGlobals = globalsOf();
+        old.scene._rrBody = true;
+        scene._rrBody = false;
         scene._neighborKept = false;
         if (scene._neighborGlobals) setGlobals(scene._neighborGlobals);
         // The reflections go on from the capture they had: the same world, in the entered map's tiles.
@@ -1692,7 +1694,11 @@
         // Its plants were last sorted into seen and unseen from a camera that had already gone over the border with
         // the party (all unseen): they are seen until its next sorting, a frame or two on.
         const plants = old.scene._foliageGroup;
-        if (plants) for (const mesh of plants.children) if (mesh.userData && mesh.userData.rrFoliageChunk) mesh.visible = true;
+        // (Not one its region's batch draws: it stays hidden, or it is drawn twice, and where it stood before the move.)
+        if (plants) for (const mesh of plants.children) {
+            const batch = mesh.userData && mesh.userData.rrBatchedIn;
+            if (mesh.userData && mesh.userData.rrFoliageChunk && !(batch && batch.mesh)) mesh.visible = true;
+        }
         N.stats.adopted++;
         return scene;
     };

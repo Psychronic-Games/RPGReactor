@@ -2544,6 +2544,16 @@
                 _warnDestroyedOnce(sprite, "SpritePipe.updateRenderable", deadReason);
                 return;
             }
+            // A sprite asked to update that no batch holds (taken off the display list and put back, or shown again,
+            // between two builds of the list): PIXI reads its batcher, finds none and the game stops ("Cannot read
+            // properties of null (reading 'updateElement')", North Haven's square, 2026-11-10). It is passed over and
+            // the list is built again, which gives it a batch.
+            const gpuSprite = this._getGpuSprite ? this._getGpuSprite(sprite) : null;
+            if (gpuSprite && !gpuSprite._batcher) {
+                const group = sprite.parentRenderGroup || sprite.renderGroup;
+                if (group) group.structureDidChange = true;
+                return;
+            }
             return origUpdate.call(this, sprite);
         };
         PIXI.SpritePipe.prototype.validateRenderable = function(sprite) {
@@ -4014,6 +4024,10 @@
                     return containerVisible.get.call(this);
                 },
                 set: function(value) {
+                    // Every write marks the draw list changed, a change or not, and that is relied on: with the mark
+                    // left to real changes only (tried 2026-11-10, runtime .11), a walk into North Haven's square
+                    // stopped the game in PIXI's SpritePipe.updateRenderable (a sprite updated that the list no
+                    // longer held). Something else changes the list without saying so; until it is found, keep this.
                     containerVisible.set.call(this, value);
                     this._syncSubtreeDisplayStatus();
                     const renderGroup = this.renderGroup || this.parentRenderGroup;

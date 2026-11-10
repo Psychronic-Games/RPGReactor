@@ -1940,6 +1940,7 @@
             this.visible = !this._hiding;
         };
         Sprite_Base.prototype.updateAnimationSprites = function() {
+            if (!this._animationSprites.length) return;
             const sprites = this._animationSprites.clone();
             this._animationSprites.length = 0;
             for (const sprite of sprites) {

@@ -306,13 +306,16 @@
     async function paste(field) {
         rememberCaret(field);
         let text = '';
+        // The field's own window and document: in a pop-out (the Database, the Event Editor) the main window's
+        // clipboard and execCommand act on the main document, where the field is not, and did nothing.
+        const doc = field.ownerDocument || document, view = doc.defaultView || window;
         try {
-            text = await navigator.clipboard.readText();
+            text = await view.navigator.clipboard.readText();
         } catch (error) {
             // Clipboard permission is not always granted in an app window;
             // execCommand still works on the focused field.
             field.focus();
-            document.execCommand('paste');
+            doc.execCommand('paste');
             return;
         }
         if (text) insertAtCaret(field, text, null, true);
@@ -320,12 +323,12 @@
 
     function copySelection(field) {
         field.focus();
-        document.execCommand('copy');
+        (field.ownerDocument || document).execCommand('copy');
     }
 
     function cutSelection(field) {
         field.focus();
-        document.execCommand('cut');
+        (field.ownerDocument || document).execCommand('cut');
         field.dispatchEvent(new Event('input', { bubbles: true }));
     }
 

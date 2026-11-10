@@ -1262,7 +1262,8 @@ class PieceBuilderManager {
     _effectsChanged() {
         window.reactor?.lightingManager?.render?.();
         window.reactor?.mediaSurfaceManager?.render?.();
-        this.projectController?.mediaSurfacePreviewManager?.refresh?.();
+        // (`rescan`: the preview manager has no `refresh`, so this did nothing and a removed screen stayed drawn.)
+        this.projectController?.mediaSurfacePreviewManager?.rescan?.();
         window.reactor?.mapEditor3D?.refreshLights?.();
         this.announce(false);
     }

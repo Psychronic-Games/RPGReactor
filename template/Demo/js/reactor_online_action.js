@@ -143,11 +143,14 @@ const ReactorOnlineAction = {
     drain(fight) {
         const B = ReactorOnlineBattle;
         for (const message of B.inbox.splice(0)) {
-            if (message.t === "apos") this.place(fight, message.rows);
-            else if (message.t === "ares") this.land(fight, message);
-            else if (message.t === "afire" || message.t === "amotion") this.play(fight, message);
-            else if (message.t === "end") B.finishMirror(fight, message.result);
-            else B.applyNote(fight, message);
+            // Each on its own: one that is not what it says is passed over, and the rest still land.
+            try {
+                if (message.t === "apos") this.place(fight, message.rows);
+                else if (message.t === "ares") this.land(fight, message);
+                else if (message.t === "afire" || message.t === "amotion") this.play(fight, message);
+                else if (message.t === "end") B.finishMirror(fight, message.result);
+                else B.applyNote(fight, message);
+            } catch (error) { console.warn("A shared battle's message could not be read.", error); }
         }
     },
 

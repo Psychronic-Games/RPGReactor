@@ -764,6 +764,11 @@ Reactor3D.eventModelFaceTurn = function(direction) {
 
 Reactor3D.eventModelInterpolatedMark = function(faces, direction) {
     if (!faces) return null;
+    // A model with no marks at all (most of them) has nothing to find: asked for every unsettled model each frame,
+    // the table below was built and thrown away each time.
+    let marked = false;
+    for (const name in faces) { marked = true; break; }
+    if (!marked) return null;
     const pairs = {
         2: ["front"],
         4: ["left"],
@@ -12805,6 +12810,9 @@ Reactor3D.FarParts = {
         for (const part of this.partsOf(object)) {
             if (want) part.layers.disable(this.VIEW_LAYER); else part.layers.enable(this.VIEW_LAYER);
         }
+        // The mouth's inside is among these parts: shown again here, it is ClosedMouth's to hide again, which it
+        // would not do while its record still said hidden (three draws a pass back for that body until it next spoke).
+        if (!want && object.userData.rrMouth) object.userData.rrMouth.hidden = undefined;
         holder.softParts = soft;
         object.userData.rrSoftPartsApplied = soft;
         for (const part of this.softOf(object)) {

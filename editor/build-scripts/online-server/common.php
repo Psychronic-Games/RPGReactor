@@ -279,6 +279,9 @@ function checkPackage(string $file, array $rules): void {
     if ($fields['version'] !== 1 || $glbAt + 20 > $size) fail(422, 'That character is damaged.');
     $info = json_decode((string)fread($in, $fields['json']), true);
     if (!is_array($info)) fail(422, 'That character is damaged.');
+    // The portrait travels inside the package. An address would be fetched by every game that meets this character.
+    $face = $info['face'] ?? '';
+    if ($face !== '' && (!is_string($face) || strlen($face) > 4194304 || !preg_match('~^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]*$~', $face))) fail(422, 'That character is damaged.');
     $recipe = is_array($info['recipe'] ?? null) ? $info['recipe'] : [];
     $species = speciesRule($rules);
     if (!in_array('all', $species, true) && !in_array((string)($recipe['species'] ?? 'human'), $species, true)) fail(422, 'This game does not allow that species.');
@@ -500,9 +503,11 @@ function partyOf(array $state, string $name): array {
 }
 
 /** Someone online by name, in any case, other than `$not`: their slot, or -1. */
-function slotNamed(string $dir, string $name, int $not = -1): int {
-    $alive = (string)@file_get_contents($dir . '/alive.bin');
-    foreach (readNames($dir) as $slot => $known) {
+function slotNamed(string $dir, string $name, int $not = -1, ?array $names = null): int {
+    // One read of each file a request, however many names it asks after (a party's news asks for every member).
+    static $aliveOf = [];
+    $alive = $aliveOf[$dir] ?? ($aliveOf[$dir] = (string)@file_get_contents($dir . '/alive.bin'));
+    foreach ($names ?? readNames($dir) as $slot => $known) {
         if ((int)$slot === $not || textFold((string)($known['name'] ?? '')) !== textFold($name) || strlen($alive) < ((int)$slot + 1) * 4) continue;
         $seen = (int)unpack('V', substr($alive, (int)$slot * 4, 4))[1];
         if ($seen > time() - ALIVE_SECONDS && $seen < REPLACED) return (int)$slot;

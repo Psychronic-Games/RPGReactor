@@ -9218,7 +9218,9 @@ Reactor3D.LightVolume = {
         // atlases: three must forget what it thinks is bound first, or a
         // shadow sampler meets PIXI's texture and the driver drops the draw
         // (INVALID_OPERATION), leaving the volume unlit.
-        if (this.enabled && renderer && typeof renderer.resetState === "function") renderer.resetState();
+        // (Only when the volume is in use: the reset is some forty GL calls and empties three's state cache, paid
+        // every update on machines that never bake.)
+        if (this.on() && renderer && typeof renderer.resetState === "function") renderer.resetState();
         this.frameStatic(renderer, mapScene, mapData, focus);
         Reactor3D.WaterLight.loadFar(this.uniforms(), mapData, this);
         this.frameDynamic(renderer, mapData, focus);

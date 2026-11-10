@@ -411,7 +411,7 @@
             if (joints) for (let k = 0; k < 4; k++) joints[to * 4 + k] = joi[v * 4 + k];
             if (weights) for (let k = 0; k < 4; k++) weights[to * 4 + k] = wei[v * 4 + k];
         }
-        const indices = next < 65536 ? new Uint16Array(triangles * 3) : new Uint32Array(triangles * 3);
+        const indices = next < 65535 ? new Uint16Array(triangles * 3) : new Uint32Array(triangles * 3);
         let w = 0;
         for (let t = 0; t < alive.length; t++) {
             if (!alive[t]) continue;

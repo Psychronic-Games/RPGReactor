@@ -2196,7 +2196,12 @@
         for (let z = 0; z < 6; z++) if (z !== 4) key = (key * 31 + (data[z * size + at] || 0)) | 0;
         key = (key << 1) || 2;
         // A tile event can change what stands on a cell at any moment: such a map is asked afresh.
-        const kept = !($gameMap.tileEvents && $gameMap.tileEvents.length > 0), known = hides.cells[at];
+        // (Only the cells one stands on: with any tile event on the map every cell of every sight line was asked
+        // afresh, four passability checks each, thousands for one AI decision.)
+        let kept = true;
+        const tiles = $gameMap.tileEvents;
+        if (tiles && tiles.length > 0) for (let i = 0; i < tiles.length; i++) if (tiles[i].pos(x, y)) { kept = false; break; }
+        const known = hides.cells[at];
         if (kept && known !== 0 && (known & ~1) === key) return (known & 1) === 1;
         let blocks = true;
         if ($gameMap.isPassable(x, y, 2) || $gameMap.isPassable(x, y, 4) || $gameMap.isPassable(x, y, 6) || $gameMap.isPassable(x, y, 8)) blocks = false;
@@ -3367,7 +3372,12 @@
         const P = root.ReactorPhysics;
         if (P && P.isAirborne && P.isAirborne(character)) return true;
         character._rrDrop = undefined;
-        if (loss > 0) this.hurtByFall(unit, loss);
+        if (loss > 0) {
+            this.hurtByFall(unit, loss);
+            // A walk that cost HP is not taken back: Undo Move returned the unit to its place with the HP still gone,
+            // and the move range kept from before still called the same drop survivable.
+            if (this._act && this._act.unitId === unit.id) this._act.locked = true;
+        }
         return false;
     };
 

@@ -635,9 +635,13 @@ test('a guest in a battle hears only what is meant for it, and a host only belie
     online.slot = 4;
     battle.reset();
     battle.role = 'guest';
+    battle.hostSlot = 0;
     battle.receive({ t: 'turn', u: 1, to: 9 }, 0);
     battle.receive({ t: 'turn', u: 2, to: 4 }, 0);
     battle.receive({ t: 'walk', u: 3 }, 0);
+    // Only the battle's host is believed: the log and the relay carry anyone's lines.
+    battle.receive({ t: 'sync', rows: [[1, 0, 0, 0, [1]]] }, 7);
+    battle.receive({ t: 'end', result: 2 }, 7);
     assert.deepEqual(Array.from(battle.inbox, message => message.u), [2, 3]);
     battle.reset();
     battle.role = 'host';
@@ -812,7 +816,8 @@ test('waking restores the whole game and goes to where the player stopped', asyn
 test('the server gives one account one body, and a sleeper keeps nothing private', () => {
     const api = fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/api.php'), 'utf8');
     assert.match(api, /touchAlive\(\$dir, \(int\)\$other, REPLACED\)/);
-    assert.match(api, /You signed in somewhere else/);
+    // Refused where every request names its player (once: sync no longer reads the stamp a second time).
+    assert.match(fs.readFileSync(path.join(appRoot, 'build-scripts/online-server/common.php'), 'utf8'), /You signed in somewhere else/);
     assert.match(api, /unset\(\$entry\['slot'\], \$entry\['account'\]\)/);
     const save = api.slice(api.indexOf("if ($action === 'save')"), api.indexOf("if ($action === 'load')"));
     assert.ok(save.indexOf('sessionAccount') < save.indexOf('file_put_contents'), 'a save names its player first');

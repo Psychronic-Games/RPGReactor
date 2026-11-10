@@ -274,13 +274,13 @@ class DatabaseSystem2Editor {
             { label: 'UI Area Width', field: 'uiAreaWidth', value: adv.uiAreaWidth || 816, type: 'number' },
             { label: 'UI Area Height', field: 'uiAreaHeight', value: adv.uiAreaHeight || 624, type: 'number' },
             { label: 'Pixelated Rendering', field: 'pixelatedRendering', value: adv.pixelatedRendering === true, type: 'checkbox' },
-            { label: 'Screen Scale', field: 'screenScale', value: adv.screenScale || 1, type: 'number', step: '0.1' },
+            { label: 'Screen Scale', field: 'screenScale', value: adv.screenScale ?? 1, type: 'number', step: '0.1' },
             { label: '2D Camera Zoom', field: 'camera2DZoom', value: adv.camera2DZoom ?? 1, type: 'number', step: '0.25', min: 1, max: 8 },
             { label: '2D Camera Offset X (px)', field: 'camera2DOffsetX', value: adv.camera2DOffsetX ?? 0, type: 'number' },
             { label: '2D Camera Offset Y (px)', field: 'camera2DOffsetY', value: adv.camera2DOffsetY ?? 0, type: 'number' },
-            { label: 'Font Size', field: 'fontSize', value: adv.fontSize || 26, type: 'number' },
-            { label: 'Window Opacity', field: 'windowOpacity', value: adv.windowOpacity || 192, type: 'number' },
-            { label: 'Pictures Limit', field: 'picturesUpperLimit', value: adv.picturesUpperLimit || 100, type: 'number' },
+            { label: 'Font Size', field: 'fontSize', value: adv.fontSize ?? 26, type: 'number' },
+            { label: 'Window Opacity', field: 'windowOpacity', value: adv.windowOpacity ?? 192, type: 'number' },
+            { label: 'Pictures Limit', field: 'picturesUpperLimit', value: adv.picturesUpperLimit ?? 100, type: 'number' },
             { label: 'Main Font', field: 'mainFontFilename', value: adv.mainFontFilename || '', type: 'text' },
             { label: 'Number Font', field: 'numberFontFilename', value: adv.numberFontFilename || '', type: 'text' },
             { label: 'Fallback Fonts', field: 'fallbackFonts', value: adv.fallbackFonts || '', type: 'text' },
@@ -573,7 +573,7 @@ class DatabaseSystem2Editor {
         const motionNames = ['Thrust', 'Swing', 'Missile'];
         const weaponImageNames = DatabaseSystem2Editor.weaponImageNames();
         const weaponTypes = system.weaponTypes || [''];
-        const motion = system.attackMotions[index] || { type: 0, weaponImageId: 0 };
+        const motion = (system.attackMotions || [])[index] || { type: 0, weaponImageId: 0 };
         const typeName = weaponTypes[index] !== undefined ? weaponTypes[index] : `${tt('Type')} ${index}`;
 
         const overlay = document.createElement('div');

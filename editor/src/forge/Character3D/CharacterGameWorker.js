@@ -31,6 +31,36 @@ importScripts('../../database/ModelRigger.js', '../../database/ModelAutoRig.js',
 
     let cache = null;
 
+    /**
+     * The outfits taken whole from another model (the Star Shift presets) that `recipe` wears, read before the build:
+     * a worker has no `require`, so one not brought in here was quietly left out, and a player who picked the
+     * Captain's Uniform got its gloves and boots alone. The editor's own preview worker does the same.
+     */
+    const Taken = scope.RRCharacterOutfitTransfer, fetchedOutfits = new Map();
+    async function ensureOutfits(recipe) {
+        if (!Taken || !Taken.store) return;
+        const ids = (Array.isArray(recipe.outfit) ? recipe.outfit : []).map(item => typeof item === 'string' ? item : item && item.id);
+        const keys = new Set(ids.map(id => Wardrobe.BY_ID.get(id)?.transfer).filter(Boolean));
+        for (const key of keys) {
+            if (Taken.store.outfits.get(key) && Taken.store.pictures.has(key)) continue;
+            if (!Taken.BUILT_IN.includes(key)) continue;
+            if (!fetchedOutfits.has(key)) fetchedOutfits.set(key, (async () => {
+                const base = DATA + '/outfits/';
+                let outfit = Taken.store.outfits.get(key);
+                if (!outfit) {
+                    const [json, bin] = await Promise.all([
+                        fetch(base + key + '.json').then(r => { if (!r.ok) throw new Error('Character data is missing: ' + key + '.json'); return r.json(); }),
+                        fetch(base + key + '.bin').then(r => { if (!r.ok) throw new Error('Character data is missing: ' + key + '.bin'); return r.arrayBuffer(); })
+                    ]);
+                    outfit = Taken.decode(json, new Uint8Array(bin)); outfit.key = key;
+                    Taken.store.outfits.set(key, outfit);
+                }
+                if (!Taken.store.pictures.has(key)) Taken.store.pictures.set(key, await picture(new URL(outfit.picture || key + '.jpg', base).href));
+            })());
+            try { await fetchedOutfits.get(key); } catch (error) { fetchedOutfits.delete(key); throw error; }
+        }
+    }
+
     function ready() {
         if (!readied) readied = (async () => {
             // None of these wait on another, so they download together.
@@ -42,7 +72,24 @@ importScripts('../../database/ModelRigger.js', '../../database/ModelAutoRig.js',
         return readied;
     }
 
+    // A picture already made into a PNG is not made again: a change of shirt keeps the skin, the hair and most cloth
+    // tiles as they were (the same texture objects, from the build's cache), and every look encoded all of them anew.
+    // The sum guards a picture repainted in place.
+    const encoded = new WeakMap();
+    function sumOf(data) {
+        let sum = data.length;
+        for (let i = 0; i < data.length; i += 997) sum = (sum * 31 + data[i]) | 0;
+        return sum;
+    }
     async function png(texture) {
+        const sum = sumOf(texture.data), kept = encoded.get(texture);
+        if (kept && kept.sum === sum && kept.data === texture.data) return kept.bytes;
+        const bytes = await encodePng(texture);
+        encoded.set(texture, { sum, data: texture.data, bytes });
+        return bytes;
+    }
+
+    async function encodePng(texture) {
         const canvas = new OffscreenCanvas(texture.width, texture.height);
         const bytes = new Uint8ClampedArray(texture.data.buffer, texture.data.byteOffset, texture.width * texture.height * 4);
         canvas.getContext('2d').putImageData(new ImageData(bytes, texture.width, texture.height), 0, 0);
@@ -54,7 +101,13 @@ importScripts('../../database/ModelRigger.js', '../../database/ModelAutoRig.js',
         if (message.species) recipe = Model.withSpecies(recipe, message.species);
         if (message.preset) {
             const preset = Wardrobe.PRESETS.find(p => p.id === message.preset);
-            if (preset) recipe = Object.assign({}, recipe, { outfit: JSON.parse(JSON.stringify(preset.items)) });
+            // Dressed as the editor dresses the same preset: a woman's bare-chested outfit gains its top there
+            // (Wardrobe.dressFor), and the game gave her none.
+            if (preset) {
+                const female = Body.sexOf ? Body.sexOf(recipe) === 'female' : false;
+                const items = Wardrobe.dressFor ? Wardrobe.dressFor(preset.items, female) : preset.items;
+                recipe = Object.assign({}, recipe, { outfit: JSON.parse(JSON.stringify(items)) });
+            }
         }
         return Model.normalize(Controls.enforce(recipe, message.rules));
     }
@@ -66,6 +119,7 @@ importScripts('../../database/ModelRigger.js', '../../database/ModelAutoRig.js',
         const quality = message.final && message.quality === 'high' ? { quality: 'save' } : { quality: 'preview', skinSize: 1024, atlasSize: 1024 };
         // Kept between builds, as the editor keeps its own: a change of shirt reuses the skin, hair and the rest.
         if (!cache || cache._rrQuality !== quality.quality) cache = { _rrQuality: quality.quality };
+        await ensureOutfits(recipe);
         const result = Model.build(pack, recipe, cache, Object.assign(quality, { eyeSource }));
         const shoes = cache.wardrobe?.shoes;
         if (shoes instanceof Map) while (shoes.size > 12) shoes.delete(shoes.keys().next().value);

@@ -699,8 +699,13 @@ class MapEditor3D {
             if (release && this._ownCanvas) release.dropRenderer(renderer);
             else {
                 release?.untrack(renderer);
+                // The view's own colour and depth target first: on a context shared with the 2D view the renderer's
+                // dispose frees no render targets, and each 3D off and on left a canvas-sized one behind.
+                try { this._mainTarget?.dispose(); } catch (_) {}
                 try { renderer.dispose(); } catch (_) {}
             }
+            // Either way it is not the next renderer's to draw into.
+            this._mainTarget = null;
         }
         if (this.inputSurface?.parentNode) {
             this.inputSurface.parentNode.removeChild(this.inputSurface);

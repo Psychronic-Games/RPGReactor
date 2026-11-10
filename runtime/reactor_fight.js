@@ -541,8 +541,10 @@
         if (unit.party) {
             const actor = $gameActors.actor(unit.actorId);
             if ($gameParty.leader() === actor) return $gamePlayer;
-            const follower = $gamePlayer.followers().data().find(f => f.actor() === actor);
-            return follower || null;
+            // The followers' own list, not a copy of it: this is asked for every unit in every frame's loops.
+            const followers = $gamePlayer.followers(), list = followers._data || followers.data();
+            for (const follower of list) if (follower.actor() === actor) return follower;
+            return null;
         }
         return null;
     };
@@ -1834,7 +1836,11 @@
     Game_Fight.prototype.nearestOpponent = function(unit) {
         const character = this.character(unit);
         let best = null, bestDistance = Infinity;
-        for (const other of this.units({ team: F.oppose(unit.team), alive: true })) {
+        // (With more than two sides "the other side" is "everyone but ours", which no unit's team equals: asked for
+        // by team, the list was empty and nobody was ever found.)
+        const against = F.oppose(unit.team);
+        for (const other of this.units({ alive: true })) {
+            if (!F.isSide(other.team, against)) continue;
             const d = this.distance(character, this.character(other));
             if (d < bestDistance) { best = other; bestDistance = d; }
         }

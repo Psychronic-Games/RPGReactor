@@ -1457,6 +1457,8 @@ Game_Interpreter.prototype.command285 = function(params) {
     } else {
         // Designation by a character
         const character = this.character(params[3]);
+        // Nobody there (a follower's place the party does not fill, an event of a map since left): nothing to read.
+        if (!character) return true;
         x = character.x;
         y = character.y;
     }

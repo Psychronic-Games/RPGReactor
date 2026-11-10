@@ -183,9 +183,37 @@ const ReactorOnlineBattle = {
         return { id: this.id, x: leader.x, y: leader.y, mode: this.hostMode, sides, members: [...this.guests.keys()] };
     },
 
+    /**
+     * A battler as another game described it, held to what this game will read off it: the eight parameters, HP and
+     * MP as numbers, a name, lists of ids. Anything else is refused: a stranger may write a join line into any
+     * battle's log, and one that named a member with no parameters stopped the host's game.
+     */
+    soundMember(member) {
+        const number = value => typeof value === "number" && Number.isFinite(value);
+        if (!member || typeof member !== "object" || Array.isArray(member)) return false;
+        if (!Array.isArray(member.params) || member.params.length < 8 || !member.params.slice(0, 8).every(number)) return false;
+        if (!number(member.hp) || !number(member.mp)) return false;
+        member.name = String(member.name ?? "").slice(0, 24);
+        member.tp = number(member.tp) ? member.tp : 0;
+        for (const list of ["weapons", "armors", "skills", "states"]) {
+            if (member[list] !== undefined) member[list] = Array.isArray(member[list]) ? member[list].filter(Number.isInteger).slice(0, 256) : [];
+        }
+        if (member.vehicle !== undefined && member.vehicle !== null && !this.soundMember(member.vehicle)) member.vehicle = null;
+        return true;
+    },
+
+    /** A request to join, made safe to act on, or nothing. */
+    soundJoin(message) {
+        if (!Number.isFinite(Number(message.x)) || !Number.isFinite(Number(message.y))) return null;
+        message.x = Number(message.x);
+        message.y = Number(message.y);
+        message.members = (Array.isArray(message.members) ? message.members.slice(0, 8) : []).filter(member => this.soundMember(member));
+        return message;
+    },
+
     receive(message, from) {
         if (this.role === "host") {
-            if (message.t === "join") this.joins.push({ message, from });
+            if (message.t === "join") { const join = this.soundJoin(message); if (join) this.joins.push({ message: join, from }); }
             else if (message.t === "leave") { if (this.hostMode === "classic") ReactorOnlineClassic.dropGuest(from); else this.dropGuest(from); }
             else if (this.realTime && $gameFight?.isAction?.()) ReactorOnlineAction.onHost($gameFight, message, from);
             else if (message.t === "plan") this.plans.set(message.u, Object.assign(message, { from }));
@@ -193,6 +221,9 @@ const ReactorOnlineBattle = {
             else if (message.t === "orders" && Array.isArray(message.orders)) {
                 for (const order of message.orders.slice(0, 16)) if (order && typeof order.key === "string" && order.key.startsWith("g" + from + ".")) ReactorOnlineClassic.orders.set(order.key, order);
             }
+        } else if (from !== this.hostSlot && !(message.t === "rehost" && this.slots && this.slots.has(from))) {
+            // A guest's game believes the battle's host and nobody else (a hand-over is told by the player taking it
+            // on, who is in the battle): the log and the relay carry anyone's lines, and these set our own party's HP.
         } else if (this.role === "joining") {
             if (message.t === "roster" && message.to === ReactorOnline.slot) this.beginMirror(message);
             else if (message.t === "croster" && message.to === ReactorOnline.slot) ReactorOnlineClassic.begin(message);
@@ -283,6 +314,7 @@ const ReactorOnlineBattle = {
         this.reset();
         this.role = "joining";
         this.id = battle.id;
+        this.hostSlot = battle.host;
         try {
             const place = await fetch(ReactorOnline.request(Object.assign(this.identity(), { a: "bRead", id: battle.id, after: -1 })), { cache: "no-store" });
             this.offset = (await place.json()).next;
@@ -610,7 +642,7 @@ const ReactorOnlineBattle = {
     /** A turn of the mirror's own: starts the next thing the host reported, once the last has played. */
     nextMirror(fight) {
         const inbox = this.inbox;
-        while (inbox.length && ["sync", "unit", "gone", "team", "slots", "over", "rehost"].includes(inbox[0].t)) this.applyNote(fight, inbox.shift());
+        while (inbox.length && ["sync", "unit", "gone", "team", "slots", "over", "rehost"].includes(inbox[0].t)) this.takeNote(fight, inbox.shift());
         const message = inbox.shift();
         if (!message) return;
         const unit = fight.unit(message.u);
@@ -634,8 +666,13 @@ const ReactorOnlineBattle = {
         }
     },
 
+    /** A note applied, or passed over when it is not what it says: a bad line must not stop the game's scene. */
+    takeNote(fight, message) {
+        try { this.applyNote(fight, message); } catch (error) { console.warn("A shared battle's note could not be read.", error); }
+    },
+
     applyNote(fight, message) {
-        if (message.t === "sync") this.applySync(fight, message.rows);
+        if (message.t === "sync") { if (Array.isArray(message.rows)) this.applySync(fight, message.rows.filter(Array.isArray)); }
         else if (message.t === "unit") this.addForeign(fight, message.unit);
         else if (message.t === "gone") { const unit = fight.unit(message.u); if (unit) fight.removeUnit(unit); }
         else if (message.t === "team") { fight.tac().team = this.localTeam(message.team); fight._turn = message.turn; fight.touch(); }

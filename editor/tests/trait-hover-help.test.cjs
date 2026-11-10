@@ -247,7 +247,9 @@ test('a dropdown hint puts its plugin note on its own dimmer line', () => {
 test('hover help is delegated and never left stranded on screen', () => {
     const hoverHelp = source('utils', 'HoverHelp.js');
     // Delegation, so rows rendered after load are covered without re-attaching.
-    assert.match(hoverHelp, /document\.addEventListener\('mouseover'/);
+    assert.match(hoverHelp, /doc\.addEventListener\('mouseover'/);
+    // Each pop-out window gets the listeners too (the bridge does not carry mouseover or mouseout).
+    assert.match(hoverHelp, /RRPopoutBridge\.onAttach/);
     // Every way the pointer can move on has to hide it.
     for (const event of ['mousedown', 'wheel', 'keydown', 'scroll']) {
         assert.ok(hoverHelp.includes(`'${event}'`), `${event} does not hide the help`);

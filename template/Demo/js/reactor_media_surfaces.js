@@ -831,6 +831,10 @@ function normalizeShowArgs(raw, interpreter) {
 
         play() {
             if (!this.video || this.cleaned) return;
+            // Started by anything (a second surface of the same file, a rebuilt one): the out-of-sight pause's marks no
+            // longer describe it, or the budget would think it still paused and never pause it again.
+            this.video._rrOffPaused = false;
+            this.video._rrUnseen = 0;
             let result;
             try {
                 result = this.video.play();
@@ -1795,6 +1799,16 @@ function normalizeShowArgs(raw, interpreter) {
          * that does not loop, and one waiting for a click to start are left alone. `videoBudget.enabled = false`
          * keeps every video playing; `HIDE_FRAMES` is how long a video is out of sight before it pauses.
          */
+        /** Whether every surface stands on the 3D map itself: not on the screen, a 2D map that scrolls, an event or a model's anchor. */
+        allStandStill() {
+            for (const owner of this._owners.values()) {
+                const descriptor = owner.descriptor;
+                if (owner.cleaned || !descriptor) continue;
+                if (owner.backend !== "three" || descriptor.target !== "map" || descriptor.anchor) return false;
+            }
+            return true;
+        }
+
         budgetVideos() {
             if (!videoBudget.enabled || !this._owners.size) return;
             // A Quality level that holds looping videos still pauses them wherever they are (Reactor3D.Quality.stillVideos).
@@ -1808,7 +1822,9 @@ function normalizeShowArgs(raw, interpreter) {
                 let record = seen.get(video);
                 if (!record) seen.set(video, (record = { shown: false, pausable: true, owner }));
                 const descriptor = owner.descriptor;
-                if (!descriptor || !descriptor.loop || owner.awaitingGesture || this._waiters.has(owner.id)) record.pausable = false;
+                // A video that is heard (a radio, a television) keeps playing out of sight: pausing it would cut its sound.
+                if (!descriptor || !descriptor.loop || !descriptor.muted || owner.awaitingGesture
+                    || this._waiters.has(this.waitKey(owner.id, owner.generation))) record.pausable = false;
                 if (owner.backend === "three") {
                     for (const mesh of [owner.threeMesh, owner.threeScanMesh]) {
                         if (mesh && mesh.visible && mesh.parent && (!frustum || frustum.intersectsObject(mesh))) record.shown = true;
@@ -1915,7 +1931,7 @@ function normalizeShowArgs(raw, interpreter) {
                 // leaves out the second look after the spriteset's own update: a screen on a still prop stands where it
                 // stood, and its video keeps playing and uploading meanwhile.
                 const Q = typeof Reactor3D !== "undefined" ? Reactor3D.Quality : null, every = Q && Q.mediaEvery ? Q.mediaEvery() : 1;
-                if (every > 1 && manager._spriteset === this && manager._owners.size) {
+                if (every > 1 && manager._spriteset === this && manager._owners.size && manager.allStandStill()) {
                     this._rrMediaSkip = ((this._rrMediaSkip || 0) + 1) % every;
                     if (this._rrMediaSkip === 1) manager.updateSpriteset(this);
                     return baseUpdate.apply(this, arguments);

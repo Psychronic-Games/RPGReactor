@@ -955,7 +955,8 @@
             if (!d.leave) { USED.gas=IN.gas; USED.brake=IN.brake; USED.steer=IN.steer; USED.analog=IN.analog; }
             last.controls=1;
         }
-        if (!controls || d.leave) { USED.brake=1; d.rest=0; }
+        // (Braking only while it moves, as on the ground: held on at a standstill, the slowdown clip looped through a whole dialogue.)
+        if (!controls || d.leave) { USED.brake=d.v!==0?1:0; d.rest=0; }
         ENV.air=false; ENV.water=false; ENV.flooded=false; ENV.slope=1; ENV.pitch=0; ENV.alone=false;
         V.step(d,USED,type,ENV,DT);
         d.yaw=turnOf(d.yaw+d.turn); last.turned=d.turn;

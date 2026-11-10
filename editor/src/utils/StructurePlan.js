@@ -901,7 +901,7 @@
                 } else piece.rot = ((Number(piece.rot) || 0) + 1) % 4;
             }
             // Lights and screens stand anywhere in the plot, not in cells: (x, y) turns about the plot, a screen's facing with it.
-            for (const light of out.lights || []) { [light.x, light.y] = [H - light.y, light.x]; if (Number(light.yaw)) light.yaw = ((Number(light.yaw) || 0) + 270) % 360; }
+            for (const light of out.lights || []) { [light.x, light.y] = [H - light.y, light.x]; if (light.yaw !== undefined || light.type === 'spot' || light.type === 'beam') light.yaw = ((Number(light.yaw) || 0) + 270) % 360; }
             for (const row of out.surfaces || []) { [row.x, row.y] = [H - row.y, row.x]; row.rotationY = ((Number(row.rotationY) || 0) + 270) % 360; }
             // Models stand on cells (the event's cell) and face one of four ways: the cell turns and the facing with it.
             for (const prop of out.props || []) { [prop.x, prop.y] = [H - 1 - Number(prop.y), Number(prop.x)]; prop.direction = PROP_TURN[Number(prop.direction)] || 4; }

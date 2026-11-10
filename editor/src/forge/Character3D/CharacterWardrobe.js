@@ -1088,7 +1088,12 @@
         let cutParts = [], atlasTexture = null, key = null;
         if (entries.length) {
             const Atlas = root.RRCharacterAtlas || require('./CharacterAtlas.js');
-            key = JSON.stringify([items.filter(i => !BY_ID.get(i.id).modeled && !BY_ID.get(i.id).transfer).map(i => Object.fromEntries(Object.entries(i).filter(([k]) => !DETAIL_KEYS.has(k)))), atlasSize(cache), detailedCuts]);
+            key = JSON.stringify([items.filter(i => !BY_ID.get(i.id).modeled && !BY_ID.get(i.id).transfer).map(i => Object.fromEntries(Object.entries(i).filter(([k]) => !DETAIL_KEYS.has(k)))), atlasSize(cache), detailedCuts,
+                // Two things the layout reads that the items above do not show: whether anything is on the feet (a
+                // suit's legs then end at the ankle, though the shoe itself is a modeled item and left out above), and
+                // each trouser's style (tailored takes suiting, not denim). Without them a layout made for other
+                // vertices was applied: the part scrambled in the view, and the view differed from the export.
+                anyShoes, items.map(i => i.trouserStyle || '')]);
             const store = cache.atlas || (cache.atlas = { key: null, layout: null });
             if (store.key !== key) { store.layout = Atlas.layout(pack, entries, { size: atlasSize(cache) }); store.key = key; }
             cutParts = Atlas.apply(store.layout, entries);

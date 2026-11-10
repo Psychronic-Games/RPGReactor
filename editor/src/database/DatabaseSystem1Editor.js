@@ -1065,7 +1065,7 @@ class DatabaseSystem1Editor {
             const value = raw === undefined || String(raw).trim() === '' ? fallback : Math.trunc(Number(raw));
             return Number.isFinite(value) ? Math.max(low, Math.min(high, value)) : fallback;
         };
-        const height = { levels: number('.system-battle-height-levels', 1, 10, 2), most: number('.system-battle-height-most', 0, 10, 3) };
+        const height = { levels: number('.system-battle-height-levels', 1, 10, 2), most: number('.system-battle-height-most', 0, 50, 3) };
         const ownHeight = height.levels !== 2 || height.most !== 3;
         // Those who fell in a battle won on the map get up unless the game keeps them down.
         const revive = container.querySelector('.system-battle-revive')?.checked !== false;

@@ -2879,7 +2879,11 @@ Reactor3D.ShaderWarmup = {
             return false;
         });
         // How many sat out the last draw: nothing, once a map has settled.
-        this.lastHidden = hidden ? hidden.length : 0;
+        // The most of any draw of this update (the world, its light, the layer above, a sprite's own picture each ask):
+        // the last draw alone, often one with nothing waiting, ended an arrival's wait while the world was still compiling.
+        const update = typeof Graphics !== "undefined" ? Graphics.frameCount : 0, count = hidden ? hidden.length : 0;
+        if (this._hiddenFrame !== update) { this._hiddenFrame = update; this.lastHidden = count; }
+        else if (count > this.lastHidden) this.lastHidden = count;
         return hidden;
     },
     lastHidden: 0,
@@ -3859,9 +3863,12 @@ Reactor3D.Viewport.prototype.spreadsUpdateWork = function() {
 };
 
 /** Work an earlier update left for spare refreshes, done now (a new update came first, or the view is torn down). */
-Reactor3D.Viewport.prototype.runOwedWork = function() {
+Reactor3D.Viewport.prototype.runOwedWork = function(mapScene) {
     const owed = this._owedWork;
     this._owedWork = null;
+    // Not what was owed for another map's scene (`mapScene` is the one about to be drawn): that scene may be gone, and
+    // its light and capture are nobody's now.
+    if (owed && mapScene !== undefined && this._owedScene !== mapScene) return;
     if (owed) for (const work of owed) work();
 };
 
@@ -3896,7 +3903,7 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             this._matrixFrame = frame;
             if (typeof Graphics !== "undefined") this._spareRefresh = Graphics.refreshCount;
             // Work an update left owed and no spare refresh took: done now, before this update's own.
-            this.runOwedWork();
+            this.runOwedWork(mapScene);
             scene.updateMatrixWorld();
             // (Recomputing only the matrices that moved was measured twice, 2026-11-10: nothing gained, even in a crowd of
             // 120 walked joint by joint: nearly every joint does move, and the check costs what the work does.)
@@ -3904,6 +3911,7 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             // reflections in its own frame: put off a refresh, that frame took the shadows laid for the map before.
             const freshScene = this._spreadScene !== mapScene;
             this._spreadScene = mapScene;
+            this._owedScene = mapScene;
             if (!freshScene && this.spreadsUpdateWork()) {
                 // A screen faster than the game's 60: the shadow rows and the reflections go to the refreshes
                 // between this update and the next, one each, so the frame carrying the update costs what the
@@ -7380,6 +7388,8 @@ Reactor3D.MapScene.prototype.initialize = function(mapData, bitmaps, options) {
     // A new map: its own reflections, captured once something in it shines. (Not for the world of a
     // neighboring map built beside the one being played: `options.body`.)
     if (Reactor3D.Reflections && !(options && options.body)) Reactor3D.Reflections.reset();
+    // Whether this is a neighbor's world, not the map played (set before the first `clear`, which a build begins with).
+    this._rrBody = !!(options && options.body);
     // The sides a neighbor's world stands on have no land of their own (reactor_3d_surround.js).
     this._surroundNone = (options && options.surroundNone) || null;
     this._surroundOrigin = (options && options.surroundOrigin) || null;
@@ -11105,8 +11115,29 @@ Reactor3D.MapScene.prototype.destroy = function() {
 /** Pick the nearest horizontal ground surface, including elevated tiles. */
 Reactor3D.groundTileFromRay = function(map, origin, direction) {
     if (!map || Math.abs(direction.y) < 1e-8) return null;
-    const heights = new Set([0]);
-    for (const height of map.reactor3d?.elevation || []) if (Number.isFinite(height)) heights.add(height);
+    // Shaped ground: the ray is walked until it goes under the land. The flat planes below know nothing of terrain,
+    // so a click on a slope picked a cell well past it (ten tiles, five tiles up at the third-person pitch).
+    if (Reactor3D.terrainOf && Reactor3D.terrainOf(map) && Reactor3D.terrainHeightAt) {
+        const STEP = 0.2, LIMIT = 2400;
+        let entered = false;
+        for (let i = 0; i < LIMIT; i++) {
+            const t = i * STEP, wx = origin.x + direction.x * t, wy = origin.y + direction.y * t, wz = origin.z + direction.z * t;
+            const x = Math.floor(wx), y = Math.floor(wz);
+            if (x < 0 || y < 0 || x >= map.width || y >= map.height) { if (entered) break; continue; }
+            entered = true;
+            if (wy <= Reactor3D.elevationAt(map, x, y) + Reactor3D.terrainHeightAt(map, wx, wz)) return { x, y };
+        }
+        return null;
+    }
+    // The distinct heights of a map's cells, kept for its elevation array: gathered again on every call, this was
+    // 40,000 additions to a set for each pointer move of a tactical battle on a large map.
+    const elevation = map.reactor3d?.elevation || null, kept = Reactor3D._groundHeights || (Reactor3D._groundHeights = new WeakMap());
+    let heights = elevation && typeof elevation === "object" ? kept.get(elevation) : null;
+    if (!heights || heights.count !== elevation.length) {
+        heights = new Set([0]);
+        for (const height of elevation || []) if (Number.isFinite(height)) heights.add(height);
+        if (elevation && typeof elevation === "object") { heights.count = elevation.length; kept.set(elevation, heights); }
+    }
     let nearest = Infinity, result = null;
     for (const height of heights) {
         const distance = (height - origin.y) / direction.y;
@@ -11148,7 +11179,9 @@ Reactor3D.MapScene.prototype.updateDestination = function(temp, map, frame) {
     }
     const mesh = this._destinationMarker, x = temp.destinationX(), y = temp.destinationY();
     const phase = ((frame - this._destinationStartFrame) % 20) / 20;
-    mesh.position.set(x + 0.5, Reactor3D.elevationAt(map, x, y) + 0.015, y + 0.5);
+    // On the land where it is shaped (the cell's own height alone left the mark under a hill).
+    const rise = Reactor3D.terrainHeightAt ? Reactor3D.terrainHeightAt(map, x + 0.5, y + 0.5) : 0;
+    mesh.position.set(x + 0.5, Reactor3D.elevationAt(map, x, y) + rise + 0.015, y + 0.5);
     mesh.scale.setScalar(1 + phase);
     mesh.material.opacity = (1 - phase) * 0.5;
     mesh.visible = true;

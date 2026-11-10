@@ -214,7 +214,7 @@ test('skills and items get MZ formulas, scopes and effects that reproduce the 20
     const db = {
         engine: 'RPG Maker 2003', actors: [null], classes: [null], states: [null, { name: 'Dead' }, { name: 'Poison', a_rate: 100, b_rate: 80, c_rate: 60, d_rate: 40, e_rate: 0 }], attributes: [null, { name: 'Fire', a_rate: 300, b_rate: 200, c_rate: 100, d_rate: 50, e_rate: 0 }], commonevents: [null, { name: 'x', event_commands: [] }],
         skills: [null, { name: 'Fire', type: 0, scope: 1, power: 40, physical_rate: 0, magical_rate: 10, variance: 4, hit: 95, sp_cost: 6, affect_hp: true, attribute_effects: [true], animation_id: 3, occasion_field: false, occasion_battle: true, using_message1: 'casts Fire' },
-            { name: 'Heal', type: 0, scope: 3, power: 60, magical_rate: 5, affect_hp: true, occasion_field: true, occasion_battle: true, state_effects: [false, true], reverse_state_effect: true },
+            { name: 'Heal', type: 0, scope: 3, power: 60, magical_rate: 5, affect_hp: true, occasion_field: true, occasion_battle: true, state_effects: [false, true] },
             { name: 'Open', type: 3, switch_id: 12, occasion_field: true, occasion_battle: false }],
         items: [null, { name: 'Potion', type: 6, price: 50, recover_hp: 100, recover_hp_rate: 0, uses: 1, occasion_field1: true, state_set: [false, true] }, { name: 'Sword', type: 1, price: 300, atk_points1: 12, hit: 95, critical_hit: 10, two_handed: true, attribute_set: [true] }, { name: 'Cap', type: 4, price: 80, def_points1: 4 }, { name: 'Key', type: 0, price: 0 }, { name: 'Tome', type: 7, skill_id: 1, uses: 1 }, { name: 'Wand', type: 9, skill_id: 1, uses: 0 }]
     };

@@ -846,10 +846,12 @@
             viewRemap.set(index, viewRemap.size);
             return true;
         });
-        for (const [oldIndex, staged] of Array.from(replacements)) {
-            replacements.delete(oldIndex);
-            if (viewRemap.has(oldIndex)) replacements.set(viewRemap.get(oldIndex), staged);
-        }
+        // Into a new table, then back: renumbered in place, an entry moved to a number another still held was
+        // overwritten and then deleted with it, and a distance level was written with the wrong view's data.
+        const renumbered = new Map();
+        for (const [oldIndex, staged] of replacements) if (viewRemap.has(oldIndex)) renumbered.set(viewRemap.get(oldIndex), staged);
+        replacements.clear();
+        for (const [index, staged] of renumbered) replacements.set(index, staged);
         for (const accessor of json.accessors) if (accessor.bufferView != null) accessor.bufferView = viewRemap.get(accessor.bufferView);
         for (const image of json.images || []) if (image.bufferView != null) image.bufferView = viewRemap.get(image.bufferView);
     }
