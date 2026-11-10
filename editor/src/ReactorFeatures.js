@@ -48,6 +48,12 @@
             plugins: ['Community_Lighting*', 'TerraxLighting*', 'Terrax_Lighting*', 'KhasUltraLighting', 'OcRam_Lights', 'VisuMZ_2_LightingEffects']
         },
         {
+            id: 'enemyEquipment', tier: 'basic', flag: 'rrFeatures.enemyEquipment', default: false,
+            label: 'Enemy Equipment',
+            description: 'Equipment slots for enemies, with stat, trait and weapon effects in battle.',
+            plugins: []
+        },
+        {
             id: 'unsellableItems', tier: 'basic', flag: 'rrFeatures.unsellableItems', default: true,
             label: 'Unsellable Items',
             description: 'Items and equipment marked as not for sale.',

@@ -8159,3 +8159,32 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-c3d-export input.rr-input[type="number"] { background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 5px; padding: 6px 8px; width: 110px; }
 .rr-c3d-export input.rr-input[type="number"]:focus { border-color: var(--color-accent); outline: 2px solid color-mix(in srgb, var(--color-accent) 30%, transparent); }
 .rr-c3d-export .rr-c3d-export-preview { max-width: 100%; max-height: 260px; object-fit: contain; }
+
+/* Database › Enemies: equipment columns and the Equipment window. */
+.enemy-param-readout { white-space: nowrap; color: var(--color-text-muted); text-align: right; }
+.enemy-equipment-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.enemy-equipment-note { flex: 1 1 160px; min-width: 0; font-size: 11px; color: var(--color-text-muted); }
+.rr-enemy-equip { width: min(1040px, 94vw); height: min(640px, 88vh); display: flex; flex-direction: column; }
+.rr-enemy-equip-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; overflow: hidden; }
+.rr-enemy-equip .ee-col { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
+.rr-enemy-equip .ee-info { overflow-y: auto; }
+.rr-enemy-equip .ee-heading { flex: 0 0 auto; font-size: 12px; font-weight: 600; color: var(--color-text); }
+.rr-enemy-equip .ee-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: var(--color-bg-base); border: 1px solid var(--color-border); border-radius: 4px; outline: none; }
+.rr-enemy-equip .ee-list:focus { border-color: var(--color-accent); }
+.rr-enemy-equip .ee-row { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 12px; color: var(--color-text); cursor: pointer; }
+.rr-enemy-equip .ee-row.is-selected, .rr-enemy-equip .ee-row.is-held { background: var(--color-bg-selected); }
+.rr-enemy-equip .ee-row.is-active { box-shadow: inset 2px 0 0 var(--color-accent-bright); background: var(--color-accent-tint-15); }
+.rr-enemy-equip .ee-number { flex: 0 0 18px; color: var(--color-text-muted); text-align: right; }
+.rr-enemy-equip .ee-type { flex: 0 0 34%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
+.rr-enemy-equip .ee-value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-enemy-equip .ee-warning { color: var(--color-warning-text); }
+.rr-enemy-equip .ee-empty { padding: 10px; font-size: 12px; font-style: italic; color: var(--color-text-muted); }
+.rr-enemy-equip .ee-tools { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.rr-enemy-equip .ee-add-type { flex: 1 1 90px; min-width: 0; }
+.rr-enemy-equip .ee-search { flex: 0 0 auto; box-sizing: border-box; width: 100%; padding: 4px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; }
+.rr-enemy-equip .ee-details { flex: 0 0 auto; min-height: 72px; padding: 8px; font-size: 12px; color: var(--color-text); background: var(--color-bg-base); border: 1px solid var(--color-border); border-radius: 4px; overflow-wrap: anywhere; }
+.rr-enemy-equip .ee-item-name { font-weight: 600; }
+.rr-enemy-equip .ee-item-description, .rr-enemy-equip .ee-item-params { margin-top: 4px; color: var(--color-text-muted); }
+.rr-enemy-equip .ee-item-traits { margin: 4px 0 0; padding-left: 16px; }
+.rr-enemy-equip .ee-totals th, .rr-enemy-equip .ee-totals td { font-size: 11px; }
+.rr-enemy-equip .ee-note { flex: 0 0 auto; font-size: 11px; color: var(--color-text-muted); }

@@ -116,6 +116,7 @@ class DatabaseEnemyEditor {
 
         // Parameters Section
         const paramRows = this.parameterRows(enemy);
+        const equipment = this.equipmentPreview(enemy);
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
         paramsSection.style.flex = '1.6 1 0';
@@ -137,7 +138,8 @@ class DatabaseEnemyEditor {
                     <thead>
                         <tr>
                             <th style="width: 1px; white-space: nowrap;">${tt('Parameter')}</th>
-                            <th>${tt('Value')}</th>
+                            <th>${equipment ? tt('Base') : tt('Value')}</th>
+                            ${equipment ? `<th>${tt('Equipment Bonus')}</th><th>${tt('Equipped Total')}</th>` : ''}
                         </tr>
                     </thead>
                     <tbody>
@@ -152,15 +154,22 @@ class DatabaseEnemyEditor {
                                            data-field="${row.field}"
                                            ${row.index === null ? '' : `data-param-index="${row.index}"`}
                                            data-enemy-id="${enemy.id}"
-                                           style="width: ${this.paramInputWidth()}; background: var(--color-bg-panel);">
+                                           style="width: ${equipment ? this.equippedParamInputWidth() : this.paramInputWidth()}; background: var(--color-bg-panel);">
                                 </td>
+                                ${equipment ? this.equipmentCellsHTML(equipment, row) : ''}
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
+                ${equipment ? `
+                    <div class="enemy-equipment-actions">
+                        <button type="button" class="rr-btn-chip enemy-equipment-open">${tt('Equipment...')}</button>
+                        <span class="enemy-equipment-note">${tt('Totals leave out plugin processing, JavaScript, battle states and random variance.')}</span>
+                    </div>` : ''}
             </div>
         `;
         topRow.appendChild(paramsSection);
+        if (equipment) this.setupEquipmentControls(paramsSection, enemy, equipment);
 
         // Drop Items Section (3 fixed slots)
         const dropItemsSection = document.createElement('div');
@@ -419,6 +428,42 @@ class DatabaseEnemyEditor {
     }
 
     /**
+     * Enemy Equipment (Database › Reactor Features). Off, this page shows no
+     * equipment at all and the stored rows stay unread.
+     */
+    equipmentPreview(enemy) {
+        if (typeof RREnemyEquipment === 'undefined' || !RREnemyEquipment.on(this.databaseManager)) return null;
+        return RREnemyEquipment.preview(enemy.params, RREnemyEquipment.rows(enemy), this.databaseManager);
+    }
+
+    /** The read-only columns of one row. Max TP is not a parameter and equipment does not touch it. */
+    equipmentCellsHTML(preview, row) {
+        if (row.index === null) return '<td class="enemy-param-readout">–</td><td class="enemy-param-readout">–</td>';
+        const entry = preview[row.index];
+        return `<td class="enemy-param-readout">${RREnemyEquipment.signed(entry.bonus)}</td>
+            <td class="enemy-param-readout" data-equipped-total="${row.index}">${entry.total}</td>`;
+    }
+
+    setupEquipmentControls(section, enemy, preview) {
+        section.querySelector('.enemy-equipment-open').addEventListener('click', () => {
+            RREnemyEquipment.open({
+                enemy,
+                databaseManager: this.databaseManager,
+                commonUI: this.commonUI,
+                onSave: () => this.refreshEnemyDetail(enemy)
+            });
+        });
+        // The total follows the Base box as it is typed in, before it is committed.
+        section.querySelectorAll('.enemy-param-input[data-param-index]').forEach(input => {
+            input.addEventListener('input', () => {
+                const index = Number(input.dataset.paramIndex);
+                const cell = section.querySelector(`[data-equipped-total="${index}"]`);
+                if (cell) cell.textContent = String(RREnemyEquipment.total(input.value, preview[index].bonus));
+            });
+        });
+    }
+
+    /**
      * A reward and its optional top: EXP or Gold, then a "Maximum" box. Left
      * blank (or no higher than the first), the enemy gives exactly the first
      * value, as in RPG Maker MZ; above it, each defeated enemy rolls a whole
@@ -465,6 +510,12 @@ class DatabaseEnemyEditor {
     // Editing HP must not change the alignment of the other values.
     paramInputWidth() {
         return 'calc(15ch + 48px)';
+    }
+
+    // Narrower with the two equipment columns beside it: all four must fit
+    // the panel at the editor's smallest window.
+    equippedParamInputWidth() {
+        return 'calc(7ch + 40px)';
     }
 
     // ==========================================

@@ -833,8 +833,8 @@
         }
         if(root.Game_Enemy){
             const proto=Game_Enemy.prototype,weapons=proto.weapons,animation=proto.attackAnimationId1,perform=proto.performAttack;
-            proto.weapons=function(){const g=P.settings.enemies?.[this.enemyId()]?.graphic;return g?.weaponIds?.length?g.weaponIds.map(id=>$dataWeapons[id]).filter(Boolean):weapons?.call(this)||[];};
-            proto.attackAnimationId1=function(){return P.settings.enemies?.[this.enemyId()]?.graphic?.attackAnimationId||this.weapons()[0]?.animationId||animation?.call(this)||0;};
+            proto.weapons=function(){const ids=(P.settings.enemies?.[this.enemyId()]?.graphic?.weaponIds||[]).filter(id=>Number(id)>0);return ids.length?ids.map(id=>$dataWeapons[id]).filter(Boolean):weapons?.call(this)||[];};
+            proto.attackAnimationId1=function(){return P.settings.enemies?.[this.enemyId()]?.graphic?.attackAnimationId||this.rrWeaponAnimationId?.()||animation?.call(this)||0;};
             proto.performAttack=function(){const g=P.settings.enemies?.[this.enemyId()]?.graphic;if(g?.mode&&g.mode!=='auto'){this.requestMotion?.('thrust');if(g.showWeapon!==false){const type=this.weapons()[0]?.wtypeId,motion=$dataSystem.attackMotions?.[type];if(motion)this.startWeaponAnimation?.(motion.weaponImageId);}return;}return perform?.call(this);};
         }
         // The stock side-view step (48 px forward while inputting or acting, back home after, the retreat on escape) belongs to sprite-sheet actors with no authored states. A battler drawn from a native graphic, or one whose input state is authored, is placed by its sequences alone.

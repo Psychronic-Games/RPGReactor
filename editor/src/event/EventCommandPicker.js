@@ -218,6 +218,7 @@ class EventCommandPicker {
                                     { name: 'Enemy Recover All', code: 334 },
                                     { name: 'Enemy Appear', code: 335 },
                                     { name: 'Enemy Transform', code: 336 },
+                                    { name: 'Change Enemy Equipment', code: 357, reactor: 'ChangeEnemyEquipment', feature: 'enemyEquipment' },
                                     { name: 'Show Battle Animation', code: 337 },
                                     { name: 'Force Action', code: 339 },
                                     { name: 'Abort Battle', code: 340 }
@@ -521,6 +522,13 @@ class EventCommandPicker {
         footer.querySelector('.cancel-btn').addEventListener('click', () => this.close());
     }
 
+    /** Whether a command that belongs to a Reactor Feature is on offer in this project. */
+    _available(command) {
+        if (!command.feature || typeof window === 'undefined' || !window.ReactorFeatures) return true;
+        const system = window.reactor?.projectController?.databaseManager?.getSystem?.() || {};
+        return window.ReactorFeatures.on(command.feature, system);
+    }
+
     /** The commands a search matches, by section across every tab (English and shown names, and section names). */
     matches(query) {
         const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
@@ -529,7 +537,7 @@ class EventCommandPicker {
         for (const key of ['tab1', 'tab2', 'tab3', 'tab4']) {
             for (const column of this.commandData[key].columns) for (const section of column.sections) {
                 const sectionText = (section.title + ' ' + this._sectionName(section.title)).toLowerCase();
-                const commands = section.commands.filter(command => {
+                const commands = section.commands.filter(command => this._available(command)).filter(command => {
                     const text = (command.name + ' ' + this._commandName(command.name) + ' ' + sectionText).toLowerCase();
                     return words.every(w => text.includes(w));
                 });
@@ -587,7 +595,7 @@ class EventCommandPicker {
         `;
         sectionDiv.appendChild(title);
 
-        section.commands.forEach(command => {
+        section.commands.filter(command => this._available(command)).forEach(command => {
             const commandBtn = document.createElement('button');
             commandBtn.textContent = this._commandName(command.name);
             commandBtn.style.cssText = `
