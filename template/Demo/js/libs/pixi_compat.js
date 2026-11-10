@@ -4074,3 +4074,56 @@
     };
 })();
 
+/*
+ * A container shown and hidden again before the next render (or hidden and shown) leaves the draw list as it was.
+ * PIXI 8 marks the stage's draw list changed on every write of `visible` that differs from the value before it, and
+ * builds the whole list afresh at the next render. MZ plugins write it twice an update: MOG_VariableHud sets its
+ * HUD visible in updateSprites and hidden again in update, every update, and the Demo's stage was rebuilt every
+ * frame for it (0.5 ms of the laptop's frame, i5-1145G7, 2026-11-08). Now the first write since the last render
+ * notes what the container showed then, and the render marks the list changed only for a container that ends up
+ * different. `PIXI.rrDeferVisibility = false` (before the next write) marks it at every write, as PIXI does.
+ */
+(function() {
+    if (typeof PIXI === "undefined" || !PIXI.Container || !PIXI.RenderGroupSystem) return;
+    const proto = PIXI.Container.prototype;
+    const visible = Object.getOwnPropertyDescriptor(proto, "visible");
+    const system = PIXI.RenderGroupSystem.prototype;
+    if (!visible || !visible.get || !visible.set || typeof system._updateRenderGroups !== "function" || proto.__rrDeferVisibility) return;
+    // PIXI 8's UPDATE_VISIBLE flag; checked against how the setter it replaces reads.
+    if (!/localDisplayStatus/.test(String(visible.set)) || !/_onUpdate/.test(String(visible.set))) return;
+    const UPDATE_VISIBLE = 4;
+    const pending = new Set();
+    PIXI.rrDeferVisibility = true;
+    Object.defineProperty(proto, "visible", {
+        configurable: true,
+        enumerable: visible.enumerable,
+        get: visible.get,
+        set(value) {
+            if (!PIXI.rrDeferVisibility) { visible.set.call(this, value); return; }
+            const bit = value ? 2 : 0;
+            if ((this.localDisplayStatus & 2) === bit) return;
+            if (this.parentRenderGroup && this._rrDrawnVisible === undefined) {
+                this._rrDrawnVisible = this.localDisplayStatus & 2;
+                pending.add(this);
+            }
+            this._updateFlags |= UPDATE_VISIBLE;
+            this.localDisplayStatus ^= 2;
+            this._onUpdate();
+            this.emit("visibleChanged", value);
+        }
+    });
+    const update = system._updateRenderGroups;
+    system._updateRenderGroups = function(renderGroup) {
+        if (pending.size) {
+            for (const container of pending) {
+                const group = container.parentRenderGroup;
+                if (group && (container.localDisplayStatus & 2) !== container._rrDrawnVisible) group.structureDidChange = true;
+                container._rrDrawnVisible = undefined;
+            }
+            pending.clear();
+        }
+        return update.call(this, renderGroup);
+    };
+    proto.__rrDeferVisibility = true;
+})();
+

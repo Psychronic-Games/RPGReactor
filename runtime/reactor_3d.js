@@ -513,29 +513,69 @@ Reactor3D.minRenderScale = 0.5;
 Reactor3D.Quality = {
     // Profiles learned while Auto chased monitor Hz can contain unnecessary
     // resolution/shadow reductions. Re-evaluate those under the 60 Hz policy.
-    PROFILE_VERSION: 2,
+    // 3: the deeper ladders below (2026-11-08); levels a machine settled on with the old ones are learned again.
+    PROFILE_VERSION: 3,
     /** The kill switch: false draws level 0 whatever the frame rate or the player's setting. */
     enabled: true,
+    /**
+     * The world frames a second Auto keeps, whatever the screen: the game's own 60 by default. A project that
+     * wants more (120, 200) sets it, and a machine that falls short of it steps down further along the ladders.
+     * Faster frames are never held back: this is the bar for stepping, not a cap.
+     */
+    // 63: with SLOW, Auto keeps 60 a second or steps down (owner, 2026-11-08: above 60 under load, on any machine).
+    // It was 66, a tenth to spare so a frame's wobble would not miss a refresh; frames that miss one are now counted
+    // themselves (MISS_SHARE), and 66 had Auto giving levels up for nothing: the laptop on OpenGL ran North Haven at
+    // 62-64 a second with no frame missed at GPU 3 / CPU 3, and Auto went on down to CPU 5 after the 66 (2026-11-10).
+    TARGET_FPS: 63,
+    /**
+     * Each ladder, cheapest to the eye first, as measured on the laptop's Iris Xe in the Reactor Room (GPU time
+     * of the 3D draw and the composite, 2026-11-08): model detail at three times the error -2.0 ms; the moving
+     * lights' bake every fourth frame -0.3; the halo -0.5; the 3D drawn at 0.6 of its size -2.7, at 0.5 -3.2;
+     * shadows off -5.1. `shadows`: "full" (the tier's own), "lite" (moving casters redrawn less often, fewer of
+     * them), "off". `volumeEvery`: the moving lights' bake kept that many frames while only they move.
+     */
     GPU: [
-        { scale: 1, detail: 1, shadows: true },
-        { scale: 0.83, detail: 1, shadows: true },
-        { scale: 0.67, detail: 2, shadows: true },
-        { scale: 0.67, detail: 3, shadows: false }
+        { scale: 1, detail: 1, shadows: "full", volumeEvery: 1, halo: true },
+        { scale: 0.9, detail: 1.5, shadows: "full", volumeEvery: 2, halo: true },
+        { scale: 0.83, detail: 2, shadows: "lite", volumeEvery: 2, halo: true },
+        { scale: 0.75, detail: 3, shadows: "lite", volumeEvery: 3, halo: false, mirrors: false },
+        { scale: 0.67, detail: 3, shadows: "off", volumeEvery: 4, halo: false, mirrors: false, cull: 4 },
+        { scale: 0.5, detail: 4, shadows: "off", volumeEvery: 4, halo: false, mirrors: false, cull: 8 },
+        // Past the last level a player's "Low" holds: for a graphics card far out of its depth (2026-11-10). With the
+        // pixels of every pass four times over, the laptop held 59 frames a second at 0.5 and 63 at 0.4; a card
+        // eight or ten times weaker than its Iris Xe has nothing below 0.5 to step to otherwise. The picture is
+        // enlarged with the sharpening pass and reads its textures a level finer (MipBias), as at 0.5.
+        { scale: 0.4, detail: 4, shadows: "off", volumeEvery: 4, halo: false, mirrors: false, cull: 8 },
+        { scale: 0.33, detail: 4, shadows: "off", volumeEvery: 4, halo: false, mirrors: false, cull: 8 }
     ],
+    // The main thread's, measured the same way: shadows off -1.1 ms of the 3D draw, the haze -1.0 (and nothing on the
+    // GPU), animating the props and NPCs every other update about -0.7 (18 bodies: their clips, poses and bones).
+    // `stride`: updates between poses of a body that is not the party's. `haze`: the lamps' and spotlights' glow.
+    // `sprites`: updates between two updates of a character sprite its model draws (never shown; Sprite_Character.
+    // throttleModelSprites). `beams`: updates a beam's landing is kept. `trim`: every body without its small parts
+    // and its hair's soft pass (FarParts), near or far: four draws of a built character's nine.
     CPU: [
-        { depthFirst: true, reach: 1, share: 1, shadows: true },
-        { depthFirst: false, reach: 0.65, share: 0.7, shadows: true },
-        { depthFirst: false, reach: 0.45, share: 0.5, shadows: true }
+        { depthFirst: true, reach: 1, share: 1, shadows: "full", volumeEvery: 1, stride: 1, haze: true, trim: false, sprites: 1, beams: 1 },
+        { depthFirst: false, reach: 0.65, share: 0.7, shadows: "lite", volumeEvery: 2, stride: 1, haze: true, trim: false, sprites: 2, beams: 2 },
+        { depthFirst: false, reach: 0.45, share: 0.5, shadows: "lite", volumeEvery: 3, stride: 2, haze: true, trim: true, sprites: 2, beams: 3, video: 15 },
+        { depthFirst: false, reach: 0.35, share: 0.4, shadows: "off", volumeEvery: 4, stride: 2, haze: true, trim: true, sprites: 3, beams: 4, video: 15 },
+        { depthFirst: false, reach: 0.35, share: 0.4, shadows: "off", volumeEvery: 4, stride: 3, haze: false, trim: true, sprites: 8, beams: 6, media: 2, cull: 4, props: 2, video: 10, stillVideo: true },
+        // The last resort: the lights gathered and placed every other update, the party's followers animated every
+        // other update (the player always every one).
+        { depthFirst: false, reach: 0.3, share: 0.35, shadows: "off", volumeEvery: 4, stride: 4, haze: false, trim: true, sprites: 8, beams: 6, lights: 2, party: 2, media: 3, cull: 8, props: 3, video: 6, stillVideo: true }
     ],
     /** The levels a player's fixed setting holds: [GPU, CPU]. */
-    FIXED: { high: [0, 0], medium: [1, 1], low: [3, 2] },
+    FIXED: { high: [0, 0], medium: [2, 1], low: [5, 5] },
+    /** Short of its frames by this share or more in one window: two steps at once (a weak machine reaches its level sooner). */
+    LEAP: 0.5,
     /** A window of play this long is judged (ms), if the world was asked for at least MIN_TICKS times in it. */
     WINDOW_MS: 2000,
     MIN_TICKS: 24,
     /** Short of the world frames a second should deliver by this share: slow (two windows running step), failing (one does). */
-    SLOW: 0.12,
+    // 0.05 (2026-11-08, was 0.12): a frame's work near the refresh misses it now and then, and 53 a second read as fine.
+    SLOW: 0.05,
     FAILING: 0.4,
-    CALM: 0.03,
+    CALM: 0.02,
     /** The main thread is what a frame waits for when its work takes this share of the frame, or of a refresh's budget. */
     BOUND: 0.6,
     BOUND_OF_BUDGET: 0.75,
@@ -585,7 +625,43 @@ Reactor3D.Quality = {
     scale() { return this.GPU[this.g].scale; },
     /** How many times `GeometryDetail.pixelError` a model's level may stray. */
     detail() { return this.GPU[this.g].detail; },
-    shadows() { return this.GPU[this.g].shadows && this.CPU[this.c].shadows; },
+    /** "full", "lite" or "off": the lesser of what both levels allow. */
+    shadowMode() {
+        const order = this.SHADOW_MODES, a = order.indexOf(this.GPU[this.g].shadows), b = order.indexOf(this.CPU[this.c].shadows);
+        return order[Math.max(a < 0 ? 0 : a, b < 0 ? 0 : b)];
+    },
+    SHADOW_MODES: ["full", "lite", "off"],
+    shadows() { return this.shadowMode() !== "off"; },
+    /** Frames the moving lights' bake is kept while only they move (LightVolume.frameDynamic). */
+    volumeEvery() { return Math.max(this.GPU[this.g].volumeEvery || 1, this.CPU[this.c].volumeEvery || 1); },
+    /** Whether shining surfaces draw their halo (Reactor3D.Halo). */
+    halo() { return this.GPU[this.g].halo !== false; },
+    /** Whether mirror finishes and still water draw their planar pictures (MapScene.mirrorCandidates). */
+    mirrors() { return this.GPU[this.g].mirrors !== false; },
+    /** Whether the lamps and spotlights draw their haze (HalfHaze). */
+    haze() { return this.CPU[this.c].haze !== false; },
+    /** Updates between two updates of a sprite its model draws (Sprite_Character.throttleModelSprites). */
+    spriteEvery() { return Math.max(1, this.CPU[this.c].sprites || 1); },
+    /** Updates between two gatherings of the map's lights (Spriteset_Map.updateReactor3DLights). */
+    lightsEvery() { return Math.max(1, this.CPU[this.c].lights || 1); },
+    /** The fewest updates between two poses of the party's followers (Reactor3D.animationDue; never the player). */
+    partyStride() { return Math.max(1, this.CPU[this.c].party || 1); },
+    /** Pixels across under which a model's rigid piece is left out of the colour draw (Reactor3D.SmallCull); 0 draws all. */
+    cullPixels() { return Math.max(this.GPU[this.g].cull || 0, this.CPU[this.c].cull || 0); },
+    /** Frames between two syncs of a prop that stood still (MapScene.syncCharacterModels); never the party. */
+    propEvery() { return Math.max(1, this.CPU[this.c].props || 1); },
+    /** Whether looping videos that no event waits on hold still (reactor_media_surfaces.js budgetVideos): their decoding was the laptop's hitches. */
+    stillVideos() { return !!this.CPU[this.c].stillVideo; },
+    /** The most frames a second a playing video sends to the GPU (reactor_media_surfaces.js capVideoUploads); 0 every frame. */
+    videoFps() { return this.CPU[this.c].video || 0; },
+    /** Updates between two placings of the video surfaces (reactor_media_surfaces.js). */
+    mediaEvery() { return Math.max(1, this.CPU[this.c].media || 1); },
+    /** Updates a beam's landing is kept (MapScene.syncVolumeLights). */
+    beamEvery() { return Math.max(1, this.CPU[this.c].beams || 1); },
+    /** Whether every body leaves out its small parts and its hair's soft pass (Reactor3D.FarParts), near or far. */
+    trimParts() { return !!(this.CPU[this.c].trim || this.GPU[this.g].trim); },
+    /** The fewest updates between two poses of a body that is not the party's (Reactor3D.animationDue). */
+    animationStride() { return Math.max(1, this.CPU[this.c].stride || 1); },
     depthFirst() { return this.CPU[this.c].depthFirst; },
     /** The share of the foliage's distances kept, and of its clumps. */
     foliageReach() { return this.CPU[this.c].reach; },
@@ -607,12 +683,10 @@ Reactor3D.Quality = {
         if (typeof ConfigManager !== "undefined" && typeof ConfigManager.isLoaded === "function" && !ConfigManager.isLoaded()) return;
         this._loaded = true;
         const kept = typeof ConfigManager !== "undefined" && ConfigManager.graphicsAuto;
-        if (!kept || typeof kept !== "object") return;
         // Levels another machine settled on are its own: a project folder shared between two computers (Dropbox)
         // carries one options file, and a laptop took the desktop's levels, or the desktop the laptop's.
-        if (kept.version !== this.PROFILE_VERSION || String(kept.device || "") !== this.device()) {
-            this._gpu = 0; this._cpu = 0; this._half = false; this._taken = [];
-            this.keep();
+        if (!kept || typeof kept !== "object" || kept.version !== this.PROFILE_VERSION || String(kept.device || "") !== this.device()) {
+            this.startFresh(!!kept && typeof kept === "object");
             return;
         }
         this._gpu = Math.max(0, Math.min(this.GPU.length - 1, Number(kept.gpu) || 0));
@@ -622,6 +696,23 @@ Reactor3D.Quality = {
         this._taken = [];
         for (let i = 0; i < this._gpu; i++) this._taken.push("gpu");
         for (let i = 0; i < this._cpu; i++) this._taken.push("cpu");
+    },
+
+    /**
+     * A machine Auto has no levels for yet. A weak GPU (Reactor3D.isWeakGpu: integrated graphics) starts WEAK_START
+     * levels down rather than at the full picture: the laptop's Iris Xe spent its first map, and the first minute of
+     * it, at the full picture and 25-30 frames a second before the steps came (2026-11-09). Any other starts at the top.
+     * A step back up is still tried as later maps open. `write`: keep the levels in the options file now.
+     */
+    WEAK_START: [2, 2],
+    startFresh(write) {
+        const weak = typeof Reactor3D.isWeakGpu === "function" && Reactor3D.isWeakGpu() && Array.isArray(this.WEAK_START);
+        this._gpu = weak ? Math.max(0, Math.min(this.GPU.length - 1, this.WEAK_START[0] | 0)) : 0;
+        this._cpu = weak ? Math.max(0, Math.min(this.CPU.length - 1, this.WEAK_START[1] | 0)) : 0;
+        this._half = false; this._taken = [];
+        for (let i = 0; i < this._gpu; i++) this._taken.push("gpu");
+        for (let i = 0; i < this._cpu; i++) this._taken.push("cpu");
+        if (write || weak) this.keep();
     },
 
     keep() {
@@ -636,6 +727,7 @@ Reactor3D.Quality = {
     reset() {
         this._gpu = 0; this._cpu = 0; this._half = false;
         this._taken = []; this._ceiling = false; this._probe = null; this._calm = 0; this._slowRun = 0;
+        this._gpuHold = false; this._gpuReturn = null; this._spent = { cpu: false, gpu: false }; this._stepCheck = null; this._recent = []; this._jumpNext = { cpu: false, gpu: false };
         this.clearWindow();
         this.rest();
         this.keep();
@@ -646,10 +738,29 @@ Reactor3D.Quality = {
         this._rest = this.REST_TICKS;
         // From the clock the frames are judged on (tickBegin's), so a rest and the windows read the same time.
         this._restUntil = (this._tickStart || 0) + this.REST_MS;
+        this._restFrom = this._tickStart || 0;
     },
+    /**
+     * The longest a rest lasts (ms), however few frames it has seen: REST_TICKS frames are two seconds at 60 a
+     * second and twelve at 10, and a machine far out of its depth waited those twelve after every step: 49 s to
+     * walk the main thread's ladder with the processor slowed three times (2026-11-10).
+     */
+    REST_MAX_MS: 5000,
+    _restFrom: 0,
     clearWindow() {
-        this._elapsed = 0; this._ticks = 0; this._draws = 0; this._busy = 0; this._busyTicks = 0;
+        this._elapsed = 0; this._ticks = 0; this._draws = 0; this._busy = 0; this._busyTicks = 0; this._missed = 0;
     },
+    /**
+     * Frames that took half as long again as the wanted one are a stutter the average hides: on a screen the
+     * picture is locked to, a frame a hair over its refresh waits for the next and is shown twice as long.
+     * North Haven on the laptop (2026-11-10) settled at 58.8 frames a second of 61.8 wanted, inside SLOW, with
+     * 13% of its frames two refreshes long. A window with more than MISS_SHARE of such frames counts as slow
+     * (one step, as a window just past SLOW takes), and one with half that is not calm, so no step back up is
+     * tried from it. A machine that holds its refresh has none, and is not judged by this.
+     */
+    MISS_SHARE: 0.08,
+    _missMs: Infinity,
+    _missed: 0,
 
     /** Whether the window has the player's eye: a game out of focus or hidden is not running slow. */
     away() {
@@ -693,6 +804,8 @@ Reactor3D.Quality = {
         this.clearWindow();
         this.rest();
         this._slowRun = 0;
+        // Another map: GPU levels may be given back again (spareGpu).
+        this._gpuHold = false; this._gpuReturn = null; this._spent = { cpu: false, gpu: false }; this._stepCheck = null; this._recent = []; this._jumpNext = { cpu: false, gpu: false };
         if (first || this.enabled === false || this.setting() !== "auto") { this._calm = 0; return; }
         if (!this._ceiling && !this._probe && this._taken.length && this._calm >= this.PROBE_CALM) {
             this._probe = this.stepUp();
@@ -708,6 +821,62 @@ Reactor3D.Quality = {
         this._worldTick = false;
         this._drew = false;
         this.noteInterval(now);
+        if (this.gpuClock && this.enabled !== false && this.setting() === "auto") this.GpuClock.begin();
+    },
+
+    /**
+     * What the graphics card spends on a frame, by the context's own timer (EXT_disjoint_timer_query_webgl2): one
+     * query over each frame's GL work, read back frames later when the GPU has it. Where the context has no timer
+     * the old rule judges the frame (the main thread's share of it). `Quality.gpuClock = false` turns it off.
+     */
+    gpuClock: true,
+    GpuClock: {
+        _gl: null, _ext: null, _failed: false, _open: null, _pending: [], _sum: 0, _count: 0,
+        context() {
+            if (this._failed) return null;
+            const gl = typeof Graphics !== "undefined" && Graphics._app && Graphics._app.renderer ? Graphics._app.renderer.gl : null;
+            if (!gl) return null;
+            if (gl !== this._gl) {
+                this._gl = gl; this._pending.length = 0; this._open = null;
+                try { this._ext = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext ? gl.getExtension("EXT_disjoint_timer_query_webgl2") : null; }
+                catch (error) { this._ext = null; }
+                if (!this._ext) { this._failed = true; return null; }
+            }
+            return gl;
+        },
+        begin() {
+            const gl = this.context();
+            if (!gl || this._open) return;
+            this.collect(gl);
+            if (this._pending.length > 8) return;
+            try {
+                const query = gl.createQuery();
+                gl.beginQuery(this._ext.TIME_ELAPSED_EXT, query);
+                this._open = query;
+            } catch (error) { this._failed = true; }
+        },
+        end() {
+            const gl = this._gl, query = this._open;
+            if (!gl || !query) return;
+            this._open = null;
+            try { gl.endQuery(this._ext.TIME_ELAPSED_EXT); this._pending.push(query); } catch (error) { this._failed = true; }
+        },
+        collect(gl) {
+            const pending = this._pending;
+            while (pending.length) {
+                const query = pending[0];
+                if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) break;
+                pending.shift();
+                if (!gl.getParameter(this._ext.GPU_DISJOINT_EXT)) { this._sum += gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6; this._count++; }
+                gl.deleteQuery(query);
+            }
+        },
+        /** The window's average GPU ms a frame, or NaN with too few readings; the window starts again. */
+        take() {
+            const ms = this._count >= 8 ? this._sum / this._count : NaN;
+            this._sum = 0; this._count = 0;
+            return ms;
+        }
     },
 
     /**
@@ -731,7 +900,8 @@ Reactor3D.Quality = {
 
     /** Auto's quality threshold, not a rendering cap: faster frames keep drawing. */
     wantedPerSecond() {
-        return Math.min(60, this._refreshMs < Infinity ? 1030 / this._refreshMs : 60);
+        const target = this.TARGET_FPS > 0 ? this.TARGET_FPS : 60;
+        return Math.min(target, this._refreshMs < Infinity ? 1030 / this._refreshMs : target);
     },
 
     /**
@@ -741,8 +911,8 @@ Reactor3D.Quality = {
         this._worldTick = true;
         if (this._last) {
             const gap = now - this._last;
-            if (gap < this.GAP_MS && !this.away()) { this._elapsed += gap; this._ticks++; }
-            else this.clearWindow();
+            if (gap < this.GAP_MS && !this.away()) { this._elapsed += gap; this._ticks++; if (gap > this._missMs) this._missed++; }
+            else { this.clearWindow(); this.noteStall(now, gap); }
         }
         this._last = now;
         this._lastDraw = now;
@@ -751,21 +921,198 @@ Reactor3D.Quality = {
         return true;
     },
 
+    /**
+     * Frames that keep stopping are a verdict themselves. A gap of GAP_MS or more is not play (a pause, something
+     * loading), and the window it falls in starts again: right for one such gap, but a machine far out of its depth
+     * stops like that all the time, no window of its play was ever whole, and it was never judged. With every 3D
+     * pass drawn at four times its pixels (a graphics card a quarter as strong stood in for), North Haven stopped
+     * for a quarter of a second or more 23 times in 30 s and Auto stayed at the full picture at 28 frames a second
+     * for two minutes (2026-11-10). STALLS such gaps within STALL_SPAN_MS of play that is being judged (not away,
+     * not resting, nothing loading) take two levels at once, the GPU's and the main thread's ladders in turn (what
+     * stops a frame for that long is not told apart from the little that was measured). A gap of STALL_MAX_MS or
+     * more is the game stopped, not a stall. `STALLS = 0` never steps for them, as before.
+     */
+    STALLS: 3,
+    STALL_SPAN_MS: 10000,
+    STALL_MAX_MS: 2500,
+    stallSteps: 0,
+    _stalls: 0, _stallFrom: 0, _stallKind: "cpu",
+    noteStall(now, gap) {
+        if (!(this.STALLS > 0) || this.away() || !(gap < this.STALL_MAX_MS)) { this._stalls = 0; return; }
+        if (!this._stalls || now - this._stallFrom > this.STALL_SPAN_MS) { this._stalls = 0; this._stallFrom = now; }
+        this._stalls++;
+    },
+    /** STALLS stalls: two levels down the next ladder that has them. Returns the ladder stepped, or null. */
+    stalled() {
+        this._stalls = 0;
+        const bottom = kind => (kind === "cpu" ? this._cpu >= this.CPU.length - 1 : this._gpu >= this.GPU.length - 1);
+        let kind = this._stallKind === "gpu" ? "cpu" : "gpu";
+        if (bottom(kind)) kind = kind === "gpu" ? "cpu" : "gpu";
+        if (bottom(kind)) return null;
+        this._stallKind = kind;
+        // No step back up is under trial, and no step's before and after is being compared: neither can be measured here.
+        this._probe = null; this._stepCheck = null; this._recent = [];
+        this._slowRun = 1;
+        const step = this.judge(Math.max(this.LEAP, this.FAILING), kind === "cpu");
+        if (step) this.stallSteps++;
+        return step;
+    },
+
     /** The frame's work is done: the main thread's share of it, and the window judged when it is full. */
     tickEnd(now) {
+        this.GpuClock.end();
         if (!this._worldTick) return;
         if (this._drew) { this._busy += now - this._tickStart; this._busyTicks++; }
         if (this.enabled === false || this.setting() !== "auto") { this.clearWindow(); return; }
         // A rest's end further ahead than a rest lasts is a clock that started again (a new session): not a rest.
         const resting = now < this._restUntil && this._restUntil - now <= this.REST_MS;
-        if (this._rest > 0 || resting) { if (this._rest > 0) this._rest--; this.clearWindow(); return; }
+        if (this._rest > 0 && this._restFrom > 0 && now - this._restFrom > this.REST_MAX_MS) this._rest = 0;
+        if (this._rest > 0 || resting || this.loading()) { if (this._rest > 0) this._rest--; this.clearWindow(); this.GpuClock.take(); this._stalls = 0; return; }
+        if (this.STALLS > 0 && this._stalls >= this.STALLS) { this.stalled(); return; }
         if (this._elapsed < this.WINDOW_MS || this._ticks < this.MIN_TICKS) return;
         const perSecond = this._draws * 1000 / this._elapsed, wanted = this.wantedPerSecond();
-        const short = Math.max(0, 1 - perSecond / wanted);
+        const missed = this._ticks ? this._missed / this._ticks : 0;
+        this._missMs = 1500 / wanted;
+        let short = Math.max(0, 1 - perSecond / wanted);
+        if (missed > this.MISS_SHARE) short = Math.max(short, this.SLOW);
+        else if (missed > this.MISS_SHARE / 2) short = Math.max(short, (this.SLOW + this.CALM) / 2);
         const frameMs = this._draws ? this._elapsed / this._draws : 0, busyMs = this._busyTicks ? this._busy / this._busyTicks : 0;
-        const cpuBound = busyMs >= this.BOUND * frameMs || busyMs >= this.BOUND_OF_BUDGET * 1000 / (wanted * this.drawEvery());
+        const gpuMs = this.plausibleGpu(this.GpuClock.take(), frameMs);
+        this.lastWindow = { perSecond, wanted, frameMs, busyMs, gpuMs, missed, g: this._gpu, c: this._cpu };
+        // What this window says of the graphics backend the game is running on (reactor_main.js, ReactorBackend).
+        if (typeof ReactorBackend !== "undefined" && ReactorBackend._live) ReactorBackend.note(this.lastWindow);
         this.clearWindow();
-        this.judge(short, cpuBound);
+        if (this.spareGpu(perSecond, busyMs, gpuMs)) return;
+        // The last two windows' frames, for a step's before and after (checkStep).
+        const recent = this._recent || (this._recent = []);
+        recent.push(perSecond); if (recent.length > this.CHECK_WINDOWS) recent.shift();
+        if (this.checkStep(perSecond)) return;
+        const before = this._gpu + this._cpu;
+        let kind = this.mainThreadBound(busyMs, gpuMs, frameMs, wanted) ? "cpu" : "gpu";
+        // Its own ladder spent (stepped to the bottom, or a step that bought nothing): the other one is tried, and kept
+        // only if it buys frames (checkStep). On a laptop whose processor and graphics share one power budget, less
+        // for the GPU to do made the main thread itself faster: walking the Reactor Room at the main thread's last
+        // level, the GPU's level 3 took it from 45 to 53 frames a second (Iris Xe, 2026-11-08).
+        const other = kind === "cpu" ? "gpu" : "cpu";
+        const bottom = k => k === "cpu" ? this._cpu >= this.CPU.length - 1 : this._gpu >= this.GPU.length - 1;
+        if ((this._spent[kind] || bottom(kind)) && !this._spent[other] && !bottom(other)) { kind = other; this._cross = true; } else this._cross = false;
+        if (this._spent[kind]) { this.judge(Math.min(short, this.SLOW / 2), kind === "cpu"); return; }
+        this.judge(short, kind === "cpu");
+        // After a step that bought nothing, the next try goes one level further (a rung may hold a lever that costs
+        // nothing on this map, the next one the lever that does).
+        const stepped = this._gpu + this._cpu > before, jump = stepped && !!(this._jumpNext && this._jumpNext[kind]);
+        if (jump && (kind === "cpu" ? this._cpu < this.CPU.length - 1 : this._gpu < this.GPU.length - 1)) {
+            if (kind === "cpu") this._cpu++; else this._gpu++;
+            this._taken.push(kind); this.keep();
+        }
+        if (jump) this._jumpNext[kind] = false;
+        // A step taken down: the next window says whether it bought anything (checkStep).
+        if (this._gpu + this._cpu > before && !this._probe) {
+            this._stepCheck = { kind, rate: recent.reduce((a, b) => a + b, 0) / recent.length, levels: this._gpu + this._cpu - before, cross: this._cross, after: [], jump };
+            this._recent = [];
+        }
+    },
+
+    /**
+     * A step down after which the frames came clearly slower (by more than -STEP_GAIN) is taken back: that step did
+     * the machine no good. A step that only seemed to buy nothing stays: running through a town, one window's frames
+     * swing with the view by more than a step changes them, and taking such steps back walked North Haven's levels up
+     * and down and left it at the full picture at 32 a second (the laptop, 2026-11-09). Returns whether a level moved.
+     */
+    STEP_GAIN: -0.05,
+    CROSS_GAIN: 0.01,
+    /** Windows a step is judged over, before it and after it: one window of play swings by 5-10% while running. */
+    CHECK_WINDOWS: 3,
+    _spent: { cpu: false, gpu: false },
+    checkStep(perSecond) {
+        const check = this._stepCheck;
+        if (!check) return false;
+        check.after.push(perSecond);
+        // Until the step has been seen for as many windows as before it, nothing else is judged.
+        if (check.after.length < this.CHECK_WINDOWS) return true;
+        this._stepCheck = null;
+        perSecond = check.after.reduce((a, b) => a + b, 0) / check.after.length;
+        // A GPU step taken for a busy main thread that paid off stays: the GPU's spare time is not given back for it.
+        // A step along the other ladder (its own spent) is a guess, and stays only if it bought frames (CROSS_GAIN).
+        if (perSecond > check.rate * (1 + (check.cross ? this.CROSS_GAIN : this.STEP_GAIN))) { if (check.cross && check.kind === "gpu") this._gpuHold = true; return false; }
+        for (let i = 0; i < check.levels; i++) {
+            const at = this._taken.lastIndexOf(check.kind);
+            if (at < 0) break;
+            this._taken.splice(at, 1);
+            if (check.kind === "cpu") this._cpu--; else this._gpu--;
+        }
+        // The first that bought nothing: one more try, a level further down; the second: this ladder is spent here.
+        const below = check.kind === "cpu" ? this.CPU.length - 1 - this._cpu : this.GPU.length - 1 - this._gpu;
+        if (!check.jump && below >= 2) (this._jumpNext || (this._jumpNext = { cpu: false, gpu: false }))[check.kind] = true;
+        else this._spent[check.kind] = true;
+        this.rest(); this.keep();
+        return true;
+    },
+
+    /**
+     * Whether the map is still being made ready (models simplified, programs compiled, models joining): its frames
+     * are not play. The Reactor Room's distance levels take 30 to 60 s on the laptop after it looks settled, and
+     * the frames meanwhile stepped its GPU down three levels it did not need.
+     */
+    loading() {
+        const D = Reactor3D.GeometryDetail, W = Reactor3D.ShaderWarmup, J = Reactor3D.ModelJoins;
+        return !!((D && !D._failed && (D._busy || (D._queue && D._queue.length))) || (W && W.lastHidden) || (J && J.queue && J.queue.length));
+    },
+
+    /**
+     * A GPU level given back when the GPU has clearly time to spare beside a main thread that the frame waits for
+     * (GPU_SPARE of its time or less): it was taken for a frame that was not the GPU's, or for a scene that has
+     * since changed. If the next window is slower by more than RETURN_LOSS, the level is taken again and no more
+     * are given back this map. Returns whether a level moved.
+     */
+    GPU_SPARE: 0.7,
+    RETURN_LOSS: 0.05,
+    spareGpu(perSecond, busyMs, gpuMs) {
+        const back = this._gpuReturn;
+        if (back) {
+            this._gpuReturn = null;
+            if (perSecond < back.rate * (1 - this.RETURN_LOSS)) {
+                this._gpu++; this._taken.push("gpu"); this._gpuHold = true;
+                this.rest(); this.keep();
+                return true;
+            }
+        }
+        if (this._gpuHold || !(this._gpu > 0) || !(gpuMs > 0) || !(busyMs > 0) || gpuMs >= this.GPU_SPARE * busyMs) return false;
+        const at = this._taken.lastIndexOf("gpu");
+        if (at >= 0) this._taken.splice(at, 1);
+        this._gpu--;
+        this._gpuReturn = { rate: perSecond };
+        this.rest(); this.keep();
+        return true;
+    },
+
+    /**
+     * The GPU's time, or NaN when the timer cannot be believed: under Chromium's D3D11-on-12 translation the Iris Xe
+     * laptop's timer read 0.3 to 1.8 ms for frames that drew the whole 3D map (2026-11-09). Under a tenth of a frame
+     * of 8 ms or more is taken as a broken timer (and a GPU that idle leaves the main thread the answer anyway, as the
+     * old rule finds); three such windows in a row and the timer is put away for the session.
+     */
+    plausibleGpu(gpuMs, frameMs) {
+        if (!(gpuMs > 0)) return NaN;
+        if (frameMs >= 8 && gpuMs < frameMs * 0.1) {
+            if (++this._implausibleGpu >= 3) this.GpuClock._failed = true;
+            return NaN;
+        }
+        this._implausibleGpu = 0;
+        return gpuMs;
+    },
+    _implausibleGpu: 0,
+
+    /**
+     * Whether a short window is the main thread's doing. With the GPU's own time the two are compared: the
+     * longer one is what the frame waits for, and a GPU within a tenth of the main thread counts as the GPU (on a
+     * laptop whose processor and graphics share one power budget, less GPU work also gives the processor its
+     * clock back: at 0.4 of the size the Iris Xe laptop's game updates ran 8% faster). Without it, the share of
+     * the frame the main thread's own work takes.
+     */
+    mainThreadBound(busyMs, gpuMs, frameMs, wanted) {
+        if (gpuMs > 0) return busyMs > gpuMs * 1.1;
+        return busyMs >= this.BOUND * frameMs || busyMs >= this.BOUND_OF_BUDGET * 1000 / (wanted * this.drawEvery());
     },
 
     /** One window's verdict: how far short of its world frames, and whether the main thread's work is why. Returns the step taken, if any. */
@@ -780,7 +1127,15 @@ Reactor3D.Quality = {
         this._slowRun++;
         if (this._slowRun < 2 && short < this.FAILING) return null;
         this._slowRun = 0;
-        return this.stepDown(cpuBound ? "cpu" : "gpu", short);
+        const kind = cpuBound ? "cpu" : "gpu", probing = !!this._probe, step = this.stepDown(kind, short);
+        // Far short: a second step along the same ladder, if it has one, before the rest. Not after a step back up
+        // that failed: the level under it held before.
+        if (step && !probing && short >= this.LEAP && (kind === "cpu" ? this._cpu < this.CPU.length - 1 : this._gpu < this.GPU.length - 1)) {
+            if (kind === "cpu") this._cpu++; else this._gpu++;
+            this._taken.push(kind);
+            this.keep();
+        }
+        return step;
     }
 };
 
@@ -974,7 +1329,7 @@ Reactor3D.onContextRestored = function() {
 };
 
 Reactor3D.Viewport.prototype._teardownShared = function() {
-    this._disposeTargets();
+    this._disposeTargets(true);
     if (this._renderer) {
         try { this._renderer.dispose(); } catch (e) { /* nothing to do */ }
     }
@@ -1050,6 +1405,7 @@ Reactor3D.Viewport.prototype._trackFrame = function() {
         ? Graphics.frameCount : this._renderCount;
     if (frame === this._trackedFrame) return;
     this._trackedFrame = frame;
+    this._reapOwed();
     if (!Reactor3D.adaptiveResolution) {
         this.setRenderScale((Reactor3D.renderScale || 1) * Reactor3D.Quality.scale());
         return;
@@ -1085,7 +1441,16 @@ Reactor3D.Viewport.prototype.generation = function() {
     return this._generation || 0;
 };
 
-Reactor3D.Viewport.prototype._disposeTargets = function() {
+/**
+ * `final`: the view is going (torn down, destroyed, its context lost) and will not draw again, so the old passes
+ * go two refreshes from now. Otherwise (a new render scale, a resize) they go once the view has drawn in two more
+ * game frames (`_reapOwed`, from `_trackFrame`): the pass sprites take the new textures when the map is next
+ * drawn, and refreshes can pass before that with the old ones still composited (a fast screen between updates, a
+ * game held still). Counted in refreshes, a scale changed while nothing drew destroyed a texture the composite's
+ * mesh still held, and PIXI stopped the game on it ("Cannot read properties of null (reading 'alphaMode')",
+ * 2026-11-10, a probe that froze the updates and changed the scale).
+ */
+Reactor3D.Viewport.prototype._disposeTargets = function(final) {
     const targets = this._targets || {};
     const passTextures = this._passTextures || {};
     this._targets = Object.create(null);
@@ -1108,11 +1473,20 @@ Reactor3D.Viewport.prototype._disposeTargets = function() {
     // rebuild, and a sprite holding a destroyed texture is skipped — the
     // ground blinks out for a frame and the compat guard logs a leak that
     // is not one. Two frames from now nothing references the old passes.
-    if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(function() { requestAnimationFrame(reap); });
-    } else {
-        reap();
-    }
+    const later = typeof requestAnimationFrame === "function" ? () => requestAnimationFrame(function() { requestAnimationFrame(reap); }) : reap;
+    const owed = this._owedReaps || (this._owedReaps = []);
+    if (final || typeof requestAnimationFrame !== "function") {
+        // What a change of scale left waiting goes with it.
+        for (const entry of owed.splice(0)) entry.later();
+        later();
+    } else owed.push({ later, frames: 2 });
+};
+
+/** Once a game frame the view draws in: the passes a change of scale or size replaced, two such frames ago, are let go. */
+Reactor3D.Viewport.prototype._reapOwed = function() {
+    const owed = this._owedReaps;
+    if (!owed || !owed.length) return;
+    for (let i = owed.length - 1; i >= 0; i--) if (--owed[i].frames <= 0) owed.splice(i, 1)[0].later();
 };
 
 Reactor3D.Viewport.prototype._target = function(slot) {
@@ -1171,7 +1545,11 @@ Reactor3D.GeometryDetail = {
     // attribute so no edge collapses across a joint. Skinning is paid per
     // vertex in every pass, so a smaller character already qualifies.
     skinned: true,
-    SKINNED_MIN_INDICES: 90000,
+    // 10,000 triangles and up. The Demo's crowd in North Haven (2026-11-09, Iris Xe, running) drew 400k
+    // triangles of characters a frame, none of them in levels: every built character's parts (an outfit
+    // of 15-34k, a body, an actor of 15k) sat under the old 30k (skinned) and 33k (rigid) triangles.
+    SKINNED_MIN_INDICES: 30000,
+    MIN_INDICES: 30000,
     /**
      * A weak GPU always takes the levels. Any other takes them once a scene's last draw passed
      * HEAVY_TRIANGLES: a crowd of 150-thousand-triangle characters drew 30M triangles a frame
@@ -1179,14 +1557,15 @@ Reactor3D.GeometryDetail = {
      */
     HEAVY_TRIANGLES: 2000000,
     wanted(scene) {
-        return Reactor3D.tier() === 'weak' || (scene?.userData?.rrDrawnTriangles || 0) > this.HEAVY_TRIANGLES;
+        // Or once a Quality level allows more error than the levels' own pixel.
+        return Reactor3D.tier() === 'weak' || (scene?.userData?.rrDrawnTriangles || 0) > this.HEAVY_TRIANGLES || Reactor3D.Quality.detail() > 1;
     },
     eligible(object) {
         const g = object.geometry, m = object.material;
         const skinned = !!object.isSkinnedMesh;
         if (skinned && (!this.skinned || object.userData.rrNoDetail)) return false;
         if (!(object.isMesh && !object.isInstancedMesh
-            && g?.index?.count >= (skinned ? this.SKINNED_MIN_INDICES : 100000) && !g.groups.length
+            && g?.index?.count >= (skinned ? this.SKINNED_MIN_INDICES : this.MIN_INDICES) && !g.groups.length
             && g.drawRange.start === 0 && g.drawRange.count >= g.index.count
             && m?.isMeshBasicMaterial && m.__reactorModel && !m.transparent && !m.alphaTest && !m.envMap
             && !m.__reactorBillboard && !g.attributes.position.isInterleavedBufferAttribute
@@ -1197,9 +1576,13 @@ Reactor3D.GeometryDetail = {
         for (const k in g.attributes) if (!this.detailAttribute(k, skinned)) return false;
         return true;
     },
-    /** An attribute a level of detail keeps as it is: position, normal, tangent, uv, uv1…, color (and a skin's). */
+    /**
+     * An attribute a level of detail keeps as it is: position, normal, tangent, uv, uv1…, color (and a skin's),
+     * and a built character's part row (`rrLayer`, LayeredParts), which the simplifier weighs so no edge
+     * collapses from one part into another.
+     */
     detailAttribute(k, skinned) {
-        if (k === "position" || k === "normal" || k === "tangent" || k === "color" || k === "uv") return true;
+        if (k === "position" || k === "normal" || k === "tangent" || k === "color" || k === "uv" || k === "rrLayer") return true;
         if (skinned && (k === "skinIndex" || k === "skinWeight")) return true;
         if (k.length < 3 || k.charCodeAt(0) !== 117 || k.charCodeAt(1) !== 118) return false;
         for (let i = 2; i < k.length; i++) { const c = k.charCodeAt(i); if (c < 48 || c > 57) return false; }
@@ -1298,12 +1681,19 @@ Reactor3D.GeometryDetail = {
             }
             const g = state.source, positions = g.attributes.position.array.slice();
             const indices = new Uint32Array(g.index.array);
-            const attributes = Object.entries(g.attributes).filter(([k]) => /^(uv\d*|color|skinWeight)$/.test(k));
-            const stride = attributes.reduce((n, [, a]) => n + a.itemSize, 0);
-            const packed = new Float32Array(g.attributes.position.count * stride);
-            for (let v = 0; v < g.attributes.position.count; v++) {
-                let at = v * stride;
-                for (const [, a] of attributes) for (let c = 0; c < a.itemSize; c++) packed[at++] = a.getComponent(v, c);
+            const attributes = Object.entries(g.attributes).filter(([k]) => /^(uv\d*|color|skinWeight|rrLayer)$/.test(k));
+            const stride = attributes.reduce((n, [, a]) => n + a.itemSize, 0), count = g.attributes.position.count;
+            const packed = new Float32Array(count * stride);
+            // A column at a time, read straight from its array where it is plain (getComponent per value was
+            // most of the main thread's part of a model's arrival).
+            let offset = 0;
+            for (const [, a] of attributes) {
+                const size = a.itemSize;
+                if (!a.isInterleavedBufferAttribute && !a.normalized) {
+                    const source = a.array;
+                    for (let v = 0; v < count; v++) { const at = v * stride + offset, from = v * size; for (let c = 0; c < size; c++) packed[at + c] = source[from + c]; }
+                } else for (let v = 0; v < count; v++) for (let c = 0; c < size; c++) packed[v * stride + offset + c] = a.getComponent(v, c);
+                offset += size;
             }
             this._busy = state;
             this._worker.postMessage({ id: state.id, positions, indices, attributes: packed, stride,
@@ -1560,6 +1950,7 @@ Reactor3D.SkeletonUpdates = {
         walk.each(scene, object => { if (object.isSkinnedMesh) this.install(object.skeleton); });
     }
 };
+
 
 /**
  * The visible scene, walked once and read by everything that looks at it
@@ -2179,10 +2570,15 @@ Reactor3D.ShaderWarmup = {
         // The wait gives up with the warmup's own timeout, so a program that never reports ready is not polled forever.
         const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
         const deadline = clock() + this.TIMEOUT_MS;
+        // In flight until every program of it is linked (`quiet`): what reads a program waits for that.
+        this._inFlight++;
+        let flying = true;
+        const landed = () => { if (flying) { flying = false; this._inFlight--; } };
         return new Promise(resolve => {
             const check = () => {
-                if (clock() > deadline) { resolve(); return; }
+                if (clock() > deadline) { landed(); resolve(); return; }
                 try {
+                    let linked = true;
                     materials.forEach(material => {
                         const props = renderer.properties.get(material), program = props.currentProgram;
                         if (!program) { materials.delete(material); return; }
@@ -2190,6 +2586,7 @@ Reactor3D.ShaderWarmup = {
                         // A see-through two-sided material is compiled as two programs, its back and its front:
                         // the draw asks for both, so both are waited for.
                         if (ready && props.programs && props.programs.forEach) props.programs.forEach(each => { if (each && each.isReady && !each.isReady()) ready = false; });
+                        if (!ready) linked = false;
                         // Linked, and its uniforms read between frames (`readSoon`), so its first draw waits on nothing.
                         if (ready && this.readEarly) {
                             if (!this.readSoon(program)) ready = false;
@@ -2197,11 +2594,63 @@ Reactor3D.ShaderWarmup = {
                         }
                         if (ready) materials.delete(material);
                     });
+                    if (linked) landed();
                 } catch (error) { materials.clear(); }
-                if (!materials.size) resolve(); else setTimeout(check, 10);
+                if (!materials.size) { landed(); resolve(); } else setTimeout(check, 10);
             };
             setTimeout(check, 0);
         });
+    },
+    /**
+     * Reads wait for quiet. The GPU process answers a read (a program's uniforms and attributes, at its first use)
+     * after everything sent before it, and builds each new program's shaders in that same queue: a program long
+     * linked, read while newer ones were building, waited for all of them. Three such reads were 2.9 s of the
+     * 48th to 51st seconds of a first visit to North Haven (2026-11-10). So a linked program is read only while
+     * no compile begun here is still in flight, no new compile is begun while a read is owed (the ones in flight
+     * land, the reads go, the next are begun), and a material is not drawn until its program has been read.
+     * `readWhenQuiet = false` reads as each program links and draws what is linked, as before.
+     */
+    readWhenQuiet: true,
+    _inFlight: 0,
+    _quietWaits: 0,
+    /** The longest a read waits for quiet (a compile that never answers must not hold every read). */
+    QUIET_WAIT_MS: 3000,
+    quiet() { return !this.readWhenQuiet || this._inFlight <= 0; },
+    /** Whether a read is waiting its turn: no new compile is begun until it has gone. */
+    readsOwed() { return this.readWhenQuiet && (this._toRead.length > 0 || this._quietWaits > 0); },
+    /** A compile begun elsewhere (a merged character's warm, the light bake): in flight until its promise settles. */
+    track(promise) {
+        if (!promise || typeof promise.then !== "function") return promise;
+        this._inFlight++;
+        let flying = true;
+        const landed = () => { if (flying) { flying = false; this._inFlight--; } };
+        promise.then(landed, landed);
+        if (typeof setTimeout === "function") { const timer = setTimeout(landed, this.TIMEOUT_MS); if (timer && typeof timer.unref === "function") timer.unref(); }
+        return promise;
+    },
+    /** Resolves once nothing is in flight, or after QUIET_WAIT_MS; new compiles are held meanwhile. */
+    whenQuiet() {
+        if (this.quiet()) return Promise.resolve(true);
+        const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+        const from = clock();
+        this._quietWaits++;
+        return new Promise(resolve => {
+            const check = () => {
+                const calm = this.quiet();
+                if (calm || clock() - from > this.QUIET_WAIT_MS) { this._quietWaits--; resolve(calm); } else setTimeout(check, 10);
+            };
+            setTimeout(check, 10);
+        });
+    },
+    /** Whether every program of a material has had its uniforms read (`readSoon`, or a draw). */
+    wasRead(renderer, material) {
+        try {
+            const props = renderer.properties.get(material), program = props && props.currentProgram;
+            if (!program) return false;
+            let read = !!program.__rrUniformsRead;
+            if (read && props.programs && props.programs.forEach) props.programs.forEach(each => { if (each && !each.__rrUniformsRead) read = false; });
+            return read;
+        } catch (error) { return false; }
     },
     /**
      * A linked program's uniforms and attributes are read from the driver
@@ -2222,8 +2671,15 @@ Reactor3D.ShaderWarmup = {
         if (this._readScheduled) return false;
         this._readScheduled = true;
         const later = typeof requestIdleCallback === "function" ? fn => requestIdleCallback(fn, { timeout: 100 }) : fn => setTimeout(fn, 0);
+        const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
         const run = deadline => {
             const list = this._toRead;
+            // Not while a compile is in flight (`readWhenQuiet`), for QUIET_WAIT_MS at most.
+            if (!this.quiet()) {
+                if (!this._readHeldFrom) this._readHeldFrom = clock();
+                if (clock() - this._readHeldFrom <= this.QUIET_WAIT_MS) { later(run); return; }
+            }
+            this._readHeldFrom = 0;
             // A few at a time, while the frame's idle time lasts.
             for (let n = 0; list.length && n < 4 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 3); n++) {
                 const program = list.shift();
@@ -2256,12 +2712,16 @@ Reactor3D.ShaderWarmup = {
     materialReady(renderer, material, mesh, scene, camera, now) {
         const props = renderer.properties.get(material);
         const program = props && props.currentProgram;
+        // In view and being rebuilt (`recompile`): drawn with the program it has until the next one is ready.
+        if (this.holdRecompiles) { const job = this._recompiles.get(material); if (job) return this.recompile(renderer, material, mesh, scene, camera, now, props, job); }
         if (program && props.__version === material.version) {
             // Its program begun elsewhere (a merged character's warm, the capture) and still compiling: its first draw
             // would wait for the driver on the main thread. Held until linked (asked without waiting), as a new
             // compile is. On a cold shader cache the first Reactor room's first seconds waited 1.27 s this way (2026-11-05).
             // Only one never drawn: a material drawn before is never held (one that changes every frame would stay hidden).
-            if (this.holdUnlinked && !material.__rrSeen && typeof program.isReady === "function" && !program.isReady()) {
+            // Linked, and not read yet: read when quiet (`readSoon`), and held until then, as an unlinked one is.
+            if (this.holdUnlinked && !material.__rrSeen && typeof program.isReady === "function"
+                && (!program.isReady() || (this.readWhenQuiet && this.readEarly && !this.readSoon(program)))) {
                 const since = this._unlinked.get(material);
                 if (since === undefined) { this._unlinked.set(material, now); return false; }
                 return now - since > this.TIMEOUT_MS;
@@ -2275,6 +2735,7 @@ Reactor3D.ShaderWarmup = {
         const seen = material.__rrSeen || 0;
         const waitingFirst = !!state && !state.returning && (!seen || seen < state.started);
         const returning = !!program && this._viewKept && !waitingFirst && !(now - seen <= this.SEEN_MS);
+        if (this.holdRecompiles && program && seen && !waitingFirst && !returning) return this.recompile(renderer, material, mesh, scene, camera, now, props, null);
         if (returning && state && state.version === material.version && state.returning) return state.ready || now - state.started > this.TIMEOUT_MS;
         // Drawn a moment ago (another variant, or a recompile): not held.
         if (!state && program && !returning) return true;
@@ -2282,11 +2743,68 @@ Reactor3D.ShaderWarmup = {
         // frame and every lit material took its shadow variant): compile the
         // variant the draw will ask for. The timeout runs from the first ask.
         if (!state || state.version !== material.version || (returning && !state.returning)) {
-            if (this._startedThisFrame >= this.COMPILES_PER_FRAME) return false;
+            if (this._startedThisFrame >= this.COMPILES_PER_FRAME || this.readsOwed()) return false;
             state = this.start(renderer, material, mesh, scene, camera, now, returning ? null : state);
             state.returning = returning;
         }
         return state.ready || now - state.started > this.TIMEOUT_MS;
+    },
+    /**
+     * A material in view that changed (shadows came on or went with a quality level, and every lit material takes
+     * its other variant) keeps drawing with the program it has while the next one is built, then takes it. Before,
+     * the few a frame's budget allowed were drawn at once, each waiting on the driver for its new program, and the
+     * rest sat out of the picture until their turn: 0.8 to 2.9 s of stopped frames and pieces of the map missing
+     * for seconds, each time Auto changed such a level on a machine that had not built those programs before
+     * (North Haven, 2026-11-10). three is told the material has not changed (its record's version) and is pointed
+     * back at the old program, which stays in the material's own table; once the new one is linked and read, the
+     * record's version is cleared and three takes the new program at the next draw, from that table, without
+     * building anything. Always true (drawn); `_unsettled` says it is still the old program (not to be marked ready).
+     * `holdRecompiles = false` draws a changed material at once, as before.
+     */
+    holdRecompiles: true,
+    /** Milliseconds a frame spends beginning such rebuilds (most find their program built already, by another material). */
+    RECOMPILE_MS: 4,
+    /** A material changed again within this long of its last change is one that keeps changing: drawn at once. */
+    CHANGING_MS: 1000,
+    /** New programs begun a frame for such rebuilds (one a frame measured no better than six: 1.1 s against 0.6 s in frames over 100 ms, a run each). */
+    RECOMPILES_PER_FRAME: 6,
+    _recompiles: new WeakMap(),
+    _recompileMs: 0,
+    held: 0,
+    recompile(renderer, material, mesh, scene, camera, now, props, job) {
+        if (!job || job.version !== material.version) {
+            // One that changes again and again (a look under a slider, a material rewritten every frame) is drawn at
+            // once, as before: each change would begin a compile here, and it would never catch up with itself.
+            const last = material.__rrChangedAt;
+            material.__rrChangedAt = now;
+            if (last !== undefined && now >= last && now - last < this.CHANGING_MS) {
+                if (job) { this._recompiles.delete(material); props.__version = -1; }
+                return true;
+            }
+            // Changed again while it was being built (but not at once): the newest is built instead, the old program still drawing.
+            if (!job) this.held++;
+            job = { old: job ? job.old : props.currentProgram, version: material.version, state: null, asked: now };
+        }
+        this._recompiles.set(material, job);
+        if (!job.state && this._startedThisFrame < this.RECOMPILES_PER_FRAME && this._recompileMs < this.RECOMPILE_MS && !this.readsOwed()) {
+            const clock = typeof performance !== "undefined" ? performance : Date, from = clock.now();
+            const programs = renderer.info && renderer.info.programs ? renderer.info.programs.length : -1;
+            job.state = this.start(renderer, material, mesh, scene, camera, now, null);
+            // Only a program that had to be built counts against the frame's compiles.
+            if (programs >= 0 && renderer.info.programs.length === programs) this._startedThisFrame--;
+            this._recompileMs += clock.now() - from;
+        }
+        const done = !!job.state && (job.state.ready || now - job.state.started > this.TIMEOUT_MS);
+        if (done || now - job.asked > this.TIMEOUT_MS * 4) {
+            this._recompiles.delete(material);
+            // three takes the new program at this draw (built and read; overdue, it waits for it as before).
+            props.__version = -1;
+            return true;
+        }
+        if (props.currentProgram !== job.old) { props.currentProgram = job.old; props.uniformsList = null; }
+        props.__version = material.version;
+        this._unsettled = true;
+        return true;
     },
     /** A material's compile begun, for the mesh that wears it; its record. */
     start(renderer, material, mesh, scene, camera, now, state) {
@@ -2301,7 +2819,8 @@ Reactor3D.ShaderWarmup = {
         // must find the material unchanged, or it would start over on every draw and never show the mesh.
         next.version = material.version;
         // A program another material already draws with (the haze of the map entered, a second lamp's glow) is not waited for.
-        if (this.linked(renderer, material)) next.ready = true;
+        // (And read: one only linked is read when quiet, and its compile's promise says when.)
+        if (this.linked(renderer, material) && (!this.readWhenQuiet || !this.readEarly || this.wasRead(renderer, material))) next.ready = true;
         return next;
     },
     /** Whether every program of a material is linked now. */
@@ -2319,7 +2838,7 @@ Reactor3D.ShaderWarmup = {
         const now = typeof performance !== "undefined" ? performance.now() : Date.now();
         // The budget is a frame's, not a pass's: hide runs once per render (below, above, lights, battlers).
         const frame = typeof Graphics !== "undefined" && Graphics && Number.isFinite(Graphics.frameCount) ? Graphics.frameCount : null;
-        if (frame === null || frame !== this._budgetFrame) { this._budgetFrame = frame; this._startedThisFrame = 0; }
+        if (frame === null || frame !== this._budgetFrame) { this._budgetFrame = frame; this._startedThisFrame = 0; this._recompileMs = 0; }
         // Whether this renderer has drawn all along (SEEN_MS), in the game.
         const last = this._drawnAt.get(renderer);
         this._viewKept = last !== undefined && now - last <= this.SEEN_MS && !this.inEditor();
@@ -2340,9 +2859,20 @@ Reactor3D.ShaderWarmup = {
                     if (!material || !material.visible) continue;
                     // When it was last drawn (SEEN_MS): only once it may be.
                     if (material.__rrWarm === material.version && material.__rrWarmMap === material.map) { material.__rrSeen = now; continue; }
-                    if (!this.materialReady(renderer, material, object, scene, camera, now)) ready = false;
+                    this._unsettled = false;
+                    const drawable = this.materialReady(renderer, material, object, scene, camera, now), unsettled = this._unsettled;
+                    if (!drawable) ready = false;
                     else if (!this.picturesReady(renderer, material)) ready = false;
-                    else { material.__rrWarm = material.version; material.__rrWarmMap = material.map; material.__rrSeen = now; }
+                    // Still drawn with its old program (`recompile`): asked again next draw.
+                    else if (unsettled) material.__rrSeen = now;
+                    else {
+                        material.__rrWarm = material.version; material.__rrWarmMap = material.map; material.__rrSeen = now;
+                        if (!Object.prototype.hasOwnProperty.call(material, "__rrWarmWatch")) this.watch(material);
+                        // Drawn from here on: its program is read by that draw at the latest (another material's check asks).
+                        // (Only one whose table is taken in at its read, cacheUniformArrays: the mark alone would have it read there.)
+                        const drawn = renderer.properties.get(material).currentProgram;
+                        if (drawn && !drawn.__rrUniformsRead && !drawn.__rrReadQueued && (drawn.__rrArraysLazy || drawn.__rrArraysCached)) drawn.__rrUniformsRead = true;
+                    }
                 }
                 if (!ready) { object.visible = false; (hidden || (hidden = [])).push(object); return true; }
             }
@@ -2353,6 +2883,23 @@ Reactor3D.ShaderWarmup = {
         return hidden;
     },
     lastHidden: 0,
+    /**
+     * A material let go (`dispose`) has no program any more, and its marks said it had: one drawn again afterwards
+     * (a body kept from one map to the next) passed for ready and built its program inside its first draw. Its
+     * marks go with its program, so it waits for the next one as a new material does.
+     */
+    watch(material) {
+        material.__rrWarmWatch = true;
+        if (typeof material.addEventListener !== "function") return;
+        material.addEventListener("dispose", this._onDispose || (this._onDispose = event => this.forgetMaterial(event.target)));
+    },
+    forgetMaterial(material) {
+        if (!material) return;
+        material.__rrWarm = undefined; material.__rrWarmMap = undefined; material.__rrSeen = 0;
+        this._materials.delete(material); this._unlinked.delete(material); this._recompiles.delete(material);
+        this.forgotten++;
+    },
+    forgotten: 0,
     _drawnAt: new WeakMap(),
     _viewKept: false,
     show(hidden) {
@@ -2384,7 +2931,7 @@ Reactor3D.ShaderWarmup = {
                 if (!(material.__rrWarm === material.version && material.__rrWarmMap === material.map) && !this.picturesReady(renderer, material)) ready = false;
                 if (entry && entry.version === material.version && (entry.ready || now - entry.started > this.TIMEOUT_MS)) continue;
                 if (!entry || entry.version !== material.version) {
-                    if (started >= this.PASS_COMPILES_PER_FRAME) { ready = false; continue; }
+                    if (started >= this.PASS_COMPILES_PER_FRAME || this.readsOwed()) { ready = false; continue; }
                     started++;
                     entry = passes[kind] = { version: material.version, ready: false, started: now };
                     try { this.compileGuarded(renderer, object, camera, scene).then(() => { entry.ready = true; }, () => { entry.ready = true; }); }
@@ -2418,6 +2965,8 @@ Reactor3D.DepthFirst = {
     enabled: true,
     MIN_PIXELS: 400000,
     MIN_MESHES: 8,
+    // Not on a weak GPU that shades fast (Intel Xe): Reactor3D.fastShading.
+    SKIP_ON_FAST_SHADING: true,
     _materials: new Map(),
     _laid: [],
     _hidden: [],
@@ -2452,6 +3001,9 @@ Reactor3D.DepthFirst = {
     wanted(renderer, scene) {
         if (!this.enabled || this._drawing || typeof THREE === "undefined" || scene.overrideMaterial || renderer.autoClear === false) return false;
         if (Reactor3D.tier() !== "weak" || !Reactor3D.Quality.depthFirst()) return false;
+        // A weak GPU that shades fast (Intel Xe) gains nothing from it on the GPU (North Haven 25.0 -> 23.6 ms
+        // without it) and pays its walk and draws on the CPU (1.1-1.4 ms a frame): see Reactor3D.fastShading.
+        if (this.SKIP_ON_FAST_SHADING && Reactor3D.fastShading && Reactor3D.fastShading()) return false;
         const target = renderer.getRenderTarget ? renderer.getRenderTarget() : null;
         const width = target ? target.width : renderer.domElement ? renderer.domElement.width : 0, height = target ? target.height : renderer.domElement ? renderer.domElement.height : 0;
         return width * height >= this.MIN_PIXELS;
@@ -2487,6 +3039,50 @@ Reactor3D.DepthFirst = {
     }
 };
 
+/**
+ * At the deepest Quality levels (Quality.cullPixels), a model's piece that covers fewer than that many pixels across
+ * on screen is not drawn this frame: a bolt, a dial, a turret's hinge far off. Each is a draw, about 45 microseconds
+ * of three's work on the laptop's main thread at its base clock whatever its size (2026-11-08), and props are built of
+ * many. Only rigid model pieces (`__reactorModel` materials): never a character's skinned body, the ground, an effect
+ * or a light. Hidden for the colour draw only, and shown again after it.
+ */
+Reactor3D.SmallCull = {
+    enabled: true,
+    _hidden: [],
+    _center: null,
+    begin(scene, camera, renderer) {
+        const Q = Reactor3D.Quality, px = Q && Q.cullPixels ? Q.cullPixels() : 0;
+        if (!this.enabled || !(px > 0) || !camera || !camera.isPerspectiveCamera || !Reactor3D.SceneWalk) return 0;
+        const target = renderer && renderer.getRenderTarget ? renderer.getRenderTarget() : null;
+        const height = (target && target.height) || (renderer && renderer.domElement && renderer.domElement.height) || 1080;
+        const focal = height * 0.5 * Math.abs(camera.projectionMatrix.elements[5]);
+        const view = camera.matrixWorldInverse.elements, hidden = this._hidden, center = this._center || (this._center = new THREE.Vector3());
+        let count = 0;
+        Reactor3D.SceneWalk.each(scene, object => {
+            if (!object.isMesh || object.isSkinnedMesh || object.isInstancedMesh || !object.visible) return;
+            const material = Array.isArray(object.material) ? object.material[0] : object.material;
+            if (!material || !material.__reactorModel) return;
+            const g = object.geometry;
+            if (!g) return;
+            if (!g.boundingSphere) g.computeBoundingSphere();
+            const sphere = g.boundingSphere, e = object.matrixWorld.elements;
+            center.copy(sphere.center).applyMatrix4(object.matrixWorld);
+            const depth = -(view[2] * center.x + view[6] * center.y + view[10] * center.z + view[14]);
+            if (!(depth > camera.near)) return;
+            const radius = sphere.radius * Reactor3D.GeometryDetail.scaleBound(e);
+            if (radius * focal / depth * 2 >= px) return;
+            object.visible = false;
+            hidden[count++] = object;
+        });
+        this._count = count;
+        return count;
+    },
+    end() {
+        const hidden = this._hidden;
+        for (let i = 0; i < this._count; i++) { hidden[i].visible = true; hidden[i] = null; }
+        this._count = 0;
+    }
+};
 /** What a scene's draw cost, measured at full detail where levels were not in use (GeometryDetail.wanted). */
 Reactor3D.noteDrawnTriangles = function(renderer, scene, reduced) {
     const drawn = renderer?.info?.render?.triangles;
@@ -2526,6 +3122,15 @@ Reactor3D._renderScene = function(renderer, scene, camera) {
         this.noteDrawnTriangles(renderer, scene, swaps.length > 0);
     }
 };
+
+// The small pieces left out of the colour draw at the deepest levels (Reactor3D.SmallCull).
+(function() {
+    const render = Reactor3D._renderScene;
+    Reactor3D._renderScene = function(renderer, scene, camera) {
+        const culled = Reactor3D.SmallCull.begin(scene, camera, renderer);
+        try { return render.call(this, renderer, scene, camera); } finally { if (culled) Reactor3D.SmallCull.end(); }
+    };
+})();
 
 
 Reactor3D.Viewport.prototype.renderInto = function(target, scene, camera) {
@@ -2966,8 +3571,9 @@ Reactor3D.Viewport.prototype.render = function(slot) {
         return;
     }
     this._trackFrame();
-    if (this.upscaled()) return this._renderUpscaled(slot || "below");
-    return this.renderInto(this._target(slot || "below"), this._scene, this._camera);
+    return Reactor3D.MipBias.during(this._scale, () => this.upscaled()
+        ? this._renderUpscaled(slot || "below")
+        : this.renderInto(this._target(slot || "below"), this._scene, this._camera));
 };
 
 /**
@@ -3004,6 +3610,46 @@ Reactor3D.Viewport.prototype._renderUpscaled = function(slot) {
  * 11.2 ms, "crisp" 9.0, "cas" 9.9, PIXI's nearest 8.3 (the full-size
  * target costs about 0.65 of the difference). Alpha is filtered plainly.
  */
+/**
+ * A picture drawn smaller than the screen and enlarged loses its textures' detail twice: once to the
+ * smaller grid, and again because the GPU, seeing each pixel cover more of a texture, reads a blurrier
+ * level of it (its mip). Enlarged, the second loss is what the eye meets first: North Haven's cobbles at
+ * half size were a smear under any enlarging filter (2026-11-10; an edge-adaptive one scored 0.9475
+ * against the full picture where the plain one scored 0.9452). The lookups of the world's colour pictures
+ * take a bias, the base-2 log of the scale times STRENGTH, so they read the level the full-size picture
+ * would have; the enlarging filter then has the detail to show. Zero at full size and for every renderer
+ * but the view's own while it draws (`during`), so nothing else changes. Costs no draw and no pass.
+ */
+Reactor3D.MipBias = {
+    enabled: true,
+    // Of the scale's whole log: 0.5 gave most of the gain on a still frame (half size: 0.9449 -> 0.956 against the
+    // full picture; 1 gave 0.9578). A sharper level than the smaller grid can show may shimmer in motion, which a
+    // still does not measure: three quarters, to be judged by eye.
+    STRENGTH: 0.75,
+    uniform: { value: 0 },
+    failed: false,
+    /** three's own picture lookup takes the bias (zero unless a material carries the uniform). Once. */
+    install() {
+        if (this._installed || typeof THREE === "undefined" || !THREE.ShaderChunk) return;
+        this._installed = true;
+        const chunk = THREE.ShaderChunk, lookup = "texture2D( map, vMapUv )";
+        // Declared wherever a picture is: the engine's own lookups (tiles, ground, triplanar pieces) name it too.
+        // (Guarded: a built character's layered lookups declare it too, whichever comes first in the shader.)
+        if (typeof chunk.map_pars_fragment === "string") chunk.map_pars_fragment += "\n#ifdef USE_MAP\n#ifndef RR_MIP_BIAS\n#define RR_MIP_BIAS\n\tuniform float rrMipBias;\n#endif\n#endif";
+        if (typeof chunk.map_fragment !== "string" || chunk.map_fragment.indexOf(lookup) < 0) { this.failed = true; return; }
+        chunk.map_fragment = chunk.map_fragment.replace(lookup, "texture2D( map, vMapUv, rrMipBias )");
+    },
+    /** The bias for a picture drawn at `scale` of the screen. */
+    forScale(scale) {
+        return this.enabled && !this.failed && scale > 0 && scale < 1 ? Math.log2(scale) * this.STRENGTH : 0;
+    },
+    /** `draw` run with the bias of `scale` in force, and none after. */
+    during(scale, draw) {
+        this.uniform.value = this.forScale(scale);
+        try { return draw(); } finally { this.uniform.value = 0; }
+    }
+};
+
 Reactor3D.SharpUpscale = {
     enabled: true,
     mode: "cas",
@@ -3252,6 +3898,8 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             // Work an update left owed and no spare refresh took: done now, before this update's own.
             this.runOwedWork();
             scene.updateMatrixWorld();
+            // (Recomputing only the matrices that moved was measured twice, 2026-11-10: nothing gained, even in a crowd of
+            // 120 walked joint by joint: nearly every joint does move, and the check costs what the work does.)
             // A scene new to this view (the first frame of a map, or of one crossed into) draws its shadows and
             // reflections in its own frame: put off a refresh, that frame took the shadows laid for the map before.
             const freshScene = this._spreadScene !== mapScene;
@@ -3324,7 +3972,7 @@ Reactor3D.Viewport.prototype.isDetached = function() {
 Reactor3D.Viewport.prototype.destroy = function() {
     Reactor3D.EffekseerScene?.stopScene(this._scene);
     Reactor3D.GpuEffects?.release(Reactor3D.GpuEffects._runtime.get(this._renderer));
-    if (this._shared) this._disposeTargets();
+    if (this._shared) this._disposeTargets(true);
     if (this._renderer && Reactor3D.Shadows._renderer === this._renderer) Reactor3D.Shadows.dispose();
     if (this._renderer) {
         this._renderer.dispose();
@@ -3625,6 +4273,7 @@ Reactor3D.clampToTile = function(material, cacheKey) {
         // and silently does nothing — leaving `vUvBounds` unwritten, which
         // clamps every sample to a zero-sized rectangle. Every cut-out on the
         // map became one transparent texel, and no shader failed to compile.
+        Reactor3D.MipBias.install();
         shader.vertexShader = "attribute vec4 uvBounds;\nvarying vec4 vUvBounds;\n"
             + shader.vertexShader.replace(
                 "void main() {",
@@ -3638,7 +4287,7 @@ Reactor3D.clampToTile = function(material, cacheKey) {
                 "#include <map_fragment>",
                 [
                     "#ifdef USE_MAP",
-                    "	vec4 sampledDiffuseColor = texture2D( map, clamp( vMapUv, vUvBounds.xy, vUvBounds.zw ) );",
+                    "	vec4 sampledDiffuseColor = texture2D( map, clamp( vMapUv, vUvBounds.xy, vUvBounds.zw ), rrMipBias );",
                     "	#ifdef DECODE_VIDEO_TEXTURE",
                     "		sampledDiffuseColor = sRGBTransferEOTF( sampledDiffuseColor );",
                     "	#endif",
@@ -7394,6 +8043,7 @@ Reactor3D.groundSlopeMaterial = function(material, tilesW, tilesH, cliff, slope,
         // 1 once the cliff image has arrived; read every frame, so it switches on by itself.
         shader.uniforms.rrCliffOn = { get value() { return own.cliff && own.cliff.image ? 1 : 0; } };
         const types = own.ground;
+        Reactor3D.MipBias.install();
         if (types) Reactor3D.groundTypesUniforms(shader, types);
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vRRGroundPos;\nvarying vec3 vRRGroundN;")
@@ -7480,13 +8130,14 @@ Reactor3D.GROUND_SLOPE_MAP_GLSL = [
     "\tvec3 rrGW = pow(abs(rrGN), vec3(4.0));",
     "\trrGW /= max(rrGW.x + rrGW.y + rrGW.z, 1e-4);",
     "\tvec3 rrGdx = dFdx(vRRGroundPos), rrGdy = dFdy(vRRGroundPos);",
-    "\tvec4 sampledDiffuseColor = texture2D(map, vMapUv);",
+    "\tvec4 sampledDiffuseColor = texture2D(map, vMapUv, rrMipBias);",
     "\tfloat rrSteep = 1.0 - abs(rrGN.y);",
     // Laid from the sides only where that shows: under a hundredth of the blend it is the plain lookup.
     "\tif (rrGW.x + rrGW.z > 0.01) {",
-    "\t\tvec2 rrGS = 1.0 / rrGroundTiles;",
-    "\t\tvec4 rrGX = textureGrad(map, rrGroundAt.zy * rrGS, rrGdx.zy * rrGS, rrGdy.zy * rrGS);",
-    "\t\tvec4 rrGZ = textureGrad(map, rrGroundAt.xy * rrGS, rrGdx.xy * rrGS, rrGdy.xy * rrGS);",
+    // The lookups by explicit gradients take the mip bias as a scale of those gradients.
+    "\t\tvec2 rrGS = 1.0 / rrGroundTiles, rrGB = rrGS * exp2(rrMipBias);",
+    "\t\tvec4 rrGX = textureGrad(map, rrGroundAt.zy * rrGS, rrGdx.zy * rrGB, rrGdy.zy * rrGB);",
+    "\t\tvec4 rrGZ = textureGrad(map, rrGroundAt.xy * rrGS, rrGdx.xy * rrGB, rrGdy.xy * rrGB);",
     "\t\tsampledDiffuseColor = rrGX * rrGW.x + sampledDiffuseColor * rrGW.y + rrGZ * rrGW.z;",
     "\t}",
     // The ground types painted on the map go over the floor here, under the cliff (groundTypesBodyGLSL).
@@ -9246,8 +9897,20 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
         let reach = radius;
         let hit = null;
         if (beam) {
-            const landed = Reactor3D.beamHit(light.x, light.y, y, ax, ay, az, radius, this,
-                beamBounds || (beamBounds = new Map()));
+            // A Quality level may keep where a beam lands for a few updates (Quality.beamEvery): its march through
+            // every model's box was most of the lights' sync while the party walked.
+            const Q = Reactor3D.Quality, every = Q && Q.beamEvery ? Q.beamEvery() : 1, tick = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+            const kept = light.__rrBeamKept;
+            let landed;
+            if (every > 1 && kept && tick - kept.tick < every && tick >= kept.tick && kept.radius === radius) landed = kept.landed;
+            else {
+                landed = Reactor3D.beamHit(light.x, light.y, y, ax, ay, az, radius, this, beamBounds || (beamBounds = new Map()));
+                if (every > 1) {
+                    const store = kept || {};
+                    store.tick = tick; store.radius = radius; store.landed = landed;
+                    if (!kept) try { Object.defineProperty(light, "__rrBeamKept", { value: store, enumerable: false, configurable: true, writable: true }); } catch (error) { /* a sealed light is marched each update */ }
+                }
+            }
             if (landed !== null) {
                 reach = landed;
                 hit = { x: x + ax * reach, y: y + ay * reach, z: z + az * reach };
@@ -9465,18 +10128,35 @@ Reactor3D.MapScene.prototype.reflectionSubject = function() {
     return null;
 };
 
+/**
+ * Whether an object has a mirror finish (isMirrorFinish walks its whole tree and its materials), kept for
+ * MIRROR_FINISH_FRAMES: the list of candidates is made again four times a second, and every body on the map
+ * was walked each time (120 bodies: half a millisecond of every frame). A finish changed meanwhile (a part
+ * swapped, a look repainted) is seen within those frames.
+ */
+Reactor3D.MIRROR_FINISH_FRAMES = 240;
+Reactor3D.mirrorFinishKept = function(object, frame) {
+    const kept = object.userData.rrMirrorFinish;
+    if (kept && frame >= kept.at && frame - kept.at < this.MIRROR_FINISH_FRAMES) return kept.value;
+    const value = this.isMirrorFinish(object);
+    object.userData.rrMirrorFinish = { value, at: frame };
+    return value;
+};
+
 /** The mirror-finish models near the camera, nearest first (at most two), for `Reactor3D.Mirrors`. */
 Reactor3D.MapScene.prototype.mirrorCandidates = function(camera) {
+    // A Quality level that sets the mirror pictures aside (Quality.mirrors): the surfaces keep their own shine.
+    if (Reactor3D.Quality && Reactor3D.Quality.mirrors && !Reactor3D.Quality.mirrors()) return [];
     // Outside a game (the editor, a battle preview) the calls themselves keep time.
     const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : (this._reflectTick = (this._reflectTick || 0) + 1);
     if (!this._mirrorList || frame - this._mirrorList.frame >= 15 || frame < this._mirrorList.frame) {
         const list = [];
         for (const holder of this.reflectionHolders()) {
             const object = holder && holder.object;
-            if (object && Reactor3D.mirrorOf(object) >= 0.5 && Reactor3D.isMirrorFinish(object)) list.push(object);
+            if (object && Reactor3D.mirrorOf(object) >= 0.5 && Reactor3D.mirrorFinishKept(object, frame)) list.push(object);
         }
         // Built pieces with a mirror finish, chunk by chunk.
-        for (const mesh of this._pieceMeshes || []) if (mesh.userData.pieceFinish && Reactor3D.isMirrorFinish(mesh)) list.push(mesh);
+        for (const mesh of this._pieceMeshes || []) if (mesh.userData.pieceFinish && Reactor3D.mirrorFinishKept(mesh, frame)) list.push(mesh);
         // Reflective water: a level plane, facing up.
         for (const mesh of this._waterMeshes || []) {
             const look = mesh.material && mesh.material.userData && mesh.material.userData.rrWaterLook;
@@ -9629,7 +10309,11 @@ Reactor3D.HalfHaze = {
     },
     /** Takes this pass's haze out of the scene's draw; null when it has none to move. */
     take(scene, target, camera) {
-        if (!this.enabled || !target || !target.depthTexture || !scene || !scene.userData || !(camera && camera.isPerspectiveCamera)) return null;
+        // A Quality level that sets the haze aside takes it out of every pass, drawn small or not (`draw` then leaves it).
+        const off = !!(Reactor3D.Quality && Reactor3D.Quality.haze && !Reactor3D.Quality.haze());
+        if (!this.enabled && !off) return null;
+        if (!off && (!target || !target.depthTexture || !(camera && camera.isPerspectiveCamera))) return null;
+        if (!scene || !scene.userData) return null;
         const group = scene.userData.rrLightBodies;
         if (!group || !group.visible || group.parent !== scene) return null;
         let list = null;
@@ -9740,10 +10424,33 @@ Reactor3D.HalfHaze = {
      * have the haze (one with a depth texture).
      */
     expect() { this._expected = true; },
+    /**
+     * Whether the haze's and the halo's programs are built. Until they are the haze sits out, as anything new in
+     * the scene does (ShaderWarmup): on a map entered through a door nothing had asked for them ahead, and its
+     * first draw built them on the spot, behind every program the map was building in the background (1.7 s of
+     * a first visit to North Haven, 2026-11-10). `warmAhead` starts one a pass; the wait gives up as the warm-up's does.
+     */
+    WAIT: true,
+    ready(renderer) {
+        const W = Reactor3D.ShaderWarmup;
+        if (!this.WAIT || !W || !W.enabled || !W.supported(renderer)) return true;
+        // Per renderer: the editor draws a map in more than one.
+        const waits = this._waits || (this._waits = new WeakMap());
+        let wait = waits.get(renderer);
+        if (wait === true) return true;
+        this._expected = true;
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (wait === undefined) waits.set(renderer, wait = now);
+        if (now - wait <= W.TIMEOUT_MS) {
+            for (const entry of this.warmList()) if (!W.linked(renderer, entry.material)) return false;
+        }
+        waits.set(renderer, true);
+        return true;
+    },
     warmAhead(renderer, target) {
         if (!this._expected || this._warmedFor === renderer || !target || !target.depthTexture) return;
         const W = Reactor3D.ShaderWarmup;
-        if (!W || !W.enabled || !W.supported(renderer)) return;
+        if (!W || !W.enabled || !W.supported(renderer) || (W.readsOwed && W.readsOwed())) return;
         for (const entry of this.warmList()) {
             if (entry.done === renderer) continue;
             entry.done = renderer;
@@ -9766,6 +10473,10 @@ Reactor3D.HalfHaze = {
         list.push({ scene: quad.scene, camera: quad.camera, material: quad.material, output: "pass" });
         const glow = new THREE.Mesh(Reactor3D.sphereBodyGeometry(), Reactor3D.lightBodyMaterial());
         list.push({ scene: alone(glow), camera: eye, material: glow.material, output: "small" });
+        if (this.instanced) {
+            const many = new THREE.InstancedMesh(this.Instanced.geometry(Reactor3D.sphereBodyGeometry(), 1), this.Instanced.material(), 1);
+            list.push({ scene: alone(many), camera: eye, material: many.material, output: "small" });
+        }
         const halo = Reactor3D.Halo;
         if (halo && halo.quads && halo.surfaceMaterial) {
             const q = halo.quads();
@@ -9791,6 +10502,13 @@ Reactor3D.HalfHaze = {
      * silhouette in front of it.
      */
     draw(renderer, target, camera, list, split) {
+        if (!this.ready(renderer)) return;
+        if (Reactor3D.Quality && Reactor3D.Quality.haze && !Reactor3D.Quality.haze()) {
+            // No haze at this level; the halo, if it is on, still draws (with no depth texture, nothing does).
+            if (!list.halo || !target || !target.depthTexture) return;
+            const halo = list.halo;
+            list = []; list.halo = halo;
+        }
         const light = split ? split.light : null;
         // (A halo's feeders alone, with no haze this frame: their group stands in the same light bodies.)
         const group = list.length ? list[0].parent : list.halo.parent;
@@ -9814,6 +10532,9 @@ Reactor3D.HalfHaze = {
         // farthest of each texel's pixels lets it run over what stands in
         // front of its feeders (the reeds on a bank, whoever stands there),
         // where one pixel's distance stopped it at every blade.
+        // The lamps' and spotlights' haze as two draws (Instanced), what is not theirs as before.
+        const packed = list.length && this.instanced ? this.Instanced.pack(list, group) : null;
+        if (packed) for (const mesh of packed.taken) mesh.visible = false;
         const fromLight = !!(light && light.width === w && light.height === h), shrunk = !fromLight || !!list.halo;
         let depth = this._depth;
         if (shrunk && (!depth || depth.width !== w || depth.height !== h)) {
@@ -9864,6 +10585,7 @@ Reactor3D.HalfHaze = {
                 Reactor3D.Halo.draw(renderer, target, camera, list.halo, w, h);
             }
         } finally {
+            if (packed) this.Instanced.unpack(packed, group);
             u.rrHazeDepthOn.value = 0;
             u.rrHazeDepth.value = null;
             for (const mesh of list) mesh.visible = false;
@@ -10110,7 +10832,156 @@ Reactor3D.lightBodyMaterial = function() {
         fog: false
     });
     material.userData.rrHaze = true;
+    // One of the lamps' and spotlights' own bodies: drawn with the others in one draw (HalfHaze.Instanced).
+    material.userData.rrBodyHaze = true;
     return material;
+};
+
+/**
+ * The haze of the lamps and spotlights in two draws, one of every sphere and one of every cone, instead of one
+ * draw each: the Reactor Room's 22 were 22 draws into the haze's small picture every frame, each a bind and a
+ * walk through three's draw (the laptop, i5-1145G7: about 30 microseconds of main thread a draw, 2026-11-08). The
+ * same shader as `lightBodyMaterial`, its colour, strength and fade read per body instead of per material, so
+ * each body adds what it added alone. `HalfHaze.instanced = false` draws them one by one as before.
+ */
+Reactor3D.HalfHaze.instanced = true;
+Reactor3D.HalfHaze.Instanced = {
+    _material: null,
+    _meshes: new Map(),
+    _matrix: null,
+    material() {
+        if (this._material) return this._material;
+        const haze = Reactor3D.HalfHaze.uniforms();
+        const material = new THREE.ShaderMaterial({
+            uniforms: { rrHazeDepth: haze.rrHazeDepth, rrHazeDepthScale: haze.rrHazeDepthScale, rrHazeDepthPick: haze.rrHazeDepthPick, rrHazeDepthOn: haze.rrHazeDepthOn },
+            vertexShader: [
+                "attribute vec3 rrColour;",
+                "attribute float rrStrength;",
+                "attribute float rrAlongFade;",
+                "varying float vAlong;",
+                "varying vec3 vNormalW;",
+                "varying vec3 vToEye;",
+                "varying vec3 vColour;",
+                "varying float vStrength;",
+                "varying float vFade;",
+                "void main() {",
+                "\tvAlong = clamp(-position.y, 0.0, 1.0);",
+                "\tmat4 placed = modelMatrix * instanceMatrix;",
+                "\tvec4 world = placed * vec4(position, 1.0);",
+                "\tvNormalW = normalize(mat3(placed) * normal);",
+                "\tvToEye = cameraPosition - world.xyz;",
+                "\tvColour = rrColour;",
+                "\tvStrength = rrStrength;",
+                "\tvFade = rrAlongFade;",
+                "\tgl_Position = projectionMatrix * viewMatrix * world;",
+                "}"
+            ].join("\n"),
+            fragmentShader: Reactor3D.HalfHaze.shader([
+                "varying float vAlong;",
+                "varying vec3 vNormalW;",
+                "varying vec3 vToEye;",
+                "varying vec3 vColour;",
+                "varying float vStrength;",
+                "varying float vFade;",
+                "void main() {",
+                "\tfloat facing = abs(dot(normalize(vNormalW), normalize(vToEye)));",
+                "\tfloat soft = pow(facing, 1.6);",
+                "\tfloat along = 1.0 - vAlong * vFade;",
+                "\tfloat a = vStrength * soft * along * along;",
+                "\tgl_FragColor = vec4(vColour * a, a);",
+                "}"
+            ].join("\n")),
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            depthWrite: false,
+            depthTest: true,
+            side: THREE.DoubleSide,
+            forceSinglePass: true,
+            fog: false
+        });
+        material.userData.rrHaze = true;
+        material.userData.rrHazeInstanced = true;
+        return (this._material = material);
+    },
+    /** `shape` (a body geometry) with room for `capacity` bodies' colour, strength and fade. */
+    geometry(shape, capacity) {
+        // Copies, not the shape's own: disposing this geometry deletes its buffers, and the bodies drawn alone keep theirs.
+        const geometry = new THREE.BufferGeometry();
+        for (const name of ["position", "normal"]) if (shape.attributes[name]) geometry.setAttribute(name, shape.attributes[name].clone());
+        if (shape.index) geometry.setIndex(shape.index.clone());
+        geometry.setAttribute("rrColour", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
+        geometry.setAttribute("rrStrength", new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1));
+        geometry.setAttribute("rrAlongFade", new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1));
+        return geometry;
+    },
+    /** The instanced mesh drawing `shape`'s bodies, room for `count`. */
+    meshFor(shape, count) {
+        let mesh = this._meshes.get(shape);
+        if (mesh && mesh.instanceMatrix.count >= count) return mesh;
+        const capacity = Math.max(8, count * 2);
+        if (mesh) { mesh.geometry.dispose(); mesh.dispose(); }
+        mesh = new THREE.InstancedMesh(this.geometry(shape, capacity), this.material(), capacity);
+        mesh.name = "light-haze";
+        mesh.frustumCulled = false;
+        mesh.matrixAutoUpdate = false;
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.renderOrder = 11;
+        this._meshes.set(shape, mesh);
+        return mesh;
+    },
+    /**
+     * The bodies of `list` that a lamp's or spotlight's own shape and material draw, into the instanced meshes,
+     * which join `group` until `unpack`; null when there are none. `taken` lists the bodies they stand for.
+     */
+    pack(list, group) {
+        const sphere = Reactor3D._sphereBody, cone = Reactor3D._coneBody;
+        let spheres = 0, cones = 0;
+        for (const mesh of list) {
+            if (!this.packable(mesh)) continue;
+            if (mesh.geometry === sphere) spheres++; else cones++;
+        }
+        if (!spheres && !cones) return null;
+        const packed = { taken: [], meshes: [] };
+        const into = [];
+        if (spheres) into.push([sphere, this.meshFor(sphere, spheres)]);
+        if (cones) into.push([cone, this.meshFor(cone, cones)]);
+        // Where the group stands is in each body's world matrix already, and in the instanced mesh's own again.
+        group.updateWorldMatrix(true, false);
+        const inverse = (this._matrix || (this._matrix = new THREE.Matrix4())).copy(group.matrixWorld).invert();
+        const local = this._local || (this._local = new THREE.Matrix4());
+        const plain = group.matrixWorld.equals(this._identity || (this._identity = new THREE.Matrix4()));
+        for (const [shape, instanced] of into) {
+            const colour = instanced.geometry.attributes.rrColour, strength = instanced.geometry.attributes.rrStrength, fade = instanced.geometry.attributes.rrAlongFade;
+            let n = 0;
+            for (const mesh of list) {
+                if (mesh.geometry !== shape || !this.packable(mesh)) continue;
+                const u = mesh.material.uniforms;
+                instanced.setMatrixAt(n, plain ? mesh.matrixWorld : local.multiplyMatrices(inverse, mesh.matrixWorld));
+                const c = u.colour.value;
+                colour.array[n * 3] = c.r; colour.array[n * 3 + 1] = c.g; colour.array[n * 3 + 2] = c.b;
+                strength.array[n] = u.strength.value;
+                fade.array[n] = u.alongFade.value;
+                packed.taken.push(mesh);
+                n++;
+            }
+            instanced.count = n;
+            instanced.instanceMatrix.needsUpdate = true;
+            colour.needsUpdate = strength.needsUpdate = fade.needsUpdate = true;
+            instanced.visible = true;
+            group.add(instanced);
+            instanced.updateMatrixWorld(true);
+            packed.meshes.push(instanced);
+        }
+        return packed;
+    },
+    packable(mesh) {
+        const material = mesh.material;
+        return !!(mesh.isMesh && !mesh.isInstancedMesh && material && material.userData && material.userData.rrBodyHaze && material.uniforms
+            && (mesh.geometry === Reactor3D._sphereBody || mesh.geometry === Reactor3D._coneBody));
+    },
+    unpack(packed, group) {
+        for (const mesh of packed.meshes) { mesh.visible = false; group.remove(mesh); }
+    }
 };
 
 /**

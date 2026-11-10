@@ -131,3 +131,16 @@ test('the game and editor WebGL contexts ask for the high-performance GPU', () =
     const map3d = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor3D.js'), 'utf8');
     assert.doesNotMatch(map3d, /powerPreference: 'default'/);
 });
+
+test('a playtest on a weak GPU under Windows Direct3D 11 runs its WebGL through D3D11-on-12, and nothing else does', () => {
+    const PlaytestManager = require('../src/PlaytestManager.js');
+    const iris = 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', iris, {}), ['--use-angle=d3d11on12']);
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', null), ['--use-angle=d3d11on12'], 'integrated Radeon');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU Direct3D11 vs_5_0 ps_5_0, D3D11)', {}), [], 'a discrete GPU is left alone');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('linux', 'ANGLE (Intel, Mesa Intel(R) Xe Graphics (TGL GT2), OpenGL 4.6)', {}), [], 'another system is left alone');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', iris.replace('Direct3D11 ', 'Direct3D11on12 '), {}), [], 'already on D3D11-on-12');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', iris, { reactorAngle: 'default' }), [], 'the project opts out');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', iris, { 'chromium-args': '--use-angle=gl' }), [], 'the project chose its own backend');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', '', {}), [], 'a GPU that will not say');
+});

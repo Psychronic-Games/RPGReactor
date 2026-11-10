@@ -394,8 +394,14 @@ test('a collision test reads the body it kept: nothing is measured again until t
     assert.deepEqual(counts, { spec: 0, foot: 0 }, '400 tests in a frame: no model looked up, no footprint measured');
     w.tick();
     player.isCollidedWithEvents(3, 2);
-    assert.equal(counts.spec, 31, 'a new frame: each event\'s model is looked at once');
+    assert.equal(counts.spec, 0, 'a new frame: a far event\'s reach is trusted (BODY_FAR_FRAMES), its model not looked at');
+    for (let i = 0; i < R.BODY_FAR_FRAMES; i++) w.tick();
+    player.isCollidedWithEvents(3, 2);
+    assert.equal(counts.spec, 31, 'past the trusted frames: each event\'s model is looked at once');
     assert.equal(counts.foot, 0, 'and none is measured: nothing changed');
+    // The kept body itself, with the far test asking every frame as it did.
+    const trusted = R.BODY_FAR_FRAMES;
+    R.BODY_FAR_FRAMES = 0;
     // A new facing is measured once, and so is each turn's swing; after that both are kept.
     w.at(1).setDirection(4);
     player.isCollidedWithEvents(3, 2);
@@ -405,6 +411,7 @@ test('a collision test reads the body it kept: nothing is measured again until t
     const before = counts.foot;
     for (let i = 0; i < 6; i++) { w.at(1).setDirection(i % 2 ? 2 : 4); player.isCollidedWithEvents(3, 2); w.at(10).canPass(2, 13, 8); }
     assert.equal(counts.foot, before, 'facings and swings seen before are kept');
+    R.BODY_FAR_FRAMES = trusted;
     // Thirty units of one model and facing share one shape.
     assert.equal(R.eventBody(w.at(10)), R.eventBody(w.at(39)));
     // What is kept beside an event never reaches a save.

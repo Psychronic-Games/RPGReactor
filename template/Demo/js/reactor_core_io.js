@@ -1793,7 +1793,24 @@ Input._onLostFocus = function() {
     this.clear();
 };
 
+/**
+ * With no pad seen yet, the pads are asked for once every GAMEPAD_IDLE_POLL updates, not every update: Chromium's
+ * `navigator.getGamepads` cost 0.13 ms an update on the Iris Xe laptop (2026-11-08) with nothing plugged in. A pad
+ * shows itself to a page by its first press ("gamepadconnected"), and from then on, or once a poll finds one, it
+ * is read every update as before. 1 asks every update.
+ */
+Input.GAMEPAD_IDLE_POLL = 15;
 Input._pollGamepads = function() {
+    if (!this._gamepadListening && typeof window !== "undefined" && window.addEventListener) {
+        this._gamepadListening = true;
+        window.addEventListener("gamepadconnected", () => { this._gamepadSeen = true; });
+    }
+    if (!this._gamepadSeen && this.GAMEPAD_IDLE_POLL > 1) {
+        let held = false;
+        for (let s = 0; s < this._gamepadStates.length; s++) if (this._gamepadStates[s] && this._gamepadStates[s].length) { held = true; break; }
+        this._gamepadIdle = ((this._gamepadIdle || 0) + 1) % this.GAMEPAD_IDLE_POLL;
+        if (!held && this._gamepadIdle !== 1) return;
+    }
     // Every frame: the connected list is reused and the pads are walked by index, so polling allocates nothing.
     const connected = this._connectedScratch || (this._connectedScratch = []);
     connected.length = 0;
@@ -1803,6 +1820,7 @@ Input._pollGamepads = function() {
             for (let i = 0; i < gamepads.length; i++) {
                 const gamepad = gamepads[i];
                 if (gamepad && gamepad.connected) {
+                    this._gamepadSeen = true;
                     connected[gamepad.index] = true;
                     this._updateGamepadState(gamepad);
                 }

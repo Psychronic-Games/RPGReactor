@@ -28,7 +28,7 @@ test('a merged character is warmed offscreen, through a target set up as the vie
     const models = read('reactor_3d_models.js');
     assert.match(models, /await this\.within\(this\.preload\([^)]*\)\), this\.WARM_WAIT_MS \* 4\);\s*await this\.within\(this\.warm\(template\), this\.WARM_WAIT_MS \+ 1000\);/);
     assert.match(models, /pixels\.isXRRenderTarget = true;\s*pixels\.texture\.internalFormat = "RGBA8";/);
-    assert.match(models, /await this\.within\(renderer\.compileAsync\(scene, camera, target \|\| null\)\.then\(\(\) => true\), this\.WARM_WAIT_MS\);/);
+    assert.match(models, /compiling = renderer\.compileAsync\(scene, camera, target \|\| null\)\.then\(\(\) => true\);[\s\S]{0,120}?await this\.within\(compiling, this\.WARM_WAIT_MS\);/);
     assert.match(models, /warm\(template\) \{\s*const run = \(\) => this\.warmNow\(template\);\s*const turn = \(this\._uploads \|\| Promise\.resolve\(\)\)\.then\(run, run\);/);
 });
 

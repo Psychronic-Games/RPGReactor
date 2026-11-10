@@ -119,7 +119,7 @@ test('a part hidden for a moment sits its group out; a changed part makes the st
 
 test('only the moving-caster pass merges, and a face that hides a character hides its stand-in', () => {
     const lighting = require('node:fs').readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
-    assert.match(lighting, /const swapped = this\._swapCasters\(roots, true\);/);
+    assert.match(lighting, /const swapped = this\._swapCasters\(roots, true, renderer, scene\);/);
     assert.match(lighting, /const swapped = this\._swapCasters\(this\._static\);/);
     const { root } = character();
     const live = [];

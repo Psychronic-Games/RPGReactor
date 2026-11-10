@@ -2404,6 +2404,7 @@ Reactor3D.triplanarMaterial = function(material, tiles) {
     const earlier = material.onBeforeCompile;
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
+        if (Reactor3D.MipBias) Reactor3D.MipBias.install();
         shader.uniforms.rrTriScale = this.__rrTriScale || (this.__rrTriScale = { value: this.__reactorTriplanar });
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vRRTriPos;\nvarying vec3 vRRTriNormal;")
@@ -2414,7 +2415,7 @@ Reactor3D.triplanarMaterial = function(material, tiles) {
                 "#ifdef USE_MAP",
                 "\tvec3 rrTriW = pow(abs(normalize(vRRTriNormal)), vec3(4.0));",
                 "\trrTriW /= max(rrTriW.x + rrTriW.y + rrTriW.z, 1e-4);",
-                "\tvec4 sampledDiffuseColor = texture2D(map, vRRTriPos.zy * rrTriScale) * rrTriW.x + texture2D(map, vRRTriPos.xz * rrTriScale) * rrTriW.y + texture2D(map, vRRTriPos.xy * rrTriScale) * rrTriW.z;",
+                "\tvec4 sampledDiffuseColor = texture2D(map, vRRTriPos.zy * rrTriScale, rrMipBias) * rrTriW.x + texture2D(map, vRRTriPos.xz * rrTriScale, rrMipBias) * rrTriW.y + texture2D(map, vRRTriPos.xy * rrTriScale, rrMipBias) * rrTriW.z;",
                 "\tdiffuseColor *= sampledDiffuseColor;",
                 "#endif"
             ].join("\n"));
@@ -3951,6 +3952,11 @@ Reactor3D.DrawBatches = {
         if (casts) S.markCaster(mesh, false);
         for (const m of members) {
             m.visible = false;
+            // Its batch draws it: three's walk of the scene's matrices passes it by until it is drawn as itself again
+            // (`reveal`). North Haven holds 1,476 such chunks, each a call of that walk every frame for a matrix that
+            // never moves (the laptop, 2026-11-08). Its world matrix is brought up to date first.
+            m.updateMatrixWorld(true);
+            m.matrixWorldAutoUpdate = false;
             if (casts && S._static) S._static.delete(m);
         }
     },
@@ -3974,6 +3980,7 @@ Reactor3D.DrawBatches = {
     /** A chunk drawn as itself, and casting as itself. */
     reveal(m) {
         m.visible = true;
+        if (m.matrixWorldAutoUpdate === false) { m.matrixWorldAutoUpdate = true; m.updateMatrixWorld(true); }
         const S = Reactor3D.Shadows;
         if (m.parent && m.userData.reactorShadowCaster === "static" && S && S._static) { S._static.add(m); if (S.invalidate) S.invalidate(m); }
     },

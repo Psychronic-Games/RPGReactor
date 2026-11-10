@@ -67,6 +67,9 @@ test('incremental light masks match a full pack as lights move, reorder, resize 
  let seed=71;const random=()=>((seed=Math.imul(seed,1664525)+1013904223)>>>0)/4294967296;
  for(let i=0;i<32;i++){const a=i*4;u.rrLightPos.value.set([random()*50,random()*10,random()*50,2+random()*15],a);u.rrLightColor.value.set([1,1,1,i%3],a);u.rrLightAim.value.set([0,0,1,.4],a);}
  const expected=new Uint32Array(D.size[0]*D.size[1]*D.size[2]),focus={x:24,y:24};
+ // Exact packing; the slack the game packs with has its own test (exact-frame-caches).
+ D.slackEnabled=false;
+ try{
  for(let frame=0;frame<60;frame++){
   u.rrLightCount.value=8+frame%25;
   for(let i=0;i<frame%33;i++){const a=i*4;u.rrLightPos.value[a]+=.13;u.rrLightPos.value[a+3]=.01+random()*20;u.rrLightAim.value[a]=Math.sin(frame*.1);u.rrLightAim.value[a+2]=Math.cos(frame*.1);}
@@ -78,6 +81,7 @@ test('incremental light masks match a full pack as lights move, reorder, resize 
  }
  D.cacheEnabled=false;try{D.update(u,focus);}finally{D.cacheEnabled=true;}D.update(u,focus);assert.deepEqual(u.rrLightGrid.value.image.data,expected);
  u.rrLightCount.value=0;D.update(u,focus);assert.equal(u.rrLightGridEnabled.value,0);u.rrLightGrid.value.dispose();
+ }finally{D.slackEnabled=true;}
 });
 test('one row clear covers all six shadow faces while only selected faces draw',()=>{
  const target={viewport:new T.Vector4(),scissor:new T.Vector4()},camera=new T.PerspectiveCamera(90,1,.1,20),scene=new T.Scene(),origin=new T.Vector3();let current;

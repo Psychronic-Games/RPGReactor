@@ -1,5 +1,75 @@
 # Performance checks
 
+## The same laptop: backends, arrivals, weak machines (2026-11-10, runtimes 20261110.1–.10)
+
+The EliteBook of the section below, the Demo in one muted NW.js window, the party walking and running through North Haven unless said. Frames are timed with `performance.now()`: the time a frame callback is handed bunches when vsync is off, and probes that used it reported 35 ms frames that were not there (by the real clock 1 frame of 552 was over 25 ms). Direct3D 11 differs by up to 20% from one session to the next, so figures are compared within a session. Details per runtime are in the [changelog](../editor/changelog/0.99.5.md).
+
+By ANGLE backend, the same walk:
+
+| | Direct3D 11 | OpenGL |
+| --- | --- | --- |
+| Levels held at GPU 2 / CPU 2 | 40.6-50 fps | 68 fps |
+| A frame's JavaScript | 23.7 ms | 14.0 ms |
+| Auto left free for 110 s | settles at GPU 4 / CPU 5, 83% of the rate, 8.6% of frames late | GPU 1 / CPU 0, 99%, 2.1% late |
+
+Direct3D 11's extra cost sits in no one feature: switched off one at a time, shadows gave back 6.1%, reflections 2.1%, the GPU timer queries 1.9%, frame pacing 1.8%, and everything else nothing. `ReactorBackend` (runtimes .4 and .8) lets each Windows machine find its backend from its own recorded play, compared on the maps both were played on.
+
+| Change | Measured |
+| --- | --- |
+| Crowds (.5): per-body shadow and mirror work kept, joints with nothing to draw out of the visible tree | 120 copies of a character: 17-19 → 22-24 fps |
+| Arrivals (.6): three draws no longer build their program on the spot; built characters' pictures decode in the image worker | into North Haven on a cold shader cache, worst frame 5.8 → 0.7-1.4 s; warm, 50 fps at 22-24 s where it was 45 at 43 s |
+| Shader reads wait until nothing is compiling; a material in view keeps its program while the next is built (.7) | cold arrival, slow draws 2.3 → 0.21 s in all and none over 0.22 s after the 14th second; Auto turning shadows off cold, worst frame 0.90 → 0.23-0.32 s, things missing from the picture 527 → 0 |
+| Sprites and culling once a drawn frame on a 3D map (.9) | processor slowed three times: 14.9 → 15.8 fps; none as the laptop is |
+| Standing events skip their ground physics (.10) | the events' update 1.61 → 0.65 ms slowed three times (0.44 → 0.18 as it is); 13.9 → 14.2 fps slowed, none as it is |
+
+Weak machines stood in for, Auto left free, on OpenGL, one run each. A slower processor is Chromium's CPU throttling (`session.cjs --cpu-throttle=3`); a weaker graphics card is every 3D pass drawn with N times the pixels (`weak-gpu-log.js`). Both are stand-ins, not such machines.
+
+| Machine | Auto settles at | Frames |
+| --- | --- | --- |
+| The laptop as it is | GPU 1 / CPU 0 | 60-67 fps |
+| Graphics card 4 times weaker | GPU 4 / CPU 2 from 24 s (before .10: GPU 0 / CPU 0 for two minutes at 25-36 fps, since a machine that kept stopping was never judged) | 65-75 fps |
+| Graphics card 10 times weaker | GPU 6, one of two levels past Low, from 26 s | 63-71 fps |
+| Processor 3 times slower | the main thread's last level from 33 s (49 s before the rest after a step was capped) | 13-15 fps, the game a tenth slow |
+| Both (4 times, 3 times) | the same | 12-14 fps |
+
+Measured and left out: WebGPU through three's renderer (30-45% slower than its WebGL renderer on the same scene), a frame limit (`ticker.maxFPS`, which made pacing worse), an edge-adaptive enlarging filter, half-rate 3D by shifting the last picture (the player's own body judders). Open: a processor far too slow, and the first second after a cold map appears (frames of 0.66 and 0.83 s, unexplained).
+
+## Intel Iris Xe laptop (2026-11-08, runtime 20261108.1)
+
+HP EliteBook 840 G8: i5-1145G7, Iris Xe on shared memory, 1920×1080 at 60 Hz, ANGLE/D3D11, weak tier. The Demo from New Game, one muted NW.js window with the Demo's own switches (no vsync), the Quality levels off, measured once the geometry worker had been idle 5 s. Harness: `%LOCALAPPDATA%\rr-tests\harness` on that laptop (see the handoff).
+
+Where the frame went, Reactor Room, before: 28-30 fps; the main thread 98% busy (update 13 ms at 1.8 catch-up updates a frame, 3D draw 12-14 ms, PIXI 2.5-3 ms); GPU ~21-24 ms of timed passes beside it. Half the 3D resolution saved ~4 ms of GPU and no frame time; with the 3D not drawn at all the game ran at 117 fps.
+
+| Change | Measured |
+| --- | --- |
+| Distance levels go past UV seams (`Permissive`) once the plain simplifier stalls | three 488k props 128,500 → 22,483 triangles each, the 370k prop 154,971 → 69,862; main pass 16.3 → 9.5 ms GPU; frozen frames with and without levels differ within the frame's own noise |
+| Character sprites drawn by their model skip their 2D frame work | 3.4 → 1.8-2.0 ms a frame (30 sprites, 1.8 updates a frame) |
+| Beam bounds kept between frames for a model that has not moved | 0.95 → 0.21 ms |
+| Intel Xe skips the split light and the depth-first pass (`Reactor3D.fastShading`) | GPU unchanged (Reactor Room 24.0 / 23.6 ms; North Haven 25.0 / 24.7); CPU −1.6 to −2.5 ms; North Haven 37.0 → 40.3 fps |
+| Whole: Reactor Room, settled, standing | 28-29.6 fps (median 32-34 ms, p95 51-59) → 33-37.6 (median 27-30, p95 31-42) |
+
+Second pass (runtime 20261108.2), each measured on and off in turn in one session (ABBA rounds, medians):
+
+| Change | Measured |
+| --- | --- |
+| Light grid packs with slack (a tenth of the reach, 2°) | repacks ~17 → ~2.8 lights a frame; `LightGrid.update` 0.59 → 0.13-0.38 ms |
+| PIXI rebuilds its draw list only for a real visibility change | rebuilds 1.0 → 0.05 a frame (MOG_VariableHud); PIXI −0.4 ms |
+| Scene textures at fixed texture units (`PinnedSamplers`) | binds 300 → 157 a frame; `renderScene` −0.3 ms |
+| Haze in two instanced draws | `HalfHaze.draw` 0.99 → 0.61 ms |
+| Moving-light bake kept a frame on a weak GPU | bakes 1.0 → 0.51 a frame; 3D draw −0.7 ms |
+| Whole, Reactor Room, back to back | 20261107.15 ~31 fps (median 30-31 ms, p95 48-52) → 20261108.2 ~38 (median 25-26, p95 32-40) |
+
+The first pass called the frame CPU-bound; that was wrong in part. The CPU runs at its 2.4-2.6 GHz base clock at 78 °C and shares a power budget with the GPU: at render scale 0.4 instead of 0.75 game updates ran 8% faster and the 3D draw's main-thread time fell 12.3 → 8.5 ms (frame 24.9 → 19.7). GPU frame now: main pass ~16 ms (pixel lighting more than vertices: a machine prop filling the view costs 1.5 ms for 13k triangles, with seven room-wide searchlights in every pixel's loop), PIXI composite ~3, shadows ~2. Left on the CPU: ~110 draws at ~40 µs, `syncCharacterModels` ~2 ms, the colour filters' scene walk 0.4 ms.
+
+Auto quality, runtime 20261108.4, the party running (harness `--walk` with always-dash), Auto from the top:
+
+| Map | Full picture | Auto | Settled at |
+| --- | --- | --- | --- |
+| Reactor Room | ~37 fps | 64-68 fps, 5% of frames held a refresh | GPU 2, CPU 5 |
+| North Haven's square | ~39 fps | 54-55 fps, 20% held | GPU 5, CPU 5 |
+
+Chromium's GPU process (ANGLE, D3D11) ran at 119% of a core beside the page's 130%; the held frames did the page's usual work and waited on it. North Haven at the last levels, by ANGLE backend: D3D11 54 fps (18% held), `--use-angle=d3d11on12` 64-68 (5% held, the same picture), Vulkan drew nothing (a blank page).
+
 ## Built characters in a few draws (2026-11-04, runtime 20261104.9)
 
 North Haven's square, 64 sleepers and awake bots (47 built characters drawn), RTX 5070, 1920×1080, headless Chromium with the frame cap off, the same live data each run.

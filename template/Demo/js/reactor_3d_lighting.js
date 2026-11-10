@@ -196,8 +196,12 @@ Reactor3D.LightGrid = {
         }
         return uniforms.rrLightGrid.value;
     },
-    /** Pure array packer, also used by geometry/light-intersection regressions. */
-    fill(data, origin, count, pos, color, aim, slot = -1, cells = null) {
+    /**
+     * Pure array packer, also used by geometry/light-intersection regressions. `slack` (optional, two numbers a
+     * light: a distance, then an angle in radians) packs each light as if it reached that much further and its
+     * cone or beam were turned by up to that angle: what `updateCached` keeps while a light moves within it.
+     */
+    fill(data, origin, count, pos, color, aim, slot = -1, cells = null, slack = null) {
         const [nx, ny, nz] = this.size, step = this.step, half = step / 2;
         const cellRadius = Math.sqrt(3) * half;
         if (data) data.fill(0);
@@ -205,10 +209,11 @@ Reactor3D.LightGrid = {
         const begin = slot < 0 ? 0 : slot, end = slot < 0 ? count : slot + 1;
         for (let i = begin; i < end; i++) {
             const a = i * 4, x = pos[a], y = pos[a + 1], z = pos[a + 2];
+            const grow = slack ? slack[i * 2] : 0, turn = slack ? slack[i * 2 + 1] : 0;
             // Padding covers Float32 shader arithmetic at cell/cone boundaries.
             const pad = 0.002 + (Math.abs(x) + Math.abs(y) + Math.abs(z) + Math.abs(pos[a + 3])) * 0.000002;
-            const radius = Math.max(pos[a + 3], 0.001) + pad;
-            const r2 = radius * radius, sr = cellRadius + pad, bit = (1 << i) >>> 0;
+            const radius = Math.max(pos[a + 3], 0.001) + pad + grow;
+            const r2 = radius * radius, sr = cellRadius + pad + grow, bit = (1 << i) >>> 0;
             const x0 = Math.max(0, Math.floor((x - radius - origin[0]) / step));
             const x1 = Math.min(nx - 1, Math.floor((x + radius - origin[0]) / step));
             const kind = color[a + 3];
@@ -221,7 +226,9 @@ Reactor3D.LightGrid = {
             const ax = aim[a], ay = aim[a + 1], az = aim[a + 2];
             const length = Math.hypot(ax, ay, az);
             const shaped = kind > 0.5 && kind < 2.5 && Math.abs(length - 1) < 0.0001;
-            const cosine = aim[a + 3] / length;
+            let cosine = aim[a + 3] / length;
+            // A cone turned by up to `turn` stays inside the same cone widened by it.
+            if (turn > 0 && kind < 1.5) cosine = cosine >= 1 ? Math.cos(turn) : Math.cos(Math.acos(Math.max(-1, cosine)) + turn);
             const sine = Math.sqrt(Math.max(0, 1 - cosine * cosine));
             for (let iz = z0; iz <= z1; iz++) {
                 const dz = origin[2] + (iz + 0.5) * step - z;
@@ -240,7 +247,8 @@ Reactor3D.LightGrid = {
                             const perp = Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - along * along));
                             if (kind > 1.5) {
                                 // A tiny aim-length error must not narrow the shader's beam.
-                                const beamPad = sr + radius * Math.abs(length - 1) * 2;
+                                // A beam turned by up to `turn` sweeps its far end sideways by up to its length times it.
+                                const beamPad = sr + radius * Math.abs(length - 1) * 2 + radius * turn;
                                 if (along + beamPad < 0 || along - beamPad > radius || perp - beamPad > aim[a + 3]) continue;
                             } else if (cosine > 0 && cosine < 1 && perp * cosine - along * sine > sr) continue;
                         }
@@ -329,9 +337,11 @@ Reactor3D.LightGrid.updateCached = function(uniforms, focus) {
     origin[2] = Math.floor(((focus?.y || 0) - 32) / 8) * 8;
     const data = texture.image.data, pos = uniforms.rrLightPos.value, color = uniforms.rrLightColor.value, aim = uniforms.rrLightAim.value;
     let state = this._cells.get(texture), changed = false;
-    if (!state || !state.cellLists || state.data !== data || state.step !== this.step
+    const slackOn = !!this.slackEnabled;
+    if (!state || !state.cellLists || state.data !== data || state.step !== this.step || state.slackOn !== slackOn
         || state.size.some((value, i) => value !== this.size[i]) || state.origin.some((value, i) => value !== origin[i])) {
-        state = { cellLists: true, data, origin: origin.slice(), step: this.step, size: this.size.slice(), entries: [], scratch: [], generation: 0, mask: new Uint32Array(data.length), dirty: [] };
+        state = { cellLists: true, data, origin: origin.slice(), step: this.step, size: this.size.slice(), entries: [], scratch: [], generation: 0, mask: new Uint32Array(data.length), dirty: [],
+            slackOn, slack: slackOn ? new Float64Array(64) : null };
         this._cells.set(texture, state); data.fill(0); changed = true;
     }
     const dirty = state.dirty; dirty.length = 0;
@@ -340,13 +350,24 @@ Reactor3D.LightGrid.updateCached = function(uniforms, focus) {
         let entry = state.entries[i], key = entry?.key;
         if (key && key[0] === pos[at] && key[1] === pos[at+1] && key[2] === pos[at+2] && key[3] === pos[at+3]
             && key[4] === color[at+3] && key[5] === aim[at] && key[6] === aim[at+1] && key[7] === aim[at+2] && key[8] === aim[at+3]) continue;
+        // Still inside the reach it was packed with (`slackEnabled`): its cells stand.
+        if (key && slackOn && this.withinSlack(key, state.slack, i, pos, color, aim)) continue;
         if (!entry) { entry = state.entries[i] = { key: new Float64Array(9), cells: [], generation: state.generation }; key = entry.key; }
-        key[0] = pos[at]; key[1] = pos[at+1]; key[2] = pos[at+2]; key[3] = pos[at+3]; key[4] = color[at+3];
-        key[5] = aim[at]; key[6] = aim[at+1]; key[7] = aim[at+2]; key[8] = aim[at+3];
         dirty.push(i);
     }
+    const pack = i => {
+        const at = i * 4, key = state.entries[i].key;
+        key[0] = pos[at]; key[1] = pos[at+1]; key[2] = pos[at+2]; key[3] = pos[at+3]; key[4] = color[at+3];
+        key[5] = aim[at]; key[6] = aim[at+1]; key[7] = aim[at+2]; key[8] = aim[at+3];
+        if (state.slack) { state.slack[i * 2] = Math.min(this.SLACK_MAX, Math.max(this.SLACK_MIN, Math.abs(pos[at+3]) * this.SLACK_SHARE)); state.slack[i * 2 + 1] = this.SLACK_TURN; }
+    };
     if (dirty.length > count * 0.75) {
-        this.fill(state.mask, origin, count, pos, color, aim);
+        // Every light packed afresh from where it stands now.
+        for (let i = 0; i < count; i++) {
+            if (!state.entries[i]) state.entries[i] = { key: new Float64Array(9), cells: [], generation: state.generation };
+            pack(i);
+        }
+        this.fill(state.mask, origin, count, pos, color, aim, -1, null, state.slack);
         for (let cell = 0; cell < data.length; cell++) if (data[cell] !== state.mask[cell]) { data[cell] = state.mask[cell]; changed = true; }
         state.generation++;
     } else for (const i of dirty) {
@@ -357,7 +378,8 @@ Reactor3D.LightGrid.updateCached = function(uniforms, focus) {
             for (let cell = 0; cell < data.length; cell++) if (data[cell] & bit) previous.push(cell);
             entry.generation = state.generation;
         }
-        this.fill(null, origin, count, pos, color, aim, i, cells);
+        pack(i);
+        this.fill(null, origin, count, pos, color, aim, i, cells, state.slack);
         let same = cells.length === previous.length;
         for (let j = 0; same && j < cells.length; j++) if (cells[j] !== previous[j]) same = false;
         if (same) continue;
@@ -376,6 +398,40 @@ Reactor3D.LightGrid.updateCached = function(uniforms, focus) {
 };
 /** The kill switch for the out-of-grid mask (see `spill`): false spills every light. */
 Reactor3D.LightGrid.spillEnabled = true;
+
+/**
+ * A light's cells packed with room to move: a tenth of its reach (a quarter of a unit to one unit) and two degrees
+ * of turn. A flickering lamp or a sweeping searchlight stays inside that for several frames, and its cells are not
+ * worked out again until it leaves: the Reactor Room's seven searchlights and seven flickering lamps were packed
+ * afresh every frame, 0.5 to 0.6 ms of the laptop's frame (i5-1145G7, 2026-11-08). The mask only ever holds a
+ * light in a few more cells than it reaches, which the shader's own falloff and cone test then light as nothing.
+ * false packs every light exactly where it stands, every time it moves.
+ */
+Reactor3D.LightGrid.slackEnabled = true;
+Reactor3D.LightGrid.SLACK_SHARE = 0.1;
+Reactor3D.LightGrid.SLACK_MIN = 0.25;
+Reactor3D.LightGrid.SLACK_MAX = 1;
+Reactor3D.LightGrid.SLACK_TURN = 0.035;
+/** Whether light `i` as it stands now lies inside what it was packed with (`key`, and its two slacks). */
+Reactor3D.LightGrid.withinSlack = function(key, slack, i, pos, color, aim) {
+    const at = i * 4, grow = slack[i * 2], turn = slack[i * 2 + 1], kind = color[at + 3];
+    if (kind !== key[4]) return false;
+    // Its sphere (centre moved, reach grown) inside the packed one.
+    const moved = Math.hypot(pos[at] - key[0], pos[at + 1] - key[1], pos[at + 2] - key[2]);
+    if (moved + Math.max(0, pos[at + 3] - key[3]) > grow) return false;
+    // Nor shrunk by more than the slack: a light gone small is packed small again.
+    if (pos[at + 3] < key[3] - grow) return false;
+    const shapedOf = (k, x, y, z) => k > 0.5 && k < 2.5 && Math.abs(Math.hypot(x, y, z) - 1) < 0.0001;
+    // Packed as a whole sphere: any aim is inside it.
+    if (!shapedOf(key[4], key[5], key[6], key[7])) return true;
+    if (!shapedOf(kind, aim[at], aim[at + 1], aim[at + 2])) return false;
+    const was = Math.hypot(key[5], key[6], key[7]), now = Math.hypot(aim[at], aim[at + 1], aim[at + 2]);
+    const swing = Math.acos(Math.max(-1, Math.min(1, (key[5] * aim[at] + key[6] * aim[at + 1] + key[7] * aim[at + 2]) / (was * now))));
+    if (kind > 1.5) return aim[at + 3] === key[8] && swing <= turn;
+    // A spot: turned, plus widened, within the turn it was packed with.
+    const angle = c => Math.acos(Math.max(-1, Math.min(1, c)));
+    return swing + Math.max(0, angle(aim[at + 3] / now) - angle(key[8] / was)) <= turn;
+};
 
 
 Reactor3D.lightUniforms = function() {
@@ -858,6 +914,7 @@ Reactor3D.cacheUniformArrays = function(renderer) {
                 if (!program.__rrArraysCached) {
                     program.__rrArraysCached = true;
                     try { visit(uniforms && uniforms.seq); } catch (error) { /* a program that failed to link has none */ }
+                    try { Reactor3D.PinnedSamplers.apply(uniforms, renderer); } catch (error) { /* left to three's own units */ }
                 }
                 return uniforms;
             };
@@ -868,10 +925,61 @@ Reactor3D.cacheUniformArrays = function(renderer) {
         if (typeof program.isReady === "function" && !program.isReady()) { renderer.__rrCachedPrograms = -1; continue; }
         program.__rrArraysCached = true;
         try { visit(program.getUniforms().seq); } catch (error) { /* a program that failed to link has none */ }
+        try { Reactor3D.PinnedSamplers.apply(program.getUniforms(), renderer); } catch (error) { /* left to three's own units */ }
     }
 };
 /** False reads every linked program's uniforms as the draw begins (a wait on the GPU process per new program). */
 Reactor3D.lazyUniformArrays = true;
+
+/**
+ * The scene's own textures (the shadow atlases, the light grid, the light volume's three, the dynamic atlas, the
+ * far water) at texture units of their own, the top eight, in every lit program. three hands units out afresh at
+ * each bind, in the order a program declares its samplers, after a skinned body's bones and morphs: the light
+ * grid sat at unit 2 in a prop's program and at unit 7 in a layered body's, and each change of program between
+ * the two bound the same eight textures over again. In the Reactor Room that was 300 texture binds a frame for
+ * 139 draws (laptop, i5-1145G7 with Iris Xe through ANGLE, where each GL call costs the main thread a few
+ * microseconds; 2026-11-08). Held at fixed units they stay bound from one program to the next; only a program's
+ * own textures (its map, bones, layers, mirrors) move. A program with more samplers than fit below the eight
+ * keeps three's units. `enabled = false` goes back to three's units everywhere, from the next bind.
+ */
+Reactor3D.PinnedSamplers = {
+    enabled: true,
+    NAMES: ["rrShadowAtlas", "rrShadowDynAtlas", "rrLightGrid", "rrVolumeStatic", "rrVolumeFlicker", "rrVolumePulse", "rrDynAtlas", "rrWaterFar"],
+    SAMPLER_TYPES: new Set([0x8B5E, 0x8B5F, 0x8B60, 0x8B62, 0x8DC1, 0x8DC4, 0x8DC5, 0x8DCA, 0x8DCB, 0x8DCC, 0x8DCF, 0x8DD2, 0x8DD3, 0x8DD4, 0x8DD7]),
+    /** Pins `uniforms`' (a program's WebGLUniforms) scene samplers; whether any were. Once per program. */
+    apply(uniforms, renderer) {
+        if (!this.enabled || !uniforms || !Array.isArray(uniforms.seq) || uniforms.__rrPinned !== undefined) return false;
+        uniforms.__rrPinned = false;
+        const max = renderer && renderer.capabilities ? renderer.capabilities.maxTextures : 0;
+        if (!(max >= this.NAMES.length * 2)) return false;
+        const base = max - this.NAMES.length, pins = [];
+        let units = 0;
+        const count = list => {
+            for (const u of list) {
+                if (u.seq) { count(u.seq); continue; }
+                if (!this.SAMPLER_TYPES.has(u.type)) continue;
+                const k = u.size === undefined && list === uniforms.seq ? this.NAMES.indexOf(u.id) : -1;
+                if (k >= 0) pins.push(u, base + k);
+                else units += u.size === undefined ? 1 : u.size;
+            }
+        };
+        count(uniforms.seq);
+        // Three's own units run from 0 up to one under what it hands out; they must stay under the pinned ones.
+        if (!pins.length || units > base) return false;
+        for (let i = 0; i < pins.length; i += 2) {
+            const u = pins[i], unit = pins[i + 1], set = u.setValue, fixed = () => unit;
+            if (typeof set !== "function") continue;
+            u.setValue = function(gl, v, textures) {
+                if (!Reactor3D.PinnedSamplers.enabled) return set.call(this, gl, v, textures);
+                const allocate = textures.allocateTextureUnit;
+                textures.allocateTextureUnit = fixed;
+                try { set.call(this, gl, v, textures); } finally { textures.allocateTextureUnit = allocate; }
+            };
+        }
+        uniforms.__rrPinned = true;
+        return true;
+    }
+};
 
 /**
  * The scene's values in one uniform buffer (a WebGL2 uniform block). A lit
@@ -1501,6 +1609,8 @@ Reactor3D.injectLightShader = function(shader, renderer, material) {
     this.LightGrid.ensure(uniforms);
     if (this.LightVolume) this.LightVolume.uniforms();
     for (const key of Object.keys(uniforms)) shader.uniforms[key] = uniforms[key];
+    // The colour pictures' mip bias while the view draws smaller than the screen (Reactor3D.MipBias).
+    if (this.MipBias) shader.uniforms.rrMipBias = this.MipBias.uniform;
     // After projection, where `transformed` is final: skinned, billboarded,
     // or plain. (Anchored on the include, which every three material has;
     // the billboard's own patch keeps the include inside its replacement.)
@@ -4011,6 +4121,7 @@ Reactor3D.injectSurfaceOcclusion = function(material, shader) {
 
 Reactor3D.litMaterial = function(material) {
     if (!material || material.__reactorLit) return material;
+    if (Reactor3D.MipBias) Reactor3D.MipBias.install();
     material.__reactorLit = true;
     const earlier = material.onBeforeCompile;
     material.onBeforeCompile = function(shader, renderer) {
@@ -4121,6 +4232,26 @@ Reactor3D.tier = function() {
 
 Reactor3D.isWeakGpu = function() {
     return this.tier() === "weak";
+};
+
+/**
+ * Whether a weak GPU still shades every pixel quickly: Intel's Xe generation (Iris Xe, Mesa's "Intel(R) Xe
+ * Graphics", Arc). The weak tier's quarter-size light (HalfLight) and its depth-first pass were tuned on a
+ * UHD 630 and an integrated Radeon, where each saved 3 to 8 ms of the GPU. On an Iris Xe laptop (i5-1145G7,
+ * 1080p, 2026-11-08) they saved it nothing (Reactor Room 24.0 / 23.6 ms of GPU with and without the split,
+ * North Haven 25.0 / 24.7 with neither) and cost the main thread 1.6 to 2.5 ms a frame: 37 -> 40 fps in North
+ * Haven with both off, every pixel lit at full size. Such a GPU skips both. `fastShadingOverride` pins it.
+ */
+Reactor3D.fastShadingOverride = null;
+Reactor3D.FAST_SHADING_GPU_PATTERN = /\bIntel\b.*\b(?:Xe|Arc)\b/i;
+Reactor3D.fastShading = function() {
+    if (this.fastShadingOverride !== null) return !!this.fastShadingOverride;
+    const description = typeof Graphics !== "undefined" && Graphics.gpuDescription ? String(Graphics.gpuDescription) : "";
+    if (this._fastShadingFor !== description) {
+        this._fastShadingFor = description;
+        this._fastShading = !!description && this.FAST_SHADING_GPU_PATTERN.test(description);
+    }
+    return this._fastShading;
 };
 
 /**
@@ -4986,6 +5117,11 @@ Reactor3D.SHADOW_QUALITY = {
 Reactor3D.SHADOW_QUALITY.fullCpu = Object.assign({}, Reactor3D.SHADOW_QUALITY.full, {
     dynamicTriangles: 300000, staticPerFrame: 1, dynamicPerFrame: 1, dynamicInterval: 2
 });
+// The Quality levels' "lite" shadows on the weak tier: the same atlas and shader, moving casters redrawn every
+// third frame and fewer of them (Reactor3D.Quality.shadowMode).
+Reactor3D.SHADOW_QUALITY.weakLite = Object.assign({}, Reactor3D.SHADOW_QUALITY.weak, {
+    dynamicTriangles: 120000, dynamicInterval: 3
+});
 /**
  * A sun casts along one direction through an orthographic map that follows
  * the focus, not through six cube faces from where it hangs: a cube face
@@ -5224,9 +5360,9 @@ Reactor3D.Shadows = {
 
     quality() {
         if (this._quality) return this._quality;
-        if (Reactor3D.isWeakGpu()) return Reactor3D.SHADOW_QUALITY.weak;
-        const Q = Reactor3D.Quality;
-        return Reactor3D.SHADOW_QUALITY[Q && Q.enabled !== false && Q.setting() === "auto" && Q.c >= 2 ? "fullCpu" : "full"];
+        const Q = Reactor3D.Quality, lite = !!(Q && Q.shadowMode && Q.shadowMode() === "lite");
+        if (Reactor3D.isWeakGpu()) return Reactor3D.SHADOW_QUALITY[lite ? "weakLite" : "weak"];
+        return Reactor3D.SHADOW_QUALITY[lite ? "fullCpu" : "full"];
     },
 
     active() {
@@ -5959,7 +6095,10 @@ Reactor3D.Shadows = {
 
     _casterTriangles(root, distance = Reactor3D.SHADOW_BUDGET_DISTANCE) {
         const data = root.userData || (root.userData = {});
-        const detail = Reactor3D.GeometryDetail, stamp = Reactor3D._lodSwaps + "/" + (detail ? detail.levelsReady : 0) + "/" + distance;
+        // Kept by this root's own level (pickLod's `lodLevel`), not by the count of every model's swaps: with that, one
+        // body changing its level anywhere had every caster's tree walked again, in a crowd every frame (120 bodies:
+        // 2.3 ms of each frame, 2026-11-10).
+        const detail = Reactor3D.GeometryDetail, stamp = (data.lodLevel || 0) + "/" + (detail ? detail.levelsReady : 0) + "/" + distance;
         if (data.rrShadowTris !== undefined && data.rrShadowTrisAt === stamp) return data.rrShadowTris;
         let total = 0;
         if (detail && detail.shadowTriangles) total = detail.shadowTriangles(root, this.quality().size, distance, Reactor3D.SHADOW_NEAR);
@@ -6063,6 +6202,10 @@ Reactor3D.Shadows = {
     _setCasts(root, on) {
         const layer = Reactor3D.SHADOW_LAYER_DYNAMIC;
         const was = root.userData.rrShadowCasts;
+        // Already as asked, and no caster marked since (markCaster turns the layer on as it registers one, and counts
+        // in `_generation`): its meshes' layers stand. Every root the budget refused was walked again each frame.
+        if (was === on && root.userData.rrShadowCastsAt === this._generation) return;
+        root.userData.rrShadowCastsAt = this._generation;
         root.traverse(child => {
             if (!child.isMesh) return;
             if (on) child.layers.enable(layer);
@@ -6658,7 +6801,7 @@ Reactor3D.Shadows = {
      * caster follows the source's map, which a sprite sheet swaps as it
      * animates.
      */
-    _swapCasters(roots, dynamic) {
+    _swapCasters(roots, dynamic, renderer, scene) {
         const swapped = [];
         const live = this._liveStandIns || (this._liveStandIns = []);
         live.length = 0;
@@ -6686,6 +6829,12 @@ Reactor3D.Shadows = {
                     }
                     caster.alphaTest = source.alphaTest;
                 }
+                // A moving caster whose depth program is not built yet sits out of this frame's rows (`casterReady`).
+                if (dynamic && renderer && child.visible && !this.casterReady(renderer, scene, caster, child)) {
+                    child.visible = false;
+                    (swapped.waiting || (swapped.waiting = [])).push(child);
+                    return;
+                }
                 child.material = caster;
                 swapped.push(child, source);
             });
@@ -6693,8 +6842,48 @@ Reactor3D.Shadows = {
         return swapped;
     },
 
+    /**
+     * Whether a moving caster's depth program is built for the kind of mesh that wears it; begun on the driver's
+     * threads when not, and the mesh casts nothing until it is (its rows are drawn every frame: it joins the next
+     * one). Drawn at once, the shadow pass built the program on the spot and waited for it: 0.44 s for the first
+     * skinned caster of a first visit to North Haven (2026-11-10). A record per kind of mesh (skinned, its shapes):
+     * three builds a program for each. The warm-up's own timeout; `waitForDepth = false` draws at once, as before.
+     * The still casters' rows are kept once drawn, so those are drawn as before.
+     */
+    waitForDepth: true,
+    depthWaits: 0,
+    casterReady(renderer, scene, caster, child) {
+        const W = Reactor3D.ShaderWarmup;
+        if (!this.waitForDepth || !W || !W.enabled || !W.supported(renderer) || !W.compileGuarded) return true;
+        const morph = child.geometry && child.geometry.morphAttributes, shapes = morph && (morph.position || morph.normal || morph.color);
+        const kind = (child.isSkinnedMesh ? 1 : 0) + (child.isInstancedMesh ? 2 : 0) + (child.isBatchedMesh ? 4 : 0) + (shapes ? shapes.length * 8 : 0);
+        const records = caster.__rrDepthReady || (caster.__rrDepthReady = new Map());
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        let record = records.get(kind);
+        if (!record || record.version !== caster.version) { records.set(kind, record = { version: caster.version, ready: false, begun: false, started: now }); this.depthWaits++; }
+        if (record.ready) return true;
+        if (now - record.started > W.TIMEOUT_MS) { record.ready = true; return true; }
+        if (record.begun || (W.readsOwed && W.readsOwed())) return false;
+        record.begun = true;
+        // Compiled for this mesh alone (not what hangs under it), with a picture bound as the rows are.
+        const stand = Object.create(child);
+        stand.children = [];
+        stand.material = caster;
+        const camera = this._depthCamera || (this._depthCamera = new THREE.Camera()), before = renderer.getRenderTarget();
+        const done = () => { record.ready = true; };
+        try {
+            renderer.setRenderTarget(Reactor3D.LightVolume.compileTarget());
+            W.compileGuarded(renderer, stand, camera, scene).then(done, done);
+            // One another kind of mesh already draws with: nothing to wait for.
+            if (W.linked(renderer, caster) && W.wasRead(renderer, caster)) record.ready = true;
+        } catch (error) { record.ready = true; }
+        finally { renderer.setRenderTarget(before); }
+        return record.ready;
+    },
+
     _unswap(swapped) {
         for (let i = 0; i < swapped.length; i += 2) swapped[i].material = swapped[i + 1];
+        if (swapped.waiting) for (const child of swapped.waiting) child.visible = true;
         if (this._liveStandIns && this._liveStandIns.length) Reactor3D.CasterMerge.done(this._liveStandIns);
     },
 
@@ -6913,7 +7102,7 @@ Reactor3D.Shadows = {
                 if (dynamics.length || sunDynamics.length) {
                     const roots = this._casting || this._dynamic;
                     if (Reactor3D.CasterMerge.enabled) Reactor3D.CasterMerge.sweep(scene);
-                    const swapped = this._swapCasters(roots, true);
+                    const swapped = this._swapCasters(roots, true, renderer, scene);
                     let others = null, crowd = null;
                     try {
                         others = this._hideNonCasters(scene, Reactor3D.SHADOW_LAYER_DYNAMIC);
@@ -7319,6 +7508,15 @@ Reactor3D.lightSegmentBlocked = function(x0, y0, h0, x1, y1, h1) {
  * the world height the beam leaves from, `length` its reach.
  */
 Reactor3D.BEAM_MARCH_STEP = 1 / 6;
+/** How many frames a model standing where it stood keeps the bounds a beam last measured it at. */
+Reactor3D.BEAM_BOX_FRAMES = 30;
+Reactor3D.frameStamp = function() {
+    return typeof Graphics !== "undefined" && Number.isFinite(Graphics.frameCount) ? Graphics.frameCount : 0;
+};
+Reactor3D.sameMatrix = function(a, b) {
+    for (let i = 0; i < 16; i++) if (a[i] !== b[i]) return false;
+    return true;
+};
 Reactor3D.beamHit = function(x, y, h, ax, ay, az, length, scene, bounds) {
     let best = null;
     const step = this.BEAM_MARCH_STEP;
@@ -7339,11 +7537,22 @@ Reactor3D.beamHit = function(x, y, h, ax, ay, az, length, scene, bounds) {
             let worldBox = bounds && bounds.get(object);
             // A body held still (Reactor3D.holdModelMatrices) has the bounds it had: measured again, it was a walk of every bone of a crowd each frame.
             if (!worldBox && holder.matricesHeld && holder.heldBox && holder.heldBoxOf === object) worldBox = holder.heldBox;
+            // In a light update (`bounds`), any other model keeps the box it was last measured at while it stands
+            // where it stood (its own matrix, brought up to date as the measuring would, unchanged; the same
+            // geometry), for BEAM_BOX_FRAMES at most (a body moving its limbs in place): measuring every model
+            // each frame was 0.95 ms of the laptop's frame in the Reactor Room's sweeping searchlights.
+            const kept = !worldBox && bounds && holder.beamBox;
+            if (kept && kept.of === object && kept.geometry === object.geometry && this.frameStamp() - kept.at < this.BEAM_BOX_FRAMES) {
+                object.updateWorldMatrix(false, false);
+                if (this.sameMatrix(kept.matrix, object.matrixWorld.elements)) { worldBox = kept.box; bounds.set(object, worldBox); }
+            }
             if (!worldBox) {
                 worldBox = bounds ? new THREE.Box3() : box;
                 worldBox.setFromObject(object);
                 if (bounds) bounds.set(object, worldBox);
                 if (holder.matricesHeld) { holder.heldBox = (holder.heldBox || new THREE.Box3()).copy(worldBox); holder.heldBoxOf = object; }
+                const record = holder.beamBox || (holder.beamBox = { box: new THREE.Box3(), matrix: new Float64Array(16), at: 0, of: null, geometry: null });
+                record.box.copy(worldBox); record.matrix.set(object.matrixWorld.elements); record.at = this.frameStamp(); record.of = object; record.geometry = object.geometry;
             }
             if (worldBox.isEmpty() || worldBox.containsPoint(ray.origin)) continue;
             if (!ray.intersectBox(worldBox, hit)) continue;
@@ -8965,7 +9174,7 @@ Reactor3D.LightVolume = {
             if (!bake.compiling) {
                 const previous = renderer.getRenderTarget();
                 renderer.setRenderTarget(volume.static, 0);
-                try { bake.compiling = renderer.compileAsync(bake.scene, bake.camera).then(() => { bake.compiled = true; }, () => { bake.compiled = true; }); }
+                try { bake.compiling = renderer.compileAsync(bake.scene, bake.camera).then(() => { bake.compiled = true; }, () => { bake.compiled = true; }); if (Reactor3D.ShaderWarmup.track) Reactor3D.ShaderWarmup.track(bake.compiling); }
                 catch (error) { bake.compiled = true; }
                 finally { renderer.setRenderTarget(previous); }
             }
@@ -9035,6 +9244,14 @@ Reactor3D.LightVolume = {
      * rate above the game's, most frames reuse the last.
      */
     dynamicEnabled: true,
+    /**
+     * On a weak GPU, while only the moving lights have moved (the same region of the view, the same lights, the
+     * same atlas), their bake is kept for this many frames: the Reactor Room's seven searchlights turn under a
+     * degree a frame and their light is a tile-sized grid, and the bake was a millisecond of the laptop's GPU
+     * every frame (Iris Xe, 2026-11-08). A view that moves to another region, a light that comes or goes and any
+     * other GPU bake as soon as asked. 1 bakes every frame.
+     */
+    DYNAMIC_EVERY: 2,
     frameDynamic(renderer, mapData, focus) {
         const u = this.uniforms();
         u.rrDynOn.value = 0;
@@ -9091,6 +9308,28 @@ Reactor3D.LightVolume = {
         const last = this._dynSig;
         let same = !!last && last.length === sig.length && this._dynAtlasBaked === atlas;
         for (let k = 0; same && k < sig.length; k++) if (last[k] !== sig[k]) same = false;
+        // Only the lights moved (the same region, lights and atlas): a weak GPU keeps the last bake for a frame.
+        const refresh = typeof Graphics !== "undefined" && Number.isFinite(Graphics.refreshCount) ? Graphics.refreshCount : 0;
+        const held = this._dynHeld, Q = Reactor3D.Quality;
+        const every = Math.max(Reactor3D.tier() === "weak" ? this.DYNAMIC_EVERY : 1, Q && Q.volumeEvery ? Q.volumeEvery() : 1);
+        if (!same && held && every > 1 && refresh > 0 && refresh - held.refresh < every && held.atlas === atlas && held.mask === (mask >>> 0)
+            && last && last.length === sig.length) {
+            let sameRegion = true;
+            for (let k = 0; sameRegion && k < 10; k++) if (last[k] !== sig[k]) sameRegion = false;
+            if (sameRegion) {
+                u.rrDynAtlas.value = atlas.texture;
+                u.rrDynAtlasSize.value[0] = atlas.width; u.rrDynAtlasSize.value[1] = atlas.height;
+                u.rrDynOrigin.value.set(held.origin);
+                u.rrDynCells.value[0] = nx; u.rrDynCells.value[1] = ny; u.rrDynCells.value[2] = nz;
+                u.rrDynTiles.value[0] = tx; u.rrDynTiles.value[1] = ty;
+                u.rrDynVoxel.value = v;
+                u.rrLightAll.value = (count >= 32 ? 0xffffffff : (1 << count) - 1) >>> 0;
+                u.rrLightDynamic.value = held.mask;
+                u.rrDynOn.value = 1;
+                this.dynamicHeld = (this.dynamicHeld || 0) + 1;
+                return;
+            }
+        }
         if (!same) {
             this._dynSigNext = last || [];
             this._dynSig = sig;
@@ -9106,6 +9345,9 @@ Reactor3D.LightVolume = {
             } finally { renderer.autoClear = autoClear; renderer.setRenderTarget(previous); }
             this._dynAtlasBaked = atlas;
             this.dynamicBakes = (this.dynamicBakes || 0) + 1;
+            const kept = this._dynHeld || (this._dynHeld = { refresh: 0, atlas: null, mask: 0, origin: [0, 0, 0] });
+            kept.refresh = refresh; kept.atlas = atlas; kept.mask = mask >>> 0;
+            kept.origin[0] = region.origin[0]; kept.origin[1] = region.origin[1]; kept.origin[2] = region.origin[2];
         }
         u.rrDynAtlas.value = atlas.texture;
         u.rrDynAtlasSize.value[0] = atlas.width; u.rrDynAtlasSize.value[1] = atlas.height;
@@ -9224,10 +9466,20 @@ Reactor3D.LightVolume = {
         if (bake.compiled) return true;
         if (!(renderer.compileAsync && renderer.extensions && renderer.extensions.has("KHR_parallel_shader_compile"))) { bake.compiled = true; return true; }
         if (!bake.compiling) {
-            try { bake.compiling = renderer.compileAsync(bake.scene, bake.camera).then(() => { bake.compiled = true; }, () => { bake.compiled = true; }); }
+            // With a picture of its own bound, as its draws have: the program three builds depends on what it
+            // draws into. Compiled with whatever was bound (the screen, after the shadow rows), it was the screen's,
+            // and the bake's first draw built its own on the spot (2.4 s of a first visit to North Haven, 2026-11-10).
+            const previous = renderer.getRenderTarget();
+            renderer.setRenderTarget(this._dynAtlas || this.compileTarget());
+            try { bake.compiling = renderer.compileAsync(bake.scene, bake.camera).then(() => { bake.compiled = true; }, () => { bake.compiled = true; }); if (Reactor3D.ShaderWarmup.track) Reactor3D.ShaderWarmup.track(bake.compiling); }
             catch (error) { bake.compiled = true; }
+            finally { renderer.setRenderTarget(previous); }
         }
         return !!bake.compiled;
+    },
+    /** A one-pixel picture to compile the bake against before its own exist. */
+    compileTarget() {
+        return this._compileTarget || (this._compileTarget = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false, stencilBuffer: false }));
     },
 
     frameStatic(renderer, mapScene, mapData, focus) {
@@ -9806,7 +10058,9 @@ Reactor3D.Halo = {
      * Asked once a pass; after IDLE_FRAMES passes with nothing, the targets go.
      */
     sources(bodies) {
-        const group = this.enabled && bodies ? bodies.userData.rrHalo : null;
+        // A Quality level may set the halo aside (Reactor3D.Quality.halo).
+        const Q = Reactor3D.Quality, wanted = this.enabled && !(Q && Q.halo && !Q.halo());
+        const group = wanted && bodies ? bodies.userData.rrHalo : null;
         if (group) {
             const list = group.children;
             for (let i = 0; i < list.length; i++) if (list[i].visible) { this._idle = 0; return group; }
@@ -10009,6 +10263,8 @@ Reactor3D.HalfLight = {
      * median 13.8 to 6.9 ms, the GPU 3 to about 4 ms. False splits on every tier.
      */
     WEAK_ONLY: true,
+    // Not on a weak GPU that shades fast (Intel Xe): no GPU saved there, 1.6-2 ms of CPU spent (Reactor3D.fastShading).
+    SKIP_ON_FAST_SHADING: true,
     // A quarter each way: measured beside the full-size light, only the rim
     // of a model against a much brighter or darker ground tells them apart.
     SCALE: 0.25,
@@ -10085,6 +10341,8 @@ Reactor3D.HalfLight = {
      */
     begin(renderer, scene, target) {
         if (!this.enabled || (this.WEAK_ONLY && Reactor3D.tier() !== "weak") || !target || !target.depthTexture || target.samples > 0 || !scene || !scene.isScene) return null;
+        // A GPU that lights every pixel as fast as the split does (Reactor3D.fastShading) is spared the split's CPU.
+        if (this.SKIP_ON_FAST_SHADING && Reactor3D.fastShading && Reactor3D.fastShading()) return null;
         if (!Reactor3D.LightVolume || !Reactor3D.LightVolume.supported(renderer)) return null;
         const walk = Reactor3D.SceneWalk, held = walk.hold(scene);
         try {

@@ -53,9 +53,13 @@ test('a material drawn before is never held, even after its version changes (a m
     const r = fakeRenderer();
     r.properties.get(mesh.material).currentProgram = {}; r.draw(mesh);
     assert.equal(W.hide(r, scene, {}), null);
+    // Changed once: still drawn (with the program it has), its next one begun in the background (runtime 20261110.7).
     mesh.material.needsUpdate = true;
-    assert.equal(W.hide(r, scene, {}), null, 'a recompile is drawn the old way');
-    assert.equal(r.compiles.length, 0);
+    assert.equal(W.hide(r, scene, {}), null, 'never held');
+    assert.equal(r.compiles.length, 1);
+    // Changing again and again: drawn the old way, and no compile begun for each change.
+    for (let i = 0; i < 4; i++) { mesh.material.needsUpdate = true; assert.equal(W.hide(r, scene, {}), null); r.draw(mesh); }
+    assert.equal(r.compiles.length, 1);
 });
 
 test('pictures upload under a per-frame budget before the mesh shows; one always goes', async () => {

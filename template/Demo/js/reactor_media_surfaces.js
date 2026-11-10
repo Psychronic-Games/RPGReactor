@@ -29,7 +29,37 @@
      * error each frame, and the console says why once. Launching with
      * --disable-accelerated-video-decode decodes in software, which plays.
      */
+    /**
+     * A Quality level may cap how many of a video's frames a second reach the GPU (Reactor3D.Quality.videoFps): each
+     * new frame of a playing video was a full-size upload (1280x720 or more), and two videos on ten screens held the
+     * laptop's frames a refresh past their time one in seven (2026-11-08). The video plays on at its own speed; the
+     * screens show every second or third of its frames.
+     */
+    function capVideoUploads(texture) {
+        if (!texture || texture.__rrUploadCap) return texture;
+        texture.__rrUploadCap = true;
+        let last = 0;
+        try {
+            Object.defineProperty(texture, "needsUpdate", {
+                configurable: true,
+                set(value) {
+                    if (value !== true) return;
+                    const Q = typeof Reactor3D !== "undefined" ? Reactor3D.Quality : null, cap = Q && Q.videoFps ? Q.videoFps() : 0;
+                    if (cap > 0) {
+                        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+                        if (now - last < 1000 / cap) return;
+                        last = now;
+                    }
+                    this.version++;
+                    if (this.source) this.source.needsUpdate = true;
+                }
+            });
+        } catch (error) { /* a texture that will not take it uploads every frame */ }
+        return texture;
+    }
+
     function watchVideoImport(texture, renderer) {
+        capVideoUploads(texture);
         if (!texture || !texture.isVideoTexture || !renderer || typeof renderer.getContext !== "function") return texture;
         const gl = renderer.getContext(), invalid = gl.INVALID_VALUE;
         let checks = 0, strikes = 0;
@@ -541,6 +571,8 @@ function normalizeShowArgs(raw, interpreter) {
      */
     const turnCache = { enabled: true };
     const secondPlacement = { enabled: true };
+    // Looping videos nobody can see pause until a surface showing them comes into view (MediaSurfaceManager.budgetVideos).
+    const videoBudget = { enabled: true, HIDE_FRAMES: 30 };
     function setMeshTurn(mesh, rx, ry, rz) {
         const r = mesh.rotation, q = mesh.quaternion;
         const memo = mesh.userData.rrTurnMemo;
@@ -1752,6 +1784,52 @@ function normalizeShowArgs(raw, interpreter) {
                     this._owners.delete(id);
                 }
             }
+            if (!settled) this.budgetVideos();
+        }
+
+        /**
+         * A looping video that none of its surfaces shows is paused, and plays on from there once one comes into view:
+         * a screen behind the camera or off the map's edge decoded and uploaded every frame for nobody. The Reactor
+         * Room plays ten surfaces; with them still the laptop's frame (i5-1145G7, Iris Xe) went from 60 to 78 a second
+         * and its frames held a refresh past their time from 13% to 0.6% (2026-11-08). A video an event waits on, one
+         * that does not loop, and one waiting for a click to start are left alone. `videoBudget.enabled = false`
+         * keeps every video playing; `HIDE_FRAMES` is how long a video is out of sight before it pauses.
+         */
+        budgetVideos() {
+            if (!videoBudget.enabled || !this._owners.size) return;
+            // A Quality level that holds looping videos still pauses them wherever they are (Reactor3D.Quality.stillVideos).
+            const Q = typeof Reactor3D !== "undefined" ? Reactor3D.Quality : null, still = !!(Q && Q.stillVideos && Q.stillVideos());
+            const frustum = typeof Reactor3D !== "undefined" && Reactor3D.viewFrustum ? Reactor3D.viewFrustum() : null;
+            const seen = this._videoSeen || (this._videoSeen = new Map());
+            seen.clear();
+            for (const owner of this._owners.values()) {
+                const video = owner.video;
+                if (!video || owner.cleaned || owner.isImage) continue;
+                let record = seen.get(video);
+                if (!record) seen.set(video, (record = { shown: false, pausable: true, owner }));
+                const descriptor = owner.descriptor;
+                if (!descriptor || !descriptor.loop || owner.awaitingGesture || this._waiters.has(owner.id)) record.pausable = false;
+                if (owner.backend === "three") {
+                    for (const mesh of [owner.threeMesh, owner.threeScanMesh]) {
+                        if (mesh && mesh.visible && mesh.parent && (!frustum || frustum.intersectsObject(mesh))) record.shown = true;
+                    }
+                } else if (owner.backend === "pixi") {
+                    const source = owner.videoSource;
+                    if (owner.pixiContainer && owner.pixiContainer.visible !== false && (!source || source.autoUpdate !== false)) record.shown = true;
+                } else record.shown = true;
+            }
+            for (const [video, record] of seen) {
+                if ((record.shown && !still) || !record.pausable) {
+                    video._rrUnseen = 0;
+                    if (video._rrOffPaused) { video._rrOffPaused = false; record.owner.play(); }
+                    continue;
+                }
+                video._rrUnseen = (video._rrUnseen || 0) + 1;
+                if ((still || video._rrUnseen >= videoBudget.HIDE_FRAMES) && !video.paused && !video._rrOffPaused) {
+                    video._rrOffPaused = true;
+                    try { video.pause(); } catch (error) { video._rrOffPaused = false; }
+                }
+            }
         }
 
         teardownRuntime(reason) {
@@ -1833,6 +1911,15 @@ function normalizeShowArgs(raw, interpreter) {
             && !Spriteset_Map.prototype.update.__reactorVideoSurfaces) {
             const baseUpdate = Spriteset_Map.prototype.update;
             Spriteset_Map.prototype.update = function() {
+                // A Quality level that asks it (Reactor3D.Quality.mediaEvery) places the surfaces every few updates and
+                // leaves out the second look after the spriteset's own update: a screen on a still prop stands where it
+                // stood, and its video keeps playing and uploading meanwhile.
+                const Q = typeof Reactor3D !== "undefined" ? Reactor3D.Quality : null, every = Q && Q.mediaEvery ? Q.mediaEvery() : 1;
+                if (every > 1 && manager._spriteset === this && manager._owners.size) {
+                    this._rrMediaSkip = ((this._rrMediaSkip || 0) + 1) % every;
+                    if (this._rrMediaSkip === 1) manager.updateSpriteset(this);
+                    return baseUpdate.apply(this, arguments);
+                }
                 manager.updateSpriteset(this);
                 const result = baseUpdate.apply(this, arguments);
                 manager.updateSpriteset(this, true);
@@ -1894,6 +1981,7 @@ function normalizeShowArgs(raw, interpreter) {
         applyWorldCorners: applyWorldCorners,
         turnCache: turnCache,
         secondPlacement: secondPlacement,
+        videoBudget: videoBudget,
         watchVideoImport: watchVideoImport,
         MediaSurfaceOwner: MediaSurfaceOwner,
         MediaSurfaceManager: MediaSurfaceManager,

@@ -408,7 +408,41 @@
      * height, so the right floor), then gravity, then landing. A character on
      * the ground that the ground falls away from starts falling.
      */
+    /**
+     * An event standing still on the ground it stood on at its last update has nothing to work out: where the ground
+     * is under it, whether it falls, floats, climbs or steps is the same answer as before. The whole of `update` ran
+     * for each of a map's events in every update all the same: two thirds of the events' update in North Haven, where
+     * most stand (2026-11-10). Such an event rests: it is looked at again when it moves, when anything about its
+     * height is set from outside (a jump, a unit sent to another floor), and every REST_UPDATES updates whatever
+     * happens, so ground that changes under it (a door, a bridge, an edit) is noticed within a fifth of a second.
+     * Events only: the party's bodies are four, and board vehicles. Kept beside the characters, not on them (a
+     * character is written into a save). `RESTS = false` works every event out in every update, as before.
+     */
+    ReactorPhysics.RESTS = true;
+    ReactorPhysics.REST_UPDATES = 12;
+    ReactorPhysics.rested = 0;
+    const REST = new WeakMap();
+    /** Whether `character` is at rest as `rest` recorded it, at update `tick`. */
+    ReactorPhysics.atRest = function(character, rest, tick) {
+        return rest.valid && rest.map === $dataMap && rest.x === character._realX && rest.y === character._realY && rest.tx === character.x && rest.ty === character.y
+            && rest.ground === character._reactorGround && rest.alt === character._reactorAlt && !character._reactorVz
+            && tick >= rest.at && tick - rest.at < this.REST_UPDATES
+            && !character._reactorMantle && !character._reactorGrapple && !character._reactorLeap && !character._reactorSwim && !character._reactorOnLadder
+            && !character._reactorStepDown && character._reactorStepUp === undefined && !character._reactorRisen && !character._reactorRagdoll && !character._reactorClimb
+            && !character._reactorJumped && !(character.isJumping && character.isJumping());
+    };
+
     ReactorPhysics.update = function(character) {
+        // An event at rest (`atRest`): nothing to work out.
+        let rest = null;
+        if (this.RESTS && typeof Game_Event !== "undefined" && character instanceof Game_Event) {
+            const tick = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+            rest = REST.get(character);
+            if (!rest) REST.set(character, rest = { valid: false, map: null, x: 0, y: 0, tx: 0, ty: 0, ground: 0, alt: 0, at: 0 });
+            else if (this.atRest(character, rest, tick)) { this.rested++; return; }
+            rest.valid = false;
+            rest.at = tick;
+        }
         // Vehicles keep their own height (an airship flies, a boat floats), and so does a player aboard one.
         const vehicle = (typeof Game_Vehicle !== "undefined" && character instanceof Game_Vehicle)
             || (typeof $gamePlayer !== "undefined" && character === $gamePlayer && character.isInVehicle && character.isInVehicle());
@@ -583,7 +617,15 @@
                 height += rate;
                 ground = height;
                 character._reactorGround = ground;
-            } else height = ground;
+            } else {
+                height = ground;
+                // Standing on its ground with nothing under way: at rest from here (`atRest`), unless it is in or over water.
+                if (rest && float === null && !flying) {
+                    rest.valid = true; rest.map = $dataMap;
+                    rest.x = character._realX; rest.y = character._realY; rest.tx = character.x; rest.ty = character.y;
+                    rest.ground = ground; rest.alt = height;
+                }
+            }
             vz = 0;
             character._reactorPeak = undefined;
             character._reactorLeap = false;

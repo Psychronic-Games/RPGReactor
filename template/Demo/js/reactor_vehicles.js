@@ -301,8 +301,10 @@
         const R = world();
         if (!R || typeof R.characterModelSpec !== "function" || R.characterModelSpec.__rrVehicles) return;
         const characterModelSpec = R.characterModelSpec;
+        // Asked of every character several times an update: no list made per call.
+        const STOCK = { boat: true, ship: true, airship: true };
         R.characterModelSpec = function(character) {
-            const stock = character && ["boat","ship","airship"].includes(character._type) && root.$dataSystem && root.$dataSystem[character._type];
+            const stock = character && typeof character._type === "string" && STOCK[character._type] === true && root.$dataSystem && root.$dataSystem[character._type];
             if (stock && stock.reactorVehicle && stock.reactorVehicle.model && stock.reactorVehicle.model.name) {
                 const look = lookOf(models().typeOf(stock.reactorVehicle));
                 if (look && look.spec) return look.spec;

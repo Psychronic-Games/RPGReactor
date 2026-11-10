@@ -1759,9 +1759,17 @@ Reactor3D._bodyHeights = function(a, b, at) {
  * and the tile is further from its own than any part of it reaches. Nearly
  * every event asked about is, and is passed over with no more than this.
  */
+/**
+ * How many updates an event's reach (`held.far`) is trusted for the test above: it changes only with the event's
+ * page, model or size, which are checked or rarely change. Asked only of a body looked at this very update, every
+ * event's whole body was worked out again (its model's spec through every wrapper) each update a wanderer tried a
+ * step: about 1 ms a frame of the Reactor Room on the laptop while walking (2026-11-08). 0 trusts this update's only.
+ */
+Reactor3D.BODY_FAR_FRAMES = 30;
 Reactor3D._bodyFar = function(event, x, y, margin, now) {
     const held = event._reactorBody;
-    if (held === undefined || held.frame !== now.frame || !(now.frame > 0) || now.loops || held.page !== event._pageIndex || held.map !== now.data) return false;
+    if (held === undefined || !(now.frame > 0) || now.loops || held.page !== event._pageIndex || held.map !== now.data) return false;
+    if (held.frame !== now.frame && !(held.frame < now.frame && now.frame - held.frame <= this.BODY_FAR_FRAMES && held.erased === !!event._erased)) return false;
     const far = held.far + margin, dx = x - event._x, dy = y - event._y;
     return dx > far || dx < -far || dy > far || dy < -far;
 };
@@ -2762,8 +2770,13 @@ Reactor3D.fitModelTexture = function(texture, image, own) {
     texture.image = stand;
     texture.needsUpdate = true;
     const scale = cap / Math.max(width, height);
-    createImageBitmap(image, { resizeWidth: Math.max(1, Math.round(width * scale)), resizeHeight: Math.max(1, Math.round(height * scale)),
-        resizeQuality: "high", imageOrientation: texture.flipY ? "flipY" : "from-image", premultiplyAlpha: texture.premultiplyAlpha ? "premultiply" : "none", colorSpaceConversion: "none" })
+    const options = { resizeWidth: Math.max(1, Math.round(width * scale)), resizeHeight: Math.max(1, Math.round(height * scale)),
+        resizeQuality: "high", imageOrientation: texture.flipY ? "flipY" : "from-image", premultiplyAlpha: texture.premultiplyAlpha ? "premultiply" : "none", colorSpaceConversion: "none" };
+    // Decoded and resized in the image worker from the picture's own bytes: `createImageBitmap` of an <img> did that
+    // work on the main thread, 300 ms of every second for the first 20 s of North Haven's arrival on the weak-GPU
+    // laptop, whose 1024 cap resizes nearly every model sheet (2026-11-09). The main thread only if the worker cannot.
+    const worker = this.ImageWorker && this.ImageWorker.bitmap ? this.ImageWorker.bitmap(image, options) : null;
+    (worker ? worker.catch(() => createImageBitmap(image, options)) : createImageBitmap(image, options))
         .then(bitmap => {
             if (texture.image !== stand) { if (bitmap.close) bitmap.close(); return; }
             // Its storage was made one pixel square: made again at the picture's size.
@@ -11401,9 +11414,12 @@ Reactor3D.updateMapModelSprite = function(sprite) {
         sprite._reactorFlatFit = 0;
     }
     if (!character || typeof character.tileId === "function" && character.tileId() > 0) return;
-    const spec = this.characterModelSpec(character);
     let state = sprite._reactorMapModel;
     const inScene = typeof $dataMap !== "undefined" && this.shouldRender3D($dataMap);
+    // A 3D map draws the model in its scene: nothing to do here unless a flat map's picture is left to let go
+    // (the spec, asked of every sprite every update, was the larger part of this call).
+    if (inScene && !state) return;
+    const spec = this.characterModelSpec(character);
     if (!spec || inScene) {
         if (state) {
             this.releaseMapModelState(state);
@@ -12721,7 +12737,9 @@ Reactor3D.animationDue = function(holder, character, object, camera) {
     // Its first pose is always taken, and the sphere is generous, so it never steps in frozen mid-stride.
     if (holder.posedOnce && !Reactor3D.inAnimationView(object, span, camera)) { holder.poseHeld = true; holder.blendPose = false; return (holder.sampled = false); }
     holder.posedOnce = true;
-    const stride = Reactor3D.animationStride(object.position.x, object.position.y + span / 2, object.position.z, span, camera);
+    // A Quality level may animate what is not the party (props, machines, NPCs) every other update or less often.
+    const Q = Reactor3D.Quality, floor = !Q || !Q.animationStride ? 1 : Reactor3D.partyCharacter(character) ? (Q.partyStride ? Q.partyStride() : 1) : Q.animationStride();
+    const stride = Math.max(floor, Reactor3D.animationStride(object.position.x, object.position.y + span / 2, object.position.z, span, camera));
     if (stride === 1) return true;
     holder.blendPose = false;
     if (holder.strideAt === undefined) holder.strideAt = (Reactor3D._strideSeed = (Reactor3D._strideSeed || 0) + 1);
@@ -12754,14 +12772,43 @@ Reactor3D.FarParts = {
         object.userData.rrFarParts = list;
         return list;
     },
-    apply(holder, object, far) {
+    /**
+     * The second, soft pass of hair (a built character's `Hair_soft`, `Facial_hair_soft`): the blended fringe over
+     * the cut-out hair. A Quality level that trims (Reactor3D.Quality.trimParts) leaves it out with the small parts,
+     * on every body however near: the cut-out hair stays, its edge harder.
+     */
+    SOFT_PATTERN: /(^|_|\s)soft\b/i,
+    /**
+     * A part's name, or the name of a group it stands in below the body: a built character's soft hair is an
+     * unnamed SkinnedMesh in a node named `Hair_soft`, and was never found by its own name (North Haven,
+     * 2026-11-09: every trimmed party member still drew both hair passes).
+     */
+    namedSoft(child, object) {
+        for (let node = child; node && node !== object; node = node.parent) if (this.SOFT_PATTERN.test(node.name || "")) return true;
+        return false;
+    },
+    softOf(object) {
+        let list = object.userData.rrSoftParts;
+        if (list && list.of === object.children.length) return list;
+        list = [];
+        object.traverse(child => { if (child.isMesh && child !== object && this.namedSoft(child, object)) list.push(child); });
+        list.of = object.children.length;
+        object.userData.rrSoftParts = list;
+        return list;
+    },
+    apply(holder, object, far, trim = false) {
         if (!object || !object.userData) return;
-        const want = !!(far && this.enabled);
-        if (holder.farParts === want && object.userData.rrFarPartsApplied === want) return;
+        const want = !!((far || trim) && this.enabled), soft = !!(trim && this.enabled);
+        if (holder.farParts === want && object.userData.rrFarPartsApplied === want && holder.softParts === soft && object.userData.rrSoftPartsApplied === soft) return;
         holder.farParts = want;
         object.userData.rrFarPartsApplied = want;
         for (const part of this.partsOf(object)) {
             if (want) part.layers.disable(this.VIEW_LAYER); else part.layers.enable(this.VIEW_LAYER);
+        }
+        holder.softParts = soft;
+        object.userData.rrSoftPartsApplied = soft;
+        for (const part of this.softOf(object)) {
+            if (soft) part.layers.disable(this.VIEW_LAYER); else part.layers.enable(this.VIEW_LAYER);
         }
     }
 };
@@ -12769,7 +12816,8 @@ Reactor3D.FarParts = {
     const due = Reactor3D.animationDue;
     Reactor3D.animationDue = function(holder, character, object, camera) {
         const answer = due.apply(this, arguments);
-        Reactor3D.FarParts.apply(holder, object, holder.blendPose === false);
+        const Q = Reactor3D.Quality, trim = !!(Q && Q.trimParts && Q.trimParts());
+        Reactor3D.FarParts.apply(holder, object, holder.blendPose === false, trim);
         return answer;
     };
 })();
@@ -13049,6 +13097,115 @@ Reactor3D.ModelJoins = {
 };
 
 /**
+ * Crowd tiers: what a body out of view costs. Its pose is already held there (Reactor3D.animationDue); its
+ * placement was not: every update every NPC out of view still had its model looked up, its ground, facing,
+ * place, effects and carried things worked out, and its sprite's plugins run, for a picture nobody sees (North
+ * Haven, 80 characters, 2026-11-10: about a third of the page's frame was per character). A body out of view
+ * that is not the party, not a ragdoll, not knocked out and not acting is placed every OFF_VIEW_EVERY updates
+ * (each on its own beat), its sprite updated every SPRITE_OFF_VIEW_EVERY; its game logic runs as before. The
+ * view test is the animation's generous sphere, so a body is placed again before it comes on screen. Coming
+ * into view, it is placed at its next beat at the latest: OFF_VIEW_EVERY - 1 updates.
+ */
+Reactor3D.CrowdTiers = {
+    enabled: true,
+    OFF_VIEW_EVERY: 4,
+    SPRITE_OFF_VIEW_EVERY: 4,
+    /** Placements left out (a counter for probes). */
+    skipped: 0,
+    _seed: 0,
+    /** After a placement: whether this body is out of view, and what its next sync needs to leave it be. */
+    note(character, key, holder) {
+        const off = holder.poseHeld === true && !!holder.object && !Reactor3D.partyCharacter(character)
+            && !character._reactorRagdoll && !character._reactorKnockedOut && !holder.action;
+        let crowd = character._rrCrowd;
+        if (!crowd) {
+            if (!off) return;
+            crowd = { off: false, key, holder, page: character._pageIndex, seed: ++this._seed };
+            try { Object.defineProperty(character, "_rrCrowd", { value: crowd, enumerable: false, configurable: true, writable: true }); } catch (error) { return; }
+        }
+        crowd.off = off; crowd.key = key; crowd.holder = holder; crowd.page = character._pageIndex;
+    },
+    /** How often a model-drawn character's sprite updates for being out of view (1: as its level says). */
+    spriteEvery(character) {
+        const crowd = this.enabled && character ? character._rrCrowd : null;
+        return crowd && crowd.off ? this.SPRITE_OFF_VIEW_EVERY : 1;
+    }
+};
+
+/**
+ * A skinned body's joints are objects in the scene's tree, sixty to ninety of them a character, and every walk
+ * of the visible tree went through them all to find nothing to draw: the engine's own gathering of the visible
+ * tree (SceneWalk), three's walk for its draw lists, the shadow rows' walks. With 120 bodies that was about
+ * 10,000 nodes a walk and ~5 ms of every frame (2026-11-10). A joint with nothing under it that a pass could
+ * draw or light is set invisible, which is how those walks know to pass a subtree by; its matrices are worked
+ * out as before (visibility is not asked there), so the skin moves the same. Whatever is put under such a
+ * joint afterwards (a weapon in a hand, a worn piece, an effect's anchor) shows it and every joint above it
+ * again at once (`add` on those nodes), and each body is looked over again every EVERY updates for anything
+ * that got there another way.
+ */
+Reactor3D.BareBones = {
+    enabled: true,
+    EVERY: 30,
+    _joints: new Set(),
+    /** Whether a node is something a pass may draw, light or look from. */
+    draws(node) {
+        return !!(node.isMesh || node.isLine || node.isPoints || node.isSprite || node.isLight || node.isCamera || (node.userData && node.userData.rrKeepShown));
+    },
+    /** `root`'s bare joints hidden, and those no longer bare shown; returns how many are hidden now. */
+    apply(root) {
+        if (!root) return 0;
+        if (!this.enabled) { this.release(root); return 0; }
+        const joints = this._joints;
+        joints.clear();
+        root.traverse(node => { if (node.isSkinnedMesh && node.skeleton && node.skeleton.bones) for (const bone of node.skeleton.bones) if (bone) joints.add(bone); });
+        if (!joints.size) return 0;
+        let hidden = 0;
+        const walk = node => {
+            let draws = this.draws(node);
+            const children = node.children;
+            for (let i = 0; i < children.length; i++) if (walk(children[i])) draws = true;
+            if (!joints.has(node)) return draws;
+            if (draws) { if (node.userData.rrBare) this.show(node); return true; }
+            // Hidden by this, or by a copy of a body this had hidden (userData and `visible` are copied; `add` is not).
+            if (node.visible || node.userData.rrBare) {
+                node.visible = false;
+                node.userData.rrBare = true;
+                this.watch(node);
+                hidden++;
+            }
+            return false;
+        };
+        walk(root);
+        joints.clear();
+        return hidden;
+    },
+    /** A bare joint and everything under it tell this when something is added to them. */
+    watch(joint) {
+        const owner = this;
+        joint.traverse(node => {
+            if (node.__rrBareAdd) return;
+            node.__rrBareAdd = true;
+            node.add = function() {
+                owner.reveal(this);
+                return THREE.Object3D.prototype.add.apply(this, arguments);
+            };
+        });
+    },
+    show(node) {
+        node.visible = true;
+        delete node.userData.rrBare;
+    },
+    /** `node` and every joint above it that this hid, shown again: something to draw is coming under them. */
+    reveal(node) {
+        for (let n = node; n; n = n.parent) if (n.userData && n.userData.rrBare) this.show(n);
+    },
+    /** Every joint of `root` this hid, shown (the switch turned off). */
+    release(root) {
+        root.traverse(node => { if (node.userData && node.userData.rrBare) this.show(node); });
+    }
+};
+
+/**
  * A body whose pose is held (asleep, or out of view: Reactor3D.animationDue) and that stands as it
  * was placed keeps last frame's matrices, bones and all: the scene's walk leaves it out, and its bone
  * palette is not compared again, until it moves or is posed. 150 still bodies were most of a frame.
@@ -13093,12 +13250,37 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     let lodScreen = null;
     let commandsAsked = false;
     const still = Reactor3D.StillModels;
+    // A Quality level may sync a prop that stood still last time every few frames (Quality.propEvery): what it
+    // was placed and posed as stands meanwhile. Never the party.
+    const Q = Reactor3D.Quality, propEvery = Q && Q.propEvery ? Q.propEvery() : 1;
+    const tick = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    const crowdTiers = Reactor3D.CrowdTiers, offEvery = crowdTiers.enabled ? crowdTiers.OFF_VIEW_EVERY : 1;
+    const bareBones = Reactor3D.BareBones;
     for (const character of characters || []) {
+        // Out of view (its pose held, see animationDue) and not the party: placed every few updates only.
+        if (offEvery > 1) {
+            const crowd = character && character._rrCrowd;
+            if (crowd && crowd.off && crowd.holder.object && this._modelInstances.get(crowd.key) === crowd.holder
+                && crowd.page === character._pageIndex && ((tick + crowd.seed) % offEvery) !== 0) { live.add(crowd.key); crowdTiers.skipped++; continue; }
+        }
+        if (propEvery > 1) {
+            const kept = character && character._rrPropSkip;
+            if (kept && kept.holder && kept.holder.stillNow && kept.holder.object && this._modelInstances.get(kept.key) === kept.holder
+                && kept.page === character._pageIndex && ((tick + kept.seed) % propEvery) !== 0) { live.add(kept.key); continue; }
+        }
         const spec = Reactor3D.characterModelSpec(character);
         if (!spec) continue;
         const key = Reactor3D.modelInstanceKey(character);
         live.add(key);
         let holder = this._modelInstances.get(key);
+        if (propEvery > 1 && holder && character && !Reactor3D.partyCharacter(character)) {
+            let kept = character._rrPropSkip;
+            if (!kept) {
+                kept = { key, holder, page: character._pageIndex, seed: (this._propSeed = (this._propSeed || 0) + 1) };
+                try { Object.defineProperty(character, "_rrPropSkip", { value: kept, enumerable: false, configurable: true, writable: true }); } catch (error) { kept = null; }
+            }
+            if (kept) { kept.key = key; kept.holder = holder; kept.page = character._pageIndex; }
+        }
         const specKey = Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file);
         // Another model for the same character (a page turned to one, a party member swapped in): the one
         // it wore is let go and the new one loads, as A.remodel does in a battle. A variant only is below.
@@ -13343,6 +13525,9 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             }
         }
         Reactor3D.holdModelMatrices(holder, character, object);
+        if (offEvery > 1 && character) crowdTiers.note(character, key, holder);
+        // Its joints with nothing to draw under them leave the visible tree (BareBones): at once, then every so often.
+        if (holder.bareAt === undefined || tick - holder.bareAt >= bareBones.EVERY || tick < holder.bareAt) { holder.bareAt = tick; bareBones.apply(object); }
     }
     for (const [key, holder] of this._modelInstances) {
         if (live.has(key)) continue;
@@ -14993,7 +15178,6 @@ Reactor3D.LayeredParts = {
 
     /** Pixels of every picture at width x height, one after another (RGBA bytes, top row first as the GLB reads them). */
     async pixels(images, width, height, give) {
-        const out = new Uint8Array(width * height * 4 * images.length);
         // A bitmap nothing else will draw goes to the worker itself; any other is copied (a copy of a 1024 sheet
         // was most of a merge's main-thread time). The worker draws each to the layer's size.
         // A bitmap still drawn elsewhere is sent to the worker as it is, without handing it over: the browser shares
@@ -15004,17 +15188,19 @@ Reactor3D.LayeredParts = {
         const worker = this.worker();
         const shared = !!worker && this.SHARE_BITMAPS;
         const owned = images.map((image, i) => !(isBitmap(image) && (shared || (give && give[i]))) || !!(give && give[i]));
-        const bitmaps = await Promise.all(images.map((image, i) => (isBitmap(image) && (shared || (give && give[i]))
-            ? image : createImageBitmap(image, { premultiplyAlpha: "none", colorSpaceConversion: "none" }))));
+        const bitmaps = await Promise.all(images.map((image, i) => (isBitmap(image) && (shared || (give && give[i])) ? image : this.decode(image))));
         if (worker) {
             const id = (this._jobs = (this._jobs || 0) + 1);
             const data = await new Promise(resolve => {
                 (this._pending || (this._pending = new Map())).set(id, resolve);
                 worker.postMessage({ id, width, height, bitmaps, owned }, bitmaps.filter((bitmap, i) => owned[i]));
             });
-            if (data) { out.set(new Uint8Array(data)); return out; }
+            // The worker's own bytes, as they came: copied into an array made here they were 110 to 200 ms of each second
+            // of an arrival's merges (a group's pictures are tens of megabytes, made and filled twice).
+            if (data) return new Uint8Array(data);
         }
         // Without a worker (or if it failed): here, on a canvas.
+        const out = new Uint8Array(width * height * 4 * images.length);
         const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(width, height) : Object.assign(document.createElement("canvas"), { width, height });
         const context = canvas.getContext("2d", { willReadFrequently: true });
         context.imageSmoothingQuality = "high";
@@ -15027,6 +15213,22 @@ Reactor3D.LayeredParts = {
     },
     /** False copies every picture still drawn elsewhere on the main thread before the worker reads it, as before. */
     SHARE_BITMAPS: true,
+
+    /**
+     * A bitmap of a picture as the GLB reads it. A picture element goes to the image worker, which decodes it from
+     * the picture's own bytes: `createImageBitmap` of an <img> decoded it again on the main thread (50 ms of every
+     * second of North Haven's arrival with the shaders already cached, 2026-11-10). Here when the worker cannot
+     * (a canvas; a picture whose bytes and address it cannot read). `DECODE_FAR = false` decodes here, as before.
+     */
+    decode(image) {
+        const options = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
+        const W = Reactor3D.ImageWorker;
+        const far = this.DECODE_FAR && image && image.tagName === "IMG" && W && W.bitmap ? W.bitmap(image, options) : null;
+        if (!far) return createImageBitmap(image, options);
+        this.decodedFar = (this.decodedFar || 0) + 1;
+        return far.catch(() => createImageBitmap(image, options));
+    },
+    DECODE_FAR: true,
 
     /** The worker that reads the pictures' pixels, off the main thread. */
     worker() {
@@ -15188,7 +15390,9 @@ Reactor3D.LayeredParts = {
                 let start = 0;
                 for (const part of parts) {
                     const list = part.geometry.morphAttributes.position || [], a = list.find(x => x.name === name), n = part.geometry.attributes.position.count;
-                    if (a) for (let i = 0; i < n; i++) { values[(start + i) * 3] = a.getX(i); values[(start + i) * 3 + 1] = a.getY(i); values[(start + i) * 3 + 2] = a.getZ(i); }
+                    // Whole where it is plain, as the places above are.
+                    if (a && !a.isInterleavedBufferAttribute && !a.normalized && a.itemSize === 3 && a.array && a.array.length === n * 3) values.set(a.array, start * 3);
+                    else if (a) for (let i = 0; i < n; i++) { values[(start + i) * 3] = a.getX(i); values[(start + i) * 3 + 1] = a.getY(i); values[(start + i) * 3 + 2] = a.getZ(i); }
                     start += n;
                 }
                 const attribute = new THREE.BufferAttribute(values, 3);
@@ -15197,9 +15401,67 @@ Reactor3D.LayeredParts = {
             });
             geometry.morphTargetsRelative = true;
         }
-        geometry.computeBoundingBox();
-        geometry.computeBoundingSphere();
+        this.bounds(geometry);
         return geometry;
+    },
+
+    /**
+     * The geometry's box and sphere, read straight from its arrays: the same numbers three works out, which reads
+     * every vertex through a Vector3, and every shape's twice more (a face's dozens of shapes: 50 ms of every
+     * second of North Haven's arrival, 2026-11-10). `FAST_BOUNDS = false` leaves it to three.
+     */
+    FAST_BOUNDS: true,
+    bounds(geometry) {
+        const attribute = geometry.attributes.position, shapes = geometry.morphAttributes.position || [];
+        const plain = a => a && !a.isInterleavedBufferAttribute && !a.isGLBufferAttribute && !a.normalized && a.itemSize === 3 && a.array && a.array.length === a.count * 3;
+        if (!this.FAST_BOUNDS || !plain(attribute) || !attribute.count || !shapes.every(plain)) {
+            geometry.computeBoundingBox();
+            geometry.computeBoundingSphere();
+            return;
+        }
+        const extent = array => {
+            let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+            for (let i = 0; i < array.length; i += 3) {
+                const x = array[i], y = array[i + 1], z = array[i + 2];
+                if (x < x0) x0 = x; if (x > x1) x1 = x;
+                if (y < y0) y0 = y; if (y > y1) y1 = y;
+                if (z < z0) z0 = z; if (z > z1) z1 = z;
+            }
+            return [x0, y0, z0, x1, y1, z1];
+        };
+        const reach = (box, x, y, z) => {
+            if (x < box[0]) box[0] = x; if (x > box[3]) box[3] = x;
+            if (y < box[1]) box[1] = y; if (y > box[4]) box[4] = y;
+            if (z < box[2]) box[2] = z; if (z > box[5]) box[5] = z;
+        };
+        const position = attribute.array, relative = !!geometry.morphTargetsRelative, box = extent(position);
+        for (const shape of shapes) {
+            const e = extent(shape.array);
+            // As three does: a shape that moves its vertices reaches from the box's corners by its own least and greatest moves.
+            if (relative) { reach(box, box[0] + e[0], box[1] + e[1], box[2] + e[2]); reach(box, box[3] + e[3], box[4] + e[4], box[5] + e[5]); }
+            else { reach(box, e[0], e[1], e[2]); reach(box, e[3], e[4], e[5]); }
+        }
+        const cx = (box[0] + box[3]) * 0.5, cy = (box[1] + box[4]) * 0.5, cz = (box[2] + box[5]) * 0.5;
+        let far = 0;
+        for (let i = 0; i < position.length; i += 3) {
+            const dx = cx - position[i], dy = cy - position[i + 1], dz = cz - position[i + 2], d = dx * dx + dy * dy + dz * dz;
+            if (d > far) far = d;
+        }
+        for (const shape of shapes) {
+            const moves = shape.array;
+            if (relative) for (let i = 0; i < moves.length; i += 3) {
+                const mx = moves[i], my = moves[i + 1], mz = moves[i + 2];
+                // A vertex the shape leaves where it is was counted above (most of a face's shapes move a few).
+                if (mx === 0 && my === 0 && mz === 0) continue;
+                const dx = cx - (mx + position[i]), dy = cy - (my + position[i + 1]), dz = cz - (mz + position[i + 2]), d = dx * dx + dy * dy + dz * dz;
+                if (d > far) far = d;
+            } else for (let i = 0; i < moves.length; i += 3) {
+                const dx = cx - moves[i], dy = cy - moves[i + 1], dz = cz - moves[i + 2], d = dx * dx + dy * dy + dz * dz;
+                if (d > far) far = d;
+            }
+        }
+        geometry.boundingBox = new THREE.Box3(new THREE.Vector3(box[0], box[1], box[2]), new THREE.Vector3(box[3], box[4], box[5]));
+        geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), Math.sqrt(far));
     },
 
     /**
@@ -15344,10 +15606,14 @@ Reactor3D.LayeredParts = {
             template.updateMatrixWorld(true);
             // Never waited for long: the player's own character waits on this, and the map on it (a lost context
             // answers no program's status, and three's wait would poll it for ever).
-            const ready = await this.within(renderer.compileAsync(scene, camera, target || null).then(() => true), this.WARM_WAIT_MS);
+            const W = Reactor3D.ShaderWarmup, compiling = renderer.compileAsync(scene, camera, target || null).then(() => true);
+            if (W && W.track) W.track(compiling);
+            const ready = await this.within(compiling, this.WARM_WAIT_MS);
             this.handBack(viewport);
             // Not ready in time: drawing now would wait on those same programs, so it is drawn where first seen instead.
             if (ready !== true) return;
+            // Its draw reads its programs: not while others are still building (ShaderWarmup.readWhenQuiet).
+            if (W && W.whenQuiet) await W.whenQuiet();
             await this.nextFrame();
             this.plainUnpack(renderer);
             const was = renderer.getRenderTarget();
@@ -15575,6 +15841,11 @@ Reactor3D.LayeredParts = {
 
     /** The GLSL that picks each part's own: before the fragment's main, where every map it reads is declared. */
     FRAGMENT_GLSL: [
+        // The colour pictures' mip bias (Reactor3D.MipBias), declared once wherever this or three's own lookup comes first.
+        "#ifndef RR_MIP_BIAS",
+        "#define RR_MIP_BIAS",
+        "uniform float rrMipBias;",
+        "#endif",
         "vec2 rrLayerUv(float bit) { return mod(floor(vRRLayerB.w / bit), 2.0) > 0.5 ? vRRUv1 : vMapUv; }",
         "vec4 rrLayerTexel(highp sampler2DArray s, float k, float bit, vec4 none) {",
         "\tvec2 uv = rrLayerUv(bit), dx = dFdx(uv), dy = dFdy(uv);",
@@ -15592,7 +15863,8 @@ Reactor3D.LayeredParts = {
     baseGlsl(count) {
         const lines = ["vec4 rrLayerBase(vec2 uv) {", "\tfloat k = vRRLayerA.x;", "\tif (k < -0.5 || " + count + " == 0) return vec4(1.0);"];
         if (count > 0) {
-            lines.push("\tvec2 dx = dFdx(uv), dy = dFdy(uv);", "\tvec3 at = vec3(uv, k);", "\tfloat c = vRRLayerE.w;");
+            // The colour pictures read by explicit gradients: the mip bias is a scale of those.
+            lines.push("\tfloat bias = exp2(rrMipBias);", "\tvec2 dx = dFdx(uv) * bias, dy = dFdy(uv) * bias;", "\tvec3 at = vec3(uv, k);", "\tfloat c = vRRLayerE.w;");
             for (let i = 0; i < count - 1; i++) lines.push("\tif (c < " + (i + 0.5).toFixed(1) + ") return textureGrad(rrBase" + i + ", at, dx, dy);");
             lines.push("\treturn textureGrad(rrBase" + (count - 1) + ", at, dx, dy);");
         }

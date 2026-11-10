@@ -84,7 +84,10 @@ test('a recompile of something on screen, or after the view itself was not drawn
     mesh2.visible = true; mesh2.material.needsUpdate = true; clock.t += 16;
     global.reactor = { projectController: {} };
     try { assert.equal(W.hide(r, scene, {}), null, 'the editor'); } finally { delete global.reactor; }
-    assert.equal(r.compiles.length, 0);
+    // Never held; a change that is not one of a run begins its next program in the background while the old one
+    // draws (runtime 20261110.7): the first of the five and the one after the menu. (The editor's mesh was never
+    // passed by this view before it changed: drawn as before.)
+    assert.equal(r.compiles.length, 2);
 }));
 
 test('the unlit twin keeps its own warmup record: one the original holds from a lit pass is not read through', () => {
@@ -155,9 +158,9 @@ test('the haze\'s and the halo\'s programs are compiled ahead against stand-in t
         H.warmAhead(r, { depthTexture: null });
         assert.equal(r.compiles.length, 0, 'a pass with no depth texture has no haze');
         const list = H.warmList();
-        assert.equal(list.length, 7, 'shrink, haze, a lamp\'s glow, the halo\'s halving, gathering and screen, a feeder');
+        assert.equal(list.length, 8, 'shrink, haze, a lamp\'s glow, the lamps\' glows in one draw, the halo\'s halving, gathering and screen, a feeder');
         for (let i = 0; i < 12; i++) H.warmAhead(r, pass);
-        assert.equal(r.compiles.length, 7, 'each once, one a call');
+        assert.equal(r.compiles.length, 8, 'each once, one a call');
         assert.equal(current, null, 'the pass\'s own target bound again after each');
         const small = H.standIn('small'), onPass = H.standIn('pass');
         assert.notEqual(small, onPass);

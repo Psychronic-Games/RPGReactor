@@ -1437,7 +1437,8 @@ test('rock tops, tints and the rock brush: rows, filled areas, each rock its own
     const shaded = {}; R.triplanarMaterial(shaded, 5);
     const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <project_vertex>', fragmentShader: '#include <common>\n#include <map_fragment>' };
     shaded.onBeforeCompile(shader);
-    assert.match(shader.fragmentShader, /texture2D\(map, vRRTriPos\.zy \* rrTriScale\) \* rrTriW\.x \+ texture2D\(map, vRRTriPos\.xz \* rrTriScale\) \* rrTriW\.y/);
+    // (Each lookup takes the view's mip bias: Reactor3D.MipBias, zero at full size.)
+    assert.match(shader.fragmentShader, /texture2D\(map, vRRTriPos\.zy \* rrTriScale, rrMipBias\) \* rrTriW\.x \+ texture2D\(map, vRRTriPos\.xz \* rrTriScale, rrMipBias\) \* rrTriW\.y/);
     assert.equal(shader.uniforms.rrTriScale.value, 0.2);
     assert.match(shaded.customProgramCacheKey(), /\|triplanar$/);
     // The brush: a drag lays one rock each spacing, a Ctrl rectangle fills a grid, each rock varies by its seed.
