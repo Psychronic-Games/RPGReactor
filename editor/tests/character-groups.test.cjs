@@ -95,21 +95,18 @@ test('portraits are laid eight to a face sheet, and a sheet can hold the first p
     assert.deepEqual([one[0].col, one[0].row, one[0].expression], [0, 0, 'neutral']);
 });
 
-test('a member is drawn at once as a figure in its own colours, with no model built', () => {
-    const r = Model.normalize({ gender: 1, skin: '#8a5a3c', height: 1, weight: 1, hair: { style: 'crew', color: '#111111' }, outfit: [{ id: 'tunic', color: '#7a1f1f' }, { id: 'jeans', color: '#22334a' }, { id: 'boots', color: '#3a2a1a' }] });
-    const svg = Groups.figure(r);
-    assert.match(svg, /^<svg class="rr-c3d-gen-figure" viewBox="0 0 60 90"/);
-    for (const colour of ['#8a5a3c', '#111111', '#7a1f1f', '#22334a', '#3a2a1a']) assert.ok(svg.includes(colour), colour + ' is in the figure');
-    assert.ok(!/NaN|undefined/.test(svg));
-    // Bald and bare: skin where cloth and hair were, and no hair drawn.
-    const bare = Groups.figure(Model.normalize({ skin: '#c18c69', hair: { style: 'bald' }, outfit: [] }));
-    assert.ok(!bare.includes('#3b2a1e') && bare.includes('#c18c69') && !/NaN|undefined/.test(bare));
-    // A heavier, taller member is drawn broader and taller than a slight, short one.
-    const widthOf = s => Number(/<path d="M([\d.]+) [\d.]+ Q30/.exec(s)[1]);
-    assert.ok(widthOf(Groups.figure({ ...r, weight: 1 })) < widthOf(Groups.figure({ ...r, weight: 0 })), 'shoulders start further left when heavy');
-    // Every member of a group can be drawn, in well under a millisecond each.
-    const list = Groups.members({ name: 'Crowd', count: 60, seed: 9, species: ['human', 'elf', 'orc'], themes: ['Everyday', 'Fantasy', 'Armor'] });
-    const started = performance.now();
-    for (const m of list) assert.ok(Groups.figure(m.recipe).length > 300);
-    assert.ok(performance.now() - started < 500, 'sixty figures in ' + Math.round(performance.now() - started) + ' ms');
+test('a member is shown at once as a baked picture of what it wears, with no model built', () => {
+    const shown = [];
+    global.Character3DBuilder = { shippedPicture: (kind, tag, id) => { shown.push([kind, tag, id].join(' ')); return id === 'robe' || kind === 'species' ? 'data:image/webp;base64,AAAA' : null; } };
+    try {
+        const html = Groups.standIn(Model.normalize({ gender: 0.2, outfit: [{ id: 'shirt' }, { id: 'robe' }] }));
+        assert.match(html, /^<img class="rr-c3d-gen-standin" src="data:image\/webp;base64,AAAA" alt="">$/);
+        assert.ok(shown.includes('garment f robe'), 'the garment that says most, for a woman: ' + shown.join(', '));
+        shown.length = 0;
+        assert.match(Groups.standIn(Model.normalize({ gender: 0.9, species: 'elf', outfit: [] })), /^<img /);
+        assert.deepEqual(shown, ['species m elf'], 'nothing worn: the species');
+        const started = performance.now(), list = Groups.members(Groups.normalize({ count: 60, seed: 3 }), null);
+        for (const m of list) assert.ok(Groups.standIn(m.recipe).startsWith('<img '));
+        assert.ok(performance.now() - started < 500, 'sixty in ' + Math.round(performance.now() - started) + ' ms');
+    } finally { delete global.Character3DBuilder; }
 });

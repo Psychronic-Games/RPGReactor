@@ -226,7 +226,10 @@ class ModelPropsManager {
         return {
             name: prop.name, ext: prop.ext, file: prop.file, texture: prop.texture,
             ...(prop.variant ? { variant: prop.variant } : null),
-            size: prop.size, scale: prop.scale, stretch: prop.stretch, yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll
+            size: prop.size, scale: prop.scale, stretch: prop.stretch, yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll,
+            // An event's model says which way is its front (the Model panel's faces): without it the 2D view
+            // turned the model about its file's own axes, and it faced another way than in 3D and in the game.
+            ...(prop.faces ? { faces: prop.faces } : null)
         };
     }
 

@@ -427,10 +427,13 @@ class RPGReactor {
         this.mapImageLayersManager = new MapImageLayersManager(this.projectController, this.databaseManager);
         this.mediaSurfacePreviewManager.setEnabled(this.optionsManager.getShowVideoPreviews());
         document.getElementById('map-3d-view')?.addEventListener('change', async (event) => {
-            const active = await this.applyMap3DViewPreference(event.currentTarget.checked);
-            // Ticked or unticked by hand: that is the map's preference from now on.
-            this.projectController.rememberMap3DView(
-                this.projectController.tilemapManager?.currentMap?.id, active);
+            // Ticked or unticked by hand: that is the map's preference from now on. The map is the one open when the
+            // box was clicked (the view takes a moment to come up, and another map may be open by then), and a view
+            // that was asked for and did not come up (a failure, or another request overtaking it) is not a choice
+            // of 2D: remembered as one, the map opened flat ever after with its box cleared.
+            const mapId = this.projectController.tilemapManager?.currentMap?.id, asked = event.currentTarget.checked === true;
+            const active = await this.applyMap3DViewPreference(asked);
+            if (active === asked) this.projectController.rememberMap3DView(mapId, active);
         });
         document.getElementById('map-video-previews')?.addEventListener('change', (event) => {
             this.optionsManager.setShowVideoPreviews(event.currentTarget.checked);
@@ -680,6 +683,8 @@ class RPGReactor {
         // code, the next launch still starts in 2D.
         this.optionsManager.setMap3DView(false);
         let active = false;
+        // (What this attempt reports, not an earlier one's.)
+        this.mapEditor3D.lastError = null;
         try {
             active = await this.mapEditor3D.setEnabled(requested);
         } catch (error) {
@@ -688,6 +693,9 @@ class RPGReactor {
         }
 
         if (active) this.optionsManager.setMap3DView(true);
+        // Overtaken by a later request (a map loading asks again; a second one is now in charge of the view and of
+        // the box): this one neither clears the box nor reports a failure that did not happen.
+        if (requested && !active && !this.mapEditor3D.lastError && (this.mapEditor3D.enabled || this.mapEditor3D._activationPromise || this.mapEditor3D._desiredEnabled !== requested)) return this.mapEditor3D.enabled === true;
 
         const checkbox = document.getElementById('map-3d-view');
         if (checkbox) checkbox.checked = active;

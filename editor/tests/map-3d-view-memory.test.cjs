@@ -81,7 +81,10 @@ test('loading a map reconciles the view with that map\'s memory, and the checkbo
     assert.match(refresh, /if \(wanted !== enabled && typeof this\.reconcileMap3DView === 'function'\) \{\s*this\.reconcileMap3DView\(wanted\);/);
 
     const main = read('src/main.js');
-    assert.match(main, /const active = await this\.applyMap3DViewPreference\(event\.currentTarget\.checked\);\s*[^]*?this\.projectController\.rememberMap3DView\(/);
+    // The choice is remembered for the map open at the click, and only when it took effect: a view that failed or
+    // was overtaken is not the owner choosing 2D.
+    assert.match(main, /const mapId = this\.projectController\.tilemapManager\?\.currentMap\?\.id, asked = event\.currentTarget\.checked === true;\s*const active = await this\.applyMap3DViewPreference\(asked\);\s*if \(active === asked\) this\.projectController\.rememberMap3DView\(mapId, active\);/);
+    assert.match(read('src/MapEditor3D.js'), /addEventListener\('beforeunload', \(\) => this\._clearStage\(\)\)/);
     assert.match(main, /reconcileMap3DView = \(wanted\) => \{\s*if \(wanted && this\._map3DCrashGuard\) return;\s*this\.applyMap3DViewPreference\(wanted === true\);/);
     assert.match(main, /if \(map3DCheckbox\) map3DCheckbox\.checked = false;/);
     assert.doesNotMatch(main, /map3DCheckbox\.checked = this\.optionsManager\.getMap3DView\(\)/);

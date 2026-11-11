@@ -1225,17 +1225,7 @@ class Character3DBuilder {
         const saved = key && this._thumbs.get(key);
         const url = saved && (saved.sig === this._thumbSig(kind) || saved.project === (this._project()?.path || '')) ? saved.url : '';
         return `<button class="rr-c3d-tile rr-c3d-thumbtile${active ? ' is-active' : ''}" data-act="${act}" data-id="${rrEscapeHtml(id)}"${extra} title="${rrEscapeHtml(this._t(label))}">`
-            + `<span class="rr-c3d-thumb" data-thumb="${rrEscapeHtml(key)}">${url ? `<img src="${url}" alt="">` : this._standIn(kind, id)}</span><span class="rr-c3d-tile-label">${rrEscapeHtml(this._t(label))}</span></button>`;
-    }
-
-    /**
-     * What a tile shows until its picture has been built: a drawn figure in the choice's own colours, made from the
-     * recipe alone (no model), so a page of tiles is never blank. Only for the choices a whole figure can show: a
-     * species, an outfit, a garment. A hairstyle or an earring has no stand-in and waits for its picture.
-     */
-    _standIn(kind, id) {
-        if (!['species', 'dress', 'garment'].includes(kind) || !this.human || this.slime || !window.RRCharacterGroups) return '';
-        try { return RRCharacterGroups.figure(this._thumbRecipe({ kind, id }).recipe); } catch (e) { return ''; }
+            + `<span class="rr-c3d-thumb" data-thumb="${rrEscapeHtml(key)}">${url ? `<img src="${url}" alt="">` : ''}</span><span class="rr-c3d-tile-label">${rrEscapeHtml(this._t(label))}</span></button>`;
     }
 
     _grid(options, render) {
@@ -1252,7 +1242,7 @@ class Character3DBuilder {
         const url = saved && (saved.sig === this._thumbSig(kind) || saved.project === (this._project()?.path || '')) ? saved.url : '';
         let html = `<div class="rr-c3d-row rr-c3d-pickrow"><span class="rr-c3d-label">${this._t(label)}</span>
             <button class="rr-c3d-pickcurrent${open ? ' is-open' : ''}" data-act="picker" data-id="${path}">`
-            + `<span class="rr-c3d-thumb" data-thumb="${kind}:${rrEscapeHtml(now.id)}">${url ? `<img src="${url}" alt="">` : this._standIn(kind, now.id)}</span>`
+            + `<span class="rr-c3d-thumb" data-thumb="${kind}:${rrEscapeHtml(now.id)}">${url ? `<img src="${url}" alt="">` : ''}</span>`
             + `<span>${rrEscapeHtml(this._t(now.label))}</span><span class="rr-c3d-caret">${open ? '▴' : '▾'}</span></button></div>`;
         if (open) html += `<div class="rr-c3d-pickgrid">${this._grid(options, o => this._tile('pick', o.id, o.label, kind, o.id === current, ` data-path="${path}"`))}</div>`;
         return html;
@@ -1386,6 +1376,13 @@ class Character3DBuilder {
             if (this._thumbShared(key, sig) === sig) return null;
             const at = key.indexOf(':'), kind = key.slice(0, at), id = key.slice(at + 1);
             const tag = kind === 'kind' || !this.human || this.slime ? 'x' : this._thumbGender() < 0.5 ? 'f' : 'm';
+            return Character3DBuilder.shippedPicture(kind, tag, id);
+        } catch (error) { return null; }
+    }
+
+    /** One baked picture as a data URL (`kind` 'garment', `tag` 'f', 'm' or 'x'), or null: for whoever shows one. */
+    static shippedPicture(kind, tag, id) {
+        try {
             const packs = Character3DBuilder._shippedPacks || (Character3DBuilder._shippedPacks = new Map()), name = kind + '-' + tag;
             if (!packs.has(name)) {
                 let pack = null;

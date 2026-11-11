@@ -101,8 +101,10 @@ class ModelPropsPreview2D {
             const spec = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(entry.prop));
             const template = await RREventPreviewModels.templateFor(this.manager.project(), spec, this.manager.mapEditor3D());
             if (!template || this.entries.get(entry.prop.id) !== entry) return;
-            entry.object = RREventPreviewModels.instance(template, spec, entry.prop.direction);
+            // A vehicle faces along its heading, as the 3D view stands it (MapEditor3D.previewEventModel).
             const vehicle = entry.prop.vehicle;
+            const direction = vehicle && typeof RRVehicles !== 'undefined' && RRVehicles.dir8OfYaw ? RRVehicles.dir8OfYaw(vehicle.yaw) : entry.prop.direction;
+            entry.object = RREventPreviewModels.instance(template, spec, direction);
             if (vehicle && Reactor3D.Vehicles?.pose) {
                 Reactor3D.Vehicles.pose({ object: entry.object, spec }, { _rrVehicle: vehicle.type, _rrYaw: vehicle.yaw * Math.PI / 180 }, entry.object, spec, 0);
             }

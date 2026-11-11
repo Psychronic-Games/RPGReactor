@@ -8190,7 +8190,8 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-c3d-gen-face { display: block; aspect-ratio: 1; background: var(--color-bg-deep); border-radius: 2px; overflow: hidden; }
 .rr-c3d-gen-face img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* The drawn stand-in shown at once, until the member's real picture is built. */
-.rr-c3d-gen-figure { display: block; width: 100%; height: 100%; opacity: 0.92; }
+/* (The baked picture a card shows until the member's own is built: a little dimmed, so the change reads as an arrival.) */
+.rr-c3d-gen-face img.rr-c3d-gen-standin { opacity: 0.7; }
 .rr-c3d-gen-name { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-text-muted); }
 .rr-c3d-gen-title { font-size: 11px; font-weight: 600; color: var(--color-text); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--color-border-subtle); }
 .rr-c3d-gen-ticks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 8px; font-size: 11px; color: var(--color-text); padding: 2px 0 4px; }

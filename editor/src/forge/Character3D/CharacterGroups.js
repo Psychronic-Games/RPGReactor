@@ -123,40 +123,22 @@
     const faceFile = (spec, sheet, sheets) => spec.name.replace(/\s+/g, '_') + '_Faces' + (sheets > 1 ? String(sheet + 1) : '') + '.png';
 
     /**
-     * A member as a drawn figure, at once: no model is built for it. Skin, hair and what is worn are the recipe's own
-     * colours (the outermost thing on the chest, on the legs, on the feet and on the head), and the figure is as tall,
-     * as broad and as heavy as its ranges say. It is what to expect, not the character: the real picture takes its
-     * place on the card when it has been built.
+     * What a member's card shows at once, before its own picture is built: the baked picture (the ones the builder's
+     * tiles use, a real 3D shot on the mannequin) of the garment that says most about it, the armour before the dress
+     * before the coat before the shirt, or of its species when it wears nothing baked. The garment is in its catalog
+     * colour, not the member's: it is the article, and the member's own picture takes its place.
      */
-    function figure(recipe) {
-        const W = need('RRCharacterWardrobe', './CharacterWardrobe.js');
-        const r = recipe || {}, worn = new Map();
-        for (const item of Array.isArray(r.outfit) ? r.outfit : []) { const def = W && W.BY_ID.get(item && item.id); const color = def && (item.color || (def.defaults && def.defaults.color)); if (color) worn.set(def.slot, color); }
-        const first = slots => { for (const slot of slots) if (worn.has(slot)) return worn.get(slot); return ''; };
-        const hex = (c, fallback) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : fallback);
-        const skin = hex(r.skin, '#c69c7f'), hair = r.hair || {}, bald = !hair.style || hair.style === 'bald';
-        const chest = first(['over', 'cloak', 'armor', 'mail', 'top', 'dress', 'wrap', 'underwearTop']) || skin;
-        const dress = !worn.has('bottom') && !worn.has('legarmor') ? first(['dress', 'wrap']) : '';
-        const legs = first(['legarmor', 'bottom', 'hosiery', 'underwearBottom']) || skin, feet = first(['feet']) || skin, hands = first(['hands']) || skin, hat = first(['head']);
-        const num = (v, d) => (Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : d), weight = num(r.weight, 0.4), muscle = num(r.muscle, 0.4), height = num(r.height, 0.5), woman = !(r.gender >= 0.5);
-        const tall = 0.84 + 0.16 * height, cx = 30, foot = 86, top = foot - 76 * tall;
-        const headR = 6.4, headY = top + headR, shoulderY = headY + headR + 3, hipY = shoulderY + 22 * tall, kneeY = hipY + 17 * tall;
-        const shoulder = 8.2 + 4.2 * weight + 2.6 * muscle + (woman ? -0.8 : 0.8), hip = 6.4 + 5 * weight + (woman ? 1.2 : 0), waist = Math.min(shoulder, hip) - 1.2 + 2.4 * weight;
-        const leg = 3 + 1.9 * weight + 0.6 * muscle, arm = 2.3 + 1.2 * weight + 1.1 * muscle, f = v => v.toFixed(1);
-        const long = !bald && (hair.length || 1) >= 1.45 && !/crew|buzz|undercut|balding|short|fade|mohawk/i.test(hair.style || '');
-        const hairColour = hex(hair.color, '#3b2a1e');
-        return `<svg class="rr-c3d-gen-figure" viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
-            + (long ? `<path d="M${f(cx - headR - 1)} ${f(headY)} Q${f(cx - headR - 2.5)} ${f(shoulderY + 6)} ${f(cx - headR + 1)} ${f(shoulderY + 9)} L${f(cx + headR - 1)} ${f(shoulderY + 9)} Q${f(cx + headR + 2.5)} ${f(shoulderY + 6)} ${f(cx + headR + 1)} ${f(headY)} Z" fill="${hairColour}"/>` : '')
-            + `<rect x="${f(cx - hip + 0.6)}" y="${f(hipY - 1)}" width="${f(leg * 2)}" height="${f(foot - hipY - 2)}" rx="${f(leg * 0.7)}" fill="${legs}"/><rect x="${f(cx + hip - 0.6 - leg * 2)}" y="${f(hipY - 1)}" width="${f(leg * 2)}" height="${f(foot - hipY - 2)}" rx="${f(leg * 0.7)}" fill="${legs}"/>`
-            + `<rect x="${f(cx - hip + 0.1)}" y="${f(foot - 4)}" width="${f(leg * 2 + 1.6)}" height="4" rx="1.6" fill="${feet}"/><rect x="${f(cx + hip - 1.7 - leg * 2)}" y="${f(foot - 4)}" width="${f(leg * 2 + 1.6)}" height="4" rx="1.6" fill="${feet}"/>`
-            + (dress ? `<path d="M${f(cx - waist)} ${f(hipY - 6)} L${f(cx + waist)} ${f(hipY - 6)} L${f(cx + hip + 3)} ${f(kneeY + 4)} L${f(cx - hip - 3)} ${f(kneeY + 4)} Z" fill="${dress}"/>` : '')
-            + `<rect x="${f(cx - shoulder - arm * 1.5)}" y="${f(shoulderY + 0.5)}" width="${f(arm * 2)}" height="${f(24 * tall)}" rx="${f(arm)}" fill="${chest}"/><rect x="${f(cx + shoulder - arm * 0.5)}" y="${f(shoulderY + 0.5)}" width="${f(arm * 2)}" height="${f(24 * tall)}" rx="${f(arm)}" fill="${chest}"/>`
-            + `<circle cx="${f(cx - shoulder - arm * 0.5)}" cy="${f(shoulderY + 25 * tall)}" r="${f(arm * 0.95)}" fill="${hands}"/><circle cx="${f(cx + shoulder + arm * 0.5)}" cy="${f(shoulderY + 25 * tall)}" r="${f(arm * 0.95)}" fill="${hands}"/>`
-            + `<path d="M${f(cx - shoulder)} ${f(shoulderY)} Q${f(cx)} ${f(shoulderY - 2.6)} ${f(cx + shoulder)} ${f(shoulderY)} L${f(cx + waist)} ${f(hipY - 7)} L${f(cx + hip)} ${f(hipY + 1)} L${f(cx - hip)} ${f(hipY + 1)} L${f(cx - waist)} ${f(hipY - 7)} Z" fill="${chest}"/>`
-            + `<rect x="${f(cx - 2.2)}" y="${f(headY + headR - 1.5)}" width="4.4" height="5" fill="${skin}"/><circle cx="${cx}" cy="${f(headY)}" r="${headR}" fill="${skin}"/>`
-            + (bald ? '' : `<path d="M${f(cx - headR - 0.4)} ${f(headY + 0.6)} A${headR + 0.5} ${headR + 0.9} 0 0 1 ${f(cx + headR + 0.4)} ${f(headY + 0.6)} Q${f(cx + headR - 2)} ${f(headY - 3)} ${f(cx)} ${f(headY - 3.2)} Q${f(cx - headR + 2)} ${f(headY - 3)} ${f(cx - headR - 0.4)} ${f(headY + 0.6)} Z" fill="${hairColour}"/>`)
-            + (hat ? `<path d="M${f(cx - headR - 1.4)} ${f(headY - 1.6)} A${headR + 1.4} ${headR + 1.8} 0 0 1 ${f(cx + headR + 1.4)} ${f(headY - 1.6)} Z" fill="${hat}"/>` : '')
-            + `</svg>`;
+    const STAND_IN_SLOTS = ['armor', 'dress', 'over', 'cloak', 'top', 'mail', 'wrap', 'bottom', 'legarmor'];
+    function standIn(recipe) {
+        const B = root.Character3DBuilder, W = need('RRCharacterWardrobe', './CharacterWardrobe.js');
+        if (!B || typeof B.shippedPicture !== 'function') return '';
+        const r = recipe || {}, sex = r.anatomy && r.anatomy.sex, tag = (sex === 'male' || sex === 'female' ? sex === 'female' : !(r.gender >= 0.5)) ? 'f' : 'm';
+        const worn = new Map();
+        for (const item of Array.isArray(r.outfit) ? r.outfit : []) { const def = W && W.BY_ID.get(item && item.id); if (def && !worn.has(def.slot)) worn.set(def.slot, item.id); }
+        let url = null;
+        for (const slot of STAND_IN_SLOTS) if (!url && worn.has(slot)) url = B.shippedPicture('garment', tag, worn.get(slot));
+        url = url || B.shippedPicture('species', tag, r.species || 'human');
+        return url ? `<img class="rr-c3d-gen-standin" src="${url}" alt="">` : '';
     }
 
     // ── the panel ─────────────────────────────────────────────────────────
@@ -252,8 +234,8 @@
             const mine = ++epoch, grid = panel.querySelector('.rr-c3d-gen-grid');
             if (!grid) return;
             const list = members(Object.assign({}, state, { count: Math.min(SHOWN, state.count) }), base());
-            // Every member at once as a drawn figure (no model is built for it); its real picture follows.
-            grid.innerHTML = list.map((m, i) => `<button class="rr-c3d-gen-card" data-g="open" data-i="${i}" title="${esc(t('Open {name} in the builder', { name: m.name }))}"><span class="rr-c3d-gen-face">${figure(m.recipe)}</span><span class="rr-c3d-gen-name">${esc(m.name)}</span></button>`).join('');
+            // Every member at once as a baked picture of what it wears (nothing is built for it); its own picture follows.
+            grid.innerHTML = list.map((m, i) => `<button class="rr-c3d-gen-card" data-g="open" data-i="${i}" title="${esc(t('Open {name} in the builder', { name: m.name }))}"><span class="rr-c3d-gen-face">${standIn(m.recipe)}</span><span class="rr-c3d-gen-name">${esc(m.name)}</span></button>`).join('');
             if (typeof builder._renderThumb !== 'function' || panel.dataset.busy) return;
             // Each worker takes the next member not yet begun: two or three are built at once where the machine has
             // the cores, and each is a picture's build (`thumb`: no sewn details, no rigs), not a whole character's.
@@ -275,9 +257,8 @@
                     }
                 }
             };
-            // The real pictures start once the description has rested a moment: while a range is being typed or the
-            // group rolled again and again, only the figures are drawn, and they cost nothing.
-            await new Promise(done => setTimeout(done, 700));
+            // The members' own pictures start once the description has rested a moment (a range being dragged).
+            await new Promise(done => setTimeout(done, 150));
             if (!current()) return;
             workers.list().forEach((worker, index) => lane(worker, index));
         };
@@ -475,6 +456,10 @@
             // The description stays with this entry while the Forge is open (and in the project between sessions).
             if (this.spec) builder._groupSpec = this.spec;
             builder.renderInto(stage, projectController);
+            // Out of sight, the builder's own view is drawn only while a group is being made: each frame of it is a
+            // whole character drawn for nobody, and every member's picture waits its turn behind one.
+            const frame = builder._render;
+            builder._render = function () { if (main.querySelector('.rr-c3d-gen[data-busy]')) return frame.apply(this, arguments); };
             let tries = 0;
             this._wait = setInterval(() => {
                 if (this.builder !== builder || ++tries > 600) { clearInterval(this._wait); return; }
@@ -511,7 +496,7 @@
         holdsWork() { return !!(this.main && this.main.querySelector('.rr-c3d-gen[data-busy]')); }
     }
 
-    const api = { DEFAULT, THEMES, MOST, normalize, member, members, memberName, faceSheets, faceFile, speciesChoices, figure, openPanel, Tool };
+    const api = { DEFAULT, THEMES, MOST, normalize, member, members, memberName, faceSheets, faceFile, speciesChoices, standIn, openPanel, Tool };
     root.RRCharacterGroups = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

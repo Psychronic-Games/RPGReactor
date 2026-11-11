@@ -41,6 +41,9 @@ class MapEditor3D {
 
     constructor(projectController) {
         this.projectController = projectController;
+        // A window closed or reloaded while the view is coming up is not a graphics crash: the mark a crash leaves
+        // (rrMap3DStage) is taken back, or the next session would keep every 3D map flat with its box cleared.
+        if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('beforeunload', () => this._clearStage());
         // A cell is the project's tile size in pixels, which MZ lets a project
         // choose; tilePixels() reads it and the prototype holds the default.
         this.enabled = false;
