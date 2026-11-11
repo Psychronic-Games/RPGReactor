@@ -254,6 +254,7 @@ class Character3DBuilder {
                         <div class="rr-c3d-viewbar">
                             <button class="rr-btn-chip rr-c3d-frame" data-frame="body">${this._t('Whole Body')}</button>
                             <button class="rr-btn-chip rr-c3d-frame" data-frame="face">${this._t('Face')}</button>
+                            <button class="rr-btn-chip rr-c3d-spritebtn">${this._t('Sprite')}</button>
                         </div>
                         <div class="rr-c3d-hint">${this._t('Drag to turn, wheel to zoom')}</div>
                         <div class="rr-c3d-gallery" hidden></div>
@@ -279,7 +280,18 @@ class Character3DBuilder {
         this._renderDesignGroups();
         q('.rr-c3d-save').addEventListener('click', () => this.save());
         // Export sprite sheet: the panel and the rendering live in RRCharacterSpriteSheet.
-        q('.rr-c3d-sheet').addEventListener('click', () => { if (window.RRCharacterSpriteSheet && this._view) { this.root.querySelector('.rr-c3d-gen:not([data-busy])')?.remove(); if (!this.root.querySelector('.rr-c3d-gen')) RRCharacterSpriteSheet.openPanel(this); } });
+        // The sprite view's wording is the sheet module's, and English only for now (as its panel's).
+        if (window.RRCharacterSpriteSheet && RRCharacterSpriteSheet.SPRITE_VIEW_HINT) q('.rr-c3d-spritebtn').title = this._t(RRCharacterSpriteSheet.SPRITE_VIEW_HINT);
+        // One sprite workspace, from either button: the chip shows it or goes back to the model, Export Sprite Sheet shows it.
+        const sprites = keep => {
+            if (!window.RRCharacterSpriteSheet || !this._view) return;
+            this.root.querySelector('.rr-c3d-gen:not([data-busy])')?.remove();
+            if (this.root.querySelector('.rr-c3d-gen')) return;
+            if (keep && this.root.querySelector('.rr-c3d-spriteview')) return;
+            RRCharacterSpriteSheet.openPanel(this);
+        };
+        q('.rr-c3d-spritebtn').addEventListener('click', () => sprites(false));
+        q('.rr-c3d-sheet').addEventListener('click', () => sprites(true));
         // The group's own page in the Forge, where there is one (this character is then whose outfit a uniform is);
         // a builder standing alone opens the panel over its view.
         q('.rr-c3d-crowd')?.addEventListener('click', () => {

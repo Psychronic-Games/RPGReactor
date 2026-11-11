@@ -4,6 +4,7 @@
 # Starts a second KWin with a virtual 1920x1080 output and its own Xwayland,
 # under its own D-Bus session, so harness windows never reach the desktop.
 # Prints the X display it made (":1" when the desktop holds ":0").
+# RR_DISPLAY_OUTPUTS=2 gives it two outputs side by side (a window moved between monitors).
 #
 #   editor/tests/perf/headless-display.sh &          # leave it running
 #   DISPLAY=:1 XAUTHORITY= XDG_SESSION_TYPE=x11 env -u WAYLAND_DISPLAY \
@@ -20,7 +21,7 @@ set -e
 list() { ls /tmp/.X11-unix 2>/dev/null | sort; }
 before=$(list)
 dbus-run-session -- kwin_wayland --virtual --width "${RR_DISPLAY_WIDTH:-1920}" --height "${RR_DISPLAY_HEIGHT:-1080}" \
-    --no-lockscreen --no-global-shortcuts --socket "wayland-rr-$$" --xwayland &
+    ${RR_DISPLAY_OUTPUTS:+--output-count "$RR_DISPLAY_OUTPUTS"} --no-lockscreen --no-global-shortcuts --socket "wayland-rr-$$" --xwayland &
 pid=$!
 trap 'pkill -P $pid 2>/dev/null; kill $pid 2>/dev/null' INT TERM EXIT
 # KWin opens two sockets: Xwayland's display and, one number up, an init

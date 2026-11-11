@@ -20,6 +20,8 @@
  *   win.isPoppedOut()      it lives in a window of its own now
  *   win.seeThrough()       its window requests transparent pixels outside its rounded panel
  *   win.hidePopout()       it closed: its window hides and keeps its place
+ *   win.toggleFit()        its window fills the monitor it is on, or goes back; win.minimize()
+ *   win.pinned() / win.setPinned(on)   whether it stays on top of every window, other apps' too (remembered per window)
  *
  * config: overlayId, panelSelector, headerSelector, titleSelector, title (fallback), page (the
  * blank HTML page its window loads), storageKey, popoutKey, minWidth, minHeight, defaultWidth and
@@ -80,6 +82,61 @@
     }
     function lastWorked() {
         return lastWorkedTarget && lastWorkedTarget.isConnected !== false ? lastWorkedTarget : document.activeElement;
+    }
+
+    /**
+     * The open windows as a row of chips in the upper left corner of the map's area in the editor's own window: one click brings a window
+     * back, minimized or behind something, on any desktop. A taskbar shows the editor's windows as one icon
+     * and what a click on it does is the desktop's to decide; this row is the editor's own.
+     */
+    let dockFrame = 0, dockWatch = null;
+    /** The row's place: the upper left corner of the map's own area, clear of the toolbars and of the bars along the bottom. */
+    function placeDock() {
+        const doc = root.document, dock = doc && doc.getElementById && doc.getElementById('rr-window-dock');
+        if (!dock) return;
+        const area = doc.getElementById('canvas-container'), box = area && area.getBoundingClientRect();
+        const there = box && box.width > 40 && box.height > 40;
+        dock.style.left = Math.round(there ? box.left + 8 : 8) + 'px';
+        dock.style.top = Math.round(there ? box.top + 8 : 8) + 'px';
+        dock.style.maxWidth = Math.max(160, Math.round((there ? box.width : (root.innerWidth || 1280)) - 16)) + 'px';
+        // The map's area moves when a side panel is dragged or the window is sized.
+        if (there && !dockWatch && typeof ResizeObserver === 'function') {
+            dockWatch = new ResizeObserver(() => placeDock());
+            dockWatch.observe(area);
+            root.addEventListener('resize', placeDock);
+        }
+    }
+    function refreshDock() {
+        const doc = root.document;
+        if (!doc || typeof doc.createElement !== 'function' || !doc.body) return;
+        if (dockFrame) return;
+        const draw = () => {
+            dockFrame = 0;
+            const shown = windows.filter(win => win.isPoppedOut() && win.isShown());
+            let dock = doc.getElementById('rr-window-dock');
+            if (!shown.length) { if (dock) dock.remove(); return; }
+            if (!dock) {
+                dock = doc.createElement('div');
+                dock.id = 'rr-window-dock';
+                dock.setAttribute('role', 'toolbar');
+                dock.addEventListener('click', event => {
+                    const chip = event.target.closest('[data-window-index]');
+                    const win = chip && windows[Number(chip.dataset.windowIndex)];
+                    if (win) win.raise();
+                });
+                doc.body.appendChild(dock);
+            }
+            const say = text => (root.I18n && typeof root.I18n.t === 'function' ? root.I18n.t(text) : text);
+            const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            dock.setAttribute('aria-label', say('Open windows'));
+            dock.innerHTML = `<span class="rr-window-dock-label">${escape(say('Windows'))}</span>` + shown.map(win => {
+                const title = win.title(), small = win.isMinimized();
+                return `<button type="button" class="rr-window-chip${small ? ' is-minimized' : ''}" data-window-index="${windows.indexOf(win)}" title="${escape(say(small ? 'Minimized. Click to bring it back.' : 'Click to bring this window to the front.'))}"><span class="rr-window-chip-mark"></span><span class="rr-window-chip-title">${escape(title)}</span></button>`;
+            }).join('');
+            placeDock();
+        };
+        // A timer, not a frame: a window wholly covered by its own pop-out is given no frames.
+        dockFrame = root.setTimeout(draw, 0) || 1;
     }
 
     function create(config) {
@@ -220,29 +277,260 @@
         }
 
         function keepWindowRect(win) {
+            // Maximized, the place remembered stays the one it goes back to.
+            if (popped && popped.maximized) return;
             write(POPOUT_KEY, { left: win.x, top: win.y, width: win.width, height: win.height });
         }
 
-        /** The corner grip of a window with no frame: it sizes the window, never under its minimum. */
-        function addResizeGrip(doc, win) {
-            const grip = doc.createElement('div');
-            grip.className = config.gripClass;
-            grip.addEventListener('pointerdown', event => {
-                if (event.button !== 0) return;
-                event.preventDefault();
-                const startX = event.screenX, startY = event.screenY, width = win.width, height = win.height;
-                const move = moveEvent => {
-                    win.resizeTo(Math.max(MIN_WIDTH, Math.round(width + moveEvent.screenX - startX)), Math.max(MIN_HEIGHT, Math.round(height + moveEvent.screenY - startY)));
-                };
-                const end = () => {
-                    doc.removeEventListener('pointermove', move);
-                    doc.removeEventListener('pointerup', end);
-                    keepWindowRect(win);
-                };
-                doc.addEventListener('pointermove', move);
-                doc.addEventListener('pointerup', end);
+        // --- The buttons a title bar would have ------------------------------------------------
+
+        /**
+         * Pinned, the window stays on top of every window, other apps' too. Not pinned (the default) it is in
+         * front of the editor while Reactor is the app in use and drops behind other apps with it.
+         */
+        function pinned() {
+            try { return root.localStorage.getItem(POPOUT_KEY + ':top') === '1'; } catch (error) { return false; }
+        }
+
+        function setPinned(on) {
+            try { root.localStorage.setItem(POPOUT_KEY + ':top', on ? '1' : '0'); } catch (error) { /* a convenience only */ }
+            if (popped && popped.decide) popped.decide();
+            pinThroughDesktop(popped);
+            showControls();
+        }
+
+        /**
+         * Fill the monitor the window is on, or go back to its size: the desktop's own maximize. The window
+         * manager knows which monitor that is and leaves its panels clear; the app does not always (a Wayland
+         * window is told neither its place nor its monitor, and sized from the main monitor's numbers it
+         * overflowed a smaller one). Returns whether it is maximized now.
+         */
+        function toggleFit(state = popped) {
+            const win = state && state.win;
+            if (!win || !state.ready) return false;
+            state.maximized = !state.maximized;
+            try { if (state.maximized) win.maximize(); else win.restore(); } catch (error) { state.maximized = false; }
+            showControls();
+            return !!state.maximized;
+        }
+
+        /**
+         * Whether the window's place and stacking are the app's to set. Not for a native Wayland window: the
+         * desktop tells an app neither where its window is nor lets it move it or keep it on top. There the
+         * window is sized only by the sides that grow it without moving it, filling a monitor is the desktop's
+         * own maximize, and the pin is asked of the window manager where it can be (KWin, below).
+         */
+        function placesItself() {
+            try {
+                const env = (typeof process !== 'undefined' && process.env) || {};
+                if (typeof process === 'undefined' || process.platform !== 'linux' || !env.WAYLAND_DISPLAY) return true;
+                // Started as an X11 client on a Wayland desktop (--ozone-platform=x11), it is placed as on X11.
+                const app = (typeof nw !== 'undefined' && nw.App) || {};
+                const args = (app.fullArgv || []).concat(String((app.manifest && app.manifest['chromium-args']) || '').split(/\s+/));
+                return args.includes('--ozone-platform=x11');
+            } catch (error) { return true; }
+        }
+
+        /** A Wayland window on KDE: KWin keeps a window above the others when one of its scripts asks. */
+        function onKWin() {
+            try { return !placesItself() && /kde/i.test(process.env.XDG_CURRENT_DESKTOP || '') && typeof require === 'function'; } catch (error) { return false; }
+        }
+
+        /** Whether the pin can do anything here. */
+        function canPin() {
+            return placesItself() || onKWin();
+        }
+
+        /**
+         * Run a script of KWin's (its window manager scripting, over D-Bus): loaded, run, and unloaded at once,
+         * or kept until the function returned is called (`keep`). `ready` is told once it runs, or that it
+         * could not. Nothing happens where KWin does not answer.
+         */
+        function kwinScript(source, { keep = false, ready = null } = {}) {
+            let stopped = false, loaded = false, stop = () => { stopped = true; };
+            try {
+                const fs = require('fs'), os = require('os'), path = require('path'), { execFile } = require('child_process');
+                const name = 'rr-window-' + process.pid + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e6), file = path.join(os.tmpdir(), name + '.js');
+                fs.writeFileSync(file, source);
+                const send = (object, method, args, done) => execFile('dbus-send', ['--session', '--print-reply', '--dest=org.kde.KWin', object, method, ...args], { timeout: 4000 }, (error, out) => done(error, String(out || '')));
+                const unload = () => { if (loaded) { loaded = false; send('/Scripting', 'org.kde.kwin.Scripting.unloadScript', ['string:' + name], () => {}); } try { fs.unlinkSync(file); } catch (error) { /* gone */ } };
+                stop = () => { stopped = true; unload(); };
+                send('/Scripting', 'org.kde.kwin.Scripting.loadScript', ['string:' + file, 'string:' + name], (error, out) => {
+                    const id = /int32 (\d+)/.exec(out);
+                    if (error || !id) { unload(); if (ready) ready(false); return; }
+                    loaded = true;
+                    send('/Scripting/Script' + id[1], 'org.kde.kwin.Script.run', [], failed => {
+                        if (!keep || stopped) unload();
+                        if (ready) ready(!failed);
+                    });
+                });
+            } catch (error) { if (ready) ready(false); }
+            return () => stop();
+        }
+
+        /** Ask KWin to keep the window titled `title` above the others, or to stop. */
+        function kwinKeepAbove(title, on) {
+            kwinScript(`for (const w of workspace.windowList()) if (w.caption === ${JSON.stringify(title)}) w.keepAbove = ${on ? 'true' : 'false'};\n`);
+        }
+
+        /**
+         * While a side or corner is dragged, KWin holds the opposite one where it stood. Left to itself it
+         * keeps the middle of a window that sizes itself (measured on KWin 6.8: a corner dragged out by
+         * 200 x 120 moved the far corner 100 x 60 the other way). The app only sets the size; the script,
+         * inside the window manager, puts the window back at each change. Returns what ends it.
+         */
+        function kwinAnchor(title, edge, ready) {
+            return kwinScript(`(function() {
+    const w = workspace.windowList().find(x => x.caption === ${JSON.stringify(title)});
+    if (!w) return;
+    const g = w.frameGeometry, left = g.x, top = g.y, right = g.x + g.width, bottom = g.y + g.height;
+    w.frameGeometryChanged.connect(function() {
+        const n = w.frameGeometry, x = ${edge.includes('w') ? 'right - n.width' : 'left'}, y = ${edge.includes('n') ? 'bottom - n.height' : 'top'};
+        if (Math.abs(n.x - x) > 0.5 || Math.abs(n.y - y) > 0.5) w.frameGeometry = { x: x, y: y, width: n.width, height: n.height };
+    });
+})();\n`, { keep: true, ready });
+        }
+
+        /** The pin as the window manager holds it, asked again only when it changes or the window is shown anew. */
+        function pinThroughDesktop(state, force = false) {
+            if (!state || !state.win || !onKWin()) return;
+            const on = pinned();
+            if (!force && state.desktopPin === on) return;
+            state.desktopPin = on;
+            let title = '';
+            try { title = state.child && state.child.document ? state.child.document.title : ''; } catch (error) { /* closed */ }
+            if (title) kwinKeepAbove(title, on);
+        }
+
+        function minimize(state = popped) {
+            if (!state || !state.win) return;
+            // Said here as well: not every desktop tells a window it was minimized.
+            state.minimized = true;
+            refreshDock();
+            try { state.win.minimize(); } catch (error) { /* gone */ }
+        }
+
+        const CONTROL_ICONS = {
+            // The pushpin of Google's Material Icons (Apache License 2.0): filled when pinned, its outline tilted when not.
+            pin: '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z" fill="currentColor"/></svg>',
+            unpinned: '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path transform="rotate(45 12 12)" d="M14 4v5c0 1.12.37 2.16 1 3H9c.65-.86 1-1.9 1-3V4h4m3-2H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3V4h1c.55 0 1-.45 1-1s-.45-1-1-1z" fill="currentColor"/></svg>',
+            minimize: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 12h10v1.5H3z" fill="currentColor"/></svg>',
+            fit: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M2.5 2.5h11v11h-11zM4 5v7h8V5z" fill="currentColor" fill-rule="evenodd"/></svg>',
+            restore: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M5 2.5h8.5V11H12V4H5zM2.5 5H11v8.5H2.5zM4 7.5V12h5.5V7.5z" fill="currentColor" fill-rule="evenodd"/></svg>'
+        };
+        const say = text => (root.I18n && typeof root.I18n.t === 'function' ? root.I18n.t(text) : text);
+
+        /** The header's window buttons, made once and kept through every opening, before its ×. */
+        function addWindowControls(overlay) {
+            const panel = panelOf(overlay), header = panel && panel.querySelector(config.headerSelector);
+            if (!header || header.querySelector('.rr-window-controls')) return;
+            const box = header.ownerDocument.createElement('span');
+            box.className = 'rr-window-controls';
+            // No pin where nothing can keep the window on top (a Wayland desktop other than KDE).
+            box.innerHTML = (canPin() ? ['pin', 'minimize', 'fit'] : ['minimize', 'fit']).map(name => `<button type="button" class="rr-window-control" data-window="${name}"></button>`).join('');
+            box.addEventListener('click', event => {
+                const button = event.target.closest('[data-window]');
+                if (!button || !popped) return;
+                if (button.dataset.window === 'pin') setPinned(!pinned());
+                else if (button.dataset.window === 'minimize') minimize();
+                else toggleFit();
             });
-            doc.body.appendChild(grip);
+            const buttons = [...header.querySelectorAll('button')];
+            const close = header.querySelector('.rr-modal-close, .modal-close, [data-action="close"]') || buttons[buttons.length - 1];
+            if (close) close.parentElement.insertBefore(box, close); else header.appendChild(box);
+        }
+
+        /** Each button as things stand: what it would do now, said in its title. */
+        function showControls() {
+            const overlay = popped && popped.overlay, box = overlay && overlay.querySelector('.rr-window-controls');
+            if (!box) return;
+            const set = (name, icon, title, on) => {
+                const button = box.querySelector(`[data-window="${name}"]`);
+                if (!button) return;
+                button.innerHTML = CONTROL_ICONS[icon];
+                button.title = say(title);
+                button.setAttribute('aria-label', say(title));
+                if (on === undefined) button.removeAttribute('aria-pressed'); else button.setAttribute('aria-pressed', String(on));
+            };
+            const on = pinned();
+            set('pin', on ? 'pin' : 'unpinned', on ? 'Pinned: stays on top of every window. Click to let other windows cover it.' : 'Pin: keep this window on top of every window, other apps too.', on);
+            set('minimize', 'minimize', 'Minimize');
+            set('fit', popped.maximized ? 'restore' : 'fit', popped.maximized ? 'Back to its size' : 'Fill this monitor');
+        }
+
+        /**
+         * The window's place and size set together. Moved and then sized in two calls, the second used the
+         * place the window had before the first (seen on KWin: a window sent back from the monitor's size
+         * landed in the corner).
+         */
+        function setBounds(win, rect) {
+            const bounds = { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+            try {
+                const id = win.cWindow && win.cWindow.id, api = root.chrome && root.chrome.windows;
+                if (api && typeof api.update === 'function' && id !== undefined && id !== null) { api.update(id, bounds); return; }
+            } catch (error) { /* the two calls below */ }
+            win.resizeTo(bounds.width, bounds.height);
+            win.moveTo(bounds.left, bounds.top);
+        }
+
+        /**
+         * A window with no frame is sized by its own edges: the corner grip that shows, and a thin strip along
+         * every side and corner. The side or corner dragged follows the pointer and the opposite one stays
+         * where it is, the same on every desktop; never under the minimum.
+         */
+        const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'sw', 'se'];
+        function edgeRect(start, edge, dx, dy) {
+            let { left, top, width, height } = start;
+            if (edge.includes('e')) width = Math.max(MIN_WIDTH, start.width + dx);
+            if (edge.includes('s')) height = Math.max(MIN_HEIGHT, start.height + dy);
+            if (edge.includes('w')) { width = Math.max(MIN_WIDTH, start.width - dx); left = start.left + start.width - width; }
+            if (edge.includes('n')) { height = Math.max(MIN_HEIGHT, start.height - dy); top = start.top + start.height - height; }
+            return { left, top, width, height };
+        }
+        function addResizeGrip(doc, win) {
+            const handle = (edge, className) => {
+                const grip = doc.createElement('div');
+                grip.className = className;
+                grip.dataset.edge = edge;
+                grip.addEventListener('pointerdown', event => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    try { grip.setPointerCapture(event.pointerId); } catch (error) { /* the document still hears the moves */ }
+                    const startX = event.screenX, startY = event.screenY, start = { left: win.x, top: win.y, width: win.width, height: win.height };
+                    // Maximized, its size is the window manager's.
+                    if (popped && popped.maximized) return;
+                    // On a Wayland desktop the app sets the size alone, and KWin (where it is the window manager)
+                    // holds the far side; the moves that arrive before it has begun wait for it.
+                    const desktop = !placesItself();
+                    let release = null, anchored = !desktop || !onKWin(), waiting = null;
+                    const size = rect => { if (desktop) win.resizeTo(Math.round(rect.width), Math.round(rect.height)); else setBounds(win, rect); };
+                    if (!anchored) {
+                        let title = '';
+                        try { title = doc.title; } catch (error) { /* closed */ }
+                        release = kwinAnchor(title, edge, () => { anchored = true; if (waiting) { size(waiting); waiting = null; } });
+                    }
+                    const move = moveEvent => {
+                        const rect = edgeRect(start, edge, moveEvent.screenX - startX, moveEvent.screenY - startY);
+                        if (anchored) size(rect); else waiting = rect;
+                    };
+                    const end = () => {
+                        doc.removeEventListener('pointermove', move);
+                        doc.removeEventListener('pointerup', end);
+                        doc.removeEventListener('pointercancel', end);
+                        // The last size has to reach the window manager before it lets go of the far side.
+                        if (release) root.setTimeout(release, 300);
+                        keepWindowRect(win);
+                    };
+                    doc.addEventListener('pointermove', move);
+                    doc.addEventListener('pointerup', end);
+                    doc.addEventListener('pointercancel', end);
+                });
+                doc.body.appendChild(grip);
+            };
+            // Every side where something can hold the far one: the app itself, or KWin for it.
+            const movable = placesItself() || onKWin();
+            for (const edge of EDGES) if (edge !== 'se' && (movable || edge === 'e' || edge === 's')) handle(edge, 'rr-window-edge');
+            handle('se', config.gripClass);
         }
 
         /**
@@ -256,7 +544,7 @@
                 clearTimeout(settle);
                 settle = setTimeout(() => {
                     if (popped !== state) return;
-                    try { win.setAlwaysOnTop(focus.main || focus.own || RRDetachedWindow.anyFocused()); } catch (error) { /* closed */ }
+                    try { win.setAlwaysOnTop(pinned() || focus.main || focus.own || RRDetachedWindow.anyFocused()); } catch (error) { /* closed */ }
                 }, 120);
             };
             const on = (target, name, handler) => { target.on(name, handler); state.unhook.push(() => target.removeListener(name, handler)); };
@@ -304,6 +592,8 @@
                     panel.style.cssText = '';
                     doc.body.appendChild(overlay);
                     addResizeGrip(doc, win);
+                    addWindowControls(overlay);
+                    showControls();
                     overlay.style.visibility = '';
                     // The manifest can supply the main window's minimum/size during creation.
                     // Load the theme and apply the final geometry while hidden, including the
@@ -317,6 +607,7 @@
                             if (popped !== state) return;
                             state.ready = true;
                             if (state.wantsVisible && isOpen()) showPopout();
+                            refreshDock();
                         }, 50);
                     });
                 };
@@ -332,6 +623,14 @@
                 };
                 win.on('move', () => { if (popped === state && state.ready) { keepWindowRect(win); repaint(); } });
                 win.on('resize', () => { if (popped === state && state.ready) { keepWindowRect(win); repaint(); } });
+                // 'restore' is also a minimized window coming back, which leaves a maximized one maximized.
+                // Believed only where the app is told the truth: a Wayland window covered by another was reported
+                // minimized (seen on KWin), and there the editor's own button is what says so.
+                win.on('minimize', () => { if (placesItself()) { state.minimized = true; refreshDock(); } });
+                win.on('maximize', () => { state.maximized = true; showControls(); });
+                win.on('restore', () => { if (state.minimized) { state.minimized = false; refreshDock(); } else { state.maximized = false; showControls(); } });
+                // A window that has the focus is up, however it came back.
+                win.on('focus', () => { if (state.minimized) { state.minimized = false; } refreshDock(); });
                 stayInFrontOfEditor(main, win, state);
                 // Closing it another way than its × (Alt+F4, the taskbar) closes the dialog as its × does,
                 // asking first about unapplied edits; the window hides and waits for the next opening.
@@ -370,6 +669,7 @@
                 if (sizeObserver && panel) (root.requestAnimationFrame || setTimeout)(() => sizeObserver.observe(panel));
             }
             try { if (state.win) state.win.close(true); } catch (error) { /* already closed */ }
+            refreshDock();
             if (windowGone && overlay) {
                 overlay.__rrFloating = false;
                 install(overlay);
@@ -395,6 +695,29 @@
             state.focused = false;
             if (root.RRPopoutBridge && state.child) root.RRPopoutBridge.setAsleep(state.child, true);
             try { state.win?.hide(); } catch (error) { /* gone */ }
+            refreshDock();
+        }
+
+        /** Its window is wanted on screen (minimized or not), not hidden with its dialog closed. */
+        function isShown() {
+            return !!(popped && popped.ready && popped.wantsVisible && isOpen());
+        }
+
+        function isMinimized() {
+            return !!(popped && popped.minimized);
+        }
+
+        function title() {
+            try { if (popped && popped.child && popped.child.document && popped.child.document.title) return popped.child.document.title; } catch (error) { /* closed */ }
+            return config.title || '';
+        }
+
+        /** Up and in front, from wherever it was: minimized, or behind the editor. */
+        function raise() {
+            if (!popped) return;
+            showPopout();
+            // A Wayland app may not un-minimize or raise its own window; KWin does it for it.
+            if (onKWin()) kwinScript(`(function() { const w = workspace.windowList().find(x => x.caption === ${JSON.stringify(title())}); if (w) { w.minimized = false; workspace.activeWindow = w; } })();\n`);
         }
 
         /** It opens again: its window comes back where it was. */
@@ -404,7 +727,12 @@
             popped.wantsVisible = true;
             if (!popped.win || !popped.ready) return;
             if (root.RRPopoutBridge && popped.child) root.RRPopoutBridge.setAsleep(popped.child, false);
-            try { popped.win.show(); popped.win.focus(); } catch (error) { /* gone */ }
+            const wasMinimized = !!popped.minimized;
+            try { if (wasMinimized) popped.win.restore(); popped.win.show(); popped.win.focus(); } catch (error) { /* gone */ }
+            popped.minimized = false;
+            refreshDock();
+            // Shown again, a Wayland window is a new one to its desktop: a pin is asked for again, once it is up.
+            if (pinned() && onKWin()) { const state = popped; root.setTimeout(() => { if (popped === state) pinThroughDesktop(state, true); }, 400); }
             // A dialog first opened while its window was still being made had its focus refused there
             // (hidden): the focus goes into it now that it shows.
             const keys = popped.overlay && popped.overlay._rrModalKeys;
@@ -485,7 +813,7 @@
             if (popped && popped.decide) popped.decide();
         }
 
-        const api = { install, open, place, isOpen, ownsKeys, owns, focused, decideInFront, clamp, defaultRect, windowRect, popOut, dock, isPoppedOut, popoutWindow, hidePopout, showPopout, separateWindows, seeThrough,
+        const api = { install, open, place, isOpen, ownsKeys, owns, focused, decideInFront, clamp, defaultRect, windowRect, popOut, dock, isPoppedOut, popoutWindow, hidePopout, showPopout, separateWindows, seeThrough, pinned, setPinned, canPin, placesItself, toggleFit, minimize, edgeRect, isShown, isMinimized, title, raise,
             MIN_WIDTH, MIN_HEIGHT, STORAGE_KEY, POPOUT_KEY };
         windows.push(api);
         return api;
@@ -501,7 +829,8 @@
         /** The element the person last clicked or tabbed to, in any window. */
         lastWorked,
         previewActive,
-        onPreviewActivity
+        onPreviewActivity,
+        refreshDock
     };
     root.RRDetachedWindow = RRDetachedWindow;
     if (typeof module !== 'undefined' && module.exports) module.exports = RRDetachedWindow;

@@ -27,9 +27,11 @@
 
     const THEMES = ['Everyday', 'Fantasy', 'Armor', 'Sci-fi', 'Wasteland', 'Cyberpunk'];
     const MOST = 200;
+    const MOST_COLOURS = 6;
     const DEFAULT = {
         name: 'Villagers', count: 12, seed: 1,
         species: ['human'], female: 50, age: [18, 65], height: [0, 1], weight: [0, 1], muscle: [0, 1],
+        shares: {}, skin: [], hairColours: [], eyeColours: [],
         themes: ['Everyday'], keepOutfit: false, keepProps: false, accessories: 50, palette: [],
         designs: true, walk: true, walkLayout: 'mz', walkFrame: 48, walkFrames: 3, sv: false, svFrame: 64, faces: true, faceFrame: 144,
         style: 'realistic', look: 'smooth', outline: true
@@ -54,11 +56,16 @@
         const known = new Set(speciesChoices().map(x => x.id)), minAge = Math.max(18, (Body() && Body().MIN_AGE) || 18), maxAge = (Body() && Body().MAX_AGE) || 90;
         const species = (Array.isArray(s.species) ? s.species : []).filter(id => known.has(id));
         const themes = (Array.isArray(s.themes) ? s.themes : []).filter(t => THEMES.includes(t));
+        const colours = list => (Array.isArray(list) ? list : []).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, MOST_COLOURS);
+        // How many of a species to each one of the others: whole numbers, 1 unless said.
+        const shares = {};
+        for (const id of species) { const n = clamp(Math.round(number(s.shares && s.shares[id], 1)), 1, 9); if (n !== 1) shares[id] = n; }
         return {
             name: String(s.name || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').slice(0, 40) || DEFAULT.name,
             count: clamp(Math.round(number(s.count, DEFAULT.count)), 1, MOST),
             seed: Math.round(number(s.seed, 1)) >>> 0,
-            species: species.length ? species : ['human'],
+            species: species.length ? species : ['human'], shares,
+            skin: colours(s.skin), hairColours: colours(s.hairColours), eyeColours: colours(s.eyeColours),
             female: clamp(Math.round(number(s.female, 50)), 0, 100),
             // Adults: a group fills a town at one press, and nobody checks each member.
             age: range(s.age, DEFAULT.age, minAge, maxAge).map(Math.round),
@@ -66,12 +73,12 @@
             themes: themes.length ? themes : ['Everyday'],
             keepOutfit: !!s.keepOutfit, keepProps: !!s.keepProps,
             accessories: clamp(Math.round(number(s.accessories, 50)), 0, 100),
-            palette: (Array.isArray(s.palette) ? s.palette : []).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 6),
+            palette: colours(s.palette),
             designs: !!s.designs, walk: !!s.walk, walkLayout: s.walkLayout === '8d' ? '8d' : 'mz',
             walkFrame: clamp(Math.round(number(s.walkFrame, 48)), 16, 512), walkFrames: [1, 3, 4, 6, 8, 10, 12].includes(Number(s.walkFrames)) ? Number(s.walkFrames) : 3,
             sv: !!s.sv, svFrame: clamp(Math.round(number(s.svFrame, 64)), 16, 512),
             faces: !!s.faces, faceFrame: clamp(Math.round(number(s.faceFrame, 144)), 16, 512),
-            style: s.style === 'chibi' ? 'chibi' : 'realistic', look: s.look === 'pixel' ? 'pixel' : 'smooth', outline: s.outline !== false
+            style: s.style === 'chibi' ? 'chibi' : 'realistic', look: ['pixel', 'cel'].includes(s.look) ? s.look : 'smooth', outline: s.outline !== false
         };
     }
 
@@ -96,7 +103,11 @@
         const s = normalize(spec), M = Model(), own = scramble(Math.imul(s.seed + 1, 2654435761) + index * 40503);
         const rand = sequence(own), pick = list => list[Math.floor(rand() * list.length) % list.length];
         // Drawn in a fixed order, used or not, so a change to one choice leaves the others' draws where they were.
-        const species = pick(s.species), woman = rand() * 100 < s.female, lean = rand(), theme = pick(s.themes);
+        // One draw for the species whatever the shares; with every share 1 it is the plain pick it always was.
+        const share = id => s.shares[id] || 1, total = s.species.reduce((sum, id) => sum + share(id), 0);
+        let species = s.species[s.species.length - 1], left = rand() * total;
+        for (const id of s.species) { if (left < share(id)) { species = id; break; } left -= share(id); }
+        const woman = rand() * 100 < s.female, lean = rand(), theme = pick(s.themes);
         const at = [rand(), rand(), rand(), rand()], wears = rand, colour = sequence(own + 17);
         const r = M.random(own, { species, gender: woman ? lean * 0.3 : 0.7 + lean * 0.3, theme });
         if (r.plan && r.plan !== 'human') return r;
@@ -108,6 +119,18 @@
         else if (s.palette.length) for (const item of r.outfit || []) if (item && typeof item === 'object' && item.color) item.color = s.palette[Math.floor(colour() * s.palette.length) % s.palette.length];
         if (s.keepProps && base && Array.isArray(base.props)) r.props = copy(base.props);
         else r.props = (r.props || []).filter(() => wears() * 100 < s.accessories);
+        // Colouring held to the group's own lists, from a sequence of its own: an empty list leaves the member as rolled.
+        const tint = sequence(own + 29), of = (list, at) => list[Math.floor(at * list.length) % list.length];
+        const tones = [tint(), tint(), tint()], S = Species();
+        // A species with skin tones of its own (an orc's greens) keeps them.
+        if (s.skin.length && ((r.species || 'human') === 'human' || !(S && S.skinTones && S.skinTones(r.species).length))) r.skin = of(s.skin, tones[0]);
+        if (s.hairColours.length && r.hair && r.hair.style !== 'bald') {
+            const c = of(s.hairColours, tones[1]);
+            r.hair = Object.assign({}, r.hair, { color: c, tipColor: '', highlights: 0 });
+            if (r.hair.brows && r.hair.brows.color) r.hair.brows = Object.assign({}, r.hair.brows, { color: c });
+            if (r.hair.facial && r.hair.facial.color) r.hair.facial = Object.assign({}, r.hair.facial, { color: c });
+        }
+        if (s.eyeColours.length) r.eyes = Object.assign({}, r.eyes, { color: of(s.eyeColours, tones[2]) });
         return M.normalize(r);
     }
 
@@ -145,6 +168,14 @@
     const rrEscapeHtml = text => (root.rrEscapeHtml ? root.rrEscapeHtml(String(text)) : String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
     const esc = rrEscapeHtml;
     const SHOWN = 24;
+    const FOLDS_KEY = 'rrCharacterGroupFolds';
+    /** What a new colour in each list starts as: the next of these not already there. */
+    const STARTS = {
+        palette: ['#5a6b8c', '#7a3b3b', '#3f6b4a', '#c9b37a', '#2b2b33', '#e8e4da'],
+        skin: ['#f1d3bd', '#e5b897', '#c69c7f', '#a8795a', '#8a5a3c', '#5e3b26'],
+        hairColours: ['#2a1d16', '#5a3a22', '#8a5a2e', '#c9a35a', '#a8432a', '#c8c8c8'],
+        eyeColours: ['#5b3a21', '#3f6b8c', '#5d7a4a', '#7a7f86', '#8a6a2e', '#2f4f6f']
+    };
 
     /** The builder showing exactly `recipe`, built and painted, with nothing more on its way. */
     async function shown(builder, recipe, alive) {
@@ -170,7 +201,9 @@
         if (!host) return null;
         const old = host.querySelector('.rr-c3d-gen');
         if (old) { if (!old.dataset.busy && !options.page) old.remove(); return options.page ? old : null; }
-        host.querySelector('.rr-c3d-export')?.remove();
+        // The sprite workspace gives the view back before the group's panel takes it.
+        const sprites = host.querySelector('.rr-c3d-spriteview');
+        if (sprites && sprites._close) sprites._close(); else host.querySelector('.rr-c3d-export')?.remove();
         const t = (text, params) => builder._t(text, params);
         const state = builder._groupSpec || (builder._groupSpec = normalize(readSpec(builder) || {}));
         const panel = document.createElement('div');
@@ -186,37 +219,67 @@
             <input type="number" class="rr-input" data-g="${key}" data-i="1" min="${lo}" max="${hi}" step="${step}" value="${show(state[key][1])}"></div>`;
         const check = (key, label, title = '') => `<label class="rr-c3d-row rr-c3d-check"${title ? ` title="${esc(t(title))}"` : ''}><span class="rr-c3d-label">${esc(t(label))}</span><input type="checkbox" data-g="${key}"${state[key] ? ' checked' : ''}></label>`;
         const percent = v => Math.round(v * 100);
+        // Which sections are folded, kept for the next visit.
+        const folds = (() => { try { return JSON.parse(localStorage.getItem(FOLDS_KEY)) || {}; } catch (error) { return {}; } })();
+        /** A section as the app's cards are: the accent-strip header that folds it, what it holds said beside the title, the controls in the body. */
+        const card = (title, meta, body) => {
+            const folded = !!folds[title];
+            return `<div class="lit-section rr-c3d-card-sec rr-c3d-gen-sec${folded ? ' is-collapsed' : ''}">
+                <div class="lit-section-header rr-c3d-sechead" data-g="fold" data-key="${esc(title)}" tabindex="0" role="button" aria-expanded="${!folded}"><span class="r3d-sec-toggle">${folded ? '▸' : '▾'}</span><span class="r3d-sec-title">${esc(t(title))}</span><span class="lit-section-meta">${esc(meta)}</span></div>
+                <div class="lit-section-body rr-c3d-secbody">${body}</div></div>`;
+        };
+        /** A list of colours with what it colours named, and what an empty list means said in its place. */
+        const colours = (key, label, any, hint, off = false) => `<div class="rr-c3d-row rr-c3d-gen-palette"${off ? ' data-off="1"' : ''} title="${esc(t(hint))}"><span class="rr-c3d-label">${esc(t(label))}</span><span class="rr-c3d-gen-swatches">${
+            state[key].map((c, i) => `<button class="rr-c3d-color" data-g="swatch" data-k="${key}" data-i="${i}" style="--rr-c3d-swatch:${esc(c)}" title="${esc(t('{c}: click to change, right-click to remove', { c }))}"${off ? ' disabled' : ''}></button>`).join('')
+        }${state[key].length < MOST_COLOURS ? `<button class="rr-btn-chip" data-g="addcolour" data-k="${key}" title="${esc(t('Add a colour'))}"${off ? ' disabled' : ''}>+</button>` : ''}${
+            state[key].length ? `<button class="rr-btn-chip" data-g="nocolours" data-k="${key}" title="${esc(t('Remove these colours'))}"${off ? ' disabled' : ''}>${esc(t('Clear'))}</button>` : `<span class="rr-c3d-note">${esc(t(any))}</span>`}</span></div>`;
+        const span = (pair, show, unit = '') => (show(pair[0]) === show(pair[1]) ? show(pair[0]) : show(pair[0]) + '–' + show(pair[1])) + unit;
         const draw = () => {
             const species = speciesChoices(), groups = [...new Set(species.map(s => s.group || ''))];
-            const sheets = faceSheets(state.count).length;
+            const sheets = faceSheets(state.count).length, label = id => { const found = species.find(x => x.id === id); return t((found && found.label) || id); };
+            const kept = panel.querySelector('.rr-c3d-gen-form'), scroll = kept ? kept.scrollTop : 0;
+            const several = state.species.length > 1;
+            const who = state.species.slice(0, 3).map(label).join(', ') + (state.species.length > 3 ? ' +' + (state.species.length - 3) : '') + ' · ' + t('{n}% women', { n: state.female });
+            const held = [state.skin.length && t('skin'), state.hairColours.length && t('hair'), state.eyeColours.length && t('eyes')].filter(Boolean);
+            const made = [state.designs && t('designs'), state.walk && t('walking'), state.sv && t('battlers'), state.faces && t('portraits')].filter(Boolean);
             panel.innerHTML = `
                 <div class="rr-c3d-export-head"><span>${esc(t('Character Group'))}</span>${options.page ? '' : `<button class="rr-c3d-clear" data-g="close" title="${esc(t('Close'))}">✕</button>`}</div>
                 <div class="rr-c3d-gen-body">
                 <div class="rr-c3d-gen-form">
                     <p class="rr-c3d-note">${esc(t('Many characters to one description: a town, an army, a people. Each is the standard random character held to these limits.'))}</p>
-                    <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Group name'))}</span><input type="text" class="rr-input" data-g="name" maxlength="40" value="${rrEscapeHtml(state.name)}"></label>
-                    <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('How many'))}</span><input type="number" class="rr-input" data-g="count" min="1" max="${MOST}" step="1" value="${state.count}"></label>
-                    <div class="rr-c3d-gen-title">${esc(t('Who'))}</div>
-                    <div class="rr-c3d-gen-ticks" data-list="species">${groups.map(g => `<div class="rr-c3d-gen-sub">${esc(t(g || 'Other'))}</div>` + species.filter(s => (s.group || '') === g).map(s => `<label><input type="checkbox" data-g="species" value="${esc(s.id)}"${state.species.includes(s.id) ? ' checked' : ''}>${esc(t(s.label || s.id))}</label>`).join('')).join('')}</div>
-                    <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Women'))}</span><input type="range" data-g="female" min="0" max="100" step="5" value="${state.female}"><span class="rr-c3d-value">${state.female}%</span></label>
-                    ${pair('age', 'Age', 18, 90, 1, v => v)}
-                    ${pair('height', 'Height (%)', 0, 100, 5, percent)}
-                    ${pair('weight', 'Weight (%)', 0, 100, 5, percent)}
-                    ${pair('muscle', 'Muscle (%)', 0, 100, 5, percent)}
-                    <div class="rr-c3d-gen-title">${esc(t('Dress'))}</div>
-                    ${check('keepOutfit', 'Everyone wears this outfit', 'The outfit of the character open in the builder, on every member: a uniform.')}
-                    ${check('keepProps', 'Everyone has these accessories', 'The accessories of the character open in the builder, on every member.')}
-                    <div class="rr-c3d-gen-ticks"${state.keepOutfit ? ' data-off="1"' : ''}>${THEMES.map(id => `<label><input type="checkbox" data-g="themes" value="${esc(id)}"${state.themes.includes(id) ? ' checked' : ''}${state.keepOutfit ? ' disabled' : ''}>${esc(t(id))}</label>`).join('')}</div>
-                    <div class="rr-c3d-row rr-c3d-gen-palette"${state.keepOutfit ? ' data-off="1"' : ''}><span class="rr-c3d-label" title="${esc(t('With colours here, every garment\'s main colour is one of them. With none, each setting\'s own colours.'))}">${esc(t('Colours'))}</span><span class="rr-c3d-gen-swatches">${state.palette.map((c, i) => `<button class="rr-c3d-color" data-g="swatch" data-i="${i}" style="--rr-c3d-swatch:${esc(c)}" title="${esc(c)}"></button>`).join('')}${state.palette.length < 6 ? `<button class="rr-btn-chip" data-g="addcolour">+</button>` : ''}${state.palette.length ? `<button class="rr-btn-chip" data-g="nocolours">${esc(t('Any'))}</button>` : `<span class="rr-c3d-note">${esc(t('Any'))}</span>`}</span></div>
-                    <label class="rr-c3d-row"${state.keepProps ? ' data-off="1"' : ''}><span class="rr-c3d-label">${esc(t('Accessories'))}</span><input type="range" data-g="accessories" min="0" max="100" step="5" value="${state.accessories}"${state.keepProps ? ' disabled' : ''}><span class="rr-c3d-value">${state.accessories}%</span></label>
-                    <div class="rr-c3d-gen-title">${esc(t('Make'))}</div>
-                    ${check('designs', 'Saved designs', 'Each member kept as a design in a group of this name, to open and change in the builder.')}
-                    <div class="rr-c3d-row rr-c3d-gen-out"><label class="rr-c3d-gen-outcheck"><input type="checkbox" data-g="walk"${state.walk ? ' checked' : ''}>${esc(t('Walking sheets'))}</label><select class="rr-select" data-g="walkLayout"><option value="mz"${state.walkLayout === 'mz' ? ' selected' : ''}>${esc(t('4 directions'))}</option><option value="8d"${state.walkLayout === '8d' ? ' selected' : ''}>${esc(t('8 directions [8D]'))}</option></select><input type="number" class="rr-input" data-g="walkFrame" min="16" max="512" value="${state.walkFrame}" title="${esc(t('Frame size'))}"></div>
-                    <div class="rr-c3d-row rr-c3d-gen-out"><label class="rr-c3d-gen-outcheck"><input type="checkbox" data-g="sv"${state.sv ? ' checked' : ''}>${esc(t('Side-view battlers'))}</label><span></span><input type="number" class="rr-input" data-g="svFrame" min="16" max="512" value="${state.svFrame}" title="${esc(t('Frame size'))}"></div>
-                    <div class="rr-c3d-row rr-c3d-gen-out"><label class="rr-c3d-gen-outcheck" title="${esc(t('One portrait of each member, eight to a face sheet.'))}"><input type="checkbox" data-g="faces"${state.faces ? ' checked' : ''}>${esc(t('Portraits'))}</label><span class="rr-c3d-note">${esc(t('{n} sheet(s)', { n: sheets }))}</span><input type="number" class="rr-input" data-g="faceFrame" min="16" max="512" value="${state.faceFrame}" title="${esc(t('Frame size'))}"></div>
-                    <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Style'))}</span><select class="rr-select" data-g="style"><option value="realistic"${state.style === 'realistic' ? ' selected' : ''}>${esc(t('Realistic'))}</option><option value="chibi"${state.style === 'chibi' ? ' selected' : ''}>${esc(t('RPG chibi'))}</option></select></label>
-                    <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Look'))}</span><select class="rr-select" data-g="look"><option value="smooth"${state.look === 'smooth' ? ' selected' : ''}>${esc(t('Smooth'))}</option><option value="pixel"${state.look === 'pixel' ? ' selected' : ''}>${esc(t('Pixel art'))}</option></select></label>
-                    ${check('outline', 'Outline')}
+                    ${card('Group', t('{n} named {name}', { n: state.count, name: state.name }), `
+                        <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Group name'))}</span><input type="text" class="rr-input" data-g="name" maxlength="40" value="${rrEscapeHtml(state.name)}"></label>
+                        <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('How many'))}</span><input type="number" class="rr-input" data-g="count" min="1" max="${MOST}" step="1" value="${state.count}"></label>`)}
+                    ${card('People', who, `
+                        <div class="rr-c3d-gen-bar"><span class="rr-c3d-note">${esc(t(several ? 'Species, and how many of each to one of the others' : 'Species'))}</span><span><button class="rr-btn-chip" data-g="allspecies">${esc(t('All'))}</button><button class="rr-btn-chip" data-g="nospecies">${esc(t('Only human'))}</button></span></div>
+                        <div class="rr-c3d-gen-ticks" data-list="species">${groups.map(g => `<div class="rr-c3d-gen-sub">${esc(t(g || 'Other'))}</div>` + species.filter(s => (s.group || '') === g).map(s => { const on = state.species.includes(s.id); return `<label><input type="checkbox" data-g="species" value="${esc(s.id)}"${on ? ' checked' : ''}><span>${esc(t(s.label || s.id))}</span>${on && several ? `<select class="rr-select rr-c3d-gen-share" data-g="share" data-id="${esc(s.id)}" title="${esc(t('Share: how many of this species to each one of a species set to ×1'))}">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<option value="${n}"${(state.shares[s.id] || 1) === n ? ' selected' : ''}>×${n}</option>`).join('')}</select>` : ''}</label>`; }).join('')).join('')}</div>
+                        <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Women'))}</span><input type="range" data-g="female" min="0" max="100" step="5" value="${state.female}"><span class="rr-c3d-value">${state.female}%</span></label>`)}
+                    ${card('Body', t('age {a}', { a: span(state.age, v => v) }), `
+                        <p class="rr-c3d-note">${esc(t('Each member falls somewhere between the two numbers. The same number twice holds everyone to it.'))}</p>
+                        ${pair('age', 'Age', 18, 90, 1, v => v)}
+                        ${pair('height', 'Height (%)', 0, 100, 5, percent)}
+                        ${pair('weight', 'Weight (%)', 0, 100, 5, percent)}
+                        ${pair('muscle', 'Muscle (%)', 0, 100, 5, percent)}`)}
+                    ${card('Colouring', held.length ? t('held: {list}', { list: held.join(', ') }) : t('natural'), `
+                        <p class="rr-c3d-note">${esc(t('An empty row keeps the natural spread. With colours in a row, every member takes one of them.'))}</p>
+                        ${colours('skin', 'Skin', 'Natural tones', 'Skin tones the members are drawn from. A species with tones of its own keeps them.')}
+                        ${colours('hairColours', 'Hair', 'Natural colours', 'Hair colours the members are drawn from; brows and beards follow.')}
+                        ${colours('eyeColours', 'Eyes', 'Natural colours', 'Eye colours the members are drawn from.')}`)}
+                    ${card('Clothing', state.keepOutfit ? t('one outfit') : state.themes.map(id => t(id)).join(', '), `
+                        ${check('keepOutfit', 'Everyone wears this outfit', 'The outfit of the character open in the builder, on every member: a uniform.')}
+                        ${check('keepProps', 'Everyone has these accessories', 'The accessories of the character open in the builder, on every member.')}
+                        <div class="rr-c3d-gen-bar"><span class="rr-c3d-note">${esc(t('Settings the outfits come from'))}</span></div>
+                        <div class="rr-c3d-gen-ticks"${state.keepOutfit ? ' data-off="1"' : ''}>${THEMES.map(id => `<label><input type="checkbox" data-g="themes" value="${esc(id)}"${state.themes.includes(id) ? ' checked' : ''}${state.keepOutfit ? ' disabled' : ''}><span>${esc(t(id))}</span></label>`).join('')}</div>
+                        ${colours('palette', 'Garments', 'Each setting\'s own colours', 'With colours here, every garment\'s main colour is one of them: a livery. With none, each setting\'s own colours.', state.keepOutfit)}
+                        <label class="rr-c3d-row"${state.keepProps ? ' data-off="1"' : ''} title="${esc(t('How often a member keeps each accessory its outfit came with: 0% none, 100% all of them.'))}"><span class="rr-c3d-label">${esc(t('Accessories'))}</span><input type="range" data-g="accessories" min="0" max="100" step="5" value="${state.accessories}"${state.keepProps ? ' disabled' : ''}><span class="rr-c3d-value">${state.accessories}%</span></label>`)}
+                    ${card('Make', made.join(', ') || t('nothing ticked'), `
+                        ${check('designs', 'Saved designs', 'Each member kept as a design in a group of this name, to open and change in the builder.')}
+                        <div class="rr-c3d-row rr-c3d-gen-out"><label class="rr-c3d-gen-outcheck"><input type="checkbox" data-g="walk"${state.walk ? ' checked' : ''}>${esc(t('Walking sheets'))}</label><select class="rr-select" data-g="walkLayout"><option value="mz"${state.walkLayout === 'mz' ? ' selected' : ''}>${esc(t('4 directions'))}</option><option value="8d"${state.walkLayout === '8d' ? ' selected' : ''}>${esc(t('8 directions [8D]'))}</option></select><input type="number" class="rr-input" data-g="walkFrame" min="16" max="512" value="${state.walkFrame}" title="${esc(t('Frame size'))}"></div>
+                        <div class="rr-c3d-row rr-c3d-gen-out"><label class="rr-c3d-gen-outcheck"><input type="checkbox" data-g="sv"${state.sv ? ' checked' : ''}>${esc(t('Side-view battlers'))}</label><span></span><input type="number" class="rr-input" data-g="svFrame" min="16" max="512" value="${state.svFrame}" title="${esc(t('Frame size'))}"></div>
+                        <div class="rr-c3d-row rr-c3d-gen-out"><label class="rr-c3d-gen-outcheck" title="${esc(t('One portrait of each member, eight to a face sheet.'))}"><input type="checkbox" data-g="faces"${state.faces ? ' checked' : ''}>${esc(t('Portraits'))}</label><span class="rr-c3d-note">${esc(t('{n} sheet(s)', { n: sheets }))}</span><input type="number" class="rr-input" data-g="faceFrame" min="16" max="512" value="${state.faceFrame}" title="${esc(t('Frame size'))}"></div>
+                        <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Style'))}</span><select class="rr-select" data-g="style"><option value="realistic"${state.style === 'realistic' ? ' selected' : ''}>${esc(t('Realistic'))}</option><option value="chibi"${state.style === 'chibi' ? ' selected' : ''}>${esc(t('RPG chibi'))}</option></select></label>
+                        <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Look'))}</span><select class="rr-select" data-g="look"><option value="smooth"${state.look === 'smooth' ? ' selected' : ''}>${esc(t('Smooth'))}</option><option value="pixel"${state.look === 'pixel' ? ' selected' : ''}>${esc(t('Pixel art'))}</option><option value="cel"${state.look === 'cel' ? ' selected' : ''}>${esc(t('Pixel art, drawn'))}</option></select></label>
+                        ${check('outline', 'Outline')}`)}
                 </div>
                 <div class="rr-c3d-gen-side">
                     <div class="rr-c3d-gen-sidehead"><span>${esc(t('The first {n} of {count}', { n: Math.min(SHOWN, state.count), count: state.count }))}</span><button class="rr-btn-chip" data-g="reroll" title="${esc(t('Another group to the same description'))}">${esc(t('Roll again'))}</button></div>
@@ -227,7 +290,17 @@
                 <div class="rr-c3d-export-status" aria-live="polite"></div>
                 <div class="rr-c3d-export-foot">${options.page ? '' : `<button class="rr-btn-chip" data-g="close">${esc(t('Close'))}</button>`}<button class="rr-btn-chip" data-g="stop" hidden>${esc(t('Stop'))}</button><button class="rr-btn-chip rr-c3d-export-go" data-g="make">${esc(t('Make {n} characters', { n: state.count }))}</button></div>`;
             for (const fill of panel.querySelectorAll('input[type="range"]')) fill.style.setProperty('--rr-fill', fill.value + '%');
+            const form = panel.querySelector('.rr-c3d-gen-form');
+            if (form) form.scrollTop = scroll;
             preview();
+        };
+        const fold = head => {
+            const key = head.dataset.key, sec = head.parentElement, folded = !folds[key];
+            if (folded) folds[key] = true; else delete folds[key];
+            sec.classList.toggle('is-collapsed', folded);
+            head.setAttribute('aria-expanded', String(!folded));
+            head.querySelector('.r3d-sec-toggle').textContent = folded ? '▸' : '▾';
+            try { localStorage.setItem(FOLDS_KEY, JSON.stringify(folds)); } catch (error) { /* a fold not kept */ }
         };
         /** The first members as the builder's own thumbnails, one after another; a change of description starts over. */
         const preview = async () => {
@@ -278,6 +351,8 @@
                 const next = state[g].slice(), v = Number(el.value);
                 if (Number.isFinite(v)) next[Number(el.dataset.i)] = g === 'age' ? v : v / 100;
                 state[g] = next;
+            } else if (g === 'share') {
+                state.shares = Object.assign({}, state.shares, { [el.dataset.id]: Number(el.value) });
             } else if (el.type === 'checkbox') state[g] = el.checked;
             else if (el.type === 'number') state[g] = Number(el.value);
             else if (el.type !== 'range') state[g] = el.value;
@@ -288,20 +363,37 @@
             if (!b) return;
             const g = b.dataset.g;
             if (g === 'stop') { stop = true; status(t('Stopping after this character…')); return; }
+            if (g === 'fold') { fold(b); return; }
             if (panel.dataset.busy) return;
             if (g === 'close') { epoch++; workers.dispose(); panel.remove(); }
             else if (g === 'reroll') { state.seed = (Math.random() * 4294967296) >>> 0; writeSpec(builder, state); draw(); }
-            else if (g === 'nocolours') { state.palette = []; writeSpec(builder, state); draw(); }
+            else if (g === 'allspecies') { state.species = speciesChoices().map(x => x.id); writeSpec(builder, state); draw(); }
+            else if (g === 'nospecies') { state.species = ['human']; writeSpec(builder, state); draw(); }
+            else if (g === 'nocolours') { state[b.dataset.k] = []; writeSpec(builder, state); draw(); }
             else if (g === 'addcolour' || g === 'swatch') {
-                const i = g === 'swatch' ? Number(b.dataset.i) : state.palette.length, start = state.palette[i] || '#5a6b8c';
-                if (g === 'addcolour') { state.palette = state.palette.concat(start); writeSpec(builder, state); draw(); return; }
-                if (root.RRColorPopover) root.RRColorPopover.open(b, { value: start, onInput: hex => { b.style.setProperty('--rr-c3d-swatch', hex); }, onChange: hex => { state.palette[i] = hex; writeSpec(builder, state); draw(); } });
+                const k = b.dataset.k, list = state[k];
+                if (g === 'addcolour') { state[k] = list.concat((STARTS[k] || STARTS.palette).find(c => !list.includes(c)) || '#808080'); writeSpec(builder, state); draw(); return; }
+                const i = Number(b.dataset.i);
+                if (root.RRColorPopover) root.RRColorPopover.open(b, { value: list[i], onInput: hex => { b.style.setProperty('--rr-c3d-swatch', hex); }, onChange: hex => { state[k][i] = hex; writeSpec(builder, state); draw(); } });
             } else if (g === 'open') {
                 // One member into the builder, to look at closely or to change and save by hand.
                 const m = members(Object.assign({}, state, { count: Math.min(SHOWN, state.count) }), base())[Number(b.dataset.i)];
                 if (m && options.open) options.open(m);
                 else if (m) { epoch++; workers.dispose(); panel.remove(); builder.name = m.name; const input = builder.root.querySelector('.rr-c3d-name-input'); if (input) input.value = m.name; builder._selectPreset(m.recipe); }
             } else if (g === 'make') make();
+        });
+
+        // One colour out of its list.
+        panel.addEventListener('contextmenu', e => {
+            const b = e.target.closest('[data-g="swatch"]');
+            if (!b || panel.dataset.busy) return;
+            e.preventDefault();
+            state[b.dataset.k] = state[b.dataset.k].filter((c, i) => i !== Number(b.dataset.i));
+            writeSpec(builder, state); draw();
+        });
+        panel.addEventListener('keydown', e => {
+            const head = e.target.closest && e.target.closest('.rr-c3d-sechead');
+            if (head && e.target === head && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fold(head); }
         });
 
         /** Every member built on the builder's own view in turn, and what was asked for made of each. */

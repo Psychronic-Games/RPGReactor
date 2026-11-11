@@ -83,6 +83,24 @@ test('settings, colours and accessories follow the description', () => {
     assert.ok(settings.size > 0);
 });
 
+test('colouring lists and species shares hold the members, and an empty description is as it was', () => {
+    const plain = { name: 'Town', count: 40, seed: 9, species: ['human', 'elf'] };
+    const held = Groups.members({ ...plain, skin: ['#8a5a3c'], hairColours: ['#a8432a', '#c8c8c8'], eyeColours: ['#3f6b8c'] });
+    for (const { recipe } of held) {
+        if ((recipe.species || 'human') === 'human') assert.equal(recipe.skin, '#8a5a3c');
+        if (recipe.hair && recipe.hair.style !== 'bald') assert.ok(['#a8432a', '#c8c8c8'].includes(recipe.hair.color), recipe.hair.color);
+        assert.equal(recipe.eyes.color, '#3f6b8c');
+    }
+    // Shares of 1 are the plain pick: nobody changes when the lists are empty and no share is set.
+    assert.deepEqual(Groups.members({ ...plain, shares: { elf: 1 } }), Groups.members(plain));
+    const count = list => list.filter(m => m.recipe.species === 'elf').length;
+    const even = count(Groups.members(plain)), mostly = count(Groups.members({ ...plain, shares: { elf: 9 } }));
+    assert.ok(mostly > even && mostly >= 30, `${even} elves of 40 at even shares, ${mostly} at nine to one`);
+    const n = Groups.normalize({ species: ['human', 'elf'], shares: { elf: 40, orc: 3, human: 1 }, skin: ['red', '#112233'] });
+    assert.deepEqual(n.shares, { elf: 9 });
+    assert.deepEqual(n.skin, ['#112233']);
+});
+
 test('portraits are laid eight to a face sheet, and a sheet can hold the first portraits alone', () => {
     assert.deepEqual(Groups.faceSheets(8), [{ sheet: 0, from: 0, to: 8 }]);
     assert.deepEqual(Groups.faceSheets(19).map(s => [s.from, s.to]), [[0, 8], [8, 16], [16, 19]]);

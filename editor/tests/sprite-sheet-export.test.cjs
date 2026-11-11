@@ -233,3 +233,80 @@ test('the grade lifts darks and color; pixel art is hard-edged and on a small pa
     assert.ok(colors.size <= 32, String(colors.size));
     assert.equal(many[3], 0, 'empty pixels stay empty');
 });
+
+// ── 'cel': pixel art, drawn (2026-11-10) ───────────────────────────────────────────────────────────────────────
+{
+    const S = require('../src/forge/Character3D/CharacterSpriteSheet.js');
+    /** A k-times enlarged picture, premultiplied RGBA with rows bottom-up, from rows of [r, g, b] or null. */
+    const big = (rows, k) => {
+        const h = rows.length, w = rows[0].length, out = new Uint8Array(w * k * h * k * 4);
+        for (let y = 0; y < h * k; y++) for (let x = 0; x < w * k; x++) {
+            const c = rows[h - 1 - Math.floor(y / k)][Math.floor(x / k)];
+            if (c) out.set([c[0], c[1], c[2], 255], (y * w * k + x) * 4);
+        }
+        return out;
+    };
+
+    test('a drawn pixel is the commonest surface under it, never a blend of two', () => {
+        const red = [200, 40, 40], blue = [40, 40, 200], k = 4;
+        // One output pixel: ten samples of red, six of blue. A mean would be purple.
+        const flat = new Uint8Array(k * k * 4), lit = new Uint8Array(k * k * 4);
+        for (let i = 0; i < k * k; i++) { flat.set([...(i < 10 ? red : blue), 255], i * 4); lit.set([...(i < 10 ? [100, 20, 20] : [20, 20, 100]), 255], i * 4); }
+        const cell = S.celCell(lit, flat, k, k, k);
+        assert.deepEqual([...cell.albedo], red);
+        assert.deepEqual([...cell.shown], [100, 20, 20]);
+        assert.equal(cell.alpha[0], 255);
+        // Fewer than half its samples drawn: the pixel is empty, so edges are hard.
+        const thin = new Uint8Array(k * k * 4);
+        for (let i = 0; i < 7; i++) thin.set([...red, 255], i * 4);
+        assert.equal(S.celCell(thin, thin, k, k, k).alpha[0], 0);
+    });
+
+    test('a drawn sheet holds a few colors, each in a few tones set by the light, and a lone pixel joins its neighbours', () => {
+        const red = [200, 40, 40], k = 2, w = 6, h = 4;
+        const flat = big(Array.from({ length: h }, () => Array(w).fill(red)), k);
+        // Lit: the left third in shadow, the right third bright, and one stray dark pixel in the middle.
+        const lit = big(Array.from({ length: h }, (_, y) => Array.from({ length: w }, (_, x) => (x < 2 ? [60, 12, 12] : x > 3 ? [250, 50, 50] : (x === 3 && y === 1 ? [60, 12, 12] : [160, 32, 32])))), k);
+        const cell = S.celCell(lit, flat, w * k, h * k, k);
+        const px = S.celDraw([cell], 8)[0];
+        const at = (x, y) => [...px.slice((y * w + x) * 4, (y * w + x) * 4 + 3)].join();
+        const tones = new Set();
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) tones.add(at(x, y));
+        assert.equal(tones.size, 3, 'shadow, base and light of one red');
+        assert.notEqual(at(0, 0), at(2, 0));
+        assert.notEqual(at(5, 0), at(2, 0));
+        assert.equal(at(3, 1), at(2, 1), 'the stray pixel is taken into the base around it');
+        const ramp = S.celRamp(red), bright = c => c[0] + c[1] + c[2];
+        assert.ok(bright(ramp[0]) < bright(ramp[1]) && bright(ramp[1]) < bright(ramp[2]) && bright(ramp[2]) < bright(ramp[3]));
+        assert.ok(ramp[0][2] / ramp[0][0] > red[2] / red[0], 'a shadow leans cool');
+    });
+
+    test('the workspace shows a sheet as the animations in it, each played from its own frames', () => {
+        const walk = S.strips({ layout: 'mz', frames: 3 });
+        assert.deepEqual(walk.map(x => [x.label, x.col, x.row, x.count]), [['Down', 0, 0, 3], ['Left', 0, 1, 3], ['Right', 0, 2, 3], ['Up', 0, 3, 3]]);
+        assert.deepEqual(walk[0].order, [1, 0, 1, 2], 'three frames step as the game steps them');
+        assert.deepEqual(S.strips({ layout: 'mz', frames: 6 })[0].order, [0, 1, 2, 3, 4, 5]);
+        const all = S.strips({ layout: '8d', frames: 3 });
+        assert.equal(all.length, 32);
+        assert.ok(all.some(x => x.label === 'Down-left') && all.some(x => /^run/.test(x.label)) && all.some(x => x.label === 'guard'));
+        const battler = S.strips({ layout: 'sv' });
+        assert.deepEqual([battler.length, battler[0].label, battler[0].count, battler.at(-1).label], [18, 'walk', 3, 'dead']);
+        assert.deepEqual(S.strips({ layout: 'face' }).map(x => x.count), Array(8).fill(1));
+        // Every frame of the sheet belongs to exactly one animation.
+        for (const [id, columns, rows] of [['mz', 3, 4], ['8d', 12, 8], ['sv', 9, 6], ['face', 4, 2]]) {
+            assert.equal(S.strips({ layout: id, frames: 3 }).reduce((sum, x) => sum + x.count, 0), columns * rows, id);
+        }
+    });
+
+    test('tiles are enlarged by whole pixels, as far as the stage holds them, and the settings a sheet is drawn with are the ones exported', () => {
+        assert.equal(S.tileZoom(4, 48, 900, 600), 5);
+        assert.equal(S.tileZoom(32, 100, 900, 600), 1);
+        const set = S.settingsOf({ layout: 'mz', frame: 37, frames: 6, elevation: 20, outline: false, style: 'chibi', look: 'cel', colors: 9, background: '' });
+        assert.deepEqual([set.layout, set.frame, set.frames, set.elevation, set.outline, set.style, set.look, set.colors], ['mz', 37, 6, 20, false, 'chibi', 'cel', 9]);
+        assert.equal(S.settingsOf({ layout: 'sv', frames: 6 }).frames, 3, 'a battler sheet is three frames a motion');
+    });
+
+    test('the drawn look is offered beside the others', () => {
+        assert.deepEqual(S.LOOKS.map(l => l.id), ['smooth', 'pixel', 'cel']);
+    });
+}

@@ -325,7 +325,7 @@
 
     /** The styles a sheet is drawn in; 'chibi' changes only the copy drawn, never the character. */
     const STYLES = [{ id: 'realistic', label: 'Realistic' }, { id: 'chibi', label: 'RPG chibi' }];
-    const LOOKS = [{ id: 'smooth', label: 'Smooth' }, { id: 'pixel', label: 'Pixel art' }];
+    const LOOKS = [{ id: 'smooth', label: 'Smooth' }, { id: 'pixel', label: 'Pixel art' }, { id: 'cel', label: 'Pixel art, drawn' }];
 
     /** The builder's anime eyes: large irises with a catchlight. */
     const ANIME_EYES = { shapes: { eyeSize: 1.1 }, morph: { eyeWide: 1.1, eyeTall: 1.3 }, eyes: { size: 1.45, pupilSize: 1.15, catchlight: true } };
@@ -432,11 +432,23 @@
      * histogram of its drawn pixels), so flat areas read as flat. In place.
      */
     function quantize(px, count) {
+        const found = clusters(px, count);
+        if (!found) return px;
+        for (let i = 0; i < px.length; i += 4) {
+            if (!px[i + 3]) continue;
+            const c = found.centers[found.owner[((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3)]];
+            px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2];
+        }
+        return px;
+    }
+
+    /** The drawn pixels of an RGBA picture as `count` colors: their centers, and each 15-bit color's center (`owner`). */
+    function clusters(px, count) {
         const hist = new Float64Array(32768);
         for (let i = 0; i < px.length; i += 4) if (px[i + 3]) hist[((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3)]++;
         const bins = [];
         for (let b = 0; b < 32768; b++) if (hist[b]) bins.push(b);
-        if (!bins.length) return px;
+        if (!bins.length) return null;
         const colorOf = b => [((b >> 10) & 31) * 8 + 4, ((b >> 5) & 31) * 8 + 4, (b & 31) * 8 + 4];
         const k = Math.min(count, bins.length);
         // Seeds spread by brightness.
@@ -450,17 +462,225 @@
                 let best = 0, bd = Infinity;
                 for (let j = 0; j < k; j++) { const d = (c[0] - centers[j][0]) ** 2 + (c[1] - centers[j][1]) ** 2 + (c[2] - centers[j][2]) ** 2; if (d < bd) { bd = d; best = j; } }
                 owner[b] = best;
-                const w = hist[b], s = sum[best];
-                s[0] += c[0] * w; s[1] += c[1] * w; s[2] += c[2] * w; s[3] += w;
+                const w = hist[b], t = sum[best];
+                t[0] += c[0] * w; t[1] += c[1] * w; t[2] += c[2] * w; t[3] += w;
             }
             centers = centers.map((c, j) => (sum[j][3] ? [sum[j][0] / sum[j][3], sum[j][1] / sum[j][3], sum[j][2] / sum[j][3]] : c));
         }
-        for (let i = 0; i < px.length; i += 4) {
-            if (!px[i + 3]) continue;
-            const c = centers[owner[((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3)]];
-            px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2];
+        return { centers, owner };
+    }
+
+    // ── Pixel art, drawn ('cel') ──────────────────────────────────────────────────────────────────────────────
+    // A small sprite a pixel artist draws is flat areas of a few chosen colors, each in two or three tones, with
+    // hard edges. A render scaled down is none of that: every pixel is a blend of what lay under it. So the
+    // character is drawn twice, lit and unlit. The unlit picture says what each pixel IS (the commonest surface
+    // color under it, never a blend of two); the lit one says how bright that surface is there. The sheet's
+    // surface colors are cut to a short list, and each is drawn in a few tones (shadow, base, light, and a glint on what shines) decided by
+    // the light, the same list and tones on every frame.
+
+    const luma = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+    /** Shadow, base, light, glint. */
+    const TONES = 4;
+
+    /**
+     * One frame's k × k samples (premultiplied RGBA, rows bottom-up) into what each of its w × h pixels is:
+     * `albedo` its surface color (the commonest among its samples), `shown` that surface as the lit picture has
+     * it, `light` how bright the lit picture is there against the surface color, `alpha` 255 where at least half the samples are drawn.
+     */
+    function celCell(lit, flat, sw, sh, k) {
+        const w = Math.floor(sw / k), h = Math.floor(sh / k), n = k * k;
+        const albedo = new Uint8ClampedArray(w * h * 3), shown = new Uint8ClampedArray(w * h * 3), light = new Float32Array(w * h), alpha = new Uint8Array(w * h);
+        const bin = new Int32Array(n), at = new Int32Array(n);
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            let count = 0;
+            for (let j = 0; j < k; j++) {
+                let i = ((sh - 1 - (y * k + j)) * sw + x * k) * 4;
+                for (let q = 0; q < k; q++, i += 4) {
+                    const a = flat[i + 3];
+                    if (a < 128) continue;
+                    bin[count] = ((flat[i] * 255 / a) >> 4 << 8) | ((flat[i + 1] * 255 / a) >> 4 << 4) | ((flat[i + 2] * 255 / a) >> 4);
+                    at[count++] = i;
+                }
+            }
+            if (count * 2 < n) continue;
+            let best = bin[0], most = 0;
+            for (let c = 0; c < count; c++) {
+                let same = 0;
+                for (let d = 0; d < count; d++) if (bin[d] === bin[c]) same++;
+                if (same > most) { most = same; best = bin[c]; }
+            }
+            let r = 0, g = 0, b = 0, bright = 0, lr = 0, lg = 0, lb = 0;
+            for (let c = 0; c < count; c++) {
+                if (bin[c] !== best) continue;
+                const i = at[c], a = flat[i + 3], la = Math.max(1, lit[i + 3]);
+                r += flat[i] * 255 / a; g += flat[i + 1] * 255 / a; b += flat[i + 2] * 255 / a;
+                bright += luma(lit[i], lit[i + 1], lit[i + 2]) * 255 / la;
+                lr += lit[i] * 255 / la; lg += lit[i + 1] * 255 / la; lb += lit[i + 2] * 255 / la;
+            }
+            const o = y * w + x;
+            albedo[o * 3] = r / most; albedo[o * 3 + 1] = g / most; albedo[o * 3 + 2] = b / most;
+            shown[o * 3] = lr / most; shown[o * 3 + 1] = lg / most; shown[o * 3 + 2] = lb / most;
+            light[o] = (bright / most) / Math.max(10, luma(r / most, g / most, b / most));
+            alpha[o] = 255;
         }
-        return px;
+        return { albedo, shown, light, alpha, w, h };
+    }
+
+    /**
+     * Where the eyes are in a frame w pixels wide, for the ones turned toward the camera: a small sprite's
+     * eyes are drawn, two or three dark pixels each, because at this size a rendered eye is a smudge or
+     * nothing. Each `{ x, y }` is in the frame's pixels.
+     */
+    function eyeMarks(builder, camera, w, h) {
+        const view = builder._view, THREE = root.THREE, parts = (builder._result && builder._result.parts) || [];
+        const k = parts.findIndex(p => p.name === 'Eyes'), mesh = k >= 0 ? view.meshes[k] : null;
+        const head = view.bones.find(b => b.name === 'Head');
+        if (!mesh || !head || !mesh.geometry.getAttribute('position')) return [];
+        const rest = mesh.geometry.getAttribute('position'), v = new THREE.Vector3();
+        const sides = [{ sum: new THREE.Vector3(), n: 0, sign: -1 }, { sum: new THREE.Vector3(), n: 0, sign: 1 }];
+        for (let i = 0; i < rest.count; i++) {
+            const side = sides[rest.getX(i) < 0 ? 0 : 1];
+            if (typeof mesh.getVertexPosition === 'function') mesh.getVertexPosition(i, v); else v.fromBufferAttribute(rest, i);
+            side.sum.add(v.applyMatrix4(mesh.matrixWorld)); side.n++;
+        }
+        const q = head.getWorldQuaternion(new THREE.Quaternion());
+        const toCamera = camera.getWorldDirection(new THREE.Vector3()).negate(), out = [];
+        for (const side of sides) {
+            if (!side.n) continue;
+            // An eye looks a little outward of straight ahead: seen from the side, the near one shows and the far one does not.
+            const facing = new THREE.Vector3(side.sign * 0.45, 0, 1).normalize().applyQuaternion(q);
+            if (facing.dot(toCamera) < 0.28) continue;
+            const at = side.sum.multiplyScalar(1 / side.n).project(camera);
+            out.push({ x: (at.x * 0.5 + 0.5) * w, y: (1 - (at.y * 0.5 + 0.5)) * h });
+        }
+        return out;
+    }
+
+    /** A surface color's three tones: a shadow that leans cool and keeps its color, the color, a light that leans warm. */
+    function celRamp(c) {
+        const y = luma(c[0], c[1], c[2]), sat = v => y + (v - y) * 1.06;
+        const base = [sat(c[0]), sat(c[1]), sat(c[2])];
+        const shadow = base.map((v, i) => (v * 0.62) * 0.86 + [38, 30, 72][i] * 0.14 * (0.35 + y / 255));
+        const lift = y < 60 ? 0.2 : 0.3;
+        const lightTone = base.map((v, i) => v + ([255, 248, 226][i] - v) * lift);
+        // A glint, for what shines: polished metal is its highlights.
+        const glint = base.map((v, i) => v + ([255, 252, 240][i] - v) * 0.72);
+        return [shadow, base, lightTone, glint].map(t => t.map(v => Math.max(0, Math.min(255, Math.round(v)))));
+    }
+
+    /**
+     * The frames `celCell` read, drawn: the sheet's surface colors cut to `colors`, each pixel's tone from how its
+     * light stands against the usual light on its color, lone pixels taken into what surrounds them. Returns one
+     * straight-alpha RGBA picture per frame.
+     */
+    function celDraw(cells, colors = 12) {
+        let total = 0;
+        for (const c of cells) for (let o = 0; o < c.alpha.length; o++) if (c.alpha[o]) total++;
+        const all = new Uint8ClampedArray(total * 4);
+        let t = 0;
+        for (const c of cells) for (let o = 0; o < c.alpha.length; o++) if (c.alpha[o]) { all[t] = c.albedo[o * 3]; all[t + 1] = c.albedo[o * 3 + 1]; all[t + 2] = c.albedo[o * 3 + 2]; all[t + 3] = 255; t += 4; }
+        const found = clusters(all, colors);
+        if (!found) return cells.map(c => new Uint8ClampedArray(c.w * c.h * 4));
+        const baseOf = (c, o) => found.owner[((c.albedo[o * 3] >> 3) << 10) | ((c.albedo[o * 3 + 1] >> 3) << 5) | (c.albedo[o * 3 + 2] >> 3)];
+        // The usual light on each color, over the whole sheet: a tone means the same thing on every frame.
+        const lights = found.centers.map(() => []);
+        for (const c of cells) for (let o = 0; o < c.alpha.length; o++) if (c.alpha[o]) lights[baseOf(c, o)].push(c.light[o]);
+        const usual = lights.map(list => { list.sort((a, b) => a - b); return list.length ? list[list.length >> 1] : 1; });
+        // Each color as the builder shows it: the lit picture's own color where the light on it is the usual one,
+        // graded as every sheet is. The unlit picture only says which pixels are one surface.
+        const seen = found.centers.map(() => [0, 0, 0, 0]);
+        for (const c of cells) for (let o = 0; o < c.alpha.length; o++) {
+            if (!c.alpha[o]) continue;
+            const base = baseOf(c, o), rel = c.light[o] / Math.max(0.05, usual[base]);
+            if (rel < 0.9 || rel > 1.1) continue;
+            const t = seen[base];
+            t[0] += c.shown[o * 3]; t[1] += c.shown[o * 3 + 1]; t[2] += c.shown[o * 3 + 2]; t[3]++;
+        }
+        const ramps = found.centers.map((center, j) => {
+            const t = seen[j];
+            if (!t[3]) return celRamp(center);
+            const px = grade(new Uint8ClampedArray([t[0] / t[3], t[1] / t[3], t[2] / t[3], 255]));
+            return celRamp([px[0], px[1], px[2]]);
+        });
+        return cells.map(c => {
+            const key = new Int16Array(c.w * c.h).fill(-1);
+            for (let o = 0; o < key.length; o++) {
+                if (!c.alpha[o]) continue;
+                const base = baseOf(c, o), rel = c.light[o] / Math.max(0.05, usual[base]);
+                key[o] = base * TONES + (rel < 0.84 ? 0 : rel > 1.6 ? 3 : rel > 1.14 ? 2 : 1);
+            }
+            // A pixel alone among others is noise at this size: it joins the commonest of its neighbours.
+            const clean = key.slice();
+            for (let y = 0; y < c.h; y++) for (let x = 0; x < c.w; x++) {
+                const o = y * c.w + x;
+                if (key[o] < 0) continue;
+                const near = [];
+                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && ny >= 0 && nx < c.w && ny < c.h && key[ny * c.w + nx] >= 0) near.push(key[ny * c.w + nx]);
+                }
+                if (near.length < 3 || near.includes(key[o])) continue;
+                near.sort((a, b) => a - b);
+                let pick = near[0], run = 1, bestRun = 1;
+                for (let i = 1; i < near.length; i++) { run = near[i] === near[i - 1] ? run + 1 : 1; if (run > bestRun) { bestRun = run; pick = near[i]; } }
+                if (bestRun >= 2) clean[o] = pick;
+            }
+            const px = new Uint8ClampedArray(c.w * c.h * 4);
+            for (let o = 0; o < clean.length; o++) {
+                if (clean[o] < 0) continue;
+                const tone = ramps[Math.floor(clean[o] / TONES)][clean[o] % TONES];
+                px[o * 4] = tone[0]; px[o * 4 + 1] = tone[1]; px[o * 4 + 2] = tone[2]; px[o * 4 + 3] = 255;
+            }
+            // The eyes, drawn: dark pixels where each eye is, only on skin (hair over an eye hides it).
+            const tall = Math.max(2, Math.round(c.h / 22)), wide = Math.max(1, Math.round(c.w / 34));
+            for (const eye of c.eyes || []) {
+                const x0 = Math.round(eye.x - wide / 2), y0 = Math.round(eye.y - tall / 2);
+                for (let dy = 0; dy < tall; dy++) for (let dx = 0; dx < wide; dx++) {
+                    const x = x0 + dx, y = y0 + dy, o = y * c.w + x;
+                    if (x < 0 || y < 0 || x >= c.w || y >= c.h || !c.alpha[o]) continue;
+                    if (skinLike(c.albedo[o * 3], c.albedo[o * 3 + 1], c.albedo[o * 3 + 2]) < 0.2) continue;
+                    const dark = dy === 0 && tall > 2 ? [70, 52, 60] : [34, 26, 40];
+                    px[o * 4] = dark[0]; px[o * 4 + 1] = dark[1]; px[o * 4 + 2] = dark[2];
+                }
+            }
+            return px;
+        });
+    }
+
+    /** The view drawn unlit for a moment: every surface in its own color, no shading, no reflections, no tone curve. */
+    function flatLight(THREE, view, renderer) {
+        const lights = [], materials = new Map();
+        view.scene.traverse(node => {
+            if (node.isLight) lights.push([node, node.visible]);
+            for (const m of [node.material].flat().filter(Boolean)) if (!materials.has(m)) materials.set(m, m.envMapIntensity);
+        });
+        // Pi: an ambient light of 1 lights a surface to its color over pi (three's physical units).
+        const ambient = new THREE.AmbientLight(0xffffff, Math.PI);
+        ambient.visible = false;
+        view.scene.add(ambient);
+        let kept = null;
+        return {
+            on() {
+                kept = { environment: view.scene.environment, tone: renderer.toneMapping, exposure: renderer.toneMappingExposure };
+                for (const [light] of lights) light.visible = false;
+                for (const m of materials.keys()) if (m.envMapIntensity !== undefined) m.envMapIntensity = 0;
+                ambient.visible = true;
+                view.scene.environment = null;
+                renderer.toneMapping = THREE.NoToneMapping;
+                renderer.toneMappingExposure = 1;
+            },
+            off() {
+                if (!kept) return;
+                for (const [light, visible] of lights) light.visible = visible;
+                for (const [m, intensity] of materials) if (intensity !== undefined) m.envMapIntensity = intensity;
+                ambient.visible = false;
+                view.scene.environment = kept.environment;
+                renderer.toneMapping = kept.tone;
+                renderer.toneMappingExposure = kept.exposure;
+                kept = null;
+            },
+            dispose() { this.off(); view.scene.remove(ambient); ambient.dispose(); }
+        };
     }
 
     function safeName(name) {
@@ -718,6 +938,7 @@
         for (const c of cells) { c.clipId = resolveClip(c.clip, has); if (c.upper) c.upperId = resolveClip(c.upper, has); }
         const m = cellMetrics(size, size, settings.outline && settings.layout !== 'face');
         const pixelArt = settings.look === 'pixel' && settings.layout !== 'face';
+        const cel = settings.look === 'cel' && settings.layout !== 'face';
         const k = Math.max(2, Math.min(6, Math.floor(512 / size)));
         const renderer = view.renderer, canvas = renderer.domElement;
         const saved = { ratio: renderer.getPixelRatio(), size: renderer.getSize(new THREE.Vector2()), action: view.action, yaw: view.group.rotation.y, floor: view.floor.visible, blob: view.blob.visible, visibility: canvas.style.visibility, clear: renderer.getClearAlpha() };
@@ -732,7 +953,10 @@
         renderer.toneMappingExposure = saved.exposure * (portrait ? 1 : 1.25);
         const fill = new THREE.DirectionalLight(0xfff8f0, portrait ? 0 : 0.9), rim = new THREE.DirectionalLight(0xe8f0ff, portrait ? 0 : 0.9);
         fill.position.set(0, 1.4, 3); rim.position.set(0.6, 2.6, -3);
+        // Drawn pixel art takes its tones from one clear light: the fill that flattens it is turned down.
+        if (cel) { fill.intensity = 0.3; rim.intensity = 0.35; }
         view.scene.add(fill, rim);
+        const flat = cel ? flatLight(THREE, view, renderer) : null, celCells = [], flatPixels = cel ? new Uint8Array(1) : null;
         view.floor.visible = false; view.blob.visible = false;
         const pose = poser(builder);
         const upperBones = view.bones.filter(b => /^(Spine1|Spine2|Neck|Head|(Left|Right)(Shoulder|Arm|ForeArm|Hand))/.test(b.name));
@@ -791,6 +1015,15 @@
                 renderer.setRenderTarget(null);
                 renderer.render(view.scene, camera);
                 gl.readPixels(0, 0, size * k, size * k, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                if (cel) {
+                    // The same frame again unlit; the two are drawn together once every frame is read.
+                    const unlit = new Uint8Array(pixels.length);
+                    flat.on();
+                    try { renderer.render(view.scene, camera); gl.readPixels(0, 0, size * k, size * k, gl.RGBA, gl.UNSIGNED_BYTE, unlit); } finally { flat.off(); }
+                    celCells.push(Object.assign(celCell(pixels, unlit, size * k, size * k, k), { col: c.col, row: c.row, eyes: eyeMarks(builder, camera, size, size) }));
+                    await breathe();
+                    continue;
+                }
                 let px = downsample(pixels, size * k, size * k, k, true);
                 if (!portrait) px = grade(px);
                 if (pixelArt) threshold(px);
@@ -801,7 +1034,12 @@
             }
             if (faceSpan) setExpression(builder, 'neutral');
             if (pixelArt) quantize(sheet, 32);
+            if (cel) {
+                const drawn = celDraw(celCells, Math.max(4, Math.min(32, Math.round(settings.colors) || 12)));
+                celCells.forEach((c, i) => blit(sheet, width, settings.outline ? outline(drawn[i], size, size) : drawn[i], size, size, c.col, c.row));
+            }
         } finally {
+            if (flat) flat.dispose();
             view.scene.remove(fill, rim);
             fill.dispose(); rim.dispose();
             if (builder._view === view) {
@@ -844,51 +1082,210 @@
 
     const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
+    // ── The sprite workspace ──────────────────────────────────────────────────────────────────────────────────
+    // The builder as a sprite maker: in place of the 3D model, the sheet the game will cut, every animation in it
+    // moving, with everything about the sheet beside it (which sheet, the frame's size, frames per step, style,
+    // camera, look, colors, outline; a face sheet's view, expressions and background) and Export. The character is
+    // still shaped in the builder's own tabs; the sheet is drawn again whenever it or a setting changes. One set
+    // of settings (`builder._exportSettings`), whichever button opened it.
+
+    const SPRITE_VIEW_HINT = 'Work on the character as its sprite sheet: every animation as the game draws it, with the sheet\'s settings and Export';
+    const QUICK_SIZES = [32, 48, 64, 96, 128];
+    const GROUNDS = [{ id: 'grass', color: '#6a8f5a', label: 'Grass' }, { id: 'dark', color: '#22252c', label: 'Dark' }, { id: 'light', color: '#cfcabd', label: 'Light' }, { id: 'checker', color: '', label: 'Checkered' }];
+    const DIRECTIONS = { '0': 'Down', '-90': 'Left', '90': 'Right', '180': 'Up', '-45': 'Down-left', '45': 'Down-right', '-135': 'Up-left', '135': 'Up-right' };
+
+    /** What a sheet is drawn with, from the workspace's settings. */
+    function settingsOf(state) {
+        const l = layout(state.layout);
+        return { layout: l.id, frame: state.frame, frames: framesOf(l.id, state.frames), elevation: state.elevation, outline: state.outline, view: state.view, background: state.background || '',
+            expressions: state.expressions, style: state.style, look: state.look, colors: state.colors };
+    }
+
+    /**
+     * A sheet as the animations in it: each `{ label, col, row, count, order }` is `count` frames from (col, row)
+     * played in `order`. A walking sheet's three frames step 1, 0, 1, 2 as the game plays them; a face is one frame.
+     */
+    function strips(settings) {
+        const l = layout(settings.layout), per = l.id === 'face' ? 1 : l.id === 'sv' ? 3 : framesOf(l.id, settings.frames);
+        const found = new Map();
+        for (const c of plan(l.id, { expressions: settings.expressions, view: settings.view, frames: settings.frames })) {
+            const key = Math.floor(c.col / per) + '|' + c.row;
+            if (!found.has(key)) found.set(key, { col: Math.floor(c.col / per) * per, row: c.row, count: per, cells: [] });
+            found.get(key).cells.push(c);
+        }
+        return [...found.values()].map(strip => {
+            const lead = strip.cells.find(c => c.clip !== 'idle') || strip.cells[0];
+            const direction = DIRECTIONS[String(lead.yaw)] || '';
+            const label = l.id === 'face' ? (lead.expression || '') : l.id === 'sv' ? (lead.motion || lead.clip) : (lead.clip === 'walk' || lead.clip === 'idle' ? direction : lead.clip + (direction && direction !== 'Down' ? ' · ' + direction : ''));
+            const order = per === 3 && l.id !== 'sv' ? [1, 0, 1, 2] : Array.from({ length: per }, (_, i) => i);
+            return { label, col: strip.col, row: strip.row, count: per, order, walk: lead.clip === 'walk' || lead.clip === 'idle' };
+        });
+    }
+
+    /** The largest whole-pixel zoom at which `count` tiles of `frame` pixels (plus `label` under each) fit a stage. */
+    function tileZoom(count, frame, width, height, label = 16, gap = 10) {
+        for (let zoom = 8; zoom > 1; zoom--) {
+            const columns = Math.floor((width + gap) / (frame * zoom + gap));
+            if (columns >= 1 && Math.ceil(count / columns) * (frame * zoom + label + gap) <= height + gap) return zoom;
+        }
+        return 1;
+    }
+
+    /** The workspace shown or taken away (the Sprite chip). Returns whether it shows now. */
+    function toggleSpriteView(builder) {
+        return !!openPanel(builder);
+    }
+
     function openPanel(builder) {
         const host = builder.root && builder.root.querySelector('.rr-c3d-view');
         if (!host) return null;
-        const old = host.querySelector('.rr-c3d-export');
-        if (old) { old.remove(); return null; }
+        const old = host.querySelector('.rr-c3d-spriteview');
+        if (old) { if (old._close && !old.querySelector('.rr-c3d-export').dataset.busy) old._close(); return null; }
         const t = (text, params) => builder._t(text, params);
         const state = builder._exportSettings || (builder._exportSettings = { layout: '8d', frame: 100, frames: 3, elevation: 30, outline: true, view: 'three', preset: 'everyday', background: '', style: 'realistic', look: 'smooth' });
+        if (!(state.colors >= 4)) state.colors = 12;
+        if (!state.stage) state.stage = 'frames';
+        if (!state.ground) state.ground = 'grass';
+        const el = document.createElement('div');
+        el.className = 'rr-c3d-spriteview';
+        el.innerHTML = `<div class="rr-c3d-spriteview-main">
+                <div class="rr-c3d-spriteview-bar">
+                    <span class="rr-c3d-seg" role="group"><button class="rr-btn-chip" data-v="frames">${esc(t('Animations'))}</button><button class="rr-btn-chip" data-v="sheet">${esc(t('Whole sheet'))}</button></span>
+                    <span class="rr-c3d-spriteview-grounds" title="${esc(t('What the sprite is shown on'))}">${GROUNDS.map(g => `<button class="rr-c3d-ground" data-ground="${g.id}" title="${esc(t(g.label))}" style="${g.color ? 'background:' + g.color : ''}"></button>`).join('')}</span>
+                    <span class="rr-c3d-note" data-v="status" aria-live="polite"></span>
+                </div>
+                <div class="rr-c3d-spriteview-stage"></div>
+            </div>`;
         const panel = document.createElement('div');
-        panel.className = 'rr-c3d-export';
-        panel.setAttribute('role', 'dialog');
-        panel.setAttribute('aria-label', t('Export Sprite Sheet'));
-        host.appendChild(panel);
+        panel.className = 'rr-c3d-export is-docked';
+        panel.setAttribute('role', 'group');
+        panel.setAttribute('aria-label', t('Sprite sheet'));
+        el.appendChild(panel);
+        host.appendChild(el);
+        const chip = builder.root.querySelector('.rr-c3d-spritebtn');
+        if (chip) chip.classList.add('is-active');
+        const stage = el.querySelector('.rr-c3d-spriteview-stage');
+        const live = { sheet: null, picture: null, settings: null, tiles: [], drawnFor: '', busy: false, steady: 0, timer: 0, frame: 0 };
+        const note = text => { el.querySelector('[data-v="status"]').textContent = text; };
+
         const draw = () => {
             const l = layout(state.layout), face = l.id === 'face', exprs = expressionList();
             const name = safeName(builder.name) || t('Villager');
             const presets = facePresets();
             const frames = framesOf(l.id, state.frames), cols = columnsOf(l.id, frames), file = fileName(l.id, name, frames);
             const presetOptions = presets.map(p => `<option value="${p.id}"${p.id === state.preset ? ' selected' : ''}>${esc(t(p.label))}</option>`).join('');
+            const keep = panel.scrollTop;
             panel.innerHTML = `
-                <div class="rr-c3d-export-head"><span>${esc(t('Export Sprite Sheet'))}</span><button class="rr-c3d-clear" data-x="close" title="${esc(t('Close'))}">✕</button></div>
+                <div class="rr-c3d-export-head"><span>${esc(t('Sprite sheet'))}</span><button class="rr-btn-chip" data-x="close" title="${esc(t('Back to the 3D model'))}">◂ ${esc(t('3D model'))}</button></div>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Sheet'))}</span><select class="rr-select" data-x="layout">${LAYOUTS.map(o => `<option value="${o.id}"${o.id === l.id ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
                 <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Frame size'))}</span><input type="number" class="rr-input" data-x="frame" min="16" max="512" step="1" value="${state.frame}"><span class="rr-c3d-value">${cols * state.frame} × ${l.rows * state.frame}</span></label>
+                <div class="rr-c3d-row rr-c3d-export-sizes"><span class="rr-c3d-label"></span><span>${QUICK_SIZES.concat(face ? [144] : []).map(n => `<button class="rr-btn-chip${n === state.frame ? ' is-active' : ''}" data-x="size" data-n="${n}">${n}</button>`).join('')}</span></div>
                 ${l.id === '8d' || l.id === 'mz' ? `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Frames'))}</span><select class="rr-select" data-x="frames">${FRAME_CHOICES.map(n => `<option value="${n}"${n === frames ? ' selected' : ''}>${esc(n === 3 ? t('3 (RPG Maker MZ)') : String(n))}</option>`).join('')}</select></label>` : ''}
                 ${face ? `
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('View'))}</span><select class="rr-select" data-x="view"><option value="three"${state.view === 'three' ? ' selected' : ''}>${esc(t('Three-quarter'))}</option><option value="front"${state.view === 'front' ? ' selected' : ''}>${esc(t('Front'))}</option></select></label>
                 ${exprs.length > 1 ? `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Expressions'))}</span><select class="rr-select" data-x="preset">${presetOptions}</select></label>
                 <div class="rr-c3d-export-faces">${(state.expressions || presets[0].expressions).map((id, i) => `<select class="rr-select" data-x="expr" data-i="${i}">${exprs.map(e => `<option value="${esc(e.id)}"${e.id === id ? ' selected' : ''}>${esc(t(e.label || e.id))}</option>`).join('')}</select>`).join('')}</div>` : ''}
-                <div class="rr-c3d-row rr-c3d-colorrow"><span class="rr-c3d-label">${esc(t('Background'))}</span><select class="rr-select" data-x="bgmode"><option value=""${state.background ? '' : ' selected'}>${esc(t('Transparent'))}</option><option value="color"${state.background ? ' selected' : ''}>${esc(t('Color'))}</option></select><button class="rr-c3d-color" data-x="bgcolor" style="--rr-c3d-swatch:${esc(state.background || '#3a3f4b')}"${state.background ? '' : ' hidden'} title="${esc(state.background || '')}"></button></div>`
+                <div class="rr-c3d-row rr-c3d-colorrow"><span class="rr-c3d-label">${esc(t('Background'))}</span><select class="rr-select" data-x="bgmode"><option value=""${state.background ? '' : ' selected'}>${esc(t('Transparent'))}</option><option value="color"${state.background ? ' selected' : ''}>${esc(t('Color'))}</option></select><button class="rr-c3d-color" data-x="bgcolor" style="--rr-c3d-swatch:${esc(state.background || '#3a3f4b')}" title="${esc(state.background || '')}"${state.background ? '' : ' hidden'}></button></div>`
                 : `
                 ${builder.human === false ? '' : `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Style'))}</span><select class="rr-select" data-x="style">${STYLES.map(o => `<option value="${o.id}"${o.id === state.style ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>`}
                 <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Camera angle'))}</span><input type="range" data-x="elevation" min="0" max="60" step="1" value="${state.elevation}"><span class="rr-c3d-value">${state.elevation}°</span></label>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Look'))}</span><select class="rr-select" data-x="look">${LOOKS.map(o => `<option value="${o.id}"${o.id === state.look ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
+                ${state.look === 'cel' ? `<label class="rr-c3d-row" title="${esc(t('How many surface colors the whole sheet is drawn in; each has its own shadow and light.'))}"><span class="rr-c3d-label">${esc(t('Colors'))}</span><input type="range" data-x="colors" min="4" max="24" step="1" value="${state.colors}"><span class="rr-c3d-value">${state.colors}</span></label>` : ''}
                 <label class="rr-c3d-row rr-c3d-check"><span class="rr-c3d-label">${esc(t('Outline'))}</span><input type="checkbox" data-x="outline"${state.outline ? ' checked' : ''}></label>`}
                 <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('File'))}</span><span class="rr-c3d-export-file" title="img/${l.folder}/${esc(file)}">img/${l.folder}/${esc(file)}</span></div>
+                <p class="rr-c3d-note">${esc(t('The picture beside this is the sheet as it will be saved. Shape the character in the tabs on the left; it is drawn again as you go.'))}</p>
                 <div class="rr-c3d-export-progress" hidden><div></div></div>
                 <img class="rr-c3d-export-preview" data-x="sheet" alt="" hidden>
                 <div class="rr-c3d-export-status" aria-live="polite"></div>
-                <div class="rr-c3d-export-foot"><button class="rr-btn-chip" data-x="close">${esc(t('Close'))}</button><button class="rr-btn-chip rr-c3d-export-look" data-x="preview" title="${esc(t('Draw the sheet here without saving it'))}">${esc(t('Preview'))}</button><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export'))}</button></div>`;
-            const fill = panel.querySelector('input[type="range"]');
-            if (fill) fill.style.setProperty('--rr-fill', (state.elevation / 60 * 100) + '%');
+                <div class="rr-c3d-export-foot"><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export to the project'))}</button></div>`;
+            for (const fill of panel.querySelectorAll('input[type="range"]')) fill.style.setProperty('--rr-fill', ((fill.value - fill.min) / (fill.max - fill.min) * 100) + '%');
+            panel.scrollTop = keep;
+            for (const b of el.querySelectorAll('[data-v="frames"], [data-v="sheet"]')) b.classList.toggle('is-active', b.dataset.v === state.stage);
+            for (const b of el.querySelectorAll('[data-ground]')) b.classList.toggle('is-active', b.dataset.ground === state.ground);
+            const ground = GROUNDS.find(g => g.id === state.ground) || GROUNDS[0];
+            stage.dataset.ground = ground.id;
+            stage.style.backgroundColor = ground.color || '';
         };
+
+        /** The sheet last drawn, laid out on the stage: its animations as tiles, or the whole sheet. */
+        const show = () => {
+            const sheet = live.sheet;
+            if (!sheet) return;
+            const box = stage.getBoundingClientRect(), f = sheet.frame, width = Math.max(60, box.width - 24), height = Math.max(60, box.height - 24);
+            live.tiles = [];
+            if (state.stage === 'sheet') {
+                const zoom = Math.max(1, Math.min(8, Math.floor(Math.min(width / sheet.width, height / sheet.height)))) || 1, fits = sheet.width <= width && sheet.height <= height;
+                stage.innerHTML = `<canvas class="rr-c3d-sprite-whole" width="${sheet.width}" height="${sheet.height}" style="width:${fits ? sheet.width * zoom + 'px' : 'auto'};max-width:100%;max-height:100%"></canvas>`;
+                stage.firstElementChild.getContext('2d').drawImage(live.picture, 0, 0);
+                return;
+            }
+            const list = strips(live.settings), zoom = tileZoom(list.length, f, width, height);
+            stage.innerHTML = `<div class="rr-c3d-sprite-tiles">${list.map(strip => `<figure class="rr-c3d-sprite-tile"><canvas width="${f}" height="${f}" style="width:${f * zoom}px;height:${f * zoom}px"></canvas><figcaption>${esc(t(strip.label))}</figcaption></figure>`).join('')}</div>`;
+            const canvases = stage.querySelectorAll('canvas');
+            live.tiles = list.map((strip, i) => ({ strip, g: canvases[i].getContext('2d') }));
+        };
+        const animate = time => {
+            if (!el.isConnected) return;
+            live.frame = requestAnimationFrame(animate);
+            if (!live.picture || !live.tiles.length) return;
+            const f = live.sheet.frame;
+            for (const { strip, g } of live.tiles) {
+                // A walk steps as the game steps it; anything else plays through and rests a moment on its last frame.
+                const beat = Math.floor(time / (strip.walk ? 170 : 210)), at = strip.walk ? strip.order[beat % strip.order.length] : Math.min(strip.count - 1, beat % (strip.count + 2));
+                if (strip.shown === at) continue;
+                strip.shown = at;
+                g.clearRect(0, 0, f, f);
+                g.drawImage(live.picture, (strip.col + at) * f, strip.row * f, f, f, 0, 0, f, f);
+            }
+        };
+        const idle = () => { const P = builder._painter; return !!(builder._result && builder._view && !builder._pending && !builder._rebuildOwed && !(builder._liveJob && builder._liveJob.busy) && !(P && (P.busy || P.next)) && !builder._settle && !builder._sheetExporting); };
+        const tick = async () => {
+            if (!el.isConnected) { clearInterval(live.timer); return; }
+            if (live.busy || panel.dataset.busy) return;
+            live.steady = idle() ? live.steady + 1 : 0;
+            if (live.steady < 2) return;
+            const settings = settingsOf(state), want = JSON.stringify([builder.recipe, settings]);
+            if (want === live.drawnFor) return;
+            live.busy = true;
+            const started = performance.now();
+            note(t('Drawing…'));
+            try {
+                const sheet = await render(builder, settings);
+                if (!el.isConnected) return;
+                live.sheet = sheet; live.settings = settings; live.drawnFor = want;
+                live.picture = document.createElement('canvas');
+                live.picture.width = sheet.width; live.picture.height = sheet.height;
+                live.picture.getContext('2d').putImageData(new ImageData(sheet.data, sheet.width, sheet.height), 0, 0);
+                show();
+                note(t('{w} × {h}, drawn in {s} s', { w: sheet.width, h: sheet.height, s: ((performance.now() - started) / 1000).toFixed(1) }));
+            } catch (error) {
+                live.drawnFor = want;
+                note(t('The sheet could not be drawn.'));
+                console.warn('[RRCharacterSpriteSheet] live sheet', error);
+            } finally { live.busy = false; live.steady = 0; }
+        };
+        live.timer = setInterval(tick, 250);
+        live.frame = requestAnimationFrame(animate);
+        const watch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => show()) : null;
+        if (watch) watch.observe(stage);
+        el._close = () => {
+            clearInterval(live.timer); cancelAnimationFrame(live.frame);
+            if (watch) watch.disconnect();
+            el.remove();
+            if (chip) chip.classList.remove('is-active');
+        };
+
+        el.querySelector('.rr-c3d-spriteview-bar').addEventListener('click', e => {
+            const view = e.target.closest('[data-v="frames"], [data-v="sheet"]'), ground = e.target.closest('[data-ground]');
+            if (view) { state.stage = view.dataset.v; draw(); show(); }
+            if (ground) { state.ground = ground.dataset.ground; draw(); }
+        });
         const preview = panel => panel.querySelector('.rr-c3d-export-preview');
         panel.addEventListener('input', e => {
             const x = e.target.dataset.x;
-            if (x === 'elevation') { state.elevation = Number(e.target.value); e.target.style.setProperty('--rr-fill', (state.elevation / 60 * 100) + '%'); e.target.parentElement.querySelector('.rr-c3d-value').textContent = state.elevation + '°'; }
+            if (e.target.type === 'range') e.target.style.setProperty('--rr-fill', ((e.target.value - e.target.min) / (e.target.max - e.target.min) * 100) + '%');
+            if (x === 'elevation') { state.elevation = Number(e.target.value); e.target.parentElement.querySelector('.rr-c3d-value').textContent = state.elevation + '°'; }
+            if (x === 'colors') { state.colors = Number(e.target.value); e.target.parentElement.querySelector('.rr-c3d-value').textContent = String(state.colors); }
             if (x === 'frame') { const v = Math.round(Number(e.target.value)); if (v >= 16 && v <= 512) { state.frame = v; const l = layout(state.layout); e.target.parentElement.querySelector('.rr-c3d-value').textContent = `${columnsOf(l.id, state.frames) * v} × ${l.rows * v}`; } }
         });
         panel.addEventListener('change', e => {
@@ -901,7 +1298,7 @@
                 draw();
             } else if (x === 'outline') state.outline = e.target.checked;
             else if (x === 'style') state.style = e.target.value;
-            else if (x === 'look') state.look = e.target.value;
+            else if (x === 'look') { state.look = e.target.value; draw(); }
             else if (x === 'view') state.view = e.target.value;
             else if (x === 'preset') { const presets = facePresets(); state.preset = e.target.value; state.expressions = (presets.find(p => p.id === state.preset) || presets[0]).expressions.slice(); draw(); }
             else if (x === 'expr') { state.expressions = (state.expressions || facePresets()[0].expressions).slice(); state.expressions[Number(e.target.dataset.i)] = e.target.value; }
@@ -909,19 +1306,21 @@
             else if (x === 'frame') draw();
             else if (x === 'frames') { state.frames = Number(e.target.value); draw(); }
         });
-        panel.addEventListener('click', e => {
+        panel.addEventListener('click', async e => {
             const b = e.target.closest('[data-x]');
             if (!b) return;
-            if (b.dataset.x === 'close' && !panel.dataset.busy) panel.remove();
+            if (b.dataset.x === 'close' && !panel.dataset.busy) el._close();
+            else if (b.dataset.x === 'size') { state.frame = Number(b.dataset.n); draw(); }
             else if (b.dataset.x === 'bgcolor' && root.RRColorPopover) {
                 root.RRColorPopover.open(b, { value: state.background || '#3a3f4b', onInput: hex => { state.background = hex; b.style.setProperty('--rr-c3d-swatch', hex); }, onChange: hex => { state.background = hex; b.style.setProperty('--rr-c3d-swatch', hex); b.title = hex; } });
-            } else if (b.dataset.x === 'export' && !panel.dataset.busy) exportNow(builder, panel, state, preview);
-            else if (b.dataset.x === 'preview' && !panel.dataset.busy) exportNow(builder, panel, state, preview, true);
-            // The sheet shown: a click on it shows it at its own size, another fits it to the panel again.
-            else if (b.dataset.x === 'sheet') b.classList.toggle('is-actual');
+            } else if (b.dataset.x === 'export' && !panel.dataset.busy) {
+                // The picture being drawn is let finish; the sheet saved is drawn from the settings as they stand.
+                for (let i = 0; i < 400 && live.busy; i++) await new Promise(done => setTimeout(done, 50));
+                if (el.isConnected && !panel.dataset.busy) exportNow(builder, panel, state, preview);
+            }
         });
         draw();
-        return panel;
+        return el;
     }
 
     /** The project's face size (System 2), else MZ's 144. */
@@ -960,7 +1359,7 @@
         status.dataset.kind = '';
         const started = performance.now();
         try {
-            const settings = { layout: l.id, frame: state.frame, frames, elevation: state.elevation, outline: state.outline, view: state.view, background: state.background || '', expressions: state.expressions, style: state.style, look: state.look };
+            const settings = settingsOf(state);
             const sheet = await render(builder, settings, (done, total) => { bar.firstElementChild.style.width = Math.round(done / total * 100) + '%'; });
             const png = await toPng(sheet);
             if (!current()) return;
@@ -993,7 +1392,7 @@
     const api = {
         LAYOUTS, CLIPS, SV_MOTIONS, SV_CLIPS, FACE_PRESETS, YAW, SV_YAW, CARDINAL, DIAGONAL,
         STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, columnsOf, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
-        downsample, outline, grade, skinLike, threshold, quantize, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
+        downsample, outline, grade, skinLike, threshold, quantize, clusters, celCell, celRamp, celDraw, toggleSpriteView, SPRITE_VIEW_HINT, settingsOf, strips, tileZoom, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
     };
     root.RRCharacterSpriteSheet = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

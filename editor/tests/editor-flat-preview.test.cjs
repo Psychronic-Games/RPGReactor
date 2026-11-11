@@ -257,6 +257,30 @@ test('flat model materials keep their own lighting when another preview changes 
 });
 
 
+test('flat model materials do not read the 3D view\'s baked light volumes or its shared uniform block', t => {
+    const previous = global.Reactor3D;
+    const seen = [];
+    const block = { apply(material, shader) { seen.push(shader.uniforms.rrLightCount); return false; } };
+    const original = block.apply;
+    global.Reactor3D = { SHADER_LIGHTS: 32, SceneUniformBlock: block };
+    t.after(() => { if (previous === undefined) delete global.Reactor3D; else global.Reactor3D = previous; });
+    // What the 3D view leaves in the shared set: its volumes on, and masks that take lights out of the loop.
+    const shared = { rrLightCount: { value: 23 }, rrDynOn: { value: 1 }, rrVolumeOn: { value: 1 },
+        rrLightDynamic: { value: 8385319 }, rrLightCached: { value: 7 }, rrLightAll: { value: 8388607 }, rrSunShade: { value: 0.5 } };
+    const material = { __reactorLit: true, customProgramCacheKey: () => 'model',
+        onBeforeCompile(shader, renderer) { shader.uniforms = { ...shared }; Reactor3D.SceneUniformBlock.apply(this, shader, renderer); } };
+    const preview = new Preview({});
+    const own = preview.isolateLighting({ traverse: fn => fn({ material }) });
+    const shader = {}; material.onBeforeCompile(shader);
+    for (const name of ['rrDynOn', 'rrVolumeOn', 'rrLightDynamic', 'rrLightCached', 'rrSunShade']) {
+        assert.equal(shader.uniforms[name].value, 0, name);
+        assert.notEqual(shader.uniforms[name], shared[name], name);
+    }
+    // The block looked at the picture's own values, so it leaves the material its loose uniforms.
+    assert.deepEqual(seen, [own.rrLightCount]);
+    assert.equal(block.apply, original);
+});
+
 test('flat surfaces use world-height lights even when their floor footprint is empty', t => {
     const previous = global.Reactor3D;
     const R = require('../../runtime/reactor_3d.js');

@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-10)
 
-- **Development:** 0.99.5 is open, runtime revision **20261110.13** in the tree and the Demo; committed on `main` with the audit's fixes and the merge of `origin/main` (pull request #80), 20 commits ahead of GitHub and not pushed. demo.rpgreactor.org runs **20261110.12**, deployed online with the creator on. The Demo in the tree is single player, creator off, uncommitted on purpose: switch both for a deploy and put them back (the settings as the owner left them are in `~/.cache/rr-tests/server-backup-20261110/demo-settings`).
+- **Development:** 0.99.5 is open, runtime revision **20261110.13** in the tree and the Demo; committed on `main` with the audit's fixes and the merge of `origin/main` (pull request #80), 24 commits ahead of GitHub and not pushed. demo.rpgreactor.org runs **20261110.12**, deployed online with the creator on. The Demo in the tree is single player, creator off, uncommitted on purpose: switch both for a deploy and put them back (the settings as the owner left them are in `~/.cache/rr-tests/server-backup-20261110/demo-settings`).
 - **Laptop:** `template/` there holds only the Demo since 2026-11-08; the sync finds 1 bundled project there and 17 on the desktop (the folders still on their own engine are left alone), so run the sync on the desktop. The laptop's games now start on OpenGL: its record in `%LOCALAPPDATA%\RPGReactor\graphics-backend.json` chose it (11-10, runtime .8).
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
 - **Verification:** CI was last green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is 8 commits past it. On the laptop on 11-10 the suite without the heavy sweeps ran 8,942 passed, 49 failed: the known failures and tests that need the desktop's files. Substantial checks go through `codex-check`.
@@ -29,7 +29,7 @@ Runtimes 20261110.11 and .12, synced into the 17 bundled projects, deployed (.12
 - **Test speed (owner asked again):** `npm run test:changed` goes by what each test process read (`tests/helpers/test-inputs.cjs`): a runtime file's change reruns tens of files, not 782 of 958. The slowest sweeps were profiled and cut with the built models' hashes unchanged: the suite's CPU 3,399 to 2,847 s. A Character Builder change still reruns about 150 files (seven minutes at six workers). Tools: `~/.cache/rr-tests/testspeed`.
 - **Left as found:** `reverse_state_effect` on a 2000/2003 skill now follows EasyRPG's rule (cure on allies, inflict on enemies, reversed by the flag); `legacy-commands.test.cjs` held the opposite for an ally skill with the flag and was changed. Re-import a game to pick it up.
 
-- **Later:** Character Groups, sheet Preview, baked tile pictures; a whole test run takes 5.4 min (changelog).
+- **Later (changelog):** Character Groups, tile pictures; evening, unseen: Sprite workspace, pop-out buttons, 2D-view model light.
 
 ## 2026-11-10 (laptop) — Auto's smoothness, sharper small pictures, the backend by measurement, crowds, arrivals, shader changes
 
