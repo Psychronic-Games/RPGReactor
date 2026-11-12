@@ -508,6 +508,7 @@
                     <tbody></tbody>
                 </table>
                 <div style="margin-top: 6px; font-size: 11px; color: var(--color-text-muted);">${tt('Stored in the Note as notetags.')}</div>
+                ${types.some(type => type.native) ? `<div class="rr-cost-native-note" style="margin-top: 2px; font-size: 11px; color: var(--color-text-muted);">${tt('MP and TP: Value is the cost field under Invocation, the same number in both places. % is a notetag the plugin adds on top of that field.')}</div>` : ''}
             </div>
         `;
         const tbody = section.querySelector('tbody');

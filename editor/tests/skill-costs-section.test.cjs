@@ -228,6 +228,8 @@ test('the card shows what the note sets and writes nothing by being shown', asyn
     await tick();
     assert.ok(section);
     assert.equal(section.querySelector('.database-section-header').dataset.sectionKey, 'skill-costs');
+    assert.match(section.querySelector('.rr-cost-native-note').textContent, /Value is the cost field under Invocation/, 'MP and TP are explained where they are listed');
+    assert.equal(page({ id: 5, note: '' }, [BP]).section.querySelector('.rr-cost-native-note'), null, 'and not where neither is a cost type');
     assert.equal(field(line('Gold')[0], 'amount').value, '100');
     assert.equal(field(line('Gold')[0], 'unit').value, 'flat');
     assert.equal(field(line('HP')[0], 'amount').value, '5');

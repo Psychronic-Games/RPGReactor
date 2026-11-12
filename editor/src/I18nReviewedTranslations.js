@@ -12871,6 +12871,31 @@ for (const [locale, translations] of Object.entries(RR_REVIEWED_SKILL_COSTS_TEXT
   });
 }
 
+// How MP and TP on the Skill Costs card relate to the Invocation fields.
+// A machine-assisted first pass, flagged for review.
+const RR_REVIEWED_SKILL_COSTS_NATIVE_NOTE = "MP and TP: Value is the cost field under Invocation, the same number in both places. % is a notetag the plugin adds on top of that field.";
+for (const [locale, text] of Object.entries({
+  "ja": "MPとTP：「値」は「発動」にあるコスト欄そのもので、どちらでも同じ数値です。「%」はノートタグで、プラグインがその欄の値に上乗せします。",
+  "zh-Hant": "MP 與 TP：「值」就是「調用」中的消耗欄位，兩處是同一個數字。「%」是備註標籤，外掛會把它加在該欄位之上。",
+  "zh-Hans": "MP 与 TP：“值”就是“调用”中的消耗字段，两处是同一个数字。“%”是备注标签，插件会把它加在该字段之上。",
+  "ko": "MP와 TP: \"값\"은 \"발동\"의 비용 필드 그 자체이며 양쪽에서 같은 숫자입니다. \"%\"는 노트 태그로, 플러그인이 그 필드 값에 더합니다.",
+  "es": "MP y TP: «Valor» es el campo de coste de Invocación, el mismo número en ambos sitios. «%» es una etiqueta de nota que el plugin suma a ese campo.",
+  "pt": "MP e TP: \"Valor\" é o campo de custo em Invocação, o mesmo número nos dois lugares. \"%\" é uma tag de nota que o plugin soma a esse campo.",
+  "fr": "MP et TP : « Valeur » est le champ de coût d'Invocation, le même nombre aux deux endroits. « % » est une balise de note que le plugin ajoute à ce champ.",
+  "it": "MP e TP: «Valore» è il campo del costo in Invocazione, lo stesso numero in entrambi i punti. «%» è un tag delle note che il plugin somma a quel campo.",
+  "de": "MP und TP: „Wert“ ist das Kostenfeld unter Auslösung, an beiden Stellen dieselbe Zahl. „%“ ist ein Notiz-Tag, den das Plugin zu diesem Feld addiert.",
+  "ru": "MP и TP: «Значение» — это поле стоимости в разделе «Применение», одно и то же число в обоих местах. «%» — тег в заметках, который плагин прибавляет к этому полю.",
+  "pl": "MP i TP: „Wartość” to pole kosztu w sekcji Wywołanie, ta sama liczba w obu miejscach. „%” to tag notatki, który wtyczka dodaje do tego pola.",
+  "el": "MP και TP: η «Τιμή» είναι το πεδίο κόστους στην Επίκληση, ο ίδιος αριθμός και στα δύο σημεία. Το «%» είναι ετικέτα σημείωσης που το πρόσθετο προσθέτει σε αυτό το πεδίο.",
+  "ar": "MP و TP: «القيمة» هي حقل الكلفة ضمن الاستدعاء، الرقم نفسه في الموضعين. «%» وسم في الملاحظات تضيفه الإضافة فوق ذلك الحقل.",
+  "tr": "MP ve TP: \"Değer\", Çağırma altındaki bedel alanının kendisidir; iki yerde de aynı sayıdır. \"%\", eklentinin o alanın üzerine eklediği bir not etiketidir.",
+  "id": "MP dan TP: \"Nilai\" adalah kolom biaya di Invokasi, angka yang sama di kedua tempat. \"%\" adalah tag catatan yang ditambahkan plugin di atas kolom itu.",
+  "vi": "MP và TP: \"Giá trị\" chính là trường chi phí trong mục Phát động, cùng một con số ở cả hai nơi. \"%\" là thẻ ghi chú mà plugin cộng thêm vào trường đó.",
+  "th": "MP และ TP: \"ค่า\" คือช่องค่าใช้ในส่วนการร่ายใช้ เป็นตัวเลขเดียวกันทั้งสองที่ ส่วน \"%\" คือแท็กในหมายเหตุที่ปลั๊กอินบวกเพิ่มจากช่องนั้น"
+})) {
+  globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][RR_REVIEWED_SKILL_COSTS_NATIVE_NOTE] = text;
+}
+
 // Battle Test identifies missing graphics before launching the game.
 for (const [locale, text] of Object.entries({
   "ja": "戦闘グラフィックが見つかりません。別のアクターを選ぶか、アクター設定でグラフィックを指定してください。",
