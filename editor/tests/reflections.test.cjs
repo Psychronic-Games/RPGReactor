@@ -315,7 +315,7 @@ test('battle shadows: the room\'s lights become shadow candidates with their own
     assert.match(battle, /id:'room:'\+index/, 'room lights: names repeat, so rows would swap between them');
     assert.match(battle, /R\.Shadows\.markCaster\(object, !key\.startsWith\('prop:'\) \|\| R\.modelCasterMoves\?\./, 'animated props and battlers cast moving shadows');
     assert.match(battle, /key\.call\(this\) \+ '\|battle-room' \+ \(view\._shadowed \? '\|room-shadows' : ''\)/, 'programs follow whether the room holds the rows');
-    assert.match(battle, /if\(m\.__battleRoomLight\)\{m\.dispose\(\);m\.needsUpdate=true;\}/, 'and are compiled again, never reused, when that changes');
+    assert.match(battle, /if\(m\.__battleRoomLight\)\{m\.dispose\(\);m\.needsUpdate=true;[^}]*\}/, 'and are compiled again, never reused, when that changes');
 });
 
 test('a second owner takes the shadow rows only once the map has left them', () => {

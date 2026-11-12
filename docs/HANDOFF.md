@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-11)
 
-- **Development:** 0.99.5 is open, runtime revision **20261111.16** in `runtime/` and the Demo (the laptop's work of 11-11; the desktop's other 16 bundled projects are at .7 until a sync there), with the fixes of the 2026-11-11 audit: committed (`47790645`), not deployed, the audit's part not seen in the game. `main` is 26 commits ahead of GitHub and not pushed. demo.rpgreactor.org runs **20261110.12**, online with the creator on. The Demo in the tree is single player, creator off, uncommitted on purpose: switch both for a deploy and put them back (the settings as the owner left them are in `~/.cache/rr-tests/server-backup-20261110/demo-settings`).
+- **Development:** 0.99.5 is open, runtime revision **20261111.17** in `runtime/` and all 17 bundled projects on the desktop, with the 2026-11-11 audit's fixes and both machines' work of that day committed (`47790645`, and the desktop's pacing fix after it), not deployed; the audit's part is not seen in the game. `main` is 27 commits ahead of GitHub and not pushed. demo.rpgreactor.org runs **20261110.12**, online with the creator on. The Demo in the tree is single player, creator off, uncommitted on purpose: switch both for a deploy and put them back (the settings as the owner left them are in `~/.cache/rr-tests/server-backup-20261110/demo-settings`).
 - **Laptop:** `template/` there holds only the Demo since 2026-11-08; the sync finds 1 bundled project there and 17 on the desktop (the folders still on their own engine are left alone), so run the sync on the desktop. The laptop's games now start on OpenGL: its record in `%LOCALAPPDATA%\RPGReactor\graphics-backend.json` chose it (11-10, runtime .8).
 - **Published:** [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4) is the regular Latest source release; the [itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released) is live. Signed native binaries remain a separate pipeline.
 - **Verification:** CI was last green on branch `ci/0.99.5-check` (run 41513263959: 9,328 passed, 35 skipped); `main` is 8 commits past it. On the laptop on 11-10 the suite without the heavy sweeps ran 8,942 passed, 49 failed: the known failures and tests that need the desktop's files. Substantial checks go through `codex-check`.
@@ -15,9 +15,18 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing and uncapped rendering.
 
+## 2026-11-11 (desktop, night) — The laptop's pacing cost the desktop its frames
+
+Runtime 20261111.17, synced into the 17 bundled projects, committed. [Changelog](../editor/changelog/0.99.5.md).
+
+- **Found on pulling the laptop's work:** `Graphics.GpuPace` (.12), on for every machine, ran the desktop's first room at 176-185 frames a second against 1,070-1,230 with it off. It now acts only where frames come under 100 a second, or for a while after two stops of 50 ms in four seconds, and lets a held machine go when it begins 200 frames in a second (`GpuPace.armed`). Desktop after: 925-1,028 as shipped, the same as off.
+- **Not run on the laptop:** its paced 35-66 frames a second stays paced by the first rule; its unpaced 137-144 with a stop a second is held after two stops. To check there: the Reactor Room standing still, and the half minute after a map opens.
+- **The rule this shows (owner's question):** a measure built for one kind of machine is switched on by what the machine shows, never for all, and is measured on both machines before it is committed: the laptop's harness and the desktop's `~/.cache/rr-tests/battle-room/pace-ab.cjs`, `fps-settle.cjs`.
+- **Tests:** the desktop's first whole `test:changed` after the laptop's commit: 6,120 of 6,130, the 7 known failures and one pattern in `reflections`, corrected.
+
 ## 2026-11-11 (laptop) — Not quite playable on the Iris Xe: what was measured, and two fixes
 
-Runtimes 20261111.8 to .13, synced into the Demo here only (run the sync on the desktop for the other 16), not committed. Numbers and method: [changelog](../editor/changelog/0.99.5.md), [PERFORMANCE.md](PERFORMANCE.md).
+Runtimes 20261111.8 to .16, synced into the Demo there and since into the desktop's other 16, committed (`47790645`). Numbers and method: [changelog](../editor/changelog/0.99.5.md), [PERFORMANCE.md](PERFORMANCE.md).
 
 - **Auto sat on the full-size level (.8, fixed):** the laptop's record was GPU 0 / CPU 5; the full-size top level of .4 costs it a quarter of its frames (first room 66 against 86). A short window judged the main thread's now leaves that level first. After: North Haven's square 61-66, its raid 59-65, Auto free, on OpenGL.
 - **The editor ran on Direct3D 11 (fixed, editor only):** North Haven in the 3D view 36-38 fps on OpenGL against 3-21 with stops of seconds. The editor leaves `%LOCALAPPDATA%\RPGReactor\editor-angle.txt` from the game's plan and `RPGReactor.bat` starts it on that backend (from the second start). The owner rejected a first version that restarted the editor by itself. Not seen: the editor's picture on OpenGL by eye, a playtest from it.
@@ -31,7 +40,7 @@ Runtimes 20261111.8 to .13, synced into the Demo here only (run the sync on the 
 
 ## 2026-11-11 (desktop, later) — The owner's reports after the audit
 
-Runtimes 20261111.2 to .7, synced, not committed. Details in the [changelog](../editor/changelog/0.99.5.md).
+Runtimes 20261111.2 to .7, synced, committed (`47790645`). Details in the [changelog](../editor/changelog/0.99.5.md).
 
 - **Message boxes with no text (owner's report, fixed in .2):** not from this audit. The laptop's `pixi_compat.js` change of 11-08 (a container's shown/hidden note held back until the next draw) left a message box with its frame and name and no face or text, and a hidden follower in view; found by putting each commit's runtime into a Demo copy under NW.js on the real display. It is off now (`PIXI.rrDeferVisibility`); why it fails is not known. No test caught it: nothing in the suite draws a frame. The probe is `~/.cache/rr-tests/audit-20261111/msg-probe.cjs real`.
 - **The Windows row** of last night's pop-out work was put inside the focused pop-out (the page's `appendChild` is turned to it); it stays in the main window now.
@@ -42,7 +51,7 @@ Runtimes 20261111.2 to .7, synced, not committed. Details in the [changelog](../
 
 ## 2026-11-11 (desktop) — An audit of every part, and its fixes
 
-Runtime 20261111.1, synced into the 17 bundled projects, not committed, not deployed. Details in the [changelog](../editor/changelog/0.99.5.md) under "Audit of 2026-11-11"; what was left is in [AUDIT-2026-11-11.md](AUDIT-2026-11-11.md).
+Runtime 20261111.1, synced into the 17 bundled projects, committed (`47790645`), not deployed. Details in the [changelog](../editor/changelog/0.99.5.md) under "Audit of 2026-11-11"; what was left is in [AUDIT-2026-11-11.md](AUDIT-2026-11-11.md).
 
 - **The audit:** 28 read-only reviews (each group of event commands at both ends, the event editor, every Database page and its shell, both map editors, the Forge, the importers, the build tools, the whole runtime), then one fixer per report, each re-reading a finding in the code before changing anything. The logs count 362 fixed, 68 left, 7 rejected, 5 unsure. About 290 files changed.
 - **Not seen running:** no fix was looked at in the game or the editor. The audit page's "Fixed but least proven" list (38 entries) says where to look first.

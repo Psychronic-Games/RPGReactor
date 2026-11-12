@@ -1938,6 +1938,16 @@ Graphics.FrameGovernor = {
  * share of the pace frames have lately been begun at; at 0.6, 0.75 and 0.92 alike the game settled into one frame at
  * a time, evenly, at 42 a second (a marker is only seen reached as the next frame is sent). It is off (0): a third
  * more frames in uneven pairs, with no frame over 33 ms either way.
+ *
+ * Only on a machine that shows the trouble (`armed`, runtime 20261111.17). A marker and its flush after every frame
+ * is not free where frames come by the thousand: on an RTX 5070 the Demo's first room ran 176 to 185 frames a second
+ * with every frame marked and 1,070 to 1,230 with none (turn about in one session, 2026-11-11), and that card never
+ * owes a frame. So frames are marked, and ticks made to wait, only while frames come slower than UNDER_MS apart
+ * (under 100 a second: a machine near what it can do, where a marker costs nothing that shows), or for ARM_MS after
+ * STALLS stops of STALL_MS or more inside STALL_WINDOW of play (the backlog shown at once, as on the Iris Xe drawing
+ * 137 a second); each time the stops come back the hold is twice as long, up to ARM_MOST. Paced, frames come as fast
+ * as the card finishes them, so a held machine whose frames then come under FAST_MS apart for a second is let go: its
+ * stops were something else (a map arriving). A fast machine pays for nothing; one that stalls is paced within seconds.
  */
 Graphics.GpuPace = {
     enabled: true,
@@ -1948,12 +1958,50 @@ Graphics.GpuPace = {
     EVEN: 0,
     /** Ticks that did nothing, and frames marked, since the game began (for whoever measures). */
     waited: 0, marked: 0,
-    _gl: null, _pending: [], _since: 0, _period: 0, _begunAt: 0,
-    /** A frame is begun now: the pace they come at, smoothed (a pause is not a pace). */
+    /** Frames further apart than this are paced; closer, only after stops (see above). */
+    UNDER_MS: 10,
+    /** Paced frames closer than this for a second: the card keeps up, and a hold after stops is let go. */
+    FAST_MS: 5,
+    STALL_MS: 50, STALLS: 2, STALL_WINDOW: 4000, ARM_MS: 30000, ARM_MOST: 600000,
+    _gl: null, _pending: [], _since: 0, _period: 0, _begunAt: 0, _stalls: [], _armedUntil: 0, _armFor: 0, _rate: 0, _rateHeld: false, _secStart: 0, _secCount: 0,
+    /** A frame is begun now: the pace they come at, smoothed (a pause is not a pace), and the stops between them. */
     begun(now) {
         const gap = now - this._begunAt;
         if (this._begunAt > 0 && gap > 0 && gap < 250) this._period = this._period > 0 ? this._period * 0.85 + gap * 0.15 : gap;
+        // A stop in play (not a map being made ready, a scene on its way or the window left: FrameGovernor.judged).
+        if (this._begunAt > 0 && gap >= this.STALL_MS && gap < 2000 && this.judged()) {
+            const stalls = this._stalls;
+            stalls.push(now);
+            while (stalls.length && now - stalls[0] > this.STALL_WINDOW) stalls.shift();
+            if (stalls.length >= this.STALLS && now >= this._armedUntil) {
+                this._secHeld = false; this._rateHeld = false;
+                // Back after a hold: held twice as long this time. Calm for a minute since: from the start again.
+                this._armFor = this._armFor > 0 && now - this._armedUntil < 60000 ? Math.min(this.ARM_MOST, this._armFor * 2) : this.ARM_MS;
+                this._armedUntil = now + this._armFor;
+                stalls.length = 0;
+            }
+        }
         this._begunAt = now;
+        // Frames begun in the last whole second, and whether that second was spent held after stops.
+        this._secCount++;
+        if (now - this._secStart >= 1000) { this._rate = this._secStart > 0 ? this._secCount * 1000 / (now - this._secStart) : 0; this._rateHeld = this._secHeld === true; this._secStart = now; this._secCount = 0; this._secHeld = now < this._armedUntil; }
+    },
+    judged() {
+        const governor = typeof Graphics !== "undefined" ? Graphics.FrameGovernor : null;
+        try { return !governor || typeof governor.judged !== "function" || governor.judged() !== false; } catch (error) { return true; }
+    },
+    /** Whether frames are marked and waited for now: this machine is near what it can do, or it has been stopping. */
+    armed(now) {
+        if (!this.enabled) return false;
+        if (now < this._armedUntil) {
+            // Paced, frames come as fast as the card finishes them: one that finishes over 200 a second for a
+            // second running was not what stopped (a fast machine's stops as a map arrives), and is let go.
+            // (Counted over a whole second: paced frames come in uneven pairs, and the smoothed gap swings with them.)
+            if (this._rateHeld && this._rate >= 1000 / this.FAST_MS) { this._armedUntil = 0; this._armFor = 0; }
+            if (now < this._armedUntil) return true;
+        }
+        // (Nothing known of its pace yet: paced, as a slow machine's first frames are.)
+        return !(this._period > 0) || this._period >= this.UNDER_MS;
     },
     context() {
         const renderer = typeof Graphics !== "undefined" && Graphics._app ? Graphics._app.renderer : null;
@@ -1966,6 +2014,12 @@ Graphics.GpuPace = {
     behind(now) {
         if (!this.enabled) return false;
         const pending = this._pending;
+        if (!this.armed(now)) {
+            // Not paced: the markers still out are let go, and nothing waits.
+            if (pending.length) { const gl = this._gl; for (const sync of pending) { try { gl.deleteSync(sync); } catch (error) { /* gone with its context */ } } pending.length = 0; this._since = 0; }
+            this.begun(now);
+            return false;
+        }
         if (!pending.length) { this.begun(now); return false; }
         const gl = this.context();
         if (!gl || (typeof gl.isContextLost === "function" && gl.isContextLost())) { pending.length = 0; return false; }
@@ -1991,7 +2045,8 @@ Graphics.GpuPace = {
     },
     /** A frame's drawing has been handed over: its marker. */
     mark() {
-        if (!this.enabled) return;
+        // (By the clock of the tick this frame was begun in: `behind` runs first.)
+        if (!this.enabled || !this.armed(this._begunAt)) return;
         const gl = this.context();
         if (!gl || this._pending.length > 8) return;
         try {

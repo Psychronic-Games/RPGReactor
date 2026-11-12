@@ -769,12 +769,13 @@ test('no frame is begun while the graphics card still owes two', () => {
     assert.equal(deleted, 1);
     // A card that keeps up never waits.
     reached.add(2); const waited = P.waited;
-    for (let i = 0; i < 50; i++) { assert.equal(P.behind(100 + i * 5), false); P.mark(); reached.add(made); }
+    for (let i = 0; i < 50; i++) { assert.equal(P.behind(100 + i * 12), false); P.mark(); reached.add(made); }
     assert.equal(P.waited, waited);
     // Markers never reached are given up, not waited on for good.
     P.mark(); P.mark();
     assert.equal(P.behind(1000), true);
     assert.equal(P.behind(1000 + P.GIVE_UP_MS + 1), false, 'given up');
+    assert.equal(P.armed(1000 + P.GIVE_UP_MS + 1), true, 'frames 12 ms apart: a machine near what it can do is paced');
     assert.equal(P.behind(2000), false, 'and nothing is owed after');
     // A lost context, and the switch.
     P.mark(); P.mark(); lost = true; assert.equal(P.behind(3000), false); lost = false;
@@ -782,6 +783,45 @@ test('no frame is begun while the graphics card still owes two', () => {
     // The tick asks first, before any update, and marks after the composite.
     assert.match(core, /Graphics\._onTick = function\(deltaTime\) \{\n\s*\/\/[^\n]*\n\s*if \(this\.GpuPace\.behind\(performance\.now\(\)\)\) return;/);
     assert.match(core, /this\._noteComposite\(\);\n\s*this\.GpuPace\.mark\(\);/);
+});
+
+test('a fast machine is not paced: no marker, no wait, until it stops as a card behind does', () => {
+    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const from = core.indexOf('Graphics.GpuPace = {'), to = core.indexOf('\nGraphics._onTick = function');
+    let made = 0, flushed = 0;
+    const gl = { SYNC_GPU_COMMANDS_COMPLETE: 1, SYNC_STATUS: 2, SIGNALED: 3, UNSIGNALED: 4, fenceSync: () => ({ id: ++made }), flush: () => { flushed++; },
+        getSyncParameter: () => 4, deleteSync: () => {}, isContextLost: () => false };
+    const P = new Function('Graphics', core.slice(from, to) + '\nreturn Graphics.GpuPace;')({ _app: { renderer: { gl } } });
+    // A thousand frames a second (an RTX 5070 in the Demo's first room): after the first few, nothing is marked.
+    let now = 0;
+    for (let i = 0; i < 400; i++) { now += 1; assert.equal(P.behind(now), false); P.mark(); }
+    const early = made;
+    for (let i = 0; i < 2000; i++) { now += 1; assert.equal(P.behind(now), false); P.mark(); }
+    assert.equal(made, early, 'no marker for a frame of a machine that fast');
+    assert.equal(P.armed(now), false);
+    assert.equal(P.waited, 0);
+    // 137 a second with a stop of 200 ms every second (the Iris Xe unpaced): held after the second stop.
+    for (let s = 0; s < 2; s++) { for (let i = 0; i < 110; i++) { now += 7.3; P.behind(now); P.mark(); } now += 200; P.behind(now); P.mark(); }
+    assert.equal(P.armed(now), true, 'two stops inside four seconds: paced');
+    assert.equal(P._armFor, P.ARM_MS);
+    const marked = made;
+    now += 7.3; P.behind(now); P.mark();
+    assert.ok(made > marked, 'and its frames are marked again');
+    // Held, a card that then finishes over 200 frames a second was not what stopped: let go within two seconds.
+    const Q2 = new Function('Graphics', core.slice(from, to) + '\nreturn Graphics.GpuPace;')({ _app: { renderer: { gl: Object.assign({}, gl, { getSyncParameter: () => 3 }) } } });
+    let t = 0;
+    for (let i = 0; i < 300; i++) { t += 1; Q2.behind(t); Q2.mark(); }
+    Q2._armedUntil = t + 30000;
+    for (let i = 0; i < 2500; i++) { t += 1; Q2.behind(t); Q2.mark(); }
+    assert.equal(Q2.armed(t), false, 'a fast machine held after a map\'s arrival is let go');
+    // One that paced delivers 65 a second stays held, and stays paced after the hold by its pace alone.
+    const Q3 = new Function('Graphics', core.slice(from, to) + '\nreturn Graphics.GpuPace;')({ _app: { renderer: { gl: Object.assign({}, gl, { getSyncParameter: () => 3 }) } } });
+    t = 0; Q3._armedUntil = 30000;
+    for (let i = 0; i < 400; i++) { t += 15.4; Q3.behind(t); Q3.mark(); }
+    assert.equal(Q3.armed(t), true);
+    for (let i = 0; i < 2000; i++) { t += 15.4; Q3.behind(t); Q3.mark(); }
+    assert.ok(t > 30000);
+    assert.equal(Q3.armed(t), true, 'frames 15 ms apart are paced, hold or no hold');
 });
 
 test('frames paced in pairs by the graphics card are not frames shown late', () => {
