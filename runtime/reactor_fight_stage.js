@@ -1438,7 +1438,7 @@
     Stage.queueSkills = function(battler, character) {
         const skills = new Set([battler.attackSkillId ? battler.attackSkillId() : 1]);
         if (battler.isActor && battler.isActor()) for (const skill of battler.skills().slice(0, 12)) skills.add(skill.id);
-        else if (battler.enemy) for (const entry of battler.enemy().actions.slice(0, 12)) skills.add(entry.skillId);
+        else if (battler.enemy) for (const entry of (battler.rrActionPatterns ? battler.rrActionPatterns() : battler.enemy().actions).slice(0, 12)) skills.add(entry.skillId);
         for (const id of skills) {
             const key = Stage.warmKey(battler, id);
             // Thirty raiders of one record ask once.

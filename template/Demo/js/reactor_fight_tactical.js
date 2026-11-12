@@ -4883,7 +4883,7 @@
             }
         }
         if (battler.isEnemy()) {
-            for (const pattern of battler.enemy().actions) if (battler.isActionValid(pattern)) add(pattern.skillId, 0.8 + pattern.rating * 0.04);
+            for (const pattern of battler.rrActionPatterns()) if (battler.isActionValid(pattern)) add(pattern.skillId, 0.8 + pattern.rating * 0.04);
         } else {
             for (const skill of battler.usableSkills()) if (skill.id !== battler.guardSkillId()) add(skill.id, 1);
         }
@@ -7423,7 +7423,7 @@
     function strikeReach(battler) {
         let far = F.tactics(battler, $dataSkills[battler.attackSkillId()]).max;
         if (battler.isEnemy && battler.isEnemy()) {
-            for (const pattern of battler.enemy().actions || EMPTY) {
+            for (const pattern of battler.rrActionPatterns() || EMPTY) {
                 const skill = $dataSkills[pattern.skillId];
                 if (skill && skill.scope >= 1 && skill.scope <= 6) far = Math.max(far, F.tactics(battler, skill).max);
             }

@@ -1907,7 +1907,7 @@
         const action = new Game_Action(battler);
         let skill = null;
         if (battler.isEnemy()) {
-            const list = battler.enemy().actions.filter(a => battler.isActionValid(a));
+            const list = battler.rrActionPatterns().filter(a => battler.isActionValid(a));
             if (list.length) {
                 const ratingMax = Math.max(...list.map(a => a.rating));
                 const ratingZero = ratingMax - 3;
