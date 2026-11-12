@@ -499,10 +499,10 @@
                     <thead>
                         <tr>
                             ${BLANK.replace('<td', '<th').replace('</td>', '</th>')}
-                            <th style="width: 20%;">${tt('Cost')}</th>
-                            <th style="width: 40%;">${tt('Amount')}</th>
-                            <th style="width: 20%; overflow: hidden; text-overflow: ellipsis;" title="${escape(tt('Maximum'))}">${tt('Maximum')}</th>
-                            <th style="width: 20%; overflow: hidden; text-overflow: ellipsis;" title="${escape(tt('Minimum'))}">${tt('Minimum')}</th>
+                            <th style="width: 18%;">${tt('Cost')}</th>
+                            <th style="width: 36%;">${tt('Amount')}</th>
+                            <th style="width: 23%; padding-left: 4px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis;" title="${escape(tt('Maximum'))}">${tt('Maximum')}</th>
+                            <th style="width: 23%; padding-left: 4px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis;" title="${escape(tt('Minimum'))}">${tt('Minimum')}</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
