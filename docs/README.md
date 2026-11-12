@@ -5,6 +5,8 @@ Guides for authoring with the engine, the current verified state, and maintainer
 ## Start here
 
 - [0.99.4 itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released): published announcement; [Markdown copy](posts/itch-devlog-0.99.4.md) and [plain text](posts/itch-devlog-0.99.4-plain.txt).
+- 0.99.5 itch.io devlog, drafted and not posted: [Markdown](posts/itch-devlog-0.99.5.md) and [plain text](posts/itch-devlog-0.99.5-plain.txt).
+- [0.99.5 release notes](posts/release-notes-0.99.5.md): shared battles and parties, Character Groups, interface pictures and motion, speed on weak and strong machines.
 - [0.99.4 release notes](posts/release-notes-0.99.4.md): online worlds, player creation, Forge movement and current screenshots.
 - [0.99.3 release notes](posts/release-notes-0.99.3.md): Builder exports, model previews, complete Structures editing, worn equipment and grappling.
 - [Current status](STATUS.md): the verified state of the tree, runtime defaults that supersede older notes, and open work. Read this before the handoff.

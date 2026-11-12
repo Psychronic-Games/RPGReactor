@@ -6,33 +6,33 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-The current development version is 0.99.5 and is not published yet; the latest tagged source release is [0.99.4](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.4). Read the [release notes](docs/posts/release-notes-0.99.4.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
+The latest tagged source release is [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5). Read the [release notes](docs/posts/release-notes-0.99.5.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/01-online-town.jpg" alt="Players meeting in North Haven"><br><sub>Player characters, names and chat share the same online world.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/02-character-creator.jpg" alt="Character creation inside a game"><br><sub>Players choose their appearance with the Forge-powered character creator.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.5/01-battle-room.jpg" alt="A Classic battle in a Battle Room"><br><sub>Classic battles in a Battle Room are drawn the way maps are, at the machine's real frame rate.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.5/02-interface-motion.jpg" alt="Pictures and motion in User Interfaces"><br><sub>Fill interface elements with pictures and give them motion in Database → User Interfaces.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/05-holographic-table.jpg" alt="An editable holographic table"><br><sub>Screen design, animated readouts and holographic displays remain editable in the Prop Builder.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/06-passenger-minivan.jpg" alt="A minivan with an accessible cabin"><br><sub>Sliding doors reveal the seven-seat cabin in the Prop Builder.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.5/03-character-groups.jpg" alt="A generated group of characters"><br><sub>Character Groups makes a town, an army or a whole people from one description.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.5/04-north-haven.jpg" alt="North Haven with the frame-rate box"><br><sub>Games run without vsync; F2 shows the real frame rate and the graphics device.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/03-online-deploy.jpg" alt="Deploying an online game"><br><sub>Online Server writes the game and its PHP server to a web folder.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.4/04-voice-settings.jpg" alt="Avatar voice settings"><br><sub>Set the speaking key, hearing range and who may use voice in Database → Online.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.5/05-open-road.jpg" alt="An Open Road map with cliffs at its edge"><br><sub>High ground rises at the edge of an Open Road map.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.5/06-database-columns.jpg" alt="Database columns of even height"><br><sub>Database pages deal their cards into columns of near the same height.</sub></td>
 </tr>
 </table>
 
-## What's new in 0.99.4
+## What's new in 0.99.5
 
-- **Online worlds:** deploy a game and PHP server together, with player characters, accounts, chat, shared world state and an owner page.
-- **In-game character creation:** let players choose an actor or edit their appearance with the Forge-powered creator, in single-player and online games.
-- **Avatar voice:** optional nearby voice and animated mouths, with project-specific controls. Hosts that support the Node engine can use pushed updates and movement checks.
-- **Characters in motion:** exercise and resting poses, independent bust/butt/fat bounce, smoother live sliders, editable skin finishes and revised body/face controls.
-- **Props and clothing:** improved fabric, seams, wearable symbols and fitted construction; medical and Wasteland props; a minivan with an accessible seven-seat cabin.
-- **Correct sprite presentation:** complete multi-frame walks, correctly cropped event previews and stationary events that stay attached to map tiles while the camera moves.
+- **Battles and parties online:** join another player's Tactical, Classic, Action or First Person battle on any side, watch one, duel, and form parties with their own chat, `/follow` and shared switches.
+- **A game-styled start:** sign-in and character creation are real game windows in the project's own window skin, for keyboard, gamepad, mouse and touch.
+- **Character Groups:** describe a town, an army or a people and the Forge makes every member, with designs, walking sheets, battlers and portraits.
+- **Pictures and motion in User Interfaces:** picture fills with nine-slice and state pictures, animation frames, and float, pulse, spin, sway, fade and appear motion that carries whatever is inside an element.
+- **Faster on every machine:** no vsync and real frame rates on F2, automatic quality that lowers only what a computer is short of, full-resolution 3D where there is room, and far lighter crowds, maps and Battle Rooms.
+- **Two audits:** several hundred faults fixed across event commands, the Database, the editors, battles, imports and builds; enemies can wear equipment (contributed by Xehanort88).
 
-Known CI failures remain; online features have been tested on one server, and real microphones, separate networks and production load still need review. See the [0.99.4 notes](docs/posts/release-notes-0.99.4.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
+Eight tests fail in the whole run and most audit fixes are checked by tests only; the newest speed changes still need a check on the weak laptop, and online features have been tested on one server. See the [0.99.5 notes](docs/posts/release-notes-0.99.5.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
 
 ## Repository Layout
 
@@ -51,8 +51,8 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.4.md): features, screenshots and known issues for 0.99.4.
-- [Previous release notes](docs/posts/release-notes-0.99.3.md): features and fixes in 0.99.3.
+- [Latest release notes](docs/posts/release-notes-0.99.5.md): features, screenshots and known issues for 0.99.5.
+- [Previous release notes](docs/posts/release-notes-0.99.4.md): features and fixes in 0.99.4.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Online worlds](docs/DESIGN-ONLINE.md): using Online Server today, measured capacity and the plan.
@@ -181,7 +181,7 @@ npm test               # every test, as CI runs it
 
 Every run keeps each pass as it happens, so an interrupted `test:changed` or `test:whole` resumes where it stopped. The same tests run on a working machine and on CI. Tests use small default pictures (`tests/helpers/small-pictures.cjs`, which the npm scripts load and a bare `node --test` run does not); a test that judges pixels asks for its size explicitly. Sweeps use `tests/helpers/coverage.cjs`: every value, paired rather than multiplied; `RR_TEST_EXHAUSTIVE=1` walks every combination.
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-10-29, before the 0.99.3 cut, local validation completed with **8905 passing tests**, 33 skipped and no failures. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-11-12, before the 0.99.5 cut, local validation completed with **9718 passing tests**, 11 skipped and 8 failures (seven long-standing, one timing test that passes alone). A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
 
 ## Trusted Projects
 

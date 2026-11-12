@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-12",
+  "version": "0.99.5",
+  "runtime": "20261111.18",
+  "tag": "v0.99.5",
+  "publication": "regular source release marked Latest; not a prerelease",
+  "authorization": "Owner, 2026-11-11: \"let's push the latest release, and make sure to share the updates on GitHub where proper with screenshots as we've been doing\".",
+  "knownIssues": [
+    "Eight tests fail in the whole local run: fight-seams, speaker-face, model-effects, reactor-3d-foundation, encrypted-assets, reflection-costs, online (the Demo is single player), and a live-slider timing test in character-3d-creatures that passes alone.",
+    "CI has not run on main since 2026-11-02; the release push starts its first run.",
+    "The fixes of the 2026-11-10 and 2026-11-11 audits are checked by tests and mostly not seen in the running game or editor.",
+    "The newest pacing, Battle Room and interface-motion changes are not measured on the Iris Xe laptop.",
+    "The server's PHP changes of this cycle are not deployed or run against the live server.",
+    "No signed native-binary validation is claimed."
+  ],
+  "changes": [
+    "cut-release.cjs refuses a failing suite, so its steps were done by hand: changelog titles and index lines dated, README release link, gallery and validation sentence, handoff entries archived to docs/archive/handoff/0.99.5.md, annotated tag, push.",
+    "changelog/0.99.5.md rewritten as short illustrated notes (the release body); the development notes moved to docs/archive/changelog/0.99.5-every-change.md.",
+    "Six screenshots in docs/media/releases/0.99.5/: three from the game under NW.js on the desktop (RTX 5070), three from the editor on a hidden display; the interface picture sets Float and Pulse on the Demo's title text in memory, unsaved."
+  ],
+  "validation": {
+    "scope": "whole suite through run-tier.cjs all on the desktop before the cut; docs-budget after the documentation changes",
+    "passed": 9718,
+    "failed": 8,
+    "skipped": 11,
+    "tests": 9737,
+    "nativeBinaries": "not part of this source publication"
+  },
+  "artifacts": "~/.cache/rr-tests/release-0995/ (test-all.log, the screenshot scripts and their pictures)"
+}

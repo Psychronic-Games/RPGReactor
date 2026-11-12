@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01-battle-room.jpg",
+    "title": "A Classic battle in a Battle Room",
+    "caption": "Classic battles in a Battle Room are drawn the way maps are, at the machine's real frame rate."
+  },
+  {
+    "file": "02-interface-motion.jpg",
+    "title": "Pictures and motion in User Interfaces",
+    "caption": "Fill interface elements with pictures and give them motion in Database \u2192 User Interfaces."
+  },
+  {
+    "file": "03-character-groups.jpg",
+    "title": "A generated group of characters",
+    "caption": "Character Groups makes a town, an army or a whole people from one description."
+  },
+  {
+    "file": "04-north-haven.jpg",
+    "title": "North Haven with the frame-rate box",
+    "caption": "Games run without vsync; F2 shows the real frame rate and the graphics device."
+  },
+  {
+    "file": "05-open-road.jpg",
+    "title": "An Open Road map with cliffs at its edge",
+    "caption": "High ground rises at the edge of an Open Road map."
+  },
+  {
+    "file": "06-database-columns.jpg",
+    "title": "Database columns of even height",
+    "caption": "Database pages deal their cards into columns of near the same height."
+  }
+]
