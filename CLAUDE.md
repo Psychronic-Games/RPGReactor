@@ -10,7 +10,7 @@ Standing instructions for Claude Code sessions in this folder, on any machine. T
 
 ## Rules the owner has set
 
-- **Git:** stage named files only, never `git add -A` or `git commit -a`, and read `git diff --cached --stat` before committing. Commit only when asked; a commit request does not include a push. Leave `template/Demo/project.rpgreactor`, `template/Demo/asset-usage.rpgreactor.json` and the Demo's `data/` settings out of commits unless the change is yours and asked for: the editor rewrites them, and the owner switches the Demo's settings for testing.
+- **Git:** stage named files only, never `git add -A` or `git commit -a`, and read `git diff --cached --stat` before committing. Commit only when asked; a commit request does not include a push. The Demo (`template/Demo`) is the editor's stock project and showcase: the owner switches its settings and content as the work needs, and what they have set there is committed with everything else (owner, 2026-11-11: no reason to hide it or to overthink the Demo). Look at its diff first all the same: a change there that came from a test or a probe and not from the owner is not committed.
 - **Faces:** human face work belongs to another model. Stay out of the face files in `editor/src/forge/Character3D/` (`CharacterHeadMesh.js`, `HeadMeshData.js`, the face parts of `HumanBody.js`) unless asked.
 - **Accounts on the live demo:** never sign in as, or act on, the owner's own accounts. Test bots use `E2E…` accounts only; keep those accounts.
 - **Never print the online server's secret.**

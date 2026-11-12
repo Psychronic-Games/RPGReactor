@@ -1,5 +1,5 @@
 {
-  "mode": "build",
+  "mode": "off",
   "onNewGame": true,
   "prompt": "",
   "askName": true,

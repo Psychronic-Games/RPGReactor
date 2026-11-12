@@ -1,0 +1,48 @@
+{
+  "name": "Villagers",
+  "count": 12,
+  "seed": 1,
+  "species": [
+    "human"
+  ],
+  "female": 50,
+  "age": [
+    18,
+    65
+  ],
+  "height": [
+    0,
+    1
+  ],
+  "weight": [
+    0,
+    1
+  ],
+  "muscle": [
+    0,
+    1
+  ],
+  "themes": [
+    "Everyday"
+  ],
+  "keepOutfit": false,
+  "keepProps": false,
+  "accessories": 50,
+  "palette": [
+    "#5a6b8c",
+    "#855a8c",
+    "#00ec2c"
+  ],
+  "designs": true,
+  "walk": true,
+  "walkLayout": "mz",
+  "walkFrame": 48,
+  "walkFrames": 3,
+  "sv": false,
+  "svFrame": 64,
+  "faces": true,
+  "faceFrame": 144,
+  "style": "realistic",
+  "look": "smooth",
+  "outline": true
+}
