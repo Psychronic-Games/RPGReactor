@@ -1945,6 +1945,17 @@
         .database-item-column { display:flex; flex-direction:column; gap:16px; min-width:0; }
         .database-item-column > .database-section { margin-bottom:0; }
 
+        /* Columns of near the same height (RRDatabaseSections, COLUMN_SETS).
+         * The shell deals a page's cards among its columns and says how many
+         * columns it uses: the page's own count at this width, a third on a
+         * page of two wide enough for it, or fewer where that stands as
+         * short. A column it made for that looks like the page's own, and a
+         * column left without cards takes no room. */
+        [data-rr-columns] { grid-template-columns: repeat(var(--rr-db-columns, 2), minmax(0, 1fr)) !important; }
+        [data-rr-columns] > .rr-db-column { grid-column: auto !important; min-width: 0; }
+        .rr-db-column-made { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+        .rr-db-column-empty { display: none !important; }
+
         /* Pages that are nothing but options (DatabaseFlowForm): cards fill the window's
          * width in columns and cascade down as it narrows, and short fields share a row. */
         .rr-flow-page { column-width: 350px; column-gap: 12px; padding: 12px; }
@@ -8311,3 +8322,7 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-enemy-equip .ee-item-traits { margin: 4px 0 0; padding-left: 16px; }
 .rr-enemy-equip .ee-totals th, .rr-enemy-equip .ee-totals td { font-size: 11px; }
 .rr-enemy-equip .ee-note { flex: 0 0 auto; font-size: 11px; color: var(--color-text-muted); }
+
+/* User Interfaces: pictures and motion (2026-11-11). The Motion button over the canvas while it plays, and the parts of the Motion card. */
+.rr-ui-motion-play[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
+.rr-ui-props .rr-ui-motion-part { margin: 4px 0; }

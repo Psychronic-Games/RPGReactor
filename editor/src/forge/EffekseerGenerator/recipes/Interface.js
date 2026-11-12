@@ -2675,7 +2675,7 @@
             { key: 'level', label: 'Fill Level', type: 'range', default: 100, min: 5, max: 100, step: 5 },
             { key: 'mode', label: 'Fill Mode', type: 'select', default: 'fill',
               options: [
-                  { value: 'fill', label: 'Fill' },
+                  { value: 'fill', label: 'Charge' },
                   { value: 'drain', label: 'Drain' },
                   { value: 'hold', label: 'Hold' },
                   { value: 'short', label: 'Short' },

@@ -45,7 +45,9 @@ HUDs, not modal menus.
 and pixel offset. Box and Image nodes can parent other nodes, and parent opacity
 affects the subtree. Box, Image, Text, Button, Gauge and Text Input nodes take
 an **Angle** (degrees, -180 to 180) and turn about their center, highlight and
-hit area included; nodes inside them keep their own angle. There is no Container
+hit area included. Since 2026-11-11 a Box or an Image with an Angle carries the
+nodes placed inside it, which turn with it as one piece; a node's own Angle is
+added on top (see Pictures and motion › Carrying). There is no Container
 node, general row/column flow layout, or general alignment-guide system yet. The
 editor provides an optional grid and snap-to-grid.
 
@@ -61,12 +63,12 @@ parents-first.
 
 | Type | Current behavior |
 |---|---|
-| **Box** | Window-skin, solid, gradient, or transparent surface; opacity, border, radius, and nesting |
-| **Image** | Picture, System image, face, character, icon, party face, or title layer; actual-size, stretch, or contain fit |
+| **Box** | Window-skin, solid, gradient, picture, or transparent surface; opacity, border, radius, and nesting |
+| **Image** | Picture, System image, face, character, icon, party face, or title layer; actual-size, stretch, or contain fit; a sheet of frames or a drifting picture |
 | **Text** | Escape codes, actor and named-context tokens, alignment, wrapping, fit-to-size, and authored typography |
 | **Button** | Focusable surface and label with an action, enabled condition, sound, visual states, and directional focus overrides |
 | **List** | Typed rows in a real `Window_Selectable`, with scrolling, disabled rows, a named context, row template, selection styling, and an action |
-| **Gauge** | Actor HP/MP/TP/EXP/stat or game-variable progress with configurable label, value format, colors, back color, and bar height |
+| **Gauge** | Actor HP/MP/TP/EXP/stat or game-variable progress with configurable label, value format, colors, back color, and bar height; the bar and its back can be pictures |
 | **Text Input** | A field that edits a variable or an actor's name or nickname: typing, optional stock character grid, placeholder, maximum length, password dots, an action after Enter |
 | **Battle Window** | In a Battle HUD: places, sizes and skins one stock battle window, with columns, slide-in, a background picture, following the active actor, or hiding it while it keeps the input. The Actor and Party Command windows also take an alignment and their own command list |
 | **Target Cursor** | In a Battle HUD: an animated, floating arrow or picture over the enemy or ally being chosen, with their name |
@@ -389,9 +391,116 @@ target is a visible focusable control, and invalid targets safely fall back to
 geometry.
 
 Scene interfaces support `none`, `fade`, `slideLeft`, and `slideUp` opening and closing
-transitions over an authored duration. Input remains locked while opening, and
+transitions over an authored duration. (Until 2026-11-11 a record that opened with none and closed with a fade or a slide was not shown while open; it is now.) Input remains locked while opening, and
 the close action completes only after its transition. Overlay visibility can
 fade or slide in by 96 px.
+
+## Pictures and motion
+
+Added 2026-11-11, after users asked to build interfaces from their own art and
+to move it. Everything here is off by default and stored only where it is set,
+so a record that uses none of it reads, draws and saves as before.
+
+**A picture as the look.** Box, Button, List and Text Input take a fifth
+**Fill**, **Picture** (`fill: "picture"`). The **Picture** card holds the file
+(`fillImage`), by reference as the HUD pictures are: a bare name is in
+`img/pictures` (with its extension when it is not a .png), `system/Name` is in
+`img/system`. **Draw** (`fillFit`) is Stretch, Fit inside (`contain`), Tile or
+Nine-slice (`slice`, by `sliceLeft`/`sliceTop`/`sliceRight`/`sliceBottom`, the
+Image node's own borders). Fill Opacity, Radius and Border apply as they do to
+a colour fill; a picture fill has no window skin and no padding. Choosing
+Picture sets Fill Opacity to 255 (160 is the colour fill's default).
+
+- A **Button** or **Text Input** can name a picture for **Selected**
+  (`focusedImage`), **Pressed** (`pressedImage`) and **Disabled**
+  (`disabledImage`). A blank one shows the normal picture, and Pressed shows
+  the Selected one first. With a picture fill the state fill colours are not
+  used, and a Selected picture replaces the skin cursor.
+- A **List** can name a picture under every row (`rowImage`), the selected
+  row (`focusedImage`) and a disabled row (`disabledImage`), whatever its own
+  Fill. Row pictures are stretched with the slice borders kept; a Selected row
+  picture replaces the highlight.
+- A **Gauge** can name a picture for its bar (`gaugeImage`, cut to the value,
+  as the Actor Panel's Meter image is and by the same code) and for its back
+  (`gaugeBackImage`).
+
+The picture is drawn once into the element's surface, when it is made and when
+its state changes. A file that is missing draws nothing (a gauge draws its
+coloured bar) and never stops the game: these pictures load outside the image
+cache, as the HUD pictures do. A scene waits for its pictures before it opens,
+for at most a second. "Don't bundle unused files" finds them by name in
+`UserInterfaces.json`, like every other name in the data.
+
+**Motion.** Box, Image, Text, Button, List, Gauge and Text Input have a
+**Motion** card. A node's settings are in `motion` (absent when nothing moves).
+Times are in game updates, 60 a second, counted from when the node is shown, so
+motion runs at the same speed on every screen; it is not placed between
+updates.
+
+| Part | Settings | What it does |
+|---|---|---|
+| Frames (Image; Picture, System or Title source) | `cols`, `rows`, `frameCount` (0 = all), `fps`, `frameMode` (`loop`, `once`, `pingpong`) | The picture is a sheet read left to right, top to bottom; one frame shows, placed by Fit |
+| Drift (the same Image nodes, without frames) | `driftX`, `driftY` (pixels a second) | The picture repeats across the box and scrolls |
+| Float | `floatX`, `floatY` (pixels each way), `floatPeriod`, `floatOffset` | Moves back and forth |
+| Pulse | `pulseFrom`, `pulseTo` (percent), `pulsePeriod`, `pulseOffset` | Grows and shrinks about its center |
+| Turn | `spin` (degrees a second), `swayAngle`, `swayPeriod`, `swayOffset` | Turns, or swings each way, about its center, on top of its Angle |
+| Fade | `fadeFrom`, `fadeTo` (0-255), `fadePeriod`, `fadeOffset` | Opacity between two values |
+| Appear | `appearX`, `appearY`, `appearScale` (percent), `appearOpacity`, `appearDuration`, `appearDelay` | Starts at an offset, a size and an opacity and eases into place; plays again each time the node becomes visible |
+| Selected (Button, Text Input) | `focusScale` (percent), `focusX`, `focusY` | Eases to a size and an offset over eight updates while focused |
+
+Periods and offsets are in updates; a start offset keeps several elements out
+of step. A List has no size, turn or Angle settings of its own (it moves, fades
+and appears by offset and opacity). When the interface closes with a
+transition (or an overlay fades out), Appear runs backward over that
+transition; with no closing transition there is no time for it.
+
+**Carrying** (the owner's ruling, 2026-11-11: "make the contents move with it,
+and angle too"). A node's motion and its Angle carry every node placed inside
+it, at any depth: moved with it, grown and turned about its center, faded by
+its opacity. A child's own Angle and motion then apply on top, about the
+child's own center. A panel that slides in brings its title, buttons and
+gauges; a box turned 15 degrees turns its contents as one piece. Lists are
+carried whole, turned and grown with the rest (a window's rows are cut by a
+mask that turns with it). A sheet's frames and a drift happen inside their
+node and carry nothing. A parent with no size has no window and carries
+nothing, and parents that name each other in a ring carry nothing.
+
+Before this an Angle turned its node alone. No record in the bundled projects
+had an angled node with nodes inside it, so none of them changed; a project
+that does have one now sees the contents turn with their box.
+
+The carry is one sum for motion and Angle, in the shared maths (`carryInto`,
+`carryPoint`, `carried`): each ancestor, outermost first, adds its offset, size,
+turn and opacity about its own center. When a scene or an overlay makes its
+windows it works out once which of them stand inside a moving or angled node
+(`ReactorUI.linkCarried`): such a window keeps its carrying ancestors, and a
+moving ancestor keeps the windows it carries and places them in its own
+update. A window with no such ancestor and no motion is placed by the old code
+(`_uiPosed` is false). Clicks and touches land where a carried control is
+drawn (the hit test goes through the window's own transform), and direction
+keys go by the drawn centers.
+
+On the editor's canvas an ancestor's Angle always carries, and its motion
+carries while Motion plays. A carried layer is picked where it is drawn, its
+outline and handles are drawn turned with it, a drag moves it under the
+pointer (the drag is read in the carrying layer's frame) and its handles
+resize it in its own frame. Snap rounds in that frame, so a snapped drag
+inside a turned layer steps along the turned grid.
+
+Motion moves, grows, turns and fades the node's own window and switches a
+sprite's frame; nothing is painted or laid out per update, and a node without
+motion runs none of it (`_uiMotion` is null). A node at rest (Appear over,
+nothing idling) returns at once, and a hidden node or interface does not
+update. The Target Cursor's frame strip steps by the same function.
+
+The settings, their ranges, the pose at a given update, a sheet's frame and
+the pieces of a picture fill are one text, `interfaceMotionApi`, between the
+`<interface-motion>` markers in `runtime/reactor_ui.js` and
+`editor/src/utils/InterfaceMotion.js` (a test pins the two, as with
+`<interface-fit>`). The canvas draws picture fills, state and row pictures,
+gauge pictures and a sheet's first frame through it. **Motion** over the canvas
+plays every layer from the moment the interface opens, at 60 updates a second
+by the clock; while it is off, layers stand where they are edited.
 
 ## Editor and capture
 

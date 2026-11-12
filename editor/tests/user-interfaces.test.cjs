@@ -2215,3 +2215,44 @@ test('the name grid is placed under a typing field whose parents name each other
     assert.equal(place([[1, 2, 100, 40], [2, 3, 80, 120], [3, 2, 60, 200]]), 60 + 200 + 8);
     assert.equal(place([[1, 1, 100, 40]]), 100 + 40 + 8);
 });
+
+test('an interface that opens with no transition and closes with a fade or a slide is shown while it is open', () => {
+    const sandbox = loadRuntimeUI({ globals: { Graphics: { width: 816, height: 624, boxWidth: 816, boxHeight: 624 } } });
+    const made = (openTransition, closeTransition) => {
+        const scene = Object.create(sandbox.Scene_ReactorUI.prototype);
+        const window = { syncVisualState() {} };
+        scene._interfaceId = 1;
+        scene._transitionPhase = 'idle';
+        scene._nodeWindows = [window];
+        sandbox.ReactorUI.interface = () => ({ mode: 'scene', openTransition, closeTransition, transitionDuration: 10, nodes: [] });
+        sandbox.Scene_MenuBase.prototype.create = function() {};
+        scene.createNodes = () => {};
+        scene.create();
+        // (+ 0: a slide's start works out as a negative zero, which is the same place.)
+        return [scene._transitionPhase, window._uiTransitionAlpha, window._uiTransitionX + 0, window._uiTransitionY + 0];
+    };
+    // As made, before any update: in place and opaque, whatever it will do when it closes.
+    assert.deepEqual(made('none', 'fade'), ['idle', 1, 0, 0]);
+    assert.deepEqual(made('none', 'slideLeft'), ['idle', 1, 0, 0]);
+    assert.deepEqual(made('none', 'slideUp'), ['idle', 1, 0, 0]);
+    assert.deepEqual(made('none', 'none'), ['idle', 1, 0, 0]);
+    // With an opening transition it starts where that transition starts.
+    assert.deepEqual(made('fade', 'none'), ['opening', 0, 0, 0]);
+    assert.deepEqual(made('slideLeft', 'fade'), ['opening', 1, 816, 0]);
+});
+
+test('picture fills and motion are part of a node: off by default, and a list or a text takes only what it can show', () => {
+    const { ReactorUI } = loadRuntimeUI();
+    const record = ReactorUI.normalizeInterface({ id: 1, coordinateSpace: 'screen', nodes: [
+        { id: 1, type: 'box' },
+        { id: 2, type: 'box', fill: 'picture', fillImage: 'system/Panel', fillFit: 'slice', sliceLeft: 12, motion: { floatY: 6, floatPeriod: 90 } },
+        { id: 3, type: 'list', fill: 'picture', fillImage: 'Back', rowImage: 'Row', motion: { spin: 45, appearX: -100 } },
+        { id: 4, type: 'text', fill: 'picture', fillImage: 'Nope', motion: { swayAngle: 10 } }
+    ] });
+    const [plain, box, list, text] = record.nodes;
+    assert.deepEqual([plain.fill, plain.fillImage, plain.fillFit, plain.motion], ['window', '', 'stretch', null]);
+    assert.deepEqual([box.fill, box.fillImage, box.fillFit, box.sliceLeft, box.motion.floatY, box.motion.floatPeriod, box.motion.spin], ['picture', 'system/Panel', 'slice', 12, 6, 90, 0]);
+    assert.deepEqual([list.fill, list.rowImage, list.motion.spin, list.motion.appearX], ['picture', 'Row', 0, -100], 'a list does not turn');
+    assert.deepEqual([text.fill, text.motion.swayAngle], ['none', 10], 'a text has no surface to fill, and can sway');
+    assert.deepEqual([...ReactorUI.Motion.MOTION_TYPES], ['box', 'image', 'text', 'button', 'list', 'gauge', 'input']);
+});
