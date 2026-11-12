@@ -305,7 +305,9 @@ class ActionElements {
         document.body.appendChild(panel);
 
         const onDown = event => {
-            if (panel.contains(event.target) || event.target === button) return;
+            // The field's face is its children, so a press on it is a press inside the button:
+            // left alone here, the click that follows closes the list.
+            if (panel.contains(event.target) || button.contains(event.target)) return;
             ActionElements.close();
         };
         const onKey = event => {

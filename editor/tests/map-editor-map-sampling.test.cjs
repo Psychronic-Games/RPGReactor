@@ -92,7 +92,17 @@ test('one sampled-map stamp is one undoable edit across every layer', () => {
 
     editor.undo();
     assert.deepEqual(map.data, new Array(36).fill(0));
-    assert.equal(renders, 1);
+    // The undo redraws the five tile and shadow cells the stamp changed, not the whole map
+    // (a whole redraw restarted the water and the parallax); the region cell goes through its overlay.
+    assert.equal(renders, 0);
+    assert.equal(tileUpdates.length, 10);
+    assert.deepEqual(tileUpdates.slice(5).map(u => [u.x, u.y, u.layer]), [[1, 1, 0], [1, 1, 1], [1, 1, 2], [1, 1, 3], [1, 1, 4]]);
+    assert.equal(regionUpdates, 2);
+
+    editor.redo();
+    assert.deepEqual([0, 1, 2, 3, 4, 5].map(layer => map.data[layer * 6 + 4]), [10, 20, 30, 40, 15, 99]);
+    assert.equal(editor.undoStack.length, 1);
+    assert.equal(renders, 0);
 });
 
 test('right-drag selects a stamp without touching undo, then left-click places it', () => {

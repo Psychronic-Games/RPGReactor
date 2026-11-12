@@ -269,6 +269,10 @@ class SetMovementRouteEditor {
                 false
             ));
         });
+        // An event the open map does not have (the command was written for another map) is kept and shown.
+        if (this.characterId > 0 && !events.some(ev => ev.id === this.characterId)) {
+            select.appendChild(this._option(String(this.characterId), `EV${String(this.characterId).padStart(3, '0')}`, true, false));
+        }
 
         // What a route does to a follower, in one line, while one is chosen.
         const followerHint = document.createElement('div');

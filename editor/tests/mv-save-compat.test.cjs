@@ -113,6 +113,51 @@ test('MV synchronous StorageManager load returns decompressed JSON for YEP SaveC
     assert.equal(context.LZString.decompressFromBase64(writes[0][1]), expectedJson);
 });
 
+test('an MZ game keeps the stock class tag on what a save restores; MV saves and MV games are still cleaned', () => {
+    const compatSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_mv_compat.js'), 'utf8');
+    const jsonExSource = extractFunction(compatSource, 'installJsonExCompatibility', 'ensureArrayClone');
+    const coreSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_core_io.js'), 'utf8');
+    const stockStart = coreSource.indexOf('function JsonEx() {');
+    const stockEnd = coreSource.indexOf('\n//----', stockStart);
+    assert.ok(stockStart >= 0 && stockEnd > stockStart, 'the stock JsonEx is locatable');
+    const load = mvGameSemantics => vm.runInNewContext(`(function() {
+        const global = globalThis, window = globalThis;
+        function Game_Thing() { this.hp = 3; this.list = [1, { deep: true }]; }
+        globalThis.Game_Thing = Game_Thing;
+        ${coreSource.slice(stockStart, stockEnd)}
+        globalThis.JsonEx = JsonEx;
+        const stockStringify = JsonEx.stringify.bind(JsonEx);
+        const mvGameSemantics = ${mvGameSemantics};
+        ${jsonExSource}
+        installJsonExCompatibility();
+        return { JsonEx, Game_Thing, stockStringify };
+    })()`, { console });
+    const plain = value => JSON.parse(JSON.stringify(value));
+    const mvSave = '{"@c":1,"@":"Game_Thing","hp":3,"list":{"@c":2,"@a":[1,{"@c":3,"deep":true}]},"self":{"@r":1}}';
+
+    const mz = load(false);
+    // A save written before this change is the same stock JSON as one written after.
+    const oldSave = mz.stockStringify({ thing: new mz.Game_Thing(), plain: { a: 1 } });
+    assert.equal(mz.JsonEx.stringify({ thing: new mz.Game_Thing(), plain: { a: 1 } }), oldSave);
+    const restored = mz.JsonEx.parse(oldSave);
+    assert.equal(restored.thing instanceof mz.Game_Thing, true);
+    assert.deepEqual(plain(restored), { thing: { hp: 3, list: [1, { deep: true }], '@': 'Game_Thing' }, plain: { a: 1 } },
+        'the tag stays, as in RPG Maker MZ');
+    assert.equal(mz.JsonEx.stringify(restored), oldSave, 'and saves back to the same bytes');
+    const fromMv = mz.JsonEx.parse(mvSave);
+    assert.equal(fromMv instanceof mz.Game_Thing, true);
+    assert.equal(fromMv.self, fromMv, 'an MV save still gets its circular reference back');
+    assert.deepEqual(Object.keys(fromMv), ['hp', 'list', 'self']);
+    assert.deepEqual(plain(fromMv.list), [1, { deep: true }]);
+
+    const mv = load(true);
+    const mvRestored = mv.JsonEx.parse(oldSave);
+    assert.equal(mvRestored.thing instanceof mv.Game_Thing, true);
+    assert.deepEqual(plain(mvRestored), { thing: { hp: 3, list: [1, { deep: true }] }, plain: { a: 1 } },
+        'an MV game strips the tag, as MV did');
+    assert.equal(mv.JsonEx.parse(mvSave).self instanceof mv.Game_Thing, true);
+});
+
 test('MV synchronous web storage honors the MV webStorageKey contract', () => {
     const compatSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_mv_compat.js'), 'utf8');
     const storageSource = extractFunction(compatSource, 'installStorageManagerCompatibility', 'installInterpreterCompatibility');

@@ -939,7 +939,6 @@ class PieceBuilderManager {
         this.selectedIds = ids.length > 1 ? ids : [];
     }
 
-    /** Change the selected piece in place (a material, a turn, a size, a move); the list keeps its ids. */
     /** A placed ladder is a stack of one-level pieces: every ladder level joined to this one on its cell. */
     ladderStack(piece) {
         const map = this.currentMap(), elevation = this.elevation();
@@ -1101,6 +1100,7 @@ class PieceBuilderManager {
         return true;
     }
 
+    /** Change the selected piece in place (a material, a turn, a size, a move); the list keeps its ids. */
     updateSelected(patch, record = true) {
         const map = this.currentMap(), elevation = this.elevation();
         const piece = this.selectedPiece();

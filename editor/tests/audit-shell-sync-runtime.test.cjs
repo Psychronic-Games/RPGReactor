@@ -29,7 +29,23 @@ test('a project on its own corescript is left alone; a Reactor project is synced
         write('template/Corescript/index.html', '<script src="js/main.js"></script>');
         write('template/Corescript/js/main.js', 'rmmz');
         write('template/Corescript/js/libs/pixi.js', 'v5');
-        execFileSync(process.execPath, [path.join(root, 'editor', 'build-scripts', 'sync-runtime.cjs')], { stdio: 'pipe' });
+        // A patch backup in runtime/ is not copied; a runtime file a project still has from before is removed,
+        // and its own plugin list and libraries are not.
+        write('runtime/reactor_main.js.orig', 'backup');
+        write('template/Game/js/reactor_old.js', 'renamed away');
+        write('template/Game/js/reactor_old.js.orig', 'backup of it');
+        write('template/Game/js/reactor_plugins.js', 'var $plugins = [];');
+        write('template/Game/js/libs/three.min.js', 'its own');
+        const sync = path.join(root, 'editor', 'build-scripts', 'sync-runtime.cjs');
+        assert.throws(() => execFileSync(process.execPath, [sync, '--check'], { stdio: 'pipe' }), 'a check reports what is left behind');
+        assert.equal(fs.existsSync(path.join(root, 'template/Game/js/reactor_old.js')), true, 'and changes nothing');
+        execFileSync(process.execPath, [sync], { stdio: 'pipe' });
+        assert.equal(fs.existsSync(path.join(root, 'template/Game/js/reactor_main.js.orig')), false);
+        assert.equal(fs.existsSync(path.join(root, 'template/Game/js/reactor_old.js')), false);
+        assert.equal(fs.existsSync(path.join(root, 'template/Game/js/reactor_old.js.orig')), false);
+        assert.equal(fs.readFileSync(path.join(root, 'template/Game/js/reactor_plugins.js'), 'utf8'), 'var $plugins = [];');
+        assert.equal(fs.readFileSync(path.join(root, 'template/Game/js/libs/three.min.js'), 'utf8'), 'its own');
+        execFileSync(process.execPath, [sync, '--check'], { stdio: 'pipe' });
         assert.equal(fs.readFileSync(path.join(root, 'template/Game/js/libs/pixi.js'), 'utf8'), 'v8');
         assert.equal(fs.readFileSync(path.join(root, 'template/Corescript/js/libs/pixi.js'), 'utf8'), 'v5');
         assert.equal(fs.existsSync(path.join(root, 'template/Corescript/js/reactor_main.js')), false);

@@ -364,10 +364,6 @@ class ProjectController {
         return `lastMapId:${encodeURIComponent(projectPath)}`;
     }
 
-    setRendererApp(app) {
-        this.app = app;
-    }
-
     async checkAutoLoadProject() {
         const webHost = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (webHost?.mode === 'web') {
@@ -1105,8 +1101,11 @@ class ProjectController {
 
     // Filter maps based on search text
     filterMaps(searchText) {
-        const mapItems = document.querySelectorAll('#maps-list [data-map-id], #quick-access-list [data-map-id]');
-        const lowerSearch = searchText.toLowerCase();
+        // The tree is drawn again from the search field, so a map under a
+        // closed branch is found too; the flat Quick Access rows are filtered here.
+        if (this.currentProject) this.renderMapsList();
+        const mapItems = document.querySelectorAll('#quick-access-list [data-map-id]');
+        const lowerSearch = searchText.trim().toLowerCase();
 
         mapItems.forEach(item => {
             const mapName = item.textContent.toLowerCase();
@@ -1165,11 +1164,27 @@ class ProjectController {
                 list.sort((a, b) => (a.order || 0) - (b.order || 0));
             }
 
+            // A search shows the maps whose names match, each under its
+            // parents, whether or not their branches are open. It is read
+            // here so that every redraw of the list keeps it.
+            const search = (document.getElementById('map-search-input')?.value || '').trim().toLowerCase();
+            let found = null;
+            if (search) {
+                found = new Set();
+                const byId = new Map();
+                this.currentProject.maps.forEach(map => { if (map && map.id) byId.set(map.id, map); });
+                byId.forEach(map => {
+                    if (!String(map.name || this._tt('Unnamed Map')).toLowerCase().includes(search)) return;
+                    for (let shown = map; shown && !found.has(shown.id); shown = byId.get(shown.parentId)) found.add(shown.id);
+                });
+            }
+
             // Build hierarchical tree starting from root (parentId = 0)
             const buildTree = (parentId, depth = 0) => {
                 const children = childrenByParent.get(parentId) || [];
 
                 children.forEach(map => {
+                    if (found && !found.has(map.id)) return;
                     const mapItem = document.createElement('div');
                     mapItem.className = 'tree-item';
                     mapItem.setAttribute('data-map-id', map.id);
@@ -1183,7 +1198,7 @@ class ProjectController {
                     if (hasChildren) {
                         const icon = document.createElement('span');
                         icon.className = 'tree-icon';
-                        icon.textContent = map.expanded ? '▼ ' : '► ';
+                        icon.textContent = (map.expanded || found) ? '▼ ' : '► ';
                         icon.style.cssText = 'cursor: pointer; user-select: none; margin-right: 4px;';
                         icon.addEventListener('click', (e) => {
                             e.stopPropagation();
@@ -1225,7 +1240,7 @@ class ProjectController {
                     mapsList.appendChild(mapItem);
 
                     // Recursively build children if expanded
-                    if (hasChildren && map.expanded) {
+                    if (hasChildren && (map.expanded || found)) {
                         buildTree(map.id, depth + 1);
                     }
                 });
@@ -1687,6 +1702,9 @@ class ProjectController {
         } else {
             this.mediaSurfacePreviewManager?.setMap?.(tilemapManager.currentMap, tilemapManager);
             this.uiManager.updateStatus(`Failed to load map ${mapId}`);
+            // A click in the map list that does nothing says why.
+            const reason = tilemapManager.lastLoadError;
+            this.uiManager.showMapNote?.(`${this._tt('This map could not be opened.')}${reason ? ' ' + reason : ''}`);
             return false;
         }
     }
@@ -4155,13 +4173,18 @@ class ProjectController {
 
         // Paint snapshots taken at the old size cannot be replayed onto the new
         // one; keeping them would let a later undo restore a wrong-length array.
-        if (this.mapEditor && this.mapEditor.clearUndoHistory) {
+        // The histories belong to the open map: resizing another map from the
+        // tree leaves them alone.
+        const openMapId = this.tilemapManager?.currentMap?.id;
+        const anotherMapIsOpen = openMapId != null && openMapId !== sourceMap.id;
+        if (!anotherMapIsOpen && this.mapEditor && this.mapEditor.clearUndoHistory) {
             this.mapEditor.clearUndoHistory();
         }
         // Event history is equally stale: a resize moves events and deletes any
         // the new bounds exclude, so undoing afterwards would put them back at
-        // coordinates the map no longer has.
-        if (this.eventManager && this.eventManager.clearUndoHistory) {
+        // coordinates the map no longer has. The open map's goes too when its
+        // commands that point into the resized map are about to be shifted.
+        if ((!anotherMapIsOpen || inbound?.openMapReferences?.length) && this.eventManager && this.eventManager.clearUndoHistory) {
             this.eventManager.clearUndoHistory();
         }
 
@@ -4208,7 +4231,11 @@ class ProjectController {
 
             if ((systemStarts.length > 0 || inbound?.sources.some(s => s.kind === 'commonEvents'))
                 && this.databaseManager?.saveAllData && this.currentProject?.path) {
-                await this.databaseManager.saveAllData(this.currentProject.path);
+                const databaseSaved = await this.databaseManager.saveAllData(this.currentProject.path);
+                // The whole database is on disk now: an open Database's Cancel goes back to it as saved,
+                // not to the start positions from before the resize.
+                const databaseEditor = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+                if (databaseSaved && databaseEditor?._dataSnapshot) databaseEditor.takeDatabaseSnapshot(true);
             }
         }
 
@@ -4230,10 +4257,6 @@ class ProjectController {
             tilesLost,
             eventsLost
         };
-    }
-
-    addToQuickAccess(mapId) {
-        RRDialog.alert(this._tt('Add To Quick Access - Coming soon!'), { title: this._t('mapCtx.addQuick') });
     }
 
     async copyMap(mapId) {
@@ -4346,6 +4369,8 @@ class ProjectController {
                 throw new Error('Could not save map metadata');
             }
             if (this.databaseManager?.data) this.databaseManager.data.mapInfos = targetProject.maps;
+            // The map list is on disk as it stands, so it is not an unsaved change.
+            if (this.currentProject === targetProject) this.savedMapInfosState = JSON.stringify(targetProject.maps || []);
             // The complete map is now committed; later UI errors must not remove it.
             written.length = 0;
             previousMaps = null;
@@ -4732,8 +4757,16 @@ class ProjectController {
                     return;
                 }
 
-                const pngData = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
-                fs.writeFileSync(outputPath, Buffer.from(pngData, 'base64'));
+                // This listener runs after the function's own try has ended.
+                try {
+                    const pngData = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+                    fs.writeFileSync(outputPath, Buffer.from(pngData, 'base64'));
+                } catch (error) {
+                    console.error('Error saving map image:', error);
+                    RRDialog.alert(this._tt('Failed to save map image. Check console for details.'), { title: this._t('mapCtx.saveImage'), kind: 'error' });
+                    this.uiManager.updateStatus('Map image export failed');
+                    return;
+                }
                 this.uiManager.updateStatus(`Saved map image: ${outputPath}`);
             });
 

@@ -48,11 +48,8 @@ class DatabaseTilesetEditor {
             this.path = host.path;
         }
         this.currentTileset = null;
-        this.tilesetList = [];
         this.selectedImageIndex = null;
         this.currentEditMode = null; // 'passage-o', 'passage-x', 'passage-4dir', 'ladder', 'bush', 'counter', 'damage', 'terrain'
-        this.selectedDirection = null; // For 4-dir passage: 'down', 'left', 'right', 'up'
-        this.selectedTerrain = 0; // For terrain tag: 0-7
         this.currentTab = 'A'; // Current layer tab: 'A', 'B', 'C', 'D', 'E', 'F', 'G'
         this.selectedTile = null; // Currently selected tile { x, y } for highlighting
         this.passageBrush = null; // 'o' | 'x' | 'star' picked in the Key, null = click-to-cycle
@@ -127,120 +124,12 @@ class DatabaseTilesetEditor {
         return fill(tileset);
     }
 
-    // Initialize the tileset editor UI
-    async loadTilesets() {
-        if (!this.fs) {
-            console.error('File system not available');
-            return;
-        }
-
-        try {
-            const tilesetsPath = this.path.join(this.getProjectPath(), 'data', 'Tilesets.json');
-
-            if (!this.fs.existsSync(tilesetsPath)) {
-                console.warn('Tilesets.json not found, creating new file');
-                this.tilesetList = [null]; // RPG Maker format starts with null at index 0
-                this.saveTilesetsFile();
-                return;
-            }
-
-            const data = RRJson.parse(this.fs.readFileSync(tilesetsPath));
-            this.tilesetList = data;
-
-
-            // Select first valid tileset
-            for (let i = 1; i < this.tilesetList.length; i++) {
-                if (this.tilesetList[i]) {
-                    this.selectTileset(i);
-                    break;
-                }
-            }
-        } catch (error) {
-            console.error('Error loading tilesets:', error);
-        }
-    }
-
-    selectTileset(id) {
-        this.currentTileset = this.tilesetList[id];
-        this.clearTile3DSelection();
-    }
-
-    saveTileset() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        if (!this.currentTileset) {
-            RRDialog.alert(tt('No tileset selected'), { title: tt('Tilesets'), kind: 'warning' });
-            return;
-        }
-
-        // Update name from input (check both old UI and compact UI)
-        const nameInput = document.getElementById('compact-tileset-name-input');
-        if (nameInput) {
-            this.currentTileset.name = nameInput.value;
-        }
-
-        // Inside the Database modal, Save updates the transactional in-memory
-        // database. The modal's OK/Save action owns persistence and Cancel can
-        // still restore its snapshot.
-        if (this.parentEditor?._activeDatabaseList?.type === 'tilesets') {
-            this.notifyTilesetSaved();
-            this.updateStatus(`${this.currentTileset.name} ${tt('updated')}`);
-            return;
-        }
-
-        // Ensure the tilesetList is initialized and contains the current tileset
-        if (!this.tilesetList || this.tilesetList.length === 0) {
-            console.warn('TilesetList is empty, loading from file before saving...');
-            this.loadTilesets();
-            // Give it a moment to load
-            setTimeout(() => {
-                this.saveAfterLoad();
-            }, 100);
-            return;
-        }
-
-        // Update the current tileset in the list
-        if (this.currentTileset.id) {
-            this.tilesetList[this.currentTileset.id] = this.currentTileset;
-        }
-
-        // Save to file
-        this.saveTilesetsFile();
-
-        // Refresh list to show updated name
-        this.notifyTilesetSaved();
-
-        // Update status
-        this.updateStatus(`${tt('Tileset saved:')} ${this.currentTileset.name}`);
-        console.debug('Tileset saved:', this.currentTileset.name);
-    }
-
-    saveAfterLoad() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        console.debug('saveAfterLoad - tilesetList length:', this.tilesetList.length);
-
-        // Update the current tileset in the list
-        if (this.currentTileset && this.currentTileset.id) {
-            this.tilesetList[this.currentTileset.id] = this.currentTileset;
-        }
-
-        // Save to file
-        this.saveTilesetsFile();
-
-        // Refresh list to show updated name
-        this.notifyTilesetSaved();
-
-        // Update status
-        this.updateStatus(`${tt('Tileset saved:')} ${this.currentTileset.name}`);
-        console.debug('Tileset saved:', this.currentTileset.name);
-    }
-
     notifyTilesetSaved() {
         if (typeof this.onTilesetSaved === 'function') {
             this.onTilesetSaved(this.currentTileset);
         }
     }
 
-    /** The 3D classification module, absent on hosts that never loaded it. */
     /** The project's tile size, from System.json; 48 when it says nothing. */
     readTileSize() {
         const metrics = (typeof RRTileMetrics !== 'undefined' && RRTileMetrics)
@@ -251,6 +140,7 @@ class DatabaseTilesetEditor {
         return metrics ? metrics.tileSizeOf(system) : 48;
     }
 
+    /** The 3D classification module, absent on hosts that never loaded it. */
     tileset3DClasses() {
         return (typeof window !== 'undefined' && window.RRTileset3DClass) || null;
     }
@@ -261,7 +151,7 @@ class DatabaseTilesetEditor {
      * The database owns it when there is one, so the modal's OK/Cancel covers
      * 3D classes along with everything else. Standalone (the old constructor
      * signature, and tests) it is read from disk once and written by
-     * `saveTilesetsFile`.
+     * `saveTileset3DFile`.
      */
     tileset3DStore() {
         const classes = this.tileset3DClasses();
@@ -292,7 +182,6 @@ class DatabaseTilesetEditor {
         return this.path.join(projectPath, 'data', classes.FILENAME);
     }
 
-    /** Persist classification alongside Tilesets.json outside the modal. */
     /**
      * Tell the open map that the 3D classification changed.
      *
@@ -307,6 +196,7 @@ class DatabaseTilesetEditor {
         }));
     }
 
+    /** Persist classification alongside Tilesets.json: through the database when there is one. */
     saveTileset3DFile() {
         const classes = this.tileset3DClasses();
         if (!classes || !this.fs) return;
@@ -331,50 +221,6 @@ class DatabaseTilesetEditor {
         }
     }
 
-    saveTilesetsFile() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        if (!this.fs) {
-            console.error('Cannot save: fs not available');
-            return;
-        }
-
-        const projectPath = this.getProjectPath();
-        if (!projectPath) {
-            console.error('Cannot save: projectPath is null');
-            RRDialog.alert(tt('Error: Project path not available. Cannot save tilesets.'), { title: tt('Tilesets'), kind: 'error' });
-            return;
-        }
-
-        console.debug('Saving tilesets...');
-        console.debug('Project path:', projectPath);
-        console.debug('Tileset list length:', this.tilesetList.length);
-        console.debug('Current tileset:', this.currentTileset);
-
-        try {
-            const tilesetsPath = this.path.join(projectPath, 'data', 'Tilesets.json');
-            console.debug('Full path:', tilesetsPath);
-
-            // Use RPG Maker's compact JSON format (each tileset on one line)
-            // This keeps file size small by not pretty-printing the large flags arrays
-            const jsonLines = ['['];
-            for (let i = 0; i < this.tilesetList.length; i++) {
-                const tileset = this.tilesetList[i];
-                const line = (tileset === null) ? 'null' : JSON.stringify(tileset);
-                const isLast = (i === this.tilesetList.length - 1);
-                jsonLines.push(line + (isLast ? '' : ','));
-            }
-            jsonLines.push(']');
-            const compactJson = jsonLines.join('\n');
-
-            this._writeFileAtomic(this.fs, tilesetsPath, compactJson);
-            this.saveTileset3DFile();
-            console.debug('Tilesets.json saved successfully');
-        } catch (error) {
-            console.error('Error saving Tilesets.json:', error);
-            RRDialog.alert(`${tt('Error saving tilesets:')} ${error.message}`, { title: tt('Tilesets'), kind: 'error' });
-        }
-    }
-
     initializeCompactUI(container, tileset) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Decoded sheets and tile dimensions belong to the active project.
@@ -385,8 +231,6 @@ class DatabaseTilesetEditor {
             this._cacheProjectPath = projectPath;
         }
         this.tileSize = this.readTileSize();
-        // Load the full tilesets list from file
-        this.loadTilesets();
 
         // Set the current tileset
         this.currentTileset = tileset;
@@ -411,6 +255,12 @@ class DatabaseTilesetEditor {
                         <input type="text" id="compact-tileset-name-input" value="${rrEscapeHtml(tileset.name)}"
                                style="flex: 1; max-width: 250px; padding: 4px 8px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;"
                                placeholder="${tt('Tileset name')}" />
+                        <label for="compact-tileset-mode-select" style="font-size: 11px; color: var(--color-text-muted);">${tt('Mode:')}</label>
+                        <select id="compact-tileset-mode-select" title="${rrEscapeHtml(tt('World: a battle on a map without a battleback takes one from the terrain. Area: it takes none.'))}"
+                                style="padding: 4px 8px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
+                            <option value="0"${tileset.mode === 0 ? ' selected' : ''}>${tt('World')}</option>
+                            <option value="1"${tileset.mode === 0 ? '' : ' selected'}>${tt('Area')}</option>
+                        </select>
                     </div>
                 </div>
 
@@ -894,7 +744,6 @@ class DatabaseTilesetEditor {
         browser?.focusSelected();
     }
 
-    // Browse for external tileset file (copies to project)
     assignTilesetToLayer(layerIndex, baseName, layerName) {
         // Clear cache for old layer first (before overwriting)
         const oldFileName = this.currentTileset.tilesetNames[layerIndex];
@@ -1150,6 +999,8 @@ class DatabaseTilesetEditor {
 
                 this.tabCanvases.push({ canvas, imageIndex: index, isSplitSheet });
                 this.applyPreviewZoom(canvas);
+                // The pictures finish loading in any order; the column shows them A1 to A5.
+                canvas.style.order = String(index);
                 wrapper.appendChild(canvas);
 
                 loadedCount++;
@@ -1211,6 +1062,10 @@ class DatabaseTilesetEditor {
                 this.parentEditor?.refreshDatabaseListLabel?.(this.currentTileset, 'tilesets');
             });
         }
+        // World (0) or Area (1): the game asks it for a battle's overworld battleback.
+        document.getElementById('compact-tileset-mode-select')?.addEventListener('change', (e) => {
+            this.currentTileset.mode = e.target.value === '0' ? 0 : 1;
+        });
 
         // Tab buttons
         document.querySelectorAll('.compact-layer-tab').forEach(btn => {
@@ -1237,8 +1092,6 @@ class DatabaseTilesetEditor {
         if (mode !== 'tile3d') this.clearTile3DSelection();
         if (!mode) {
             this.selectedTile = null;
-            this.selectedDirection = null;
-            this.selectedTerrain = 0;
             this.tile3dTool = 'select';
         }
         if (refresh) {
@@ -2359,52 +2212,6 @@ class DatabaseTilesetEditor {
     }
 
     /**
-     * Advance one tile through Auto -> Flat -> Upright.
-     *
-     * Autotile ids fold to their kind, so classifying a wall classifies every
-     * shape of that wall — see `RRTileset3DClass.keyFor`.
-     */
-    /**
-     * Shift-click twice to say "these tiles are one object".
-     *
-     * The first click marks a corner, the second declares the rectangle between
-     * them. Which tiles belong to one object cannot be inferred: two different
-     * objects sitting side by side on the sheet look exactly like one wide
-     * object, and autotile terrain gives no grouping at all. Shift-clicking a
-     * tile that is already declared clears its object instead, so the same
-     * gesture undoes itself.
-     */
-    markTile3DObject(tileIndex) {
-        const classes = this.tileset3DClasses();
-        const store = this.tileset3DStore();
-        if (!classes || !store || !this.currentTileset) return;
-        const tilesetId = this.currentTileset.id;
-
-        if (!this._tile3dCorner) {
-            if (classes.objectAt(store, tilesetId, tileIndex)) {
-                classes.clearObject(store, tilesetId, tileIndex);
-                console.debug(`3D object cleared at tile ${tileIndex}`);
-                return;
-            }
-            this._tile3dCorner = tileIndex;
-            console.debug('3D object: shift-click the opposite corner');
-            return;
-        }
-
-        const from = classes.sheetCell(this._tile3dCorner);
-        const to = classes.sheetCell(tileIndex);
-        this._tile3dCorner = null;
-        if (from.setNumber !== to.setNumber) return;
-        const col = Math.min(from.col, to.col), row = Math.min(from.row, to.row);
-        const width = Math.abs(from.col - to.col) + 1;
-        const height = Math.abs(from.row - to.row) + 1;
-        classes.defineObject(store, tilesetId,
-            classes.tileAtCell(from.setNumber, col, row), width, height);
-        console.debug(`3D object declared: ${width}x${height} from tile ` +
-            `${classes.tileAtCell(from.setNumber, col, row)}`);
-    }
-
-    /**
      * The mark on a flag-mode button.
      *
      * Drawn as a few strokes rather than a detailed picture: these render at
@@ -2617,8 +2424,10 @@ class DatabaseTilesetEditor {
         for (const button of host.querySelectorAll('button.tile3d-tool')) {
             button.addEventListener('click', () => {
                 this.tile3dTool = button.dataset.tool;
-                // Choosing a tool abandons a half-finished object rectangle.
+                // Choosing a tool abandons a half-finished object rectangle
+                // and a wall waiting for its roof.
                 this._tile3dCorner = null;
+                this._tile3dTopWall = null;
                 this.refreshFlagKey();
             });
         }
@@ -2889,7 +2698,8 @@ class DatabaseTilesetEditor {
             : { tile: tileIndex, w: 1, h: 1, roles: soloRole };
         const names = {
             [classes.GROUND]: tt('Flat'), [classes.UPRIGHT]: tt('Upright'),
-            [classes.SCENERY]: tt('Scenery'), [classes.FOLIAGE]: tt('Foliage')
+            [classes.SCENERY]: tt('Scenery'), [classes.FOLIAGE]: tt('Foliage'),
+            [classes.PANEL]: tt('Panel')
         };
         const className = names[value] || tt('unclassified — the runtime decides');
         const label = member
@@ -3382,6 +3192,8 @@ class DatabaseTilesetEditor {
         this._preview3dTile = null;
         this._preview3dCell = null;
         this._tile3dCorner = null;
+        // A wall picked with the Roof tool belongs to this sheet too: left armed, the next Roof click paired it.
+        this._tile3dTopWall = null;
     }
 
     /** A declared object's selection rectangle, in sheet coordinates. */
@@ -3464,6 +3276,13 @@ class DatabaseTilesetEditor {
                     ? tt('Wall selected — click its roof, or click this wall again to clear.')
                     : tt('Wall selected — now click the tile that covers its top.'));
                 this.refreshTile3DPreview();
+                return;
+            }
+            // The game draws a roof as an autotile, one shape per wall cell:
+            // a picture tile (A5, B-G) would show the tiles after it on its
+            // sheet. The wall stays picked for another try.
+            if (picked < 2048) {
+                this.noteTile3DRefusal(tt('A roof has to be an autotile (A1-A4). Click one, or click the wall again to clear.'));
                 return;
             }
             const wall = this._tile3dTopWall;
@@ -3567,6 +3386,15 @@ class DatabaseTilesetEditor {
                 return;
             }
 
+            // The drag is in palette cells and the object a rectangle of the
+            // sheet: one dragged across the seam between the two halves would
+            // be stored with rows the sheet does not have, and without the
+            // right-half rows it was dragged over.
+            if (classes.sheetCell(indexAt(x0, y0)).row + height > 16) {
+                this.noteTile3DRefusal(`${tt('That would reach past the edge of the sheet.')} `
+                    + tt('Shift-drag another part to add it to this one.'));
+                return;
+            }
             classes.defineObject(store, tilesetId, indexAt(x0, y0), width, height);
             this._lastDeclaredObject = indexAt(x0, y0);
             this.noteTile3DRefusal(`${tt('Object declared:')} ${width}x${height}. `
@@ -3643,17 +3471,9 @@ class DatabaseTilesetEditor {
         this.saveTileset3DFile();
     }
 
-    // Render full tileset preview showing all layers stacked vertically (like RPG Maker)
     updateStatus(message) {
         if (this.parentEditor && this.parentEditor.updateStatus) {
             this.parentEditor.updateStatus(message);
-        }
-    }
-
-    cleanupListKeyHandler() {
-        if (this._tilesetListKeyHandler) {
-            document.removeEventListener('keydown', this._tilesetListKeyHandler);
-            this._tilesetListKeyHandler = null;
         }
     }
 
@@ -3714,8 +3534,6 @@ class DatabaseTilesetEditor {
             if (this.parentEditor?._activeDatabaseList?.type === 'tilesets') {
                 this.parentEditor._activeDatabaseList.mutationGeneration++;
                 this.parentEditor._activeDatabaseList.refresh();
-            } else if (typeof this._refreshTilesetDatabaseList === 'function') {
-                this._refreshTilesetDatabaseList(savedTileset.id);
             }
         };
 

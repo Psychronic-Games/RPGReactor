@@ -10,7 +10,6 @@ class ChangeWindowColorEditor {
         this.toneR = 0;
         this.toneG = 0;
         this.toneB = 0;
-        this.toneGray = 0;
     }
 
     /**
@@ -27,12 +26,10 @@ class ChangeWindowColorEditor {
             this.toneR = tone[0];
             this.toneG = tone[1];
             this.toneB = tone[2];
-            this.toneGray = tone[3];
         } else {
             this.toneR = 0;
             this.toneG = 0;
             this.toneB = 0;
-            this.toneGray = 0;
         }
 
         if (!this.modal) {
@@ -133,7 +130,6 @@ class ChangeWindowColorEditor {
         content.appendChild(this.createSliderInput(tt('Red:'), this.toneR, -255, 255, (val) => { this.toneR = val; }));
         content.appendChild(this.createSliderInput(tt('Green:'), this.toneG, -255, 255, (val) => { this.toneG = val; }));
         content.appendChild(this.createSliderInput(tt('Blue:'), this.toneB, -255, 255, (val) => { this.toneB = val; }));
-        content.appendChild(this.createSliderInput(tt('Gray:'), this.toneGray, 0, 255, (val) => { this.toneGray = val; }));
 
         container.appendChild(content);
 
@@ -160,10 +156,12 @@ class ChangeWindowColorEditor {
      * Build command from current data
      */
     buildCommand() {
+        // A window's tone is red, green and blue: the game reads no gray, so
+        // the fourth place holds 0 as RPG Maker MZ writes it.
         return {
             code: 138,
             indent: 0,
-            parameters: [[this.toneR, this.toneG, this.toneB, this.toneGray]]
+            parameters: [[this.toneR, this.toneG, this.toneB, 0]]
         };
     }
 

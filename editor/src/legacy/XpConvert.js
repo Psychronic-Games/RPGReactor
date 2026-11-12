@@ -270,7 +270,7 @@
                 case 207: push(212, indent, [num(p[0]), num(p[1]), false]); break;
                 case 208: push(211, indent, [num(p[0]) === 0 ? 0 : 1]); break;
                 case 209: push(205, indent, [num(p[0]), moveRoute(p[1], notes, ruby)]); break;
-                case 509: push(505, indent, [moveCommand(p[0] || {}, notes, ruby)]); break;
+                case 509: push(505, indent, [moveCommand(p[0] || {}, null, ruby)]); break;   // counted with the 209's route
                 case 210: push(355, indent, ['this.rrWaitForAllMoves?.()']); break;
                 case 221: push(355, indent, ['this.rrPrepareTransition?.()']); break;
                 case 222: push(355, indent, [`this.rrExecuteTransition?.(${JSON.stringify(str(p[0]))}, ${FRAMES(20)})`]); break;
@@ -292,7 +292,8 @@
                 case 601: case 602: case 603: case 604: push(code, indent, []); break;
                 case 302: case 605: push(code, indent, [num(p[0]), num(p[1]), 0, 0, false].slice(0, code === 302 ? 5 : 4)); break;
                 case 303: push(303, indent, [num(p[0]), num(p[1], 8)]); break;
-                case 311: case 312: push(code, indent, [0, num(p[0]), num(p[1]), num(p[2]), num(p[3]), code === 311]); break;
+                // Change HP's fifth parameter allows knockout; unticked, XP stops at 1 HP (Interpreter#command_311).
+                case 311: case 312: push(code, indent, [0, num(p[0]), num(p[1]), num(p[2]), num(p[3]), code === 311 && p[4] !== false]); break;
                 case 313: push(313, indent, [0, num(p[0]), num(p[1]), num(p[2])]); break;
                 // XP names the actor alone (0: the whole party); MZ puts a fixed-or-variable flag before it.
                 case 314: push(314, indent, [0, num(p[0])]); break;
@@ -338,8 +339,13 @@
      * own, which MZ pages lack: a first-line comment <rrOpacity: n> <rrBlend: n>
      * carries them (RR_XpCompat reads it), visible and editable in the event.
      */
-    function eventPage(pg, bases, notes, ruby) {
+    function eventPage(pg, bases, notes, ruby, walkable) {
         const c = pg.condition || {}, g = pg.graphic || {};
+        // XP starts an event from the square itself, and lets the player walk onto it, when its page has no
+        // character graphic and the square can be walked on (Game_Event#over_trigger?, Game_Character#passable?):
+        // MZ's below-characters. On a wall, a shelf or a blocking tile of its own it is started from the front
+        // and stays at the characters' level.
+        const under = !str(g.character_name) && !!walkable && walkable(pg.through ? -1 : num(g.tile_id));
         const body = commands(pg.list, notes, ruby);
         const look = [];
         if (num(g.opacity, 255) !== 255) look.push(`<rrOpacity: ${num(g.opacity)}>`);
@@ -355,7 +361,7 @@
             list: body, moveFrequency: num(pg.move_frequency, 3), moveRoute: pg.move_route ? moveRoute(pg.move_route, notes, ruby) : EMPTY_ROUTE,
             moveSpeed: num(pg.move_speed, 3), moveType: num(pg.move_type),
             // XP events share the characters' level; "always on top" is MZ's above-characters.
-            priorityType: pg.always_on_top ? 2 : 1,
+            priorityType: pg.always_on_top ? 2 : under ? 0 : 1,
             stepAnime: !!pg.step_anime, through: !!pg.through, trigger: num(pg.trigger), walkAnime: pg.walk_anime !== false
         };
     }
@@ -365,9 +371,22 @@
         const w = num(m.width), h = num(m.height);
         const events = [null];
         const entries = m.events instanceof Map ? Array.from(m.events.values()) : Object.values(m.events || {});
+        // Game_Map#passable?(x, y, 0) for an event's own square: its tile graphic first (-1: none counted), then
+        // the three layers from the top. A tile blocked on all four sides stops; one of priority 0 decides.
+        const passages = tileset && tileset.passages && tileset.passages.data, priorities = tileset && tileset.priorities && tileset.priorities.data;
+        const cells = m.data && m.data.data;
+        const walkable = (x, y) => (eventTile) => {
+            if (!passages || !priorities || !cells || x < 0 || y < 0 || x >= w || y >= h) return false;
+            for (const id of [eventTile, cells[x + y * w + 2 * w * h], cells[x + y * w + w * h], cells[x + y * w]]) {
+                if (!(id >= 0)) continue;
+                if ((passages[id] & 0x0f) === 0x0f) return false;
+                if (priorities[id] === 0) return true;
+            }
+            return true;
+        };
         for (const e of entries) {
             if (!e || !e.id) continue;
-            events[e.id] = { id: e.id, name: str(e.name), note: '', x: num(e.x), y: num(e.y), pages: list(e.pages).map(pg => eventPage(pg, bases, notes, ruby)) };
+            events[e.id] = { id: e.id, name: str(e.name), note: '', x: num(e.x), y: num(e.y), pages: list(e.pages).map(pg => eventPage(pg, bases, notes, ruby, walkable(num(e.x), num(e.y)))) };
         }
         for (let i = 1; i < events.length; i++) if (events[i] === undefined) events[i] = null;
         const ts = tileset || {};

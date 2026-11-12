@@ -53,10 +53,16 @@ if ($action === 'join') {
     $times = strlen($alive) >= 4 ? unpack('V*', substr($alive, 0, strlen($alive) - strlen($alive) % 4)) : [];
     $slot = -1;
     $limit = max(1, min(SLOTS, (int)($config['maxPlayers'] ?? SLOTS)));
+    // A slot gone quiet is taken first. One marked "removed" or "signed in elsewhere" is taken only when no other is
+    // free: its old holder may not have been told yet, and a newcomer's time written over the mark hid it (that game
+    // then joined again, a removed player back in the world, a replaced device throwing the newer one out).
+    $marked = -1;
     for ($i = 0; $i < $limit; $i++) {
         $seen = $times[$i + 1] ?? 0;
-        if ($seen === REMOVED || $seen === REPLACED || $seen < $now - ALIVE_SECONDS) { $slot = $i; break; }
+        if ($seen === REMOVED || $seen === REPLACED) { if ($marked < 0) $marked = $i; continue; }
+        if ($seen < $now - ALIVE_SECONDS) { $slot = $i; break; }
     }
+    if ($slot < 0) $slot = $marked;
     if ($slot < 0) { flock($lock, LOCK_UN); fail(503, 'This world is full.'); }
     // One person, one body: a second sign-in ends the first, so two games can't overwrite one life.
     if ($account) {
@@ -270,7 +276,8 @@ if ($action === 'bSay') {
     // Messages for a battle's log, stamped with who sent them. Only the host's game believes anything in them.
     $slot = player($secret);
     $dir = dataDir($config);
-    $body = jsonBody();
+    // (More than other bodies: one message alone, a large battle's roster, may be up to 200,000 bytes; `bRead` reads 262,144.)
+    $body = jsonBody(262144);
     $id = (string)($body['id'] ?? '');
     $file = battleFile($dir, $id);
     // Only a battle still listed has a log, and only its host and the players it let in say more than asking to

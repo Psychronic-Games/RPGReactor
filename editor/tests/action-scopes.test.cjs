@@ -67,7 +67,8 @@ const SCOPE_METHODS = [
     'targetSideUnit', 'makeTargets', 'repeatTargets', 'targetsForAnyone',
     'targetsForRandomAny', 'targetsForAlliesButUser', 'targetsForEveryone',
     'targetsForOpponents', 'targetsForFriends', 'randomTargets', 'targetsForDead',
-    'targetsForAlive', 'targetsForDeadAndAlive', 'itemTargetCandidates'
+    'targetsForAlive', 'targetsForDeadAndAlive', 'itemTargetCandidates',
+    'evaluate', 'evaluateBestSide', 'evaluateWithTarget', 'decideRandomTarget'
 ];
 
 function battler(name, isActor, alive = true) {
@@ -430,6 +431,48 @@ test('itemTargetCandidates is unchanged for the MZ scopes', () => {
     assert.deepEqual(names(makeAction(1).action.itemTargetCandidates()), ['enemy0', 'enemy1']);
     assert.deepEqual(names(makeAction(7).action.itemTargetCandidates()), ['actor0', 'actor1']);
     assert.deepEqual(names(makeAction(11).action.itemTargetCandidates()), ['actor0']);
+});
+
+// --- auto-battle and Force Action "Random" --------------------------------
+
+/** An action whose HP effect is `amount` on every target (negative heals); everyone at 40 of 100 HP. */
+function weighed(scope, amount) {
+    const made = makeAction(scope);
+    for (const b of [...made.party.members(), ...made.troop.members()]) Object.assign(b, { hp: 40, mhp: 100 });
+    Object.assign(made.action, { isHpEffect: () => true, makeDamageValue: () => amount, clear() { this._cleared = true; } });
+    return made;
+}
+
+test('auto-battle aims an either-side attack at an opponent and an either-side heal at a friend', () => {
+    for (const scope of [15, 16]) {
+        const attack = weighed(scope, 30);
+        assert.ok(attack.action.evaluate() > 0, `scope ${scope}: an attack is worth using`);
+        assert.equal(attack.action._targetSideIsFriend, false, `scope ${scope}: on an opponent`);
+        const heal = weighed(scope, -30);
+        assert.ok(heal.action.evaluate() > 0, `scope ${scope}: a heal is worth using`);
+        assert.equal(heal.action._targetSideIsFriend, true, `scope ${scope}: on a friend`);
+    }
+});
+
+test('auto-battle weighs scope 17 a side at a time and records the better side', () => {
+    const attack = weighed(17, 30);
+    assert.ok(attack.action.evaluate() > 0);
+    assert.deepEqual(names(attack.action.makeTargets()), ['enemy0', 'enemy1']);
+    const heal = weighed(17, -30);
+    assert.ok(heal.action.evaluate() > 0);
+    assert.deepEqual(names(heal.action.makeTargets()), ['actor0', 'actor1']);
+});
+
+test('a forced random target comes from the side an either-side scope opens on', () => {
+    for (const [scope, friend] of [[15, true], [16, false], [17, false]]) {
+        const { action } = weighed(scope, 30);
+        action.decideRandomTarget();
+        assert.equal(action._targetSideIsFriend, friend, `scope ${scope}`);
+    }
+    const any = weighed(19, 30).action;
+    any.decideRandomTarget();
+    assert.equal(any._targetSideIsFriend, null, 'a random-any scope keeps no target: makeTargets draws for it');
+    assert.ok(!any._cleared, 'and the action is kept');
 });
 
 // --- confusion still wins -------------------------------------------------

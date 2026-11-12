@@ -120,7 +120,9 @@
         plan.pieces = pieces.map(piece => {
             const out = Object.assign({}, piece, { x: piece.x - x0, y: piece.y - y0 });
             delete out.id; delete out.group;
-            const rise = Array.isArray(piece.size) ? Number(piece.size[1]) || 1 : (/^(wall|doorway|window|pillar|glass|door)$/.test(piece.kind) ? storey : 1);
+            // A wall given a height of its own (a tall hall) stands that high, not a storey: the floors and the picture's box reach its top.
+            const rise = Array.isArray(piece.size) ? Number(piece.size[1]) || 1 : Number(piece.height) > 0 ? Number(piece.height)
+                : (/^(wall|doorway|window|pillar|glass|door)$/.test(piece.kind) ? storey : 1);
             top = Math.max(top, (Number(piece.z) || 0) + rise);
             return out;
         });

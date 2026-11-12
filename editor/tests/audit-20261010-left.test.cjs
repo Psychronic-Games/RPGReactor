@@ -176,7 +176,8 @@ test('the Tilesets list row takes a new name as it is typed', () => {
     const nameInput = { addEventListener: (type, handler) => { listeners[type] = handler; } };
     const nameSpan = { textContent: 'Field' };
     const row = { dataset: { entryId: '2', entryName: 'Field' }, querySelector: selector => selector === '.database-list-name' ? nameSpan : null };
-    const list = { querySelectorAll: selector => selector === '.database-list-item' ? [row] : [] };
+    // The row is asked for by its id (one lookup per keystroke, not a walk of every row).
+    const list = { querySelector: selector => selector === '.database-list-item[data-entry-id="2"]' ? row : null };
     const document = { getElementById: id => ({ 'compact-tileset-name-input': nameInput, 'database-list': list })[id] || null, querySelector: () => null, querySelectorAll: () => [] };
     const context = { console: quiet, window: {}, document };
     const DatabaseEditorUI = vm.runInNewContext(`${read('src/DatabaseEditorUI.js')}\nDatabaseEditorUI;`, context);

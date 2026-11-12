@@ -152,6 +152,14 @@ class ShowAnimationEditor {
                 }
             });
         }
+        // An event the open map does not have (the command was written for another map) is kept and shown.
+        if (this.characterId > 0 && !(mapData && mapData.events && mapData.events[this.characterId])) {
+            const option = document.createElement('option');
+            option.value = this.characterId.toString();
+            option.textContent = `EV${String(this.characterId).padStart(3, '0')}`;
+            option.selected = true;
+            characterSelect.appendChild(option);
+        }
 
         characterSelect.addEventListener('change', (e) => {
             this.characterId = parseInt(e.target.value);

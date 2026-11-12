@@ -273,6 +273,24 @@ test('effects load once into the scene\'s context; a preload holds the scene unt
     assert.ok(e.resets.includes('all'));
 });
 
+test('after a transfer the scene lets go of loaded effects the new map does not name and no animation holds', () => {
+    const e = environment();
+    const released = [];
+    const fire = e.layer.load('Fire'), wind = e.layer.load('Wind'), ice = e.layer.load('Ice'), slow = e.layer.load('Slow');
+    e.layer.context.releaseEffect = effect => released.push(effect);
+    fire.isLoaded = wind.isLoaded = ice.isLoaded = true;
+    e.layer.preload('Late');
+    e.layer.live.add({ _effect: ice });
+    e.layer.dirty = false;
+    e.layer.clear(new Set(['Wind']));
+    assert.deepEqual(released, [fire], 'not the one kept, the one playing, nor the ones still loading');
+    assert.deepEqual(Array.from(e.layer.cache.keys()), ['Wind', 'Ice', 'Slow', 'Late']);
+    assert.equal(e.layer.deadlines.has('Late'), true, 'a preload still loading keeps its deadline');
+    assert.equal(e.layer.dirty, true, 'PIXI is reset before its next render');
+    assert.notEqual(e.layer.load('Fire'), fire, 'and it loads again when next played');
+    assert.equal(slow.isLoaded, false);
+});
+
 test('the scene\'s context steps with the overlay\'s update, so battle slow motion reaches it', () => {
     const e = environment();
     e.layer.ensureContext();

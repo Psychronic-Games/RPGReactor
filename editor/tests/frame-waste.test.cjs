@@ -135,6 +135,34 @@ test('outside a game every sheet is seen, and the switch gives the old behavior 
     assert.equal(sight.seen(new THREE.Mesh()), true, 'a sheet nobody watches is not judged');
 });
 
+test('the weak tier asks nothing (no mirror is drawn there), and a sheet taken away is forgotten with its question', () => {
+    inGame(() => {
+        const sight = Reactor3D.WaterSight, camera = new THREE.PerspectiveCamera(), mesh = new THREE.Mesh();
+        const gl = fakeGl(), tier = Reactor3D.gpuTierOverride, sheets = sight.sheets;
+        sight.sheets = new Set();
+        try {
+            sight.begin(camera);
+            sight.watch(mesh);
+            Reactor3D.gpuTierOverride = 'weak';
+            for (let frame = 0; frame < sight.HOLD + 5; frame++) { sight.begin(camera); drawSheet(mesh, gl, camera); }
+            assert.equal(gl.made, 0, 'no query on the weak tier');
+            assert.equal(sight.seen(mesh), true, 'and the sheet counts as seen');
+            Reactor3D.gpuTierOverride = 'full';
+            sight.begin(camera); drawSheet(mesh, gl, camera);
+            assert.equal(gl.begun, 1, 'the full tier asks');
+            assert.equal(sight.sheets.has(mesh), true);
+            sight.forget(mesh);
+            assert.equal(sight.sheets.has(mesh), false, 'out of the set');
+            assert.equal(gl.deleted, 1, 'its last question deleted');
+            drawSheet(mesh, gl, camera);
+            assert.equal(gl.begun, 1, 'and its draws ask no more');
+            assert.doesNotThrow(() => sight.forget(mesh));
+        } finally { Reactor3D.gpuTierOverride = tier; sight.sheets = sheets; }
+    });
+    assert.match(source('reactor_3d_world.js'), /if \(mesh\.parent\) mesh\.parent\.remove\(mesh\);\n\s*if \(Reactor3D\.WaterSight\) Reactor3D\.WaterSight\.forget\(mesh\);/);
+    assert.match(source('reactor_3d.js'), /if \(mesh\.parent\) mesh\.parent\.remove\(mesh\);\n\s*if \(Reactor3D\.WaterSight\) Reactor3D\.WaterSight\.forget\(mesh\);/);
+});
+
 test('a sheet is watched as it is laid, and the mirrors pass by one out of sight', () => {
     assert.match(source('reactor_3d_world.js'), /this\._waterMeshes\.push\(mesh\);\n\s*if \(Reactor3D\.WaterSight\) Reactor3D\.WaterSight\.watch\(mesh\);/);
     assert.match(source('reactor_3d.js'), /if \(Reactor3D\.WaterSight\) Reactor3D\.WaterSight\.begin\(camera\);/, 'each frame names the camera whose draws count');

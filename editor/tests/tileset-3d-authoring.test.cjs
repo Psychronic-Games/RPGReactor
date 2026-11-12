@@ -312,13 +312,11 @@ test('standalone saves write the classification beside Tilesets.json', () => {
     const root = tempProject();
     try {
         editor.projectPath = root;
-        editor.tilesetList = [null, editor.currentTileset];
         editor.currentTileset.id = 1;
         classes.setClass(editor._tileset3d, 1, 1029, classes.UPRIGHT);
 
-        editor.saveTilesetsFile();
+        editor.saveTileset3DFile();
 
-        assert.equal(fs.existsSync(path.join(root, 'data', 'Tilesets.json')), true);
         const written = JSON.parse(fs.readFileSync(path.join(root, 'data', classes.FILENAME), 'utf8'));
         assert.equal(classes.classOf(written, 1, 1029), classes.UPRIGHT);
     } finally {

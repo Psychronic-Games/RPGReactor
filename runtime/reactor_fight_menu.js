@@ -212,7 +212,7 @@
         };
 
         /** Show a page of the battle menu (opening it if it is shut). `root` is the page Cancel shuts it from. */
-        W.openMenu = function(scene, page, from) {
+        W.openMenu = function(scene, page) {
             if (!scene || !scene.addWindow) return false;
             let win = scene._fightMenuWindow;
             if (!win) {
@@ -240,7 +240,7 @@
                 win.hide();
                 scene.addWindow(win);
             }
-            if (!win._fightOpen) { win._root = page; win._from = from || ""; sound("playOk"); }
+            if (!win._fightOpen) { win._root = page; sound("playOk"); }
             win._page = page;
             W.fitMenu(scene, win);
             // A question starts on the answer that changes nothing.
@@ -320,13 +320,13 @@
         /** End Turn chosen from a unit's menu: asked first when other units would lose their turn. */
         W.askEndTurn = function(scene) {
             const fight = $gameFight;
-            if (fight.unactedCount() > 0) W.openMenu(scene, "endTurn", "command");
+            if (fight.unactedCount() > 0) W.openMenu(scene, "endTurn");
             else if (!fight.commandEndTurn() && scene._fightCommandWindow) scene._fightCommandWindow.activate();
         };
 
         /** A way that ends in a fatal fall was chosen (Lethal jumps: Ask first): the question, Stay first. */
         W.askFall = function(scene) {
-            if (scene) W.openMenu(scene, "fall", "move");
+            if (scene) W.openMenu(scene, "fall");
         };
 
         /** Whether Cancel with nothing to step back from opens the battle menu now. */

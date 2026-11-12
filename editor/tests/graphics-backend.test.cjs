@@ -246,3 +246,57 @@ test('each window is also kept by the map it was played on, a handful of maps fo
     B.note({ perSecond: 63, wanted: 63, missed: 0, g: 0, c: 0 });
     assert.equal(r.windows, 15 + B.MAX_MAPS + 1, 'a window with no map counts for the backend as before');
 });
+
+test('the editor leaves its launcher the backend the game found for the card, and its playtests keep the plan', () => {
+    const PlaytestManager = require('../src/PlaytestManager.js');
+    const d3d = 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+    const gl = 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics, OpenGL 4.5.0)';
+    const E = (...a) => PlaytestManager.editorBackend(...a);
+    assert.equal(E('win32', d3d, ['.'], 'gl', {}, false, null), 'gl');
+    assert.equal(E('win32', d3d, [], 'd3d11on12', {}, false, null), 'd3d11on12');
+    assert.equal(E('win32', gl, ['.', '--use-angle=gl', '--rr-editor-angle=gl'], 'gl', {}, false, null), 'gl', 'started on it by the launcher: the note stands');
+    assert.equal(E('win32', gl, ['.', '--use-angle=gl', '--rr-editor-angle=gl'], 'd3d11', {}, false, null), '', 'the game changed its mind: the note goes');
+    assert.equal(E('win32', d3d, ['.'], 'd3d11', {}, false, null), '', 'the browser\x27s own backend is the plan: no note');
+    assert.equal(E('win32', d3d, ['.'], null, {}, false, null), '', 'no plan yet: the editor guesses nothing');
+    assert.equal(E('win32', d3d, ['.'], 'vulkan', {}, false, null), '');
+    assert.equal(E('win32', d3d, ['.'], 'gl', {}, false, 'default'), '', 'the person\x27s own choice');
+    assert.equal(E('linux', d3d, ['.'], 'gl', {}, false, null), null);
+    assert.equal(E('win32', d3d, ['.'], 'gl', {}, true, null), null, 'never under automation');
+    assert.equal(E('win32', '', ['.'], 'gl', {}, false, null), null, 'no WebGL to name the card by');
+    assert.equal(E('win32', d3d, ['.', '--use-angle=d3d11on12'], 'gl', {}, false, null), null, 'a backend named by hand on the command line: the note is left alone');
+    assert.equal(E('win32', d3d, ['.'], 'gl', { 'chromium-args': '--use-angle=gl' }, false, null), null);
+    assert.equal(PlaytestManager.editorHop(['.', '--use-angle=gl', '--rr-editor-angle=gl']), 'gl');
+    assert.equal(PlaytestManager.editorHop(['.']), null);
+    // An editor on OpenGL by hand gives its playtests nothing; one the launcher put there gives them the plan.
+    const host = '--rr-angle-host=editor';
+    assert.deepEqual(PlaytestManager.backendArgs('win32', gl, {}, 'gl'), []);
+    assert.deepEqual(PlaytestManager.backendArgs('win32', gl, {}, 'gl', true), ['--use-angle=gl', '--rr-angle=gl', host]);
+    assert.deepEqual(PlaytestManager.backendArgs('win32', gl, { 'chromium-args': '--use-angle=gl' }, 'gl', true), [], 'a project\x27s own backend still stands');
+    const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
+    assert.ok(main.includes('if (this.relaunchOnMachineBackend()) return;'), 'asked at startup, before the editor is built');
+    // The launcher reads the note and takes only the two names; the note's file name is the editor's.
+    const bat = fs.readFileSync(path.join(__dirname, '..', 'RPGReactor.bat'), 'utf8');
+    assert.ok(bat.includes('%LOCALAPPDATA%\\RPGReactor\\' + PlaytestManager.EDITOR_ANGLE_FILE));
+    assert.ok(bat.includes('if /i "%RR_ANGLE%"=="gl" set "RR_ANGLE_ARGS=--use-angle=gl --rr-editor-angle=gl"'));
+    assert.ok(bat.includes('if /i "%RR_ANGLE%"=="d3d11on12" set "RR_ANGLE_ARGS=--use-angle=d3d11on12 --rr-editor-angle=d3d11on12"'));
+    assert.ok(bat.includes('start "" "%NW_BINARY%" . %RR_ANGLE_ARGS%'));
+});
+
+test('a session of play is logged only when the user\'s folder asks for it', () => {
+    const start = source.indexOf('const ReactorPlayLog = {'), end = source.indexOf('\nclass Main {');
+    assert.ok(start > 0 && end > start);
+    const L = new Function(source.slice(start, end) + '\nreturn ReactorPlayLog;')();
+    // No NW.js, no folder: nothing is started, timed or written.
+    assert.equal(L.folder(), '');
+    assert.equal(L.start(), false);
+    // A line is the readings that are there, each as key=value; a game not up yet gives the frames alone.
+    L._frames = 120; L._worst = 41.6; L._late = 3;
+    const line = L.line(2000);
+    assert.match(line, /^\d\d:\d\d:\d\d fps=60 worst=42 late=3/);
+    const written = [];
+    L._fs = { appendFileSync: (file, text) => written.push([file, text]) }; L._file = 'play-log.txt';
+    L.write('a line');
+    assert.deepEqual(written, [['play-log.txt', 'a line\n']]);
+    assert.ok(source.includes('ReactorPlayLog.start();'), 'asked once, as the game boots');
+    assert.ok(source.includes('"play-log.on"'), 'the switch is a file beside the graphics record');
+});

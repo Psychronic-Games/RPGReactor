@@ -399,11 +399,8 @@ class EventCommandPicker {
 
         this.modal.appendChild(container);
 
-        // Close on background click
-        this.modal.addEventListener('click', (e) => {
-            // A click on the backdrop no longer closes the dialog: an accidental
-            // click beside it must never cost in-progress work. Close deliberately.
-        });
+        // A click on the backdrop does not close the dialog: an accidental
+        // click beside it must never cost in-progress work. Close deliberately.
 
         document.body.appendChild(this.modal);
     }
@@ -454,6 +451,8 @@ class EventCommandPicker {
             tab.dataset.commandTab = String(index);
             tab.addEventListener('click', () => {
                 this.currentTab = index;
+                // A search shows every tab's matches: choosing a tab leaves the search for that tab's own list.
+                this.query = '';
                 this.renderContent();
                 // The redraw replaced the tab that held the focus: the new one takes it, so Escape and Tab still answer.
                 this.modal.querySelector(`[data-command-tab="${index}"]`)?.focus({ preventScroll: true });

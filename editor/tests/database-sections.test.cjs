@@ -1120,7 +1120,6 @@ test('the shell folds the Tactics card in a Classic project and opens it once th
     ui.currentProject = { path: '/game' };
     ui._databasePage = 'armors';
     const state = () => [folded(tactical.section), folded(combat.section)];
-    assert.equal(ui.usesMapBattles(), false);
     assert.deepEqual(ui.battleModes(), { tactical: false, action: false });
     ui.refreshDatabaseSections();
     assert.equal(folded(cards.Tactics.section), true, 'Classic: folded');
@@ -1128,7 +1127,6 @@ test('the shell folds the Tactics card in a Classic project and opens it once th
     assert.deepEqual(state(), [true, true], 'Classic: both battle cards folded');
     assert.equal(folded(cards.Note.section), false);
     system.reactorBattle.mode = 'tactical';
-    assert.equal(ui.usesMapBattles(), true);
     assert.deepEqual(ui.battleModes(), { tactical: true, action: false });
     ui.refreshDatabaseSections();
     assert.equal(folded(cards.Tactics.section), false, 'Tactical: open');
@@ -1146,7 +1144,6 @@ test('the shell folds the Tactics card in a Classic project and opens it once th
     assert.equal(folded(cards.Tactics.section), true, 'while the files are read');
     finish({ tactical: false, action: true });
     await new Promise(resolve => setImmediate(resolve));
-    assert.equal(ui.usesMapBattles(), true);
     assert.deepEqual(ui.battleModes(), { tactical: false, action: true });
     assert.equal(folded(cards.Tactics.section), false);
     assert.equal(folded(action.section), false);

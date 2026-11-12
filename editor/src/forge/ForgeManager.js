@@ -198,17 +198,26 @@ class ForgeManager {
      */
     async requestClose() {
         if (!this.workspaceModal || this.workspaceModal.style.display === 'none') return false;
-        const tool = FORGE_TOOLS.find(entry => entry.id === this.activeToolId);
-        const instance = tool && this[tool.getter];
-        if (instance && typeof instance.holdsWork === 'function' && instance.holdsWork()) {
-            const tt = text => (window.I18n ? window.I18n.tText(text) : text);
-            const discard = typeof RRDialog === 'undefined' ? false : await RRDialog.confirm(
-                `${tt('Discard the unsaved changes in')} ${this._t(tool.nameKey)}?`,
-                { title: tt('Unsaved Changes'), ok: tt('Discard Changes'), danger: true });
-            if (!discard) return false;
-        }
+        if (this._holdsWork() && !await this._confirmDiscard()) return false;
         this.close();
         return true;
+    }
+
+    /** The open tool has work a close or a switch to another tool would throw away. */
+    _holdsWork() {
+        const tool = FORGE_TOOLS.find(entry => entry.id === this.activeToolId);
+        const instance = tool && this[tool.getter];
+        return !!(instance && typeof instance.holdsWork === 'function' && instance.holdsWork());
+    }
+
+    /** Asks whether to drop the open tool's unsaved work. Resolves true to go on. */
+    async _confirmDiscard() {
+        const tool = FORGE_TOOLS.find(entry => entry.id === this.activeToolId);
+        const tt = text => (window.I18n ? window.I18n.tText(text) : text);
+        if (typeof RRDialog === 'undefined') return false;
+        return RRDialog.confirm(
+            `${tt('Discard the unsaved changes in')} ${this._t(tool.nameKey)}?`,
+            { title: tt('Unsaved Changes'), ok: tt('Discard Changes'), danger: true });
     }
 
     /**
@@ -312,8 +321,16 @@ class ForgeManager {
         const tool = FORGE_TOOLS.find(t => t.id === toolId);
         if (!tool || this.activeToolId === toolId) return;
 
-        if (!this[tool.getter]) this[tool.getter] = tool.ctor();
-        this.activeToolId = toolId;
-        this._renderWorkspace();
+        const from = this.activeToolId;
+        const leave = () => {
+            if (!this[tool.getter]) this[tool.getter] = tool.ctor();
+            this.activeToolId = toolId;
+            this._renderWorkspace();
+        };
+        // A running project tool is closed by the switch: ask first, as closing the Forge does.
+        if (!this._holdsWork()) { leave(); return; }
+        this._confirmDiscard().then(discard => {
+            if (discard && this.activeToolId === from && this.workspaceModal) leave();
+        });
     }
 }

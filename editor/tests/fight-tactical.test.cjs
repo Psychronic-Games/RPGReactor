@@ -238,6 +238,14 @@ test('heights on a 3D map: a rise within the jump is hopped, a wall is not climb
     const level = { ...fight.preview(foe(w, 1)) };
     assert.equal(level.height, 0);
     assert.ok(high.damageMin > level.damageMin, `${high.damageMin} > ${level.damageMin}`);
+    // A formula written to change the battle does not change it for a forecast, and still gives its number.
+    const struck = fight.battler(foe(w, 1)), hp = struck.hp, formula = w.$dataSkills[1].damage.formula;
+    w.$dataSkills[1].damage.formula = `b._rrPoked = 1; b.gainHp(-5); v[3] = 7; ${formula}`;
+    const guarded = { ...fight.preview(foe(w, 1)) };
+    w.$dataSkills[1].damage.formula = formula;
+    assert.deepEqual([struck.hp, struck._rrPoked, w.$gameVariables._data[3] === 7], [hp, undefined, false]);
+    assert.deepEqual([guarded.damageMin, guarded.damageMax], [level.damageMin, level.damageMax]);
+    assert.ok(level.damageMax > 0);
 });
 
 test('height pays: a shooter on a roof reaches further and shoots over half cover; the world\'s edge query decides climbs and their cost', () => {

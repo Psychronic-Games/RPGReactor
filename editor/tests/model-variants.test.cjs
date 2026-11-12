@@ -377,7 +377,12 @@ test('every place a model is chosen or drawn passes its variant on', () => {
     assert.match(read('editor/src/MapEditor3D.js'), /Reactor3D\.readModelEffects\(sidecar, spec\)/);
     assert.match(read('editor/src/MapEditor3D.js'), /prop\.texture, prop\.variant \|\| ''/, 'a placed model is rebuilt when its variant changes');
     assert.match(read('editor/src/utils/ModelPropsPreview2D.js'), /readModelEffects\(template\.userData\.reactorSidecar \|\| \{\}, spec\)/);
-    assert.match(read('editor/src/EventManager.js'), /\$\{spec\.variant \|\| ''\}@\$\{pixels\}/, 'the flat map\'s picture of an event is per variant');
+    // The picture is kept by the whole normalized spec, which carries the variant (and the turn, faces and texture).
+    assert.match(read('editor/src/EventManager.js'), /const spec = Reactor3D\.normalizeModelSpec\(raw\);[\s\S]{0,700}?const key = `\$\{JSON\.stringify\(spec\)\}@\$\{pixels\}:\$\{direction\}`;/, 'the flat map\'s picture of an event is per variant');
+    const pictureKey = variant => JSON.stringify(R._normalizeModelSpecNow({ name: 'Vehicles/Tank', size: 3, ...(variant ? { variant } : {}) }));
+    assert.notEqual(pictureKey('Black'), pictureKey(''), 'a variant\'s picture is not the plain model\'s');
+    assert.notEqual(pictureKey('Black'), pictureKey('Parade'), 'nor another variant\'s');
+    assert.equal(pictureKey('Black'), pictureKey('Black'));
     assert.match(read('editor/src/event/EventPageEditor.js'), /ModelVariantsPanel\.wear\(mesh, project\.path, model\.name, model\.variant\)/);
     // The game: every instance is prepared with its spec.
     const models = read('runtime/reactor_3d_models.js');

@@ -420,7 +420,6 @@
      */
     ReactorPhysics.RESTS = true;
     ReactorPhysics.REST_UPDATES = 12;
-    ReactorPhysics.rested = 0;
     const REST = new WeakMap();
     /** Whether `character` is at rest as `rest` recorded it, at update `tick`. */
     ReactorPhysics.atRest = function(character, rest, tick) {
@@ -440,7 +439,7 @@
             rest = REST.get(character);
             const fresh = !rest;
             if (fresh) REST.set(character, rest = { valid: false, map: null, x: 0, y: 0, tx: 0, ty: 0, ground: 0, alt: 0, at: 0 });
-            else if (this.atRest(character, rest, tick)) { this.rested++; return; }
+            else if (this.atRest(character, rest, tick)) return;
             rest.valid = false;
             // A map's events all get their record in its first update: each is put back by its own share, so they do
             // not all come due in the same update for good (the work saved, back as a spike every REST_UPDATES).

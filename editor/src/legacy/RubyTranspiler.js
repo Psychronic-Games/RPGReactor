@@ -114,6 +114,9 @@
         const isKw = (v) => is('kw', v);
         const expect = (type, value) => { if (!is(type, value)) fail(`expected ${value || type}`); return next(); };
         const skipTerms = () => { while (is('nl') || isOp(';')) next(); };
+        // In `while cond do` and `for x in list do` the `do` opens the loop's body, not a block on the last name before it.
+        let loopHead = 0;
+        const head = (f) => { loopHead++; try { return f(); } finally { loopHead--; } };
 
         function body(...stops) {
             const out = [];
@@ -151,7 +154,7 @@
             }
             if (isKw('while') || isKw('until')) {
                 const negate = next().value === 'until';
-                let cond = expression(); if (negate) cond = { t: 'not', e: cond };
+                let cond = head(expression); if (negate) cond = { t: 'not', e: cond };
                 if (isKw('do')) next();
                 const node = { t: 'while', cond, body: body('end') };
                 expect('kw', 'end');
@@ -162,7 +165,7 @@
                 next();
                 const name = expect('id').value;
                 expect('kw', 'in');
-                const iter = expression();
+                const iter = head(expression);
                 if (isKw('do')) next();
                 const node = { t: 'for', name, iter, body: body('end') };
                 expect('kw', 'end');
@@ -187,7 +190,7 @@
             }
             if (isKw('break')) { next(); return { t: 'break' }; }
             if (isKw('next')) { next(); return { t: 'continue' }; }
-            if (isKw('return')) { next(); return { t: 'return', e: is('nl') || isOp(';') || is('eof') ? null : expression() }; }
+            if (isKw('return')) { next(); return { t: 'return', e: is('nl') || isOp(';') || is('eof') || isKw('if') || isKw('unless') ? null : expression() }; }
             // `name (a, b)`: Ruby reads a spaced parenthesised list after a method name as its arguments.
             if (is('id') && peek(1).type === 'op' && peek(1).value === '(' && peek(1).space && !isAssignmentAhead()) {
                 const name = next().value;
@@ -298,7 +301,7 @@
                 expect('op', '}');
                 return { params, body: b };
             }
-            if (isKw('do')) {
+            if (isKw('do') && !loopHead) {
                 next();
                 const params = blockParams();
                 const b = body('end');
@@ -399,8 +402,8 @@
     // Methods every kind of value has in both languages.
     const COMMON = {
         to_i: (r) => `Math.trunc(Number(${r}))`, to_f: (r) => `Number(${r})`, to_s: (r) => `String(${r})`, round: (r, a) => (a.length ? `Number(Number(${r}).toFixed(${a[0]}))` : `Math.round(${r})`),
-        floor: (r) => `Math.floor(${r})`, ceil: (r) => `Math.ceil(${r})`, abs: (r) => `Math.abs(${r})`, zero: (r) => `(${r} === 0)`, 'nil?': (r) => `(${r} == null)`,
-        between: (r, a) => `((v) => v >= ${a[0]} && v <= ${a[1]})(${r})`, 'between?': (r, a) => `((v) => v >= ${a[0]} && v <= ${a[1]})(${r})`,
+        floor: (r) => `Math.floor(${r})`, ceil: (r) => `Math.ceil(${r})`, abs: (r) => `Math.abs(${r})`, 'zero?': (r) => `(${r} === 0)`, 'nil?': (r) => `(${r} == null)`,
+        'between?': (r, a) => `((v) => v >= ${a[0]} && v <= ${a[1]})(${r})`,
         size: (r) => `${r}.length`, length: (r) => `${r}.length`, count: (r, a, b) => (b ? `${r}.filter(${b}).length` : a.length ? `${r}.filter(x => x === ${a[0]}).length` : `${r}.length`),
         'empty?': (r) => `(${r}.length === 0)`, 'include?': (r, a) => `${r}.includes(${a[0]})`, first: (r) => `${r}[0]`, last: (r) => `${r}[${r}.length - 1]`,
         sample: (r) => `((a) => a[Math.randomInt(a.length)])(${r})`, shuffle: (r) => `((a) => a.slice().sort(() => Math.random() - 0.5))(${r})`,
@@ -442,10 +445,27 @@
         system: { save_disabled: '!$.isSaveEnabled()', menu_disabled: '!$.isMenuEnabled()', encounter_disabled: '!$.isEncounterEnabled()', playtime: '$.playtime()', save_count: '$.saveCount()', battle_count: '$.battleCount()',
             playtime_s: '$.playtimeText()', battle_bgm: '$.battleBgm()', timer: '$gameTimer._frames', timer_working: '$gameTimer.isWorking()' },
         followers: { visible: '$.isVisible()', 'visible?': '$.isVisible()', gather: '$.gather()', 'gather?': '$.areGathering()' },
-        timer: { sec: '$.seconds()', start: '$.start(%0 * 60)', stop: '$.stop()', 'working?': '$.isWorking()' },
+        // Ace's Game_Timer#start takes frames, as MZ's does (Control Timer multiplies its seconds before calling it).
+        timer: { sec: '$.seconds()', start: '$.start(%0)', stop: '$.stop()', 'working?': '$.isWorking()' },
         screen: { start_fadeout: '$.startFadeOut(%0)', start_fadein: '$.startFadeIn(%0)', start_tone_change: '$.startTint(%0, %1)', start_flash: '$.startFlash(%0, %1)', start_shake: '$.startShake(%0, %1, %2)', pictures: '$._pictures', weather: '$.changeWeather(%0, %1, %2)' },
         temp: { reserve_common_event: '$.reserveCommonEvent(%0)', 'common_event_reserved?': '$.isCommonEventReserved()', fade_type: '($._rrFadeType ?? 0)' },
         message: { 'busy?': '$.isBusy()', add: '$.add(%0)', texts: '$._texts', face_name: '$._faceName', background: '$._background', position: '$._positionType' }
+    };
+    /**
+     * Where an older engine's method has the same name as Ace's and other arguments (options.engine 'xp' or 'vx').
+     * XP's party and actors take database ids where Ace takes the records, and its party list is `actors`; XP and
+     * VX number the weather where MZ names it. Written the Ace way these run and do nothing. [template, kind].
+     */
+    const WEATHER_BY_NUMBER = ['$.changeWeather((["none", "rain", "storm", "snow"][%0] || "none"), %1, %2)'];
+    const ENGINE_OBJECTS = {
+        xp: {
+            party: { actors: ['$.members()', 'array:actor'], item_number: ['$.numItems($dataItems[%0])', 'number'], weapon_number: ['$.numItems($dataWeapons[%0])', 'number'], armor_number: ['$.numItems($dataArmors[%0])', 'number'],
+                gain_item: ['$.gainItem($dataItems[%0], %1)'], gain_weapon: ['$.gainItem($dataWeapons[%0], %1)'], gain_armor: ['$.gainItem($dataArmors[%0], %1)'],
+                lose_item: ['$.loseItem($dataItems[%0], %1)'], lose_weapon: ['$.loseItem($dataWeapons[%0], %1)'], lose_armor: ['$.loseItem($dataArmors[%0], %1)'] },
+            actor: { 'skill_learn?': ['$.isLearnedSkill(%0)', 'bool'] },
+            screen: { weather: WEATHER_BY_NUMBER }
+        },
+        vx: { screen: { weather: WEATHER_BY_NUMBER } }
     };
     /** Globals and what kind of object each is. */
     const GLOBALS = { $game_party: ['$gameParty', 'party'], $game_player: ['$gamePlayer', 'character'], $game_map: ['$gameMap', 'map'], $game_system: ['$gameSystem', 'system'], $game_timer: ['$gameTimer', 'timer'], $game_troop: ['$gameTroop', 'party'], $game_message: ['$gameMessage', 'message'], $game_temp: ['$gameTemp', 'temp'], $game_screen: ['$gameScreen', 'screen'] };
@@ -512,7 +532,7 @@
                 case 'hash': return js('{ ' + n.pairs.map(([k, v]) => `[${gen(k)}]: ${gen(v)}`).join(', ') + ' }', 'any');
                 case 'range': { const a = gen(n.from), b = gen(n.to); return js(`Array.from({ length: (${b}) - (${a})${n.exclusive ? '' : ' + 1'} }, (_, i) => (${a}) + i)`, 'array'); }
                 case 'not': return js('!(' + test(n.e) + ')', 'bool');
-                case 'neg': return js('-(' + gen(n.e) + ')', 'number');
+                case 'neg': { const e = expr(n.e); return js('-(' + e.code + ')', e.kind === 'float' ? 'float' : 'number'); }
                 case 'cond': return js(`(${test(n.cond)} ? ${gen(n.a)} : ${gen(n.b)})`);
                 case 'seq': return js('(' + n.body.map(gen).join(', ') + ')');
                 case 'bin': {
@@ -636,6 +656,14 @@
             if (!n.recv) return bareCall(n, a);
             const recv = expr(n.recv);
             if (recv.kind.startsWith('module:')) return moduleCall(recv.kind.slice(7), n, a);
+            // $game_map.events is a hash of id → event: its values are the events, its keys their ids. Anything
+            // else called on it (a block over the pairs too) has no form here.
+            if (recv.kind === 'events') {
+                if (!n.block && !a.length && n.name === 'values') return js('$gameMap.events()', 'array:character');
+                if (!n.block && !a.length && n.name === 'keys') return js('$gameMap.events().map((e) => e.eventId())', 'array');
+                if (!n.block && !a.length && ['size', 'length', 'count'].includes(n.name)) return js('$gameMap.events().length', 'number');
+                return fail('unknown method ' + n.name + ' on the events list');
+            }
             if (n.block && BLOCK_METHODS[n.name]) {
                 const how = BLOCK_METHODS[n.name];
                 const element = recv.kind.startsWith('array:') ? recv.kind.slice(6) : null;
@@ -646,6 +674,13 @@
                     locals.add(i); blockParamsKinds.set(i, 'number');
                     return js(`for (let ${i} = 0; ${i} < ${recv.code}; ${i}++) { ${within('loop', () => n.block.body.map(stmt)).join(' ')} }`);
                 }
+                // a.upto(b) counts from a to b, b included; the limit is read once, as Ruby reads it.
+                if (how === 'upto') {
+                    if (a.length !== 1) fail('upto');
+                    const i = n.block.params[0] || '_i';
+                    locals.add(i); blockParamsKinds.set(i, 'number');
+                    return js(`for (let ${i} = ${recv.code}, _to = ${a[0]}; ${i} <= _to; ${i}++) { ${within('loop', () => n.block.body.map(stmt)).join(' ')} }`);
+                }
                 if (how.startsWith('!')) return js(`!${recv.code}.${how.slice(1)}(${blockFnOf(n.block)})`, 'bool');
                 if (how === 'count') return js(`${recv.code}.filter(${blockFnOf(n.block)}).length`, 'number');
                 if (how === 'sortBy') return js(`${recv.code}.slice().sort((a, b) => ((f) => f(a) - f(b))(${blockFnOf(n.block)}))`, 'array');
@@ -655,14 +690,15 @@
                 return js(`${recv.code}.${how}(${blockFnOf(n.block)})`, kind);
             }
             if (n.block) fail('block on ' + n.name);
-            if (recv.kind === 'events' || (recv.kind === 'map' && n.name === 'events')) return js('$gameMap', 'events');
+            if (recv.kind === 'map' && n.name === 'events') return js('$gameMap', 'events');
             const member = options.members && options.members[recv.kind + '.' + n.name];
             if (member) return js(fill(member[0], recv.code, a), member[1] || 'any');
             const extra = options.objects && options.objects[recv.kind];
             if (extra && extra[n.name] !== undefined) return js(fill(extra[n.name], recv.code, a), 'any');
+            const older = ENGINE_OBJECTS[options.engine] && ENGINE_OBJECTS[options.engine][recv.kind];
+            if (older && older[n.name]) return js(fill(older[n.name][0], recv.code, a), older[n.name][1] || 'any');
             const table = OBJECTS[recv.kind];
             if (table && table[n.name]) return js(fill(table[n.name], recv.code, a), kindOf(recv.kind, n.name));
-            if (recv.kind === 'map' && n.name === 'events') return js('$gameMap', 'events');
             if (recv.kind === 'map' && n.name === 'screen') return js('$gameScreen', 'screen');
             if (recv.kind === 'map' && n.name === 'data' && !a.length) return js('$gameMap', 'mapdata');
             if (recv.kind === 'screen' && n.name === 'pictures') return js('$gameScreen', 'pictures');
@@ -675,7 +711,9 @@
                 if (!a.length && fields[n.name]) return js(n.name === 'class_id' ? `((o) => o._classId ?? o.classId)(${recv.code})` : `${recv.code}.${fields[n.name]}`);
                 const member = options.members && options.members['actor.' + n.name];
                 if (member) return js(fill(member[0], recv.code, a), member[1] || 'any');
-                if (OBJECTS.actor[n.name] && !['name', 'id'].includes(n.name)) return js(fill(OBJECTS.actor[n.name], recv.code, a), kindOf('actor', n.name));
+                const olderActor = ENGINE_OBJECTS[options.engine] && ENGINE_OBJECTS[options.engine].actor;
+                if (olderActor && olderActor[n.name]) return js(fill(olderActor[n.name][0], recv.code, a), olderActor[n.name][1] || 'any');
+                if (OBJECTS.actor[n.name] &&!['name', 'id'].includes(n.name)) return js(fill(OBJECTS.actor[n.name], recv.code, a), kindOf('actor', n.name));
             }
             if (recv.kind === 'record') {
                 const fields = { id: 'id', name: 'name', icon_index: 'iconIndex', price: 'price', description: 'description', note: 'note', stype_id: 'stypeId', learnings: 'learnings', mp_cost: 'mpCost', tp_cost: 'tpCost' };
@@ -835,7 +873,14 @@
             if (t.t === 'gvar' && options.setters && options.setters[t.name] && op === '=') return js(options.setters[t.name].replace('%v', value));
             if (t.t === 'var') {
                 if (op === '=') localCode.set(t.name, value); else localCode.delete(t.name);
-                if (locals.has(t.name)) return js(`${t.name} = ${combine(t.name, blockParamsKinds.get(t.name))}`);
+                if (locals.has(t.name)) {
+                    const kind = blockParamsKinds.get(t.name);
+                    const code = `${t.name} = ${combine(t.name, kind)}`;
+                    // A local that takes a value of another kind (a number, then nil or a Float) is no longer known
+                    // to be the first: later tests and divisions must look at the value itself.
+                    if (kind && kind !== 'any' && valueNode.kind !== kind) { blockParamsKinds.delete(t.name); declare(t.name); }
+                    return js(code);
+                }
                 if (op !== '=') fail('compound assignment to an undeclared local');
                 locals.add(t.name);
                 if (valueNode.kind !== 'any') blockParamsKinds.set(t.name, valueNode.kind);
@@ -861,6 +906,19 @@
             }
             if (t.t === 'call' && t.recv) {
                 const recv = expr(t.recv);
+                // A family's setter takes the new value: for +=, -= … that is the current value (read through the
+                // family's getter) combined with the right-hand side.
+                const familySetter = () => {
+                    if (!(options.setters && options.setters[recv.kind + '.' + t.name])) return null;
+                    const cur = op === '=' ? null : expr({ t: 'call', recv: t.recv, name: t.name, args: [], block: null });
+                    const v = op === '=' ? value : combine(cur.code, cur.kind);
+                    return js(options.setters[recv.kind + '.' + t.name].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%v', v));
+                };
+                // +=, -= … need the field's current value. Only these fields read it below; on the others the
+                // right-hand side alone would be written, as if it were a plain =.
+                const compound = (recv.kind === 'system' && t.name === 'timer') || (recv.kind === 'actor' && ['hp', 'mp', 'tp'].includes(t.name)) || (recv.kind === 'result' && ['critical', 'missed', 'evaded'].includes(t.name))
+                    || (recv.kind === 'character' && ['opacity', 'move_speed', 'blend_type'].includes(t.name)) || (recv.kind === 'party' && t.name === 'gold');
+                if (op !== '=' && !compound) return familySetter() || fail(`compound assignment to ${recv.kind}.${t.name}`);
                 if (recv.kind === 'map' && t.name === 'name_display') return js(`$gameMap._nameDisplay = ${value}`);
                 if (recv.kind === 'map' && t.name === 'need_refresh') return js(`if (${value}) $gameMap.requestRefresh()`);
                 if (recv.kind === 'temp' && t.name === 'fade_type') return js(`($gameTemp._rrFadeType = ${value})`);
@@ -880,21 +938,15 @@
                 }
                 if (recv.kind === 'character' && ['opacity', 'transparent', 'through', 'direction_fix', 'move_speed', 'blend_type'].includes(t.name)) {
                     const set = { opacity: 'setOpacity', transparent: 'setTransparent', through: 'setThrough', direction_fix: 'setDirectionFix', move_speed: 'setMoveSpeed', blend_type: 'setBlendMode' }[t.name];
-                    return js(`${recv.code}.${set}(${value})`);
+                    const current = { opacity: 'opacity()', move_speed: 'moveSpeed()', blend_type: 'blendMode()' }[t.name];
+                    return js(`${recv.code}.${set}(${op === '=' ? value : combine(`${recv.code}.${current}`)})`);
                 }
                 if (recv.kind === 'followers' && t.name === 'visible') return js(`(${value} ? $gamePlayer.showFollowers() : $gamePlayer.hideFollowers()); $gamePlayer.refresh()`);
                 if (recv.kind === 'actor' && ['hp', 'mp', 'tp'].includes(t.name)) return js(`${recv.code}.set${t.name.toUpperCase()[0]}${t.name.slice(1)}(${combine(`${recv.code}.${t.name}`)})`);
                 if (recv.kind === 'result' && ['critical', 'missed', 'evaded'].includes(t.name)) return js(`(${recv.code}.${t.name} = ${combine(`${recv.code}.${t.name}`)})`);
                 if (recv.kind === 'actor' && t.name === 'name') return js(`${recv.code}.setName(${value})`);
-                if (recv.kind === 'party' && t.name === 'gold') return js(`$gameParty.gainGold((${value}) - $gameParty.gold())`);
-                // A family's setter takes the new value: for +=, -= … that is the current value (read through the
-                // family's getter) combined with the right-hand side.
-                if (options.setters && options.setters[recv.kind + '.' + t.name]) {
-                    const cur = op === '=' ? null : expr({ t: 'call', recv: t.recv, name: t.name, args: [], block: null });
-                    const v = op === '=' ? value : combine(cur.code, cur.kind);
-                    return js(options.setters[recv.kind + '.' + t.name].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%v', v));
-                }
-                return fail(`assignment to ${recv.kind}.${t.name}`);
+                if (recv.kind === 'party' && t.name === 'gold') return js(`$gameParty.gainGold((${combine('$gameParty.gold()', 'number')}) - $gameParty.gold())`);
+                return familySetter() || fail(`assignment to ${recv.kind}.${t.name}`);
             }
             return fail('assignment target');
         }
@@ -905,6 +957,7 @@
                 case 'while': return `while (${test(n.cond)}) { ${within('loop', () => n.body.map(stmt)).join(' ')} }`;
                 case 'for': {
                     let iter = expr(n.iter);
+                    if (iter.kind === 'events') fail('for over the events list');
                     if (iter.kind === 'pictures') iter = js('[null, ...Array.from({ length: 20 }, (_, i) => i + 1)]', 'array:pictureId');
                     locals.add(n.name);
                     if (iter.kind.startsWith('array:')) blockParamsKinds.set(n.name, iter.kind.slice(6));
@@ -918,7 +971,10 @@
                 // In a block's callback, next returns from it; break has no JS form there.
                 case 'break': if (scope[scope.length - 1] === 'fn') fail('break inside a block'); return 'break;';
                 case 'continue': return scope[scope.length - 1] === 'fn' ? 'return;' : 'continue;';
-                case 'return': return n.e ? `return ${gen(n.e)};` : 'return;';
+                // The game runs this text with eval, where a bare return is a syntax error; only a stepped script
+                // (rrRunScript's generator) has a function to return from. In a block's callback it would end the
+                // callback alone and the script would carry on.
+                case 'return': if (!fiber || scope.includes('fn')) fail('return'); return n.e ? `return ${gen(n.e)};` : 'return;';
                 case 'massign': {
                     // One value spreads over the targets as Ruby spreads an array; several are listed.
                     const tmp = '_m' + (massigns++);

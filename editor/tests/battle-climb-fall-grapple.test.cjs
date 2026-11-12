@@ -255,6 +255,10 @@ test('a grapple pulls its wearer up to a roof edge in reach: its own color in th
     assert.ok(F.grappleFor(fight, me), 'ready again after its cooldown');
     fight._tac.grapples[me.id].count = 2;
     assert.equal(F.grappleFor(fight, me), null, 'two uses a battle, both spent');
+    // Undo Move takes the unit back and the grapple with it: it was not used.
+    assert.ok(fight.commandUndoMove(), 'the move can be undone');
+    assert.equal(fight._tac.grapples[me.id], undefined, 'the use and its cooldown are given back');
+    assert.ok(F.grappleFor(fight, me));
 });
 
 test('Grapple as a command: offered before the unit moves, the move range is then only the edges, the cursor on the nearest, Cancel back to the menu', () => {

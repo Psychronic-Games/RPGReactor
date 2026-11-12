@@ -363,7 +363,8 @@
         return {x:from.x+(to.x-from.x)*u,y:from.y+(to.y-from.y)*u,z:(from.z||0)+((to.z||0)-(from.z||0))*u+4*arc*u*(1-u)};
     };
     B.visualIcon=(step,battler,item)=>{
-        const source=step.iconSource||'weapon',equipment=battler?.equips?.()||battler?.weapons?.()||[];
+        // An enemy is asked for its weapons: its equips() is an empty list (never missing) when it has no equipment, and its weapons() is where a Battle Presentation weapon comes from.
+        const source=step.iconSource||'weapon',equipment=(battler?.isEnemy?.()?battler.weapons?.():battler?.equips?.())||battler?.weapons?.()||[];
         return Math.max(0,Math.floor(source==='icon'?step.iconIndex||0:(source==='action'?item:equipment[Math.max(0,(step.equipIndex||1)-1)])?.iconIndex||0));
     };
     B.optionLabel=value=>({allTargets:'All Targets',fadeIn:'Fade In',fadeOut:'Fade Out',elseIf:'Else If',mhp:'Max HP',mmp:'Max MP',atk:'Attack',def:'Defense',mat:'Magic Attack',mdf:'Magic Defense',agi:'Agility',luk:'Luck',hp:'HP',mp:'MP',tp:'TP',bgm:'BGM',bgs:'BGS',se:'SE',front:'In front of the battler',behind:'Behind the battler'}[value]||String(value).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/^./,c=>c.toUpperCase()));

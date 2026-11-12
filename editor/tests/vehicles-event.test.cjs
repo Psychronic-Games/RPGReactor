@@ -173,6 +173,8 @@ test('rowValue: a taken or reserved name is refused with a sentence, and the res
     assert.equal(S.say(taken.problem), 'Another vehicle is already named "bike".');
     assert.equal(S.nameProblem('', ['']), null, 'no name is no problem');
     assert.equal(S.nameProblem('bike', ['tank']), null);
+    assert.equal(S.nameProblem('12').key, 'vehicleCheck.nameReserved', 'only digits would be read as an event number');
+    assert.equal(S.nameProblem('bike 12'), null);
 });
 
 test('an event still called EV and digits takes its type\'s name', () => {

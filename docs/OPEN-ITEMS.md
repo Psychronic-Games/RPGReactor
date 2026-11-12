@@ -1,6 +1,6 @@
-# Open items (2026-11-10)
+# Open items (2026-11-11)
 
-Open during 0.99.5: Character Preview 98, Props 62, runtime 20261110.13. This is the working list for the release in progress; [STATUS.md](STATUS.md#open-work) holds the standing threads and [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md) the questions only the owner can answer. Changes are recorded in the [development changelog](../editor/changelog/0.99.5.md); released export/loading fixes remain in [0.99.3](../editor/changelog/0.99.3.md).
+Open during 0.99.5: Character Preview 98, Props 62, runtime 20261111.16. This is the working list for the release in progress; [STATUS.md](STATUS.md#open-work) holds the standing threads and [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md) the questions only the owner can answer. Changes are recorded in the [development changelog](../editor/changelog/0.99.5.md); released export/loading fixes remain in [0.99.3](../editor/changelog/0.99.3.md).
 
 1. **CI.** Green on [run 41513263959](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959) (2026-11-02, branch `ci/0.99.5-check`; `main` is not pushed yet). The 24 character failures and the five audit advisories are fixed: five regressions in product code, stale fixtures, intended changes recorded in the tests, and `overrides` for `glob` and `minimatch` under nw-builder. Exercise and floor poses now go through `limitLegs`, which moves feet 1.7 to 6 cm in 10 poses and needs a look (owner check [B3](OWNER-QUESTIONS.md)). The two kneeling stretches are the approved hold, so they keep their measured reach through a labelled allowance in `character-3d-poses`. A real `nwbuild` has not run on the overridden packages. Generated models need re-saving to pick up the cloth, seam and clip fixes.
 
@@ -47,7 +47,9 @@ Open during 0.99.5: Character Preview 98, Props 62, runtime 20261110.13. This is
 
 19. **Audit of 2026-11-10.** Twenty-one reviews of the runtime, server, editor, Forge and importers; over eighty findings fixed ([changelog](../editor/changelog/0.99.5.md)), none yet seen in the running game. What was found and left, the parts not read in full, and six decisions for the owner are in [AUDIT-2026-11-10.md](AUDIT-2026-11-10.md). Two older items changed: the white patches on clothing at standard quality (item 14) and the creator showing another outfit than the one picked (item 15) have traced causes and fixes, to be confirmed by making a character; the server's PHP changes (items 14 and 16) are deployed and pass `~/.cache/rr-tests/server-test.cjs`.
 
-20. **Older threads.** Each is unfinished or unconfirmed but has no active work:
+20. **Audit of 2026-11-11.** Twenty-eight reviews of every part of the app and one fixer per report: 362 findings fixed ([changelog](../editor/changelog/0.99.5.md)), none seen in the running game or editor. [AUDIT-2026-11-11.md](AUDIT-2026-11-11.md) holds what was left: 58 decisions for the owner, 24 items for a session with the game on screen, the 38 fixes least proven, and the ranges of the largest files that were not read. The server's PHP changed and needs a deploy and `~/.cache/rr-tests/server-test.cjs`. Item 16's list is older than this audit: some of its entries may be fixed now and are to be checked against the changelog.
+
+21. **Older threads.** Each is unfinished or unconfirmed but has no active work:
     - **Braver:** the corescript port landed at runtime 20261026.2 ([0.99.3 changelog](../editor/changelog/0.99.3.md)); no full playthrough of the game is recorded.
     - **Detached editor windows:** transparency on Linux.
     - **Unused files and the playtest record:** a Demo first-map playtest passed on 2026-10-26 ([Web build](STATUS.md#version-and-validation)); a longer play with the record on has not been done.

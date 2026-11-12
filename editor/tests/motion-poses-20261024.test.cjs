@@ -60,6 +60,22 @@ test('mirror swaps the sides of the pose at the playhead, each turn seen in a mi
     assert.equal(RRMotionEditor.mirrorPart('LeftUpperLeg'), 'RightUpperLeg');
     assert.equal(RRMotionEditor.mirrorPart('mixamorig:RightHand'), 'mixamorig:LeftHand');
     assert.equal(RRMotionEditor.mirrorPart('Spine'), null);
+    // A file's own bones: a lone side letter set off by anything but a letter or a digit.
+    assert.equal(RRMotionEditor.mirrorPart('UpperArm_L'), 'UpperArm_R');
+    assert.equal(RRMotionEditor.mirrorPart('upperarm_r'), 'upperarm_l');
+    assert.equal(RRMotionEditor.mirrorPart('Arm.L'), 'Arm.R');
+    assert.equal(RRMotionEditor.mirrorPart('Leg'), null);
+    // A partner by name counts only when the model has that part.
+    const lone = editorWith([{ part: 'Upright', keys: [key(0.5, [10, 20, 30])] }]);
+    lone.host.partNames = ['Upright', 'Spine'];
+    lone.playhead = 0.5;
+    lone.mirrorPose();
+    assert.deepEqual(lone.motion.tracks.map(t => t.part), ['Upright']);
+    assert.deepEqual(plain(lone.motion.tracks[0].keys[0].rotate), [10, -20, -30]);
+    // In a long motion the shortest step (0.05 s) is under 0.015 of its length: the two poses stay two.
+    const long = editorWith([{ part: 'Spine', keys: [key(0, [0, 0, 0]), key(0.25, [1, 0, 0]), key(0.5, [2, 0, 0]), key(0.75, [3, 0, 0])] }], 360);
+    long.setGap(1, 0.05);
+    assert.equal(long.poseTimes().length, 4);
     const editor = editorWith([
         { part: 'LeftUpperArm', keys: [key(0.5, [10, 20, 30])] },
         { part: 'Spine', keys: [key(0.5, [5, 15, 0])] }

@@ -187,6 +187,8 @@ class StructureWorkshop {
         const at = list.findIndex(record => record && record.id === entry.id);
         if (at >= 0) list[at] = copy; else list[entry.id] = copy;
         db.savedState.structures = typeof db.serialize === 'function' ? db.serialize(list) : JSON.stringify(list);
+        // An open Database's Cancel goes back to the structures as they now are on disk, this one included.
+        db.adoptSavedState?.(['structures']);
     }
 
     /** Leave the plot: ask about unsaved work, bring the previous map back, and the Database if asked. */

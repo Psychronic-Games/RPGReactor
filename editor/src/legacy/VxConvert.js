@@ -64,6 +64,8 @@
                     else if (type === 7) out = [start, end, op, 3, 7, num(p[4]), 0];
                     break;
                 }
+                // VX's transfer has no fade choice: Scene_Map#update_transfer_player always fades through black.
+                case 201: out = p.slice(0, 5).concat([0]); break;
                 case 236: out = [WEATHER[num(p[0])] || 'none', num(p[1]), num(p[2]), !!p[3]]; break;
                 case 302: out = [num(p[0]), num(p[1]), 0, 0, !!p[2]]; break;
                 case 605: out = [num(p[0]), num(p[1]), 0, 0]; break;
@@ -167,6 +169,11 @@
         const type = base < 0 ? (mp ? 4 : 3) : drain ? (mp ? 6 : 5) : (mp ? 2 : 1);
         return { type, elementId: list(r.element_set)[0] || 0, formula: damageFormula(r), variance: num(r.variance, 20), critical: false };
     }
+    /** MZ's Guard state (the guard flag for one turn), under the id the appended Guard skill adds. XpDatabase uses it too. */
+    const guardState = (id) => ({
+        id, autoRemovalTiming: 2, chanceByDamage: 100, iconIndex: 0, maxTurns: 1, message1: '', message2: '', message3: '', message4: '', minTurns: 1, motion: 0, name: 'Guard', note: '', overlay: 0,
+        priority: 0, removeAtBattleEnd: true, removeByDamage: false, removeByRestriction: true, removeByWalking: false, restriction: 0, stepsToRemove: 100, traits: [{ code: 62, dataId: 1, value: 0 }], messageType: 1
+    });
     const stateEffects = (r) => list(r.plus_state_set).map(id => ({ code: 21, dataId: id, value1: 1, value2: 0 })).concat(list(r.minus_state_set).map(id => ({ code: 22, dataId: id, value1: 1, value2: 0 })));
 
     /**
@@ -194,6 +201,8 @@
         const skillsSrc = list(vx.skills);
         const lastSkill = skillsSrc.reduce((m, s) => Math.max(m, s ? s.id : 0), 0);
         const attackSkillId = lastSkill + 1, guardSkillId = lastSkill + 2, escapeSkillId = lastSkill + 3;
+        // State 2 is the game's own (MZ's Guard skill adds MZ's state 2): the Guard state follows the game's last.
+        const guardStateId = list(vx.states).reduce((m, s) => Math.max(m, s ? s.id : 0), 0) + 1;
         const actorsSrc = list(vx.actors), classesSrc = list(vx.classes);
         const lastActor = actorsSrc.reduce((m, a) => Math.max(m, a ? a.id : 0), 0);
         const weaponTypes = equipTypes(classesSrc, vx.weapons, 'weapon_set');
@@ -269,7 +278,7 @@
             occasion: 1, repeats: 1, requiredWtypeId1: 0, requiredWtypeId2: 0, scope: 1, speed: 0, stypeId: 0, successRate: 100, tpCost: 0, tpGain: 0 };
         skills[attackSkillId] = attack;
         skills[guardSkillId] = Object.assign({}, attack, { id: guardSkillId, animationId: 0, damage: { type: 0, elementId: 0, formula: '0', variance: 20, critical: false },
-            effects: [{ code: 21, dataId: 2, value1: 1, value2: 0 }], hitType: 0, message1: ' guards.', name: 'Guard', scope: 11, speed: 2000 });
+            effects: [{ code: 21, dataId: guardStateId, value1: 1, value2: 0 }], hitType: 0, message1: ' guards.', name: 'Guard', scope: 11, speed: 2000 });
         skills[escapeSkillId] = Object.assign({}, attack, { id: escapeSkillId, animationId: 0, damage: { type: 0, elementId: 0, formula: '0', variance: 20, critical: false },
             effects: [{ code: 41, dataId: 0, value1: 0, value2: 0 }], hitType: 0, message1: ' fled.', name: 'Escape', scope: 11 });
 
@@ -303,7 +312,7 @@
         const enemies = byId(vx.enemies, e => {
             const traits = rankTraits(e.element_ranks, e.state_ranks);
             traits.push({ code: 22, dataId: 0, value: num(e.hit, 95) / 100 }, { code: 22, dataId: 1, value: num(e.eva) / 100 }, { code: 22, dataId: 2, value: e.has_critical ? 0.1 : 0 },
-                { code: 31, dataId: 1, value: 0 }, { code: 35, dataId: attackSkillId, value: 1 });
+                { code: 35, dataId: attackSkillId, value: 1 });   // no attack element: VX's Game_Battler#element_set is empty for an enemy
             const drop = (d) => (d && d.kind ? { kind: num(d.kind), dataId: [0, num(d.item_id), num(d.weapon_id), num(d.armor_id)][num(d.kind)] || 1, denominator: Math.max(1, num(d.denominator, 1)) } : { kind: 0, dataId: 1, denominator: 1 });
             return {
                 id: e.id, battlerHue: num(e.battler_hue), battlerName: str(e.battler_name), dropItems: [drop(e.drop_item1), drop(e.drop_item2), { kind: 0, dataId: 1, denominator: 1 }],
@@ -325,7 +334,7 @@
             if (st.reduce_hit_ratio) traits.push({ code: 22, dataId: 0, value: -0.5 });
             for (const id of list(st.element_set)) traits.push({ code: 11, dataId: id, value: 0.5 });
             for (const id of list(st.state_set)) traits.push({ code: 14, dataId: id, value: 1 });
-            // Restrictions: 1 silent (skills sealed), 2 berserk (attacks enemies), 3 confused (attacks anyone), 4 can't move, 5 can't move or parry.
+            // Restrictions: 1 silent (skills sealed), 2 berserk (attacks enemies), 3 confused (attacks its own side), 4 can't move, 5 can't move or parry.
             const r = num(st.restriction);
             if (r === 1) traits.push({ code: 42, dataId: 1, value: 1 });
             if (r === 5) traits.push({ code: 22, dataId: 1, value: -1 });
@@ -336,9 +345,10 @@
                 id: st.id, autoRemovalTiming: hold && prob ? 2 : 0, chanceByDamage: 100, iconIndex: num(st.icon_index), maxTurns: Math.max(1, maxTurns), minTurns: Math.max(1, hold),
                 message1: str(st.message1), message2: str(st.message2), message3: str(st.message3), message4: str(st.message4), messageType: 1, motion: 0, name: str(st.name), note: str(st.note), overlay: 0,
                 priority: num(st.priority, 5) * 10, releaseByDamage: !!st.release_by_damage, removeAtBattleEnd: !!st.battle_only, removeByDamage: !!st.release_by_damage,
-                removeByRestriction: false, removeByWalking: false, restriction: [0, 0, 1, 2, 4, 4][r] ?? 0, stepsToRemove: 100, traits
+                removeByRestriction: false, removeByWalking: false, restriction: [0, 0, 1, 3, 4, 4][r] ?? 0, stepsToRemove: 100, traits
             };
         });
+        states[guardStateId] = guardState(guardStateId);
         return { actors, classes, skills, items, weapons, armors, enemies, states, attackSkillId, guardSkillId, escapeSkillId,
             weaponTypes: weaponTypes.names, armorTypes: armorTypes.names };
     }
@@ -379,6 +389,7 @@
         out.tileSize = 32; out.iconSize = 24; out.faceSize = 96;
         Object.assign(out.advanced, { screenWidth: 544, screenHeight: 416, uiAreaWidth: 544, uiAreaHeight: 416, fontSize: 20, lineHeight: 24, windowPadding: 16, windowMargin: 2, textOutlineWidth: 0, windowOpacity: 200 });
         out.rrGuardSkillId = db.guardSkillId;
+        out.rrRgssFades = true;   // VX's 30-frame fades, and the black held 15 frames on a transfer, as Ace's
         out.rrTitleShutdown = (typeof t.shutdown === 'string' && t.shutdown.trim()) || 'Shutdown';   // VX's title ends with it
         out.rrBalloonSize = 32;
         out.locale = 'en_US';
@@ -404,7 +415,7 @@
         return out;
     }
 
-    const api = { battlebackTable, aceCommands, reshapeMap, tilesetFlags, applyAreas, database, system, damageFormula, equipTypes, BUTTON, ACTOR_DATA, ENEMY_DATA, SOUND_SLOTS };
+    const api = { battlebackTable, aceCommands, reshapeMap, tilesetFlags, applyAreas, database, system, damageFormula, equipTypes, guardState, BUTTON, ACTOR_DATA, ENEMY_DATA, SOUND_SLOTS };
     root.RRVxConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -162,7 +162,7 @@ class EventPageEditor {
                         ${!conditions.variableValid ? 'disabled' : ''}>
                     #${String(conditions.variableId || 1).padStart(4, '0')}: ${rrEscapeHtml(variables.find(v => v.id === (conditions.variableId || 1))?.name || `${tt('Variable')} 0001`)}
                 </button>
-                <span style="flex-shrink: 0; font-size: 12px; color: var(--color-text-muted);" data-rr-i18n-skip>&ge;</span>
+                <span style="flex-shrink: 0; font-size: 12px; color: var(--color-text-muted);" data-rr-i18n-skip>${EventPageEditor.variableSign(conditions)}</span>
                 <input type="number"
                        class="condition-input"
                        data-field="variableValue"
@@ -225,6 +225,7 @@ class EventPageEditor {
                     ${this.generateOptionsFromArray(actors, conditions.actorId || 1)}
                 </select>
             </div>
+            ${EventPageEditor.timerConditionLines(conditions).map(line => `<div style="margin-bottom: 4px; font-size: 12px; color: var(--color-text-muted);">${rrEscapeHtml(tt(line.label))}: ${rrEscapeHtml(tt('{n} seconds or less left').replace('{n}', line.seconds))}</div>`).join('')}
         `;
 
         section.appendChild(this.createFightHookRow(page));
@@ -233,6 +234,23 @@ class EventPageEditor {
         this.attachConditionListeners(section);
 
         return section;
+    }
+
+    /**
+     * How the page's variable condition compares, as the game reads it (Game_Event.meetsConditions): at least,
+     * unless a page imported from RPG Maker 2000/2003 carries another comparison in `rrVariableOp`.
+     */
+    static variableSign(conditions) {
+        const signs = ['=', '&ge;', '&le;', '&gt;', '&lt;', '&ne;'];
+        return signs[conditions && conditions.rrVariableOp] || '&ge;';
+    }
+
+    /** The timer conditions an imported page waits on (`rrTimerSec`, `rrTimer2Sec`): shown, not edited here. */
+    static timerConditionLines(conditions) {
+        const lines = [];
+        if (conditions && conditions.rrTimerSec !== undefined) lines.push({ label: 'Timer', seconds: Number(conditions.rrTimerSec) || 0 });
+        if (conditions && conditions.rrTimer2Sec !== undefined) lines.push({ label: 'Timer 2', seconds: Number(conditions.rrTimer2Sec) || 0 });
+        return lines;
     }
 
     /**
@@ -304,7 +322,9 @@ class EventPageEditor {
         };
         select.addEventListener('change', () => {
             if (!select.value) delete page.rrFightHook;
-            else page.rrFightHook = { on: select.value };
+            // A region hook without its region is no hook to the game, so it is stored with the region the row is
+            // about to show; the other moments need no field until one is changed.
+            else page.rrFightHook = select.value === 'unitEnters' ? EventPageEditor.hookValue(select.value, {}) : { on: select.value };
             fill();
         });
         fill();
@@ -432,7 +452,7 @@ class EventPageEditor {
 
         const row = RRVehicles.vehicleOf(this.parentEditor.currentEvent);
         const sheet = row && this.databaseManager.data.vehicles?.[row.type]?.sheet;
-        const currentMap = this.parentEditor.currentMap || window.reactor?.eventManager?.currentMap;
+        const currentMap = this.parentEditor._currentMap?.() || window.reactor?.eventManager?.currentMap;
         const flat = currentMap && !window.Reactor3D?.isMap3D?.(currentMap) && !/<3d>/i.test(currentMap.note || '');
         const inheritedSprite = !image.characterName && !image.tileId && sheet?.characterName;
         if (inheritedSprite && flat) image = {...image,...sheet};
@@ -461,12 +481,8 @@ class EventPageEditor {
             return;
         }
 
-        console.log('renderCharacterPreview - image data:', image);
-        console.log('renderCharacterPreview - tileId:', image.tileId);
-
         // Check if this is a tileset graphic (tileId > 0)
         if (image.tileId && image.tileId > 0) {
-            console.log('Rendering tileset preview for tileId:', image.tileId);
             requestAnimationFrame(() => {
                 if (!canvas.isConnected) return;
                 this.renderTilesetPreview(canvas, fit(), image.tileId);
@@ -495,8 +511,6 @@ class EventPageEditor {
         const path = require('path');
         const imgPath = RRAssetFiles.imageUrlFor(
             path.join(currentProject.path, 'img', 'characters'), image.characterName);
-
-        console.log('Loading character preview:', imgPath);
 
         img.onload = () => {
             if (!canvas.isConnected) return;
@@ -833,12 +847,15 @@ class EventPageEditor {
         const tilemapManager = this.projectController.getTilemapManager();
         if (!tilemapManager || !tilemapManager.currentMap) return;
 
-        // Get current tileset
-        const fs = require('fs');
-        const tilesetsPath = path.join(currentProject.path, 'data', 'Tilesets.json');
-        if (!fs.existsSync(tilesetsPath)) return;
-
-        const tilesets = RRJson.parse(fs.readFileSync(tilesetsPath));
+        // The map's tileset as the open Database holds it (the file is read only when the Database has none:
+        // parsing every tileset's flags on each draw, for one file name, was the cost of a window resize).
+        let tilesets = this.databaseManager?.data?.tilesets;
+        if (!Array.isArray(tilesets) || !tilesets.length) {
+            const fs = require('fs');
+            const tilesetsPath = path.join(currentProject.path, 'data', 'Tilesets.json');
+            if (!fs.existsSync(tilesetsPath)) return;
+            tilesets = RRJson.parse(fs.readFileSync(tilesetsPath));
+        }
         const tilesetId = tilemapManager.currentMap.tilesetId || 1;
         const currentTileset = tilesets[tilesetId];
         if (!currentTileset) return;
@@ -1482,6 +1499,9 @@ class EventPageEditor {
         picker.show(current, result => {
             this.setPageModelSpec(pageIndex, result);
             this.parentEditor.renderCurrentPage();
+        }, {
+            // Cancelled with no model chosen: the 3D box, ticked to open the picker, goes back to what the page has.
+            onCancel: () => { if (!this.pageModelSpec(pageIndex)) this.parentEditor.renderCurrentPage(); }
         });
     }
 

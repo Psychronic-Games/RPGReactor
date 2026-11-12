@@ -144,8 +144,8 @@ class BattleTestConfigModal {
         // The party assembled here is the battle test party whether or not a test was started, so the troop preview can field it.
         const system = this.databaseManager?.getSystem?.();
         if (system && JSON.stringify(system.testBattlers || null) !== JSON.stringify(this.battlers)) {
+            // (The Database finds unsaved work by comparing its data, so nothing more is needed here.)
             system.testBattlers = JSON.parse(JSON.stringify(this.battlers));
-            this.databaseManager.markDirty?.('system');
         }
         if (typeof this.onClose === 'function') this.onClose();
     }
@@ -167,12 +167,10 @@ class BattleTestConfigModal {
         if (!row) return;
         row.innerHTML = '';
 
-        const actors = this.databaseManager.getActors();
-
         this.battlers.forEach((battler, idx) => {
             const actor = this.databaseManager.getActor(battler.actorId);
             const tab = document.createElement('button');
-            tab.textContent = actor ? actor.name : `${this._t('Actor')} #${battler.actorId}`;
+            tab.textContent = actor ? actor.name : !(Number(battler.actorId) > 0) ? this._t('(None)') : `${this._t('Actor')} #${battler.actorId}`;
             tab.style.cssText = `
                 padding: 4px 12px; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px;
                 ${idx === this.selectedBattlerIndex
@@ -302,6 +300,16 @@ class BattleTestConfigModal {
         const actorRow = this.createFormRow('Actor:');
         const actorSelect = document.createElement('select');
         actorSelect.style.cssText = 'width:100%;min-width:0;background:var(--color-bg-menubar);border:1px solid var(--color-border-input);color:var(--color-text);padding:4px;border-radius:3px;';
+        // A slot with no actor (RPG Maker stores unused slots as actor 0) says
+        // so, instead of showing the first actor while holding none: choosing
+        // that first actor then changes the slot.
+        if (!actor) {
+            const none = document.createElement('option');
+            none.value = Number(battler.actorId) || 0;
+            none.textContent = this._t('(None)');
+            none.selected = true;
+            actorSelect.appendChild(none);
+        }
         actors.forEach(actor => {
             const opt = document.createElement('option');
             opt.value = actor.id;

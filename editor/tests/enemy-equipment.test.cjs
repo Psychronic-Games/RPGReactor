@@ -253,12 +253,38 @@ test('the picker offers what fits the slot and filters by name or number', () =>
     assert.deepEqual(RREnemyEquipment.matches(1, db, '').map(m => m.id), [1], 'a nameless separator is not offered');
 });
 
-test('storing an empty loadout removes the field', () => {
+test('an emptied loadout is kept as an empty list; no list at all means the default slots', () => {
     const enemy = { rrEquipment: [{ etypeId: 1, kind: 2, itemId: 1 }] };
+    const system = database().getSystem();
     RREnemyEquipment.store(enemy, []);
-    assert.equal('rrEquipment' in enemy, false);
+    assert.deepEqual(enemy.rrEquipment, []);
+    assert.deepEqual(RREnemyEquipment.slots(enemy, system), [], 'no slots, as the author left it');
+    assert.deepEqual(RREnemyEquipment.slots({}, system), RREnemyEquipment.defaultRows(system), 'never edited');
     RREnemyEquipment.store(enemy, [{ etypeId: '2', kind: '3', itemId: '4', extra: 1 }]);
     assert.deepEqual(enemy.rrEquipment, [{ etypeId: 2, kind: 3, itemId: 4 }]);
+});
+
+test('an enemy never edited has the slots its window shows, so an event can equip it', () => {
+    const w = world();
+    delete w.$dataEnemies[1].rrEquipment;
+    const enemy = spawn(w);
+    assert.deepEqual(Array.from(enemy.equipSlots()), [1, 2], 'one per named equipment type');
+    assert.deepEqual(names(enemy.equips()), [null, null]);
+    assert.equal(enemy.param(0), 60);
+    assert.equal(enemy.changeEquip(0, SWORD), true);
+    assert.deepEqual(names(enemy.equips()), ['Sword', null]);
+    w.$dataEnemies[2].rrEquipment = [];
+    assert.equal(spawn(w, 2).equipSlots().length, 0, 'an emptied list is no slots');
+    assert.equal(spawn(w, 2).changeEquip(0, SWORD), false);
+});
+
+test('a Battle Presentation weapon still gives a sequence its icon', () => {
+    const B = require('../src/battle/BattleData.js');
+    const step = { iconSource: 'weapon', equipIndex: 1 };
+    const enemy = { isEnemy: () => true, equips: () => [], weapons: () => [{ iconIndex: 97 }] };
+    assert.equal(B.visualIcon(step, enemy), 97, 'an enemy is asked for its weapons, not its (empty) equipment');
+    const actor = { isEnemy: () => false, equips: () => [{ iconIndex: 12 }], weapons: () => [] };
+    assert.equal(B.visualIcon(step, actor), 12);
 });
 
 test('the command saves as a plugin command and reads as one line', () => {

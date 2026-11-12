@@ -37,7 +37,8 @@ test('switching presets retires pending slider work, view caches and obsolete co
     b._onInput({target:{isConnected:false,type:'range',dataset:{path:'girth'},value:'2'}},true);
     b._onInput({target:{tagName:'SELECT',dataset:{path:'morphology'},value:'avian'}},true);
     assert.deepEqual(plain(b.recipe),fresh);assert.deepEqual(fresh,Q.Creature.kindRecipe('bee'));
-    assert.equal(stopped,1);assert.equal(applied,0);assert.equal(rebuilt,0);assert.equal(b._view.structure,null);
+    // The shaper itself stays (it holds only the body pack): its unfinished shape is dropped, not the worker.
+    assert.equal(stopped,0);assert.equal(applied,0);assert.equal(rebuilt,0);assert.equal(b._view.structure,null);
     assert.equal(b._view.height,0);assert.equal(b.pose,'idle');assert.equal(b.extreme,false);assert.equal(b._heldName,'');
     assert.deepEqual(plain(b.cache),{});assert.equal(b._shapeJob,null);
 });

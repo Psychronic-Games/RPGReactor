@@ -974,6 +974,9 @@
         const R = root.Reactor3D;
         if (!room || room.disposed || !R || !R.Rider || !R.Vehicles || typeof R.Vehicles.stand !== "function" || typeof R.characterModelSpec !== "function") return;
         let rides = rooms.get(room);
+        // On foot, with nothing kept of a ride in this room: nobody rides (`rideOf`), and there is nothing to take away.
+        const p = player();
+        if (!rides && (!p || p._vehicleType !== "reactor")) return;
         const members = typeof $gameParty !== "undefined" && $gameParty ? $gameParty.battleMembers() : [];
         const live = new Set();
         for (let i = 0; i < members.length; i++) {

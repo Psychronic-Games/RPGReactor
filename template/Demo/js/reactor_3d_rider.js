@@ -1431,8 +1431,8 @@
         }
         const size = object.userData && object.userData.glbSize;
         const tall = (size && finite(size.y) ? size.y : 1.7) * object.scale.y;
+        // Shown or hidden as the sync left it: a vehicle that hides its rider hides this one too.
         object.position.set(w.v0.x, w.v0.y - Rider.PERCH * tall, w.v0.z);
-        object.visible = true;
         return true;
     };
 

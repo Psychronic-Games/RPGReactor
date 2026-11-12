@@ -38,7 +38,7 @@ Object.assign(ReactorOnline, {
 
     /** Passwords and passes go in the body of a request, never its address, which servers log. */
     async post(action, body, params) {
-        const response = await fetch(this.request(Object.assign({ a: action }, params)),
+        const response = await this.ask(this.request(Object.assign({ a: action }, params)),
             { method: "POST", body: JSON.stringify(body || {}), headers: { "Content-Type": "text/plain" } });
         const text = await response.text();
         if (!response.ok) { const error = new Error(text); error.status = response.status; throw error; }
@@ -86,7 +86,7 @@ Object.assign(ReactorOnline, {
                 ? await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer()
                 : pako.deflate(text);
             const body = new Blob([this.account.session + "\n", bytes], { type: "text/plain" });
-            const response = await fetch(this.request({ a: "save" }), { method: "POST", body });
+            const response = await this.ask(this.request({ a: "save" }), { method: "POST", body }, this.TRANSFER_MS);
             if (!response.ok) console.warn("Progress was not kept: " + await response.text());
             return response.ok;
         } finally {
@@ -107,7 +107,7 @@ Object.assign(ReactorOnline, {
         if (!this.keepsProgress() || !$gameMap?.mapId()) return;
         const body = JSON.stringify(this.wakeNote());
         if (leaving && navigator.sendBeacon) navigator.sendBeacon(this.request({ a: "wake" }), new Blob([body], { type: "text/plain" }));
-        else fetch(this.request({ a: "wake" }), { method: "POST", body, headers: { "Content-Type": "text/plain" } }).catch(() => {});
+        else this.ask(this.request({ a: "wake" }), { method: "POST", body, headers: { "Content-Type": "text/plain" } }).catch(() => {});
     },
 
     /** A save is whole only between things. A battle waiting on its next move counts: the event that started it just waits for it. */
@@ -140,7 +140,7 @@ Object.assign(ReactorOnline, {
     async wake(account) {
         // They left before anything was saved: a new game, but where they went to sleep.
         if (account.progress?.saved !== false) {
-            const response = await fetch(this.request({ a: "load" }), { method: "POST", body: JSON.stringify({ session: account.session }), headers: { "Content-Type": "text/plain" } });
+            const response = await this.ask(this.request({ a: "load" }), { method: "POST", body: JSON.stringify({ session: account.session }), headers: { "Content-Type": "text/plain" } }, this.TRANSFER_MS);
             if (!response.ok) throw new Error(await response.text());
             const contents = JsonEx.parse(pako.inflate(new Uint8Array(await response.arrayBuffer()), { to: "string" }));
             DataManager.createGameObjects();
@@ -162,16 +162,19 @@ Object.assign(ReactorOnline, {
     async signOff() {
         if (!this._running) return;
         this.noteWhereIAm(true);
-        await this.saveProgress().catch(() => {});
+        // The game is read for the save before anything is awaited, so this player is asleep at once and the upload
+        // finishes behind: a game started from the title meanwhile is not the one signed off.
+        const saving = this.saveProgress().catch(() => {});
         this.stop();
         this.gameStarted = false;
+        await saving;
     },
 
     /** Those asleep on this map stay in the world, lying where they stopped. */
     async fetchSleepers() {
         const map = $gameMap?.mapId();
         if (!map || this.config()?.accounts?.sleepers === false || this.accountMode() === "none") return;
-        const response = await fetch(this.request({ a: "sleepers", m: map }), { cache: "no-store" }).catch(() => null);
+        const response = await this.ask(this.request({ a: "sleepers", m: map }), { cache: "no-store" }).catch(() => null);
         if (!response?.ok || $gameMap.mapId() !== map) return;
         const tiles = new Set(), seen = new Set(), x = $gamePlayer.x, y = $gamePlayer.y;
         const list = ((await response.json()).sleepers || [])
@@ -654,7 +657,12 @@ const ReactorWorldState = {
             // look at the world put this player's own switch back, and nobody else ever saw it change.
             console.warn("A shared change was not sent; it will be sent again.", error);
             if (!(error && error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 429)) {
-                for (const change of changes) { const key = change.kind + ":" + change.id; if (!this.pending.has(key)) this.pending.set(key, change); }
+                for (const change of changes) {
+                    const key = change.kind + ":" + change.id, now = this.pending.get(key);
+                    if (!now) this.pending.set(key, change);
+                    // Two adds to one variable are both owed: the newer one's value stands, and the amounts are summed.
+                    else if (change.delta !== undefined && now.delta !== undefined) now.delta += change.delta;
+                }
             }
         } finally {
             this._sending = false;
@@ -666,7 +674,7 @@ const ReactorWorldState = {
     },
 
     async fetch() {
-        const response = await fetch(ReactorOnline.request({ a: "world" }), { cache: "no-store" }).catch(() => null);
+        const response = await ReactorOnline.ask(ReactorOnline.request({ a: "world" }), { cache: "no-store" }).catch(() => null);
         if (response?.ok) this.apply(await response.json());
     },
 
@@ -905,7 +913,7 @@ const ReactorOnlineChat = {
         if (this._fetching) { this._again = true; return; }
         this._fetching = true;
         try {
-            const response = await fetch(ReactorOnline.request({ a: "chat", after: this.after, m: $gameMap.mapId(), p: ReactorOnlineParty.party?.id || "" }), { cache: "no-store" });
+            const response = await ReactorOnline.ask(ReactorOnline.request({ a: "chat",after: this.after, m: $gameMap.mapId(), p: ReactorOnlineParty.party?.id || "" }), { cache: "no-store" });
             if (response.ok) this.receive(await response.json());
         } catch (error) {
             // The next count asks again.

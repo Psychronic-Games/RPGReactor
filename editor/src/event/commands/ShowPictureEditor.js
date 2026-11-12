@@ -338,7 +338,10 @@ class ShowPictureEditor {
         this.scaleX = values.scaleX;
         this.scaleY = values.scaleY;
         this.opacity = values.opacity;
+        const byVariables = this.designationType === 1;
         this.designationType = 0;
+        // X and Y were built with the limits of variable ids: drawn again, they take a position's.
+        if (byVariables && this.modal) { this.renderContent(); return; }
         this.syncPictureField('origin');
         this.syncPictureField('x');
         this.syncPictureField('y');
@@ -746,7 +749,7 @@ class ShowPictureEditor {
         ]));
         content.appendChild(this.createNumberInput(
             this.pictureIdSource === 'variable' ? 'Variable:' : 'Picture Number:',
-            'pictureId', 1, 9999));
+            'pictureId', 1, this.pictureIdSource === 'variable' ? 9999 : 100));
 
         // Picture Name
         const imageRow = this.createTextInput('Image:', 'pictureName', 'Enter picture filename');
@@ -929,6 +932,10 @@ class ShowPictureEditor {
         }
         select.addEventListener('change', event => {
             this[property] = event.target.value;
+            // The game has 100 pictures: a variable id past that is not a picture number.
+            if (property === 'pictureIdSource' && this.pictureIdSource !== 'variable') {
+                this.pictureId = Math.max(1, Math.min(100, Number(this.pictureId) || 1));
+            }
             if (property === 'pictureIdSource') this.renderContent();
         });
         section.appendChild(labelEl);

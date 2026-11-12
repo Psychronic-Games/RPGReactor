@@ -295,9 +295,9 @@ class DatabaseClassEditor {
             const canvasId = `param-curve-${classEntry.id}-${idx}`;
             const color = paramColors[idx];
             paramsHTML += `
-                <div class="param-curve-cell" data-param-idx="${idx}" style="display: flex; flex-direction: column; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.15s;" title="${tt('Click to edit')} ${name} ${tt('curve')}">
+                <div class="param-curve-cell" data-param-idx="${idx}" style="display: flex; flex-direction: column; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.15s;" title="${tt('Click to edit')} ${rrEscapeHtml(name)} ${tt('curve')}">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label class="database-field-label" style="font-size: 10px; color: ${color}; font-weight: bold;">${name}</label>
+                        <label class="database-field-label" style="font-size: 10px; color: ${color}; font-weight: bold;">${rrEscapeHtml(name)}</label>
                          <span style="font-size: 9px; color: var(--color-text-muted);">${tt('Lv')}1: ${level1} → ${tt('Lv')}${midLevel}: ${levelMid} → ${tt('Lv')}${targetLevel}: ${levelTarget}</span>
                     </div>
                     <canvas id="${canvasId}" width="200" height="50"
@@ -375,6 +375,14 @@ class DatabaseClassEditor {
     }
 
     /**
+     * The least a curve may hold: 1 for Max HP, 0 for the other seven, as
+     * Game_BattlerBase.paramMin has it. A class with no MP keeps its 0.
+     */
+    static paramValueFloor(paramIdx) {
+        return paramIdx === 0 ? 1 : 0;
+    }
+
+    /**
      * A curve as the dialog edits it: one value per level across the whole
      * engine domain. Stock MZ arrays hold 100 entries; levels past the array
      * take the runtime's own extrapolation, so what the dialog shows at Lv120
@@ -431,7 +439,7 @@ class DatabaseClassEditor {
                 <button class="rr-modal-close pcd-close" type="button">&times;</button>
             </div>
             <div class="pcd-tabs" role="tablist" style="display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-panel);">
-                ${paramNames.map((name, idx) => `<button type="button" class="pcd-tab" role="tab" data-param-idx="${idx}" style="padding: 6px 12px; border: 1px solid var(--color-border-subtle); border-bottom: none; border-radius: 4px 4px 0 0; background: transparent; color: var(--color-text-muted); cursor: pointer; font-size: 12px;">${name}</button>`).join('')}
+                ${paramNames.map((name, idx) => `<button type="button" class="pcd-tab" role="tab" data-param-idx="${idx}" style="padding: 6px 12px; border: 1px solid var(--color-border-subtle); border-bottom: none; border-radius: 4px 4px 0 0; background: transparent; color: var(--color-text-muted); cursor: pointer; font-size: 12px;">${rrEscapeHtml(name)}</button>`).join('')}
             </div>
             <div class="rr-modal-body" style="display: flex; flex-direction: column; gap: 10px;">
                 <div style="display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;">
@@ -476,7 +484,12 @@ class DatabaseClassEditor {
 
         const curve = () => working[paramIdx];
         const limit = () => this._paramValueLimit(paramIdx);
-        const clampValue = value => Math.max(1, Math.min(limit(), Math.round(Number(value) || 1)));
+        // Max HP cannot go below 1; the other seven take 0 (a class with no MP), as the game does.
+        const floor = () => DatabaseClassEditor.paramValueFloor(paramIdx);
+        const clampValue = value => {
+            const number = Number(value);
+            return Math.max(floor(), Math.min(limit(), Math.round(Number.isFinite(number) ? number : floor())));
+        };
         const setValue = (atLevel, value) => {
             curve()[atLevel] = clampValue(value);
             if (atLevel === 1) curve()[0] = curve()[1];
@@ -542,6 +555,7 @@ class DatabaseClassEditor {
                 tab.setAttribute('aria-selected', active ? 'true' : 'false');
                 tab.tabIndex = active ? 0 : -1;
             });
+            valueInput.min = floor();
             valueInput.max = limit();
             fitScale();
             selectLevel(level);
@@ -564,7 +578,7 @@ class DatabaseClassEditor {
             button.addEventListener('mouseenter', () => { button.title = `${lv}1: ${preset()[0]} → ${lv}${targetLevel}: ${preset()[1]}`; });
             button.addEventListener('click', () => {
                 const [lv1, lvTarget] = preset();
-                working[paramIdx] = this._generateParamCurve(lv1, lvTarget, 1, capLevel + 1, targetLevel, limit());
+                working[paramIdx] = this._generateParamCurve(lv1, lvTarget, 1, capLevel + 1, targetLevel, limit(), floor());
                 touched.add(paramIdx);
                 fitScale();
                 selectLevel(level);
@@ -668,6 +682,9 @@ class DatabaseClassEditor {
         const current = Array.isArray(options.values) ? options.values : classEntry.params[paramIdx];
 
         const maxAllowed = this._paramValueLimit(paramIdx);
+        // Max HP cannot go below 1; the other seven take 0, as the game does.
+        const minAllowed = DatabaseClassEditor.paramValueFloor(paramIdx);
+        const fromBox = v => { const n = parseInt(v); return Math.max(minAllowed, Math.min(maxAllowed, Number.isFinite(n) ? n : minAllowed)); };
         const targetLevel = this._targetLevelFor(classEntry);
         const initialLv1 = Number.isFinite(Number(current[1])) ? Number(current[1]) : 1;
         const initialLvMax = globalThis.rrClassParamAtLevel?.(current, targetLevel) ?? initialLv1;
@@ -675,7 +692,7 @@ class DatabaseClassEditor {
         const initialExponent = this._inferCurveExponent(current, targetLevel);
 
         let lv1 = initialLv1;
-        let lvMax = Math.max(1, Math.min(maxAllowed, initialLvMax));
+        let lvMax = Math.max(minAllowed, Math.min(maxAllowed, initialLvMax));
         // The sliders keep the old reach (99,999 HP/MP, 9,999 others) so they
         // stay fine-grained; the number boxes go to maxAllowed, and a typed
         // value past a slider's end stretches it.
@@ -684,7 +701,7 @@ class DatabaseClassEditor {
         let workingValues = current.slice();
 
         const recompute = () => {
-            workingValues = this._generateParamCurve(lv1, lvMax, exponent, capLevel + 1, targetLevel, maxAllowed);
+            workingValues = this._generateParamCurve(lv1, lvMax, exponent, capLevel + 1, targetLevel, maxAllowed, minAllowed);
             redraw();
         };
 
@@ -697,15 +714,15 @@ class DatabaseClassEditor {
 
         modal.innerHTML = `
             <div class="rr-modal-header">
-                <div class="rr-modal-title">${tt('Generate Curve')} &mdash; <span style="color: ${color};">${paramName}</span></div>
+                <div class="rr-modal-title">${tt('Generate Curve')} &mdash; <span style="color: ${color};">${rrEscapeHtml(paramName)}</span></div>
                 <button class="rr-modal-close rr-param-curve-close" type="button">&times;</button>
             </div>
 
             <div class="rr-modal-body">
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 1 value')}</label>
-                    <input type="range" class="rr-pc-lv1-slider rr-range" min="1" max="${sliderMax}" value="${lv1}">
-                    <input type="number" class="rr-pc-lv1-input database-field-value" min="1" max="${maxAllowed}" value="${lv1}">
+                    <input type="range" class="rr-pc-lv1-slider rr-range" min="${minAllowed}"max="${sliderMax}" value="${lv1}">
+                    <input type="number" class="rr-pc-lv1-input database-field-value" min="${minAllowed}"max="${maxAllowed}" value="${lv1}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
@@ -715,8 +732,8 @@ class DatabaseClassEditor {
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Value at target level')}</label>
-                    <input type="range" class="rr-pc-lvmax-slider rr-range" min="1" max="${sliderMax}" value="${lvMax}">
-                    <input type="number" class="rr-pc-lvmax-input database-field-value" min="1" max="${maxAllowed}" value="${lvMax}">
+                    <input type="range" class="rr-pc-lvmax-slider rr-range" min="${minAllowed}"max="${sliderMax}" value="${lvMax}">
+                    <input type="number" class="rr-pc-lvmax-input database-field-value" min="${minAllowed}"max="${maxAllowed}" value="${lvMax}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
@@ -775,8 +792,8 @@ class DatabaseClassEditor {
         const shapeSlider = modal.querySelector('.rr-pc-shape-slider');
 
         const stretch = (slider, v) => { if (v > Number(slider.max)) slider.max = String(v); };
-        const syncLv1 = (v) => { lv1 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); stretch(lv1Slider, lv1); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
-        const syncLvMax = (v) => { lvMax = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); stretch(lvMaxSlider, lvMax); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
+        const syncLv1 = (v) => { lv1 = fromBox(v); stretch(lv1Slider, lv1); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
+        const syncLvMax = (v) => { lvMax = fromBox(v); stretch(lvMaxSlider, lvMax); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
         const syncShape = (v) => { exponent = (parseInt(v) || 100) / 100; recompute(); };
 
         lv1Slider.addEventListener('input', e => syncLv1(e.target.value));
@@ -837,7 +854,7 @@ class DatabaseClassEditor {
      * a steep exponent, t reaches ~25 by Lv999 and an uncapped cubic would write
      * millions into the array.
      */
-    _generateParamCurve(lv1, lvEnd, exponent, count, targetLevel, limit) {
+    _generateParamCurve(lv1, lvEnd, exponent, count, targetLevel, limit, floor = 1) {
         // Params arrays are indexed BY LEVEL: [level] for level 1..lastLevel,
         // with [0] an unread placeholder. The old 0-based mapping put the
         // Lv1 value in the placeholder and read every level one step low.
@@ -848,7 +865,7 @@ class DatabaseClassEditor {
         for (let level = 1; level < count; level++) {
             const t = (level - 1) / (anchorLevel - 1);
             const v = lv1 + (lvEnd - lv1) * Math.pow(t, exponent);
-            out[level] = Math.min(ceiling, Math.max(1, Math.round(v)));
+            out[level] = Math.min(ceiling, Math.max(floor, Math.round(v)));
         }
         out[0] = out[1]; // placeholder mirrors Lv1, like MZ writes it
         return out;
@@ -1609,7 +1626,7 @@ class DatabaseClassEditor {
 
         classEntry[fieldName] = value;
         this.databaseManager.updateClass(classId, classEntry);
-        console.log(`Updated class ${classId} field ${fieldName} to:`, value);
+        console.debug(`Updated class${classId} field ${fieldName} to:`, value);
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.commonUI.updateStatus(`${fieldName} ${tt('updated')}`);
@@ -1765,8 +1782,6 @@ class DatabaseClassEditor {
             const nextLevelData = [];
             const totalData = [];
 
-            console.log('EXP Curve Parameters:', params);
-
             for (let level = 1; level <= maxLevel; level++) {
                 const totalExp = calculateTotalExp(level, params[0], params[1], params[2], params[3]);
                 const nextTotal = calculateTotalExp(level + 1, params[0], params[1], params[2], params[3]);
@@ -1777,8 +1792,6 @@ class DatabaseClassEditor {
 
             const data = activeTab === 'nextLevel' ? nextLevelData : totalData;
             const maxExp = Math.max(...data.map(d => d.exp));
-
-            console.log('Tab:', activeTab, 'MaxExp:', maxExp, 'L1:', data[0]?.exp, `L${maxLevel}:`, data[maxLevel - 1]?.exp);
 
             // Create table with graph background
             // The box fills whatever the dialog has left instead of asserting a
@@ -1906,8 +1919,6 @@ class DatabaseClassEditor {
                 });
 
                 ctx.stroke();
-
-                console.log('Graph scale:', useLogScale ? 'logarithmic' : 'linear');
             }, 50);
         };
 
@@ -1987,10 +1998,8 @@ class DatabaseClassEditor {
             this.refreshClassDetail(classEntry);
             closeExpModal();
         });
-        overlay.addEventListener('click', (e) => {
-            // A click on the backdrop no longer closes the dialog: an accidental
-            // click beside it must never cost in-progress work. Close deliberately.
-        });
+        // A click on the backdrop does not close the dialog: an accidental
+        // click beside it must never cost in-progress work. Close deliberately.
 
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);

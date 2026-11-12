@@ -34,7 +34,7 @@ const built = () => ({
         { kind: 'wall', x: 5, y: 0, z: 1, rot: 1, material: 'Stone' },
         { kind: 'cylinder', x: 2, y: 3, z: 0.5, size: [2, 3, 2], angle: 30, offset: [0.25, 0] }
     ],
-    lights: [{ id: 'light1', type: 'point', x: 1.5, y: 0.5, height: 96, radius: 4, color: '#ffcc88' }],
+    lights: [{ id: 'light1', type: 'point', x: 1.5, y: 0.5, height: 2, radius: 4, color: '#ffcc88' }],
     surfaces: [{ id: 1, target: 'map', movie: 'News', x: 4.5, y: 3.52, z: 1, width: 96, height: 54, rotationY: 0 }]
 });
 
@@ -101,14 +101,15 @@ test('floors: more copies the top floor up and lifts the roof; fewer takes floor
     const F = require(path.join(repoRoot, 'editor', 'src', 'utils', 'StructureFloors.js'));
     const plan = { size: [6, 6], storey: 5, height: 1, pieces: [
         { kind: 'floor', x: 1, y: 1, z: 0 }, { kind: 'wall', x: 0, y: 1, z: 0, material: 'Stone' }, { kind: 'roof', x: 1, y: 1, z: 5 }],
-        lights: [{ id: 'light1', x: 1.5, y: 1.5, height: 144 }] };
+        lights: [{ id: 'light1', x: 1.5, y: 1.5, height: 3 }] };
     F.setFloors(plan, 3);
     assert.equal(plan.height, 3);
     assert.deepEqual(plan.pieces.filter(p => p.kind === 'wall').map(p => p.z).sort((a, b) => a - b), [0, 5, 10], 'the wall is on every floor');
     assert.deepEqual(plan.pieces.filter(p => p.kind === 'roof').map(p => p.z), [15], 'the roof rides on top');
-    assert.deepEqual(plan.lights.map(l => l.height).sort((a, b) => a - b), [144, 384, 624], 'and a lamp on each floor');
+    assert.deepEqual(plan.lights.map(l => l.height).sort((a, b) => a - b), [3, 8, 13], 'and a lamp on each floor, its height in tiles as map lights have it');
     assert.equal(new Set(plan.lights.map(l => l.id)).size, 3, 'each with its own id');
     F.setFloors(plan, 2);
+    assert.deepEqual(plan.lights.map(l => l.height).sort((a, b) => a - b), [3, 8], 'the top floor\'s lamp goes with its floor');
     assert.deepEqual(plan.pieces.filter(p => p.kind === 'wall').map(p => p.z).sort((a, b) => a - b), [0, 5]);
     assert.deepEqual(plan.pieces.filter(p => p.kind === 'roof').map(p => p.z), [10], 'the roof comes down with it');
     const described = { size: [8, 8], storey: 5, height: 1, pieces: [], floors: [{ rooms: { hall: [1, 1, 6, 6] }, doors: [] }] };

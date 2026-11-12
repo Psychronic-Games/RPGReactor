@@ -23,6 +23,18 @@ test('neighbors are read back as written, and only sides that name a map are kep
     assert.deepEqual(R.neighborsOf(map), { west: { map: 2, shift: -3 } });
     assert.deepEqual(R.surroundOf(map).neighbors, { west: { map: 2, shift: -3 } });
     assert.deepEqual(R.neighborsOf({ width: 4, height: 4 }), {});
+    // The frame's loop keeps the checked list on the map while what it was read from stands.
+    const N = R.Neighbors, kept = N.sidesOf(map);
+    assert.deepEqual(kept, { west: { map: 2, shift: -3 } });
+    assert.equal(N.sidesOf(map), kept, 'the same record while nothing changed');
+    map.reactor3d.surround.neighbors.west.shift = 5;
+    assert.deepEqual(N.sidesOf(map), { west: { map: 2, shift: 5 } }, 'an entry changed in place is read again');
+    map.reactor3d.surround.neighbors.north = 4;
+    assert.deepEqual(N.sidesOf(map), { north: { map: 4 }, west: { map: 2, shift: 5 } }, 'and a side named since');
+    map.reactor3d.surround.neighbors = { east: { map: 9 } };
+    assert.deepEqual(N.sidesOf(map), { east: { map: 9 } }, 'and another list');
+    assert.deepEqual(N.sidesOf({ width: 4, height: 4 }), {});
+    assert.deepEqual(N.sidesOf(null), {});
 });
 
 test('a border with a neighbor and no land is kept, and lays nothing', () => {

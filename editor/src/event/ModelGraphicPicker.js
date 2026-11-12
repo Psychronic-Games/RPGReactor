@@ -104,7 +104,6 @@ class ModelGraphicPicker {
     }
 
     show(current, callback, options) {
-        ModelGraphicPicker._last = this;
         this.onSelect = callback;
         // Face framing: extra Zoom and Height controls that pick which
         // part of the model a rendered face bitmap shows.
@@ -121,7 +120,10 @@ class ModelGraphicPicker {
         this.selectedYaw = Number(current && current.yaw) || 0;
         this.selectedPitch = Number(current && current.pitch) || 0;
         this.selectedRoll = Number(current && current.roll) || 0;
-        this.selectedSize = Number(current && current.size) > 0 ? Number(current.size) : 2;
+        // OK hands back scale 1, so the size shown is the whole of it (size × scale), as the model card shows it:
+        // a spec with another scale kept its look on a re-pick only this way.
+        this.selectedSize = Math.round((Number(current && current.size) > 0 ? Number(current.size) : 2)
+            * (Number(current && current.scale) > 0 ? Number(current.scale) : 1) * 100) / 100;
         this.selectedOffset = (Array.isArray(current && current.offset) ? current.offset : [0, 0, 0]).map(v => Number(v) || 0);
         this.selectedFaces = Object.assign({}, (current && current.faces) || {});
         this._placingFace = '';
@@ -213,7 +215,12 @@ class ModelGraphicPicker {
         this._refreshFaceButtons();
         this._loadFiles();
         // Tab stays inside, Escape cancels, and the focus goes back to what opened the picker when it closes.
-        window.RRKeyboardNavigation?.modal(modal, { onEscape: () => this._close(), container: () => content })?.enter();
+        // A caller that drew itself for a pick to come (a box ticked) is told when none came: `options.onCancel`.
+        const cancel = () => {
+            this._close();
+            if (options && typeof options.onCancel === 'function') options.onCancel();
+        };
+        window.RRKeyboardNavigation?.modal(modal, { onEscape: cancel, container: () => content })?.enter();
 
         content.querySelector('.model-size-input').addEventListener('input', e => {
             const value = Number(e.target.value);
@@ -275,7 +282,7 @@ class ModelGraphicPicker {
         const reset = content.querySelector('.model-angle-reset');
         if (reset) reset.addEventListener('click', () => setAngles(0, 0, 0));
         content.querySelectorAll('.model-picker-cancel').forEach(btn => {
-            btn.addEventListener('click', () => this._close());
+            btn.addEventListener('click', cancel);
         });
         content.querySelector('.model-picker-ok').addEventListener('click', () => {
             if (this.onSelect) {
@@ -1002,7 +1009,15 @@ class ModelGraphicPicker {
         }
         const filePath = this._modelPath();
         const fs = require('fs');
+        // A model that cannot be shown takes the one before it off the preview: left there, it stood under the
+        // new name, and the rings and OK acted on the wrong model.
+        const clearShown = () => {
+            this._disposePoseRings();
+            this._disposeModelResources();
+            this._previewDirty = true;
+        };
         if (!fs.existsSync(filePath)) {
+            clearShown();
             this._setMessage(this._t('None'));
             return;
         }
@@ -1010,7 +1025,7 @@ class ModelGraphicPicker {
             const data = (typeof RREncryptedAssets !== 'undefined' && RREncryptedAssets.readAssetBytesAsync)
                 ? await RREncryptedAssets.readAssetBytesAsync(filePath)
                 : fs.readFileSync(filePath);
-            if (!data) { this._setMessage(this._t('None')); return; }
+            if (!data) { clearShown(); this._setMessage(this._t('None')); return; }
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const path = require('path');
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
@@ -1093,7 +1108,6 @@ class ModelGraphicPicker {
                             return;
                         }
                         this._previewDirty = false;
-                        this._lastRenderAt = now;
                     }
                     ModelPreview3D.updateBackground(this._scene);
                     if (ModelPreview3D.render(this._renderer, this._scene, this._camera)) this._previewDirty = true;
@@ -1158,6 +1172,7 @@ class ModelGraphicPicker {
         } catch (error) {
             if (/superseded/i.test(error?.message || '')) return;
             console.error('Reactor3D preview failed.', error);
+            if (gen === this._previewGen && this._modal) clearShown();
             this._setMessage(this.selectedName);
         }
     }

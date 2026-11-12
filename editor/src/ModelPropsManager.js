@@ -383,7 +383,10 @@ class ModelPropsManager {
             x, y, z: this.fields.z, direction: this.fields.direction,
             yaw: options.yaw ?? this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll,
             size: options.size ?? this.fields.size, scale: this.fields.scale, passable: this.fields.passable,
-            animations: this.fields.animations.slice(), repeat: this.fields.repeat, effects: this.fields.effects.slice()
+            // The stretch and the speed too: the ghost under the pointer shows them, so what lands has them.
+            stretch: (this.fields.stretch || [1, 1, 1]).slice(),
+            animations: this.fields.animations.slice(), repeat: this.fields.repeat, animationSpeed: this.fields.animationSpeed ?? 100,
+            effects: this.fields.effects.slice()
         });
         // What was put down is not selected: the fields stay the next placement's,
         // so changing them does not reach back into the one just placed.

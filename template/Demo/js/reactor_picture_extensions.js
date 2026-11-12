@@ -133,11 +133,6 @@
         return t;
     }
 
-    const _Game_Interpreter_initialize = Game_Interpreter.prototype.initialize;
-    Game_Interpreter.prototype.initialize = function() {
-        _Game_Interpreter_initialize.apply(this, arguments);
-    };
-
     Game_Interpreter.prototype.reactorPictureCommand = function(payload) {
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
         if (payload.operation === "show") return this.reactorShowPicture(normalizeShow(payload));
@@ -182,9 +177,11 @@
         const max = $gameScreen.maxPictures();
         if (!integer(id, 1, max) || !integer(duration, 0, 999999) || !point) return false;
         const stockBlend = move.blend === "overlay" ? 0 : move.blend;
+        // A duration variable holding 0 moves in one frame: the stock move
+        // only stores its targets and never reaches them with no frames left.
         $gameScreen.movePicture(
             id, move.origin, point.x, point.y, move.scaleX, move.scaleY,
-            move.opacity, stockBlend, duration, move.easing
+            move.opacity, stockBlend, Math.max(1, duration), move.easing
         );
         const picture = $gameScreen.picture(id);
         if (picture) {
@@ -236,23 +233,6 @@
         const high = Math.max(start, end);
         for (let id = low; id <= high; id++) $gameScreen.erasePicture(id);
         return true;
-    };
-
-    const _Game_Screen_showPicture = Game_Screen.prototype.showPicture;
-    Game_Screen.prototype.showPicture = function() {
-        _Game_Screen_showPicture.apply(this, arguments);
-        const picture = this.picture(arguments[0]);
-        if (picture) clearState(picture);
-    };
-
-    const _Game_Screen_movePicture = Game_Screen.prototype.movePicture;
-    Game_Screen.prototype.movePicture = function() {
-        _Game_Screen_movePicture.apply(this, arguments);
-    };
-
-    const _Game_Screen_erasePicture = Game_Screen.prototype.erasePicture;
-    Game_Screen.prototype.erasePicture = function() {
-        _Game_Screen_erasePicture.apply(this, arguments);
     };
 
     const _Game_Picture_initialize = Game_Picture.prototype.initialize;

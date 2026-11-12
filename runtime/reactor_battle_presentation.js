@@ -97,7 +97,7 @@
         roles.target=roles.target0;
         const homes={},saved=new Map();
         for(const [key,sprite] of Object.entries(roles))if(sprite){
-            if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1,model:sprite._reactorBattler?.object,modelRotation:sprite._reactorBattler?.object?.rotation.clone(),modelScale:sprite._reactorBattler?.object?.scale.clone()});
+            if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1,model:sprite._reactorBattler?.object,modelRotation:sprite._reactorBattler?.object?.rotation.clone(),modelScale:sprite._reactorBattler?.object?.scale.clone(),room:room&&sprite._reactorRoomPosition?{...sprite._reactorRoomPosition}:null});
             homes[key]=Object.assign({rotateX:0,rotateY:0,rotateZ:0,scale:1},room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0]===sprite._battler?subject:targets[0])});
         }
         const camera=room?{...room.settings.camera}:null,cameraSource=room?.settings.cameraSource;
@@ -145,15 +145,8 @@
                         rules.length=0;rules.push(...kept);};
                     const state=sprite?._reactorBattler;if(state){root.ReactorBattleRoomView.prepareMotions(state);join(state.rules);const rule=state.rules?.find(r=>r.trigger==='action'&&r.name.toLowerCase()===actionName?.toLowerCase());state.action=actionName==='idle'?null:{name:rule?.name||actionName,frame:state.frame};if(actionName==='idle'&&state.binding)state.binding.movingAt=undefined;}
                     const model=room?.models.get(sprite?._reactorRoomKey);if(model){join(model.rules);model.action=actionName==='idle'?null:{name:actionName,start:room.frame};if(actionName==='idle'&&model.binding)model.binding.movingAt=undefined;}
-                }else if(step.type==='weapon'){
-                    adapter.clearWeapon();if(step.visible===false)return;
-                    const item=step.iconSource==='action'?manager._action.item():subject.weapons?.()[0];const icon=step.iconSource==='icon'?step.iconIndex||0:item?.iconIndex||0;
-                    const graphic=new Sprite(ImageManager.loadSystem('IconSet')),size=ImageManager.iconWidth||32;graphic.setFrame(icon%16*size,Math.floor(icon/16)*size,size,size);graphic.anchor.set(.5,.5);ss._battleField.addChild(graphic);adapter.weapon={graphic,step};
-                }else if(step.type==='projectile'){
-                    adapter.clearProjectile();
-                    const graphic=new Sprite(new Bitmap(step.size||8,step.size||8));graphic.bitmap.fillAll(step.color||'#ffcc55');graphic.anchor.set(.5,.5);
-                    ss._battleField.addChild(graphic);adapter.projectile={graphic,start,duration:step.duration};
                 }
+                // Weapon and projectile steps never come here: the sequence visuals of extendAdapter draw them.
             },
             pose(positions,frame){
                 const posed=new Set();
@@ -164,23 +157,13 @@
                     if(room)sprite._reactorRoomPosition={...sprite._reactorRoomPosition,...p};
                     else{sprite._offsetX=p.x*48-sprite._homeX;sprite._offsetY=(p.y-p.z)*48-sprite._homeY;sprite.x=p.x*48;sprite.y=(p.y-p.z)*48;const old=saved.get(sprite);sprite.rotation=(old.rotation||0)+(old.model?0:(p.rotateZ||0)*Math.PI/180);if(old.model){old.model.rotation.set(old.modelRotation.x+(p.rotateX||0)*Math.PI/180,old.modelRotation.y+(p.rotateY||0)*Math.PI/180,old.modelRotation.z+(p.rotateZ||0)*Math.PI/180);old.model.scale.set(old.modelScale.x*(p.scaleX??1),old.modelScale.y*(p.scaleY??1),old.modelScale.z*(p.scaleZ??1));}const initialFacing=B.facingToward(homes[key],(key==='user'?homes.target:homes.user)||homes[key]),turn=!P.usesSheet(sprite)&&p.facing!==undefined&&Math.sign(p.facing)!==Math.sign(initialFacing)?-1:1;sprite.scale?.set(old.scaleX*turn*(p.scale??1)*(old.model?1:(p.scaleX??1)),old.scaleY*(p.scale??1)*(old.model?1:(p.scaleY??1)));}
                 }
-                const projectile=adapter.projectile;
-                if(projectile){const a=roles.user,b=roles.target;if(a&&b){const t=Math.min(1,Math.max(0,(frame-projectile.start)/Math.max(1,projectile.duration)));projectile.graphic.x=a.x+(b.x-a.x)*t;projectile.graphic.y=a.y+(b.y-a.y)*t-48;projectile.graphic.visible=t<1;
-                    if(room){const pa=a._reactorRoomPosition,pb=b._reactorRoomPosition;room.billboard('extra:projectile',projectile.graphic.bitmap.canvas,{x:0,y:0,width:projectile.graphic.bitmap.width,height:projectile.graphic.bitmap.height},{x:pa.x+(pb.x-pa.x)*t,y:pa.y+(pb.y-pa.y)*t,z:1},projectile.graphic.bitmap.height/48,projectile.graphic.bitmap);const record=room.billboards.get('extra:projectile');if(record)record.object.visible=t<1;projectile.graphic.visible=false;}
-                }}
-                const weapon=adapter.weapon;if(weapon){const s=weapon.step,p=roles.user;weapon.graphic.x=p.x+(s.x??.5)*48;weapon.graphic.y=p.y-(s.z??1)*48+(s.y||0)*48;weapon.graphic.rotation=(s.rotation||0)*Math.PI/180;weapon.graphic.scale.set(s.scale||1);
-                    if(room&&weapon.graphic.bitmap.isReady()){const home=p._reactorRoomPosition;room.billboard('extra:weapon',weapon.graphic.bitmap.canvas,weapon.graphic._frame,{x:home.x+(s.x??.5),y:home.y+(s.y||0),z:(home.z||0)+(s.z??1),rotateZ:s.rotation||0,scale:s.scale||1},.7,weapon.graphic.bitmap);weapon.graphic.visible=false;}
-                }
             },
             resolveNext(){if(manager._targets.length)manager.invokeAction(subject,manager._targets.shift());adapter.pendingImpact=manager._targets.length>0;},
-            clearWeapon(){room?.remove('extra:weapon');const g=adapter.weapon?.graphic;if(g){g.removeFromParent();g.destroy();}adapter.weapon=null;},
-            clearProjectile(){room?.remove('extra:projectile');const g=adapter.projectile?.graphic;if(g){g.removeFromParent();g.bitmap.destroy();g.destroy();}adapter.projectile=null;},
             cleanup(cancelled){
                 if(cancelled)for(const ticket of media)ticket.cancel?.();
                 if(!stateOnly)room?.endCinematicAction?.();
-                for(const [sprite,old] of saved){if(old.model){old.model.rotation.copy(old.modelRotation);old.model.scale.copy(old.modelScale);}delete sprite._rrSequenceFacing;sprite.rotation=old.rotation;sprite.scale?.set(old.scaleX,old.scaleY);Object.assign(sprite,{x:old.x,y:old.y,_offsetX:old.offsetX,_offsetY:old.offsetY});if(room){const role=Object.keys(roles).find(k=>roles[k]===sprite);sprite._reactorRoomPosition={...homes[role]};}}
+                for(const [sprite,old] of saved){if(old.model){old.model.rotation.copy(old.modelRotation);old.model.scale.copy(old.modelScale);}delete sprite._rrSequenceFacing;sprite.rotation=old.rotation;sprite.scale?.set(old.scaleX,old.scaleY);Object.assign(sprite,{x:old.x,y:old.y,_offsetX:old.offsetX,_offsetY:old.offsetY});if(room){const role=Object.keys(roles).find(k=>roles[k]===sprite);sprite._reactorRoomPosition={...homes[role],...(old.room?{x:old.room.x,y:old.room.y}:{})};}}// A home moved by Set Home Position lasts for the sequence, as in a flat battle.
                 if(!stateOnly&&room&&camera){Object.assign(room.settings.camera,camera);room.settings.cameraSource=cameraSource;}
-                adapter.clearProjectile();adapter.clearWeapon();
                 for(const sprite of saved.keys()){sprite.refreshMotion?.();if(sprite._reactorBattler){sprite._reactorBattler.action=null;const binding=sprite._reactorBattler.binding;if(binding){binding.latch={};binding.angles={};}}const model=room?.models.get(sprite._reactorRoomKey);if(model){model.action=null;if(model.binding){model.binding.latch={};model.binding.angles={};}}}
             }
         };adapter.owns=sprite=>saved.has(sprite);return P.extendAdapter(adapter,{manager,subject,targets,ss,room,roles,homes,saved,stateOnly});
@@ -350,7 +333,8 @@
             else if(op==='fadeIn'||op==='fadeOut')AudioManager[op+suffix]?.(step.fade/60);
             else if(op==='stop')AudioManager['stop'+suffix]?.();return {};
         }
-        if(step.type==='movie'){Video.play('movies/'+step.name);return {ticket:{blocking:true,isPlaying:()=>Video.isPlaying(),cancel:()=>Video._element?.pause()}};}
+        // The step stores the name without its extension, as the Play Movie command does.
+        if(step.type==='movie'){Video.play('movies/'+step.name+Game_Interpreter.prototype.videoFileExt(step.name));return {ticket:{blocking:true,isPlaying:()=>Video.isPlaying(),cancel:()=>Video._element?.pause()}};}
         if(step.type==='flash'){$gameScreen.startFlash([step.red,step.green,step.blue,step.alpha],step.duration);return {};}
         if(step.type==='shake'){$gameScreen.startShake(step.power,step.speed,step.duration);return {};}
         return null;
@@ -369,7 +353,7 @@
         const number=(value,target)=>{const n=typeof value==='number'?value:Number(expression(value??'0',target));if(!Number.isFinite(n))throw Error('Sequence expression must return a finite number.');return n;};
         const capture=sprite=>{
             if(!sprite)return null;
-            if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1});
+            if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1,room:room&&sprite._reactorRoomPosition?{...sprite._reactorRoomPosition}:null});
             if(!spriteKeys.has(sprite)){const key='extraBattler'+spriteKeys.size;spriteKeys.set(sprite,key);roles[key]=sprite;homes[key]=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0};}
             if(!appearance.has(sprite)){const main=sprite._mainSprite||sprite;appearance.set(sprite,{opacity:sprite.opacity,tone:main.getColorTone?.(),blend:main.getBlendColor?.(),pose:sprite._rrHeldPose,motion:sprite._rrGraphicMotion,homeX:sprite._homeX,homeY:sprite._homeY});}
             return spriteKeys.get(sprite);
@@ -458,7 +442,8 @@
             }
             if(['direction','home','jump','leap','float','fall','opacity','pose','tint','whiten'].includes(step.type)){
                 for(const sprite of sprites){const main=sprite._mainSprite||sprite,key=capture(sprite),home=homes[key];
-                    if(step.type==='home'){if(step.operation==='here'){home.x=sprite.x/48;home.y=sprite.y/48;}else if(step.operation==='position'){home.x=step.x;home.y=step.y;}else{const old=saved.get(sprite);home.x=old.x/48;home.y=old.y/48;}continue;}
+                    // In a Battle Room a home is a place on the room's map, where sprite.x and y are the point on the screen it is drawn at.
+                    if(step.type==='home'){const old=saved.get(sprite),at=room?sprite._reactorRoomPosition:null;if(step.operation==='here'){home.x=at?at.x:sprite.x/48;home.y=at?at.y:sprite.y/48;}else if(step.operation==='position'){home.x=step.x;home.y=step.y;}else if(room&&old.room){home.x=old.room.x;home.y=old.room.y;}else{home.x=old.x/48;home.y=old.y/48;}continue;}
                     if(step.type==='direction'){const target=step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0],dest=ss.findTargetSprite(target),pose={x:sprite.x/48,y:sprite.y/48,facing:sprite._rrSequenceFacing??sprite._rrFacingYaw??P.spriteYaw(sprite,target)},yaw=B.directionYaw(step,pose,dest?{x:dest.x/48,y:dest.y/48}:null,{x:home.x,y:home.y}),rad=yaw*Math.PI/180,facing=Math.abs(Math.sin(rad))>=Math.abs(Math.cos(rad))?Math.sign(Math.sin(rad)):(sprite._rrFacing||-1);sprite._rrFacing=facing;sprite._rrFacingYaw=yaw;if(!P.usesSheet(sprite))effects.push({direction:sprite,facing});continue;}
                     if(step.type==='pose'){sprite._rrHeldPose=step.operation==='clear'?null:{motion:step.motion,frame:Math.max(0,step.frame-1)};continue;}
                     if(step.type==='opacity')tween(sprite,'opacity',Math.max(0,Math.min(255,step.opacity)),step.duration,start,v=>sprite.opacity=v,sprite.opacity);
@@ -466,10 +451,6 @@
                     else if(step.type==='whiten'){main.setBlendColor?.([255,255,255,160]);tween(sprite,'whiten',0,Math.max(1,step.duration),start,v=>main.setBlendColor?.([255,255,255,v]),160);}
                     else{effects.push({lift:sprite,kind:step.type,height:step.height,start,end:start+Math.max(1,step.duration),from:sprite._rrLift||0});}
                 }return;
-            }
-            if(step.type==='weapon'&&step.weaponGraphic==='sheet'){
-                adapter.clearWeapon();if(step.visible===false)return;
-                const id=Math.max(1,step.weaponImageId),index=(id-1)%12,graphic=new Sprite(ImageManager.loadSystem('Weapons'+Math.ceil(id/12)));graphic.setFrame((Math.floor(index/6)*3+Math.max(0,Math.min(2,step.weaponFrame-1)))*96,index%6*64,96,64);graphic.anchor.set(.5,.5);ss._battleField.addChild(graphic);adapter.weapon={graphic,step};return;
             }
             if(step.type==='motion'&&(step.motionIndex||step.motionFrames||step.motionSpeed||step.motionLoop&&step.motionLoop!=='default'))for(const sprite of sprites){sprite._rrMotionOverride={...(step.motionIndex?{index:step.motionIndex-1}:{}),...(step.motionFrames?{frames:step.motionFrames}:{}),...(step.motionSpeed?{speed:step.motionSpeed}:{}),...(step.motionLoop&&step.motionLoop!=='default'?{loop:step.motionLoop==='loop'?true:step.motionLoop==='hold'?'once':false}:{}),name:step.motion};}
             else if(step.type==='motion')for(const sprite of sprites)delete sprite._rrMotionOverride;
@@ -489,7 +470,7 @@
             frame=time;original.pose(positions,time);
             for(const effect of effects){
                 if(effect.balloon){effect.balloon.update();continue;}
-                if(effect.direction){const sprite=effect.direction,old=saved.get(sprite);sprite.scale.x=Math.abs(old.scaleX)*(effect.facing<0?1:-1);if(room)sprite._reactorRoomPosition.facing=effect.facing*90;continue;}
+                if(effect.direction){const sprite=effect.direction,old=saved.get(sprite);sprite.scale.x=Math.abs(old.scaleX)*(effect.facing<0?1:-1);if(room&&!room.models.has(sprite._reactorRoomKey))sprite._reactorRoomPosition.facing=effect.facing*90;continue;}// A room's model keeps the yaw the pose gave it; a picture can only face left or right.
                 const t=Math.min(1,Math.max(0,(time-effect.start)/Math.max(1,effect.end-effect.start)));
                 if(effect.lift){const h=effect.kind==='jump'?effect.from+Math.sin(Math.PI*t)*effect.height:effect.kind==='leap'?effect.from+effect.height*(1-(1-t)*(1-t)):effect.kind==='float'?effect.from+effect.height*t:effect.from+(effect.height-effect.from)*t;effect.lift._rrLift=h;continue;}
                 const v=Array.isArray(effect.to)?effect.to.map((n,i)=>effect.from[i]+(n-effect.from[i])*t):effect.from+(effect.to-effect.from)*t;effect.apply(v);
@@ -701,7 +682,7 @@
         // A dissolving model owns its own look: the room eats it from the feet up and hides it at the end.
         if(record.dissolve){object.visible=!record.dissolve.done;
             // The hit blink may have left its white on the materials the frame before; the shards must come off the model's own colours.
-            if(!record.dissolve.lookCleared){record.dissolve.lookCleared=true;const T=root.THREE;object.traverse(node=>{for(const material of Array.isArray(node.material)?node.material:[node.material]){if(!material)continue;const tint=material.userData?.rrBlend;if(tint)tint.value.w=0;if(material.userData?.rrOriginalOpacity!==undefined)material.opacity=material.userData.rrOriginalOpacity;if(T&&material.blending!==T.NormalBlending)material.blending=T.NormalBlending;}});}
+            if(!record.dissolve.lookCleared){record.dissolve.lookCleared=true;const T=root.THREE;object.traverse(node=>{for(const material of Array.isArray(node.material)?node.material:[node.material]){if(!material)continue;const tint=material.userData?.rrBlend;if(tint)tint.value.w=0;if(material.userData?.rrOriginalOpacity!==undefined)material.opacity=material.userData.rrOriginalOpacity;if(T&&material.blending!==T.NormalBlending)material.blending=T.NormalBlending;root.Reactor3D?.touchMaterial?.(material);}});}
             return;}
         const main=sprite._mainSprite||sprite,blend=main.getBlendColor?.()||[0,0,0,0],strength=Math.max(0,Math.min(1,(blend[3]||0)/255)),additive=sprite.blendMode===1||main.blendMode===1;
         const dead=typeof battler.isDead==='function'&&battler.isDead(),collapsed=dead&&!sprite._effectType&&sprite.opacity<32;
@@ -711,12 +692,15 @@
         const T=root.THREE,wanted=T?(additive?T.AdditiveBlending:T.NormalBlending):null;
         object.traverse(node=>{for(const material of Array.isArray(node.material)?node.material:[node.material]){if(!material)continue;
             material.userData||={};material.userData.rrOriginalOpacity??=material.opacity;
+            const was=material.userData.rrBlend?.value,wasKey=material.opacity+'|'+material.transparent+'|'+material.blending+'|'+(was?was.x+','+was.y+','+was.z+','+was.w:'');
             material.opacity=material.userData.rrOriginalOpacity*opacity/255;
             if(opacity<255||additive)material.transparent=true;
             const tint=material.userData.rrBlend||(material.userData.rrBlend={value:{x:0,y:0,z:0,w:0}});
             if(blinkOff){tint.value.x=1;tint.value.y=1;tint.value.z=1;tint.value.w=.7;}
             else{tint.value.x=(blend[0]||0)/255;tint.value.y=(blend[1]||0)/255;tint.value.z=(blend[2]||0)/255;tint.value.w=strength;}
             if(wanted!==null&&material.blending!==wanted)material.blending=wanted;
+            // (Every frame of a battle: stamped only when a number changed.)
+            if(wasKey!==material.opacity+'|'+material.transparent+'|'+material.blending+'|'+tint.value.x+','+tint.value.y+','+tint.value.z+','+tint.value.w)root.Reactor3D?.touchMaterial?.(material);
         }});
         // The engine shakes a boss as it collapses: the model shakes the same few pixels, across the screen.
         const shake=Number(sprite._shake)||0,room=root.BattleManager?._spriteset?._reactorRoom;
@@ -944,7 +928,7 @@
                 P.createRoom(this,config,token).catch(P.warn).finally(()=>{if(this._reactorRoomToken===token)this._reactorRoomLoading=false;});}
         };
         Scene_Battle.prototype.isReady=function(){return !this._reactorRoomLoading&&ready.call(this);};
-        Scene_Battle.prototype.terminate=function(){P.cancelStates(this._spriteset);P.clearBattlerLayers(this._spriteset);this._reactorRoomToken=null;this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
+        Scene_Battle.prototype.terminate=function(){P.cancelStates(this._spriteset);P.clearBattlerLayers(this._spriteset);this._reactorRoomToken=null;{const holder=this._spriteset?._reactorRoomSprite;if(holder?._rrPass){holder._rrPass.removeFromParent();holder._rrPass.destroy();holder._rrPass=null;holder._rrPassGeneration=-1;}}this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
         const updateSprites=Spriteset_Battle.prototype.update;
         Spriteset_Battle.prototype.update=function(){updateSprites.call(this);P.updateStates(this);if(this._reactorRoom)P.updateRoom(this);else for(const update of this._rrSequenceVisualUpdates||[])update();};
         PluginManager.registerCommand('RPGReactor','BattleSequenceSkip',()=>{const player=BattleManager._reactorSequence;if(player){player.skip();while(player.adapter.pendingImpact)player.adapter.resolveNext();}});
@@ -981,11 +965,14 @@
         P.preloadBattleModels();
         try{await room.build();if(scene._reactorRoomToken!==token){room.dispose();return;}
             const ss=scene._spriteset;room.resize(Graphics.width,Graphics.height);
-            // A room on the game's context shows its own texture; one on its own canvas is copied into a bitmap.
-            const sprite=room.texture?new PIXI.Sprite(room.texture):new Sprite(new Bitmap(Graphics.width,Graphics.height));ss._baseSprite.addChildAt(sprite,Math.max(0,ss._baseSprite.children.indexOf(ss._battleField)));
+            // A room on the game's context is shown by its view's pass sprite, held in a container that stays at the
+            // screen's own scale (room points are turned into screen points through it); one on its own canvas is
+            // copied into a bitmap.
+            const sprite=room.view?new PIXI.Container():new Sprite(new Bitmap(Graphics.width,Graphics.height));ss._baseSprite.addChildAt(sprite,Math.max(0,ss._baseSprite.children.indexOf(ss._battleField)));
+            if(room.view)P.showRoomPass(sprite,room);
             ss._reactorRoom=room;ss._reactorRoomSprite=sprite;P.setupRoomEvents?.(room,ss);
             for(const bg of [ss._backgroundSprite,ss._back1Sprite,ss._back2Sprite])if(bg)bg.visible=false;
-        }catch(error){room.dispose();const ss=scene._spriteset;if(ss?._reactorRoom===room){ss._reactorRoom=null;const sprite=ss._reactorRoomSprite;sprite?.removeFromParent();sprite?.bitmap?.destroy();sprite?.destroy();ss._reactorRoomSprite=null;}throw error;}
+        }catch(error){room.dispose();const ss=scene._spriteset;if(ss?._reactorRoom===room){ss._reactorRoom=null;const sprite=ss._reactorRoomSprite;sprite?.removeFromParent();sprite?.bitmap?.destroy();sprite?._rrPass?.destroy();sprite?.destroy();ss._reactorRoomSprite=null;}throw error;}
     };
     /**
      * The game canvas's context came back after a loss: the room is built again
@@ -997,7 +984,7 @@
         if(!old||config?.type!=='room'||!(config.mapId>0))return;
         scene._reactorRoomToken={};const token=scene._reactorRoomToken;
         old.dispose();ss._reactorRoom=null;
-        const sprite=ss._reactorRoomSprite;sprite?.removeFromParent();sprite?.destroy();ss._reactorRoomSprite=null;
+        const sprite=ss._reactorRoomSprite;sprite?.removeFromParent();sprite?._rrPass?.destroy();sprite?.destroy();ss._reactorRoomSprite=null;
         P.createRoom(scene,config,token).catch(P.warn);
     };
     if(root.Reactor3D?.contextRestoredHandlers)root.Reactor3D.contextRestoredHandlers.push(()=>{const scene=typeof SceneManager!=='undefined'?SceneManager._scene:null;if(scene&&scene._spriteset?._reactorRoom)P.rebuildRoom(scene);});
@@ -1060,7 +1047,8 @@
             const main=sprite._mainSprite||sprite;
             if(spec){if(room.billboards.has(key))room.remove(key);room.addModel(key,spec,p);room.place(key,p);if(actor)P.fallPose(room,key,battler);else P.liePose(room,key,sprite._corpse);}
             else {if(room.models.has(key))room.remove(key);}
-            if(!spec&&main.bitmap?.isReady()){const tall=Math.max(.5,main._frame.height/48);room.billboard(key,main.bitmap.canvas,main._frame,{...P.lieBillboard(p,main._frame,tall,actor?0:sprite._corpse),flipX:actor?p.facing>0:p.facing<0},tall,main.bitmap);}
+            // A battler's Scale and Mirror (Battler Options) hold in a room as in a flat battle; the editor's sequence preview draws them the same way.
+            if(!spec&&main.bitmap?.isReady()){const graphic=P.graphicFor(battler),tall=Math.max(.5,main._frame.height/48)*Math.max(.1,Math.min(10,graphic?.scale||1));room.billboard(key,main.bitmap.canvas,main._frame,{...P.lieBillboard(p,main._frame,tall,actor?0:sprite._corpse),flipX:(actor?p.facing>0:p.facing<0)!==!!graphic?.mirror},tall,main.bitmap);}
             const record=room.models.get(key)||room.billboards.get(key);
             if(record?.object)P.mirrorSpriteLook(sprite,battler,record);
             const projected=P.roomScreenPosition(sprite);if(projected){sprite.x=projected.x;sprite.y=projected.y;}
@@ -1071,13 +1059,42 @@
         // Drawn once for the frame shown (a tick catching up updates several times), else at once.
         ss._reactorRoomDirty=true;if(!(typeof Graphics!=='undefined'&&Graphics._reactorBeforeRender))P.flushRoom(ss);
     };
+    /**
+     * The view's pass sprite for a room on the game's context, inside `holder`: made when there is none, and again
+     * when the view's passes were (a new render scale from Auto quality, a resize), as the map's own pass sprites are.
+     */
+    P.showRoomPass=function(holder,room){
+        const generation=room.passGeneration();
+        if(holder._rrPass&&holder._rrPassGeneration===generation)return;
+        const old=holder._rrPass;
+        if(old){old.removeFromParent();old.destroy();}
+        holder._rrPass=room.passSprite(Graphics.width,Graphics.height);holder._rrPassGeneration=generation;
+        holder.addChild(holder._rrPass);
+    };
     /** The room's picture for the frame: rendered, its battlers' bounds published, copied onto the battle's sprite. */
     P.flushRoom=function(ss){
-        const room=ss._reactorRoom;if(!room||room.disposed||!ss._reactorRoomDirty||!ss._reactorRoomSprite)return;ss._reactorRoomDirty=false;
+        const room=ss._reactorRoom;if(!room||room.disposed||!ss._reactorRoomSprite)return;
+        // A refresh with no update: the room drawn again at this refresh's moment (BattleRoomView.renderBetween).
+        if(!ss._reactorRoomDirty){if(room.renderBetween?.())P.showRoomPass(ss._reactorRoomSprite,room);return;}
+        ss._reactorRoomDirty=false;
         room.render();for(const sprite of ss.battlerSprites())if(sprite._reactorRoomKey)P.publishRoomBounds(sprite,room,sprite._reactorRoomKey);
         const sprite=ss._reactorRoomSprite;
-        if(room.texture){if(sprite.texture!==room.texture)sprite.texture=room.texture;return;}
+        if(room.view){P.showRoomPass(sprite,room);return;}
         const bitmap=sprite.bitmap;bitmap.context.drawImage(room.renderer.domElement,0,0);bitmap.baseTexture.update();
     };
+    /**
+     * The battle screen is drawn on every refresh, as a map is, not only on the refreshes that ran an update: the
+     * frame counter (F2) then shows what a frame of the battle costs, where it stood at 60 whatever the machine had
+     * to spare (owner, 2026-11-11). Updates stay at 60 a second. A Battle Room draws its picture again at the
+     * refresh's own moment (`flushRoom`); a flat battle's composite is drawn again as the last update left it.
+     * Not where the frames are rounded to the game's 60 (`SceneManager.trueSpeed` false) or the pacing is off.
+     */
+    P.EVERY_REFRESH=true;
+    P.drawsEveryRefresh=function(){
+        if(!P.EVERY_REFRESH||typeof SceneManager==='undefined'||typeof Scene_Battle==='undefined'||!(SceneManager._scene instanceof Scene_Battle))return false;
+        const pacing=typeof Graphics!=='undefined'?Graphics.FramePacing:null;
+        return !!pacing&&pacing.enabled!==false&&SceneManager.trueSpeed!==false;
+    };
+    if(typeof Graphics!=='undefined'&&Graphics._reactorEveryRefresh)Graphics._reactorEveryRefresh.add(P.drawsEveryRefresh);
     if(typeof Graphics!=='undefined'&&Graphics._reactorBeforeRender)Graphics._reactorBeforeRender.add(()=>{const ss=typeof SceneManager!=='undefined'&&SceneManager._scene?SceneManager._scene._spriteset:null;if(ss&&ss._reactorRoom)P.flushRoom(ss);});
 })(globalThis);

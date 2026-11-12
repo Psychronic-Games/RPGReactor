@@ -62,3 +62,13 @@ test('animated tile groups are never culled at build (their frames sample other 
     const source = require('node:fs').readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(source, /group\.anim \? group\.indices : Reactor3D\.InvisibleTiles\.cull\(group\.indices, group\.bounds, bitmaps && bitmaps\[group\.setNumber\]\)/);
 });
+
+test('a layer left with no triangles is hidden, both its meshes, instead of drawn empty every frame', () => {
+    // Measured in the Demo's first room (2026-11-11): three tile layers, every tile blank, were six draws of nothing.
+    assert.equal(T.hideEmpty, true);
+    const source = require('node:fs').readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    // Only a layer the cull emptied (never an animated one, whose index is kept whole), and one that had triangles.
+    assert.match(source, /const nothing = Reactor3D\.InvisibleTiles\.hideEmpty && !group\.anim && geometry\.index\.count === 0 && group\.indices\.length > 0;/);
+    assert.match(source, /if \(nothing\) \{ coreMesh\.visible = false; coreMesh\.userData\.rrEmptyTiles = true; \}/);
+    assert.match(source, /if \(nothing\) \{ mesh\.visible = false; mesh\.userData\.rrEmptyTiles = true; \}/);
+});

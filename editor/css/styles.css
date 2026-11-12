@@ -5079,7 +5079,6 @@
         }
         .rr-ui-props .rr-ui-hint { margin-top: 4px; }
         .rr-ui-props .rr-ui-hint-row { grid-column: 2 / -1; margin-top: -2px; }
-        .rr-ui-props .rr-ui-empty { grid-column: 1 / -1; padding: 8px; }
         .rr-ui-property-section {
             grid-column: 1 / -1;
             min-width: 0;

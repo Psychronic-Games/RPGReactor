@@ -116,7 +116,7 @@ class EventCommandList {
         this.playModelAnimationEditor = new PlayModelAnimationEditor();
         this.callUserInterfaceEditor = new CallUserInterfaceEditor();
         this.vehicleCommandEditor = typeof VehicleCommandEditor !== 'undefined' ? new VehicleCommandEditor(eventEditor.databaseManager,
-            () => ({ event: eventEditor.currentEvent || null, map: eventEditor.currentMap || (typeof window !== 'undefined' ? window.reactor?.eventManager?.currentMap : null) || null })) : null;
+            () => ({ event: eventEditor.currentEvent || null, map: (eventEditor._currentMap ? eventEditor._currentMap() : null) || (typeof window !== 'undefined' ? window.reactor?.eventManager?.currentMap : null) || null })) : null;
         this.questCommandEditor = typeof QuestCommandEditor !== 'undefined'
             ? new QuestCommandEditor(eventEditor.databaseManager) : null;
         this.fightCommandEditor = typeof FightCommandEditor !== 'undefined'
@@ -264,7 +264,7 @@ class EventCommandList {
             eventEditor.projectController
         );
 
-        // Toggle command editor (shared for codes 136-139, 216, 281)
+        // Toggle command editor (shared for codes 134-137, 216, 281)
         this.toggleCommandEditor = new ToggleCommandEditor(
             eventEditor.databaseManager,
             eventEditor.projectController
@@ -294,18 +294,6 @@ class EventCommandList {
             eventEditor.projectController
         );
         this.changeWindowColorEditor = new ChangeWindowColorEditor(
-            eventEditor.databaseManager,
-            eventEditor.projectController
-        );
-        this.changeBattleBGMEditor = new ChangeBattleBGMEditor(
-            eventEditor.databaseManager,
-            eventEditor.projectController
-        );
-        this.changeVictoryMEEditor = new ChangeVictoryMEEditor(
-            eventEditor.databaseManager,
-            eventEditor.projectController
-        );
-        this.changeDefeatMEEditor = new ChangeDefeatMEEditor(
             eventEditor.databaseManager,
             eventEditor.projectController
         );
@@ -2390,7 +2378,7 @@ class EventCommandList {
             case 137: description = params[0] === 0 ? tt('Disable') : tt('Enable'); break;
             case 138: {
                 const tone = params[0] || [0,0,0,0];
-                description = `(${tone[0]}, ${tone[1]}, ${tone[2]}, ${tone[3]})`;
+                description = `(${tone[0]}, ${tone[1]}, ${tone[2]})`;
                 break;
             }
             case 139: {
@@ -2407,7 +2395,9 @@ class EventCommandList {
             case 202: {
                 const vehicle = typeof SetVehicleLocationEditor !== 'undefined'
                     ? SetVehicleLocationEditor.vehicleName(params[0], this.eventEditor?.databaseManager, tt) : tt(['Boat', 'Ship', 'Airship'][params[0]] || 'Unknown');
-                description = `${vehicle} → (${params[2]}, ${params[3]}, ${params[4]})`;
+                // By variables, the three are variables' numbers, not a place.
+                description = params[1] ? `${vehicle} → (${this._fmtVarBracket(params[2])}, ${this._fmtVarBracket(params[3])}, ${this._fmtVarBracket(params[4])})`
+                    : `${vehicle} → (${params[2]}, ${params[3]}, ${params[4]})`;
                 break;
             }
             case 216: description = params[0] === 0 ? tt('Show') : tt('Hide'); break;
@@ -2428,7 +2418,11 @@ class EventCommandList {
                 break;
             }
             case 232: {
-                description = `#${params[0] || 1} (${params[4] || 0}, ${params[5] || 0}) ${params[10] || 60} ${tt('frames')}`;
+                // A position by variables names its variables: their ids read as pixels.
+                const place = params[3] === 1
+                    ? `(${this._fmtVarBracket(params[4])}, ${this._fmtVarBracket(params[5])})`
+                    : `(${params[4] || 0}, ${params[5] || 0})`;
+                description = `#${params[0] || 1} ${place} ${params[10] || 60} ${tt('frames')}`;
                 break;
             }
             case 233: {
@@ -2511,7 +2505,8 @@ class EventCommandList {
                 const opType = params[3] || 0;
                 const val = params[4] || 0;
                 const valStr = opType === 1 ? this._fmtVarBracket(val) : val;
-                description = `${op}${valStr}`;
+                description = `${this._fmtActorTarget(params[0], params[1])}, ${op}${valStr}`;
+                if (command.code === 311 && params[5]) description += ` (${tt('Allow Death')})`;
                 break;
             }
             case 313: {
@@ -2522,18 +2517,18 @@ class EventCommandList {
                     const s = this.eventEditor.databaseManager.data.states[stId];
                     if (s && s.name) stName = s.name;
                 }
-                description = `${op} ${stName}`;
+                description = `${this._fmtActorTarget(params[0], params[1])}, ${op} ${stName}`;
                 break;
             }
             case 314:
-                description = params[0] === 0 ? tt('Fixed Actor') : tt('Variable');
+                description = this._fmtActorTarget(params[0], params[1]);
                 break;
             case 315: case 316: {
                 const op = params[2] === 0 ? '+' : '-';
                 const opType = params[3] || 0;
                 const val = params[4] || 0;
                 const valStr = opType === 1 ? this._fmtVarBracket(val) : val;
-                description = `${op}${valStr}`;
+                description = `${this._fmtActorTarget(params[0], params[1])}, ${op}${valStr}`;
                 if (params[5]) description += ` (${tt('Show')})`;
                 break;
             }
@@ -2546,7 +2541,7 @@ class EventCommandList {
                     : params[4] === 2
                         ? `${params[5] || 0}–${params[6] || 0}`
                         : (params[5] || 0);
-                description = `${pName} ${op}${val}`;
+                description = `${this._fmtActorTarget(params[0], params[1])}, ${pName} ${op}${val}`;
                 break;
             }
             case 318: {
@@ -2557,21 +2552,23 @@ class EventCommandList {
                     const s = this.eventEditor.databaseManager.data.skills[skId];
                     if (s && s.name) skName = s.name;
                 }
-                description = `${op} ${skName}`;
+                description = `${this._fmtActorTarget(params[0], params[1])}, ${op} ${skName}`;
                 break;
             }
             case 319: {
-                // [actor, equipment type id (1 = Weapon), item id]: weapons for type 1, armors otherwise.
+                // [actor, equipment type id (1 = Weapon), item id]: weapons for type 1 (and for a dual
+                // wielder's type 2, as the game reads it), armors otherwise.
                 const databaseManager = this.eventEditor?.databaseManager;
                 const editorClass = typeof ChangeEquipmentEditor !== 'undefined' ? ChangeEquipmentEditor : null;
-                const type = editorClass ? editorClass.equipTypes(databaseManager, params[1]).find(entry => entry.value === params[1]) : null;
-                const items = params[1] === 1 ? databaseManager?.data?.weapons : databaseManager?.data?.armors;
+                const offHand = !!editorClass && params[1] === 2 && editorClass.dualWields(databaseManager, params[0] || 1);
+                const type = editorClass ? editorClass.equipTypes(databaseManager, params[1], offHand ? (params[0] || 1) : 0).find(entry => entry.value === params[1]) : null;
+                const items = params[1] === 1 || offHand ? databaseManager?.data?.weapons : databaseManager?.data?.armors;
                 const item = params[2] ? items?.[params[2]] : null;
-                description = `${type ? type.label : `#${params[1] || 0}`} = ${params[2] ? (item?.name || `#${params[2]}`) : tt('None')}`;
+                description = `${this._fmtActorTarget(0, params[0] || 1)}, ${type ? type.label : `#${params[1] || 0}`} = ${params[2] ? (item?.name || `#${params[2]}`) : tt('None')}`;
                 break;
             }
             case 320: case 324:
-                description = `${params[1] || ''}`;
+                description = `${this._fmtActorTarget(0, params[0] || 1)}, ${params[1] || ''}`;
                 break;
             case 321: {
                 let clsName = `${tt('Class')} ${params[1] || 1}`;
@@ -2579,11 +2576,11 @@ class EventCommandList {
                     const c = this.eventEditor.databaseManager.data.classes[params[1]];
                     if (c && c.name) clsName = c.name;
                 }
-                description = clsName;
+                description = `${this._fmtActorTarget(0, params[0] || 1)}, ${clsName}`;
                 break;
             }
             case 322:
-                description = `${tt('Character:')} ${params[1] || tt('(None)')}`;
+                description = `${this._fmtActorTarget(0, params[0] || 1)}, ${tt('Character:')} ${params[1] || tt('(None)')}`;
                 break;
             case 323: {
                 const vehicles = ['Boat', 'Ship', 'Airship'];
@@ -2591,7 +2588,7 @@ class EventCommandList {
                 break;
             }
             case 325:
-                description = (params[1] || '').substring(0, 40);
+                description = `${this._fmtActorTarget(0, params[0] || 1)}, ${(params[1] || '').substring(0, 40)}`;
                 break;
             case 331: case 332: case 342: {
                 const idx = params[0] || 0;
@@ -2626,7 +2623,7 @@ class EventCommandList {
             case 337: {
                 const idx = params[0];
                 const animId = params[1] || 1;
-                description = `${idx === -1 ? tt('All') : '#' + (idx + 1)} ${tt('Anim')} ${this._fmtAnim(animId)}`;
+                description = `${idx === -1 || params[2] ? tt('All') : '#' + (idx + 1)} ${tt('Anim')} ${this._fmtAnim(animId)}`;
                 break;
             }
             case 339: {
@@ -2801,11 +2798,11 @@ class EventCommandList {
             case 3: { // Actor param
                 let name = `${tt('Actor')} ${param1}`;
                 if (data && data.actors && data.actors[param1] && data.actors[param1].name) name = data.actors[param1].name;
-                const paramNames = [...['Level', 'EXP', 'HP', 'MP'].map(tt), ...globalThis.rrParamNames(tt)];
+                const paramNames = [...['Level', 'EXP', 'HP', 'MP'].map(tt), ...globalThis.rrParamNames(tt), tt('TP')];
                 return `${name}.${paramNames[param2] || tt('Param')}`;
             }
             case 4: { // Enemy param (param1 = troop member index)
-                const paramNames = [...['HP', 'MP'].map(tt), ...globalThis.rrParamNames(tt)];
+                const paramNames = [...['HP', 'MP'].map(tt), ...globalThis.rrParamNames(tt), tt('TP')];
                 return `${tt('Troop')} #${param1 + 1}.${paramNames[param2] || tt('Param')}`;
             }
             case 5: { // Character (param1 = char id, param2 = prop)
@@ -2822,12 +2819,26 @@ class EventCommandList {
                 const otherNames = ['Map ID', 'Party Size', 'Gold', 'Steps', 'Play Time', 'Timer', 'Save Count', 'Battle Count', 'Win Count', 'Escape Count'];
                 return tt(otherNames[param1] || 'Other');
             }
+            case 8: { // Last action
+                const lastNames = ['Last Used Skill ID', 'Last Used Item ID', 'Last Actor ID to Act',
+                    'Last Enemy Index to Act', 'Last Target Actor ID', 'Last Target Enemy Index'];
+                return tt(lastNames[param1] || 'Game Data');
+            }
             default:
                 return tt('Game Data');
         }
     }
 
     /** Format a compact variable operand: V[0001 VarName] */
+    /** Who an Actor command is for: the whole party, one actor by name, or the actor a variable names. */
+    _fmtActorTarget(designation, id) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        if (designation === 1) return this._fmtVarBracket(id || 0);
+        if (!id) return tt('Entire Party');
+        const actor = this.eventEditor?.databaseManager?.data?.actors?.[id];
+        return actor?.name || `${tt('Actor')} ${id}`;
+    }
+
     _fmtVarBracket(id) {
         const num = id.toString().padStart(4, '0');
         const name = this._lookupVariableName(id);
@@ -3670,7 +3681,8 @@ class EventCommandList {
         if (kind === 'eventCall') {
             const Editor = typeof CommonEventEditor !== 'undefined'
                 ? CommonEventEditor : require('./commands/CommonEventEditor.js');
-            return parsed.body === new Editor(null, null)._eventCallBody(parsed.data);
+            const editor = new Editor(null, null);
+            return parsed.body === editor._eventCallBody(parsed.data) || parsed.body === editor._eventCallBody(parsed.data, true);
         }
         if (kind === 'inputCondition') {
             const Editor = typeof ConditionalBranchEditor !== 'undefined'
@@ -4027,7 +4039,7 @@ class EventCommandList {
 
             // For show balloon icon commands, open the editor immediately
             if (code === 213) {
-                const eventData = this.eventEditor ? this.eventEditor.event : null;
+                const eventData = this.eventEditor ? this.eventEditor.currentEvent : null;
                 this.balloonIconEditor.show(null, (command) => {
                     if (command) {
                         page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
@@ -4102,7 +4114,7 @@ class EventCommandList {
             }
 
             // For audio commands, open the editor immediately
-            if ([241, 242, 245, 246, 249, 250, 251].includes(code)) {
+            if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(code)) {
                 this.audioEditor.show(null, code, (editedCommand) => {
                     if (editedCommand) {
                         // The editor builds new audio commands at indent 0. Left
@@ -4131,54 +4143,6 @@ class EventCommandList {
                         this.refreshCommandList(page, pageIndex);
                     }
                 });
-                return;
-            }
-
-            // Change Battle BGM
-            if (code === 132) {
-                this.audioEditor.show(null, code, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Victory ME
-            if (code === 133) {
-                this.audioEditor.show(null, code, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Defeat ME
-            if (code === 139) {
-                this.audioEditor.show(null, code, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Move Picture
-            if (code === 232) {
-                this.movePictureEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { commands: page.list, index: insertIndex });
                 return;
             }
 
@@ -4527,7 +4491,7 @@ class EventCommandList {
 
         // Show Balloon Icon command
         if (code === 213) {
-            const eventData = this.eventEditor ? this.eventEditor.event : null;
+            const eventData = this.eventEditor ? this.eventEditor.currentEvent : null;
             this.balloonIconEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
                     replaceSingle(editedCommand);
@@ -4631,7 +4595,7 @@ class EventCommandList {
         }
 
         // Audio commands
-        if ([241, 242, 245, 246, 249, 250, 251].includes(code)) {
+        if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(code)) {
             this.audioEditor.show(command, code, (editedCommand) => {
                 replaceSingle(editedCommand);
                 this.refreshCommandList(page, pageIndex);
@@ -4667,39 +4631,6 @@ class EventCommandList {
                     this.refreshCommandList(page, pageIndex);
                 }
             }, textLines);
-            return;
-        }
-
-        // Change Battle BGM command
-        if (code === 132) {
-            this.audioEditor.show(command, code, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Victory ME command
-        if (code === 133) {
-            this.audioEditor.show(command, code, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Defeat ME command
-        if (code === 139) {
-            this.audioEditor.show(command, code, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
             return;
         }
 

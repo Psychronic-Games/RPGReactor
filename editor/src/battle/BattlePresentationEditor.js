@@ -516,7 +516,7 @@ class BattlePresentationEditor {
             };
             const up=e=>{if(!drag)return;const held=drag;drag=null;view.cameraFollowFrozen=false;view.cameraFollowResume=true;canvas.style.cursor='';
                 if(e.type==='pointercancel')settings.enemies[held.index]=held.start;
-                else if(held.changed){config.enemies||=[];config.enemies[held.index]={...settings.enemies[held.index]};signature=JSON.stringify([config,troopEditor.currentTroop.members]);this.changed();}
+                else if(held.changed){config.enemies||=[];config.enemies[held.index]={...settings.enemies[held.index]};signature=JSON.stringify([config,troopEditor.currentTroop.members,party()]);this.changed();}
                 if(e.pointerId!==undefined&&canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
             };
             for(const [type,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['lostpointercapture',up]])canvas.addEventListener(type,fn);

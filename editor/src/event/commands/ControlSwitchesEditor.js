@@ -315,22 +315,6 @@ class ControlSwitchesEditor {
     }
 
     /**
-     * Browse switches using SwitchVariablePicker
-     */
-    browseSwitches() {
-        const picker = new SwitchVariablePicker(this.databaseManager, this.projectController);
-        picker.show('switch', this.startId, (selectedId) => {
-            if (selectedId) {
-                this.startId = selectedId;
-                if (this.singleSwitch) {
-                    this.endId = selectedId;
-                }
-                this.renderContent();
-            }
-        });
-    }
-
-    /**
      * Build command from current data
      */
     buildCommand() {

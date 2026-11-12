@@ -43,7 +43,6 @@ class BuildHotbar {
 
     static PIECES = ['floor', 'wall', 'doorway', 'door', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'];
     static EXTRA = ['shape', 'screen', 'light', 'hammer', 'blueprint'];
-    /** Rock sizes to start from, [w, h, d] in tiles: pick one, click, stack. */
     /** A placed shape's panel tabs. */
     static SHAPE_TABS = ['size', 'offset', 'rotate'];
     static ROCK_PRESETS = { boulder: [3, 2, 3], rock: [4, 4, 4], cliff: [4, 8, 4], spire: [2, 8, 2], ledge: [6, 2, 3], slab: [6, 1, 6] };
@@ -70,9 +69,9 @@ class BuildHotbar {
      * kept as one undo step, in ms: longer than the wait before a held key or a held arrow starts to repeat.
      */
     static GATHER_MS = 800;
-    /** The kinds whose facing matters: they climb, slope, open or run one way. */
     /** The longest stair run or ladder: as high as a piece may stand. */
     static get MAX_RUN() { return (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_MAX_LEVEL) || 240; }
+    /** The kinds whose facing matters: they climb, slope, open or run one way. */
     // (A fence turns itself to the way it runs: PieceBuilderManager.orientFences, Reactor3D.fenceJoins.)
     static FACING = ['stair', 'ladder', 'ramp', 'doorway', 'door', 'window', 'roof', 'glass'];
     /** A door's choices, value and label. */
@@ -173,10 +172,10 @@ class BuildHotbar {
 
     toggle(on) { if (on === undefined ? !this.visible : on) this.show(); else this.hide(); }
 
-    /** The slot the manager's state names. */
     /** Whether Lighting or Media Surfaces holds the map while the bar is up. */
     docked() { const owner = window.reactor?.mapTool; return owner === 'lighting' ? 'light' : owner === 'media' ? 'screen' : null; }
 
+    /** The slot the manager's state names. */
     activeSlot() {
         const manager = this.manager();
         if (!manager) return 'wall';
@@ -727,7 +726,7 @@ class BuildHotbar {
                     const shapeAt = [piece.x + 0.5 + (piece.offset ? piece.offset[0] || 0 : 0), piece.y + 0.5 + (piece.offset ? piece.offset[1] || 0 : 0)];
                     // In the handles' colours: red X, green up, blue Z; the rings alike (tilt about red, turn about green, roll about blue).
                     const pane = tab === 'shape' ? shapeGrid : tab === 'offset'
-                        ? slide('rr-build-pos', 'X', shapeAt[0], 0, 999, 0.05, 'x', 'x', 4) + slide('rr-build-pos', tt('Up'), piece.z, 0, 120, 0.05, 'z', 'y', 6) + slide('rr-build-pos', 'Z', shapeAt[1], 0, 999, 0.05, 'y', 'z', 4)
+                        ? slide('rr-build-pos', 'X', shapeAt[0], 0, 999, 0.05, 'x', 'x', 4) + slide('rr-build-pos', tt('Up'), piece.z, 0, BuildHotbar.MAX_RUN, 0.25, 'z', 'y', 6) + slide('rr-build-pos', 'Z', shapeAt[1], 0, 999, 0.05, 'y', 'z', 4)
                         : tab === 'rotate'
                             ? slide('rr-build-turn', tt('Tilt'), piece.tilt || 0, 0, 359, 1, 'tilt', 'x') + slide('rr-build-turn', tt('Turn'), piece.angle || 0, 0, 359, 1, 'angle', 'y') + slide('rr-build-turn', tt('Roll'), piece.roll || 0, 0, 359, 1, 'roll', 'z')
                             : rockPresets + sizeRows + (settings ? `<div class="rr-build-subhead">${this._t('build.settings')}</div>${settings}` : '');
@@ -1157,7 +1156,6 @@ class BuildHotbar {
             const key = el.dataset.key, frame = frameNow() || { style: 'cottage' };
             if (key === 'style') { setFrame(el.value ? Object.assign(frame, { style: el.value }) : null); return; }
             if (key === 'shutters') { if (el.checked) frame.shutters = (typeof Reactor3D !== 'undefined' && Reactor3D.SHUTTER_COLOUR) || '#3f5f3a'; else { delete frame.shutters; delete frame.closed; } setFrame(frame); return; }
-            if (key === 'shutterColour') { frame.shutters = el.value; setFrame(frame); return; }
             if (key === 'closed' || key === 'flowerBox') { if (el.checked) frame[key] = true; else delete frame[key]; setFrame(frame); }
         }));
         const shutters = panel.querySelector('.rr-build-shutters');
@@ -1366,7 +1364,8 @@ class BuildHotbar {
         panel.querySelectorAll('.rr-build-pos').forEach(el => el.addEventListener('change', () => {
             const v = Number(el.value); if (!Number.isFinite(v) || !placed) { this.renderPanel(); return; }
             const cx = s.piece.x + 0.5 + (s.piece.offset ? s.piece.offset[0] || 0 : 0), cy = s.piece.y + 0.5 + (s.piece.offset ? s.piece.offset[1] || 0 : 0);
-            if (el.dataset.key === 'z') manager.updateSelected({ z: Math.max(0, Math.round(v * 20) / 20) }); else manager.moveSelectedPieceTo(el.dataset.key === 'x' ? v : cx, el.dataset.key === 'y' ? v : cy);
+            // Up is kept to the quarter tile (normalizePiece), so the row steps and rounds as the store does.
+            if (el.dataset.key === 'z') manager.updateSelected({ z: Math.max(0, Math.round(v * 4) / 4) }); else manager.moveSelectedPieceTo(el.dataset.key === 'x' ? v : cx, el.dataset.key === 'y' ? v : cy);
             this.renderPanel();
         }));
         panel.querySelectorAll('.rr-build-turn').forEach(el => el.addEventListener('change', () => { const v = ((Math.round(Number(el.value)) || 0) % 360 + 360) % 360; if (placed) manager.updateSelected({ [el.dataset.key]: v }); this.renderPanel(); }));
@@ -1430,7 +1429,6 @@ class BuildHotbar {
         });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
         panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });
-        panel.querySelector('.rr-build-plan')?.addEventListener('change', event => { manager.structure = event.target.value; manager.setMode('stamp'); });
     }
 
     /**
@@ -2500,7 +2498,6 @@ class BuildHotbar {
         return true;
     }
 
-    /** A line that shows for a moment over the bar: why a click did nothing, what just happened. */
     /**
      * Save the selection as a structure: a name, an optional note, what comes with it (people,
      * and whether the selection itself becomes one building), a picture of it from the view.
@@ -2584,6 +2581,7 @@ class BuildHotbar {
         name.focus(); name.select();
     }
 
+    /** A line that shows for a moment over the bar: why a click did nothing, what just happened. */
     flash(text) {
         if (!this.root || !this.visible) return;
         let note = this.root.querySelector('.rr-build-flash');

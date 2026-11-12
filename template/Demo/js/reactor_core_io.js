@@ -697,12 +697,20 @@ WebAudio.prototype._onError = function() {
     const noData = this._fetchedSize === 0 && (!this._data || !this._data.length);
     // An encrypted MV game names its audio .rpgmvo / .rpgmvm where MZ adds "_"
     // (the bytes are encrypted the same way): ask for that name once.
-    if (noData && Utils.hasEncryptedAudio() && !this._mvEncryptedUrl) {
-        const mv = String(this._url || "").replace(/\.ogg$/i, ".rpgmvo").replace(/\.m4a$/i, ".rpgmvm");
-        if (mv !== this._url) {
-            this._mvEncryptedUrl = Utils.correctFileCase(mv) || mv;
-            this._startLoading();
-            return;
+    if (noData && Utils.hasEncryptedAudio()) {
+        if (this._mvEncryptedUrl) {
+            // That name failed too. Let it go, or every extension tried below
+            // would ask for it again instead of its own name (_realUrl).
+            this._mvEncryptedUrl = null;
+        } else {
+            const mv = String(this._url || "").replace(/\.ogg$/i, ".rpgmvo").replace(/\.m4a$/i, ".rpgmvm");
+            this._triedMvUrls = this._triedMvUrls || [];
+            if (mv !== this._url && !this._triedMvUrls.includes(mv)) {
+                this._triedMvUrls.push(mv);
+                this._mvEncryptedUrl = Utils.correctFileCase(mv) || mv;
+                this._startLoading();
+                return;
+            }
         }
     }
     if (noData && !Utils.isNwjs()) {

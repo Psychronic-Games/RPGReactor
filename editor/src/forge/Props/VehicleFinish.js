@@ -184,7 +184,10 @@
         charts.sort((a,b)=>b.h*b.k-a.h*a.k||b.w*b.k-a.w*a.k);
         const quick=size===512,maxW=quick?512:2048,maxH=quick?1024:2048;
         let density=quick?95:330,layout;
-        for(let attempt=0;attempt<16;attempt++){
+        // The density steps down until the charts fit: sixteen steps stopped at
+        // about 48 pixels a meter, too many for a 40 m jet the sliders offer.
+        // Under one pixel a meter every chart is at its smallest already.
+        for(;density>=1;){
             const a={width:maxW,shelfY:0,shelfH:0,cursorX:0};let used=0;
             for(const c of charts){const w=Math.max(12,Math.min(maxW-16,Math.ceil(c.w*density*c.k))),h=Math.max(12,Math.min(maxH-16,Math.ceil(c.h*density*c.k)));if(a.cursorX+w+8>a.width){a.shelfY+=a.shelfH;a.shelfH=0;a.cursorX=0;}c.rect={x:a.cursorX+4,y:a.shelfY+4,w,h};a.cursorX+=w+8;a.shelfH=Math.max(a.shelfH,h+8);used=Math.max(used,c.rect.y+h+4);if(used>maxH)break;}
             if(used<=maxH){layout={width:maxW,height:used<=maxH/2?maxH/2:maxH};break;}density*=.88;

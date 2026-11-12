@@ -194,6 +194,8 @@ test('the volume runs where the graphics card is the limit: a weak GPU, or Auto 
         Reactor3D.isWeakGpu = () => false; Q.g = 0;
         assert.equal(V.on(), false, 'a discrete card at full quality lights per pixel');
         Q.g = 1;
+        assert.equal(V.on(), false, 'nor at the plain picture one level down, which every machine began at before the whole picture took the top');
+        Q.g = 2;
         assert.equal(V.on(), true, 'Auto stepped down for the GPU');
         Q.g = 0; Reactor3D.isWeakGpu = () => true;
         assert.equal(V.on(), true, 'a weak GPU');

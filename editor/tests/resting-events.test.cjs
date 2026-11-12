@@ -52,7 +52,7 @@ test('anything that moves it or sets its height wakes it at once', () => {
 test('only events rest, the record is kept beside the character, and it is made where a body stands dry on its ground', () => {
     assert.match(physics, /if \(this\.RESTS && typeof Game_Event !== "undefined" && character instanceof Game_Event\) \{/);
     assert.match(physics, /const REST = new WeakMap\(\);/, 'not on the character: a character is written into a save');
-    assert.match(physics, /else if \(this\.atRest\(character, rest, tick\)\) \{ this\.rested\+\+; return; \}/);
+    assert.match(physics, /else if \(this\.atRest\(character, rest, tick\)\) return;/);
     assert.match(physics, /if \(rest && float === null && !flying\) \{\n\s+rest\.valid = true; rest\.map = \$dataMap;/);
     assert.match(physics, /ReactorPhysics\.RESTS = true;/);
 });

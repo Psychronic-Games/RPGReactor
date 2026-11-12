@@ -361,7 +361,10 @@ class MovePictureEditor {
         this.scaleY = values.scaleY;
         this.opacity = values.opacity;
         if (values.duration !== undefined) this.duration = values.duration;
+        const byVariables = this.designationType === 1;
         this.designationType = 0;
+        // X and Y were built with the limits of variable ids: drawn again, they take a position's.
+        if (byVariables && this.modal) { this.renderContent(); return; }
         for (const property of ['origin', 'designationType', 'x', 'y', 'scaleX', 'scaleY', 'opacity', 'duration']) {
             this.syncPictureField(property);
         }
@@ -419,48 +422,6 @@ class MovePictureEditor {
     }
 
     /**
-     * Create a labeled slider + number input
-     */
-    createSliderInput(label, value, min, max, onChange) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const section = document.createElement('div');
-        section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const labelEl = document.createElement('span');
-        labelEl.textContent = tt(label);
-        labelEl.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = min;
-        slider.max = max;
-        slider.value = value;
-        slider.style.cssText = 'flex: 1;';
-
-        const numInput = document.createElement('input');
-        numInput.type = 'number';
-        numInput.min = min;
-        numInput.max = max;
-        numInput.value = value;
-        numInput.style.cssText = 'padding:4px 6px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:60px;';
-
-        slider.addEventListener('input', (e) => {
-            numInput.value = e.target.value;
-            onChange(parseInt(e.target.value));
-        });
-
-        numInput.addEventListener('input', (e) => {
-            slider.value = e.target.value;
-            onChange(parseInt(e.target.value) || 0);
-        });
-
-        section.appendChild(labelEl);
-        section.appendChild(slider);
-        section.appendChild(numInput);
-        return section;
-    }
-
-    /**
      * Create number input field
      */
     createNumberInput(label, property, min, max) {
@@ -491,6 +452,20 @@ class MovePictureEditor {
         `;
         input.addEventListener('input', (e) => {
             this[property] = Number(e.target.value) || 0;
+        });
+        // When the field is left (OK blurs it first): within its range, and whole where the game wants a whole number,
+        // as Show Picture's fields are. A cleared picture number saved 0 and moved nothing; with a Reactor option on,
+        // a decimal X or an opacity over 255 made the game skip the command, and the row reopened as a raw script.
+        const whole = ['pictureId', 'x', 'y', 'opacity', 'scaleX', 'scaleY'].includes(property);
+        let kept = Number(this[property]) || 0;
+        input.addEventListener('change', (e) => {
+            let value = Number(e.target.value);
+            // Emptied or unreadable: the last value it had.
+            if (e.target.value === '' || !Number.isFinite(value)) value = kept;
+            value = Math.max(Number(min), Math.min(Number(max), value));
+            if (whole) value = Math.round(value);
+            this[property] = kept = value;
+            e.target.value = String(value);
         });
 
         section.appendChild(labelEl);
@@ -534,6 +509,10 @@ class MovePictureEditor {
             const option = options.find(item => String(item.value) === e.target.value);
             this[property] = option ? option.value : e.target.value;
             if (property === 'designationType') this.setDesignationType(this[property]);
+            // The game has 100 pictures: a variable id past that is not a picture number.
+            if (property === 'pictureIdSource' && this.pictureIdSource !== 'variable') {
+                this.pictureId = Math.max(1, Math.min(100, Number(this.pictureId) || 1));
+            }
             if (property === 'pictureIdSource' || property === 'durationSource'
                 || property === 'designationType') this.renderContent();
         });
@@ -580,7 +559,7 @@ class MovePictureEditor {
         ]));
         const pictureRow = this.createNumberInput(
             this.pictureIdSource === 'variable' ? 'Variable:' : 'Picture Number:',
-            'pictureId', 1, 9999);
+            'pictureId', 1, this.pictureIdSource === 'variable' ? 9999 : 100);
         const quickSettingButton = document.createElement('button');
         quickSettingButton.type = 'button';
         quickSettingButton.textContent = tt('Quick Setting');
@@ -652,6 +631,14 @@ class MovePictureEditor {
         `;
         durationInput.addEventListener('input', (e) => {
             this.duration = parseInt(e.target.value) || 1;
+        });
+        // When the field is left: 1 to 999 frames, or a variable the project has.
+        const durationMaximum = this.durationSource === 'variable' ? this.getVariableMaximum() : 999;
+        durationInput.max = durationMaximum;
+        durationInput.addEventListener('change', (e) => {
+            const value = Math.max(1, Math.min(durationMaximum, parseInt(e.target.value) || this.duration || 1));
+            this.duration = value;
+            e.target.value = String(value);
         });
 
         const durationUnit = document.createElement('span');

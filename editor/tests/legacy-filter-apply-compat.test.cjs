@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const realPool = require('pixi.js').TexturePool;
 
 const workspaceRoot = path.resolve(__dirname, '..', '..');
 const source = fs.readFileSync(
@@ -60,7 +61,7 @@ function makePixi() {
     }
     class FilterSystem {}
     const whiteSource = { uploadMethodId: 'image', label: 'white' };
-    const pool = { returns: [] };
+    const pool = { returns: [], requests: [] };
     const PIXI = {
         TextureSource: function TextureSource() {},
         Filter,
@@ -69,11 +70,17 @@ function makePixi() {
         FilterSystem,
         GlProgram: { from(options) { captured.program = options; return options; } },
         Texture: { WHITE: { source: whiteSource }, prototype: {} },
+        // The bundled PIXI's own pool: it takes an options object since 8.21
+        // and says so (a deprecation) when handed numbers.
         TexturePool: {
-            getOptimalTexture(width, height, resolution, antialias) {
-                return { width, height, resolution, antialias };
+            getOptimalTexture(...args) {
+                pool.requests.push(args);
+                return realPool.getOptimalTexture(...args);
             },
-            returnTexture(texture) { pool.returns.push(texture); }
+            returnTexture(texture) {
+                pool.returns.push(texture);
+                return realPool.returnTexture(texture);
+            }
         }
     };
     return { PIXI, captured, pool, whiteSource };
@@ -152,15 +159,23 @@ test('the v5 FilterSystem scratch-texture API maps onto the v8 TexturePool', () 
     install(PIXI);
     const system = new PIXI.FilterSystem();
     system._activeFilterData = { bounds: { width: 816, height: 624 }, resolution: 2 };
+    const shape = texture => ({
+        width: texture.frame.width, height: texture.frame.height,
+        resolution: texture.source._resolution, antialias: texture.source.antialias
+    });
     const scratch = system.getFilterTexture();
-    assert.deepEqual(scratch, { width: 816, height: 624, resolution: 2, antialias: false });
-    assert.deepEqual(system.getFilterTexture(true), scratch,
+    assert.deepEqual(shape(scratch), { width: 816, height: 624, resolution: 2, antialias: false });
+    assert.deepEqual(shape(system.getFilterTexture(true)), shape(scratch),
         'a junk input argument (KawaseBlur passes true) still sizes from the pass');
     const sized = system.getFilterTexture({
         source: { uploadMethodId: 'image', _resolution: 1 },
         frame: { width: 32, height: 16 }
     });
-    assert.deepEqual(sized, { width: 32, height: 16, resolution: 1, antialias: false });
+    assert.deepEqual(shape(sized), { width: 32, height: 16, resolution: 1, antialias: false });
+    for (const args of pool.requests) {
+        assert.equal(args.length, 1, 'one options object, not the positional form 8.21 deprecated');
+        assert.equal(typeof args[0], 'object');
+    }
     system.returnFilterTexture(scratch);
     assert.equal(pool.returns[0], scratch);
 });

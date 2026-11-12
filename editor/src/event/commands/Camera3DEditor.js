@@ -3,7 +3,7 @@
  *
  * Stored as an MZ plugin command (code 357, plugin "RPGReactor", command
  * "ChangeCamera3D"), so the data stays loadable everywhere and a stock MZ
- * runtime ignores it. The runtime (`reactor_camera_3d.js`) moves the 3D map
+ * runtime ignores it. The runtime (`reactor_3d.js`) moves the 3D map
  * camera to the chosen mode, eased over the duration. A blank number means
  * the mode's own value.
  */
@@ -26,8 +26,8 @@ class Camera3DEditor {
             fixed: { pitch: 55, yaw: 0, fov: 30, distance: '' },
             topDown: { pitch: 89, yaw: 0, fov: 30, distance: '' },
             isometric: { pitch: 35.264, yaw: 45, fov: 15, distance: '' },
-            thirdPerson: { pitch: 28, yaw: 0, fov: 45, distance: 6 },
-            firstPerson: { pitch: 0, yaw: 0, fov: 70, distance: '' }
+            thirdPerson: { pitch: 25, yaw: 0, fov: 45, distance: 8 },
+            firstPerson: { pitch: 0, yaw: 0, fov: 70, distance: 0 }
         };
         return table[mode] || table.fixed;
     }

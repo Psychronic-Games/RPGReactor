@@ -175,8 +175,9 @@ class DatabaseManager {
             // An absent file reads as []; records start at id 1 behind the
             // null slot every other database file keeps. A project that has
             // never authored an interface opens on baselines of its stock
-            // scenes (they are written with the next save; the game keeps
-            // its stock scenes until one is called).
+            // scenes (they are written by the first save after one is
+            // edited, bound in Use As or playtested; until then the project
+            // gains no file and the game keeps its stock scenes).
             if (!Array.isArray(loaded.userInterfaces) || loaded.userInterfaces.length === 0) {
                 const stock = typeof RRStockInterfaces !== 'undefined' ? RRStockInterfaces.build(loaded) : [];
                 loaded.userInterfaces = [null, ...stock];
@@ -342,15 +343,13 @@ class DatabaseManager {
         return (this.data.structures || []).filter(entry => entry !== null);
     }
 
-    hasStructures() {
-        return (this.data.structures || []).some(entry => entry && entry.name);
-    }
-
     /** A file name from a plan's name, unique among the names taken. */
     static structureFileName(name, taken) {
         const base = String(name || 'Plan').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '-') || 'Plan';
+        // Without case: House.json and house.json are one file on a Windows disk.
+        const used = new Set([...taken].map(other => String(other).toLowerCase()));
         let file = base + '.json', n = 2;
-        while (taken.has(file)) file = `${base}-${n++}.json`;
+        while (used.has(file.toLowerCase())) file = `${base}-${n++}.json`;
         return file;
     }
 
@@ -373,17 +372,27 @@ class DatabaseManager {
         const normalize = typeof DatabaseStructureEditor !== 'undefined' ? (raw => DatabaseStructureEditor.normalizePlan(raw)) : (raw => raw);
         const taken = new Set();
         const keep = new Set();
+        // The files the records have: a record with none (a pasted one) must not be named onto
+        // the file of a record further down the list.
+        const owned = records.filter(entry => entry && entry.plan && entry.file).map(entry => entry.file);
+        let savedRecords = null;
+        try { savedRecords = this.savedState.structures === undefined ? null : JSON.parse(this.savedState.structures); } catch (_) { savedRecords = null; }
         try {
             this.fs.mkdirSync(directory, { recursive: true });
-            for (const entry of records) {
+            for (const [index, entry] of records.entries()) {
                 // A deleted record has no name and no file. One with a file keeps it while its name is retyped.
                 if (!entry || !entry.plan || (!entry.name && !entry.file)) continue;
-                if (!entry.file || taken.has(entry.file)) entry.file = DatabaseManager.structureFileName(entry.name, taken);
+                if (!entry.file || taken.has(entry.file)) entry.file = DatabaseManager.structureFileName(entry.name, new Set([...owned, ...taken]));
                 taken.add(entry.file);
                 entry.plan.name = entry.name || entry.file.replace(/\.json$/i, '');
-                const plan = normalize(entry.plan);
-                this._writeFileAtomic(this.fs, this.path.join(directory, entry.file), (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trim(plan)) : JSON.stringify(trim(plan), null, 2)) + '\n');
                 keep.add(entry.file);
+                const target = this.path.join(directory, entry.file);
+                // A plan as the last save or load left it keeps its file as it is: each write is
+                // a file the sync client sends to the other machine again.
+                if (Array.isArray(savedRecords) && savedRecords[index]
+                    && JSON.stringify(savedRecords[index]) === JSON.stringify(entry) && this.fs.existsSync(target)) continue;
+                const plan = normalize(entry.plan);
+                this._writeFileAtomic(this.fs, target, (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trim(plan)) : JSON.stringify(trim(plan), null, 2)) + '\n');
             }
             for (const file of seen) {
                 if (keep.has(file)) continue;
@@ -660,10 +669,27 @@ class DatabaseManager {
                 const systemEntry = this.dataFiles.find(([, file]) => file === 'System.json');
                 if (systemEntry) this.captureSavedState(systemEntry[0]);
             }
+            // A whole save retakes the Database's Cancel baseline itself, once, when it is done.
+            if (!options.wholeSave) this.adoptSavedState(filename === 'System.json' ? ['system'] : [entry && entry[0], 'system']);
             return true;
         } catch (error) {
             console.error(`Error saving ${filename}:`, error);
             return false;
+        }
+    }
+
+    /**
+     * These sections were written outside a Database save (a start position set on the map, a
+     * structure kept from a selection): an open Database's Cancel goes back to them as they
+     * now are on disk. Without this its Cancel put the older data back in memory, and the
+     * next save wrote that over the file.
+     */
+    adoptSavedState(keys) {
+        try {
+            const ui = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+            if (ui && ui.databaseManager === this && typeof ui.adoptSaved === 'function') ui.adoptSaved(keys);
+        } catch (error) {
+            console.warn('The Database baseline was not updated:', error);
         }
     }
 
@@ -874,6 +900,18 @@ class DatabaseManager {
         return Array.isArray(list) && list.some(entry => entry && typeof entry === 'object');
     }
 
+    /**
+     * Whether the game will look for an interface record: one is bound in
+     * Use As (System's reactor…InterfaceId fields), or the interface editor
+     * asked for the file before a playtest (writeSeededInterfaces).
+     */
+    seededInterfacesInUse() {
+        if (this.writeSeededInterfaces) return true;
+        const system = this.data.system;
+        if (!system || typeof system !== 'object') return false;
+        return Object.keys(system).some(field => /^reactor[A-Za-z]+InterfaceId$/.test(field) && Number(system[field]) > 0);
+    }
+
     getCommonEvents() {
         return this.data.commonEvents.filter(c => c !== null);
     }
@@ -1053,7 +1091,8 @@ class DatabaseManager {
                 // Removing this journal commits the pair. Recovery can be retried
                 // after an interrupted write, without losing the previous pair.
                 this._writeFileAtomic(this.fs,journal,JSON.stringify({version:1,files:records.map(({file,previous})=>({file,previous}))}));
-                for(const r of records)if(r.next!==null)this._writeFileAtomic(this.fs,r.dest,r.next);
+                // Only the file that changed: the journal holds both as they were, so recovery is the same.
+                for(const r of records)if(r.next!==null&&r.next!==r.previous)this._writeFileAtomic(this.fs,r.dest,r.next);
                 this.fs.rmSync(journal,{force:true});
             }
             this.captureSavedState('actionSequences');this.captureSavedState('battlePresentation');return true;
@@ -1095,8 +1134,11 @@ class DatabaseManager {
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
                 continue;
             }
-            // Nor one whose stock interfaces, seeded on load, are still as they were seeded.
+            // Nor one whose stock interfaces, seeded on load, are still as they
+            // were seeded, unless something now points at one of them: the
+            // game finds a bound or playtested record only in this file.
             if (key === 'userInterfaces' && !dirty.has(key) && this.savedState[key] !== undefined
+                && !this.seededInterfacesInUse()
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
                 continue;
             }
@@ -1113,7 +1155,7 @@ class DatabaseManager {
             // System.json is part of dataFiles and gets its own fresh
             // versionId when its turn comes — skip the companion rewrite
             // that would otherwise re-save it after every other file.
-            if (!await this.saveJSON(projectPath, filename, this.data[key], { skipVersionBump: true })) {
+            if (!await this.saveJSON(projectPath, filename, this.data[key], { skipVersionBump: true, wholeSave: true })) {
                 failed.push(filename);
             }
             wroteData = true;

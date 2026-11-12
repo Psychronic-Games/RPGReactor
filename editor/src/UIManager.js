@@ -57,7 +57,6 @@ class UIManager {
             });
             menuItems.forEach(item => item.classList.remove('is-open'));
         };
-        this.closeHtmlMenus = closeAllMenus;
         const stepHeading = (item, direction, reopen) => {
             const index = menuItems.indexOf(item);
             const next = menuItems[(index + direction + menuItems.length) % menuItems.length];
@@ -1635,5 +1634,21 @@ class UIManager {
 
     updateStatus(message) {
         // Status bar removed - status updates are visual only
+    }
+
+    /**
+     * A failure that has no dialog of its own, said in the short note over the
+     * map (the one an undo or a redo names its step in). It stays longer than
+     * those: it is the only place the reason is given.
+     */
+    showMapNote(message, duration = 6000) {
+        const stage = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
+        if (!stage || !message) return;
+        let note = stage.querySelector(':scope > .rr-history-note');
+        if (!note) { note = document.createElement('div'); note.className = 'rr-history-note'; note.setAttribute('role', 'status'); stage.appendChild(note); }
+        note.textContent = message;
+        note.classList.add('is-shown');
+        clearTimeout(note._rrHideTimer);
+        note._rrHideTimer = setTimeout(() => note.classList.remove('is-shown'), duration);
     }
 }

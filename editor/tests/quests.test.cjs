@@ -92,6 +92,10 @@ test('objectives and rewards change one at a time or all at once, and "every sho
     quests.setReward(1, 'all', false);
     assert.deepEqual([...quests.rewardsShown(1)], [false, false]);
     assert.equal(quests.setObjective(1, 9, 'complete'), false, 'an index past the list is refused');
+    quests.reset(1);
+    assert.equal(quests.setReward(1, -1, true), false, 'a reward the quest does not have is refused');
+    assert.equal(quests.setReward(1, 9, true), false);
+    assert.equal(quests.status(1), 'hidden', 'and the quest stays out of the log');
 });
 
 test('the rules run on the map: start, switch and variable activation; switch-driven objectives and completion', () => {

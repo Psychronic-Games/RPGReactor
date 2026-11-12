@@ -430,6 +430,8 @@ class TilemapManager {
 
     async loadMap(mapId) {
         const generation = ++this._mapLoadGeneration;
+        // Why the last load failed, for whoever tells the user; empty when it did not.
+        this.lastLoadError = '';
         if (!this.fs || !this.path) {
             return false;
         }
@@ -443,6 +445,7 @@ class TilemapManager {
             const mapPath = this.path.join(this.projectPath, 'data', mapFile);
 
             if (!this.fs.existsSync(mapPath)) {
+                this.lastLoadError = `${mapFile} is missing from the project's data folder.`;
                 return false;
             }
 
@@ -476,6 +479,7 @@ class TilemapManager {
                 this.savedMapState = previousSavedMapState;
             }
             console.error(`Error loading map ${mapId}:`, error);
+            if (generation === this._mapLoadGeneration) this.lastLoadError = String(error?.message || error || '');
             return false;
         }
     }
@@ -700,13 +704,15 @@ class TilemapManager {
         for (const cache of [this.textureCache, this.a1AnimationCache]) {
             for (const key in cache) {
                 const parts = key.split('_');
-                const slot = Number(parts[0] === 'auto' ? parts[1] : parts[0]);
+                // The animated water's frames ("a1_…") are all cut from the A1 sheet, slot 0.
+                const slot = parts[0] === 'a1' ? 0 : Number(parts[0] === 'auto' ? parts[1] : parts[0]);
                 if (!changedSlots.has(slot)) continue;
                 if (cache[key] && cache[key].destroy) cache[key].destroy(false);
                 delete cache[key];
             }
         }
-        if (changedSlots.has(0)) this._a2DecorKinds = null;
+        // The decoration table is read from the A2 sheet's pixels, slot 1.
+        if (changedSlots.has(1)) this._a2DecorKinds = null;
 
         if (this.mapUsesSheets(changed)) {
             this.renderMap();
@@ -2988,15 +2994,6 @@ class TilemapManager {
         return (tileId - this.TILE_ID_A1) % 48;
     }
 
-    isTileA1Waterfall(tileId) {
-        // Check if this A1 tile is a waterfall (vertical animation)
-        // Per RPG Maker MZ corescript: waterfalls are odd kinds >= 5 (5, 7, 9, 11, 13, 15)
-        // Kinds 2, 3 are deep sea water/whirlpool (static, not waterfalls)
-        if (!this.isTileA1(tileId)) return false;
-        const kind = this.getAutotileKind(tileId);
-        return kind >= 5 && kind % 2 === 1;
-    }
-
     // ── A2 decoration classification ─────────────────────────────────────
     // The MZ editor decides "does this A2 autotile REPLACE the ground (z0)
     // or STACK onto the second A-slot (z1)?" from the ART: kinds drawn
@@ -3535,19 +3532,13 @@ class TilemapManager {
         this.tileSprites[key] = spritesArray;
     }
 
-    isShadowTile(shadowBits) {
-        // Shadow bits is a 4-bit bitmask value (0x00 to 0x0F)
-        // Check if any of the lower 4 bits are set
-        return (shadowBits & 0x0f) !== 0;
-    }
-
     renderShadowTile(shadowBits, x, y, targetLayer = null) {
         // Render shadow using shadowBits bitmask (RPG Maker MZ approach)
         // shadowBits is a 4-bit value where each bit represents one quadrant:
-        // Bit 0 (0x01) = bottom-left quadrant
-        // Bit 1 (0x02) = bottom-right quadrant
-        // Bit 2 (0x04) = top-left quadrant
-        // Bit 3 (0x08) = top-right quadrant
+        // Bit 0 (0x01) = top-left quadrant
+        // Bit 1 (0x02) = top-right quadrant
+        // Bit 2 (0x04) = bottom-left quadrant
+        // Bit 3 (0x08) = bottom-right quadrant
 
         if (shadowBits & 0x0f) {
             const w1 = this.TILE_WIDTH / 2;   // Half tile width
@@ -3724,85 +3715,6 @@ class TilemapManager {
         this.a1TilePositions = [];
         this.tileSprites = {};
         this.layers = {};
-    }
-
-    // Get tile at position
-    getTileAt(x, y, layerIndex = 0) {
-        if (!this.currentMap) return 0;
-
-        const { width, height, data } = this.currentMap;
-        if (x < 0 || x >= width || y < 0 || y >= height) return 0;
-
-        const layerHeight = width * height;
-        const index = layerHeight * layerIndex + y * width + x;
-
-        return data[index] || 0;
-    }
-
-    // Set tile at position
-    setTileAt(x, y, tileId, layerIndex = 0) {
-        if (!this.currentMap) return;
-
-        const { width, height, data } = this.currentMap;
-        if (x < 0 || x >= width || y < 0 || y >= height) return;
-
-        const layerHeight = width * height;
-        const index = layerHeight * layerIndex + y * width + x;
-
-        data[index] = tileId;
-        if (!this.isTileCellRendered(x, y)) return;
-
-        if (this.usesVirtualViewport()) {
-            const key = `${Math.floor(x / this.virtualChunkSize)},${Math.floor(y / this.virtualChunkSize)}`;
-            this.rebuildVirtualChunks(new Set([key]));
-            return;
-        }
-
-        // Re-render the affected tile
-        this.clearTileAt(x, y, layerIndex);
-
-        if (tileId > 0) {
-            const layer = this.virtualTileLayer(this.tileTargetLayer(layerIndex, tileId), x, y);
-            if (layer) {
-                this.renderTile(tileId, x, y, layer);
-            }
-        }
-    }
-
-    clearTileAt(x, y, layerIndex = 0) {
-        if (this.usesVirtualViewport()) {
-            const key = `${Math.floor(x / this.virtualChunkSize)},${Math.floor(y / this.virtualChunkSize)}`;
-            this.rebuildVirtualChunks(new Set([key]));
-            return;
-        }
-        // The old sprite can live in either stack of the z-slot (☆ tiles
-        // render in the upper container).
-        for (const layer of this.containersForZ(layerIndex)) {
-            // Remove existing sprite at this position
-            for (let i = layer.children.length - 1; i >= 0; i--) {
-                const child = layer.children[i];
-                if (child.x === x * this.TILE_WIDTH && child.y === y * this.TILE_HEIGHT) {
-                    layer.removeChild(child);
-                    child.destroy();
-                }
-            }
-        }
-    }
-
-    // Convert screen coordinates to tile coordinates
-    screenToTile(screenX, screenY) {
-        return {
-            x: Math.floor(screenX / this.TILE_WIDTH),
-            y: Math.floor(screenY / this.TILE_HEIGHT)
-        };
-    }
-
-    // Convert tile coordinates to screen coordinates
-    tileToScreen(tileX, tileY) {
-        return {
-            x: tileX * this.TILE_WIDTH,
-            y: tileY * this.TILE_HEIGHT
-        };
     }
 
     getPersistedMapData(map = this.currentMap) {

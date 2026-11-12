@@ -240,8 +240,9 @@ const ReactorCharacters = {
         await entry.promise;
         this.modelIds.set(name, id);
         // A portrait is a picture carried in the package itself. An address would be fetched by every game that meets
-        // this character, telling whoever made it where each of them is.
-        if (typeof unpacked.face === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(unpacked.face) && unpacked.face.length <= 4194304) {
+        // this character, telling whoever made it where each of them is. Only this player's own is decoded and kept:
+        // nothing shows another player's portrait, and each one met stayed in memory for the session.
+        if (mine && typeof unpacked.face === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(unpacked.face) && unpacked.face.length <= 4194304) {
             try { await this.keepFace(id, unpacked.face); } catch (error) { console.warn("A character's portrait could not be read.", error); }
         }
         const size = R.databaseModelSpecOfProject ? R.databaseModelSpecOfProject(this.baseActorId())?.size : 0;
@@ -280,7 +281,6 @@ const ReactorCharacters = {
         bitmap.clear();
         bitmap.context.drawImage(picture, 0, 0, bitmap.width, bitmap.height);
         bitmap.baseTexture?.update?.();
-        if (bitmap._baseTexture?.update) bitmap._baseTexture.update();
         this.faces.set(name, bitmap);
         if (actor) actor.setFaceImage(name, 0);
     },
@@ -776,7 +776,15 @@ class ReactorCharacterStudio {
     }
 
     dispose(object) {
-        object.traverse(child => { if (child.geometry) child.geometry.dispose(); });
+        // Its materials and their pictures on the graphics card too: each look tried on is a template of its own, and
+        // they waited for the garbage collector while the game's own renderer was loaded beside this one.
+        object.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            for (const material of [].concat(child.material || [])) {
+                for (const value of Object.values(material)) if (value && value.isTexture) value.dispose();
+                material.dispose();
+            }
+        });
     }
 
     status(text, bad) {
@@ -816,7 +824,8 @@ class ReactorCharacterStudio {
         clearTimeout(this._soon);
         cancelAnimationFrame(this._frame);
         if (this.model) this.dispose(this.model);
-        if (this.renderer) this.renderer.dispose();
+        // (The view's own graphics context is given back now, not when the collector reaches its canvas.)
+        if (this.renderer) { this.renderer.dispose(); this.renderer.forceContextLoss?.(); }
         this.canvas?.remove();
     }
 }
@@ -1448,7 +1457,7 @@ ReactorCharacters.markNewGame = function(begin) {
     DataManager.setupNewGame = function() {
         original.call(this);
         ReactorCharacters.onNewGame();
-        if (typeof ReactorOnline !== "undefined") ReactorOnline.onGameStarted(true);
+        if (typeof ReactorOnline !== "undefined") ReactorOnline.onGameStarted();
     };
     try { begin(); } finally { DataManager.setupNewGame = original; }
 };

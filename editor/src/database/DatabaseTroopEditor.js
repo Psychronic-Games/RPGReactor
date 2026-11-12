@@ -66,6 +66,10 @@ class DatabaseTroopEditor {
         this.selectedMemberIndex = -1;
         this.selectedCommandIndices = [];
         this.commandSelectionAnchor = null;
+        // The command dialogs are built with this troop's battle room map, so
+        // the next troop must not inherit them (Conditional Branch > Character
+        // listed the first troop's room events for every later troop).
+        this._editors = {};
 
         const system = this.databaseManager.getSystem();
         // The battleback the troop is fought on: where a map starts the battle, else the Battle Test one.
@@ -79,8 +83,12 @@ class DatabaseTroopEditor {
         this.actorBattlerImages = {};
         this.actorFaceImages = {};
         const skinProject = this.projectManager.getCurrentProject()?.path;
-        if (this._skinProject !== skinProject) this.windowSkin = null;
+        // Another project: its window skin, and a Battle HUD renderer of its own
+        // (the renderer keeps the skin, the font and its pictures by name).
+        if (this._skinProject !== skinProject) { this.windowSkin = null; this._hudRenderer = null; }
         this._skinProject = skinProject;
+        // Normalized again for each troop shown: it also reads System (the screen size, the menu commands).
+        this._hudRecord = null;
 
         const wrapper = document.createElement('div');
         wrapper.className = 'rr-troop-editor';
@@ -825,6 +833,31 @@ class DatabaseTroopEditor {
         return found;
     }
 
+    /**
+     * The part of a parsed map `battlebacksFromMaps` reads, and nothing else: its battleback, its encounters
+     * and the Change Battle Back and Battle Processing commands of each page, in order. The scan keeps this
+     * instead of the map, so a project of several hundred maps is never held in memory whole.
+     */
+    static battlebackFacts(map) {
+        if (!map) return null;
+        const events = [];
+        for (const event of map.events || []) {
+            const pages = [];
+            for (const page of (event && event.pages) || []) {
+                const list = (page.list || []).filter(command => command.code === 283 || command.code === 301);
+                if (list.length) pages.push({ list });
+            }
+            if (pages.length) events.push({ pages });
+        }
+        return {
+            specifyBattleback: map.specifyBattleback,
+            battleback1Name: map.battleback1Name,
+            battleback2Name: map.battleback2Name,
+            encounterList: map.encounterList,
+            events
+        };
+    }
+
     /** What the scan found for a troop, or null (not scanned yet, or no map gives it a battleback). */
     troopBattleback(troopId) {
         const scan = this._battlebackScan;
@@ -864,7 +897,7 @@ class DatabaseTroopEditor {
         this._battlebackScan = mine;
         const ids = Object.values(this.databaseManager.getMapInfos?.() || {}).filter(info => info && info.id > 0).map(info => info.id);
         const read = id => fs.promises.readFile(path.join(project.path, 'data', `Map${String(id).padStart(3, '0')}.json`), 'utf8')
-            .then(text => ({ id, map: JSON.parse(text) }), () => ({ id, map: null }));
+            .then(text => ({ id, map: DatabaseTroopEditor.battlebackFacts(JSON.parse(text)) }), () => ({ id, map: null }));
         (async () => {
             const maps = [];
             for (const id of ids) {
@@ -1274,12 +1307,21 @@ class DatabaseTroopEditor {
             const enemy = enemies.find(e => e && e.id === member.enemyId);
             if (!enemy) return;
             const home = this.battleToCanvas(member.x, member.y);
+            // The outline of the selected enemy, around the bounds just recorded for it.
+            const outlineSelected = () => {
+                if (idx !== this.selectedMemberIndex) return;
+                const b = this.enemySpriteBounds[this.enemySpriteBounds.length - 1];
+                ctx.strokeStyle = ThemeColors.resolve('--color-accent-bright', '#ffd700');
+                ctx.lineWidth = 2;
+                ctx.strokeRect(b.x - 2, b.y - 2, b.width + 4, b.height + 4);
+                ctx.lineWidth = 1;
+            };
 
             const explicit=this.enemyGraphicImages?.[enemy.id];
             if(explicit?.image.complete&&explicit.image.naturalWidth){
                 const {image,graphic}=explicit,frame=ReactorBattleData.graphicFrame(graphic,image.naturalWidth,image.naturalHeight),scale=graphic.scale||1;
                 const bounds=this.getEnemyDrawRect(member,frame.width*scale,frame.height*scale);bounds.y-=graphic.offsetY||0;
-                ctx.save();ctx.globalAlpha=member.hidden?.4:1;ctx.translate(bounds.x+(graphic.mirror?bounds.width:0),bounds.y);if(graphic.mirror)ctx.scale(-1,1);ctx.drawImage(image,frame.x,frame.y,frame.width,frame.height,0,0,bounds.width,bounds.height);ctx.restore();this.enemySpriteBounds.push({...bounds,memberIndex:idx});return;
+                ctx.save();ctx.globalAlpha=member.hidden?.4:1;ctx.translate(bounds.x+(graphic.mirror?bounds.width:0),bounds.y);if(graphic.mirror)ctx.scale(-1,1);ctx.drawImage(image,frame.x,frame.y,frame.width,frame.height,0,0,bounds.width,bounds.height);ctx.restore();this.enemySpriteBounds.push({...bounds,memberIndex:idx});outlineSelected();return;
             }
             const model = this.enemyModelImages[enemy.id];
             const img = model ? model.image : (enemy.battlerName ? this.enemySpriteImages[enemy.battlerName] : null);
@@ -1350,14 +1392,7 @@ class DatabaseTroopEditor {
                 this.enemySpriteBounds.push({ x: drawX, y: drawY, width: pw, height: ph, memberIndex: idx });
             }
 
-            // Selection highlight
-            if (idx === this.selectedMemberIndex) {
-                const b = this.enemySpriteBounds[this.enemySpriteBounds.length - 1];
-                ctx.strokeStyle = ThemeColors.resolve('--color-accent-bright', '#ffd700');
-                ctx.lineWidth = 2;
-                ctx.strokeRect(b.x - 2, b.y - 2, b.width + 4, b.height + 4);
-                ctx.lineWidth = 1;
-            }
+            outlineSelected();
         });
 
         // Drawn last so it covers the battlers the way the real windows do;
@@ -1627,7 +1662,7 @@ class DatabaseTroopEditor {
                     this.selectedCommandIndices = [idx];
                     this.commandSelectionAnchor = idx;
                 }
-                this.renderCommandList(container, page);
+                this.updateCommandSelectionStyles(container);
             };
 
             // Double-click end command → add new command
@@ -1638,15 +1673,15 @@ class DatabaseTroopEditor {
             }
 
             // Hover
-            div.onmouseenter = () => { if (!isSelected) div.style.backgroundColor = 'var(--color-bg-input)'; };
-            div.onmouseleave = () => { if (!isSelected) div.style.backgroundColor = 'var(--color-bg-list-item)'; };
+            div.onmouseenter = () => { if (!this.selectedCommandIndices.includes(idx)) div.style.backgroundColor = 'var(--color-bg-input)'; };
+            div.onmouseleave = () => { if (!this.selectedCommandIndices.includes(idx)) div.style.backgroundColor = 'var(--color-bg-list-item)'; };
 
             // Right-click context menu
             div.oncontextmenu = (e) => {
                 e.preventDefault();
                 if (!this.selectedCommandIndices.includes(idx)) {
                     this.selectedCommandIndices = [idx];
-                    this.renderCommandList(container, page);
+                    this.updateCommandSelectionStyles(container);
                 }
                 this.showCommandContextMenu(e.clientX, e.clientY, page, container);
             };
@@ -1654,6 +1689,20 @@ class DatabaseTroopEditor {
             container.appendChild(div);
         });
         container.scrollTop = previousScrollTop;
+    }
+
+    /**
+     * Shows the selection on the rows already drawn. A click changes nothing
+     * but which rows are selected, so the list is not rebuilt for it (a long
+     * list was stringified and redrawn whole on every click).
+     */
+    updateCommandSelectionStyles(container) {
+        for (const div of container.querySelectorAll('[data-cmd-index]')) {
+            const selected = this.selectedCommandIndices.includes(Number(div.dataset.cmdIndex));
+            div.style.backgroundColor = selected ? 'var(--color-bg-selected)' : 'var(--color-bg-list-item)';
+            if (selected) div.style.setProperty('--rr-command-ink', 'var(--color-text-strong)');
+            else div.style.removeProperty('--rr-command-ink');
+        }
     }
 
     handleCommandListKeyDown(event, page, container) {
@@ -1813,6 +1862,12 @@ class DatabaseTroopEditor {
                     .show(null, edited => edited && insertCommands([edited]), command.reactor, this.enemySlotContext());
                 return;
             }
+            // Every other Reactor command opens its own dialog, as on a common event's page, not the blank Plugin Command one.
+            const reactorEditor = command.code === 357 && command.reactor && this.commandDialogs()._reactorCommandEditor(command.reactor);
+            if (reactorEditor) {
+                reactorEditor.show(null, edited => edited && insertCommands(ECL.commandBlock(edited)), command.reactor, { type: 'troop' });
+                return;
+            }
             const editorMap = {
                 232: ['movePicture', MovePictureEditor],
                 356: ['pluginCommand', PluginCommandEditor],
@@ -1927,6 +1982,15 @@ class DatabaseTroopEditor {
     }
 
     /**
+     * Rows that only mark a part of another command: When, Cancel and End of
+     * Show Choices, Else and End of a Conditional Branch, a route step, and
+     * If Win, If Escape, If Lose and End of a battle.
+     */
+    static get STRUCTURE_ROW_CODES() {
+        return new Set([402, 403, 404, 411, 412, 505, 601, 602, 603, 604]);
+    }
+
+    /**
      * The same commands on the way in, where the dialog hands back the whole
      * run to insert. `extraArgs` is what the dialog takes between the command
      * and the callback.
@@ -2010,45 +2074,10 @@ class DatabaseTroopEditor {
         return typeof window !== 'undefined' && window.I18n ? window.I18n.t('menu.troops') : 'Troops';
     }
 
+    // A command no dialog claimed, with its default parameters. (The branching
+    // commands never come here: each opens its dialog on insert.)
     buildCommandStructure(code) {
-        switch (code) {
-            case 111: // Conditional Branch
-                return [
-                    { code: 111, indent: 0, parameters: [0, 1, 0] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 411, indent: 0, parameters: [] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 412, indent: 0, parameters: [] }
-                ];
-            case 112: // Loop
-                return [
-                    { code: 112, indent: 0, parameters: [] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 413, indent: 0, parameters: [] }
-                ];
-            case 102: // Show Choices
-                return [
-                    { code: 102, indent: 0, parameters: [['Yes', 'No'], 0, 0, 2, 0] },
-                    { code: 402, indent: 0, parameters: [0, 'Yes'] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 402, indent: 0, parameters: [1, 'No'] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 404, indent: 0, parameters: [] }
-                ];
-            case 301: // Battle Processing
-                return [
-                    { code: 301, indent: 0, parameters: [0, 0, false, false] },
-                    { code: 601, indent: 0, parameters: [] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 602, indent: 0, parameters: [] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 603, indent: 0, parameters: [] },
-                    { code: 0, indent: 1, parameters: [] },
-                    { code: 604, indent: 0, parameters: [] }
-                ];
-            default:
-                return [{ code: code, indent: 0, parameters: this.getDefaultParams(code) }];
-        }
+        return [{ code: code, indent: 0, parameters: this.getDefaultParams(code) }];
     }
 
     getDefaultParams(code) {
@@ -2106,6 +2135,19 @@ class DatabaseTroopEditor {
             idx = range.start;
             cmd = page.list[idx];
         }
+        // A line of a message, a scrolling text or a comment edits the command
+        // it belongs to, as on a map event.
+        const parentCode = { 401: 101, 405: 105, 408: 108 }[cmd.code];
+        if (parentCode) {
+            let parent = idx - 1;
+            while (parent >= 0 && page.list[parent].code === cmd.code) parent--;
+            if (parent < 0 || page.list[parent].code !== parentCode) return;
+            idx = parent;
+            cmd = page.list[idx];
+        }
+        // The rows a branch, a choice, a route or a battle is made of have
+        // nothing of their own to edit.
+        if (DatabaseTroopEditor.STRUCTURE_ROW_CODES.has(cmd.code)) return;
         const refresh = () => {
             this.persistTroop();
             const container = document.getElementById('battle-command-list');
@@ -2219,6 +2261,23 @@ class DatabaseTroopEditor {
                 ECL.replaceContiguousBlock(page.list, idx, edited, 357, 657);
                 refresh();
             }, undefined, { type: 'troop' });
+            return;
+        }
+        const reactorEditor = cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'
+            && this.commandDialogs()._reactorCommandEditor(cmd.parameters[1]);
+        if (reactorEditor) {
+            const battleStart = ECL.isMapBattleStart(cmd);
+            let drop = false;
+            const context = battleStart ? {
+                type: 'troop',
+                beforeStore: async block => (drop = await this.commandDialogs().confirmLostBranches(page.list, idx, block))
+            } : { type: 'troop' };
+            reactorEditor.show(cmd, edited => {
+                if (!isCurrent() || !edited) return;
+                if (battleStart) ECL.replaceBattleStart(page.list, idx, edited, { drop });
+                else ECL.replaceContiguousBlock(page.list, idx, edited, 357, 657);
+                refresh();
+            }, cmd.parameters[1], context);
             return;
         }
         if (cmd.code === 356 || cmd.code === 357) {
@@ -2535,7 +2594,8 @@ class DatabaseTroopEditor {
         if (!pageData) return;
         if (!this.currentTroop.pages) this.currentTroop.pages = [];
         this.currentTroop.pages.splice(this.currentBattlePageIndex + 1, 0, JSON.parse(JSON.stringify(pageData)));
-        this.currentBattlePageIndex++;
+        // (A troop with no pages left has index 0 and gets the page at 0: stay on it.)
+        this.currentBattlePageIndex = Math.min(this.currentBattlePageIndex + 1, this.currentTroop.pages.length - 1);
         this.selectedCommandIndices = [];
         this.persistTroop();
         this.renderBattlePageTabs();
@@ -3096,8 +3156,14 @@ class DatabaseTroopEditor {
         const list = this.databaseManager.getUserInterfaces ? this.databaseManager.getUserInterfaces() : [];
         const raw = id > 0 ? (list || []).find(entry => entry && entry.id === id) : null;
         if (!raw || raw.mode !== 'battle' || typeof DatabaseUserInterfaceEditor === 'undefined') return null;
-        const renderer = this.battleHudRenderer();
-        return renderer.normalizeInterface(JSON.parse(JSON.stringify(raw)));
+        // The preview redraws on every pointer move of a drag: the record is
+        // normalized once and kept while its data stays the same.
+        const json = JSON.stringify(raw);
+        const kept = this._hudRecord;
+        if (kept && kept.json === json) return kept.record;
+        const record = this.battleHudRenderer().normalizeInterface(JSON.parse(json));
+        this._hudRecord = { json, record };
+        return record;
     }
 
     /** A User Interfaces renderer that draws into this canvas; its images redraw the preview as they arrive. */

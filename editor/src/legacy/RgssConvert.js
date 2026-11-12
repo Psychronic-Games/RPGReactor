@@ -443,7 +443,7 @@
     function ruby(source, kind, context = {}) {
         if (!T) return null;
         const { calls, ivars, extra } = familyTables(context);
-        const options = Object.assign({ self: context.self === 'character' ? 'character' : 'interpreter', constants: context.constants || {}, calls, ivars, locals: context.locals, declared: context.declared }, extra);
+        const options = Object.assign({ self: context.self === 'character' ? 'character' : 'interpreter', constants: context.constants || {}, calls, ivars, locals: context.locals, declared: context.declared, engine: context.engine }, extra);
         if (kind === 'formula') return T.transpileFormula(source, options);
         return kind === 'expression' ? T.transpileExpression(source, options) : T.transpile(source, options);
     }
@@ -691,7 +691,8 @@
         for (let i = 0; i < src.length; i++) {
             const c = src[i] || {};
             const code = num(c.code), indent = num(c.indent);
-            let p = list(c.parameters).map(x => plain(x, notes));
+            // A 505 repeats one step of the 205 route before it for the editor's list: its script is counted there.
+            let p = list(c.parameters).map(x => plain(x, code === 505 ? null : notes));
             switch (code) {
                 case 101: {
                     // Yanfly's name box, \\n<Name> (or \\nc<> / \\nr<>) anywhere in the message, is MZ's speaker name.
@@ -731,6 +732,8 @@
                     break;
                 case 232: p = p.slice(0, 12); while (p.length < 12) p.push(p.length === 11 ? false : 0); p.push(0); break;   // + easing
                 case 236: p = [String(p[0] || 'none').replace(/^:/, ''), num(p[1]), num(p[2]), !!p[3]]; break;
+                // Get Location Info: Ace has three tile layers (2 to 4) and then the region (5); MZ a fourth layer at 5 and the region at 6.
+                case 285: if (num(p[1]) >= 5) p[1] = 6; break;
                 case 319: p = [num(p[0]), num(p[1]) + 1, num(p[2])]; break;   // RGSS slot index 0 (weapon) … is MZ equipment type 1 …
                 case 321: p = [num(p[0]), num(p[1]), false]; break;
                 case 322: p = [num(p[0]), str(p[1]), num(p[2]), str(p[3]), num(p[4]), '']; break;
@@ -754,7 +757,7 @@
                     }
                     continue;
                 }
-                case 505: p = [plain(list(c.parameters)[0], notes)]; break;
+                case 505: p = [p[0]]; break;
                 default: break;
             }
             out.push({ code, indent, parameters: p });

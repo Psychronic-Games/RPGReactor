@@ -603,7 +603,9 @@ class DatabaseQuestEditor {
         container.querySelectorAll('.quest-give-amount').forEach(input => input.addEventListener('change', () => {
             const entry = (quest.rewards || [])[Number(input.dataset.index)];
             if (!entry) return;
-            entry.amount = parseInt(input.value, 10) || 0;
+            // The game gives 1 for an amount of 0 or none (ReactorQuests.rewardAmount), so the page stores and shows 1.
+            entry.amount = parseInt(input.value, 10) || 1;
+            input.value = String(entry.amount);
             this.databaseManager.updateQuest(quest.id, quest);
         }));
         const settingsButton = container.querySelector('.quest-log-settings');

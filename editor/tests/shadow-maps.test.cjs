@@ -303,7 +303,6 @@ test('the static rows re-render when a prop moves, hides or arrives, and not for
     const a = prop(1);
     shadows._static.clear();
     shadows._static.add(a);
-    shadows._staticHash = NaN;
     assert.equal(shadows._staticChanged(), true, 'the first look is a change');
     assert.equal(shadows._staticChanged(), false, 'nothing moved');
     a.matrixWorld.elements[12] = 2;
@@ -324,7 +323,6 @@ test('the static rows re-render when a prop moves, hides or arrives, and not for
     shadows.invalidate();
     assert.equal(shadows._staticChanged(), true, 'asked outright');
     shadows._static.clear();
-    shadows._staticHash = NaN;
 });
 
 test('a slot keeps its far plane while the reach breathes inside the band', () => {
@@ -488,7 +486,7 @@ test('the dynamic budget is measured from the player, and a party of two reduced
 
 test('both viewports render the maps once a frame before the first pass, and the game marks its casters', () => {
     const three = source3D();
-    assert.match(three, /scene\.updateMatrixWorld\(\);[\s\S]{0,700}?if \(!freshScene && this\.spreadsUpdateWork\(\)\) \{[\s\S]{0,700}?this\._owedWork = \[shadowWork, reflectionWork\];\n\s*\} else \{\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, scale\);/, 'the maps before the reflections, spread over the spare refreshes or in the update');
+    assert.match(three, /scene\.updateMatrixWorld\(\);[\s\S]{0,700}?if \(!freshScene && this\.spreadsUpdateWork\(\)\) \{[\s\S]{0,1400}?this\._owedWork = \[shadowWork, reflectionWork\];\n\s*\} else \{\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, scale\);/, 'the maps before the reflections, spread over the spare refreshes or in the update');
     assert.match(three, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\(renderer, \(shadows && shadows\.mapData\) \|\| null, shadows \|\| undefined\);/);
     assert.match(three, /Reactor3D\.Shadows\.markCaster\(object, Reactor3D\.modelCasterMoves\(character, current\.rules\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.

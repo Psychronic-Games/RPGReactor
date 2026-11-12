@@ -83,6 +83,8 @@ class DatabaseActionSequenceEditor {
         const footer=U.element('div','rr-battle-toolbar rr-sequence-footer');this.host.append(footer);
         const kind=U.field(footer,'Used As',U.select(B.kinds,['motion','routine'].includes(B.purpose(sequence))?B.purpose(sequence):'action',value=>{this.edit(()=>{sequence.purpose=value;if(value==='action')B.migratePhases(sequence);});this.updateReferences();this.drawSteps();this.drawInspector();this.phasesButton.hidden=value!=='action';}));kind.title=U.text('Used As');
         this.references=U.element('p','rr-battle-help');footer.append(this.references);this.updateReferences();this.phasesButton.hidden=B.purpose(sequence)!=='action';
+        // Made once here, so Undo and Redo set them again from the sequence (see history).
+        this.headerControls={name,impact,kind};
         this.refresh();this.loadCast();let last=performance.now();
         // Painted while playing, and otherwise only when something changed: a
         // paused sequence used to be drawn in full every frame. Any input in
@@ -130,6 +132,8 @@ class DatabaseActionSequenceEditor {
         const apply=steps=>{if(this.host!==host||!host.isConnected)return;this.edit(()=>sequence.steps=steps);this.selected=0;this.drawSteps();this.drawInspector();this.selectStep(0);this.revealStep();};
         const items=purpose==='action'?B.templates.map(name=>({label:U.text(name),action:()=>apply(B.template(name).steps)}))
             :purpose==='motion'?[{label:U.text('Idle motion'),action:()=>apply([B.step('motion',{motion:'idle',duration:60})])}]
+            // A Routine is no phase: "Default for this phase" had no steps for it and emptied the list.
+            :purpose==='routine'?B.basicSteps.map(name=>({label:U.text(name),action:()=>apply(B.basic(name))}))
             :[{label:U.text('Default for this phase'),action:()=>apply(B.defaultPhase(purpose,{isAttack:true}).steps)}];
         this.parent.showDatabaseActionMenu(rect.left,rect.bottom+2,items);this.stepMenu=this.parent._databaseActionMenu;
     }
@@ -173,7 +177,10 @@ class DatabaseActionSequenceEditor {
     label(type){return {move:'Move / Position Key',motion:'Battler Motion',sound:'Play Sound',animation:'Show Animation',projectile:'Projectile',weapon:'Weapon',impact:'Apply Action Effect',wait:'Wait',camera:'Camera Key'}[type]||ReactorBattleData.commands[type]?.label||type;}
     pushUndo(){this.undo.push(JSON.stringify(this.sequence));if(this.undo.length>100)this.undo.shift();this.redo=[];}
     edit(fn){this.clearPreviewMedia();this.stepPlayback=null;this.playing=false;this.pushUndo();fn();this.ui.changed();this.validate();}
-    history(from,to){if(!from.length)return;this.clearPreviewMedia();this.stepPlayback=null;this.playing=false;to.push(JSON.stringify(this.sequence));const next=JSON.parse(from.pop());for(const key of Object.keys(this.sequence))delete this.sequence[key];Object.assign(this.sequence,next);this.selected=Math.min(this.selected,this.sequence.steps.length-1);if(this.controls?.transformPose){const step=this.sequence.steps[this.selected];this.controls.transformPose=step?.type==='motion'&&step.transform?step:null;if(this.controls.transformPose)this.controls.showTransformPose(step);}this.ui.changed();this.refresh();}
+    history(from,to){if(!from.length)return;this.clearPreviewMedia();this.stepPlayback=null;this.playing=false;to.push(JSON.stringify(this.sequence));const next=JSON.parse(from.pop());for(const key of Object.keys(this.sequence))delete this.sequence[key];Object.assign(this.sequence,next);this.selected=Math.min(this.selected,this.sequence.steps.length-1);if(this.controls?.transformPose){const step=this.sequence.steps[this.selected];this.controls.transformPose=step?.type==='motion'&&step.transform?step:null;if(this.controls.transformPose)this.controls.showTransformPose(step);}
+        // The name, Hits and Used As are not redrawn by refresh(): left alone they showed the undone value, and the next edit of the name recorded it.
+        const header=this.headerControls;if(header){const purpose=ReactorBattleData.purpose(this.sequence);header.name.value=this.sequence.name??'';header.impact.value=this.sequence.hitPolicy||'once';header.kind.value=['motion','routine'].includes(purpose)?purpose:'action';if(this.phasesButton)this.phasesButton.hidden=purpose!=='action';this.parent?._activeDatabaseList?.refresh();this.updateReferences();}
+        this.ui.changed();this.refresh();}
     validate(){const B=ReactorBattleData,errors=B.validateSequence(this.sequence);try{B.expandCalls(this.sequence,this.db.data.actionSequences);}catch(error){errors.push(error.message);}
         if(this.validation){let ready=this.ui.text(this.sequence.hitPolicy==='authored'?'Ready. Each impact applies one hit to its selected battlers. Skill repeats are not added.':'Ready to use. Apply Action Effect uses the skill’s existing targeting, damage and repeats.');
             if(B.purpose(this.sequence)==='action'){const missing=B.phaseIds().filter(p=>!B.sequencePhases(this.sequence).includes(p));if(missing.length)ready+=' '+this.ui.text(this.ui.message('{phases}: not in this sequence, so they come from the next level down or the built-in action.',{phases:missing.map(p=>this.ui.text(B.actionPhases.find(([id])=>id===p)[1])).join(', ')}));}
@@ -268,8 +275,9 @@ class DatabaseActionSequenceEditor {
             if(this.host!==host||this.sequence!==sequence||!host.isConnected)return false;
             if(payload?.version!==1||!Array.isArray(payload.steps)||!payload.steps.length||payload.steps.length>256)return false;
             const B=ReactorBattleData,probe={version:1,steps:payload.steps};
-            // Clipboard fragments need not contain the sequence's impact cue.
-            const errors=B.validateSequence(probe).filter(message=>!message.startsWith('Include exactly one Apply Action Effect'));
+            // Clipboard fragments need not contain the sequence's impact cue, nor both ends of an If: a lone If, Else or End If pastes, and the sequence's own check then says what is still open.
+            const fragmentRules=['Include exactly one Apply Action Effect','Close every If with End If.','Else / Else If must follow an open If','End If has no matching If.'];
+            const errors=B.validateSequence(probe).filter(message=>!fragmentRules.some(rule=>message.startsWith(rule)));
             if(errors.length){this.parent.updateStatus(errors.map(t=>this.ui.text(t)).join(' '));return false;}
             const found=sequence.steps.findIndex(s=>s.id===anchor),at=found>=0?found+1:Math.max(0,Math.min(index,sequence.steps.length));
             return this.insertSteps(payload.steps,at);
@@ -604,7 +612,7 @@ class DatabaseActionSequenceEditor {
         }
         if(['branch','elseIf'].includes(step.type)){const input=U.element('input');input.type='checkbox';input.checked=step.previewResult??true;input.onchange=()=>change('previewResult',input.checked);U.field(advanced,'Preview Condition Result',input);}
         if(step.type==='impact'){const input=U.element('input','database-field-value');input.value=step.rate??'100';input.onchange=()=>change('rate',input.value);U.field(this.inspector,'Damage Rate (%) / Expression',input);}
-        if(step.type==='wait')U.field(this.inspector,'Wait Until',U.select(['frames','move','motion','popup','animation','effecting'].map(v=>[v,v]),step.waitFor||'frames',v=>change('waitFor',v)));
+        if(step.type==='wait')U.field(this.inspector,'Wait Until',U.select(['frames','move','jump','motion','popup','animation','effecting'].map(v=>[v,v]),step.waitFor||'frames',v=>change('waitFor',v)));
         if(step.type==='animation')U.field(this.inspector,'Animation Source',U.select([['id','Selected Animation'],['action','Each Action’s Own'],['weapon','Weapon Attack']],step.animationSource||'id',v=>{change('animationSource',v);this.drawInspector();}));
         if(['move','camera'].includes(step.type)){
             U.field(this.inspector,'Relative To',U.select([['home','Home'],['target','Target'],['approach','Approach Target']],step.anchor,v=>{change('anchor',v);this.drawInspector();}));

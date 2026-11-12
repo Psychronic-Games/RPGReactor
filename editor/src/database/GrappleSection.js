@@ -13,8 +13,8 @@
  * effect `{ name, volume, pitch, pan }` played as the line is shot, as the hook
  * bites, and as the pull starts.
  *
- * while the section's switch is on; the record has no `rrGrapple` when it is
- * off. `range` is tiles across, `height` the highest edge over the feet,
+ * The record holds `rrGrapple` while the section's switch is on and has none
+ * when it is off. `range` is tiles across, `height` the highest edge over the feet,
  * `uses` a battle (0: no limit), `cooldown` turns before the next use, and
  * the cost is `moveCost` move points or the wearer's action.
  *

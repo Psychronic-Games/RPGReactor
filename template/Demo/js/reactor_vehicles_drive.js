@@ -955,8 +955,9 @@
             if (!d.leave) { USED.gas=IN.gas; USED.brake=IN.brake; USED.steer=IN.steer; USED.analog=IN.analog; }
             last.controls=1;
         }
-        // (Braking only while it moves, as on the ground: held on at a standstill, the slowdown clip looped through a whole dialogue.)
-        if (!controls || d.leave) { USED.brake=d.v!==0?1:0; d.rest=0; }
+        // (Braking only while it moves, as on the ground: held on at a standstill, the slowdown clip looped through a whole dialogue.
+        // Forward only: backing up, the brake is the reverse throttle, and it backed away faster for the whole dialogue. It coasts to rest.)
+        if (!controls || d.leave) { USED.brake=d.v>0?1:0; d.rest=0; }
         ENV.air=false; ENV.water=false; ENV.flooded=false; ENV.slope=1; ENV.pitch=0; ENV.alone=false;
         V.step(d,USED,type,ENV,DT);
         d.yaw=turnOf(d.yaw+d.turn); last.turned=d.turn;
@@ -966,6 +967,7 @@
         const debug=controls && player.isDebugThrough && player.isDebugThrough();
         // Where the map does not loop, its middle stays on the map's own tiles.
         const maxX=map.isLoopHorizontal() ? Infinity : map.width()-1, maxY=map.isLoopVertical() ? Infinity : map.height()-1;
+        let shaped=false;
         for (let i=0;i<parts && d.go!==0;i++) {
             let nx=map.roundX(x+sx), ny=map.roundY(y+sy), met=false, held=false;
             if (maxX!==Infinity && (nx<0 || nx>maxX)) { nx=nx<0?0:maxX; held=true; }
@@ -981,7 +983,8 @@
             if (ok && type.medium !== "air") { met=solidEventAt(map,event,tx,ty); ok=!met; }
             if (ok && deep && type.medium === "water") {
                 const hx=Math.sin(d.yaw), hy=-Math.cos(d.yaw);
-                shapeFor(event,type);
+                // (Once a tick, not once a part: nothing in the loop changes it.)
+                if (!shaped) { shapeFor(event,type); shaped=true; }
                 for (let axle=0;axle<3;axle++) {
                     const reach=axle===0?-SHAPE.rear:axle===2?SHAPE.front:0;
                     for (let side=0;side<2;side++) {
@@ -1405,7 +1408,8 @@
         proto.forceMoveRoute = function(moveRoute) {
             // A route forced on the ridden vehicle's event is the rider's.
             const player = typeof root.$gamePlayer !== "undefined" ? root.$gamePlayer : null;
-            if (this._rrBoarded && player && this !== player && player._rrFree) return player.forceMoveRoute(moveRoute);
+            // (The one the player rides: a convoy vehicle a follower rides is boarded too, and keeps its own route.)
+            if (this._rrBoarded && player && this !== player && player._rrFree && riddenBy(player) === this) return player.forceMoveRoute(moveRoute);
             if (this._rrFree) release(this);
             return _forceMoveRoute.apply(this, arguments);
         };
@@ -1565,6 +1569,9 @@
             if (this._newMapId !== root.$gameMap.mapId()) {
                 // The world carries the same identity into a runtime event on the destination map.
                 leaveStrip();
+                // The map arrived at cannot show it (a 2D map, and it has a model and no sheet): it stays parked on the map
+                // it was ridden from, and the party arrives on foot.
+                if (this._rrVehicleTransfer && typeof ReactorVehicles.showsHere === "function" && !ReactorVehicles.showsHere(riddenBy(this))) ReactorVehicles.cancelTransfer();
                 if (this._rrVehicleTransfer && typeof ReactorVehicles.bind === "function") {
                     // Ridden over a border into the map shown past it (Reactor3D.Neighbors): the ride goes on as it
                     // was, at its speed and on its heading, from the very place it crossed at.

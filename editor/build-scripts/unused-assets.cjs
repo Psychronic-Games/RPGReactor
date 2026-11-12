@@ -200,7 +200,16 @@ function analyze(root, options = {}) {
     const evidence = new Evidence(text);
     const kept = patternTest(readSettings(root).keep.concat(options.keep || []));
     const played = options.usage === false ? new Set() : usageRecord(root);
-    const files = walk(root).filter(rel => ASSET_ROOTS.has(rel.split('/')[0]) || /^js\/plugins\/[^/]+\.js$/i.test(rel));
+    // Only the asset folders and js/ are walked: the rest of the project (save/, forge/, .git, backups) is never
+    // judged, and listing it was most of the files.
+    const files = [];
+    let tops = [];
+    try { tops = fs.readdirSync(root, { withFileTypes: true }); } catch (_) {}
+    for (const entry of tops) {
+        if (!entry.isDirectory()) continue;
+        if (ASSET_ROOTS.has(entry.name)) walk(root, entry.name, files);
+        else if (/^js$/i.test(entry.name)) for (const rel of walk(root, entry.name)) if (/^js\/plugins\/[^/]+\.js$/i.test(rel)) files.push(rel);
+    }
     const verdict = new Map();
     const decide = (rel, reason) => { if (!verdict.has(rel)) verdict.set(rel, reason); };
     const ruled = (rel, name) => {

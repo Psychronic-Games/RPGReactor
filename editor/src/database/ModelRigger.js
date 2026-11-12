@@ -782,7 +782,6 @@
         bonesFromMarkers,
         previewLinks,
         computeWeights,
-        distanceSqToSegment,
         encodeBytes,
         decodeBytes,
         buildRig,

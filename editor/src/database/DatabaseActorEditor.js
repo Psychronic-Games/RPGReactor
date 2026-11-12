@@ -886,7 +886,7 @@ class DatabaseActorEditor {
 
         actor.equips[slotIndex] = equipId;
         this.databaseManager.updateActor(actorId, actor);
-        console.log(`Changed actor ${actorId} slot ${slotIndex} to equipment ${equipId}`);
+        console.debug(`Changed actor${actorId} slot ${slotIndex} to equipment ${equipId}`);
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.commonUI.updateStatus(tt('Equipment changed'));
@@ -921,7 +921,7 @@ class DatabaseActorEditor {
         }
 
         this.databaseManager.updateActor(actorId, actor);
-        console.log(`Updated actor ${actorId} field ${fieldName} to ${value}`);
+        console.debug(`Updated actor${actorId} field ${fieldName} to ${value}`);
         // The Equipment section lists what the class can wear: drawn again for the new class.
         if (fieldName === 'classId') this.refreshActorDetail(actor);
 

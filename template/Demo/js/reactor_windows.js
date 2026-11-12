@@ -508,13 +508,29 @@ Window_Base.prototype.drawCharacter = function(
     characterName, characterIndex, x, y
 ) {
     const bitmap = ImageManager.loadCharacter(characterName);
+    const cell = Window_Base.rrCharacterCell(characterName, characterIndex, bitmap.width, bitmap.height);
+    this.contents.blt(bitmap, cell.sx, cell.sy, cell.pw, cell.ph, x - cell.pw / 2, y - cell.ph);
+};
+
+/**
+ * The cell of a character sheet a window shows: the character standing,
+ * facing down. Cut by the rules the map sprite follows (reactor_sprites.js):
+ * an [NF] sheet has N frames a row and rests on the first, where a plain sheet
+ * has three and rests on the middle one; a [1D] sheet has one row a character.
+ */
+Window_Base.rrCharacterCell = function(characterName, characterIndex, width, height) {
     const big = ImageManager.isBigCharacter(characterName);
-    const pw = bitmap.width / (big ? 3 : 12);
-    const ph = bitmap.height / (big ? 4 : 8);
-    const n = big ? 0: characterIndex;
-    const sx = ((n % 4) * 3 + 1) * pw;
-    const sy = Math.floor(n / 4) * 4 * ph;
-    this.contents.blt(bitmap, sx, sy, pw, ph, x - pw / 2, y - ph);
+    const frames = typeof Game_CharacterBase !== "undefined" && Game_CharacterBase.rrFramesOf
+        ? Game_CharacterBase.rrFramesOf(characterName) : 0;
+    const cols = frames || 3;
+    const oneDir = !!ImageManager.isOneDirCharacter && ImageManager.isOneDirCharacter(characterName)
+        && !ImageManager.isEightDirCharacter(characterName);
+    const pw = width / (big ? cols : cols * 4);
+    const ph = oneDir ? height / (big ? 1 : 2) : height / (big ? 4 : 8);
+    const n = big ? 0 : characterIndex;
+    const sx = ((n % 4) * cols + (frames ? 0 : 1)) * pw;
+    const sy = Math.floor(n / 4) * (oneDir ? 1 : 4) * ph;
+    return { sx: sx, sy: sy, pw: pw, ph: ph };
 };
 
 Window_Base.prototype.drawItemName = function(item, x, y, width) {
@@ -7377,7 +7393,8 @@ Window_NameBox.prototype.updateBackground = function() {
     };
     /** The state that shows, in its own color, or the Normal term. */
     Window_Base.prototype.drawLegacyState = function(actor, x, y, width) {
-        const top = actor.states()[0];
+        // An unnamed state is not a condition to show (the importer's Guard state, on while a battler defends).
+        const top = actor.states().find(state => state.name);
         this.changeTextColor(top ? ColorManager.textColor(top.rrColor ?? 6) : ColorManager.normalColor(), top ? (top.rrColor ?? 6) : 0);
         this.drawText(top ? top.name : ($dataSystem.rrNormalStatus || "Normal"), x, y, width);
         this.resetTextColor();

@@ -54,7 +54,7 @@ test('Database Cancel restores vehicle loadouts and class equipment traits toget
     manager.data.vehicles = [null, {id: 1, name: 'Bike', classId: 1, equips: [2]}];
     manager.data.classes = [null, {id: 1, name: 'Bike class', traits: [{code:51,dataId:1,value:1}]}];
     const UI = vm.runInNewContext(fs.readFileSync(path.join(editor, 'src/DatabaseEditorUI.js'), 'utf8') + '\nDatabaseEditorUI;', { console, RRDatabase3DBindings: bindings });
-    const ui = {databaseManager: manager, currentProject: null, _dataSnapshot: JSON.stringify(manager.data)};
+    const ui = Object.assign(Object.create(UI.prototype), {databaseManager: manager, currentProject: null, _dataSnapshot: JSON.stringify(manager.data)});
     manager.data.vehicles[1].equips[0] = 3;
     manager.data.classes[1].traits.push({code:55,dataId:1,value:1});
     UI.prototype.revertDatabaseSnapshot.call(ui);

@@ -790,6 +790,8 @@ Scene_Map.prototype.start = function() {
     } else if (this.needsFadeIn()) {
         this.startFadeIn(this.fadeSpeed(), false);
     }
+    // A loaded save's music sequence waited for this map's data, and a load makes no transfer to repeat it.
+    AudioManager.resumePendingBgmSequence();
     this.menuCalling = false;
 };
 
@@ -1624,6 +1626,12 @@ Scene_ItemBase.prototype.itemTargetActors = function() {
     action.setItemObject(this.item());
     if (!action.isForFriend()) {
         return [];
+    } else if (action.isForAllAlliesButUser() && DataManager.isSkill(this.item())) {
+        // A skill cast from the menu skips its caster, as it does in battle. An item
+        // has no caster in the menu (its "user" is only whoever has the best
+        // Pharmacology), so it still reaches the whole party.
+        const user = this.user();
+        return $gameParty.members().filter(member => member !== user);
     } else if (action.isForAll()) {
         return $gameParty.members();
     } else {
@@ -3863,6 +3871,17 @@ Scene_Boot.prototype.isReady = function() {
     Scene_Title.prototype.createCommandWindow = function() {
         _createCommandWindow.call(this);
         this._commandWindow.setHandler("shutdown", this.rrCommandShutdown.bind(this));
+    };
+    // Four commands with it: the window is a row taller, its bottom where it was, so Options is not below the edge.
+    const _commandWindowRect = Scene_Title.prototype.commandWindowRect;
+    Scene_Title.prototype.commandWindowRect = function() {
+        const rect = _commandWindowRect.call(this);
+        const name = $dataSystem && typeof $dataSystem.rrTitleShutdown === "string" ? $dataSystem.rrTitleShutdown : "";
+        if (!name || !Utils.isNwjs()) return rect;
+        const row = this.calcWindowHeight(4, true) - this.calcWindowHeight(3, true);
+        rect.y -= row;
+        rect.height += row;
+        return rect;
     };
     Scene_Title.prototype.rrCommandShutdown = function() {
         this._commandWindow.close();

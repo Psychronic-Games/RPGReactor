@@ -220,7 +220,9 @@ test('all Effekseer surfaces use authored X rotation and aspect-neutral positive
     // The game's overlay draws through the shared projection: positive Y, the same pixels on both axes.
     assert.match(sprites, /ReactorBattleData\.effekseerProjection\(side, side, height, 1, mirror\)/);
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_data.js'), 'utf8'), /\(mirror \? -1 : 1\) \* scale \* frame \/ width, 0, 0, 0,\s*0, scale \* frame \/ height, 0, 0,/);
-    assert.match(core, /setProjectionMatrix\(\[1, 0, 0, 0,\s*0, 1,/);
+    // The core draws no effect of its own (its console check, the last projection written there, went 2026-11-11):
+    // nothing in it can set another projection than the shared one.
+    assert.doesNotMatch(core, /setProjectionMatrix/);
 });
 
 test('modal loading is synchronous-safe, standalone output is opaque, and scene blit precedes draw', () => {

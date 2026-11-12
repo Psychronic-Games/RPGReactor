@@ -181,6 +181,32 @@ test('clearing a slot drops its texture', async () => {
     assert.equal(tm.tilesetTextures[9], undefined);
 });
 
+test('a replaced A1 sheet drops the water\'s animation frames; a replaced A2 sheet drops the decoration table', async () => {
+    // The animation frames are keyed "a1_…", not by slot number, so they were
+    // never dropped and the water went back to the old sheet's art at its next
+    // step. The decoration table is read from A2 (slot 1) and was reset for A1.
+    const make = () => {
+        const tm = tilemap({ names: ['old_a1', 'old_a2'], mapData: new Array(4 * 4 * 6).fill(0) });
+        tm.renderMap = () => {};
+        tm.path = { join: (...p) => p.join('/') };
+        tm.assetUrl = p => p;
+        tm.projectPath = '/p';
+        tm.a1AnimationCache = { 'a1_0_47_0_0_0': { destroy() {} } };
+        tm._a2DecorKinds = [true];
+        return tm;
+    };
+
+    let tm = make();
+    await tm.refreshTilesetImages({ tilesetNames: ['new_a1', 'old_a2'] });
+    assert.deepEqual(Object.keys(tm.a1AnimationCache), [], 'the frames cut from the old A1 sheet are gone');
+    assert.deepEqual(tm._a2DecorKinds, [true], 'A1 says nothing about A2\'s decorations');
+
+    tm = make();
+    await tm.refreshTilesetImages({ tilesetNames: ['old_a1', 'new_a2'] });
+    assert.deepEqual(Object.keys(tm.a1AnimationCache), ['a1_0_47_0_0_0'], 'the water keeps its frames');
+    assert.equal(tm._a2DecorKinds, null, 'the table is worked out again from the new A2 sheet');
+});
+
 test('the save announces itself and the listener coalesces bursts', () => {
     assert.match(tilesetEditorSource, /new CustomEvent\('rr-tileset-saved'/);
     assert.match(controllerSource, /addEventListener\('rr-tileset-saved', this\._tilesetSavedHandler\)/);

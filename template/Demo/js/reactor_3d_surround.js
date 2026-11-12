@@ -659,7 +659,6 @@
         this._surroundMeshes = [];
         this._surroundHaze = null;
         this._surroundWater = null;
-        this._surroundInfo = null;
     };
 
     /** Lay the map's surroundings (again): nothing for a map without them, or before its floor is there. */
@@ -684,7 +683,6 @@
         const lay = (mesh, group, order) => {
             mesh.renderOrder = order;
             mesh.castShadow = false;
-            mesh.userData.rrSurround = true;
             // Scenery: a click or a camera ray passes through it.
             mesh.raycast = function() {};
             mesh.visible = R.SURROUND_VISIBLE !== false;
@@ -729,7 +727,6 @@
             mesh.userData.rrSurroundOwn = true;
             this._surroundWater = mesh;
         }
-        this._surroundInfo = built.info;
         return true;
     };
 
@@ -977,7 +974,7 @@
         });
         // The longest unused go, past what is kept.
         if (N.records.size > N.KEEP) {
-            const old = Array.from(N.records.values()).filter(r => r !== record && !r.held).sort((p, q) => p.used - q.used)[0];
+            const old = Array.from(N.records.values()).filter(r => r !== record).sort((p, q) => p.used - q.used)[0];
             if (old) N.records.delete(old.mapId);
         }
         return record;
@@ -1007,6 +1004,8 @@
         record.copy = null;
         // Its cells are the world's that stands built from the same files: indexed once (the camera asks in the crossing frame).
         if (map && R.sharePieceIndex) R.sharePieceIndex(record.map, map);
+        // And its doors are that world's doors: as they stand, when the scene is made again (the menu, a battle).
+        if (map && R.shareDoorStates) R.shareDoorStates(record.map, map);
         return map;
     };
 
@@ -1416,7 +1415,7 @@
         }
         if (depth > 1) { if (body.record) body.record.used = ++N._clock; return; }
         // Its plants are laid as the eye nears them, as this map's are.
-        if (body.scene.updateFoliageFrame && body.scene._foliageMap) N.inBody(body.scene._foliageMap, body.at, null, () => body.scene.updateFoliageFrame(null));
+        if (body.scene.updateFoliageFrame && body.scene._foliageMap) N.inBody(body.scene._foliageMap, body.at, null, () => body.scene.updateFoliageFrame(null, true));
         // Read (a map left over a border was never asked for), and a copy of it ready for the game to enter by.
         const record = N.request(body.mapId);
         if (record.state === "ready" && !record.copy && record.text && N.upkeep(frame)) record.copy = N.make(record);
@@ -1500,12 +1499,39 @@
     };
 
     /**
+     * `neighborsOf` for the frame's loop, which asks it of the map played four times and of every standing world
+     * twice, every frame: the checked list is kept on the map for as long as what it was read from stands (each
+     * side's stored entry, its map and its shift are looked at again each time, so a list changed in place is
+     * read again). Read only: the same record is handed out each time.
+     */
+    const sidesKept = new WeakMap();
+    N.sidesOf = function(mapData) {
+        if (!mapData || typeof mapData !== "object") return R.neighborsOf(mapData);
+        const surround = mapData.reactor3d && mapData.reactor3d.surround, raw = surround && surround.neighbors;
+        const usable = !!raw && typeof raw === "object", names = R.SURROUND_SIDES;
+        let kept = sidesKept.get(mapData), same = !!kept && kept.raw === raw && kept.count === names.length;
+        for (let i = 0; same && usable && i < names.length; i++) {
+            const entry = raw[names[i]], said = !!entry && typeof entry === "object";
+            same = kept.entries[i] === entry && (!said || (kept.maps[i] === entry.map && kept.shifts[i] === entry.shift));
+        }
+        if (same) return kept.sides;
+        kept = { raw, count: names.length, entries: [], maps: [], shifts: [], sides: R.neighborsOf(mapData) };
+        for (let i = 0; usable && i < names.length; i++) {
+            const entry = raw[names[i]], said = !!entry && typeof entry === "object";
+            kept.entries.push(entry); kept.maps.push(said ? entry.map : undefined); kept.shifts.push(said ? entry.shift : undefined);
+        }
+        sidesKept.set(mapData, kept);
+        return kept.sides;
+    };
+
+    /**
      * Once a frame on a 3D map: every map within `DEPTH` maps of the one played is read and its world built
      * (one part a frame, the nearest first; several while the screen fades in), each map once however many
      * ways lead to it, and worlds further out are let go.
      */
     N.update = function(live, bitmaps) {
         N.live = live;
+        const neighborsOf = N.sidesOf;
         const map = root.$dataMap, player = root.$gamePlayer, scene = live && live.scene;
         if (!N.enabled || !map || !player || !scene || !scene._scene || N.crossing) return;
         const infos = root.$dataMapInfos;
@@ -1522,7 +1548,7 @@
         let ahead = "", least = Infinity;
         for (const side of R.SURROUND_SIDES) {
             const away = N.sideDistance(map, player._realX, player._realY, side);
-            if (R.neighborsOf(map)[side] && away < least) { least = away; ahead = side; }
+            if (neighborsOf(map)[side] && away < least) { least = away; ahead = side; }
         }
         if (least > (N._ahead === ahead ? N.AHEAD + N.AHEAD_KEEP : N.AHEAD)) ahead = "";
         N._ahead = ahead;
@@ -1534,7 +1560,7 @@
             for (const host of level) {
                 const bodies = host.scene._neighborBodies;
                 if (!bodies) continue;
-                const sides = host.map ? R.neighborsOf(host.map) : null;
+                const sides = host.map ? neighborsOf(host.map) : null;
                 for (const side of Object.keys(bodies)) {
                     const body = bodies[side], entry = sides ? sides[side] : null;
                     if (standing.has(body.mapId) || (sides && (!entry || !infos[entry.map] || body.mapId !== entry.map))) { N.removeBody(host.scene, side); continue; }
@@ -1546,7 +1572,7 @@
             const wanted = [], next = [];
             for (const host of level) {
                 if (!host.map) continue;
-                const sides = R.neighborsOf(host.map), bodies = host.scene._neighborBodies || (host.scene._neighborBodies = {});
+                const sides = neighborsOf(host.map), bodies = host.scene._neighborBodies || (host.scene._neighborBodies = {});
                 const from = host.body ? host.body.at : ZERO;
                 for (const side of R.SURROUND_SIDES) {
                     const entry = sides[side], body = bodies[side];

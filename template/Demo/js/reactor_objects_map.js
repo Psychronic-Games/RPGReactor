@@ -1075,7 +1075,8 @@ Game_CharacterBase.LATE_FIELDS = [
     "_reactorChaseLater", "_reactorPosePitch", "_reactorFallYaw", "_reactorPush", "_reactorPushAlso", "_reactorPushDir",
     "_reactorPushFrames", "_reactorDriftX", "_reactorDriftY", "_rrSpin", "_rrSpinCount", "_rrVehicle", "_rrHome", "_rrYaw",
     "_rrStage", "_rrFade", "_rrDrop", "_rrVehicleTransfer", "_borderArrival", "_destinationCheckCounter",
-    "_reactorSpin", "_rrMirror", "_rrFlip", "_rrSpinPivot", "_rrPageImage"
+    "_reactorSpin", "_rrMirror", "_rrFlip", "_rrSpinPivot", "_rrPageImage",
+    "_reactorRisen", "_reactorSplash", "_reactorRagdoll", "_reactorStepOff", "_reactorSplashSeen", "_reactorRippleAt"
 ];
 
 /**

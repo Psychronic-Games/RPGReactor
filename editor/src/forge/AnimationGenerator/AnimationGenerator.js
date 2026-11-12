@@ -283,13 +283,14 @@ class AnimationGenerator {
                     this._relinkLayerParams(layer);
                     const anim = this._findAnimation(layer.categoryId, layer.animationId);
                     if (!anim) continue;
-                    for (const p of anim.params) {
-                        if (layer.params[p.key] === undefined) layer.params[p.key] = p.default;
-                    }
-                    // Migration: sphere `tilt` (single X-tilt) → tiltX.
+                    // Migration: sphere `tilt` (single X-tilt) → tiltX. Before the
+                    // defaults go in: after them tiltX is never missing.
                     if (layer.params.tilt !== undefined && layer.params.tiltX === undefined) {
                         layer.params.tiltX = layer.params.tilt;
                         delete layer.params.tilt;
+                    }
+                    for (const p of anim.params) {
+                        if (layer.params[p.key] === undefined) layer.params[p.key] = p.default;
                     }
                 }
                 this.activeLayerId = (cfg.activeLayerId && this.layers.find(l => l.id === cfg.activeLayerId))

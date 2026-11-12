@@ -627,6 +627,25 @@
     };
 
     /**
+     * A map's data read again under events that are kept (the menu, a battle, a load, a transfer on this map): what
+     * `visitingVehicles` added to the data is put back, a visitor's own model binding with it.
+     */
+    const restoreVisitors = function() {
+        const map = typeof $gameMap !== "undefined" ? $gameMap : null, data = mapData(), store = registry(false);
+        if (!map || !data || !Array.isArray(data.events)) return;
+        for (const event of map.events()) {
+            if (!event || !(event._eventId > 0) || !event._rrAuthored) continue;
+            data.events[event._eventId] = event._rrAuthored;
+            const identity = V.idOf(event), entry = store ? store.at[identity] : null;
+            // (Only a vehicle from another map was given one: at home the map's own data has it.)
+            if (!entry || !entry.models || Number(String(identity).split(":")[0]) === map._mapId) continue;
+            if (!data.reactor3d) data.reactor3d = {};
+            if (!data.reactor3d.events) data.reactor3d.events = {};
+            if (!data.reactor3d.events[event._eventId]) data.reactor3d.events[event._eventId] = copy(entry.models);
+        }
+    };
+
+    /**
      * A map whose events came from a save, not from `setupEvents`: an event the data has since made a vehicle is
      * marked where it stands, and one the data no longer makes a vehicle is an ordinary event again.
      */
@@ -634,11 +653,11 @@
         const map = typeof $gameMap !== "undefined" ? $gameMap : null, data = mapData();
         const p = player();
         if (!map || !data || !data.events || (p && p.isTransferring && p.isTransferring())) return;
+        restoreVisitors();
         const events = map.events();
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
             if (!event || !(event._eventId > 0)) continue;
-            if (event._rrAuthored) data.events[event._eventId] = event._rrAuthored;
             const authored = event._rrAuthored || data.events[event._eventId];
             const row = authored && authored.rrVehicle && typeof authored.rrVehicle === "object" ? authored.rrVehicle : null;
             if (row && !event._rrVehicle) mark(event, authored);
@@ -707,6 +726,15 @@
         if (!V.free()) return "free";
         const type = event ? V.type(event._rrVehicle) : null;
         return kindRule(type) || mapRule() || modelRule(type,event);
+    };
+
+    /** Whether a vehicle has something to be drawn as on the map whose data is loaded now (asked on the way in, before that map's events are made). */
+    V.showsHere = function(event) { return !!event && !modelRule(V.type(event._rrVehicle), event); };
+    /** The ride does not go on to the map being entered: the vehicle and its convoy stay where they were parked. */
+    V.cancelTransfer = function() {
+        const p = player();
+        if (p) p._rrVehicleTransfer = null;
+        for (const follower of convoyFollowers()) follower._rrConvoy = undefined;
     };
 
     /**
@@ -1381,11 +1409,6 @@
         return !!(seats && seats[0] && seats[0].seat);
     };
 
-    /**
-     * The rider nobody draws on the seat: the vehicle's Rider setting says inside; or it says nothing, its kind
-     * keeps its rider inside and its model places no seat; or the leader has no model. Left to itself, a seat placed
-     * on the model shows its rider there, whatever the kind.
-     */
     /** Whether a vehicle keeps its rider inside it (its Rider setting; left to itself, its kind unless its model places a seat). */
     V.riderInside = function(event) {
         if (!event || !(event._rrVehicle > 0)) return false;
@@ -1394,6 +1417,11 @@
         return own === "inside" || (!own && !!type && type.rider === "inside" && !seatPlaced(event));
     };
 
+    /**
+     * The rider nobody draws on the seat: the vehicle's Rider setting says inside; or it says nothing, its kind
+     * keeps its rider inside and its model places no seat; or the leader has no model. Left to itself, a seat placed
+     * on the model shows its rider there, whatever the kind.
+     */
     const hidesRider = function(type, p, event) {
         if (!map3D()) return true;
         if (event && V.riderInside(event)) return true;
@@ -1683,8 +1711,13 @@
      * beside it when the ride began) rides to it. `speed` is the leader's, signed.
      */
     Convoy.follow = function(p, lead, speed) {
+        if (!lead) return;
+        // (Asked every tick aboard: with no follower seated there is no convoy, and no list is built to find that out.)
+        let seated = false;
+        for (const follower of convoyFollowers()) if (follower._rrSeated && follower._rrRide) { seated = true; break; }
+        if (!seated) return;
         const riders = Convoy.riders();
-        if (!riders.length || !lead) return;
+        if (!riders.length) return;
         const map = $gameMap, x = p._realX, y = p._realY;
         const alt = Number.isFinite(p._reactorAlt) ? p._reactorAlt : groundOf(p);
         // A leader put somewhere else (a transfer on this map): the trail begins again there, the convoy with it.
@@ -2514,6 +2547,16 @@
                 $gameSelfSwitches.setValue([home[0], home[1], params[0]], params[1] === 0);
                 return true;
             };
+            const branch = Game_Interpreter.prototype.command111;
+            Game_Interpreter.prototype.command111 = function(params) {
+                // (A Battle Room's events keep self switches of their own.)
+                const event = params[0] === 2 && !this._reactorRoom && $gameMap && this._mapId === $gameMap._mapId ? $gameMap.event(this._eventId) : null;
+                if (!event || !event._rrIdentity) return branch.call(this, params);
+                // A vehicle's self switches are kept under its own identity, wherever it stands (as command 123 writes them).
+                const mapId = this._mapId, eventId = this._eventId, home = event._rrIdentity.split(":").map(Number);
+                this._mapId = home[0]; this._eventId = home[1];
+                try { return branch.call(this, params); } finally { this._mapId = mapId; this._eventId = eventId; }
+            };
             // Game_Action ordinarily identifies subjects through Actors or Troop indices.
             // Vehicles use their own saved identity; no synthetic Actor database record is needed.
             if (typeof Game_Action !== "undefined" && !Game_Action.prototype.subject.__rrVehicles) {
@@ -2531,6 +2574,17 @@
                     if (V.isBusy()) return true;
                     this._waitMode = "";
                     return false;
+                }
+                if (this._waitMode === "route") {
+                    // A route forced on the ridden vehicle's event is the rider's (reactor_vehicles_drive.js): the wait is for the rider.
+                    // (`_character`: the compat layer's note of who the route was given to, which its own check would ask first.)
+                    const character = this._character || this.character(this._characterId), p = player();
+                    if (character && p && character !== p && p._rrFree && V.ridden() === character) {
+                        if (p.isMoveRouteForcing()) return true;
+                        this._waitMode = "";
+                        if (this._character) this._character = null;
+                        return false;
+                    }
                 }
                 return updateWaitMode.call(this);
             };
@@ -2570,6 +2624,14 @@
                 V.resume();
             };
             Scene_Map.prototype.start.__rrVehicles = true;
+            // The map's data was read again from its file: what visitors added to it is put back before the scene builds from it.
+            const onMapLoaded = Scene_Map.prototype.onMapLoaded;
+            Scene_Map.prototype.onMapLoaded = function() {
+                const p = player();
+                // Not when this map's events are about to be made again (another map, or this one reloaded): `setupEvents` does it then.
+                if (!this._transfer || (p && $gameMap && p._newMapId === $gameMap._mapId && !p._needsMapReload)) restoreVisitors();
+                return onMapLoaded.apply(this, arguments);
+            };
         }
 
         if (typeof Scene_Map !== "undefined" && typeof Scene_Map.prototype.updateCallMenu === "function" && !Scene_Map.prototype.updateCallMenu.__rrVehicles) {

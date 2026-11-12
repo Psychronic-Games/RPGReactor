@@ -63,7 +63,7 @@ class DatabaseWeaponEditor {
                         <span class="db-col">
                             <label>${tt('Weapon Type')}</label>
                             <select class="database-field-value" data-field="wtypeId" data-weapon-id="${weapon.id}">
-                                ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${weapon.wtypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
+                                ${/* None (0) and a type with no name keep their own entry, so the field shows what is stored. */ DatabaseSkillEditor.skillTypeOptions(weaponTypeNames, weapon.wtypeId || 0, tt)}
                             </select>
                         </span>
                         <span class="db-col">
@@ -77,7 +77,7 @@ class DatabaseWeaponEditor {
                         </span>
                         <span class="db-col">
                             <label>${tt('Animation')}</label>
-                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-rr-i18n-skip>${animationLabel(weapon.animationId || 0)}</button>
+                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-rr-i18n-skip>${rrEscapeHtml(animationLabel(weapon.animationId || 0))}</button>
                             <input type="hidden" value="${weapon.animationId || 0}" data-field="animationId" data-weapon-id="${weapon.id}">
                         </span>
                     </div>
@@ -131,7 +131,7 @@ class DatabaseWeaponEditor {
                     <tbody>
                         ${paramNames.map((name, idx) => `
                             <tr>
-                                <td>${name}</td>
+                                <td>${rrEscapeHtml(name)}</td>
                                 <td>
                                     <input type="number"
                                            class="database-field-value database-field-value-small"
@@ -493,24 +493,13 @@ class DatabaseWeaponEditor {
     }
 
     addTrait(weapon) {
-        console.debug('DatabaseWeaponEditor.addTrait - Adding new trait to weapon:', weapon.id);
-        console.debug('DatabaseWeaponEditor.addTrait - Current traits:', weapon.traits);
-
         // Initialize traits array if needed
         if (!weapon.traits) weapon.traits = [];
 
         // Open trait editor for a new trait (index -1)
-        console.debug('DatabaseWeaponEditor.addTrait - Opening editor for new trait');
-
         this.traitEditor.showTraitEditorModal(weapon, -1, (updatedEntry) => {
-            console.debug('DatabaseWeaponEditor.addTrait - Callback received entry:', updatedEntry);
-            console.debug('DatabaseWeaponEditor.addTrait - Entry traits:', updatedEntry.traits);
-
             this.databaseManager.updateWeapon(updatedEntry.id, updatedEntry);
-            console.debug('DatabaseWeaponEditor.addTrait - Updated weapon in database');
-
             this.refreshWeaponDetail(updatedEntry);
-            console.debug('DatabaseWeaponEditor.addTrait - Refreshed weapon detail');
         });
     }
 
@@ -568,15 +557,10 @@ class DatabaseWeaponEditor {
         if (this.parentEditor?.showDatabaseDetail) {
             return this.parentEditor.showDatabaseDetail(weapon, 'weapons');
         }
-        console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Refreshing weapon:', weapon.id);
-        console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Weapon traits:', weapon.traits);
-
         const container = document.getElementById('database-detail');
         if (container) {
-            console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Found container, clearing and rebuilding');
             container.innerHTML = '';
             this.showWeaponDetail(container, weapon);
-            console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Detail rebuilt');
         } else {
             console.warn('DatabaseWeaponEditor.refreshWeaponDetail - Could not find detail panel container!');
         }

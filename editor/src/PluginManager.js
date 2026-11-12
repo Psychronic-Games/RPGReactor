@@ -173,34 +173,6 @@ class PluginManager {
         this.clearPluginSelection();
     }
 
-    /**
-     * Recursively parse nested JSON strings
-     */
-    deepParseJSON(value) {
-        if (typeof value === 'string') {
-            // Try to parse as JSON
-            try {
-                const parsed = JSON.parse(value);
-                // Recursively parse the result
-                return this.deepParseJSON(parsed);
-            } catch (e) {
-                // Not JSON, return as-is
-                return value;
-            }
-        } else if (Array.isArray(value)) {
-            // Recursively parse array elements
-            return value.map(item => this.deepParseJSON(item));
-        } else if (value && typeof value === 'object') {
-            // Recursively parse object properties
-            const result = {};
-            for (const [k, v] of Object.entries(value)) {
-                result[k] = this.deepParseJSON(v);
-            }
-            return result;
-        }
-        return value;
-    }
-
     getStructName(type) {
         return RRPluginParamCodec.getStructName(type);
     }
@@ -1460,7 +1432,8 @@ class PluginManager {
             const falseOpt = document.createElement('option');
             falseOpt.value = 'false';
             falseOpt.textContent = fieldSchema.off || 'false';
-            falseOpt.selected = value === 'false' || value === false;
+            // Anything but true reads as false in a plugin (no value, no @default): show what it gets.
+            falseOpt.selected = value !== 'true' && value !== true;
 
             select.appendChild(trueOpt);
             select.appendChild(falseOpt);
@@ -3099,10 +3072,6 @@ class PluginManager {
         return RRPluginAnnotations.normalizeLine(line);
     }
 
-    cleanAnnotationValue(value) {
-        return RRPluginAnnotations.cleanValue(value);
-    }
-
     splitAnnotationLine(line) {
         return RRPluginAnnotations.splitLine(line);
     }
@@ -3876,7 +3845,8 @@ class PluginManager {
             const falseOpt = document.createElement('option');
             falseOpt.value = 'false';
             falseOpt.textContent = metadata.off || 'false';
-            falseOpt.selected = value === 'false';
+            // Anything but true reads as false in a plugin (no value, no @default): show what it gets.
+            falseOpt.selected = value !== 'true' && value !== true;
 
             select.appendChild(trueOpt);
             select.appendChild(falseOpt);
@@ -4203,10 +4173,20 @@ class PluginManager {
 
         const lines = commentBlock[0].split('\n');
         let currentParam = null;
+        // The last tag applied to the parameter: a line without a tag after `@desc` carries the description on.
+        let lastTag = null;
 
         for (const line of lines) {
-            const tokens = this.splitAnnotationLine(this.normalizeAnnotationLine(line));
+            const text = this.normalizeAnnotationLine(line);
+            const tokens = this.splitAnnotationLine(text);
+            if (!tokens.length) {
+                const more = currentParam && metadata[currentParam] ? RRPluginAnnotations.descContinuation(text, lastTag) : '';
+                if (more) this.applyAnnotationToSchema(metadata[currentParam], 'desc', more);
+                else lastTag = null;
+                continue;
+            }
             for (const token of tokens) {
+                lastTag = token.tag;
                 if (token.tag === 'command' || token.tag === 'arg') {
                     currentParam = null;
                     continue;

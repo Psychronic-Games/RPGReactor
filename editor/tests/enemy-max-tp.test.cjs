@@ -202,7 +202,7 @@ test('the Parameter column is pinned to its labels, so a growing box cannot move
         /<th style="width: 1px; white-space: nowrap;">\$\{tt\('Parameter'\)\}<\/th>/,
         'the Parameter column collapses to its own content');
     assert.match(enemyEditorSource,
-        /<td style="white-space: nowrap;">\$\{row\.label\}<\/td>/,
+        /<td style="white-space: nowrap;">\$\{rrEscapeHtml\(row\.label\)\}<\/td>/,
         'and the labels stay on one line, so that content is the longest of them');
     assert.doesNotMatch(enemyEditorSource, /table-layout: fixed/,
         'the Value column takes the rest rather than being pinned itself');

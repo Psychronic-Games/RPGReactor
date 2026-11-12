@@ -17,10 +17,6 @@ class AnimationPicker {
         this._effekseerContext = null;
         this._effekseerHandle = null;
         this._gl = null;
-        this._spriteSheet1 = null;
-        this._spriteSheet2 = null;
-        this._previewCanvas = null;
-        this._isPlaying = false;
     }
 
     _t(text) {
@@ -61,10 +57,8 @@ class AnimationPicker {
             z-index: 20000;
         `;
 
-        this.modal.addEventListener('click', (e) => {
-            // A click on the backdrop no longer closes the dialog: an accidental
-            // click beside it must never cost in-progress work. Close deliberately.
-        });
+        // A click on the backdrop does not close the dialog: an accidental
+        // click beside it must never cost in-progress work. Close deliberately.
 
         // Container
         const container = document.createElement('div');
@@ -191,15 +185,8 @@ class AnimationPicker {
         const animations = this.databaseManager.data.animations;
         const items = [];
 
-        // (None) entry
-        const noneItem = this._createListItem(0, this._t('(None)'), null);
-        listContainer.appendChild(noneItem);
-        items.push({ el: noneItem, name: this._t('(None)').toLowerCase(), id: 0 });
-
-        if (this.selectedId === 0) {
-            noneItem.style.backgroundColor = 'var(--color-selection-mid)';
-            noneItem.style.color = 'var(--color-link)';
-        }
+        // No "(None)" row: Show Animation, the picker's one caller, has no animation 0 (it saved as a command
+        // that does nothing and came back as animation 1 when opened again).
 
         // Animation entries
         for (let i = 1; i < animations.length; i++) {
@@ -303,6 +290,9 @@ class AnimationPicker {
 
     _loadPreview(animId) {
         this._stopPreview();
+        // The last animation's canvas goes with the panel: its contexts are let go now, not left to pile up
+        // (one pair per row clicked) until the picker closes.
+        this._releasePreviewContext();
         const gen = ++this._loadGeneration;
         const panel = this._rightPanel;
         panel.innerHTML = '';
@@ -360,7 +350,6 @@ class AnimationPicker {
             max-width: 100%;
         `;
         panel.appendChild(canvas);
-        this._previewCanvas = canvas;
 
         // Controls
         const controls = document.createElement('div');
@@ -506,7 +495,6 @@ class AnimationPicker {
             if (isPlaying) return;
             if (!animation.frames || animation.frames.length === 0) return;
             isPlaying = true;
-            this._isPlaying = true;
             currentFrame = 0;
             playBtn.disabled = true;
             playBtn.style.opacity = '0.5';
@@ -539,7 +527,6 @@ class AnimationPicker {
 
         const stop = () => {
             isPlaying = false;
-            this._isPlaying = false;
             if (this._spriteInterval) {
                 cancelAnimationFrame(this._spriteInterval);
                 this._spriteInterval = null;
@@ -762,7 +749,6 @@ class AnimationPicker {
             if (isPlaying) return;
             if (!effect || !effect.isLoaded) return;
             isPlaying = true;
-            this._isPlaying = true;
             currentFrame = 0;
             lastTime = Date.now();
             accumulator = 0;
@@ -798,7 +784,6 @@ class AnimationPicker {
 
         const stop = () => {
             isPlaying = false;
-            this._isPlaying = false;
 
             if (this._animFrameId) {
                 cancelAnimationFrame(this._animFrameId);
@@ -853,13 +838,19 @@ class AnimationPicker {
             try { this._effekseerHandle.stop(); } catch (e) {}
             this._effekseerHandle = null;
         }
-
-        this._isPlaying = false;
     }
 
     _cleanup() {
+        // A loop restart, a late load or the "initializing" poll of this opening must not run on what is released here.
+        this._loadGeneration++;
         this._stopPreview();
+        this._releasePreviewContext();
+        this._rightPanel = null;
+        this._refreshPreviewBackdrop = null;
+    }
 
+    /** Lets go of the Effekseer context and the WebGL context of the preview on show. */
+    _releasePreviewContext() {
         // Destroy Effekseer context
         if (this._effekseerContext) {
             try { this._effekseerContext.release(); } catch (e) {}
@@ -874,11 +865,6 @@ class AnimationPicker {
             if (lose) { try { lose.loseContext(); } catch (e) {} }
         }
         this._gl = null;
-        this._spriteSheet1 = null;
-        this._spriteSheet2 = null;
-        this._previewCanvas = null;
-        this._rightPanel = null;
-        this._refreshPreviewBackdrop = null;
     }
 
     _confirm() {

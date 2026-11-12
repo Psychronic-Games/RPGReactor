@@ -227,6 +227,15 @@ test('the blades are built in the shader from their clump, lit like everything e
     assert.match(shader.fragmentShader, /rrLight\(vRRWorldPos\)/);
     assert.match(shader.fragmentShader, /diffuseColor\.rgb \*= vRRFoliage/);
     assert.equal(shader.uniforms.rrFolWind, R.foliageUniforms().rrFolWind, 'one wind for the whole map');
+    // A scene's plants read that scene's wind and walkers, so a neighboring map's world keeps its own.
+    const here = Object.create(R.MapScene.prototype), there = Object.create(R.MapScene.prototype);
+    assert.equal(here.foliageOwn(), here.foliageOwn());
+    assert.notEqual(here.foliageOwn().rrFolWind, there.foliageOwn().rrFolWind);
+    const placed = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+    R.foliageMaterial(layer, here.foliageOwn()).onBeforeCompile(placed, null);
+    assert.equal(placed.uniforms.rrFolWind, here.foliageOwn().rrFolWind);
+    assert.equal(placed.uniforms.rrFolPush, here.foliageOwn().rrFolPush);
+    assert.equal(placed.uniforms.rrFolTime, R.foliageUniforms().rrFolTime, 'the clock stays shared');
     assert.match(material.customProgramCacheKey(), /reactor3d-foliage-grass/);
     for (const kind of R.FOLIAGE_KINDS) {
         const t = R.foliageTemplate(kind);
@@ -249,7 +258,7 @@ test('a frame of the game reuses its vectors: who walks through, which chunks ar
     R._viewport = { camera: () => camera };
     try {
         const walker = { _realX: 3, _realY: 4, isMoving: () => false };
-        const pushers = R.foliageUniforms().rrFolPush.value;
+        const pushers = scene.foliageOwn().rrFolPush.value;
         scene.updateFoliageFrame([walker]);
         assert.equal(near.visible, true);
         assert.equal(far.visible, false, 'a chunk past the fade is not drawn at all');
@@ -257,7 +266,11 @@ test('a frame of the game reuses its vectors: who walks through, which chunks ar
         assert.equal(pushers[1].w, 0);
         const first = pushers[0];
         scene.updateFoliageFrame([walker]);
-        assert.equal(R.foliageUniforms().rrFolPush.value[0], first, 'the same vector next frame');
+        assert.equal(scene.foliageOwn().rrFolPush.value[0], first, 'the same vector next frame');
+        // A neighboring map's world has nobody walking in it, and clearing its pushers leaves this map's alone.
+        const beside = Object.create(R.MapScene.prototype);
+        beside.updateFoliageFrame(null);
+        assert.equal(pushers[0].w, 1);
     } finally { R._viewport = saved; }
 });
 
@@ -378,4 +391,44 @@ test('the foliage eraser takes every kind under the brush, and the bushes in it'
     assert.ok(calls.every(call => call[0] === 'bushes' || call[1] === true), 'every kind is erased');
     assert.deepEqual(calls[calls.length - 1], ['bushes', 3]);
     assert.ok(announced && announced.x0 <= 1 && announced.x1 >= 13, 'the map is told of all of it');
+});
+
+test('a world past the border lays only the plants within reach of the eye, and all of them once it is the map played', () => {
+    const scene = Object.create(R.MapScene.prototype);
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    scene._scene = {};
+    scene._foliageGroup = group;
+    // (No map to lay from: the lists are only parted here.)
+    scene._foliageQueue = [[0, 0], [20, 20]];
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(8, 10, 8); camera.updateMatrixWorld();
+    const saved = R._viewport;
+    R._viewport = { camera: () => camera };
+    try {
+        assert.ok(R.FOLIAGE_BACKGROUND_LEAD >= 0);
+        scene.updateFoliageFrame(null, true);
+        assert.deepEqual(scene._foliageQueue, [[0, 0]], 'the chunk the eye stands in is queued');
+        assert.deepEqual(scene._foliageFar, [[20, 20]], 'one 320 tiles off waits');
+        const queue = scene._foliageQueue;
+        for (let i = 0; i < 15; i++) scene.updateFoliageFrame(null, true);
+        assert.equal(scene._foliageQueue, queue, 'nothing moved: the same list, so the batches do not look again');
+        // The eye nears the far chunk: parted again within a few frames.
+        camera.position.set(330, 10, 330); camera.updateMatrixWorld();
+        for (let i = 0; i < 15; i++) scene.updateFoliageFrame(null, true);
+        assert.deepEqual(scene._foliageQueue, [[20, 20]]);
+        assert.deepEqual(scene._foliageFar, [[0, 0]]);
+        // An edit takes a chunk out of both lists.
+        scene.removeFoliage(new Set([0]));
+        assert.deepEqual(scene._foliageFar, []);
+        scene._foliageFar = [[0, 0]];
+        // The border crossed: it is the map played, and lays everything as its own would be.
+        scene.updateFoliageFrame([]);
+        assert.deepEqual(scene._foliageQueue, [[20, 20], [0, 0]]);
+        assert.equal(scene._foliageFar, null);
+        // With the lead off, a world past the border lays all of it, as before.
+        const lead = R.FOLIAGE_BACKGROUND_LEAD;
+        R.FOLIAGE_BACKGROUND_LEAD = -1;
+        try { scene._foliageSift = 0; scene.updateFoliageFrame(null, true); assert.equal(scene._foliageQueue.length, 2); } finally { R.FOLIAGE_BACKGROUND_LEAD = lead; }
+    } finally { R._viewport = saved; }
 });

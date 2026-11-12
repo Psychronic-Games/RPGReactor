@@ -197,6 +197,8 @@
                 H.tmp = H.levels.map(L => target(L.w, L.h, type, false));
                 if (H.levels.some(x => !x) || H.tmp.some(x => !x)) throw Error("bloom pyramid incomplete");
                 H.g = Array.from({length: 6}, () => null);
+                // The Gaussians' targets, kept by size (see post).
+                H.gPool = new Map(); H.gUsed = new Map();
                 H.down = compile(VS, FS_DOWN);
                 H.setup = compile(VS, FS_SETUP);
                 H.blur = compile(VS, FS_BLUR);
@@ -296,18 +298,26 @@
                 // Radii are fractions of the view's width: the light buffer's in
                 // the game, the game screen's width as a preview draws it there.
                 const viewWidth = s.bloomWidth > 0 ? s.bloomWidth : H.w;
+                // Each Gaussian takes a target of its level's size from those kept by size, its own within this draw
+                // (all six are read together below). Kept one a Gaussian, two effects whose settings put a Gaussian
+                // at different levels deleted and made its target again twice a frame. At most six a level are ever
+                // made; they go with the rest (H.resources).
+                H.gUsed.clear();
                 for (let i = 0; i < SIZES.length; i++) {
                     const sigma = viewWidth * SIZES[i] * 0.04 * 0.5 / Math.sqrt(33.4) * s.bloomScale;
                     let l = Math.max(0, setupLevel);
                     while (l < H.levels.length - 1 && sigma / Math.pow(2, l) > 4) l++;
                     const st = sigma / Math.pow(2, l);
                     const L = level(l), T = H.tmp[l];
-                    if (!H.g[i] || H.g[i].w !== L.w || H.g[i].h !== L.h) {
-                        if (H.g[i]) { const old = H.g[i]; gl.deleteTexture(old.t); gl.deleteFramebuffer(old.f);
-                            H.resources.splice(H.resources.indexOf(old), 1); }
-                        H.g[i] = target(L.w, L.h, H.type, false);
-                        if (!H.g[i]) throw Error("bloom target incomplete");
+                    const sizeKey = L.w * 65536 + L.h, nth = H.gUsed.get(sizeKey) || 0;
+                    let sized = H.gPool.get(sizeKey);
+                    if (!sized) H.gPool.set(sizeKey, sized = []);
+                    if (!sized[nth]) {
+                        sized[nth] = target(L.w, L.h, H.type, false);
+                        if (!sized[nth]) { sized.length = nth; throw Error("bloom target incomplete"); }
                     }
+                    H.g[i] = sized[nth];
+                    H.gUsed.set(sizeKey, nth + 1);
                     gl.useProgram(H.blur.p);
                     gl.uniform1f(H.blur.u.uSigma, Math.max(st, 0.3));
                     bind(0, L.t, H.blur.u.uTex);

@@ -70,47 +70,6 @@ class RotatePictureEditor {
     }
 
     /**
-     * Create a labeled slider + number input
-     */
-    createSliderInput(label, value, min, max, onChange) {
-        const section = document.createElement('div');
-        section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const labelEl = document.createElement('span');
-        labelEl.textContent = label;
-        labelEl.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = min;
-        slider.max = max;
-        slider.value = value;
-        slider.style.cssText = 'flex: 1;';
-
-        const numInput = document.createElement('input');
-        numInput.type = 'number';
-        numInput.min = min;
-        numInput.max = max;
-        numInput.value = value;
-        numInput.style.cssText = 'padding:4px 6px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:60px;';
-
-        slider.addEventListener('input', (e) => {
-            numInput.value = e.target.value;
-            onChange(parseInt(e.target.value));
-        });
-
-        numInput.addEventListener('input', (e) => {
-            slider.value = e.target.value;
-            onChange(parseInt(e.target.value) || 0);
-        });
-
-        section.appendChild(labelEl);
-        section.appendChild(slider);
-        section.appendChild(numInput);
-        return section;
-    }
-
-    /**
      * Render modal content
      */
     renderContent() {

@@ -81,6 +81,7 @@ const ReactorOnlineBattle = {
     DUEL_WAIT_MS: 60000,
     GONE_MS: 12000,
     BODY_BYTES: 60000,
+    LINE_BYTES: 200000,
     BEHIND: 6,
     SETTLED_STAGES: ["pick", "await", "move", "command", "skill", "item", "target"],
 
@@ -93,7 +94,6 @@ const ReactorOnlineBattle = {
     guests: new Map(),
     slots: new Set(),
     asked: new Set(),
-    near: [],
 
     // ---- What other files ask ----
 
@@ -134,28 +134,64 @@ const ReactorOnlineBattle = {
         this.exchange(now).catch(error => { if (error?.status === 404) this.onLost(); else console.error("A shared battle's message failed.", error); }).finally(() => { this._busy = false; });
     },
 
-    async exchange(now) {
+    /**
+     * A message's size as the server counts it, a little high: its bytes on the way there are fewer than this, and so
+     * are those of its line in the battle's log, where the server writes each character that is not plain ASCII as
+     * six and each "/" as two.
+     */
+    bytesOf(text) {
+        let n = text.length;
+        for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); if (c > 0x7f) n += 5; else if (c === 47) n += 1; }
+        return n;
+    },
+
+    /**
+     * The next lines to send, taken off the outbox: at most 64 and BODY_BYTES together; a line by itself may be up to
+     * LINE_BYTES. One that could never be sent is dropped and said, so it does not hold back all that follow it.
+     */
+    batch() {
         const lines = [];
         let bytes = 0;
         while (this.outbox.length && lines.length < 64) {
-            const size = JSON.stringify(this.outbox[0]).length;
+            const size = this.bytesOf(JSON.stringify(this.outbox[0]));
+            if (size > this.LINE_BYTES) { console.warn("A shared battle's message was too large to send (" + this.outbox[0].t + ").", size); this.outbox.shift(); continue; }
             if (lines.length && bytes + size > this.BODY_BYTES) break;
             bytes += size;
             lines.push(this.outbox.shift());
         }
+        return lines;
+    },
+
+    /** Everything still waiting goes now, one body after another in order (this game is leaving, or the battle is over). */
+    sayAll(id) {
+        const who = this.identity(), bodies = [];
+        for (let lines = this.batch(); lines.length; lines = this.batch()) bodies.push(lines);
+        return bodies.reduce((sent, lines) => sent.then(() => ReactorOnline.post("bSay", { id, lines }, who)).catch(() => null), Promise.resolve());
+    },
+
+    async exchange(now) {
+        const lines = this.batch(), id = this.id;
+        let closed = false;
         if (lines.length) {
             try {
                 await ReactorOnline.post("bSay", { id: this.id, lines }, this.identity());
                 this._refusedSince = 0;
             } catch (error) {
-                // Not sent: back to the front of the outbox for the next exchange (a "too much" refusal would only repeat).
-                if (error?.status !== 413) this.outbox.unshift(...lines);
-                // Refused as not yet in the battle: the host's next beat names this player; read on meanwhile.
-                if (error?.status !== 403) throw error;
-                // Still refused long after any beat would have named this player: the host dropped them (dropGuest).
-                // Sending the same lines for the rest of the battle would only grow the outbox; this player is out.
-                this._refusedSince = this._refusedSince || now;
-                if (now - this._refusedSince > this.GONE_MS * 2) { this.onLost(); return; }
+                // The battle is closed: nothing more can be said in it, and what it said last (its end) is still to be
+                // read. (Since 2026-11-10 the server refuses a closed battle's lines; a guest with something to say as
+                // the host's battle ended stopped here, and was shown an escape in place of the result.)
+                if (error?.status === 404 && this.role === "guest") closed = true;
+                else {
+                    // Not sent: back to the front of the outbox for the next exchange, unless the refusal is of the lines
+                    // themselves ("too much", or a body the server cannot read), which would only repeat and hold back the rest.
+                    if (!(error?.status === 400 || error?.status === 413 || error?.status === 422)) this.outbox.unshift(...lines);
+                    // Refused as not yet in the battle: the host's next beat names this player; read on meanwhile.
+                    if (error?.status !== 403) throw error;
+                    // Still refused long after any beat would have named this player: the host dropped them (dropGuest).
+                    // Sending the same lines for the rest of the battle would only grow the outbox; this player is out.
+                    this._refusedSince = this._refusedSince || now;
+                    if (now - this._refusedSince > this.GONE_MS * 2) { this.onLost(); return; }
+                }
             }
         }
         // The players let in are told to the server with each beat, and at once when they change: only they
@@ -166,7 +202,7 @@ const ReactorOnlineBattle = {
             this._beatMembers = members;
             await ReactorOnline.post("bBeat", this.listing(), Object.assign(this.identity(), { m: $gameMap.mapId() }));
         }
-        const response = await fetch(ReactorOnline.request(Object.assign(this.identity(), { a: "bRead", id: this.id, after: this.offset })), { cache: "no-store" });
+        const response = await ReactorOnline.ask(ReactorOnline.request(Object.assign(this.identity(), { a: "bRead", id: this.id, after: this.offset })), { cache: "no-store" });
         if (!response.ok) { const error = new Error(await response.text()); error.status = response.status; throw error; }
         const answer = await response.json();
         this.offset = answer.next;
@@ -175,6 +211,8 @@ const ReactorOnlineBattle = {
             if (!line || line.from === ReactorOnline.slot || !line.m || typeof line.m !== "object") continue;
             try { this.receive(line.m, line.from); } catch (error) { console.warn("A shared battle's message could not be read.", error); }
         }
+        // Closed, read to the end of its log, and the log never told how it ended: the battle is gone.
+        if (closed && this.role === "guest" && this.id === id && !this._endHeard && !(answer.lines || []).length) this.onLost();
     },
 
     listing() {
@@ -216,7 +254,9 @@ const ReactorOnlineBattle = {
             if (message.t === "join") { const join = this.soundJoin(message); if (join) this.joins.push({ message: join, from }); }
             else if (message.t === "leave") { if (this.hostMode === "classic") ReactorOnlineClassic.dropGuest(from); else this.dropGuest(from); }
             else if (this.realTime && $gameFight?.isAction?.()) ReactorOnlineAction.onHost($gameFight, message, from);
-            else if (message.t === "plan") this.plans.set(message.u, Object.assign(message, { from }));
+            // A plan is kept only from the player whose unit it is for: anyone else's would take the place of the real one,
+            // be refused when the turn came (`awaitOrders`), and leave the unit to wait out its time.
+            else if (message.t === "plan") { if ($gameFight?.unit?.(message.u)?.remoteSlot === from) this.plans.set(message.u, Object.assign(message, { from })); }
             // A guest orders only its own battlers ("g<slot>.<actor>"): an order for anyone else's is not taken.
             else if (message.t === "orders" && Array.isArray(message.orders)) {
                 for (const order of message.orders.slice(0, 16)) if (order && typeof order.key === "string" && order.key.startsWith("g" + from + ".")) ReactorOnlineClassic.orders.set(order.key, order);
@@ -229,6 +269,7 @@ const ReactorOnlineBattle = {
             else if (message.t === "croster" && message.to === ReactorOnline.slot) ReactorOnlineClassic.begin(message);
             else if (message.t === "refuse" && message.to === ReactorOnline.slot) { this.reset(); this.tell(message.why); }
         } else if (this.role === "guest" && (!message.to || message.to === ReactorOnline.slot)) {
+            if (message.t === "end" || message.t === "cend") this._endHeard = true;
             this.inbox.push(message);
         }
     },
@@ -241,6 +282,7 @@ const ReactorOnlineBattle = {
         this.id = "";
         this.offset = 0;
         this._refusedSince = 0;
+        this._endHeard = false;
         this.outbox.length = 0;
         this.inbox.length = 0;
         this.plans.clear();
@@ -255,7 +297,6 @@ const ReactorOnlineBattle = {
     // ---- Coming near a battle ----
 
     onNews(battles) {
-        this.near = battles;
         const running = battles.some(battle => battle.id === this.id);
         if (this.role === "guest" && running) this._heard = performance.now();
         if (this.role === "guest" && !running) {
@@ -316,7 +357,7 @@ const ReactorOnlineBattle = {
         this.id = battle.id;
         this.hostSlot = battle.host;
         try {
-            const place = await fetch(ReactorOnline.request(Object.assign(this.identity(), { a: "bRead", id: battle.id, after: -1 })), { cache: "no-store" });
+            const place = await ReactorOnline.ask(ReactorOnline.request(Object.assign(this.identity(), { a: "bRead", id: battle.id, after: -1 })), { cache: "no-store" });
             this.offset = (await place.json()).next;
             // In real time a player is their leader: everyone else would need someone to drive them.
             const fighters = battle.mode === "tactical" || battle.mode === "classic" ? $gameParty.battleMembers() : [$gameParty.leader()];
@@ -363,9 +404,8 @@ const ReactorOnlineBattle = {
     close() {
         const id = this.id;
         // What is still waiting to go out goes: the guests need to hear the end.
-        const last = this.outbox.splice(0);
-        if (id) ReactorOnline.post("bSay", { id, lines: last.slice(-64) }, this.identity()).catch(() => null)
-            .finally(() => ReactorOnline.post("bClose", { id }, this.identity()).catch(() => null));
+        const who = this.identity();
+        if (id) this.sayAll(id).finally(() => ReactorOnline.post("bClose", { id }, who).catch(() => null));
         this.reset();
     },
 
@@ -454,8 +494,7 @@ const ReactorOnlineBattle = {
 
     /** Whatever waits to go out goes now: this game is leaving the battle. */
     flushNow() {
-        const lines = this.outbox.splice(0);
-        if (lines.length && this.id) ReactorOnline.post("bSay", { id: this.id, lines }, this.identity()).catch(() => null);
+        if (this.id) this.sayAll(this.id); else this.outbox.length = 0;
     },
 
     /** Any enemy record: a guest's unit needs one to be made, then wears its own battler. */
@@ -855,7 +894,7 @@ const ReactorOnlineBattle = {
     leave() {
         if (this.role === "guest" && this.id) {
             this.send({ t: "leave" });
-            ReactorOnline.post("bSay", { id: this.id, lines: this.outbox.splice(0) }, this.identity()).catch(() => null);
+            this.sayAll(this.id);
         } else if (this.role === "host") this.close();
         if (this.role) this.reset();
     }
@@ -995,7 +1034,7 @@ if (typeof Game_Fight !== "undefined" && typeof ReactorFight !== "undefined") (f
         }
         this._mirror = false;
         if (host) B.close();
-        else if (mirror) { const left = B.outbox.splice(0); if (left.length && B.id) ReactorOnline.post("bSay", { id: B.id, lines: left }, B.identity()).catch(() => null); B.reset(); }
+        else if (mirror) { if (B.id) B.sayAll(B.id); B.reset(); }
     });
 
     /** With other players in it, a battle lasts until one side stands, whoever's game it is on. */

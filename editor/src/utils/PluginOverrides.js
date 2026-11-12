@@ -40,30 +40,32 @@
         return (project && project.path) || '';
     }
 
-    /** The enabled plugin names from the project's manifest, in load order. */
-    function enabledPlugins(fs, path, projectPath) {
+    /**
+     * The project's plugin manifest and a stamp that changes when it is saved; both '' when there is none.
+     * Asked on every lookup (a Traits table asks per row and per choice), so it only stats the file.
+     */
+    function manifestStamp(fs, path, projectPath) {
         const usesReactor = fs.existsSync(path.join(projectPath, 'js', 'reactor_main.js'));
         const manifest = path.join(projectPath, 'js', usesReactor ? 'reactor_plugins.js' : 'plugins.js');
-        if (!fs.existsSync(manifest)) return { names: [], stamp: '' };
-        const text = fs.readFileSync(manifest, 'utf8');
-        const match = text.match(/var\s+\$plugins\s*=\s*(\[[\s\S]*\])\s*;/);
-        if (!match) return { names: [], stamp: manifest };
+        try {
+            return { manifest, stamp: `${manifest}|${fs.statSync(manifest).mtimeMs}` };
+        } catch (error) {
+            return { manifest: '', stamp: '' };
+        }
+    }
+
+    /** The enabled plugin names from the project's manifest, in load order. */
+    function enabledPlugins(fs, manifest) {
         let list;
         try {
-            list = JSON.parse(match[1]);
+            const match = fs.readFileSync(manifest, 'utf8').match(/var\s+\$plugins\s*=\s*(\[[\s\S]*\])\s*;/);
+            list = match ? JSON.parse(match[1]) : [];
         } catch (error) {
-            return { names: [], stamp: manifest };
+            return [];
         }
-        const names = (Array.isArray(list) ? list : [])
+        return (Array.isArray(list) ? list : [])
             .filter(entry => entry && entry.status && typeof entry.name === 'string')
             .map(entry => entry.name);
-        let stamp = '';
-        try {
-            stamp = String(fs.statSync(manifest).mtimeMs);
-        } catch (error) {
-            stamp = '';
-        }
-        return { names, stamp: `${manifest}|${stamp}` };
     }
 
     /**
@@ -85,8 +87,9 @@
             return new Map();
         }
 
-        const { names, stamp } = enabledPlugins(fs, path, projectPath);
+        const { manifest, stamp } = manifestStamp(fs, path, projectPath);
         if (stamp && stamp === cachedKey && cachedMap) return cachedMap;
+        const names = manifest ? enabledPlugins(fs, manifest) : [];
 
         const found = new Map();
         const pattern = /\.prototype\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;

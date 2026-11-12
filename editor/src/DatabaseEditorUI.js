@@ -13,9 +13,6 @@ class DatabaseEditorUI {
         this._listGeneration = 0;
         this._activeDatabaseList = null;
 
-        // Animation preview state
-        this.animationPreviews = {};
-
         // Clipboard for list copy/cut/paste
         this.listClipboard = null;  // { type, entry }
 
@@ -174,8 +171,8 @@ class DatabaseEditorUI {
 
     refreshDatabaseListLabel(entry, type) {
         const listEl = document.getElementById('database-list');
-        const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
-            .find(el => el.dataset.entryId === String(entry?.id || ''));
+        // Asked for by its id: this runs on every keystroke in a name field, and a list can be thousands of rows.
+        const item = Number.isInteger(entry?.id) ? listEl?.querySelector(`.database-list-item[data-entry-id="${entry.id}"]`) : null;
         if (!item) return;
         const labels = this.databaseEntryLabels(entry, type);
         item.dataset.entryName = labels.primary;
@@ -369,12 +366,6 @@ class DatabaseEditorUI {
         }
     }
 
-    /** Whether any battle of the project is fought on the map. */
-    usesMapBattles() {
-        const modes = this.battleModes();
-        return modes.tactical || modes.action;
-    }
-
     /**
      * Read the project's map files for battles on the map, once per Database
      * session and off the page's way; a find unfolds the battle cards the
@@ -424,10 +415,6 @@ class DatabaseEditorUI {
         if (this._listKeyHandler) {
             document.removeEventListener('keydown', this._listKeyHandler);
             this._listKeyHandler = null;
-        }
-
-        if (this.tilesetEditor?.cleanupListKeyHandler) {
-            this.tilesetEditor.cleanupListKeyHandler();
         }
     }
 
@@ -553,10 +540,6 @@ class DatabaseEditorUI {
             this._listKeyHandler = null;
         }
 
-        if (this.tilesetEditor?.cleanupListKeyHandler) {
-            this.tilesetEditor.cleanupListKeyHandler();
-        }
-
         if (viewer) {
             viewer.classList.remove('active');
         }
@@ -570,6 +553,13 @@ class DatabaseEditorUI {
                 this.databaseManager.data.mapInfos = this.currentProject.maps;
             }
             this._dataSnapshot = null;
+            // Putting the data back is a change too: what is cached by this count is worked out again.
+            this._markDatabaseMutation();
+            // The open map drew the cancelled tileset (its sheets, its passability) and holds
+            // that record: it takes the one put back.
+            if (typeof document !== 'undefined' && typeof CustomEvent === 'function') {
+                document.dispatchEvent(new CustomEvent('rr-tileset-saved', { detail: { tilesetId: null } }));
+            }
         }
     }
 
@@ -580,11 +570,39 @@ class DatabaseEditorUI {
         // edit made before the last category switch, and the next save wrote
         // those "cancelled" edits to disk. (Apply intentionally refreshes
         // the baseline by assigning _dataSnapshot directly after saving;
-        // OK/close null it so the next open captures fresh.) It also
-        // Store compact JSON rather than a second live object graph. This is
+        // OK/close null it so the next open captures fresh.)
+        // It is stored as compact JSON rather than a second live object graph. This is
         // especially important for Tilesets, where every entry has 8,192 flags.
         if (this._dataSnapshot && !force) return;
         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
+        this._snapshotTakes = (this._snapshotTakes || 0) + 1;
+    }
+
+    /**
+     * Sections written to disk from outside the Database while it is open (a
+     * start position set on the map, a structure kept from a selection): the
+     * Cancel baseline takes each as it was written. Cancel used to put the
+     * older data back, and the next save then wrote that over the file, or
+     * deleted the structure just made.
+     */
+    adoptSaved(keys) {
+        if (!this._dataSnapshot) return;
+        const saved = this.databaseManager?.savedState || {};
+        try {
+            const snapshot = JSON.parse(this._dataSnapshot);
+            let changed = false;
+            for (const key of keys || []) {
+                if (typeof saved[key] !== 'string') continue;
+                const value = JSON.parse(saved[key]);
+                // A section the project does not have is saved as null and absent from the data.
+                if (value === null && !(key in snapshot)) continue;
+                snapshot[key] = value;
+                changed = true;
+            }
+            if (changed) this._dataSnapshot = JSON.stringify(snapshot);
+        } catch (error) {
+            console.warn('Database baseline was not updated:', error);
+        }
     }
 
     /**
@@ -597,9 +615,13 @@ class DatabaseEditorUI {
         const manager = this.databaseManager;
         const before = JSON.stringify(entry);
         const saved = manager?.savedState?.[type];
-        const clean = saved !== undefined && typeof manager.serialize === 'function' && manager.serialize(manager.data[type]) === saved;
         const result = normalize(entry);
         if (!entry || JSON.stringify(entry) === before) return result;
+        // Whether the section was unedited before the pass, asked only now that the pass changed
+        // the record: the answer makes the whole section into text, and most views change nothing.
+        const section = manager?.data?.[type];
+        const clean = saved !== undefined && typeof manager.serialize === 'function'
+            && manager.serialize(Array.isArray(section) ? section.map(other => other === entry ? JSON.parse(before) : other) : section) === saved;
         if (clean) manager.captureSavedState(type);
         if (this._dataSnapshot && Number.isInteger(entry.id)) {
             try {
@@ -625,7 +647,9 @@ class DatabaseEditorUI {
         } catch (error) {
             dirty = true;
         }
-        if (!dirty) { cancelAndClose(); return; }
+        // Nothing to put back: closing must not parse the whole database and replace every record
+        // with a copy (the open map and others hold some of them).
+        if (!dirty) { this._dataSnapshot = null; cancelAndClose(); return; }
         const session = this._databaseSession;
         const ask = this.callbacks?.showConfirm || (window.reactor?.uiManager?.showConfirm
             ? (...args) => window.reactor.uiManager.showConfirm(...args) : null);
@@ -738,6 +762,7 @@ class DatabaseEditorUI {
         if (applyBtn) {
             applyBtn.onclick = async () => {
                 if (this._databaseSaveInFlight) return;
+                const takesBefore = this._snapshotTakes;
                 if (models() && !(await models().savePending())) return;
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
@@ -768,7 +793,9 @@ class DatabaseEditorUI {
                         return;
                     }
                     this.updateStatus(this._t('db.saved'));
-                    this._dataSnapshot = JSON.stringify(this.databaseManager.data);
+                    // The project's save retakes the baseline when it is done; the whole database is
+                    // made into text again here only when the save did not.
+                    if (this._snapshotTakes === takesBefore) this._dataSnapshot = JSON.stringify(this.databaseManager.data);
                     applyBtn.style.backgroundColor = 'var(--color-accent)';
                     applyBtn.style.color = 'var(--color-bg-deep)';
                     setTimeout(() => {
@@ -1267,6 +1294,10 @@ class DatabaseEditorUI {
             if (snapshot.tileset3d !== undefined) this.databaseManager.data.tileset3d = snapshot.tileset3d;
             if (snapshot.modelBindings !== undefined) this.databaseManager.data.modelBindings = snapshot.modelBindings;
             this._markDatabaseMutation();
+            // The open map holds the tileset record this replaced: it takes the one put back.
+            if (type === 'tilesets' && typeof document !== 'undefined' && typeof CustomEvent === 'function') {
+                document.dispatchEvent(new CustomEvent('rr-tileset-saved', { detail: { tilesetId: null } }));
+            }
             refreshData();
             selectedIds.clear();
             focusedId = null;
@@ -1962,10 +1993,6 @@ class DatabaseEditorUI {
         this.updateStatus(this._t('db.entryCopied'));
     }
 
-    cutListEntry(entry, data, type, populateList, searchInput, detailEl) {
-        return this.cutListEntries([entry], data, type, populateList, searchInput, detailEl);
-    }
-
     async cutListEntries(entries, data, type, populateList, searchInput, detailEl) {
         if (!entries?.length) return;
         const session = this._activeDatabaseList;
@@ -2422,8 +2449,7 @@ class DatabaseEditorUI {
 
     refreshListIcon(entry, type) {
         const listEl = document.getElementById('database-list');
-        const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
-            .find(el => el.dataset.entryId === String(entry.id || ''));
+        const item = Number.isInteger(entry?.id) ? listEl?.querySelector(`.database-list-item[data-entry-id="${entry.id}"]`) : null;
         const iconSpan = item?.querySelector('.database-list-icon');
         if (iconSpan) this.applyListIcon(iconSpan, entry, type);
     }
@@ -2493,14 +2519,17 @@ class DatabaseEditorUI {
             // Every tile starts with the flag RPG Maker gives its sheet (utils/TilesetSheets.js): tile 0, the
             // empty tile on every unpainted upper layer, is a star, as an O checkPassage would stop at it and
             // every wall on the map would be walkable; A1 water stops walkers.
-            tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: typeof RRTilesetSheets !== 'undefined' ? RRTilesetSheets.defaultFlags() : Object.assign(new Array(8192).fill(0), { 0: 0x10 }), note: '' },
+            // Area type (mode 1), as a new tileset made in RPG Maker and the first one of a new project: World
+            // type (0) makes a battle take its battleback from the terrain. The Mode choice on the page changes
+            // it. (No apostrophes or brackets beyond these: tests cut this object out by counting them.)
+            tilesets: { name: 'New Tileset', mode: 1, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: typeof RRTilesetSheets !== 'undefined' ? RRTilesetSheets.defaultFlags() : Object.assign(new Array(8192).fill(0), { 0: 0x10 }), note: '' },
             commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] },
             // Reactor section; the runtime (reactor_ui.js) fills in any field an
             // older record lacks, so this is the whole shape.
             userInterfaces: { name: 'New Interface', mode: 'scene', background: 'blur', visible: { type: 'always' }, cancel: { type: 'close' }, firstFocus: 0, coordinateSpace: 'screen', nodes: [], note: '' },
-            // Reactor quests: reactor_quests.js reads this shape as it is.
             actionSequences: typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.template() : {version:1,name:'New Sequence',steps:[]},
             vehicles: { name: 'New Vehicle', kind: 'motorcycle', model: { name: '', size: 3.5 } },
+            // Reactor quests: reactor_quests.js reads this shape as it is.
             quests: { name: 'New Quest', key: '', category: '', iconIndex: 0, difficulty: '', from: '', location: '', description: '', objectives: [], rewards: [], subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 }, note: '' },
             // Stored on System.json; reactor_managers.js reads this shape as it is.
             musicSequences: { name: 'New Sequence', sequence: { enabled: true, entries: [] } },
@@ -2624,57 +2653,6 @@ class DatabaseEditorUI {
         container.appendChild(wrapper);
     }
 
-    /**
-     * Get equipment slots for an actor (RPG Maker MZ compatible)
-     */
-    getActorEquipSlots(actor) {
-        const system = this.databaseManager.getSystem();
-        if (!system || !system.equipTypes) {
-            return [1, 2, 3, 4, 5]; // Default slots
-        }
-
-        // Build slots array from equipTypes (skip index 0 which is empty)
-        const slots = [];
-        for (let i = 1; i < system.equipTypes.length; i++) {
-            slots.push(i);
-        }
-
-        // Check for dual-wield trait (trait code 55, dataId 1)
-        if (slots.length >= 2 && this.isDualWield(actor)) {
-            slots[1] = 1; // Change second slot from Shield to Weapon
-        }
-
-        return slots;
-    }
-
-    /**
-     * Check if actor has dual-wield trait
-     */
-    isDualWield(actor) {
-        // Check actor's own traits
-        if (actor.traits) {
-            for (const trait of actor.traits) {
-                if (trait.code === 55 && trait.dataId === 1) {
-                    return true;
-                }
-            }
-        }
-
-        // Check class traits
-        const actorClass = this.databaseManager.getClass(actor.classId);
-        if (actorClass && actorClass.traits) {
-            for (const trait of actorClass.traits) {
-                if (trait.code === 55 && trait.dataId === 1) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    // Note: The animation detail methods are very long - I'll include the key parts
-    // Continue in next part due to length...
     addDatabasePreview(container, entry, type) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const preview = document.createElement('div');
@@ -3746,6 +3724,8 @@ class DatabaseEditorUI {
             updateSelectionUI(category);
         };
 
+        // Set once the Slot Layouts card below has been drawn.
+        let refreshLayouts = null;
         const renderPanel = category => {
             const panel = panelFor(category.key);
             if (!panel) return;
@@ -3923,6 +3903,9 @@ class DatabaseEditorUI {
             });
 
             updateSelectionUI(category.key);
+            // Add, Paste, Cut, Clear and Change Maximum redraw this panel and fire no change
+            // event: the Slot Layouts card names these types, so it is drawn again with them.
+            if (category.key === 'equipTypes') refreshLayouts?.();
         };
 
         const copySelected = async () => {
@@ -4015,6 +3998,7 @@ class DatabaseEditorUI {
             });
         };
         renderLayouts();
+        refreshLayouts = renderLayouts;
         panelFor('equipTypes')?.addEventListener('change', event => {
             if (event.target.closest('.rr-types-name-editor')) renderLayouts();
         });
@@ -4460,205 +4444,6 @@ class DatabaseEditorUI {
         });
         this.wireBattleWords(detailEl, system);
         this.refreshDatabaseSections();
-    }
-
-    /**
-     * Show detail for a specific terms category. Terms have a fixed schema in
-     * MZ: basic[8], commands[23], params[10] are arrays; messages is a keyed
-     * object (alwaysDash, touchUI, victory, etc.). Persistence is direct
-     * mutation of the system.terms object on every keystroke.
-     */
-    showTermDetail(terms, category) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const detailEl = document.getElementById('database-detail');
-
-        const arrayCategoryMeta = {
-            basic: {
-                title: tt('Basic Terms'),
-                description: tt('Labels shown on status panels, level-up screens, and the bestiary.'),
-                labels: [
-                    'Level', 'Level (Abbreviation)', 'HP', 'HP (Abbreviation)',
-                    'MP', 'MP (Abbreviation)', 'TP', 'TP (Abbreviation)',
-                    'EXP', 'EXP (Abbreviation)'
-                ].map(tt)
-            },
-            commands: {
-                title: tt('Command Terms'),
-                description: tt('Battle command and menu labels.'),
-                labels: [
-                    'Fight',         'Escape',        'Attack',        'Guard',
-                    'Item',          'Skill',         'Equip',         'Status',
-                    'Formation',     'Save',          'Game End',      'Options',
-                    'Weapon',        'Armor',         'Key Item',      'Equip',
-                    'Optimize',      'Clear',         'New Game',      'Continue',
-                    '(Reserved)',    'To Title',      'Cancel',        '(Reserved)',
-                    'Buy',           'Sell'
-                ].map(tt)
-            },
-            params: {
-                title: tt('Parameters'),
-                description: tt('Stat names used in the status menu, equipment screen, and damage formulas.'),
-                labels: [
-                    'Max HP', 'Max MP', 'Attack', 'Defense',
-                    'Magic Attack', 'Magic Defense', 'Agility', 'Luck',
-                    'Hit',           'Evasion'
-                ].map(tt)
-            }
-        };
-
-        // Object-keyed Messages schema. Groups are presentation-only.
-        // hint shows what %1 / %2 / %3 will be replaced with at runtime.
-        const messagesSchema = {
-            title: tt('Messages'),
-            description: tt('Game messages and option labels. %1, %2, %3 are placeholders the engine fills in at runtime (e.g. "%1 took %2 damage!" → "Harold took 25 damage!"). The hint under each field shows what each placeholder becomes.'),
-            groups: [
-                { label: 'Options Menu', fields: [
-                    { key: 'alwaysDash',      label: 'Always Dash' },
-                    { key: 'commandRemember', label: 'Command Remember' },
-                    { key: 'touchUI',         label: 'Touch UI' }
-                ]},
-                { label: 'Audio Volume', fields: [
-                    { key: 'bgmVolume', label: 'BGM Volume' },
-                    { key: 'bgsVolume', label: 'BGS Volume' },
-                    { key: 'meVolume',  label: 'ME Volume' },
-                    { key: 'seVolume',  label: 'SE Volume' }
-                ]},
-                { label: 'Menu & Save / Load', fields: [
-                    { key: 'possession',  label: 'Possession' },
-                    { key: 'expTotal',    label: 'EXP Total',  hint: '%1 = "EXP" term from Basic' },
-                    { key: 'expNext',     label: 'EXP To Next', hint: '%1 = "Level" term from Basic' },
-                    { key: 'saveMessage', label: 'Save Message' },
-                    { key: 'loadMessage', label: 'Load Message' },
-                    { key: 'file',        label: 'File' },
-                    { key: 'autosave',    label: 'Autosave' },
-                    { key: 'partyName',   label: 'Party Name',  hint: '%1 = party leader name' }
-                ]},
-                { label: 'Battle Flow', fields: [
-                    { key: 'emerge',         label: 'Enemy Emerge',     hint: '%1 = enemy name' },
-                    { key: 'preemptive',     label: 'Preemptive Attack', hint: '%1 = party name' },
-                    { key: 'surprise',       label: 'Surprise Attack',   hint: '%1 = party name' },
-                    { key: 'escapeStart',    label: 'Escape Start',      hint: '%1 = party name' },
-                    { key: 'escapeFailure',  label: 'Escape Failure' },
-                    { key: 'victory',        label: 'Victory',           hint: '%1 = party name' },
-                    { key: 'defeat',         label: 'Defeat',            hint: '%1 = party name' },
-                    { key: 'obtainExp',      label: 'Obtain EXP',        hint: '%1 = amount, %2 = "EXP" term' },
-                    { key: 'obtainGold',     label: 'Obtain Gold',       hint: '%1 = amount (use \\\\G for currency icon)' },
-                    { key: 'obtainItem',     label: 'Obtain Item',       hint: '%1 = item name' },
-                    { key: 'levelUp',        label: 'Level Up',          hint: '%1 = actor name, %2 = "Level" term, %3 = new level' },
-                    { key: 'obtainSkill',    label: 'Obtain Skill',      hint: '%1 = skill name' },
-                    { key: 'useItem',        label: 'Use Item',          hint: '%1 = actor name, %2 = item or skill name' }
-                ]},
-                { label: 'Battle Damage', fields: [
-                    { key: 'criticalToEnemy', label: 'Critical To Enemy' },
-                    { key: 'criticalToActor', label: 'Critical To Actor' },
-                    { key: 'actorDamage',     label: 'Actor Damage',     hint: '%1 = actor name, %2 = damage amount' },
-                    { key: 'actorRecovery',   label: 'Actor Recovery',   hint: '%1 = actor name, %2 = stat name, %3 = amount' },
-                    { key: 'actorGain',       label: 'Actor Gain',       hint: '%1 = actor name, %2 = stat name, %3 = amount' },
-                    { key: 'actorLoss',       label: 'Actor Loss',       hint: '%1 = actor name, %2 = stat name, %3 = amount' },
-                    { key: 'actorDrain',      label: 'Actor Drain',      hint: '%1 = actor name, %2 = stat name, %3 = amount' },
-                    { key: 'actorNoDamage',   label: 'Actor No Damage',  hint: '%1 = actor name' },
-                    { key: 'actorNoHit',      label: 'Actor No Hit',     hint: '%1 = actor name' },
-                    { key: 'enemyDamage',     label: 'Enemy Damage',     hint: '%1 = enemy name, %2 = damage amount' },
-                    { key: 'enemyRecovery',   label: 'Enemy Recovery',   hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
-                    { key: 'enemyGain',       label: 'Enemy Gain',       hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
-                    { key: 'enemyLoss',       label: 'Enemy Loss',       hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
-                    { key: 'enemyDrain',      label: 'Enemy Drain',      hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
-                    { key: 'enemyNoDamage',   label: 'Enemy No Damage',  hint: '%1 = enemy name' },
-                    { key: 'enemyNoHit',      label: 'Enemy No Hit',     hint: '%1 = enemy name' }
-                ]},
-                { label: 'Battle Effects', fields: [
-                    { key: 'evasion',         label: 'Evasion',          hint: '%1 = target name' },
-                    { key: 'magicEvasion',    label: 'Magic Evasion',    hint: '%1 = target name' },
-                    { key: 'magicReflection', label: 'Magic Reflection', hint: '%1 = target name' },
-                    { key: 'counterAttack',   label: 'Counter Attack',   hint: '%1 = counter-attacker name' },
-                    { key: 'substitute',      label: 'Substitute',       hint: '%1 = protector name, %2 = original target name' },
-                    { key: 'buffAdd',         label: 'Buff Add',         hint: '%1 = target name, %2 = stat name' },
-                    { key: 'debuffAdd',       label: 'Debuff Add',       hint: '%1 = target name, %2 = stat name' },
-                    { key: 'buffRemove',      label: 'Buff Remove',      hint: '%1 = target name, %2 = stat name' },
-                    { key: 'actionFailure',   label: 'Action Failure',   hint: '%1 = target name' }
-                ]}
-            ]
-        };
-
-        if (category === 'messages') {
-            if (!terms.messages || typeof terms.messages !== 'object') terms.messages = {};
-            const data = terms.messages;
-            const meta = messagesSchema;
-
-            let bodyHtml = '';
-            meta.groups.forEach(group => {
-                bodyHtml += `
-                    <div style="font-size: 12px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${tt(group.label)}</div>
-                `;
-                group.fields.forEach(field => {
-                    const value = data[field.key] != null ? String(data[field.key]) : '';
-                    const hintHtml = field.hint
-                        ? `<div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: 3px;">${tt(field.hint)}</div>`
-                        : '';
-                    bodyHtml += `
-                        <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px 12px; align-items: center; padding: 6px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 4px;">
-                            <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${tt(field.label)}</div>
-                            <input type="text" class="rr-terms-msg-input database-field-value" data-key="${field.key}" value="${rrEscapeHtml(value)}" placeholder="${tt('(default)')}">
-                            ${hintHtml}
-                        </div>
-                    `;
-                });
-            });
-
-            detailEl.innerHTML = `
-                <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;">
-                    <div style="background: var(--color-bg-deep); padding: 14px 18px; border-bottom: 2px solid var(--color-accent-border-mid); margin-bottom: 16px; border-radius: 4px 4px 0 0;">
-                        <div style="font-size: 18px; font-weight: 600; color: var(--color-text-strong);">${meta.title}</div>
-                        <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">${meta.description}</div>
-                    </div>
-                    ${bodyHtml}
-                </div>
-            `;
-
-            detailEl.querySelectorAll('.rr-terms-msg-input').forEach(input => {
-                input.addEventListener('input', (e) => {
-                    data[e.target.dataset.key] = e.target.value;
-                });
-            });
-            return;
-        }
-
-        if (!terms[category]) terms[category] = [];
-        const data = terms[category];
-        const meta = arrayCategoryMeta[category] || { title: category, description: '', labels: [] };
-
-        // Ensure data length matches the schema (MZ may not allocate trailing slots)
-        const targetLen = Math.max(data.length, meta.labels.length);
-        while (data.length < targetLen) data.push('');
-
-        let rowsHtml = '';
-        data.forEach((value, index) => {
-            const label = meta.labels[index] ? tt(meta.labels[index]) : `${tt('Slot')} ${index}`;
-            rowsHtml += `
-                <div style="display: grid; grid-template-columns: 48px 180px 1fr; gap: 12px; align-items: center; padding: 8px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 6px;">
-                    <div style="text-align: center; font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); padding: 4px 0; background: var(--color-bg-deep); border-radius: 3px; border: 1px solid var(--color-border-subtle);">${String(index).padStart(3, '0')}</div>
-                    <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${label}</div>
-                    <input type="text" class="rr-terms-input database-field-value" data-index="${index}" value="${rrEscapeHtml(value)}" placeholder="${tt('(default)')}">
-                </div>
-            `;
-        });
-
-        detailEl.innerHTML = `
-            <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;">
-                <div style="background: var(--color-bg-deep); padding: 14px 18px; border-bottom: 2px solid var(--color-accent-border-mid); margin-bottom: 16px; border-radius: 4px 4px 0 0;">
-                    <div style="font-size: 18px; font-weight: 600; color: var(--color-text-strong);">${meta.title}</div>
-                    <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">${meta.description}</div>
-                </div>
-                ${rowsHtml}
-            </div>
-        `;
-
-        detailEl.querySelectorAll('.rr-terms-input').forEach(input => {
-            input.addEventListener('input', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                data[idx] = e.target.value;
-            });
-        });
     }
 
 }

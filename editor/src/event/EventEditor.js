@@ -134,13 +134,6 @@ class EventEditor {
         return this._commitChanges();
     }
 
-    /**
-     * Close the editor
-     */
-    closeEditor() {
-        this.cancelChanges();
-    }
-
     cancelChanges() {
         if (this.cancelBaseline) this.currentEvent = this._clone(this.cancelBaseline);
         this.pendingModels = this._clone(this.pendingModelsBaseline);
@@ -1077,20 +1070,7 @@ class EventEditor {
         contentsArea.style.overflowY = 'auto';
         contentsArea.style.minHeight = '0';
 
-        // Placeholder content
-        const currentPage = event.pages[this.currentPageIndex];
-        if (currentPage && currentPage.list && currentPage.list.length > 0) {
-            contentsArea.innerHTML = `
-                <div style="color: var(--color-text-muted);">
-                    ${this._t('event.commandListPlaceholder', { count: currentPage.list.length })}
-                    <br><br>
-                    ${this._t('event.commandEditorPlaceholder')}
-                </div>
-            `;
-        } else {
-            contentsArea.innerHTML = `<div style="color: var(--color-text-muted);">${this._t('event.noCommandsDefined')}</div>`;
-        }
-
+        // Filled by updateContentsColumn (renderCurrentPage) before it is shown.
         column.appendChild(header);
         column.appendChild(contentsArea);
 
@@ -1227,7 +1207,6 @@ class EventEditor {
         if (typeof ReactorClipboard !== 'undefined') {
             ReactorClipboard.write('eventPage', { page: this.clipboard, model: this.clipboardModel });
         }
-        console.log('Page copied to clipboard');
     }
 
     /**

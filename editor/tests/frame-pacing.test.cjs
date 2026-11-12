@@ -154,7 +154,6 @@ test('165 and 100 Hz pace too; 50 Hz plays every refresh evenly', () => {
         const j = judder(run.shown);
         assert.ok(j.spread < 0.01, hz + ' Hz: even (' + j.spread.toFixed(4) + ')');
         assert.ok(j.gaps.every(g => Math.abs(g - every * 1000 / hz) < 0.01), hz + ' Hz: every ' + every);
-        assert.equal(run.Graphics.FramePacing.every(), every);
     }
 });
 

@@ -115,9 +115,13 @@ class ChangeEquipmentEditor {
             actorSelect.appendChild(option);
         }
         actorSelect.addEventListener('change', (e) => {
+            const wasWeapon = ChangeEquipmentEditor.isWeaponSlot(this.databaseManager, this.actorId, this.equipSlot);
             this.actorId = parseInt(e.target.value);
+            const isWeapon = ChangeEquipmentEditor.isWeaponSlot(this.databaseManager, this.actorId, this.equipSlot);
+            // The same id is another thing once the slot holds the other kind (a dual wielder's second weapon).
+            if (wasWeapon !== isWeapon) this.equipId = 0;
             // An actor whose Slot Type picks a slot layout lists that layout's types.
-            if (ChangeEquipmentEditor.layoutTypes(this.databaseManager, this.actorId) || this._layoutListed) this.renderContent();
+            if (wasWeapon !== isWeapon || ChangeEquipmentEditor.layoutTypes(this.databaseManager, this.actorId) || this._layoutListed) this.renderContent();
         });
 
         actorRow.appendChild(actorLabel);
@@ -172,7 +176,7 @@ class ChangeEquipmentEditor {
         noneOption.selected = (this.equipId === 0);
         equipSelect.appendChild(noneOption);
 
-        if (this.equipSlot === 1) {
+        if (ChangeEquipmentEditor.isWeaponSlot(this.databaseManager, this.actorId, this.equipSlot)) {
             // Weapons
             const weapons = this.databaseManager.data.weapons || [];
             for (let i = 1; i < weapons.length; i++) {
@@ -242,7 +246,40 @@ class ChangeEquipmentEditor {
         const own = ChangeEquipmentEditor.layoutTypes(databaseManager, actorId);
         const listed = own ? types.filter(type => own.has(type.value) || type.value === current) : types;
         if (current > 0 && !listed.some(type => type.value === current)) listed.push({ value: current, label: `#${current}` });
+        // A dual wielder's second slot holds a weapon: name it after the weapon type, not the shield's.
+        if (ChangeEquipmentEditor.dualWields(databaseManager, actorId)) {
+            return listed.map(type => (type.value === 2 ? { value: 2, label: `${types[0].label} 2` } : type));
+        }
         return listed;
+    }
+
+    /**
+     * Whether the game gives this actor a second weapon in place of the second slot: its Slot Type
+     * (the highest of the actor's and its class's) is Dual Wield and it has the stock slots. Under a
+     * slot layout or a class's own list the game does not apply Dual Wield (Game_Actor.equipSlots).
+     * Dual Wield from equipment or a state is not known here.
+     */
+    static dualWields(databaseManager, actorId) {
+        if (!(actorId > 0)) return false;
+        try {
+            const actor = databaseManager.data && databaseManager.data.actors ? databaseManager.data.actors[actorId] : null;
+            if (!actor) return false;
+            const actorClass = typeof databaseManager.getClass === 'function' ? databaseManager.getClass(actor.classId) : null;
+            let slotType = 0;
+            for (const owner of [actor, actorClass]) for (const trait of (owner && owner.traits) || []) {
+                if (trait && trait.code === 55 && Number(trait.dataId) > slotType) slotType = Number(trait.dataId);
+            }
+            if (slotType !== 1) return false;
+            const slots = typeof globalThis !== 'undefined' ? globalThis.RREquipSlots : null;
+            const system = typeof databaseManager.getSystem === 'function' ? databaseManager.getSystem() : null;
+            const own = slots && slots.classSlots ? slots.classSlots(actorClass, system) : (actorClass && Array.isArray(actorClass.rrEquipSlots) ? actorClass.rrEquipSlots : null);
+            return !own;
+        } catch (error) { return false; }
+    }
+
+    /** Whether the game reads the item id of this equipment type as a weapon for this actor. */
+    static isWeaponSlot(databaseManager, actorId, type) {
+        return type === 1 || (type === 2 && ChangeEquipmentEditor.dualWields(databaseManager, actorId));
     }
 
     /** The equipment types of the slot layout an actor's Slot Type picks, or null (no layout). */

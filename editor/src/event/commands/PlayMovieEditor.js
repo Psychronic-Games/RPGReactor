@@ -120,9 +120,34 @@ class PlayMovieEditor {
             this.filename = e.target.value;
         });
 
+        // The field offers the movies the project has, named as the command
+        // stores them: without extension. It was a bare text field, with no
+        // sign of what the folder holds or how to write a name.
+        const movies = this.listMovies();
+        if (movies.length) {
+            const options = document.createElement('datalist');
+            // One id per drawing: map events, common events and troop pages each keep a dialog of their own.
+            PlayMovieEditor.listCount = (PlayMovieEditor.listCount || 0) + 1;
+            options.id = `rr-play-movie-files-${PlayMovieEditor.listCount}`;
+            for (const name of movies) {
+                const option = document.createElement('option');
+                option.value = name;
+                options.appendChild(option);
+            }
+            filenameInput.setAttribute('list', options.id);
+            filenameRow.appendChild(options);
+        }
+
         filenameRow.appendChild(filenameLabel);
         filenameRow.appendChild(filenameInput);
         content.appendChild(filenameRow);
+
+        const hint = document.createElement('div');
+        hint.textContent = movies.length
+            ? tt('A .webm or .mp4 file in the movies folder, named without its extension.')
+            : tt('The movies folder has no .webm or .mp4 file yet.');
+        hint.style.cssText = 'color: var(--color-text-muted); font-size: 11px;';
+        content.appendChild(hint);
 
         container.appendChild(content);
 
@@ -149,11 +174,31 @@ class PlayMovieEditor {
      * Build command from current data
      */
     buildCommand() {
+        // A name typed with its extension is stored without it when that is
+        // a movie of the project: the game adds the extension the file has.
+        let name = String(this.filename || '').trim();
+        const stem = name.replace(/\.(?:webm|mp4)$/i, '');
+        if (stem !== name && this.listMovies().includes(stem)) name = stem;
         return {
             code: 261,
             indent: 0,
-            parameters: [this.filename]
+            parameters: [name]
         };
+    }
+
+    /**
+     * The project's movies, each named without its extension
+     */
+    listMovies() {
+        const project = this.projectController && (typeof this.projectController.getCurrentProject === 'function'
+            ? this.projectController.getCurrentProject()
+            : this.projectController.currentProject);
+        if (!project || !project.path || typeof RRAssetFiles === 'undefined' || typeof require !== 'function') return [];
+        try {
+            return RRAssetFiles.listNames(require('path').join(project.path, 'movies'), ['.webm', '.mp4']);
+        } catch (error) {
+            return [];
+        }
     }
 
     /**

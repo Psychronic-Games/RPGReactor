@@ -41,7 +41,8 @@
     H.UNIT_FIELDS = ['portrait', 'name', 'level', 'hp', 'mp', 'tp', 'states', 'stats', 'preview'];
     /** Whether `key` is a resource pool the project turned off (System.json rrPoolsOff, Database > System 1 > Options): its gauge is not drawn. HP is never off. */
     H.poolOff = function(key) {
-        const system = typeof $dataSystem !== 'undefined' ? $dataSystem : null;
+        // The editor has no $dataSystem: it hands the project's System over as H.system while it draws.
+        const system = H.system || (typeof $dataSystem !== 'undefined' ? $dataSystem : null);
         return !!system && Array.isArray(system.rrPoolsOff) && key !== 'hp' && system.rrPoolsOff.includes(key);
     };
     H.STATS = ['atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'move', 'jump'];
@@ -267,7 +268,7 @@
     /** An empty unit view; `fillUnitView` writes into it so a panel keeps one for its whole life. */
     H.newUnitView = function() {
         return { id: 0, name: '', team: 'ally', level: 0, className: '', faceName: '', faceIndex: 0, characterName: '', characterIndex: 0,
-            battlerName: '', model: null, area: null, hpShown: -1, hp: 0, mhp: 0, mp: 0, mmp: 0, tp: 0, mtp: 100, showTp: true, vhp: 0, vmhp: 0, vname: '', icons: [], stats: {}, acted: false, moved: false, watch: false, watchText: '', preview: null };
+            battlerName: '', model: null, area: null, hpShown: -1, hp: 0, mhp: 0, mp: 0, mmp: 0, tp: 0, mtp: 100, showTp: true, vhp: 0, vmhp: 0, vname: '', icons: [], stats: {}, acted: false, moved: false, watch: false, watchText: '', preview: null, forecast: null };
     };
 
     /** What a panel shows of a unit, as plain values. `preview` is the pending action's forecast on it, or null. */
@@ -309,7 +310,9 @@
         // Keeping watch (Overwatch): said on the panel in the battle's own words where it has them.
         view.watch = !!info.overwatch;
         view.watchText = view.watch ? H.battleTerm(reader, 'unitWatch') : '';
-        view.preview = preview || null;
+        // A copy the view owns (`forecast`, kept for its life): the battle answers every forecast from one
+        // object it writes over, and the area summary asks for each target's after this.
+        view.preview = preview ? Object.assign(view.forecast || (view.forecast = {}), preview) : null;
         view.area = null;
         return view;
     };

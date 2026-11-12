@@ -93,8 +93,6 @@ class DatabaseUserInterfaceEditor {
         return ['setMenuActor', 'personalSkill', 'personalEquip', 'personalStatus', 'pluginScene', 'pluginCommand', 'script', 'formation',
             'use', 'equipOptimize', 'equipClear'];
     }
-    static get SCENES() { return ['menu', 'item', 'skill', 'equip', 'status', 'save', 'load', 'options', 'gameEnd', 'title']; }
-    static get CONDITION_TYPES() { return ['always', 'never', 'saveExists', 'switch', 'variable', 'script']; }
     static get REPLACEMENT_ROLES() {
         return [
             ['title', 'Title Screen', 'reactorTitleInterfaceId'],
@@ -290,6 +288,33 @@ class DatabaseUserInterfaceEditor {
             if (typeof source.behind === 'boolean') value.behind = source.behind;
             if (Number.isFinite(Number(source.rotation)) && source.rotation !== '' && source.rotation != null) value.rotation = Math.max(-60, Math.min(60, Number(source.rotation)));
             result[key] = value;
+        }
+        return result;
+    }
+
+    /**
+     * The parts a row draws on the canvas: the layout without the MP and TP parts of a pool the project turned
+     * off (System.json rrPoolsOff), what sat below them moved up, as the game does it (ReactorUI.actorPanelLayout).
+     * The inspector keeps the whole layout, so a hidden part can still be edited.
+     */
+    static actorPanelShown(node, width, height, fontSize, system) {
+        const result = DatabaseUserInterfaceEditor.actorPanelLayout(node, width, height, fontSize);
+        const off = key => !!system && Array.isArray(system.rrPoolsOff) && key !== 'hp' && system.rrPoolsOff.includes(key);
+        const hidden = (node.actorFields || ['portrait','name','class','level','hp','mp','exp','states']).filter(key => ['mp','tp'].includes(key) && off(key));
+        const pictured = Object.values(node.actorElements || {}).some(element => element && element.kind === 'image');
+        for (const key of hidden) {
+            const parts = [key, key + 'Label', key + 'Value'];
+            const band = parts.filter(part => result[part] && result[part].visible !== false).map(part => result[part]);
+            for (const part of parts) delete result[part];
+            if (!band.length || pictured) continue;
+            const top = Math.min(...band.map(r => r.y)), bottom = Math.max(...band.map(r => r.y + r.height));
+            const left = Math.min(...band.map(r => r.x)), right = Math.max(...band.map(r => r.x + r.width));
+            const below = Object.values(result).filter(r => r.y >= bottom - 1 && r.x < right && r.x + r.width > left);
+            const next = below.length ? Math.min(...below.map(r => r.y)) : bottom;
+            for (const r of below) r.y -= next - top;
+        }
+        for (const [key, element] of Object.entries(result)) {
+            if (key.startsWith('custom_') && ['gauge','value','label'].includes(element.kind) && off(element.gauge)) delete result[key];
         }
         return result;
     }
@@ -516,7 +541,8 @@ class DatabaseUserInterfaceEditor {
             merged.fontBold = !!merged.fontBold;
             merged.fontItalic = !!merged.fontItalic;
             merged.outlineColor = /^#[0-9a-f]{6}$/i.test(merged.outlineColor || '') ? merged.outlineColor : '';
-            merged.outlineWidth = merged.outline === false ? 0 : Math.min(32, Math.max(0, Math.round(Number(merged.outlineWidth)) || 0));
+            // Kept while Outline is off (the game draws none then), so ticking it again brings the width back.
+            merged.outlineWidth = Math.min(32, Math.max(0, Math.round(Number(merged.outlineWidth)) || 0));
             merged.letterSpacing = Math.min(100, Math.max(-20, Math.round(Number(merged.letterSpacing) || 0)));
             // Kept only when turned, so records that never turn save as before.
             const angle = Math.min(180, Math.max(-180, Math.round(Number(merged.angle) || 0)));
@@ -1050,10 +1076,23 @@ class DatabaseUserInterfaceEditor {
         return `<span>${this.escapeHTML(this._t('The game still shows its own {name}.').replace('{name}', label))}</span>`;
     }
 
+    /**
+     * The first builds bound the Tactical HUD under another System field, which the game still reads when the
+     * present one is 0. Before Use As changes a binding the old field is moved onto the present one, so that
+     * clearing or replacing it takes effect in the game.
+     */
+    adoptLegacyTacticalBinding(system) {
+        const hud = DatabaseUserInterfaceEditor.fightHud();
+        if (!hud || !system || !(hud.LEGACY_FIELD in system)) return;
+        if (!(Number(system[hud.FIELD]) > 0)) system[hud.FIELD] = hud.boundId(system);
+        delete system[hud.LEGACY_FIELD];
+    }
+
     clearReplacementRoles() {
         const system = this.replacementSystem();
         const id = Number(this.current && this.current.id) || 0;
         if (!system || !(id > 0)) return false;
+        this.adoptLegacyTacticalBinding(system);
         let changed = false;
         for (const [, , field] of DatabaseUserInterfaceEditor.REPLACEMENT_ROLES) {
             if (Number(system[field]) === id) {
@@ -1134,6 +1173,7 @@ class DatabaseUserInterfaceEditor {
         const system = this.replacementSystem();
         const id = Number(this.current && this.current.id) || 0;
         if (!definition || !system || !(id > 0)) return false;
+        this.adoptLegacyTacticalBinding(system);
         const field = definition[2];
         if (assigned) {
             if (!this.roleFitsMode(role)) return false;
@@ -1376,7 +1416,8 @@ class DatabaseUserInterfaceEditor {
     addNode(type) {
         this.pushUndo();
         const node = DatabaseUserInterfaceEditor.defaultNode(type, this.nextNodeId(this.current));
-        const screen = this.screenSize();
+        // The record's own size, not the Preview at frame: x and y are stored.
+        const screen = this.designSize();
         const selected = this.selected();
         if (selected && (selected.type === 'box' || selected.type === 'image')) {
             node.parent = selected.id;
@@ -1560,8 +1601,9 @@ class DatabaseUserInterfaceEditor {
         const insert = placement === 'inside' ? siblings.length : siblings.indexOf(target) + (placement === 'after' ? 1 : 0);
         siblings.splice(insert, 0, ...roots);
         if (roots.every(root => this.effectiveParent(root) === parent) && this.siblingsOf(roots[0]).every((item, i) => item === siblings[i])) return false;
-        const rects = this.rects();
-        const screen = this.screenSize();
+        // Measured at the design size: the offsets written below are stored.
+        const rects = this.rects({ design: true });
+        const screen = this.designSize();
         const parentRect = rects.get(parent) || { x: 0, y: 0, width: screen.width, height: screen.height };
         this.pushUndo();
         for (const root of roots) {
@@ -1613,10 +1655,11 @@ class DatabaseUserInterfaceEditor {
      * Where each node stands on the canvas. A Battle Window that follows the active actor stands where it is
      * drawn (drawBattleWindowNode): over the actor in the battle, or at the actor's row of the party panel, its
      * X and Y offsets from there, so its outline, handles and clicks are on the window shown. `raw`: as its
-     * anchor and parent alone would place it.
+     * anchor and parent alone would place it. `design`: against the design size even while Preview at shows
+     * another screen, for edits that write x and y into the record.
      */
-    rects({ raw = false } = {}) {
-        const screen = this.screenSize();
+    rects({ raw = false, design = false } = {}) {
+        const screen = design ? this.designSize() : this.screenSize();
         const root = { x: 0, y: 0, width: screen.width, height: screen.height };
         const rects = new Map();
         const resolve = (node, trail) => {
@@ -1771,7 +1814,8 @@ class DatabaseUserInterfaceEditor {
         auto.textContent = this._t('First control');
         select.appendChild(auto);
         for (const node of this.current.nodes) {
-            if (node.type !== 'button' && node.type !== 'list') continue;
+            // Every control the game can focus, a Text Input included.
+            if (!DatabaseUserInterfaceEditor.isControl(node.type)) continue;
             const option = document.createElement('option');
             option.value = String(node.id);
             option.textContent = this.nodeLabel(node);
@@ -2383,6 +2427,7 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Float'), this.numberControl('p-floatRange', node.floatRange ?? 6, 0, 100));
             html += this.row('', this.checkControl('p-showName', node.showName !== false, tt('Show the target\'s name')));
             html += this.row(tt('Font size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200), tt('0 uses the game default.'));
+            html += this.row(tt('Font face'), this.textControl('p-fontFace', node.fontFace || '', tt('Game font')), tt('Blank uses the game font.'));
             html += this.group(tt('Placement'));
             html += this.hintRow(tt('Offsets from the top center of the target. A positive Y moves it down.'));
             html += this.pair(`${tt('Enemy')} X`, this.numberControl('p-enemyOffsetX', node.enemyOffsetX || 0, -2000, 2000), `${tt('Enemy')} Y`, this.numberControl('p-enemyOffsetY', node.enemyOffsetY || 0, -2000, 2000));
@@ -2527,12 +2572,13 @@ class DatabaseUserInterfaceEditor {
         if (reparent || reanchor) {
             // A new parent or anchor changes what x/y are measured from;
             // keep the node where it is on screen and re-express the offset.
-            const before = this.rects({ raw: true }).get(node.id);
+            // Measured at the design size, whatever Preview at shows.
+            const before = this.rects({ raw: true, design: true }).get(node.id);
             if (reparent) node.parent = parent;
             if (reanchor) node.anchor = anchor;
             if (before) {
-                const screen = this.screenSize();
-                const parentRect = this.rects({ raw: true }).get(node.parent) || { x: 0, y: 0, width: screen.width, height: screen.height };
+                const screen = this.designSize();
+                const parentRect = this.rects({ raw: true, design: true }).get(node.parent) || { x: 0, y: 0, width: screen.width, height: screen.height };
                 const [ax, ay] = DatabaseUserInterfaceEditor.ANCHORS[node.anchor];
                 node.x = Math.round(before.x - (parentRect.x + parentRect.width * ax - before.width * ax));
                 node.y = Math.round(before.y - (parentRect.y + parentRect.height * ay - before.height * ay));
@@ -2591,6 +2637,8 @@ class DatabaseUserInterfaceEditor {
             node.fontFace = q('p-fontFace').value.trim();
             node.fontBold = q('p-fontBold').checked;
             node.fontItalic = q('p-fontItalic').checked;
+            // Ticking Outline with a width of 0 gives the stock width: the game draws no outline at 0.
+            if (q('p-outline').checked && !node.outline && !(num('p-outlineWidth', 0, 32, node.outlineWidth) > 0)) q('p-outlineWidth').value = 3;
             node.outline = q('p-outline').checked;
             node.outlineColor = optionalColor('p-outlineColor');
             node.outlineWidth = num('p-outlineWidth', 0, 32, node.outlineWidth);
@@ -2625,7 +2673,10 @@ class DatabaseUserInterfaceEditor {
             if (q('p-portraitSize')) node.portraitSize = num('p-portraitSize', 32, 144, 144);
             if (q('p-actorPadding')) node.actorPadding = num('p-actorPadding', 0, 200, 12);
             if (q('p-actorGap')) node.actorGap = num('p-actorGap', 0, 200, 4);
-            if (oldLayout === 'actorPanel') node.actorFields = ['portrait','name','class','level','hp','mp','tp','exp','states','atb'].filter(key => q('p-actorField-' + key)?.checked);
+            // Only from a panel that shows the part checkboxes: a pick fires
+            // change and then input, and the second arrives after the layout
+            // became Actor Panel but before the Text panel is redrawn.
+            if (oldLayout === 'actorPanel' && q('p-actorField-portrait')) node.actorFields =['portrait','name','class','level','hp','mp','tp','exp','states','atb'].filter(key => q('p-actorField-' + key)?.checked);
             if (q('p-portraitSource')) {
                 node.portraitSource = q('p-portraitSource').value;
                 node.portraitPattern = q('p-portraitPattern').value.trim() || 'Face_{id}';
@@ -2651,6 +2702,8 @@ class DatabaseUserInterfaceEditor {
             node.fontFace = q('p-fontFace').value.trim();
             node.fontBold = q('p-fontBold').checked;
             node.fontItalic = q('p-fontItalic').checked;
+            // Ticking Outline with a width of 0 gives the stock width: the game draws no outline at 0.
+            if (q('p-outline').checked && !node.outline && !(num('p-outlineWidth', 0, 32, node.outlineWidth) > 0)) q('p-outlineWidth').value = 3;
             node.outline = q('p-outline').checked;
             node.outlineColor = optionalColor('p-outlineColor');
             node.outlineWidth = num('p-outlineWidth', 0, 32, node.outlineWidth);
@@ -2706,6 +2759,7 @@ class DatabaseUserInterfaceEditor {
             node.actorFile = q('p-actorFile').value.trim();
             node.cursorSlide = q('p-cursorSlide').checked;
             node.fontSize = num('p-fontSize', 0, 200, 0);
+            node.fontFace = q('p-fontFace').value.trim();
             for (const key of ['enemyOffsetX', 'enemyOffsetY', 'actorOffsetX', 'actorOffsetY']) node[key] = num('p-' + key, -2000, 2000, 0);
         }
         if (node.type === 'gauge') {
@@ -2987,7 +3041,9 @@ class DatabaseUserInterfaceEditor {
                 node.actorElements ||= {}; node.actorElements[key] ||= {};
                 const oldShape=node.actorElements[key].shape || 'rectangle';
                 node.actorElements[key][prop]=value;
-                if(prop==='shape' && value==='circular' && oldShape!=='circular') {
+                // A cleared Text goes back to the game default, as the field says: a stored '' would draw nothing.
+                if(prop==='text' && value==='' && !key.startsWith('custom_')) delete node.actorElements[key].text;
+                if(prop==='shape'&& value==='circular' && oldShape!=='circular') {
                     const previousHeight=node.actorElements[key].height || 6;
                     node.actorElements[key].width=node.actorElements[key].height=80;
                     if(!key.startsWith('custom_')) node.rowHeight+=Math.max(0,80-previousHeight);
@@ -3060,8 +3116,9 @@ class DatabaseUserInterfaceEditor {
             if (selected && this.selectedNodes().length === 1 && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
                 const handle = this.handleAt(rects.get(selected.id), point, selected);
                 if (handle) {
-                    this.pushUndo();
-                    this.drag = { kind: 'resize', handle, node: selected, start: point, origin: { x: selected.x, y: selected.y, width: selected.width, height: selected.height }, rect: rects.get(selected.id) };
+                    // The undo step is taken now and kept only once the drag changes something
+                    // (see mousemove): a click alone must not add a step or empty Redo.
+                    this.drag = { kind: 'resize', handle, node: selected, start: point, origin: { x: selected.x, y: selected.y, width: selected.width, height: selected.height }, rect: rects.get(selected.id), before: this.snapshot(), changed: false };
                     event.preventDefault();
                     return;
                 }
@@ -3074,11 +3131,10 @@ class DatabaseUserInterfaceEditor {
                     return;
                 }
                 if (!this.selectedNodes().includes(hit)) this.select(hit.id);
-                this.pushUndo();
                 const roots = this.selectionRoots();
                 const primary = roots.includes(hit) ? hit : roots[0];
                 this.drag = { kind: 'move', node: primary, start: point, origin: { x: primary.x, y: primary.y },
-                    origins: roots.map(node => ({ node, x: node.x, y: node.y })), moved: false };
+                    origins: roots.map(node => ({ node, x: node.x, y: node.y })), before: this.snapshot(), changed: false };
             } else if (this.selectedId) {
                 this.select(0);
             }
@@ -3086,7 +3142,9 @@ class DatabaseUserInterfaceEditor {
         });
         window.addEventListener('mousemove', this._onMouseMove = event => {
             if (!this.drag) {
-                if (this.wrapper && this.wrapper.isConnected) this.updateCursor(toCanvas(event));
+                // The cursor is the canvas's own: a move anywhere else (this listener hears every editor
+                // window) has nothing to set, and finding it lays out every text of the interface.
+                if (event.target === canvas && this.wrapper && this.wrapper.isConnected) this.updateCursor(toCanvas(event));
                 return;
             }
             const point = toCanvas(event);
@@ -3097,9 +3155,16 @@ class DatabaseUserInterfaceEditor {
             if (this.drag.kind === 'move') {
                 this.translateSelection(snap(this.drag.origin.x + dx) - this.drag.origin.x,
                     snap(this.drag.origin.y + dy) - this.drag.origin.y, this.drag.origins);
-                this.drag.moved = true;
             } else {
                 this.resizeTurned(node, this.drag, dx, dy, snap);
+            }
+            if (!this.drag.changed) {
+                // Still where it was at mousedown (a click, or a move the grid snapped away): nothing to record.
+                if (Object.keys(this.drag.origin).every(key => node[key] === this.drag.origin[key])) return;
+                this.drag.changed = true;
+                this.undoStack.push(this.drag.before);
+                if (this.undoStack.length > 100) this.undoStack.shift();
+                this.redoStack = [];
             }
             this.touch();
             this.syncPositionFields(node);
@@ -3107,7 +3172,6 @@ class DatabaseUserInterfaceEditor {
         });
         window.addEventListener('mouseup', this._onMouseUp = () => {
             if (!this.drag) return;
-            if (this.drag.kind === 'move' && !this.drag.moved) this.undoStack.pop();
             this.drag = null;
         });
         this.followLanguage();
@@ -3330,11 +3394,12 @@ class DatabaseUserInterfaceEditor {
     updateCursor(point) {
         const selected = this.selected();
         let cursor = 'default';
+        const rects = this.rects();
         if (selected && this.selectedNodes().length === 1) {
-            const handle = this.handleAt(this.rects().get(selected.id), point, selected);
+            const handle = this.handleAt(rects.get(selected.id), point, selected);
             if (handle) cursor = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }[handle];
         }
-        if (cursor === 'default' && this.nodeAt(this.rects(), point)) cursor = 'move';
+        if (cursor === 'default' && this.nodeAt(rects, point)) cursor = 'move';
         this.canvas.style.cursor = cursor;
     }
 
@@ -3380,7 +3445,7 @@ class DatabaseUserInterfaceEditor {
     browseSe() {
         const node = this.selected();
         const project = this.project();
-        if (!node || (node.type !== 'button' && node.type !== 'list' && node.type !== 'victoryParty') || !project || !project.path) return;
+        if (!node || (!DatabaseUserInterfaceEditor.isControl(node.type) && node.type !== 'victoryParty') || !project || !project.path) return;
         if (typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
         const path = require('path');
         const sePath = path.join(project.path, 'audio', 'se');
@@ -3846,6 +3911,9 @@ class DatabaseUserInterfaceEditor {
         const project = this.project();
         const manager = this.parentEditor && this.parentEditor.playtestManager;
         if (!project || !project.path || !manager) return;
+        // The game reads the record from UserInterfaces.json, which a project
+        // still on its seeded baselines has not been given yet.
+        this.databaseManager.writeSeededInterfaces = true;
         try {
             if (window.reactor && window.reactor.projectController && window.reactor.projectController.saveAll) {
                 const saved = await window.reactor.projectController.saveAll();
@@ -4135,7 +4203,6 @@ class DatabaseUserInterfaceEditor {
 
     /** Splits text into drawable runs: {text, color, size, icon}. `scale` shrinks the base font (Fit text to size). */
     parseText(node, scale = 1) {
-        const ctx = this.ctx;
         const baseSize = scale < 1 ? Math.max(DatabaseUserInterfaceEditor.MIN_FONT_SIZE, Math.round(this.fontSize(node) * scale)) : this.fontSize(node);
         const baseColor = typeof node.textColor === 'string' ? node.textColor : this.skinColor(node.textColor || 0);
         const actors = (this.databaseManager.data && this.databaseManager.data.actors) || [];
@@ -4143,11 +4210,11 @@ class DatabaseUserInterfaceEditor {
         let text = String(node.text || '');
         text = text.replace(/\\\\/g, '\u0000');
         const context = this.previewContext(node);
-        text = text.replace(/\{context\.(key|kind|id|value|name|description|icon|iconIndex|count|playtime|index|paramName|paramValue|price|level|symbol|valueText|title|timestamp|date|partyCharacters|partyFaces|existing|enabled)\}/gi,
+        text = text.replace(/\{context\.(key|kind|id|value|name|description|icon|iconIndex|count|playtime|index|paramName|paramValue|price|level|symbol|valueText|title|timestamp|date|partyCharacters|partyFaces|existing|enabled|cost|slot|newValue|change)\}/gi,
             (match, token) => {
                 if (!context) return '';
                 const field = { iconindex: 'iconIndex', paramname: 'paramName', paramvalue: 'paramValue', valuetext: 'valueText',
-                    partycharacters: 'partyCharacters', partyfaces: 'partyFaces' }[token.toLowerCase()] || token.toLowerCase();
+                    partycharacters: 'partyCharacters', partyfaces: 'partyFaces', newvalue: 'newValue' }[token.toLowerCase()] || token.toLowerCase();
                 return String(context[field] ?? '');
             });
         text = text.replace(/\{actor\.(name|nickname|class|level|profile|hp|mp|tp|mhp|maxHp|mmp|maxMp|maxTp|currentExp|totalExp|nextExp|nextRequiredExp|atk|def|mat|mdf|agi|luk)\}/gi,
@@ -4192,13 +4259,11 @@ class DatabaseUserInterfaceEditor {
             for (const run of line.runs) tallest = Math.max(tallest, run.size || 0);
             line.height = tallest + spacing;
         }
-        void ctx;
         return wrapped;
     }
 
     /** Greedy word wrap over styled runs; measured with the same font. */
-    wrapRuns(lines, maxWidth) {
-        const node = arguments[2];
+    wrapRuns(lines, maxWidth, node) {
         const ctx = this.ctx;
         const width = token => {
             if (token.icon !== undefined) return 36;
@@ -4488,18 +4553,6 @@ class DatabaseUserInterfaceEditor {
         ctx.restore();
     }
 
-    /**
-     * A Battle Window is the stock window's stand-in: its skin (or a dashed
-     * outline without one) and the window's name. One that follows the
-     * active actor is drawn over the first party row it would follow.
-     */
-    /**
-     * A Battle Window as a battle shows it while the party chooses: the
-     * actor command window, skinned and listing the commands, over the first
-     * actor's row. Every other window only appears once opened, so it is a
-     * dashed outline with its name (faint when hidden); a game view (the
-     * troop preview) leaves those out.
-     */
     /** The Commands group: the stock list until customized, then one editable row per command. */
     battleCommandsMarkup(node, kinds) {
         const tt = text => this._t(text);
@@ -4565,7 +4618,7 @@ class DatabaseUserInterfaceEditor {
         const fresh = kind => ({ kind, label: '', id: kind === 'skillType' || kind === 'skill' || kind === 'commonEvent' ? 1 : 0, knownOnly: true });
         if (action === 'customize') node.commands = DatabaseUserInterfaceEditor.stockBattleCommands(node.battleWindow).map(fresh);
         else if (action === 'stock') node.commands = [];
-        else if (action === 'add') list.push(fresh(node.battleWindow === 'partyCommand' ? 'escape' : 'escape'));
+        else if (action === 'add') list.push(fresh('escape'));
         else if (action === 'remove') list.splice(index, 1);
         else if (action === 'up' && index > 0) list.splice(index - 1, 0, list.splice(index, 1)[0]);
         else if (action === 'down' && index < list.length - 1) list.splice(index + 1, 0, list.splice(index, 1)[0]);
@@ -4603,6 +4656,13 @@ class DatabaseUserInterfaceEditor {
         return null;
     }
 
+    /**
+     * A Battle Window as a battle shows it while the party chooses: the
+     * actor command window, skinned and listing the commands, over the first
+     * actor's row. Every other window only appears once opened, so it is a
+     * dashed outline with its name (faint when hidden); a game view (the
+     * troop preview) leaves those out.
+     */
     drawBattleWindowNode(node, rect) {
         const ctx = this.ctx;
         let r = rect;
@@ -4686,7 +4746,6 @@ class DatabaseUserInterfaceEditor {
         ctx.restore();
     }
 
-    /** Skills an actor knows at their starting level: learned by their class, or added by a trait (43). */
     /** A skill's cost as the game's skill list prints it: TP first, then MP; a pool the project turned off costs nothing. */
     previewSkillCost(skill) {
         const system = this.databaseManager && this.databaseManager.data ? this.databaseManager.data.system : null;
@@ -4695,6 +4754,7 @@ class DatabaseUserInterfaceEditor {
         return tp > 0 ? `\\C[29]${tp}\\C[0]` : mp > 0 ? `\\C[23]${mp}\\C[0]` : '';
     }
 
+    /** Skills an actor knows at their starting level: learned by their class, or added by a trait (43). */
     previewKnownSkills(actor) {
         const data = (this.databaseManager && this.databaseManager.data) || {};
         const klass = actor && data.classes ? data.classes[actor.classId] : null;
@@ -4785,7 +4845,7 @@ class DatabaseUserInterfaceEditor {
         let html = this.group(this.typeLabel(node.type));
         for (const [key, kind, name, , a, b] of hud.SETTINGS[node.type]) {
             // MP and TP are the game's own abbreviations, shown as they are.
-            const label = /^[A-Z]{2,3}$/.test(name) ? name : name;
+            const label = name;
             if (kind === 'check') html += this.row('', this.checkControl('p-action-' + key, !!node[key], /^[A-Z]{2,3}$/.test(name) ? name : tt(name)));
             else if (kind === 'number') html += this.row(tt(label), this.numberControl('p-action-' + key, node[key], a, b));
             else if (kind === 'color') html += this.row(tt(label), this.colorControl('p-action-' + key, node[key]));
@@ -4798,6 +4858,7 @@ class DatabaseUserInterfaceEditor {
             html += this.pair(tt('Align'), this.selectControl('p-align', node.align || 'left', [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]),
                 tt('Size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200));
             html += this.row(tt('Color'), this.textColorControl('p-textColor', node.textColor));
+            html += this.row('', this.checkControl('p-fontBold', !!node.fontBold, tt('Bold')));
         }
         const words = { actionWeapon: ['reloading'], actionInfo: ['defeated'] }[node.type];
         if (words) {
@@ -4826,6 +4887,7 @@ class DatabaseUserInterfaceEditor {
             node.align = q('p-align').value;
             node.fontSize = num('p-fontSize', 0, 200, 0);
             node.textColor = DatabaseUserInterfaceEditor.parseTextColor(q('p-textColor').value);
+            node.fontBold = q('p-fontBold').checked;
         }
         Object.assign(node, hud.normalizeProps(Object.assign({}, node, { actionLabels: labels }), node.type));
     }
@@ -4901,7 +4963,11 @@ class DatabaseUserInterfaceEditor {
         ctx.rect(inner.x, inner.y, inner.width, inner.height);
         ctx.clip();
         ctx.translate(inner.x, inner.y);
-        if (node.type === 'actionVitals') hud.drawVitals(ctx, inner.width, inner.height, node, data, sample.unit, theme);
+        if (node.type === 'actionVitals') {
+            // The project's System, for the MP and TP gauges it turned off (the shared file reads the game's otherwise).
+            hud.system = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system) || null;
+            try { hud.drawVitals(ctx, inner.width, inner.height, node, data, sample.unit, theme); } finally { hud.system = null; }
+        }
         else if (node.type === 'actionWeapon') hud.drawWeapon(ctx, inner.width, inner.height, node, data, theme, sample.extra);
         else if (node.type === 'actionHotbar') hud.drawHotbar(ctx, inner.width, inner.height, node, data, theme, sample.extra);
         else if (node.type === 'actionTarget') hud.drawTarget(ctx, inner.width, inner.height, node, data, theme);
@@ -5036,7 +5102,8 @@ class DatabaseUserInterfaceEditor {
         // Every page before it is passed with OK; the page itself is played to the frame Play has reached, else shown at rest.
         for (let guard = 0; run.index < this._victoryPage && guard < 4096; guard++) hud.step(run, { ok: true });
         const frames = playing ? Math.floor((Date.now() - playing.start) / (1000 / 60)) : Infinity;
-        if (frames === Infinity) { if (hud.isFilling(run)) hud.step(run, { ok: true }); }
+        // Opening a page locks input for a moment; cleared again, or the OK that fills the page at rest is swallowed.
+        if (frames === Infinity) { run.lock = 0; if (hud.isFilling(run)) hud.step(run, { ok: true }); }
         else for (let frame = 0; frame < frames && hud.isAnimating(run); frame++) hud.step(run, idle);
         if (playing && !hud.isAnimating(run)) this._victoryPlay = null;
         this._victoryPreview = { hud, summary, pages, run, page: pages[this._victoryPage], playing: !!this._victoryPlay };
@@ -5382,7 +5449,7 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Gauges'), this.selectControl('p-gaugeStyle', node.gaugeStyle || 'clipped', [['clipped', tt('Clipped corners')], ['bar', tt('Thin bar')]]));
             html += this.row(tt('Portrait size'), this.numberControl('p-fightPortrait', node.fightPortrait || 0, 0, 512), tt('0 fits the panel. A unit shows its face, else a portrait of its model, else its map sprite or battle picture, else its initials.'));
             html += teamColors();
-            html += words([...hud.STATS, 'hit', 'critical', 'damage', 'heal', 'defeats', 'halfCover', 'fullCover', 'side', 'back', 'highGround', 'lowGround', 'targets']);
+            html += words([...hud.STATS, 'hit', 'critical', 'damage', 'heal', 'defeats', 'halfCover', 'fullCover', 'side', 'back', 'highGround', 'lowGround', 'targets', 'watch']);
         } else if (node.type === 'fightTurnOrder') {
             html += this.group(tt('Turn Order'));
             html += this.pair(tt('Box size'), this.numberControl('p-cellSize', node.cellSize || 0, 0, 256), tt('Gap'), this.numberControl('p-cellGap', node.cellGap ?? 6, 0, 64));
@@ -5405,7 +5472,7 @@ class DatabaseUserInterfaceEditor {
                 + this.row(`${tt('Duration')} (${tt('Frames')})`, this.numberControl('p-bannerFrames', node.bannerFrames || 90, 10, 600), tt('Shown each time the turn passes to a side, in that side\'s color.'))
                 + teamColors() + '</div>';
             const keys = { turn: ['turn', 'allyPhase', 'enemyPhase'], phase: ['allyPhase', 'enemyPhase'],
-                hint: ['hintUnit', 'hintMove', 'hintCommand', 'hintTarget', 'hintEnemy', 'whyAttack', 'whySkill', 'whyItem', 'whyCost', 'whyUse', 'whyRange', 'whyNoTarget'] }[node.fightInfo];
+                hint: ['hintUnit', 'hintMove', 'hintCommand', 'hintTarget', 'hintEnemy', 'hintAlly', 'whyAttack', 'whySkill', 'whyItem', 'whyCost', 'whyUse', 'whyRange', 'whyNoTarget', 'whyNoReach'] }[node.fightInfo];
             if (keys) html += words(keys);
         } else if (node.type === 'fightWindow') {
             html += this.group(tt('Tactical Window'));
@@ -5623,9 +5690,13 @@ class DatabaseUserInterfaceEditor {
         if (node.type === 'fightUnit') {
             const unit = hud.panelUnit(node, reader);
             if (unit) {
-                const view = hud.fillUnitView(hud.newUnitView(), reader, unit, system.optDisplayTp !== false, node.fightUnit === 'focused' ? reader.preview(unit) : null);
-                if (view.preview) view.area = hud.areaSummary(reader, unit, {});
-                hud.drawUnit(ctx, width, height, node, view, theme);
+                // The project's System, for the MP and TP gauges it turned off (the shared file reads the game's otherwise).
+                hud.system = system;
+                try {
+                    const view = hud.fillUnitView(hud.newUnitView(), reader, unit, system.optDisplayTp !== false && !hud.poolOff('tp'), node.fightUnit === 'focused' ? reader.preview(unit) : null);
+                    if (view.preview) view.area = hud.areaSummary(reader, unit, {});
+                    hud.drawUnit(ctx, width, height, node, view, theme);
+                } finally { hud.system = null; }
             }
         } else if (node.type === 'fightTurnOrder') {
             const view = hud.newUnitView();
@@ -6107,7 +6178,7 @@ class DatabaseUserInterfaceEditor {
     drawActorPanelRow(node, rect, index) {
         const actorNode={...node,actorSource:'partySlot',index,fill:'none',_previewFocused:false};
         const actor=this.startingActor(actorNode), ctx=this.ctx;
-        const elements=DatabaseUserInterfaceEditor.actorPanelLayout(node,rect.width,rect.height,this.fontSize(node));
+        const elements=DatabaseUserInterfaceEditor.actorPanelShown(node,rect.width,rect.height,this.fontSize(node),this.databaseManager.data.system);
         const basic=this.databaseManager.data.system?.terms?.basic || [];
         ctx.save(); ctx.beginPath(); ctx.rect(rect.x,rect.y,rect.width,rect.height); ctx.clip();
         // Behind parts first; parts for the active actor preview on the first row.

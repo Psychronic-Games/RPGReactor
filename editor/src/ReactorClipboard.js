@@ -105,7 +105,8 @@ class ReactorClipboard {
 
     static async write(type, payload) {
         const text = ReactorClipboard.serialize(type, payload);
-        let wrote = ReactorClipboard.writeSharedFile(text);
+        const shared = ReactorClipboard.writeSharedFile(text);
+        let wrote = shared;
 
         try {
             const nwClipboard = ReactorClipboard.getNwClipboard();
@@ -122,9 +123,14 @@ class ReactorClipboard {
             console.warn('System clipboard write failed:', error);
         }
 
+        // Reading reaches this copy only when there is no shared file, so with one written it is
+        // dead weight (a copied map is megabytes): drop an older copy instead, which would be stale.
         try {
-            localStorage.setItem('rpg-reactor.clipboard', text);
-            wrote = true;
+            if (shared) localStorage.removeItem('rpg-reactor.clipboard');
+            else {
+                localStorage.setItem('rpg-reactor.clipboard', text);
+                wrote = true;
+            }
         } catch (error) {
             console.warn('Fallback clipboard write failed:', error);
         }

@@ -7,7 +7,7 @@
  * parameters; they carry XP's as mhp ← max HP, mmp ← max SP, atk ← STR,
  * def ← PDEF, mat ← INT, mdf ← MDEF, agi ← AGI, luk ← DEX. XP's attack power
  * (a weapon's, or an enemy's own) has no MZ parameter, so it rides in a
- * <rrXpAtk: n> note that the XP battle plugin (RR_XpBattle) reads, together
+ * <rrXpAtk: n> note that the XP compatibility plugin (RR_XpCompat) reads, together
  * with XP's damage, hit and evasion rules, so battles keep the arithmetic they
  * were balanced for. Evasion is MZ's EVA ex-parameter.
  *
@@ -19,10 +19,17 @@
  * Skills keep their XP ids, so event commands and scripts that name a skill
  * by id stay right. MZ's Attack and Guard are appended after them: every class
  * and enemy carries an Attack Skill trait naming the appended Attack, and
- * System.json's rrGuardSkillId names the appended Guard.
+ * System.json's rrGuardSkillId names the appended Guard. The Guard state it
+ * adds follows the game's last state the same way (state 2 is the game's own).
+ *
+ * Equipment. An XP class lists the weapons and armours it can equip by id; MZ
+ * equips by type. Each set of classes that shares an item becomes a type of
+ * its own, as for VX (VxConvert.equipTypes).
  */
 (function (root) {
     'use strict';
+
+    const V = root.RRVxConvert || (typeof require === 'function' ? require('./VxConvert.js') : null);
 
     const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
     const str = (v) => (typeof v === 'string' ? v : '');
@@ -59,11 +66,14 @@
         const actorsSrc = list(xp.actors), classesSrc = list(xp.classes);
         const lastActor = actorsSrc.reduce((m, a) => Math.max(m, a ? a.id : 0), 0);
         const classOffset = lastActor;   // XP class n is MZ class lastActor + n
+        const guardStateId = list(xp.states).reduce((m, s) => Math.max(m, s ? s.id : 0), 0) + 1;
+        const weaponTypes = V.equipTypes(classesSrc, xp.weapons, 'weapon_set');
+        const armorTypes = V.equipTypes(classesSrc, xp.armors, 'armor_set');
 
         const classTraits = (c) => {
             const traits = rankTraits(c && c.element_ranks, c && c.state_ranks);
-            for (const w of list(c && c.weapon_set)) traits.push({ code: 51, dataId: w, value: 1 });
-            for (const a of list(c && c.armor_set)) traits.push({ code: 52, dataId: a, value: 1 });
+            if (c) for (const t of weaponTypes.forClass(c.id)) traits.push({ code: 51, dataId: t, value: 1 });
+            if (c) for (const t of armorTypes.forClass(c.id)) traits.push({ code: 52, dataId: t, value: 1 });
             traits.push({ code: 23, dataId: 0, value: 1 }, { code: 22, dataId: 0, value: 0.95 }, { code: 22, dataId: 1, value: 0 }, { code: 35, dataId: attackSkillId, value: 1 });
             return traits;
         };
@@ -104,7 +114,7 @@
         }
         for (let i = 1; i < classes.length; i++) if (classes[i] === undefined) classes[i] = null;
 
-        // XP skill damage: RR_XpBattle evaluates RGSS1's formula from these numbers.
+        // XP skill damage: RR_XpCompat evaluates RGSS1's formula from these numbers.
         const xpFormula = (s, kind) => `a.rrXp${kind} ? a.rrXp${kind}(b, ${JSON.stringify([num(s.power), num(s.atk_f), num(s.str_f), num(s.dex_f), num(s.agi_f), num(s.int_f), num(s.pdef_f), num(s.mdef_f), num(s.eva_f), num(s.recover_hp_rate), num(s.recover_hp)])}) : 0`;
         const stateEffects = (r) => list(r.plus_state_set).map(id => ({ code: 21, dataId: id, value1: 1, value2: 0 })).concat(list(r.minus_state_set).map(id => ({ code: 22, dataId: id, value1: 1, value2: 0 })));
         const elementOf = (r) => { const set = list(r.element_set); if (set.length > 1) tag(notes, 'multipleElements'); return set.length ? set[0] : 0; };
@@ -123,7 +133,7 @@
         const attack = { id: attackSkillId, animationId: -1, damage: { type: 1, elementId: -1, formula: 'a.rrXpAttack ? a.rrXpAttack(b) : a.atk * 4 - b.def * 2', variance: 15, critical: true },
             description: '', effects: [{ code: 21, dataId: 0, value1: 1, value2: 0 }], hitType: 1, iconIndex: 0, message1: ' attacks!', message2: '', messageType: 1, mpCost: 0, name: 'Attack', note: '',
             occasion: 1, repeats: 1, requiredWtypeId1: 0, requiredWtypeId2: 0, scope: 1, speed: 0, stypeId: 0, successRate: 100, tpCost: 0, tpGain: 0 };
-        const guard = Object.assign({}, attack, { id: guardSkillId, animationId: 0, damage: { type: 0, elementId: 0, formula: '0', variance: 20, critical: false }, effects: [{ code: 21, dataId: 2, value1: 1, value2: 0 }],
+        const guard = Object.assign({}, attack, { id: guardSkillId, animationId: 0, damage: { type: 0, elementId: 0, formula: '0', variance: 20, critical: false }, effects: [{ code: 21, dataId: guardStateId, value1: 1, value2: 0 }],
             hitType: 0, message1: ' guards.', name: 'Guard', scope: 11, speed: 2000 });
         skills[attackSkillId] = attack;
         skills[guardSkillId] = guard;
@@ -145,13 +155,13 @@
         const weapons = byId(xp.weapons, w => ({
             id: w.id, animationId: num(w.animation2_id), description: str(w.description).replace(/\\n/g, '\n'), etypeId: 1,
             traits: list(w.element_set).map(id => ({ code: 31, dataId: id, value: 0 })).concat(list(w.plus_state_set).map(id => ({ code: 32, dataId: id, value: 1 }))),
-            iconIndex: icons(w.icon_name), name: str(w.name), note: `<rrXpAtk: ${num(w.atk)}>`, params: equipParams(w), price: num(w.price), wtypeId: 1
+            iconIndex: icons(w.icon_name), name: str(w.name), note: `<rrXpAtk: ${num(w.atk)}>`, params: equipParams(w), price: num(w.price), wtypeId: weaponTypes.typeOf[w.id] || 0
         }));
         const armors = byId(xp.armors, a => {
             const traits = list(a.guard_element_set).map(id => ({ code: 11, dataId: id, value: 0.5 })).concat(list(a.guard_state_set).map(id => ({ code: 14, dataId: id, value: 1 })));
             if (a.eva) traits.push({ code: 22, dataId: 1, value: num(a.eva) / 100 });
             if (a.auto_state_id) tag(notes, 'armorAutoState');
-            return { id: a.id, atypeId: 1, description: str(a.description).replace(/\\n/g, '\n'), etypeId: [2, 3, 4, 5][num(a.kind)] ?? 4, traits, iconIndex: icons(a.icon_name), name: str(a.name),
+            return { id: a.id, atypeId: armorTypes.typeOf[a.id] || 0, description: str(a.description).replace(/\\n/g, '\n'), etypeId: [2, 3, 4, 5][num(a.kind)] ?? 4, traits, iconIndex: icons(a.icon_name), name: str(a.name),
                 note: a.auto_state_id ? `<rrXpAutoState: ${a.auto_state_id}>` : '', params: equipParams(a), price: num(a.price) };
         });
         const enemies = byId(xp.enemies, e => {
@@ -167,8 +177,10 @@
                     const basic = [attackSkillId, guardSkillId, 0, 0][num(a.basic)];
                     const skillId = num(a.kind) === 1 ? num(a.skill_id) : basic || guardSkillId;
                     // XP conditions: turn (a + b·x), HP ≤ %, party level ≥, switch. MZ keeps one; the first that is set wins.
+                    // Turn 0 + 1·x is XP's default and means every turn: it is not a condition, and must not hide the others.
+                    const everyTurn = num(a.condition_turn_a) === 0 && num(a.condition_turn_b, 1) === 1;
                     let conditionType = 0, conditionParam1 = 0, conditionParam2 = 0;
-                    if (a.condition_turn_a || a.condition_turn_b) { conditionType = 1; conditionParam1 = num(a.condition_turn_a); conditionParam2 = num(a.condition_turn_b); }
+                    if (!everyTurn && (a.condition_turn_a || a.condition_turn_b)) { conditionType = 1; conditionParam1 = num(a.condition_turn_a); conditionParam2 = num(a.condition_turn_b); }
                     else if (num(a.condition_hp, 100) < 100) { conditionType = 2; conditionParam1 = 0; conditionParam2 = num(a.condition_hp) / 100; }
                     else if (a.condition_level > 1) { conditionType = 5; conditionParam1 = num(a.condition_level); }
                     else if (a.condition_switch_id) { conditionType = 6; conditionParam1 = num(a.condition_switch_id); }
@@ -188,13 +200,17 @@
             if (st.cant_evade) traits.push({ code: 22, dataId: 1, value: -1 });
             for (const id of list(st.guard_element_set)) traits.push({ code: 11, dataId: id, value: 0.5 });
             if (st.atk_rate && st.atk_rate !== 100) tag(notes, 'stateAtkRate');
+            // Restrictions: 1 can't use magic, 2 always attacks enemies, 3 always attacks allies, 4 can't act.
+            // Magic is what this converter writes as a magical hit: a skill with no attack-power factor.
+            if (num(st.restriction) === 1) for (const s of skillsSrc) if (s && !(num(s.atk_f) > 0)) traits.push({ code: 44, dataId: s.id, value: 1 });
             return {
                 id: st.id, autoRemovalTiming: num(st.hold_turn) > 0 ? 2 : 0, chanceByDamage: num(st.shock_release_prob), iconIndex: 0, maxTurns: num(st.hold_turn), message1: '', message2: '', message3: '', message4: '',
                 minTurns: num(st.hold_turn), motion: 0, name: str(st.name), note: '', overlay: 0, priority: num(st.rating, 5) * 10, releaseByDamage: num(st.shock_release_prob) > 0,
                 removeAtBattleEnd: !!st.battle_only, removeByDamage: num(st.shock_release_prob) > 0, removeByRestriction: false, removeByWalking: false,
-                restriction: [0, 4, 3, 2, 4][num(st.restriction)] ?? 0, stepsToRemove: 100, traits, messageType: 1
+                restriction: [0, 0, 1, 3, 4][num(st.restriction)] ?? 0, stepsToRemove: 100, traits, messageType: 1
             };
         });
+        states[guardStateId] = V.guardState(guardStateId);
         const animations = byId(xp.animations, a => ({
             id: a.id, name: str(a.name), animation1Name: str(a.animation_name), animation1Hue: num(a.animation_hue), animation2Name: '', animation2Hue: 0, position: num(a.position, 1),
             frames: list(a.frames).slice(0, Math.max(1, num(a.frame_max, list(a.frames).length))).map(f => {
@@ -205,7 +221,8 @@
             timings: list(a.timings).map(t => ({ flashColor: t.flash_color ? [t.flash_color.red, t.flash_color.green, t.flash_color.blue, t.flash_color.alpha].map(Math.round) : [255, 255, 255, 255],
                 flashDuration: num(t.flash_duration, 5), flashScope: num(t.flash_scope), frame: num(t.frame), se: t.se ? audio(t.se) : null }))
         }));
-        return { actors, classes, skills, items, weapons, armors, enemies, states, animations, attackSkillId, guardSkillId, classOffset };
+        return { actors, classes, skills, items, weapons, armors, enemies, states, animations, attackSkillId, guardSkillId, classOffset,
+            weaponTypes: weaponTypes.names, armorTypes: armorTypes.names };
     }
 
     /** XP's System words → MZ terms (the rest stays MZ's). */
@@ -255,7 +272,7 @@
         // XP windows: 32 px lines, 16 px padding, a 22 px font, drawn without an outline.
         Object.assign(out.advanced, { screenWidth: 640, screenHeight: 480, uiAreaWidth: 640, uiAreaHeight: 480, fontSize: 22, lineHeight: 32, windowPadding: 16, windowMargin: 2, textOutlineWidth: 0, windowOpacity: 160 });
         if (s.battle_transition) out.rrBattleTransition = str(s.battle_transition);
-        out.rrGuardSkillId = 0;   // set by the importer from database()'s guardSkillId
+        out.rrGuardSkillId = 0;   // set by the importer from database()'s guardSkillId, with its weapon and armour types
         out.locale = 'en_US';
         tag(notes, 'xpSystem', 0);
         out.rrTitleShutdown = 'Shutdown';   // XP's title ends with it (a fixed word, not in the database)

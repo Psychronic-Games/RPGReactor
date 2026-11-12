@@ -80,18 +80,7 @@ class CharacterGenerator {
         this._hairPreviewCacheOwner = null;
         this._hairPreviewCacheDescriptor = null;
         this._projectPartDescriptors = new Set();
-
-        if (typeof window !== 'undefined') {
-            window.addEventListener('rr-language-changed', () => {
-                if (!this.root) return;
-                const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
-                if (!project) {
-                    this.root.innerHTML = `<div style="padding:40px;text-align:center;color:var(--color-text-muted);font-size:12px;">${this._t('forge.openProject')}</div>`;
-                    return;
-                }
-                this._render();
-            });
-        }
+        // A language change is the Forge shell's to handle: it mounts the open tool again.
     }
 
     _t(key, params = {}) {

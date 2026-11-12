@@ -956,7 +956,7 @@
         // Drawn pixel art takes its tones from one clear light: the fill that flattens it is turned down.
         if (cel) { fill.intensity = 0.3; rim.intensity = 0.35; }
         view.scene.add(fill, rim);
-        const flat = cel ? flatLight(THREE, view, renderer) : null, celCells = [], flatPixels = cel ? new Uint8Array(1) : null;
+        const flat = cel ? flatLight(THREE, view, renderer) : null, celCells = [];
         view.floor.visible = false; view.blob.visible = false;
         const pose = poser(builder);
         const upperBones = view.bones.filter(b => /^(Spine1|Spine2|Neck|Head|(Left|Right)(Shoulder|Arm|ForeArm|Hand))/.test(b.name));
@@ -988,7 +988,6 @@
                 const bounds = [];
                 for (const c of cells) { posed(c); const b = measure(view, elevation); b.kind = c.kind; bounds.push(b); await breathe(); }
                 fitted = fit(bounds, m);
-                api.lastReport = { scale: fitted.scale, cells: cells.map((c, i) => ({ col: c.col, row: c.row, clip: c.clipId, at: c.at, kind: c.kind, bounds: bounds[i] })) };
             }
             const e = elevation * Math.PI / 180;
             const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 60);
@@ -1129,11 +1128,6 @@
             if (columns >= 1 && Math.ceil(count / columns) * (frame * zoom + label + gap) <= height + gap) return zoom;
         }
         return 1;
-    }
-
-    /** The workspace shown or taken away (the Sprite chip). Returns whether it shows now. */
-    function toggleSpriteView(builder) {
-        return !!openPanel(builder);
     }
 
     function openPanel(builder) {
@@ -1330,8 +1324,8 @@
         return Number.isInteger(n) && n >= 16 && n <= 512 ? n : 144;
     }
 
-    /** The sheet drawn and saved; with `look`, drawn and shown in the panel only: nothing is asked or written. */
-    async function exportNow(builder, panel, state, preview, look = false) {
+    /** The sheet drawn and saved. */
+    async function exportNow(builder, panel, state, preview) {
         const t = (text, params) => builder._t(text, params);
         const project = builder._project && builder._project();
         const rootElement = builder.root, view = builder._view;
@@ -1339,7 +1333,7 @@
         const status = panel.querySelector('.rr-c3d-export-status');
         if (!project) return;
         let name = safeName(builder.name);
-        if (!name && !look) {
+        if (!name) {
             name = safeName(await root.RRDialog.prompt(t('Name this character:'), { title: t('Export Sprite Sheet'), value: t('Villager') }));
             if (!name || !current()) return;
             builder.name = name;
@@ -1349,7 +1343,7 @@
         const fs = require('fs'), path = require('path'), l = layout(state.layout);
         const frames = framesOf(l.id, state.frames);
         const file = path.join(project.path, 'img', l.folder, fileName(l.id, name, frames));
-        if (!look && fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export Sprite Sheet'), ok: t('Replace'), danger: true })) return;
+        if (fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export Sprite Sheet'), ok: t('Replace'), danger: true })) return;
         if (!current()) return;
         const bar = panel.querySelector('.rr-c3d-export-progress'), go = panel.querySelector('.rr-c3d-export-go');
         panel.dataset.busy = '1';
@@ -1364,13 +1358,10 @@
             const png = await toPng(sheet);
             if (!current()) return;
             const seconds = ((performance.now() - started) / 1000).toFixed(1);
-            if (look) status.textContent = t('Preview: {w} × {h} ({s} s). Nothing was saved.', { w: sheet.width, h: sheet.height, s: seconds });
-            else {
-                const atomic = root.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
-                fs.mkdirSync(path.dirname(file), { recursive: true });
-                atomic(fs, file, png);
-                status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds });
-            }
+            const atomic = root.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            atomic(fs, file, png);
+            status.textContent = t('Saved img/{folder}/{file} ({s} s).', { folder: l.folder, file: path.basename(file), s: seconds });
             status.dataset.kind = 'ok';
             const img = preview(panel);
             // (The picture before this one is let go: each was kept for as long as the editor ran.)
@@ -1392,7 +1383,7 @@
     const api = {
         LAYOUTS, CLIPS, SV_MOTIONS, SV_CLIPS, FACE_PRESETS, YAW, SV_YAW, CARDINAL, DIAGONAL,
         STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, columnsOf, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
-        downsample, outline, grade, skinLike, threshold, quantize, clusters, celCell, celRamp, celDraw, toggleSpriteView, SPRITE_VIEW_HINT, settingsOf, strips, tileZoom, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
+        downsample, outline, grade, skinLike, threshold, quantize, clusters, celCell, celRamp, celDraw, SPRITE_VIEW_HINT, settingsOf, strips, tileZoom, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
     };
     root.RRCharacterSpriteSheet = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

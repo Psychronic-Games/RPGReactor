@@ -1125,6 +1125,10 @@ function buildWeb(stageRoot, stagingDir) {
     const stagingNonce = `${process.pid}-${threadId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const stagingDir = path.join(os.tmpdir(), `rpgreactor-editor-dist-${stagingNonce}`);
     const stageRoot = path.join(stagingDir, 'RPGReactor');
+    // A stage-only run hands its copy to the caller; every other run, and any
+    // run that fails (while staging too), removes it.
+    let keepStaging = false;
+    try {
     logInfo('Staging editor files...');
     progress(2, 'Staging editor files...');
 
@@ -1273,12 +1277,12 @@ function buildWeb(stageRoot, stagingDir) {
     logInfo('');
 
     if (stageOnly) {
+        keepStaging = true;
         parentPort.postMessage({ type: 'staged', stageRoot });
         return;
     }
 
     // ── Build packages ──────────────────────────────────────────────
-    try {
         if (packageType === 'minimal' && includeProprietaryCodecs) {
             throw new Error('Third-party codec bundling is not available for minimal editor packages.');
         }
@@ -1530,7 +1534,12 @@ function buildWeb(stageRoot, stagingDir) {
             logInfo('  RPGReactor.sh');
 
             fs.writeFileSync(path.join(appDir, 'RPGReactor.bat'),
-                '@echo off\r\ncd /d "%~dp0"\r\nstart "" "nwjs-win\\nw.exe" .\r\n');
+                // The machine's graphics backend, from the note the editor leaves (editor/RPGReactor.bat has the same lines).
+                '@echo off\r\ncd /d "%~dp0"\r\nset "RR_ANGLE="\r\nset "RR_ANGLE_ARGS="\r\n'
+                + 'if exist "%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt" set /p RR_ANGLE=<"%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt"\r\n'
+                + 'if /i "%RR_ANGLE%"=="gl" set "RR_ANGLE_ARGS=--use-angle=gl --rr-editor-angle=gl"\r\n'
+                + 'if /i "%RR_ANGLE%"=="d3d11on12" set "RR_ANGLE_ARGS=--use-angle=d3d11on12 --rr-editor-angle=d3d11on12"\r\n'
+                + 'start "" "nwjs-win\\nw.exe" . %RR_ANGLE_ARGS%\r\n');
             logInfo('  RPGReactor.bat');
 
             fs.writeFileSync(path.join(appDir, 'RPGReactor.command'), [
@@ -1571,8 +1580,10 @@ function buildWeb(stageRoot, stagingDir) {
         logInfo(`Output: ${outputDir}`);
 
     } finally {
-        logDim('Cleaning up staging...');
-        try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
+        if (!keepStaging) {
+            logDim('Cleaning up staging...');
+            try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
+        }
     }
 
 })().then(() => {

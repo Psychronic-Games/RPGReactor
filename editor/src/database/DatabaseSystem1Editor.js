@@ -315,7 +315,7 @@ class DatabaseSystem1Editor {
         const currencySection = this.keyedSection('currency-display', tt('Currency & Display'), `
             <div class="form-row">
                 <label class="database-field-label">${tt('Currency Unit:')}</label>
-                <input type="text" class="database-field-value system-text-field" style="width: 120px;" value="${rrEscapeHtml(system.currencyUnit || 'G')}" data-system-field="currencyUnit">
+                <input type="text" class="database-field-value system-text-field" style="width: 120px;" value="${rrEscapeHtml(system.currencyUnit ?? 'G')}" data-system-field="currencyUnit">
             </div>
             <div style="margin-top: 10px;">
                 <label class="database-field-label" style="margin-bottom: 6px; display: block;">${tt('Window Tone:')}</label>
@@ -1491,14 +1491,6 @@ class DatabaseSystem1Editor {
         overlay._rrModalKeys?.enter();
     }
 
-    updateSystemField(fieldName, value) {
-        const system = this.databaseManager.getSystem();
-        if (!system) return;
-
-        system[fieldName] = value;
-        console.debug(`Updated system field ${fieldName} to:`, value);
-    }
-
     /**
      * The game's own screen size, so a title preview is cropped and letterboxed
      * the way the running game would crop and letterbox it.
@@ -1802,7 +1794,7 @@ class DatabaseSystem1Editor {
 
         const files = RRAssetFiles.listUnique(audioPath, RRAssetFiles.AUDIO_EXTENSIONS);
 
-        this.showAudioPickerModal(system, files, audioPath, musicType, 'bgm', folderName);
+        this.showAudioPickerModal(system, files, musicType, folderName);
     }
 
     showSoundPicker(system, soundIndex) {
@@ -1843,14 +1835,11 @@ class DatabaseSystem1Editor {
         });
     }
 
-    showAudioPickerModal(system, files, audioPath, identifier, audioType, folderName) {
+    /** The picker for one music slot; the sound slots have their own (RRSystemSoundSlotModal). */
+    showAudioPickerModal(system, files, identifier, folderName) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const isMusic = audioType === 'bgm';
-        const slot = isMusic
-            ? DatabaseSystem1Editor.resolveMusicSlot(system, identifier) : null;
-        const current = isMusic
-            ? (slot?.get() || {})
-            : (system.sounds?.[identifier] || {});
+        const slot = DatabaseSystem1Editor.resolveMusicSlot(system, identifier);
+        const current = slot?.get() || {};
 
         RRAudioPickerModal.open({
             title: `${tt('Select')} ${folderName} ${tt('File')}`,
@@ -1862,25 +1851,15 @@ class DatabaseSystem1Editor {
                 pitch: current.pitch !== undefined ? current.pitch : 100,
                 pan: current.pan !== undefined ? current.pan : 0
             },
-            loopDefault: isMusic,
+            loopDefault: true,
             onOk: result => {
-                if (isMusic) {
-                    if (slot) Object.assign(slot.ensure(), result);
-                } else {
-                    if (!system.sounds) {
-                        system.sounds = [];
-                    }
-                    system.sounds[identifier] = { ...system.sounds[identifier], ...result };
-                }
+                if (slot) Object.assign(slot.ensure(), result);
 
                 const detailEl = document.getElementById('database-detail');
                 if (detailEl) {
                     detailEl.innerHTML = '';
                     this.showSystem1Detail(detailEl);
-                    const selector = isMusic
-                        ? `.music-row[data-music-type="${identifier}"]`
-                        : `.sound-row[data-sound-index="${identifier}"]`;
-                    setTimeout(() => detailEl.querySelector(selector)?.focus(), 0);
+                    setTimeout(() => detailEl.querySelector(`.music-row[data-music-type="${identifier}"]`)?.focus(), 0);
                 }
             }
         });

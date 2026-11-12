@@ -44,6 +44,7 @@ class RPGReactor {
 
     async init() {
         if (this.relaunchFramelessForWine()) return;
+        if (this.relaunchOnMachineBackend()) return;
 
         this.centerWindowOnStartup();
 
@@ -707,8 +708,10 @@ class RPGReactor {
         this.optionsManager.setMap3DView(false);
         const checkbox = document.getElementById('map-3d-view');
         if (checkbox) checkbox.checked = false;
-        this.uiManager.updateStatus(message ||
-            (window.I18n ? window.I18n.tText('3D view unavailable') : '3D view unavailable'));
+        const reason = message || (window.I18n ? window.I18n.tText('3D view unavailable') : '3D view unavailable');
+        this.uiManager.updateStatus(reason);
+        // The box unticking itself said nothing of why.
+        this.uiManager.showMapNote?.(reason);
     }
 
     // Playtest orchestration
@@ -938,8 +941,9 @@ class RPGReactor {
         if (!note) { note = document.createElement('div'); note.className = 'rr-history-note'; note.setAttribute('role', 'status'); stage.appendChild(note); }
         note.textContent = text;
         note.classList.add('is-shown');
-        clearTimeout(this._historyNoteTimer);
-        this._historyNoteTimer = setTimeout(() => note.classList.remove('is-shown'), 2200);
+        // The timer is kept on the note: a failure said there (UIManager.showMapNote) shares it.
+        clearTimeout(note._rrHideTimer);
+        note._rrHideTimer = setTimeout(() => note.classList.remove('is-shown'), 2200);
     }
 
     toggleEventMode() {
@@ -1026,8 +1030,10 @@ class RPGReactor {
                 const regionManager = this.projectController.getRegionManager();
                 if (regionContainer && regionManager) {
                     regionManager.initializeUI(regionContainer);
-                    regionManager.createRegionLayer();
-                    regionManager.setVisible(true);
+                    // Selecting the tab has usually just drawn every cell
+                    // (claimMapTool shows the overlay): those are kept, not
+                    // drawn a second time.
+                    regionManager.showOnTop();
                 }
                 // Only one overlay of numbered cells at a time: two sets of
                 // coloured squares over the same map, answering different
@@ -1660,6 +1666,50 @@ class RPGReactor {
             try { win.setShowInTaskbar(true); } catch (error) {}
         } catch (error) {
             // Running under Wine should not prevent the app from loading.
+        }
+    }
+
+    /**
+     * Under Windows, leaves the launcher a note of the graphics backend the game found best for this machine
+     * (PlaytestManager.editorBackend), so the next start is on it from the first frame; this session stays as it
+     * started. Only a start the launcher put on a backend that then has no WebGL at all withdraws the note and
+     * starts again on the browser's own, once. Returns whether this window is on its way out.
+     */
+    relaunchOnMachineBackend() {
+        try {
+            if (typeof nw === 'undefined' || typeof process === 'undefined' || process.platform !== 'win32' || typeof PlaytestManager === 'undefined') return false;
+            const fs = require('fs'), path = require('path'), args = (nw.App.fullArgv || []).map(String);
+            const base = process.env.LOCALAPPDATA || process.env.APPDATA;
+            if (!base) return false;
+            const folder = path.join(base, 'RPGReactor'), note = path.join(folder, PlaytestManager.EDITOR_ANGLE_FILE);
+            const renderer = PlaytestManager.rendererDescription(), hop = PlaytestManager.editorHop(args);
+            if (hop && hop !== 'default' && !renderer && !navigator.webdriver) {
+                try { fs.rmSync(note, { force: true }); } catch (error) { /* the next start asks again */ }
+                const keep = args.filter(a => !/^--(use-angle|rr-editor-angle)=/.test(a));
+                const main = process.mainModule && process.mainModule.filename ? path.dirname(process.mainModule.filename) : '';
+                const next = [...(main && !keep.some(a => !a.startsWith('--')) ? [main] : []), ...keep, '--rr-editor-angle=default'];
+                const quote = a => '"' + String(a).replace(/"/g, '') + '"';
+                // After a moment: two windows on one profile at once would be taken for a second start of the same editor.
+                const line = 'ping -n 2 127.0.0.1 >nul & start "" ' + quote(process.execPath) + ' ' + next.map(quote).join(' ');
+                require('child_process').spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', '"' + line + '"'],
+                    { cwd: nw.App.startPath || process.cwd(), detached: true, stdio: 'ignore', windowsVerbatimArguments: true, windowsHide: true }).unref();
+                try { nw.Window.get().hide(); } catch (error) { /* shown a moment longer */ }
+                setTimeout(() => nw.App.quit(), 100);
+                return true;
+            }
+            let choice = null;
+            try { choice = window.localStorage.getItem('rr.editorBackend'); } catch (error) { /* no storage: no choice made */ }
+            const wanted = PlaytestManager.editorBackend(process.platform, renderer, args, PlaytestManager.backendPlan(renderer, fs, path), nw.App.manifest || {}, !!navigator.webdriver, choice);
+            if (wanted === null) return false;
+            let held = '';
+            try { held = fs.readFileSync(note, 'utf8').trim(); } catch (error) { held = ''; }
+            if (wanted === held) return false;
+            if (wanted) { fs.mkdirSync(folder, { recursive: true }); fs.writeFileSync(note, wanted + '\r\n'); }
+            else fs.rmSync(note, { force: true });
+            console.log('Editor WebGL backend for the next start:', wanted || 'the default');
+            return false;
+        } catch (error) {
+            return false;
         }
     }
 

@@ -76,7 +76,7 @@ const {
     createLinuxAppImage = false,
     packWebFiles = false,   // a Web build's files go into a few archives (web-pack.cjs)
     online = null,          // Build › Online Server: { folder, address }
-    unusedFiles = 'off',    // leave out files nothing uses: 'off', 'web' (Web builds only) or 'all' (unused-assets.cjs)
+    unusedFiles = 'off',    // leave out files nothing uses: 'off' or 'all' (unused-assets.cjs)
     appImageToolPath,
     appImageRuntimePath,
     releaseBuild = false,
@@ -545,7 +545,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     logInfo(`Asset optimization: PNG ${assetOptimization.png ? 'enabled' : 'disabled'}, audio ${assetOptimization.audio ? `quality ${assetOptimization.audioQuality}` : 'disabled'}`);
     logInfo(`Linux AppImage: ${createLinuxAppImage ? 'enabled' : 'disabled'}`);
     logInfo(`Encryption: images ${encryption.images ? 'on' : 'off'}, audio ${encryption.audio ? 'on' : 'off'}`);
-    logInfo(`Unused files: ${unusedFiles === 'all' ? 'left out of every build' : unusedFiles === 'web' ? 'left out of the Web build' : 'shipped'}`);
+    logInfo(`Unused files: ${unusedFiles === 'all' ? 'left out of every build' : 'shipped'}`);
     logInfo('');
 
     if (createLinuxAppImage && (!platforms.includes('linux') || !appImage.supportsHost())) {
@@ -565,13 +565,10 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     validateProjectRuntime(projectPath);
     copyDirFiltered(projectPath, stagingDir, '');
     // Worked out once from the project itself; each build that leaves them out removes the same files.
-    const unusedAnalysis = unusedFiles === 'all' || (unusedFiles === 'web' && platforms.includes('web'))
-        ? unusedAssets.analyze(projectPath) : null;
+    const unusedAnalysis = unusedFiles === 'all' ? unusedAssets.analyze(projectPath) : null;
     if (unusedAnalysis) {
         logInfo(unusedAssets.describe(unusedAnalysis));
         writeUnusedReport(unusedAnalysis, safeFolderName);
-    }
-    if (unusedAnalysis && unusedFiles === 'all') {
         // Before optimization and encryption, which then only work on what ships.
         logGood(`Left out ${unusedAssets.prune(stagingDir, unusedAnalysis)} unused files.`);
     }
@@ -661,9 +658,10 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 const browserDir = packOnline ? path.join(stagingDir, '..', `${path.basename(stagingDir)}-online`) : platformOutDir;
                 copyDirRecursive(stagingDir, browserDir);
                 logGood('Game files copied.');
-                if (unusedAnalysis && unusedFiles === 'web' && platform === 'web') {
-                    // Before the file index and the packing, which then only hold what ships.
-                    logGood(`Left out ${unusedAssets.prune(platformOutDir, unusedAnalysis)} unused files from the Web build.`);
+                // The server's folder is never cleared: packs left by an earlier deploy would still be what a
+                // returning player's pack worker serves, in place of the files just copied.
+                if (platform === 'online' && !packOnline && webPack.retirePacks(platformOutDir)) {
+                    logInfo('An earlier deploy packed this folder: its archives were removed, and returning players\' browsers drop the pack reader on their next visit.');
                 }
                 for (const name of applyBrowserFallbacks(browserDir)) logInfo(`Browser fallback applied to ${name} (it reads files with Node at load).`);
                 // A browser cannot list its files; the runtime corrects filename casing from this index.

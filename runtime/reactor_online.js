@@ -100,14 +100,17 @@ Game_RemotePlayer.prototype.addSample = function(sample) {
     const lateness = this._lateness;
     lateness.push(sample.arrived - sample.sent);
     if (lateness.length > 30) lateness.shift();
+    // The least and the spread are worked out here, where they change: the walk reads both every frame.
+    const sorted = lateness.slice().sort((a, b) => a - b);
+    this._least = sorted[0];
+    this._spread = sorted[Math.floor((sorted.length - 1) * 0.9)] - sorted[0];
 };
 
 /** How far behind to play: enough that a report is nearly always here before it is needed. */
 Game_RemotePlayer.prototype.targetDelay = function() {
-    const sorted = this._lateness.slice().sort((a, b) => a - b), poll = ReactorOnline.pollMs();
-    if (sorted.length < 2) return poll * 2;
-    const spread = sorted[Math.floor((sorted.length - 1) * 0.9)] - sorted[0];
-    return Math.min(ReactorOnline.MAX_DELAY_MS, Math.max(poll * 2, spread + poll * 0.5));
+    const poll = ReactorOnline.pollMs();
+    if (this._lateness.length < 2) return poll * 2;
+    return Math.min(ReactorOnline.MAX_DELAY_MS, Math.max(poll * 2, this._spread + poll * 0.5));
 };
 
 /** Replays this player's walk a moment behind them, then eases the shown body onto it. */
@@ -120,7 +123,7 @@ Game_RemotePlayer.prototype.advance = function(now) {
     // The delay drifts instead of jumping, so the walk's speed never visibly changes.
     const target = this.targetDelay(), drift = elapsed * 0.25;
     this._delay += Math.max(-drift, Math.min(drift, target - this._delay));
-    const offset = Math.min(...this._lateness);
+    const offset = this._least;
     const at = now - offset - this._delay;
     while (samples.length > 2 && samples[1].sent <= at) samples.shift();
     const from = samples[0], to = samples[1] || from;
@@ -294,6 +297,8 @@ const ReactorOnline = {
     SLEEPERS_SHOWN: 64,
     WHO_MS: 3000,
     CHUNK_BYTES: 1024 * 1024,
+    REQUEST_MS: 15000,
+    TRANSFER_MS: 120000,
 
     state: "off",
     slot: -1,
@@ -354,6 +359,12 @@ const ReactorOnline = {
         return this.url() + "?" + query;
     },
 
+    /** A fetch that ends: one that has not answered and delivered its body in `ms` is given up, so nothing waits on it for ever. */
+    ask(url, options, ms) {
+        const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(ms || this.REQUEST_MS) : undefined;
+        return fetch(url, signal ? Object.assign({ signal }, options) : options);
+    },
+
     async join() {
         const leader = $gameParty.leader();
         const model = ReactorCharacters.current()?.id || "";
@@ -400,8 +411,13 @@ const ReactorOnline = {
     removed(message) {
         this._running = false;
         this._removed = true;
+        // A shared battle hears nothing more once the loop has stopped: it ends here, or it would wait for good.
+        try { if (ReactorOnlineBattle.role) ReactorOnlineBattle.onLost(); } catch (error) { console.warn("A shared battle could not be ended.", error); }
         this.peers.clear();
+        this.sleepers.clear();
         ReactorOnlineVoice.turnOff();
+        ReactorWorldState.stop();
+        ReactorOnlineParty.stop();
         this.slot = -1;
         ReactorOnlineSocket.close();
         this.setState("removed", message);
@@ -436,7 +452,8 @@ const ReactorOnline = {
             peer.addSample({ sent: view.getUint32(at + 7, true), arrived, x: view.getUint16(at + 2, true) / 32, y: view.getUint16(at + 4, true) / 32,
                 direction: flags & 15, moving: !!(flags & 16), dashing: !!(flags & 32) });
         }
-        for (const [slot, peer] of this.peers) if (arrived - peer.lastHeard > this.PEER_GONE_MS) this.peers.delete(slot);
+        // (One no snapshot ever listed has no `lastHeard`: a poll before the socket was ready made it, far from here. It goes too.)
+        for (const [slot, peer] of this.peers) if (!(arrived - peer.lastHeard <= this.PEER_GONE_MS)) this.peers.delete(slot);
         this.learnNames();
         this.showStatus();
     },
@@ -463,7 +480,7 @@ const ReactorOnline = {
         if (map !== previous) { this.peers.clear(); this.sleepers.clear(); this._nextSleepers = 0; this._mapId = map; }
         const player = $gamePlayer;
         const flags = this.placeFlags() & 63;
-        const response = await fetch(this.request({
+        const response = await this.ask(this.request({
             a: "sync", s: this.slot, g: this.nonce, t: this.token, m: map, pm: previous, c: Math.floor(performance.now()),
             x: Math.max(0, Math.round(player._realX * 32)), y: Math.max(0, Math.round(player._realY * 32)), f: flags
         }), { cache: "no-store" });
@@ -535,7 +552,7 @@ const ReactorOnline = {
         if (refresh) this._nextWho = now + this.WHO_MS;
         this._asking = true;
         try {
-            const response = await fetch(this.request({ a: "who", ids: asked.join(",") }), { cache: "no-store" });
+            const response = await this.ask(this.request({ a: "who", ids: asked.join(",") }), { cache: "no-store" });
             const players = response.ok ? (await response.json()).players : {};
             for (const [slot, player] of Object.entries(players)) {
                 const peer = this.peers.get(Number(slot));
@@ -618,8 +635,8 @@ const ReactorOnline = {
         for (let index = 0; index < count; index++) {
             const body = buffer.slice(index * size, (index + 1) * size);
             // Plain text, so a desktop build's request needs no separate permission check.
-            const response = await fetch(this.request({ a: "upload", s: this.slot, g: this.nonce, t: this.token, id, i: index, n: count }),
-                { method: "POST", body, headers: { "Content-Type": "text/plain" } });
+            const response = await this.ask(this.request({ a: "upload", s: this.slot, g: this.nonce, t: this.token, id, i: index, n: count }),
+                { method: "POST", body, headers: { "Content-Type": "text/plain" } }, this.TRANSFER_MS);
             if (!response.ok) throw new Error(await response.text());
             answer = await response.json();
             if (progress) progress(Math.round((index + 1) / count * 100));
@@ -635,7 +652,7 @@ const ReactorOnline = {
         if (leader && this.slot < 0) this.myName = leader.name();
         if (this.account?.session) await this.post("profile", { session: this.account.session, character: ReactorCharacters.current() }).catch(() => {});
         if (this.slot < 0) return;
-        const answer = await fetch(this.request({ a: "look", s: this.slot, g: this.nonce, t: this.token, n: leader ? leader.name() : "", c: leader ? leader.actorId() : 0, h: model || "" }), { cache: "no-store" })
+        const answer = await this.ask(this.request({ a: "look",s: this.slot, g: this.nonce, t: this.token, n: leader ? leader.name() : "", c: leader ? leader.actorId() : 0, h: model || "" }), { cache: "no-store" })
             .then(response => response.ok ? response.json() : null).catch(() => null);
         // The server may show this player under another name (another's registered name, or one already in use):
         // parties and invites know them by that one. With no answer the name shown is still the one from before.
@@ -643,7 +660,7 @@ const ReactorOnline = {
     },
 
     async downloadCharacter(id) {
-        const response = await fetch(this.request({ a: "model", h: id }));
+        const response = await this.ask(this.request({ a: "model", h: id }), undefined, this.TRANSFER_MS);
         if (!response.ok) return null;
         return response.arrayBuffer();
     },

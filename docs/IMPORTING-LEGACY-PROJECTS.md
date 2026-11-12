@@ -202,7 +202,7 @@ Verification and evidence are recorded under `scratchpad/legacy-audit-20261029/`
 | Stats | Attack, Defense, Spirit, Agility → Attack, Defense, M.Attack and M.Defense (both from Spirit), Agility; Luck 50 | State and attribute ranks become state and element rate traits |
 | Skills | Skills with formula strings that reproduce the 2003 arithmetic: power + atk·phys/20 + spi·mag/40 − def·phys/40 − spi·mag/80, variance in tenths | Skills that target allies heal; a switch skill calls a generated common event; percent MP costs and teleport skills are noted |
 | Items | Items, Weapons and Armors, keeping the 2003 item id in whichever table | Medicine recovers and cures, books teach, materials grow, special items borrow their skill, switch items call a generated common event, common goods are key items |
-| Enemies, troops, states | The matching MZ records; troop pages with their conditions and commands | Basic attack and defend are skills 1 and 2; transform actions are noted |
+| Enemies, troops, states | The matching MZ records; troop pages with their conditions and commands | The game's skills 1 and 2 stay its own: an Attack and a Guard skill are appended after its last skill (Attack Skill trait on every class and enemy, `rrGuardSkillId`), with a Guard state after its last state; other basic enemy actions (double attack, observe, charge, self-destruct, escape) become a plain Attack; transform actions are noted |
 | Battle animations | MV-style sheet animations; the sheets are scaled to MZ's 192 px cells and the cells scaled back | Cell tones and screen shake timings have no MZ field |
 | Terms and system | Terms, element, skill, weapon, armor and equipment type names, vehicles, battle and title music, system sounds | Battle system is TPB active for 2003 and turn-based for 2000 |
 | System graphic | Window.png plus event-selected skins: original backgrounds, 8 px frames, cursor, pause arrow and text colours; Change System Graphics keeps its saved selection and stretch or native 32 px tiling | The parts 2000/2003 had no equivalent of stay stock; MZ's background pattern does not overlay the imported art |
@@ -483,7 +483,8 @@ corpus is Nocturne: Rebirth (English; 204 maps, 153 script sections).
 | Window skins (192×128) | MZ layout under `img/windowskins`, XP's text colours in the palette |
 | Stats: max HP/SP, STR, DEX, AGI, INT, PDEF, MDEF | mhp, mmp, atk, luk, agi, mat, def, mdf; weapon and enemy attack as `<rrXpAtk: n>` |
 | Classes (on the actor: curves; on the class: skills, ranks) | one class per actor, XP classes after them for Change Class |
-| Skill 1 and 2 | stay skills 1 and 2; Attack and Guard are appended (Attack Skill trait, `rrGuardSkillId`) |
+| Classes equipping weapons and armour by id | one weapon/armour type per set of classes, named after them (XP's four slot words stay as the equipment type names) |
+| Skill 1 and 2 | stay skills 1 and 2; Attack and Guard are appended (Attack Skill trait, `rrGuardSkillId`), with a Guard state after the game's last state |
 | Durations (40 frames a second) | ×1.5 |
 
 **RR_XpCompat**, installed with every XP game, keeps XP's rules where MZ's
@@ -507,7 +508,8 @@ animations take the Ace path once VX's commands are reshaped into Ace's.
 | Skill damage (base, ATK and SPI factors) | an MZ formula with VX's arithmetic |
 | Classes equipping weapons and armour by id | one weapon/armour type per set of classes, named after them |
 | Hit, evasion and critical rates, class position | traits (95%, 5%, 4%; target rate 4:3:2) |
-| Skill 1 and 2 | stay; Attack, Guard and Escape are appended |
+| Skill 1 and 2 | stay; Attack, Guard and Escape are appended, with a Guard state after the game's last state |
+| Transfer Player, Fadeout Screen and Fadein Screen (30 frames out, black held 15, 30 in) | the same fades, as VX Ace games have (`rrRgssFades`) |
 | Battle background (the map blurred, BattleFloor) | RR_VxCompat |
 
 A per-map battleback table in the game's scripts (`BATTLEBACK_LIST`) sets

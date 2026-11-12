@@ -241,7 +241,8 @@
         const gap = size ? Math.round(height * 0.1) : 0;
         const x = size + gap, w = Math.max(1, width - x);
         // A pool the project turned off (System.json rrPoolsOff) is not shown, whatever the node asks.
-        const off = key => { const system = typeof $dataSystem !== 'undefined' ? $dataSystem : null; return !!system && Array.isArray(system.rrPoolsOff) && system.rrPoolsOff.includes(key); };
+        // The editor has no $dataSystem: it hands the project's System over as A.system while it draws.
+        const off = key => { const system = A.system || (typeof $dataSystem !== 'undefined' ? $dataSystem : null); return !!system && Array.isArray(system.rrPoolsOff) && system.rrPoolsOff.includes(key); };
         const showMp = node.showMp && !off('mp'), showTp = node.showTp && !off('tp');
         const minor = showMp || showTp;
         const parts = (node.showName || node.showStates ? 0.8 : 0) + 1.25 + (minor ? 0.8 : 0);
@@ -504,11 +505,9 @@
     /** A key as a key cap shows it: the digit or letter, or the key's short name. */
     A.keyName = function(code) {
         code = Number(code);
-        if (code >= 48 && code <= 57) return String(code - 48);
-        if (code >= 65 && code <= 90) return String.fromCharCode(code);
+        // The number pad keeps a cap's short form; every other key reads as the Tactical hints name it.
         if (code >= 96 && code <= 105) return 'N' + (code - 96);
-        if (code >= 112 && code <= 123) return 'F' + (code - 111);
-        return { 9: 'Tab', 13: 'Enter', 16: 'Shift', 17: 'Ctrl', 18: 'Alt', 32: 'Space', 27: 'Esc' }[code] || '';
+        return F.keyName(code);
     };
 
     /** The key each hotbar slot answers to, from a key map (`{ code: name }`, the game's `Input.keyMapper`). */

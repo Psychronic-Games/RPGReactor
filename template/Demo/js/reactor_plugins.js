@@ -572,7 +572,7 @@ var $plugins =
             "emptyFileIcon": "672",
             "DisplaySettings": "",
             "autosaveText": "Autosave",
-            "gameTitle": "\\c[0]Star Shift: \\c[6]Freelancers\\c[0]",
+            "gameTitle": "\\c[0]Reactor One: \\c[6]Demo\\c[0]",
             "showMapName": "true",
             "CommandSettings": "",
             "loadCommandIcon": "0",

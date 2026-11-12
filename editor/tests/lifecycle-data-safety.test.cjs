@@ -513,16 +513,34 @@ test('Cancel never restores stale elevation after moving an event or switching e
     assert.equal(manager.currentMap.events[second.id], undefined);
 });
 
-test('a rejected event commit leaves elevation, models and the open draft untouched', () => {
+test('a new event whose number was taken while its window was open is placed under the next free one', () => {
     const { manager, editor, elements } = eventCommitHarness();
     const event = manager.createNewEvent(4, 5);
+    const takenId = event.id, takenName = event.name;
     editor.pendingModels[0] = { name: 'Map-Objects/Door-01' };
     elements['event-position-z'].value = '7';
-    manager.currentMap.events[event.id] = { id: event.id, name: 'Occupied ID' };
+    const occupier = { id: takenId, name: 'Occupied ID' };
+    manager.currentMap.events[takenId] = occupier;
+    editor.saveAndClose();
+    assert.equal(elements['event-editor-modal'].style.display, 'none', 'OK is not refused in silence');
+    assert.equal(manager.currentMap.events[takenId], occupier, 'the event that took the number is untouched');
+    assert.notEqual(event.id, takenId);
+    assert.equal(manager.currentMap.events[event.id], event);
+    assert.notEqual(event.name, takenName, 'the default name follows the new number');
+    assert.equal(manager.currentMap.reactor3d.eventZ[takenId], undefined, 'its height is not written under the taken number');
+    assert.equal(manager.currentMap.reactor3d.eventZ[event.id], 7);
+    assert.equal(manager.currentMap.reactor3d.events?.[takenId], undefined);
+});
+
+test('OK is refused when the X and Y fields name a tile another event stands on', () => {
+    const { manager, editor, elements } = eventCommitHarness();
+    const first = manager.createNewEvent(4, 5); editor.saveAndClose();
+    const second = manager.createNewEvent(6, 7); editor.saveAndClose();
+    manager.editEvent(second);
+    elements['event-position-x'].value = '4'; elements['event-position-y'].value = '5';
     editor.saveAndClose();
     assert.equal(elements['event-editor-modal'].style.display, 'flex');
-    assert.equal(manager.currentMap.reactor3d.eventZ[event.id], undefined);
-    assert.equal(manager.currentMap.reactor3d.events, undefined);
+    assert.deepEqual([second.x, second.y, first.x, first.y], [6, 7, 4, 5]);
 });
 
 test('reusing a deleted event ID starts without orphaned model or elevation settings', () => {

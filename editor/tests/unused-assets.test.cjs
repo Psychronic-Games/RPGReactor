@@ -192,8 +192,9 @@ test('both dialogs show one box, and a ticked box leaves unused files out of eve
 test('both deployments prune with the analysis, and never ship the record or the list', () => {
     const worker = fs.readFileSync(path.join(editor, 'build-scripts', 'build-worker.js'), 'utf8');
     assert.match(worker, /unusedAssets\.prune\(stagingDir, unusedAnalysis\)/, 'every build: the staging folder');
-    assert.match(worker, /unusedAssets\.prune\(platformOutDir, unusedAnalysis\)/, 'Web builds: the web copy, before its file index');
-    assert.ok(worker.indexOf('unusedAssets.prune(platformOutDir') < worker.indexOf('webFileIndex.writeWebFileIndex(browserDir)'));
+    // (The dialog offers all or nothing; the worker's Web-only choice, which nothing could send, is gone.)
+    assert.doesNotMatch(worker, /unusedFiles === 'web'/);
+    assert.ok(worker.indexOf('unusedAssets.prune(stagingDir') < worker.indexOf('webFileIndex.writeWebFileIndex(browserDir)'), 'before the Web build\'s file index');
     for (const file of ['build-worker.js', 'build.js']) {
         const source = fs.readFileSync(path.join(editor, 'build-scripts', file), 'utf8');
         assert.match(source, /'deploy\.rpgreactor\.json'/, file);

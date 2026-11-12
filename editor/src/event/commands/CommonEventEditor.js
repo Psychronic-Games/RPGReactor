@@ -63,7 +63,7 @@ class CommonEventEditor {
         }
         const data = parsed && parsed.data;
         if (!this._isValidEventCallData(data)) return false;
-        if (parsed.body !== this._eventCallBody(data)) return false;
+        if (parsed.body !== this._eventCallBody(data) && parsed.body !== this._eventCallBody(data, true)) return false;
 
         this.targetType = data.target;
         this.designation = data.designation;
@@ -233,18 +233,6 @@ class CommonEventEditor {
         return this._createRow(labelText, select);
     }
 
-    _createNumberRow(labelText, value, onChange) {
-        const input = this._styleControl(document.createElement('input'));
-        input.type = 'number';
-        input.min = 1;
-        input.value = value;
-        input.addEventListener('input', event => {
-            const parsed = parseInt(event.target.value, 10);
-            if (!Number.isNaN(parsed)) onChange(parsed);
-        });
-        return this._createRow(labelText, input);
-    }
-
     /** A game variable by name (0005: Gold), with the editor's variable browser beside it: the bare number said nothing of what it held. */
     _createVariableRow(labelText, value, onChange) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
@@ -401,7 +389,14 @@ class CommonEventEditor {
         };
     }
 
-    _eventCallBody(data) {
+    /** The script a call compiles to. `old` gives the wording written before 2026-11-11, so those commands still open here. */
+    _eventCallBody(data, old = false) {
+        if (data.target === 'commonEvent' && !old) {
+            // As the stock Common Event command: an event left behind on another map is not this one's.
+            return `var commonEventId = Number($gameVariables.value(${data.variableId}));\n` +
+                'var commonEvent = commonEventId > 0 && commonEventId === Math.floor(commonEventId) && $dataCommonEvents[commonEventId];\n' +
+                'if (commonEvent && commonEvent.list) this.setupChild(commonEvent.list, this.isOnCurrentMap() ? this._eventId : 0);';
+        }
         if (data.target === 'commonEvent') {
             return `var commonEventId = Number($gameVariables.value(${data.variableId}));\n` +
                 'var commonEvent = commonEventId > 0 && commonEventId === Math.floor(commonEventId) && $dataCommonEvents[commonEventId];\n' +

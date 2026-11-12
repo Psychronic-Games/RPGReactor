@@ -805,10 +805,11 @@
      * A random firearm of one family (its own when only the shape or details
      * roll): sizes a little off its preset; details swap muzzle, sight, stock,
      * rails and magazine where the family allows; colors the frame, furniture, paint and glow.
+     * `keep` holds the family (Randomize and Shuffle on the page).
      */
-    function random(seed, recipe, scope) {
+    function random(seed, recipe, scope, keep) {
         const R = Rand.roll(seed), cur = normalize(recipe), out = JSON.parse(JSON.stringify(cur)), has = part => Rand.covers(scope, part);
-        const family = !scope || scope === 'all' ? R.pick(PRESETS) : PRESETS.find(p => p[0] === cur.preset);
+        const family = (!scope || scope === 'all') && !keep ? R.pick(PRESETS) : PRESETS.find(p => p[0] === cur.preset);
         const base = family[3], scifi = family[2] === 'scifi', long = base.stock !== 'none' || base.barrel.length > 0.3;
         out.preset = family[0];
         if (has('shape')) {

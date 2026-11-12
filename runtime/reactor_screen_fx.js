@@ -140,6 +140,12 @@
         // Only a line with a text code can change without a new revision (a variable, a name, another text).
         this._hasCodes = t.lines.some(line => String(line).includes("\\"));
     };
+    // The text's bitmap is this sprite's own: it goes with the sprite when the scene ends (as Sprite_Timer's
+    // does), not when the garbage collector gets to it.
+    Sprite_RRText.prototype.destroy = function(options) {
+        if (this.bitmap) this.bitmap.destroy();
+        Sprite.prototype.destroy.call(this, options);
+    };
     Sprite_RRText.prototype.update = function() {
         Sprite.prototype.update.call(this);
         const t = $gameScreen.rrText(this._textId);
@@ -238,7 +244,6 @@
     function setTween(p, key, target, ms, easing) {
         const frames = msToFrames(ms);
         const tw = p._rrTweens || (p._rrTweens = {});
-        if (!(frames > 0)) { p["_" + key] = target; p[TARGET[key]] = target; delete tw[key]; return; }
         tw[key] = { start: p["_" + key], target, whole: frames, left: frames, easing: easingType(easing) };
     }
     function ease(t, type) {   // MZ's calcEasing, exponent 2

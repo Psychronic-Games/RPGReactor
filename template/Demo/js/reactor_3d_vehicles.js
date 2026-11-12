@@ -1785,7 +1785,12 @@
     // sampled at all (its wheels and bars stay as the last pass left them).
     wrap(R, "animationDue", base => function(holder, character) {
         if (rides.seen && holder) {
-            if (holder.rrRide) { holder.sampled = true; return true; }
+            // Sampled every update, and drawn between updates where it is by then (FramePacing reads `blendPose`): the
+            // flag was left as the vehicle's last pass parked had it, and at a Quality level that animates what is
+            // not the party every few updates a parked vehicle's is false. Ridden on the Iris Xe laptop at CPU 5, the
+            // motorcycle stood where its update put it in 1,052 of 2,700 drawn frames while the camera moved in
+            // every one: the two came up to half a tile apart and closed again, frame by frame (2026-11-11).
+            if (holder.rrRide) { holder.sampled = true; holder.poseHeld = false; holder.blendPose = true; return true; }
             if (character && character._rrVehicle) {
                 counts.rest++;
                 if (parkedAtRest(holder, character)) { holder.sampled = false; return false; }
@@ -1800,7 +1805,9 @@
     if (R.MapScene && R.MapScene.prototype) {
         wrap(R.MapScene.prototype, "syncCharacterModels", base => function() {
             const player = playerNow();
-            if ((player && player._rrRide) || rides.active) driveFromGame(this, player);
+            // Not for a neighbor map's scene: its models are not the ride's, and asking there ended the ride each
+            // frame that world was still standing its models (the ridden vehicle's wheels stopped turning).
+            if (!this._rrBody && ((player && player._rrRide) || rides.active)) driveFromGame(this, player);
             if (!R.StillModels || R.StillModels.enabled) return base.apply(this, arguments);
             // With the still-model rule switched off nothing is noted: every vehicle the sync placed (each
             // publishes its facing as it is placed) is posed here, then the rider.
@@ -1824,6 +1831,8 @@
         });
         // A scene that drops its models drops the ride kept on them, and has seen no vehicle yet.
         wrap(R.MapScene.prototype, "clear", base => function() {
+            // Only the played map's scene: a neighbor map's world is let go beside it all the time.
+            if (this._rrBody) return base.apply(this, arguments);
             if (rides.active) drive(null, null);
             rides.seen = false;
             return base.apply(this, arguments);

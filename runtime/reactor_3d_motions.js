@@ -360,7 +360,8 @@
         if (k <= 0) return a;
         if (k >= 1) return b;
         const mix = (x, y) => x.map((v, i) => v + (y[i] - v) * k);
-        const out = { spread: a.spread + (b.spread - a.spread) * k, thumb: mix(a.thumb, b.thumb) };
+        // (What the hand holds too: without it a blended frame closed as if on nothing.)
+        const out = { spread: a.spread + (b.spread - a.spread) * k, thumb: mix(a.thumb, b.thumb), gap: (a.gap || 0) + ((b.gap || 0) - (a.gap || 0)) * k };
         for (const f of FINGERS) out[f] = mix(a[f], b[f]);
         return out;
     }
@@ -372,6 +373,8 @@
         for (let i = 1; i < spec.length; i++) {
             if (t > spec[i][0]) continue;
             const [t0, a] = spec[i - 1], [t1, b] = spec[i], u = (t - t0) / ((t1 - t0) || 1);
+            // A hold between two keys of one shape is that shape itself: fitted to the hand once, not per frame.
+            if (a === b) return HAND_SHAPES[a];
             return blendShape(HAND_SHAPES[a], HAND_SHAPES[b], u * u * (3 - 2 * u));
         }
         return HAND_SHAPES[spec[spec.length - 1][1]];

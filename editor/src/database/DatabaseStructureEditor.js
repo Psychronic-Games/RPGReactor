@@ -36,6 +36,7 @@ class DatabaseStructureEditor {
     /** How close a dragged face comes to another shape's face before it clicks onto it, in tiles. */
     static SNAP_REACH = 0.35;
     static HISTORY = 100;
+    static HISTORY_CHARS = 64 * 1024 * 1024;
 
     constructor(databaseManager, projectController, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
@@ -227,8 +228,9 @@ class DatabaseStructureEditor {
             plan.roof && plan.roof.style === 'shed' && this.DIRECTIONS.includes(plan.roof.high) ? { high: plan.roof.high } : {},
             plan.roof && Number.isFinite(Number(plan.roof.overhang)) ? { overhang: Math.max(0, Math.min(1, Number(plan.roof.overhang))) } : {});
         // The window rhythm, and how the windows look: their frame, shutters and flower boxes (StructurePlan reads them).
+        // `windows: false` is a plan with none (StructurePlan reads it so), and stays as written.
         const look = plan.windows && typeof plan.windows === 'object' ? plan.windows : {};
-        plan.windows = Object.assign({ every: int(look.every, 6, 0, 60), width: int(look.width, 2, 1, 8) },
+        if (plan.windows !== false) plan.windows = Object.assign({ every: int(look.every, 6, 0, 60), width: int(look.width, 2, 1, 8) },
             look.frame === false || typeof look.frame === 'string' || (look.frame && typeof look.frame === 'object') ? { frame: JSON.parse(JSON.stringify(look.frame)) } : {},
             look.shutters === true || /^#[0-9a-f]{6}$/i.test(String(look.shutters)) ? { shutters: look.shutters } : {},
             look.closed === true ? { closed: true } : {},
@@ -270,7 +272,8 @@ class DatabaseStructureEditor {
             return out;
         });
         // What was built in the Structure workshop: the pieces as laid (plot cells), and the lights and screens as the map held them.
-        plan.height = int(plan.height, 3, 1, 24);
+        // A plan of parts or shapes alone says no height and has one floor of its own: counted as three, "+ Add floor" took one off instead of adding one.
+        plan.height = int(plan.height, Array.isArray(plan.pieces) && plan.pieces.length ? 3 : 1, 1, 24);
         const E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
         plan.pieces = (Array.isArray(plan.pieces) ? plan.pieces : []).map(raw => {
             const piece = E ? E.normalizePiece(raw, null) : (raw && typeof raw === 'object' && typeof raw.kind === 'string' ? Object.assign({}, raw) : null);
@@ -315,7 +318,8 @@ class DatabaseStructureEditor {
         });
         if (plan.stairs.length || had.has('stairs')) fields.stairs = plan.stairs.map(stair => ({ floor: stair.floor, from: stair.from.slice(), dir: stair.dir, width: stair.width }));
         if (plan.floors.length || had.has('roof')) fields.roof = Object.assign({ pitch: plan.roof.pitch }, plan.roof.style ? { style: plan.roof.style } : {}, plan.roof.high ? { high: plan.roof.high } : {}, Number.isFinite(plan.roof.overhang) ? { overhang: plan.roof.overhang } : {});
-        if (plan.floors.length || had.has('windows')) fields.windows = Object.assign({}, plan.windows);
+        if (plan.windows === false) fields.windows = false;
+        else if (plan.floors.length || had.has('windows')) fields.windows = Object.assign({}, plan.windows);
         if (plan.door) fields.door = JSON.parse(JSON.stringify(plan.door));
         if (plan.doors === false) fields.doors = false;
         if (Object.keys(plan.spots).length || had.has('spots')) fields.spots = Object.fromEntries(Object.entries(plan.spots).map(([name, cell]) => [name, cell.slice()]));
@@ -368,7 +372,7 @@ class DatabaseStructureEditor {
     }
 
     /** The plot a built structure needs: every piece, light, screen, shape, effect and spot inside it. */
-    static builtExtent(plan) {
+    static builtExtent(plan, resolve) {
         let w = 0, d = 0;
         const cover = (x, y) => {
             if (Number.isFinite(Number(x))) w = Math.max(w, Math.floor(Number(x)) + 1);
@@ -384,6 +388,17 @@ class DatabaseStructureEditor {
             for (const cell of floor.windows || []) if (Array.isArray(cell)) cover(cell[0], cell[1]);
         }
         for (const stair of plan.stairs || []) if (stair && Array.isArray(stair.from)) cover(stair.from[0], stair.from[1]);
+        // Paving, corner to corner, and the plans it is made of: each one's own plot, grown by its scale and turned by its turn.
+        for (const strip of plan.paths || []) if (Array.isArray(strip)) { cover(strip[0], strip[1]); cover(strip[2], strip[3]); }
+        for (const part of plan.parts || []) {
+            if (!part || !Array.isArray(part.at)) continue;
+            cover(part.at[0], part.at[1]);
+            const inner = typeof resolve === 'function' && part.plan ? resolve(part.plan) : null;
+            if (!inner || !Array.isArray(inner.size)) continue;
+            const k = Math.max(1, Math.min(4, Math.floor(part.scale || 1) || 1));
+            const turned = (((Math.floor(part.rot) || 0) % 4 + 4) % 4) % 2;
+            cover(part.at[0] + inner.size[turned ? 1 : 0] * k - 1, part.at[1] + inner.size[turned ? 0 : 1] * k - 1);
+        }
         return [w, d];
     }
 
@@ -565,7 +580,9 @@ class DatabaseStructureEditor {
             }
         }
         this.pushHistory();
-        if ((plan.parts || []).length || (plan.shapes || []).length || (plan.paths || []).length) F.materialize(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
+        // Once in pieces the plan counts its floors by its height: the count shown is the one the change starts from.
+        if (((plan.parts || []).length || (plan.shapes || []).length || (plan.paths || []).length)
+            && F.materialize(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name))) plan.height = now;
         F.setFloors(plan, target);
         this._paint.floor = Math.min(this._paint.floor, target - 1);
         this.markDirty();
@@ -850,6 +867,9 @@ class DatabaseStructureEditor {
 
     /** The roof's height in rows: the plan's own, or the one set here for a building already in pieces. */
     _roofPitch(plan) {
+        // A building in pieces keeps no pitch of its own (a new plan's is only the default every plan is given), so the one typed here comes first.
+        const F = this.floorsApi();
+        if (F && !F.isDescribed(plan) && Number.isFinite(this._paint.roofPitch)) return this._paint.roofPitch;
         if (plan.roof && plan.roof.pitch !== null && Number.isFinite(Number(plan.roof.pitch))) return Number(plan.roof.pitch);
         if (Number.isFinite(this._paint.roofPitch)) return this._paint.roofPitch;
         return plan.roof && plan.roof.style === 'shed' ? 3 : 6;
@@ -951,10 +971,12 @@ class DatabaseStructureEditor {
     moveSelection(dx, dy) {
         const F = this.floorsApi(), plan = this.current?.plan;
         if (!F || !plan || !this._sel?.length || (!dx && !dy)) return false;
+        // A move off the plot is refused (movePieces checks the same): no copy of the plan is made for it.
+        if (this._sel.some(p => p.x + dx < 0 || p.y + dy < 0 || p.x + dx >= plan.size[0] || p.y + dy >= plan.size[1])) return false;
         const before = JSON.stringify(plan);
         if (!F.movePieces(plan, this._paint.floor, this._sel, dx, dy)) return false;
         this._history.push(before);
-        if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+        this._trimHistory();
         this._future.length = 0;
         this.markDirty();
         this.renderSide();
@@ -1040,9 +1062,13 @@ class DatabaseStructureEditor {
         });
         canvas.addEventListener('pointermove', event => {
             const cell = this._paintCellAt(canvas, event.clientX, event.clientY);
-            this._paintHover = cell && cell.inside ? cell : null;
+            // The picture changes only when the pointer reaches another cell: a move inside one draws nothing new.
+            const same = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === b.y);
+            const hover = cell && cell.inside ? cell : null;
+            const moved = !same(hover, this._paintHover) || (drag && cell && !same(cell, drag.b));
+            this._paintHover = hover;
             if (drag && cell) drag.b = cell;
-            this.drawPaint();
+            if (moved) this.drawPaint();
         });
         const finish = event => {
             if (!drag) return;
@@ -1246,10 +1272,22 @@ class DatabaseStructureEditor {
     // ---- History ---------------------------------------------------------
 
     /** Before a change: the plan as it is, so Undo can bring it back. */
+    /**
+     * Undo keeps whole plans as text: at most HISTORY of them, and no more text than HISTORY_CHARS
+     * (a plan of 80,000 pieces is 4.5 million characters, and a hundred of those was 450 MB).
+     * The newest step is always kept.
+     */
+    _trimHistory() {
+        const history = this._history;
+        let chars = 0;
+        for (const text of history) chars += text.length;
+        while (history.length > 1 && (history.length > DatabaseStructureEditor.HISTORY || chars > DatabaseStructureEditor.HISTORY_CHARS)) chars -= history.shift().length;
+    }
+
     pushHistory() {
         if (!this.current) return;
         this._history.push(JSON.stringify(this.current.plan));
-        if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+        this._trimHistory();
         this._future.length = 0;
     }
 
@@ -1388,7 +1426,7 @@ class DatabaseStructureEditor {
         bar.innerHTML = card ? `
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
             ${this._field(tt('Plot'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Width in tiles'))}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Depth in tiles'))}"`)}`)}
-            ${this._field(tt('Floors'), this._numberHtml('rr-structures-height', plan.height, 'min="1" max="24"'))}
+            ${this._field(tt('Floors'), this._numberHtml('rr-structures-height', this.floorsApi() ? this._floorCount(plan) : plan.height, 'min="1" max="24"'))}
             <button type="button" class="rr-button-primary rr-structures-build" style="margin-left:auto;">${tt('Build')}</button>
             <button type="button" class="rr-btn-secondary rr-structures-use">${tt('Use on the map')}</button>` : `
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
@@ -1405,7 +1443,7 @@ class DatabaseStructureEditor {
         });
         for (const input of bar.querySelectorAll('.rr-structures-size')) {
             // The plot never shrinks past what is built on it: those pieces could not be reached again.
-            const least = () => Math.max(DatabaseStructureEditor.SIZE_MIN, DatabaseStructureEditor.builtExtent(plan)[Number(input.dataset.i)]);
+            const least = () => Math.max(DatabaseStructureEditor.SIZE_MIN, DatabaseStructureEditor.builtExtent(plan, name => this.resolve(name))[Number(input.dataset.i)]);
             input.min = String(least());
             input.addEventListener('change', () => {
                 const i = Number(input.dataset.i);
@@ -2067,7 +2105,7 @@ class DatabaseStructureEditor {
         } else if (g.snapshot) {
             // The move was applied as it went; the state before it is what Undo returns to.
             this._history.push(g.snapshot);
-            if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+            this._trimHistory();
             this._future.length = 0;
         }
         this.markDirty();
@@ -2487,7 +2525,10 @@ class DatabaseStructureEditor {
         }
         preview.ground.scale.set(W + 2, H + 2, 1);
         preview.ground.position.set(W / 2, -0.01, H / 2);
-        preview.centre = { x: W / 2, y: plan.storey * Math.max(1, plan.floors.length) / 2, z: H / 2 };
+        // How high the building stands: a built one has no floor descriptions to count, so the view centres on half of that.
+        let top = plan.storey;
+        for (const piece of shown) top = Math.max(top, (Number(piece.z) || 0) + (Array.isArray(piece.size) ? Number(piece.size[1]) || 1 : 1));
+        preview.centre = { x: W / 2, y: plan.floors.length ? plan.storey * plan.floors.length / 2 : top / 2, z: H / 2 };
         this._layoutHandles(preview, plan);
         this._layoutProxies(preview, plan);
         this._layoutEffects(preview, plan);
@@ -2495,8 +2536,6 @@ class DatabaseStructureEditor {
         this._syncGizmo(preview);
         // Until the wheel says otherwise the whole building is in view, however narrow the pane: its
         // half-diagonal, top included, is what the frame loop fits.
-        let top = plan.storey;
-        for (const piece of shown) top = Math.max(top, (Number(piece.z) || 0) + (Array.isArray(piece.size) ? Number(piece.size[1]) || 1 : 1));
         preview.fit = Math.sqrt(W * W + H * H + top * top) / 2;
         if (!preview.distance || preview.autoDistance) { preview.distance = Math.max(W, H) * 1.3 + 6; preview.autoDistance = true; }
         preview.dirty = true;
@@ -2682,7 +2721,7 @@ class DatabaseStructureEditor {
                 canvas.style.cursor = 'grab';
                 if (drag.changed) {
                     this._history.push(drag.snapshot);
-                    if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+                    this._trimHistory();
                     this._future.length = 0;
                     this.markDirty();
                     this.renderInspector();
@@ -2704,7 +2743,7 @@ class DatabaseStructureEditor {
                 canvas.style.cursor = 'grab';
                 if (drag.changed) {
                     this._history.push(drag.snapshot);
-                    if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+                    this._trimHistory();
                     this._future.length = 0;
                     this.markDirty();
                     this.renderMore();
@@ -3212,6 +3251,12 @@ class DatabaseStructureEditor {
         this._paintObserver?.disconnect?.();
         this._paintObserver = null;
         this._detail = null;
+        // The page is gone: its undo steps (whole plans as text) and what it built to draw them go with it.
+        // Opening a structure starts them again. The material pictures stay: every structure paints with them.
+        this._history = [];
+        this._future = [];
+        this._built = null;
+        this._paintIndex = null;
     }
 }
 

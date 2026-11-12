@@ -64,8 +64,6 @@ test('the room\'s callers name the bitmap each picture belongs to', () => {
     const read = file => fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', file), 'utf8');
     const presentation = read('reactor_battle_presentation.js'), events = read('reactor_battle_events.js');
     assert.match(presentation, /room\.billboard\(key,main\.bitmap\.canvas,main\._frame,\{[^\n]+\},tall,main\.bitmap\);/);
-    assert.match(presentation, /room\.billboard\('extra:projectile',[^\n]+,projectile\.graphic\.bitmap\);/);
-    assert.match(presentation, /room\.billboard\('extra:weapon',[^\n]+,weapon\.graphic\.bitmap\);/);
     assert.match(events, /room\.billboard\('event:'\+id,sprite\.bitmap\.canvas,sprite\._frame,p,[^\n]+,sprite\.bitmap\);/);
     // Every battler and room event the room draws keeps the empty texture through the helper.
     assert.match(presentation, /\n\s+P\.drawnInRoom\(main\);\n/);

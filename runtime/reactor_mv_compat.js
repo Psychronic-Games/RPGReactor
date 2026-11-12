@@ -207,7 +207,12 @@
                 return parseMvJson(json);
             }
             const contents = originalParse.apply(this, arguments);
-            cleanMetadata(contents);
+            // MV's parse strips the class tags and MV plugins may count on
+            // it. MZ leaves "@" on each object, and so must an MZ game:
+            // deleting a key turns the object into V8's slow dictionary
+            // form for the rest of the session, for everything a save
+            // restores.
+            if (mvGameSemantics) cleanMetadata(contents);
             return contents;
         };
         JsonEx.parse.__mvCompatWrapped = true;
@@ -1699,13 +1704,17 @@
     // cache): the actor and class records then sit inside states(), and
     // YEP_SkillCore reads a gauge marker off the actor record and gets
     // undefined. Hand out a copy from the base, so the pushes never reach
-    // whatever states() keeps.
+    // whatever states() keeps. Only when a plugin has replaced states():
+    // the runtime's own is already a new array, and every trait read of
+    // every battler comes through here.
     function installTraitObjectsCopyCompatibility() {
         const GBB = global.Game_BattlerBase;
         if (!GBB || !GBB.prototype || typeof GBB.prototype.traitObjects !== "function" || GBB.prototype.traitObjects.__mvCopies) return;
         const original = GBB.prototype.traitObjects;
+        const stockStates = GBB.prototype.states;
         GBB.prototype.traitObjects = function() {
             const objects = original.apply(this, arguments);
+            if (this.states === stockStates) return objects;
             return Array.isArray(objects) ? objects.slice() : objects;
         };
         GBB.prototype.traitObjects.__mvCopies = true;
@@ -1864,6 +1873,16 @@
             if (object && object === global.$dataSystem) {
                 var defaults = systemDefaults();
                 for (var key in defaults) if (object[key] === undefined) object[key] = defaults[key];
+                // An `advanced` block can hold one field only (the editor
+                // makes it on the first System 2 edit, the importer for the
+                // picture limit): the boot reads the screen size and the
+                // fonts from it with no fallback, so fill it field by field.
+                var advanced = object.advanced;
+                if (advanced && typeof advanced === "object" && advanced !== defaults.advanced) {
+                    for (var field in defaults.advanced) {
+                        if (advanced[field] === undefined) advanced[field] = defaults.advanced[field];
+                    }
+                }
             }
             return origOnLoad.apply(this, arguments);
         };
@@ -3142,7 +3161,9 @@
         if (global.Window_NameInput && !Window_NameInput.prototype.initialize.__mvCompatNameSig) {
             const originalNameInputInit = Window_NameInput.prototype.initialize;
             Window_NameInput.prototype.initialize = function(editWindow) {
-                if (!isRectangle(editWindow) && editWindow && typeof editWindow.height === "number" && "_name" in editWindow) {
+                // No isRectangle test here: a window has x and y and passes
+                // for one. `_name` is what tells the edit window from a rect.
+                if (editWindow && typeof editWindow === "object" && typeof editWindow.height === "number" && "_name" in editWindow) {
                     const rect = new Rectangle(editWindow.x, editWindow.y + editWindow.height + 8,
                         editWindow.width, this.fittingHeight(9));
                     const result = originalNameInputInit.call(this, rect);
@@ -4238,21 +4259,23 @@
                 // v5 accepted (input, resolution) but every bundled caller
                 // wants "a scratch texture matching the running pass"; some
                 // pass junk arguments (KawaseBlur's clones pass `true`).
+                // The pool takes an options object since PIXI 8.21.
+                const scratchTexture = function(width, height, resolution) {
+                    return PIXI.TexturePool.getOptimalTexture(
+                        { width, height, resolution, antialias: false });
+                };
                 filterSystemProto.getFilterTexture = function(input, resolution) {
                     if (input && input.source && input.frame) {
-                        return PIXI.TexturePool.getOptimalTexture(
-                            input.frame.width, input.frame.height,
-                            resolution || input.source._resolution || 1, false);
+                        return scratchTexture(input.frame.width, input.frame.height,
+                            resolution || input.source._resolution || 1);
                     }
                     const data = this._activeFilterData;
                     if (data && data.bounds) {
-                        return PIXI.TexturePool.getOptimalTexture(
-                            data.bounds.width, data.bounds.height,
-                            resolution || data.resolution || 1, false);
+                        return scratchTexture(data.bounds.width, data.bounds.height,
+                            resolution || data.resolution || 1);
                     }
                     const screen = this.renderer.screen;
-                    return PIXI.TexturePool.getOptimalTexture(
-                        screen.width, screen.height, resolution || 1, false);
+                    return scratchTexture(screen.width, screen.height, resolution || 1);
                 };
             }
             if (!filterSystemProto.returnFilterTexture) {
@@ -4810,12 +4833,14 @@
         // safe tuning methods to the MZ host class after plugins load:
         // YEP_CoreEngine's setupRate ("Animation Rate" speed param) and
         // MOG_BattleHud's updatePosition (screen-position centering).
-        // Never propagate the per-instance dispatchers installed by
-        // installAnimationSpriteCompatibility (__mvCompatDispatch).
+        // The per-instance dispatchers installed by
+        // installAnimationSpriteCompatibility (update, updateMain,
+        // updateFlash, isPlaying) are never among these: none is in the
+        // list below, and all four names exist on the host class.
         if (!global.Sprite_Animation || !global.Sprite_AnimationMV) return;
         ["setupRate", "setupDuration", "updatePosition"].forEach(function(name) {
             const fn = Sprite_Animation.prototype[name];
-            if (typeof fn === "function" && !fn.__mvCompatDispatch &&
+            if (typeof fn === "function" &&
                     Sprite_AnimationMV.prototype[name] !== fn) {
                 Sprite_AnimationMV.prototype[name] = fn;
             }
@@ -4828,7 +4853,7 @@
         Object.getOwnPropertyNames(Sprite_Animation.prototype).forEach(function(name) {
             if (name === "constructor" || name in Sprite_AnimationMV.prototype) return;
             const descriptor = Object.getOwnPropertyDescriptor(Sprite_Animation.prototype, name);
-            if (!descriptor || typeof descriptor.value !== "function" || descriptor.value.__mvCompatDispatch) return;
+            if (!descriptor || typeof descriptor.value !== "function") return;
             Sprite_AnimationMV.prototype[name] = descriptor.value;
         });
         // Those helpers read MV's singular this._target (YEP_X_ActSeqPack2's

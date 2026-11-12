@@ -204,6 +204,9 @@ class EventManager {
         if (editor?.sourceEvent && (typeof editor.isOpen !== 'function' || editor.isOpen())) {
             const now = (this.currentMap?.events || []).find(e => e && e.id === editor.sourceEvent.id);
             if (now) editor.sourceEvent = now;
+            // The step undone was the one that put the open event on the map: the window holds an event that is
+            // not placed again, so OK and Apply put it back (they wrote into the copy the map had dropped).
+            else editor.needsInitialCommit = true;
         }
         if (!this.selectedEvent) return;
         this.selectedEvent = this.currentMap.events.find(e => e && e.id === this.selectedEvent.id) || null;
@@ -428,6 +431,9 @@ class EventManager {
         this._lastMapClickTime = 0;
         this._lastMapClickX = null;
         this._lastMapClickY = null;
+        // Find's results name the old map's events: Find Next must not walk them on this one.
+        this.currentSearchResults = [];
+        this.currentSearchIndex = 0;
         if (this.selectionHighlight) this.selectionHighlight.visible = false;
         this.hideHoverHighlight();
 
@@ -2023,13 +2029,8 @@ class EventManager {
             window.RRKeyboardNavigation.modal(modal, { onEscape: requestClose });
         }
 
-        // Close modal when clicking outside
-        if (modal) {
-            modal.addEventListener('click', (e) => {
-                // A click on the backdrop no longer closes the dialog: an accidental
-                // click beside it must never cost in-progress work. Close deliberately.
-            });
-        }
+        // A click on the backdrop does not close the dialog: an accidental
+        // click beside it must never cost in-progress work. Close deliberately.
     }
 
     // Edit event
@@ -2087,10 +2088,32 @@ class EventManager {
             onCommit: (sourceEvent, committedEvent, changes = {}) => {
                 if (this.currentMap !== targetMap) return false;
                 const events = targetMap.events || (targetMap.events = []);
+                // An undo took the open event off the map (and no other holds its number): it is placed as a new one.
+                if (!isNew && !events.includes(sourceEvent) && !events.some(entry => entry && entry.id === sourceEvent.id)) isNew = true;
+
+                // The X and Y fields can name a tile another event stands on (as can a paste made under a new
+                // event's window): refused with the reason, as a drag or a paste there is.
+                const moved = isNew || committedEvent.x !== sourceEvent.x || committedEvent.y !== sourceEvent.y;
+                if (moved && !this.canPlaceEvent(isNew ? { id: null } : sourceEvent, committedEvent.x, committedEvent.y)) {
+                    const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+                    RRDialog.alert(tt('There is already an event at this position.'), { title: tt('Event Editor'), kind: 'warning' });
+                    return false;
+                }
 
                 if (isNew) {
                     if (events[sourceEvent.id] || events.some(entry => entry && entry.id === sourceEvent.id)) {
-                        return false;
+                        // Its number went to an event pasted or made while the window was open: it takes the
+                        // next free one, and the default name that goes with it.
+                        const defaultName = id => `EV${String(id).padStart(3, '0')}`;
+                        const takenId = sourceEvent.id, nextId = this.getNextEventId();
+                        const draft = this.eventEditor && this.eventEditor.sourceEvent === sourceEvent ? this.eventEditor.currentEvent : null;
+                        [committedEvent, draft].forEach(event => {
+                            if (!event) return;
+                            if (event.name === defaultName(takenId)) event.name = defaultName(nextId);
+                            event.id = nextId;
+                        });
+                        const nameField = document.getElementById('event-name-field');
+                        if (nameField && draft) nameField.value = draft.name;
                     }
                     this.saveState();
                     this._replaceEventData(sourceEvent, committedEvent);
@@ -2345,7 +2368,7 @@ class EventManager {
             this.currentMap.events.forEach(event => {
                 if (!event) return;
 
-                if (event.name.toLowerCase().includes(lowerQuery) ||
+                if (String(event.name || '').toLowerCase().includes(lowerQuery) ||
                     String(event.id).includes(query)) {
                     this.currentSearchResults.push(event);
                 }
@@ -2364,8 +2387,17 @@ class EventManager {
         }
     }
 
+    /** Drops the results the map no longer holds (deleted, or put back by an undo as another object of the same number). */
+    _refreshSearchResults() {
+        const events = this.currentMap?.events || [];
+        this.currentSearchResults = this.currentSearchResults
+            .map(result => events.find(event => event && event.id === result.id))
+            .filter(Boolean);
+    }
+
     // Find next
     findNext() {
+        this._refreshSearchResults();
         if (this.currentSearchResults.length === 0) return;
 
         this.currentSearchIndex = (this.currentSearchIndex + 1) % this.currentSearchResults.length;
@@ -2376,6 +2408,7 @@ class EventManager {
 
     // Find previous
     findPrevious() {
+        this._refreshSearchResults();
         if (this.currentSearchResults.length === 0) return;
 
         this.currentSearchIndex = (this.currentSearchIndex - 1 + this.currentSearchResults.length) % this.currentSearchResults.length;
@@ -2555,6 +2588,8 @@ class EventManager {
     /** Paths are only unique within one project, so a switch drops them. */
     forgetCharacterImages() {
         if (this._characterImages) this._characterImages.clear();
+        // A model's flat picture is kept by its spec, and another project may hold a model of the same name.
+        if (this._modelPreviewTextures) this._modelPreviewTextures.clear();
     }
 
     /**
@@ -3542,8 +3577,14 @@ class EventManager {
         const tw = this.tilemapManager?.TILE_WIDTH || 48;
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
         const pixels = Math.round((spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1) * tw);
-        const key = `${spec.name}|${spec.ext || ''}|${spec.file || ''}|${spec.variant || ''}@${pixels}:${direction}`;
+        // By the whole spec, as the thumbnail itself is drawn and kept: its turn, faces and texture change the picture.
+        const key = `${JSON.stringify(spec)}@${pixels}:${direction}`;
         if (!this._modelPreviewTextures) this._modelPreviewTextures = new Map();
+        // The models were read again (a re-export, a variant edited, another project): the pictures are of the old ones.
+        if (this._modelPreviewRevision !== RREventPreviewModels.revision) {
+            this._modelPreviewRevision = RREventPreviewModels.revision;
+            this._modelPreviewTextures.clear();
+        }
         let texture = this._modelPreviewTextures.get(key);
         if (texture === undefined) {
             this._modelPreviewTextures.set(key, null);
@@ -3604,8 +3645,25 @@ class EventManager {
         const pattern = patternOverride !== undefined ? patternOverride : (image.pattern === undefined ? 1 : image.pattern);
         return {
             width, height,
-            texture: new PIXI.Texture({ source, frame: new PIXI.Rectangle(baseX + pattern * width, baseY, width, height) })
+            texture: this._frameTexture(source, baseX + pattern * width, baseY, width, height)
         };
+    }
+
+    /**
+     * One rectangle of a sheet as a texture, made once per sheet and rectangle. A redraw of the map's events
+     * destroys the sprites, not their textures, and each texture listens on its sheet for as long as the sheet
+     * lives: a new one per event per redraw was never let go.
+     */
+    _frameTexture(source, x, y, width, height) {
+        const make = () => new PIXI.Texture({ source, frame: new PIXI.Rectangle(x, y, width, height) });
+        if (!source || typeof source !== 'object') return make();
+        if (!this._frameTextures) this._frameTextures = new WeakMap();
+        let frames = this._frameTextures.get(source);
+        if (!frames) this._frameTextures.set(source, frames = new Map());
+        const key = `${x},${y},${width},${height}`;
+        let texture = frames.get(key);
+        if (!texture || texture.destroyed) frames.set(key, texture = make());
+        return texture;
     }
 
     renderEvents() {
@@ -4250,9 +4308,7 @@ class EventManager {
             // Texture.from(url) would kick off a second async load and
             // render blank until it finished)
             const texture = PIXI.Texture.from(img);
-            const rect = new PIXI.Rectangle(srcX, srcY, TILE_SIZE, TILE_SIZE);
-            const croppedTexture = new PIXI.Texture({ source: texture.source, frame: rect });
-            return new PIXI.Sprite(croppedTexture);
+            return new PIXI.Sprite(this._frameTexture(texture.source, srcX, srcY, TILE_SIZE, TILE_SIZE));
 
         } else if (tileId >= 1536) {
             // A5 tiles
@@ -4288,12 +4344,7 @@ class EventManager {
         // Convert Image to PIXI.Texture first, then create cropped texture
         // The tilesetTextures are stored as HTMLImageElement, not PIXI.Texture
         const baseTexture = PIXI.Texture.from(img);
-        const croppedTexture = new PIXI.Texture({
-            source: baseTexture.source,
-            frame: new PIXI.Rectangle(srcX, srcY, TILE_SIZE, TILE_SIZE)
-        });
-
-        return new PIXI.Sprite(croppedTexture);
+        return new PIXI.Sprite(this._frameTexture(baseTexture.source, srcX, srcY, TILE_SIZE, TILE_SIZE));
     }
 
     // Create a PIXI sprite from character image data

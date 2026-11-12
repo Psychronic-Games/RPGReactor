@@ -49,7 +49,6 @@
     // The pictures of models kept between sessions are drawn again when this number changes.
     const PICTURE_VERSION = 1;
 
-    const clone = value => JSON.parse(JSON.stringify(value));
     const int = value => Math.floor(Number(value) || 0);
     const pad = id => String(id).padStart(3, '0');
     const fromNode = file => { try { return typeof module !== 'undefined' && module.exports && typeof require === 'function' ? require(file) : null; } catch (error) { return null; } };

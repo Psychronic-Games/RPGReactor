@@ -1188,7 +1188,12 @@ class ResourceManager {
         const toggle = Boolean(event?.ctrlKey || event?.metaKey);
         const range = Boolean(event?.shiftKey && this.selectionAnchor);
         if (range) {
-            const names = this.records.map(item => item.displayName);
+            // The rows between the two clicks as the list shows them: a search hides files, and a folder's
+            // own files come before its subfolders', so the order of the records is not the order on screen.
+            const rows = this.browser?.list?.querySelectorAll('.rr-resource-file');
+            const names = rows
+                ? Array.from(rows, item => item.dataset.fileName)
+                : this.records.map(item => item.displayName);
             const from = names.indexOf(this.selectionAnchor);
             const to = names.indexOf(name);
             if (!toggle) this.selectedNames.clear();
@@ -1196,6 +1201,10 @@ class ResourceManager {
                 for (let index = Math.min(from, to); index <= Math.max(from, to); index++) {
                     this.selectedNames.add(names[index]);
                 }
+            } else {
+                // The first click is no longer shown (searched away, or its folder closed): start from this one.
+                this.selectedNames.add(name);
+                this.selectionAnchor = name;
             }
         } else if (toggle) {
             if (this.selectedNames.has(name)) this.selectedNames.delete(name);

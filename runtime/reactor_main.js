@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.99.5
-// RPG Reactor runtime revision: 20261110.13
+// RPG Reactor runtime revision: 20261111.16
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261110.13";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261111.16";
 //=============================================================================
 
 const scriptUrls = [
@@ -508,6 +508,99 @@ const ReactorBackend = {
 };
 // (the end of ReactorBackend)
 
+//-----------------------------------------------------------------------------
+// ReactorPlayLog
+//
+// What a real session of play ran like, for whoever is asked why it was slow.
+//
+// A harness walks a fixed loop with the camera still; a person turns, rides,
+// crosses maps, fights, and has other programs open. When the file
+// `play-log.on` stands beside the graphics record (%LOCALAPPDATA%\RPGReactor
+// under Windows), a game under NW.js appends a line every two seconds to
+// `play-log.txt` there: the time, the scene and map, where the player is and
+// on what, the frames a second and the longest frame, Auto's levels and what
+// it last measured, and whether the map was still being made ready. Nothing
+// is written, timed or read without that file; the log starts over past
+// MAX_BYTES. Remove `play-log.on` to stop it.
+//-----------------------------------------------------------------------------
+const ReactorPlayLog = {
+    EVERY_MS: 2000,
+    MAX_BYTES: 2000000,
+    _fs: null, _file: "", _frames: 0, _worst: 0, _late: 0, _last: 0, _from: 0, _updates: 0, _lines: [],
+    /** The folder the graphics record is kept in, or "". */
+    folder() {
+        try {
+            if (typeof nw !== "object" || typeof process !== "object" || typeof require !== "function") return "";
+            const path = require("path"), env = process.env;
+            const base = env.LOCALAPPDATA || env.APPDATA || (env.HOME ? path.join(env.HOME, ".config") : "");
+            return base ? path.join(base, "RPGReactor") : "";
+        } catch (error) { return ""; }
+    },
+    start() {
+        try {
+            const folder = this.folder();
+            if (!folder) return false;
+            const fs = require("fs"), path = require("path");
+            if (!fs.existsSync(path.join(folder, "play-log.on"))) return false;
+            this._fs = fs; this._file = path.join(folder, "play-log.txt");
+            try { if (fs.statSync(this._file).size > this.MAX_BYTES) fs.rmSync(this._file, { force: true }); } catch (error) { /* no log yet */ }
+            const tick = () => { this.frame(performance.now()); requestAnimationFrame(tick); };
+            requestAnimationFrame(tick);
+            return true;
+        } catch (error) { return false; }
+    },
+    frame(now) {
+        if (!this._from) { this._from = now; this._last = now; this._updates = typeof Graphics !== "undefined" ? Graphics.frameCount || 0 : 0; this.write(this.header()); return; }
+        const gap = now - this._last; this._last = now;
+        this._frames++; if (gap > this._worst) this._worst = gap; if (gap > 33.4) this._late++;
+        if (now - this._from < this.EVERY_MS) return;
+        this.write(this.line(now - this._from));
+        this._from = now; this._frames = 0; this._worst = 0; this._late = 0;
+        this._updates = typeof Graphics !== "undefined" ? Graphics.frameCount || 0 : 0;
+    },
+    header() {
+        const d = new Date();
+        let gpu = ""; try { gpu = String(Graphics.gpuDescription || ""); } catch (error) { /* not up yet */ }
+        return "---- " + d.toISOString() + " runtime " + globalThis.RPG_REACTOR_RUNTIME_REVISION + " window " + innerWidth + "x" + innerHeight
+            + (gpu ? " gpu " + gpu : "") + " args " + ((typeof nw === "object" && nw.App.fullArgv) || []).filter(a => /angle|rr-/.test(String(a))).join(" ");
+    },
+    /** One line: every reading is taken as it stands, and a part that is not there yet is left out. */
+    line(ms) {
+        const parts = [new Date().toTimeString().slice(0, 8)];
+        const add = (key, value) => { if (value !== undefined && value !== null && value !== "") parts.push(key + "=" + value); };
+        const n = Math.max(1, this._frames);
+        add("fps", (this._frames * 1000 / ms).toFixed(0)); add("worst", this._worst.toFixed(0)); add("late", this._late);
+        try {
+            const scene = SceneManager._scene;
+            add("scene", scene && scene.constructor && scene.constructor.name);
+            add("upd", (((Graphics.frameCount || 0) - this._updates) / n).toFixed(1));
+            if (typeof $gameMap !== "undefined" && $gameMap && $gameMap.mapId() > 0) {
+                add("map", $gameMap.mapId());
+                if (typeof $gamePlayer !== "undefined" && $gamePlayer) { add("at", $gamePlayer.x + "," + $gamePlayer.y); add("on", $gamePlayer._vehicleType); if ($gamePlayer._rrDrive) add("v", ($gamePlayer._rrDrive.v || 0).toFixed(1)); }
+            }
+            if (typeof $gameFight !== "undefined" && $gameFight && $gameFight._act) add("fight", $gameFight._phase || 1);
+            if (typeof $gameParty !== "undefined" && $gameParty && $gameParty.inBattle && $gameParty.inBattle()) add("battle", 1);
+            if (typeof document !== "undefined" && document.hasFocus && !document.hasFocus()) add("unfocused", 1);
+            if (typeof Reactor3D !== "undefined" && Reactor3D.Quality) {
+                const Q = Reactor3D.Quality, w = Q.lastWindow;
+                add("auto", Q.setting() + ":g" + Q.g + "c" + Q.c);
+                if (typeof Graphics !== "undefined" && Graphics.FrameGovernor && Graphics.FrameGovernor.held) add("held", Graphics.FrameGovernor.rate());
+                if (Q.loading()) add("loading", 1);
+                if (w && w !== this._window) { this._window = w; add("busy", w.busyMs.toFixed(1)); if (Number.isFinite(w.gpuMs)) add("gpu", w.gpuMs.toFixed(1)); add("missed", (w.missed * 100).toFixed(0) + "%"); }
+                if (Reactor3D.GeometryDetail && Reactor3D.GeometryDetail._queue && Reactor3D.GeometryDetail._queue.length) add("lodq", Reactor3D.GeometryDetail._queue.length);
+                const state = scene && scene._spriteset && scene._spriteset._reactor3d, three = state && state.viewport && state.viewport._renderer;
+                if (three && three.info) { add("prog", three.info.programs ? three.info.programs.length : ""); add("tex", three.info.memory.textures); add("geo", three.info.memory.geometries); }
+                if (state && state.scene && state.scene._modelInstances) add("models", state.scene._modelInstances.size);
+            }
+            if (performance.memory) add("heapMB", Math.round(performance.memory.usedJSHeapSize / 1048576));
+        } catch (error) { add("error", String(error && error.message || error).slice(0, 80)); }
+        return parts.join(" ");
+    },
+    write(text) {
+        try { this._fs.appendFileSync(this._file, text + "\n"); } catch (error) { /* a log that cannot be written is not worth a frame */ }
+    }
+};
+
 class Main {
     constructor() {
         this.xhrSucceeded = false;
@@ -519,10 +612,31 @@ class Main {
         this.showLoadingSpinner();
         // This machine's own graphics backend: a game started on another gives way to one started on it (ReactorBackend).
         if (ReactorBackend.boot()) return;
+        // A line every two seconds of this session, if the user's folder asks for it (ReactorPlayLog).
+        ReactorPlayLog.start();
+        // The screen's refresh, asked of the system in its own time (Graphics.FrameGovernor never holds a machine under it).
+        this.askScreenRefresh();
         this.testXhr();
         this.hookNwjsClose();
         // Plugins check for WebGL as they load (UltraMode7 turns itself off without it), so the wait comes first.
         this.waitForWebGL(() => this.loadMainScripts());
+    }
+
+    /**
+     * The screen's refresh a second, where the system will say: under Windows, the highest of its video controllers
+     * (one question to PowerShell, off the game's thread; a second or so). Left unknown elsewhere, and when it cannot
+     * be had. Read by Graphics.FrameGovernor once the engine is up.
+     */
+    askScreenRefresh() {
+        try {
+            if (typeof nw !== "object" || typeof process !== "object" || process.platform !== "win32" || typeof require !== "function") return;
+            const done = (error, out) => {
+                const hz = Number(String(out || "").trim());
+                if (!error && hz >= 24 && hz <= 1000) globalThis.RPG_REACTOR_SCREEN_HZ = hz;
+            };
+            require("child_process").execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+                "(Get-CimInstance Win32_VideoController | Measure-Object CurrentRefreshRate -Maximum).Maximum"], { windowsHide: true, timeout: 15000 }, done);
+        } catch (error) { /* not known: the governor judges a map at a time */ }
     }
 
     /**

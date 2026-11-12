@@ -77,7 +77,7 @@ function emblemBuilder(refs, urlFor = ref => 'asset:' + ref) {
     });
     b._project = () => ({ path: '/project' }); b._view = {};
     b.recipe = { outfit: refs.map(ref => ({ pattern: 'emblem', emblemPicture: ref })) };
-    b.cache = {}; b._thumbCache = {}; b._queueRebuild = () => {}; b._status = () => {}; b._t = text => text;
+    b.cache = {}; b._queueRebuild = () => {}; b._status = () => {}; b._t = text => text;
     return { b, images, timers };
 }
 
@@ -90,7 +90,6 @@ test('all active emblems remain cached when a recipe has more than sixteen disti
     assert.equal(b.cache.wardrobe.emblemPictures.size, 17);
     await b._loadOutfitEmblems();
     assert.equal(images.length, 17, 'rebuilding does not repeatedly evict and decode active pictures');
-    assert.equal(b._thumbCache.garment.wardrobe.emblemPictures, b.cache.wardrobe.emblemPictures);
 });
 
 test('an emblem URL failure settles loading and does not retry on every rebuild', async () => {

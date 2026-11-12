@@ -31,7 +31,6 @@ class Character3DBuilder {
         this.folded = {};
         this._thumbs = new Map();
         this._thumbQueue = [];
-        this._thumbCache = {};
         this._lastChange = 0;
     }
 
@@ -73,6 +72,9 @@ class Character3DBuilder {
         this._pending = 0;
         this._closeOutfitImport?.();
         this._stopThumbs();
+        // The outfit store's listener holds this builder (its last build, its caches); `_start` registers it again.
+        this._takenPictures?.(); this._takenPictures = null;
+        this._galleryClose?.();
         const view = this._view;
         if (!view) return;
         this._dropHeldPreview();
@@ -155,19 +157,19 @@ class Character3DBuilder {
     }
 
     /** A catalog selection starts its own recipe and retires work from the previous body. */
-    _selectPreset(recipe, extreme = false) {
+    _selectPreset(recipe, extreme = false, keepView = false) {
         clearTimeout(this._settle); this._settle = 0;
         clearTimeout(this._shadeTimer);
         this._fast = null;
-        this._shapeWorkerRef?.terminate();
-        this._shapeWorkerRef = undefined;
+        // The shaper stays (it holds only the body pack, which no recipe changes, and starting one reads 13 MB on
+        // this thread): with no job, `_shapeDone` drops whatever it was still shaping.
         this._shapeJob = null;
         this._shapeGen = (this._shapeGen || 0) + 1;
         this.cache = {};
         this.extreme = extreme;
-        this.pose = 'idle';
+        // Undo and Redo keep the pose and the weapon in the hand (`keepView`): they are the view's, not the recipe's.
+        if (!keepView) { this.pose = 'idle'; this._heldName = ''; }
         this.openPicker = null;
-        this._heldName = '';
         this._dropHeldPreview();
         if (this._view) { this._view.structure = null; this._view.height = 0; }
         this._replace(recipe);
@@ -177,10 +179,13 @@ class Character3DBuilder {
         const from = direction < 0 ? this._undo : this._redo, to = direction < 0 ? this._redo : this._undo;
         if (!from.length) return;
         to.push(this._committed);
-        this._committed = from.pop();
-        this.recipe = RRCharacterModel.normalize(JSON.parse(this._committed));
+        // The step as `_replace` will take it: normalized once from the same text, so `_commit` finds nothing changed
+        // (normalizing a second time can move an ancestry weight by one bit, which put the step back and emptied Redo).
+        const step = from.pop();
+        this.recipe = RRCharacterModel.normalize(JSON.parse(step));
+        this._committed = JSON.stringify(this.recipe);
         this._syncHistory();
-        this._selectPreset(this.recipe);
+        this._selectPreset(JSON.parse(step), this.extreme, true);
     }
 
     _syncHistory() {
@@ -1550,8 +1555,11 @@ class Character3DBuilder {
     }
 
     /** One build off the page, followed by one small render; no polling of hidden tiles. */
-    _pumpThumbs() {
-        if (this._thumbTimer || this._thumbReads || !this._thumbQueue.length) return;
+    _pumpThumbs(wait = 16) {
+        // A pump that is only waiting out a change (`wait` over 16) gives way to one asked for sooner.
+        if ((this._thumbTimer && !(this._thumbWaiting && wait <= 16)) || this._thumbReads || !this._thumbQueue.length) return;
+        clearTimeout(this._thumbTimer);
+        this._thumbWaiting = wait > 16;
         this._thumbTimer = setTimeout(async () => {
             this._thumbTimer = 0;
             if (!this.root) return;
@@ -1568,7 +1576,10 @@ class Character3DBuilder {
             if (this._thumbQueue.some(item => keys.has(item.key) && !item.stored)) { this._pumpThumbs(); return; }
             const index = this._thumbQueue.findIndex(q => keys.has(q.key));
             if (index < 0) return;
-            if (!this._view || !this.pack || !this._result || Date.now() - this._lastChange < 350) { this._pumpThumbs(); return; }
+            if (!this._view || !this.pack || !this._result) { this._pumpThumbs(); return; }
+            // A change under 350 ms ago (a slider being dragged): one timer for what is left of it, not one every 16 ms.
+            const rest = 350 - (Date.now() - this._lastChange);
+            if (rest > 0) { this._pumpThumbs(Math.max(17, rest)); return; }
             const item = this._thumbQueue.splice(index, 1)[0];
             item.root = this.root; item.epoch = this._thumbEpoch;
             this._thumbJob = item;
@@ -1985,7 +1996,8 @@ class Character3DBuilder {
                 // Centaur hook: the horse's coat rolls with the colors.
                 if (r.centaur && roll.centaur) for (const k of ['coat', 'marking', 'pattern']) r.centaur[k] = roll.centaur[k];
                 r.hair = Object.assign({}, r.hair, { color: roll.hair.color, tipColor: roll.hair.tipColor });
-                r.outfit = r.outfit.map((item, k) => Object.assign({}, item, roll.outfit[k % Math.max(1, roll.outfit.length)] ? { color: roll.outfit[k % roll.outfit.length].color } : {}));
+                // A rolled garment that shows its own picture has no colour to give: the worn one keeps its own.
+                r.outfit = r.outfit.map((item, k) => { const color = roll.outfit[k % Math.max(1, roll.outfit.length)]?.color; return color ? Object.assign({}, item, { color }) : item; });
                 break;
             default: Object.assign(r, roll, { anatomy: r.anatomy });
         }
@@ -2772,7 +2784,7 @@ class Character3DBuilder {
             if (this._settle) return;
             this.cache.skinKey = result.skinKey;
             if (result.textures?.['skin.png']) this.cache.skin = result.textures['skin.png'];
-            this._applyBuild(result);
+            this._applyBuild(result, recipe);
             if (!current || job.owed) { job.owed = false; this._queueRebuild(); }
         }, error => {
             job.busy = false;
@@ -2803,13 +2815,19 @@ class Character3DBuilder {
             this._status(this._t('This character could not be built.'), 'error');
             return;
         }
-        this._applyBuild(result);
+        this._applyBuild(result, this.recipe);
     }
 
-    /** A finished build into the view, from the page or the live worker alike. */
-    _applyBuild(result) {
+    /**
+     * A finished build into the view, from the page or the live worker alike. `asked` is the recipe the build was
+     * given: whether the view shows the builder's recipe is told by it (`_builtFor`), not by the result's own
+     * recipe, which the build normalized once more (that can move an ancestry weight by one bit, for good).
+     */
+    _applyBuild(result, asked = result.recipe) {
         const previous = (this._rangeDrag || this._rangeSettle || this._previewTween) && this._previewSnapshot();
         this._result = result;
+        this._builtFor = JSON.stringify(asked);
+        const exact = this._builtFor === JSON.stringify(this.recipe);
         if (this._talk) this._talk.stop();
         this._show(result);
         // The drag's fast path made ready while the page is idle, so the first move of a slider does not wait on it.
@@ -2819,7 +2837,7 @@ class Character3DBuilder {
         }
         this._showExpression();
         if (previous) this._tweenPreview(previous);
-        if (JSON.stringify(result.recipe) === JSON.stringify(this.recipe)) this._rangeSettle = null;
+        if (exact) this._rangeSettle = null;
         this._queueShading();
         const readout = this.root.querySelector('.rr-c3d-readout');
         if (readout) {
@@ -2829,7 +2847,7 @@ class Character3DBuilder {
             readout.title = count.outfit != null ? this._t('Outfit {outfit} · Hair {hair} · Body {body}', { outfit: count.outfit.toLocaleString(), hair: count.hair.toLocaleString(), body: count.body.toLocaleString() }) : '';
         }
         const opening = this._openingDesign;
-        if (opening && opening.recipe === JSON.stringify(result.recipe) && opening.recipe === JSON.stringify(this.recipe)) {
+        if (opening && exact && opening.recipe === this._builtFor) {
             this._openingDesign = null;
             this._status(this._t('Opened {name}.', { name: opening.name }), 'ok');
         }
@@ -3502,6 +3520,8 @@ class Character3DBuilder {
     /** Keep the character's settings in the Forge under its name, in the chosen group: opened again from Open, nothing built. */
     async saveDesign() {
         if (!this._project()) return;
+        // The design's picture is taken from the view, which a sheet being drawn holds in one of its own poses.
+        if (this._sheetExporting) { this._status(this._t('The sprite sheet is being drawn. Try again in a moment.'), 'error'); return; }
         const fs = require('fs'), path = require('path');
         let name = this._folderName(this.name);
         if (!name) {
@@ -3583,14 +3603,25 @@ class Character3DBuilder {
                 : (loose ? section(this._t('Designs'), loose) : '') + groups.filter(g => g.cards).map(g => section(g.group, g.cards)).join(''))
             + section(this._t('Exported Models'), models, this._t('No models exported from this project yet. Export Model To Project puts one here.'))
             + '</div>';
+        // One Escape listener however often the gallery is shown: the one before goes first, and `detach` takes the last.
+        this._galleryClose?.();
         box.hidden = false;
-        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); };
+        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); if (this._galleryClose === close) this._galleryClose = null; };
         const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
         document.addEventListener('keydown', onKey, true);
+        this._galleryClose = close;
         box.onclick = e => {
             if (e.target.closest('[data-close]')) { close(); return; }
             const remove = e.target.closest('[data-delete]');
-            if (remove) { this._deleteDesign(remove.dataset.group || '', remove.dataset.delete).then(done => { if (done) this._showGallery(); }); return; }
+            if (remove) {
+                this._deleteDesign(remove.dataset.group || '', remove.dataset.delete).then(done => {
+                    if (!done || box.hidden) return;
+                    // Only the deleted card goes; every picture is read again only when its section is left empty.
+                    const gone = remove.closest('.rr-c3d-saved-card'), grid = gone && gone.parentElement;
+                    if (grid && grid.children.length > 1) gone.remove(); else this._showGallery();
+                });
+                return;
+            }
             const card = e.target.closest('.rr-c3d-saved');
             if (!card) return;
             close();
@@ -3682,17 +3713,10 @@ class Character3DBuilder {
         const pictures = this._emblemPictures;
         const share = () => {
             this.cache.wardrobe = this.cache.wardrobe || {};
-            const caches = [this.cache.wardrobe];
-            for (const kind of ['dress', 'garment', 'species','prop']) {
-                this._thumbCache[kind] = this._thumbCache[kind] || {};
-                this._thumbCache[kind].wardrobe = this._thumbCache[kind].wardrobe || {};
-                caches.push(this._thumbCache[kind].wardrobe);
-            }
-            for (const cache of caches) {
-                if (cache.emblemPictures !== pictures) delete cache.atlas;
-                cache.emblemPictures = pictures;
-            }
-            return caches;
+            const cache = this.cache.wardrobe;
+            if (cache.emblemPictures !== pictures) delete cache.atlas;
+            cache.emblemPictures = pictures;
+            return [cache];
         };
         share();
         const folder = require('path').join(project.path, 'img', 'pictures');
@@ -3964,9 +3988,10 @@ class Character3DBuilder {
         const recipe = RRCharacterModel.normalize(data.recipe || data);
         // A recipe past the natural ranges opens with Extreme on, so its sliders reach its values.
         const extreme = this.extreme || JSON.stringify(RRHumanBody.naturalRecipe ? RRHumanBody.naturalRecipe(recipe) : recipe) !== JSON.stringify(RRHumanBody.normalizeRecipe(recipe));
-        this._openingDesign = { name, recipe: JSON.stringify(recipe) };
         this._status(this._t('Opening {name}…', { name }));
         this._selectPreset(recipe, extreme);
+        // Named by the recipe the builder took, so "Opened" is said when that one is shown (the build is a frame away).
+        this._openingDesign = { name, recipe: JSON.stringify(this.recipe) };
     }
 
     /** A picture as PNG bytes. */
@@ -3992,7 +4017,8 @@ class Character3DBuilder {
 
     async save() {
         this._stopPreviewTween();
-        if (this._savingModel || this._sheetExporting) return;
+        if (this._savingModel) return;
+        if (this._sheetExporting) { this._status(this._t('The sprite sheet is being drawn. Try again in a moment.'), 'error'); return; }
         this._savingModel = true;
         try { await this._saveModel(); }
         finally { this._savingModel = false; }

@@ -202,6 +202,12 @@ class ChangeParameterEditor {
                 option.selected = (this.actorId === i);
                 select.appendChild(option);
             }
+            // An actor the Database no longer has, or a variable's number left from Variable: shown as what is saved, not as the first entry.
+            if (this.actorId !== 0 && !actors[this.actorId]) {
+                const kept = document.createElement('option');
+                kept.value = this.actorId; kept.textContent = `#${String(this.actorId).padStart(4, '0')}`; kept.selected = true;
+                select.appendChild(kept);
+            }
             select.addEventListener('change', (e) => { this.actorId = parseInt(e.target.value); });
             fixedRow.appendChild(select);
         }

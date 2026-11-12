@@ -112,7 +112,7 @@
     /** The engine loop. `sent` is the rate last sent to the source node, `rates` how many times one was sent. */
     const engine = Feel.engine = {
         on: false, held: false, name: "", buffer: null, node: null, gain: null,
-        sent: 0, volume: -1, rates: 0, share: 0, gas: 0, buffers: {}, generation: 0,
+        sent: 0, volume: -1, rates: 0, share: 0, gas: 0, buffers: {},
         folder: "se", type: null, slowing: 0
     };
     const ENGINE_SLOTS = ["engine", "idle", "accelerate", "slowdown"];
@@ -717,7 +717,6 @@
     function engineOff(seconds) {
         const buffer = engine.buffer;
         engine.on = false; engine.node = null; engine.gain = null; engine.sent = 0; engine.volume = -1;
-        engine.generation++;
         if (!buffer) return;
         const generation=buffer._rrVehicleGeneration;
         try {
@@ -754,7 +753,6 @@
         if (!engine.on) {
             // Never before it is whole: a loop started on a partly decoded file is rebuilt under the ramp.
             if ((typeof buffer.isError === "function" && buffer.isError()) || !buffer.isReady() || !buffer._isLoaded) return;
-            engine.generation++;
             buffer._rrVehicleGeneration=(buffer._rrVehicleGeneration || 0)+1;
             engine.on = true; engine.name = name; engine.folder=folder; engine.buffer = buffer;
             engine.node = null; engine.gain = null; engine.sent = 0; engine.volume = -1;

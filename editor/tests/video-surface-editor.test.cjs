@@ -636,8 +636,8 @@ test('model-bound characters on flat maps render as sprites, the view the editor
     assert.match(r3d, /this\.paintModelSpriteCanvas\(state\);/, 'painted through the canvas on the standalone renderer');
     assert.ok(r3d.indexOf('Reactor3D.paintModelSpriteCanvas = function') < r3d.indexOf('Reactor3D.updateEnemyModelSprite = function'), 'defined ahead of the per-frame battler painters');
     assert.doesNotMatch(r3d.slice(r3d.indexOf('Reactor3D.updateMapModelSprite = function'), r3d.indexOf('Reactor3D.playActorBattlerAnimation')), /acquireViewport|paintBattlerFrame/, 'a flat map never acquires the shared viewport for a sprite');
-    assert.match(sprites, /if \(inScene && Reactor3D\.hasCharacterModel\(character\)\) this\.visible = false;/, 'only a 3D scene hides the sprite');
-    assert.match(sprites, /if \(!inScene && this\._reactorMapModel && this\._reactorMapModel\.ready\)/, 'a sheetless model character is not an empty character');
+    assert.match(sprites, /if \(!character \|\| !Reactor3D\.shouldRender3D\(\$dataMap\)\) return false;/, 'only a 3D scene hides the sprite');
+    assert.match(sprites, /if \(!inScene\) this\.visible = !\(character\.isTransparent && character\.isTransparent\(\)\);/, 'a sheetless model character is not an empty character');
     assert.match(sprites, /if \(Reactor3D\.updateMapModelSprite\) Reactor3D\.updateMapModelSprite\(this\);/);
     const editorModels = read('src/utils/EventPreviewModels.js');
     assert.match(editorModels, /Reactor3D\.frameModelSprite\(object, Math\.round\(pixels\), thumbCamera\)/, 'the editor thumbnail uses the same framing');

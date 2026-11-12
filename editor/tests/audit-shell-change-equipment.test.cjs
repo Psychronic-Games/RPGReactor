@@ -59,6 +59,19 @@ test('the equipment types are the project\'s, numbered from 1', () => {
     assert.ok(ChangeEquipmentEditor.equipTypes(database, 9).some(type => type.value === 9), 'a saved id System lacks stays');
 });
 
+test('a dual wielder\'s type 2 is a second weapon, as the game reads it; not under a class\'s own slots', () => {
+    const dual = { code: 55, dataId: 1 };
+    const classes = { 1: { id: 1, traits: [] }, 2: { id: 2, traits: [], rrEquipSlots: [1, 2, 3] } };
+    const db = Object.assign({}, database, { getClass: id => classes[id], data: Object.assign({}, database.data, {
+        actors: [null, { id: 1, classId: 1, traits: [dual] }, { id: 2, classId: 1, traits: [] }, { id: 3, classId: 2, traits: [dual] }] }) });
+    assert.equal(ChangeEquipmentEditor.isWeaponSlot(db, 1, 2), true);
+    assert.equal(ChangeEquipmentEditor.isWeaponSlot(db, 2, 2), false);
+    assert.equal(ChangeEquipmentEditor.isWeaponSlot(db, 3, 2), false, 'the game does not apply Dual Wield to a class with its own slots');
+    assert.equal(ChangeEquipmentEditor.isWeaponSlot(db, 2, 1), true);
+    assert.equal(ChangeEquipmentEditor.equipTypes(db, 2, 1).find(type => type.value === 2).label, 'Blade 2');
+    assert.equal(ChangeEquipmentEditor.equipTypes(db, 2, 2).find(type => type.value === 2).label, 'Buckler');
+});
+
 test('a new command equips a weapon through type 1, and MZ\'s commands reopen as written', () => {
     assert.deepEqual(open(null).editor.buildCommand().parameters, [1, 1, 0]);
     assert.deepEqual(open({ code: 319, parameters: [1, 6, 2] }).editor.buildCommand().parameters, [1, 6, 2]);
@@ -72,9 +85,9 @@ test('the list row names the equipment type and the item by their ids', () => {
     global.ChangeEquipmentEditor = ChangeEquipmentEditor;
     try {
         const describe = parameters => list.getCommandInfo({ code: 319, indent: 0, parameters }, { list: [] }, 0).description;
-        assert.equal(describe([1, 1, 1]), 'Blade = Sword');
-        assert.equal(describe([1, 6, 2]), 'Ring = Silver Ring');
-        assert.equal(describe([1, 2, 0]), 'Buckler = None');
+        assert.equal(describe([1, 1, 1]), 'Reid, Blade = Sword');
+        assert.equal(describe([1, 6, 2]), 'Reid, Ring = Silver Ring');
+        assert.equal(describe([1, 2, 0]), 'Reid, Buckler = None');
     } finally {
         delete global.ChangeEquipmentEditor;
     }

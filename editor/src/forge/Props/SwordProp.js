@@ -303,10 +303,11 @@
      * A random sword: a believable blade of one family (its own when only
      * the shape or details roll), sized and bent a little off its preset;
      * details swap the fuller, teeth, guard, wrap and pommel; colors the steel, trim, grip and glow.
+     * `keep` holds the family (Randomize and Shuffle on the page).
      */
-    function random(seed, recipe, scope) {
+    function random(seed, recipe, scope, keep) {
         const R = Rand.roll(seed), cur = normalize(recipe), out = JSON.parse(JSON.stringify(cur)), has = part => Rand.covers(scope, part);
-        const family = has('shape') && (!scope || scope === 'all') ? R.weighted(PRESETS.map(p => [p, p[0] === 'energy' ? 0.4 : 1])) : PRESETS.find(p => p[0] === cur.preset);
+        const family = has('shape') && (!scope || scope === 'all') && !keep ? R.weighted(PRESETS.map(p => [p, p[0] === 'energy' ? 0.4 : 1])) : PRESETS.find(p => p[0] === cur.preset);
         const base = family[2], energy = family[0] === 'energy';
         out.preset = family[0];
         if (has('shape')) {

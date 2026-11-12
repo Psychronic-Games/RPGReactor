@@ -64,7 +64,11 @@ const ReactorOnlineParty = {
         const world = ReactorOnline.config()?.world;
         if (!world) return false;
         const text = kind === "s" ? world.partySwitches : world.partyVariables;
-        return !!text && ReactorWorldState.ids(text).has(id);
+        if (!text) return false;
+        // The list is read into a set once and kept while its text is the same: this is asked at every switch and variable write.
+        const kept = this._shared || (this._shared = { s: { text: null, ids: null }, v: { text: null, ids: null } }), list = kept[kind === "s" ? "s" : "v"];
+        if (list.text !== text) { list.text = text; list.ids = ReactorWorldState.ids(text); }
+        return list.ids.has(id);
     },
 
     /** Whether a change to this switch or variable is shared with the party now (so worth reading back). */

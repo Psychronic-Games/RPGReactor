@@ -25,7 +25,6 @@
     ReactorUI.DATA_URL = "data/UserInterfaces.json";
     ReactorUI.PLUGIN_NAME = "RPGReactor";
     ReactorUI.COMMAND_NAME = "CallUserInterface";
-    ReactorUI.BOOT_OPTION = "rrui";
     ReactorUI.CAPTURE_OPTION = "rrcapture";
     /** Scenes the editor can capture, by key; the values are class names. */
     ReactorUI.CAPTURE_SCENES = {
@@ -50,7 +49,6 @@
     const ActionHud = () => window.ReactorActionHud || null;
     /** The Tactical battle HUD's shared half (reactor_ui_fight.js): node settings, layout and drawing. */
     const FightHud = () => window.ReactorFightHud || null;
-    ReactorUI.TACTICAL_FIELD = "reactorTacticalInterfaceId";
     /** The stock battle windows a Battle Window node places, by scene property. */
     ReactorUI.BATTLE_WINDOWS = {
         partyCommand: "_partyCommandWindow", actorCommand: "_actorCommandWindow", help: "_helpWindow",
@@ -221,6 +219,12 @@
         const list = window.$dataUserInterfaces;
         const raw = Array.isArray(list) ? list[Number(id)] : null;
         return raw ? this.normalizeInterface(raw) : null;
+    };
+
+    /** A stored record's mode as normalizeInterface would give it, without building the record. */
+    ReactorUI.storedMode = function(raw) {
+        const mode = raw && raw.mode === "fight" ? "tactical" : raw && raw.mode;
+        return ["overlay", "battle", "tactical", "action", "firstPerson", "victory"].includes(mode) ? mode : "scene";
     };
 
     // Whether the shop refuses to buy an item back: no price, or the database's "Can't be sold" (rrNoSell)
@@ -1314,9 +1318,10 @@
             semantic(Window_StatusBase.prototype, "drawActorCharacter", function(actor, x, y) {
                 if (Window_StatusBase.rrShowsModelCharacter && Window_StatusBase.rrShowsModelCharacter(actor)) return;
                 const bitmap = ImageManager.loadCharacter(actor.characterName());
-                const big = ImageManager.isBigCharacter(actor.characterName());
-                const pw = bitmap.width > 0 ? bitmap.width / (big ? 3 : 12) : 48;
-                const ph = bitmap.height > 0 ? bitmap.height / (big ? 4 : 8) : 48;
+                // The window's own cut, so an [NF] or [1D] sheet is sized as it is drawn.
+                const cell = Window_Base.rrCharacterCell(actor.characterName(), actor.characterIndex(), bitmap.width, bitmap.height);
+                const pw = bitmap.width > 0 ? cell.pw : 48;
+                const ph = bitmap.height > 0 ? cell.ph : 48;
                 self.drawLog(this.contents).push({
                     kind: "image", source: "character", file: actor.characterName(), index: actor.characterIndex(),
                     x: Math.round(x - pw / 2), y: Math.round(y - ph), width: Math.round(pw), height: Math.round(ph), opacity: this.contents.paintOpacity
@@ -1748,15 +1753,17 @@
     // Calling
 
     ReactorUI.call = function(id) {
-        const record = this.interface(id);
-        if (!record) {
+        // The scene builds the record when it opens: here only its mode is read, from the stored record.
+        const list = window.$dataUserInterfaces;
+        const raw = Array.isArray(list) ? list[Number(id)] : null;
+        if (!raw) {
             console.warn("ReactorUI: no user interface with id " + id);
             return false;
         }
-        if (record.mode === "overlay") {
+        if (this.storedMode(raw) === "overlay") {
             const scene = SceneManager._scene;
             if (typeof Scene_Map !== "undefined" && scene instanceof Scene_Map && scene.ensureReactorUIOverlay) {
-                scene.ensureReactorUIOverlay(record);
+                scene.ensureReactorUIOverlay(this.normalizeInterface(raw));
                 return true;
             }
             console.warn("ReactorUI: overlay interface " + id + " requires Scene_Map");
@@ -1825,6 +1832,8 @@
         this._uiLastText = null;
         this._uiBitmap = null;
         this._uiFontScale = 1;
+        // A label with no token ({...}), no escape code and no expression reads the same on every frame.
+        this._uiDynamicText = !!node.labelScript || /[\\{\x1b]/.test(String(node.text == null ? "" : node.text));
         Window_Base.prototype.initialize.call(this, rect);
         this.opacity = this.usesSkin() ? 255 : 0;
         this.frameVisible = this.usesSkin();
@@ -1880,8 +1889,18 @@
         return !this._uiEnabled ? "disabled" : this._uiPressed ? "pressed" : this._uiFocused ? "focused" : "base";
     };
 
+    /** syncVisualState's working values, reused. */
+    const SYNC_STYLE = { opacity: "", offsetX: 0, offsetY: 0 };
+
     Window_ReactorUINode.prototype.syncVisualState = function() {
-        const style = ReactorUI.controlStyle(this._uiNode, this.controlState());
+        // Runs for every node of an overlay on every frame: the opacity and the pressed offset are read as
+        // ReactorUI.controlStyle gives them, without building its whole style.
+        const authored = this._uiNode, state = this.controlState();
+        const style = SYNC_STYLE;
+        style.opacity = state === "disabled" ? (authored.disabledOpacity === "" ? ReactorUI.DISABLED_OPACITY : authored.disabledOpacity)
+            : state === "pressed" ? authored.pressedOpacity : state === "focused" ? authored.focusedOpacity : "";
+        style.offsetX = state === "pressed" ? authored.pressedOffsetX : 0;
+        style.offsetY = state === "pressed" ? authored.pressedOffsetY : 0;
         const base = this._uiOpacity === undefined ? 255 : this._uiOpacity;
         const stateOpacity = style.opacity === "" ? 255 : style.opacity;
         const opacity = Math.round(base * stateOpacity / 255);
@@ -2020,18 +2039,35 @@
         "playtime", "index", "paramName", "paramValue", "price", "level", "symbol", "valueText", "title", "timestamp",
         "date", "partyCharacters", "partyFaces", "existing", "enabled", "cost", "slot", "newValue", "change"];
 
+    /** The {context.field} pattern and its lower-case field table, built once (again if the field list grows). */
+    ReactorUI.contextTokens = function() {
+        let made = this._contextTokens;
+        if (!made || made.count !== this.CONTEXT_FIELDS.length) {
+            made = this._contextTokens = {
+                count: this.CONTEXT_FIELDS.length,
+                pattern: new RegExp("\\{context\\.(" + this.CONTEXT_FIELDS.join("|") + ")\\}", "gi"),
+                fields: new Map(this.CONTEXT_FIELDS.map(name => [name.toLowerCase(), name]))
+            };
+        }
+        return made;
+    };
+
     ReactorUI.resolveContextTokens = function(value, node, scene) {
+        const source = String(value == null ? "" : value);
+        if (source.indexOf("{") < 0) return source;
         const row = scene && scene.context ? scene.context(node && node.contextName) : null;
-        const fields = this.CONTEXT_FIELDS.join("|");
-        return String(value == null ? "" : value).replace(new RegExp("\\{context\\.(" + fields + ")\\}", "gi"), (match, token) => {
+        const tokens = this.contextTokens();
+        return source.replace(tokens.pattern, (match, token) => {
             if (!row) return "";
-            const field = this.CONTEXT_FIELDS.find(name => name.toLowerCase() === token.toLowerCase());
-            const result = row[field];
+            const result = row[tokens.fields.get(token.toLowerCase())];
             return result == null ? "" : String(result);
         });
     };
 
     ReactorUI.resolveActorTokens = function(value, node, scene) {
+        // No brace, no token: nothing to look up (this runs for every label, every frame it may change).
+        const source = String(value == null ? "" : value);
+        if (source.indexOf("{") < 0) return source;
         const actor = this.resolveActor(node, scene);
         const contextBound = this.resolveContextTokens(value, node, scene);
         return contextBound.replace(/\{actor\.(name|nickname|class|level|profile|hp|mp|tp|mhp|maxHp|mmp|maxMp|maxTp|currentExp|totalExp|nextExp|nextRequiredExp|atk|def|mat|mdf|agi|luk)\}/gi,
@@ -2070,7 +2106,13 @@
     };
 
     ReactorUI.listRowsSignature = function(rows) {
-        return JSON.stringify(rows.map(row => Object.keys(row).filter(key => key !== "data").sort().map(key => [key, row[key]])));
+        // What a row paints and how it is found: its key, its text and whether it can be chosen (with its count
+        // and value). The other fields reach the screen through the selection, which is published at every poll.
+        let signature = "";
+        for (const row of rows) {
+            signature += row.key + "\u0001" + row.text + "\u0001" + row.enabled + "\u0001" + row.count + "\u0001" + row.value + "\u0002";
+        }
+        return signature;
     };
 
     /** The row selected in the list a node follows (its filterContext), or null. */
@@ -2128,14 +2170,35 @@
         if (!focused || !focused.node || focused.node().contextName !== node.compareContext) return null;
         const row = scene.context(node.compareContext);
         if (!row || row.slot === "" || row.slot == null || !actor.forceChangeEquip) return null;
+        // Asked at every poll of the parameter list. The copy is made once per candidate, as the stock screen
+        // makes it once per cursor move, and again when the actor's class, level, equipment or states differ.
+        const part = list => Array.isArray(list) ? list.map(entry => entry && typeof entry === "object" ? entry._dataClass + entry._itemId : entry).join(",") : "";
+        const key = [actor.actorId ? actor.actorId() : 0, row.slot, row.data ? row.kind + ":" + row.data.id : "", actor._classId, actor._level,
+            part(actor._equips), part(actor._states), part(actor._paramPlus), part(actor._buffs)].join("|");
+        const kept = scene._equipPreview;
+        if (kept && kept.source === actor && kept.key === key) return kept.actor;
         const preview = JsonEx.makeDeepCopy(actor);
         preview.forceChangeEquip(Number(row.slot) || 0, row.data || null);
+        scene._equipPreview = { source: actor, key, actor: preview };
         return preview;
+    };
+
+    /** A save's date as text, written out once per timestamp (Save and Load lists ask for every slot at each poll). */
+    ReactorUI._slotDates = new Map();
+    ReactorUI.slotDateText = function(timestamp) {
+        let date = this._slotDates.get(timestamp);
+        if (date === undefined) {
+            if (this._slotDates.size > 500) this._slotDates.clear();
+            date = new Date(timestamp).toLocaleString();
+            this._slotDates.set(timestamp, date);
+        }
+        return date;
     };
 
     /** Rows for the fixed declarative List sources. */
     ReactorUI.listRows = function(node, scene) {
         const rows = [];
+        const keys = new Set();
         const add = row => {
             const base = {
                 key: String(row.kind || "row") + ":" + String(row.id), kind: "row", id: 0, value: 0,
@@ -2147,7 +2210,8 @@
             row = Object.assign(base, row);
             const baseKey = row.key;
             let duplicate = 1;
-            while (rows.some(existing => existing.key === row.key)) row.key = baseKey + ":" + duplicate++;
+            while (keys.has(row.key)) row.key = baseKey + ":" + duplicate++;
+            keys.add(row.key);
             row.icon = row.iconIndex;
             row.index = rows.length + 1;
             row.text = this.formatListRow(node.rowText, row);
@@ -2313,11 +2377,21 @@
                     ["commandRemember", terms.commandRemember || "Command Remember"]
                 ];
                 if (terms.touchUI != null && config.touchUI !== undefined) descriptors.push(["touchUI", terms.touchUI]);
+                // Graphics, where and when the stock Options window offers it (Window_Options.addGraphicsOption).
+                const graphics = typeof Window_Options !== "undefined" && Window_Options.GRAPHICS_TEXT && Window_Options.GRAPHICS_VALUES
+                    && typeof Reactor3D !== "undefined" && Reactor3D.Quality && config.reactor3dSeen ? Window_Options.GRAPHICS_TEXT : null;
+                if (graphics) descriptors.push(["graphicsQuality", graphics.name]);
                 descriptors.push(
                     ["bgmVolume", terms.bgmVolume || "BGM Volume"], ["bgsVolume", terms.bgsVolume || "BGS Volume"],
                     ["meVolume", terms.meVolume || "ME Volume"], ["seVolume", terms.seVolume || "SE Volume"]
                 );
                 for (const [symbol, name] of descriptors) {
+                    if (symbol === "graphicsQuality") {
+                        const value = Window_Options.GRAPHICS_VALUES.includes(config.graphicsQuality) ? config.graphicsQuality : "auto";
+                        add({ key: "option:" + symbol, kind: "option", id: symbol, value, symbol, name,
+                            valueText: graphics[value] || graphics.auto, defaultText: "{name}  {valueText}" });
+                        continue;
+                    }
                     const volume = symbol.includes("Volume");
                     const value = volume ? Math.max(0, Math.min(100, Number(config[symbol]) || 0)) : !!config[symbol];
                     add({ key: "option:" + symbol, kind: "option", id: symbol, value, symbol, name,
@@ -2339,7 +2413,7 @@
                     const partyCharacters = info && Array.isArray(info.characters) ? info.characters.map(entry => entry[0] + "[" + entry[1] + "]").join(", ") : "";
                     const partyFaces = info && Array.isArray(info.faces) ? info.faces.map(entry => entry[0] + "[" + entry[1] + "]").join(", ") : "";
                     add({ key: "save:" + id, kind: "save", id, value: id, name, title: info && info.title || "",
-                        playtime: info && info.playtime || "", timestamp: timestamp || "", date: timestamp ? new Date(timestamp).toLocaleString() : "",
+                        playtime: info && info.playtime || "", timestamp: timestamp || "", date: timestamp ? this.slotDateText(timestamp) : "",
                         partyCharacters, partyFaces, existing, enabled, data: info,
                         defaultText: info && info.playtime ? "{name}  {playtime}" : "{name}" });
                 }
@@ -2491,7 +2565,7 @@
             case "input": this.drawSurface(); this.drawInput(); this.drawFocus(); break;
         }
         this.syncVisualState();
-        this._uiLastText = this.currentText();
+        if (this._uiDynamicText) this._uiLastText = this.currentText();
     };
 
     //-------------------------------------------------------------------------
@@ -2854,14 +2928,11 @@
             sw = pw;
             sh = ph;
         } else if (node.source === "character") {
-            const big = ImageManager.isBigCharacter(node.file);
-            const pw = bitmap.width / (big ? 3 : 12);
-            const ph = bitmap.height / (big ? 4 : 8);
-            const n = big ? 0 : node.index;
-            sx = ((n % 4) * 3 + 1) * pw;
-            sy = Math.floor(n / 4) * 4 * ph;
-            sw = pw;
-            sh = ph;
+            const cell = Window_Base.rrCharacterCell(node.file, node.index, bitmap.width, bitmap.height);
+            sx = cell.sx;
+            sy = cell.sy;
+            sw = cell.pw;
+            sh = cell.ph;
         } else if (node.source === "icon") {
             bitmap = ReactorUI.iconBitmap(bitmap, node.index);
             sw = bitmap.width;
@@ -2918,15 +2989,25 @@
 
     Window_ReactorUINode.prototype.update = function() {
         Window_Base.prototype.update.call(this);
+        // A hidden node does no work: updateConditions brings it up to date on the frame it shows again.
+        if (this.visible === false) { this._uiStale = true; return; }
+        this.updateShown();
+    };
+
+    /** The node's per-frame work: what it shows is compared with the game and redrawn when it differs. */
+    Window_ReactorUINode.prototype.updateShown = function() {
+        this._uiStale = false;
         if (this.isEditing && this.isEditing() && ++this._uiCaretTimer >= 30) {
             this._uiCaretTimer = 0;
             this._uiCaretOn = !this._uiCaretOn;
             this.refresh();
         }
-        if (this._uiNode.type === "text" || this._uiNode.type === "button") {
+        if (this._uiDynamicText && (this._uiNode.type === "text" || this._uiNode.type === "button")) {
             if (this.currentText() !== this._uiLastText) {
+                // An auto-sized text moves what is anchored to it: the scene lays out once this frame,
+                // after its windows, however many texts changed.
                 if (this._uiNode.type === "text" && (this._uiNode.width === 0 || this._uiNode.height === 0)
-                    && this._uiScene && this._uiScene.refreshNodeLayouts) this._uiScene.refreshNodeLayouts();
+                    && this._uiScene && this._uiScene.refreshNodeLayouts) this._uiScene._layoutDirty = true;
                 this.refresh();
             }
         }
@@ -3146,7 +3227,12 @@
         const slash = text.indexOf("/");
         const folder = slash > 0 ? text.slice(0, slash) : "pictures";
         const name = slash > 0 ? text.slice(slash + 1) : text;
-        const bitmap = Bitmap.load("img/" + folder + "/" + Utils.encodeURI(name) + ".png");
+        // A name that carries its own extension (a .jpg or .webp picked in the editor) is loaded as written,
+        // as ImageManager.loadBitmap does; any other is a .png.
+        const lower = name.toLowerCase();
+        const extensions = typeof ImageManager !== "undefined" && ImageManager._imageExtensions || [".png"];
+        const explicit = extensions.some(extension => lower.endsWith(extension));
+        const bitmap = Bitmap.load("img/" + folder + "/" + Utils.encodeURI(name) + (explicit ? "" : ".png"));
         this._softImages.set(text, bitmap);
         return bitmap;
     };
@@ -3181,7 +3267,6 @@
         return false;
     };
 
-    /** A meter picture cut to the rate, stretched to the part's box. */
     /**
      * A meter picture cut to the rate and stretched to the part's box. A
      * two-row picture (MOG's) holds the meter on top and the damage trail
@@ -3325,7 +3410,18 @@
                 }
                 ctx.translate(r.x,r.y);
                 ctx.scale(r.width/ImageManager.faceWidth,r.height/ImageManager.faceHeight);
-                Window_StatusBase.prototype.drawActorFace.call(this,actor,0,0,ImageManager.faceWidth,ImageManager.faceHeight);
+                // drawActorFace (a face sheet, or an actor's rendered 3D face) draws into `contents`. For a part
+                // on the back layer it is called on a stand-in whose `contents` is that layer, or the face
+                // landed on the front layer at the window's corner, unscaled.
+                let target=this;
+                if(bitmap!==this.contents) {
+                    if(!this._uiBackFace || this._uiBackFace.contents!==bitmap) {
+                        this._uiBackFace=Object.create(this,{contents:{value:bitmap},
+                            refresh:{value:()=>{if(!this.destroyed && this.contents) this.refresh();}}});
+                    }
+                    target=this._uiBackFace;
+                }
+                Window_StatusBase.prototype.drawActorFace.call(target,actor,0,0,ImageManager.faceWidth,ImageManager.faceHeight);
             } else if(element.kind==='states') {
                 const sheet=ImageManager.loadSystem('IconSet');
                 if(!sheet.isReady()) {
@@ -3430,18 +3526,49 @@
     // pictures, over the row backgrounds and under the row text, moved and
     // redrawn per frame without repainting the rows.
 
+    const NO_PANEL_PARTS = Object.freeze([]);
+    /** A portrait that neither reacts nor changes frame. */
+    const STILL_FACE = Object.freeze({ frame: 0, shake: 0, zoom: 1 });
+
     Window_ReactorUIList.prototype.panelSpriteElements = function() {
         const node = this._uiNode;
-        if (node.rowLayout !== "actorPanel" || !this._uiRows.length) return [];
+        if (node.rowLayout !== "actorPanel" || !this._uiRows.length) return NO_PANEL_PARTS;
         const rect = this.itemRect(0);
-        const key = rect.width + "x" + rect.height + ":" + this.contents.fontSize + ":" + JSON.stringify(node.actorElements || {});
-        if (key !== this._uiPanelLayoutKey) {
-            this._uiPanelLayoutKey = key;
-            const elements = ReactorUI.actorPanelLayout(node, rect.width, rect.height, this.contents.fontSize);
-            this._uiPanelSpriteElements = Object.entries(elements).filter(([, element]) => element.visible && ReactorUI.isSpriteElement(node, element))
+        // Asked every frame. The node's parts are fixed for the window's life, so the layout follows
+        // the row's size and the font size alone.
+        const fontSize = this.contents.fontSize;
+        if (rect.width !== this._uiPanelLayoutWidth || rect.height !== this._uiPanelLayoutHeight || fontSize !== this._uiPanelLayoutFont) {
+            this._uiPanelLayoutWidth = rect.width;
+            this._uiPanelLayoutHeight = rect.height;
+            this._uiPanelLayoutFont = fontSize;
+            const elements = ReactorUI.actorPanelLayout(node, rect.width, rect.height, fontSize);
+            const parts = Object.entries(elements).filter(([, element]) => element.visible && ReactorUI.isSpriteElement(node, element))
                 .sort((a, b) => Number(!!b[1].behind) - Number(!!a[1].behind));
+            // Each actor's sprites are kept by their place in this list: another set of parts starts them again.
+            const names = parts.map(([key]) => key).join("|");
+            if (names !== this._uiPanelPartNames) {
+                this._uiPanelPartNames = names;
+                this.clearPanelSprites();
+            }
+            this._uiPanelSpriteElements = parts;
         }
         return this._uiPanelSpriteElements;
+    };
+
+    /** Takes down one actor's sprites (an entry of `_uiPanelSprites`). */
+    Window_ReactorUIList.prototype.removePanelSprites = function(entry) {
+        for (const sprite of entry.sprites) {
+            if (!sprite) continue;
+            if (this._uiPanelLayer) this._uiPanelLayer.removeChild(sprite);
+            if (sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
+        }
+        entry.sprites.length = 0;
+    };
+
+    Window_ReactorUIList.prototype.clearPanelSprites = function() {
+        if (!this._uiPanelSprites) return;
+        for (const entry of this._uiPanelSprites.values()) this.removePanelSprites(entry);
+        this._uiPanelSprites.clear();
     };
 
     Window_ReactorUIList.prototype.panelLayer = function() {
@@ -3460,21 +3587,34 @@
         const elements = this.panelSpriteElements();
         if (!elements.length && !this._uiPanelLayer) return;
         const layer = this.panelLayer();
-        const node = this._uiNode;
-        const seen = new Set();
-        this._uiRows.forEach((row, index) => {
-            const actor = row.data;
-            if (!actor) return;
+        // Runs every frame for as long as the panel shows: sprites are found by actor and by the part's
+        // place in the list, and an actor seen this frame is stamped, so nothing is built to do it.
+        const actors = this._uiPanelSprites;
+        const stamp = this._uiPanelStamp = (this._uiPanelStamp || 0) + 1;
+        const rows = this._uiRows;
+        let seen = 0;
+        for (let index = 0; index < rows.length; index++) {
+            const actor = rows[index].data;
+            if (!actor) continue;
             const rect = this.itemRect(index);
             const active = ReactorUI.isActiveActor(actor);
-            for (const [key, element] of elements) {
-                const id = (actor.actorId ? actor.actorId() : index) + ":" + key;
-                seen.add(id);
-                let sprite = this._uiPanelSprites.get(id);
+            const id = actor.actorId ? actor.actorId() : index;
+            let entry = actors.get(id);
+            if (!entry) {
+                entry = { sprites: [], stamp: 0 };
+                actors.set(id, entry);
+            }
+            if (entry.stamp !== stamp) {
+                entry.stamp = stamp;
+                seen++;
+            }
+            for (let part = 0; part < elements.length; part++) {
+                const element = elements[part][1];
+                let sprite = entry.sprites[part];
                 if (!sprite) {
                     sprite = new Sprite();
                     sprite._rrKind = element.kind === "portrait" ? "portrait" : element.kind === "image" ? "image" : "gauge";
-                    this._uiPanelSprites.set(id, sprite);
+                    entry.sprites[part] = sprite;
                     layer.addChild(sprite);
                 }
                 const cx = rect.x + element.x + element.width / 2;
@@ -3489,26 +3629,37 @@
                     if (element.rotation) sprite.rotation += element.rotation * Math.PI / 180;
                 } else this.updateGaugeSprite(sprite, actor, element, rect.x + element.x, rect.y + element.y);
             }
-        });
-        for (const [id, sprite] of this._uiPanelSprites) {
-            if (seen.has(id)) continue;
-            layer.removeChild(sprite);
-            if (sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
-            this._uiPanelSprites.delete(id);
+        }
+        // Someone left the rows: their sprites go.
+        if (seen !== actors.size) {
+            for (const [id, entry] of actors) {
+                if (entry.stamp === stamp) continue;
+                this.removePanelSprites(entry);
+                actors.delete(id);
+            }
         }
     };
 
     Window_ReactorUIList.prototype.updatePortraitSprite = function(sprite, actor, element, cx, cy) {
         const node = this._uiNode;
         const picture = node.portraitSource === "picture";
-        const file = picture ? node.portraitPattern.replace(/\{id\}/g, String(actor.actorId())) : actor.faceName();
+        let file;
+        if (picture) {
+            // The picture's name is written out once per actor, not once a frame.
+            const id = actor.actorId();
+            if (sprite._rrPatternId !== id) {
+                sprite._rrPatternId = id;
+                sprite._rrPattern = node.portraitPattern.replace(/\{id\}/g, String(id));
+            }
+            file = sprite._rrPattern;
+        } else file = actor.faceName();
         if (sprite._rrFile !== file) {
             sprite._rrFile = file;
             sprite.bitmap = picture ? ReactorUI.softImage(file.includes("/") ? file : "pictures/" + file) : ImageManager.loadFace(file);
         }
         const bitmap = sprite.bitmap;
         if (!bitmap || !bitmap.isReady()) return;
-        const state = node.portraitMotion || node.portraitFrames === 5 ? ReactorUI.faceState(actor) : { frame: 0, shake: 0, zoom: 1 };
+        const state = node.portraitMotion || node.portraitFrames === 5 ? ReactorUI.faceState(actor) : STILL_FACE;
         let fw, fh, fx = 0, fy = 0;
         if (picture) {
             const frames = node.portraitFrames;
@@ -3565,7 +3716,11 @@
     };
 
     Window_ReactorUIList.prototype.destroy = function(options) {
-        if (this._uiPanelSprites) for (const sprite of this._uiPanelSprites.values()) if (sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
+        if (this._uiPanelSprites) {
+            for (const entry of this._uiPanelSprites.values()) {
+                for (const sprite of entry.sprites) if (sprite && sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
+            }
+        }
         Window_Selectable.prototype.destroy.call(this, options);
     };
 
@@ -3573,9 +3728,34 @@
         if (this._uiFocused && this._uiScene.acceptsInput()) this.activate();
         else this.deactivate();
         Window_Selectable.prototype.update.call(this);
-        if (this._uiNode.rowLayout === "actorPanel") this.updatePanelSprites();
+        if (this.visible === false) {
+            // Hidden: its sprites wait. Its rows are still read, as its selection may be the context that
+            // shown nodes follow, but not in an overlay hidden as a whole, where nothing shows.
+            this._uiStale = true;
+            if (this._uiScene._hiddenWhole) return;
+        } else {
+            this._uiStale = false;
+            if (this._uiNode.rowLayout === "actorPanel") this.updatePanelSprites();
+        }
         if (++this._uiRefreshWait < 15) return;
+        this.pollRows();
+    };
+
+    /** Shown again after an update spent hidden (updateConditions): sprites and rows are brought up to date now. */
+    Window_ReactorUIList.prototype.updateShown = function() {
+        this._uiStale = false;
+        if (this._uiNode.rowLayout === "actorPanel") this.updatePanelSprites();
+        this.pollRows();
+    };
+
+    /** Reads the rows again and repaints when they differ: four times a second, and at once when asked to. */
+    Window_ReactorUIList.prototype.pollRows = function() {
         this._uiRefreshWait = 0;
+        // Rows written in the editor never change: only the selection is published again, as an unchanged list does.
+        if (this._uiNode.dataSource === "literal" && Array.isArray(this._uiNode.items) && this._uiRows.length === this._uiNode.items.length) {
+            this.publishSelection();
+            return;
+        }
         const rows = ReactorUI.listRows(this._uiNode, this._uiScene);
         const signature = ReactorUI.listRowsSignature(rows) + (this._uiNode.rowLayout==='actorPanel'?ReactorUI.actorPanelRevision(this._uiNode,rows):'');
         const selected = this.selectedRow();
@@ -3736,6 +3916,7 @@
 
     /** Every list re-reads its rows on its next update: after an item is used, equipped, bought or sold. */
     Scene_ReactorUI.prototype.refreshAllLists = function() {
+        this._equipPreview = null;
         for (const window of this._nodeWindows) if (window.node().type === "list") window._uiRefreshWait = 15;
     };
 
@@ -3920,6 +4101,7 @@
 
     /** Re-measures auto-sized text and repositions it and anchored descendants. */
     Scene_ReactorUI.prototype.refreshNodeLayouts = function() {
+        this._layoutDirty = false;
         if (!this._interface) return;
         const fit = this._interface.fit || null;
         const root = fit ? new Rectangle(0, 0, fit.width, fit.height) : new Rectangle(0, 0, Graphics.width, Graphics.height);
@@ -3957,8 +4139,17 @@
             this._measureWindow = new (built(Window_ReactorUINode))(new Rectangle(0, 0, 8, 8), this, node);
             this._measureWindow.visible = false;
         }
-        this._measureWindow._uiNode = node;
-        return this._measureWindow.measure();
+        const measurer = this._measureWindow;
+        measurer._uiNode = node;
+        // A layout measures every auto-sized text; one whose words have not changed keeps its size.
+        const words = measurer.convertEscapeCharacters(measurer.labelValue());
+        const sizes = this._measuredTexts || (this._measuredTexts = new Map());
+        let kept = sizes.get(node);
+        if (!kept || kept.words !== words) {
+            kept = { words, size: measurer.measure() };
+            sizes.set(node, kept);
+        }
+        return { width: kept.size.width, height: kept.size.height };
     };
 
     Scene_ReactorUI.prototype.start = function() {
@@ -4005,6 +4196,7 @@
 
     Scene_ReactorUI.prototype.onActorChange = function() {
         Scene_MenuBase.prototype.onActorChange.call(this);
+        this._equipPreview = null;
         for (const window of this._nodeWindows) {
             if (window.node().type === "list") window._uiRefreshWait = 14;
             else window.refresh();
@@ -4115,21 +4307,30 @@
             this._authoredNodes = new Map(this._interface.nodes.map(node => [node.id, node]));
         }
         const authored = this._authoredNodes;
-        const shown = node => {
-            if (node && node.type === "gauge" && ReactorUI.isPoolHidden(node.gauge)) return false;
-            for (let depth = 0; node && depth <= authored.size; depth++) {
-                if (!ReactorUI.evaluateCondition(node.visible, this)) return false;
+        // Each node's own condition is asked once per pass, however many nodes stand under it.
+        const known = this._shownNodes || (this._shownNodes = new Map());
+        known.clear();
+        const chain = (node, depth) => {
+            if (!node || depth > authored.size) return false;
+            let result = known.get(node);
+            if (result !== undefined) return result;
+            if (!ReactorUI.evaluateCondition(node.visible, this)) result = false;
+            else {
                 const parent = authored.get(node.parent);
-                if (!parent || parent === node) return true;
-                node = parent;
+                result = !parent || parent === node ? true : chain(parent, depth + 1);
             }
-            return false;
+            known.set(node, result);
+            return result;
         };
+        const shown = node => !(node && node.type === "gauge" && ReactorUI.isPoolHidden(node.gauge)) && chain(node, 0);
         for (const window of this._nodeWindows) {
             const node = window.node();
             window.visible = shown(node);
-            if (node.type === "button" || node.type === "list") window.setEnabled(ReactorUI.evaluateCondition(node.enabled, this));
+            // Hidden when the windows updated this frame, so it did no work then: it catches up before it is drawn.
+            if (window.visible && window._uiStale && window.updateShown) window.updateShown();
+            if (node.type === "button" || node.type === "list" || node.type === "input") window.setEnabled(ReactorUI.evaluateCondition(node.enabled, this));
         }
+        if (this._layoutDirty) this.refreshNodeLayouts();
         const focused = this.focusedWindow();
         if (focused && !this.canFocus(focused)) {
             this.setFocus(this._nodeWindows.findIndex(window => this.canFocus(window)));
@@ -4140,6 +4341,8 @@
         this._inputHandled = false;
         Scene_MenuBase.prototype.update.call(this);
         if (!this._interface || this._interface.mode === "victory") return;
+        // Auto-sized texts that changed as the windows updated: one layout for all of them.
+        if (this._layoutDirty) this.refreshNodeLayouts();
         this.updateInterfaceTransition();
         if (!this.acceptsInput()) return;
         // A field marked to start typing does so once the interface is up (Name Input, a terminal prompt).
@@ -4174,11 +4377,16 @@
         for (let i = this._nodeWindows.length - 1; i >= 0; i--) {
             const window = this._nodeWindows[i];
             if (!this.canFocus(window) || !window.containsPoint(TouchInput.x, TouchInput.y)) continue;
+            const hadFocus = i === this._focusIndex;
             this.setFocus(i);
             if (TouchInput.isTriggered()) window.setPressed(true);
             // Window_Selectable handles List hover, touch selection, and the
             // engine's select-then-confirm gesture after it receives focus.
             if (window.node().type !== "list" && TouchInput.isTriggered()) this.activateFocused();
+            // A list that had no focus was inactive when it updated this frame, so it missed the touch:
+            // a finger never hovers, and the release would act on the row selected before. Select the
+            // row under the touch now.
+            else if (!hadFocus && TouchInput.isTriggered() && window.onTouchSelect) window.onTouchSelect(true);
             return;
         }
     };
@@ -4676,7 +4884,8 @@
             this.executeUse({ item, user, all: false, forUser: false }, null, window);
             return;
         }
-        this.beginActorSelection(action, { item, user, all: probe.isForAll(), forUser: probe.isForUser(), row, window });
+        // Only a skill is fixed on its user: an item "for the user" goes to whoever is chosen (Window_MenuActor.selectForItem).
+        this.beginActorSelection(action, { item, user, all: probe.isForAll(), forUser: probe.isForUser() && DataManager.isSkill(item), row, window });
     };
 
     Scene_ReactorUI.prototype.executeUse = function(use, actor, window) {
@@ -4727,8 +4936,9 @@
     /** A text input starts editing: typing always, the stock character grid when the node asks for it. */
     Scene_ReactorUI.prototype.beginInput = function(window, quiet) {
         if (this._editingWindow) return;
-        if (!quiet) SoundManager.playOk();
         const node = window.node();
+        // The field's own Sound stands in for the OK sound, as a button's does.
+        if (!quiet) { if (node.se) AudioManager.playSe(node.se); else SoundManager.playOk(); }
         if (this._role === "name" && this.nameMaxLength() > 0) node.maxLength = Math.min(node.maxLength, this.nameMaxLength());
         this._editingWindow = window;
         window.beginEdit();
@@ -4738,12 +4948,19 @@
     Scene_ReactorUI.prototype.commitInput = function(window, soundPlayed) {
         if (window !== this._editingWindow) return;
         const node = window.node();
+        // An actor's name is never stored empty, as on the stock screen (Window_NameInput.onNameOk): the
+        // name it had comes back, or the field refuses, and the edit goes on.
+        if (node.inputTarget === "actorName" && !window.inputValue()) {
+            if (window._uiInitial) { window.setDraft(window._uiInitial); if (!soundPlayed) SoundManager.playOk(); }
+            else SoundManager.playBuzzer();
+            return;
+        }
         this.closeCharacterGrid();
         this._editingWindow = null;
         const written = window.endEdit(true);
         this._inputHandled = true;
         if (!written) { SoundManager.playBuzzer(); return; }
-        if (!soundPlayed) SoundManager.playOk();
+        if (!soundPlayed) { if (node.se) AudioManager.playSe(node.se); else SoundManager.playOk(); }
         this.runAction(node.action);
     };
 
@@ -4854,6 +5071,19 @@
 
     ReactorUI.changeOption = function(symbol, forward, wrap) {
         if (typeof ConfigManager === "undefined" || !symbol) return false;
+        if (symbol === "graphicsQuality") {
+            // The steps of Window_Options.changeGraphicsQuality: left and right stop at the ends, OK goes round.
+            const values = typeof Window_Options !== "undefined" && Window_Options.GRAPHICS_VALUES || [];
+            if (!values.length) return false;
+            const at = Math.max(0, values.indexOf(ConfigManager.graphicsQuality));
+            const next = wrap ? (at + (forward ? 1 : values.length - 1)) % values.length : Math.max(0, Math.min(values.length - 1, at + (forward ? 1 : -1)));
+            if (next === at) return false;
+            ConfigManager.graphicsQuality = values[next];
+            // Auto chosen again starts from the full picture.
+            if (values[next] === "auto" && typeof Reactor3D !== "undefined" && Reactor3D.Quality) Reactor3D.Quality.reset();
+            if (typeof SoundManager !== "undefined" && SoundManager.playCursor) SoundManager.playCursor();
+            return true;
+        }
         const volume = symbol.includes("Volume");
         const previous = ConfigManager[symbol];
         let value;
@@ -4948,6 +5178,9 @@
         overlay.update = function() {
             // `_standDown`: its owner has it leave for now (a battle HUD while the battle's results are shown).
             const shown = !this._standDown && ReactorUI.evaluateCondition(this._interface.visible, scene);
+            // Hidden as a whole and staying so (a HUD behind a switch, a battle HUD standing down): its
+            // windows were hidden on the frame it faded out, and they do no work until it shows again.
+            if (!shown && this._hiddenWhole && this._visibilityAlpha <= 0) return;
             const transition = shown ? this._interface.openTransition : this._interface.closeTransition;
             const step = transition === "none" ? 1 : 1 / this._interface.transitionDuration;
             this._visibilityAlpha = shown ? Math.min(1, this._visibilityAlpha + step) : Math.max(0, this._visibilityAlpha - step);
@@ -4962,6 +5195,7 @@
                 window.syncVisualState();
                 if (this._visibilityAlpha <= 0) window.visible = false;
             }
+            this._hiddenWhole = this._visibilityAlpha <= 0;
         };
         overlay.update();
         return overlay;
@@ -4979,7 +5213,8 @@
     Scene_Map.prototype.createReactorUIOverlays = function() {
         const records = Array.isArray(window.$dataUserInterfaces) ? window.$dataUserInterfaces : [];
         for (const raw of records) {
-            if (!raw) continue;
+            // Every map scene asks: only the overlays are built.
+            if (!raw || ReactorUI.storedMode(raw) !== "overlay") continue;
             const record = ReactorUI.normalizeInterface(raw);
             if (record.mode === "overlay") this.ensureReactorUIOverlay(record);
         }
@@ -6698,10 +6933,19 @@
         for (const window of hud._nodeWindows) {
             const node = window.node();
             if (node.type !== "list" || node.dataSource !== "party" || !window.visible) continue;
-            const index = window._uiRows.findIndex(row => row.data === actor);
+            const rows = window._uiRows;
+            let index = -1;
+            for (let i = 0; i < rows.length && index < 0; i++) if (rows[i].data === actor) index = i;
             if (index < 0) continue;
             const rect = window.itemRect(index), shown = ReactorUI.shownScale(window);
-            return { x: window.x + (window.padding + rect.x) * shown, y: window.y + (window.padding + rect.y) * shown, width: rect.width * shown, height: rect.height * shown };
+            // Asked every frame by a window that follows the acting actor: the answer is written into one
+            // object the HUD keeps, to be read at once and not held.
+            const out = hud._slotOut || (hud._slotOut = { x: 0, y: 0, width: 0, height: 0 });
+            out.x = window.x + (window.padding + rect.x) * shown;
+            out.y = window.y + (window.padding + rect.y) * shown;
+            out.width = rect.width * shown;
+            out.height = rect.height * shown;
+            return out;
         }
         return null;
     };
@@ -6769,13 +7013,18 @@
                 const sprite = sprites ? sprites.find(other => other._battler === actor) : null;
                 if (sprite) {
                     const top = this.battlerTop(scene, sprite), layer = scene._windowLayer;
-                    state.follow = { x: Math.round(top.x - (layer ? layer.x : 0) - win.width * state.scale / 2 + node.x * state.scale),
-                        y: Math.round(top.y - (layer ? layer.y : 0) - win.height * state.scale + node.y * state.scale) };
+                    const follow = state.follow || (state.follow = { x: 0, y: 0 });
+                    follow.x = Math.round(top.x - (layer ? layer.x : 0) - win.width * state.scale / 2 + node.x * state.scale);
+                    follow.y = Math.round(top.y - (layer ? layer.y : 0) - win.height * state.scale + node.y * state.scale);
                     followed = true;
                 }
             }
             const slot = followed ? null : hud.slotRect(actor);
-            if (slot) state.follow = { x: slot.x + Math.round(node.x * state.scale), y: slot.y + Math.round(node.y * state.scale) };
+            if (slot) {
+                const follow = state.follow || (state.follow = { x: 0, y: 0 });
+                follow.x = slot.x + Math.round(node.x * state.scale);
+                follow.y = slot.y + Math.round(node.y * state.scale);
+            }
             // Kept on the screen: on a small game (640x480) the slot's offset would stand it above the top edge.
             if (state.follow) {
                 x = state.follow.x; y = state.follow.y;
@@ -7586,8 +7835,10 @@
         const list = window.$dataUserInterfaces;
         const raw = Array.isArray(list) ? list[id] : null;
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return 0;
-        const record = this.normalizeInterface(raw);
-        return record.id === id && record.mode === "scene" && (record.roles || []).includes(role) ? id : 0;
+        // Asked twice for every scene the game opens: the three fields are read from the stored record
+        // as normalizeInterface reads them, and nothing is built.
+        const roles = Array.isArray(raw.roles) ? raw.roles : raw.stock ? [raw.stock] : [];
+        return Math.max(0, Math.floor(finite(raw.id, 0))) === id && this.storedMode(raw) === "scene" && roles.includes(role) ? id : 0;
     };
 
     ReactorUI._bypassReplacements = new Set();

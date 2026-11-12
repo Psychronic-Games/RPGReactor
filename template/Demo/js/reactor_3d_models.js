@@ -40,7 +40,6 @@
 // `size` fits the longest ground axis to that many tiles. `scale` is an extra
 // multiplier. `yaw` is degrees added on top of the event's facing.
 
-Reactor3D.MODEL_DIR = "3d/";
 Reactor3D.MODEL_EXTS = [".glb", ".obj", ".fbx", ".stl", ".usdz", ".3mf", ".dxf", ".blend"];
 Reactor3D._glbCache = Object.create(null);
 
@@ -437,8 +436,9 @@ Reactor3D.collectMapModelSpecs = function(mapData) {
 
 /**
  * Load every model the map references while its loading fade still hides
- * the work, so nothing loads — or hitches — mid-play. Memoized per call
- * site; safe to call for maps with nothing to load.
+ * the work, so nothing loads — or hitches — mid-play. Safe to call again
+ * (a model already asked for is not asked for twice) and for maps with
+ * nothing to load.
  */
 Reactor3D.preloadMapModels = function(mapData) {
     const all = this.collectMapModelSpecs(mapData);
@@ -450,11 +450,9 @@ Reactor3D.preloadMapModels = function(mapData) {
     const specs = all.filter(spec => !held.has(spec));
     return this.ensureLoaded().then(ok => {
         if (!ok) return [];
-        // What a battle here will show, readied under the same fade (a preparation, never a reason to fail the load).
-        let battle = null;
-        try { battle = this.preloadBattleModels(mapData); } catch (error) { battle = null; }
-        const settled = battle ? battle.catch(() => null) : Promise.resolve(null);
-        return settled.then(() => Promise.all(specs.map(spec => Promise.all([
+        // The map's own models are asked for first: behind the battle's they waited for models only a later
+        // battle needs, and over the web the map could open before its own had been asked for.
+        const mapLoads = Promise.all(specs.map(spec => Promise.all([
             this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
             this.loadModelSidecar(spec.name)
         ]).then(loaded => {
@@ -465,13 +463,18 @@ Reactor3D.preloadMapModels = function(mapData) {
             try { this.modelCollisionMask(spec); } catch (error) { /* the box remains */ }
             this.boundModelTemplate(loaded[0]);
             return loaded;
-        }))).then(loaded => {
+        })));
+        // What a battle here will show, readied under the same fade (a preparation, never a reason to fail the load).
+        let battle = null;
+        try { battle = this.preloadBattleModels(mapData); } catch (error) { battle = null; }
+        const settled = battle ? battle.catch(() => null) : Promise.resolve(null);
+        return Promise.all([mapLoads, settled]).then(([loaded]) => {
             // One model at another size (a captain a fifth taller than his men) has a footprint of its own, kept per
             // pose: taken here too, or it was walked out on the frame its event first stood on the map (a battle's first).
             for (const spec of this.collectMapPoseSpecs(mapData)) { try { this.modelCollisionMask(spec); } catch (error) { /* the box remains */ } }
             this.loadLaterModels(later);
             return loaded;
-        }));
+        });
     });
 };
 
@@ -514,7 +517,6 @@ Reactor3D.loadLaterModels = function(specs) {
     return this._laterModels || Promise.resolve();
 };
 
-/** Every size and pose the map's events give their models, one spec for each (a footprint is kept per pose). */
 /**
  * A loaded model's rest bounds, worked out while the map loads: every copy, finger skin and detail level takes them
  * from the model's own geometry, and the first thing to ask for a missing box (the lit region, on the frame a
@@ -533,6 +535,7 @@ Reactor3D.boundModelTemplate = function(template) {
     return template;
 };
 
+/** Every size and pose the map's events give their models, one spec for each (a footprint is kept per pose). */
 Reactor3D.collectMapPoseSpecs = function(mapData) {
     const specs = [], seen = new Set();
     const events = (mapData && mapData.reactor3d && mapData.reactor3d.events) || {};
@@ -668,7 +671,7 @@ Reactor3D.warmLoadedTemplates = function() {
     // variants and uploaded every picture of a model in one frame.
     if (this.ShaderWarmup && this.ShaderWarmup.enabled && this.ShaderWarmup.supported(renderer)) return;
     if (!this._warmedTemplates) this._warmedTemplates = new Set();
-    // Runs every frame; on the steady state it must allocate nothing.
+    // Runs every frame; on the steady state it makes this empty list and nothing else.
     const pending = [];
     for (const key in this._glbCache) {
         const template = this._glbCache[key].template;
@@ -789,8 +792,9 @@ Reactor3D.eventModelInterpolatedMark = function(faces, direction) {
 
 /**
  * The yaw the mesh actually stands at in the world: the authored spec
- * rotation plus the front-mark aim, exactly as `applyEventModelPose`
- * computes it. The collision footprint must rotate by THIS — rotating by
+ * rotation plus the front-mark aim, as `applyEventModelPose` computes it
+ * (a spec with face marks and no front mark is aimed there by its other
+ * marks, and here by the facing alone). The collision footprint must rotate by THIS — rotating by
  * the facing alone left a model posed with an authored yaw (a motorcycle
  * turned 163 degrees in the picker) colliding crosswise to its visible
  * body, so a character clipped into the metal from one side and was
@@ -1492,14 +1496,6 @@ Reactor3D.eventIsUnit = function(character) {
     const F = root.ReactorFight;
     if (!F || !F.dataUnitSpec || !character || typeof character.event !== "function") return false;
     return !!F.dataUnitSpec(character.event());
-};
-
-/**
- * Whether a battle sequence holds a character: it is drawn where the sequence
- * puts it (`_realX`, `_realY`, a lift) and has not left its cell.
- */
-Reactor3D.characterIsStaged = function(character) {
-    return !!(character && character._rrStage);
 };
 
 /**
@@ -2256,6 +2252,8 @@ Reactor3D.ModelUse = {
             if (entry.name && text.indexOf(entry.name) >= 0) continue;
             idle.push(key);
         }
+        // The map's events as text were for these two sweeps: not kept for as long as the map is played.
+        if (!early) { this._text = ""; this._textOf = null; }
         // The newest first: they stay while they fit.
         idle.sort((a, b) => (cache[b].used || 0) - (cache[a].used || 0));
         let room = R.lowMemory && R.lowMemory() ? this.lowMemoryGraceBytes : this.graceBytes;
@@ -2312,10 +2310,6 @@ Reactor3D.ModelUse = {
             }
         }
     }
-};
-
-Reactor3D.loadGlb = function(name) {
-    return this.loadModel(name, ".glb");
 };
 
 /**
@@ -2410,7 +2404,7 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                         resolve(null);
                     }
                 };
-                if (job.ext === ".glb") {
+                if (String(job.ext).toLowerCase() === ".glb") {
                     // The container split and JSON parse run off-thread;
                     // the buffer travels there and back.
                     // A failed or absent worker hands the bytes back to the
@@ -2600,7 +2594,10 @@ Reactor3D._ensureParseWorker = function() {
         if (typeof Worker !== "undefined" && typeof Blob !== "undefined"
             && typeof URL !== "undefined" && URL.createObjectURL) {
             const blob = new Blob([this._glbWorkerSource()], { type: "text/javascript" });
-            const worker = new Worker(URL.createObjectURL(blob));
+            // The address is let go once the worker has it: a new one is made after every rest.
+            const url = URL.createObjectURL(blob);
+            const worker = new Worker(url);
+            URL.revokeObjectURL(url);
             this._parsePending = new Map();
             worker.onmessage = event => {
                 const data = event.data || {};
@@ -6654,6 +6651,9 @@ Reactor3D.carveModelParts = function(root, parts) {
             mesh.parent.add(piece);
         }
         mesh.geometry = subGeometry(remainder);
+        // No distance levels for what is left: a level would hand it the whole mesh back, and the carved
+        // triangles would be drawn twice (the pieces and, unmoving, here). This copy's note only.
+        delete mesh.userData.lodIndex;
     });
 };
 
@@ -7060,7 +7060,6 @@ Reactor3D.attachRigFingers = function(root, hand, side, points, palm) {
             entry.joints = [{ node: one, rest: one.quaternion.clone(), axis: hinge.clone() }, { node: two, rest: two.quaternion.clone(), axis: hinge.clone() }];
         }
         entry.now = [0, 0];
-        entry.goal = [0, 0];
     }
     hand.updateMatrixWorld(true);
     const grip = { hand, layout, file: layout.fingers.some(f => f.file), stamp: -1, held: null, last: null, closed: false };
@@ -7841,8 +7840,6 @@ Reactor3D.HandGrip = {
     HELD_FOR: 140,
     // How far a wrist turns to take a handle, in radians: a hand cannot close on a handle that lies along its fingers.
     TURN_MAX: 0.8,
-    // A thing whose bulk hangs this far off its long axis (a pistol, a rifle) is held by that bulk, the grip; anything slimmer by its long axis.
-    GRIP_HANG: 0.06,
     _m: null,
     _cloud: new Float32Array(3 * 2048),
     now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); },
@@ -8202,6 +8199,15 @@ Reactor3D.Held = {
     },
     /** The joint both arms hang from (the chest), and the head on it: what a stance turns. */
     torso(record, side) {
+        // Found once for a model and kept: asked each aimed frame, and finding the head walks everything
+        // under the chest (both arms, every finger joint) with a pattern on each name.
+        const kept = record && record._torso && record._torso.object === record.object ? record._torso : null;
+        if (kept && kept[side]) return kept[side];
+        const found = this.findTorso(record, side);
+        if (found && record.object) (kept || (record._torso = { object: record.object }))[side] = found;
+        return found;
+    },
+    findTorso(record, side) {
         const hand = this.joint(record, side + "Hand"), other = this.joint(record, (side === "right" ? "left" : "right") + "Hand");
         const upper = hand && hand.parent && hand.parent.parent, across = other && other.parent && other.parent.parent;
         if (!upper || !across) return null;
@@ -8278,7 +8284,7 @@ Reactor3D.Held = {
     /**
      * Holds a shown weapon the way its step asks: aimed, the shooting arm reaches down the line to `goal` so the
      * barrel (laid along that line) points at it and the stock sits back by the shoulder. Returns the hand frame
-     * to place the thing with. `note`, when given, is told the line (`heldAimLine`).
+     * to place the thing with.
      */
     aim(owner, held, step, goal, note) {
         const T = THREE, R = Reactor3D, side = step.attachment === "leftHand" ? "left" : "right";
@@ -8301,7 +8307,6 @@ Reactor3D.Held = {
         // A long gun is shouldered (the stock ends by the shoulder); a short one is held out at arm's length.
         const fore = hand.parent, E = fore.getWorldPosition(new T.Vector3()), H = hand.getWorldPosition(new T.Vector3()), reach = S.distanceTo(E) + E.distanceTo(H);
         const distance = itemLength > 1.2 ? Math.max(.35, gripLength + .12) : reach * .86;
-        if (note) note.heldAimLine = { from: S.clone(), to: goal.clone() };
         if (gun) {
             const down = new T.Vector3(0, -1, 0).addScaledVector(dir, dir.y);
             if (down.lengthSq() > 1e-6) {
@@ -8627,12 +8632,33 @@ Reactor3D.MapHeld = {
         this.unpin(state);
         const record = state.record;
         if (record) {
+            // Its materials (this copy's own) leave the scene's list with it: every ambient change walks that
+            // list, and it grew by each weapon's materials every battle.
+            const listed = state.lit && state.lit._materials;
+            if (listed) record.object.traverse(child => {
+                const mats = child.material ? (Array.isArray(child.material) ? child.material : [child.material]) : [];
+                for (const mat of mats) { const at = listed.indexOf(mat); if (at >= 0) listed.splice(at, 1); }
+            });
             if (record.object.parent) record.object.parent.remove(record.object);
             if (state.template) Reactor3D.releaseModelInstance(record.object, state.template);
         }
-        state.record = null; state.template = null; state.local = null; state.loading = null;
+        state.record = null; state.template = null; state.local = null; state.loading = null; state.lit = null;
     },
     free(state) {
+        // Its hands open at once: the fingers are eased only by HandGrip.update, which the map reaches through
+        // a held thing's update, and after the last one is freed nobody calls it (they stayed clenched).
+        const grips = Reactor3D.HandGrip;
+        for (const grip of state.pinned) {
+            for (const finger of grip.layout.fingers) {
+                finger.now[0] = 0; finger.now[1] = 0;
+                for (const joint of finger.joints) joint.node.quaternion.copy(joint.rest);
+            }
+            // The wrist's turn and an aim's turn come off with them, where the pose has not replaced them.
+            if (grip.turned) { if (grip.hand.quaternion.equals(grip.turnOut)) grip.hand.quaternion.copy(grip.turnBase); grip.turn.identity(); grip.turned = false; }
+            if (grip.isSet) { if (grip.hand.quaternion.equals(grip.setOut)) grip.hand.quaternion.copy(grip.setBase); grip.isSet = false; }
+            if (grips && grips.hands) grips.hands.delete(grip);
+            grip.thing = undefined; grip.relSet = false;
+        }
         this.release(state);
         for (const slot of state.slots) if (slot && slot.node && slot.node.quaternion.equals(slot.out)) slot.node.quaternion.copy(slot.base);
         state.slots.length = 0;
@@ -8961,14 +8987,19 @@ Reactor3D.LyingLift = {
     // A pose still playing (an event lying with its idle) is measured again this often, in frames.
     EVERY: 30,
     apply(holder, object, floor) {
-        const state = holder.lyingLift || (holder.lyingLift = { lift: 0, key: "", age: 0 });
-        const q = object.quaternion, key = [q.x, q.y, q.z, q.w, object.scale.y, floor].map(v => v.toFixed(3)).join(",");
+        const state = holder.lyingLift || (holder.lyingLift = { lift: 0, at: null, age: 0 });
+        // How it lay when it was last measured, as six numbers: a key string made of them was an array, six
+        // strings and a join for every sleeper every update, to find nothing changed.
+        const q = object.quaternion, at = state.at, scale = object.scale.y, near = (a, b) => Math.abs(a - b) <= 0.0005;
+        const same = !!at && near(at[0], q.x) && near(at[1], q.y) && near(at[2], q.z) && near(at[3], q.w) && near(at[4], scale) && near(at[5], floor);
         // Measured with the body where it was just placed, before any lift.
-        if (state.key !== key || (!holder.poseHeld && ++state.age >= this.EVERY)) {
+        if (!same || (!holder.poseHeld && ++state.age >= this.EVERY)) {
             object.updateMatrixWorld(true);
             const low = this.lowest(object);
             if (Number.isFinite(low)) state.lift = floor + this.CLEAR - low;
-            state.key = key; state.age = 0;
+            const kept = at || (state.at = [0, 0, 0, 0, 0, 0]);
+            kept[0] = q.x; kept[1] = q.y; kept[2] = q.z; kept[3] = q.w; kept[4] = scale; kept[5] = floor;
+            state.age = 0;
         }
         object.position.y += state.lift;
     }
@@ -9181,8 +9212,11 @@ Reactor3D.applyModelRig = function(root, rig) {
             const round = v => Math.round(v * 1e4) / 1e4;
             const signature = data.count + "|" + (geometry.index ? geometry.index.count : 0) + "|" + list.map(h => h.index + ":" + h.toHand.map(round).join(",") + ":"
                 + h.fingers.map(f => [f.one, f.two, ...f.base.map(round), ...f.tip.map(round), round(f.radius)].join(",")).join(";")).join("|");
-            const versions = this.FingerSkin._rigSkins.get(data) || [];
-            this.FingerSkin._rigSkins.set(data, versions);
+            // Kept by the weights' own array (the cached sidecar's, the same for every copy of the model):
+            // `readModelRig` makes the record around it anew each time, and every copy ran the whole job again.
+            const kept = data.indices && typeof data.indices === "object" ? data.indices : data;
+            const versions = this.FingerSkin._rigSkins.get(kept) || [];
+            this.FingerSkin._rigSkins.set(kept, versions);
             fingerSkin = versions.find(entry => entry.signature === signature);
             if (!fingerSkin) {
                 const entry = fingerSkin = { signature, index: null, weight: null, mitts: null, waiting: [] };
@@ -10230,7 +10264,7 @@ Reactor3D.applyModelGlow = function(binding, rule, index, state) {
                 }
                 mats[k] = own; changed = true;
             }
-            if (changed) object.material = many ? mats : mats[0];
+            if (changed) { object.material = many ? mats : mats[0]; Reactor3D.touchMaterial(object.material); }
         });
         glow = all[index] = { rule, list, lit: false };
     }
@@ -10243,7 +10277,7 @@ Reactor3D.applyModelGlow = function(binding, rule, index, state) {
         if (active) t -= state.action.frame;
     }
     if (!active) {
-        if (glow.lit) for (const g of glow.list) { g.material.emissiveIntensity = g.intensity; if (g.offset) g.material.emissiveMap.offset.copy(g.offset); }
+        if (glow.lit) for (const g of glow.list) { g.material.emissiveIntensity = g.intensity; if (g.offset) g.material.emissiveMap.offset.copy(g.offset); Reactor3D.touchMaterial(g.material); }
         glow.lit = false;
         return;
     }
@@ -10251,6 +10285,7 @@ Reactor3D.applyModelGlow = function(binding, rule, index, state) {
     const k = this.modelGlowValue(rule, t), seconds = t / 60;
     for (const g of glow.list) {
         g.material.emissiveIntensity = g.intensity * k;
+        Reactor3D.touchMaterial(g.material);
         if (rule.mode === "scroll" && g.offset) {
             const map = g.material.emissiveMap;
             map.offset.set(((g.offset.x + rule.uv[0] * seconds) % 1 + 1) % 1, ((g.offset.y + rule.uv[1] * seconds) % 1 + 1) % 1);
@@ -10861,7 +10896,9 @@ Reactor3D.ownModelMaterials = function(holder) {
     const own = mat => {
         if (!mat || !mat.__rrShared || !mat.__rrSource) return mat;
         swapped = true;
-        return Reactor3D.instanceModelMaterial(mat.__rrSource);
+        // (The mesh draws with another material from here: the one left and the one taken are both stamped.)
+        Reactor3D.touchMaterial(mat);
+        return Reactor3D.touchMaterial(Reactor3D.instanceModelMaterial(mat.__rrSource));
     };
     object.traverse(child => {
         if (!child.isMesh || !child.material) return;
@@ -10895,6 +10932,7 @@ Reactor3D.updateModelFlash = function(holder) {
                 base.r + (flash.color[0] / 255 - base.r) * strength,
                 base.g + (flash.color[1] / 255 - base.g) * strength,
                 base.b + (flash.color[2] / 255 - base.b) * strength);
+            Reactor3D.touchMaterial(mat);
         }
     });
     flash.t++;
@@ -10907,6 +10945,7 @@ Reactor3D.updateModelFlash = function(holder) {
             for (const mat of mats) {
                 if (mat.color && mat.userData.baseColor && mat.userData.baseColor.isColor) {
                     mat.color.copy(mat.userData.baseColor);
+                    Reactor3D.touchMaterial(mat);
                 }
             }
         });
@@ -11677,6 +11716,8 @@ Reactor3D.setMaterialShine = function(material, surface, studio) {
     if (!material || typeof THREE === "undefined") return;
     const shines = !!surface && surface.reflect > 0;
     const had = !!this.shineOf(material);
+    const shineKey = () => { const s = material.userData.rrShine; return s && s.vector ? s.vector.x + "," + s.vector.y + "," + s.vector.z + "," + s.vector.w + "," + (s.tint && s.tint.isColor ? s.tint.getHex() : "") + "," + (s.albedo ? s.albedo.value : "") : ""; };
+    const shineWas = shineKey();
     if (shines) {
         if (!material.userData.rrShine || !material.userData.rrShine.vector || !material.userData.rrShine.vector.isVector4) {
             material.userData.rrShine = { vector: new THREE.Vector4(), tint: new THREE.Color() };
@@ -11696,6 +11737,8 @@ Reactor3D.setMaterialShine = function(material, surface, studio) {
     // (no reflection sampler, every draw dropped). Dispose so the next draw compiles
     // afresh; the GL program itself is shared and reused.
     if (had !== shines) { material.dispose(); material.needsUpdate = true; }
+    // (Asked again with the surface it has: nothing changed, nothing stamped.)
+    if (had !== shines || shineKey() !== shineWas) Reactor3D.touchMaterial(material);
 };
 
 /** Builder metal keeps no diffuse paint under its metallic response (the fourth Surface component). */
@@ -11996,11 +12039,14 @@ Reactor3D.applyModelLook = function(object, look) {
                 mine = { color: base.clone(), map: material.map || null };
                 own.set(material, mine);
             }
+            const lookWas = material.color.getHex() + "|" + (material.map ? material.map.id : 0) + "|" + (material.userData.rrLook && material.userData.rrLook.a ? [material.userData.rrLook.a.x, material.userData.rrLook.a.y, material.userData.rrLook.a.z, material.userData.rrLook.b.x, material.userData.rrLook.b.y, material.userData.rrLook.b.z].join(",") : "");
+            const colourWas = [material.color.r, material.color.g, material.color.b];
             // The picture: the variant's own in place of the file's.
             const map = look && look.texture ? (this.variantTexture(look.model, look.texture, mine.map) || mine.map) : mine.map;
             if (material.map !== map) {
                 const had = !!material.map;
                 material.map = map;
+                Reactor3D.touchMaterial(material);
                 if (had !== !!map) material.needsUpdate = true;
             }
             // The color adjustment: in the program for a textured material, on the color itself for a flat one.
@@ -12027,6 +12073,9 @@ Reactor3D.applyModelLook = function(object, look) {
                 base.setRGB(out[0], out[1], out[2], THREE.SRGBColorSpace);
             }
             material.color.copy(base);
+            // (Asked again with the look it has: nothing changed, nothing stamped.)
+            const lookNow = material.color.getHex() + "|" + (material.map ? material.map.id : 0) + "|" + (material.userData.rrLook && material.userData.rrLook.a ? [material.userData.rrLook.a.x, material.userData.rrLook.a.y, material.userData.rrLook.a.z, material.userData.rrLook.b.x, material.userData.rrLook.b.y, material.userData.rrLook.b.z].join(",") : "");
+            if (lookNow !== lookWas || colourWas[0] !== material.color.r || colourWas[1] !== material.color.g || colourWas[2] !== material.color.b) Reactor3D.touchMaterial(material);
         }
     });
 };
@@ -12708,11 +12757,6 @@ Reactor3D.animationStride = function(x, y, z, span, camera) {
     return share < Reactor3D.ANIMATION_SPECK ? 4 : share < Reactor3D.ANIMATION_SMALL ? 2 : 1;
 };
 
-/**
- * Whether a placed model's motion is sampled this frame: the player's own
- * body and one playing an action asked of it always are; the rest by their
- * stride, each on its own frame of it so a crowd's samples are spread.
- */
 /** Whether a model stands in the camera's view, with a body's height of margin all round. The frustum is made once a frame. */
 Reactor3D.inAnimationView = function(object, span, camera) {
     if (typeof THREE === "undefined" || !camera?.projectionMatrix || !camera.matrixWorldInverse) return true;
@@ -12730,6 +12774,11 @@ Reactor3D.inAnimationView = function(object, span, camera) {
     return view.frustum.intersectsSphere(view.sphere);
 };
 
+/**
+ * Whether a placed model's motion is sampled this frame: the player's own
+ * body and one playing an action asked of it always are; the rest by their
+ * stride, each on its own frame of it so a crowd's samples are spread.
+ */
 Reactor3D.animationDue = function(holder, character, object, camera) {
     holder.sampled = true;
     holder.poseHeld = false;
@@ -13016,6 +13065,13 @@ Reactor3D.FarBody = {
     update(mapScene, camera) {
         const instances = mapScene && mapScene._modelInstances;
         if (!instances || typeof THREE === "undefined") return;
+        if (!this.enabled) {
+            // Off: nothing to look at each sync, once the bodies this scene was given are let go.
+            if (!mapScene._rrFarBodies) return;
+            for (const holder of instances.values()) if (holder.farBody) this.release(holder);
+            mapScene._rrFarBodies = false;
+            return;
+        }
         let scene = null;
         for (const holder of instances.values()) {
             const object = holder.object, character = holder.character;
@@ -13047,6 +13103,7 @@ Reactor3D.FarBody = {
                 mesh.userData.rrFarBodyFor = object;
                 this.group(scene).add(mesh);
                 holder.farBody = { mesh, object, on: false };
+                mapScene._rrFarBodies = true;
             }
             const far0 = holder.farBody;
             far0.mesh.visible = !!object.visible;
@@ -13217,9 +13274,16 @@ Reactor3D.BareBones = {
  * A body whose pose is held (asleep, or out of view: Reactor3D.animationDue) and that stands as it
  * was placed keeps last frame's matrices, bones and all: the scene's walk leaves it out, and its bone
  * palette is not compared again, until it moves or is posed. 150 still bodies were most of a frame.
+ *
+ * So does a body in view on an update its motion is not sampled in (its stride, at a Quality level that animates
+ * what is not the party every few updates: `holdUnsampled`): nothing wrote its joints, and the walk made the same
+ * matrices again. In a North Haven raid at the main thread's last level 83% of the models' 1,600 objects were in
+ * every frame's walk while a pose was sampled on 31% of their updates (the Iris Xe laptop, 2026-11-11).
+ * `Reactor3D.holdUnsampled = false`: only the asleep and the out of view, as before.
  */
+Reactor3D.holdUnsampled = true;
 Reactor3D.holdModelMatrices = function(holder, character, object) {
-    const held = !!(holder.stillNow && holder.poseHeld && holder.sampled === false && object.visible
+    const held = !!(holder.stillNow && (holder.poseHeld || Reactor3D.holdUnsampled !== false) && holder.sampled === false && object.visible
         && !character._reactorKnockedOut && !character._reactorRagdoll && !holder.wornRest && !holder.mantlePose
         && !(holder.effects && holder.effects.length));
     if (held === !!holder.matricesHeld) return;
@@ -13546,7 +13610,6 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     }
 };
 
-/** A placed model's materials made the map's: lit, unfogged, their base colour kept, in the ambient list. */
 // After syncCharacterModels is defined (a wrapper above it was overwritten by it): far bodies and closed mouths.
 (function() {
     const sync = Reactor3D.MapScene.prototype.syncCharacterModels;
@@ -13563,6 +13626,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     };
 })();
 
+/** A placed model's materials made the map's: lit, unfogged, their base colour kept, in the ambient list. */
 Reactor3D.MapScene.prototype.adoptModelMaterials = function(object) {
     object.traverse(child => {
         const mats = child.material
@@ -13966,8 +14030,41 @@ Reactor3D.MapScene.prototype.clear = function() {
 //    for SETTLE updates, when the groups are made afresh.
 // Instances of one model share their merged geometries (`_shared`, by the parts' buffers and places).
 // `enabled` false: every model draws its parts as before, from the next update.
+//
+// Parts at rest (`atRest`): the parts a rule can move (a parked tank's turret and cannon: nine draws of one material)
+// are merged the same way, by the same rules, in groups of their own (`resting`), while they stand still. Each
+// update, before anything draws, every number of every such part and of the nodes above it is compared with the
+// numbers it was merged at: one that differs (a rule turned the turret, a wheel rolled) and the group's parts draw
+// themselves from that same update, the merged mesh hidden; nothing is marked and no other group is touched. Once
+// every part has kept the same numbers for SETTLE updates the group is merged where the parts now stand (the same
+// geometry again when that is where it was merged before) and shown. A part changed in any other way (its material,
+// its geometry, hidden, off the view's layer) and the group is let go until the model's groups are next made.
+// `atRest` false: the parts a rule can move draw themselves, from the next update.
+//
+// Parts by colour (`byColour`): still parts whose materials are plain colours, the same in everything but `color`
+// (a motorcycle's 22 paints over 42 parts), draw as one mesh whose vertices carry each part's colour (its material's,
+// times the vertex colour it already had), with one material made for them: a copy of the first part's, white, its
+// vertex colours on (`colourMaterial`). What "the same" means is `colourKey`: a lit MeshBasicMaterial with no picture
+// of any kind, no blend colour laid over it, and every other value equal: its flags, its program's key, its shine,
+// glow and the uniform holders in its userData. This one is not the parts' own material, so nothing that reaches a
+// model's materials reaches it. Instead, each update, before anything draws, every source material is compared with
+// the numbers it was merged at (`colourNumbers`): its stamp (Reactor3D.touchMaterial, which every writer of a model
+// material calls), its version, its colour, its flags and every holder's value, read directly. One that differs and
+// the model's parts draw themselves from that same update; the groups are made again once the model's materials
+// have stood unchanged for SETTLE updates (`quietFor`). Until the copy's program has drawn in the view for
+// WARM updates the parts draw as well, under it (a new program is held back while it compiles: ShaderWarmup).
+// `byColour` false: such parts are grouped by their own material as before, from the next update.
 Reactor3D.StillParts = {
     enabled: true,
+    // Parts of plain colours drawn as one (see above).
+    byColour: true,
+    // Updates in a row a group by colour must have drawn in the view before its parts leave it.
+    WARM: 3,
+    // The parts a rule can move, merged while they stand still (see above). OFF until it has been seen in a Classic
+    // battle and in the editor's views: on the Demo's first map it takes the parked tank from 11 draws to 3, with
+    // the same hairline differences at light and dark edges the still parts' own merge has (688 pixels of 1 in 255
+    // and 8 single pixels up to 69 in a frozen frame of the tank, 2026-11-11), not a picture the same to the bit.
+    atRest: false,
     // Fewer parts than this with one material are left alone: nothing to save.
     MIN_PARTS: 2,
     // Updates a model stands before its parts are merged, and again after anything changed them.
@@ -13985,8 +14082,14 @@ Reactor3D.StillParts = {
     /** How many draws the merged meshes stand for now, and how many they are: for the lead's counters. */
     stats() {
         let parts = 0, meshes = 0;
-        for (const record of this._records) for (const group of record.groups) { meshes++; parts += group.parts.length; }
-        return { models: this._records.size, meshes, parts, shared: this._shared.size };
+        let resting = 0, colour = 0;
+        for (const record of this._records) for (const group of record.groups) {
+            if ((group.resting && !group.shown) || group.warming) continue;
+            if (group.resting) resting++;
+            if (group.colour) colour++;
+            meshes++; parts += group.parts.length;
+        }
+        return { models: this._records.size, meshes, parts, shared: this._shared.size, resting, colour };
     },
     idOf(object) {
         let id = this._ids.get(object);
@@ -14034,13 +14137,204 @@ Reactor3D.StillParts = {
         if (detail && this._detailEligible && this._detailEligible.call(detail, part)) return false;
         return true;
     },
-    attributeKey(g) {
+    attributeKey(g, withoutColour) {
         let key = "";
         for (const name of Object.keys(g.attributes).sort()) {
+            if (withoutColour && name === "color") continue;
             const a = g.attributes[name];
             key += name + ":" + a.itemSize + (a.normalized ? "n" : "") + a.array.constructor.name + ";";
         }
         return key;
+    },
+    /**
+     * A material's numbers for a group by colour, into `out`; how many. The first COLOUR_OWN are its own (its stamp,
+     * its version, its colour); the rest must be the same in every material of a group. Read each update for every
+     * source material: nothing is made here.
+     */
+    COLOUR_OWN: 5,
+    // Where `colourNumbers` puts what `colourKey` asks about by name.
+    COLOUR_AT: { vertexColors: 15, pictures: 26, blend: 30, look: 45 },
+    colourNumbers(m, out) {
+        const d = m.userData || this._noData, c = m.color;
+        let i = 0;
+        out[i++] = d.rrStamp || 0; out[i++] = m.version;
+        out[i++] = c.r; out[i++] = c.g; out[i++] = c.b;
+        out[i++] = m.opacity; out[i++] = m.transparent ? 1 : 0; out[i++] = m.visible ? 1 : 0; out[i++] = m.side; out[i++] = m.blending;
+        out[i++] = m.depthTest ? 1 : 0; out[i++] = m.depthWrite ? 1 : 0; out[i++] = m.depthFunc; out[i++] = m.alphaTest; out[i++] = m.colorWrite ? 1 : 0;
+        out[i++] = m.vertexColors ? 1 : 0; out[i++] = m.wireframe ? 1 : 0; out[i++] = m.fog ? 1 : 0; out[i++] = m.toneMapped ? 1 : 0;
+        out[i++] = m.polygonOffset ? 1 : 0; out[i++] = m.polygonOffsetFactor; out[i++] = m.polygonOffsetUnits;
+        out[i++] = m.premultipliedAlpha ? 1 : 0; out[i++] = m.dithering ? 1 : 0; out[i++] = m.alphaToCoverage ? 1 : 0; out[i++] = m.alphaHash ? 1 : 0;
+        // Pictures: none, of any kind (counted, so one given later is a difference).
+        out[i++] = (m.map ? 1 : 0) + (m.alphaMap ? 1 : 0) + (m.envMap ? 1 : 0) + (m.lightMap ? 1 : 0) + (m.aoMap ? 1 : 0) + (m.specularMap ? 1 : 0)
+            + (d.rrNormalMap ? 1 : 0) + (d.rrEmissiveMap ? 1 : 0) + (d.rrSurfaceMap ? 1 : 0) + (d.rrOcclusionMap ? 1 : 0) + (d.rrDetail ? 1 : 0) + (d.rrLayers ? 1 : 0);
+        // The uniform holders, by their values as they stand (a holder not made yet draws as its neutral value).
+        const blend = d.rrBlend && d.rrBlend.value;
+        out[i++] = blend ? blend.x : 0; out[i++] = blend ? blend.y : 0; out[i++] = blend ? blend.z : 0; out[i++] = blend ? blend.w : 0;
+        out[i++] = d.rrDissolve ? d.rrDissolve.value : -1e9;
+        out[i++] = d.rrCutBody ? d.rrCutBody.value : 0;
+        out[i++] = d.rrFightStump ? d.rrFightStump.value : 1e9;
+        const shine = d.rrShine, vector = shine && shine.vector, tint = shine && shine.tint;
+        out[i++] = vector ? vector.x : 0; out[i++] = vector ? vector.y : 0; out[i++] = vector ? vector.z : 0; out[i++] = vector ? vector.w : 0;
+        out[i++] = tint ? tint.r : 1; out[i++] = tint ? tint.g : 1; out[i++] = tint ? tint.b : 1;
+        out[i++] = shine && shine.albedo ? shine.albedo.value : 0;
+        const glow = d.rrEmissive;
+        out[i++] = glow ? glow.r : 0; out[i++] = glow ? glow.g : 0; out[i++] = glow ? glow.b : 0;
+        const look = d.rrLook && d.rrLook.a;
+        out[i++] = look ? look.x : 0;
+        const coat = d.rrClearcoat;
+        out[i++] = coat ? coat.factor || 0 : 0; out[i++] = coat ? coat.roughness || 0 : 0;
+        out[i++] = m.__reactorSelfLit ? 1 : 0; out[i++] = m.__reactorGhost ? 1 : 0; out[i++] = m.__reactorLit ? 1 : 0;
+        return i;
+    },
+    _noData: Object.freeze({}),
+    _numbers: new Float64Array(64),
+    // What `colourNumbers` reads of a material's userData (the rest is compared as it is written, in `colourKey`),
+    // and what is another's bookkeeping and no part of the picture.
+    COLOUR_READ: new Set(["rrStamp", "baseColor", "rrBlend", "rrDissolve", "rrCutBody", "rrFightStump", "rrShine", "rrEmissive", "rrLook", "rrClearcoat", "rrCutRides", "rrCutWas"]),
+    // What a material carries beside three's own values that a copy of it is given too (instanceModelMaterial, colourMaterial).
+    COLOUR_CARRIED: new Set(["__reactorModel", "__reactorLit", "__reactorReflects"]),
+    /**
+     * What a material must share with another to draw in one group by colour, as text; null for a material that
+     * cannot be in one. Everything of it but its colour: three's own values, the program its hooks build, what its
+     * userData holds. Made when a model's groups are planned, not each update.
+     */
+    colourKey(m) {
+        if (!m || !m.isMeshBasicMaterial || !m.__reactorLit || !m.color || !m.color.isColor || !this.materialFits(m)) return null;
+        const d = m.userData || this._noData;
+        // A shine or a glow that came through a copy as plain numbers is made whole first (Reactor3D.shineOf).
+        if (d.rrShine && Reactor3D.shineOf) Reactor3D.shineOf(m);
+        if (d.rrShine && d.rrShine.vector && !(d.rrShine.tint && d.rrShine.tint.isColor)) return null;
+        if (d.rrEmissive && !d.rrEmissive.isColor) return null;
+        const n = this._numbers, count = this.colourNumbers(m, n);
+        for (let i = 0; i < count; i++) if (!Number.isFinite(n[i])) return null;
+        // No picture; nothing laid over the colour (a blend takes the vertex colour, which the sources have not);
+        // no adjustment of a picture; nothing three clips or stencils.
+        const at = this.COLOUR_AT;
+        if (n[at.pictures] !== 0 || n[at.blend] !== 0 || n[at.look] !== 0) return null;
+        if (m.alphaTest || m.alphaHash || m.wireframe || m.stencilWrite || (m.clippingPlanes && m.clippingPlanes.length)) return null;
+        if (m.vertexColors && m.vertexColors !== true) return null;
+        let key = m.type;
+        for (let i = this.COLOUR_OWN; i < count; i++) key += "," + n[i];
+        // Every other value three or a hook keeps on it: a number, a flag or a word by its value; anything else must
+        // be nothing, or the material is left to its own group.
+        for (const name of Object.keys(m).sort()) {
+            if (name === "uuid" || name === "name" || name === "version" || name === "userData" || name === "color" || name === "_listeners") continue;
+            const value = m[name];
+            if (name.charCodeAt(0) === 95 && name.charCodeAt(1) === 95) {
+                // (`__rr…`: marks of the passes that draw it, none of them its picture; the program's key below
+                // tells the hooks apart.)
+                if (name.indexOf("__rr") === 0 || this.COLOUR_CARRIED.has(name)) continue;
+                if (value) return null;
+                continue;
+            }
+            if (value === null || value === undefined || typeof value === "function") continue;
+            if (typeof value === "object") {
+                // (A colour, a vector, a turn: by its numbers. A picture or anything unknown: no group.)
+                if (value.isTexture || typeof value.toArray !== "function") return null;
+                key += "|" + name + "#" + value.toArray().join(",");
+            } else key += "|" + name + "=" + value;
+        }
+        for (const name of Object.keys(d).sort()) {
+            if (this.COLOUR_READ.has(name)) continue;
+            const value = d[name];
+            if (value === null || value === undefined || value === false) continue;
+            if (typeof value === "function" || (typeof value === "object" && (value.isTexture || value.isObject3D || value.isMaterial))) return null;
+            let text;
+            try { text = typeof value === "object" ? JSON.stringify(value) : String(value); } catch (error) { return null; }
+            if (text === undefined || text.length > 2000) return null;
+            key += "|" + name + ":" + text;
+        }
+        try { key += "|" + (typeof m.customProgramCacheKey === "function" ? m.customProgramCacheKey() : ""); } catch (error) { return null; }
+        return key;
+    },
+    _colourMaterials: new Map(),
+    /**
+     * The one material a group by colour draws with: a copy of `first` as an instance's is made, white, with its
+     * vertex colours on and the holders' values as they stand. Shared by every group of the same key, and checked
+     * each update like a source (nothing should write to it; if something did, it is let go). Null when the copy
+     * would not run the program its sources do.
+     */
+    colourMaterial(key, first) {
+        let entry = this._colourMaterials.get(key);
+        if (entry && !this.sameColourNumbers(entry.material, entry.numbers, 0)) { this._colourMaterials.delete(key); entry.lost = true; if (!entry.users) this.disposeColourMaterial(entry); entry = null; }
+        if (!entry) {
+            if (typeof Reactor3D.instanceModelMaterial !== "function") return null;
+            const m = Reactor3D.instanceModelMaterial(first), d = m.userData, from = first.userData || this._noData;
+            m.name = "still-parts-colour";
+            m.color.setRGB(1, 1, 1);
+            m.vertexColors = true;
+            m.__rrStillColour = true;
+            d.baseColor = new THREE.Color(1, 1, 1);
+            d.rrStamp = 0;
+            delete d.rrCutRides; delete d.rrCutWas;
+            const shine = from.rrShine;
+            if (shine && shine.vector) {
+                d.rrShine = { vector: new THREE.Vector4(shine.vector.x, shine.vector.y, shine.vector.z, shine.vector.w), tint: shine.tint.clone(), albedo: { value: shine.albedo ? shine.albedo.value : 0 } };
+                if (first.__reactorReflects && Reactor3D.Reflections && Reactor3D.Reflections.hook) Reactor3D.Reflections.hook(m);
+            }
+            // The same program but for the vertex colours, and the same values: or no group.
+            let same = false;
+            try {
+                same = m.customProgramCacheKey() === first.customProgramCacheKey();
+                if (same) {
+                    const a = this._numbers, count = this.colourNumbers(first, a), b = new Float64Array(count);
+                    this.colourNumbers(m, b);
+                    for (let i = this.COLOUR_OWN; i < count && same; i++) if (a[i] !== b[i] && i !== this.COLOUR_AT.vertexColors) same = false;
+                    entry = { key, material: m, numbers: b, users: 0, lost: false };
+                }
+            } catch (error) { same = false; }
+            if (!same) { m.dispose(); return null; }
+            this._colourMaterials.set(key, entry);
+        }
+        entry.users++;
+        return entry;
+    },
+    giveColourMaterial(entry) {
+        if (!entry || --entry.users > 0) return;
+        // Kept while any model is merged (the next group of its key draws with it, its program ready); one
+        // something wrote to goes now.
+        if (entry.lost) this.disposeColourMaterial(entry);
+    },
+    disposeColourMaterial(entry) {
+        const m = entry.material, twin = m.__rrUnlitTwin;
+        if (twin && twin.__rrTwinOf === m && typeof twin.dispose === "function") twin.dispose();
+        m.dispose();
+    },
+    sameColourNumbers(m, numbers, from) {
+        const now = this._numbers, count = this.colourNumbers(m, now);
+        if (count !== numbers.length) return false;
+        for (let i = from; i < count; i++) if (now[i] !== numbers[i]) return false;
+        return true;
+    },
+    /** Whether every source material of a group by colour, and the copy it draws with, is as it was merged. */
+    coloursHold(group) {
+        for (const source of group.sources) {
+            if (!this.materialFits(source.material) || !this.sameColourNumbers(source.material, source.numbers, 0)) return false;
+        }
+        const drawn = group.drawn;
+        return !!drawn && !drawn.lost && this.sameColourNumbers(drawn.material, drawn.numbers, 0);
+    },
+    /**
+     * While a model waits to be merged: how many updates its plain-coloured materials have stood unchanged
+     * (their stamps, versions, colours and every other number of `colourNumbers`).
+     */
+    quietFor(record) {
+        const seen = record.seen || (record.seen = new Map()), now = this._numbers;
+        let changed = false;
+        record.inner.traverse(node => {
+            const m = node.isMesh ? node.material : null;
+            if (!m || !m.isMeshBasicMaterial || !m.__reactorLit || m.map || !m.color) return;
+            const count = this.colourNumbers(m, now), was = seen.get(m);
+            if (!was || was.length !== count) { seen.set(m, Float64Array.from(now.subarray(0, count))); changed = true; return; }
+            for (let i = 0; i < count; i++) if (was[i] !== now[i]) { was.set(now.subarray(0, count)); changed = true; break; }
+        });
+        if (changed || record.quietAt === undefined) record.quietAt = this._tick;
+        return this._tick - record.quietAt;
+    },
+    /** Whether this draw is the view's own (not a reflection's capture, a mirror's or the depth pass before it). */
+    viewDraw() {
+        const R = Reactor3D;
+        return !(R.Reflections && R.Reflections._capturing) && !(R.Mirrors && R.Mirrors._rendering) && !(R.DepthFirst && R.DepthFirst._drawing);
     },
     /** The model's parts any of its rules can move (a rule names a part of each one's chain). */
     movingParts(binding, rules) {
@@ -14078,7 +14372,9 @@ Reactor3D.StillParts = {
      * (a carved piece shares its whole mesh's vertices) taken through its matrix. Pure; for the tests too.
      */
     merge(list) {
-        const first = list[0].geometry, names = Object.keys(first.attributes);
+        // By colour (`tint`): the parts' own colour attribute is not copied; each vertex takes its part's colour.
+        const tinted = !!list[0].tint;
+        const first = list[0].geometry, names = Object.keys(first.attributes).filter(name => !(tinted && name === "color"));
         const used = [];
         let vertices = 0, indices = 0;
         for (const { geometry } of list) {
@@ -14166,6 +14462,24 @@ Reactor3D.StillParts = {
             const a = first.attributes[name];
             geometry.setAttribute(name, new THREE.BufferAttribute(out[name], a.itemSize, a.normalized));
         }
+        if (tinted) {
+            // The material's colour, times the vertex colour the part drew with (`own`: its material had them on).
+            const colours = new Float32Array(vertices * 3);
+            let at = 0;
+            list.forEach(({ geometry: g, tint, own }, p) => {
+                const { remap, count } = used[p], c = own ? g.attributes.color : null, n = g.attributes.position.count;
+                for (let v = 0; v < n; v++) {
+                    const o = remap[v];
+                    if (o < 0) continue;
+                    const k = (at + o) * 3;
+                    colours[k] = c ? tint[0] * c.getX(v) : tint[0];
+                    colours[k + 1] = c ? tint[1] * c.getY(v) : tint[1];
+                    colours[k + 2] = c ? tint[2] * c.getZ(v) : tint[2];
+                }
+                at += count;
+            });
+            geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+        }
         geometry.setIndex(new THREE.BufferAttribute(index, 1));
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
@@ -14195,10 +14509,15 @@ Reactor3D.StillParts = {
     /** What makes a merged geometry: each part's buffers (by identity; an index by its numbers) and its place. */
     geometryKey(list) {
         let key = "";
-        for (const { geometry, matrix } of list) {
-            for (const name of Object.keys(geometry.attributes).sort()) key += name + this.idOf(geometry.attributes[name]) + ",";
+        for (const { geometry, matrix, tint, own } of list) {
+            for (const name of Object.keys(geometry.attributes).sort()) {
+                if (tint && !own && name === "color") continue;
+                key += name + this.idOf(geometry.attributes[name]) + ",";
+            }
             key += geometry.index ? "i" + this.indexHash(geometry.index) : "n";
-            key += "@" + Array.prototype.join.call(matrix.elements, ",") + "|";
+            key += "@" + Array.prototype.join.call(matrix.elements, ",");
+            if (tint) key += "#" + tint[0] + "," + tint[1] + "," + tint[2] + (own ? "v" : "");
+            key += "|";
         }
         return key;
     },
@@ -14278,8 +14597,10 @@ Reactor3D.StillParts = {
     },
     makeMesh(record, group) {
         const self = this;
-        const mesh = new THREE.Mesh(group.entry.geometry, group.material);
+        const mesh = new THREE.Mesh(group.entry.geometry, group.colour ? group.drawn.material : group.material);
         mesh.name = "still-parts";
+        // (By colour: the update the view last drew it, for `colourReady`.)
+        if (group.colour) mesh.onAfterRender = function() { if (self.viewDraw()) group.drawnAt = self._tick; };
         mesh.matrixAutoUpdate = false;
         mesh.matrixWorldAutoUpdate = false;
         mesh.layers.mask = group.mask;
@@ -14322,12 +14643,17 @@ Reactor3D.StillParts = {
     /** The record's merged meshes are taken away and its parts draw themselves. */
     breakGroup(record, group) {
         for (const part of group.parts) part.mesh.layers.enable(0);
-        if (group.mesh.parent) group.mesh.parent.remove(group.mesh);
+        if (group.mesh && group.mesh.parent) group.mesh.parent.remove(group.mesh);
         this.give(group.entry);
         group.entry = null;
+        group.shown = false;
+        group.warming = false;
+        if (group.drawn) { this.giveColourMaterial(group.drawn); group.drawn = null; }
     },
     dissolve(record) {
         for (const group of record.groups) this.breakGroup(record, group);
+        // (A planned group by colour holds its material already.)
+        for (const group of record.planned) if (group.drawn) { this.giveColourMaterial(group.drawn); group.drawn = null; }
         record.groups.length = 0;
         record.planned.length = 0;
     },
@@ -14336,19 +14662,26 @@ Reactor3D.StillParts = {
         this.dissolve(record);
         this._records.delete(record);
         if (record.holder && record.holder.rrStillParts === record) record.holder.rrStillParts = null;
+        // No model left (a map let go): the materials made for groups by colour go with their programs.
+        if (!this._records.size && this._colourMaterials.size) {
+            for (const entry of this._colourMaterials.values()) { entry.lost = true; if (!entry.users) this.disposeColourMaterial(entry); }
+            this._colourMaterials.clear();
+        }
     },
     releaseAll() {
         for (const record of Array.from(this._records)) this.release(record);
     },
     /** Whether a merged group still draws exactly what its parts would; `moved` collects the parts that moved. */
     holds(record, group, moved, live) {
-        const m = group.material, layer = live === false ? 0 : 1;
-        if (!this.materialFits(m)) return false;
+        const m = group.material, layer = live === false ? 0 : 1, colour = !!group.colour;
+        // By colour: every source material as it was merged, by its stamp and by its numbers.
+        if (colour) { if (!this.coloursHold(group)) { this._colourChanged = true; return false; } }
+        else if (!this.materialFits(m)) return false;
         let ok = true;
         for (const part of group.parts) {
             const mesh = part.mesh, nodes = part.nodes;
             // A live group's parts are off the view's layer; a planned group's still on it.
-            if (mesh.material !== m || mesh.geometry !== part.geometry || (mesh.layers.mask & 1) === layer || !mesh.visible
+            if (mesh.material !== (colour ? part.material : m) || mesh.geometry !== part.geometry || (mesh.layers.mask & 1) === layer || !mesh.visible
                 || mesh.receiveShadow !== group.receiveShadow || mesh.renderOrder !== group.renderOrder) { ok = false; continue; }
             // Moved itself: something no rule names moves it, and it draws itself from now on.
             if (!this.sameNumbers(mesh, part.numbers, 0)) { moved.push(mesh); ok = false; continue; }
@@ -14376,7 +14709,7 @@ Reactor3D.StillParts = {
             record.moving = moving;
             // (Groups planned and not yet merged too: they were planned without that rule.)
             for (const list of [record.groups, record.planned]) {
-                for (const group of list) if (group.parts.some(part => moving.has(part.mesh))) { changed = true; break; }
+                for (const group of list) if (!group.resting && group.parts.some(part => moving.has(part.mesh))) { changed = true; break; }
             }
         }
         if (changed) { this.dissolve(record); record.buildAt = this._tick + this.SETTLE; return; }
@@ -14384,17 +14717,33 @@ Reactor3D.StillParts = {
         const moved = this._moved || (this._moved = []);
         moved.length = 0;
         let broken = false;
+        this._colourChanged = false;
         for (const group of record.groups) {
+            // The parts a rule can move have their own check (`rest`).
+            if (group.resting) continue;
             if (!group.mesh.parent || group.mesh.parent !== object.parent) {
                 // The model went to another group (a crossing into the next map): its merged meshes follow.
                 if (object.parent) object.parent.add(group.mesh);
             }
             // Whatever a pass did to it last frame, it is shown again with its model.
             group.mesh.visible = true;
-            if (!this.holds(record, group, moved)) broken = true;
+            // (A group by colour not yet drawn by the view: its parts are still on the view's layer, under it.)
+            if (!this.holds(record, group, moved, group.warming ? false : undefined)) broken = true;
+            else if (group.warming && this.colourReady(group)) {
+                for (const part of group.parts) part.mesh.layers.disable(0);
+                group.warming = false;
+            }
         }
         if (moved.length) for (const part of moved) record.volatile.add(part);
-        if (broken) { this.dissolve(record); record.buildAt = this._tick + this.SETTLE; }
+        if (broken) {
+            // (A flash or a fade let a group by colour go: that is no fault of the model's, and is not counted
+            // towards MAX_BUILDS; its materials must stand unchanged for SETTLE updates first, `quietFor`.)
+            if (this._colourChanged && record.builds > 0) record.builds--;
+            this.dissolve(record); record.buildAt = this._tick + this.SETTLE;
+        }
+        // Merged and held a good while: the count starts over. MAX_BUILDS is for a model something keeps
+        // breaking, not for one whose distance level or fade changed twelve times in a long stay.
+        else if (record.builds && this._tick - record.buildAt > this.SETTLE * 10) record.builds = 0;
     },
     /** The record's parts grouped where they stand now, each group to be merged by `makeGroup`. */
     plan(record) {
@@ -14405,8 +14754,15 @@ Reactor3D.StillParts = {
         if (record.rules !== holder.rules || !record.moving) { record.rules = holder.rules; record.moving = this.movingParts(record.binding, holder.rules); }
         const inner = record.inner, hidden = this.shadowBits(), groups = new Map();
         const local = new THREE.Matrix4();
+        // By colour: the still parts that could share a group, by everything of their materials but the colour.
+        const byColour = this.byColour && !record.plainOnly, colourKeys = byColour ? new Map() : null, buckets = byColour ? new Map() : null;
+        const found = [];
+        record.seen = null;
         inner.traverse(node => {
-            if (node === inner || !node.isMesh || record.moving.has(node) || record.volatile.has(node) || !this.partFits(node)) return;
+            if (node === inner || !node.isMesh || record.volatile.has(node)) return;
+            // A part a rule can move goes with the others at rest, never with the parts that cannot move.
+            const resting = record.moving.has(node);
+            if ((resting && !this.atRest) || !this.partFits(node)) return;
             // Its nodes up to the animation root, each shown and placed by its own numbers.
             const nodes = [];
             for (let at = node; at && at !== inner; at = at.parent) {
@@ -14421,29 +14777,194 @@ Reactor3D.StillParts = {
                 this.numbersOf(nodes[i], numbers, i * 10);
             }
             const m = node.material, mask = node.layers.mask & ~hidden;
-            const key = m.id + "|" + (node.receiveShadow ? 1 : 0) + "|" + node.renderOrder + "|" + mask + "|" + this.attributeKey(node.geometry);
-            let group = groups.get(key);
-            if (!group) groups.set(key, group = { material: m, mask, receiveShadow: node.receiveShadow, renderOrder: node.renderOrder, parts: [], mesh: null, entry: null });
-            group.parts.push({ mesh: node, geometry: node.geometry, matrix, nodes, numbers });
+            const entry = { node, nodes, numbers, matrix, resting, mask, taken: false };
+            found.push(entry);
+            if (!byColour || resting) return;
+            let colourKey = colourKeys.get(m);
+            if (colourKey === undefined) colourKeys.set(m, colourKey = this.colourKey(m));
+            if (colourKey === null) return;
+            // Its own vertex colours, when its material draws them: three numbers a vertex, or it keeps its own group.
+            const own = node.geometry.attributes.color;
+            if (m.vertexColors && !(own && own.itemSize === 3)) return;
+            const key = colourKey + "|" + (node.receiveShadow ? 1 : 0) + "|" + node.renderOrder + "|" + mask + "|" + this.attributeKey(node.geometry, true);
+            let bucket = buckets.get(key);
+            if (!bucket) buckets.set(key, bucket = { key: colourKey, list: [], materials: new Set() });
+            bucket.list.push(entry);
+            bucket.materials.add(m);
         });
-        for (const group of groups.values()) if (group.parts.length >= this.MIN_PARTS) record.planned.push(group);
+        if (byColour) for (const bucket of buckets.values()) {
+            // One material alone is its own group as before, drawn with itself.
+            if (bucket.materials.size < 2 || bucket.list.length < this.MIN_PARTS) continue;
+            const first = bucket.list[0].node, drawn = this.colourMaterial(bucket.key, first.material);
+            if (!drawn) continue;
+            const group = { material: null, colour: true, drawn, sources: [], mask: bucket.list[0].mask, receiveShadow: first.receiveShadow, renderOrder: first.renderOrder,
+                parts: [], mesh: null, entry: null, resting: false, shown: false, still: 0, bakes: 0, warming: false, warm: 0, drawnAt: -1 };
+            for (const m of bucket.materials) {
+                const count = this.colourNumbers(m, this._numbers);
+                group.sources.push({ material: m, numbers: Float64Array.from(this._numbers.subarray(0, count)) });
+            }
+            for (const entry of bucket.list) {
+                const node = entry.node, m = node.material;
+                entry.taken = true;
+                group.parts.push({ mesh: node, geometry: node.geometry, matrix: entry.matrix, nodes: entry.nodes, numbers: entry.numbers,
+                    material: m, tint: [m.color.r, m.color.g, m.color.b], own: !!m.vertexColors });
+            }
+            record.planned.push(group);
+        }
+        for (const entry of found) {
+            if (entry.taken) continue;
+            const node = entry.node, m = node.material, mask = entry.mask, resting = entry.resting;
+            const key = (resting ? "rest|" : "") + m.id + "|" + (node.receiveShadow ? 1 : 0) + "|" + node.renderOrder + "|" + mask + "|" + this.attributeKey(node.geometry);
+            let group = groups.get(key);
+            if (!group) groups.set(key, group = { material: m, mask, receiveShadow: node.receiveShadow, renderOrder: node.renderOrder, parts: [], mesh: null, entry: null,
+                resting, shown: false, still: 0, bakes: 0 });
+            group.parts.push({ mesh: node, geometry: node.geometry, matrix: resting ? null : entry.matrix, nodes: entry.nodes, numbers: entry.numbers });
+        }
+        // (A group at rest is merged by `rest`, once its parts have stood for SETTLE updates.)
+        for (const group of groups.values()) if (group.parts.length >= this.MIN_PARTS) (group.resting ? record.groups : record.planned).push(group);
+    },
+    /**
+     * A group at rest as it stands now: 0 when a part is no longer what was planned (let go), 1 when a number of a
+     * part or of a node above it changed since the last look (the numbers are taken again), 2 when all stand.
+     */
+    restState(record, group) {
+        const m = group.material, off = group.shown;
+        if (!this.materialFits(m)) return 0;
+        let still = true;
+        for (const part of group.parts) {
+            const mesh = part.mesh, nodes = part.nodes;
+            // A shown group's parts are off the view's layer; one whose parts draw themselves, on it.
+            if (mesh.material !== m || mesh.geometry !== part.geometry || ((mesh.layers.mask & 1) === 0) !== off || !mesh.visible
+                || mesh.receiveShadow !== group.receiveShadow || mesh.renderOrder !== group.renderOrder) return 0;
+            if (nodes[nodes.length - 1].parent !== record.inner) return 0;
+            for (let i = 0; i < nodes.length; i++) {
+                if (i && (nodes[i - 1].parent !== nodes[i] || !nodes[i].visible)) return 0;
+                if (!nodes[i].matrixAutoUpdate) return 0;
+                if (!this.sameNumbers(nodes[i], part.numbers, i * 10)) { still = false; this.numbersOf(nodes[i], part.numbers, i * 10); }
+            }
+        }
+        return still ? 2 : 1;
+    },
+    /** Whether a group at rest stands exactly where its merged geometry was made. */
+    restWhereMerged(group) {
+        if (!group.entry) return false;
+        for (const part of group.parts) {
+            const now = part.numbers, then = part.merged;
+            if (!then || then.length !== now.length) return false;
+            for (let i = 0; i < now.length; i++) if (now[i] !== then[i]) return false;
+        }
+        return true;
+    },
+    /** A group at rest shown in its parts' place: merged where they stand now, unless that is where it was merged. */
+    restShow(record, group) {
+        if (!this.restWhereMerged(group)) {
+            const local = this._restLocal || (this._restLocal = new THREE.Matrix4());
+            const list = group.parts.map(part => {
+                const matrix = new THREE.Matrix4(), nodes = part.nodes;
+                for (let i = nodes.length - 1; i >= 0; i--) matrix.multiply(local.compose(nodes[i].position, nodes[i].quaternion, nodes[i].scale));
+                return { geometry: part.geometry, matrix };
+            });
+            // (Taken before the last is given back: one another instance holds is shared, not copied again.)
+            const entry = this.take(list), last = group.entry;
+            if (last) this.give(last);
+            group.bakes++;
+            group.entry = entry;
+            for (const part of group.parts) part.merged = Float64Array.from(part.numbers);
+        }
+        const entry = group.entry;
+        if (!group.mesh) group.mesh = this.makeMesh(record, group);
+        else if (group.mesh.geometry !== entry.geometry) group.mesh.geometry = entry.geometry;
+        this.follow(record);
+        if (group.mesh.parent !== record.object.parent) record.object.parent.add(group.mesh);
+        for (const part of group.parts) part.mesh.layers.disable(0);
+        group.mesh.visible = true;
+        group.shown = true;
+    },
+    /** A group at rest drawn by its parts again; its merged geometry is kept for when they stand there again. */
+    restHide(group) {
+        for (const part of group.parts) part.mesh.layers.enable(0);
+        if (group.mesh) group.mesh.visible = false;
+        group.shown = false;
+    },
+    /**
+     * Each update, after `check`: the record's groups at rest, each shown only while every part stands exactly
+     * where it was merged. `room()` says whether this update may still merge; `made()` counts a merge.
+     */
+    rest(record, room, made) {
+        const groups = record.groups, object = record.object;
+        for (let g = groups.length - 1; g >= 0; g--) {
+            const group = groups[g];
+            if (!group.resting) continue;
+            const state = this.restState(record, group);
+            if (state === 0) { this.breakGroup(record, group); groups.splice(g, 1); continue; }
+            if (state === 1) { group.still = 0; if (group.shown) this.restHide(group); continue; }
+            group.still++;
+            if (!this.atRest) { if (group.shown) this.restHide(group); continue; }
+            if (group.shown) {
+                // The model went to another group (a crossing into the next map): its merged mesh follows.
+                if (object.parent && group.mesh.parent !== object.parent) object.parent.add(group.mesh);
+                // Whatever a pass did to it last frame, it is shown again with its model.
+                group.mesh.visible = true;
+                if (group.bakes && group.still > this.SETTLE * 10) group.bakes = 0;
+                continue;
+            }
+            if (group.still < this.SETTLE || !object.parent) continue;
+            // Back where it was merged: shown again as it is. Somewhere new is a copy and an upload: each waits a
+            // SETTLE longer than the last (a wheel that stops at another angle every second is soon left to its
+            // own draws), and one that keeps coming to rest somewhere new is let go.
+            if (!this.restWhereMerged(group)) {
+                if (group.still < this.SETTLE * (1 + group.bakes) || !room()) continue;
+                if (group.bakes >= this.MAX_BUILDS) { this.breakGroup(record, group); groups.splice(g, 1); continue; }
+                made();
+            }
+            this.restShow(record, group);
+        }
     },
     /** One planned group merged and shown in its parts' place; false when its parts changed since the plan. */
     makeGroup(record, group) {
-        if (!record.object.parent || !this.holds(record, group, [], false)) return false;
-        group.entry = this.take(group.parts.map(part => ({ geometry: part.geometry, matrix: part.matrix })));
+        if (!record.object.parent || !this.holds(record, group, [], false)) {
+            if (group.drawn) { this.giveColourMaterial(group.drawn); group.drawn = null; }
+            return false;
+        }
+        group.entry = this.take(group.parts.map(part => ({ geometry: part.geometry, matrix: part.matrix, tint: part.tint, own: part.own })));
         for (const part of group.parts) part.matrix = null;
         group.mesh = this.makeMesh(record, group);
         this.follow(record);
         record.object.parent.add(group.mesh);
-        for (const part of group.parts) part.mesh.layers.disable(0);
+        // Placed now, not at the scene's next walk of its matrices: a draw may come before one (a frame held still
+        // drew a mesh merged in it where nothing stands, 2026-11-11).
+        this.place(record, group.mesh);
+        // By colour: its parts stay in the view under it until the view has drawn it (`colourReady`).
+        if (group.colour) { group.warming = true; group.warm = 0; group.drawnAt = -1; }
+        else for (const part of group.parts) part.mesh.layers.disable(0);
         record.groups.push(group);
         return true;
+    },
+    /**
+     * Whether the view has drawn a group by colour for WARM updates in a row. Its material is new to the renderer:
+     * while its program compiles its mesh is held back (ShaderWarmup), and parts taken from the view before it
+     * draws would leave a hole for those frames.
+     */
+    colourReady(group) {
+        if (group.drawnAt >= this._tick - 1) group.warm++; else group.warm = 0;
+        return group.warm >= this.WARM;
     },
     /** Once an update, after every model was placed and posed (syncCharacterModels). */
     update(mapScene) {
         this._tick++;
         if (!this.enabled) { if (this._records.size) this.releaseAll(); return; }
+        // `byColour` switched: the models it concerns are grouped again, the other way.
+        if (this.byColour !== this._colourWas) {
+            const first = this._colourWas === undefined;
+            this._colourWas = this.byColour;
+            if (!first) for (const record of this._records) {
+                // (One with nothing to merge by its own materials is asked again soon, not at its long wait's end.)
+                if (!record.groups.length && !record.planned.length) { if (this.byColour && !record.skip) record.buildAt = Math.min(record.buildAt, this._tick + this.SETTLE); continue; }
+                if (!this.byColour && !record.groups.some(group => group.colour) && !record.planned.some(group => group.colour)) continue;
+                this.dissolve(record);
+                record.buildAt = this._tick + this.SETTLE;
+            }
+        }
         // A model gone from its scene without being released lets its merged meshes go.
         for (const record of this._records) {
             if (!record.object.parent || record.holder.object !== record.object || record.holder.binding !== record.binding) this.release(record);
@@ -14455,6 +14976,7 @@ Reactor3D.StillParts = {
         const clock = typeof performance !== "undefined" ? performance : Date;
         let started = 0, made = 0;
         const room = () => made === 0 || clock.now() - started < this.BUDGET;
+        const merged = () => { if (!made) started = clock.now(); made++; };
         for (const holder of instances.values()) {
             const object = holder.object;
             if (!object || !holder.binding || !object.parent) continue;
@@ -14462,8 +14984,26 @@ Reactor3D.StillParts = {
             if (record.skip) continue;
             this.check(record);
             if (record.skip) continue;
+            if (record.groups.length) this.rest(record, room, merged);
+            // Grouped by its own materials because they would not rest: once they have, it is grouped again, by colour.
+            if (record.plainOnly && this.byColour && record.groups.length && this.quietFor(record) >= this.SETTLE) {
+                this.dissolve(record);
+                record.plainOnly = false;
+                record.buildAt = this._tick;
+                if (record.builds > 0) record.builds--;
+            }
             if (!record.planned.length) {
-                if (record.groups.length || this._tick < record.buildAt || !room()) continue;
+                if (record.groups.length) continue;
+                // By colour: its plain-coloured materials are watched from a SETTLE before it is due, and it waits
+                // until they have stood unchanged that long (a flash still fading, a cutaway still opening); one
+                // whose materials never rest is grouped by its own materials alone, as before.
+                const quiet = this.byColour && record.buildAt - this._tick <= this.SETTLE ? this.quietFor(record) : Infinity;
+                if (this._tick < record.buildAt || !room()) continue;
+                record.plainOnly = false;
+                if (quiet < this.SETTLE) {
+                    if (this._tick - record.buildAt < this.SETTLE * 4) continue;
+                    record.plainOnly = true;
+                }
                 this.plan(record);
                 // Nothing to merge (every part moves, none shares a material, or a fade has them see-through):
                 // asked again much later, at most MAX_BUILDS times.

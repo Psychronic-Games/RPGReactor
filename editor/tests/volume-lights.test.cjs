@@ -145,7 +145,8 @@ test('the field selects the nearest lights to the focus when there are more than
     // A minimal scene: no THREE, so bodies are stubbed; the uniforms are real.
     const scene = Object.create(Reactor3D.MapScene.prototype);
     const placed = [];
-    scene.lightBodies = () => ({ place: (i, l) => placed.push(l), trim: () => {} });
+    // (A copy of each: the scene hands every body the one record, filled again for the next.)
+    scene.lightBodies = () => ({ place: (i, l) => placed.push(Object.assign({}, l)), trim: () => {} });
     const saved = { facadeAt: Reactor3D.facadeAt, surfaceHeightAt: Reactor3D.surfaceHeightAt };
     Reactor3D.facadeAt = () => null;
     Reactor3D.surfaceHeightAt = () => 0;
@@ -274,7 +275,19 @@ test('LightSwitch turns a light or a tag on, off and over', () => {
         assert.equal(Reactor3D.nativeLights(map).map(l => l.id).join(''), 'abc', 'the tag lit b');
         Reactor3D.switchLight('#row', 'toggle');
         assert.equal(Reactor3D.nativeLights(map).map(l => l.id).join(''), 'c', 'toggle reads the first tagged light');
-        assert.deepEqual(global.$gameMap._reactorLightStates, { c: true, '#row': false }, 'saved as plain state');
+        assert.deepEqual(global.$gameMap._reactorLightStates, { 7: { c: true, '#row': false } }, 'saved as plain state, under the map it was made on');
+        // Another map's light of the same name is untouched, and the state is still there on the way back.
+        global.$gameMap.mapId = () => 8;
+        assert.equal(Reactor3D.nativeLights(map).map(l => l.id).join(''), 'ac', 'map 8 reads its authored lights');
+        Reactor3D.switchLight('a', 'off');
+        assert.equal(Reactor3D.nativeLights(map).map(l => l.id).join(''), 'c');
+        global.$gameMap.mapId = () => 7;
+        assert.equal(Reactor3D.nativeLights(map).map(l => l.id).join(''), 'c', 'map 7 keeps its own');
+        // A save from before the states were kept per map: its flat states name no map, so none applies.
+        global.$gameMap._reactorLightStates = { c: false, 7: false, '#row': true };
+        assert.equal(Reactor3D.nativeLights(map).map(l => l.id).join(''), 'ac', 'flat states are passed over');
+        Reactor3D.switchLight('c', 'off');
+        assert.deepEqual(global.$gameMap._reactorLightStates, { 7: { c: false } }, 'and dropped at the next write');
     });
 });
 

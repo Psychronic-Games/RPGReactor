@@ -150,6 +150,18 @@ test('the database manager reads plans as records and writes records back as pla
         assert.equal(manager.getDirtyKeys().includes('structures'), false, 'saved is clean');
         manager.data.structures[2].plan.storey = 6;
         assert.equal(manager.getDirtyKeys().includes('structures'), true, 'an edit to a plan is unsaved work');
+        // A record pasted above a plan of the same name takes a file of its own, not that plan's;
+        // and a save writes the plans that changed, not every file.
+        assert.equal(await manager.saveStructures(root), true);
+        const written = [], write = manager._writeFileAtomic;
+        manager._writeFileAtomic = function(fsx, dest, ...rest) { written.push(path.basename(dest)); return write.call(this, fsx, dest, ...rest); };
+        manager.data.structures[1] = { id: 1, name: 'Tower', file: '', plan: E.newPlan('Tower') };
+        assert.equal(await manager.saveStructures(root), true);
+        assert.equal(manager.data.structures[1].file, 'Tower-2.json');
+        assert.equal(manager.data.structures[2].file, 'Tower.json', 'the plan further down keeps its file');
+        assert.equal(JSON.parse(fs.readFileSync(path.join(folder, 'Tower.json'), 'utf8')).storey, 6);
+        assert.deepEqual(written, ['Tower-2.json'], 'the unchanged plans were not written again');
+        assert.equal(context.DatabaseManager.structureFileName('tower', new Set(['Tower.json'])), 'tower-2.json', 'one file on a disk without case');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
@@ -534,6 +546,8 @@ test('the plot never shrinks past what is built on it', () => {
     const described = E.normalizePlan({ name: 'Cottage', size: [16, 12], floors: [{ rooms: { room: [1, 1, 9, 10], kitchen: [11, 1, 14, 10] } }] });
     assert.deepEqual([...E.builtExtent(described)], [15, 11], 'a described cottage keeps the plot its rooms need');
     const source = read('editor/src/database/DatabaseStructureEditor.js');
-    assert.match(source, /const least = \(\) => Math\.max\(DatabaseStructureEditor\.SIZE_MIN, DatabaseStructureEditor\.builtExtent\(plan\)\[Number\(input\.dataset\.i\)\]\);/);
+    assert.match(source, /const least = \(\) => Math\.max\(DatabaseStructureEditor\.SIZE_MIN, DatabaseStructureEditor\.builtExtent\(plan, name => this\.resolve\(name\)\)\[Number\(input\.dataset\.i\)\]\);/);
+    const village = E.normalizePlan({ name: 'Village', size: [40, 40], parts: [{ name: 'a', plan: 'Hut', at: [10, 20], rot: 1, scale: 2 }], paths: [[0, 30, 34, 31]] });
+    assert.deepEqual([...E.builtExtent(village, () => ({ size: [6, 4] }))], [35, 32], 'a plan of parts keeps the plot its parts and paving cover');
     assert.match(source, /const size = Math\.max\(least\(\), Math\.min\(DatabaseStructureEditor\.SIZE_MAX,/);
 });

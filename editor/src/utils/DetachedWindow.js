@@ -89,12 +89,21 @@
      * back, minimized or behind something, on any desktop. A taskbar shows the editor's windows as one icon
      * and what a click on it does is the desktop's to decide; this row is the editor's own.
      */
-    let dockFrame = 0, dockWatch = null;
+    let dockFrame = 0, dockWatch = null, dockElement = null;
+    /**
+     * The row, in the editor's own page and nowhere else. While a pop-out has the focus the page's lookups and
+     * its body's appendChild are turned to that window (RRPopoutBridge, so a dialog opens in front of the
+     * person): asked for that way, the row was put on top of the pop-out it lists and rode along with it.
+     */
+    function dockIn(doc) {
+        if (dockElement && dockElement.ownerDocument !== doc) { dockElement.remove(); dockElement = null; }
+        return dockElement && dockElement.isConnected ? dockElement : null;
+    }
     /** The row's place: the upper left corner of the map's own area, clear of the toolbars and of the bars along the bottom. */
     function placeDock() {
-        const doc = root.document, dock = doc && doc.getElementById && doc.getElementById('rr-window-dock');
+        const doc = root.document, dock = doc && dockIn(doc);
         if (!dock) return;
-        const area = doc.getElementById('canvas-container'), box = area && area.getBoundingClientRect();
+        const area = doc.getElementById('canvas-container'), box = area && area.ownerDocument === doc && area.getBoundingClientRect();
         const there = box && box.width > 40 && box.height > 40;
         dock.style.left = Math.round(there ? box.left + 8 : 8) + 'px';
         dock.style.top = Math.round(there ? box.top + 8 : 8) + 'px';
@@ -113,8 +122,8 @@
         const draw = () => {
             dockFrame = 0;
             const shown = windows.filter(win => win.isPoppedOut() && win.isShown());
-            let dock = doc.getElementById('rr-window-dock');
-            if (!shown.length) { if (dock) dock.remove(); return; }
+            let dock = dockIn(doc);
+            if (!shown.length) { if (dock) dock.remove(); dockElement = null; return; }
             if (!dock) {
                 dock = doc.createElement('div');
                 dock.id = 'rr-window-dock';
@@ -124,7 +133,9 @@
                     const win = chip && windows[Number(chip.dataset.windowIndex)];
                     if (win) win.raise();
                 });
-                doc.body.appendChild(dock);
+                // The page's own appendChild, not the one turned to the window in use.
+                (root.Node ? root.Node.prototype.appendChild : doc.body.appendChild).call(doc.body, dock);
+                dockElement = dock;
             }
             const say = text => (root.I18n && typeof root.I18n.t === 'function' ? root.I18n.t(text) : text);
             const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

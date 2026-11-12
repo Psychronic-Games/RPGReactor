@@ -356,6 +356,36 @@ test('XP database: stats, curves, classes per actor, appended Attack and Guard',
     assert.deepEqual(db.weapons[1].params, [0, 0, 3, 0, 0, 0, 0, 0]);
     assert.equal(db.enemies[1].actions[0].skillId, db.attackSkillId);
     assert.ok(db.enemies[1].traits.some(t => t.code === 35 && t.dataId === db.attackSkillId));
+    // The class's weapon list is a weapon type of its own, not weapon ids read as type ids.
+    assert.deepEqual(db.weaponTypes, ['', 'Fighter']);
+    assert.equal(db.weapons[1].wtypeId, 1);
+    assert.deepEqual(cls.traits.filter(t => t.code === 51 || t.code === 52), [{ code: 51, dataId: 1, value: 1 }]);
+    // Guard adds a Guard state after the game's own states, not the game's state 2.
+    const guardState = db.states[db.states.length - 1];
+    assert.deepEqual(guardState.traits, [{ code: 62, dataId: 1, value: 0 }]);
+    assert.deepEqual(db.skills[db.guardSkillId].effects, [{ code: 21, dataId: guardState.id, value1: 1, value2: 0 }]);
+});
+
+test('XP rules its own scripts state: the default turn condition, restrictions, pages with no graphic, knockout', () => {
+    const db = XD.database({
+        actors: [], classes: [], items: [], weapons: [], armors: [], animations: [],
+        skills: [null, { id: 1, name: 'Slash', atk_f: 100, power: 10 }, { id: 2, name: 'Fire', atk_f: 0, power: 10 }],
+        enemies: [null, { id: 1, name: 'Bat', actions: [
+            { kind: 1, skill_id: 2, rating: 5, condition_turn_a: 0, condition_turn_b: 1, condition_hp: 50, condition_level: 1 },
+            { kind: 0, basic: 0, rating: 5, condition_turn_a: 2, condition_turn_b: 3, condition_hp: 100, condition_level: 1 }] }],
+        states: [null, { id: 1, name: 'Mute', restriction: 1 }, { id: 2, name: 'Berserk', restriction: 2 }, { id: 3, name: 'Confuse', restriction: 3 }, { id: 4, name: 'Stun', restriction: 4 }]
+    }, {});
+    // Turn 0 + 1x is "every turn": the HP condition behind it is the one that counts.
+    assert.deepEqual(db.enemies[1].actions.map(a => [a.conditionType, a.conditionParam1, a.conditionParam2]), [[2, 0, 0.5], [1, 2, 3]]);
+    // 1 seals magic (skills with no attack factor), 2 attacks enemies, 3 attacks allies, 4 cannot act.
+    assert.deepEqual([1, 2, 3, 4].map(id => db.states[id].restriction), [0, 1, 3, 4]);
+    assert.deepEqual(db.states[1].traits, [{ code: 44, dataId: 2, value: 1 }]);
+    // A page with no character graphic on a square that can be walked on is below the characters.
+    const priority = (graphic, open, more) => X.eventPage(Object.assign({ graphic, list: [] }, more), [], {}, null, () => open).priorityType;
+    assert.deepEqual([priority({ character_name: '' }, true), priority({ character_name: '' }, false), priority({ character_name: '001-Fighter01' }, true), priority({ character_name: '' }, true, { always_on_top: true })], [0, 1, 1, 2]);
+    // Change HP keeps its "allow knockout" tick; Change SP has none.
+    const out = X.commands([{ code: 311, indent: 0, parameters: [1, 1, 0, 50, false] }, { code: 311, indent: 0, parameters: [1, 1, 0, 50, true] }, { code: 312, indent: 0, parameters: [1, 1, 0, 50] }], {}, null);
+    assert.deepEqual(out.slice(0, 3).map(c => c.parameters[5]), [false, true, false]);
 });
 
 test('a game script that plays other music for its BGM names rewrites the references', () => {
@@ -467,7 +497,8 @@ test('VX commands reshape into VX Ace\'s before conversion', () => {
         { code: 236, indent: 0, parameters: [2, 5, 60, true] },
         { code: 302, indent: 0, parameters: [1, 4, true] },
         { code: 605, indent: 0, parameters: [0, 2] },
-        { code: 339, indent: 0, parameters: [0, 1, 0, 1, -1] }
+        { code: 339, indent: 0, parameters: [0, 1, 0, 1, -1] },
+        { code: 201, indent: 0, parameters: [0, 3, 4, 5, 2] }
     ], ids).map(c => c.parameters);
     assert.deepEqual(out, [
         [0, 0, 1, 0, 50, false],        // fixed actor 0 (whole party)
@@ -479,8 +510,11 @@ test('VX commands reshape into VX Ace\'s before conversion', () => {
         ['storm', 5, 60, true],
         [1, 4, 0, 0, true],
         [0, 2, 0, 0],
-        [0, 1, 301, -1]                 // Force Action: guard
+        [0, 1, 301, -1],                // Force Action: guard
+        [0, 3, 4, 5, 2, 0]              // Transfer Player: VX always fades through black
     ]);
+    // Get Location Info: Ace's region (5) is MZ's 6; its tile layers keep their numbers.
+    assert.deepEqual(C.commands([{ code: 285, indent: 0, parameters: [1, 5, 0, 2, 3] }, { code: 285, indent: 0, parameters: [1, 4, 0, 2, 3] }], {}).slice(0, 2).map(c => c.parameters[1]), [6, 4]);
     // Converted by the Ace pipeline, 319's slot index becomes an equipment type.
     const mz = C.commands([{ code: 319, indent: 0, parameters: [1, 0, 5] }], {});
     assert.deepEqual(mz[0].parameters, [1, 1, 5]);

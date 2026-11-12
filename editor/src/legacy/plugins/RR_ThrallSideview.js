@@ -1934,8 +1934,7 @@
             this.y = this.baseY + this._moveY + this._orbit;
             if (weapon === '' && id !== 0) {
                 const anim = VX.animation(id);
-                if (anim && this._host) this._host.startAnimationAt(this, anim, mirror);
-                else this._pendingAnimation = anim ? [anim, mirror] : null;
+                this._pendingAnimation = anim ? [anim, mirror] : null;
             }
             this.rrApply();
         }

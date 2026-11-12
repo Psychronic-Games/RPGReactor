@@ -33,6 +33,8 @@ class SwitchVariablePicker {
     show(type, selectedId, callback) {
         this.type = type;
         this.callback = callback;
+        // Kept for a redraw (Set Maximum): the row it opened on stays the chosen one.
+        this.shownId = selectedId;
         this.previouslyFocused = document.activeElement;
         this.openerAddress = SwitchVariablePicker.addressOf(this.previouslyFocused);
         this.currentTab = Math.floor((Math.max(1, selectedId || 1) - 1) / this.itemsPerTab);
@@ -552,7 +554,7 @@ class SwitchVariablePicker {
         }
 
         // Refresh the modal
-        if (this.modal === renderedModal) this.updateModalContent(1);
+        if (this.modal === renderedModal) this.updateModalContent(this.shownId || 1);
     }
 
     /**

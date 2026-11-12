@@ -604,6 +604,19 @@
     // The states last given to a map's doors and the game they were given in, for as long as that map's data lives.
     const doorStatesOf = new WeakMap();
 
+    /**
+     * A copy of a map read from the same files (the one the game is handed over a border) takes the door states of
+     * the map its world was built from. The states are kept by the map's data, and the world past a border is built
+     * from one reading of the map while the game plays on another: the scene made again after the menu or a battle
+     * found none for the game's, and every door there started shut again.
+     */
+    R.shareDoorStates = function(from, to) {
+        const kept = from && typeof from === "object" ? doorStatesOf.get(from) : null;
+        if (!kept || !to || typeof to !== "object" || from === to) return false;
+        doorStatesOf.set(to, kept);
+        return true;
+    };
+
     /** The game's own map gets its doors' states (shut, unless they open by themselves); a battle room and the editor none. */
     R.MapScene.prototype._syncDoorStates = function(mapData, doors) {
         const game = gameOn() && typeof $dataMap !== "undefined" && mapData === $dataMap;
@@ -773,7 +786,7 @@
         if (open) { playDoorSound(door, "open"); if (feed()) ReactorEvents.emit("doorOpened", notice(door, by)); }
     };
 
-    const sayLocked = (door, state) => {
+    const sayLocked = door => {
         playDoorSound(door, "locked");
         const message = door.piece.message !== undefined ? door.piece.message : R.DOOR_LOCKED_TEXT;
         if (message && typeof $gameMessage !== "undefined" && $gameMessage && !$gameMessage.isBusy()) $gameMessage.add(message);
@@ -790,7 +803,7 @@
         const door = (scene._doors || []).find(entry => entry.piece.id === piece.id);
         const state = states.get(piece.id);
         if (!door || !state) return false;
-        if (R.doorLocked(piece, state)) { sayLocked(door, state); return true; }
+        if (R.doorLocked(piece, state)) { sayLocked(door); return true; }
         if (!state.open && state.t === 0) state.dir = R.doorOpenSide(door, player, scene._doorWalkers || [player]);
         // A locked door, once unlocked, is automatic: shut by the button it would open again at once for whoever pressed.
         const automatic = piece.opens === "auto" || piece.opens === "locked";

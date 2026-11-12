@@ -551,7 +551,7 @@
 
     /*
      * The map's default 3D camera: a mode plus optional pitch/yaw/distance/
-     * fov overrides, mirroring `reactor_camera_3d.js`. `reactor3d.camera` is
+     * fov overrides, mirroring `reactor_3d.js`. `reactor3d.camera` is
      * only written when it says more than the default view.
      */
     const CAMERA_MODES = ['fixed', 'topDown', 'isometric', 'thirdPerson', 'firstPerson'];
@@ -950,7 +950,8 @@
         // A wall's, glass's or pillar's own height (the runtime's SIZED_KINDS), to the quarter tile; none is a storey.
         if (SIZED_KINDS.includes(raw.kind) && Number(raw.height) > 0) {
             const tall = Math.max(0.5, Math.min(40, Math.round(Number(raw.height) * 4) / 4));
-            if (tall !== 5) piece.height = tall;
+            // A fence stands 1.5 when it has none, so 5 is a height of its own for it and is kept.
+            if (tall !== 5 || raw.kind === 'fence') piece.height = tall;
         }
         // Pieces stamped from one plan share a group, so the building moves as one.
         const group = Number(raw.group);

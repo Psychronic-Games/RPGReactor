@@ -120,8 +120,11 @@
             const onFocus = () => lastFocused.set(spec, field);
             // A programmatic insert arrives as a plain Event; typing is an
             // InputEvent and already reaches the editor's own change handler.
+            // In the Database's own window a typed event is that window's
+            // InputEvent, not this one's, so its `inputType` is asked too.
             const onInput = event => {
                 if (typeof InputEvent !== 'undefined' && event instanceof InputEvent) return;
+                if (event && event.inputType !== undefined) return;
                 field.dispatchEvent(new Event('change', { bubbles: true }));
             };
             field.addEventListener('focus', onFocus);

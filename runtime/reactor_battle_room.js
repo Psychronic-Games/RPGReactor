@@ -38,9 +38,10 @@
             this.world.guestSubject = () => this.models.get('actor:0') || this.billboards.get('actor:0') || null;
             this.scene.background = new T.Color(0x171a21);
             this.camera = this.settings.projection === '2d' ? new T.OrthographicCamera(-12,12,7,-7,.1,2000) : R.createCamera({ fov: 40 });
-            // On the game's own WebGL context when the map's viewport shares it: the room draws into
-            // a target PIXI samples, and nothing is copied. Else its own canvas (no MSAA: the map's
-            // passes draw without it), copied onto the battle's sprite each frame.
+            // On the game's own WebGL context when the map's viewport shares it: the room is that view's
+            // guest (Viewport.renderGuest), drawn through the map's own pipeline into a pass PIXI samples,
+            // and nothing is copied. Else its own canvas (no MSAA: the map's passes draw without it),
+            // copied onto the battle's sprite each frame.
             const viewport = R.battleRoomShared !== false && R.sharedContextAvailable?.() ? R.acquireViewport?.() : null;
             this.view = viewport && viewport.isShared?.() ? viewport : null;
             if (this.view) this.renderer = this.view.renderer();
@@ -52,6 +53,8 @@
                 rrLightAim:{value:new Float32Array(R.SHADER_LIGHTS*4)}, rrLightShadow:{value:new Float32Array(R.SHADER_LIGHTS).fill(-1)},
                 rrLightGridEnabled:{value:0}
             };
+            // Lit from these and not the map's: the map's light split has no part in this scene (HalfLight.begin).
+            this.scene.userData.rrOwnLights = true;
             this.light(this.scene);
             await Promise.all(R.mapProps(this.map).map(prop => this.addModel('prop:'+prop.id, prop, prop)));
             this.buildMapMedia();
@@ -66,7 +69,7 @@
                     const compile = material.onBeforeCompile, key = material.customProgramCacheKey;
                     material.onBeforeCompile = function(shader, renderer) { compile.call(this, shader, renderer); Object.assign(shader.uniforms, uniforms); };
                     material.customProgramCacheKey = function() { return key.call(this) + '|battle-room' + (view._shadowed ? '|room-shadows' : ''); };
-                    material.__battleRoomLight = true; material.needsUpdate = true;
+                    material.__battleRoomLight = true; material.needsUpdate = true; R.touchMaterial?.(material);
                 }
             });
         }
@@ -501,9 +504,10 @@
             const t = this.frame - d.start, preset = d.preset;
             // The front leads the shards a little so a shard is never seen leaving a surface that still stands.
             const front = d.minY + (d.maxY - d.minY) * Math.min(1.05, (t + 2) / preset.waveSpread);
-            record.object?.traverse(node => { for (const m of [node.material].flat().filter(Boolean)) { const u = m.userData?.rrDissolve || (m.userData = m.userData || {}, m.userData.rrDissolve = { value: -1e9 }); u.value = front; } });
+            record.object?.traverse(node => { for (const m of [node.material].flat().filter(Boolean)) { const u = m.userData?.rrDissolve || (m.userData = m.userData || {}, m.userData.rrDissolve = { value: -1e9 }); if (u.value !== front) { u.value = front; root.Reactor3D?.touchMaterial?.(m); } } });
             record.dissolveShadow = Math.max(0, 1 - t / preset.waveSpread);
-            const scale = this.camera?.isOrthographicCamera ? (this.height || 624) / Math.max(.001, (this.camera.top - this.camera.bottom)) : (this.height || 624) / (2 * Math.tan(((this.camera?.fov || 40) * Math.PI) / 360));
+            const tall = this.passSize().height || 624;
+            const scale = this.camera?.isOrthographicCamera ? tall / Math.max(.001, (this.camera.top - this.camera.bottom)) : tall / (2 * Math.tan(((this.camera?.fov || 40) * Math.PI) / 360));
             for (const p of [d.points, d.sparks]) if (p) {
                 const u = p.material.uniforms; u.uTime.value = t;
                 if (u.uScale) { u.uScale.value = scale; u.uOrtho.value = this.camera?.isOrthographicCamera ? 1 : 0; }
@@ -822,28 +826,29 @@
             if(r.object&&r.template)root.Reactor3D.releaseModelInstance?.(r.object,r.template);
             if(r.billboard){r.object.geometry.dispose();r.texture.dispose();}
         }
-        resize(width,height) { this.width=width;this.height=height;if(this.view)this.shareTarget(width,height);else this.renderer?.setSize(width,height,false); if(this.camera){this.camera.aspect=width/height;this.camera.updateProjectionMatrix();} }
-        /** On the shared context: the target the room draws into, and the PIXI texture that shows it (`texture`). */
-        shareTarget(width,height) {
-            if(this.target&&this.target.width===width&&this.target.height===height)return;
-            this.releaseTarget();
-            const R=root.Reactor3D,view=this.view;
-            this.target=view.createTarget(width,height,1,{samples:0});
-            const source=new PIXI.TextureSource({width,height,resolution:1,scaleMode:'nearest',alphaMode:'premultiplied-alpha',autoGarbageCollect:false,label:'reactor3d-battle-room'});
-            R.adoptGlTexture(view.pixi(),source,view.targetHandle(this.target));
-            this.textureSource=source;
-            // Flipped: a framebuffer's first row is its bottom.
-            this.texture=new PIXI.Texture({source,rotate:PIXI.groupD8.MIRROR_VERTICAL,label:'reactor3d-battle-room'});
+        resize(width,height) { this.width=width;this.height=height;if(!this.view)this.renderer?.setSize(width,height,false); if(this.camera){this.camera.aspect=width/height;this.camera.updateProjectionMatrix();} }
+        /**
+         * On the shared context: what PIXI shows the room with, the view's own pass sprite (its small target
+         * enlarged and sharpened as the map's passes are), laid over `width` by `height`. Made again by the
+         * caller when the view's passes are (`passGeneration` changes: a new render scale, a resize).
+         */
+        passSprite(width=this.width,height=this.height) {
+            const view=this.view,sprite=view.passSprite(root.Reactor3D.GUEST_SLOT);
+            sprite.width=width;sprite.height=height;
+            return sprite;
         }
-        releaseTarget() {
-            if(!this.target)return;
-            const target=this.target,texture=this.texture,source=this.textureSource,pixi=this.view?.pixi();
-            this.target=this.texture=this.textureSource=null;
-            // As the viewport's own passes: PIXI never made this GL texture and must not delete it, and a
-            // sprite may still draw the old texture this frame, so it goes two frames from now.
-            const reap=()=>{try{target.dispose();}catch(e){}if(source&&pixi&&source._gpuData)delete source._gpuData[pixi.uid];try{texture.destroy(true);}catch(e){}};
-            if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(reap));else reap();
+        passGeneration() { return this.view?this.view.generation():0; }
+        /**
+         * The pixels the room's picture is drawn at: its own size on its own canvas; on the game's context the view's
+         * pass (the screen at the view's render scale). What is sized in pixels follows it: an effect's own picture,
+         * a dissolve's points.
+         */
+        passSize() {
+            if(!this.view)return {width:this.width,height:this.height};
+            this.view.resize();return this.view.targetSize();
         }
+        /** The view's guest pass, let go with the room. */
+        releaseTarget() { if(this.view)this.view.releaseSlot(root.Reactor3D.GUEST_SLOT); }
         /** three has driven the context: it forgets, and on the shared context PIXI does too. */
         releaseContext() { this.renderer.resetState(); if(this.view)this.view._resetPixi(); }
         cinematicEnabled(){return this.settings.cameraSource==='custom'&&this.settings.camera?.mode==='cinematic';}
@@ -1205,17 +1210,131 @@
             if(this.view){
                 // PIXI has drawn since: three forgets what it thought was bound before it draws anything.
                 this.renderer.resetState();
-                try{
-                    R.prepareWorldFrame(this.renderer,this.world,this.scene,this.camera,shadowed?{mapData:this.map,lights:this.uniforms,focus}:false);
-                    this.renderer.setRenderTarget(this.target);
-                    R.cacheUniformArrays?.(this.renderer);
-                    this.renderer.render(this.scene,this.camera);
-                }finally{this.renderer.setRenderTarget(null);this.view._resetPixi();}
+                // The room's own shadow rows and reflections, then its picture as the view's guest: the map's work
+                // target and scale, the sharpening enlargement, the colour draw's culling, detail levels and
+                // shader warm-up, and the frame counted for Auto quality (Viewport.renderGuest).
+                this.capturePace();
+                try{R.prepareWorldFrame(this.renderer,this.world,this.scene,this.camera,shadowed?{mapData:this.map,lights:this.uniforms,focus}:false,this.view.upscaled()?this.view.scale():1);}
+                finally{this.renderer.setRenderTarget(null);this.view._resetPixi();}
+                this.drawPaced();
                 return;
             }
             R.prepareWorldFrame(this.renderer,this.world,this.scene,this.camera,shadowed?{mapData:this.map,lights:this.uniforms,focus}:false);
             R.cacheUniformArrays?.(this.renderer);
             this.renderer.render(this.scene,this.camera);
+        }
+        /**
+         * The room's picture on the game's context, at this refresh's moment. Where the screen refreshes faster than
+         * the game updates (`pacedNow`), the camera and everything the room places are drawn between where the update
+         * before last left them and where the last did (`Graphics.FramePacing.alphaNow`, as a map's models are), and
+         * put back at once: the game's own places, `project` and `bounds` are never the blended ones. Effects, flat
+         * shadows' rows, reflections and the pictures over the room move with the updates.
+         */
+        drawPaced(){
+            const R=root.Reactor3D,ease=(this.paceEase||0)/BattleRoomView.PACE_EASE;
+            const alpha=ease>0?root.Graphics.FramePacing.alphaNow(ease):1;
+            const blended=alpha<1&&this.blendPace(alpha);
+            try{this.view.renderGuest(this.scene,this.camera);}finally{if(blended)this.restorePace();}
+            // Counted as a map's picture is: Auto quality judges a battle's frames and its levels act here.
+            R.Quality?.worldTick?.(performance.now());
+        }
+        /** Whether the room is drawn again on a refresh that ran no update (the game's own context, frames not rounded to 60). */
+        drawsBetween(){
+            const G=root.Graphics,F=G&&G.FramePacing,S=root.SceneManager;
+            return !this.disposed&&!!this.view&&!!this.scene&&!!F&&F.enabled!==false&&typeof F.alphaNow==='function'&&!(S&&S.trueSpeed===false);
+        }
+        /** A refresh with no update: the same update's picture, at this refresh's moment. Poses, lights and shadows are the update's. */
+        renderBetween(){if(!this.drawsBetween())return false;this.drawPaced();return true;}
+        /** Whether refreshes come faster than updates, so a picture between two updates has somewhere to go. */
+        pacedNow(){const F=root.Graphics?.FramePacing;return this.drawsBetween()&&typeof F.ratio==='function'&&F.ratio()>1+(F.WHOLE||0);}
+        /** Updates over which the picture goes from the updates' own moment to the paced one and back (FramePacing.EASE_FRAMES). */
+        static get PACE_EASE(){return 30;}
+        /** Past these in one update the camera cut (tiles, radians) or a thing was put elsewhere (tiles): drawn where it is. */
+        static get PACE_CAMERA_JUMP(){return 3;}
+        static get PACE_CAMERA_TURN(){return 1;}
+        static get PACE_JUMP(){return 2;}
+        /**
+         * Once an update, when everything is posed: where the camera and every node of every model and picture stand,
+         * beside where they stood an update ago. A thing new this update, or whose parts changed, has no place before.
+         */
+        capturePace(){
+            const E=BattleRoomView.PACE_EASE,paced=this.pacedNow();
+            this.paceEase=paced?Math.min(E,(this.paceEase||0)+1):Math.max(0,(this.paceEase||0)-1);
+            const stamp=this.paceStamp=(this.paceStamp||0)+1;
+            if(!this.paceEase){this.paceList=null;return;}
+            const list=this.paceList||(this.paceList=[]);let count=0;
+            const take=(holder,object,extra)=>{
+                if(!object||!object.position)return;
+                let p=holder._pace;if(!p||p.object!==object)p=holder._pace={object,nodes:[],prev:new Float64Array(0),live:new Float64Array(0),stamp:0,moved:false,applied:false};
+                const nodes=p.nodes;let n=0,same=true;
+                const add=node=>{if(nodes[n]!==node){nodes[n]=node;same=false;}n++;};
+                object.traverse?object.traverse(add):add(object);if(extra)add(extra);
+                if(nodes.length!==n){nodes.length=n;same=false;}
+                if(p.live.length<n*10){p.prev=new Float64Array(n*10);p.live=new Float64Array(n*10);same=false;}
+                const prev=p.live,live=p.prev;p.prev=prev;p.live=live;
+                let moved=false;
+                for(let i=0,k=0;i<n;i++,k+=10){
+                    const a=nodes[i].position,q=nodes[i].quaternion,s=nodes[i].scale;
+                    live[k]=a.x;live[k+1]=a.y;live[k+2]=a.z;live[k+3]=q.x;live[k+4]=q.y;live[k+5]=q.z;live[k+6]=q.w;live[k+7]=s.x;live[k+8]=s.y;live[k+9]=s.z;
+                    if(!moved)for(let j=0;j<10;j++)if(live[k+j]!==prev[k+j]){moved=true;break;}
+                }
+                p.moved=moved&&same&&p.stamp===stamp-1;p.stamp=stamp;
+                list[count++]=p;
+            };
+            for(const r of this.models.values())take(r,r.object,r.shadow);
+            for(const r of this.billboards.values())take(r,r.object,r.shadow);
+            list.length=count;
+            const c=this.paceCamera||(this.paceCamera={});take(c,this.camera,null);list.length=count-1;
+            c.fovPrev=c.fovLive;c.fovLive=Number.isFinite(this.camera.fov)?this.camera.fov:0;
+        }
+        /** Everything that moved in the last update, put `alpha` of the way from where it stood before it. True when anything was. */
+        blendPace(alpha){
+            const list=this.paceList;if(!list)return false;
+            let any=false;const jump=BattleRoomView.PACE_JUMP;
+            for(const p of list){
+                if(!p.moved)continue;
+                const prev=p.prev,live=p.live,nodes=p.nodes;
+                // The thing itself put somewhere else (a swap of places, a return from a throw): drawn where it is.
+                if(Math.abs(live[0]-prev[0])>jump||Math.abs(live[1]-prev[1])>jump||Math.abs(live[2]-prev[2])>jump)continue;
+                for(let i=0,k=0;i<nodes.length;i++,k+=10){
+                    const node=nodes[i];if(node.matrixAutoUpdate===false)continue;
+                    let same=true;for(let j=0;j<10;j++)if(live[k+j]!==prev[k+j]){same=false;break;}
+                    if(same)continue;
+                    BattleRoomView.paceSet(node,prev,live,k,alpha);
+                }
+                p.applied=true;any=true;
+            }
+            const c=this.paceCamera?._pace,camera=this.camera;
+            if(c&&c.moved||c&&c.stamp===this.paceStamp&&this.paceCamera.fovPrev>0&&this.paceCamera.fovPrev!==this.paceCamera.fovLive){
+                const prev=c.prev,live=c.live,dx=live[0]-prev[0],dy=live[1]-prev[1],dz=live[2]-prev[2];
+                const dot=Math.abs(prev[3]*live[3]+prev[4]*live[4]+prev[5]*live[5]+prev[6]*live[6]);
+                const J=BattleRoomView.PACE_CAMERA_JUMP;
+                if(c.moved&&dx*dx+dy*dy+dz*dz<=J*J&&2*Math.acos(Math.min(1,dot))<=BattleRoomView.PACE_CAMERA_TURN){
+                    BattleRoomView.paceSet(camera,prev,live,0,alpha);
+                    const a=this.paceCamera.fovPrev,b=this.paceCamera.fovLive;
+                    if(a>0&&b>0&&a!==b){camera.fov=a+(b-a)*alpha;camera.updateProjectionMatrix();}
+                    camera.updateMatrixWorld();c.applied=true;any=true;
+                }
+            }
+            return any;
+        }
+        static paceSet(node,prev,live,k,alpha){
+            node.position.set(prev[k]+(live[k]-prev[k])*alpha,prev[k+1]+(live[k+1]-prev[k+1])*alpha,prev[k+2]+(live[k+2]-prev[k+2])*alpha);
+            const sign=prev[k+3]*live[k+3]+prev[k+4]*live[k+4]+prev[k+5]*live[k+5]+prev[k+6]*live[k+6]<0?-1:1;
+            const x=prev[k+3]*sign+(live[k+3]-prev[k+3]*sign)*alpha,y=prev[k+4]*sign+(live[k+4]-prev[k+4]*sign)*alpha,z=prev[k+5]*sign+(live[k+5]-prev[k+5]*sign)*alpha,w=prev[k+6]*sign+(live[k+6]-prev[k+6]*sign)*alpha;
+            const length=Math.hypot(x,y,z,w)||1;node.quaternion.set(x/length,y/length,z/length,w/length);
+            node.scale.set(prev[k+7]+(live[k+7]-prev[k+7])*alpha,prev[k+8]+(live[k+8]-prev[k+8])*alpha,prev[k+9]+(live[k+9]-prev[k+9])*alpha);
+        }
+        /** After the draw: everything `blendPace` moved, back where the game put it, its matrices with it. */
+        restorePace(){
+            const put=p=>{
+                const live=p.live,nodes=p.nodes;p.applied=false;
+                for(let i=0,k=0;i<nodes.length;i++,k+=10){const node=nodes[i];if(node.matrixAutoUpdate===false)continue;
+                    node.position.set(live[k],live[k+1],live[k+2]);node.quaternion.set(live[k+3],live[k+4],live[k+5],live[k+6]);node.scale.set(live[k+7],live[k+8],live[k+9]);}
+            };
+            for(const p of this.paceList||[])if(p.applied){put(p);p.object.updateMatrixWorld?.(true);}
+            const c=this.paceCamera?._pace;
+            if(c&&c.applied){put(c);const fov=this.paceCamera.fovLive;if(fov>0&&this.camera.fov!==fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}this.camera.updateMatrixWorld();}
         }
         /** A rule's timed effects (a muzzle flash at the cannon, a sound) fire once each as the action clock passes them. */
         fireRuleEffects(record,action) {
@@ -1260,7 +1379,7 @@
             const shadowed=!!(this.settings.projection!=='2d'&&R.Shadows&&R.claimShadows(this.renderer)&&R.shadowsWanted(this.map));
             if(shadowed!==!!this._shadowed){
                 this._shadowed=shadowed;
-                this.scene.traverse(node=>{for(const m of [node.material].flat().filter(Boolean))if(m.__battleRoomLight){m.dispose();m.needsUpdate=true;}});
+                this.scene.traverse(node=>{for(const m of [node.material].flat().filter(Boolean))if(m.__battleRoomLight){m.dispose();m.needsUpdate=true;root.Reactor3D?.touchMaterial?.(m);}});
             }
             return shadowed;
         }
@@ -1442,8 +1561,9 @@
                     h.setSpeed?.((a.speed??100)/100);h.setLocation(play.world.x,play.world.y,play.world.z);h.setScale(...axes.map(v=>v*unit));
                     h.setRotation((rotate[0]+(rotation.x||0))*Math.PI/180,(rotate[1]+(rotation.y||0))*Math.PI/180+o.rotation.y,(rotate[2]+(rotation.z||0))*Math.PI/180);
                     if(!play.quad){const canvas=document.createElement('canvas');canvas.width=canvas.height=4;play.quad=R.EffekseerScene.quadFor(canvas);this.scene.add(play.quad.mesh);}
-                    const target=G.draw(entry,play,this.width,this.height,{x:0,y:0,width:this.width,height:this.height},this.camera.projectionMatrix.elements,this.camera.matrixWorldInverse.elements,h);
-                    if(target){G.bindQuad(play.quad,target);const u=play.quad.material.uniforms;u.resolution.value.set(this.width,this.height);u.rectMin.value.set(0,0);u.rectSize.value.set(1,1);R.EffekseerScene.standQuad(play.quad.mesh,play.world,this.camera);play.quad.mesh.visible=true;}
+                    // At the pixels the room's pass is drawn at (its quad reads it by the pass's own pixels), as a map's effects are.
+                    const size=this.passSize(),target=G.draw(entry,play,size.width,size.height,{x:0,y:0,width:size.width,height:size.height},this.camera.projectionMatrix.elements,this.camera.matrixWorldInverse.elements,h);
+                    if(target){G.bindQuad(play.quad,target);const u=play.quad.material.uniforms;u.resolution.value.set(size.width,size.height);u.rectMin.value.set(0,0);u.rectSize.value.set(1,1);R.EffekseerScene.standQuad(play.quad.mesh,play.world,this.camera);play.quad.mesh.visible=true;}
                     entry.context._makeContextCurrent();
                 }
             } finally { G.restoreDefault();this.releaseContext(); }

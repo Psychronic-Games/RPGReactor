@@ -31,7 +31,8 @@ test('common-event calls keep direct commands stock and tag variable/page script
     assert.deepEqual(commonTag.data, {
         target: 'commonEvent', designation: 'variable', variableId: 7
     });
-    assert.match(commonTag.body, /setupChild\(commonEvent\.list, this\._eventId \|\| 0\)/);
+    // As the stock Common Event command: an event left behind on another map is not this one's.
+    assert.match(commonTag.body, /setupChild\(commonEvent\.list, this\.isOnCurrentMap\(\) \? this\._eventId : 0\)/);
 
     const commonList = [{ code: 101 }];
     const calls = [];
@@ -39,13 +40,30 @@ test('common-event calls keep direct commands stock and tag variable/page script
         variables: { value: id => id === 7 ? 2 : 0 },
         commonEvents: [null, null, { list: commonList }],
         map: null,
-        interpreter: { _eventId: 11, setupChild: (list, eventId) => calls.push([list, eventId]) }
+        interpreter: { _eventId: 11, onMap: true, isOnCurrentMap() { return this.onMap; }, setupChild: (list, eventId) => calls.push([list, eventId]) }
     };
     runScript(commonTag.body, environment);
     assert.deepEqual(calls, [[commonList, 11]]);
+    environment.interpreter.onMap = false;
+    runScript(commonTag.body, environment);
+    assert.deepEqual(calls.pop(), [commonList, 0], 'an event of a map since left is not passed on');
+    environment.interpreter.onMap = true;
     environment.variables.value = () => 999;
     runScript(commonTag.body, environment);
     assert.equal(calls.length, 1, 'an invalid common event ID is a no-op');
+
+    // A command written before 2026-11-11 carries the old body: it still opens in the visual editor, and is
+    // written back in the new wording.
+    const oldCommand = ReactorEventCommandCodec.createScriptCommand('eventCall', commonTag.data, commonTag.body.replace(
+        'this.isOnCurrentMap() ? this._eventId : 0', 'this._eventId || 0'));
+    assert.notDeepEqual(oldCommand, commonCommand);
+    assert.match(ReactorEventCommandCodec.parseCommand(oldCommand, 'eventCall').body, /setupChild\(commonEvent\.list, this\._eventId \|\| 0\)/);
+    const reopenedOld = new CommonEventEditor(null, null);
+    assert.equal(reopenedOld.parseCommand(oldCommand), true, 'the old wording is still recognised');
+    assert.equal(reopenedOld.targetType, 'commonEvent');
+    assert.equal(reopenedOld.designation, 'variable');
+    assert.equal(reopenedOld.commonEventVariableId, 7);
+    assert.deepEqual(reopenedOld.buildCommand(), commonCommand);
 
     editor.targetType = 'mapEventPage';
     editor.designation = 'direct';

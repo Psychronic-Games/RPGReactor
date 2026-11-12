@@ -1389,19 +1389,33 @@ Game_Interpreter.prototype.command261 = function(params) {
     }
     const name = params[0];
     if (name.length > 0) {
-        const ext = this.videoFileExt();
+        const ext = this.videoFileExt(name);
         Video.play("movies/" + name + ext);
         this.setWaitMode("video");
     }
     return true;
 };
 
-Game_Interpreter.prototype.videoFileExt = function() {
-    if (Utils.canPlayWebm()) {
-        return ".webm";
-    } else {
-        return ".mp4";
-    }
+// The game plays the movie the project has. The stock rule asks for .webm
+// wherever webm can play, which is everywhere here, so a project's .mp4
+// stopped on the load error screen. With the files known (on disk under
+// NW.js, the file index of a web build) the extension is the one the file
+// has, and a name written with its extension plays as written. Unknown, or
+// called without a name as a plugin does, it is the stock rule.
+Game_Interpreter.prototype.videoFileExt = function(name) {
+    const stock = Utils.canPlayWebm() ? ".webm" : ".mp4";
+    if (typeof name !== "string" || !name) return stock;
+    const there = ext => {
+        const url = "movies/" + name + ext;
+        if (Utils.isNwjs()) return Utils.localAssetExists(url) === true;
+        const index = Utils._webFileIndex;
+        return !!index && index.has(url.toLowerCase());
+    };
+    if (there(stock)) return stock;
+    const other = stock === ".webm" ? ".mp4" : ".webm";
+    if (there(other)) return other;
+    if (/\.(?:webm|mp4)$/i.test(name) && there("")) return "";
+    return stock;
 };
 
 // Change Map Name Display

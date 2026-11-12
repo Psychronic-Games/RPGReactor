@@ -391,6 +391,8 @@ class DatabaseSystem2Editor {
         const last = keys[keys.length - 1];
         if (value === null || value === false) delete owner[last]; else owner[last] = value;
         if (keys.length === 3 && Object.keys(owner).length === 0) delete system[keys[0]][keys[1]];
+        // A value typed and cleared again in data that had no `advanced` block leaves none behind.
+        if (keys[0] === 'advanced' && system.advanced && Object.keys(system.advanced).length === 0) delete system.advanced;
     }
 
     /** A card that is named for the folding of the page's sections: `key` is the same in every language. */
@@ -545,12 +547,13 @@ class DatabaseSystem2Editor {
 
         // Advanced Settings fields. MV-era System.json has no `advanced`
         // object — create it on first edit instead of silently dropping the
-        // change.
+        // change, with the screen and UI size the card shows: the game reads
+        // those from the block and has nothing to fall back on.
         container.querySelectorAll('.sys2-advanced-field').forEach(field => {
             field.addEventListener('change', (e) => {
                 const advField = e.target.dataset.advancedField;
                 if (advField) {
-                    if (!system.advanced) system.advanced = {};
+                    if (!system.advanced) system.advanced = { screenWidth: 816, screenHeight: 624, uiAreaWidth: 816, uiAreaHeight: 624 };
                     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
                     if (advField.startsWith('camera2D')) {
                         if (!Number.isFinite(val)) {

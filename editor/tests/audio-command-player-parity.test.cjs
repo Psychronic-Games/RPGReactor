@@ -104,8 +104,10 @@ test('Troop audio commands route through AudioCommandEditor for insert and edit'
     assert.match(eventList, /^    140: \['changeVehicleBGMEditor'\],$/m);
     const common = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseCommonEventEditor.js'), 'utf8');
     const vehicle = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'commands', 'ChangeVehicleBGMEditor.js'), 'utf8');
+    // Insert and edit on a map event: one block each for every audio command, 132, 133 and 139 among them.
+    const shared = eventList.match(/\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(code\)[\s\S]{0,120}?audioEditor\.show\((?:null|command), code/g);
+    assert.equal(shared && shared.length, 2);
     for (const code of [132, 133, 139]) {
-        assert.match(eventList, new RegExp(`code === ${code}[\\s\\S]{0,120}?audioEditor\\.show\\([^,]+, code`));
         assert.match(common, new RegExp(`${code}: \\[\\{ name: '', volume: 90, pitch: 100, pan: 0 \\}\\]`));
     }
     assert.match(common, /\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(code\)/);

@@ -160,22 +160,6 @@ class DatabaseCommonUI {
     }
 
     /**
-     * Normalize file path for file:// URLs (convert backslashes to forward slashes)
-     */
-    normalizeFilePath(filepath) {
-        return filepath.replace(/\\/g, '/');
-    }
-
-    /**
-     * Create an image path for file:// protocol
-     */
-    createImagePath(folder, filename) {
-        const path = require('path');
-        const imageRoot = path.join(this.currentProject.path, 'img', folder);
-        return RRAssetFiles.imageUrlFor(imageRoot, filename);
-    }
-
-    /**
      * Update status message
      */
     updateStatus(message) {

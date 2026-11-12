@@ -294,6 +294,28 @@ test('the game\'s worker answers packed files and leaves the rest alone', async 
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('a folder that gets the game unpacked again loses its packs and its worker takes itself away', () => {
+    const { root } = project();
+    try {
+        assert.equal(webPack.retirePacks(root), false, 'a folder never packed is left alone');
+        assert.equal(fs.existsSync(path.join(root, 'reactor_pack_worker.js')), false);
+        webPack.packGame(root);
+        fs.writeFileSync(path.join(root, 'packs', 'notes.txt'), 'not ours');
+        assert.equal(webPack.retirePacks(root), true);
+        assert.deepEqual(fs.readdirSync(path.join(root, 'packs')), ['notes.txt'], 'only the index and its archives go');
+        const worker = fs.readFileSync(path.join(root, 'reactor_pack_worker.js'), 'utf8');
+        const listeners = {};
+        let gone = false;
+        vm.runInNewContext(worker, { self: { addEventListener: (type, fn) => { listeners[type] = fn; }, skipWaiting() {}, registration: { unregister: () => { gone = true; return Promise.resolve(true); } } } });
+        assert.equal(listeners.fetch, undefined, 'it answers nothing');
+        listeners.install();
+        listeners.activate({ waitUntil() {} });
+        assert.equal(gone, true);
+        assert.equal(webPack.retirePacks(root), false, 'and a second deploy finds nothing to end');
+        assert.match(read('editor/build-scripts/build-worker.js'), /platform === 'online' && !packOnline && webPack\.retirePacks\(platformOutDir\)/);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('the editor\'s own worker reads a packed project under browser-saved edits, and is unchanged without packs', () => {
     const worker = read('editor/src/web/service-worker.js');
     assert.match(worker, /const projectPacks = self\.RRPackReader\s*\n\s*\? self\.RRPackReader\.create\(new URL\('project\/', self\.registration\.scope\)\.href\)\s*\n\s*: null;/);

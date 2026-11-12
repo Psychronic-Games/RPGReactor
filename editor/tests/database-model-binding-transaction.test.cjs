@@ -51,7 +51,7 @@ test('a binding made in the Database waits for OK; Cancel takes it back and the 
     const { root, manager, file } = await openProject({ version: 1, actors: { 1: { character: spec('Knight') } } });
     const before = file();
     const DatabaseEditorUI = loadDatabaseEditorUI();
-    const ui = { databaseManager: manager, currentProject: null, _dataSnapshot: JSON.stringify(manager.data) };
+    const ui = Object.assign(Object.create(DatabaseEditorUI.prototype), { databaseManager: manager, currentProject: null, _dataSnapshot: JSON.stringify(manager.data) });
 
     bindings.set(root, 'actors', 2, spec('Mage'), 'character');
     bindings.set(root, 'actors', 1, null, 'character');

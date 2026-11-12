@@ -242,7 +242,9 @@ class MediaSurfaceEditor {
                     presentFields.add('muted');
                 }
             }
-            data.corners = this._parseCorners(rawArgs, data.corners);
+            // A Show without corners is its width × height rectangle, as the game builds it.
+            data.corners = this._parseCorners(rawArgs, command && name === 'ShowVideoSurface'
+                ? this._rectCorners(data.width, data.height) : data.corners);
             const worldCorners = this._field(rawArgs, 'worldCorners');
             if (worldCorners.present) data.worldCorners = this.jsonValue(worldCorners.value);
             const rotation = this.jsonValue(rawArgs.rotation);
@@ -274,6 +276,20 @@ class MediaSurfaceEditor {
         return value;
     }
 
+    /** The four corners of a width × height rectangle about the anchor, in the game's order. */
+    static _rectCorners(width, height) {
+        return [
+            { x: -width / 2, y: -height / 2 }, { x: width / 2, y: -height / 2 },
+            { x: width / 2, y: height / 2 }, { x: -width / 2, y: height / 2 }
+        ];
+    }
+
+    static _isRectCorners(corners, width, height) {
+        if (!Array.isArray(corners) || corners.length !== 4 || !Number.isFinite(width) || !Number.isFinite(height)) return false;
+        const rect = this._rectCorners(width, height);
+        return corners.every((point, index) => Math.abs(point?.x - rect[index].x) < 1e-6 && Math.abs(point?.y - rect[index].y) < 1e-6);
+    }
+
     static build(operation, data, indent = 0, options = {}) {
         if (!this.supports(operation)) throw new TypeError(`Unknown media-surface operation: ${operation}`);
         const meta = data?.[this.META] || {};
@@ -292,6 +308,10 @@ class MediaSurfaceEditor {
             for (const key of this.SHOW_FIELDS) {
                 if (key === 'eventId' && data.target !== 'event') continue;
                 if (key === 'worldCorners' && data.worldCorners == null) continue;
+                // Corners that are just the width × height rectangle are left out: the game builds the
+                // same ones, and a later Transform of the width or height alone then resizes the surface
+                // (written out, the game takes them for hand-set corners and keeps them).
+                if (key === 'corners' && this._isRectCorners(data.corners, data.width, data.height)) continue;
                 args[key] = this._copyValue(data[key]);
             }
         } else {

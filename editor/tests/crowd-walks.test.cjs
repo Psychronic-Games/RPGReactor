@@ -108,7 +108,11 @@ test('a body the shadow budget refused is not walked again until a caster is mar
 });
 
 test('a caster\'s triangle count is kept by its own level, not by every body\'s swaps', () => {
-    assert.match(read('reactor_3d_lighting.js'), /stamp = \(data\.lodLevel \|\| 0\) \+ "\/" \+ \(detail \? detail\.levelsReady : 0\) \+ "\/" \+ distance;/);
+    // Its own level, the levels ready and the distance, compared in place as three numbers (one text of them was a string made per caster, per frame).
+    const lighting = read('reactor_3d_lighting.js');
+    assert.match(lighting, /lod = data\.lodLevel \|\| 0, ready = detail \? detail\.levelsReady : 0;/);
+    assert.match(lighting, /if \(data\.rrShadowTris !== undefined && data\.rrShadowTrisLod === lod && data\.rrShadowTrisReady === ready && data\.rrShadowTrisAt === distance\) return data\.rrShadowTris;/);
+    assert.match(lighting, /data\.rrShadowTrisLod = lod; data\.rrShadowTrisReady = ready; data\.rrShadowTrisAt = distance;/);
     const S = R.Shadows, root = new T.Group();
     root.add(new T.Mesh(new T.BoxGeometry(), new T.MeshBasicMaterial()));
     const first = S._casterTriangles(root, 3);

@@ -195,7 +195,13 @@ test('MV name-entry windows built with an actor and an edit window take MZ rects
     Window_NameInput.prototype.initialize = function(rect) { calls.push(['input', rect]); };
     Window_NameInput.prototype.fittingHeight = n => 36 * n + 24;
     Window_NameInput.prototype.setEditWindow = function(w) { calls.push(['setEditWindow', w === edit]); };
-    const isRectangle = v => v instanceof Rectangle;
+    // The file's own isRectangle: anything with x and y, which the edit
+    // window (a display object) has too.
+    const rectStart = compat.indexOf('    function isRectangle(value) {');
+    const rectEnd = compat.indexOf('\n    }\n', rectStart) + '\n    }\n'.length;
+    assert.ok(rectStart >= 0 && rectEnd > rectStart);
+    const isRectangle = vm.runInNewContext('(' + compat.slice(rectStart, rectEnd).trim() + ')');
+    assert.equal(!!isRectangle({ x: 0, y: 0, _name: '' }), true);
     vm.runInNewContext(compat.slice(start, stop), { global: { Window_NameEdit, Window_NameInput }, Window_NameEdit, Window_NameInput, Rectangle, isRectangle, Graphics: { boxWidth: 816, boxHeight: 624 }, Math, Number, def: (o, n, f) => { if (!o[n]) o[n] = f; } });
     const edit = new Window_NameEdit();
     edit.initialize({ id: 3, faceName: () => 'Actor1' }, 8);
@@ -248,13 +254,19 @@ test("PIXI v4's renderer.textureManager frees the GPU side of a texture and leav
 test("MZ's mutating traitObjects never reaches a cached states() array", () => {
     function Game_BattlerBase() {}
     const cached = [{ id: 40 }];
-    Game_BattlerBase.prototype.states = function() { return cached; };
+    let stockArray = null;
+    Game_BattlerBase.prototype.states = function() { return stockArray = [{ id: 40 }]; };
     Game_BattlerBase.prototype.traitObjects = function() { return this.states(); };
     function Game_Actor() {}
     Game_Actor.prototype = Object.create(Game_BattlerBase.prototype);
     Game_Actor.prototype.traitObjects = function() { const objects = Game_BattlerBase.prototype.traitObjects.call(this); objects.push({ actor: true }, { cls: true }); return objects; };
     vm.runInNewContext(slice('installTraitObjectsCopyCompatibility') + '\ninstallTraitObjectsCopyCompatibility();', { global: { Game_BattlerBase }, Game_BattlerBase, Array });
     const actor = new Game_Actor();
+    const stock = actor.traitObjects();
+    assert.equal(stock, stockArray, "the runtime's own states() is a new array each call: no second copy");
+    assert.equal(stock.length, 3);
+    // A plugin replaces states() with one that keeps its array (Braver's).
+    Game_BattlerBase.prototype.states = function() { return cached; };
     assert.equal(actor.traitObjects().length, 3, 'the actor still sees its records');
     assert.equal(actor.traitObjects().length, 3, 'and does not accumulate');
     assert.deepEqual(actor.states(), [{ id: 40 }], 'the cached states array is untouched');

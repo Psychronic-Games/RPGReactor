@@ -64,7 +64,7 @@
         const hair = Hair();
         return [
             { kind: 'select', path: 'hair.style', label: 'Hairstyle', options: hair.STYLES.map(s => ({ id: s.id, label: s.label, group: s.group })) },
-            { kind: 'slider', path: 'hair.length', label: 'Length', min: 0, max: 2, step: 0.01 },
+            { kind: 'slider', path: 'hair.length', label: 'Length', min: 0.3, max: 2.5, step: 0.01 },
             { kind: 'slider', path: 'hair.volume', label: 'Volume', min: 0, max: 1, step: 0.01 },
             { kind: 'slider', path: 'hair.curl', label: 'Curl', min: 0, max: 1, step: 0.01 },
             { kind: 'color', path: 'hair.color', label: 'Hair color' },
@@ -76,7 +76,7 @@
         return [{ kind: 'select', path: 'outfitPreset', label: 'Outfit', options: Wardrobe().PRESETS.map(p => ({ id: p.id, label: p.label, group: p.group })) }];
     }
 
-    const COLORS = [['skin', 'Skin'], ['eyes.color', 'Eyes'], ['lips', 'Lips']];
+    const COLORS = [['skin', 'Skin'], ['eyes.color', 'Eyes'], ['skinPattern.lips', 'Lips']];
 
     function speciesControls(rules) {
         const allowed = new Set(allowedSpecies(rules));

@@ -68,6 +68,14 @@ test('Opened belongs to the applied current recipe, and an abandoned load cannot
     b._livePool = () => ({ build: async ({ recipe }) => ({ recipe, parts: [], height: 1, plan: 'quadruped' }) });
     await f.flush(); assert.equal(b.displayed.species, 'dwarf');
 });
+test('a build whose own recipe differs by a normalizing pass still counts as the one asked for', async () => {
+    const f = fixture(), { b } = f; b._view = {};
+    // The build normalizes once more, which can move an ancestry weight by one bit: its recipe never equals the builder's.
+    b._livePool = () => ({ build: async ({ recipe }) => ({ recipe: { ...recipe, drift: 1 }, parts: [], height: 1, plan: 'quadruped' }) });
+    b._openRecord('Saved elf', { recipe: { species: 'elf' } }); await f.flush();
+    assert.equal(f.status.textContent, 'Opened Saved elf.');
+    assert.equal(b._builtFor, JSON.stringify(b.recipe), 'what a group waits for before it draws a member');
+});
 test('detach cancels pending frame and settle work even before a view exists', t => {
     const f = fixture(), { b } = f;
     b._queueRebuild(); const timer = b._settle = setTimeout(() => assert.fail('detached slider callback'), 10000);

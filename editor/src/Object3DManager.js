@@ -168,7 +168,8 @@ class Object3DManager {
         this.createObjectLayer();
         if (!this.objectLayer) return;
         this.objectLayer.visible = this.enabled;
-        this.objectLayer.removeChildren();
+        // Destroyed, not only dropped: a graphic and a text left to the collector keep their GPU data until it runs.
+        for (const child of this.objectLayer.removeChildren()) child.destroy();
 
         const tileW = this.tilemapManager.TILE_WIDTH;
         const tileH = this.tilemapManager.TILE_HEIGHT;
@@ -213,16 +214,6 @@ class Object3DManager {
         }
     }
 
-    toggleObjects() {
-        this.enabled = !this.enabled;
-        if (this.enabled) {
-            this.createObjectLayer();
-            this.renderObjects();
-        }
-        this.setVisible(this.enabled);
-        return this.enabled;
-    }
-
     setVisible(visible) {
         this.enabled = !!visible;
         if (!this.objectLayer && visible) this.createObjectLayer();
@@ -232,6 +223,18 @@ class Object3DManager {
 
     refresh() {
         if (this.enabled && this.objectLayer) this.renderObjects();
+    }
+
+    /**
+     * Draw the overlay again on the next frame, once for however many cells
+     * were painted before it: a drag paints several cells per pointer event,
+     * and each redraw reads every cell of the map.
+     */
+    refreshSoon() {
+        if (typeof requestAnimationFrame !== 'function') { this.refresh(); return; }
+        if (this._refreshQueued) return;
+        this._refreshQueued = true;
+        requestAnimationFrame(() => { this._refreshQueued = false; this.refresh(); });
     }
 
     //-------------------------------------------------------------------------

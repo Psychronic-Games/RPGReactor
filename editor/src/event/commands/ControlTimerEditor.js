@@ -28,7 +28,8 @@ class ControlTimerEditor {
         if (command && command.code === 124) {
             const params = command.parameters;
             this.operation = params[0] || 0;
-            this.seconds = params[1] || 60;
+            // A stored 0 (a timer started at 0:00) is a value, not a missing one.
+            this.seconds = params[1] ?? 60;
         } else {
             this.operation = 0;
             this.seconds = 60;
@@ -160,7 +161,7 @@ class ControlTimerEditor {
 
             const input = document.createElement('input');
             input.type = 'number';
-            input.min = 1;
+            input.min = 0;
             input.max = 3600;
             input.value = this.seconds;
             input.style.cssText = `
@@ -182,7 +183,8 @@ class ControlTimerEditor {
             preview.textContent = ControlTimerEditor.durationLabel(this.seconds);
             preview.style.cssText = 'color: var(--color-link); font-size: 12px; margin-left: 8px;';
             input.addEventListener('input', (e) => {
-                this.seconds = parseInt(e.target.value) || 60;
+                const typed = parseInt(e.target.value);
+                this.seconds = typed >= 0 ? typed : 60;
                 preview.textContent = ControlTimerEditor.durationLabel(this.seconds);
             });
 

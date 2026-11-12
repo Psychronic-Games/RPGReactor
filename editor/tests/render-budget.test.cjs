@@ -326,3 +326,118 @@ test('a skinned model drawn without perspective (a flat map\'s model sprite) tak
         assert.equal(D.skinnedPixelsPerUnit(mesh, { isPerspectiveCamera: false, projectionMatrix: flat.projectionMatrix, matrixWorldInverse: flat.matrixWorldInverse }, 360), Infinity);
     } finally { R.instanceSpan = instanceSpan; }
 });
+
+test('a pass of the game\'s view keeps its distance levels between draws at the main thread\'s lower levels', () => {
+    const D = R.GeometryDetail, Q = R.Quality;
+    assert.deepEqual(Q.CPU.map(level => level.levels || 1), [1, 1, 2, 2, 3, 3], 'every draw at the first two levels');
+    const make = () => {
+        const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([0,0,0,1,0,0,0,1,0], 3));
+        g.setIndex(new T.BufferAttribute(new Uint32Array(100002), 1)); g.computeBoundingSphere();
+        const m = new T.MeshBasicMaterial(); m.__reactorModel = true;
+        const coarse = new T.BufferGeometry();
+        const state = { source: g, signature: D.signature(g), levels: [{ geometry: coarse, error: 0.0001 }], id: 1, dead: false };
+        D._states.set(g, state);
+        return { mesh: new T.Mesh(g, m), g, coarse, state };
+    };
+    const a = make(), b = make();
+    const scene = new T.Scene(); scene.add(a.mesh); scene.add(b.mesh); scene.updateMatrixWorld(true);
+    const camera = new T.PerspectiveCamera(60, 16 / 9, 0.1, 500); camera.position.z = 50; camera.updateMatrixWorld();
+    const pass = {}, other = {};
+    const saved = { worker: global.Worker, wanted: D.wanted, every: Q.detailEvery, eligible: D.eligible };
+    global.Worker = global.Worker || function () {};
+    D.wanted = () => true;
+    let asked = 0; D.eligible = function (object) { asked++; return saved.eligible.call(this, object); };
+    try {
+        Q.detailEvery = () => 3;
+        let swaps = D.begin(scene, camera, 1080, pass);
+        assert.equal(a.mesh.geometry, a.coarse); assert.equal(swaps.length, 2); D.end(swaps);
+        assert.equal(a.mesh.geometry, a.g, 'given back after the draw, as always');
+        const first = asked;
+        // Two more draws put the same levels back and ask no mesh.
+        b.mesh.geometry = new T.BufferGeometry();
+        swaps = D.begin(scene, camera, 1080, pass);
+        assert.equal(asked, first, 'no mesh asked on a kept draw');
+        assert.equal(a.mesh.geometry, a.coarse);
+        assert.equal(swaps.length, 1, 'a mesh whose geometry changed since is drawn as it is');
+        D.end(swaps); b.mesh.geometry = b.g;
+        a.state.dead = true;
+        swaps = D.begin(scene, camera, 1080, pass);
+        assert.equal(asked, first);
+        assert.equal(a.mesh.geometry, a.g, 'levels released since: drawn whole');
+        assert.equal(b.mesh.geometry, b.coarse);
+        D.end(swaps); a.state.dead = false;
+        // The third draw after the choice asks again.
+        swaps = D.begin(scene, camera, 1080, pass); D.end(swaps);
+        assert.ok(asked > first, 'chosen again after detailEvery draws');
+        // Another pass, another camera or another height has its own choice.
+        const again = asked;
+        swaps = D.begin(scene, camera, 1080, other); D.end(swaps);
+        assert.ok(asked > again, 'another target is another pass');
+        const mark = asked;
+        swaps = D.begin(scene, camera, 720, pass); D.end(swaps);
+        assert.ok(asked > mark, 'another height is asked afresh');
+        // No pass named (a preview, a capture, a shadow face), or a level that keeps nothing: every draw.
+        const plain = asked;
+        swaps = D.begin(scene, camera, 1080); D.end(swaps);
+        swaps = D.begin(scene, camera, 1080); D.end(swaps);
+        assert.equal(asked, plain + 2 * first, 'asked both times');
+        Q.detailEvery = () => 1;
+        const one = asked;
+        swaps = D.begin(scene, camera, 1080, pass); D.end(swaps);
+        swaps = D.begin(scene, camera, 1080, pass); D.end(swaps);
+        assert.equal(asked, one + 2 * first);
+    } finally {
+        global.Worker = saved.worker; D.wanted = saved.wanted; D.eligible = saved.eligible; Q.detailEvery = saved.every;
+        D._states.delete(a.g); D._states.delete(b.g);
+    }
+    assert.match(fs.readFileSync(path.join(repo, 'runtime/reactor_3d.js'), 'utf8'), /Reactor3D\._keepLevels = target;\n\s*try \{ Reactor3D\.renderScene\(this\._renderer, scene, camera\); \} finally \{ Reactor3D\._keepLevels = null; \}/, 'the viewport names its pass');
+});
+
+test('the worker keeps a mesh\'s levels between sessions and reads them back instead of working them out again', async () => {
+    const moduleCode = fs.readFileSync(path.join(repo, 'runtime/libs/meshopt_simplifier.js'), 'utf8');
+    const { MeshoptSimplifier } = await import('data:text/javascript;base64,' + Buffer.from(moduleCode).toString('base64'));
+    let simplified = 0;
+    const counting = Object.create(MeshoptSimplifier);
+    counting.simplifyWithAttributes = (...args) => { simplified++; return MeshoptSimplifier.simplifyWithAttributes(...args); };
+    // A store that outlives the worker: two workers below share it, as two sessions share a profile.
+    const held = new Map();
+    const answer = result => { const request = { result }; queueMicrotask(() => request.onsuccess && request.onsuccess()); return request; };
+    const objectStore = { get: key => answer(held.get(key)), put: (value, key) => { held.set(key, value); return answer(key); }, count: () => answer(held.size), clear: () => { held.clear(); return answer(); } };
+    const indexedDB = { open() { const request = { result: { createObjectStore() {}, transaction: () => ({ objectStore: () => objectStore }) } }; queueMicrotask(() => { request.onupgradeneeded(); request.onsuccess(); }); return request; } };
+    const code = fs.readFileSync(path.join(repo, 'runtime/libs/reactor_geometry_worker.js'), 'utf8').replace(/^import .*;$/m, '');
+    const session = () => { const self = { indexedDB, crypto: require('node:crypto').webcrypto, postMessage(value) { self.posted = value; } }; vm.runInNewContext(code, { self, MeshoptSimplifier: counting, Float32Array, Uint32Array, Uint8Array, Error, Promise, Array, Number }); return self; };
+    const job = (id, extra = {}) => { const g = new T.PlaneGeometry(2, 2, 32, 32); return { data: Object.assign({ id, positions: g.attributes.position.array.slice(), indices: new Uint32Array(g.index.array), attributes: g.attributes.uv.array.slice(), stride: 2, weights: [1, 1] }, extra) }; };
+    const first = session();
+    await first.onmessage(job(1));
+    assert.ok(first.posted.levels.length && !first.posted.kept && simplified > 0);
+    assert.equal(held.size, 1, 'kept under one key');
+    assert.match(Array.from(held.keys())[0], /^levels-3:chained:/, 'the recipe is part of the key');
+    // Each level is made from the one before: smaller every time, its error the sum so far (never under the last).
+    for (let i = 1; i < first.posted.levels.length; i++) {
+        assert.ok(first.posted.levels[i].indices.length < first.posted.levels[i - 1].indices.length);
+        assert.ok(first.posted.levels[i].error >= first.posted.levels[i - 1].error);
+    }
+    assert.match(code, /simplify\(source, room, flags\)/);
+    const made = simplified, lengths = first.posted.levels.map(level => level.indices.length);
+    // The next session: the same mesh is read back, and nothing is simplified.
+    const second = session();
+    await second.onmessage(job(2));
+    assert.equal(second.posted.id, 2);
+    assert.equal(second.posted.kept, true);
+    assert.equal(simplified, made);
+    assert.deepEqual(second.posted.levels.map(level => level.indices.length), lengths);
+    // Another mesh is not found under it.
+    const other = job(3); other.data.positions[0] += 0.5;
+    await second.onmessage(other);
+    assert.ok(!second.posted.kept && simplified > made);
+    assert.equal(held.size, 2);
+    // Switched off (GeometryDetail.KEEP_LEVELS false): worked out, and nothing read or written.
+    const before = simplified;
+    await second.onmessage(job(4, { keep: false }));
+    assert.ok(!second.posted.kept && simplified > before);
+    // What is kept is checked before it is used: a list longer than the mesh's own is worked out again.
+    held.set(Array.from(held.keys())[0], { levels: [{ indices: new Uint32Array(1e6), error: 0.1 }] });
+    await second.onmessage(job(5));
+    assert.ok(!second.posted.kept && second.posted.levels.length);
+    assert.match(fs.readFileSync(path.join(repo, 'runtime/reactor_3d.js'), 'utf8'), /weights: new Array\(stride\)\.fill\(1\), keep: this\.KEEP_LEVELS \}/);
+});

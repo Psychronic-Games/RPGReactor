@@ -150,6 +150,13 @@ class SetEventLocationEditor {
         }else for (let i = 1; i <= 20; i++) {
             charSelect.innerHTML += `<option value="${i}">${tt('Event')} ${i.toString().padStart(3, '0')}</option>`;
         }
+        // An event the list does not have (past 20, or of another map) is kept and shown.
+        if (this.characterId > 0 && !Array.from(charSelect.options).some(option => option.value === this.characterId.toString())) {
+            const option = document.createElement('option');
+            option.value = this.characterId;
+            option.textContent = `EV${this.characterId.toString().padStart(3, '0')}`;
+            charSelect.appendChild(option);
+        }
         charSelect.value = this.characterId.toString();
         charSelect.addEventListener('change', (e) => {
             this.characterId = parseInt(e.target.value);

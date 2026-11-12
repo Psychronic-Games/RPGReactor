@@ -141,6 +141,32 @@ test('shared annotations preserve RPG Maker option values, decimals, spaced keys
     assert.equal(metadata['Display Mode'].values[1], '');
     assert.equal(1 in metadata['Display Mode'].values, true);
 
+    // A description written over several lines is read whole, in the header and in a struct.
+    const wrapped = `/*:
+ * @param Speed
+ * @desc How fast the window opens.
+ * Higher is faster.
+ * @require 1
+ * not a description
+ * @default 4
+ *
+ * @param Colour
+ * @desc One line.
+ *
+ * Text after a blank line is not the description.
+ */
+/*~struct~Box:
+ * @param Width
+ * @desc The width of the box,
+ * in pixels.
+ * @type number
+ */`;
+    const wrappedMeta = manager.parsePluginParameterMetadata(wrapped);
+    assert.equal(wrappedMeta.Speed.desc, 'How fast the window opens. Higher is faster.');
+    assert.equal(wrappedMeta.Speed.default, '4');
+    assert.equal(wrappedMeta.Colour.desc, 'One line.');
+    assert.equal(annotations.parseStructDefinitions(wrapped).Box.Width.desc, 'The width of the box, in pixels.');
+
     assert.deepEqual(annotations.splitLine('@desc Pass the current @arg name'), [{
         tag: 'desc',
         value: 'Pass the current @arg name'

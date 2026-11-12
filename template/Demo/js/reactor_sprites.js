@@ -656,27 +656,16 @@ Sprite_Character.prototype._reactor3dHides = function() {
 };
 Sprite_Character.prototype._reactor3dBaseVisibility = Sprite_Character.prototype.updateVisibility;
 Sprite_Character.prototype.updateVisibility = function() {
+    // The base has asked `_reactor3dHides` already: what a 3D scene draws itself
+    // (a prop, a character with a model, an event-model map) is hidden there, once.
     this._reactor3dBaseVisibility();
-    if (typeof Reactor3D === "undefined") return;
-    const character = this._character;
-    if (!character) return;
-    const isEvent = typeof character.eventId === "function";
-    if (isEvent && Reactor3D.isEventProp(character.eventId())
-        && typeof $dataMap !== "undefined" && Reactor3D.shouldRender3D($dataMap)) {
-        this.visible = false;
-        return;
-    }
-    // Only a 3D scene draws these itself; on a flat map a model-bound
-    // character is a rendered sprite (updateMapModelSprite) and the others
-    // are ordinary sprites.
-    const inScene = typeof $dataMap !== "undefined" && Reactor3D.shouldRender3D($dataMap);
-    if (inScene && Reactor3D.hasCharacterModel(character)) this.visible = false;
-    if (inScene && Reactor3D.hasEventModels($dataMap)) this.visible = false;
-    // A model-bound character has no sheet name, which the base class reads
+    const character = this._character, model = this._reactorMapModel;
+    if (!model || !model.ready || !character || typeof Reactor3D === "undefined") return;
+    // On a flat map a model-bound character is a rendered sprite
+    // (updateMapModelSprite). It has no sheet name, which the base class reads
     // as an empty character; its rendered model is the picture.
-    if (!inScene && this._reactorMapModel && this._reactorMapModel.ready) {
-        this.visible = !(character.isTransparent && character.isTransparent());
-    }
+    const inScene = typeof $dataMap !== "undefined" && Reactor3D.shouldRender3D($dataMap);
+    if (!inScene) this.visible = !(character.isTransparent && character.isTransparent());
 };
 
 Sprite_Character.prototype.reactor3DScale = function() {
@@ -2634,6 +2623,8 @@ Sprite_Enemy.prototype.destroyParticleCollapse = function() {
     if (state.fragments) {
         if (state.mesh.parent) state.mesh.parent.removeChild(state.mesh);
         state.mesh.destroy({ children: false, texture: true, textureSource: false });
+        // PIXI's Mesh.destroy only lets go of its geometry: the buffers are this collapse's own.
+        state.geometry.destroy(true);
         return;
     }
     // Each shard holds a Texture of its own, and a v8 Texture subscribes to its
@@ -3134,6 +3125,29 @@ Sprite_Animation.SceneLayer = {
         if (!effect) return false;
         this.deadlines.set(name, performance.now() + EffectManager.PRELOAD_WAIT_MS);
         return true;
+    },
+    /**
+     * EffectManager.clear's in-scene counterpart, after a transfer: the loaded
+     * effects go, but for the ones the new map names (`keep`) and any an
+     * animation still holds. One still loading stays too: Effekseer cannot
+     * release it yet, and it would finish loading into nothing.
+     */
+    clear(keep) {
+        if (!this.context || !this.cache.size) return;
+        const held = new Set();
+        for (const sprite of this.live) if (sprite._effect) held.add(sprite._effect);
+        try {
+            for (const [name, effect] of this.cache) {
+                if (!effect || !effect.isLoaded || held.has(effect) || (keep && keep.has(name))) continue;
+                this.context.releaseEffect(effect);
+                this.cache.delete(name);
+                this.deadlines.delete(name);
+            }
+        } finally {
+            // Its textures were deleted on PIXI's context: PIXI is reset before the next render.
+            this.dirty = true;
+            Graphics.effekseer?._makeContextCurrent?.();
+        }
     },
     isReady() {
         const now = performance.now();
@@ -6389,10 +6403,6 @@ Spriteset_Map.prototype.updateReactor3DTexture = function(pass, from) {
     else if (source) source.needsUpdate = true;
 };
 
-Spriteset_Map.prototype.reactor3D = function() {
-    return this._reactor3d;
-};
-
 /**
  * Whoever may stand as a model: the events, the player and the visible followers (an actor bound to a
  * model in the database sidecar walks the map as that model). One list, refilled in place each frame; the
@@ -6634,7 +6644,10 @@ Spriteset_Map.prototype.drawReactor3D = function(state) {
         this.keepReactor3DLightsOnTop();
     }
 
-    if (!state.warming) Graphics.worldFrameCount = (Graphics.worldFrameCount || 0) + 1;
+    if (!state.warming) {
+        Graphics.worldFrameCount = (Graphics.worldFrameCount || 0) + 1;
+        if (Reactor3D.FramePressure) Reactor3D.FramePressure.frame();
+    }
 
 };
 
@@ -6880,6 +6893,8 @@ Spriteset_Map.prototype.keepReactorLighting2DOnTop = function() {
 Spriteset_Map.prototype.suppressReactor3DGroundParallaxes = function(hide) {
     if (!this._tilemap || typeof TilingSprite === "undefined") return;
     const taken = hide ? this.reactor3DGroundParallaxNames() : null;
+    // Asked with every drawn picture: a map whose ground took no parallax has nothing to hide.
+    if (hide && !taken.size) return;
     for (const child of this._tilemap.children) {
         if (!(child instanceof TilingSprite)) continue;
         if (!hide) {
@@ -6893,8 +6908,13 @@ Spriteset_Map.prototype.suppressReactor3DGroundParallaxes = function(hide) {
 
 /** The parallaxes this map's 3D ground was built from, by name. */
 Spriteset_Map.prototype.reactor3DGroundParallaxNames = function() {
+    // Kept until what the list is read from changes: the map's record, its note and its own parallax.
+    const map = $dataMap, held = this._rrGroundParallaxNames;
+    if (held && map && held.map === map && held.note === map.note && held.parallax === map.parallaxName
+        && held.loopX === map.parallaxLoopX && held.loopY === map.parallaxLoopY) return held.names;
     const names = new Set();
     for (const layer of Reactor3D.parallaxGroundLayers($dataMap)) names.add(layer.name);
+    if (map) this._rrGroundParallaxNames = { map, note: map.note, parallax: map.parallaxName, loopX: map.parallaxLoopX, loopY: map.parallaxLoopY, names };
     return names;
 };
 

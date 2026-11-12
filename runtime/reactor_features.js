@@ -34,12 +34,16 @@
     const RF = root.ReactorFeatures = root.ReactorFeatures || {};
     RF.FLAGS = FLAGS;
 
+    // Each flag's path, split on first use and kept: battlers ask on every
+    // trait and parameter read.
+    const PATHS = {};
+
     /** Whether a feature is on: its System.json flag, else its default. `system` defaults to $dataSystem. */
     RF.on = function(id, system) {
         const entry = FLAGS[id];
         if (!entry) return true;
         let value = system !== undefined ? system : (typeof $dataSystem !== "undefined" ? $dataSystem : null);
-        for (const key of entry[0].split(".")) {
+        for (const key of PATHS[id] || (PATHS[id] = entry[0].split("."))) {
             value = value && typeof value === "object" ? value[key] : undefined;
         }
         return value === undefined || value === null ? entry[1] : !!value;

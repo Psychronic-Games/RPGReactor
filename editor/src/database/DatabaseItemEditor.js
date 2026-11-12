@@ -324,7 +324,7 @@ class DatabaseItemEditor {
                 item.damage = { type: 0, elementId: -1, formula: '0', variance: 20, critical: false };
             }
             const shown = ActionSecondaryDamage.write(item.damage, fieldName.split('.')[2], value);
-            console.log(`Updated item ${itemId} ${fieldName} to:`, shown);
+            console.debug(`Updated item${itemId} ${fieldName} to:`, shown);
             this.databaseManager.updateItem(itemId, item);
             return shown;
         }
@@ -355,12 +355,12 @@ class DatabaseItemEditor {
             else {
                 item.damage[subField] = parseInt(value) || 0;
             }
-            console.log(`Updated item ${itemId} damage.${subField} to:`, item.damage[subField]);
+            console.debug(`Updated item${itemId} damage.${subField} to:`, item.damage[subField]);
         }
         // Handle boolean fields
         else if (fieldName === 'consumable') {
             item[fieldName] = !!value;
-            console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
+            console.debug(`Updated item${itemId} field ${fieldName} to:`, item[fieldName]);
         }
         // Can't be sold: stored only when on, so a stock record stays stock.
         else if (fieldName === 'rrNoSell') {
@@ -370,19 +370,19 @@ class DatabaseItemEditor {
         // deletes repeatsMax, so the field to show is not item[fieldName].
         else if (fieldName === 'repeats' || fieldName === 'repeatsMax') {
             const shown = ActionRepeats.write(item, fieldName, value);
-            console.log(`Updated item ${itemId} field ${fieldName} to:`, shown);
+            console.debug(`Updated item${itemId} field ${fieldName} to:`, shown);
             this.databaseManager.updateItem(itemId, item);
             return shown;
         }
         // Handle numeric fields
         else if (['itypeId', 'price', 'scope', 'occasion', 'speed', 'successRate', 'hitType', 'animationId', 'tpGain'].includes(fieldName)) {
             item[fieldName] = parseInt(value) || 0;
-            console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
+            console.debug(`Updated item${itemId} field ${fieldName} to:`, item[fieldName]);
         }
         // Handle string fields (name, description, note)
         else {
             item[fieldName] = value;
-            console.log(`Updated item ${itemId} field ${fieldName} to:`, value);
+            console.debug(`Updated item${itemId} field ${fieldName} to:`, value);
         }
 
         this.databaseManager.updateItem(itemId, item);

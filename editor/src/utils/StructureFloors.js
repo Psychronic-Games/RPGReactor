@@ -23,7 +23,8 @@
 
     const storeyOf = plan => Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
     const floorsOf = plan => Math.max(1, Math.floor(Number(plan.height) || 1));
-    const levelPx = 48;
+    // A light's height is in levels (tiles), as a piece's z and a screen's z are.
+    const heightOf = light => Number(light.height) || 0;
 
     /** The pieces of one floor: every piece whose level is in the floor's band. */
     function band(plan, floor) {
@@ -100,7 +101,7 @@
     /** Move everything at or above a level up (or down) by a number of levels. */
     function shift(plan, fromLevel, by) {
         for (const piece of plan.pieces || []) if ((Number(piece.z) || 0) >= fromLevel) piece.z = (Number(piece.z) || 0) + by;
-        for (const light of plan.lights || []) if ((Number(light.height) || 0) >= fromLevel * levelPx) light.height = (Number(light.height) || 0) + by * levelPx;
+        for (const light of plan.lights || []) if (heightOf(light) >= fromLevel) light.height = heightOf(light) + by;
         for (const row of plan.surfaces || []) if ((Number(row.z) || 0) >= fromLevel) row.z = (Number(row.z) || 0) + by;
     }
 
@@ -123,7 +124,7 @@
         while (floors < target) {
             const top = floors - 1, z0 = top * S, z1 = floors * S;
             const copies = (plan.pieces || []).filter(piece => (Number(piece.z) || 0) >= z0 && (Number(piece.z) || 0) < z1).map(piece => Object.assign(JSON.parse(JSON.stringify(piece)), { z: (Number(piece.z) || 0) + S }));
-            const lightCopies = (plan.lights || []).filter(l => (Number(l.height) || 0) >= z0 * levelPx && (Number(l.height) || 0) < z1 * levelPx).map(l => Object.assign(JSON.parse(JSON.stringify(l)), { height: (Number(l.height) || 0) + S * levelPx, id: '' }));
+            const lightCopies = (plan.lights || []).filter(l => heightOf(l) >= z0 && heightOf(l) < z1).map(l => Object.assign(JSON.parse(JSON.stringify(l)), { height: heightOf(l) + S, id: '' }));
             const screenCopies = (plan.surfaces || []).filter(r => (Number(r.z) || 0) >= z0 && (Number(r.z) || 0) < z1).map(r => Object.assign(JSON.parse(JSON.stringify(r)), { z: (Number(r.z) || 0) + S }));
             shift(plan, z1, S);
             plan.pieces = (plan.pieces || []).concat(copies);
@@ -134,7 +135,7 @@
         while (floors > target) {
             const top = floors - 1, z0 = top * S, z1 = floors * S;
             plan.pieces = (plan.pieces || []).filter(piece => !((Number(piece.z) || 0) >= z0 && (Number(piece.z) || 0) < z1));
-            plan.lights = (plan.lights || []).filter(l => !((Number(l.height) || 0) >= z0 * levelPx && (Number(l.height) || 0) < z1 * levelPx));
+            plan.lights = (plan.lights || []).filter(l => !(heightOf(l) >= z0 && heightOf(l) < z1));
             plan.surfaces = (plan.surfaces || []).filter(r => !((Number(r.z) || 0) >= z0 && (Number(r.z) || 0) < z1));
             shift(plan, z1, -S);
             floors--;
@@ -248,16 +249,6 @@
         const S = storeyOf(plan), z0 = floor * S;
         const keys = new Set(cells.map(([x, y]) => x + ',' + y));
         remove(plan, p => keys.has(p.x + ',' + p.y) && (Number(p.z) || 0) >= z0 && (Number(p.z) || 0) < z0 + S);
-    }
-
-    /** What a cell shows on the plan of a floor: the tallest-reading piece there. */
-    function cellKind(plan, floor, x, y) {
-        const here = band(plan, floor).filter(p => p.x === x && p.y === y);
-        for (const kind of ['doorway', 'window', 'wall', 'stair', 'pillar', 'block', 'fence', 'ramp', 'roof']) {
-            const piece = here.find(p => p.kind === kind);
-            if (piece) return piece;
-        }
-        return here.find(p => p.kind === 'floor') || here[0] || null;
     }
 
     // ---- Selecting and moving what is on a floor ----------------------------
@@ -532,7 +523,7 @@
         return rectCells(x0, y0, x1, y1).filter(([x, y]) => x === Math.min(x0, x1) || x === Math.max(x0, x1) || y === Math.min(y0, y1) || y === Math.max(y0, y1));
     }
 
-    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, needsMaterialize, materialize, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
+    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, needsMaterialize, materialize, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, rectCells, lineCells, outlineCells };
     root.RRStructureFloors = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

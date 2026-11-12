@@ -43,6 +43,21 @@ test('a motion opens as one track per part and saves back unchanged', () => {
     assert.deepEqual(host.rawAnimations[0].keys, wave[0].keys);
 });
 
+test('a pose\'s Scale, set on the classic card, is kept by a save here', () => {
+    const host = hostWith([
+        { name: 'Swell', part: 'Head', type: 'pose', trigger: 'action', period: 30, keys: [{ at: 0.2, rotate: [0, 0, 0], move: [0, 0, 0], resize: [1.5, 1.5, 1.5] }, { at: 0.8, rotate: [0, 0, 0], move: [0, 0, 0] }] },
+        { name: 'Swell', part: 'LeftUpperArm', type: 'pose', trigger: 'action', period: 30, rotate: [10, 0, 0], move: [0, 0, 0], resize: [2, 2, 2] }
+    ]);
+    const editor = new RRMotionEditor(host);
+    editor.open('Swell');
+    editor.commit();
+    const [head, arm] = host.rawAnimations;
+    assert.deepEqual(head.keys.map(k => k.resize), [[1.5, 1.5, 1.5], undefined], 'a key keeps its own size, and one without gains none');
+    // A pose without keys becomes one key, and a keyed pose is sized by its keys alone: the rule's size moves onto it.
+    assert.deepEqual(arm.keys, [{ at: 0.5, rotate: [10, 0, 0], move: [0, 0, 0], resize: [2, 2, 2] }]);
+    assert.equal(arm.resize, undefined);
+});
+
 test('renaming, retiming and a stance write every part of the motion', () => {
     const host = hostWith([
         { name: 'Guard', part: 'LeftUpperArm', type: 'pose', trigger: 'action', period: 15, hold: true, rotate: [-40, 0, 20], move: [0, 0, 0] },

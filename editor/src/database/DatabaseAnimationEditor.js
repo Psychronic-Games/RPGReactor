@@ -200,6 +200,14 @@ class DatabaseAnimationEditor {
         return !!animation && Array.isArray(animation.frames);
     }
 
+    // A sprite animation's timing stores the index of its frame, from 0, as RPG
+    // Maker does, while the frame list beside it counts from 1: the timing list
+    // and its dialog show and take the list's number. An Effekseer timing is a
+    // count of game frames from 0 and is shown as stored.
+    static timingFrameBase(animation) {
+        return DatabaseAnimationEditor.isSpriteAnimation(animation) ? 1 : 0;
+    }
+
     static normalizeFlashColor(color) {
         return [0, 1, 2, 3].map(index => Number.isFinite(color?.[index]) ? color[index] : 0);
     }
@@ -260,6 +268,7 @@ class DatabaseAnimationEditor {
 
         delete animation.effectName;
         delete animation.displayType;
+        delete animation.alignBottom;
         delete animation.scale;
         delete animation.speed;
         delete animation.rotation;
@@ -687,6 +696,10 @@ class DatabaseAnimationEditor {
                                 <option value="1" ${animation.displayType === 1 ? 'selected' : ''}>${tt('Center of all targets')}</option>
                                 <option value="2" ${animation.displayType === 2 ? 'selected' : ''}>${tt('Center of the screen')}</option>
                             </select>
+                            <label style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--color-text); cursor: pointer; margin-top: 6px;" title="${tt('Play the effect at the target\'s feet instead of its middle.')}">
+                                <input type="checkbox" id="effekseer-align-bottom" ${animation.alignBottom ? 'checked' : ''} style="cursor: pointer;">
+                                <span>${tt('Align Bottom')}</span>
+                            </label>
                         </div>
 
                         <!-- Scale -->
@@ -866,15 +879,17 @@ class DatabaseAnimationEditor {
                 }
                 const title = `${tt('Select Animation')} ${slot} ${tt('Image')}`;
                 const cb = (selectedFile) => {
-                    if (slot === 1) animation.animation1Name = selectedFile;
-                    else animation.animation2Name = selectedFile;
+                    if (slot === 1) animation.animation1Name = selectedFile || '';
+                    else animation.animation2Name = selectedFile || '';
                     persistSprite();
                     // Re-render the detail view so the display updates
                     self.showAnimationDetail(container, animation);
                 };
                 const previewCb = fileName => RRAssetFiles.imageUrlFor(animDir, fileName);
                 if (this.parentEditor && this.parentEditor.showImagePicker) {
-                    this.parentEditor.showImagePicker(title, files, cb, previewCb);
+                    // Opens on the sheet in use, with a (None) row: a second sheet could not be taken off again.
+                    this.parentEditor.showImagePicker(title, files, cb, previewCb,
+                        (slot === 1 ? animation.animation1Name : animation.animation2Name) || undefined, { allowNone: true });
                 } else {
                     RRDialog.alert(tt('Image picker unavailable'), { title: tt('Animations'), kind: 'error' });
                 }
@@ -1620,7 +1635,7 @@ class DatabaseAnimationEditor {
             const textColor = isSelected ? 'var(--color-text-strong)' : 'var(--color-text)';
             const mutedColor = isSelected ? 'var(--color-text-strong)' : 'var(--color-text-muted)';
             timingEntry.innerHTML = `
-                <div style="font-weight:600;color:${frameLabelColor};font-size:12px;">${tt('Frame')} ${timing.frame}</div>
+                <div style="font-weight:600;color:${frameLabelColor};font-size:12px;">${tt('Frame')} ${(Number(timing.frame) || 0) + DatabaseAnimationEditor.timingFrameBase(animation)}</div>
                 <div style="grid-column:1 / -1;color:${textColor};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><strong>${tt('SE:')}</strong> ${rrEscapeHtml(seInfo)}</div>
                 <div style="grid-column:1 / -1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;">
                     <span style="color: ${textColor};"><strong>${tt('Flash:')}</strong> ${flashTypeName}</span>
@@ -1852,7 +1867,9 @@ class DatabaseAnimationEditor {
         const saveBtn = document.getElementById('timing-modal-save');
 
         // Populate fields
-        frameInput.value = timingData.frame || 0;
+        const frameBase = DatabaseAnimationEditor.timingFrameBase(animation);
+        frameInput.min = frameBase;
+        frameInput.value = (timingData.frame || 0) + frameBase;
         seNameInput.value = timingData.se?.name || tt('None');
         this._timingSeExtras = DatabaseAnimationEditor.seExtras(timingData.se);
 
@@ -2089,7 +2106,9 @@ class DatabaseAnimationEditor {
             this._timingSeExtras = {};
 
             // Reset form fields
-            document.getElementById('timing-frame').value = 0;
+            const frameBase = DatabaseAnimationEditor.timingFrameBase(animation);
+            document.getElementById('timing-frame').min = frameBase;
+            document.getElementById('timing-frame').value = frameBase;
             document.getElementById('timing-se-name').value = noneLabel;
             document.getElementById('timing-se-volume').value = 90;
             document.getElementById('timing-se-volume-value').textContent = '90';
@@ -2131,7 +2150,9 @@ class DatabaseAnimationEditor {
 
         // Save timing functionality
         saveBtn?.addEventListener('click', () => {
-            const frame = parseInt(document.getElementById('timing-frame').value) || 0;
+            // Stored from 0 whatever the field shows (see timingFrameBase).
+            const frame = Math.max(0, (parseInt(document.getElementById('timing-frame').value) || 0)
+                - DatabaseAnimationEditor.timingFrameBase(animation));
             const seName = document.getElementById('timing-se-name').value;
             const seVolume = DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90);
             const sePitch = parseInt(document.getElementById('timing-se-pitch').value) || 100;
@@ -2406,7 +2427,7 @@ class DatabaseAnimationEditor {
         return extras;
     }
 
-    showCellPropertiesModal(animation, frameIndex, cellIndex, renderFrame) {
+    showCellPropertiesModal(animation, frameIndex, cellIndex, renderFrame, beforeChange) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const frameData = animation.frames[frameIndex];
         if (!frameData || cellIndex >= frameData.length) return;
@@ -2514,7 +2535,8 @@ class DatabaseAnimationEditor {
             const newOpacity = clamp(intOr('cell-opacity', 255), 0, 255);
             const newBlend = intOr('cell-blend', 0);
 
-            // Update cell data
+            // Update cell data, recorded first so Undo takes back these values alone.
+            if (beforeChange) beforeChange();
             frameData[cellIndex] = [newPattern, newX, newY, newScale, newRotation, newMirror, newOpacity, newBlend];
 
             // Re-render frame
@@ -2928,7 +2950,7 @@ class DatabaseAnimationEditor {
      * about are the ones selected when the question is put; an answer that
      * finds the frame list changed removes nothing.
      */
-    async askRemoveFrames(animation, selectedIndices) {
+    async askRemoveFrames(animation, selectedIndices, beforeRemove) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const count = selectedIndices.size;
         if (animation.frames.length <= count) {
@@ -2942,6 +2964,8 @@ class DatabaseAnimationEditor {
             ? tt('Remove frame {number}?').replace('{number}', indicesDesc[0] + 1)
             : tt('Remove {count} selected frames?').replace('{count}', count), { title: action, ok: action, danger: true });
         if (!remove || animation.frames.length !== frameTotal) return false;
+        // The frame editor records the frames here, so Undo brings them back.
+        if (beforeRemove) beforeRemove();
         indicesDesc.forEach(i => animation.frames.splice(i, 1));
         return true;
     }
@@ -3329,6 +3353,21 @@ class DatabaseAnimationEditor {
         // Store reference to this for use in closures
         const self = this;
 
+        // After Undo or Redo the frames may be fewer or more than the list shows:
+        // keep the current frame inside them and draw the list and counter again.
+        const showRestoredFrames = () => {
+            if (frameList.children.length !== animation.frames.length) {
+                currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
+                selectedFrameIndices.clear();
+                selectedFrameIndices.add(currentFrame);
+            }
+            if (selectedCellIndex >= (animation.frames[currentFrame] || []).length) selectedCellIndex = -1;
+            persistAnimation();
+            populateFrameList();
+            renderFrame(currentFrame);
+            updateFrameCounter();
+        };
+
         // Handle context menu actions
         const handleContextMenuAction = (action, cellIndex) => {
             const frameData = animation.frames[currentFrame];
@@ -3352,7 +3391,7 @@ class DatabaseAnimationEditor {
 
                 case 'edit':
                     if (cellIndex !== -1) {
-                        self.showCellPropertiesModal(animation, currentFrame, cellIndex, renderFrame);
+                        self.showCellPropertiesModal(animation, currentFrame, cellIndex, renderFrame, saveState);
                     }
                     break;
 
@@ -3400,7 +3439,7 @@ class DatabaseAnimationEditor {
                     if (undoStack.length > 0) {
                         redoStack.push(JSON.parse(JSON.stringify(animation.frames)));
                         animation.frames = undoStack.pop();
-                        renderFrame(currentFrame);
+                        showRestoredFrames();
                     }
                     break;
 
@@ -3408,7 +3447,7 @@ class DatabaseAnimationEditor {
                     if (redoStack.length > 0) {
                         undoStack.push(JSON.parse(JSON.stringify(animation.frames)));
                         animation.frames = redoStack.pop();
-                        renderFrame(currentFrame);
+                        showRestoredFrames();
                     }
                     break;
 
@@ -3711,6 +3750,7 @@ class DatabaseAnimationEditor {
                     ? JSON.parse(JSON.stringify(animation.frames[currentFrame].slice(0, 16)))
                     : []; // Empty frame
 
+                saveState();
                 animation.frames.push(newFrame);
                 currentFrame = animation.frames.length - 1;
                 selectedFrameIndices.clear();
@@ -3756,7 +3796,7 @@ class DatabaseAnimationEditor {
 
         if (removeFrameBtn) {
             removeFrameBtn.addEventListener('click', async () => {
-                if (!(await editorSelf.askRemoveFrames(animation, selectedFrameIndices))) return;
+                if (!(await editorSelf.askRemoveFrames(animation, selectedFrameIndices, saveState))) return;
                 selectedFrameIndices.clear();
                 currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
                 selectedFrameIndices.add(currentFrame);
@@ -3875,7 +3915,7 @@ class DatabaseAnimationEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 // The key asks as the Remove Frame button does.
-                editorSelf.askRemoveFrames(animation, selectedFrameIndices).then(removed => {
+                editorSelf.askRemoveFrames(animation, selectedFrameIndices, saveState).then(removed => {
                     if (!removed) return;
                     selectedFrameIndices.clear();
                     currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
@@ -3900,6 +3940,7 @@ class DatabaseAnimationEditor {
                 const indicesAsc = Array.from(selectedFrameIndices).sort((a, b) => a - b);
                 frameClipboard = indicesAsc.map(i => JSON.parse(JSON.stringify(animation.frames[i])));
                 const indicesDesc = indicesAsc.slice().reverse();
+                saveState();
                 indicesDesc.forEach(i => animation.frames.splice(i, 1));
                 selectedFrameIndices.clear();
                 currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
@@ -3912,6 +3953,7 @@ class DatabaseAnimationEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 const insertAt = currentFrame + 1;
+                saveState();
                 frameClipboard.forEach((f, i) => {
                     animation.frames.splice(insertAt + i, 0, JSON.parse(JSON.stringify(f.slice(0, 16))));
                 });
@@ -4649,6 +4691,7 @@ class DatabaseAnimationEditor {
             const offsetXInput = document.getElementById('effekseer-offset-x');
             const offsetYInput = document.getElementById('effekseer-offset-y');
             const displayTypeSelect = document.getElementById('effekseer-display-type');
+            const alignBottomInput = document.getElementById('effekseer-align-bottom');
 
             const updateAnimation = () => {
                 const clampInput = (input, fallback, min, max) => {
@@ -4661,6 +4704,10 @@ class DatabaseAnimationEditor {
                 animation.scale = clampInput(scaleInput, 100, 1, 1000);
                 animation.speed = clampInput(speedInput, 100, 1, 1000);
                 animation.displayType = displayTypeSelect ? parseInt(displayTypeSelect.value) : (animation.displayType || 0);
+                // A record that never had the key reads as off, and gains it only when ticked.
+                if (alignBottomInput && (alignBottomInput.checked || animation.alignBottom !== undefined)) {
+                    animation.alignBottom = alignBottomInput.checked;
+                }
                 animation.rotation = {
                     x: clampInput(rotXInput, 0, -360, 360),
                     y: clampInput(rotYInput, 0, -360, 360),
@@ -4701,6 +4748,7 @@ class DatabaseAnimationEditor {
             offsetXInput?.addEventListener('change', updateAnimation);
             offsetYInput?.addEventListener('change', updateAnimation);
             displayTypeSelect?.addEventListener('change', updateAnimation);
+            alignBottomInput?.addEventListener('change', updateAnimation);
         };
 
         setupEffekseerControls();

@@ -60,5 +60,20 @@ test('a lit material carries the shared value; the engine\'s own lookups read it
 });
 
 test('the view draws with its scale\'s bias', () => {
-    assert.match(read('reactor_3d.js'), /return Reactor3D\.MipBias\.during\(this\._scale, \(\) => this\.upscaled\(\)/);
+    // `MipBias.during` written out in the view's render (no function made per pass): the same bias, and none after.
+    assert.match(read('reactor_3d.js'), /bias\.uniform\.value = bias\.forScale\(this\._scale\);\s*try \{\s*return this\.upscaled\(\)[\s\S]{0,200}?\} finally \{ bias\.uniform\.value = 0; \}/);
+    const seen = [];
+    const view = scale => ({
+        _scene: {}, _camera: {}, _shared: true, _scale: scale, _trackFrame() {}, _target: slot => slot,
+        upscaled: () => false,
+        renderInto() { seen.push(M.uniform.value); if (this.fails) throw new Error('draw failed'); return false; }
+    });
+    R.Viewport.prototype.render.call(view(0.5));
+    assert.equal(seen[0], M.forScale(0.5));
+    assert.ok(seen[0] < 0);
+    assert.equal(M.uniform.value, 0);
+    R.Viewport.prototype.render.call(view(1));
+    assert.equal(seen[1], 0, 'none at full size');
+    assert.throws(() => R.Viewport.prototype.render.call(Object.assign(view(0.5), { fails: true })), /draw failed/);
+    assert.equal(M.uniform.value, 0, 'none left behind when the draw throws');
 });

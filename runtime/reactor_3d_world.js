@@ -562,7 +562,8 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     const material = typeof raw.material === "string" ? raw.material.trim() : "";
     const id = Number(raw.id);
     const piece = { id: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0, kind, x, y, z, rot, material };
-    if (tall && tall !== this.PIECE_STOREY) piece.height = tall;
+    // A fence stands FENCE_HEIGHT when it has none, so a storey is a height of its own for it and is kept.
+    if (tall && (tall !== this.PIECE_STOREY || kind === "fence")) piece.height = tall;
     const group = Number(raw.group);
     if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
     if (typeof raw.finish === "string" && Object.prototype.hasOwnProperty.call(this.PIECE_FINISHES, raw.finish)) piece.finish = raw.finish;
@@ -3170,7 +3171,6 @@ Reactor3D.MapScene.prototype.pieceMaterial = function(name, load, surface, both)
     // A rock's faces (and its caps): many small facets, lit by the sun whichever way each turns (no RR_SUN_FACING).
     if (both === "rock" || both === "both") material.__reactorRock = true;
     material.__reactorSelfLit = look.glow;
-    material.userData.rrPieceMaterial = name;
     // Its normal and roughness maps and settings, when it has any; a rock's cap keeps its own repeat.
     const detail = texture && !look.glow ? this.materialDetail(name, load) : null;
     if (detail) { material.userData.rrDetail = detail; material.userData.rrDetailUv = both !== "both"; }
@@ -3250,7 +3250,6 @@ Reactor3D.MapScene.prototype.pieceGhostMaterial = function(name, load) {
     material.__reactorPieces = true;
     material.__reactorGhost = true;
     material.__reactorSelfLit = look.glow;
-    material.userData.rrPieceMaterial = name;
     // Laid at the wall's own repeat, so the wall seen through keeps its stones where they were.
     const detail = texture && !look.glow ? this.materialDetail(name, load) : null;
     if (detail) material.userData.rrDetail = detail;
@@ -3556,7 +3555,9 @@ Reactor3D.rockWorkerSource = function() {
 /**
  * The background meshers, shared by every map: up to three workers (one core is the game's), made
  * on first use. Null where workers cannot run. A worker that fails hands its work back: the rest
- * is meshed here, a chunk a turn.
+ * is meshed here, a chunk a turn. While the game in play is short of its frames (Reactor3D.FramePressure)
+ * the work is handed to one mesher at a time, until what is queued is done: three beside the game were
+ * more threads than a four-core processor had to give, and it was the game that waited.
  */
 Reactor3D.rockWorkerPool = function() {
     if (this._rockPool !== undefined) return this._rockPool && !this._rockPool.broken ? this._rockPool : null;
@@ -3586,7 +3587,10 @@ Reactor3D.rockWorkerPool = function() {
     });
     const pump = () => {
         if (pool.broken) { runHere(); return; }
-        while (pool.idle.length && pool.queue.length) {
+        if (!pool.queue.length && !pool.jobs.size) pool.pressed = false;
+        else if (!pool.pressed && Reactor3D.FramePressure && Reactor3D.FramePressure.short()) pool.pressed = true;
+        const most = pool.pressed ? 1 : Infinity;
+        while (pool.idle.length && pool.queue.length && pool.jobs.size < most) {
             const worker = pool.idle.pop(), job = pool.queue.shift();
             pool.jobs.set(job.id, job);
             job.worker = worker;
@@ -3852,8 +3856,14 @@ Reactor3D.DrawBatches = {
                 batch.job = null;
             }
         }
-        const pendingRegions = queue && queue.length ? new Set(queue.map(job => Math.floor(job[0] * Reactor3D.FOLIAGE_CHUNK / this.REGION)
-            + "," + Math.floor(job[1] * Reactor3D.FOLIAGE_CHUNK / this.REGION))) : null;
+        // The regions the queue still has plants to lay in, each as one number (no text made for every job), in a set kept for this.
+        const regionKey = (rx, ry) => (rx + 32768) * 65536 + (ry + 32768);
+        let pendingRegions = null;
+        if (queue && queue.length) {
+            pendingRegions = state.pendingRegions || (state.pendingRegions = new Set());
+            pendingRegions.clear();
+            for (const job of queue) pendingRegions.add(regionKey(Math.floor(job[0] * Reactor3D.FOLIAGE_CHUNK / this.REGION), Math.floor(job[1] * Reactor3D.FOLIAGE_CHUNK / this.REGION)));
+        }
         let made = 0, built = 0;
         const builtMeshes = [];
         const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now()), started = clock();
@@ -3869,7 +3879,7 @@ Reactor3D.DrawBatches = {
             }
             const first = batch.members[0], cell = first && first.userData.rrBatchCell;
             if (batch.members.length > 1 && (first.userData.rrFoliageChunk || first.userData.rrBushChunk !== undefined) && pendingRegions
-                && pendingRegions.has(Math.floor(cell.x / this.REGION) + "," + Math.floor(cell.y / this.REGION))) {
+                && pendingRegions.has(regionKey(Math.floor(cell.x / this.REGION), Math.floor(cell.y / this.REGION)))) {
                 if (batch.mesh) { this.drop(batch); for (const member of batch.members) this.reveal(member); }
                 state.pending = true;
                 continue;
@@ -4502,7 +4512,6 @@ Reactor3D.waterMaterial = function(texture, look) {
     const reflect = data.rrWaterLook.x;
     // A river: its image runs along it (the vertices carry the way and speed) and whitens in rapids.
     const flowing = !!(look && Array.isArray(look.path));
-    material.userData.rrFlowing = flowing;
     if (reflect > 0 && this.Reflections) { this.Reflections.wanted = true; this.Reflections.hook(material); }
     const env = this.Reflections ? this.Reflections.uniforms() : null;
     material.onBeforeCompile = function(shader) {
@@ -5243,7 +5252,6 @@ Reactor3D.MapScene.prototype.addFalls = function(region, load, sheet) {
         const texture = this.materialTexture(region.material, load);
         const curtain = new THREE.Mesh(Reactor3D.fallGeometry(fall), Reactor3D.fallMaterial(texture, region, fall.top - fall.bottom, sheet));
         curtain.renderOrder = 6;
-        curtain.userData.waterFall = fall;
         const foot = Reactor3D.fallFoot(fall);
         const disc = new THREE.CircleGeometry(foot.radius, 28);
         disc.rotateX(-Math.PI / 2);
@@ -5251,11 +5259,9 @@ Reactor3D.MapScene.prototype.addFalls = function(region, load, sheet) {
         const foam = new THREE.Mesh(disc, Reactor3D.foamMaterial(this.materialTexture(region.material, load), region, sheet));
         foam.position.set(foot.x, foot.y + 0.06, foot.z);
         foam.renderOrder = 7;
-        foam.userData.waterFall = fall;
         const spray = new THREE.Points(Reactor3D.fallSprayGeometry(fall, foot), Reactor3D.fallSprayMaterial(fall, foot, region, sheet));
         spray.onBeforeRender = Reactor3D.fallSprayBeforeRender;
         spray.renderOrder = 8;
-        spray.userData.waterFall = fall;
         for (const mesh of [curtain, foam, spray]) {
             this.piecesGroup().add(mesh);
             mesh.updateMatrix();
@@ -5443,6 +5449,7 @@ Reactor3D.MapScene.prototype.updateWaterSheets = function(mapData, load) {
     this.removeWaterHaze();
     for (const mesh of this._waterMeshes || []) {
         if (mesh.parent) mesh.parent.remove(mesh);
+        if (Reactor3D.WaterSight) Reactor3D.WaterSight.forget(mesh);
         mesh.geometry.dispose();
         const m = this._materials.indexOf(mesh.material);
         if (m >= 0) this._materials.splice(m, 1);

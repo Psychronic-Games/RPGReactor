@@ -25,7 +25,9 @@ test('native vehicles keep their list, class, movement and interpreter commands'
     }
     assert.equal(/prototype\.getOffVehicle\s*=|proto\.getOffVehicle\s*=/.test(code), false, 'native dismounting stays unchanged');
     assert.equal(code.includes('return nativeGetOn.apply(this,arguments);'),true,'unconfigured native boarding delegates unchanged');
-    assert.deepEqual(Array.from(code.matchAll(/prototype\.(command\d+)\s*=/g), match => match[1]), ['command123'], 'only a visiting vehicle self switch keeps its original identity');
+    assert.deepEqual(Array.from(code.matchAll(/prototype\.(command\d+)\s*=/g), match => match[1]), ['command123', 'command111'], 'only a visiting vehicle self switch keeps its original identity: written (123) and read by a branch (111)');
+    // The branch wrap acts on the Self Switch kind alone, outside a Battle Room, and only for an event with an identity of its own.
+    assert.match(code, /const event = params\[0\] === 2 && !this\._reactorRoom && \$gameMap && this\._mapId === \$gameMap\._mapId \? \$gameMap\.event\(this\._eventId\) : null;\s*if \(!event \|\| !event\._rrIdentity\) return branch\.call\(this, params\);/);
     assert.equal(/Game_Map\.prototype\.(?:isBoatPassable|isShipPassable|isAirshipLandOk)\s*=/.test(code),false,'tile passage rules are only read');
 });
 

@@ -35,7 +35,16 @@ class SetVehicleLocationEditor {
     /** The name a stored vehicle is listed by: Boat, Ship, Airship, or a vehicle of the Vehicles page. */
     static vehicleName(stored, databaseManager, tt = text => text) {
         if (typeof stored !== 'string') return tt(['Boat', 'Ship', 'Airship'][stored] || 'Unknown');
-        const found = SetVehicleLocationEditor.reactorVehicles(databaseManager, stored).find(entry => entry.value === stored);
+        // The command list asks once per row of one redraw: the list of vehicles is built once for the
+        // redraw (it walks every event of the open map) and dropped when the redraw's task ends.
+        const map = SetVehicleLocationEditor.openMap();
+        let cache = SetVehicleLocationEditor._nameCache;
+        if (!cache || cache.databaseManager !== databaseManager || cache.map !== map) {
+            cache = SetVehicleLocationEditor._nameCache = { databaseManager, map, list: SetVehicleLocationEditor.reactorVehicles(databaseManager, 0, map) };
+            Promise.resolve().then(() => { if (SetVehicleLocationEditor._nameCache === cache) SetVehicleLocationEditor._nameCache = null; });
+        }
+        const found = cache.list.find(entry => entry.value === stored)
+            || SetVehicleLocationEditor.reactorVehicles(databaseManager, stored, map).find(entry => entry.value === stored);
         return found ? found.label : stored;
     }
     constructor(databaseManager, projectController) {
@@ -195,6 +204,10 @@ class SetVehicleLocationEditor {
         varRadio.checked = this.designation === 1;
         varRadio.addEventListener('change', () => {
             this.designation = 1;
+            // A direct place may be column or row 0; a variable's number starts at 1.
+            if (!(this.mapId > 0)) this.mapId = 1;
+            if (!(this.x > 0)) this.x = 1;
+            if (!(this.y > 0)) this.y = 1;
             this.renderContent();
         });
 
@@ -314,7 +327,7 @@ class SetVehicleLocationEditor {
             xVarInput.value = this.x;
             xVarInput.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 80px;';
             xVarInput.addEventListener('input', (e) => {
-                this.x = parseInt(e.target.value) || 0;
+                this.x = parseInt(e.target.value) || 1;
             });
 
             const xVarBrowse = document.createElement('button');
@@ -340,7 +353,7 @@ class SetVehicleLocationEditor {
             yVarInput.value = this.y;
             yVarInput.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 80px;';
             yVarInput.addEventListener('input', (e) => {
-                this.y = parseInt(e.target.value) || 0;
+                this.y = parseInt(e.target.value) || 1;
             });
 
             const yVarBrowse = document.createElement('button');

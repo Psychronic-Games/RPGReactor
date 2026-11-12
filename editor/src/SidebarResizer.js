@@ -106,8 +106,10 @@ class SidebarResizer {
 
         // Apply constraints
         if (newHeight >= minHeight && (!this.dragState.nextSection || nextNewHeight >= nextMinHeight)) {
-            // Set the target section to explicit height
-            this.dragState.targetSection.style.flex = `0 0 ${newHeight}px`;
+            // Set the target section to explicit height. It may shrink (down to
+            // its min-height): a height dragged on a tall window would otherwise
+            // push the sections under it out of a smaller one.
+            this.dragState.targetSection.style.flex = `0 1 ${newHeight}px`;
 
             if (this.dragState.nextSection) {
                 // Check if this is the last visible section
@@ -118,7 +120,7 @@ class SidebarResizer {
                     this.dragState.nextSection.style.flex = `1 1 ${nextMinHeight}px`;
                 } else {
                     // Not the last section, use explicit height
-                    this.dragState.nextSection.style.flex = `0 0 ${nextNewHeight}px`;
+                    this.dragState.nextSection.style.flex = `0 1 ${nextNewHeight}px`;
                 }
             }
         }
@@ -180,7 +182,8 @@ class SidebarResizer {
             Object.keys(sizes).forEach(sectionId => {
                 const section = document.getElementById(sectionId);
                 if (section && sizes[sectionId] && section.style.display !== 'none') {
-                    section.style.flex = sizes[sectionId];
+                    // Heights saved before sections could shrink were "0 0 Npx".
+                    section.style.flex = String(sizes[sectionId]).replace(/^0 0 (?=[\d.]+px$)/, '0 1 ');
                 }
             });
         } catch (e) {

@@ -50,6 +50,12 @@ test('fields a project has are never replaced, and other data is left alone', ()
     context.$dataSystem = system;
     context.DataManager.onLoad(system);
     assert.equal(system.advanced, advanced);
+    assert.deepEqual(plain(advanced), {
+        screenWidth: 1280, screenHeight: 720, mainFontFilename: 'Mine.ttf',
+        gameId: 0, uiAreaWidth: 816, uiAreaHeight: 624,
+        numberFontFilename: 'mplus-2p-bold-sub.woff', fallbackFonts: 'Verdana, sans-serif', fontSize: 28,
+        windowOpacity: 192, screenScale: 1
+    }, 'a block with some fields keeps them and gets the ones it lacks');
     assert.equal(system.optAutosave, true);
     assert.deepEqual(plain(system.itemCategories), [true, false, true, false]);
     const actors = [null, { name: 'A' }];

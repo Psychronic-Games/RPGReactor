@@ -107,6 +107,7 @@ class TilesetPaletteViewer {
         this.selectedTiles = [];
         this.cachedLayerCanvas = null;
         this._loadedTilesetId = null;
+        this._loadedPicturesKey = null;
     }
 
     // Initialize the palette viewer UI in the sidebar
@@ -521,11 +522,21 @@ class TilesetPaletteViewer {
             }
             this._loadedTilesetId = tilesetId;
 
+            // Maps that share a tileset share its pictures: when the sheets
+            // already loaded are these very files, they are kept. Loading them
+            // again on every map opened blinked the palette empty and decoded
+            // up to eleven pictures each time.
+            const picturesKey = this._tilesetPicturesKey();
+            const picturesLoaded = picturesKey === this._loadedPicturesKey;
+
             // The texture cache is keyed by SLOT, not by tileset: a slot the
             // new tileset leaves empty would keep showing the previous
             // tileset's sheet forever. Every slot starts empty and only the
             // new tileset's own sheets fill it back in.
-            this.tilesetTextures = {};
+            if (!picturesLoaded) {
+                this.tilesetTextures = {};
+                this._loadedPicturesKey = null;
+            }
             this.cachedLayerCanvas = null;
 
             if (tilesetChanged) {
@@ -542,14 +553,35 @@ class TilesetPaletteViewer {
             // keeps a slow older load from committing sheets, or repainting
             // the palette, after a newer map switch has superseded it.
             const token = this._tilesetLoadToken = (this._tilesetLoadToken || 0) + 1;
-            await this.loadTilesetImages(token);
-            if (token !== this._tilesetLoadToken) return;
+            if (!picturesLoaded) {
+                await this.loadTilesetImages(token);
+                if (token !== this._tilesetLoadToken) return;
+                this._loadedPicturesKey = picturesKey;
+            }
 
             // Render the current layer (now that images are loaded)
             this.renderCurrentLayer();
         } catch (error) {
             console.error('Error loading tileset:', error);
         }
+    }
+
+    /**
+     * What the palette's pictures are read from: the project, the tile size and
+     * each sheet's name with its file's date and size, so a sheet replaced on
+     * disk under the same name is still loaded again.
+     */
+    _tilesetPicturesKey() {
+        const names = this.currentTileset?.tilesetNames || [];
+        return [this.projectPath, this.tileSize].concat(names.map(name => {
+            if (!name) return '';
+            let stamp = '';
+            try {
+                const stat = this.fs.statSync(this.path.join(this.projectPath, 'img', 'tilesets', name + '.png'));
+                stamp = `${stat.mtimeMs}:${stat.size}`;
+            } catch (error) { /* no such file, or packed: the name alone tells sheets apart */ }
+            return `${name}@${stamp}`;
+        })).join('|');
     }
 
     async loadTilesetImages(token = null) {
@@ -594,10 +626,6 @@ class TilesetPaletteViewer {
 
     getLayerKeyFromIndex(index) {
         return RRTilesetSheets.keyFromIndex(index) || 'A1';
-    }
-
-    getIndexFromLayerKey(layerKey) {
-        return RRTilesetSheets.indexFromKey(layerKey);
     }
 
     renderCurrentLayer() {
@@ -1006,6 +1034,9 @@ class TilesetPaletteViewer {
         const tileSize = this.tileSize;
         if (!this._transparencyScratch) {
             this._transparencyScratch = document.createElement('canvas');
+        }
+        // The viewer outlives projects, and the next one may have larger tiles.
+        if (this._transparencyScratch.width !== tileSize || this._transparencyScratch.height !== tileSize) {
             this._transparencyScratch.width = tileSize;
             this._transparencyScratch.height = tileSize;
         }

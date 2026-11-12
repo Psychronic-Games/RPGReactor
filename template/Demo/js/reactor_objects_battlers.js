@@ -746,9 +746,7 @@ Game_BattlerBase.prototype.specialFlag = function(flagId) {
     );
 };
 
-// Collapse Effect values the battle modes ask about by name (the rest are looks of the same going).
-Game_BattlerBase.COLLAPSE_INSTANT = 2;
-Game_BattlerBase.COLLAPSE_NONE = 3;
+// The Collapse Effect value the battle modes ask about by name (the rest are looks of the same going).
 Game_BattlerBase.COLLAPSE_CORPSE = 8;
 
 Game_BattlerBase.prototype.collapseType = function() {
@@ -2972,6 +2970,7 @@ Game_Enemy.prototype.rrRoll = function() {
 // on this one enemy and is saved with it, a Transform to another enemy reads
 // that enemy's rows, and an enemy from an older save reads its rows on first
 // use. Off, every enemy has an empty list and the authored rows stay unread.
+// An enemy with no authored list has one empty slot per equipment type.
 Game_Enemy.prototype.rrEquipOn = function() {
     return typeof ReactorFeatures !== "undefined" && ReactorFeatures.on("enemyEquipment");
 };
@@ -2980,7 +2979,17 @@ Game_Enemy.prototype.rrEquipRows = function() {
     const held = this._rrEquips;
     if (held && held.enemyId === this._enemyId) return held.slots;
     const enemy = this.enemy();
-    const rows = enemy && Array.isArray(enemy.rrEquipment) ? enemy.rrEquipment : [];
+    let rows = enemy && Array.isArray(enemy.rrEquipment) ? enemy.rrEquipment : null;
+    if (!rows) {
+        // Never edited: one empty slot per named equipment type, the slots the
+        // Equipment window shows for it, so an event can equip it. An enemy
+        // meant to have no slots carries an empty list.
+        rows = [];
+        const types = ($dataSystem && $dataSystem.equipTypes) || [];
+        for (let id = 1; id < types.length; id++) {
+            if (String(types[id] || "").trim()) rows.push({ etypeId: id, kind: 0, itemId: 0 });
+        }
+    }
     const slots = rows.filter(Boolean).map(row => ({
         etypeId: Number(row.etypeId) || 0,
         kind: Number(row.kind) || 0,
@@ -3088,7 +3097,9 @@ Game_Enemy.prototype.enemy = function() {
 };
 
 Game_Enemy.prototype.traitObjects = function() {
-    return Game_Battler.prototype.traitObjects.call(this).concat(this.enemy(), this.equips().filter(Boolean));
+    const objects = Game_Battler.prototype.traitObjects.call(this).concat(this.enemy());
+    // Asked on every trait read: with the feature off there is nothing to add.
+    return this.rrEquipOn() ? objects.concat(this.equips().filter(Boolean)) : objects;
 };
 
 Game_Enemy.prototype.paramPlus = function(paramId) {
@@ -3284,6 +3295,10 @@ Game_Enemy.prototype.performCollapse = function() {
             this.playCollapseSe(null);
             break;
         // 3 is "No Disappear": the sprite stays put, so no effect is requested.
+        // It has no sound of its own; a chosen one still plays.
+        case 3:
+            this.playCollapseSe(null);
+            break;
         case 4:
             this.requestEffect("ashCollapse");
             this.playCollapseSe(() => SoundManager.playEnemyCollapse());
@@ -3674,9 +3689,11 @@ Game_Unit.prototype.isAllDead = function() {
     return this.aliveMembers().length === 0;
 };
 
-Game_Unit.prototype.substituteBattler = function() {
+// The target is skipped, so a dying battler that has Substitute itself is
+// still covered by the next member that has it.
+Game_Unit.prototype.substituteBattler = function(target) {
     for (const member of this.members()) {
-        if (member.isSubstitute()) {
+        if (member.isSubstitute() && member !== target) {
             return member;
         }
     }

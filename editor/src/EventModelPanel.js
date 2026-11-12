@@ -186,16 +186,25 @@ class EventModelPanel {
             slider.addEventListener('change', () => this._endDrag());
         });
         body.querySelectorAll('.emp-num').forEach(num => num.addEventListener('change', () => {
-            const value = Number(num.value);
+            let value = Number(num.value);
             if (!Number.isFinite(value)) return;
-            const slider = body.querySelector(`.emp-slider[data-key="${num.dataset.key}"]`);
+            const key = num.dataset.key;
+            // An angle typed past half a turn is the same turn the other way round (270 is -90), not the limit.
+            if ((key === 'yaw' || key === 'pitch' || key === 'roll') && Math.abs(value) > 180) value = ((value + 180) % 360 + 360) % 360 - 180;
+            const slider = body.querySelector(`.emp-slider[data-key="${key}"]`);
             if (slider) {
                 if (value < Number(slider.min)) slider.min = Math.floor(value) - 1;
                 if (value > Number(slider.max)) slider.max = Math.ceil(value) + 1;
                 slider.value = value;
             }
-            this._apply(num.dataset.key, value, false);
+            this._apply(key, value, false);
             this._endDrag();
+            // The box and the slider show what was stored (a size or an offset past its limit is held to it).
+            const stored = this.values()[key];
+            if (stored != null && this.rawSpec(this.event)) {
+                num.value = stored;
+                if (slider) slider.value = stored;
+            }
         }));
         this._rowsFor = this.tab;
     }

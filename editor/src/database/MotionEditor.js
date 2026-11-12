@@ -40,18 +40,24 @@ class RRMotionEditor {
     /** How close two keys' moments are to count as one pose. */
     static get POSE_SNAP() { return 0.015; }
 
+    /**
+     * That, for this motion: never more than a frame and a half, so the shortest step the storyboard allows
+     * (0.05 s) still parts two poses in a long motion, where 0.015 of its length is longer than the step.
+     */
+    snap() { return Math.min(RRMotionEditor.POSE_SNAP, 1.5 / Math.max(2, this.motion ? this.motion.frames : 2)); }
+
     /** The tracks a pose is made of: every part keyed by pose (not a spin, swing or bob riding along). */
     poseTracks() { return (this.motion ? this.motion.tracks : []).filter(t => !t.other && t.keys); }
 
     /** The moments the motion has a pose at, from every part's keys, near ones as one: sorted, 0-1. */
     poseTimes() {
         const times = [];
-        for (const t of this.poseTracks()) for (const k of t.keys) if (!times.some(at => Math.abs(at - k.at) < RRMotionEditor.POSE_SNAP)) times.push(k.at);
+        for (const t of this.poseTracks()) for (const k of t.keys) if (!times.some(at => Math.abs(at - k.at) < this.snap())) times.push(k.at);
         return times.sort((a, b) => a - b);
     }
 
     /** The pose at the playhead, when the playhead stands on one. */
-    poseHere() { return this.poseTimes().find(at => Math.abs(at - this.playhead) < RRMotionEditor.POSE_SNAP) ?? null; }
+    poseHere() { return this.poseTimes().find(at => Math.abs(at - this.playhead) < this.snap()) ?? null; }
 
     /** A pose at the playhead: every part keyed there as it stands now (moving from one pose to the next). */
     addPose() { for (const t of this.poseTracks()) this.keyAtPlayhead(t, true); }
@@ -60,7 +66,7 @@ class RRMotionEditor {
     removePose(at) {
         for (const t of this.poseTracks()) {
             if (t.keys.length <= 1) continue;
-            t.keys = t.keys.filter(k => Math.abs(k.at - at) >= RRMotionEditor.POSE_SNAP);
+            t.keys = t.keys.filter(k => Math.abs(k.at - at) >= this.snap());
         }
     }
 
@@ -68,16 +74,20 @@ class RRMotionEditor {
     movePose(from, to) {
         const at = Math.max(0, Math.min(1, Math.round(to * 1000) / 1000));
         for (const t of this.poseTracks()) {
-            for (const k of t.keys) if (Math.abs(k.at - from) < RRMotionEditor.POSE_SNAP) k.at = at;
+            for (const k of t.keys) if (Math.abs(k.at - from) < this.snap()) k.at = at;
             t.keys.sort((a, b) => a.at - b.at);
         }
         return at;
     }
 
-    /** A part's other side by its name (LeftUpperLeg and RightUpperLeg, Left_Arm and Right_Arm), or null. */
+    /**
+     * A part's other side by its name (LeftUpperLeg and RightUpperLeg, Left_Arm and Right_Arm, Arm.L and Arm.R,
+     * UpperArm_L and upperarm_r: a lone letter counts when no letter or digit touches it), or null.
+     */
     static mirrorPart(part) {
         const text = String(part || '');
-        const swap = text.replace(/Left|Right|left|right|\bL\b|\bR\b/g, side => ({ Left: 'Right', Right: 'Left', left: 'right', right: 'left', L: 'R', R: 'L' })[side]);
+        const swap = text.replace(/Left|Right|left|right|LEFT|RIGHT|(?<![A-Za-z0-9])[LRlr](?![A-Za-z0-9])/g,
+            side => ({ Left: 'Right', Right: 'Left', left: 'right', right: 'left', LEFT: 'RIGHT', RIGHT: 'LEFT', L: 'R', R: 'L', l: 'r', r: 'l' })[side]);
         return swap !== text ? swap : null;
     }
 
@@ -101,6 +111,7 @@ class RRMotionEditor {
             const stop = this.keyAtPlayhead(t, true);
             stop.rotate = value.rotate.map(v => Math.round(v * 10) / 10);
             stop.move = value.move.slice();
+            RRMotionEditor.sized(stop, value.resize);
         }
     }
 
@@ -165,7 +176,7 @@ class RRMotionEditor {
         if (i < 0 || i + 1 >= times.length) return 'smooth';
         const seen = new Set();
         for (const t of this.poseTracks()) {
-            const k = t.keys.find(key => Math.abs(key.at - times[i + 1]) < RRMotionEditor.POSE_SNAP);
+            const k = t.keys.find(key => Math.abs(key.at - times[i + 1]) < this.snap());
             if (k) seen.add(k.ease || 'smooth');
         }
         return seen.size === 1 ? [...seen][0] : seen.size ? 'mixed' : 'smooth';
@@ -178,7 +189,7 @@ class RRMotionEditor {
         const playhead = this.playhead;
         this.playhead = times[i + 1];
         for (const t of this.poseTracks()) {
-            const k = t.keys.find(key => Math.abs(key.at - times[i + 1]) < RRMotionEditor.POSE_SNAP) || this.keyAtPlayhead(t, true);
+            const k = t.keys.find(key => Math.abs(key.at - times[i + 1]) < this.snap()) || this.keyAtPlayhead(t, true);
             if (!k) continue;
             if (RRMotionEditor.EASES.includes(ease)) k.ease = ease; else delete k.ease;
         }
@@ -250,9 +261,13 @@ class RRMotionEditor {
         // The model's own frames when the host knows them (a part's left and right joints may not be turned alike).
         const flip = (from, to, value) => (this.host._mirrorPartValue && this.host._mirrorPartValue(from, to, value))
             || { rotate: RRMotionEditor.mirrorTurn(value.rotate), move: [-value.move[0], value.move[1], value.move[2]] };
+        // A partner by name only counts when the model has that part ("Upright" has no "Upleft").
+        const names = Array.isArray(this.host.partNames) && this.host.partNames.length ? this.host.partNames : null;
         for (const [part, value] of Object.entries(pose)) {
-            const other = RRMotionEditor.mirrorPart(part);
-            next[other || part] = flip(part, other || part, value);
+            let other = RRMotionEditor.mirrorPart(part);
+            if (other && names && !names.includes(other)) other = null;
+            // A size reads the same in a mirror: it goes to the other side as it is.
+            next[other || part] = RRMotionEditor.sized(flip(part, other || part, value), value.resize);
         }
         // A side with no partner keyed here goes back to rest when its partner had nothing.
         for (const part of Object.keys(pose)) if (!next[part]) next[part] = { rotate: [0, 0, 0], move: [0, 0, 0] };
@@ -291,11 +306,14 @@ class RRMotionEditor {
             // In order and within the motion, as the runtime reads them.
             const keys = Array.isArray(raw.keys) && raw.keys.length
                 ? raw.keys.filter(stop => stop && typeof stop === 'object')
-                    .map(stop => Object.assign({ at: Math.min(1, Math.max(0, Number(stop.at) || 0)), rotate: RRMotionEditor.vec(stop.rotate), move: RRMotionEditor.vec(stop.move) }, RRMotionEditor.EASES.includes(stop.ease) ? { ease: stop.ease } : {}))
+                    .map(stop => Object.assign(RRMotionEditor.sized({ at: Math.min(1, Math.max(0, Number(stop.at) || 0)), rotate: RRMotionEditor.vec(stop.rotate), move: RRMotionEditor.vec(stop.move) }, stop.resize), RRMotionEditor.EASES.includes(stop.ease) ? { ease: stop.ease } : {}))
                     .sort((a, b) => a.at - b.at)
-                : [{ at: hold ? 1 : 0.5, rotate: RRMotionEditor.vec(raw.rotate), move: RRMotionEditor.vec(raw.move) }];
+                : null;
             const extra = JSON.parse(JSON.stringify(raw));
             for (const field of RRMotionEditor.MANAGED) delete extra[field];
+            // A pose without keys becomes one key, and a keyed pose takes its size from its keys alone: the rule's Scale goes with it.
+            if (!keys) delete extra.resize;
+            if (!keys) return { part: raw.part || '', keys: [RRMotionEditor.sized({ at: hold ? 1 : 0.5, rotate: RRMotionEditor.vec(raw.rotate), move: RRMotionEditor.vec(raw.move) }, raw.resize)], extra };
             return { part: raw.part || '', keys, extra };
         });
         this.motion = {
@@ -344,6 +362,7 @@ class RRMotionEditor {
 
     close() {
         this.motion = null;
+        this._previewBuilt = null;
         this.playing = false;
         if (this.host._sim.action && this.host._sim.action.name === '__motion') this.host._sim.action = null;
         if (this.root) this.root.remove();
@@ -364,23 +383,41 @@ class RRMotionEditor {
         return [0, 1, 2].map(i => Number.isFinite(Number(raw[i])) ? Number(raw[i]) : 0);
     }
 
-    /** A track's pose at a point of the motion, as the runtime samples it. */
+    /**
+     * A pose's Scale as three numbers, or null when it has none. The Scale is set on the classic card (the
+     * editor has no slider for it) and rides along on each key as `resize`, so a change made here keeps it.
+     */
+    static size(value) {
+        if (!Array.isArray(value)) return null;
+        const size = [0, 1, 2].map(i => Number.isFinite(Number(value[i])) ? Number(value[i]) : 1);
+        return size.some(v => v !== 1) ? size : null;
+    }
+
+    /** `key` with `resize` as its Scale, or with none when that is no scale. */
+    static sized(key, resize) {
+        const size = RRMotionEditor.size(resize);
+        if (size) key.resize = size; else delete key.resize;
+        return key;
+    }
+
+    /** A track's pose at a point of the motion, as the runtime samples it (`resize` only when it has a scale there). */
     sampleTrack(track, at) {
         if (!track || !track.keys || typeof Reactor3D === 'undefined') return { rotate: [0, 0, 0], move: [0, 0, 0] };
-        if (this.motion.hold) return { rotate: track.keys[0].rotate.slice(), move: track.keys[0].move.slice() };
-        const keys = track.keys.map(k => ({ at: k.at, rotate: k.rotate, move: k.move, resize: [1, 1, 1], ease: k.ease }));
+        if (this.motion.hold) return RRMotionEditor.sized({ rotate: track.keys[0].rotate.slice(), move: track.keys[0].move.slice() }, track.keys[0].resize);
+        const keys = track.keys.map(k => ({ at: k.at, rotate: k.rotate, move: k.move, resize: k.resize || [1, 1, 1], ease: k.ease }));
         const sampled = Reactor3D.sampleModelKeys({ keys, trigger: this.motion.trigger }, Math.max(0, Math.min(1, at)));
-        return { rotate: sampled.rotate, move: sampled.move };
+        return RRMotionEditor.sized({ rotate: sampled.rotate, move: sampled.move }, sampled.resize);
     }
 
     /** The key a slider edits: the selected part's key at the playhead, made when there is none. */
     keyAtPlayhead(track, create) {
         if (!track || !track.keys) return null;
         if (this.motion.hold) return track.keys[0] || (create ? (track.keys[0] = { at: 1, rotate: [0, 0, 0], move: [0, 0, 0] }) : null);
-        let stop = track.keys.find(k => Math.abs(k.at - this.playhead) < 0.006);
+        // (Within the pose's reach, or in a long motion the pose before answers for this one.)
+        let stop = track.keys.find(k => Math.abs(k.at - this.playhead) < Math.min(0.006, this.snap()));
         if (!stop && create) {
             const pose = this.sampleTrack(track, this.playhead);
-            stop = { at: Math.round(this.playhead * 1000) / 1000, rotate: pose.rotate.map(v => Math.round(v * 10) / 10), move: pose.move.slice() };
+            stop = RRMotionEditor.sized({ at: Math.round(this.playhead * 1000) / 1000, rotate: pose.rotate.map(v => Math.round(v * 10) / 10), move: pose.move.slice() }, pose.resize);
             track.keys.push(stop);
             track.keys.sort((a, b) => a.at - b.at);
         }
@@ -393,8 +430,9 @@ class RRMotionEditor {
         return motion.tracks.map(track => {
             if (track.other) return Object.assign(JSON.parse(JSON.stringify(track.other)), { name, trigger });
             const rule = Object.assign(JSON.parse(JSON.stringify(track.extra || {})), { name, part: track.part, type: 'pose', trigger, period });
-            if (motion.hold) Object.assign(rule, { hold: true, rotate: track.keys[0].rotate.slice(), move: track.keys[0].move.slice() });
-            else rule.keys = track.keys.map(k => Object.assign({ at: Math.round(k.at * 1000) / 1000, rotate: k.rotate.map(v => Math.round(v * 10) / 10), move: k.move.map(v => Math.round(v * 1000) / 1000) }, k.ease ? { ease: k.ease } : {}));
+            const size = k => { const resize = RRMotionEditor.size((RRMotionEditor.size(k.resize) || []).map(v => Math.round(v * 1000) / 1000)); return resize ? { resize } : {}; };
+            if (motion.hold) Object.assign(rule, { hold: true, rotate: track.keys[0].rotate.slice(), move: track.keys[0].move.slice() }, size(track.keys[0]));
+            else rule.keys = track.keys.map(k => Object.assign({ at: Math.round(k.at * 1000) / 1000, rotate: k.rotate.map(v => Math.round(v * 10) / 10), move: k.move.map(v => Math.round(v * 1000) / 1000) }, size(k), k.ease ? { ease: k.ease } : {}));
             // An on-demand motion repeats until stopped; a jump's replays through a long fall instead of holding.
             if (motion.repeat && (trigger === 'action' || trigger === 'jumping')) rule.repeat = true;
             return rule;
@@ -432,11 +470,19 @@ class RRMotionEditor {
     previewRules(rules, frame) {
         const motion = this.motion;
         if (!motion) return rules;
-        const off = rule => ({ ...rule, trigger: 'action', hold: false, name: ' ' });
-        const out = rules.map(rule => (rule.type === 'clip' || rule.trigger !== 'action' || rule.name === motion.original || rule.name === motion.name) ? off(rule) : rule);
-        const preview = typeof Reactor3D !== 'undefined'
-            ? Reactor3D.readModelAnimationRules({ animations: this.rulesOf(Object.assign({}, motion, { hold: false, tracks: motion.tracks.map(t => t.other ? t : (motion.hold ? { part: t.part, keys: [{ at: 0, rotate: t.keys[0].rotate, move: t.keys[0].move }, { at: 1, rotate: t.keys[0].rotate, move: t.keys[0].move }] } : t)) }), '__motion', 'action') })
-            : [];
+        // Built again only when the motion or the model's rules changed, not each display frame: the same list
+        // handed back also lets the runtime keep what it worked out for it (which part each rule moves).
+        const stamp = this._previewStamp();
+        let built = this._previewBuilt;
+        if (!built || built.rules !== rules || built.motion !== motion || built.stamp !== stamp
+            || built.name !== motion.name || built.original !== motion.original) {
+            const off = rule => ({ ...rule, trigger: 'action', hold: false, name: ' ' });
+            const out = rules.map(rule => (rule.type === 'clip' || rule.trigger !== 'action' || rule.name === motion.original || rule.name === motion.name) ? off(rule) : rule);
+            const preview = typeof Reactor3D !== 'undefined'
+                ? Reactor3D.readModelAnimationRules({ animations: this.rulesOf(Object.assign({}, motion, { hold: false, tracks: motion.tracks.map(t => t.other ? t : (motion.hold ? { part: t.part, keys: [{ at: 0, rotate: t.keys[0].rotate, move: t.keys[0].move, resize: t.keys[0].resize }, { at: 1, rotate: t.keys[0].rotate, move: t.keys[0].move, resize: t.keys[0].resize }] } : t)) }), '__motion', 'action') })
+                : [];
+            built = this._previewBuilt = { rules, motion, stamp, name: motion.name, original: motion.original, list: out.concat(preview) };
+        }
         const frames = Math.max(2, motion.frames);
         if (this.playing) {
             if (this._playFrom === null) this._playFrom = frame - this.playhead * frames;
@@ -455,7 +501,29 @@ class RRMotionEditor {
         // One frame short of the end, so a key at the very end is shown, not the rest after it.
         const shown = Math.min(this.playhead, 1 - 0.5 / frames);
         this.host._sim.action = { name: '__motion', frame: frame - shown * frames, until: Infinity };
-        return out.concat(preview);
+        return built.list;
+    }
+
+    /**
+     * A number that changes when anything the preview's rules are made from does (the parts, their keys, the
+     * length): walked each frame, which makes nothing, in place of building the rules to compare them.
+     */
+    _previewStamp() {
+        const m = this.motion;
+        let h = (m.frames | 0) * 4 + (m.hold ? 2 : 0) + (m.repeat ? 1 : 0);
+        const number = value => { h = (Math.imul(h, 31) + Math.round((Number(value) || 0) * 1000)) | 0; };
+        const text = value => { for (let i = 0; i < value.length; i++) h = (Math.imul(h, 31) + value.charCodeAt(i)) | 0; };
+        for (const t of m.tracks) {
+            text(String(t.part || ''));
+            number(t.other ? -1 : t.keys.length);
+            if (t.other) continue;
+            for (const k of t.keys) {
+                number(k.at);
+                for (let i = 0; i < 3; i++) { number(k.rotate[i]); number(k.move[i]); number(k.resize ? k.resize[i] : 1); }
+                text(k.ease || '');
+            }
+        }
+        return h;
     }
 
     // ---- The panel -------------------------------------------------------
@@ -632,7 +700,7 @@ class RRMotionEditor {
         root.querySelector('.r3d-motion-card-add')?.addEventListener('click', () => {
             this.step = null;
             const at = this.insertPose(this.pose, 0.3);
-            this.pose = this.poseTimes().findIndex(t => Math.abs(t - at) < RRMotionEditor.POSE_SNAP);
+            this.pose = this.poseTimes().findIndex(t => Math.abs(t - at) < this.snap());
             this.playing = false;
             changed();
         });
@@ -649,7 +717,7 @@ class RRMotionEditor {
             const t = m.tracks[this.track];
             if (!t || t.other) return;
             const stop = this.keyAtPlayhead(t, true);
-            stop.rotate = [0, 0, 0]; stop.move = [0, 0, 0];
+            stop.rotate = [0, 0, 0]; stop.move = [0, 0, 0]; delete stop.resize;
             changed();
         });
     }
@@ -703,7 +771,7 @@ class RRMotionEditor {
         root.querySelector('.r3d-motion-repeat')?.addEventListener('change', event => { m.repeat = event.target.checked; changed(); });
         root.querySelector('.r3d-motion-hold')?.addEventListener('change', event => {
             // A stance keeps one pose per part: the one at the playhead, sampled before the motion holds.
-            if (event.target.checked) for (const t of m.tracks) if (t.keys) { const pose = this.sampleTrack(t, this.playhead || 1); t.keys = [{ at: 1, rotate: pose.rotate, move: pose.move }]; }
+            if (event.target.checked) for (const t of m.tracks) if (t.keys) { const pose = this.sampleTrack(t, this.playhead || 1); t.keys = [RRMotionEditor.sized({ at: 1, rotate: pose.rotate, move: pose.move }, pose.resize)]; }
             m.hold = event.target.checked;
             changed();
         });

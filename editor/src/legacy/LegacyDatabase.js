@@ -14,6 +14,11 @@
  * across Items, Weapons and Armors. Battle animations become MV-style
  * sheet animations with cells scaled to MZ's 192 px. Ranks against states
  * and attributes become state and element rate traits.
+ *
+ * Skills and states keep their 2003 ids. MZ's Attack and Guard (skills 1
+ * and 2 there) and its Guard state (state 2) are appended after the game's
+ * own: every class and enemy carries an Attack Skill trait naming the
+ * appended Attack, and System.json's rrGuardSkillId names the Guard.
  */
 (function (root) {
     'use strict';
@@ -60,18 +65,30 @@
         return traits;
     }
 
+    /**
+     * Where MZ's Attack and Guard skills and its Guard state go: after the game's last skill and state. The game's
+     * skills 1 and 2 are its own (cast as Attack and Guard, a healing skill 1 made every attack heal).
+     */
+    function basicIds(db) {
+        const last = (records) => (records || []).reduce((m, r) => Math.max(m, r ? r.id : 0), 0);
+        const skill = last(db.skills);
+        return { attack: skill + 1, guard: skill + 2, guardState: last(db.states) + 1 };
+    }
+
     function actorFlags(record) {
         const traits = [];
         if (record.two_weapon) traits.push({ code: 55, dataId: 1, value: 0 });
-        if (record.lock_equipment) traits.push({ code: 64, dataId: 0, value: 0 });
+        // Fixed equipment locks every slot (it was written as a party ability: fewer encounters, nothing locked).
+        if (record.lock_equipment) for (let e = 1; e <= 5; e++) traits.push({ code: 53, dataId: e, value: 1 });
         if (record.auto_battle) traits.push({ code: 62, dataId: 0, value: 0 });
         if (record.super_guard) traits.push({ code: 62, dataId: 1, value: 0 });
         return traits;
     }
 
     /** Actors, with one class per actor (id = actor id) and the 2003 classes after them. */
-    function actorsAndClasses(db, engine2000) {
+    function actorsAndClasses(db, engine2000, basic) {
         const actors = [null], classes = [null];
+        const attackTrait = basic ? [{ code: 35, dataId: basic.attack, value: 1 }] : [];
         const actorCount = (db.actors || []).length - 1;
         const classOffset = Math.max(0, actorCount);
         for (const a of (db.actors || [])) {
@@ -88,7 +105,7 @@
             classes[a.id] = {
                 id: a.id, name: a.name || `Actor ${a.id}`, note: '', expParams: [30, 20, 30, 30], expTable: expTable(a, engine2000, maxLevel), params: params(a.parameters),
                 learnings: (a.skills || []).filter(Boolean).map(l => ({ level: l.level || 1, skillId: l.skill_id, note: '' })),
-                traits: [{ code: 22, dataId: 0, value: 0.9 }, { code: 22, dataId: 1, value: 0 }, { code: 22, dataId: 2, value: (a.critical_hit ? (a.critical_hit_chance || 30) : 0) / 100 }, { code: 51, dataId: 1, value: 1 }, ...[1, 2, 3, 4, 5].map(e => ({ code: 52, dataId: e, value: 0 }))]
+                traits: [{ code: 22, dataId: 0, value: 0.9 }, { code: 22, dataId: 1, value: 0 }, { code: 22, dataId: 2, value: (a.critical_hit ? (a.critical_hit_chance || 30) : 0) / 100 }, { code: 51, dataId: 1, value: 1 }, ...[1, 2, 3, 4, 5].map(e => ({ code: 52, dataId: e, value: 0 })), ...attackTrait]
             };
         }
         for (const k of (db.classes || [])) {
@@ -97,7 +114,7 @@
             classes[classOffset + k.id] = {
                 id: classOffset + k.id, name: k.name || `Class ${k.id}`, note: '', expParams: [30, 20, 30, 30], expTable: expTable(k, engine2000, Math.min(99, levels || 50)), params: params(k.parameters),
                 learnings: (k.skills || []).filter(Boolean).map(l => ({ level: l.level || 1, skillId: l.skill_id, note: '' })),
-                traits: [{ code: 22, dataId: 0, value: 0.9 }, { code: 51, dataId: 1, value: 1 }, ...[1, 2, 3, 4, 5].map(e => ({ code: 52, dataId: e, value: 0 })), ...actorFlags(k), ...rankTraits(k, db)]
+                traits: [{ code: 22, dataId: 0, value: 0.9 }, { code: 51, dataId: 1, value: 1 }, ...[1, 2, 3, 4, 5].map(e => ({ code: 52, dataId: e, value: 0 })), ...attackTrait, ...actorFlags(k), ...rankTraits(k, db)]
             };
         }
         return { actors, classes, classOffset };
@@ -117,8 +134,24 @@
         return `Math.max(0, Math.floor(${terms.join(' + ').replace(/\+ -\s*/g, '- ')}))`;
     }
 
-    function skills(db, notes, extraCommonEvents) {
+    function skills(db, notes, extraCommonEvents, basic) {
         const out = [null];
+        if (basic) {
+            // A normal attack is ATK/2 − DEF/4, ±20% (EasyRPG's Algo::CalcNormalAttackEffect), with the weapon's
+            // attributes, states and animation; defending halves damage, as MZ's guard does.
+            const t = db.terms || {};
+            const said = (v, d) => (v && !(F && F.isJapaneseDefault(v, db.encoding)) ? named(v) : d);
+            const attack = {
+                id: basic.attack, name: 'Attack', description: '', iconIndex: 0, note: '', stypeId: 0, mpCost: 0, tpCost: 0, tpGain: 0, scope: 1, occasion: 1, speed: 0, successRate: 100, repeats: 1, hitType: 1,
+                animationId: -1, messageType: 0, message1: said(t.attacking, '%1 attacks!'), message2: '', requiredWtypeId1: 0, requiredWtypeId2: 0,
+                damage: { type: 1, elementId: -1, formula: 'Math.max(0, Math.floor(a.atk / 2) - Math.floor(b.def / 4))', variance: 20, critical: true }, effects: [{ code: 21, dataId: 0, value1: 1, value2: 0 }]
+            };
+            out[basic.attack] = attack;
+            out[basic.guard] = {
+                ...attack, id: basic.guard, name: 'Guard', scope: 11, speed: 2000, hitType: 0, animationId: 0, message1: said(t.defending, '%1 guards.'),
+                damage: { type: 0, elementId: 0, formula: '0', variance: 20, critical: false }, effects: [{ code: 21, dataId: basic.guardState, value1: 1, value2: 0 }]
+            };
+        }
         for (const sk of (db.skills || [])) {
             if (!sk) continue;
             const type = sk.type ?? 0;
@@ -176,8 +209,10 @@
                 if (it.two_handed) traits.push({ code: 54, dataId: 2, value: 0 });
                 if (it.dual_attack) traits.push({ code: 34, dataId: 0, value: 1 });
                 if (it.attack_all) { notes.attackAll = (notes.attackAll || 0) + 1; }
-                if (it.preemptive) traits.push({ code: 64, dataId: 2, value: 0 });
-                if (it.cursed) traits.push({ code: 64, dataId: 0, value: 0 });
+                // A pre-emptive weapon's normal attack goes first (RPG_RT adds 9999 to its place in the turn): Attack Speed.
+                if (it.preemptive) traits.push({ code: 33, dataId: 0, value: 9999 });
+                // A cursed item cannot be taken off: its own slot is locked while it is worn.
+                if (it.cursed) traits.push({ code: 53, dataId: 1, value: 1 });
                 const attrs = (it.attribute_set || []).map((on, i) => (on ? i + 1 : 0)).filter(Boolean);
                 for (const a of attrs) traits.push({ code: 31, dataId: a, value: 0 });
                 (it.state_set || []).forEach((on, i) => { if (on) traits.push({ code: 32, dataId: i + 1, value: (it.state_chance ?? 0) / 100 }); });
@@ -187,7 +222,7 @@
                 const traits = [];
                 if (it.raise_evasion) traits.push({ code: 22, dataId: 1, value: 0.25 });
                 if (it.half_sp_cost) traits.push({ code: 23, dataId: 4, value: 0.5 });
-                if (it.cursed) traits.push({ code: 64, dataId: 0, value: 0 });
+                if (it.cursed) traits.push({ code: 53, dataId: { 2: 2, 3: 4, 4: 3, 5: 5 }[type], value: 1 });
                 if (it.prevent_critical) notes.preventCritical = (notes.preventCritical || 0) + 1;
                 (it.state_set || []).forEach((on, i) => { if (on) traits.push({ code: 14, dataId: i + 1, value: 0 }); });
                 (it.attribute_set || []).forEach((on, i) => { if (on) traits.push({ code: 11, dataId: i + 1, value: 0.5 }); });
@@ -227,14 +262,15 @@
         return { items, weapons, armors, kinds };
     }
 
-    function enemies(db, kinds) {
+    function enemies(db, kinds, basic) {
         const out = [null];
+        const attackId = basic ? basic.attack : 1, guardId = basic ? basic.guard : 2;
         for (const e of (db.enemies || [])) {
             if (!e) continue;
             const actions = (e.actions || []).filter(Boolean).map(a => {
-                let skillId = 1;
-                if (a.kind === 1) skillId = a.skill_id || 1;
-                else if (a.kind === 0) skillId = a.basic === 2 ? 2 : 1;
+                let skillId = attackId;
+                if (a.kind === 1) skillId = a.skill_id || attackId;
+                else if (a.kind === 0) skillId = a.basic === 2 ? guardId : attackId;
                 const cond = { 0: [0, 0, 0], 1: [6, a.condition_param1, 0], 2: [1, a.condition_param1, a.condition_param2], 4: [2, (a.condition_param1 || 0) / 100, (a.condition_param2 || 0) / 100], 5: [3, (a.condition_param1 || 0) / 100, (a.condition_param2 || 0) / 100], 6: [5, a.condition_param1, a.condition_param2] }[a.condition_type ?? 0] || [0, 0, 0];
                 return { skillId, rating: Math.max(1, Math.min(9, Math.round((a.rating ?? 50) * 9 / 100))), conditionType: cond[0], conditionParam1: cond[1], conditionParam2: cond[2] };
             });
@@ -244,8 +280,8 @@
                 exp: e.exp || 0, gold: e.gold || 0,
                 // (A weapon or armor keeps its id in its own table: dropped as an item, the game found none there and stopped at victory.)
                 dropItems: e.drop_id ? [{ kind: ({ weapons: 2, armors: 3 })[kinds && kinds[e.drop_id]] || 1, dataId: e.drop_id, denominator: Math.max(1, Math.round(100 / Math.max(1, e.drop_prob || 100))) }] : [],
-                actions: actions.length ? actions : [{ skillId: 1, rating: 5, conditionType: 0, conditionParam1: 0, conditionParam2: 0 }],
-                traits: [...rankTraits(e, db), ...(e.critical_hit ? [{ code: 22, dataId: 2, value: (e.critical_hit_chance || 30) / 100 }] : []), ...(e.miss ? [{ code: 22, dataId: 0, value: -0.1 }] : [])]
+                actions: actions.length ? actions : [{ skillId: attackId, rating: 5, conditionType: 0, conditionParam1: 0, conditionParam2: 0 }],
+                traits: [...(basic ? [{ code: 35, dataId: basic.attack, value: 1 }] : []), ...rankTraits(e, db), ...(e.critical_hit ? [{ code: 22, dataId: 2, value: (e.critical_hit_chance || 30) / 100 }] : []), ...(e.miss ? [{ code: 22, dataId: 0, value: -0.1 }] : [])]
             };
         }
         return out;
@@ -277,8 +313,15 @@
      */
     const named = (message) => !message ? '' : /%S/i.test(message) ? message.replace(/%S/gi, '%1') : '%1' + (/^[A-Za-z0-9]/.test(message) ? ' ' : '') + message;
 
-    function states(db, notes) {
+    function states(db, notes, basic) {
         const out = [null];
+        // MZ's Guard state (the guard flag until the turn ends), unnamed so the status line never shows it:
+        // defending is not a condition in 2000/2003.
+        if (basic) out[basic.guardState] = {
+            id: basic.guardState, name: '', iconIndex: 0, note: 'Guard: added by the Guard command.', priority: 0, restriction: 0, motion: 0, overlay: 0, removeAtBattleEnd: true, removeByRestriction: true,
+            autoRemovalTiming: 2, minTurns: 1, maxTurns: 1, removeByDamage: false, chanceByDamage: 100, removeByWalking: false, stepsToRemove: 100, messageType: 0,
+            message1: '', message2: '', message3: '', message4: '', traits: [{ code: 62, dataId: 1, value: 0 }]
+        };
         for (const st of (db.states || [])) {
             if (!st) continue;
             const traits = [];
@@ -389,6 +432,7 @@
             out[key] = { characterName: charsetName(sys[name]), characterIndex: sys[index] || 0, bgm: audio(sys[music]), startMapId: start[map] || 0, startX: start[x] || 0, startY: start[y] || 0 };
         }
         out.testBattlers = []; out.testTroopId = 1;
+        out.rrGuardSkillId = basicIds(db).guard;   // the appended Guard (skill 2 is the game's own)
         if (count(db.terrains) && (db.terrains || []).some(tr => tr && tr.background_name)) notes.terrainBattleback = (notes.terrainBattleback || 0) + 1;
         return out;
     }
@@ -410,8 +454,9 @@
         const engine2000 = db.engine === 'RPG Maker 2000';
         const extra = extraEvents(db);
         // EXP follows the runtime the game shipped with: a 2000 database on 2003's RPG_RT levels by 2003's curve.
-        const { actors, classes, classOffset } = actorsAndClasses(db, (db.runtime || db.engine) === 'RPG Maker 2000');
-        const skillsOut = skills(db, notes, extra);
+        const basic = basicIds(db);
+        const { actors, classes, classOffset } = actorsAndClasses(db, (db.runtime || db.engine) === 'RPG Maker 2000', basic);
+        const skillsOut = skills(db, notes, extra, basic);
         const { items: itemsOut, weapons, armors, kinds } = items(db, notes, extra, skillsOut);
         const ctx = {
             itemKind: (id) => kinds[id] || 'items', itemType: (id) => (db.items && db.items[id] ? db.items[id].type : 0),
@@ -419,14 +464,14 @@
             translate: translator ? translator.text : null, translateLines: translator ? translator.lines : null
         };
         const out = {
-            actors, classes, skills: skillsOut, items: itemsOut, weapons, armors, enemies: enemies(db, kinds), troops: troops(db, ctx), states: states(db, notes),
+            actors, classes, skills: skillsOut, items: itemsOut, weapons, armors, enemies: enemies(db, kinds, basic), troops: troops(db, ctx), states: states(db, notes, basic),
             animations: animations(db, notes), commonEvents: commonEvents(db, ctx, extra), ctx
         };
         translateRecords(out, translator);
         return out;
     }
 
-    const api = { convert, translateRecords, actorsAndClasses, skills, items, enemies, troops, states, animations, commonEvents, system, expTable, params, skillFormula, rankTraits };
+    const api = { convert, translateRecords, basicIds, actorsAndClasses, skills, items, enemies, troops, states, animations, commonEvents, system, expTable, params, skillFormula, rankTraits };
     root.RRLegacyDatabase = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

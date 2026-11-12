@@ -62,7 +62,7 @@ test('exponent inference reads whatever domain the array stores', () => {
 test('curve graphs plot the runtime series and mark extrapolation', () => {
     assert.match(classEditorSource, /const capLevel = globalThis\.RR_LIMITS\?\.ACTOR_LEVEL \|\| 9999;[\s\S]*?rrClassParamAtLevel/);
     assert.match(classEditorSource, /setLineDash\(\[5, 4\]\)/); // extrapolated tail draws dashed
-    assert.match(classEditorSource, /_generateParamCurve\(lv1, lvMax, exponent, capLevel \+ 1, targetLevel, maxAllowed\)/);
+    assert.match(classEditorSource, /_generateParamCurve\(lv1, lvMax, exponent, capLevel \+ 1, targetLevel, maxAllowed, minAllowed\)/);
     assert.doesNotMatch(classEditorSource, /rr-pc-lv99-slider/);
 });
 
@@ -146,6 +146,17 @@ test('a targeted curve hits its anchor at the target level and keeps rising past
     }
     // The runtime reads the stored value exactly at the target.
     assert.equal(globalThis.rrClassParamAtLevel(curve, 60), 800);
+});
+
+test('a curve can hold 0 for every parameter but Max HP', () => {
+    const cap = globalThis.RR_LIMITS.CLASS_CURVE_LEVEL;
+    const Editor = editor.constructor;
+    assert.equal(Editor.paramValueFloor(0), 1, 'Max HP stays at 1 or more, as Game_BattlerBase.paramMin has it');
+    assert.equal(Editor.paramValueFloor(1), 0, 'a class may have no MP');
+    const noMp = editor._generateParamCurve(0, 0, 1, cap + 1, 99, 9999, Editor.paramValueFloor(1));
+    assert.ok(noMp.every(value => value === 0), 'a 0 to 0 curve is 0 at every level');
+    const hp = editor._generateParamCurve(0, 0, 1, cap + 1, 99, 9999, Editor.paramValueFloor(0));
+    assert.ok(hp.every(value => value === 1), 'Max HP is held to 1');
 });
 
 test('the tail past a near target is capped at the dialog ceiling', () => {

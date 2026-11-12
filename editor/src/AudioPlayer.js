@@ -77,11 +77,7 @@ class AudioPlayer {
                     const panSlider = document.getElementById('pan-slider');
 
                     if (volumeSlider) {
-                        const volume = volumeSlider.value / 100;
-                        channel.audio.volume = volume;
-                        if (channel.gainNode) {
-                            channel.gainNode.gain.value = volume;
-                        }
+                        this.setChannelVolume(channel, volumeSlider.value / 100);
                     }
 
                     if (pitchSlider) {
@@ -135,7 +131,30 @@ class AudioPlayer {
             const channel = this.audioPlayer.channels[channelType];
             channel.audio.volume = 1.0;
             channel.audio.playbackRate = 1.0;
+            // A pitch is a change of speed and pitch together, as in the game.
+            channel.audio.preservesPitch = false;
         });
+    }
+
+    /**
+     * Set a channel's volume (0-1). An element routed through the gain node
+     * stays at full volume: its own volume still scales what the node is
+     * given, so setting both played 50% at about 25%.
+     */
+    setChannelVolume(channel, volume) {
+        if (channel.gainNode) {
+            channel.audio.volume = 1;
+            channel.gainNode.gain.value = volume;
+        } else {
+            channel.audio.volume = volume;
+        }
+    }
+
+    /**
+     * A channel's volume (0-1), as setChannelVolume left it.
+     */
+    getChannelVolume(channel) {
+        return channel.gainNode ? channel.gainNode.gain.value : channel.audio.volume;
     }
 
     /**
@@ -164,7 +183,8 @@ class AudioPlayer {
     }
 
     toAudioSource(filePath) {
-        if (!filePath || /^(file|https?):\/\//i.test(filePath)) return filePath;
+        // Already a URL: an encrypted file comes from the resolver as a data: URL.
+        if (!filePath || /^(?:file|https?|data|blob):/i.test(filePath)) return filePath;
         if (typeof window !== 'undefined' && window.RPGReactorAssetUrl) {
             return window.RPGReactorAssetUrl(filePath);
         }
@@ -320,10 +340,7 @@ class AudioPlayer {
             const volume = e.target.value / 100;
             const currentChannel = this.getCurrentChannel();
             if (currentChannel) {
-                currentChannel.audio.volume = volume;
-                if (currentChannel.gainNode) {
-                    currentChannel.gainNode.gain.value = volume;
-                }
+                this.setChannelVolume(currentChannel, volume);
             }
             document.getElementById('volume-value').textContent = e.target.value + '%';
         });
@@ -637,11 +654,12 @@ class AudioPlayer {
         audioFiles.sort((a, b) => this.compareAudioTrackNames(a.relativePath, b.relativePath));
 
         // Store tracks for this type
-        // Convert filesystem path to file:// URL for HTML5 Audio
+        // The path only: selectAudioTrack makes the URL for the one track
+        // picked (an encrypted file's URL is the whole file, decrypted).
         this.audioPlayer.tracks[type] = audioFiles.map(file => {
             return {
                 name: file.relativePath,
-                path: this.toAudioSource(file.absolutePath),
+                path: file.absolutePath,
                 absolutePath: file.absolutePath,
                 type: type,
                 section: this.getAudioSectionKey(file.relativePath)
@@ -883,11 +901,7 @@ class AudioPlayer {
         const panSlider = document.getElementById('pan-slider');
 
         if (volumeSlider) {
-            const volume = volumeSlider.value / 100;
-            currentChannel.audio.volume = volume;
-            if (currentChannel.gainNode) {
-                currentChannel.gainNode.gain.value = volume;
-            }
+            this.setChannelVolume(currentChannel, volumeSlider.value / 100);
         }
 
         if (pitchSlider) {
@@ -1062,11 +1076,7 @@ class AudioPlayer {
 
         // Apply parameters (whether same file or new)
         if (params.volume !== undefined) {
-            const normalizedVolume = params.volume / 100;
-            channel.audio.volume = normalizedVolume;
-            if (channel.gainNode) {
-                channel.gainNode.gain.value = normalizedVolume;
-            }
+            this.setChannelVolume(channel, params.volume / 100);
         }
 
         if (params.pitch !== undefined) {
@@ -1118,55 +1128,10 @@ class AudioPlayer {
     }
 
     /**
-     * Get the audio element for direct manipulation by external components
-     * Returns the channel for the current type being viewed in UI
-     */
-    getAudioElement() {
-        if (!this.audioPlayer) return null;
-        const currentChannel = this.getCurrentChannel();
-        return currentChannel ? currentChannel.audio : null;
-    }
-
-    /**
      * Get the audio element for a specific channel type
      */
     getChannelAudio(type) {
         const channel = this.getChannel(type);
         return channel ? channel.audio : null;
-    }
-
-    /**
-     * Get the Web Audio API nodes for advanced audio processing
-     * Returns nodes for the currently displayed channel
-     */
-    getAudioNodes() {
-        if (!this.audioPlayer) return null;
-        const currentChannel = this.getCurrentChannel();
-        if (!currentChannel) return null;
-
-        return {
-            audioContext: this.audioPlayer.audioContext,
-            gainNode: currentChannel.gainNode,
-            panNode: currentChannel.panNode,
-            sourceNode: currentChannel.sourceNode
-        };
-    }
-
-    /**
-     * Check if audio is currently playing in the current channel
-     */
-    isPlaying() {
-        if (!this.audioPlayer) return false;
-        const currentChannel = this.getCurrentChannel();
-        return currentChannel ? currentChannel.playing : false;
-    }
-
-    /**
-     * Check if a specific channel is playing
-     */
-    isChannelPlaying(type) {
-        if (!this.audioPlayer) return false;
-        const channel = this.getChannel(type);
-        return channel ? channel.playing : false;
     }
 }

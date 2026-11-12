@@ -405,7 +405,7 @@ class DatabaseEffectEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const paramNames = globalThis.rrParamNames(tt);
         const paramOpts = paramNames.map((name, idx) =>
-            `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${name}</option>`
+            `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>`
         ).join('');
 
         container.innerHTML = [
@@ -513,7 +513,7 @@ class DatabaseEffectEditor {
         // which is its own accumulator in the runtime, never a ninth params entry.
         const paramNames = [...globalThis.rrParamNames(tt), tt('Max TP')];
         const paramOpts = paramNames.map((name, idx) =>
-            `<option value="${idx}" ${effect.code === 42 && effect.dataId === idx ? 'selected' : ''}>${name}</option>`
+            `<option value="${idx}" ${effect.code === 42 && effect.dataId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>`
         ).join('');
 
         const skills = this.databaseManager.getSkills() || [];

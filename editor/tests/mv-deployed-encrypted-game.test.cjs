@@ -90,6 +90,22 @@ test('encrypted MV audio is asked for as .rpgmvo once MZ\'s name is not found', 
     assert.equal(audio._isError, true);
 });
 
+test('an encrypted track that is not .ogg is asked for by each extension\'s own name on the web', () => {
+    const io = runtimeSource('reactor_core_io.js');
+    function WebAudio() {}
+    const context = { WebAudio, Utils: { hasEncryptedAudio: () => true, isNwjs: () => false, correctFileCase: () => null, AUDIO_EXTENSIONS: ['.ogg', '.mp3', '.m4a'] } };
+    vm.createContext(context);
+    vm.runInContext(slice(io, 'WebAudio.prototype._realUrl = function', 'WebAudio.prototype._startXhrLoading = function'), context);
+    vm.runInContext(slice(io, 'WebAudio.prototype._onError = function', 'WebAudio.prototype._onFetchProcess = function'), context);
+    const audio = new WebAudio();
+    const asked = [];
+    Object.assign(audio, { _url: 'audio/bgm/3.ogg', _fetchedSize: 0, _data: null, _sourceNodes: [], _triedCaseCorrection: true, _startLoading: () => asked.push(audio._realUrl()) });
+    for (let i = 0; i < 8 && !audio._isError; i++) audio._onError();
+    assert.deepEqual(asked, ['audio/bgm/3.rpgmvo', 'audio/bgm/3.mp3_', 'audio/bgm/3.m4a_', 'audio/bgm/3.rpgmvm']);
+    assert.equal(audio._isError, true);
+    assert.equal(audio._realUrl(), 'audio/bgm/3.ogg_', 'the name first asked for is the one reported');
+});
+
 function titleWindowClass() {
     const placed = [];
     function Window_TitleCommand(rect) { this.initialize(rect); }

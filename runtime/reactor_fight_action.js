@@ -1627,6 +1627,8 @@
     // Input: the mouse buttons and wheel beside the keys and buttons Input knows.
 
     const HOTBAR = ["", "hotbar1", "hotbar2", "hotbar3", "hotbar4", "hotbar5", "hotbar6", "hotbar7", "hotbar8"];
+    // Pressed while a landed blow holds the frame, these are kept (in `edges`) for the first frame after it.
+    const STOP_KEEPS = ["lock", "reload", "dodge", "weapon"];
     const In = A.Input = {
         left: false, right: false, leftEdge: false, wheel: 0, moved: false, virtual: {}, edges: {}, held: [true, true, true, true, true, true, true, true, true],
         // A key held as the battle takes the keys does not count as pressed for it: it must come up first.
@@ -1652,7 +1654,7 @@
             this.held[slot] = down;
             return fresh || this.triggered(name);
         },
-        endFrame() { this.leftEdge = false; this.wheel = 0; this.edges = {}; }
+        endFrame() { this.leftEdge = false; this.wheel = 0; for (const name in this.edges) this.edges[name] = false; }
     };
 
     /** Whether a click should take the mouse first: a look that turns by it, the mouse not yet held, and no refusal just now. */
@@ -2378,12 +2380,6 @@
         if (!sounded && typeof SoundManager !== "undefined" && SoundManager.playEnemyAttack) SoundManager.playEnemyAttack();
     };
 
-    Game_Fight.prototype.actionAim = function(on) {
-        if (!this.isAction()) return false;
-        In.virtual.aim = !!on;
-        return true;
-    };
-
     Game_Fight.prototype.actionReload = function() {
         if (!this.isAction()) return false;
         const st = this.act(), p = st.player, unit = this.playerUnit(), battler = unit && this.battler(unit);
@@ -3090,7 +3086,11 @@
             // The instant a blade lands: nothing moves on, and a click made now still counts.
             st.stop--;
             if (In.triggered("attack") && st.player.swing) st.player.buffered = true;
-            In.endFrame();
+            // A key pressed in the pause is true for this frame only: it is kept for the first frame after it,
+            // which reads it and ends the input frame. The wheel keeps counting; the click was taken above.
+            for (const name of STOP_KEEPS) if (In.triggered(name)) In.edges[name] = true;
+            for (let slot = 1; slot <= 8; slot++) if (In.slot(slot)) In.edges[HOTBAR[slot]] = true;
+            In.leftEdge = false;
             return;
         }
         st.clock++;
@@ -3174,7 +3174,7 @@
         crosshair: { x: 0, y: 0, spread: 0, aiming: false, onTarget: false, hit: 0, kill: 0 },
         target: null, hotbar: [], enemies: [], damage: { pulse: 0, angle: null }, combo: 0, guarding: false, dodging: false, objective: "", mouseFree: false, notice: "" };
     const hudTarget = { unitId: 0, name: "", hp: 0, mhp: 0, team: "", locked: false, x: 0, y: 0, visible: false };
-    let hudRev = -1;
+    let hudRev = -1, hudPay = -1;
 
     // Which opponents the player's eyes reach (the head, else the chest), for the HUD: a few are looked for each
     // battle frame and the answer kept a third of a second, so twenty bars are not twenty lines a frame.
@@ -3203,8 +3203,11 @@
         const profile = A.profile(battler);
         hud.unitId = unit.id; hud.name = battler.name();
         hud.hp = battler.hp; hud.mhp = battler.mhp; hud.mp = battler.mp; hud.mmp = battler.mmp; hud.tp = battler.tp;
-        if (hudRev !== st.rev) {
-            hudRev = st.rev;
+        // What a slot costs is paid in MP and TP, and those rise (a hit's TP, regeneration) without the battle's
+        // revision moving: either change has the bar asked again what can be used.
+        const pay = battler.mp * 4096 + battler.tp;
+        if (hudRev !== st.rev || hudPay !== pay) {
+            hudRev = st.rev; hudPay = pay;
             const weapons = battler.isActor() ? A.weaponsOf(battler) : [];
             const weapon = battler.isActor() ? battler.weapons()[0] || null : null;
             hud.weapon.id = weapon ? weapon.id : 0; hud.weapon.name = weapon ? weapon.name : ""; hud.weapon.iconIndex = weapon ? weapon.iconIndex : 0;

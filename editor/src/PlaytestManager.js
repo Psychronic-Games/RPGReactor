@@ -53,13 +53,40 @@ class PlaytestManager {
             return entry.plan;
         } catch (error) { return null; }
     }
-    static backendArgs(platform, rendererDescription, packageData, plan) {
+    /**
+     * What the editor's launcher should be told for its next start: a backend name ("gl", "d3d11on12"), "" for the
+     * browser's own, or null to leave what it was told alone. The browser takes its backend from its command line
+     * before any of the editor runs, so the editor cannot change its own: it leaves a note in the user's folder
+     * (`EDITOR_ANGLE_FILE`) and the launcher (RPGReactor.bat) starts the next session with it, on the right backend
+     * from the first frame. The editor draws the same maps through the same engine as the game, and where the game
+     * found by playing that this card runs it better on another backend than the browser's Direct3D 11
+     * (backendPlan), the editor's 3D view does too: North Haven's whole map on the Iris Xe laptop turned at 36-38
+     * frames a second on OpenGL and 3-21 on Direct3D 11, with stops of seconds (2026-11-11). Windows only; never
+     * under automation; a backend someone named on the command line or in the package is theirs; localStorage
+     * `rr.editorBackend` = "default" keeps the browser's own. `args`: nw.App.fullArgv.
+     */
+    static EDITOR_ANGLE_FILE = 'editor-angle.txt';
+    static editorBackend(platform, rendererDescription, args, plan, packageData, automated, choice) {
+        if (platform !== 'win32' || automated || !rendererDescription) return null;
+        const list = (args || []).map(String);
+        if (list.some(a => /^--use-angle=/.test(a)) && PlaytestManager.editorHop(list) === null) return null;
+        if (packageData && typeof packageData['chromium-args'] === 'string' && /--use-angle=/.test(packageData['chromium-args'])) return null;
+        if (choice === 'default') return '';
+        return plan === 'gl' || plan === 'd3d11on12' ? plan : '';
+    }
+    /** The backend the launcher started this editor on from that note (its marker among the arguments), or null. */
+    static editorHop(args) {
+        for (const a of (args || []).map(String)) { const m = /^--rr-editor-angle=(.+)$/.exec(a); if (m) return m[1]; }
+        return null;
+    }
+    static backendArgs(platform, rendererDescription, packageData, plan, ownHop = false) {
         if (platform !== 'win32' || !rendererDescription) return [];
         if (packageData && packageData.reactorAngle === 'default') return [];
         if (packageData && typeof packageData['chromium-args'] === 'string' && /--use-angle=/.test(packageData['chromium-args'])) return [];
         const description = String(rendererDescription);
-        // The editor itself on another backend than plain Direct3D 11: someone set this machine up by hand.
-        if (!/Direct3D11 /.test(description) || /Direct3D11on12/.test(description)) return [];
+        // The editor itself on another backend than plain Direct3D 11: someone set this machine up by hand. Not when
+        // the editor put itself there from the game's own record (editorBackend): the playtest follows the same plan.
+        if (!ownHop && (!/Direct3D11 /.test(description) || /Direct3D11on12/.test(description))) return [];
         const host = '--rr-angle-host=editor';
         if (PlaytestManager.BACKENDS.includes(plan)) return plan === 'd3d11' ? ['--rr-angle=d3d11', host] : [`--use-angle=${plan}`, `--rr-angle=${plan}`, host];
         const guess = PlaytestManager.weakAngleArgs(platform, rendererDescription, packageData);
@@ -363,7 +390,8 @@ class PlaytestManager {
         try { packageData = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')); } catch (error) { packageData = null; }
         // This machine's own backend where the game has learned one (backendPlan), else the weak-GPU guess.
         const renderer = PlaytestManager.rendererDescription();
-        const angle = PlaytestManager.backendArgs(process.platform, renderer, packageData, PlaytestManager.backendPlan(renderer, fs, path));
+        const ownHop = typeof nw !== 'undefined' && nw.App ? PlaytestManager.editorHop(nw.App.fullArgv) : null;
+        const angle = PlaytestManager.backendArgs(process.platform, renderer, packageData, PlaytestManager.backendPlan(renderer, fs, path), !!ownHop && ownHop !== 'default');
         if (angle.length) {
             launchArgs.splice(userDataDir ? 1 : 0, 0, ...angle);
             console.log('Playtest WebGL backend:', angle.join(' '));
@@ -600,22 +628,6 @@ class PlaytestManager {
         }
 
         return path.dirname(process.execPath);
-    }
-
-    stopPlaytest() {
-        if (this.playtestProcess) {
-            console.log('Stopping playtest...');
-            try {
-                this.playtestProcess.kill();
-            } catch (e) {
-                console.error('Error stopping playtest:', e);
-            }
-            this.playtestProcess = null;
-        }
-    }
-
-    isPlaytesting() {
-        return this.playtestProcess !== null;
     }
 }
 

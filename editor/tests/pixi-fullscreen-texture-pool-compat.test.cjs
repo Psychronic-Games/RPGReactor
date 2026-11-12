@@ -1,139 +1,83 @@
 /**
  * v5 gave a full-screen filter a texture of exactly the screen size, so
- * vTextureCoord spanned 0..1; v8 rounds every pooled texture up to a power of
- * two and hand-written MV/MZ shaders that hardcode 0.5 as the centre drift
- * down and right. The compat layer restores the exact size for the one
- * request that matches the canvas and leaves every other size to v8.
+ * vTextureCoord spanned 0..1; hand-written MV/MZ shaders that hardcode 0.5 as
+ * the centre need that. PIXI 8.20 rounded every pooled texture up to a power
+ * of two and the compat layer wrapped the pool; since 8.21 the pool sizes to
+ * the screens registered with it, and the wrap (which read `_texturePool` and
+ * `_poolKeyHash`, fields 8.22 does not have) is gone. These run the bundled
+ * PIXI's own pool, with the compat layer loaded over it.
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const native = require('pixi.js');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const compat = fs.readFileSync(
     path.join(repoRoot, 'runtime', 'libs', 'pixi_compat.js'), 'utf8');
 
-function applyShim(PIXI, window, extras) {
-    const start = compat.indexOf('    if (PIXI.TextureSource && PIXI.TexturePool &&');
-    const end = compat.indexOf('\n    }\n', start) + '\n    }\n'.length;
-    assert.ok(start >= 0 && end > start, 'the texture pool wrap is locatable');
-    vm.runInNewContext(compat.slice(start, end), Object.assign({ PIXI, window }, extras || {}));
+const SCREEN = 990001;
+
+function load() {
+    const PIXI = { ...native };
+    const nativeGetOptimalTexture = PIXI.TexturePool.getOptimalTexture;
+    vm.runInNewContext(compat, {
+        PIXI, Float32Array, Uint8Array, ArrayBuffer,
+        console: { log() {}, warn() {}, error() {} },
+        window: { location: { search: '' }, Graphics: { _canvas: { width: 816, height: 624 } } }
+    });
+    return { pool: PIXI.TexturePool, nativeGetOptimalTexture };
 }
 
-const nextPow2 = v => { v += v === 0 ? 1 : 0; v--; v |= v >>> 1; v |= v >>> 2; v |= v >>> 4; v |= v >>> 8; v |= v >>> 16; return v + 1; };
+const size = texture => [texture.source.pixelWidth, texture.source.pixelHeight];
 
-function fakePool() {
-    let uid = 0;
-    const destroyed = [];
-    const pool = {
-        _texturePool: {},
-        _poolKeyHash: Object.create(null),
-        createTexture(pixelWidth, pixelHeight, antialias, autoGenerateMipmaps) {
-            const texture = {
-                uid: ++uid,
-                source: { pixelWidth, pixelHeight, width: pixelWidth, height: pixelHeight, antialias, autoGenerateMipmaps, _resolution: 1 },
-                frame: { x: 0, y: 0, width: 0, height: 0 },
-                uvs: 0,
-                updateUvs() { this.uvs++; },
-                destroy() { destroyed.push(this.uid); }
-            };
-            return texture;
-        },
-        // v8's body, condensed.
-        getOptimalTexture(frameWidth, frameHeight, resolution = 1, antialias, autoGenerateMipmaps = false) {
-            const w = nextPow2(Math.ceil(frameWidth * resolution - 1e-6));
-            const h = nextPow2(Math.ceil(frameHeight * resolution - 1e-6));
-            const key = (w << 17) + (h << 2) + ((autoGenerateMipmaps ? 1 : 0) << 1) + (antialias ? 1 : 0);
-            if (!this._texturePool[key]) this._texturePool[key] = [];
-            let texture = this._texturePool[key].pop();
-            if (!texture) texture = this.createTexture(w, h, antialias, autoGenerateMipmaps);
-            texture.source.pixelWidth = w;
-            texture.source.pixelHeight = h;
-            texture.frame.width = frameWidth;
-            texture.frame.height = frameHeight;
-            texture.updateUvs();
-            this._poolKeyHash[texture.uid] = key;
-            return texture;
-        },
-        returnTexture(texture) {
-            this._texturePool[this._poolKeyHash[texture.uid]].push(texture);
-        }
-    };
-    return { PIXI: { TextureSource: function TextureSource() {}, TexturePool: pool }, destroyed };
-}
+test('the compat layer leaves the pool alone and reads none of the fields 8.22 dropped', () => {
+    const { pool, nativeGetOptimalTexture } = load();
+    assert.equal(pool.getOptimalTexture, nativeGetOptimalTexture);
+    assert.equal(Object.hasOwn(pool, 'getOptimalTexture'), false);
+    assert.equal('_texturePool' in pool, false);
+    assert.equal('_poolKeyHash' in pool, false);
+    assert.doesNotMatch(compat, /_texturePool|_poolKeyHash/);
+});
 
-test('a request matching the canvas gets an exactly sized texture; other sizes stay power-of-two', () => {
-    const { PIXI } = fakePool();
-    const window = { Graphics: { _canvas: { width: 816, height: 624 } } };
-    applyShim(PIXI, window);
-    const full = PIXI.TexturePool.getOptimalTexture(816, 624, 1, false);
-    assert.deepEqual([full.source.pixelWidth, full.source.pixelHeight], [816, 624]);
+test('a request matching the registered screen gets an exactly sized texture and returns to the pool', t => {
+    const { pool } = load();
+    pool.setScreenSize(SCREEN, 816, 624);
+    t.after(() => pool.removeScreen(SCREEN));
+    const full = pool.getOptimalTexture({ width: 816, height: 624, resolution: 1, antialias: false });
+    assert.deepEqual(size(full), [816, 624]);
     assert.deepEqual([full.frame.width, full.frame.height], [816, 624]);
-    assert.equal(full.uvs, 1, 'uvs are refreshed like the native path');
-    assert.ok(PIXI.TexturePool._poolKeyHash[full.uid] < 0, 'full-screen keys never collide with v8 keys');
+    const half = pool.getOptimalTexture({ width: 408, height: 312, resolution: 1, antialias: false });
+    assert.deepEqual(size(half), [512, 512], 'a smaller request keeps the smaller power of two');
+    pool.returnTexture(half);
 
-    const offByOne = PIXI.TexturePool.getOptimalTexture(815, 624, 1, false);
-    assert.deepEqual([offByOne.source.pixelWidth, offByOne.source.pixelHeight], [1024, 1024]);
-    const half = PIXI.TexturePool.getOptimalTexture(408, 312, 1, false);
-    assert.deepEqual([half.source.pixelWidth, half.source.pixelHeight], [512, 512]);
+    pool.returnTexture(full);
+    const again = pool.getOptimalTexture({ width: 816, height: 624, resolution: 1, antialias: false });
+    assert.equal(again.uid, full.uid, 'the pooled texture is handed back out');
+    const aa = pool.getOptimalTexture({ width: 816, height: 624, resolution: 1, antialias: true });
+    assert.notEqual(aa.uid, full.uid, 'antialias textures are pooled apart');
+    pool.returnTexture(again);
+    pool.returnTexture(aa);
 });
 
-test('full-screen textures round-trip through the pool and antialias keys stay separate', () => {
-    const { PIXI } = fakePool();
-    applyShim(PIXI, { Graphics: { _canvas: { width: 1280, height: 720 } } });
-    const first = PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
-    PIXI.TexturePool.returnTexture(first);
-    const again = PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
-    assert.equal(again.uid, first.uid, 'the pooled texture is handed back out');
-    const aa = PIXI.TexturePool.getOptimalTexture(1280, 720, 1, true);
-    assert.notEqual(aa.uid, first.uid);
-    assert.notEqual(PIXI.TexturePool._poolKeyHash[aa.uid], PIXI.TexturePool._poolKeyHash[first.uid]);
+test('a resized screen never hands the old full-screen texture out again', t => {
+    const { pool } = load();
+    pool.setScreenSize(SCREEN, 816, 624);
+    t.after(() => pool.removeScreen(SCREEN));
+    const old = pool.getOptimalTexture({ width: 816, height: 624, resolution: 1, antialias: false });
+    pool.returnTexture(old);
+    pool.setScreenSize(SCREEN, 1280, 720);
+    const fresh = pool.getOptimalTexture({ width: 1280, height: 720, resolution: 1, antialias: false });
+    assert.deepEqual(size(fresh), [1280, 720]);
+    assert.notEqual(fresh.uid, old.uid);
+    pool.returnTexture(fresh);
 });
 
-test('a resized canvas retires the stale full-screen texture: fresh replacement now, destroy two frames later', () => {
-    const { PIXI, destroyed } = fakePool();
-    const window = { Graphics: { _canvas: { width: 816, height: 624 } } };
-    // Destroying mid-render fires "[BindGroup] destroyed while still bound to
-    // a shader" (last frame's filter still holds the texture), so the shim
-    // defers the destroy by two animation frames.
-    const rafQueue = [];
-    applyShim(PIXI, window, { requestAnimationFrame: cb => rafQueue.push(cb) });
-    const old = PIXI.TexturePool.getOptimalTexture(816, 624, 1, false);
-    PIXI.TexturePool.returnTexture(old);
-    window.Graphics._canvas.width = 1280;
-    window.Graphics._canvas.height = 720;
-    const fresh = PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
-    assert.deepEqual([fresh.source.pixelWidth, fresh.source.pixelHeight], [1280, 720]);
-    assert.notEqual(fresh.uid, old.uid, 'the stale texture is never reused');
-    assert.deepEqual(destroyed, [], 'not destroyed while a bind group may hold it');
-    // Two frames pass; every filter has re-bound by now.
-    while (rafQueue.length) rafQueue.shift()();
-    assert.deepEqual(destroyed, [old.uid]);
-});
-
-test('without requestAnimationFrame the stale texture is destroyed immediately', () => {
-    const { PIXI, destroyed } = fakePool();
-    const window = { Graphics: { _canvas: { width: 816, height: 624 } } };
-    applyShim(PIXI, window);
-    const old = PIXI.TexturePool.getOptimalTexture(816, 624, 1, false);
-    PIXI.TexturePool.returnTexture(old);
-    window.Graphics._canvas.width = 1280;
-    window.Graphics._canvas.height = 720;
-    PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
-    assert.deepEqual(destroyed, [old.uid]);
-});
-
-test('without a Graphics canvas (the editor) and on v5-7 nothing changes', () => {
-    const { PIXI } = fakePool();
-    applyShim(PIXI, {});
-    const texture = PIXI.TexturePool.getOptimalTexture(816, 624, 1, false);
-    assert.deepEqual([texture.source.pixelWidth, texture.source.pixelHeight], [1024, 1024]);
-
-    const legacy = fakePool().PIXI;
-    delete legacy.TextureSource;
-    const native = legacy.TexturePool.getOptimalTexture;
-    applyShim(legacy, { Graphics: { _canvas: { width: 816, height: 624 } } });
-    assert.equal(legacy.TexturePool.getOptimalTexture, native);
+test('with no screen registered (the editor) a request rounds up to a power of two', () => {
+    const { pool } = load();
+    const texture = pool.getOptimalTexture({ width: 816, height: 624, resolution: 1, antialias: false });
+    assert.deepEqual(size(texture), [1024, 1024]);
+    pool.returnTexture(texture);
 });

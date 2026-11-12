@@ -90,11 +90,16 @@ test('A8: the tileset editor fills a tileset\'s missing flags when it is opened 
 test('A9: a troop shows the battleback of the map that starts its battle', () => {
     const Troops = require('../src/database/DatabaseTroopEditor.js');
     const event = list => ({ id: 1, pages: [{ list }] });
-    const found = Troops.battlebacksFromMaps([
+    const maps = [
         { id: 5, map: { specifyBattleback: true, battleback1Name: 'Cave', battleback2Name: 'CaveWall', events: [null, event([{ code: 301, parameters: [0, 2, false, false] }])], encounterList: [{ troopId: 4 }] } },
         { id: 2, map: { specifyBattleback: false, events: [null, event([{ code: 283, parameters: ['Castle', 'Throne'] }, { code: 301, parameters: [0, 3, false, false] }, { code: 301, parameters: [0, 2, false, false] }])] } },
         { id: 7, map: { specifyBattleback: false, events: [null, event([{ code: 301, parameters: [0, 6, false, false] }, { code: 301, parameters: [1, 9, false, false] }])], encounterList: [{ troopId: 8 }] } }
-    ]);
+    ];
+    const found = Troops.battlebacksFromMaps(maps);
+    // The scan keeps only what the table reads of each map: the answer is the same, and the tiles are let go.
+    const kept = maps.map(({ id, map }) => ({ id, map: Troops.battlebackFacts({ ...map, data: [1, 2, 3], events: [...map.events, event([{ code: 101, parameters: [] }])] }) }));
+    assert.deepEqual([...Troops.battlebacksFromMaps(kept)], [...found]);
+    assert.deepEqual([kept[0].map.data, kept[0].map.events.length, Troops.battlebackFacts(null)], [undefined, 1, null]);
     assert.deepEqual(found.get(3), { mapId: 2, battleback1Name: 'Castle', battleback2Name: 'Throne' }, 'a Change Battle Back before the battle');
     assert.deepEqual(found.get(2), { mapId: 2, battleback1Name: 'Castle', battleback2Name: 'Throne' }, 'the lowest map id wins');
     assert.deepEqual(found.get(4), { mapId: 5, battleback1Name: 'Cave', battleback2Name: 'CaveWall' }, 'an encounter on a map that specifies one');

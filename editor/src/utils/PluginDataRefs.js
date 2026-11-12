@@ -122,7 +122,19 @@
         return entries;
     }
 
-    const hasEntries = (type, database) => entriesFor(type, database).length > 0;
+    /** Whether entriesFor would list anything, without building the list (asked per parameter and per row). */
+    const hasEntries = (type, database) => {
+        const source = sourceFor(type);
+        const data = database && database.data;
+        if (!source || !data) return false;
+        const list = source.scope === 'system'
+            ? data.system && data.system[source.property]
+            : data[source.property];
+        if (!Array.isArray(list)) return false;
+        return source.scope === 'data'
+            ? list.some((raw, id) => id > 0 && raw && typeof raw === 'object')
+            : list.length > 1;
+    };
 
     /** Strictly resolve a non-negative integer ID; zero deliberately has no entry. */
     function resolve(type, database, value, options = {}) {

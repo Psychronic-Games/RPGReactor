@@ -369,6 +369,23 @@ test('Escape and the × close the Forge, asking first when a tool holds work', a
     forge.projectTools = { holdsWork: () => false };
     assert.equal(await forge.requestClose(), true, 'nothing held: it closes without asking');
     assert.equal(asked.length, 2);
+    // Another tool in the sidebar closes a running project tool too: the same question first (2026-11-11).
+    let drawn = 0;
+    forge._renderWorkspace = () => { drawn++; };
+    forge.activeToolId = 'project-tools';
+    forge.projectTools = { holdsWork: () => true };
+    forge.soundEffectGenerator = {};
+    context.answer = false;
+    forge._activateTool('sound-effect-generator');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual([asked.length, drawn, forge.activeToolId], [3, 0, 'project-tools'], 'kept when the question is cancelled');
+    context.answer = true;
+    forge._activateTool('sound-effect-generator');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual([asked.length, drawn, forge.activeToolId], [4, 1, 'sound-effect-generator']);
+    forge.projectTools = { holdsWork: () => false };
+    forge._activateTool('project-tools');
+    assert.deepEqual([asked.length, drawn, forge.activeToolId], [4, 2, 'project-tools'], 'nothing held: it switches at once');
     const source = read('src/forge/ForgeManager.js');
     assert.match(source, /RRKeyboardNavigation\?\.modal\(this\.workspaceModal, \{ onEscape: \(\) => this\.requestClose\(\) \}\);/);
     assert.match(source, /\.rr-forge-close'\)\.addEventListener\('click', \(\) => this\.requestClose\(\)\);/);

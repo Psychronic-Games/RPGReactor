@@ -202,7 +202,6 @@ function allowed(player, map, x, y, flags, now) {
 function onPlace(player, data) {
     const now = Date.now(), flags = data[1], map = data.readUInt16LE(2), x = data.readUInt16LE(4), y = data.readUInt16LE(6), clock = data.readUInt32LE(8);
     if (!allowed(player, map, x, y, flags, now)) {
-        player.refused = (player.refused || 0) + 1;
         if (now - (player.fixedAt || 0) > 500) { player.fixedAt = now; sendText(player.socket, { t: 'fix', map: player.map, x: player.x, y: player.y }); }
         return;
     }

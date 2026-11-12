@@ -184,7 +184,9 @@
         while (steady < 3) {
             if (!alive()) throw Object.assign(new Error('The group was stopped.'), { name: 'AbortError' });
             if (Date.now() - started > 180000) throw new Error('A character took too long to build.');
-            const P = builder._painter, built = builder._result && JSON.stringify(builder._result.recipe) === want;
+            // By the recipe the build was given (`_builtFor`), not the result's own: the build normalizes once more,
+            // which for some people moves an ancestry weight by one bit, and the two texts then never match.
+            const P = builder._painter, built = builder._result && builder._builtFor === want;
             const idle = built && !builder._pending && !builder._rebuildOwed && !(builder._liveJob && builder._liveJob.busy) && !(P && (P.busy || P.next)) && !builder._settle;
             steady = idle ? steady + 1 : 0;
             await new Promise(done => setTimeout(done, 80));
@@ -465,10 +467,13 @@
                     bar.firstElementChild.style.width = Math.round(done / list.length * 100) + '%';
                     if (!alive()) break;
                 }
-                if (faces) write(faceAt(faces.sheet), await Sheet.toPng(faces));
+                if (faces) { const last = faces; faces = null; write(faceAt(last.sheet), await Sheet.toPng(last)); }
             } catch (error) {
                 if (!(error && error.name === 'AbortError')) { console.error('[RRCharacterGroups] make', error); status(t('The group stopped at {name}: {why}', { name: list[Math.min(done, list.length - 1)].name, why: String(error && error.message || error) }), 'error'); }
             } finally {
+                // A group stopped or failed part way: the face sheet it was filling is written too, since the record
+                // below names it for the members already drawn into it.
+                try { if (faces && made.some(entry => entry.face)) write(faceAt(faces.sheet), await Sheet.toPng(faces)); } catch (error) { console.warn('[RRCharacterGroups] face sheet', error); }
                 // Who is in the group and where each one's pictures are: for the author, and for placing them later.
                 try { if (made.length) write(path.join(groupsDir(builder), state.name + '.json'), JSON.stringify({ builder: 'character3d-group', version: 1, spec: state, members: made.map(({ recipe, ...rest }) => rest) }, null, 2) + '\n'); } catch (error) { console.warn('[RRCharacterGroups] record', error); }
                 delete panel.dataset.busy;
@@ -526,11 +531,15 @@
         const path = require('path');
         return path.join(path.dirname(builder._designsDir('')), 'groups');
     }
+    // In a folder of its own (`groups/page/last.json`): beside the groups' records it was `groups/last.json`, which a
+    // group named "last" wrote its record over. That older file is still read, unless it is such a record.
     function readSpec(builder) {
-        try { return JSON.parse(require('fs').readFileSync(require('path').join(groupsDir(builder), 'last.json'), 'utf8')); } catch (error) { return null; }
+        const fs = require('fs'), path = require('path');
+        try { return JSON.parse(fs.readFileSync(path.join(groupsDir(builder), 'page', 'last.json'), 'utf8')); } catch (error) { /* the older place next */ }
+        try { const old = JSON.parse(fs.readFileSync(path.join(groupsDir(builder), 'last.json'), 'utf8')); return old && !old.builder ? old : null; } catch (error) { return null; }
     }
     function writeSpec(builder, spec) {
-        try { const fs = require('fs'), dir = groupsDir(builder); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(require('path').join(dir, 'last.json'), JSON.stringify(spec, null, 2) + '\n'); } catch (error) { /* a project that cannot be written keeps the description for the session */ }
+        try { const fs = require('fs'), dir = require('path').join(groupsDir(builder), 'page'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(require('path').join(dir, 'last.json'), JSON.stringify(spec, null, 2) + '\n'); } catch (error) { /* a project that cannot be written keeps the description for the session */ }
     }
 
     /**
@@ -546,6 +555,11 @@
             const main = this.main = containerEl.querySelector('.rr-c3d-genpage-main'), stage = containerEl.querySelector('.rr-c3d-genpage-stage');
             const builder = this.builder = new root.Character3DBuilder();
             // The description stays with this entry while the Forge is open (and in the project between sessions).
+            // It is one project's: another project opened since reads its own.
+            const project = projectController && (projectController.getCurrentProject?.() || projectController.currentProject);
+            const projectPath = (project && project.path) || '';
+            if (this.specProject !== projectPath) this.spec = null;
+            this.specProject = projectPath;
             if (this.spec) builder._groupSpec = this.spec;
             builder.renderInto(stage, projectController);
             // Out of sight, the builder's own view is drawn only while a group is being made: each frame of it is a

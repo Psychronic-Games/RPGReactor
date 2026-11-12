@@ -266,10 +266,43 @@ function packGame(root, options = {}) {
     return report;
 }
 
+// What replaces the pack worker in a folder whose game is no longer packed: a browser that still runs the old
+// worker fetches this in its place, and it answers nothing and takes itself away.
+const RETIRED_WORKER = `// This game's files are no longer packed: the worker that read the packs removes itself.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.registration.unregister()));
+`;
+
+/**
+ * Ends an earlier packing of a folder that now gets the game as loose files (an Online Server's folder, which is
+ * never cleared): a returning player's pack worker would otherwise go on answering from the old archives. Removes
+ * the index and the archives it names (nothing else: the folder can hold other things) and leaves a worker that
+ * unregisters itself. Returns whether there was a packing to end.
+ */
+function retirePacks(root) {
+    const packRoot = path.join(root, PACK_DIR), indexPath = path.join(packRoot, INDEX_NAME), workerPath = path.join(root, WORKER_NAME);
+    let found = false;
+    if (fs.existsSync(indexPath)) {
+        let packs = [];
+        try { packs = JSON.parse(fs.readFileSync(indexPath, 'utf8')).packs; } catch (error) { /* an index nothing can read names no archives */ }
+        for (const name of Array.isArray(packs) ? packs : []) {
+            if (/^pack-\d+-[0-9a-f]+\.zip$/.test(String(name))) fs.rmSync(path.join(packRoot, name), { force: true });
+        }
+        fs.rmSync(indexPath, { force: true });
+        if (!fs.readdirSync(packRoot).length) fs.rmdirSync(packRoot);
+        found = true;
+    }
+    if (fs.existsSync(workerPath) && fs.readFileSync(workerPath, 'utf8') !== RETIRED_WORKER) {
+        fs.writeFileSync(workerPath, RETIRED_WORKER);
+        found = true;
+    }
+    return found;
+}
+
 const megabytes = bytes => (bytes / 1048576).toFixed(0);
 /** One line saying what a packing did. */
 function describe(report) {
     return `Packed ${report.files} files into ${report.packs} ${report.packs === 1 ? 'archive' : 'archives'}: ${megabytes(report.before)} MB to ${megabytes(report.after)} MB.`;
 }
 
-module.exports = { PACK_DIR, INDEX_NAME, WORKER_NAME, MAX_PACK_BYTES, crc32, listFiles, encode, packFolder, packGame, gatePage, keepsLooseInGame, readerSource, workerSource, describe };
+module.exports = { PACK_DIR, INDEX_NAME, WORKER_NAME, MAX_PACK_BYTES, crc32, listFiles, encode, packFolder, packGame, retirePacks, gatePage, keepsLooseInGame, readerSource, workerSource, describe };

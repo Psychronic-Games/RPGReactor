@@ -485,6 +485,8 @@
     Game_Quests.prototype.setReward = function(id, index, visible) {
         const quest = ReactorQuests.find(id);
         if (!quest) return false;
+        // A reward the quest does not have changes nothing, and does not bring a hidden quest into the log.
+        if (index !== "all" && !(Number.isInteger(Number(index)) && Number(index) >= 0 && Number(index) < (quest.rewards || []).length)) return false;
         this.discover(quest.id);
         const shown = this.rewardsShown(quest.id);
         let ids;
@@ -835,7 +837,6 @@
 
     Scene_Quest.prototype.createDetailWindow = function() {
         this._detailWindow = new Window_QuestDetail(this.detailWindowRect());
-        this._detailWindow.setHandler("cancel", this.onDetailCancel.bind(this));
         this.addWindow(this._detailWindow);
     };
 
@@ -864,10 +865,6 @@
     Scene_Quest.prototype.onListCancel = function() {
         this._listWindow.deselect();
         this._categoryWindow.activate();
-    };
-
-    Scene_Quest.prototype.onDetailCancel = function() {
-        this._listWindow.activate();
     };
 
     Scene_Quest.prototype.update = function() {

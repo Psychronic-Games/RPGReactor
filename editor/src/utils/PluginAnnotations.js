@@ -36,6 +36,17 @@
         });
     };
 
+    /**
+     * The text of a line that carries on the description above it (` * @desc First line` / ` * second line`), or ''.
+     * `lastTag` is the last tag applied to the parameter. A blank line, the end of the comment or a line that
+     * begins with a tag this parser does not know (`@require 1`) ends the description.
+     */
+    const descContinuation = (line, lastTag) => {
+        if (lastTag !== 'desc') return '';
+        const text = cleanValue(line);
+        return !text || text.startsWith('@') || text.startsWith('/') ? '' : text;
+    };
+
     const applyToSchema = (schema, tag, value) => {
         if (!schema) return;
         switch (tag) {
@@ -45,7 +56,6 @@
                 break;
             case 'desc':
                 schema.desc = schema.desc ? `${schema.desc} ${value}` : value;
-                if (Array.isArray(schema.descLines)) schema.descLines.push(value);
                 break;
             case 'type':
                 schema.type = value;
@@ -91,7 +101,6 @@
         text: '',
         textSpecified: false,
         desc: '',
-        descLines: [],
         type: 'string',
         typeSpecified: false,
         default: null,
@@ -114,9 +123,17 @@
             if (!structName) continue;
             const fields = {};
             structs[structName] = fields;
-            let currentParam = null;
+            let currentParam = null, lastTag = null;
             for (const line of match[2].split('\n')) {
-                for (const token of splitLine(normalizeLine(line))) {
+                const text = normalizeLine(line), tokens = splitLine(text);
+                if (!tokens.length) {
+                    const more = currentParam && fields[currentParam] ? descContinuation(text, lastTag) : '';
+                    if (more) applyToSchema(fields[currentParam], 'desc', more);
+                    else lastTag = null;
+                    continue;
+                }
+                for (const token of tokens) {
+                    lastTag = token.tag;
                     if (token.tag === 'param') {
                         currentParam = token.value || null;
                         if (currentParam) fields[currentParam] = blankSchema();
@@ -131,7 +148,7 @@
         return structs;
     };
 
-    const api = { applyToSchema, blankSchema, cleanValue, normalizeLine, parseStructDefinitions, splitLine };
+    const api = { applyToSchema, blankSchema, cleanValue, descContinuation, normalizeLine, parseStructDefinitions, splitLine };
     root.RRPluginAnnotations = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

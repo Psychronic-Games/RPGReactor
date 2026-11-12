@@ -142,7 +142,7 @@ class DatabaseStateEditor {
                     <div id="state-steps-row-${state.id}" class="state-duration-dependent" style="${state.removeByWalking ? '' : 'display: none;'}">
                         <label class="state-duration-row">
                             <span>${tt('Steps to Remove:')}</span>
-                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.stepsToRemove || 100)}" min="0" data-field="stepsToRemove" data-state-id="${state.id}">
+                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.stepsToRemove != null ? state.stepsToRemove : 100)}" min="0" data-field="stepsToRemove" data-state-id="${state.id}">
                         </label>
                     </div>
                     <label class="state-duration-row state-duration-check-row">
@@ -266,8 +266,7 @@ class DatabaseStateEditor {
         // Text, number, and textarea inputs
         const editableFields = container.querySelectorAll('[data-state-id]');
         editableFields.forEach(field => {
-            const eventType = (field.tagName === 'SELECT' || field.type === 'checkbox') ? 'change' : 'change';
-            field.addEventListener(eventType, (e) => {
+            field.addEventListener('change', (e) => {
                 const fieldName = e.target.dataset.field;
                 const stateId = parseInt(e.target.dataset.stateId);
                 if (!fieldName) return;
@@ -277,6 +276,11 @@ class DatabaseStateEditor {
                     value = e.target.checked;
                 } else if (e.target.type === 'number') {
                     value = parseInt(e.target.value) || 0;
+                    // A state lasts at least one turn: an emptied box stores the 1 the page shows.
+                    if (fieldName === 'minTurns' || fieldName === 'maxTurns') {
+                        value = Math.max(1, value);
+                        e.target.value = String(value);
+                    }
                 } else if (e.target.tagName === 'SELECT') {
                     value = parseInt(e.target.value);
                 } else {

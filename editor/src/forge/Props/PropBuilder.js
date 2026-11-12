@@ -67,6 +67,7 @@ class PropBuilder {
         // Bakes the worker was running are refused, so an export waiting on them ends (with its error) instead of hanging.
         this._failBakes(new Error('The prop builder was closed while a loop was baking.'));
         this._closeOffPage();
+        this._closeGallery?.();
         if (!view) return;
         cancelAnimationFrame(view.loop);
         view.clock?.dispose?.();
@@ -458,7 +459,8 @@ class PropBuilder {
         const parts = this._randomScopes(kind);
         const scopes = parts.length < 2 ? ['all'] : RRRandomPartsMenu.scopesFor(parts, this.randomParts || new Set(parts.map(p => p[0])));
         let r = this.recipe;
-        for (const scope of scopes) r = kind.random((Math.random() * 4294967296) >>> 0, r, scope);
+        // The last argument holds the type: Everything rolls a new take on it, as each box alone does.
+        for (const scope of scopes) r = kind.random((Math.random() * 4294967296) >>> 0, r, scope, true);
         if (scopes.length) this._replace(r);
     }
 
@@ -872,7 +874,7 @@ class PropBuilder {
         for (const m of view.meshes) { m.geometry.dispose(); m.material.dispose(); view.group.remove(m); }
         for (const b of view.bones) if (b.parent === view.group) view.group.remove(b);
         if (view.skeleton) view.skeleton.dispose();
-        view.meshes = []; view.bones = []; view.skeleton = null; view.mixer = null; view.action = null; view.sim = null; view.structure = null;
+        view.meshes = []; view.bones = []; view.skeleton = null; view.mixer = null; view.action = null; view.structure = null;
         view.clipAction = null; view.clipKey = null;
     }
 
@@ -1302,6 +1304,8 @@ class PropBuilder {
         }
         const group = this.designGroup || '';
         try {
+            // The picture is the view's: bring it to this recipe first, even with a preview on its way.
+            if (this._view) this._settle();
             const kept = await RRForgeDesigns.save(this._designsDir(), group, name, { builder: 'prop3d', version: 1, recipe: this.recipe },
                 this._thumbnail(), this._openedDesign, (s, v) => this._t(s, v));
             if (!kept) return;
@@ -1338,9 +1342,13 @@ class PropBuilder {
                 noModels: this._t('No props exported from this project yet. Export Model To Project puts one here.')
             }, t)}</div>`;
         box.hidden = false;
-        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); };
+        // One Escape listener at a time: drawing the gallery again (after a delete, or Open pressed twice)
+        // drops the one before, which would otherwise swallow a later Escape.
+        this._closeGallery?.();
+        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); if (this._closeGallery === close) this._closeGallery = null; };
         const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
         document.addEventListener('keydown', onKey, true);
+        this._closeGallery = close;
         box.onclick = e => {
             if (e.target.closest('[data-close]')) { close(); return; }
             const remove = e.target.closest('[data-delete]');

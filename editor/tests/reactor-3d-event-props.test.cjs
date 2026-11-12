@@ -442,9 +442,13 @@ test('a prop is hidden where the hide will actually stick', () => {
     const hide = sprites.lastIndexOf('Sprite_Character.prototype.updateVisibility = function() {');
     assert.ok(hide > -1, 'updateVisibility is overridden');
     const hideBody = sprites.slice(hide, sprites.indexOf('\n};', hide));
-    assert.match(hideBody, /Reactor3D\.isEventProp\(character\.eventId\(\)\)/);
-    assert.match(hideBody, /this\.visible = false/);
     assert.match(hideBody, /this\._reactor3dBaseVisibility\(\);/, 'and the stock rules still run');
+    // The rule itself is asked once, by the base (`_reactor3dHides`), not a second time by the override.
+    const rule = sprites.indexOf('Sprite_Character.prototype._reactor3dHides = function() {');
+    assert.ok(rule > -1);
+    assert.match(sprites.slice(rule, sprites.indexOf('\n};', rule)), /Reactor3D\.isEventProp\(character\.eventId\(\)\)/);
+    assert.match(sprites, /\|\| \(typeof this\._reactor3dHides === "function" && this\._reactor3dHides\(\)\);/);
+    assert.doesNotMatch(hideBody, /isEventProp|hasCharacterModel|hasEventModels/);
 
     // And positioning no longer bails out early, so nothing can go stale.
     const place = sprites.indexOf('Sprite_Character.prototype.updateReactor3DPosition = function() {');

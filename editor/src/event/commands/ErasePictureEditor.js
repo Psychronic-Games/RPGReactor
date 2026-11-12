@@ -221,6 +221,12 @@ class ErasePictureEditor {
         }
         select.addEventListener('change', event => {
             this[property] = event.target.value;
+            // Back to a picture number: a variable id past 100 is not one.
+            for (const id of ['pictureId', 'endPictureId']) {
+                if (property === `${id}Source` && this[property] !== 'variable') {
+                    this[id] = Math.max(1, Math.min(100, Number(this[id]) || 1));
+                }
+            }
             this.renderContent();
         });
         row.appendChild(labelEl);
@@ -237,11 +243,18 @@ class ErasePictureEditor {
         labelEl.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
         const input = document.createElement('input');
         input.type = 'number';
+        // The game has 100 pictures; 9999 is the limit of a variable id.
+        const maximum = this[`${property}Source`] === 'variable' ? 9999 : 100;
         input.min = 1;
-        input.max = 9999;
+        input.max = maximum;
         input.value = this[property];
         input.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 100px;';
         input.addEventListener('input', event => { this[property] = parseInt(event.target.value) || 1; });
+        // When the field is left (OK blurs it first): within its range.
+        input.addEventListener('change', event => {
+            this[property] = Math.max(1, Math.min(maximum, parseInt(event.target.value) || 1));
+            event.target.value = String(this[property]);
+        });
         row.appendChild(labelEl);
         row.appendChild(input);
         return row;

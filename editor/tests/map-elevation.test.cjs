@@ -347,7 +347,7 @@ test('the viewport is not leaked when it cannot be built', () => {
     const at = source.indexOf('Reactor3D.acquireViewport = function');
     const body = source.slice(at, source.indexOf('\n};', at));
     assert.match(body, /if \(this\._viewportFailed\) return null;/, 'one attempt only');
-    assert.match(body, /built\.destroy\(\)/, 'and a half-built one is disposed');
+    // (A constructor that threw hands nothing back to dispose: the initializers give the context back, below.)
 
     const init = source.slice(source.indexOf('Reactor3D.Viewport.prototype._initializeCanvas'));
     assert.match(init.slice(0, init.indexOf('\n};')), /this\._renderer\.dispose\(\)/,

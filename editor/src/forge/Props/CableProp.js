@@ -300,7 +300,8 @@
                 html += this._select('ends', 'Cable ends', ENDS);
                 html += this._color('accent', r.glow ? 'Glow' : 'Ties and plugs');
                 if (r.jacket) html += this._slider({ path: 'ties', label: 'Wraps along it', range: [0, 24], step: 1, format: 'int' });
-                html += this._check('glow', 'Glows');
+                // Only a jacket's wraps and finish and the sci-fi ends take the glow: bare wires have nothing to light.
+                if (r.jacket || r.ends === 'scifi') html += this._check('glow', 'Glows');
                 return html;
             }
         });

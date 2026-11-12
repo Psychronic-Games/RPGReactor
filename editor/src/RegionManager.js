@@ -199,25 +199,6 @@ class RegionManager {
         }
     }
 
-    // Toggle region visibility
-    toggleRegions() {
-        this.enabled = !this.enabled;
-
-        if (this.enabled) {
-            if (!this.regionLayer) {
-                this.createRegionLayer();
-            }
-            this.renderRegions();
-            this.regionLayer.visible = true;
-        } else {
-            if (this.regionLayer) {
-                this.regionLayer.visible = false;
-            }
-        }
-
-        return this.enabled;
-    }
-
     // Set region visibility
     setVisible(visible) {
         this.enabled = visible;
@@ -229,6 +210,27 @@ class RegionManager {
         }
     }
 
+    /** The overlay is on this map's canvas and showing: setVisible(true) drew its cells. */
+    isOverlayShown() {
+        return !!(this.enabled && this.regionLayer && !this.regionLayer.destroyed && this.regionLayer.visible
+            && this.regionLayer.parent === this.tilemapManager?.container);
+    }
+
+    /**
+     * Show the overlay above everything else on the map. Cells already drawn
+     * are kept and only lifted to the top; making the layer anew drew a map's
+     * every region twice on each visit to the tab.
+     */
+    showOnTop() {
+        if (this.isOverlayShown()) {
+            this.tilemapManager.container.addChild(this.regionLayer);
+            this.tilemapManager.requestRender?.();
+            return;
+        }
+        this.createRegionLayer();
+        this.setVisible(true);
+    }
+
     // Initialize the region palette UI
     initializeUI(container) {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
@@ -236,7 +238,7 @@ class RegionManager {
             <div id="region-palette-container" style="display: flex; flex-direction: column; flex: 1; min-width: 0; height: 100%; min-height: 0; background-color: var(--color-bg-surface);">
                 <!-- Region Info -->
                 <div id="region-selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-bottom: 1px solid var(--color-border);">
-                    <div style="font-size: 11px; color: var(--color-text-muted);">${tt('Selected: Region')} <span id="selected-region-number">1</span></div>
+                    <div style="font-size: 11px; color: var(--color-text-muted);">${tt('Selected: Region')} <span id="selected-region-number">${Number(this.selectedRegion) || 0}</span></div>
                 </div>
 
                 <!-- Region Palette Canvas (scrollable) -->

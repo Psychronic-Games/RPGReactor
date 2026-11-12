@@ -243,12 +243,6 @@
         return ptbs && ptbs[key] !== undefined ? 'ptbs' : '';
     }
 
-    /** Whether the record names a reach, an area or a line-of-sight rule. */
-    function hasAction(record) {
-        const found = recordTactics(typeof record === 'string' ? { note: record } : record);
-        return !!(found && (found.range || found.area || found.los !== undefined));
-    }
-
     /**
      * The note without the tags of `patterns`. A tag goes wherever the game
      * reads it, over two lines too. A line that held nothing else goes with
@@ -1783,7 +1777,7 @@
 
     const api = {
         SHAPES, SIZED, AI, DEFAULT_MOVE, DEFAULT_JUMP, SHAPE_LABELS, KINDS, FILES, DATA_KEYS, LIMITS, HEIGHT_REACH, HEIGHT_LIMITS, heightRule,
-        parse, parseTags, parsePtbs, parseCombat, hasAction, strip, without,
+        parse, parseTags, parsePtbs, parseCombat, strip, without,
         own, recordTactics, recordCombat, recordCharacter, sourceOf,
         effective, sighted, weaponSkill, weaponTypeReach, scopeDefaults, unitStats,
         PROJECTILES, combatProfile, cooldownOf, comboShares, describeCombat,

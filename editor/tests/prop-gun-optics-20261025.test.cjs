@@ -132,6 +132,8 @@ test('Randomize keeps the railgun a railgun, rolls it among the guns, and every 
     let rolled = 0;
     for (let s = 1; s <= 200; s++) { const out = Gun.random(s, { preset: 'pistol' }, 'all'); if (out.preset === 'railgun') { rolled++; assert.equal(out.barrelBuild, 'rails'); } else assert.equal(out.barrelBuild, 'round', out.preset); }
     assert.ok(rolled > 0, 'Randomize all can land on the railgun');
+    // The page's Randomize and Shuffle hold the family (2026-11-11): Everything used to leave the pistol.
+    for (let s = 1; s <= 40; s++) assert.equal(Gun.random(s, { preset: 'pistol' }, 'all', true).preset, 'pistol');
 });
 
 test('the new labels are translated in every locale and do not reuse an existing word', () => {

@@ -28,8 +28,9 @@ class LightCommandEditor {
 
     /** The optional value fields of TransformLight, with their slider ranges. */
     static TRANSFORM_FIELDS = [
-        { key: 'x', label: 'lightcmd.x', min: -50, max: 50, step: 0.05, fallback: 0 },
-        { key: 'y', label: 'lightcmd.y', min: -50, max: 50, step: 0.05, fallback: 0 },
+        // A light that is not attached takes these as map tiles, so the number may pass the slider's reach.
+        { key: 'x', label: 'lightcmd.x', min: -50, max: 50, saveMin: -10000, saveMax: 10000, step: 0.05, fallback: 0 },
+        { key: 'y', label: 'lightcmd.y', min: -50, max: 50, saveMin: -10000, saveMax: 10000, step: 0.05, fallback: 0 },
         { key: 'height', label: 'lightcmd.height', min: 0, max: 20, step: 0.05, fallback: 1 },
         { key: 'yaw', label: 'lightcmd.yaw', min: -180, max: 180, step: 1, fallback: 0 },
         { key: 'pitch', label: 'lightcmd.pitch', min: -90, max: 90, step: 1, fallback: 0 },
@@ -96,7 +97,7 @@ class LightCommandEditor {
             const reset = LightCommandEditor._flag(input.reset) === 'true';
             saved = { target };
             for (const field of LightCommandEditor.TRANSFORM_FIELDS) {
-                saved[field.key] = reset ? '' : LightCommandEditor._optional(input[field.key], field.min, field.max);
+                saved[field.key] = reset ? '' : LightCommandEditor._optional(input[field.key], field.saveMin ?? field.min, field.saveMax ?? field.max);
             }
             saved.color = reset ? '' : LightCommandEditor._colour(input.color);
             saved.duration = LightCommandEditor._duration(input.duration);
@@ -188,7 +189,7 @@ class LightCommandEditor {
                 <input type="checkbox" class="lc-set" data-key="${field.key}" title="${escape(this._t('lightcmd.change'))}"${on ? ' checked' : ''}>
                 <span>${escape(this._t(field.label))}</span>
                 <input type="range" class="lc-slider" data-key="${field.key}" min="${field.min}" max="${field.max}" step="${field.step}" value="${escape(current)}" style="width:100%;min-width:0;"${on ? '' : ' disabled'}>
-                <input type="number" class="lc-num" data-key="${field.key}" data-no-stepper min="${field.min}" max="${field.max}" step="${field.step}" value="${escape(current)}" style="width:100%;${inputStyle}"${on ? '' : ' disabled'}>
+                <input type="number" class="lc-num" data-key="${field.key}" data-no-stepper min="${field.saveMin ?? field.min}" max="${field.saveMax ?? field.max}" step="${field.step}" value="${escape(current)}" style="width:100%;${inputStyle}"${on ? '' : ' disabled'}>
             </div>`;
         const colourRow = (current, on) => `
             <div class="lc-row" data-key="color" style="display:grid;grid-template-columns:20px 110px 1fr;gap:8px;align-items:center;font-size:12px;color:var(--color-text);">

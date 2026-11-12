@@ -131,8 +131,8 @@ function open(folder, destination, options) {
         const constants = C.scriptConstants(custom.map(s => s.text));
         const scriptText = custom.map(s => s.text).join('\n');
         const families = C.scriptFamilies(custom.map(s => s.text));
-        C.setContext({ constants, messageCodes: {}, families, names: {} });
-        const ruby = (source, kind, context) => C.ruby(source, kind, Object.assign({ constants }, context));
+        C.setContext({ constants, messageCodes: {}, families, names: {}, engine: 'xp' });
+        const ruby = (source, kind, context) => C.ruby(source, kind, Object.assign({ constants, engine: 'xp' }, context));
 
         // JPEG cannot be decoded synchronously. Prepare the art that must be re-cut before
         // the synchronous tile/skin constructors run; ordinary copied art converts in the media pass.
@@ -214,6 +214,8 @@ function open(folder, destination, options) {
         const base = JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8'));
         const sys = aliased(D.system(base, system, title, notes));
         sys.rrGuardSkillId = db.guardSkillId;
+        // One weapon/armour type per set of classes that equips the same items (XP classes equip by id).
+        sys.weaponTypes = db.weaponTypes; sys.armorTypes = db.armorTypes;
         // Every XP character sheet is one character, four frames a row ($name[f4]).
         sys.rrMultiFrames = true;
         sys.rrBalloonSize = 32;

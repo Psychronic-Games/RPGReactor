@@ -150,7 +150,7 @@ test('the dialog is loaded before the Database pages and the Forge tools', () =>
 
 const QUESTIONS = /RRDialog\.(?:confirm|prompt)\(/g;
 // The functions that ask and resolve the answer for a caller that acts on it.
-const ASKERS = /[\w$]+\.(?:_confirmSheetOverwrite|chooseQuestLog|askRemoveFrames)\(/g;
+const ASKERS = /[\w$]+\.(?:_confirmSheetOverwrite|chooseQuestLog|askRemoveFrames|_confirmDiscard)\(/g;
 
 test('the scan tells an answer that is waited for from one that is dropped', () => {
     const sample = [
@@ -222,7 +222,7 @@ test('Animations: the selected frames are removed only when the question is answ
 
     // The button redraws the list only after frames were removed.
     assert.match(read('database/DatabaseAnimationEditor.js'),
-        /if \(!\(await editorSelf\.askRemoveFrames\(animation, selectedFrameIndices\)\)\) return;\s+selectedFrameIndices\.clear\(\);/);
+        /if \(!\(await editorSelf\.askRemoveFrames\(animation, selectedFrameIndices, saveState\)\)\) return;\s+selectedFrameIndices\.clear\(\);/);
 });
 
 test('Animations: every frame at once is refused, and an answer for a list that changed removes nothing', async () => {
@@ -901,7 +901,7 @@ test('Animations: the Delete key asks as the Remove Frame button does, and the F
     const source = read('database/DatabaseAnimationEditor.js');
     const key = source.slice(source.indexOf("if (e.key === 'Delete' && selectedFrameIndices.size > 0) {"));
     const branch = key.slice(0, key.indexOf("} else if (isCtrl && e.key.toLowerCase() === 'c'"));
-    assert.match(branch, /editorSelf\.askRemoveFrames\(animation, selectedFrameIndices\)\.then\(removed => \{\s+if \(!removed\) return;/,
+    assert.match(branch, /editorSelf\.askRemoveFrames\(animation, selectedFrameIndices, saveState\)\.then\(removed => \{\s+if \(!removed\) return;/,
         'the key goes through the question');
     assert.equal((branch.match(/frames\.splice/g) || []).length, 0, 'the frames are removed by the function that asked');
     // One number, two readouts: "Frame: 1 / 29" over the preview and "Frames" under Properties.

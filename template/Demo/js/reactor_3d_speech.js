@@ -827,6 +827,9 @@
 
     const sync = R.MapScene.prototype.syncCharacterModels;
     R.MapScene.prototype.syncCharacterModels = function() {
+        // A neighbor map's scene holds its own events under the same keys: looked up there, the speaker was
+        // missing or another character, and the real speaker's mouth was shut.
+        if (this._rrBody) return sync.apply(this, arguments);
         // The message window's class loads after this file: the talk takes its hook once it exists.
         if (!installTalk.done) installTalk();
         for (const state of active.values()) state.driver?.restore();

@@ -308,6 +308,30 @@ test('runtime resolves dynamic values once, waits the resolved duration, and era
     assert.deepEqual(runtime.$gameScreen.erased, [1, 2, 3]);
 });
 
+test('a duration variable holding 0 moves the picture in one frame', () => {
+    const runtime = runtimeHarness();
+    runtime.$gameVariables.values[2] = 0;
+    runtime.$gameScreen.showPicture(2, 'P', 0, 0, 0, 100, 100, 255, 0);
+    const interpreter = new runtime.Game_Interpreter();
+    assert.equal(interpreter.reactorPictureCommand({
+        operation: 'move',
+        pictureId: { source: 'direct', value: 2 },
+        origin: 0,
+        position: { source: 'direct', x: 30, y: 40 },
+        scaleX: 100, scaleY: 100, opacity: 255, blend: 0,
+        duration: { source: 'variable', value: 2 },
+        wait: true, easing: 0,
+        angle: { mode: 'tween', value: 90 },
+        anchor: { mode: 'keep', x: 0, y: 0 },
+        wave: { mode: 'keep', amplitudeX: 0, amplitudeY: 0, period: 60, phase: 0 }
+    }), true);
+    const picture = runtime.$gameScreen.picture(2);
+    // The stock move only reaches its targets while frames remain: 0 left the picture where it was.
+    assert.equal(picture._duration, 1);
+    assert.equal(picture.angle(), 90, 'the angle is still set at once');
+    assert.equal(interpreter._waitCount, 0);
+});
+
 test('Reactor and stock fallbacks both reject fractional dynamic references', () => {
     const runtime = runtimeHarness();
     runtime.$gameVariables.values[1] = 2.9;

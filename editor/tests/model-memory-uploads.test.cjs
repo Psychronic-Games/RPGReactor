@@ -323,6 +323,11 @@ test('the finger skin is worked out in a worker, the same skin the main thread m
         R.applyModelRig(twin.root, twin.rig);
         assert.equal(F._serial, jobs, 'no new job');
         assert.deepEqual(skinOf(twin.root), expected);
+        // So does one whose rig was read again: a new record round the same weights, as every copy in the game is.
+        const again = fingerModel(); again.rig.weights[0] = Object.assign({}, model.rig.weights[0]);
+        R.applyModelRig(again.root, again.rig);
+        assert.equal(F._serial, jobs, 'no new job for a rig read again');
+        assert.deepEqual(skinOf(again.root), expected);
         // The worker's source names nothing it cannot reach.
         assert.doesNotMatch(F.source(), /Reactor3D|THREE/);
         // A worker that fails hands its work back to the main thread.

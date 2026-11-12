@@ -345,7 +345,14 @@ Game_Action.prototype.isMagicSkill = function() {
 
 Game_Action.prototype.decideRandomTarget = function() {
     let target;
-    if (this.isForDeadFriend()) {
+    if (this.isForRandomAny()) {
+        // makeTargets draws for these scopes from both sides; no target is kept.
+        return;
+    } else if (this.isForAnyone()) {
+        // These scopes answer true to isForFriend as well, so they are asked
+        // first: the draw comes from the side the scope opens on.
+        target = this.targetSideUnit().randomTarget();
+    } else if (this.isForDeadFriend()) {
         target = this.friendsUnit().randomDeadTarget();
     } else if (this.isForFriend()) {
         target = this.friendsUnit().randomTarget();
@@ -586,18 +593,45 @@ Game_Action.prototype.targetsForDeadAndAlive = function(unit) {
 
 Game_Action.prototype.evaluate = function() {
     let value = 0;
-    for (const target of this.itemTargetCandidates()) {
-        const targetValue = this.evaluateWithTarget(target);
-        if (this.isForAll()) {
-            value += targetValue;
-        } else if (targetValue > value) {
-            value = targetValue;
-            this.setTargetBattler(target);
+    if (this.isForOneSide()) {
+        value = this.evaluateBestSide();
+    } else {
+        for (const target of this.itemTargetCandidates()) {
+            const targetValue = this.evaluateWithTarget(target);
+            if (this.isForAll()) {
+                value += targetValue;
+            } else if (targetValue > value) {
+                value = targetValue;
+                this.setTargetBattler(target);
+            }
         }
     }
     value *= this.numRepeats();
     if (value > 0) {
         value += Math.random();
+    }
+    return value;
+};
+
+// Scope 17 reaches one whole side: each side is totalled on its own and the
+// better one is recorded, so the action is not aimed at the side it opens on
+// when the other is the one worth using it on.
+Game_Action.prototype.evaluateBestSide = function() {
+    const candidates = this.itemTargetCandidates();
+    const subjectIsActor = this.subject().isActor();
+    let value = 0;
+    for (const isFriend of [false, true]) {
+        const side = candidates.filter(
+            target => (target.isActor() === subjectIsActor) === isFriend
+        );
+        let sideValue = 0;
+        for (const target of side) {
+            sideValue += this.evaluateWithTarget(target);
+        }
+        if (sideValue > value) {
+            value = sideValue;
+            this.setTargetBattler(side[0]);
+        }
     }
     return value;
 };
@@ -625,7 +659,17 @@ Game_Action.prototype.itemTargetCandidates = function() {
 Game_Action.prototype.evaluateWithTarget = function(target) {
     if (this.isHpEffect()) {
         const value = this.makeDamageValue(target, false);
-        if (this.isForOpponent()) {
+        if (this.isForAnyone() || this.isForRandomAny()) {
+            // These scopes answer true to isForOpponent and isForFriend alike,
+            // so the target's own side decides: damage is worth something only
+            // on an opponent, recovery only on a friend.
+            const isFriend = target.isActor() === this.subject().isActor();
+            if (isFriend) {
+                const recovery = Math.min(-value, target.mhp - target.hp);
+                return recovery > 0 ? recovery / target.mhp : 0;
+            }
+            return value > 0 ? value / Math.max(target.hp, 1) : 0;
+        } else if (this.isForOpponent()) {
             return value / Math.max(target.hp, 1);
         } else {
             const recovery = Math.min(-value, target.mhp - target.hp);

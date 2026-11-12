@@ -821,6 +821,8 @@ function normalizeShowArgs(raw, interpreter) {
                         ? Math.min(time, Math.max(0, duration - 0.001)) : time;
                 } catch (error) { /* metadata may still be incomplete on a browser edge case */ }
             }
+            // From here the shared video's own time says where it stands (`joinVideo`).
+            if (this.shared && this.shared.owner === this) this.shared.placed = true;
             this.play();
         }
 
@@ -906,7 +908,6 @@ function normalizeShowArgs(raw, interpreter) {
             context.fillStyle = "rgba(0,0,0," + (this.descriptor.scanlines * 0.5) + ")";
             // One dark line every other pixel, the classic CRT pitch.
             for (let y = 0; y < canvas.height; y += 2) context.fillRect(0, y, canvas.width, 1);
-            this.scanlineCanvas = canvas;
             this.scanlineSource = new PIXI.CanvasSource({ resource: canvas });
             this.scanlineTexture = new PIXI.Texture({ source: this.scanlineSource });
             this.scanlineMesh = new PIXI.PerspectiveMesh({ texture: this.scanlineTexture });
@@ -920,7 +921,6 @@ function normalizeShowArgs(raw, interpreter) {
             if (this.scanlineTexture && this.scanlineTexture.destroy) this.scanlineTexture.destroy(true);
             this.scanlineTexture = null;
             this.scanlineSource = null;
-            this.scanlineCanvas = null;
         }
 
         syncPixiScanlines() {
@@ -1034,7 +1034,6 @@ function normalizeShowArgs(raw, interpreter) {
             const geometry = this.makeThreeGeometry();
             const mesh = new THREE.Mesh(geometry, material);
             group.add(mesh);
-            this.threeScanCanvas = canvas;
             this.threeScanTexture = texture;
             this.threeScanMaterial = material;
             this.threeScanGeometry = geometry;
@@ -1052,7 +1051,6 @@ function normalizeShowArgs(raw, interpreter) {
             this.threeScanGeometry = null;
             this.threeScanMaterial = null;
             this.threeScanTexture = null;
-            this.threeScanCanvas = null;
         }
 
         syncThreeScanlines(group) {
@@ -1471,7 +1469,10 @@ function normalizeShowArgs(raw, interpreter) {
             if (!entry || !entry.video) return null;
             // A surface asked to start somewhere other than where the shared one stands keeps its own.
             const want = finiteNumber(owner.descriptor.currentTime, 0, Number.MAX_SAFE_INTEGER) || 0;
-            const at = Number(entry.video.currentTime) || 0;
+            // A video just opened reads 0 until its metadata is in and its opener has placed it: until then, where it
+            // is going is what counts, or every screen rebuilt after the menu would open a video of its own.
+            const at = entry.placed ? Number(entry.video.currentTime) || 0
+                : finiteNumber(entry.owner && entry.owner.descriptor && entry.owner.descriptor.currentTime, 0, Number.MAX_SAFE_INTEGER) || 0;
             if (want > 0 && Math.abs(want - at) > 0.5) return null;
             entry.users.add(owner);
             return entry;
@@ -1481,7 +1482,7 @@ function normalizeShowArgs(raw, interpreter) {
         shareVideo(owner, video) {
             const key = this.videoShareKey(owner.descriptor);
             if (!key || this._sharedVideos.has(key)) return null;
-            const entry = { key, video, owner, users: new Set([owner]), started: false, texture: null, textureUsers: new Set() };
+            const entry = { key, video, owner, users: new Set([owner]), started: false, placed: false, texture: null, textureUsers: new Set() };
             this._sharedVideos.set(key, entry);
             return entry;
         }

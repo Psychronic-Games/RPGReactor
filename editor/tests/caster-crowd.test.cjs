@@ -262,12 +262,18 @@ test("a light's carrier stays out of its faces, and a gone character's room is r
         ({ live, state } = pass(scene, [a.root], env)); finish(state, live);
         ({ live, state } = pass(scene, [a.root], env)); finish(state, live);
         assert.ok(pool.free.some(block => block.vStart === gone.vStart), 'its room is free');
-        const before = pool.vertices;
+        // Its bones went back with it: the pool no longer moves or holds a character that left.
+        assert.equal(pool.slots.has(b.skeleton), false);
+        assert.ok(!pool.bones.includes(b.hip) && !pool.bones.includes(b.hand), "b's bones are out of the pool");
+        assert.ok(pool.bones.includes(a.hip), "a's stay");
+        const before = pool.vertices, bones = pool.bones.length;
         const c = character(scene, 6);
         ({ live, state } = pass(scene, [a.root, c.root], env));
         const taken = pool.used.find(e => e.root === c.root);
         assert.equal(taken.vStart, gone.vStart, 'the newcomer takes it');
         assert.equal(pool.vertices, before, 'without the pool growing');
+        assert.equal(pool.bones.length, bones, 'nor its bones: the newcomer took the slots given back');
+        assert.ok(pool.bones.includes(c.hip) && pool.mesh.skeleton.bones.includes(c.hip) && !pool.mesh.skeleton.bones.includes(b.hip));
         finish(state, live);
     } finally { C.UNUSED_PASSES = passes; C.SWEEP_EVERY = every; }
 });

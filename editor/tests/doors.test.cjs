@@ -466,6 +466,36 @@ test('an automatic door swings away from whoever opens it, clear of the walkers,
     R._doorStates = null; R._doorScene = null;
 });
 
+test('a map entered over a border keeps its doors as they stand when its scene is made again', () => {
+    const THREE = loadThree();
+    // The world past the border is built from one reading of the map; the game plays on a copy read from the same files.
+    const built = doorMap({ opens: 'action' }), copy = doorMap({ opens: 'action' });
+    global.$gamePlayer = { x: 1, y: 1, _realX: 1, _realY: 1 };
+    global.$gameMap = { mapId: () => 3 };
+    const make = map => {
+        const scene = Object.create(R.MapScene.prototype), group = new THREE.Group();
+        scene.piecesGroup = () => group; scene.pieceMaterial = () => new THREE.MeshBasicMaterial();
+        global.$dataMap = map;
+        scene.addDoors(map, () => null);
+        return scene;
+    };
+    try {
+        make(built);
+        const state = R._doorStates.get(50);
+        state.open = true; state.t = 1;
+        assert.equal(R.shareDoorStates(built, copy), true);
+        make(copy);   // back from the menu: the scene is made again from the game's map
+        assert.equal(R._doorStates.get(50), state, 'the door is as it was left');
+        assert.equal(R.shareDoorStates(doorMap({ opens: 'action' }), copy), false, 'a map with no states has none to give');
+        make(doorMap({ opens: 'action' }));
+        assert.equal(R._doorStates.get(50).open, false, 'a map entered anew starts with its doors shut');
+    } finally {
+        for (const name of ['$gamePlayer', '$gameMap', '$dataMap']) delete global[name];
+        R._doorStates = null; R._doorScene = null;
+    }
+    assert.match(read('runtime/reactor_3d_surround.js'), /if \(map && R\.shareDoorStates\) R\.shareDoorStates\(record\.map, map\);/);
+});
+
 test('docs, sounds and the runtime file are in place', () => {
     const authoring = read('docs/AUTHORING.md');
     for (const needle of ['### Doors and window frames', '"opens": "locked"', 'Reactor3D.Doors.open', '"flowerBox": true']) assert.ok(authoring.includes(needle), needle);

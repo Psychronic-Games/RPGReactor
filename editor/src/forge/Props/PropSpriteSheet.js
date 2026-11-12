@@ -207,8 +207,10 @@
         const cells = plan(d, n), size = grid(d, n);
         const renderer = view.renderer, canvas = renderer.domElement;
         const saved = { ratio: renderer.getPixelRatio(), size: renderer.getSize(new THREE.Vector2()), floor: view.floor.visible, blob: view.blob.visible, wall: view.wall.visible, wall2: view.wall2 ? view.wall2.visible : false, visibility: canvas.style.visibility, clear: renderer.getClearAlpha(), exposure: renderer.toneMappingExposure, motion: builder.motion };
-        cancelAnimationFrame(view.loop); view.loop = 0;
+        // The view's frames stop only once the loop is in hand: a refused bake leaves before the
+        // `finally` below, which is what starts them again.
         const action = await loopAction(builder);
+        cancelAnimationFrame(view.loop); view.loop = 0;
         const duration = action ? action.getClip().duration : 0;
         canvas.style.visibility = 'hidden';
         renderer.toneMappingExposure = saved.exposure * 1.2;

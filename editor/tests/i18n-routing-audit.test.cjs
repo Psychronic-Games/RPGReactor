@@ -65,7 +65,6 @@ test('Resource Manager, map deletion and other rebuilt messages are whole transl
     assert.match(project, /'Battle Rooms using these maps: \{troops\}\. Select replacement maps in Troops after deletion\.'/);
 
     assert.match(read('src/TilesetPaletteViewer.js'), /tt\('Selected: \{width\}x\{height\} tiles \(\{count\} tiles\) on layer \{layer\}'\)/);
-    assert.match(read('src/event/commands/AudioCommandEditor.js'), /tt\('No \{folder\} files found'\)/);
     assert.match(read('src/LegacyImportDialog.js'), /tt\('The import worker stopped \(exit code \{code\}\)\.'\)/);
     assert.match(read('src/LegacyImportDialog.js'), /o\.textContent = tt\(value \? text : 'Automatic'\)/);
     assert.match(read('src/MediaSurfacePreviewManager.js'), /handle\.title = [^;]*tText\(spec\.label\)/);

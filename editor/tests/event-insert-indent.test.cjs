@@ -77,7 +77,7 @@ test('an indent-0 command inside a branch body would defeat the runtime skip', (
 });
 
 test('the audio insert path rebases, like every other insertion', () => {
-    const at = listSource.indexOf('[241, 242, 245, 246, 249, 250, 251].includes(code)');
+    const at = listSource.indexOf('[132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(code)');
     assert.ok(at >= 0, 'the audio insertion branch is locatable');
     const block = listSource.slice(at, at + 900);
     assert.match(block, /_rebaseInsertIndent\(\[editedCommand\], baseIndent\)/);

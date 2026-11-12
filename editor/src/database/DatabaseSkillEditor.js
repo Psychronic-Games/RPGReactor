@@ -371,7 +371,7 @@ class DatabaseSkillEditor {
                 skill.damage = { type: 0, elementId: -1, formula: '', variance: 20, critical: false };
             }
             const shown = ActionSecondaryDamage.write(skill.damage, fieldName.split('.')[2], value);
-            console.log(`Updated skill ${skillId} ${fieldName} to:`, shown);
+            console.debug(`Updated skill${skillId} ${fieldName} to:`, shown);
             this.databaseManager.updateSkill(skillId, skill);
             return shown;
         }
@@ -400,13 +400,13 @@ class DatabaseSkillEditor {
                 // type, variance
                 skill.damage[subField] = parseInt(value) || 0;
             }
-            console.log(`Updated skill ${skillId} damage.${subField} to:`, skill.damage[subField]);
+            console.debug(`Updated skill${skillId} damage.${subField} to:`, skill.damage[subField]);
         }
         // Either end of the hit-count range. A range that stops being one
         // deletes repeatsMax, so the field to show is not skill[fieldName].
         else if (fieldName === 'repeats' || fieldName === 'repeatsMax') {
             const shown = ActionRepeats.write(skill, fieldName, value);
-            console.log(`Updated skill ${skillId} field ${fieldName} to:`, shown);
+            console.debug(`Updated skill${skillId} field ${fieldName} to:`, shown);
             this.databaseManager.updateSkill(skillId, skill);
             return shown;
         }
@@ -415,12 +415,12 @@ class DatabaseSkillEditor {
                    'speed', 'successRate', 'hitType', 'animationId',
                    'requiredWtypeId1', 'requiredWtypeId2'].includes(fieldName)) {
             skill[fieldName] = parseInt(value) || 0;
-            console.log(`Updated skill ${skillId} field ${fieldName} to:`, skill[fieldName]);
+            console.debug(`Updated skill${skillId} field ${fieldName} to:`, skill[fieldName]);
         }
         // Handle string fields (name, description, note, message1-4)
         else {
             skill[fieldName] = value;
-            console.log(`Updated skill ${skillId} field ${fieldName} to:`, value);
+            console.debug(`Updated skill${skillId} field ${fieldName} to:`, value);
         }
 
         this.databaseManager.updateSkill(skillId, skill);

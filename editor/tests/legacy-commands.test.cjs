@@ -236,6 +236,16 @@ test('skills and items get MZ formulas, scopes and effects that reproduce the 20
     assert.deepEqual(out.items[5].effects, [{ code: 43, dataId: 1, value1: 0, value2: 0 }]);
     assert.equal(out.items[6].damage.formula, out.skills[1].damage.formula, 'a special item borrows its skill');
     assert.deepEqual([out.ctx.itemKind(2), out.ctx.itemKind(3), out.ctx.itemKind(1)], ['weapons', 'armors', 'items']);
+    // MZ's Attack and Guard follow the game's skills (its skills 1 and 2 are its own), the Guard state its states.
+    assert.deepEqual([out.skills[4].name, out.skills[4].damage.formula, out.skills[4].damage.variance, out.skills[5].name], ['Attack', 'Math.max(0, Math.floor(a.atk / 2) - Math.floor(b.def / 4))', 20, 'Guard']);
+    assert.deepEqual(out.skills[5].effects, [{ code: 21, dataId: 3, value1: 1, value2: 0 }]);
+    assert.deepEqual([out.states[3].name, out.states[3].traits], ['', [{ code: 62, dataId: 1, value: 0 }]]);
+    assert.equal(D.system({ terms: { basic: [], commands: [], params: [], messages: {} } }, withIds(db), { start: {} }, {}).rrGuardSkillId, 5);
+    // Fixed equipment, cursed and pre-emptive items are equipment locks and attack speed, not party abilities.
+    assert.deepEqual(D.actorsAndClasses(withIds({ actors: [null, { name: 'Ann', lock_equipment: true }] }), false).actors[1].traits, [1, 2, 3, 4, 5].map(e => ({ code: 53, dataId: e, value: 1 })));
+    const gear = D.items(withIds({ items: [null, { name: 'Blade', type: 1, preemptive: true, cursed: true }, { name: 'Mask', type: 4, cursed: true }] }), {}, null, []);
+    assert.deepEqual(gear.weapons[1].traits.filter(t => t.code !== 22), [{ code: 33, dataId: 0, value: 9999 }, { code: 53, dataId: 1, value: 1 }]);
+    assert.deepEqual(gear.armors[2].traits, [{ code: 53, dataId: 3, value: 1 }]);
 });
 
 test('actors own a class each, 2003 classes follow, ranks become rate traits, states and enemies map', () => {
@@ -256,6 +266,7 @@ test('actors own a class each, 2003 classes follow, ranks become rate traits, st
     assert.equal(out.classes[1].expTable[2], 60);
     assert.deepEqual(out.classes[1].learnings, [{ level: 5, skillId: 9, note: '' }]);
     assert.equal(out.classes[2].name, 'Mage'); assert.equal(out.ctx.classOffset, 1);
+    for (const record of [out.classes[1], out.classes[2], out.enemies[1]]) assert.ok(record.traits.some(t => t.code === 35 && t.dataId === 1), 'the Attack command is the appended Attack (this game has no skills: id 1)');
     assert.deepEqual([out.states[2].restriction, out.states[2].removeAtBattleEnd, out.states[2].autoRemovalTiming, out.states[2].minTurns, out.states[2].removeByDamage, out.states[2].message1], [4, true, 2, 3, true, '%1 sleeps']);
     assert.deepEqual(out.enemies[1].params, [30, 0, 8, 4, 2, 2, 5, 50]);
     assert.deepEqual(out.enemies[1].dropItems, [{ kind: 1, dataId: 1, denominator: 4 }]);

@@ -100,7 +100,23 @@ function bootsReactor(projectDir) {
     }
 }
 
-const runtimeFiles = filesUnder(runtimeRoot);
+/** What a patch or an editor leaves beside a file: never part of the runtime. */
+const STRAY = /(?:\.orig|\.rej|\.bak|~)$/i;
+
+const runtimeFiles = filesUnder(runtimeRoot).filter(rel => !STRAY.test(rel));
+const runtimeNames = new Set(runtimeFiles);
+
+/**
+ * The `reactor_*` files in a project's js/ that runtime/ does not have: a file renamed or removed there, or a
+ * stray one copied by an earlier sync. Only that name and only js/ itself: js/libs can hold a project's own files.
+ */
+function leftBehind(target) {
+    return fs.readdirSync(target, { withFileTypes: true })
+        .filter(entry => entry.isFile() && /^reactor_/.test(entry.name)
+            && !runtimeNames.has(entry.name) && !PER_PROJECT.has(entry.name))
+        .map(entry => entry.name);
+}
+
 const projects = fs.readdirSync(templateRoot, { withFileTypes: true })
     .filter(entry => entry.isDirectory())
     .map(entry => entry.name)
@@ -124,11 +140,14 @@ for (const project of projects) {
             fs.copyFileSync(source, destination);
         }
     }
-    if (!stale.length) continue;
-    drifted += stale.length;
-    if (!checkOnly) copied += stale.length;
+    const gone = leftBehind(target);
+    if (!checkOnly) for (const name of gone) fs.rmSync(path.join(target, name), { force: true });
+    if (!stale.length && !gone.length) continue;
+    drifted += stale.length + gone.length;
+    if (!checkOnly) copied += stale.length + gone.length;
     console.log(`${project}:`);
     for (const rel of stale) console.log(`  ${checkOnly ? 'missing/stale' : 'updated'}  ${rel}`);
+    for (const name of gone) console.log(`  ${checkOnly ? 'not in runtime/' : 'removed'}  ${name}`);
 }
 
 if (!drifted && !stamped.length) {

@@ -158,11 +158,6 @@ class FightCommandEditor {
         return FightCommandEditor.isMode(game) ? game : 'classic';
     }
 
-    /** Whether an event has a Start Battle on Map command on any page. */
-    static isStarter(event) {
-        return !!event && (event.pages || []).some(page => ((page && page.list) || []).some(command => FightCommandEditor.isStart(command)));
-    }
-
     static isStart(command) {
         return !!command && command.code === 357 && Array.isArray(command.parameters)
             && command.parameters[0] === 'RPGReactor' && command.parameters[1] === 'StartMapBattle';
@@ -293,14 +288,17 @@ class FightCommandEditor {
     static fighters(context, who, mode) {
         const c = context || {}, map = c.map;
         if (!map) return 0;
-        const start = FightCommandEditor.startOf(map.note);
+        // Counted by the rules the game uses (RRBattleCheck mirrors them: units made by PTBS comments,
+        // a start distance kept in the map's 3D sidecar, a distance past 50 read as none), where loaded.
+        const check = typeof RRBattleCheck !== 'undefined' && RRBattleCheck && RRBattleCheck.unitOf && RRBattleCheck.startOf ? RRBattleCheck : null;
+        const start = check ? check.startOf(map) : FightCommandEditor.startOf(map.note);
         const reach = start && start.kind === 'near' ? start.tiles : FightCommandEditor.REACH;
         const near = (who !== 'map' || mode === 'classic') && c.event && Number.isFinite(Number(c.event.x));
         let count = 0;
         for (const event of map.events || []) {
-            const unit = FightCommandEditor.unitOf(event);
+            const unit = check ? check.unitOf(event) : FightCommandEditor.unitOf(event);
             if (!unit || unit.team !== 'enemy') continue;
-            if (mode === 'classic' && unit.from !== 'row') continue;
+            if (mode === 'classic' && (unit.source || unit.from) !== 'row') continue;
             if (near) {
                 const dx = event.x - c.event.x, dy = event.y - c.event.y;
                 if (dx * dx + dy * dy > reach * reach) continue;

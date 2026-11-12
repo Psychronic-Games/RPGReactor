@@ -419,7 +419,10 @@ class ConditionalBranchEditor {
         const radio = document.createElement('input');
         radio.type = 'radio';
         radio.name = `${this._scope}-choice-${parentType}`;
-        radio.id = `${this._scope}-choice-${parentType}-${labelText.replace(/\W+/g, '')}`;
+        // Numbered, not named: a translated label with no Latin letters left every row of a group the same id,
+        // and a click on any label chose the first.
+        this._choiceSerial = (this._choiceSerial || 0) + 1;
+        radio.id = `${this._scope}-choice-${parentType}-${this._choiceSerial}`;
         radio.checked = checked;
         radio.disabled = !parentActive;
         radio.addEventListener('change', () => {

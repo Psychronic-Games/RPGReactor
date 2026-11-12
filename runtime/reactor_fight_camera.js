@@ -702,7 +702,6 @@
     const pose3Of = a => ({ eye: { x: a[0], y: a[1], z: a[2] }, look: { x: a[3], y: a[4], z: a[5] }, fov: a[6] });
     const flat2 = pose => [pose.x, pose.z, pose.zoom];
     const pose2Of = a => ({ x: a[0], z: a[1], zoom: a[2] });
-    const copy3 = pose => ({ eye: Object.assign({}, pose.eye), look: Object.assign({}, pose.look), fov: pose.fov });
     const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     const messageBusy = () => typeof $gameMessage !== "undefined" && !!$gameMessage && $gameMessage.isBusy();
 
@@ -765,7 +764,6 @@
     D._pres = { hud: 1, bars: 0, raw: 0 };
     D.reset();
     D._last = {};
-    D._lastActionShown = false;
     D._lastMoveShown = false;
 
     D.active = () => D._mode !== "idle";
@@ -1308,7 +1306,7 @@
         mapBattleStart(payload) {
             D.abort();
             D._last = {};
-            D._lastActionShown = D._lastMoveShown = false;
+            D._lastMoveShown = false;
             if (payload.mode !== "tactical" || !D.live()) return;
             D._established = true;
             D.queue(() => {

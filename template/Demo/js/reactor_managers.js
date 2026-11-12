@@ -167,8 +167,9 @@ DataManager.loadDataFile = function(name, src) {
 // self-sufficient (no hooks in loadDataFile — plugins like
 // YEP_X_CoreUpdatesOpt replace that method wholesale): derive what is
 // missing from _databaseFiles/$dataMap, time it, and re-fire whatever
-// loadDataFile implementation is live. 10s of no arrival -> retry
-// (3 attempts) -> surface a real load error.
+// loadDataFile implementation is live. 10s of no arrival -> retry, for
+// as long as it takes (see below: a missing file takes the error path
+// by itself).
 DataManager._checkStalledDataFiles = function() {
     const now = performance.now();
     this._loadWatch = this._loadWatch || {};
@@ -191,8 +192,10 @@ DataManager._checkStalledDataFiles = function() {
             this.loadDataFile(name, src);
         }
     };
+    // The file loadDatabase asked for: a Battle Test's or an Event Test's own copy, not the saved project's.
+    const prefix = this.isBattleTest() || this.isEventTest() ? "Test_" : "";
     for (const databaseFile of this._databaseFiles) {
-        if (!window[databaseFile.name]) track(databaseFile.name, databaseFile.src);
+        if (!window[databaseFile.name]) track(databaseFile.name, prefix + databaseFile.src);
     }
     if (!window.$dataMap && this._lastMapSrc) track("$dataMap", this._lastMapSrc);
     for (const name of Object.keys(this._loadWatch)) {
@@ -546,11 +549,13 @@ DataManager.savePlaytestCheckpoint = function(reason) {
     if (typeof $gameParty === "undefined" || !$gameParty || $gameParty.isAllDead()) return Promise.resolve(false);
     if (typeof $gameMap === "undefined" || !$gameMap || !$gameMap.mapId()) return Promise.resolve(false);
     this._playtestCheckpointBusy = true;
+    // What a save records, short of counting one: a game that shows or tests its save count must read the same in a playtest as when shipped.
+    const count = $gameSystem._saveCount;
     $gameSystem.onBeforeSave();
+    $gameSystem._saveCount = count;
     return this.saveGame(this.PLAYTEST_CHECKPOINT_ID)
         .then(() => {
             this._playtestCheckpointBusy = false;
-            this._playtestCheckpointReason = reason;
             console.info("RPG Reactor playtest checkpoint saved (" + reason + "); F9 on the title screen resumes it.");
             return true;
         })
@@ -1208,16 +1213,27 @@ const _setBitmapNearest = function(bitmap) {
     return bitmap;
 };
 
+// A sheet of cells keeps the marking for good. The bitmap's own flag decides
+// the mode of every texture it makes later (Bitmap._updateScaleMode), and it
+// makes a new one as soon as something reads a pixel of it or draws on it: a
+// sheet marked only on its first texture went back to LINEAR there.
+// img/system is left as it was: the window skin lives there, and its back is
+// stretched to the window's size.
+const _setSheetNearest = function(bitmap) {
+    if (bitmap && bitmap !== ImageManager._emptyBitmap) bitmap.smooth = false;
+    return _setBitmapNearest(bitmap);
+};
+
 ImageManager.loadEnemy = function(filename) {
     return this.loadBitmap("img/enemies/", filename);
 };
 
 ImageManager.loadCharacter = function(filename) {
-    return _setBitmapNearest(this.loadBitmap("img/characters/", filename));
+    return _setSheetNearest(this.loadBitmap("img/characters/", filename));
 };
 
 ImageManager.loadFace = function(filename) {
-    return _setBitmapNearest(this.loadBitmap("img/faces/", filename));
+    return _setSheetNearest(this.loadBitmap("img/faces/", filename));
 };
 
 ImageManager.loadParallax = function(filename) {
@@ -1229,11 +1245,11 @@ ImageManager.loadPicture = function(filename) {
 };
 
 ImageManager.loadSvActor = function(filename) {
-    return _setBitmapNearest(this.loadBitmap("img/sv_actors/", filename));
+    return _setSheetNearest(this.loadBitmap("img/sv_actors/", filename));
 };
 
 ImageManager.loadSvEnemy = function(filename) {
-    return _setBitmapNearest(this.loadBitmap("img/sv_enemies/", filename));
+    return _setSheetNearest(this.loadBitmap("img/sv_enemies/", filename));
 };
 
 ImageManager.loadSystem = function(filename) {
@@ -1241,7 +1257,7 @@ ImageManager.loadSystem = function(filename) {
 };
 
 ImageManager.loadTileset = function(filename) {
-    return _setBitmapNearest(this.loadBitmap("img/tilesets/", filename));
+    return _setSheetNearest(this.loadBitmap("img/tilesets/", filename));
 };
 
 ImageManager.loadTitle1 = function(filename) {
@@ -1305,8 +1321,9 @@ ImageManager.isReady = function() {
 // An image load can silently die without firing onload OR onerror,
 // leaving its bitmap "loading" forever and isReady() false — a hung boot
 // or scene with zero errors. Polled from isReady() by exactly the code
-// that is blocked waiting. Zero progress for 10s -> retry (3 attempts) ->
-// surface a real load error (which offers the standard Retry screen).
+// that is blocked waiting. Zero progress for 10s -> retry, for as long as
+// it takes; a file that is really missing fires onerror by itself and
+// takes the load error path (the standard Retry screen).
 ImageManager._checkStalledBitmap = function(bitmap) {
     if (bitmap._loadingState !== "loading" || !bitmap._loadStartTime) return;
     if (performance.now() - bitmap._loadStartTime < 10000) return;
@@ -1401,6 +1418,9 @@ EffectManager.clear = function() {
         Graphics.effekseer.releaseEffect(effect);
     }
     this._cache = {};
+    // The in-scene layer's effects go once the next map has named its own
+    // (preloadMap): what both maps play stays loaded.
+    this._sceneEffectsStale = true;
 };
 
 EffectManager.onLoad = function(/*url*/) {
@@ -1461,11 +1481,18 @@ EffectManager.preloadWithMap = true;
 EffectManager.PRELOAD_WAIT_MS = 8000;
 EffectManager.PRELOAD_SKILLS = 12;
 EffectManager.preloadMap = function(mapData) {
-    if (!this.preloadWithMap || !mapData || !Graphics.effekseer) return 0;
     const names = new Set();
-    for (const id of this.mapAnimationIds(mapData)) {
-        const animation = typeof $dataAnimations !== "undefined" && $dataAnimations ? $dataAnimations[id] : null;
-        if (animation && animation.effectName) names.add(animation.effectName);
+    if (this.preloadWithMap && mapData && Graphics.effekseer) {
+        for (const id of this.mapAnimationIds(mapData)) {
+            const animation = typeof $dataAnimations !== "undefined" && $dataAnimations ? $dataAnimations[id] : null;
+            if (animation && animation.effectName) names.add(animation.effectName);
+        }
+    }
+    // After a transfer (`clear`), the in-scene layer lets go of the effects this map does not name:
+    // it kept every effect the session had played, textures and models, until the game closed.
+    if (this._sceneEffectsStale) {
+        this._sceneEffectsStale = false;
+        (typeof Sprite_Animation !== "undefined" ? Sprite_Animation.SceneLayer : null)?.clear?.(names);
     }
     let started = 0;
     for (const name of names) if (this.preload(name)) started++;
@@ -1964,7 +1991,9 @@ AudioManager.stopAll = function() {
 };
 
 AudioManager.saveBgm = function() {
-    const sequence = this._bgmSequence || this._pendingBgmSequence;
+    // A sequence that is fading out is music that was stopped, as a fading track is (fadeOutBgm clears _currentBgm at once).
+    const live = this._bgmSequence && !this._bgmSequence.stopping ? this._bgmSequence : null;
+    const sequence = live || this._pendingBgmSequence;
     if (sequence) {
         const fallback = sequence.fallback || {};
         const saved = {
@@ -2097,7 +2126,8 @@ AudioManager.throwLoadError = function(webAudio) {
 // Replay BGM and save files all restart it (with a fresh random draw)
 // through playBgm. Restarting needs the map's data: when the map is not
 // the current one yet (a save being loaded), the request waits as
-// _pendingBgmSequence until the map's autoplay repeats it.
+// _pendingBgmSequence until the map's autoplay repeats it, or until the map
+// scene starts on that map (resumePendingBgmSequence).
 //
 // A sequence can also live in the project's library,
 // $dataSystem.reactorMusicSequences = [null, { id, name, sequence }], and
@@ -2127,7 +2157,8 @@ AudioManager.mapBgmObject = function(map, mapId) {
         bgm.sequence = key;
         // Carry whether this sequence has already come round, so boarding
         // a vehicle does not hand back an object that replays a heard intro.
-        const running = this._bgmSequence || this._pendingBgmSequence;
+        const live = this._bgmSequence && !this._bgmSequence.stopping ? this._bgmSequence : null;
+        const running = live || this._pendingBgmSequence;
         if (running && running.key === key && running.looped) bgm.looped = true;
     }
     return bgm;
@@ -2201,7 +2232,29 @@ AudioManager._bgmSequenceDataFor = function(key) {
     if (libraryId > 0) return this.librarySequenceData(libraryId);
     if (typeof $gameMap === "undefined" || !$gameMap || $gameMap.mapId() !== key) return null;
     if (typeof $dataMap === "undefined" || !this.mapHasBgmSequence($dataMap)) return null;
+    // A save being loaded: $gameMap is already the saved game's while $dataMap is still the map played before it.
+    if (typeof DataManager !== "undefined" && DataManager._lastMapSrc) {
+        if (DataManager._lastMapSrc !== "Map%1.json".format(Number(key).padZero(3))) return null;
+    }
     return $dataMap.bgmSequence;
+};
+
+/**
+ * Plays the sequence that was waiting for its map, once that map is the one
+ * loaded. A save being loaded asks for its music before the map is read and
+ * makes no transfer, so the map's autoplay never repeats the request.
+ */
+AudioManager.resumePendingBgmSequence = function() {
+    const pending = this._pendingBgmSequence;
+    if (!pending || typeof $gameMap === "undefined" || !$gameMap || pending.mapId !== $gameMap.mapId()) return;
+    const fallback = pending.fallback || {};
+    const bgm = { name: fallback.name, volume: fallback.volume, pitch: fallback.pitch, pan: fallback.pan };
+    if (this._bgmSequenceDataFor(pending.key)) {
+        bgm.sequence = pending.key;
+        if (pending.looped) bgm.looped = true;
+    }
+    // The map no longer has a sequence: play the track it stood in for.
+    if (bgm.sequence || bgm.name) this.playBgm(bgm);
 };
 
 AudioManager.playBgmSequence = function(bgm) {
@@ -2239,7 +2292,6 @@ AudioManager.playBgmSequence = function(bgm) {
     this.stopBgm();
     this._bgmSequence = {
         key: key,
-        mapId: mapId,
         fallback: fallback,
         entries: entries,
         index: -1,
@@ -2713,16 +2765,9 @@ SoundManager.playSystemSound = function(n) {
     }
 };
 
-// Kept because a plugin may alias either, and both keep their old shape and
-// meaning -- they simply no longer sit in the play path.
+// Kept in its old shape and meaning; it no longer sits in the play path.
 SoundManager.systemSoundVariants = function(n) {
     return AudioManager.seVariantPool(this.systemSoundSlot(n));
-};
-
-SoundManager.applySystemSoundPitch = function(se, slot) {
-    const pitch = AudioManager.rollSePitch(slot && slot.pitchRandom);
-    if (pitch === null) return se;
-    return { name: se.name, volume: se.volume, pitch, pan: se.pan };
 };
 
 SoundManager.playCursor = function() {
@@ -4244,7 +4289,7 @@ BattleManager.invokeMagicReflection = function(subject, target) {
 
 BattleManager.applySubstitute = function(target) {
     if (this.checkSubstitute(target)) {
-        const substitute = target.friendsUnit().substituteBattler();
+        const substitute = target.friendsUnit().substituteBattler(target);
         if (substitute && target !== substitute) {
             this._logWindow.displaySubstitute(substitute, target);
             return substitute;

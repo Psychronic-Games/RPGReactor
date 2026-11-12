@@ -144,6 +144,16 @@ test('the panel actually renders a row for each sound on the frame', () => {
     const text = rows.map(row => row.innerHTML).join('\n');
     assert.ok(text.includes('Blow1'), 'the first sound on the frame is on screen');
     assert.ok(text.includes('Fire1'), 'and so is the second, which used to be invisible');
+    assert.ok(text.includes('Frame 0') && text.includes('Frame 2'), 'an Effekseer timing shows its game frame as stored');
+
+    // A sprite animation's timing stores the frame's index from 0; the row
+    // shows the number the frame list beside it gives that frame.
+    // (The stub list keeps its earlier rows, so the new row is the last one.)
+    panel.populateTimingsList({ id: 2, frames: [[], [], []], timings: [{ frame: 2, se: { name: 'Blow1', volume: 90, pitch: 100, pan: 0 }, flashScope: 0 }] });
+    const spriteRows = timingsList.children.filter(child => child.className === 'anim-timing-entry');
+    assert.ok(spriteRows.at(-1).innerHTML.includes('Frame 3'), 'stored frame 2 is the list\'s Frame 3');
+    assert.equal(Panel.timingFrameBase({ frames: [[]] }), 1);
+    assert.equal(Panel.timingFrameBase({ effectName: 'Hit' }), 0);
 });
 
 test('a previewed timing rolls its pool and pitch the way the game does', () => {

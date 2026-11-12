@@ -96,10 +96,21 @@ test('no critical project file is written with a plain truncate-in-place write',
 test('the tileset database is written atomically', () => {
     // Tilesets.json is the largest database file — an 8192-entry flags array per
     // tileset — so it has the widest window for a partial write.
+    // The tileset page no longer writes the file itself: the Database writes it with every other
+    // data file, through saveJSON.
     const source = fs.readFileSync(path.join(srcRoot, 'database', 'DatabaseTilesetEditor.js'), 'utf8');
-    assert.match(source, /this\._writeFileAtomic\(this\.fs, tilesetsPath, compactJson\)/);
-    assert.doesNotMatch(source, /this\.fs\.writeFileSync\(tilesetsPath/);
-    assert.match(source, /_writeFileAtomic\(fs, filePath, data, options\)/, 'via the shared wrapper');
+    assert.doesNotMatch(source, /tilesetsPath|'Tilesets\.json'/, 'the page has no write of its own');
+    const writes = source.match(/\bwriteFileSync\(/g) || [];
+    assert.equal(writes.length, 1, 'its one plain write is the fallback inside the wrapper');
+    assert.match(source, /_writeFileAtomic\(fs, filePath, data, options\) \{[\s\S]{0,300}?fs\.writeFileSync\(filePath, data, options\);/);
+    const manager = fs.readFileSync(path.join(srcRoot, 'DatabaseManager.js'), 'utf8');
+    assert.match(manager, /\['tilesets', 'Tilesets\.json'\]/, 'Tilesets.json is one of the Database files');
+    const saveJSON = manager.slice(manager.indexOf('async saveJSON(projectPath, filename, data'));
+    const body = saveJSON.slice(0, saveJSON.indexOf('captureSavedState'));
+    assert.match(body, /const filePath = this\.path\.join\(dataPath, filename\);/);
+    assert.match(body, /this\._writeFileAtomic\(this\.fs, filePath, /, 'and each of them is written atomically');
+    assert.doesNotMatch(body, /\bwriteFileSync\(/);
+    assert.match(manager, /_writeFileAtomic\(fs, filePath, data, options\)/, 'via the shared wrapper');
 });
 
 test('battle test setup does not risk System.json', () => {

@@ -57,9 +57,9 @@ function textFold(string $text): string {
     return function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
 }
 
-/** A JSON body. Passwords and sessions travel here, never in a URL, which servers write to their logs. */
-function jsonBody(): array {
-    $body = json_decode((string)file_get_contents('php://input', false, null, 0, 65536), true);
+/** A JSON body, read up to `$most` bytes. Passwords and sessions travel here, never in a URL, which servers write to their logs. */
+function jsonBody(int $most = 65536): array {
+    $body = json_decode((string)file_get_contents('php://input', false, null, 0, $most), true);
     return is_array($body) ? $body : [];
 }
 

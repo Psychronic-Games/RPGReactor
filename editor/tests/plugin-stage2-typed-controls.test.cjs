@@ -515,6 +515,11 @@ test('Plugin Command booleans honor authored on/off labels but retain true/false
  */`);
     assert.equal(parsed.args[0].on, 'Enabled Label');
     assert.equal(parsed.args[0].off, 'Disabled Label');
+    // Help in two languages repeats the commands: one language is read, each command once.
+    const twice = parser.parsePluginCommands('/*:\n * @command set\n * @text Set Text\n * @arg text\n * @text Text\n */\n/*:ja\n * @command set\n * @text 設定\n * @arg text\n * @text テキスト\n */');
+    assert.deepEqual(Array.from(twice, command => [command.name, command.text, command.args.length]), [['set', 'Set Text', 1]]);
+    const only = parser.parsePluginCommands('/*:ja\n * @command set\n * @text 設定\n */');
+    assert.equal(only.length, 1, 'a plugin with one language, whichever, is still read');
     const command = Object.assign(Object.create(context.PluginCommandEditor.prototype), {
         args: { Enabled: 'false' }
     });

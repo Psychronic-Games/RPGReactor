@@ -16,16 +16,6 @@
 
     const ReactorControls = root.ReactorControls = {};
 
-    /** Actions a control can do, as Input knows them, and the jump. */
-    ReactorControls.ACTIONS = ["ok", "cancel", "menu", "shift", "pageup", "pagedown", "up", "down", "left", "right", "jump"];
-
-    /** The stock keyboard mapping, what a project gets until it sets its own. */
-    ReactorControls.DEFAULT_KEYS = {
-        9: "tab", 13: "ok", 16: "shift", 17: "control", 18: "control", 27: "escape", 32: "ok", 33: "pageup", 34: "pagedown",
-        37: "left", 38: "up", 39: "right", 40: "down", 45: "escape", 81: "pageup", 87: "pagedown", 88: "escape", 90: "ok",
-        96: "escape", 98: "down", 100: "left", 102: "right", 104: "up", 120: "debug"
-    };
-    ReactorControls.DEFAULT_GAMEPAD = { 0: "ok", 1: "cancel", 2: "shift", 3: "menu", 4: "pageup", 5: "pagedown", 12: "up", 13: "down", 14: "left", 15: "right" };
     /** Jump on a 3D map: Space, and the gamepad's X (dash stays on Shift and Always Dash). */
     ReactorControls.DEFAULT_JUMP_KEYS = [32];
     ReactorControls.DEFAULT_JUMP_BUTTONS = [2];
@@ -212,7 +202,8 @@
      */
     ReactorControls.setTactical = function(on) {
         if (typeof Input === "undefined" || !!on === !!this._savedTactical) return;
-        const letGo = name => { if (name && Input._currentState) Input._currentState[name] = false; };
+        // The same let-go as the other layers: the keyboard's and the pad's own records too, or a pad would press the name again.
+        const letGo = name => this.letGo(name);
         if (on) {
             const own = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.reactorControls && typeof $dataSystem.reactorControls === "object"
                 ? $dataSystem.reactorControls : {};

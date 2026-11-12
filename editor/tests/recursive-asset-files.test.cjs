@@ -119,8 +119,8 @@ test('audio commands discover and preserve nested RPG Maker names', () => {
         fs.writeFileSync(path.join(bgmRoot, 'Boss', 'Windows Only.OGG'), 'audio');
 
         const editor = new AudioCommandEditor({}, { currentProject: { path: root } });
-        editor.commandType = { folder: 'bgm' };
-        assert.deepEqual(editor.getProjectAudioFiles(),
+        // The list the command's picker is handed (showPlayCommandPicker).
+        assert.deepEqual(AssetFiles.listUnique(bgmRoot, AssetFiles.AUDIO_EXTENSIONS).map(record => record.name),
             ['Boss/Field Recording', 'Boss/Phase 2', 'Boss/Phase 3', 'Theme']);
         assert.equal(editor.stripAudioExtension('Boss\\Phase 2.ogg'), 'Boss/Phase 2');
         assert.equal(editor.stripAudioExtension('Boss/Phase 3.mp3'), 'Boss/Phase 3');

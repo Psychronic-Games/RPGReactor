@@ -357,7 +357,8 @@
             const { q } = prepareQuery(query);
             const last = this._last;
             // A longer query only narrows: search what the shorter one matched.
-            const pool = last && last.generation === this.generation && last.q && q.startsWith(last.q)
+            // Not after a lone "#": it matches no ID yet, and "#12" does.
+            const pool = last && last.generation === this.generation && last.q && last.q !== '#' && q.startsWith(last.q)
                 ? last.hits.map(hit => hit.entry) : this.entries();
             const hits = search(pool, query, { limit: 0 });
             this._last = { q, generation: this.generation, hits };
@@ -531,6 +532,13 @@
             const project = this.project();
             const infos = this.db() && this.db().getMapInfos && this.db().getMapInfos();
             if (!project || !Array.isArray(infos)) return;
+            // A deleted map leaves the list: its events leave the index with it.
+            const listed = new Set(infos.filter(info => info && info.id).map(info => info.id));
+            for (const key of [...this.index.groups.keys()]) {
+                if (!key.startsWith('map:') || listed.has(Number(key.slice(4)))) continue;
+                this.index.remove(key);
+                this._mapCache.delete(Number(key.slice(4)));
+            }
             const current = this.eventManager() && this.eventManager().currentMap;
             if (current && current.id) {
                 const info = infos[current.id];
@@ -628,6 +636,13 @@
             if (!this.overlay.isConnected) document.body.appendChild(this.overlay);
             this._openedAt = now();
             this._define();
+            // Delete, Paste, Change Maximum and list Undo in the Database fire no input event,
+            // but each counts as a change of the database: its groups are read again.
+            const changes = this.db() ? this.db().mutationGeneration : undefined;
+            if (changes !== this._dbChanges) {
+                this._dbChanges = changes;
+                this.index.invalidate(key => key.startsWith('db:') || key === 'system' || key === 'maps');
+            }
             if (this.project()) this._queueMaps();
             this.index.invalidate(key => key.startsWith('files:'));
             this.index.refresh();

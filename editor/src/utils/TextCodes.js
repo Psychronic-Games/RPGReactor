@@ -721,9 +721,15 @@
                 } else if ((matched = rest.match(/^P\[(\d+)\]/i))) {
                     advance = measure(typeof subs.partyMember === 'function' ? subs.partyMember(Number(matched[1])) : 'Name');
                     i += 1 + matched[0].length;
-                } else if (rest[0] === 'G') {
+                } else if (rest[0] === 'G' || rest[0] === 'g') {
+                    // Either case: the game replaces \G and \g alike.
                     advance = measure(typeof subs.currency === 'string' ? subs.currency : 'G');
                     i += 2;
+                } else if ((matched = rest.match(/^FS\[(\d+)\]/i))) {
+                    // The game sets the size as given, to the end of the box.
+                    if (Number(matched[1]) > 0) size = Number(matched[1]);
+                    setFont();
+                    i += 1 + matched[0].length;
                 } else if (rest[0] === '{') {
                     size = Math.min(96, size + 12);
                     setFont();
@@ -886,9 +892,7 @@
         messageTextWidth,
         customFonts,
         scanMessageLine,
-        hasWordWrap,
-        DEFAULT_MESSAGE_WIDTH,
-        FACE_WIDTH
+        hasWordWrap
     };
 
     root.RRTextCodes = api;

@@ -573,6 +573,13 @@ test('muted surfaces playing one file the same way share one video and one 3D te
     const entry = manager.shareVideo(a, video);
     assert.ok(entry && entry.video === video && entry.owner === a);
     assert.equal(manager.shareVideo(owner(descriptor(9)), {}), null, 'one entry per key');
+    // Until its opener has placed it, a new video reads 0: what counts is where the opener is taking it (after the
+    // menu every screen comes back asking for the same saved time).
+    a.descriptor.currentTime = 37.2; video.currentTime = 0;
+    assert.equal(manager.joinVideo(owner(descriptor(13, { currentTime: 37.2 }))), entry, 'rejoins a video still on its way to that time');
+    assert.equal(manager.joinVideo(owner(descriptor(14, { currentTime: 12 }))), null, 'but not one going elsewhere');
+    for (const user of [...entry.users]) if (user !== a) entry.users.delete(user);
+    a.descriptor.currentTime = 0; video.currentTime = 3; entry.placed = true;
     assert.equal(manager.joinVideo(b), entry);
     assert.equal(manager.joinVideo(c), entry);
     assert.equal(manager.joinVideo(owner(descriptor(4, { muted: false }))), null, 'a surface with sound keeps its own (volumes differ)');

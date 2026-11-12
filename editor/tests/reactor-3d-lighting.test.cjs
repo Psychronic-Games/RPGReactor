@@ -882,7 +882,8 @@ test('native lights resolve per frame: state, attachment, yaw flip', () => {
         $dataMap: map,
         $gameMap: Object.assign({
             event: () => null,
-            _reactorLightStates: { dead: true, lamp: false }
+            mapId: () => 4,
+            _reactorLightStates: { 4: { dead: true, lamp: false } }
         }, gameMap),
         Graphics: { frameCount: 0 }
     }, () => Reactor3D.nativeLights());

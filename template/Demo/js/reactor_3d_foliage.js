@@ -435,6 +435,14 @@
     /** The map's daylight brightens what it lights by about this much: authored colours are taken back by it, so a colour reads as itself in the sun. */
     R.FOLIAGE_LIGHT = 0.4;
     R.FOLIAGE_PUSHERS = 4;
+    /**
+     * Tiles past the distance plants are drawn to (`FOLIAGE_LOD`'s far, less what the quality level takes) within
+     * which a world past the map's border lays its queued chunks; the rest wait until the eye nears (-1: all of them
+     * are laid, as before). Each world beside the map laid every chunk it had in the seconds after it was built,
+     * most of them further off than plants are drawn at all: about 0.7 s of the main thread after a door to Open
+     * Road: Forest on the Iris Xe laptop, 2 ms a chunk (2026-11-11).
+     */
+    R.FOLIAGE_BACKGROUND_LEAD = 24;
 
     let uniforms = null;
     R.foliageUniforms = function() {
@@ -449,6 +457,20 @@
         };
         for (let i = 0; i < R.FOLIAGE_PUSHERS; i++) uniforms.rrFolPush.value.push(V4 ? new V4(0, 0, 1, 0) : null);
         return uniforms;
+    };
+
+    /**
+     * A scene's own wind and pressed grass. A neighboring map's world stands beside the played one with its own
+     * wind, and its blades read walkers in its own tiles: shared, the last map laid set the wind for all of them
+     * and the neighbor's grass was pressed a whole map away from anyone. The clock, the eye and the thinning stay
+     * shared (`beforeChunk` sets them per group).
+     */
+    R.MapScene.prototype.foliageOwn = function() {
+        if (this._foliageOwn) return this._foliageOwn;
+        const V4 = typeof THREE !== "undefined" ? THREE.Vector4 : null;
+        const own = this._foliageOwn = { rrFolWind: { value: V4 ? new V4(0.87, 0.5, 0.6, 1) : null }, rrFolPush: { value: [] } };
+        for (let i = 0; i < R.FOLIAGE_PUSHERS; i++) own.rrFolPush.value.push(V4 ? new V4(0, 0, 1, 0) : null);
+        return own;
     };
 
     /** A kind's clump, built in the shader from these: (side or u, height share t or v, which blade) and the part (0 blade, 1 flower head, 2 cattail, 3 bulb). */
@@ -637,9 +659,9 @@
         return c.map(v => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
     };
 
-    R.foliageMaterial = function(layer) {
+    /** `place` is the scene's own wind and pushers (`foliageOwn`); without one the shared ones are read. */
+    R.foliageMaterial = function(layer, place) {
         const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-        material.__reactorFoliage = layer.kind;
         const own = {
             rrFolRoot: { value: new THREE.Color().setRGB(...linear(layer.colour)) },
             rrFolTip: { value: new THREE.Color().setRGB(...linear(layer.tip)) },
@@ -653,6 +675,7 @@
         material.onBeforeCompile = function(shader) {
             const shared = R.foliageUniforms();
             for (const key of Object.keys(shared)) shader.uniforms[key] = shared[key];
+            if (place) { shader.uniforms.rrFolWind = place.rrFolWind; shader.uniforms.rrFolPush = place.rrFolPush; }
             shader.uniforms.rrFolRoot = own.rrFolRoot;
             shader.uniforms.rrFolTip = own.rrFolTip;
             shader.uniforms.rrFolGlow = own.rrFolGlow;
@@ -724,14 +747,13 @@
         "transformed.xz += vec2(sin(rrFolTime * 2.7 + position.y * 3.0 + rrPhase), cos(rrFolTime * 2.3 + position.x * 3.0)) * 0.012 * aBushFoot.w * rrFolWind.z;"
     ].join("\n\t");
 
-    R.bushMaterial = function() {
+    R.bushMaterial = function(place) {
         const atlas = R.leafAtlas();
         const material = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, map: atlas || null, alphaTest: atlas ? 0.5 : 0 });
-        material.__reactorFoliage = "bush";
         material.onBeforeCompile = function(shader) {
             const shared = R.foliageUniforms();
             shader.uniforms.rrFolTime = shared.rrFolTime;
-            shader.uniforms.rrFolWind = shared.rrFolWind;
+            shader.uniforms.rrFolWind = (place || shared).rrFolWind;
             shader.vertexShader = BUSH_VERTEX + "\n" + shader.vertexShader.replace("#include <begin_vertex>", BUSH_BODY);
         };
         material.customProgramCacheKey = function() { return "reactor3d-bush"; };
@@ -776,6 +798,14 @@
         const t = Math.max(0, Math.min(1, (d - lod.x) / Math.max(0.001, lod.y - lod.x)));
         const keep = lod.z * (1 - t * t * (3 - 2 * t));
         this.geometry.instanceCount = Math.min(info.count, Math.ceil(info.count * Math.min(1, keep + lod.w)));
+    }
+
+    /**
+     * Before a bush chunk draws: the clock. Blades set it too, but a map may have bushes and no blades, and the
+     * blades' chunks are hidden past the fade: the bushes stood still then, and jumped when grass came back.
+     */
+    function beforeBush() {
+        R.foliageUniforms().rrFolTime.value = (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000;
     }
 
     const templates = {};
@@ -845,7 +875,7 @@
         const materials = this._foliageMaterials || (this._foliageMaterials = []);
         let material = layer.__material;
         if (!material) {
-            material = layer.__material = R.foliageMaterial(layer);
+            material = layer.__material = R.foliageMaterial(layer, this.foliageOwn());
             materials.push(material);
             this._materials.push(material);
         }
@@ -877,10 +907,11 @@
         geometry.setIndex(out.index.length > 65535 ? new THREE.Uint32BufferAttribute(out.index, 1) : new THREE.Uint16BufferAttribute(out.index, 1));
         geometry.computeBoundingSphere();
         if (geometry.boundingSphere) geometry.boundingSphere.radius += 0.3;
-        if (!this._bushMaterial) { this._bushMaterial = R.bushMaterial(); this._materials.push(this._bushMaterial); }
+        if (!this._bushMaterial) { this._bushMaterial = R.bushMaterial(this.foliageOwn()); this._materials.push(this._bushMaterial); }
         const mesh = new THREE.Mesh(geometry, this._bushMaterial);
         mesh.name = "foliage:bushes";
         mesh.userData.rrBushChunk = cx * 65536 + cy;
+        mesh.onBeforeRender = beforeBush;
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
         return mesh;
@@ -906,7 +937,7 @@
         const foliage = R.foliageOf(mapData);
         this._foliageMap = mapData;
         if (!foliage) { this.removeFoliage(keys); return; }
-        const u = R.foliageUniforms();
+        const u = this.foliageOwn();
         const wind = foliage.wind, a = wind.dir * Math.PI / 180;
         if (u.rrFolWind.value) u.rrFolWind.value.set(Math.cos(a), Math.sin(a), wind.strength, wind.gust);
         this.removeFoliage(keys);
@@ -940,6 +971,38 @@
             else queue.push(job);
         }
         this._foliageQueue = queue;
+        this._foliageFar = null;
+        this._foliageSift = 0;
+    };
+
+    /**
+     * A world past the border: its queued chunks parted into those within reach of the eye (`_foliageQueue`, laid
+     * a few a frame) and those beyond it (`_foliageFar`, kept for when the eye nears). The batches wait only for
+     * the first (Reactor3D.DrawBatches reads `_foliageQueue`).
+     */
+    R.MapScene.prototype.siftFoliage = function() {
+        const viewport = R._viewport, camera = viewport && viewport.camera ? viewport.camera() : null;
+        if (typeof THREE === "undefined" || !this._scene || !camera || !camera.matrixWorld) return;
+        const group = this.foliageGroup();
+        group.updateWorldMatrix(true, false);
+        if (!eye.world) { eye.world = new THREE.Vector3(); eye.inverse = new THREE.Matrix4(); }
+        const at = eye.sift || (eye.sift = new THREE.Vector3());
+        at.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(eye.inverse.copy(group.matrixWorld).invert());
+        const size = R.FOLIAGE_CHUNK, reach = lodOf().far + R.FOLIAGE_BACKGROUND_LEAD;
+        const near = [], far = [];
+        const part = jobs => {
+            if (!jobs) return;
+            for (const job of jobs) {
+                const dx = Math.max(job[0] * size - at.x, 0, at.x - (job[0] + 1) * size), dz = Math.max(job[1] * size - at.z, 0, at.z - (job[1] + 1) * size);
+                (dx * dx + dz * dz < reach * reach ? near : far).push(job);
+            }
+        };
+        part(this._foliageQueue);
+        part(this._foliageFar);
+        // (The same list while nothing changed: the batches look again when it is another.)
+        const queue = this._foliageQueue;
+        if (!queue || near.length !== queue.length || near.some((job, i) => job !== queue[i])) this._foliageQueue = near;
+        this._foliageFar = far;
     };
 
     /** The instanced component a chunk's clumps are sorted by (foliageClumps): the share of them drawn is a prefix. */
@@ -965,8 +1028,11 @@
     R.MapScene.prototype.removeFoliage = function(keys) {
         const group = this._foliageGroup;
         if (!group) return;
-        if (!keys) this._foliageQueue = [];
-        else if (this._foliageQueue) this._foliageQueue = this._foliageQueue.filter(job => !keys.has(job[0] * 65536 + job[1]));
+        if (!keys) { this._foliageQueue = []; this._foliageFar = null; }
+        else {
+            if (this._foliageQueue) this._foliageQueue = this._foliageQueue.filter(job => !keys.has(job[0] * 65536 + job[1]));
+            if (this._foliageFar) this._foliageFar = this._foliageFar.filter(job => !keys.has(job[0] * 65536 + job[1]));
+        }
         for (let i = group.children.length - 1; i >= 0; i--) {
             const mesh = group.children[i];
             const key = mesh.userData.rrFoliageChunk ? mesh.userData.rrFoliageChunk.key : mesh.userData.rrBushChunk;
@@ -995,8 +1061,20 @@
         this.addFoliage(mapData, keys);
     };
 
-    /** A few queued chunks a frame (game), within a small time budget; whoever walks through bends the grass. */
-    R.MapScene.prototype.updateFoliageFrame = function(characters) {
+    /**
+     * A few queued chunks a frame (game), within a small time budget; whoever walks through bends the grass.
+     * `background`: a world past the map's border, which lays only the chunks within reach of the eye (siftFoliage).
+     */
+    R.MapScene.prototype.updateFoliageFrame = function(characters, background) {
+        if (background && R.FOLIAGE_BACKGROUND_LEAD >= 0) {
+            // Parted again every few frames, as the eye moves.
+            const waiting = (this._foliageQueue ? this._foliageQueue.length : 0) + (this._foliageFar ? this._foliageFar.length : 0);
+            if (waiting && (this._foliageSift = (this._foliageSift || 0) + 1) % 15 === 1) this.siftFoliage();
+        } else if (this._foliageFar) {
+            // The map played now (a border crossed): all of it is laid, as its own would be.
+            if (this._foliageFar.length) this._foliageQueue = (this._foliageQueue || []).concat(this._foliageFar);
+            this._foliageFar = null;
+        }
         const queue = this._foliageQueue;
         if (queue && queue.length && this._foliageMap) {
             const foliage = R.foliageOf(this._foliageMap);
@@ -1025,7 +1103,7 @@
                 mesh.visible = dx * dx + dy * dy + dz * dz < far * far;
             }
         }
-        const pushers = R.foliageUniforms().rrFolPush.value;
+        const pushers = this.foliageOwn().rrFolPush.value;
         let n = 0;
         if (characters) {
             for (let i = 0; i < characters.length && n < pushers.length; i++) {

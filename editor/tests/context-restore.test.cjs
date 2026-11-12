@@ -121,7 +121,7 @@ test('a battle room is built again on a restored context', () => {
     const rebuild = presentation.slice(presentation.indexOf('P.rebuildRoom=function(scene){'), presentation.indexOf('P.updateRoom=function'));
     // A fresh token cancels a build still in flight; the old room and its sprite go before the new one starts.
     assert.match(rebuild, /scene\._reactorRoomToken=\{\};const token=scene\._reactorRoomToken;\n\s+old\.dispose\(\);ss\._reactorRoom=null;/);
-    assert.match(rebuild, /sprite\?\.removeFromParent\(\);sprite\?\.destroy\(\);ss\._reactorRoomSprite=null;\n\s+P\.createRoom\(scene,config,token\)\.catch\(P\.warn\);/);
+    assert.match(rebuild, /sprite\?\.removeFromParent\(\);sprite\?\._rrPass\?\.destroy\(\);sprite\?\.destroy\(\);ss\._reactorRoomSprite=null;\n\s+P\.createRoom\(scene,config,token\)\.catch\(P\.warn\);/);
     assert.match(rebuild, /root\.Reactor3D\?\.contextRestoredHandlers\)root\.Reactor3D\.contextRestoredHandlers\.push\(/);
 });
 

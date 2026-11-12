@@ -235,6 +235,9 @@ async function serve() {
                 const start = performance.now(), built = Model.build(pack, message.recipe, liveCache, { ...message.options, eyeSource: context.eyeSource });
                 built.skinKey = liveCache.skinKey;
                 const { result, fresh, transfers } = packLive(built);
+                // A colour being dragged makes a belt, helmet or plate picture per build: keep a working set, as below.
+                const worn = liveCache.wardrobe?.shoes;
+                if (worn instanceof Map) while (worn.size > 12) worn.delete(worn.keys().next().value);
                 parentPort.postMessage({ id: message.id, live: true, result, fresh, ms: performance.now() - start }, transfers);
                 return;
             }

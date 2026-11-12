@@ -245,17 +245,6 @@ Reactor3D.modelEffectByName = function(effects, name) {
 };
 
 /**
- * Where an effect plays, in world space: the anchor part's (or bone's)
- * frame plus the offset, or the model's frame when no part is named. The
- * offset is in model units, so it scales and turns with the model.
- */
-/**
- * How far an effect's anchor part is currently turned from its rest:
- * identity for an unanchored effect or a still part, the pose's own turn
- * while an animation holds it — so a screen's video turns WITH the screen
- * as the arm carrying it swings, instead of only sliding after its point.
- */
-/**
  * The node a part name means on a carved model. A piece cut where several
  * authored parts overlap is NAMED after only one of them (the most specific),
  * but it carries every owner in `userData.parts` — so a lookup by node name
@@ -276,6 +265,12 @@ Reactor3D.effectAnchorNode = function(object, name) {
     return found;
 };
 
+/**
+ * How far an effect's anchor part is currently turned from its rest:
+ * identity for an unanchored effect or a still part, the pose's own turn
+ * while an animation holds it — so a screen's video turns WITH the screen
+ * as the arm carrying it swings, instead of only sliding after its point.
+ */
 Reactor3D.effectAnchorQuaternion = function(object, effect, out) {
     const target = out || new THREE.Quaternion();
     target.identity();
@@ -317,6 +312,11 @@ Reactor3D.effectAnchorTransform = function(object, effect, out, wantPose = true)
     return result;
 };
 
+/**
+ * Where an effect plays, in world space: the anchor part's (or bone's)
+ * frame plus the offset, or the model's frame when no part is named. The
+ * offset is in model units, so it scales and turns with the model.
+ */
 Reactor3D.effectAnchorWorld = function(object, effect, out) {
     if (!object || typeof THREE === "undefined") return null;
     const target = out || new THREE.Vector3();
@@ -675,7 +675,9 @@ Reactor3D.modelEffectLights = function() {
             seed++;
             if (!entry || !entry.effect || !entry.effect.light) continue;
             if (entry.until > 0 && frame >= entry.until) continue;
-            const light = this.effectLight(holder.object, entry.effect, key + ":" + name);
+            // Its id, kept on the entry while it is this instance's (made once, not for every light every frame).
+            if (entry.idOf !== key) { entry.idOf = key; entry.id = key + ":" + name; }
+            const light = this.effectLight(holder.object, entry.effect, entry.id);
             if (!light) continue;
             if (holder.flat) {
                 const point = this.flatModelAnchor(holder, entry.effect, this._flatLightPoint || (this._flatLightPoint = {}));
@@ -746,6 +748,23 @@ Reactor3D.spawnVideoEffect = function(effect, character, holder) {
         if (!holder.videos) holder.videos = {};
         holder.videos[effect.name] = id;
     }
+};
+
+/**
+ * A model made again with its scene (after the menu or a battle) has a new holder, which knows of no video, while
+ * the surface itself came back with the map's store: asked once for each effect, it is this holder's again. Not
+ * found so, one whose character had stopped moving by then was never stopped, and played until the character
+ * moved and stopped again.
+ */
+Reactor3D.adoptVideoEffect = function(effect, character, holder) {
+    (holder.videosAsked || (holder.videosAsked = {}))[effect.name] = true;
+    const surfaces = typeof RPGReactorMediaSurfaces !== "undefined" ? RPGReactorMediaSurfaces : null;
+    if (!surfaces || !surfaces.manager || !surfaces.manager.descriptor) return false;
+    if (!character || !character.eventId && !(typeof Game_Player !== "undefined" && character instanceof Game_Player)) return false;
+    const id = this.videoEffectId(character, effect);
+    if (!surfaces.manager.descriptor(id)) return false;
+    (holder.videos || (holder.videos = {}))[effect.name] = id;
+    return true;
 };
 
 Reactor3D.stopVideoEffect = function(effect, character, holder) {
@@ -1795,7 +1814,7 @@ Reactor3D.EffekseerScene = {
                         { x: -drawX, y: -drawY, width: Math.round(screenW * s), height: Math.round(screenH * s) },
                         camera.projectionMatrix.elements, camera.matrixWorldInverse.elements, handle);
                     if (!target) { play.ready = false; play.quad.mesh.visible = false; continue; }
-                    Reactor3D.GpuEffects.bindQuad(play.quad, target, false);
+                    Reactor3D.GpuEffects.bindQuad(play.quad, target);
                     play.frames++;
                     if (this.shouldMeasure(play.frames, play.track)) {
                         const anchor = { x: (clip.x / clip.w + 1) * 0.5 * screenW, y: (clip.y / clip.w + 1) * 0.5 * screenH };
@@ -2025,7 +2044,9 @@ Reactor3D.updateTriggeredEffects = function(holder, character, state) {
             || (effect.trigger === "climbing" && state.climbing)
             || (effect.trigger === "idle" && Reactor3D.isIdleState(state));
         if (isVideo) {
-            const playing = !!(holder.videos && holder.videos[effect.name]);
+            let playing = !!(holder.videos && holder.videos[effect.name]);
+            // (Only to stop it: one that should be playing is shown again as before, with the effect as it is now.)
+            if (!playing && !active && !(holder.videosAsked && holder.videosAsked[effect.name])) playing = this.adoptVideoEffect(effect, character, holder);
             if (active && !playing) this.spawnVideoEffect(effect, character, holder);
             else if (!active && playing) this.stopVideoEffect(effect, character, holder);
             continue;
@@ -2184,6 +2205,23 @@ Reactor3D.registerPluginCommands = function() {
         };
         Game_Interpreter.prototype.updateWaitMode.__reactorModelAnimation = true;
     }
+    // A play queued for an event that shows no model is never taken. It is kept by the event's
+    // number alone, so on the next map it would play on another event of that number and keep
+    // a "last action" wait on everything busy: a new map starts with no plays queued for events.
+    if (typeof Game_Map !== "undefined" && Game_Map.prototype.setup
+        && !Game_Map.prototype.setup.__reactorModelActions) {
+        const baseSetup = Game_Map.prototype.setup;
+        Game_Map.prototype.setup = function() {
+            const result = baseSetup.apply(this, arguments);
+            if (Reactor3D._modelActions) {
+                for (const key of Object.keys(Reactor3D._modelActions)) {
+                    if (key[0] === "e") delete Reactor3D._modelActions[key];
+                }
+            }
+            return result;
+        };
+        Game_Map.prototype.setup.__reactorModelActions = true;
+    }
     const reactorScopedWait = function(args) {
         // A BACKGROUND wait: the player keeps walking while it holds — MZ's
         // own Wait exists for blocking. Scope: an event id, 0 for this
@@ -2196,13 +2234,15 @@ Reactor3D.registerPluginCommands = function() {
         if (raw !== "all") {
             const target = Number(raw) || 0;
             character = this.character ? this.character(target) : null;
-            if (!character) return;
         }
         if (!this.setWaitMode) return;
         const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
         const duration = Math.max(0, Math.round(Number(args && args.duration) || 0));
         const modes = ["actions", "duration", "switch", "variable"];
         const mode = modes.indexOf(String(args && args.mode)) >= 0 ? String(args.mode) : "actions";
+        // Only a wait on a character's last actions needs the character: a duration, switch or variable
+        // wait holds as well in a common event or a battle, where "this event" is nobody.
+        if (raw !== "all" && !character && mode === "actions") return;
         this._reactorScopedWait = Reactor3D.holdWaitCharacter({
             mode,
             until: frame + duration,

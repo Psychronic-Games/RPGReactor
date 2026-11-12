@@ -61,12 +61,13 @@ class DatabaseArmorEditor {
                         <span class="db-col">
                             <label>${tt('Armor Type')}</label>
                             <select class="database-field-value" data-field="atypeId" data-armor-id="${armor.id}">
-                                ${armorTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.atypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
+                                ${/* None (0) and a type with no name keep their own entry, so the field shows what is stored. */ DatabaseSkillEditor.skillTypeOptions(armorTypeNames, armor.atypeId || 0, tt)}
                             </select>
                         </span>
                         <span class="db-col">
                             <label>${tt('Equip Type')}</label>
                             <select class="database-field-value" data-field="etypeId" data-armor-id="${armor.id}">
+                                ${/* A stored type with no name (or 0) keeps its own entry, so the field shows what is stored. */ equipTypeNames[armor.etypeId] && armor.etypeId > 0 ? '' : `<option value="${rrEscapeHtml(armor.etypeId || 0)}" selected>#${rrEscapeHtml(armor.etypeId || 0)}</option>`}
                                 ${equipTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.etypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                             </select>
                         </span>
@@ -130,7 +131,7 @@ class DatabaseArmorEditor {
                     <tbody>
                         ${paramNames.map((name, idx) => `
                             <tr>
-                                <td>${name}</td>
+                                <td>${rrEscapeHtml(name)}</td>
                                 <td>
                                     <input type="number"
                                            class="database-field-value database-field-value-small"

@@ -1692,7 +1692,14 @@ test('a body that cannot sit is asked once, shown through the hop and stood in t
         assert.equal(Rider.pass(scene), false);
         assert.equal(box.object.visible, true, 'still shown on its way to the vehicle');
         player._rrMount = null;
+        // The model sync sets `visible` each update, before this pass: a rider it hid (a vehicle that hides its
+        // rider, first person) stays hidden in the seat, and one it shows stays shown.
+        const hiddenAt = box.object.position.clone();
         box.object.visible = false;
+        Rider.pass(scene);
+        assert.equal(box.object.visible, false, 'a rider the sync hid is not shown by standing it in the seat');
+        assert.ok(!box.object.position.equals(hiddenAt), 'and is stood in the seat all the same');
+        box.object.visible = true;
         Rider.pass(scene);
         assert.equal(box.object.visible, true, 'shown on the seat');
         const seat = new THREE.Vector3();

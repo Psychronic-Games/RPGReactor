@@ -252,13 +252,14 @@
 
     /**
      * Why a name cannot be a vehicle's: one of the three reserved words, a
-     * `:` in it (an identity is `"<mapId>:<eventId>"`), or a name in `taken`
+     * `:` in it (an identity is `"<mapId>:<eventId>"`), only digits, or a name in `taken`
      * (the names other vehicles carry). Null for a name that can.
      */
     function nameProblem(key, taken) {
         const name = String(key === null || key === undefined ? '' : key).trim();
         if (!name) return null;
-        if (RESERVED.includes(name.toLowerCase()) || name.includes(':')) return item('vehicleCheck.nameReserved', { key: name });
+        // Only digits: the game's vehicle commands read such a name as an event's number.
+        if (RESERVED.includes(name.toLowerCase()) || name.includes(':') || /^\d+$/.test(name)) return item('vehicleCheck.nameReserved', { key: name });
         if (Array.isArray(taken) && taken.some(other => String(other || '').trim() === name)) return item('vehicleCheck.nameTaken', { key: name });
         return null;
     }

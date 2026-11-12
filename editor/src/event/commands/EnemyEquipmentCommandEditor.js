@@ -65,12 +65,12 @@ class EnemyEquipmentCommandEditor {
         return `#${(Number(a.enemyIndex) || 0) + 1}, ${tt('Slot')} ${(Number(a.slotIndex) || 0) + 1} → ${shown}`;
     }
 
-    /** The authored slots of the enemy in a troop position, or null when unknown. */
+    /** The slots of the enemy in a troop position (the default ones when it was never edited), or null when unknown. */
     _memberRows(enemyIndex, context) {
         if (typeof RREnemySlotOptions === 'undefined' || typeof RREnemyEquipment === 'undefined') return null;
         const member = RREnemySlotOptions.members(context)[enemyIndex];
         const enemy = member ? RREnemySlotOptions.enemy(member.enemyId, this.databaseManager) : null;
-        return enemy ? RREnemyEquipment.rows(enemy) : null;
+        return enemy ? RREnemyEquipment.slots(enemy, this.databaseManager?.getSystem?.() || {}) : null;
     }
 
     _slotChoices(enemyIndex, context, selected) {
@@ -151,11 +151,24 @@ class EnemyEquipmentCommandEditor {
         q('.eec-item').appendChild(picker.element);
 
         let choices = [];
+        // The saved item, while the author has not changed the enemy or slot.
+        let kept = value;
         const syncItems = () => {
             const chosen = choices.find(choice => choice.value === Number(slotSelect.value));
             const groups = this._itemGroups(chosen ? chosen.etypeId : null);
+            if (!groups.some(group => group.items.some(item => item.id === value))) {
+                // A saved item that no longer fits (the slot's type changed, or the
+                // entry is gone) stays listed and kept, as a saved slot does: opening
+                // the command and pressing OK must not empty the slot.
+                if (value === kept) {
+                    const [kind, itemId] = value.split(':');
+                    const item = EnemyEquipmentCommandEditor._item(kind, itemId, this.databaseManager);
+                    groups.push({ label: item ? tt('Does not fit this slot') : tt('Missing'), items: [{ id: value, label: `#${itemId}${item && item.name ? ` ${item.name}` : ''}` }] });
+                } else {
+                    value = '0:0';
+                }
+            }
             picker.setGroups(groups);
-            if (!groups.some(group => group.items.some(item => item.id === value))) value = '0:0';
             picker.setValue(value);
         };
         const syncSlots = selected => {
@@ -163,8 +176,8 @@ class EnemyEquipmentCommandEditor {
             slotSelect.innerHTML = choices.map(choice => `<option value="${choice.value}"${choice.value === selected ? ' selected' : ''}>${escape(choice.label)}</option>`).join('');
             syncItems();
         };
-        enemySelect.addEventListener('change', () => syncSlots(Number(slotSelect.value)));
-        slotSelect.addEventListener('change', syncItems);
+        enemySelect.addEventListener('change', () => { kept = null; syncSlots(Number(slotSelect.value)); });
+        slotSelect.addEventListener('change', () => { kept = null; syncItems(); });
         syncSlots(startSlot);
 
         const keys = typeof RRKeyboardNavigation !== 'undefined' && RRKeyboardNavigation.modal

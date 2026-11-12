@@ -204,10 +204,8 @@ class DatabaseTraitEditor {
                 closeModal();
             }
         });
-        overlay.addEventListener('click', (e) => {
-            // A click on the backdrop no longer closes the dialog: an accidental
-            // click beside it must never cost in-progress work. Close deliberately.
-        });
+        // A click on the backdrop does not close the dialog: an accidental
+        // click beside it must never cost in-progress work. Close deliberately.
 
         // Load initial tab content
         this.loadTabContent(activeTab, tabContent, trait);
@@ -271,7 +269,7 @@ class DatabaseTraitEditor {
 
     _paramOptions(code, trait) {
         return globalThis.rrParamNames(param => this._t(param))
-            .map((param, idx) => `<option value="${idx}" ${trait.code === code && trait.dataId === idx ? 'selected' : ''}>${param}</option>`)
+            .map((param, idx) => `<option value="${idx}" ${trait.code === code && trait.dataId === idx ? 'selected' : ''}>${rrEscapeHtml(param)}</option>`)
             .join('');
     }
 

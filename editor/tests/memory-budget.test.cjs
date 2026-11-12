@@ -323,3 +323,50 @@ test('the GLB worker splits and parses a model and decodes none of its pictures 
     assert.equal(decodes, 0);
     assert.equal(R._workerParts.decodeImages, undefined);
 });
+
+test('the rock meshers work one at a time while the game is short of its frames, until what is queued is done', () => {
+    const R = load(), tier = R.memoryTier, P = R.FramePressure, short = P.short;
+    const made = [];
+    global.Worker = class { constructor() { made.push(this); } postMessage() {} terminate() {} };
+    global.Blob = class { constructor(parts) { this.parts = parts; } };
+    const createObjectURL = URL.createObjectURL, revoke = URL.revokeObjectURL, rest = R.IdleWorkers.REST_MS;
+    URL.createObjectURL = () => 'blob:worker'; URL.revokeObjectURL = () => {};
+    R.IdleWorkers.REST_MS = 0;
+    R.memoryTier = 'normal';
+    let pressed = false;
+    P.short = () => pressed;
+    try {
+        delete R._rockPool;
+        const pool = R.rockWorkerPool();
+        assert.ok(pool);
+        const workers = made.length;
+        let done = 0;
+        const submit = count => { for (let i = 0; i < count; i++) pool.submit({ frames: [] }, () => { done++; }, () => []); };
+        const finish = () => { const job = Array.from(pool.jobs.values())[0]; job.worker.onmessage({ data: { id: job.id, buckets: [] } }); };
+        // Keeping its frames: every mesher is given work.
+        submit(4);
+        assert.equal(pool.jobs.size, Math.min(4, workers));
+        while (pool.jobs.size) finish();
+        assert.equal(done, 4);
+        // Short of them: one job out at a time, the rest queued.
+        pressed = true;
+        submit(4);
+        assert.equal(pool.jobs.size, 1);
+        assert.equal(pool.queue.length, 3);
+        finish();
+        assert.equal(pool.jobs.size, 1, 'the next goes out as one comes back');
+        // The frames recover while work is queued: held to one until it is done, so the rule does not flap.
+        pressed = false;
+        finish();
+        assert.equal(pool.jobs.size, 1);
+        finish(); finish();
+        assert.equal(done, 8);
+        assert.equal(pool.jobs.size, 0);
+        submit(4);
+        assert.equal(pool.jobs.size, Math.min(4, workers), 'and at full strength for the next');
+        while (pool.jobs.size) finish();
+    } finally {
+        P.short = short; R.memoryTier = tier; R.IdleWorkers.REST_MS = rest; delete global.Worker; delete global.Blob; delete R._rockPool;
+        URL.createObjectURL = createObjectURL; URL.revokeObjectURL = revoke;
+    }
+});

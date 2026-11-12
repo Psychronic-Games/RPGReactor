@@ -98,6 +98,11 @@ test('a fence takes a height: posts as tall, rails spread up them; none is the 1
     manager.setHeight('fence', 2.5);
     assert.equal(manager.pieceFor({ x: 0, y: 0, z: 0 }).height, 2.5);
     assert.ok(!P.SIZED_KINDS.includes('fence') && P.HEIGHT_KINDS.includes('fence'), 'a building\'s storeys still go by its walls');
+    // A storey is a wall's default, not a fence's: a fence 5 tall keeps its 5 in the game and in the editor.
+    const { E } = builderOn(map);
+    assert.equal(R.normalizePiece({ kind: 'fence', x: 1, y: 1, z: 0, rot: 0, height: 5 }, map).height, 5);
+    assert.equal(R.normalizePiece({ kind: 'wall', x: 1, y: 1, z: 0, rot: 0, height: 5 }, map).height, undefined);
+    assert.equal(E.pieces({ width: 4, height: 4, reactor3d: { pieces: [{ id: 1, kind: 'fence', x: 1, y: 1, z: 0, height: 5 }] } })[0].height, 5);
 });
 
 test('a plan stamps at the size chosen', () => {

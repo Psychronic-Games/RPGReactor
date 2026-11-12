@@ -31,25 +31,6 @@ class ShowBalloonIconEditor {
             'User-defined 4',
             'User-defined 5'
         ];
-
-        // Balloon emojis for preview
-        this.balloonEmojis = [
-            '❗',  // Exclamation
-            '❓',  // Question
-            '♪',   // Music Note
-            '❤️',  // Heart
-            '💢',  // Anger
-            '💧',  // Sweat
-            '🕸️',  // Cobweb
-            '💭',  // Silence
-            '💡',  // Light Bulb
-            '💤',  // Zzz
-            '①',   // User-defined 1
-            '②',   // User-defined 2
-            '③',   // User-defined 3
-            '④',   // User-defined 4
-            '⑤'    // User-defined 5
-        ];
     }
 
     show(command, callback, eventData = null) {
@@ -185,6 +166,13 @@ class ShowBalloonIconEditor {
                 charSelect.appendChild(option);
             }
         }
+        // An event the list does not have (the command was written for another map) is kept and shown.
+        if (this.characterId > 0 && !Array.from(charSelect.options).some(option => option.value === this.characterId.toString())) {
+            const option = document.createElement('option');
+            option.value = this.characterId;
+            option.textContent = `EV${this.characterId.toString().padStart(3, '0')}`;
+            charSelect.appendChild(option);
+        }
 
         charSelect.value = this.characterId.toString();
         charSelect.addEventListener('change', (e) => {
@@ -295,14 +283,14 @@ class ShowBalloonIconEditor {
             });
 
             balloonBtn.addEventListener('mouseenter', () => {
-                if (!isSelected) {
+                if (this.balloonId !== balloonIndex) {
                     balloonBtn.style.backgroundColor = 'var(--color-bg-hover)';
                     balloonBtn.style.borderColor = 'var(--color-text-dim)';
                 }
             });
 
             balloonBtn.addEventListener('mouseleave', () => {
-                if (!isSelected) {
+                if (this.balloonId !== balloonIndex) {
                     balloonBtn.style.backgroundColor = 'var(--color-bg-input)';
                     balloonBtn.style.borderColor = 'var(--color-border-input)';
                 }
@@ -442,7 +430,6 @@ class ShowBalloonIconEditor {
     loadCharacterSprite() {
         const characterCanvas = this.modal.querySelector('.character-preview');
         if (!characterCanvas) {
-            console.log('ShowBalloonIcon: No character canvas found');
             return;
         }
 
@@ -454,7 +441,6 @@ class ShowBalloonIconEditor {
             this.projectController.currentProject;
 
         if (!currentProject) {
-            console.log('ShowBalloonIcon: No current project');
             return;
         }
 
@@ -464,35 +450,21 @@ class ShowBalloonIconEditor {
         let characterName = null;
         let characterIndex = 0;
 
-        console.log('ShowBalloonIcon: Loading character sprite for characterId:', this.characterId);
 
         // Determine which character to show
         if (this.characterId === -1) {
             // Player - get from System.json
-            try {
-                const systemPath = path.join(currentProject.path, 'data', 'System.json');
-                const systemData = JSON.parse(fs.readFileSync(systemPath, 'utf8'));
-                console.log('ShowBalloonIcon: System data:', systemData.partyMembers);
-                if (systemData.partyMembers && systemData.partyMembers.length > 0) {
-                    const leaderId = systemData.partyMembers[0];
-                    const actorsPath = path.join(currentProject.path, 'data', 'Actors.json');
-                    const actorsData = JSON.parse(fs.readFileSync(actorsPath, 'utf8'));
-                    const leader = actorsData[leaderId];
-                    console.log('ShowBalloonIcon: Leader actor:', leader);
-                    if (leader) {
-                        characterName = leader.characterName;
-                        characterIndex = leader.characterIndex;
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to load player character:', e);
+            // The Database as it stands, unsaved edits included.
+            const system = this.databaseManager?.getSystem?.(), actors = this.databaseManager?.data?.actors;
+            const leader = actors?.[system?.partyMembers?.[0]];
+            if (leader) {
+                characterName = leader.characterName;
+                characterIndex = leader.characterIndex;
             }
         } else if (this.characterId === 0) {
             // This Event - get from current event being edited
-            console.log('ShowBalloonIcon: Current event data:', this.currentEventData);
             if (this.currentEventData && this.currentEventData.pages && this.currentEventData.pages.length > 0) {
                 const currentPage = this.currentEventData.pages[0]; // Use first page for preview
-                console.log('ShowBalloonIcon: Event page image:', currentPage.image);
                 if (currentPage.image) {
                     characterName = currentPage.image.characterName;
                     characterIndex = currentPage.image.characterIndex;
@@ -501,23 +473,19 @@ class ShowBalloonIconEditor {
         } else {
             // Specific event ID - load from current map data
             // Get the current map from the tilemapManager
-            console.log('ShowBalloonIcon: ProjectController:', this.projectController);
             let mapData = null;
 
             if (this.projectController && this.projectController.tilemapManager) {
                 mapData = this.projectController.tilemapManager.currentMap;
             }
 
-            console.log('ShowBalloonIcon: Map data:', mapData);
 
             if (mapData && mapData.events) {
                 const mapEvents = mapData.events;
                 if (mapEvents && mapEvents[this.characterId]) {
                     const event = mapEvents[this.characterId];
-                    console.log('ShowBalloonIcon: Event data:', event);
                     if (event && event.pages && event.pages.length > 0) {
                         const eventPage = event.pages[0]; // Use first page for preview
-                        console.log('ShowBalloonIcon: Event page image:', eventPage.image);
                         if (eventPage.image) {
                             characterName = eventPage.image.characterName;
                             characterIndex = eventPage.image.characterIndex;
@@ -527,7 +495,6 @@ class ShowBalloonIconEditor {
             }
         }
 
-        console.log('ShowBalloonIcon: Character name:', characterName, 'index:', characterIndex);
 
         // If we have a character name, load and draw the sprite
         if (characterName && characterName.trim() !== '') {
@@ -627,7 +594,11 @@ class ShowBalloonIconEditor {
         const balloonPath = path.join(currentProject.path, 'img', 'system', 'Balloon.png');
         balloonImage.src = 'file://' + balloonPath.replace(/\\/g, '/');
 
+        const turn = this._previewTurn = (this._previewTurn || 0) + 1;
         balloonImage.onload = () => {
+            // A later click, or the dialog closing, has taken this one's place.
+            if (turn !== this._previewTurn) return;
+            if (this.animationInterval) clearInterval(this.animationInterval);
             let frame = 0;
             const totalFrames = 8;
             const frameWidth = 48;
@@ -681,7 +652,8 @@ class ShowBalloonIconEditor {
     }
 
     close() {
-        // Clean up animation interval
+        // Clean up animation interval, and any picture still loading for one
+        this._previewTurn = (this._previewTurn || 0) + 1;
         if (this.animationInterval) {
             clearInterval(this.animationInterval);
             this.animationInterval = null;

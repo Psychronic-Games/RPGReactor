@@ -340,3 +340,20 @@ test('a save writes no UserInterfaces.json while the seeded stock interfaces are
     assert.equal(await manager.saveAllData(project), true);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8'))[1].name, 'My title', 'an edited interface is written');
 });
+
+test('a save writes the seeded stock interfaces once Use As binds one of them, edited or not', async t => {
+    const os = require('node:os');
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-stock-interfaces-bound-'));
+    t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+    const dataPath = path.join(project, 'data');
+    fs.mkdirSync(dataPath);
+    fs.writeFileSync(path.join(dataPath, 'System.json'), JSON.stringify(fixtureSystem));
+    const DatabaseManager = new Function('RRStockInterfaces', 'require', 'RRJson',
+        read('editor/src/DatabaseManager.js') + '\nreturn DatabaseManager;')(Stock, require, require('../src/utils/JsonFiles.js'));
+    const manager = new DatabaseManager(); manager.fs = fs; manager.path = path;
+    assert.equal(await manager.loadAllData(project), true);
+    const file = path.join(dataPath, 'UserInterfaces.json');
+    manager.data.system.reactorTitleInterfaceId = 1;
+    assert.equal(await manager.saveAllData(project), true);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8'))[1].id, 1, 'the bound record is on disk for the game to find');
+});

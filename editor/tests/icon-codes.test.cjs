@@ -227,7 +227,7 @@ test('trait rows render their value through the icon renderer', () => {
         'and falls back to plain escaping when the renderer is absent');
 
     for (const file of ['DatabaseActorEditor', 'DatabaseArmorEditor', 'DatabaseClassEditor',
-        'DatabaseEnemyEditor', 'DatabaseItemBaseEditor', 'DatabaseStateEditor',
+        'DatabaseEnemyEditor', 'DatabaseStateEditor',
         'DatabaseWeaponEditor']) {
         const source = read(path.join('src', 'database', `${file}.js`));
         assert.match(source, /\$\{this\.commonUI\.getTraitValueHtml\(trait\)\}/, file);

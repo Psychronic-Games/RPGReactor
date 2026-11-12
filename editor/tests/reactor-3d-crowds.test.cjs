@@ -157,3 +157,40 @@ test('copies of a model that look alike draw with one set of materials; a flash 
     assert.notEqual(mat(a).color.getHex(), before, 'and it is tinted');
     assert.equal(mat(b).color.getHex(), before, 'the other copy is not');
 });
+
+test('a still body in view keeps its matrices on an update its motion is not sampled in', () => {
+    const { root, bones } = body();
+    // In view (its pose is not held), standing where it was placed, and this update's stride passed it over.
+    const holder = { stillNow: true, poseHeld: false, sampled: false };
+    Reactor3D.holdModelMatrices(holder, {}, root);
+    assert.equal(holder.matricesHeld, true, 'nothing wrote its joints: the walk would make the same matrices');
+    bones[1].position.x = 5;
+    root.updateMatrixWorld(true);
+    assert.equal(bones[1].matrixWorld.elements[12], 0, 'left out of the walk');
+    holder.sampled = true;
+    Reactor3D.holdModelMatrices(holder, {}, root);
+    root.updateMatrixWorld(true);
+    assert.equal(holder.matricesHeld, false);
+    assert.equal(bones[1].matrixWorld.elements[12], 5, 'sampled again, it is walked that update');
+    // What else moves a body's joints keeps it in the walk, sampled or not.
+    for (const extra of [{ wornRest: {} }, { mantlePose: {} }, { effects: [{}] }]) {
+        const other = body(), h = Object.assign({ stillNow: true, poseHeld: false, sampled: false }, extra);
+        Reactor3D.holdModelMatrices(h, {}, other.root);
+        assert.equal(!!h.matricesHeld, false, Object.keys(extra)[0]);
+    }
+    for (const character of [{ _reactorKnockedOut: true }, { _reactorRagdoll: {} }]) {
+        const other = body(), h = { stillNow: true, poseHeld: false, sampled: false };
+        Reactor3D.holdModelMatrices(h, character, other.root);
+        assert.equal(!!h.matricesHeld, false);
+    }
+    // The switch: only the asleep and the out of view, as before.
+    Reactor3D.holdUnsampled = false;
+    try {
+        const other = body(), h = { stillNow: true, poseHeld: false, sampled: false };
+        Reactor3D.holdModelMatrices(h, {}, other.root);
+        assert.equal(!!h.matricesHeld, false);
+        h.poseHeld = true;
+        Reactor3D.holdModelMatrices(h, {}, other.root);
+        assert.equal(h.matricesHeld, true);
+    } finally { Reactor3D.holdUnsampled = true; }
+});

@@ -206,6 +206,36 @@ test('the saved BGM names the sequence, and replaying it waits for the map when 
     assert.equal(AudioManager._bgmSequence, before);
 });
 
+test('a loaded save starts its map sequence when the map scene starts, and never another map\'s under its key', () => {
+    const { AudioManager, live, context } = loadAudioManager({ map: MAP });
+    // The core's own helpers, on this context's numbers and strings (its `Number` is the test's, handed in).
+    vm.runInContext('"".constructor.prototype.padZero = function(n) { return this.padStart(n, "0"); };'
+        + '(0).constructor.prototype.padZero = function(n) { return ("" + this).padZero(n); };'
+        + '"".constructor.prototype.format = function() { return this.replace(/%([0-9]+)/g, (s, n) => arguments[n - 1]); };', context);
+    const saved = { name: 'Fallback', volume: 90, pitch: 100, pan: 0, pos: 0, sequence: 1 };
+    // What DataManager.loadGame leaves: $gameMap is the saved game's, and $dataMap is whatever was read last.
+    context.DataManager = { _lastMapSrc: null };
+    context.$dataMap = null;
+    AudioManager.playBgm(saved);
+    assert.equal(AudioManager._pendingBgmSequence.mapId, 1, 'a fresh start: the request waits');
+    AudioManager.stopBgm();
+    const other = { bgm: MAP.bgm, bgmSequence: { enabled: true, entries: [{ type: 'track', name: 'Other' }, { type: 'silence', duration: 5 }] } };
+    context.DataManager._lastMapSrc = 'Map007.json';
+    context.$dataMap = other;
+    AudioManager.playBgm(saved);
+    assert.deepEqual(live(), [], 'the map played before the title does not lend its sequence');
+    assert.equal(AudioManager._pendingBgmSequence.mapId, 1);
+    // The map scene starts on the saved map, with no transfer and so no autoplay.
+    context.DataManager._lastMapSrc = 'Map001.json';
+    context.$dataMap = MAP;
+    AudioManager.resumePendingBgmSequence();
+    assert.equal(AudioManager._pendingBgmSequence, null);
+    assert.deepEqual(live(), ['Intro']);
+    const running = AudioManager._bgmSequence;
+    AudioManager.resumePendingBgmSequence();
+    assert.equal(AudioManager._bgmSequence, running, 'nothing waiting: nothing restarts');
+});
+
 test('a plain Play BGM, Stop BGM or Fadeout BGM ends the sequence, and nothing restarts from a torn-down track', () => {
     const { AudioManager, created, live, tick } = loadAudioManager({ map: MAP });
     AudioManager.playBgm(AudioManager.mapBgmObject(MAP, 1));
@@ -221,6 +251,7 @@ test('a plain Play BGM, Stop BGM or Fadeout BGM ends the sequence, and nothing r
     const intro = created.find(b => b.name === 'Intro' && !b.destroyed);
     assert.equal(intro.fadedOut, 4);
     assert.equal(AudioManager._bgmSequence.stopping, true);
+    assert.deepEqual(plain(AudioManager.saveBgm()), { name: '', volume: 0, pitch: 0 }, 'a sequence fading out is not saved as the music, as a fading track is not');
     intro.end();
     assert.deepEqual(live(), ['Intro'], 'a track ending mid-fade starts nothing');
     tick(4);

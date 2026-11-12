@@ -397,6 +397,8 @@ test('the overflow scanner draws the line the way the game will', () => {
     assert.equal(scan('abcdefghij', 5).overflowIndex, 5, 'and overflows at the exact character');
     assert.equal(scan('\\C[6]abcd', 10).width, 4, 'a colour code costs nothing');
     assert.equal(scan('\\SPEED[2]ab', 10).width, 2, 'an unknown bracketed code costs nothing either');
+    assert.equal(scan('ab\\FS[26]cd', 10).width, 6, '\\FS sets the size for what follows, as the game does');
+    assert.equal(scan('\\g', 10, { currency: 'Gold' }).width, 4, 'the currency unit in either case');
     assert.equal(scan('\\I[64]', 100).width, 36, 'an icon costs its 36 pixels');
     assert.equal(scan('a\\.b\\|c\\!d\\^', 100).width, 4, 'the punctuation codes draw nothing');
     assert.equal(scan('\\\\ab', 10).width, 3, 'an escaped backslash is one drawn character');

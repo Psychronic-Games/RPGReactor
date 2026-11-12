@@ -185,7 +185,10 @@ test('System 1 loads the slot modal after its dependencies and merges legacy pic
     assert.ok(html.indexOf('src/utils/AudioPickerModal.js') < html.indexOf('src/utils/SystemSoundSlotModal.js'));
     assert.ok(html.indexOf('src/utils/SystemSoundSlotModal.js') < html.indexOf('src/database/DatabaseSystem1Editor.js'));
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseSystem1Editor.js'), 'utf8');
-    assert.match(source, /system\.sounds\[identifier\] = \{ \.\.\.system\.sounds\[identifier\], \.\.\.result \}/);
+    // The slot modal is opened on the slot as stored (a legacy one too) and answers with the whole
+    // slot, which replaces it; the music picker no longer has a sound half that could write one.
+    assert.match(source, /const current = system\.sounds\?\.\[soundIndex\] \|\| \{\};\s+RRSystemSoundSlotModal\.open\(\{[\s\S]{0,200}?slot: current,[\s\S]{0,200}?system\.sounds\[soundIndex\] = result;/);
+    assert.doesNotMatch(source, /system\.sounds\[identifier\]/);
 });
 
 // Renders the real createColumn3 rather than asserting on its source, so the

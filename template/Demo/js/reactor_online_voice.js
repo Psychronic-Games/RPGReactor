@@ -23,7 +23,6 @@ const ReactorOnlineVoice = {
 
     on: false,
     transmitting: false,
-    level: 0,
     links: new Map(),
     talks: new Map(),
     outbox: [],
@@ -306,7 +305,6 @@ const ReactorOnlineVoice = {
         }
         if (this.ownMeter && this.transmitting) {
             const sound = this.read(this.ownMeter);
-            this.level = sound.level;
             this.mouth($gamePlayer, sound);
         }
     },

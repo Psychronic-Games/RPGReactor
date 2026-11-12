@@ -4,7 +4,8 @@
  *
  * An enemy's loadout is its optional `rrEquipment` list of rows
  * `{ etypeId, kind, itemId }`, in slot order. `kind` is the drop-item numbering
- * (2 weapon, 3 armor, 0 an empty slot). The game reads the same rows through
+ * (2 weapon, 3 armor, 0 an empty slot). An enemy without the list has one
+ * empty slot per equipment type. The game reads the same rows through
  * Game_Enemy.equips (runtime/reactor_objects_battlers.js), while Database >
  * Reactor Features has Enemy Equipment on.
  *
@@ -62,10 +63,20 @@
         return equipTypes(system).map(type => ({ etypeId: type.id, kind: 0, itemId: 0 }));
     }
 
-    /** Writes rows to the enemy; an enemy with no slots carries no field at all. */
+    /**
+     * The slots the game gives the enemy: its own list, or the default slots
+     * when it was never edited (Game_Enemy.rrEquipRows does the same).
+     */
+    function slots(enemy, system) {
+        return Array.isArray(enemy?.rrEquipment) ? rows(enemy) : defaultRows(system);
+    }
+
+    /**
+     * Writes rows to the enemy. An emptied loadout is kept as an empty list:
+     * no field at all means the default slots.
+     */
     function store(enemy, list) {
-        const next = (list || []).map(normalizedRow);
-        if (next.length) enemy.rrEquipment = next; else delete enemy.rrEquipment;
+        enemy.rrEquipment = (list || []).map(normalizedRow);
     }
 
     function entries(kind, databaseManager) {
@@ -135,9 +146,8 @@
      */
     function open({ enemy, databaseManager, commonUI, onSave }) {
         const system = databaseManager.getSystem?.() || {};
-        const configured = rows(enemy);
         const state = {
-            rows: configured.length ? configured : defaultRows(system),
+            rows: slots(enemy, system),
             selected: 0,
             query: '',
             active: -1,
@@ -440,7 +450,7 @@
         return overlay;
     }
 
-    const api = { on, equipTypes, typeName, rows, defaultRows, store, resolve, preview, total, signed, matches, open };
+    const api = { on, equipTypes, typeName, rows, defaultRows, slots, store, resolve, preview, total, signed, matches, open };
     root.RREnemyEquipment = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

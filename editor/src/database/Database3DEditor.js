@@ -1366,13 +1366,17 @@ class Database3DEditor {
         return { bytes: glb, images: Object.keys(images).length + (mesh.materials || []).filter(m => m.embedded).length, sourceBytes: bytes.length };
     }
 
-    /** Every model reference in the project's 3D sidecars that named the old extension now names the new one. */
+    /**
+     * Every model reference in the project's 3D sidecars, its Vehicles and its action sequences that named the
+     * old extension now names the new one: in the files, and in the copies the open Database holds, which
+     * would otherwise show the old one and write it back with OK.
+     */
     _retargetModelExtension(fs, path, name, from, to) {
         const project = this._project();
         if (!project || !project.path) return;
         const dataDir = path.join(project.path, 'data');
         let files = [];
-        try { files = fs.readdirSync(dataDir).filter(file => /\.r3d\.json$/i.test(file)); } catch (error) { return; }
+        try { files = fs.readdirSync(dataDir).filter(file => /\.r3d\.json$/i.test(file) || file === 'ReactorVehicles.json' || file === 'ActionSequences.json'); } catch (error) { return; }
         const walk = node => {
             let changed = false;
             if (Array.isArray(node)) { for (const item of node) changed = walk(item) || changed; return changed; }
@@ -1387,6 +1391,13 @@ class Database3DEditor {
                 const data = JSON.parse(fs.readFileSync(full, 'utf8'));
                 if (walk(data)) this._writeFileAtomic(fs, full, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(data) : JSON.stringify(data, null, 2)) + '\n');
             } catch (error) { /* a sidecar that will not parse is left as it is */ }
+        }
+        const manager = this.databaseManager;
+        if (!manager || !manager.data || (manager.projectPath && path.resolve(manager.projectPath) !== path.resolve(project.path))) return;
+        const unsaved = typeof manager.getDirtyKeys === 'function' ? manager.getDirtyKeys() : [];
+        for (const key of ['modelBindings', 'vehicles', 'actionSequences']) {
+            // What had no unsaved change still has none: the file was corrected just above.
+            if (walk(manager.data[key]) && !unsaved.includes(key) && typeof manager.captureSavedState === 'function') manager.captureSavedState(key);
         }
     }
 
@@ -1430,6 +1441,23 @@ class Database3DEditor {
         if (fs.existsSync(own)) return own;
         const shared = path.join(project.path, '3d', 'source', file);
         return fs.existsSync(shared) ? shared : null;
+    }
+
+    /**
+     * Whether a saved rig holds skin weights for the mesh's own vertices (Rig › Save on a model without a
+     * skeleton). A rig of markers only, or one laid on the file's own skeleton, weighs none.
+     */
+    _rigWeighsVertices(fs, path, rig) {
+        if (!rig || typeof rig !== 'object' || !Array.isArray(rig.bones) || !rig.bones.length) return false;
+        const weighs = table => !!table && typeof table === 'object' && Object.keys(table).some(key => table[key] && table[key].count > 0);
+        if (rig.weights) return weighs(rig.weights);
+        const file = String(rig.weightsFile || '');
+        if (!file || /[\\/]/.test(file) || file.indexOf('..') >= 0) return false;
+        let data;
+        try { data = fs.readFileSync(path.join(path.dirname(this.rulesPath()), file)); } catch (error) { return false; }
+        // Without the decoder the weights cannot be counted: take the rig as bound rather than risk it.
+        if (typeof ModelRigger === 'undefined') return true;
+        return weighs(ModelRigger.decodeWeightsBinary(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)));
     }
 
     /**
@@ -1493,6 +1521,13 @@ class Database3DEditor {
                 throw new Error('model.json must contain a JSON object');
             }
 
+            // A rig bound here holds a weight for each vertex of the mesh as it stands, and the game skins a
+            // mesh only while the counts agree: a mesh rebuilt under the rig would stand rigid through every motion.
+            const rigBound = this._rigWeighsVertices(fs, path, previous.rig);
+            if (rigBound && conversion) {
+                return say(this._t('This model’s rig is bound to its mesh, and converting to GLB rebuilds the mesh. Remove the rig, optimize, then rig the model again.'));
+            }
+
             const carvedParts = (previous.parts || []).length;
             let bytes = original;
             let remappedParts = null;
@@ -1501,6 +1536,13 @@ class Database3DEditor {
                 const settings = Object.assign({
                     encodeImage: window.RRGlbOptimizer.canvasEncoder()
                 }, window.RRGlbOptimizer.PRESETS[mode]);
+                if (rigBound) {
+                    // As for parts that cannot be re-derived: only the passes that leave the vertices alone.
+                    settings.meshRatio = 0;
+                    settings.meshCells = 0;
+                    settings.cacheOrder = false;
+                    partsNote = ' ' + this._t('Textures only: its rig is bound to the mesh as it is. To reduce the mesh, remove the rig, optimize, then rig the model again.');
+                }
 
                 say(this._t('Optimizing {name}…', { name: entry.name }));
                 let optimized = await window.RRGlbOptimizer.optimize(original, settings);
@@ -2200,6 +2242,7 @@ class Database3DEditor {
     _rebuildInstance() {
         if (!this._scene || !this._template || typeof Reactor3D === 'undefined') return;
         if (this._object && this._object.parent) this._object.parent.remove(this._object);
+        this._disposeInstanceMaterials(this._object);
         const template = this._template;
         const object = Reactor3D.cloneModelTemplate
             ? Reactor3D.cloneModelTemplate(template)
@@ -2344,6 +2387,7 @@ class Database3DEditor {
         if (this.motionEditor && this.motionEditor.active) this.motionEditor.close();
         this._binding?.mixer?.stopAllAction();
         this._object?.parent?.remove(this._object);
+        this._disposeInstanceMaterials(this._object);
         this._object = null;
         this._binding = null;
         this._template = null;
@@ -2358,6 +2402,20 @@ class Database3DEditor {
         this._pivotAnchor = null;
         if (this._pivotMarker) this._pivotMarker.visible = false;
         this._lastAnimFrame = undefined;
+    }
+
+    /**
+     * A copy of the model taken out of the preview lets go of its materials, as a thumbnail's copy does: each
+     * copy has its own (cloneModelTemplate), and a rebuild at every part or rig change left the last one's
+     * held. Pictures are shared with the template and stay, and so does the geometry.
+     */
+    _disposeInstanceMaterials(object) {
+        if (!object || typeof object.traverse !== 'function' || typeof Reactor3D === 'undefined' || !Reactor3D.cloneModelTemplate) return;
+        object.traverse(node => {
+            if (!node.isMesh) return;
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            for (const material of materials) material?.dispose?.();
+        });
     }
 
     _disposePreview() {
@@ -3432,7 +3490,7 @@ class Database3DEditor {
                 while (this.rawAnimations.some(raw => raw.name === base + (n > 1 ? '-' + n : ''))) n++;
                 name = base + (n > 1 ? '-' + n : '');
             }
-            this.rawAnimations.push({ name, cycles: 1, ...values });
+            this.rawAnimations.push({ name, ...values });
             this._editingRule = this.rawAnimations.length - 1;
             this.selectedRule = this._editingRule;
         }
@@ -4334,10 +4392,8 @@ class Database3DEditor {
     /** The rig bar's Save: bind (when the template has bones) and write the rig, then say so. */
     async saveRigFromBar() {
         if (!this._rigMode || this._rigFaceMode) return;
-        this.bindRig();
-        // The bind runs on a short timer of its own; this waits for it.
-        await new Promise(resolve => setTimeout(resolve, 80));
-        this._markSaved('rig');
+        // The bind runs on a short timer of its own; this waits for it, and counts the rig as saved only when it was written.
+        if (await this.bindRig()) this._markSaved('rig');
         this.renderRigBar();
     }
 
@@ -4356,7 +4412,9 @@ class Database3DEditor {
     /** Write the model's own transform, as its card's Save does. */
     saveTransform() {
         if (!this._transformWork) return;
-        this.rawTransform = JSON.parse(JSON.stringify(this._transformWork));
+        // The three keys the game reads: the work also carries the surface and look its reader hands back.
+        const { offset, rotate, scale } = this._transformWork;
+        this.rawTransform = JSON.parse(JSON.stringify({ offset, rotate, scale }));
         this.saveRules();
         this.renderEditCard();
         this._refreshUnsaved();
@@ -4732,7 +4790,14 @@ class Database3DEditor {
         card.querySelector('.r3d-card-redo').addEventListener('click', () => this.redoEffect());
         card.querySelector('.r3d-fcard-title').addEventListener('change', event => {
             const name = event.target.value.trim();
-            if (name) work.name = name;
+            if (name) {
+                // Another effect's name is numbered, as a pasted one is: the game keeps only the first of two
+                // with one name, and this one's rules and looks would follow the name to the other.
+                const others = this.rawEffects.filter((effect, at) => effect && at !== this.selectedEffect);
+                let unique = name, n = 2;
+                while (others.some(effect => effect.name === unique)) unique = `${name} (${n++})`;
+                work.name = unique;
+            }
             event.target.value = work.name;
         });
         card.querySelectorAll('.r3d-fxcard-tab').forEach(tab => tab.addEventListener('click', () => {
@@ -5086,6 +5151,8 @@ class Database3DEditor {
             if (looks) this.variantsPanel?.save();
         }
         this.rawEffects[index] = JSON.parse(JSON.stringify(work));
+        // The card gives every effect a video block to work with; one that is no video and names no file is not written.
+        if (work.type !== 'video' && this.rawEffects[index].video && !this.rawEffects[index].video.file) delete this.rawEffects[index].video;
         this.saveRules();
         // The save tidies the list of variants: the card's work follows, so it does not read as changed.
         if (this.rawEffects[index].variants) work.variants = this.rawEffects[index].variants.slice(); else delete work.variants;
@@ -9080,15 +9147,18 @@ class Database3DEditor {
      * Solve skin weights against the template's meshes and persist the
      * rig. The solve runs on model-space vertices — the same frame carve
      * pivots use — so the runtime's bind reproduces the preview exactly.
+     * Resolves true once the rig is written, false when nothing was (the
+     * status line or a notice says why), so a caller counts as saved only
+     * what was.
      */
     bindRig() {
         if (typeof ModelRigger === 'undefined' || typeof Reactor3D === 'undefined'
-            || !this._template) return;
+            || !this._template) return Promise.resolve(false);
         const status = this._detail.querySelector('.r3d-status');
         // A thing held in a hand (Blade or tool, Gun) has markers only: they are saved as they stand, nothing is bound.
         if (this._rigNeedsUncarved()) {
             if (status) status.textContent = this._t('Remove carved parts before rigging.');
-            return;
+            return Promise.resolve(false);
         }
         if (ModelRigger.TEMPLATES[this._rigTemplate] && ModelRigger.TEMPLATES[this._rigTemplate].vehicle) {
             // A rider's dots are the vehicle's seat, not a rig: the model's rig, if it has one, is left as it is.
@@ -9097,23 +9167,40 @@ class Database3DEditor {
                 if (status) status.textContent = this._t('Rider saved.');
             } catch (error) {
                 this._reportModelSaveError(error);
+                return Promise.resolve(false);
             }
-            return;
+            return Promise.resolve(true);
         }
         if (ModelRigger.TEMPLATES[this._rigTemplate] && ModelRigger.TEMPLATES[this._rigTemplate].markersOnly) {
             const hadBones = this._rigHasBones();
             this.customRig = { template: this._rigTemplate, markers: JSON.parse(JSON.stringify(this._rigMarkers)) };
             this._rigBinary = null;
-            this.saveRig();
+            try {
+                this.saveRig();
+            } catch (error) {
+                this._reportModelSaveError(error);
+                return Promise.resolve(false);
+            }
             if (hadBones) this._rebuildInstance();
             this.renderRigBar();
             this._refreshMotionsButton();
             this._rigChanged();
             if (status) status.textContent = this._t('Markers saved.');
-            return;
+            return Promise.resolve(true);
         }
         if (status) status.textContent = this._t('Binding rig…');
-        setTimeout(() => {
+        // A failure in the timer has no caller to reach: it is reported here, and the answer is false.
+        const bind = work => new Promise(resolve => setTimeout(() => {
+            try {
+                work();
+                resolve(true);
+            } catch (error) {
+                console.error('3D model rig save failed:', error);
+                this._reportModelSaveError(error);
+                resolve(false);
+            }
+        }, 30));
+        return bind(() => {
             const template = this._template;
             template.updateMatrixWorld(true);
             const targets = Reactor3D.carveTargetMeshes(template);
@@ -9157,7 +9244,7 @@ class Database3DEditor {
                     ? this._t('Rig bound — {bones} bones, {vertices} vertices', { bones: bones.length, vertices: total })
                     : this._t("Rig bound to the model's own skeleton — {bones} joints", { bones: bones.length });
             }
-        }, 30);
+        });
     }
 
     removeRig() {
@@ -9619,7 +9706,7 @@ class Database3DEditor {
         }
         this._sectionCount('animations', shown);
         const note = this._detail.querySelector('.r3d-rule-note');
-        if (note) note.style.display = this._editingRule >= 0 && this._work && this._work.type === 'pose' ? '' : 'none';
+        if (note) note.style.display = this._editingRule >= 0 && this._work && this._work.motion === 'pose' ? '' : 'none';
         this.renderSimBar();
         this.renderEffectList();
         this.renderEffectForm();

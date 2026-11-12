@@ -154,7 +154,9 @@ test('Reactor menus: an actor panel drops the gauge, label and number of an off 
     const both = panels({ rrPoolsOff: ['mp', 'tp'] }).actorPanelLayout(Object.assign({}, auto, { actorElements: { mpLabel: { x: 250, y: 126 } } }), 400, 200, 20);
     assert.equal(both.exp.y, before.mp.y, 'with both off EXP moves up two rows, hand-placed labels or not');
     // A gauge node of an off pool is not shown; the HUD's TP follows the switch.
-    assert.match(ui, /if \(node && node\.type === "gauge" && ReactorUI\.isPoolHidden\(node\.gauge\)\) return false;/);
+    // (Asked before the node's own condition and its parents', and what it sets is the window's `visible`.)
+    assert.match(ui, /const shown = node => !\(node && node\.type === "gauge" && ReactorUI\.isPoolHidden\(node\.gauge\)\) && chain\(node, 0\);/);
+    assert.match(ui, /window\.visible = shown\(node\);/);
     assert.match(ui, /\$dataSystem\.optDisplayTp !== false && !ReactorUI\.isPoolHidden\("tp"\)/);
 });
 

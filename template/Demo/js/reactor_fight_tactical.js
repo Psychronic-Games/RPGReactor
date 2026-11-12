@@ -27,7 +27,6 @@
     const Game_Fight = root.Game_Fight;
     if (!F || !Game_Fight) return;
 
-    F.AREAS = ["self", "single", "circle", "square", "line", "cone", "cross", "all"];
     F.AI_PRESETS = ["aggressive", "ranged", "support"];
     F.DEFAULT_JUMP = 1;
     // A blow from the side or from behind (the way the target faces).
@@ -2396,6 +2395,62 @@
     const highVariance = (damage, variance) => { const amp = Math.floor(Math.max(Math.abs(damage) * variance / 100, 0)); return damage >= 0 ? damage + amp : damage - amp; };
     const estimate = { hit: 1, critical: 0, min: 0, max: 0, heals: false, hp: true };
 
+    // An estimate must not change the battle, and a damage formula may be written to: `b.addState(5); 100`,
+    // `v[10] += 1; a.atk`. The forecast and the AI's weighing (twice per target per cell) run the formula against
+    // stand-ins instead: each reads through to the real object, takes no writes, and answers a method named for a
+    // change (addState, gainHp, setValue...) with nothing. What a stand-in's method hands back is a stand-in too,
+    // and one passed to a method goes in as the real object, so comparing and searching still work. It is a guard
+    // against the usual ways, not a wall: a method under another name, or a change made inside a callback, still
+    // happens. Only the engine's own evaluation is replaced; a plugin's, or a sequence step's, is left to run.
+    const stockFormula = Game_Action.prototype.evalDamageFormula;
+    const CHANGES = /^(?:add|remove|erase|clear|gain|lose|set|change|recover|die|revive|learn|forget|consume|pay|use|refresh|transform|escape|hide|appear|request|start|perform|force|reserve|init|setup|on)(?=[A-Z_]|$)/;
+    const standIns = new WeakMap(), standsFor = new WeakMap();
+    const nothing = () => undefined;
+    const realOf = value => standsFor.get(value) || value;
+    const standInHandler = {
+        get(target, key) {
+            const value = Reflect.get(target, key, target);
+            if (value === null || (typeof value !== "object" && typeof value !== "function")) return value;
+            // A frozen property must be answered with its very value.
+            const own = Reflect.getOwnPropertyDescriptor(target, key);
+            if (own && !own.configurable && !own.writable && !own.get) return value;
+            if (typeof value !== "function" || key === "constructor") return standIn(value);
+            if (typeof key === "string" && CHANGES.test(key)) return nothing;
+            return function() {
+                const args = Array.prototype.map.call(arguments, realOf);
+                return standIn(value.apply(target, args));
+            };
+        },
+        set() { return true; },
+        defineProperty() { return true; },
+        deleteProperty() { return true; }
+    };
+    function standIn(value) {
+        if (!value || typeof value !== "object" || standsFor.has(value)) return value;
+        let made = standIns.get(value);
+        if (!made) { made = new Proxy(value, standInHandler); standIns.set(value, made); standsFor.set(made, value); }
+        return made;
+    }
+    // The game objects a formula can name, shadowed by their stand-ins. `eval` inside sees the parameters as the
+    // engine's own evaluation sees its locals, so a formula of several statements gives the same value.
+    const SHADOWED = ["$gameVariables", "$gameSwitches", "$gameSelfSwitches", "$gameParty", "$gameTroop", "$gameActors",
+        "$gameTemp", "$gameSystem", "$gameMap", "$gamePlayer", "$gameScreen", "$gameMessage", "$gameTimer"];
+    const shadowed = new Function("return [" + SHADOWED.map(name => "typeof " + name + " !== \"undefined\" ? " + name + " : undefined").join(", ") + "];");
+    const evalShielded = new Function("a", "b", "v", "item", "target", ...SHADOWED, "$rrFormula", "return eval($rrFormula);");
+    function shieldedFormula(target) {
+        try {
+            const item = this.item(), b = standIn(target);
+            const sign = [3, 4].includes(item.damage.type) ? -1 : 1;
+            const args = [standIn(this.subject()), b, standIn($gameVariables._data), item, b];
+            for (const object of shadowed()) args.push(standIn(object));
+            args.push(item.damage.formula);
+            const value = Math.max(evalShielded.apply(this, args), 0) * sign;
+            return isNaN(value) ? 0 : value;
+        } catch (e) {
+            return 0;
+        }
+    }
+
     /** What an action would do to a battler, with F._strike already set: its chances and its least and most. */
     function estimateAction(action, battler) {
         const item = action.item();
@@ -2405,7 +2460,9 @@
         estimate.hp = !item.damage || item.damage.type === 0 || action.isHpEffect();
         if (item.damage && item.damage.type > 0) {
             let low = 0, high = 0;
+            const shield = action.evalDamageFormula === stockFormula;
             try {
+                if (shield) action.evalDamageFormula = shieldedFormula;
                 action.applyVariance = lowVariance;
                 low = action.makeDamageValue(battler, false);
                 action.applyVariance = highVariance;
@@ -2414,6 +2471,7 @@
                 low = 0; high = 0;
             } finally {
                 delete action.applyVariance;
+                if (shield) delete action.evalDamageFormula;
             }
             estimate.heals = low < 0 || high < 0 || (low === 0 && high === 0 && action.isRecover());
             estimate.min = Math.min(Math.abs(low), Math.abs(high));
@@ -2898,6 +2956,11 @@
         act.path = steps;
         delete act.grappleOnly; delete act.grappleFrom;
         // A grapple on the way is counted now; one that takes the action leaves nothing to do on arriving.
+        // What was counted before is kept (null for nothing), so Undo Move can give the use and the cooldown back.
+        if (unit && steps && steps.some(step => step.kind === "grapple")) {
+            const grapples = this.tac().grapples;
+            act.grappleWas = (grapples && grapples[unit.id]) || null;
+        } else delete act.grappleWas;
         act.spent = this.noteGrapple(unit, steps);
         act.through = character.isThrough();
         act.speed = character.moveSpeed();
@@ -4385,6 +4448,12 @@
         if (G.is3D()) character._reactorGround = origin.height;
         this._inside[String(unit.id)] = [origin.x, origin.y];
         act.moved = false;
+        // A grapple taken on the way that is undone was not used: its count and cooldown go back to what they were.
+        if (act.grappleWas !== undefined) {
+            const grapples = this.tac().grapples;
+            if (grapples) { if (act.grappleWas) grapples[unit.id] = act.grappleWas; else delete grapples[unit.id]; }
+            delete act.grappleWas;
+        }
         act.stage = "move";
         this.setCursor(origin.x, origin.y, G.is3D() ? origin.height : undefined);
         this.focusOn(origin.x, origin.y);
@@ -4782,7 +4851,7 @@
         serial: -1, unitId: 0, turn: -1, ready: false, preset: "aggressive", move: 0, count: 0, index: 0,
         x: new Int16Array(AI_CELLS), y: new Int16Array(AI_CELLS), cost: new Float32Array(AI_CELLS), height: new Float32Array(AI_CELLS),
         loss: new Float32Array(AI_CELLS), spent: new Uint8Array(AI_CELLS), mhp: 1,
-        actions: [], foes: [], friends: [], threat: [], front: [], shoots: false,
+        actions: [], foes: [], friends: [], threat: [], front: [], closers: [], shoots: false,
         bestScore: -Infinity, bestX: 0, bestY: 0, bestKind: "", bestId: 0, bestCx: 0, bestCy: 0
     };
     // What a cell in an opponent's reach costs the unit, by how it fights.
@@ -4877,18 +4946,22 @@
         }
         if (ai.friends.length > AI.POOL) ai.friends.sort((a, b) => far(a) - far(b) || a.id - b.id);
         // How near the nearest friend who closes in stands to each foe, and whether this unit has anything to shoot.
+        // The friends who close in, and where they stand: found once, not once per foe. A unit that closes in
+        // itself never reads the answer (positionScore), so it is not worked out for one.
+        const closers = ai.closers;
+        closers.length = 0;
+        if (ai.preset !== "aggressive") for (const friend of ai.friends) {
+            if (!fight.isAlive(friend)) continue;
+            const fb = fight.battler(friend);
+            if (F.tactics(fb, $dataSkills[fb.attackSkillId()]).max >= 2 || F.aiOf(friend) !== "aggressive") continue;
+            const c = AI.at(fight, friend);
+            if (c) closers.push(c);
+        }
         ai.front.length = 0;
         for (const foe of ai.foes) {
             const fc = AI.at(fight, foe);
-            if (!fc) { ai.front.push(0); continue; }
             let nearest = Infinity;
-            for (const friend of ai.friends) {
-                if (!fight.isAlive(friend)) continue;
-                const reach = F.tactics(fight.battler(friend), $dataSkills[fight.battler(friend).attackSkillId()]).max;
-                if (reach >= 2 || F.aiOf(friend) !== "aggressive") continue;
-                const c = AI.at(fight, friend);
-                if (c) nearest = Math.min(nearest, F.stepsTo(foe, fc.x, fc.y, c.x, c.y));
-            }
+            if (fc) for (const c of closers) nearest = Math.min(nearest, F.stepsTo(foe, fc.x, fc.y, c.x, c.y));
             ai.front.push(nearest === Infinity ? 0 : nearest);
         }
         ai.shoots = ai.actions.some(entry => entry.action.isForOpponent() && entry.tactics.max >= 2);
@@ -6488,7 +6561,9 @@
         shared.rrOpenLow.value = least;
         for (const prop of cut.props.values()) {
             const value = prop.e <= 0 ? 1e9 : prop.top + (prop.low - prop.top) * smooth(prop.e);
+            // (Each update of a battle: the materials are stamped only when the height changed.)
             for (const uniform of prop.uniforms) uniform.value = value;
+            if (prop.value !== value) { prop.value = value; Reactor3D.touchMaterial(prop.materials); }
         }
     }
 
@@ -6647,12 +6722,13 @@
                 let prop = cut.props.get(object);
                 if (!hides) continue;
                 if (!prop) {
-                    prop = { uniforms: [], e: 0, goal: 1, last: frame, wanted: stamp, low, top: box.y1 + 0.3 };
+                    prop = { uniforms: [], materials: [], value: 1e9, e: 0, goal: 1, last: frame, wanted: stamp, low, top: box.y1 + 0.3 };
                     object.traverse(node => {
                         const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : EMPTY;
                         for (const material of materials) {
                             material.userData = material.userData || {};
                             prop.uniforms.push(material.userData.rrFightStump || (material.userData.rrFightStump = { value: 1e9 }));
+                            prop.materials.push(material);
                         }
                     });
                     cut.props.set(object, prop);
@@ -6696,7 +6772,7 @@
         if (cut.scene !== scene) {
             for (const cluster of cut.open) { shutBuilding(cluster); cluster.e = 0; cluster.goal = 0; }
             for (const mesh of cut.caps) mesh.geometry.dispose();
-            for (const prop of cut.props.values()) for (const uniform of prop.uniforms) uniform.value = 1e9;
+            for (const prop of cut.props.values()) { for (const uniform of prop.uniforms) uniform.value = 1e9; Reactor3D.touchMaterial(prop.materials); }
             cut.open.length = 0; cut.caps.length = 0; cut.props.clear(); cut.memo.clear();
             cut.scene = scene; cut.ex = 1e9; cut.due = Infinity; cut.easing = false; cut.capsDue = false;
             cut.entryCluster.length = 0; cut.entryRun.length = 0;
@@ -8630,7 +8706,7 @@
             // End Turn asks first when units that could still act would lose their turn.
             command.setHandler("endTurn", () => W.askEndTurn(scene));
             // Auto hands every unit still to act to itself: asked first.
-            command.setHandler("auto", () => W.openMenu(scene, "auto", "command"));
+            command.setHandler("auto", () => W.openMenu(scene, "auto"));
             command.setHandler("cancel", () => { ate(); fight().commandCancel(); });
             // (A row of the vehicle the unit rides is the vehicle's to use: the list says whose each is.)
             skills.setHandler("ok", () => {

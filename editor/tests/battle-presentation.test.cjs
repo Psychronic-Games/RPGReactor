@@ -30,8 +30,12 @@ test('battle presentation save rolls back a failed pair and recovers an interrup
  try{
   const manager=new Manager();manager.data.actionSequences=[null,B.template()];manager.data.battlePresentation=B.empty();manager.data.battlePresentation.skills[1]={mode:'sequence',sequenceId:1};
   assert.equal(manager.saveBattlePresentation(dir),true);const file=path.join(dir,'data/ActionSequences.json'),bindings=path.join(dir,'data/BattlePresentation.json'),previous=fs.readFileSync(file,'utf8'),oldBindings=fs.readFileSync(bindings,'utf8');
-  manager.data.actionSequences[1].name='New';const write=manager._writeFileAtomic;let failed=false;manager._writeFileAtomic=function(fs,dest,...args){if(dest===bindings&&!failed){failed=true;throw Error('disk failure');}return write.call(this,fs,dest,...args);};
-  assert.equal(manager.saveBattlePresentation(dir),false);assert.equal(fs.readFileSync(file,'utf8'),previous);assert.equal(fs.readFileSync(bindings,'utf8'),oldBindings);
+  // A change to one file of the pair writes that file only.
+  const write=manager._writeFileAtomic;let written=[];manager._writeFileAtomic=function(fs,dest,...args){written.push(path.basename(dest));return write.call(this,fs,dest,...args);};
+  manager.data.actionSequences[1].name='Renamed';assert.equal(manager.saveBattlePresentation(dir),true);assert.deepEqual(written.filter(name=>!name.startsWith('.')),['ActionSequences.json']);assert.equal(fs.readFileSync(bindings,'utf8'),oldBindings);
+  const previous2=fs.readFileSync(file,'utf8');
+  manager.data.actionSequences[1].name='New';manager.data.battlePresentation.skills[2]={mode:'sequence',sequenceId:1};let failed=false;manager._writeFileAtomic=function(fs,dest,...args){if(dest===bindings&&!failed){failed=true;throw Error('disk failure');}return write.call(this,fs,dest,...args);};
+  assert.equal(manager.saveBattlePresentation(dir),false);assert.equal(fs.readFileSync(file,'utf8'),previous2);assert.equal(fs.readFileSync(bindings,'utf8'),oldBindings);
   fs.writeFileSync(path.join(dir,'data/.BattlePresentation.pending.json'),JSON.stringify({version:1,files:[{file:'ActionSequences.json',previous},{file:'BattlePresentation.json',previous:oldBindings}]}));fs.writeFileSync(file,'[]');manager.recoverBattlePresentation(dir);assert.equal(fs.readFileSync(file,'utf8'),previous);
   assert.equal(manager.changeMaximum('actionSequences',0,B.template()),false);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}

@@ -118,7 +118,7 @@ function open(folder, destination, options) {
         // Families are found in every section: a game may carry its own code inside a stock one (Thrall's Game_Temp).
         const familyTexts = active.map(s => s.text);
         const families = C.scriptFamilies(familyTexts);
-        C.setContext({ constants, messageCodes, families, names: { items: nameTable(vx.items), weapons: nameTable(vx.weapons), armors: nameTable(vx.armors), skills: nameTable(vx.skills) } });
+        C.setContext({ constants, messageCodes, families, engine: 'vx', names: { items: nameTable(vx.items), weapons: nameTable(vx.weapons), armors: nameTable(vx.armors), skills: nameTable(vx.skills) } });
         const db = V.database(vx, notes);
         const ids = { attack: db.attackSkillId, guard: db.guardSkillId, escape: db.escapeSkillId };
         // Troops, common events and animations have Ace's shape once their commands are.
