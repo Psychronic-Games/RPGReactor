@@ -1,5 +1,6 @@
 # Editor changelog
 
+- A party member who leaves the battle line mid-fight, for example captured or banished by a state that hides them, disappears from the battlefield instead of standing there with their last pose (runtime 20261113.1). Clearing a sprite's bitmap assigned a new texture frame, which Pixi v8 never applies, so the sprite kept drawing the old image; it now returns to an empty texture of its own. Status window, target lists and turn order were already right.
 - For plugin authors: two methods on `Game_Enemy` to replace instead of working around. `rrActionPatterns()` returns the action patterns an enemy chooses from, and the turn-based, Action and Tactical battle modes now all read them through it, so a plugin that gives an enemy other skills changes one method and every mode follows. `rrEquipSource()` returns the rows an enemy's equipment is first read from, so a plugin can equip an enemy from somewhere other than its database entry. Both return the database lists by default, so nothing changes for a project without such a plugin. (runtime 20261112.1)
 
 The full technical list, one file per release or labeled development checkpoint, newest first. The short version of each release is in the [root changelog](../CHANGELOG.md).

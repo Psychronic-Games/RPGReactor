@@ -329,7 +329,26 @@ Sprite.prototype._onBitmapChange = function() {
         this._bitmap.addLoadListener(this._onBitmapLoad.bind(this));
     } else {
         this._refreshFrame = false;
-        this.texture.frame = new Rectangle();
+        if (PIXI.TextureSource) {
+            // v8: assigning texture.frame refreshes neither the UVs nor the
+            // source, so a sprite whose bitmap is cleared kept drawing the old
+            // bitmap's last frame (an actor sprite left without a battler went
+            // on showing that actor). Go back to an empty texture of the
+            // sprite's own, as initialize() starts with. A texture whose frame
+            // is already 0x0 draws nothing (initialize() calls this with one),
+            // so it is kept rather than allocated twice.
+            const old = this.texture;
+            if (!old || old.frame.width > 0 || old.frame.height > 0) {
+                const texture = PIXICreateTexture(Sprite._emptyBaseTexture, new Rectangle());
+                texture.__rrSpriteOwned = true;
+                this.texture = texture;
+                if (old && old.__rrSpriteOwned && !old.destroyed) {
+                    old.destroy();
+                }
+            }
+        } else {
+            this.texture.frame = new Rectangle();
+        }
     }
 };
 
