@@ -126,7 +126,7 @@
         // Where each battler's posed parts stand, so a pose step starts from
         // the last one and the motion after a pose brings the parts home.
         const media=[],poseState=new Map();
-        const adapter={context:{homes,target:homes.target,direction:homes.target&&homes.user&&homes.target.x<homes.user.x?-1:1},
+        const adapter={media,context:{homes,target:homes.target,direction:homes.target&&homes.user&&homes.target.x<homes.user.x?-1:1},
             cue(step,start){
                 const chosen=step._chosen|| (step.role==='allTargets'?visibleTargets:step.role==='target'?[visibleTargets[step.targetIndex??0]]:[subject]);
                 if(step.type==='impact'){
@@ -140,18 +140,26 @@
                     media.push(ticket);return ticket;
                 }
                 else if(step.type==='animation'&&step.animationId>0){
-                    const tickets=[],flat=[];
-                    for(const battler of chosen.filter(Boolean)){const ticket=room?.playAnimation(ss.findTargetSprite(battler)?._reactorRoomKey,step.animationId,step.animationTransform);if(ticket)tickets.push(ticket);else flat.push(battler);}
-                    if(flat.length){
+                    if(root.$dataAnimations&&!root.$dataAnimations[step.animationId]){const ticket={kind:'animation',targets:[],isPlaying:()=>false,cancel(){}};media.push(ticket);return ticket;}
+                    const targetsList=chosen.filter(Boolean),tickets=[],flat=[];
+                    for(const battler of targetsList){const ticket=room?.playAnimation(ss?.findTargetSprite(battler)?._reactorRoomKey,step.animationId,step.animationTransform);if(ticket){ticket.kind='animation';ticket.targets=[battler];tickets.push(ticket);}else flat.push(battler);}
+                    if(flat.length&&root.$gameTemp?.requestAnimation){
                         const before=new Set($gameTemp._animationQueue||[]);$gameTemp.requestAnimation(flat,step.animationId);
                         for(const request of ($gameTemp._animationQueue||[]).filter(r=>!before.has(r))){
-                            const created=Date.now(),ticket={pending:true,sprites:[],transform:{...step.animationTransform},room,
-                                isPlaying(){return this.pending?Date.now()-created<15000:this.sprites.some(s=>s.isPlaying());},
-                                cancel(){this.pending=false;const i=$gameTemp._animationQueue.indexOf(request);if(i>=0){$gameTemp._animationQueue.splice(i,1);for(const b of request.targets)b.endAnimation?.();}for(const sprite of this.sprites)if(ss._animationSprites?.includes(sprite))ss.removeAnimation(sprite);}};
+                            const created=Date.now(),reqTargets=Array.isArray(request.targets)?request.targets:flat,ticket={kind:'animation',targets:reqTargets,pending:true,sprites:[],transform:{...step.animationTransform},room,
+                                isPlaying(){
+                                    if(this.pending){
+                                        if(root.$gameTemp?._animationQueue&&!root.$gameTemp._animationQueue.includes(request)){this.pending=false;return false;}
+                                        if(this.targets.length&&this.targets.every(b=>b?.isDead?.()))return false;
+                                        return Date.now()-created<15000;
+                                    }
+                                    return this.sprites.some(s=>P.isSequenceSpritePlaying(s,ss));
+                                },
+                                cancel(){this.pending=false;const queue=root.$gameTemp?._animationQueue,i=queue?queue.indexOf(request):-1;if(i>=0){queue.splice(i,1);for(const b of request.targets)b.endAnimation?.();}for(const sprite of this.sprites){if(ss?._animationSprites?.includes(sprite)&&ss.removeAnimation)ss.removeAnimation(sprite);sprite._playing=false;sprite._duration=0;}}};
                             request._reactorSequenceMedia=ticket;tickets.push(ticket);
                         }
                     }
-                    const ticket={isPlaying:()=>tickets.some(t=>t.isPlaying()),cancel:()=>tickets.forEach(t=>t.cancel?.())};media.push(ticket);return ticket;
+                    const ticket={kind:'animation',targets:targetsList,isPlaying:()=>tickets.some(t=>t.isPlaying()),cancel:()=>tickets.forEach(t=>t.cancel?.())};media.push(ticket);return ticket;
                 }
                 else if(step.type==='motion')for(const battler of chosen.filter(Boolean)){
                     // A part pose is played by rules made for this step from
@@ -381,6 +389,7 @@
         };
         const appearance=new Map(),spriteKeys=new Map();for(const [key,sprite] of Object.entries(roles))if(sprite&&!spriteKeys.has(sprite))spriteKeys.set(sprite,key);
         const tween=(sprite,key,to,duration,start,apply,from)=>{effects.push({sprite,key,from,to,start,end:start+duration,apply});};
+        const liftHeight=(effect,at)=>{const t=Math.min(1,Math.max(0,(at-effect.start)/Math.max(1,effect.end-effect.start)));return effect.kind==='jump'?effect.from+(t>=1?0:Math.sin(Math.PI*t)*effect.height):effect.kind==='leap'?effect.from+effect.height*(1-(1-t)*(1-t)):effect.kind==='float'?effect.from+effect.height*t:effect.from+(effect.height-effect.from)*t;};
         const layerPrefix='extra:sequence-layer:'+(P._layerSerial=(P._layerSerial||0)+1)+':';
         const destroyLayer=(key,owners=[])=>{const entry=layers.get(key)||owners.map(o=>o?._rrLayers?.get(key)).find(Boolean);if(entry){if(entry.roomKey)room?.remove(entry.roomKey);entry.graphic.removeFromParent();entry.graphic.destroy();layers.delete(key);entry.owner?._rrLayers?.delete(key);}};
         const pending=()=>({blocking:true,isPlaying:()=>adapter.pendingImpact});
@@ -481,12 +490,37 @@
                     if(step.type==='opacity')tween(sprite,'opacity',Math.max(0,Math.min(255,step.opacity)),step.duration,start,v=>sprite.opacity=v,sprite.opacity);
                     else if(step.type==='tint')tween(sprite,'tone',[step.red,step.green,step.blue,step.gray],step.duration,start,v=>main.setColorTone?.(v),main.getColorTone?.()||[0,0,0,0]);
                     else if(step.type==='whiten'){main.setBlendColor?.([255,255,255,160]);tween(sprite,'whiten',0,Math.max(1,step.duration),start,v=>main.setBlendColor?.([255,255,255,v]),160);}
-                    else{effects.push({lift:sprite,kind:step.type,height:step.height,start,end:start+Math.max(1,step.duration),from:sprite._rrLift||0});}
+                    else{for(const e of effects)if(e.lift===sprite)sprite._rrLift=liftHeight(e,start);effects.push({lift:sprite,kind:step.type,height:step.height,start,end:start+Math.max(1,step.duration),from:sprite._rrLift||0});}
                 }return;
             }
             if(step.type==='motion'&&(step.motionIndex||step.motionFrames||step.motionSpeed||step.motionLoop&&step.motionLoop!=='default'))for(const sprite of sprites){sprite._rrMotionOverride={...(step.motionIndex?{index:step.motionIndex-1}:{}),...(step.motionFrames?{frames:step.motionFrames}:{}),...(step.motionSpeed?{speed:step.motionSpeed}:{}),...(step.motionLoop&&step.motionLoop!=='default'?{loop:step.motionLoop==='loop'?true:step.motionLoop==='hold'?'once':false}:{}),name:step.motion};}
             else if(step.type==='motion')for(const sprite of sprites)delete sprite._rrMotionOverride;
-            if(step.type==='wait'&&step.waitFor&&step.waitFor!=='frames')return {blocking:true,isPlaying:()=>sprites.some(s=>step.waitFor==='move'?s.isMoving?.():step.waitFor==='animation'?s.isAnimationPlaying?.():step.waitFor==='popup'?s._damages?.length:step.waitFor==='effecting'?s.isEffecting?.():step.waitFor==='motion'?s._motion&&!s._motion.loop&&s._pattern<2:false)};
+            if(step.type==='wait'&&step.waitFor&&step.waitFor!=='frames'){
+                let cancelled=false;
+                return {
+                    blocking:true,
+                    cancel(){cancelled=true;},
+                    isPlaying(){
+                        if(cancelled)return false;
+                        const activeTargets=step.filter&&step.filter!=='all'?choose(step):chosen;
+                        const activeSprites=activeTargets.map(b=>ss?.findTargetSprite(b)).filter(Boolean);
+                        if(step.waitFor==='animation'){
+                            if(step.filter==='alive'&&!activeTargets.length)return false;
+                            const animMedia=(adapter.media||[]).filter(m=>m.kind==='animation');
+                            const hasRoleMatch=animMedia.some(m=>m.targets?.some(t=>activeTargets.includes(t)));
+                            if(animMedia.some(m=>m.isPlaying()&&(!m.targets?.length||m.targets.some(t=>activeTargets.includes(t))||(step.role==='user'&&!hasRoleMatch&&!(step.filter==='alive'&&m.targets.every(t=>t?.isDead?.()))))))return true;
+                            if((ss?._animationSprites||[]).some(a=>P.isSequenceSpritePlaying(a,ss)&&((a.targetObjects||[]).some(t=>activeTargets.includes(t))||(a._targets||[]).some(t=>activeSprites.includes(t)))))return true;
+                            if((root.$gameTemp?._animationQueue||[]).some(r=>(!root.$dataAnimations||root.$dataAnimations[r.animationId])&&(r.targets||[]).some(t=>activeTargets.includes(t)&&!t?.isDead?.())))return true;
+                            return activeSprites.some(s=>!(s._battler||s._actor||s._enemy)?.isDead?.()&&s.isAnimationPlaying?.());
+                        }
+                        if(step.waitFor==='move')return activeSprites.some(s=>!(s._battler||s._actor||s._enemy)?.isDead?.()&&s.isMoving?.());
+                        if(step.waitFor==='motion')return activeSprites.some(s=>!(s._battler||s._actor||s._enemy)?.isDead?.()&&s._motion&&!s._motion.loop&&s._pattern<2);
+                        if(step.waitFor==='popup')return activeSprites.some(s=>s._damages?.length);
+                        if(step.waitFor==='effecting')return activeSprites.some(s=>s.isEffecting?.());
+                        return false;
+                    }
+                };
+            }
             if(step.type==='animation'&&step.animationSource&&step.animationSource!=='id'){const id=action?.item()?.animationId??0;raw={...raw,animationId:step.animationSource==='weapon'||id===-1?subject.attackAnimationId1?.()||0:Math.max(0,id)};}
             return original.cue(raw,start);
         };
@@ -499,25 +533,32 @@
         }};
         if(room)(room.sequenceVisualUpdates||=new Set()).add(updateRoomLayers);
         adapter.pose=(positions,time)=>{
-            frame=time;original.pose(positions,time);
+            frame=time;
+            if(!room)for(const sprite of appearance.keys())if(sprite._rrAppliedLift){sprite.y+=sprite._rrAppliedLift;if(Number.isFinite(sprite._offsetY))sprite._offsetY+=sprite._rrAppliedLift;sprite._rrAppliedLift=0;}
+            original.pose(positions,time);
             for(const effect of effects){
                 if(effect.balloon){effect.balloon.update();continue;}
                 if(effect.direction){const sprite=effect.direction,old=saved.get(sprite);sprite.scale.x=Math.abs(old.scaleX)*(effect.facing<0?1:-1);if(room&&!room.models.has(sprite._reactorRoomKey))sprite._reactorRoomPosition.facing=effect.facing*90;continue;}// A room's model keeps the yaw the pose gave it; a picture can only face left or right.
+                if(effect.lift){effect.lift._rrLift=liftHeight(effect,time);continue;}
                 const t=Math.min(1,Math.max(0,(time-effect.start)/Math.max(1,effect.end-effect.start)));
-                if(effect.lift){const h=effect.kind==='jump'?effect.from+Math.sin(Math.PI*t)*effect.height:effect.kind==='leap'?effect.from+effect.height*(1-(1-t)*(1-t)):effect.kind==='float'?effect.from+effect.height*t:effect.from+(effect.height-effect.from)*t;effect.lift._rrLift=h;continue;}
                 const v=Array.isArray(effect.to)?effect.to.map((n,i)=>effect.from[i]+(n-effect.from[i])*t):effect.from+(effect.to-effect.from)*t;effect.apply(v);
             }
-            for(const sprite of appearance.keys())if(sprite._rrLift){if(room)sprite._reactorRoomPosition.z=(positions[spriteKeys.get(sprite)]?.z||0)+sprite._rrLift;else sprite.y-=sprite._rrLift*48;}
+            for(const sprite of appearance.keys()){
+                if(room){if(sprite._rrLift)sprite._reactorRoomPosition.z=(positions?.[spriteKeys.get(sprite)]?.z||0)+sprite._rrLift;continue;}
+                const lift=(sprite._rrLift||0)*48;
+                if(lift){sprite.y-=lift;if(Number.isFinite(sprite._offsetY))sprite._offsetY-=lift;}
+                sprite._rrAppliedLift=lift;
+            }
             visuals.pose(time);
             for(const entry of layers.values()){const {graphic,owner,step}=entry;graphic.opacity=entry.opacity;graphic.rotation=(step.angle+(time-entry.start)*step.spin)*Math.PI/180;graphic.scale?.set(step.scale);if(entry.type==='plane'){graphic.origin.x=(time-entry.start)*step.scrollX;graphic.origin.y=(time-entry.start)*step.scrollY;}else if(entry.hosted){graphic.x=entry.x;graphic.y=entry.y;}else{graphic.x=(owner?.x||0)+entry.x;graphic.y=(owner?.y||0)+entry.y;}}
         };
-        adapter.cleanup=cancelled=>{try{original.cleanup(cancelled);}finally{
+        adapter.cleanup=cancelled=>{try{if(!room)for(const sprite of appearance.keys())if(sprite._rrAppliedLift){sprite.y+=sprite._rrAppliedLift;if(Number.isFinite(sprite._offsetY))sprite._offsetY+=sprite._rrAppliedLift;sprite._rrAppliedLift=0;}original.cleanup(cancelled);}finally{
             visuals.cleanup();room?.sequenceVisualUpdates?.delete(updateRoomLayers);
             for(const fn of restore.reverse())fn();for(const key of [...layers.keys()])if(!(stateOnly&&layers.get(key).hosted))destroyLayer(key);
             for(const [sprite,old] of appearance){const main=sprite._mainSprite||sprite;
                 // A dead enemy keeps what its collapse left (a few points of opacity, a blend colour): a reaction played over the collapse must not stand it back up.
                 const gone=sprite._battler&&typeof sprite._battler.isDead==='function'&&sprite._battler.isDead()&&typeof sprite._battler.isEnemy==='function'&&sprite._battler.isEnemy();
-                if(!gone){sprite.opacity=old.opacity;if(old.tone)main.setColorTone?.(old.tone);if(old.blend)main.setBlendColor?.(old.blend);}sprite._rrHeldPose=old.pose;sprite._rrGraphicMotion=old.motion;sprite._rrLift=0;delete sprite._rrFacing;delete sprite._rrMotionOverride;sprite._homeX=old.homeX;sprite._homeY=old.homeY;}
+                if(!gone){sprite.opacity=old.opacity;if(old.tone)main.setColorTone?.(old.tone);if(old.blend)main.setBlendColor?.(old.blend);}sprite._rrHeldPose=old.pose;sprite._rrGraphicMotion=old.motion;sprite._rrLift=0;sprite._rrAppliedLift=0;delete sprite._rrFacing;delete sprite._rrMotionOverride;sprite._homeX=old.homeX;sprite._homeY=old.homeY;}
         }};
         return adapter;
     };
@@ -785,11 +826,19 @@
         }
         if(sprite._stateIconSprite)sprite._stateIconSprite.y=bounds.y-room.project(sprite._reactorRoomPosition).y-20;
     };
+    P.isSequenceSpritePlaying=function(sprite,ss){
+        if(!sprite||sprite.destroyed||sprite._rrAssetError)return false;
+        if(sprite._bitmap1?.isError?.()||sprite._bitmap2?.isError?.()||sprite._effect?.isError){sprite._rrAssetError=true;sprite._playing=false;sprite._duration=0;return false;}
+        if(ss?._animationSprites&&!ss._animationSprites.includes(sprite))return false;
+        if(sprite._targets?.length&&sprite._targets.every(t=>t?.destroyed))return false;
+        return !!sprite.isPlaying?.();
+    };
     P.installSequenceAnimations=function(){
         if(!root.Spriteset_Base)return;
         const proto=Spriteset_Base.prototype,create=proto.createAnimation,busy=proto.isAnimationPlaying;
         proto.createAnimation=function(request){
             const ticket=request._reactorSequenceMedia;if(!ticket)return create.call(this,request);
+            if(root.$dataAnimations&&!root.$dataAnimations[request.animationId]){ticket.pending=false;ticket.sprites=[];return;}
             const before=new Set(this._animationSprites);
             try{return create.call(this,request);}finally{
                 ticket.pending=false;ticket.sprites=this._animationSprites.filter(s=>!before.has(s));
@@ -797,6 +846,14 @@
                     sprite._reactorSequenceMedia=ticket;
                     const t=ticket.transform,scale=t.scale??1;
                     sprite._animation={...sprite._animation,scale:(sprite._animation.scale??100)*scale};
+                    const effName=sprite._animation?.effectName;
+                    if(effName&&!sprite._animation?.frames){
+                        const fail=()=>{sprite._rrAssetError=true;sprite._playing=false;};
+                        const layer=root.Sprite_Animation?.SceneLayer;
+                        if(sprite._effect&&layer?.load&&layer.cache?.get?.(effName)===sprite._effect)layer.load(effName,fail);
+                        else if(sprite._effect&&root.EffectManager?.load&&root.EffectManager.makeUrl&&root.EffectManager._cache?.[root.EffectManager.makeUrl(effName)]===sprite._effect)root.EffectManager.load(effName,fail);
+                    }
+                    if(sprite._bitmap1?.isError?.()||sprite._bitmap2?.isError?.()||sprite._effect?.isError){sprite._rrAssetError=true;sprite._playing=false;sprite._duration=0;}
                     const offset=()=>{
                         const points=(sprite.targetObjects||[]).map(b=>this.findTargetSprite(b)?._reactorRoomPosition).filter(Boolean);
                         if(ticket.room&&points.length){let x=0,y=0;for(const p of points){const a=ticket.room.project(p),b=ticket.room.project({x:p.x+(t.x||0),y:p.y+(t.y||0),z:(p.z||0)+(t.z||0)});x+=b.x-a.x;y+=b.y-a.y;}return {x:x/points.length,y:y/points.length};}
