@@ -2026,9 +2026,11 @@
      * helmet or hood leaves no room for a hat; a closed helmet none for
      * glasses. Returns { outfit, props, hat } (hat: a hat was chosen).
      */
-    function dressRandom(rand, theme, female) {
+    function dressRandom(rand, theme, female, only) {
         const pick = list => list[Math.floor(rand() * list.length)];
-        const presets = PRESETS.filter(p => p.group === theme && p.items.length);
+        // `only`: the outfits to choose among by id (a character group's own list), whatever the setting.
+        const chosen0 = Array.isArray(only) && only.length ? PRESETS.filter(p => only.includes(p.id) && p.items.length) : [];
+        const presets = chosen0.length ? chosen0 : PRESETS.filter(p => p.group === theme && p.items.length);
         const preset = pick(presets.length ? presets : PRESETS.filter(p => p.items.length));
         const colors = THEME_COLORS[preset.group] || THEME_COLORS.Everyday;
         const designed = rand() < 0.3;
@@ -2055,7 +2057,7 @@
         // Earrings and necklaces are mostly a woman's choice here; a man keeps the rest.
         if (!female) options = options.filter(id => !['hoops', 'choker'].includes(id));
         const props = options.length && rand() < 0.5 ? [{ id: pick(options) }] : [];
-        return { outfit, props, preset: preset.id, hat: props.some(p => HATS.has(p.id) && p.id !== 'halo' && p.id !== 'headband' && p.id !== 'circlet') };
+        return { outfit, props, preset: preset.id, group: preset.group, hat: props.some(p => HATS.has(p.id) && p.id !== 'halo' && p.id !== 'headband' && p.id !== 'circlet') };
     }
 
     /** How far apart two hex colors are: their largest channel difference (0..255). */

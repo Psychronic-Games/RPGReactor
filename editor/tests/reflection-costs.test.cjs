@@ -156,8 +156,10 @@ test('a lookup outside the drawn part keeps the capture: the shader tests the sl
 
 test('an update\'s capture face waits for a refresh with no update, or is drawn with the next update', () => {
     const faces = [];
-    const kept = { update: F.update, enabled: F.enabled, wanted: F.wanted };
+    const kept = { update: F.update, enabled: F.enabled, wanted: F.wanted, UPDATES_PER_FACE: F.UPDATES_PER_FACE };
     F.reset();
+    // A face every update, as this sequence counts them; the game's one in two is checked at the end.
+    F.UPDATES_PER_FACE = 1;
     F.wanted = true;
     F.enabled = () => true;
     F.update = function() { faces.push('face'); };
@@ -197,6 +199,15 @@ test('an update\'s capture face waits for a refresh with no update, or is drawn 
         assert.equal(F._owed, null);
         F.reset();
         assert.equal(F._owed, null, 'a new map owes nothing');
+        // As the game ships it: once the cube is whole only every second update has a face to leave.
+        assert.equal(kept.UPDATES_PER_FACE, 2);
+        F.UPDATES_PER_FACE = 2;
+        F.wanted = true; F._ready = true; F._shownFrame = 1e9; F._turn = 0;
+        const before = faces.length;
+        let left = 0;
+        for (let i = 0; i < 6; i++) { update(); if (F._owed) { left++; F.takeOwed(renderer, mapScene, scene); } }
+        assert.equal(left, 3, 'three of six updates leave a face');
+        assert.equal(faces.length, before + 3, 'and each is drawn once, on a spare refresh');
     } finally {
         Object.assign(F, kept);
         F.SPARE_REFRESH = true;

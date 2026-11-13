@@ -386,6 +386,27 @@ test('Escape and the × close the Forge, asking first when a tool holds work', a
     forge.projectTools = { holdsWork: () => false };
     forge._activateTool('project-tools');
     assert.deepEqual([asked.length, drawn, forge.activeToolId], [4, 2, 'project-tools'], 'nothing held: it switches at once');
+    // The menu's direct entries (openTool) ask the same question (2026-11-12).
+    context.RRForgeWindow = { open() {} };
+    forge.workspaceModal.style.display = 'flex';
+    forge.projectTools = { holdsWork: () => true };
+    context.answer = false;
+    forge.openTool('sound-effect-generator');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual([asked.length, drawn, forge.activeToolId], [5, 2, 'project-tools'], 'the menu keeps the running tool when the question is cancelled');
+    assert.equal(asked[4][0], asked[3][0], 'the same question as the sidebar');
+    forge.openTool('project-tools');
+    assert.deepEqual([asked.length, drawn], [5, 2], 'the tool already showing: no question');
+    context.answer = true;
+    forge.openTool('sound-effect-generator');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual([asked.length, drawn, forge.activeToolId], [6, 3, 'sound-effect-generator']);
+    forge.openTool('project-tools');
+    assert.deepEqual([asked.length, drawn, forge.activeToolId], [6, 4, 'project-tools'], 'nothing held: the menu opens it in the same turn');
+    forge.projectTools = { holdsWork: () => true };
+    forge.workspaceModal.style.display = 'none';
+    forge.openTool('sound-effect-generator');
+    assert.deepEqual([asked.length, forge.activeToolId], [6, 'sound-effect-generator'], 'a closed Forge has nothing running: no question');
     const source = read('src/forge/ForgeManager.js');
     assert.match(source, /RRKeyboardNavigation\?\.modal\(this\.workspaceModal, \{ onEscape: \(\) => this\.requestClose\(\) \}\);/);
     assert.match(source, /\.rr-forge-close'\)\.addEventListener\('click', \(\) => this\.requestClose\(\)\);/);

@@ -494,7 +494,7 @@ test('both viewports render the maps once a frame before the first pass, and the
     assert.match(three, /this\._pending = \{ renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs, activate: !this\._active \};/);
     assert.match(three, /const object = new THREE\.Mesh\(geometry, material\);\n\s*group\.add\(object\);\n[\s\S]{0,300}?Reactor3D\.Shadows\.markCaster\(object, true\);/);
     assert.match(three, /if \(level !== current\) this\._lodSwaps\+\+;/);
-    assert.match(three, /Reactor3D\.Shadows\._renderer === this\._renderer\) Reactor3D\.Shadows\.dispose\(\);/);
+    // (`Viewport.prototype.destroy`, which let the shadows go with its renderer, had no caller and was removed on 2026-11-12.)
     // The picture a map stands on (a pinned parallax as ground) is lit like
     // the tiles over it: it is the whole floor of a parallax room.
     assert.match(three, /const geometry = this\.groundPlane\(width, height, lift\);[\s\S]{0,2600}?material\.__reactorShaded = true;\n\s*Reactor3D\.litMaterial\(material\);\n\s*this\._materials\.push\(material\);\n\n\s*const mesh = new THREE\.Mesh\(geometry, material\);\n\s*\/\/ Beneath the tile geometry/);

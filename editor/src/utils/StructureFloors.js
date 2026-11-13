@@ -72,32 +72,6 @@
         return true;
     }
 
-    /**
-     * Build a described plan out into pieces, once: the rooms become their
-     * walls, floors, doors, windows, stairs and roof, and the plan keeps
-     * only the pieces from then on (its lights and screens come along).
-     */
-    function buildOut(plan, SP, resolve) {
-        if (!isDescribed(plan) || !SP) return false;
-        const floors = plan.floors.length;
-        // Its own rooms, shapes and pieces; parts and paths are other plans and paving, and stay as they are.
-        const build = SP.buildOwn || SP.build;
-        plan.pieces = build(plan, 0, 0, 1, 0, resolve).map(piece => { const out = Object.assign({}, piece); delete out.id; delete out.group; return out; });
-        const own = Object.assign({}, plan, { parts: [], lights: [], surfaces: [], props: [], water: [] });
-        const effects = SP.effectsOf(own, 0, 0, resolve).filter(fx => fx.type === 'light' || fx.type === 'screen');
-        if (effects.length) {
-            const scratch = { width: plan.size[0], height: plan.size[1], reactor3d: { version: 1 } };
-            SP.addEffects(scratch, effects, 0);
-            plan.lights = (plan.lights || []).concat((scratch.reactor3d.lights || []).map(row => { const out = Object.assign({}, row); if (!out.tag || /^structure:\d+$/.test(String(out.tag))) delete out.tag; delete out.structure; return out; }));
-            plan.surfaces = (plan.surfaces || []).concat(scratch.reactor3d.mediaSurfaces || []);
-        }
-        plan.floors = []; plan.stairs = []; plan.shapes = [];
-        plan.effects = (plan.effects || []).filter(fx => fx && fx.type !== 'light' && fx.type !== 'screen');
-        if (plan.roof) plan.roof.pitch = null;
-        plan.height = Math.max(1, floors, occupiedFloors(plan));
-        return true;
-    }
-
     /** Move everything at or above a level up (or down) by a number of levels. */
     function shift(plan, fromLevel, by) {
         for (const piece of plan.pieces || []) if ((Number(piece.z) || 0) >= fromLevel) piece.z = (Number(piece.z) || 0) + by;
@@ -523,7 +497,7 @@
         return rectCells(x0, y0, x1, y1).filter(([x, y]) => x === Math.min(x0, x1) || x === Math.max(x0, x1) || y === Math.min(y0, y1) || y === Math.max(y0, y1));
     }
 
-    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, needsMaterialize, materialize, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, rectCells, lineCells, outlineCells };
+    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, needsMaterialize, materialize, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, rectCells, lineCells, outlineCells };
     root.RRStructureFloors = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -82,6 +82,9 @@ class ConditionalBranchEditor {
 
     show(command, callback, options = {}) {
         this.callback = callback;
+        // A branch made here gets RPG Maker MZ's empty row in each body
+        // (buildCommands). An edited one keeps the bodies it has, as they are.
+        this.isNew = !(command && command.code === 111);
 
         if (command && command.code === 111) {
             this.parseCommand(command);
@@ -901,6 +904,10 @@ class ConditionalBranchEditor {
             indent: 0,
             parameters: parameters
         });
+        // The empty row that ends a body, one level in, as MZ writes it. The
+        // game does not need it; plugins and tools that read event lists may.
+        const emptyRow = () => ({ code: 0, indent: 1, parameters: [] });
+        if (this.isNew) commands.push(emptyRow());
 
         // Else branch. The 411 marker sits at the SAME indent as the 111
         // header (MZ format): at indent 1 the runtime's skipBranch never
@@ -912,6 +919,7 @@ class ConditionalBranchEditor {
                 indent: 0,
                 parameters: []
             });
+            if (this.isNew) commands.push(emptyRow());
         }
 
         // End

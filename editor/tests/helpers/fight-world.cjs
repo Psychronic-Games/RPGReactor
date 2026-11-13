@@ -14,7 +14,7 @@
 //   reactor_fight_action.js    `action: true`
 //   reactor_fight_menu.js      with the Tactical driver, which it stands on
 //   reactor_fight_classic.js   `classic: true`
-//   reactor_vehicles.js, reactor_vehicles_drive.js, reactor_vehicles_feel.js, reactor_vehicles_hints.js, reactor_vehicles_mount.js   `vehicles: true`
+//   reactor_vehicles.js, reactor_vehicles_drive.js, reactor_vehicles_feel.js, reactor_vehicles_mount.js   `vehicles: true`
 // `prepare(ctx)` runs just before them, for what a file must find when it loads (a map scene, windows).
 const fs = require('node:fs');
 const path = require('node:path');
@@ -49,7 +49,7 @@ const battleSource = name => fs.readFileSync(path.join(runtimeRoot, name), 'utf8
 const CONTROL_NAMES = ['KEY_NAMES', 'BUTTON_NAMES', 'keyName', 'buttonName', 'keyRank', 'labelFor', 'device', 'noteDevice', 'onDevice'];
 
 // The vehicle game files, in the order the game boots them: the last of the engine's own files (runtime/reactor_main.js).
-const VEHICLE_FILES = ['reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_hints.js', 'reactor_vehicles_mount.js'];
+const VEHICLE_FILES = ['reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_mount.js'];
 
 /**
  * The names of keys and buttons, which a battle's hint line and menu show. This world's Input has no key maps to

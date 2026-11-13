@@ -202,6 +202,9 @@
             if (!it) continue;
             const type = it.type ?? 0;
             const base = { id: it.id, name: it.name || '', description: it.description || '', iconIndex: 0, note: '', price: it.price || 0 };
+            // "Usable by" (a hero list, or a class list in 2003) is not carried: as equipment types it would take
+            // off what a game's events put on a hero. Counted for the import report.
+            if ([it.actor_set, it.class_set].some(set => Array.isArray(set) && set.some(allowed => allowed === false))) notes.usableByNotCarried = (notes.usableByNotCarried || 0) + 1;
             if (type === 1) {
                 kinds[it.id] = 'weapons';
                 const traits = [{ code: 22, dataId: 0, value: ((it.hit ?? 90) - 90) / 100 }];

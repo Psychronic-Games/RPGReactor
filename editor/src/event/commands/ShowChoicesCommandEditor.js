@@ -50,7 +50,7 @@ class ShowChoicesCommandEditor {
         this.positionType = params[3] !== undefined ? params[3] : 2;
         this.background = params[4] !== undefined ? params[4] : 0;
 
-        // Ensure at least 2 choices
+        // Two rows to type in at least; a blank last row is not written back.
         while (this.choices.length < 2) {
             this.choices.push('');
         }
@@ -184,7 +184,7 @@ class ShowChoicesCommandEditor {
             input.type = 'text';
             input.className = `choice-input-${i}`;
             input.value = this.choices[i] || '';
-            input.placeholder = i < 2 ? tt('Required') : tt('Optional');
+            input.placeholder = i < 1 ? tt('Required') : tt('Optional');
             input.style.cssText = `
                 flex: 1;
                 padding: 6px 10px;
@@ -371,9 +371,11 @@ class ShowChoicesCommandEditor {
         let count = this.choices.length;
         while (count > 0 && String(this.choices[count - 1] || '').trim() === '') count--;
         const filteredChoices = this.choices.slice(0, count).map(choice => String(choice || ''));
-        if (filteredChoices.length < 2) {
+        // One choice is enough: a command that came with a single choice is
+        // written back as it was, not held until a second one is typed.
+        if (filteredChoices.length < 1) {
             const tt = text => window.I18n ? window.I18n.tText(text) : text;
-            RRDialog.alert(tt('You must have at least 2 choices.'), { title: tt('Show Choices'), kind: 'warning' });
+            RRDialog.alert(tt('You must have at least 1 choice.'), { title: tt('Show Choices'), kind: 'warning' });
             return null;
         }
 
@@ -412,7 +414,7 @@ class ShowChoicesCommandEditor {
     save() {
         if (this.callback) {
             const commands = this.buildCommands();
-            // Refused (fewer than two choices, after the warning): the dialog stays open with what was typed.
+            // Refused (no choice with text, after the warning): the dialog stays open with what was typed.
             if (!commands) return;
             this.callback(commands);
         }

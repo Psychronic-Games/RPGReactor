@@ -2975,21 +2975,30 @@ Game_Enemy.prototype.rrEquipOn = function() {
     return typeof ReactorFeatures !== "undefined" && ReactorFeatures.on("enemyEquipment");
 };
 
+// Where an enemy's rows come from the first time they are read: the rows
+// authored on its database entry, or its default slots when it has none. A
+// plugin that equips enemies from somewhere else replaces this one method
+// and returns { etypeId, kind, itemId } rows;
+// rrEquipRows copies them, so the list returned here is never changed.
+Game_Enemy.prototype.rrEquipSource = function() {
+    const enemy = this.enemy();
+    if (enemy && Array.isArray(enemy.rrEquipment)) return enemy.rrEquipment;
+    // Never edited: one empty slot per named equipment type, the slots the
+    // Equipment window shows for it, so an event can equip it. An enemy
+    // meant to have no slots carries an empty list.
+    const rows = [];
+    const types = ($dataSystem && $dataSystem.equipTypes) || [];
+    for (let id = 1; id < types.length; id++) {
+        if (String(types[id] || "").trim()) rows.push({ etypeId: id, kind: 0, itemId: 0 });
+    }
+    return rows;
+};
+
 Game_Enemy.prototype.rrEquipRows = function() {
     const held = this._rrEquips;
     if (held && held.enemyId === this._enemyId) return held.slots;
-    const enemy = this.enemy();
-    let rows = enemy && Array.isArray(enemy.rrEquipment) ? enemy.rrEquipment : null;
-    if (!rows) {
-        // Never edited: one empty slot per named equipment type, the slots the
-        // Equipment window shows for it, so an event can equip it. An enemy
-        // meant to have no slots carries an empty list.
-        rows = [];
-        const types = ($dataSystem && $dataSystem.equipTypes) || [];
-        for (let id = 1; id < types.length; id++) {
-            if (String(types[id] || "").trim()) rows.push({ etypeId: id, kind: 0, itemId: 0 });
-        }
-    }
+    const source = this.rrEquipSource();
+    const rows = Array.isArray(source) ? source : [];
     const slots = rows.filter(Boolean).map(row => ({
         etypeId: Number(row.etypeId) || 0,
         kind: Number(row.kind) || 0,
@@ -3295,9 +3304,10 @@ Game_Enemy.prototype.performCollapse = function() {
             this.playCollapseSe(null);
             break;
         // 3 is "No Disappear": the sprite stays put, so no effect is requested.
-        // It has no sound of its own; a chosen one still plays.
+        // The enemy still fell: it sounds as in a battle on the map (`ReactorFight.collapseSound`), the stock
+        // collapse sound unless one is chosen for it.
         case 3:
-            this.playCollapseSe(null);
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 4:
             this.requestEffect("ashCollapse");
@@ -3537,10 +3547,20 @@ Game_Enemy.prototype.selectAllActions = function(actionList) {
     }
 };
 
+// The action patterns this enemy chooses from: the ones authored on its
+// database entry. Every battle mode reads them through here, so a plugin that
+// gives an enemy other patterns replaces this one method. Return a list of
+// { skillId, rating, conditionType, conditionParam1, conditionParam2 } and
+// leave the database entry's own list as it is.
+Game_Enemy.prototype.rrActionPatterns = function() {
+    const enemy = this.enemy();
+    return enemy && Array.isArray(enemy.actions) ? enemy.actions : [];
+};
+
 Game_Enemy.prototype.makeActions = function() {
     Game_Battler.prototype.makeActions.call(this);
     if (this.numActions() > 0) {
-        const actionList = this.enemy().actions.filter(a =>
+        const actionList = this.rrActionPatterns().filter(a =>
             this.isActionValid(a)
         );
         if (actionList.length > 0) {

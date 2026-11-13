@@ -298,7 +298,7 @@ test('the setting is saved with the player\'s options and offered once a 3D map 
     const windows = source('reactor_windows.js');
     assert.match(windows, /if \(typeof Reactor3D === "undefined" \|\| !Reactor3D\.Quality \|\| !ConfigManager\.reactor3dSeen\) return;\n\s*this\.addCommand\(Window_Options\.GRAPHICS_TEXT\.name, "graphicsQuality"\);/);
     assert.match(windows, /if \(values\[next\] === "auto" && typeof Reactor3D !== "undefined" && Reactor3D\.Quality\) Reactor3D\.Quality\.reset\(\);/);
-    assert.match(source('reactor_scenes.js'), /return 7 \+ \(typeof Reactor3D !== "undefined" && Reactor3D\.Quality && ConfigManager\.reactor3dSeen \? 1 : 0\);/, 'the window is a row taller with it');
+    assert.match(source('reactor_scenes.js'), /return 7 \+ \(typeof Reactor3D !== "undefined" && Reactor3D\.Quality && ConfigManager\.reactor3dSeen \? 1 : 0\)\n/, 'the window is a row taller with it');
 });
 
 test('a measuring tool holds the levels still', () => {

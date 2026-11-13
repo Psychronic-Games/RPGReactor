@@ -1652,7 +1652,7 @@ class DatabaseEnemyEditor {
             }
         });
         btnPaste.addEventListener('click', () => {
-            this.pasteTrait(entry);
+            this.pasteTrait(entry, this.getSelectedTraitIndex(table));
         });
         btnDelete.addEventListener('click', () => {
             const idx = this.getSelectedTraitIndex(table);
@@ -1713,7 +1713,7 @@ class DatabaseEnemyEditor {
             } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
-                this.pasteTrait(entry);
+                this.pasteTrait(entry, idx);
             }
         });
     }
@@ -1749,7 +1749,7 @@ class DatabaseEnemyEditor {
                 { label: 'Edit', action: () => this.editTrait(enemy, traitIndex), enabled: traitIndex !== null },
                 { label: 'Cut', action: () => this.cutTrait(enemy, traitIndex), enabled: traitIndex !== null },
                 { label: 'Copy', action: () => this.copyTrait(enemy, traitIndex), enabled: traitIndex !== null },
-                { label: 'Paste', action: () => this.pasteTrait(enemy), enabled: true },
+                { label: 'Paste', action: () => this.pasteTrait(enemy, traitIndex), enabled: true },
                 { label: 'Delete', action: () => this.deleteTrait(enemy, traitIndex), enabled: traitIndex !== null },
             ];
 
@@ -1825,8 +1825,9 @@ class DatabaseEnemyEditor {
         return this.traitsClipboard;
     }
 
-    async pasteTrait(enemy) {
-        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, enemy.traits);
+    /** Paste goes after the selected row, or at the end with none selected: the same on every page with a trait table. */
+    async pasteTrait(enemy, traitIndex = null) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, enemy.traits, enemy.traits ? traitIndex : null);
         const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
         if (this.currentEnemy !== enemy
             || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, enemy.traits)) return;
@@ -1835,7 +1836,7 @@ class DatabaseEnemyEditor {
             return;
         }
         if (!enemy.traits) enemy.traits = [];
-        enemy.traits.push(result.row);
+        DatabaseRowClipboard.insertPasted(enemy.traits, traitIndex, result.row);
         this.databaseManager.updateEnemy(enemy.id, enemy);
         this.refreshEnemyDetail(enemy);
     }

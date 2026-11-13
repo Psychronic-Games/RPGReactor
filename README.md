@@ -6,7 +6,7 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-The latest tagged source release is [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5). Read the [release notes](docs/posts/release-notes-0.99.5.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
+The current development version is 0.99.6 and is not published yet; the latest tagged source release is [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5). Read the [release notes](docs/posts/release-notes-0.99.5.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
@@ -92,7 +92,6 @@ RPGReactor/
 - **The Forge, in-editor asset generators**:
   - **Animation Generator**: 76 procedural 2D animations across eight categories, including Portal, with layered composition, per-layer keyframe timelines, a 3D shape pipeline, custom textures, and export to bake-ready sprite sheets or animated GIFs.
   - **Effekseer Animation Generator**: create native Effekseer particle effects (`.efkefc`) from 106 recipes across nine categories without the external Effekseer editor: 21 sci-fi interface instruments with user-typed text, physical battle hits, 15 energy recipes, elements, a custom-effect Composer, and more; wireframe or solid-textured rendering with custom texture upload; layers, keyframes with texture cross-fades, live in-editor preview through the game's own Effekseer runtime, and one-click export. The tracked suite validates generated format/model round trips, every recipe at default/extreme/swept values, composition, and real-WASM playback.
-  - **Character Generator**: bundled Psychronic and Looseleaf styles plus procedural Outfit Forge and Hair Forge tools that generate RPG Maker-style walking-sheet parts, with live 4-direction walk previews, multiple hair styles, palette systems, and save-to-library output. Psychronic remains the default style.
   - **3D Character Builder**: shape humans, humanoid species and creatures with sliders and pickers, dress them from a catalog of 152 garments, 74 outfit presets and 84 accessories, and save them as rigged GLB models with 51 poses and motions, expressions and speech. Characters also export as 2D sprite sheets, battlers and face portraits. Default human faces and body appearance are still under review. See the [guide](docs/CHARACTER-BUILDER.md).
   - **Character Creation**: let players choose an actor or build their own 3D character inside the game, single player or online, with the same tools and catalog. See the [guide](docs/DESIGN-ONLINE.md#using-it-today).
   - **3D Prop Builder**: build flags, props made from pictures, weapons, wearables, containers, furniture and vehicles, and save them as 3D models. See the [guide](docs/PROP-BUILDER.md).
@@ -185,7 +184,7 @@ GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch 
 
 ## Trusted Projects
 
-Treat an RPG project like source code. Project plugins and project-local Character Generator JavaScript execute inside the Node-enabled desktop editor/runtime and can access the local machine. Only open or run projects and plugins from sources you trust; inspect downloaded project code before using it. The browser editor has a narrower host, but projects may still execute game/plugin JavaScript during playtest and interface capture.
+Treat an RPG project like source code. Project plugins execute inside the Node-enabled desktop editor/runtime and can access the local machine. Only open or run projects and plugins from sources you trust; inspect downloaded project code before using it. The browser editor has a narrower host, but projects may still execute game/plugin JavaScript during playtest and interface capture.
 
 ## Bundled Demo Limitations
 
@@ -205,18 +204,18 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.99.5 changes have been committed:
+`main` worktree after all 0.99.6 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.99.5 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.5
+node editor/build-scripts/cut-release.cjs 0.99.6 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.6
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, moves the cycle's
 dated handoff entries to `docs/archive/handoff/<version>.md`, creates a release
-commit when those surfaces changed, creates an annotated `v0.99.5` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.99.6` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

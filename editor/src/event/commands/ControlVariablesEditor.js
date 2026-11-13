@@ -588,6 +588,10 @@ class ControlVariablesEditor {
             } else if (!expression.right) {
                 expression.right = { type: 'constant', value: 0 };
             }
+            // A formula picked here always starts with its multiplier and rounding.
+            delete expression.scale;
+            delete expression.round;
+            Object.assign(expression, ControlVariablesEditor.defaultScaling(expression.operator) || {});
             this.advancedExpression = expression;
             this.renderContent();
         });
@@ -610,6 +614,68 @@ class ControlVariablesEditor {
             ));
         }
         container.appendChild(sources);
+        if (ControlVariablesEditor.isFractionOperator(expression.operator)) {
+            this._buildExpressionScaling(container, expression);
+        }
+    }
+
+    // Multiplier and rounding for the formulas that give fractions. A command
+    // saved before these existed has neither: it opens on "As saved" and is
+    // written back unchanged until the author picks a rounding.
+    _buildExpressionScaling(container, expression) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const saved = expression.scale === undefined;
+        const row = document.createElement('div');
+        row.className = 'rr-expression-source rr-expression-scaling';
+
+        const scaleLabel = document.createElement('span');
+        scaleLabel.className = 'rr-command-inline-label';
+        scaleLabel.textContent = `${tt('Multiply by')}:`;
+        const scale = document.createElement('input');
+        scale.type = 'number';
+        scale.value = saved ? 1 : expression.scale;
+        scale.disabled = saved;
+        scale.addEventListener('input', event => {
+            const number = Number(event.target.value);
+            expression.scale = event.target.value !== '' && Number.isFinite(number) ? number : 1;
+        });
+
+        const roundLabel = document.createElement('span');
+        roundLabel.className = 'rr-command-inline-label';
+        roundLabel.textContent = `${tt('Rounding')}:`;
+        const round = document.createElement('select');
+        const modes = ControlVariablesEditor.roundingModes();
+        if (saved) modes.unshift({ value: '', label: 'As saved (fraction dropped)' });
+        modes.forEach(mode => {
+            const option = document.createElement('option');
+            option.value = mode.value;
+            option.textContent = tt(mode.label);
+            option.selected = saved ? mode.value === '' : expression.round === mode.value;
+            round.appendChild(option);
+        });
+        round.addEventListener('change', event => {
+            if (!event.target.value) return;
+            if (expression.scale === undefined) {
+                expression.scale = ControlVariablesEditor.defaultScaling(expression.operator).scale;
+            }
+            expression.round = event.target.value;
+            this.renderContent();
+        });
+
+        row.appendChild(scaleLabel);
+        row.appendChild(scale);
+        row.appendChild(roundLabel);
+        row.appendChild(round);
+        container.appendChild(row);
+
+        const help = document.createElement('div');
+        help.className = 'rr-command-help';
+        help.textContent = saved && expression.operator === 'atan2'
+            ? tt('This command was saved without a multiplier: its angle is in radians. Pick a rounding to get degrees.')
+            : expression.operator === 'atan2'
+                ? tt('The angle is in degrees. A variable holds whole numbers: the result is multiplied, then rounded.')
+                : tt('A variable holds whole numbers: the result is multiplied, then rounded.');
+        container.appendChild(help);
     }
 
     _buildExpressionSource(labelText, source, onChange) {
@@ -1098,6 +1164,19 @@ class ControlVariablesEditor {
 
         const unary = this.isUnaryOperator(data.operator);
         const expectedKeys = unary ? ['operator', 'left'] : ['operator', 'left', 'right'];
+        // A multiplier and a rounding choice, always together and only on the
+        // formulas that give fractions. A command saved before they existed has
+        // neither and keeps computing what it always did.
+        const has = key => Object.prototype.hasOwnProperty.call(data, key);
+        const scaled = has('scale') || has('round');
+        if (scaled) {
+            if (!this.isFractionOperator(data.operator) ||
+                typeof data.scale !== 'number' || !Number.isFinite(data.scale) ||
+                !this.roundingModes().some(mode => mode.value === data.round)) {
+                return null;
+            }
+            expectedKeys.push('scale', 'round');
+        }
         if (Object.keys(data).length !== expectedKeys.length ||
             !expectedKeys.every(key => Object.prototype.hasOwnProperty.call(data, key))) {
             return null;
@@ -1109,7 +1188,33 @@ class ControlVariablesEditor {
 
         const normalized = { operator: data.operator, left };
         if (!unary) normalized.right = right;
+        if (scaled) {
+            normalized.scale = data.scale;
+            normalized.round = data.round;
+        }
         return normalized;
+    }
+
+    // The formulas whose answer is usually a fraction. A variable holds whole
+    // numbers only, so these carry a multiplier and a rounding choice.
+    static isFractionOperator(operator) {
+        return ['divide', 'atan2', 'squareRoot', 'sineDegrees', 'cosineDegrees'].includes(operator);
+    }
+
+    static roundingModes() {
+        return [
+            { value: 'nearest', label: 'Nearest' },
+            { value: 'down', label: 'Down' },
+            { value: 'up', label: 'Up' }
+        ];
+    }
+
+    // What a formula picked in the dialog starts with. Sine and Cosine only run
+    // from -1 to 1, so they start at 1000; the others are useful as they are.
+    static defaultScaling(operator) {
+        if (!this.isFractionOperator(operator)) return null;
+        const trig = operator === 'sineDegrees' || operator === 'cosineDegrees';
+        return { scale: trig ? 1000 : 1, round: 'nearest' };
     }
 
     static compileExpressionSource(source) {
@@ -1124,6 +1229,21 @@ class ControlVariablesEditor {
 
         const left = this.compileExpressionSource(expression.left);
         const right = expression.right ? this.compileExpressionSource(expression.right) : null;
+        if (expression.scale !== undefined) {
+            // With a multiplier: times it, then to a whole number. Atan2 answers
+            // in degrees here, like Sine and Cosine take them. The value is first
+            // rounded at nine decimals, so 1000 x sine(30), which the computer
+            // holds as 499.99999999999994, rounds down to 500 and not to 499.
+            const raw = {
+                divide: `(${left} / ${right})`,
+                atan2: `(Math.atan2(${left}, ${right}) * 180 / Math.PI)`,
+                squareRoot: `Math.sqrt(${left})`,
+                sineDegrees: `Math.sin(${left} * Math.PI / 180)`,
+                cosineDegrees: `Math.cos(${left} * Math.PI / 180)`
+            }[expression.operator];
+            const whole = { nearest: 'Math.round', down: 'Math.floor', up: 'Math.ceil' }[expression.round];
+            return `${whole}(Math.round(${raw} * ${JSON.stringify(expression.scale)} * 1e9) / 1e9)`;
+        }
         switch (expression.operator) {
             case 'add': return `(${left} + ${right})`;
             case 'subtract': return `(${left} - ${right})`;

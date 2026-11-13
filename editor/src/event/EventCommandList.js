@@ -1415,7 +1415,8 @@ class EventCommandList {
         }
 
         const draw = () => {
-            const col = faceIndex % 4;
+            // (A face set with frames, "Name[4F]": each face is that many frames wide; its first is shown.)
+            const col = RRFaceSheet.columnOf(faceIndex, src);
             const row = Math.floor(faceIndex / 4);
 
             // Draw scaled down version (144x144 -> 32x32)
@@ -1707,7 +1708,16 @@ class EventCommandList {
                     description = `${tt('Button')} ${tt(buttonNames[params[1]] || params[1] || 'OK')} ${tt('is')} ${tt(buttonModes[mode] || 'Pressed')}`;
                 } else if (condType === 12) { // Script
                     const generated = EventCommandList.generatedCommand(command, 'inputCondition');
-                    if (generated) {
+                    // The row that ends a made loop (a number of times, while a variable, a range) reads as what the loop does.
+                    const LoopClass = EventCommandList.loopEditorClass();
+                    const i18n = typeof window !== 'undefined' ? window.I18n : null;
+                    const loopText = generated || !LoopClass ? null : LoopClass.guardText(command,
+                        id => this._fmtVarBracket(id),
+                        (text, values) => (i18n && i18n.formatText ? i18n.formatText(text, values)
+                            : text.replace(/\{(\w+)\}/g, (token, key) => (key in values ? String(values[key]) : token))));
+                    if (loopText) {
+                        description = loopText;
+                    } else if (generated) {
                         const data = generated.data;
                         if (data.type === 'keyboard') {
                             description = `${tt('Keyboard Extended')}: ${tt(data.button)} ${tt(data.mode)}`;
@@ -1821,6 +1831,10 @@ class EventCommandList {
                         valueStr = unary
                             ? `${tt(labels[data.operator] || data.operator)}(${source(data.left)})`
                             : `${source(data.left)} ${tt(labels[data.operator] || data.operator)} ${source(data.right)}`;
+                        // A formula saved with a multiplier shows it (1 is not worth a mention).
+                        if (typeof data.scale === 'number' && data.scale !== 1) {
+                            valueStr = `${unary ? valueStr : `(${valueStr})`} × ${data.scale}`;
+                        }
                     } else {
                         const scriptText = String(params[4] || '');
                         const trimmed = scriptText.substring(0, 150);
@@ -3732,8 +3746,17 @@ class EventCommandList {
             const unary = ['absolute', 'squareRoot', 'sineDegrees', 'cosineDegrees'];
             const binary = ['add', 'subtract', 'multiply', 'divide', 'modulo', 'power', 'minimum',
                 'maximum', 'atan2', 'random', 'bitwiseAnd', 'bitwiseOr', 'bitwiseXor', 'leftShift', 'rightShift'];
-            if (unary.includes(data.operator)) return hasKeys(['operator', 'left']) && source(data.left);
-            return binary.includes(data.operator) && hasKeys(['operator', 'left', 'right']) &&
+            // The formulas that give fractions may carry a multiplier and a
+            // rounding choice, always together (ControlVariablesEditor writes them).
+            const extra = [];
+            if (Object.prototype.hasOwnProperty.call(data, 'scale') ||
+                Object.prototype.hasOwnProperty.call(data, 'round')) {
+                if (!['divide', 'atan2', 'squareRoot', 'sineDegrees', 'cosineDegrees'].includes(data.operator) ||
+                    !finite(data.scale) || !['nearest', 'down', 'up'].includes(data.round)) return false;
+                extra.push('scale', 'round');
+            }
+            if (unary.includes(data.operator)) return hasKeys(['operator', 'left', ...extra]) && source(data.left);
+            return binary.includes(data.operator) && hasKeys(['operator', 'left', 'right', ...extra]) &&
                 source(data.left) && source(data.right);
         }
 
@@ -4387,6 +4410,14 @@ class EventCommandList {
 
         // Conditional Branch command
         if (code === 111) {
+            // The row that ends a made loop belongs to its Loop (the row
+            // above it): editing it as a condition would break the loop.
+            const LoopGuard = EventCommandList.loopEditorClass();
+            if (LoopGuard && page.list[index - 1]?.code === 112 &&
+                LoopGuard.guardText(command, id => String(id), text => text)) {
+                this.editCommand(index - 1, page, pageIndex);
+                return;
+            }
             // Parse the structure up front: the "then" body follows the
             // header itself, the "else" body stays bound to its 411 marker.
             // The parse also tells the editor whether an Else branch exists
@@ -4420,6 +4451,15 @@ class EventCommandList {
                             for (const nestedCmd of body) {
                                 page.list.splice(insertPos++, 0, nestedCmd);
                             }
+                        }
+                        // An Else added to a branch whose first body ends in
+                        // its empty row gets one too; the bodies already
+                        // there are never given or cost one.
+                        const bodyIndent = (command.indent || 0) + 1;
+                        const thenLast = thenBody[thenBody.length - 1];
+                        if (cmd.code === 411 && !elseBranch && thenLast && thenLast.code === 0 &&
+                            (thenLast.indent || 0) === bodyIndent) {
+                            page.list.splice(insertPos++, 0, { code: 0, indent: bodyIndent, parameters: [] });
                         }
                     }
 

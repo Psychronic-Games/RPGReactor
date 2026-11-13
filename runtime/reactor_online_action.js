@@ -259,11 +259,12 @@ if (typeof ReactorFight !== "undefined" && ReactorFight.Action) (function(R, B, 
     };
 
     // Someone only watching has no use for the battle's menu: Escape takes them out.
-    const callMenu = Scene_Map.prototype.callMenu;
-    Scene_Map.prototype.callMenu = function(...args) {
-        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
-        if (fight?._mirror && B.side === "watch" && !fight._ending) { this.menuCalling = false; fight.end(ReactorFight.ESCAPE, true); return; }
-        return callMenu.apply(this, args);
+    // The menu's file owns the press and asks here first (`ReactorFight.menuPress`).
+    ReactorFight.menuPress = function(scene, fight) {
+        if (!(fight?._mirror && B.side === "watch" && !fight._ending)) return false;
+        scene.menuCalling = false;
+        fight.end(ReactorFight.ESCAPE, true);
+        return true;
     };
 
     // A guard a guest holds up on their own game counts on the host.

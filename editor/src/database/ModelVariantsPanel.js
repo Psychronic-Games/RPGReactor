@@ -138,6 +138,119 @@ class ModelVariantsPanel {
     }
 
     /**
+     * A variant was renamed: every use of the model under `node` that wears it wears the new
+     * name. A use is stored the same way wherever it is kept, an object with the model's `name`
+     * and the `variant` it wears (an event page and a placed model in a map's 3D file, a
+     * Database binding, a battler's model, a vehicle's, an Action Sequence step's, a placed
+     * model in a structure plan). Returns how many uses changed.
+     */
+    static renameUses(node, model, from, to) {
+        let count = 0;
+        const walk = value => {
+            if (Array.isArray(value)) { for (const item of value) walk(item); return; }
+            if (!value || typeof value !== 'object') return;
+            if (value.name === model && typeof value.variant === 'string' && value.variant.trim() === from) { value.variant = to; count++; }
+            for (const key of Object.keys(value)) walk(value[key]);
+        };
+        walk(node);
+        return count;
+    }
+
+    /**
+     * The one rename between two lists of variants, `{ from, to }`: the same variants in the same
+     * order, one under another name that neither list has elsewhere. Null for any other change
+     * (a variant added or deleted, two renamed), where no use can be said to follow.
+     */
+    static renamedBetween(before, after) {
+        const names = list => (list || []).map(variant => (variant && typeof variant.name === 'string' ? variant.name : ''));
+        const a = names(before), b = names(after);
+        if (a.length !== b.length) return null;
+        const differ = a.map((name, index) => index).filter(index => a[index] !== b[index]);
+        if (differ.length !== 1) return null;
+        const from = a[differ[0]], to = b[differ[0]];
+        return from && to && !b.includes(from) && !a.includes(to) ? { from, to } : null;
+    }
+
+    /**
+     * The project's files that keep uses of models, each with the way its own save writes it
+     * (`sidecar`: a map's 3D file or a structure plan; `pretty`: the two battle files; `data`:
+     * the rest). Found from what the game reads a model from (`normalizeModelSpec`'s callers,
+     * `normalizeProp`, the vehicle types).
+     */
+    static useFiles(projectPath, fs, path) {
+        const files = [], list = directory => { try { return fs.readdirSync(directory).sort(); } catch (error) { return []; } };
+        const data = path.join(projectPath, 'data');
+        for (const name of list(data)) {
+            if (/^Map\d+\.r3d\.json$/i.test(name)) files.push({ full: path.join(data, name), format: 'sidecar' });
+            else if (name === 'ActionSequences.json' || name === 'BattlePresentation.json') files.push({ full: path.join(data, name), format: 'pretty' });
+            else if (name === 'Database.r3d.json' || name === 'ReactorVehicles.json') files.push({ full: path.join(data, name), format: 'data' });
+        }
+        const structures = path.join(projectPath, '3d', 'Structures');
+        for (const name of list(structures)) if (/\.json$/i.test(name)) files.push({ full: path.join(structures, name), format: 'sidecar' });
+        return files;
+    }
+
+    /**
+     * Renames a variant in every file of `useFiles` that has a use of it, each written the way
+     * its own save writes it. A file that does not read is left as it is. `write(full, text)`
+     * does the writing. Returns the files changed.
+     */
+    static renameUsesInFiles(projectPath, model, from, to, fs, path, write) {
+        const changed = [];
+        const parse = text => (typeof RRJson !== 'undefined' && RRJson.parse ? RRJson.parse(text) : JSON.parse(text));
+        const elevation = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
+        const text = {
+            sidecar: value => (elevation && elevation.stringifySidecar ? elevation.stringifySidecar(value) : JSON.stringify(value)),
+            pretty: value => JSON.stringify(value, null, 2),
+            data: value => (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(value) : JSON.stringify(value, null, 2)) + '\n'
+        };
+        for (const file of ModelVariantsPanel.useFiles(projectPath, fs, path)) {
+            try {
+                const raw = fs.readFileSync(file.full, 'utf8');
+                // Most files have no use of any variant: those are not parsed.
+                if (!raw.includes('"variant"')) continue;
+                const value = parse(raw);
+                if (!ModelVariantsPanel.renameUses(value, model, from, to)) continue;
+                write(file.full, text[file.format](value));
+                changed.push(file.full);
+            } catch (error) {
+                console.warn('Variant rename: ' + file.full + ' was left as it is.', error);
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * The copies of those files the editor holds follow the files: the open Database (and its
+     * copy for Cancel, or Cancel would bring the old name back), the open map's 3D data and
+     * the model the Place Models tool holds. A part that had no unsaved change still has none.
+     */
+    static renameUsesInMemory(model, from, to, held) {
+        const rename = node => ModelVariantsPanel.renameUses(node, model, from, to);
+        const manager = held && held.databaseManager;
+        if (manager && manager.data) {
+            const unsaved = typeof manager.getDirtyKeys === 'function' ? manager.getDirtyKeys() : [];
+            for (const key of ['modelBindings', 'battlePresentation', 'actionSequences', 'vehicles', 'structures']) {
+                if (rename(manager.data[key]) && !unsaved.includes(key) && typeof manager.captureSavedState === 'function') manager.captureSavedState(key);
+            }
+        }
+        const ui = held && held.databaseUI;
+        if (ui && typeof ui._dataSnapshot === 'string') {
+            try {
+                const snapshot = JSON.parse(ui._dataSnapshot);
+                if (rename(snapshot)) ui._dataSnapshot = JSON.stringify(snapshot);
+            } catch (error) { /* a copy that will not read is left as it is */ }
+        }
+        const tilemap = held && held.tilemapManager, map = tilemap && tilemap.currentMap;
+        if (map && map.reactor3d && typeof tilemap.sidecarState === 'function') {
+            const clean = tilemap.sidecarState() === tilemap.savedSidecarState;
+            if (rename(map.reactor3d) && clean) tilemap.savedSidecarState = tilemap.sidecarState();
+        }
+        const brush = held && held.modelPropsManager && held.modelPropsManager.model;
+        if (brush) rename(brush);
+    }
+
+    /**
      * A variant was deleted: it leaves every effect's list. An effect only
      * it wore keeps the name, so it shows in no variant ("No variant" on its
      * row) instead of turning up in all of them.
@@ -338,6 +451,8 @@ class ModelVariantsPanel {
         const host = this.host;
         to.push({ text: this._snapshot(), view: host._variant || '' });
         const state = JSON.parse(last.text);
+        // A step that takes a rename back (or makes it again) renames the uses with it.
+        const renamed = ModelVariantsPanel.renamedBetween(host.rawVariants, state.variants);
         host.rawVariants = state.variants;
         // The effects' lists go back with the variants they name.
         let lists = false;
@@ -353,6 +468,7 @@ class ModelVariantsPanel {
         this._saveTimer = null;
         this.save();
         if (lists) host.saveRules();
+        if (renamed) this.renameUses(renamed.from, renamed.to);
         host.renderEffectList();
         this.render();
         host.renderToolbar();
@@ -572,6 +688,38 @@ class ModelVariantsPanel {
         return true;
     }
 
+    /**
+     * After a rename is in model.json: every use of the model that wore the old name wears the
+     * new one, in the project's files and in the copies the editor holds. Without this each
+     * use found no such variant in the game and drew the model's own look. Not reached: a
+     * `variant(...)` written by hand in an event's Note, and a script's `setModelVariant`.
+     */
+    renameUses(from, to) {
+        const host = this.host;
+        if (typeof require !== 'function' || !from || from === to) return;
+        try {
+            const fs = require('fs'), path = require('path');
+            const project = host._project();
+            if (!project || !project.path) return;
+            // The file must have the new name first (a failed save was reported and changes no use).
+            if (!ModelVariantsPanel.namesFor(project.path, host.selectedName).includes(to)) return;
+            ModelVariantsPanel.renameUsesInFiles(project.path, host.selectedName, from, to, fs, path, (full, text) => host._writeFileAtomic(fs, full, text));
+            const manager = host.databaseManager;
+            const reactor = typeof window !== 'undefined' ? window.reactor : null;
+            const ui = reactor && reactor.databaseEditorUI;
+            const controller = reactor && reactor.projectController;
+            const sameProject = !manager || !manager.projectPath || path.resolve(manager.projectPath) === path.resolve(project.path);
+            ModelVariantsPanel.renameUsesInMemory(host.selectedName, from, to, {
+                databaseManager: sameProject ? manager : null,
+                databaseUI: ui && ui.databaseManager === manager && sameProject ? ui : null,
+                tilemapManager: controller && (controller.getTilemapManager ? controller.getTilemapManager() : controller.tilemapManager),
+                modelPropsManager: controller && controller.modelPropsManager
+            });
+        } catch (error) {
+            console.warn('Variant rename: its uses were not all renamed.', error);
+        }
+    }
+
     rename(wanted) {
         const host = this.host, variant = this.record();
         if (!variant || !String(wanted || '').trim() || wanted.trim() === variant.name) return;
@@ -582,6 +730,7 @@ class ModelVariantsPanel {
         this.end();
         this.save();
         if (lists) host.saveRules();
+        this.renameUses(before, variant.name);
         host._variant = variant.name;
         host.renderEffectList();
         host.renderToolbar();

@@ -151,7 +151,8 @@ function main(argv) {
     // Each test process reports as it ends, so what passed is kept even if this run never finishes.
     const facts = plan ? plan.facts : (({ nodes, salt }) => allTestFiles().map(file => Graph.describe(nodes, file, salt)))(graphOf());
     fs.writeFileSync(path.join(dir, 'run.json'), JSON.stringify(Object.fromEntries(facts.map(fact => [fact.file, fact.fingerprint]))));
-    const env = { ...process.env, RR_TEST_PEAKS: path.join(dir, 'run.jsonl') };
+    // How many files run at once, for the tests that hold code to a time budget (`helpers/timing.cjs`).
+    const env = { ...process.env, RR_TEST_PEAKS: path.join(dir, 'run.jsonl'), RR_TEST_WORKERS: String(option('concurrency') || workers) };
     flags.unshift('--require=' + path.join(here, 'helpers', 'peak-probe.cjs'));
     const run = spawnSync(process.execPath, [...flags, ...passed, ...files], { cwd: editor, stdio: 'inherit', env });
     if (run.error) throw run.error;

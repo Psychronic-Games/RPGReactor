@@ -4224,25 +4224,6 @@ Reactor3D.Viewport.prototype.detachFromPage = function() {
     this._detached = true;
 };
 
-Reactor3D.Viewport.prototype.destroy = function() {
-    Reactor3D.EffekseerScene?.stopScene(this._scene);
-    Reactor3D.GpuEffects?.release(Reactor3D.GpuEffects._runtime.get(this._renderer));
-    if (this._shared) this._disposeTargets(true);
-    if (this._renderer && Reactor3D.Shadows._renderer === this._renderer) Reactor3D.Shadows.dispose();
-    if (this._renderer) {
-        this._renderer.dispose();
-        this._renderer = null;
-    }
-    this._pixi = null;
-    this._shared = false;
-    if (this._canvas && this._canvas.parentNode) {
-        this._canvas.parentNode.removeChild(this._canvas);
-    }
-    this._canvas = null;
-    this._scene = null;
-    this._camera = null;
-};
-
 //-----------------------------------------------------------------------------
 // Reactor3D.Geometry
 //

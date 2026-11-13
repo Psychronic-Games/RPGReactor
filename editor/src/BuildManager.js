@@ -202,6 +202,7 @@ class BuildManager {
                                     <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt("Don't bundle unused files")}</span>
                                 </label>
                                 <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('A picture, sound, movie, effect, model or font is left out only when nothing names it: the database, maps and events, plugin parameters, the code of the plugins switched on, and what playtests loaded.')}</div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 4px;">${tt('A helper script that is not in the plugin list is left out unless it is added under "Always include".')}</div>
                                 <button id="build-unused-review" class="graphic-selector-button" style="margin-top: 8px; padding: 6px 14px; font-size: 12px;">${tt('Review unused files...')}</button>
                                 <div id="build-unused-panel" style="display: none; margin-top: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px;">
                                     <div id="build-unused-summary" style="color: var(--color-text); font-size: 12px; line-height: 1.4;"></div>

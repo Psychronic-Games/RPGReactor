@@ -1955,6 +1955,13 @@
         [data-rr-columns] > .rr-db-column { grid-column: auto !important; min-width: 0; }
         .rr-db-column-made { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
         .rr-db-column-empty { display: none !important; }
+        /* The Note card closes the page's last column and takes up the height that column has to spare, its text
+         * box with it, so the columns end level (RRDatabaseSections, NOTE_FILL). */
+        [data-rr-columns]:has(.rr-db-note-fill) { align-items: stretch !important; }
+        .rr-db-column:has(> .rr-db-note-fill) { display: flex; flex-direction: column; }
+        .rr-db-note-fill { flex: 1 1 auto; display: flex; flex-direction: column; }
+        .rr-db-note-fill > .database-section-content { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+        .rr-db-note-fill textarea { flex: 1 1 auto; min-height: 3.5em; resize: none; }
 
         /* Pages that are nothing but options (DatabaseFlowForm): cards fill the window's
          * width in columns and cascade down as it narrows, and short fields share a row. */
@@ -1981,11 +1988,12 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 16px;
         }
+        /* As tall as its cards: the page round it scrolls, not the columns (they never shrink to make room). */
         .database-class-columns {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 16px;
-            overflow-y: auto;
+            flex: 0 0 auto;
         }
 
         /* Paired sections stretch to equal heights; the section content
@@ -7500,7 +7508,8 @@ html.rr-detached-window .rr-window-controls { display: inline-flex; }
 .rr-event-editor-grip,
 .rr-database-grip,
 .rr-forge-grip,
-.rr-plugin-grip {
+.rr-plugin-grip,
+.rr-audio-grip {
     position: fixed;
     right: 2px;
     bottom: 2px;
@@ -7633,6 +7642,34 @@ html.rr-web #database-viewer.rr-database-floating {
 #plugin-manager-modal.rr-plugin-popped .rr-plugin-header { -webkit-app-region: drag; }
 #plugin-manager-modal.rr-plugin-popped .rr-plugin-header :is(button, input, select, a) { -webkit-app-region: no-drag; }
 
+/* The Audio Player is a window like them: no backdrop, dragged by its header, sized from its corner. */
+#audio-player-modal.rr-audio-floating { background: transparent; pointer-events: none; z-index: 1000; }
+#audio-player-modal.rr-audio-floating > .rr-audio-window {
+    position: fixed; pointer-events: auto;
+    width: 900px; height: 88vh; max-width: none; max-height: none; min-width: 480px; min-height: 520px;
+    box-sizing: border-box; resize: both; overflow: hidden;
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-modal);
+}
+#audio-player-modal.rr-audio-floating .modal-header { cursor: move; user-select: none; gap: 8px; }
+#audio-player-modal.rr-audio-floating .modal-header h2 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Its × is one of the window's buttons: the same box and weight as pin, minimize and fill. */
+#audio-player-modal.rr-audio-floating .modal-close {
+    display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+    width: 24px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm, 3px);
+    font-size: 17px; font-weight: 400; line-height: 1; color: var(--color-text-muted);
+}
+#audio-player-modal.rr-audio-floating .modal-close:hover { background: var(--color-bg-hover, rgba(255, 255, 255, 0.08)); color: var(--color-text); }
+#audio-player-modal.rr-audio-floating .rr-window-controls { margin-inline-end: -6px; }
+/* Made small, the list gives up height before anything is cut off. */
+#audio-player-modal.rr-audio-floating #audio-track-list-container { min-height: 120px !important; }
+#audio-player-modal.rr-audio-popped { pointer-events: auto; }
+#audio-player-modal.rr-audio-popped > .rr-audio-window {
+    position: static; width: 100% !important; height: 100% !important;
+    min-width: 0; min-height: 0; resize: none; box-shadow: none;
+}
+#audio-player-modal.rr-audio-popped .modal-header { cursor: default; -webkit-app-region: drag; }
+#audio-player-modal.rr-audio-popped .modal-header :is(button, input, select, a) { -webkit-app-region: no-drag; }
+
 /* Clip the complete native document too: composited canvases, header strips and
    the body-level resize grip all stay inside the same transparent rounded edge. */
 html.rr-detached-window {
@@ -7650,7 +7687,8 @@ html.rr-detached-window.rr-repaint { clip-path: inset(0 round calc(var(--radius-
 #event-editor-modal.rr-event-editor-popped > .rr-modal,
 #database-viewer.rr-database-popped > .database-window,
 #forge-workspace.rr-forge-popped > .rr-forge-window,
-#plugin-manager-modal.rr-plugin-popped > .rr-plugin-window {
+#plugin-manager-modal.rr-plugin-popped > .rr-plugin-window,
+#audio-player-modal.rr-audio-floating > .rr-audio-window {
     clip-path: inset(0 round var(--radius-lg));
     isolation: isolate;
 }
@@ -8219,10 +8257,10 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 /* Generate Group (RRCharacterGroups): the export panel's frame, wide enough for the description beside the members. */
 .rr-c3d-export.rr-c3d-gen { width: min(760px, calc(100% - 24px)); overflow: hidden; }
 .rr-c3d-gen-body { display: grid; grid-template-columns: minmax(0, 330px) minmax(0, 1fr); gap: 10px; min-height: 0; flex: 1 1 auto; overflow: hidden; }
-.rr-c3d-gen-form { min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 6px; }
+.rr-c3d-gen-form { min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 8px; }
 .rr-c3d-gen-side { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .rr-c3d-gen-sidehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: var(--color-text-muted); padding-bottom: 6px; }
-.rr-c3d-gen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; align-content: start; }
+.rr-c3d-gen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; align-content: start; padding-right: 4px; }
 .rr-c3d-gen-card { display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 3px; background: var(--color-bg-input); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); cursor: pointer; color: var(--color-text); }
 .rr-c3d-gen-card:hover { border-color: var(--color-accent); }
 .rr-c3d-gen-face { display: block; aspect-ratio: 1; background: var(--color-bg-deep); border-radius: 2px; overflow: hidden; }
@@ -8242,18 +8280,57 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-c3d-spriteview-grounds { display: inline-flex; gap: 4px; }
 .rr-c3d-ground { width: 18px; height: 18px; padding: 0; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; background: repeating-conic-gradient(#8c8c8c 0% 25%, #c4c4c4 0% 50%) 0 0 / 8px 8px; }
 .rr-c3d-ground.is-active { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.rr-c3d-spriteview-stage { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 12px; box-sizing: border-box; }
+/* Centred while it fits (`safe`): a picture zoomed past the stage starts at the top left, so every edge of it can be scrolled to. */
+.rr-c3d-spriteview-stage { flex: 1 1 auto; min-height: 0; display: flex; align-items: safe center; justify-content: safe center; overflow: auto; padding: 12px; box-sizing: border-box; }
+.rr-c3d-spriteview-stage > canvas { flex: 0 0 auto; }
+/* The stage's scrollbars in the theme's accent, both ways, as the editor's other accent lists have them. */
+.rr-c3d-spriteview-stage { scrollbar-color: var(--color-accent-muted) var(--color-bg-deep); scrollbar-width: thin; }
+.rr-c3d-spriteview-stage::-webkit-scrollbar { width: 10px; height: 10px; }
+.rr-c3d-spriteview-stage::-webkit-scrollbar-track, .rr-c3d-spriteview-stage::-webkit-scrollbar-corner { background: var(--color-bg-deep); }
+.rr-c3d-spriteview-stage::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--color-accent), var(--color-accent-muted)); border-radius: 5px; }
+.rr-c3d-spriteview-stage::-webkit-scrollbar-thumb:hover { background: var(--color-accent-hover); }
+.rr-c3d-spriteview-zoom [data-zoom="fit"] { min-width: 40px; justify-content: center; }
+/* The shadow's angle as a dial: a ring, the figure as a dot at its middle, and a hand from the middle to the rim
+   that points the way the shadow falls on the picture (up is straight back). */
+.rr-c3d-dialrow { align-items: center; }
+.rr-c3d-dial { position: relative; width: 46px; height: 46px; flex: 0 0 auto; justify-self: start; border-radius: 50%; border: 1px solid var(--color-border-input); background: var(--color-bg-deep); cursor: grab; touch-action: none; }
+.rr-c3d-dial:active { cursor: grabbing; }
+.rr-c3d-dial:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.rr-c3d-dial::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--color-text-muted); }
+.rr-c3d-dial-hand { position: absolute; left: 50%; top: 50%; width: 2px; height: 21px; margin: -21px 0 0 -1px; transform-origin: 50% 100%; background: var(--color-accent); border-radius: 1px; pointer-events: none; }
+.rr-c3d-dial-hand::before { content: ''; position: absolute; left: 50%; top: -3px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--color-accent); }
+.rr-c3d-spriteview-guide { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text); cursor: pointer; white-space: nowrap; }
+.rr-c3d-spriteview-guidecolor { width: 18px; height: 18px; flex: 0 0 auto; }
+/* The frame-edge guide: one screen pixel round each animation's frame, and the grid of frames over the whole sheet
+   (drawn behind the picture, which is clear at its frames' edges; the last line on each side is the outline). */
+/* (A border of the canvas's own, clear until the guide is on, so nothing moves when it is switched and no side of it is lost under a neighbour.) */
+.rr-c3d-sprite-tile canvas { box-sizing: content-box; border: 1px solid transparent; }
+.rr-c3d-spriteview-stage.has-guide .rr-c3d-sprite-tile canvas { border-color: var(--rr-sprite-guide, #ff00ff); }
+.rr-c3d-spriteview-stage.has-guide .rr-c3d-sprite-whole {
+    box-shadow: 0 0 0 1px var(--rr-sprite-guide, #ff00ff);
+    background-image: linear-gradient(to right, var(--rr-sprite-guide, #ff00ff) 0 1px, transparent 1px), linear-gradient(to bottom, var(--rr-sprite-guide, #ff00ff) 0 1px, transparent 1px);
+    background-size: calc(100% / var(--rr-sprite-cols, 1)) 100%, 100% calc(100% / var(--rr-sprite-rows, 1));
+}
+/* What is shown is not yet what is chosen: dimmed until the new sheet is drawn. */
+.rr-c3d-spriteview-stage.is-stale > * { opacity: 0.3; transition: opacity 0.15s; }
 .rr-c3d-spriteview-stage[data-ground="checker"] { background: repeating-conic-gradient(#7d7d7d 0% 25%, #a9a9a9 0% 50%) 0 0 / 16px 16px; }
 .rr-c3d-spriteview-stage canvas { image-rendering: pixelated; }
-.rr-c3d-sprite-tiles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-content: center; }
-.rr-c3d-sprite-tile { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.rr-c3d-sprite-tile figcaption { height: 14px; font-size: 10px; line-height: 14px; color: rgba(255, 255, 255, 0.86); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); text-transform: capitalize; white-space: nowrap; }
-.rr-c3d-spriteview-stage[data-ground="light"] .rr-c3d-sprite-tile figcaption { color: rgba(0, 0, 0, 0.75); text-shadow: none; }
+.rr-c3d-sprite-tiles { display: grid; gap: 10px; flex: 0 0 auto; }
+.rr-c3d-sprite-tile { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* A plate of its own behind each name, so it reads on any ground. */
+.rr-c3d-sprite-tile figcaption { height: 18px; padding: 0 7px; border-radius: 9px; font-size: 12px; line-height: 18px; font-weight: 600; color: #fff; background: rgba(12, 14, 18, 0.78); white-space: nowrap; }
 .rr-c3d-export.is-docked { position: static; flex: 0 0 340px; width: 340px; max-height: none; height: 100%; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; box-shadow: none; padding: 10px 12px; z-index: auto; }
 .rr-c3d-export.is-docked .rr-c3d-export-preview { display: none; }
+/* The Sprite view's settings in cards of the app's own kind, as the builder's tabs beside it have them: the
+   accent-strip header, the controls in the card's body, so a drop-down stands out from what is behind it. */
+.rr-c3d-export .rr-c3d-sheet-sec { margin: 0 0 8px; flex: 0 0 auto; }
+.rr-c3d-export .rr-c3d-sheet-sec > .rr-c3d-sechead { cursor: default; }
+.rr-c3d-export .rr-c3d-sheet-head .rr-btn-chip { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.rr-c3d-export .rr-c3d-sheet-sec > .rr-c3d-secbody { display: flex; flex-direction: column; padding: 6px 8px 8px; }
 .rr-c3d-export.is-docked .rr-c3d-export-foot { margin-top: auto; padding-top: 8px; }
 .rr-c3d-export.is-docked .rr-c3d-export-go { flex: 1 1 auto; justify-content: center; }
-.rr-c3d-export-sizes > span:last-child { display: flex; gap: 4px; flex-wrap: wrap; grid-column: 2 / -1; }
+.rr-c3d-export-sizes > span:last-child { display: flex; gap: 4px; flex-wrap: nowrap; grid-column: 2 / -1; min-width: 0; }
+.rr-c3d-export-sizes .rr-btn-chip { flex: 1 1 0; min-width: 0; padding-left: 0; padding-right: 0; justify-content: center; }
 .rr-c3d-spritebtn.is-active { border-color: var(--color-accent); color: var(--color-accent); }
 .rr-c3d-gen-sec .lit-section-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; color: var(--color-text-muted); font-size: 10px; }
 .rr-c3d-gen-sec .r3d-sec-title { flex: 0 0 auto; }
@@ -8262,23 +8339,93 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-c3d-gen-form > .rr-c3d-note { margin: 0 0 2px; }
 .rr-c3d-gen-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
 .rr-c3d-gen-bar > span:last-child { display: flex; gap: 4px; flex: 0 0 auto; }
-.rr-c3d-gen-ticks label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; }
-.rr-c3d-gen-ticks .rr-c3d-gen-share { flex: 0 0 44px; width: 44px; min-width: 0; padding: 0 2px; height: 18px; min-height: 0; font-size: 10px; box-sizing: border-box; }
-.rr-c3d-gen-ticks { grid-auto-rows: max-content; }
-.rr-c3d-gen-ticks label { min-height: 20px; }
-.rr-c3d-gen-ticks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 8px; font-size: 11px; color: var(--color-text); padding: 2px 0 4px; }
-.rr-c3d-gen-ticks[data-list="species"] { max-height: 190px; background: var(--color-bg-input); overflow-y: auto; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); padding: 4px 6px; }
-.rr-c3d-gen-ticks label { display: flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rr-c3d-gen-sub { grid-column: 1 / -1; font-size: 10px; color: var(--color-text-muted); padding-top: 3px; }
+/* A list of ticks (species, outfit settings): two even columns of rows, each a tick and its name, with a ticked
+   species' share at the row's end. The list is as tall as it needs: the form is what scrolls, not a part of it. */
+.rr-c3d-gen-ticks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; gap: 2px 6px; font-size: 11px; color: var(--color-text); padding: 2px 0 4px; }
+.rr-c3d-gen-ticks[data-list="species"] { background: var(--color-bg-input); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); padding: 4px 6px 6px; }
+.rr-c3d-gen-tick { display: flex; align-items: center; gap: 4px; min-width: 0; height: 24px; padding: 0 4px; border-radius: var(--radius-sm, 3px); border: 1px solid transparent; box-sizing: border-box; }
+.rr-c3d-gen-tick:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+.rr-c3d-gen-tick.is-on { background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-color: color-mix(in srgb, var(--color-accent) 35%, transparent); }
+.rr-c3d-gen-tick > label { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; height: 100%; cursor: pointer; }
+.rr-c3d-gen-tick > label > input { flex: 0 0 auto; margin: 0; }
+.rr-c3d-gen-tick > label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-c3d-gen-mix { padding: 0 0 4px; }
+.rr-c3d-gen-sub { grid-column: 1 / -1; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-muted); padding: 5px 4px 1px; }
+.rr-c3d-gen-sub:first-child { padding-top: 1px; }
 .rr-c3d-gen [data-off] { opacity: 0.45; }
-.rr-c3d-export .rr-c3d-row.rr-c3d-gen-range { grid-template-columns: 96px minmax(0, 1fr) auto minmax(0, 1fr); }
-.rr-c3d-export .rr-c3d-row.rr-c3d-gen-range > input, .rr-c3d-export .rr-c3d-row.rr-c3d-gen-out > input { width: 100%; min-width: 0; box-sizing: border-box; }
-/* A tick's wording in full: the description's choices are sentences, not field names. */
+/* A range as one slider with two handles: two sliders on one track, only their handles taking the pointer. */
+.rr-c3d-export .rr-c3d-row.rr-c3d-gen-range { grid-template-columns: 96px minmax(0, 1fr) 78px; }
+.rr-c3d-gen-dual { position: relative; display: block; height: 14px; min-width: 0; }
+.rr-c3d-gen-dual::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; height: 6px; box-sizing: border-box; border-radius: 3px; border: 1px solid var(--color-border-input); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    background: linear-gradient(to right, var(--color-bg-input) 0, var(--color-bg-input) var(--lo, 0%), var(--color-accent) var(--lo, 0%), var(--color-accent) var(--hi, 100%), var(--color-bg-input) var(--hi, 100%)); }
+.rr-c3d-row .rr-c3d-gen-dual input[type="range"] { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; }
+.rr-c3d-row .rr-c3d-gen-dual input[type="range"]::-webkit-slider-runnable-track { background: none; border-color: transparent; box-shadow: none; }
+.rr-c3d-row .rr-c3d-gen-dual input[type="range"]::-webkit-slider-thumb { pointer-events: auto; cursor: grab; }
 .rr-c3d-gen .rr-c3d-row.rr-c3d-check { grid-template-columns: minmax(0, 1fr) auto; }
 .rr-c3d-gen .rr-c3d-row.rr-c3d-check > .rr-c3d-label { white-space: normal; overflow: visible; text-overflow: clip; }
-.rr-c3d-gen-to { font-size: 10px; color: var(--color-text-muted); }
-.rr-c3d-export .rr-c3d-row.rr-c3d-gen-out { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 64px; }
-.rr-c3d-gen-outcheck { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text); min-width: 0; }
+/* What to make: a tick and its name, and under a ticked one what it needs, set in from a strip of the accent. */
+.rr-c3d-gen-toggle { display: flex; align-items: center; gap: 7px; min-height: 24px; font-size: 11px; font-weight: 600; color: var(--color-text); cursor: pointer; }
+.rr-c3d-gen-toggle > input { flex: 0 0 auto; margin: 0; }
+.rr-c3d-gen-toggle > .rr-c3d-note { margin-left: auto; font-weight: 400; }
+.rr-c3d-gen-opts { margin: 1px 0 6px 6px; padding: 2px 0 2px 10px; border-left: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); }
+.rr-c3d-export .rr-c3d-gen-opts .rr-c3d-row { grid-template-columns: 84px minmax(0, 1fr) 70px; }
+.rr-c3d-export .rr-c3d-gen-opts .rr-c3d-row.rr-c3d-check { grid-template-columns: minmax(0, 1fr) auto; }
+.rr-c3d-export .rr-c3d-gen-opts .rr-c3d-row.rr-c3d-dialrow { grid-template-columns: 84px minmax(0, 1fr) 70px; }
+/* The page's scrollbars, as the sprite view's. */
+.rr-c3d-gen-form::-webkit-scrollbar, .rr-c3d-gen-grid::-webkit-scrollbar, .rr-c3d-gen-catalog::-webkit-scrollbar { width: 10px; height: 10px; }
+.rr-c3d-gen-form::-webkit-scrollbar-track, .rr-c3d-gen-grid::-webkit-scrollbar-track, .rr-c3d-gen-catalog::-webkit-scrollbar-track { background: var(--color-bg-deep); }
+.rr-c3d-gen-form::-webkit-scrollbar-thumb, .rr-c3d-gen-grid::-webkit-scrollbar-thumb, .rr-c3d-gen-catalog::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--color-accent), var(--color-accent-muted)); border-radius: 5px; }
+.rr-c3d-gen-form::-webkit-scrollbar-thumb:hover, .rr-c3d-gen-grid::-webkit-scrollbar-thumb:hover, .rr-c3d-gen-catalog::-webkit-scrollbar-thumb:hover { background: var(--color-accent-hover); }
+/* The builder's other sliders as ranges: sections folded until opened; a slider on Any is dim until its handles are moved. */
+.rr-c3d-gen-fold { border-top: 1px solid var(--color-border-subtle); }
+.rr-c3d-gen-fold:last-of-type { border-bottom: 1px solid var(--color-border-subtle); margin-bottom: 4px; }
+.rr-c3d-gen-foldhead { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 2px; font-size: 11px; font-weight: 600; color: var(--color-text); background: transparent; border: 0; cursor: pointer; text-align: left; }
+.rr-c3d-gen-foldhead:hover { color: var(--color-accent-bright); }
+.rr-c3d-gen-foldhead > .rr-c3d-note { margin-left: auto; font-weight: 400; }
+.rr-c3d-gen-fold.is-open { padding-bottom: 4px; }
+.rr-c3d-export .rr-c3d-row.rr-c3d-gen-range.rr-c3d-gen-any { grid-template-columns: 96px minmax(0, 1fr) 62px 16px; }
+.rr-c3d-gen-any:not(.is-set) .rr-c3d-gen-dual { opacity: 0.45; }
+.rr-c3d-gen-any:not(.is-set):hover .rr-c3d-gen-dual { opacity: 0.8; }
+.rr-c3d-gen-anyoff { width: 16px; height: 16px; padding: 0; font-size: 10px; line-height: 14px; color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border-subtle); border-radius: 50%; cursor: pointer; }
+.rr-c3d-gen-anyoff:hover { color: var(--color-accent-bright); border-color: var(--color-accent); }
+.rr-c3d-gen-anyoff[hidden] { display: block; visibility: hidden; }
+/* The page's text and number fields, as its dropdowns are: dark, edged in the accent, the whole width of their place. */
+.rr-c3d-gen input.rr-input[type="text"], .rr-c3d-gen input.rr-input[type="number"] { height: 26px; box-sizing: border-box; width: 100%; min-width: 0; padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--color-text-strong, var(--color-text)); background: var(--color-bg-deep); border: 1px solid var(--color-accent-border-strong, var(--color-accent)); border-radius: var(--radius-sm, 3px); }
+.rr-c3d-gen input.rr-input[type="text"]:focus, .rr-c3d-gen input.rr-input[type="number"]:focus { outline: none; border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-bright); }
+.rr-c3d-gen .rr-number-stepper-auto { display: flex; width: 100%; min-width: 0; height: 26px; box-sizing: border-box; background: var(--color-bg-deep); border: 1px solid var(--color-accent-border-strong, var(--color-accent)); border-radius: var(--radius-sm, 3px); overflow: hidden; }
+.rr-c3d-gen .rr-number-stepper-auto:focus-within { border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-bright); }
+.rr-c3d-gen .rr-number-stepper-auto > input.rr-input[type="number"] { flex: 1 1 auto; height: 100%; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.rr-c3d-gen .rr-number-stepper-auto .rr-number-stepper-buttons { border-color: var(--color-accent-border-strong, var(--color-accent)); }
+.rr-c3d-gen .rr-number-stepper-auto .rr-number-stepper-buttons button { background: var(--color-bg-deep); color: var(--color-accent-bright); border-color: var(--color-accent-border-strong, var(--color-accent)); }
+.rr-c3d-gen .rr-number-stepper-auto .rr-number-stepper-buttons button:hover { background: color-mix(in srgb, var(--color-accent) 20%, var(--color-bg-deep)); }
+/* A row whose label is read whole: the label as wide as its words, the field the rest. */
+.rr-c3d-export .rr-c3d-row.rr-c3d-gen-wide { grid-template-columns: 140px minmax(0, 1fr); gap: 2px 12px; }
+.rr-c3d-gen-wide > .rr-c3d-label { overflow: visible; text-overflow: clip; }
+/* The right side's tabs: the preview, and the catalog of what the group may wear (outfits, pieces, accessories). */
+.rr-c3d-gen-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--color-border-subtle); margin-bottom: 8px; flex: 0 0 auto; }
+.rr-c3d-gen-tab { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11px; font-weight: 600; color: var(--color-text-muted); background: transparent; border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: var(--radius-sm, 3px) var(--radius-sm, 3px) 0 0; cursor: pointer; margin-bottom: -1px; }
+.rr-c3d-gen-tab:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+.rr-c3d-gen-tab.is-active { color: var(--color-accent-bright); border-bottom-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.rr-c3d-gen-count { min-width: 16px; padding: 0 5px; border-radius: 8px; font-size: 10px; line-height: 16px; text-align: center; color: var(--color-text); background: var(--color-bg-input); border: 1px solid var(--color-border-subtle); }
+.rr-c3d-gen-hint { margin: 0 0 8px; flex: 0 0 auto; }
+.rr-c3d-gen-catalog { min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 6px; }
+.rr-c3d-gen-cathead { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 0 0 6px; border-left: 3px solid var(--color-accent); background: var(--color-bg-input); border-radius: 0 var(--radius-sm, 3px) var(--radius-sm, 3px) 0; position: sticky; top: 0; z-index: 1; }
+.rr-c3d-gen-catname { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text); }
+.rr-c3d-gen-catall { margin-left: auto; display: flex; gap: 4px; }
+.rr-c3d-gen-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin-bottom: 12px; }
+.rr-c3d-gen-pick { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 3px; background: var(--color-bg-input); border: 2px solid var(--color-border-subtle); border-radius: var(--radius-sm, 3px); cursor: pointer; color: var(--color-text); opacity: 0.85; }
+.rr-c3d-gen-pick:hover { opacity: 1; border-color: var(--color-accent-border-strong); }
+.rr-c3d-gen-pick.is-on { opacity: 1; border-color: var(--color-accent-bright); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-input)); }
+.rr-c3d-gen-pick.is-on .rr-c3d-gen-name { color: var(--color-text); }
+.rr-c3d-gen-pick .rr-c3d-gen-name { text-align: center; }
+.rr-c3d-gen-tickmark { position: absolute; top: 5px; right: 5px; width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 16px; text-align: center; font-weight: 700; color: var(--color-bg-deep); background: var(--color-accent-bright); display: none; }
+.rr-c3d-gen-pick.is-on .rr-c3d-gen-tickmark { display: block; }
+.rr-c3d-gen-noface { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 28px; font-weight: 700; color: var(--color-text-muted); }
+/* In the form: a catalog's line (what it is, how many are chosen, the button that opens it), and the kinds of thing to create. */
+.rr-c3d-export .rr-c3d-row.rr-c3d-gen-cat { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rr-c3d-gen-cat > .rr-c3d-note { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-c3d-gen-kind { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-muted); padding: 6px 0 1px; }
+.rr-c3d-gen-kind:first-child { padding-top: 0; }
 .rr-c3d-export .rr-c3d-row.rr-c3d-gen-palette { grid-template-columns: 96px minmax(0, 1fr); }
 .rr-c3d-gen-swatches { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .rr-c3d-gen .rr-c3d-export-status[data-kind="error"] { color: var(--color-danger, #e06c6c); }
@@ -8289,7 +8436,9 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-c3d-genpage-stage { position: absolute; left: -20000px; top: 0; width: 960px; height: 720px; overflow: hidden; pointer-events: none; }
 .rr-c3d-export.rr-c3d-gen.is-page { position: static; flex: 1 1 auto; width: auto; max-height: none; height: 100%; border: 0; border-radius: 0; box-shadow: none; padding: 12px 16px; }
 .rr-c3d-gen.is-page .rr-c3d-gen-body { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 16px; }
-.rr-c3d-gen.is-page .rr-c3d-gen-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.rr-c3d-gen.is-page .rr-c3d-gen-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.rr-c3d-gen-extra { font-size: 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-accent-bright); }
+.rr-c3d-gen-card .rr-c3d-gen-name { text-align: center; }
 /* A click shows the sheet at its own size (the panel scrolls); another fits it again. */
 .rr-c3d-export .rr-c3d-export-preview.is-actual { width: auto; max-width: none; max-height: none; cursor: zoom-out; }
 .rr-c3d-export:has(.rr-c3d-export-preview.is-actual) { overflow: auto; }

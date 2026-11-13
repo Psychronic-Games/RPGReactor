@@ -606,10 +606,33 @@ class MessageCommandEditor {
         choice('none', this._t('None'), '', () => this._setFaceMode('none'));
         choice('picture', this._t('Picture...'), '', () => this.browseFaces());
 
+        // A face set with frames ("Name[4F]"): how this message plays them. Shown only for such a picture.
+        const play = document.createElement('label');
+        play.className = 'face-play-row';
+        play.style.cssText = 'display: none; flex-direction: column; gap: 3px; font-size: 11px; color: var(--color-text-muted);';
+        play.title = this._t('This face set has frames. Talk moves the mouth with the letters as the text appears. Play once runs through the frames when the face appears and holds the last: use it for a sweep into an expression. Loop goes round. Still shows the first frame.');
+        const playLabel = document.createElement('span');
+        playLabel.textContent = this._t('Frames:');
+        const playSelect = document.createElement('select');
+        playSelect.className = 'face-play-select';
+        for (const [value, text] of [['talk', this._t('Talk')], ['once', this._t('Play once')], ['loop', this._t('Loop')], ['still', this._t('Still')]]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            playSelect.appendChild(option);
+        }
+        playSelect.addEventListener('change', () => {
+            const header = this._activeHeader();
+            if (playSelect.value === 'talk') delete header.facePlay; else header.facePlay = playSelect.value;
+        });
+        play.appendChild(playLabel);
+        play.appendChild(playSelect);
+
         column.appendChild(label);
         column.appendChild(canvas);
         column.appendChild(hint);
         column.appendChild(choices);
+        column.appendChild(play);
 
         // Face preview will be updated after renderContent completes
 
@@ -1162,8 +1185,10 @@ class MessageCommandEditor {
         overlay.textContent = '';
         if (window.RRTextCodes.hasWordWrap(this.textLines.join('\n'))) return;
 
-        const available = window.RRTextCodes.messageTextWidth(
-            this._pluginList(), Boolean(this._previewFace(this._activeHeader())));
+        const hasFace = Boolean(this._previewFace(this._activeHeader()));
+        const available = window.RRTextCodes.messageTextWidth(this._pluginList(), hasFace);
+        // Where a line starts in the window: \PX[n] is counted from the window's edge.
+        const startX = window.RRTextCodes.messageTextStart ? window.RRTextCodes.messageTextStart(hasFace) : undefined;
         const context = this._measureContext();
         const system = window.reactor?.databaseManager?.data?.system;
         const projectSize = Number(system?.advanced?.fontSize);
@@ -1195,7 +1220,7 @@ class MessageCommandEditor {
             const line = lines[index];
             if (index % rows === 0) pen = {};
             const scan = window.RRTextCodes.scanMessageLine(
-                line, context, this._previewFontFamily || 'sans-serif', gameSize, available, substitutions, pen);
+                line, context, this._previewFontFamily || 'sans-serif', gameSize, available, substitutions, pen, startX);
             if (index > 0) overlay.appendChild(document.createTextNode('\n'));
             if (scan.overflowIndex < 0) {
                 overlay.appendChild(document.createTextNode(line));
@@ -1784,6 +1809,13 @@ class MessageCommandEditor {
 
         const header = this._activeHeader();
         const mode = this._faceMode(header);
+        // The Frames choice is for a picture whose name says it has frames; another face has nothing to play.
+        const playRow = this.modal.querySelector('.face-play-row'), playSelect = this.modal.querySelector('.face-play-select');
+        if (playRow && playSelect) {
+            const framed = mode === 'picture' && typeof RRFaceSheet !== 'undefined' && typeof RRFaceSheet.framesOf === 'function' && RRFaceSheet.framesOf(header.faceName) > 1;
+            playRow.style.display = framed ? 'flex' : 'none';
+            playSelect.value = ['once', 'loop', 'still'].includes(header.facePlay) ? header.facePlay : 'talk';
+        }
         for (const button of this.modal.querySelectorAll('.face-choice-buttons button')) {
             const chosen = button.dataset.faceMode === mode;
             button.setAttribute('aria-pressed', chosen ? 'true' : 'false');

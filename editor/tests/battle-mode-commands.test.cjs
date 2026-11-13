@@ -181,7 +181,7 @@ test('the Start Battle form: no Music row, a wait worded as what it does, the ba
     const form = read('src/event/commands/FightCommandEditor.js');
     assert.doesNotMatch(form, /row\(t\('Music'\)/, 'the music is the game\'s battle BGM, set by Change Battle BGM');
     assert.match(form, /check\('wait', t\('Wait here until the battle ends'\), form\.wait\)/);
-    // An older command that kept the map's music still does: the form starts from a copy of what is stored.
+    // An older command's `bgm` argument is not taken out by the form, which starts from a copy of what is stored.
     assert.equal(FightCommandEditor.argsOf('StartMapBattle', { bgm: 'map', wait: false }, FightCommandEditor.formOf('StartMapBattle', { bgm: 'map', wait: false }, {}), {}).bgm, 'map');
     const page = read('src/event/EventPageEditor.js');
     assert.match(page, /tt\('Runs during a battle'\)/);
@@ -191,10 +191,16 @@ test('the Start Battle form: no Music row, a wait worded as what it does, the ba
     assert.match(page, /words\(this\._t\('event\.hookRegion'\)\)/);
     assert.match(page, /event-fight-hook-note/);
     assert.match(read('src/event/EventCommandPicker.js'), /name: 'Change Battle Goal', code: 357, reactor: 'ChangeBattleGoal'/);
-    // The battle music still plays unless the command says to keep the map's.
+    // The battle music plays.
     const w = runCommands([FightCommandEditor.build('StartMapBattle', { troopId: 0, objective: 'defeatAll' })], { events: [event(2, 15, 10, { note: '<unit: enemy 1>' })] });
     w.run(3);
     assert.equal(w.$gameFight._options.bgm, 'battle');
+    // The game no longer reads the argument (owner, 2026-11-12): a command saved with it by hand still starts
+    // its battle, with the battle music like any other.
+    const old = runCommands([FightCommandEditor.build('StartMapBattle', { troopId: 0, objective: 'defeatAll', bgm: 'map' })], { events: [event(2, 15, 10, { note: '<unit: enemy 1>' })] });
+    old.run(3);
+    assert.ok(old.$gameFight.isActive(), 'the battle starts');
+    assert.equal(old.$gameFight._options.bgm, 'battle');
 });
 
 test('Change Unit Side as written: an enemy becomes an ally in the running battle and in the ones after', () => {

@@ -68,11 +68,12 @@ class DatabaseSystem2Editor {
         }
         columnsGrid.appendChild(col1);
 
-        // Col 2: Attack Motions, Editor Settings
+        // Col 2: Attack Motions, Compatibility
+        // (The Editor Settings card is gone: nothing reads its two message widths or its JSON
+        // format level. A System.json that has `editor` keeps it as it is; the page never touches it.)
         const col2 = document.createElement('div');
         col2.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
         col2.appendChild(this.createAttackMotionsSection(system));
-        col2.appendChild(this.createEditorSettingsSection(system));
         // (Higher Limits, once a Limits card here, is a tick on Database › Reactor Features.)
         col2.appendChild(this.createCompatibilitySection(system));
         columnsGrid.appendChild(col2);
@@ -235,33 +236,6 @@ class DatabaseSystem2Editor {
         }
         html += '</div>';
         return this.keyedSection('asset-sizes', tt('Asset Sizes'), html);
-    }
-
-    createEditorSettingsSection(system) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        if (!system.editor) system.editor = { messageWidth1: 60, messageWidth2: 47, jsonFormatLevel: 1 };
-        const editor = system.editor;
-        const editorHTML = `
-            <table class="traits-table" style="width: 100%;">
-                <thead>
-                    <tr><th>${tt('Setting')}</th><th>${tt('Value')}</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">${tt('Message Width (Normal)')}</td>
-                        <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="messageWidth1" value="${editor.messageWidth1 || 60}" style="width: 70px; font-size: 12px;"></td>
-                    </tr>
-                    <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">${tt('Message Width (with Face)')}</td>
-                        <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="messageWidth2" value="${editor.messageWidth2 || 47}" style="width: 70px; font-size: 12px;"></td>
-                    </tr>
-                    <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">${tt('JSON Format Level')}</td>
-                        <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="jsonFormatLevel" value="${editor.jsonFormatLevel || 1}" min="0" style="width: 70px; font-size: 12px;"></td>
-                    </tr>
-                </tbody>
-            </table>`;
-        return this.keyedSection('editor-settings', tt('Editor Settings'), editorHTML);
     }
 
     createAdvancedSettingsSection(system) {
@@ -513,21 +487,6 @@ class DatabaseSystem2Editor {
             radio.addEventListener('change', (e) => {
                 system.faceSize = parseInt(e.target.value);
                 console.debug('Updated faceSize to:', system.faceSize);
-            });
-        });
-
-        // Editor Settings fields
-        container.querySelectorAll('.sys2-editor-field').forEach(field => {
-            field.addEventListener('change', (e) => {
-                const editorField = e.target.dataset.editorField;
-                if (editorField) {
-                    if (!system.editor) system.editor = {};
-                    // A cleared or unreadable number keeps the value it had (NaN would be saved as null).
-                    const number = parseFloat(e.target.value);
-                    if (!Number.isFinite(number)) { e.target.value = system.editor[editorField] ?? ''; return; }
-                    system.editor[editorField] = number;
-                    console.debug(`Updated editor.${editorField} to:`, system.editor[editorField]);
-                }
             });
         });
 

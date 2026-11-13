@@ -653,3 +653,13 @@ test('title-screen scripts are recognised and their settings read', () => {
     const site = require(path.join(legacy, 'plugins', 'RR_WebsiteTitleCommand.params.js')).extract({ scripts: [web], constants: {} });
     assert.match(JSON.stringify(site), /Join Discord/);
 });
+
+test('Change Class in an XP or VX game is counted for the import report: there it kept the level, here it starts at level 1', () => {
+    const xp = {};
+    X.commands([{ code: 321, indent: 0, parameters: [1, 2] }, { code: 321, indent: 0, parameters: [2, 1] }, { code: 0, indent: 0, parameters: [] }], xp);
+    assert.equal(xp.changeClassResetsLevel, 2);
+    const vx = {};
+    V.aceCommands([{ code: 321, indent: 0, parameters: [1, 2] }, { code: 0, indent: 0, parameters: [] }], { notes: vx });
+    assert.equal(vx.changeClassResetsLevel, 1);
+    assert.doesNotThrow(() => V.aceCommands([{ code: 321, indent: 0, parameters: [1, 2] }]), 'with no tally to write to');
+});

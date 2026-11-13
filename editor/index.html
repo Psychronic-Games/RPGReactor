@@ -773,7 +773,7 @@
                 <div class="rr-about-overview">
                     <img class="rr-about-logo" src="images/logo.png" alt="RPG Reactor" width="112" height="112" onerror="this.style.display='none'">
                     <div class="rr-about-summary">
-                        <h3 data-i18n="about.version">RPG Reactor v0.99.5</h3>
+                        <h3 data-i18n="about.version">RPG Reactor v0.99.6</h3>
                         <p data-i18n="about.description">An open-source, cross-platform RPG game engine built with NW.js, PixiJS v8, and Three.js</p>
                         <p class="rr-about-compatibility" data-i18n="about.compatibility">
                             Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux.
@@ -809,10 +809,10 @@
 
     <!-- Audio Player Modal -->
     <div id="audio-player-modal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-content rr-audio-window">
             <div class="modal-header">
                 <h2 data-i18n="modal.audioPlayer">♪ Audio Player</h2>
-                <span class="modal-close" onclick="document.getElementById('audio-player-modal').style.display='none'">&times;</span>
+                <button type="button" class="modal-close" title="Close" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <!-- Audio Type Tabs -->
@@ -989,14 +989,6 @@
     <script src="src/I18nManager.js"></script>
     <script src="src/OptionsManager.js"></script>
     <!-- Forge tool suite -->
-    <!-- CharacterGenerator: helpers + registry + class (order matters) -->
-    <script src="src/forge/CharacterGenerator/helpers/pixel.js"></script>
-    <script src="src/forge/CharacterGenerator/helpers/palette.js"></script>
-    <script src="src/forge/CharacterGenerator/helpers/palette_resolve.js"></script>
-    <script src="src/forge/CharacterGenerator/helpers/part_draw.js"></script>
-    <script src="src/forge/CharacterGenerator/registry.js"></script>
-    <script src="src/forge/CharacterGenerator/CharacterRenderer.js"></script>
-    <script src="src/forge/CharacterGenerator/CharacterGenerator.js"></script>
     <!-- AnimationGenerator: helpers + registry + animations + class (order matters) -->
     <script src="src/forge/AnimationGenerator/helpers/color.js"></script>
     <script src="src/forge/AnimationGenerator/helpers/texture.js"></script>
@@ -1314,6 +1306,7 @@
     <script src="src/database/DatabaseWindow.js"></script>
     <script src="src/forge/ForgeWindow.js"></script>
     <script src="src/PluginManagerWindow.js"></script>
+    <script src="src/AudioPlayerWindow.js"></script>
     <script src="src/event/EventEditor.js"></script>
     <script src="src/event/EventPageEditor.js"></script>
     <script src="src/event/EventCommandPicker.js"></script>

@@ -3904,7 +3904,7 @@ Bitmap._sweepStalledLoads = function() {
     for (let i = list.length - 1; i >= 0; i--) {
         const bitmap = list[i];
         if (bitmap._loadingState === "loaded" || bitmap._loadingState === "none" ||
-            bitmap._degradedToBlank) {
+            bitmap._degradedToBlank || bitmap._watchDropped) {
             list.splice(i, 1);
             continue;
         }
@@ -4111,6 +4111,9 @@ Object.defineProperty(Bitmap.prototype, "paintOpacity", {
  * Destroys the bitmap.
  */
 Bitmap.prototype.destroy = function() {
+    // A picture destroyed while it loads is let finish (something may still hold it across a map transfer and
+    // wants the picture), but the stall watchdog stops watching it: nothing waits on it any more.
+    this._watchDropped = true;
     this._revokeObjectUrl();
     this._animation = null;
     if (this._baseTexture) {
@@ -4711,6 +4714,7 @@ Bitmap.prototype._startLoading = function() {
     // image loads can silently die without onload OR onerror.
     this._loadStartTime = performance.now();
     this._loadAttempts = (this._loadAttempts || 0) + 1;
+    this._watchDropped = false;
     Bitmap._loadWatchList = Bitmap._loadWatchList || [];
     if (Bitmap._loadWatchList.indexOf(this) < 0) {
         Bitmap._loadWatchList.push(this);

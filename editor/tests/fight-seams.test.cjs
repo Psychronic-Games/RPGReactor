@@ -103,6 +103,7 @@ test('each shared piece of a battle is defined in one file, the one that owns it
         [/F\.triggerRange = function/, 'reactor_fight_flow.js'], [/F\.updateTrigger = function/, 'reactor_fight_flow.js'], [/F\.bootRequest = function/, 'reactor_fight_flow.js'],
         [/function Window_FightMenu\(/, 'reactor_fight_menu.js'], [/F\.menuBlocked = function/, 'reactor_fight_menu.js'], [/W\.openMenu = function/, 'reactor_fight_menu.js'],
         [/Scene_Map\.prototype\.callMenu = function/, 'reactor_fight_menu.js'],
+        [/ReactorFight\.menuPress = function/, 'reactor_online_action.js'],
         [/ReactorControls\.KEY_NAMES = /, 'reactor_controls.js'], [/ReactorControls\.labelFor = function/, 'reactor_controls.js']
     ];
     for (const [pattern, owner] of owners) {
@@ -298,6 +299,24 @@ test('the battle menu is its own file, bound to the Tactical driver it stands on
     scene.callMenu();
     assert.equal(scene.menuCalling, false, 'the call is taken');
     assert.equal(W.isMenuOpen(), true);
+    // A later file with another use for the press is asked first, and what it takes goes no further: someone only
+    // watching another player's battle leaves by it (the online file's, which wraps nothing of the scene's).
+    W.closeMenu(scene, true);
+    frame(); frame();
+    const asked = [];
+    F.menuPress = (from, fight) => { asked.push(from === scene && fight === w.$gameFight); return true; };
+    w.Graphics.frameCount++;
+    scene.callMenu();
+    assert.deepEqual(asked, [true]);
+    assert.equal(W.isMenuOpen(), false, 'taken before the battle menu');
+    assert.equal(scene.menuCalls, 0);
+    F.menuPress = () => false;
+    w.Graphics.frameCount++;
+    scene.callMenu();
+    assert.equal(W.isMenuOpen(), true, 'not taken: the battle menu as before');
+    delete F.menuPress;
+    const online = source('reactor_online_action.js');
+    assert.match(online, /ReactorFight\.menuPress = function\(scene, fight\) \{\n\s*if \(!\(fight\?\._mirror && B\.side === "watch" && !fight\._ending\)\) return false;\n\s*scene\.menuCalling = false;\n\s*fight\.end\(ReactorFight\.ESCAPE, true\);\n\s*return true;/);
     assert.equal(scene.menuCalls, 0);
 });
 

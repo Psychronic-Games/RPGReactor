@@ -355,7 +355,7 @@ class DatabaseWeaponEditor {
             }
         });
         btnPaste.addEventListener('click', () => {
-            this.pasteTrait(entry);
+            this.pasteTrait(entry, this.getSelectedTraitIndex(table));
         });
         btnDelete.addEventListener('click', () => {
             const idx = this.getSelectedTraitIndex(table);
@@ -416,7 +416,7 @@ class DatabaseWeaponEditor {
             } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
-                this.pasteTrait(entry);
+                this.pasteTrait(entry, idx);
             }
         });
     }
@@ -452,7 +452,7 @@ class DatabaseWeaponEditor {
                 { label: 'Edit', action: () => this.editTrait(weapon, traitIndex), enabled: traitIndex !== null },
                 { label: 'Cut', action: () => this.cutTrait(weapon, traitIndex), enabled: traitIndex !== null },
                 { label: 'Copy', action: () => this.copyTrait(weapon, traitIndex), enabled: traitIndex !== null },
-                { label: 'Paste', action: () => this.pasteTrait(weapon), enabled: true },
+                { label: 'Paste', action: () => this.pasteTrait(weapon, traitIndex), enabled: true },
                 { label: 'Delete', action: () => this.deleteTrait(weapon, traitIndex), enabled: traitIndex !== null },
             ];
 
@@ -530,8 +530,9 @@ class DatabaseWeaponEditor {
         return this.traitsClipboard;
     }
 
-    async pasteTrait(weapon) {
-        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, weapon.traits);
+    /** Paste goes after the selected row, or at the end with none selected: the same on every page with a trait table. */
+    async pasteTrait(weapon, traitIndex = null) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, weapon.traits, weapon.traits ? traitIndex : null);
         const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
         if (this.currentWeapon !== weapon
             || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, weapon.traits)) return;
@@ -540,7 +541,7 @@ class DatabaseWeaponEditor {
             return;
         }
         if (!weapon.traits) weapon.traits = [];
-        weapon.traits.push(result.row);
+        DatabaseRowClipboard.insertPasted(weapon.traits, traitIndex, result.row);
         this.databaseManager.updateWeapon(weapon.id, weapon);
         this.refreshWeaponDetail(weapon);
     }

@@ -300,6 +300,18 @@ In the editor: Database › Classes › **Equipment Slots**. Add a slot, pick it
 
 A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eight blocks of 3 × 4 frames, whatever its `$` says. Block 0 walks down, left, right and up; block 1 holds its diagonals (rows down-left, down-right, up-left, up-right); block 2 is the dash, block 3 its diagonals. A character set to block 0 dashes on block 2, and shows the block to the right while it steps or faces diagonally; blocks 2 and 4 take their own diagonals the same way. Blocks 1, 3, 5, 6 and 7 show as picked in the event's graphic. The player, followers and events all follow it (the player steps diagonally with Database › System 1 › Options › Diagonal movement on). Sheets without the tag are cut as in MZ. Forge › 3D Character Builder › Export Sprite Sheet makes one.
 
+## Face sets with frames
+
+A file in `img/faces` whose name has its frames, `Name[4F].png` (or `Name[F4]`), holds each of its eight faces that many frames wide: for four frames, 16 faces across and 2 down, frame k of face i in column (i % 4) × 4 + k. It follows Database › System 2 › **Multi-frame Sheets ([NF])**, which is on unless turned off, as a character sheet's `[NF]` does.
+
+Show Text has a **Frames** choice under the face, shown only for such a picture:
+
+- **Talk** (the usual): the mouth follows the message's own letters at the pace of speech, shut for spaces, punctuation and m, b, p and widest for a. Frame 0 is the mouth at rest and the last frame the widest.
+- **Play once:** through the frames when the face appears, the last one held. Use it for a face whose frames sweep into an expression.
+- **Loop** and **Still.**
+
+Every other window, custom interfaces and the battle HUD show the first frame, as do the editor's pickers. A plugin that draws faces its own way does not know the naming and will cut such a sheet wrongly. The 3D Character Builder makes these sheets ([Faces with frames](CHARACTER-BUILDER.md#faces-with-frames)).
+
 ## Pieces
 
 ```json

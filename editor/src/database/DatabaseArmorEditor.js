@@ -358,7 +358,7 @@ class DatabaseArmorEditor {
             }
         });
         btnPaste.addEventListener('click', () => {
-            this.pasteTrait(entry);
+            this.pasteTrait(entry, this.getSelectedTraitIndex(table));
         });
         btnDelete.addEventListener('click', () => {
             const idx = this.getSelectedTraitIndex(table);
@@ -419,7 +419,7 @@ class DatabaseArmorEditor {
             } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
-                this.pasteTrait(entry);
+                this.pasteTrait(entry, idx);
             }
         });
     }
@@ -455,7 +455,7 @@ class DatabaseArmorEditor {
                 { label: 'Edit', action: () => this.editTrait(armor, traitIndex), enabled: traitIndex !== null },
                 { label: 'Cut', action: () => this.cutTrait(armor, traitIndex), enabled: traitIndex !== null },
                 { label: 'Copy', action: () => this.copyTrait(armor, traitIndex), enabled: traitIndex !== null },
-                { label: 'Paste', action: () => this.pasteTrait(armor), enabled: true },
+                { label: 'Paste', action: () => this.pasteTrait(armor, traitIndex), enabled: true },
                 { label: 'Delete', action: () => this.deleteTrait(armor, traitIndex), enabled: traitIndex !== null },
             ];
 
@@ -544,8 +544,9 @@ class DatabaseArmorEditor {
         return this.traitsClipboard;
     }
 
-    async pasteTrait(armor) {
-        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, armor.traits);
+    /** Paste goes after the selected row, or at the end with none selected: the same on every page with a trait table. */
+    async pasteTrait(armor, traitIndex = null) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, armor.traits, armor.traits ? traitIndex : null);
         const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
         if (this.currentArmor !== armor
             || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, armor.traits)) return;
@@ -554,7 +555,7 @@ class DatabaseArmorEditor {
             return;
         }
         if (!armor.traits) armor.traits = [];
-        armor.traits.push(result.row);
+        DatabaseRowClipboard.insertPasted(armor.traits, traitIndex, result.row);
         this.databaseManager.updateArmor(armor.id, armor);
         this.refreshArmorDetail(armor);
     }

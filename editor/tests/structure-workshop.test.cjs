@@ -250,3 +250,57 @@ test('a flat roof is the top floor in the walls\' material with a parapet round 
     F.rebuildRoof(plan, { style: 'gable' });
     assert.ok(plan.pieces.some(p => p.kind === 'ramp'), 'a gable again on request');
 });
+
+test('a sun in the workshop only lights the build: kept under the workshop\'s own settings, put back on the plot, never stamped', () => {
+    const context = load();
+    const { StructureWorkshop, DatabaseStructureEditor: E, RRStructurePlan: SP } = context;
+    const json = value => JSON.stringify(value);
+    const sun = { id: 'light2', type: 'sun', x: 3, y: 2, height: 200, radius: 100, color: '#fff2d0' };
+    // A file from before: the sun among the structure's lights.
+    const old = Object.assign(built(), { lights: [built().lights[0], sun] });
+    // The Blueprint slot stamps files as they are on disk: that file's sun stays behind already.
+    const stamped = { width: 30, height: 30, reactor3d: { version: 1 } };
+    SP.placeEffects(stamped, 2, SP.effectsOf(old, 4, 4, null));
+    assert.equal(json(stamped.reactor3d.lights.map(light => light.type)), json(['point']), 'a stamp carries the lamp, not the sun');
+    // Loaded, the sun moves to the workshop's settings; the file is written that way at its next save.
+    const plan = E.normalizePlan(JSON.parse(json(old)));
+    assert.equal(json(plan.lights.map(light => light.type)), json(['point']));
+    assert.equal(json(plan.workshop), json({ lights: [sun] }));
+    const trimmed = E.trimPlan(plan);
+    assert.equal(json(Object.keys(trimmed)), json(['name', 'size', 'storey', 'height', 'pieces', 'lights', 'surfaces', 'workshop']));
+    assert.equal(json(trimmed.workshop), json({ lights: [sun] }));
+    assert.equal(json(E.trimPlan(E.normalizePlan(JSON.parse(json(trimmed))))), json(trimmed), 'and reads back the same');
+    // A structure with no sun gains nothing.
+    assert.equal('workshop' in E.normalizePlan(built()), false);
+    assert.equal('workshop' in E.trimPlan(E.normalizePlan(built())), false);
+    // The plot has the sun again, beside the structure's own lamp, each with its own id.
+    const root = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'rr-workshop-sun-'));
+    try {
+        const entry = { id: 1, name: 'Shed', file: 'Shed.json', plan };
+        const db = { data: { structures: [null, entry] }, getTilesets: () => [null, { id: 1 }] };
+        const tilemap = { currentMap: { id: 5, tilesetId: 3 } };
+        const workshop = new StructureWorkshop({ databaseManager: db, getTilemapManager: () => tilemap, getCurrentProject: () => ({ path: root }) });
+        const plot = workshop.plotMap(entry);
+        assert.equal(json(plot.reactor3d.lights.map(light => light.type).sort()), json(['point', 'sun']));
+        assert.equal(new Set(plot.reactor3d.lights.map(light => light.id)).size, 2);
+        assert.equal(plot.reactor3d.lights.find(light => light.type === 'sun').height, 200, 'as it was left');
+        // Saving the plot keeps the sun out of the structure's lights, in the file too.
+        tilemap.currentMap = plot;
+        workshop.session = { structureId: 1 };
+        assert.equal(workshop.save(), true);
+        assert.equal(json(entry.plan.lights.map(light => light.type)), json(['point']));
+        assert.equal(json(entry.plan.workshop.lights.map(light => light.type)), json(['sun']));
+        const file = JSON.parse(fs.readFileSync(path.join(root, '3d', 'Structures', 'Shed.json'), 'utf8'));
+        assert.equal(json(file.lights.map(light => light.type)), json(['point']));
+        assert.equal(json(file.workshop.lights.map(light => light.type)), json(['sun']));
+        const again = { width: 30, height: 30, reactor3d: { version: 1 } };
+        SP.placeEffects(again, 2, SP.effectsOf(file, 4, 4, null));
+        assert.equal(json(again.reactor3d.lights.map(light => light.type)), json(['point']), 'the saved structure stamps without the sun');
+        // The sun taken off the plot is gone from the workshop's settings at the next save.
+        plot.reactor3d.lights = plot.reactor3d.lights.filter(light => light.type !== 'sun');
+        assert.equal(workshop.save(), true);
+        assert.equal(json(entry.plan.workshop.lights), json([]));
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});

@@ -121,10 +121,6 @@ test('a question that destroys or overwrites is a danger question', () => {
     danger('database/DatabaseAnimationEditor.js', 'Remove frame');
     danger('database/DatabaseStructureEditor.js', 'Take away floors');
     danger('database/DatabaseUserInterfaceEditor.js', 'Replace every layer');
-    danger('forge/CharacterGenerator/CharacterGenerator.js', 'Clear all painted zone edits');
-    danger('forge/CharacterGenerator/CharacterGenerator.js', 'outfit library. Overwrite it?');
-    danger('forge/CharacterGenerator/CharacterGenerator.js', 'hair library. Overwrite it?');
-    danger('forge/CharacterGenerator/CharacterGenerator.js', 'already exists in this project. Overwrite it?');
     danger('forge/EffekseerGenerator/EffekseerGenerator.js', 'already exists in this project. Overwrite it?');
 });
 
@@ -531,183 +527,6 @@ test('3D Models: a save that keeps failing raises one notice at a time', async (
     assert.equal(notices.length, 2, 'a failure after the notice was read is told again');
 });
 
-/** A Character Generator whose tabs hold a sheet named Hero, in a project folder of its own. */
-function characterGenerator(RRDialog, t) {
-    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-themed-cg-'));
-    t.after(() => fs.rmSync(project, { recursive: true, force: true }));
-    const canvas = () => ({ getContext: () => ({ putImageData() {}, drawImage() {} }), toDataURL: () => 'data:image/png;base64,AQID' });
-    const registry = [];
-    const Generator = loadClass('forge/CharacterGenerator/CharacterGenerator.js', 'CharacterGenerator',
-        { window: { addEventListener() {}, removeEventListener() {} }, document: { createElement: canvas }, require, RRDialog, RR_CHARACTER_REGISTRY: registry,
-            CharacterRenderer: { render: () => ({}) }, console: { error() {}, log() {}, warn() {} } });
-    const gen = new Generator();
-    // The line under the Outfit Forge and the Hair Forge.
-    const status = { textContent: '', style: {} };
-    gen.root = {
-        querySelector(selector) {
-            if (selector === '.rr-cg-name-input' || selector === '.rr-cgp-name') return { value: 'Hero' };
-            if (selector === '.rr-cg-sheet-canvas') return canvas();
-            if (selector === '.rr-forge-status' || selector === '.rr-hair-status') return status;
-            return null;
-        }
-    };
-    gen._syncProjectPath = () => project;
-    const outPath = path.join(project, 'img', 'characters', '$Hero.png');
-    return { gen, project, outPath, status, registry };
-}
-
-test('Character Generator: a sheet that exists is overwritten only on Overwrite, and the question names the file', async t => {
-    const no = dialogStub({ confirm: false });
-    const kept = characterGenerator(no, t);
-    fs.mkdirSync(path.dirname(kept.outPath), { recursive: true });
-    fs.writeFileSync(kept.outPath, 'original');
-    await kept.gen._savePartsSheet();
-    assert.equal(fs.readFileSync(kept.outPath, 'utf8'), 'original', 'declined: the old sheet stays');
-    assert.deepEqual(no.asked.map(entry => entry.kind), ['confirm'], 'and nothing is reported as saved');
-    assert.equal(no.asked[0].message, 'img/characters/$Hero.png already exists in this project. Overwrite it?');
-    assert.deepEqual(no.asked[0].options, { title: 'Overwrite File', ok: 'Overwrite', danger: true });
-
-    const yes = dialogStub({ confirm: true });
-    const replaced = characterGenerator(yes, t);
-    fs.mkdirSync(path.dirname(replaced.outPath), { recursive: true });
-    fs.writeFileSync(replaced.outPath, 'original');
-    await replaced.gen._savePartsSheet();
-    assert.deepEqual([...fs.readFileSync(replaced.outPath)], [1, 2, 3], 'accepted: replaced');
-    assert.deepEqual(yes.asked.map(entry => entry.kind), ['confirm', 'alert']);
-    assert.match(yes.asked[1].message, /^Saved \$Hero\.png to img\/characters\/$/);
-});
-
-test('Character Generator: the Procedural tab overwrites a sheet only on Overwrite', async t => {
-    const sheet = answer => {
-        const dialog = dialogStub({ confirm: answer });
-        const made = characterGenerator(dialog, t);
-        Object.assign(made.gen, { frameWidth: 4, frameHeight: 4, _buildActiveParts: () => [] });
-        fs.mkdirSync(path.dirname(made.outPath), { recursive: true });
-        fs.writeFileSync(made.outPath, 'original');
-        return { dialog, gen: made.gen, outPath: made.outPath };
-    };
-    const kept = sheet(false);
-    await kept.gen._saveProceduralSheet();
-    assert.equal(fs.readFileSync(kept.outPath, 'utf8'), 'original', 'declined: the old sheet stays');
-    assert.deepEqual(kept.dialog.asked.map(entry => entry.kind), ['confirm'], 'and nothing is reported as saved');
-    assert.equal(kept.dialog.asked[0].message, 'img/characters/$Hero.png already exists in this project. Overwrite it?');
-    assert.deepEqual(kept.dialog.asked[0].options, { title: 'Overwrite File', ok: 'Overwrite', danger: true });
-
-    const replaced = sheet(true);
-    await replaced.gen._saveProceduralSheet();
-    assert.deepEqual([...fs.readFileSync(replaced.outPath)], [1, 2, 3], 'accepted: replaced');
-    assert.deepEqual(replaced.dialog.asked.map(entry => entry.kind), ['confirm', 'alert']);
-});
-
-/** Set a generator up so its Outfit Forge and its Hair Forge each make a small part named Cloak; resolves the two files. */
-function partForge(made) {
-    const result = { palette: { a: { hex: '#000000', material: '' } }, sheet: [[['a']]] };
-    Object.assign(made.gen, {
-        characterStyle: 'test',
-        _projectPartDescriptors: new Set(),
-        _isBuiltInPartId: () => false,
-        _formatTemplateRowLiteral: row => JSON.stringify(row),
-        _outfitEngine: () => ({ generateOutfit: () => result }),
-        _forgeBodyTemplate: () => ({}),
-        _forgeConfig: () => ({ name: 'Cloak' }),
-        _forgeSyncZoneLayers() {},
-        _forgeTags: () => [],
-        _forgeEngineConfig: () => ({}),
-        _hairEngine: () => ({ generateHair: () => result }),
-        _hairBodyTemplate: () => ({}),
-        _hairConfig: () => ({ name: 'Cloak' }),
-        _hairEngineConfig: () => ({ tags: [] })
-    });
-    const parts = path.join(made.project, 'forge', 'character_generator', 'styles', 'test', 'parts');
-    return { outfit: path.join(parts, 'full outfits', 'full-outfits-test-cloak.js'), hair: path.join(parts, 'hair', 'hair-test-cloak.js') };
-}
-
-for (const [what, save, kind, question] of [
-    ['an outfit part', '_saveForgeOutfit', 'outfit', "full-outfits-test-cloak.js already exists in this project's outfit library. Overwrite it?"],
-    ['a hair part', '_saveHairPart', 'hair', "hair-test-cloak.js already exists in this project's hair library. Overwrite it?"]
-]) {
-    test(`Character Generator: ${what} that exists is overwritten only on Overwrite, and a declined save says so`, async t => {
-        const existing = answer => {
-            const dialog = dialogStub({ confirm: answer });
-            const made = characterGenerator(dialog, t);
-            const file = partForge(made)[kind];
-            fs.mkdirSync(path.dirname(file), { recursive: true });
-            fs.writeFileSync(file, 'original');
-            made.status.textContent = 'Saved earlier';
-            return { dialog, file, gen: made.gen, status: made.status, registry: made.registry };
-        };
-        const kept = existing(false);
-        await kept.gen[save]();
-        assert.equal(fs.readFileSync(kept.file, 'utf8'), 'original', 'declined: the old part stays');
-        assert.equal(kept.dialog.asked[0].message, question);
-        assert.deepEqual(kept.dialog.asked[0].options, { title: 'Overwrite File', ok: 'Overwrite', danger: true });
-        assert.equal(kept.status.textContent, 'Save canceled', 'the line stops saying Saved');
-        assert.equal(kept.registry.length, 0, 'and the part is not registered');
-
-        const replaced = existing(true);
-        await replaced.gen[save]();
-        assert.match(fs.readFileSync(replaced.file, 'utf8'), /^\/\/ Procedurally generated (?:outfit|hair) "Cloak"/, 'accepted: replaced');
-        assert.match(replaced.status.textContent, /^Saved “Cloak”/);
-        assert.equal(replaced.registry.length, 1);
-    });
-}
-
-test('Character Generator: the Import Parts summary is one notice after the loop, with the files that failed first', async t => {
-    const importer = dialog => {
-        const { gen } = characterGenerator(dialog, t);
-        Object.assign(gen, {
-            characterStyle: 'test', activePartIds: new Set(), activeLayerOrder: [], _projectPartDescriptors: new Set(),
-            _requireProjectPath: gen._syncProjectPath,
-            _setTemplateStatus() {}, _normalizeAllTemplates() {}, _render() {},
-            _isBuiltInPartId: () => false,
-            _formatPartDescriptorJs: () => '/* a part */',
-            _imageFileToAsciiTemplate: async file => { if (/\.txt$/.test(file.name)) throw new Error('not a picture'); return { palette: {} }; }
-        });
-        return gen;
-    };
-    const details = message => { const lines = message.split('\n'); return lines.slice(lines.findIndex(line => /^[✗✓]/.test(line))); };
-
-    const mixed = dialogStub();
-    await importer(mixed)._bulkImportFiles([{ name: 'bob.png' }, { name: 'notes.txt' }, { name: 'braid.png' }], 'hair');
-    assert.equal(mixed.asked.length, 1, 'one notice');
-    assert.deepEqual(mixed.asked[0].options, { title: 'Import Parts', kind: 'warning' });
-    assert.equal(mixed.asked[0].message.split('\n')[0], 'Bulk import complete: 2 succeeded, 1 failed');
-    assert.deepEqual(details(mixed.asked[0].message), ['✗ notes.txt: not a picture', '', '✓ bob.png → hair-test-bob', '✓ braid.png → hair-test-braid']);
-
-    const clean = dialogStub();
-    await importer(clean)._bulkImportFiles([{ name: 'bob.png' }], 'hair');
-    assert.deepEqual(clean.asked[0].options, { title: 'Import Parts', kind: 'info' });
-    assert.deepEqual(details(clean.asked[0].message), ['✓ bob.png → hair-test-bob']);
-});
-
-test('Character Generator: a new sheet is written without a question, and a missing name is a notice', async t => {
-    const dialog = dialogStub({ confirm: false });
-    const { gen, outPath } = characterGenerator(dialog, t);
-    await gen._savePartsSheet();
-    assert.deepEqual([...fs.readFileSync(outPath)], [1, 2, 3]);
-    assert.deepEqual(dialog.asked.map(entry => entry.kind), ['alert']);
-
-    const unnamed = dialogStub();
-    const other = characterGenerator(unnamed, t);
-    other.gen.root = { querySelector: () => ({ value: '  ' }) };
-    await other.gen._savePartsSheet();
-    assert.equal(fs.existsSync(other.outPath), false);
-    assert.equal(unnamed.asked[0].message, 'Enter a name for the character sheet.');
-    assert.deepEqual(unnamed.asked[0].options, { title: 'Character Generator', kind: 'warning' });
-});
-
-test('Character Generator: bulk import asks its category through a themed prompt, and Cancel imports nothing', async t => {
-    const cancelled = dialogStub();
-    const { gen } = characterGenerator(cancelled, t);
-    const status = [];
-    gen._setTemplateStatus = text => status.push(text);
-    await gen._openBulkImportChooser();
-    assert.equal(cancelled.asked[0].kind, 'prompt');
-    assert.match(cancelled.asked[0].message, /^Category for these parts \(e\.g\. hair, clothing, accessory\):$/);
-    assert.deepEqual(cancelled.asked[0].options, { title: 'Import Parts', value: 'hair', ok: 'Choose Files' });
-    assert.deepEqual(status, ['Bulk import cancelled.']);
-});
-
 /** An Effekseer generator reduced to its preset store. */
 function effekseerGenerator(RRDialog) {
     const Generator = loadClass('forge/EffekseerGenerator/EffekseerGenerator.js', 'EffekseerGenerator', { window: {}, RRDialog, console });
@@ -892,7 +711,7 @@ test('the new titles and buttons are translated in every language', () => {
         assert.ok(text[locale].Frames.toLowerCase().includes(counted.slice(0, 5).toLowerCase()), `${locale}: the Frames heading says "${counted}"`);
     }
     // The overwrite questions read as a sentence about the file: no fragment is glued to a path any more.
-    for (const file of ['forge/CharacterGenerator/CharacterGenerator.js', 'forge/EffekseerGenerator/EffekseerGenerator.js']) {
+    for (const file of ['forge/EffekseerGenerator/EffekseerGenerator.js']) {
         assert.doesNotMatch(read(file), /['"`(]already exists in this project\. Overwrite it\?/, file);
     }
 });

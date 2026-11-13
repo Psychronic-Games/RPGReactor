@@ -243,6 +243,8 @@ class DatabaseItemEditor {
                 <div class="effect-action-buttons">
                     <button class="effect-btn-add rr-btn-chip">${tt('Add')}</button>
                     <button class="effect-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="effect-btn-copy rr-btn-chip" disabled>${tt('Copy')}</button>
+                    <button class="effect-btn-paste rr-btn-chip">${tt('Paste')}</button>
                     <button class="effect-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
                 </div>
             </div>
@@ -446,6 +448,12 @@ class DatabaseItemEditor {
             const index = this.getSelectedEffectIndex(table);
             if (index !== null) this.editEffect(item, index);
         });
+        // Copy and Paste, as under the trait tables (the right-click menu always had them).
+        section.querySelector('.effect-btn-copy').addEventListener('click', () => {
+            const index = this.getSelectedEffectIndex(table);
+            if (index !== null) this.copyEffect(item, index);
+        });
+        section.querySelector('.effect-btn-paste').addEventListener('click', () => this.pasteEffect(item));
         section.querySelector('.effect-btn-delete').addEventListener('click', () => {
             const index = this.getSelectedEffectIndex(table);
             if (index !== null) this.deleteEffect(item, index);
@@ -461,6 +469,7 @@ class DatabaseItemEditor {
         if (!section) return;
         const enabled = this.getSelectedEffectIndex(table) !== null;
         section.querySelector('.effect-btn-edit').disabled = !enabled;
+        section.querySelector('.effect-btn-copy').disabled = !enabled;
         section.querySelector('.effect-btn-delete').disabled = !enabled;
     }
 

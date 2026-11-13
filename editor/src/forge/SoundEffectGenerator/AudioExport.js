@@ -11,7 +11,8 @@
 
     const FORMATS = [
         { id: 'wav', label: 'WAV (lossless)', extension: '.wav', mimeType: 'audio/wav', lossy: false },
-        { id: 'ogg', label: 'OGG', extension: '.ogg', mimeType: 'audio/ogg', lossy: true },
+        // Named for what is in the file: Opus sound in an Ogg file, not Vorbis.
+        { id: 'ogg', label: 'OGG (Opus)', extension: '.ogg', mimeType: 'audio/ogg', lossy: true },
         { id: 'mp3', label: 'MP3', extension: '.mp3', mimeType: 'audio/mpeg', lossy: true }
     ];
 

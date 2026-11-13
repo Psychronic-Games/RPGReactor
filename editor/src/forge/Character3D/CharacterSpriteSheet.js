@@ -118,6 +118,59 @@
 
     /** Frames per row a character sheet ('8d', 'mz') may have; 3 is MZ's own. */
     const FRAME_CHOICES = [1, 3, 4, 6, 8, 10, 12];
+    /**
+     * How a face sheet's portraits move, from the workspace's settings (`faceFrames`, `faceKinds`, `talkMouths`):
+     *   frames  how many frames each portrait is wide, 1 (still) to 8: the "[4F]" of the file's name, which is all
+     *           the game reads of it (ImageManager.faceFrames);
+     *   kinds   what each of the eight portraits' frames hold: 'talk', the expression with its mouth at rest and
+     *           then in each of `mouths`; or 'sweep', from the neutral face to the expression, the last frame the
+     *           expression itself. How a message plays them is its Show Text command's (talk, once, loop, still);
+     *   mouths  the mouth shape of each talking frame after the first, least open first (speech shapes of
+     *           RRCharacterExpressions by id), the usual ones for that many frames unless chosen.
+     */
+    const MOUTH_SHAPES = ['mbp', 'fv', 's', 'ih', 'ee', 'ch', 'l', 'th', 'ou', 'oh', 'aa'];
+    const USUAL_MOUTHS = { 2: ['aa'], 3: ['ih', 'aa'], 4: ['ih', 'oh', 'aa'], 5: ['s', 'ih', 'oh', 'aa'], 6: ['s', 'ih', 'ee', 'oh', 'aa'], 7: ['s', 'ih', 'ee', 'ou', 'oh', 'aa'], 8: ['fv', 's', 'ih', 'ee', 'ou', 'oh', 'aa'] };
+    const FACE_KINDS = ['talk', 'sweep'];
+    function faceAnimOf(source) {
+        const from = source || {};
+        let frames = Math.max(1, Math.min(8, Math.round(Number(from.faceFrames ?? from.frames) || 1)));
+        const given = Array.isArray(from.faceKinds ?? from.kinds) ? (from.faceKinds ?? from.kinds) : [];
+        const kinds = Array.from({ length: 8 }, (_, i) => (FACE_KINDS.includes(given[i]) ? given[i] : 'talk'));
+        const usual = USUAL_MOUTHS[frames] || [], chosen = Array.isArray(from.talkMouths ?? from.mouths) ? (from.talkMouths ?? from.mouths) : [];
+        const mouths = usual.map((id, i) => (MOUTH_SHAPES.includes(chosen[i]) ? chosen[i] : id));
+        return { frames, kinds, mouths };
+    }
+    /** The tag a face set carries in its name for its frames, "[4F]"; none for a still one. */
+    const faceTag = anim => (anim.frames > 1 ? `[${anim.frames}F]` : '');
+    /** The face drawn in one frame: `{ expression, sweep }` that part of the way from neutral (0 is neutral, 1 all of it), `{ expression, mouth }` talking. The expression's own name where faces cannot be blended. */
+    function frameFace(cell) {
+        const X = root.RRCharacterExpressions, expression = cell.expression || 'neutral';
+        if (cell.sweep !== undefined && cell.sweep <= 0) return 'neutral';
+        if (!X || typeof X.blend !== 'function') return expression;
+        try {
+            if (cell.mouth) return X.blend([[expression, 1], ['viseme_' + cell.mouth, 1]]);
+            if (cell.sweep !== undefined && cell.sweep < 1) return X.blend([[expression, cell.sweep]]);
+        } catch (error) { /* the expression itself */ }
+        return expression;
+    }
+    /**
+     * How far open a mouth is for a character of text and the talking frame for it: the game's own rule
+     * (Window_Message.faceMouth and faceTalkFrame, kept the same by test), so the view talks as the game will.
+     */
+    function mouthOpen(character) {
+        const c = String(character || '').toLowerCase();
+        if (!c || /[\s.,;:!?…。、！？「」()\[\]"'’“”\-–—~*_/\\<>]/.test(c)) return 0;
+        const table = { a: 1, á: 1, à: 1, â: 1, ä: 1, ã: 1, o: 0.8, ó: 0.8, ö: 0.8, ô: 0.8, e: 0.6, é: 0.6, è: 0.6, ê: 0.6, i: 0.45, í: 0.45, u: 0.5, ú: 0.5, ü: 0.5, y: 0.4,
+            m: 0, b: 0, p: 0, f: 0.15, v: 0.15, w: 0.35, h: 0.5 };
+        if (c in table) return table[c];
+        if (c >= 'a' && c <= 'z') return 0.3;
+        if (c >= '0' && c <= '9') return 0.5;
+        const code = c.codePointAt(0);
+        return code > 127 ? 0.3 + (code % 5) * 0.175 : 0;
+    }
+    const talkFrame = (open, talk) => (talk > 1 ? Math.max(0, Math.min(talk - 1, Math.round(open * (talk - 1)))) : 0);
+    /** What the Sprite view has a face say, to show its talking frames as the game would pick them. */
+    const TALK_SAMPLE = 'Well met, traveler. What brings you to our humble town?';
     /** The file-name tag for n frames per row: `[6F]`, number first like [8D]; none for MZ's 3 (RRAssetFiles.frameTag). */
     const frameTag = n => (root.RRAssetFiles && root.RRAssetFiles.frameTag ? root.RRAssetFiles.frameTag(n) : (Number(n) >= 1 && Number(n) !== 3 ? `[${Math.round(Number(n))}F]` : ''));
     /** A layout's frames per row: n where the layout takes a choice, else 3. */
@@ -179,7 +232,16 @@
             const list = options.expressions || facePresets()[0].expressions;
             // (`only`: the first so many portraits alone, for a sheet put together from several characters.)
             const count = Number.isInteger(options.only) ? Math.max(1, Math.min(8, options.only)) : 8;
-            for (let i = 0; i < count; i++) cells.push({ col: i % 4, row: Math.floor(i / 4), clip: 'idle', at: 0, yaw: options.view === 'three' ? 22 : 0, kind: 'face', expression: list[i] || 'neutral' });
+            // With frames (`face`: faceAnimOf), each portrait is that many wide: a talking portrait's mouth at rest
+            // and then in each chosen shape, or a sweep from the neutral face to the portrait's expression.
+            const anim = faceAnimOf(options.face), base = i => ({ row: Math.floor(i / 4), clip: 'idle', at: 0, yaw: options.view === 'three' ? 22 : 0, kind: 'face', expression: list[i] || 'neutral' });
+            for (let i = 0; i < count; i++) {
+                const first = (i % 4) * anim.frames;
+                if (anim.frames === 1) { cells.push(Object.assign(base(i), { col: first })); continue; }
+                for (let k = 0; k < anim.frames; k++) {
+                    cells.push(Object.assign(base(i), { col: first + k, plays: anim.kinds[i] }, anim.kinds[i] === 'sweep' ? { sweep: k / (anim.frames - 1) } : { talk: k, mouth: k ? anim.mouths[k - 1] : '' }));
+                }
+            }
         }
         return cells;
     }
@@ -304,6 +366,197 @@
             }
             if (best < 0) continue;
             px[o] = src[best] * (k ?? 0.28); px[o + 1] = src[best + 1] * (k ?? 0.25); px[o + 2] = src[best + 2] * (k ?? 0.28); px[o + 3] = 255;
+        }
+        return px;
+    }
+
+    /**
+     * The outline of the Smooth look: a soft dark rim that fades out, not a ring of solid pixels. Each pixel the
+     * figure does not fill takes a share of a darker shade of the figure beside it, by how much of a figure is
+     * beside it (a neighbour straight on counts whole, a diagonal one half) and under what the pixel already holds.
+     */
+    function softOutline(px, w, h) {
+        const src = px.slice();
+        const NEAR = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 0.5], [-1, 1, 0.5], [1, -1, 0.5], [-1, -1, 0.5]];
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const o = (y * w + x) * 4, own = src[o + 3];
+            if (own >= 250) continue;
+            let best = -1, cover = 0;
+            for (const [dx, dy, share] of NEAR) {
+                const nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                const n = (ny * w + nx) * 4, c = src[n + 3] * share;
+                if (c > cover) { cover = c; best = n; }
+            }
+            if (best < 0 || cover < 24) continue;
+            // At most a little over half opaque, and only where the pixel's own colour leaves room.
+            const rim = cover * 0.55 * (255 - own) / 255, alpha = own + rim;
+            px[o] = (src[o] * own + src[best] * 0.28 * rim) / alpha;
+            px[o + 1] = (src[o + 1] * own + src[best + 1] * 0.25 * rim) / alpha;
+            px[o + 2] = (src[o + 2] * own + src[best + 2] * 0.28 * rim) / alpha;
+            px[o + 3] = alpha;
+        }
+        return px;
+    }
+
+    /** How long a shadow is against the figure's height, and how flat the ground lies under the camera. */
+    /** `ANGLE`: the way it falls unless chosen (up and to the right, behind the figure). `LEAST`: the shortest a sheet's shadows are made to fit a tight frame; past that they fade out at the frame's edge. */
+    const SHADOW = { LENGTH: 0.55, FLAT: 0.5, ALPHA: 0.38, ANGLE: 30, LEAST: 0.6 };
+
+    /**
+     * Where the shadow of a figure's pixel falls, as a step per pixel of height above the feet: `angle` in degrees
+     * is the way the shadow points on the picture, 0 straight up it (behind the figure), 90 to the right, -90 to the
+     * left, 180 down it (towards the viewer). `distance`: how far it reaches against the usual (1; 0 lies under the
+     * feet, 2 is twice as long).
+     */
+    function shadowStep(angle, distance = 1) {
+        const a = (Number(angle) || 0) * Math.PI / 180, reach = SHADOW.LENGTH * Math.max(0, Math.min(3, Number.isFinite(Number(distance)) ? Number(distance) : 1));
+        return { x: Math.sin(a) * reach, y: -Math.cos(a) * reach * SHADOW.FLAT };
+    }
+
+    /** The share of full length (0 to 1) at which one cell's shadow stays inside its `w` × `h` frame; 1 for an empty cell. */
+    function shadowFit(px, w, h, angle, distance = 1) {
+        const step = shadowStep(angle, distance);
+        let feet = -1;
+        for (let y = h - 1; y >= 0 && feet < 0; y--) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] >= 96) { feet = y; break; }
+        if (feet < 0) return 1;
+        let fit = 1;
+        for (let y = 0; y <= feet; y++) for (let x = 0; x < w; x++) {
+            if (px[(y * w + x) * 4 + 3] < 96) continue;
+            const up = feet - y, dx = up * step.x, dy = up * step.y;
+            if (dx > 0) fit = Math.min(fit, (w - 1 - x) / dx);
+            else if (dx < 0) fit = Math.min(fit, x / -dx);
+            if (dy > 0) fit = Math.min(fit, (h - 1 - feet) / dy);
+        }
+        return Math.max(0, Math.min(1, fit));
+    }
+
+    /**
+     * A cell with its shadow under it: the figure's own shape laid on the ground from its feet, the way `angle`
+     * points, at `scale` of full length (`shadowFit`), behind the figure. It is worked out at twice the frame's
+     * size and softened before it is brought down, so its edge is a curve and not steps of whole pixels; towards
+     * the frame's edge it fades out, so a shadow longer than its frame has room for ends softly inside it and is
+     * never cut by the edge. `hard`: one darkness with a clean edge, for pixel art. A new array; the figure's own
+     * pixels are as they were.
+     */
+    function shadowed(px, w, h, angle, scale, hard, distance = 1) {
+        const step = shadowStep(angle, distance);
+        let feet = -1;
+        for (let y = h - 1; y >= 0 && feet < 0; y--) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] >= 96) { feet = y; break; }
+        const out = new Uint8ClampedArray(px);
+        if (feet < 0) return out;
+        const k = Math.max(0, Math.min(1, Number.isFinite(scale) ? scale : 1));
+        // A body is as deep as it is wide, near enough, so its shadow has that depth on the ground: without it a
+        // shadow thrown straight to the side was a line one pixel thin. Measured over the lower half of the figure
+        // (legs and hips): wings, arms and a weapon held out make it wide, not deep.
+        let left = w, right = -1, top = feet;
+        for (let y = 0; y <= feet; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] >= 96) { if (y < top) top = y; }
+        const waist = Math.round((top + feet) / 2);
+        for (let y = waist; y <= feet; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] >= 96) { if (x < left) left = x; if (x > right) right = x; }
+        const S2 = 2, W = w * S2, H = h * S2, big = new Float32Array(W * H);
+        const depth = Math.max(1, (right - left + 1) * 0.16 * SHADOW.FLAT * S2), tall = Math.max(1, feet - top);
+        for (let y = 0; y <= feet; y++) for (let x = 0; x < w; x++) {
+            const a = px[(y * w + x) * 4 + 3];
+            if (a < 96) continue;
+            const up = feet - y, sx = (x + 0.5 + up * step.x * k) * S2, sy = (feet + 0.5 + up * step.y * k) * S2;
+            // Thinner towards its far end, as a body's shadow is at the head.
+            const reach = Math.max(1, Math.round(depth * (1 - 0.6 * up / tall)));
+            const x0 = Math.max(0, Math.floor(sx - 1)), x1 = Math.min(W - 1, Math.floor(sx + 1));
+            for (let iy = Math.max(0, Math.round(sy) - reach); iy <= Math.min(H - 1, Math.round(sy) + reach); iy++) for (let ix = x0; ix <= x1; ix++) big[iy * W + ix] = 1;
+        }
+        // Softened: two passes of a small box each way, the wider the larger the frame.
+        const radius = Math.max(1, Math.round(w / 32)), line = new Float32Array(Math.max(W, H));
+        const blur = (count, stride, start) => {
+            for (let i = 0; i < count; i++) line[i] = big[start + i * stride];
+            let sum = 0;
+            for (let i = -radius; i <= radius; i++) sum += line[Math.max(0, Math.min(count - 1, i))];
+            for (let i = 0; i < count; i++) {
+                big[start + i * stride] = sum / (radius * 2 + 1);
+                sum += line[Math.min(count - 1, i + radius + 1)] - line[Math.max(0, i - radius)];
+            }
+        };
+        for (let pass = 0; pass < 2; pass++) {
+            for (let y = 0; y < H; y++) blur(W, 1, y * W);
+            for (let x = 0; x < W; x++) blur(H, W, x);
+        }
+        const fade = Math.max(2, w * 0.08);
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            let cover = (big[(y * 2) * W + x * 2] + big[(y * 2) * W + x * 2 + 1] + big[(y * 2 + 1) * W + x * 2] + big[(y * 2 + 1) * W + x * 2 + 1]) / 4;
+            // Out to nothing over the last pixels before the frame's edge.
+            cover *= Math.max(0, Math.min(1, Math.min(x, y, w - 1 - x, h - 1 - y) / fade));
+            if (hard) cover = cover >= 0.45 ? 1 : 0;
+            if (cover <= 0.01) continue;
+            const o = (y * w + x) * 4, own = px[o + 3], under = cover * SHADOW.ALPHA * 255 * (255 - own) / 255, alpha = own + under;
+            if (alpha <= 0) continue;
+            // The figure over the shadow: the shadow is black, so it only darkens what shows through.
+            out[o] = px[o] * own / alpha; out[o + 1] = px[o + 1] * own / alpha; out[o + 2] = px[o + 2] * own / alpha; out[o + 3] = alpha;
+        }
+        return out;
+    }
+
+    /**
+     * Every frame of a finished sheet given its shadow, all at one length: the length that fits the tightest frame,
+     * but never under `SHADOW.LEAST` of full length. One frame with wings or a tail out to the frame's side used to
+     * shrink every shadow on the sheet to almost nothing; now such a frame's shadow fades out at its edge instead.
+     */
+    function castShadows(sheet, width, height, size, angle, hard, distance = 1) {
+        const cols = Math.round(width / size), rows = Math.round(height / size), cells = [];
+        let scale = 1;
+        for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+            const px = new Uint8ClampedArray(size * size * 4);
+            for (let y = 0; y < size; y++) px.set(sheet.subarray(((row * size + y) * width + col * size) * 4, ((row * size + y) * width + col * size + size) * 4), y * size * 4);
+            cells.push({ col, row, px });
+            scale = Math.min(scale, shadowFit(px, size, size, angle, distance));
+        }
+        scale = Math.max(SHADOW.LEAST, scale);
+        for (const cell of cells) blit(sheet, width, shadowed(cell.px, size, size, angle, scale, hard, distance), size, size, cell.col, cell.row);
+        return scale;
+    }
+
+    /**
+     * A portrait with its small holes closed. Where the lips part, the head's surface has a gap the camera can see
+     * through at some angles (the mouth's corner most of all): in the builder's view the dark behind it hides that,
+     * and on a sheet it was a spot of clear background inside the face. Every clear patch that the clear ground
+     * round the figure does not reach, and that is no larger than `most` pixels, is filled with the dark of the
+     * inside of a mouth, shaded from the pixels round it. Larger ones (the space inside a hoop, between hair and
+     * neck) are left: they are meant.
+     */
+    function closeHoles(px, w, h, most) {
+        const limit = Number.isFinite(most) ? most : Math.max(4, Math.round(w * h * 0.004));
+        const CLEAR = 96, seen = new Uint8Array(w * h), queue = new Int32Array(w * h);
+        const clear = i => px[i * 4 + 3] < CLEAR;
+        // The ground: everything clear that the frame's edge reaches.
+        let head = 0, tail = 0;
+        const push = i => { if (!seen[i] && clear(i)) { seen[i] = 1; queue[tail++] = i; } };
+        for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+        for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+        const spread = each => {
+            while (head < tail) {
+                const i = queue[head++], x = i % w, y = (i - x) / w;
+                if (each) each(i);
+                if (x > 0) push(i - 1);
+                if (x < w - 1) push(i + 1);
+                if (y > 0) push(i - w);
+                if (y < h - 1) push(i + w);
+            }
+        };
+        spread(null);
+        for (let start = 0; start < w * h; start++) {
+            if (seen[start] || !clear(start)) continue;
+            const from = tail, patch = [];
+            head = tail;
+            push(start);
+            spread(i => patch.push(i));
+            if (patch.length > limit) continue;
+            // The colour of what borders it, darkened: the inside of a mouth is the lips' own colour in shadow.
+            let r = 0, g = 0, b = 0, n = 0;
+            for (const i of patch) for (const j of [i - 1, i + 1, i - w, i + w]) {
+                if (j < 0 || j >= w * h || clear(j)) continue;
+                r += px[j * 4]; g += px[j * 4 + 1]; b += px[j * 4 + 2]; n++;
+            }
+            if (!n) continue;
+            for (const i of patch) { px[i * 4] = r / n * 0.35; px[i * 4 + 1] = g / n * 0.25; px[i * 4 + 2] = b / n * 0.28; px[i * 4 + 3] = 255; }
+            void from;
         }
         return px;
     }
@@ -688,9 +941,11 @@
     }
 
     /** The sheet's file name: `$Name[8D].png`, `$Name.png`, `Name.png`; at n frames other than 3, `$Name[8D][6F].png`, `$Name[6F].png`. */
-    function fileName(id, name, n) {
+    function fileName(id, name, n, face) {
         const l = layout(id);
-        return l.prefix + safeName(name) + l.tag + frameTag(framesOf(l.id, n)) + '.png';
+        // A face set says its frames in its name: "Name[4F]" (faceTag).
+        const tag = l.id === 'face' ? faceTag(faceAnimOf(face)) : frameTag(framesOf(l.id, n));
+        return l.prefix + safeName(name) + l.tag + tag + '.png';
     }
 
     // ── rendering (in the builder, on its own view) ───────────────────────
@@ -823,11 +1078,47 @@
     }
 
     /** The expression a face cell asks for, on the character's face, when the builder can make expressions. */
+    /**
+     * The inside of the head, for a portrait: where the lips part the camera can look through the mouth and, from
+     * the side, out past the far cheek, which on a sheet was a notch of clear background in the face (the builder's
+     * own view has a dark ground behind it and never showed it). After a frame is drawn, the body's and head's own
+     * meshes are drawn once more from their inner side, in the dark of a mouth, over nothing that was drawn nearer:
+     * so only what was seen through an opening is filled. Null where there is no such mesh.
+     */
+    function headInside(builder, view, renderer, THREE) {
+        const parts = (builder._result && builder._result.parts) || [];
+        const own = (view.meshes || []).filter((mesh, k) => mesh && /^(Body|Head(?: .*)?)$/.test((parts[k] && parts[k].name) || ''));
+        if (!own.length) return null;
+        const material = new THREE.MeshBasicMaterial({ color: 0x2c0f12, side: THREE.BackSide });
+        return {
+            draw(camera) {
+                const hidden = [];
+                view.scene.traverse(object => { if ((object.isMesh || object.isLine || object.isPoints || object.isSprite) && object.visible && !own.includes(object)) { hidden.push(object); object.visible = false; } });
+                const over = view.scene.overrideMaterial, clears = renderer.autoClear;
+                view.scene.overrideMaterial = material;
+                renderer.autoClear = false;
+                try { renderer.render(view.scene, camera); }
+                finally { view.scene.overrideMaterial = over; renderer.autoClear = clears; for (const object of hidden) object.visible = true; }
+            },
+            dispose() { material.dispose(); }
+        };
+    }
+
     function setExpression(builder, id) {
         const X = root.RRCharacterExpressions;
         if (!X || typeof X.apply !== 'function') return false;
         try { X.apply(builder, id || 'neutral'); return true; } catch (error) { console.warn('[RRCharacterSpriteSheet] expression', id, error); return false; }
     }
+
+    /**
+     * A mouth shape in plain words, with the sounds it is the mouth of. The builder's speech shapes are known by
+     * the short names phoneticians give them ("AA", "MBP"), which say nothing to anyone else.
+     */
+    const MOUTH_NAMES = {
+        mbp: 'Lips closed (m, b, p)', fv: 'Lip under teeth (f, v)', s: 'Teeth together (s, z)', ih: 'Slightly open (i in "sit")', ee: 'Wide smile (ee)',
+        ch: 'Lips pushed out (ch, sh)', l: 'Tongue up (l)', th: 'Tongue between teeth (th)', ou: 'Small and round (oo)', oh: 'Round and open (oh)', aa: 'Wide open (ah)'
+    };
+    const mouthLabel = id => MOUTH_NAMES[id] || String(id);
 
     function expressionList() {
         const X = root.RRCharacterExpressions;
@@ -931,7 +1222,7 @@
         const restore = settings.style === 'chibi' && settings.layout !== 'face' ? showChibi(builder) : null;
         const shrink = restore ? enlarge(view, builder._result) : null;
         const elevation = settings.layout === 'face' ? l.elevation : Math.max(0, Math.min(75, Number.isFinite(settings.elevation) ? settings.elevation : l.elevation));
-        const cells = plan(settings.layout, { expressions: settings.expressions, view: settings.view, frames: settings.frames, only: settings.only });
+        const cells = plan(settings.layout, { expressions: settings.expressions, view: settings.view, frames: settings.frames, face: settings.face, only: settings.only });
         const poses = view.plan === 'quadruped' ? (root.RRCreatureBody && root.RRCreatureBody.POSES) : (root.RRCharacterPoses && root.RRCharacterPoses.POSES);
         const ids = new Set((poses || []).map(p => p.id));
         const has = id => id === 'idle' || (ids.has(id) && !!builder._poseAction(id));
@@ -957,6 +1248,8 @@
         if (cel) { fill.intensity = 0.3; rim.intensity = 0.35; }
         view.scene.add(fill, rim);
         const flat = cel ? flatLight(THREE, view, renderer) : null, celCells = [];
+        // A portrait's head gets its inside drawn too (`headInside`), so an open mouth is never a hole in the sheet.
+        const inside = l.id === 'face' ? headInside(builder, view, renderer, THREE) : null;
         view.floor.visible = false; view.blob.visible = false;
         const pose = poser(builder);
         const upperBones = view.bones.filter(b => /^(Spine1|Spine2|Neck|Head|(Left|Right)(Shoulder|Arm|ForeArm|Hand))/.test(b.name));
@@ -976,7 +1269,7 @@
             if (performance.now() - budget > 14) { if (progress) progress(done, total); await new Promise(r => setTimeout(r, 0)); budget = performance.now(); }
             if (builder._view !== view || builder.root !== rootElement) throw new Error('The sprite sheet preview was closed.');
         };
-        const width = columnsOf(l.id, settings.frames) * size, height = l.rows * size, sheet = new Uint8ClampedArray(width * height * 4);
+        const width = (l.id === 'face' ? l.columns * faceAnimOf(settings.face).frames : columnsOf(l.id, settings.frames)) * size, height = l.rows * size, sheet = new Uint8ClampedArray(width * height * 4);
         try {
             // Measure every frame first: one scale holds for the whole sheet.
             let fitted, faceSpan = 0;
@@ -1004,7 +1297,7 @@
                 let f;
                 if (faceSpan) {
                     // Each portrait framed on its own eyes, so the eye line holds whatever the expression moves.
-                    setExpression(builder, c.expression);
+                    setExpression(builder, frameFace(c));
                     view.group.updateMatrixWorld(true);
                     const face = fitFace(eyeLine(builder, elevation), m, faceSpan);
                     f = frustum(face.anchor, face.scale, size, size);
@@ -1013,6 +1306,7 @@
                 camera.updateProjectionMatrix();
                 renderer.setRenderTarget(null);
                 renderer.render(view.scene, camera);
+                if (inside && faceSpan) inside.draw(camera);
                 gl.readPixels(0, 0, size * k, size * k, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
                 if (cel) {
                     // The same frame again unlit; the two are drawn together once every frame is read.
@@ -1026,7 +1320,10 @@
                 let px = downsample(pixels, size * k, size * k, k, true);
                 if (!portrait) px = grade(px);
                 if (pixelArt) threshold(px);
-                if (settings.outline && !faceSpan) px = outline(px, size, size);
+                // A ring of hard pixels belongs to pixel art; the Smooth look gets a soft rim.
+                if (settings.outline && !faceSpan) px = pixelArt ? outline(px, size, size) : softOutline(px, size, size);
+                // A portrait's small see-through gaps (the corner of an open mouth) are closed before it is laid down.
+                if (faceSpan) px = closeHoles(px, size, size);
                 if (faceSpan && settings.background) px = onColor(px, settings.background);
                 blit(sheet, width, px, size, size, c.col, c.row);
                 await breathe();
@@ -1037,8 +1334,11 @@
                 const drawn = celDraw(celCells, Math.max(4, Math.min(32, Math.round(settings.colors) || 12)));
                 celCells.forEach((c, i) => blit(sheet, width, settings.outline ? outline(drawn[i], size, size) : drawn[i], size, size, c.col, c.row));
             }
+            // The shadow last, under the finished figure and its outline; a face has none.
+            if (settings.shadow && !faceSpan && l.id !== 'face') castShadows(sheet, width, height, size, settings.shadowAngle, pixelArt || cel, settings.shadowDistance / 100);
         } finally {
             if (flat) flat.dispose();
+            if (inside) inside.dispose();
             view.scene.remove(fill, rim);
             fill.dispose(); rim.dispose();
             if (builder._view === view) {
@@ -1089,14 +1389,72 @@
     // of settings (`builder._exportSettings`), whichever button opened it.
 
     const SPRITE_VIEW_HINT = 'Work on the character as its sprite sheet: every animation as the game draws it, with the sheet\'s settings and Export';
-    const QUICK_SIZES = [32, 48, 64, 96, 128];
-    const GROUNDS = [{ id: 'grass', color: '#6a8f5a', label: 'Grass' }, { id: 'dark', color: '#22252c', label: 'Dark' }, { id: 'light', color: '#cfcabd', label: 'Light' }, { id: 'checker', color: '', label: 'Checkered' }];
+    // 144 is three tiles of 48 in the game.
+    const QUICK_SIZES = [32, 48, 64, 96, 144];
+    // What the sprite is shown on: the checks of a transparent picture first (the sheet has no background), then three grounds to judge it against.
+    const GROUNDS = [{ id: 'checker', color: '', label: 'Transparent' }, { id: 'grass', color: '#6a8f5a', label: 'Grass' }, { id: 'dark', color: '#22252c', label: 'Dark' }, { id: 'light', color: '#cfcabd', label: 'Light' }];
+    /** The frame-edge guide of the Sprite view: on or off and its colour, kept with the editor from one session to the next. */
+    const GUIDE_KEY = 'rrSpriteFrameGuide', GUIDE_COLOR = '#ff00ff';
+    function loadGuide() {
+        try {
+            const kept = JSON.parse(root.localStorage.getItem(GUIDE_KEY) || 'null');
+            return { on: !!(kept && kept.on), color: kept && /^#[0-9a-f]{6}$/i.test(kept.color) ? kept.color : GUIDE_COLOR };
+        } catch (error) { return { on: false, color: GUIDE_COLOR }; }
+    }
+    function saveGuide(guide) {
+        try { root.localStorage.setItem(GUIDE_KEY, JSON.stringify({ on: !!guide.on, color: guide.color })); } catch (error) { /* a preference only */ }
+    }
+    const ZOOMS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12];
+    /** A picture shown under full size is smoothed; at full size and over, each pixel is a hard square. */
+    const zoomStyle = zoom => (zoom < 1 ? 'image-rendering:auto;' : '');
+    const TITLE = word => String(word || '').replace(/^./, c => c.toUpperCase());
     const DIRECTIONS = { '0': 'Down', '-90': 'Left', '90': 'Right', '180': 'Up', '-45': 'Down-left', '45': 'Down-right', '-135': 'Up-left', '135': 'Up-right' };
 
     /** What a sheet is drawn with, from the workspace's settings. */
+    /**
+     * The shadow's angle as a dial: its hand is the way the shadow falls on the picture. `dialRow` is the row,
+     * `watchDial` what turns it: a drag round the dial's middle (to the nearest 5 degrees; Shift for single degrees)
+     * or the arrow keys. `set(angle)` keeps the angle, -179 to 180. The sprite view and the character group share it.
+     */
+    function dialRow(t, angle) {
+        return `<div class="rr-c3d-row rr-c3d-dialrow" title="${esc(t('Which way the shadow falls on the picture. Drag the hand to point it: up is straight back, down is towards the viewer. It is kept inside the frame.'))}"><span class="rr-c3d-label">${esc(t('Shadow angle'))}</span><span class="rr-c3d-dial" data-x="shadowDial" role="slider" tabindex="0" aria-label="${esc(t('Shadow angle'))}" aria-valuemin="-180" aria-valuemax="180" aria-valuenow="${angle}"><span class="rr-c3d-dial-hand" style="transform:rotate(${angle}deg)"></span></span><span class="rr-c3d-value">${angle}°</span></div>`;
+    }
+    function watchDial(panel, get, set) {
+        const turn = (dial, angle) => {
+            const whole = Math.round(angle), a = ((whole + 180) % 360 + 360) % 360 - 180, kept = a === -180 ? 180 : a;
+            set(kept, dial);
+            dial.querySelector('.rr-c3d-dial-hand').style.transform = `rotate(${kept}deg)`;
+            dial.setAttribute('aria-valuenow', String(kept));
+            dial.parentElement.querySelector('.rr-c3d-value').textContent = kept + '°';
+        };
+        panel.addEventListener('pointerdown', e => {
+            const dial = e.target.closest('.rr-c3d-dial');
+            if (!dial || panel.dataset.busy) return;
+            e.preventDefault();
+            dial.focus();
+            const point = at => {
+                const box = dial.getBoundingClientRect(), dx = at.clientX - (box.left + box.width / 2), dy = at.clientY - (box.top + box.height / 2);
+                if (Math.abs(dx) + Math.abs(dy) < 2) return;
+                const degrees = Math.atan2(dx, -dy) * 180 / Math.PI, snap = at.shiftKey ? 1 : 5;
+                turn(dial, Math.round(degrees / snap) * snap);
+            };
+            point(e);
+            const move = at => point(at), end = () => { root.removeEventListener('pointermove', move); root.removeEventListener('pointerup', end); root.removeEventListener('pointercancel', end); };
+            root.addEventListener('pointermove', move); root.addEventListener('pointerup', end); root.addEventListener('pointercancel', end);
+        });
+        panel.addEventListener('keydown', e => {
+            const dial = e.target.closest && e.target.closest('.rr-c3d-dial');
+            if (!dial || panel.dataset.busy) return;
+            const by = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5 }[e.key];
+            if (!by) return;
+            e.preventDefault();
+            turn(dial, Number(get(dial)) + (e.shiftKey ? Math.sign(by) : by));
+        });
+    }
+
     function settingsOf(state) {
         const l = layout(state.layout);
-        return { layout: l.id, frame: state.frame, frames: framesOf(l.id, state.frames), elevation: state.elevation, outline: state.outline, view: state.view, background: state.background || '',
+        return { layout: l.id, frame: state.frame, frames: framesOf(l.id, state.frames), elevation: state.elevation, outline: state.outline, face: faceAnimOf(state), shadow: !!state.shadow, shadowAngle: Number.isFinite(Number(state.shadowAngle)) ? Number(state.shadowAngle) : SHADOW.ANGLE, shadowDistance: Number.isFinite(Number(state.shadowDistance)) ? Math.max(0, Math.min(200, Number(state.shadowDistance))) : 100, view: state.view, background: state.background || '',
             expressions: state.expressions, style: state.style, look: state.look, colors: state.colors };
     }
 
@@ -1105,29 +1463,64 @@
      * played in `order`. A walking sheet's three frames step 1, 0, 1, 2 as the game plays them; a face is one frame.
      */
     function strips(settings) {
-        const l = layout(settings.layout), per = l.id === 'face' ? 1 : l.id === 'sv' ? 3 : framesOf(l.id, settings.frames);
+        const l = layout(settings.layout), anim = faceAnimOf(settings.face), per = l.id === 'face' ? anim.frames : l.id === 'sv' ? 3 : framesOf(l.id, settings.frames);
         const found = new Map();
-        for (const c of plan(l.id, { expressions: settings.expressions, view: settings.view, frames: settings.frames })) {
+        for (const c of plan(l.id, { expressions: settings.expressions, view: settings.view, frames: settings.frames, face: settings.face })) {
             const key = Math.floor(c.col / per) + '|' + c.row;
             if (!found.has(key)) found.set(key, { col: Math.floor(c.col / per) * per, row: c.row, count: per, cells: [] });
             found.get(key).cells.push(c);
         }
         return [...found.values()].map(strip => {
             const lead = strip.cells.find(c => c.clip !== 'idle') || strip.cells[0];
-            const direction = DIRECTIONS[String(lead.yaw)] || '';
-            const label = l.id === 'face' ? (lead.expression || '') : l.id === 'sv' ? (lead.motion || lead.clip) : (lead.clip === 'walk' || lead.clip === 'idle' ? direction : lead.clip + (direction && direction !== 'Down' ? ' · ' + direction : ''));
-            const order = per === 3 && l.id !== 'sv' ? [1, 0, 1, 2] : Array.from({ length: per }, (_, i) => i);
-            return { label, col: strip.col, row: strip.row, count: per, order, walk: lead.clip === 'walk' || lead.clip === 'idle' };
+            const sv = l.id === 'sv', face = l.id === 'face';
+            // What the animation is and which way it faces, named apart so each can be said in the editor's language.
+            const name = face ? (lead.expression || '') : sv ? (lead.motion || lead.clip) : lead.clip, direction = face || sv ? '' : (DIRECTIONS[String(lead.yaw)] || '');
+            const label = TITLE(name) + (direction ? ' · ' + direction : '');
+            // Played as the game plays it. A character sheet's block is stepped like a walk whatever it holds: three
+            // frames as 1, 0, 1, 2, more than three in order, a frame every 10 updates at walking speed and every 8
+            // at a dash (Game_CharacterBase.animationWait at speeds 4 and 5, counted 1.5 an update). A battler's
+            // motion takes 12 updates a frame, there and back when it loops and once through when it does not.
+            const loops = sv ? !!(SV_MOTIONS.find(m => m[0] === lead.motion) || [])[1] : true;
+            // A face plays as the message window will play it (Window_Message.updateFaceFrames). A talking face rests,
+            // then says a line of sample text letter by letter, each letter held as long as the game holds it. A sweep runs through once and holds its last frame. Then each starts over. `steps` are
+            // [frame, updates] in turn.
+            let order = sv ? (loops ? [0, 1, 2, 1] : [0, 1, 2]) : per === 3 ? [1, 0, 1, 2] : Array.from({ length: per }, (_, i) => i), steps = null;
+            if (face) {
+                order = [0];
+                if (per > 1 && lead.plays === 'sweep') {
+                    steps = [[0, 20]];
+                    for (let k = 1; k < per; k++) steps.push([k, 5]);
+                    steps[steps.length - 1][1] = 70;
+                } else if (per > 1) {
+                    steps = [[0, 24]];
+                    for (const letter of TALK_SAMPLE) steps.push([talkFrame(mouthOpen(letter), per), 4]);
+                    steps.push([0, 40]);
+                }
+            }
+            const period = 1000 / 60 * (sv ? 12 : lead.clip === 'run' ? 8 : 10);
+            return { label, name, direction, col: strip.col, row: strip.row, count: per, order, period, loops, steps, walk: lead.clip === 'walk' || lead.clip === 'idle' };
         });
     }
 
-    /** The largest whole-pixel zoom at which `count` tiles of `frame` pixels (plus `label` under each) fit a stage. */
-    function tileZoom(count, frame, width, height, label = 16, gap = 10) {
-        for (let zoom = 8; zoom > 1; zoom--) {
+    /**
+     * The largest zoom at which `count` tiles of `frame` pixels (plus `label` under each) all fit a stage: a whole
+     * number where there is room, and a part of full size (three quarters, a half, a quarter) for frames too large
+     * to show whole, so a sheet of large frames is seen entire and not cut off. A quarter when even that is too much.
+     */
+    function tileZoom(count, frame, width, height, label = 22, gap = 10) {
+        for (const zoom of [8, 7, 6, 5, 4, 3, 2, 1, 0.75, 0.5, 0.25]) {
             const columns = Math.floor((width + gap) / (frame * zoom + gap));
             if (columns >= 1 && Math.ceil(count / columns) * (frame * zoom + label + gap) <= height + gap) return zoom;
         }
-        return 1;
+        return 0.25;
+    }
+
+    /** The largest zoom at which a grid of `across` by `down` tiles of `frame` pixels (a label under each) fits a stage; a quarter at the least. */
+    function gridZoom(across, down, frame, width, height, label = 22, gap = 10) {
+        for (const zoom of [8, 7, 6, 5, 4, 3, 2, 1, 0.75, 0.5, 0.25]) {
+            if (across * (frame * zoom + 2) + (across - 1) * gap <= width && down * (frame * zoom + 2 + label) + (down - 1) * gap <= height) return zoom;
+        }
+        return 0.25;
     }
 
     function openPanel(builder) {
@@ -1139,13 +1532,17 @@
         const state = builder._exportSettings || (builder._exportSettings = { layout: '8d', frame: 100, frames: 3, elevation: 30, outline: true, view: 'three', preset: 'everyday', background: '', style: 'realistic', look: 'smooth' });
         if (!(state.colors >= 4)) state.colors = 12;
         if (!state.stage) state.stage = 'frames';
-        if (!state.ground) state.ground = 'grass';
+        if (!state.ground) state.ground = 'checker';
+        if (!Number.isFinite(Number(state.shadowAngle))) state.shadowAngle = SHADOW.ANGLE;
+        if (!Number.isFinite(Number(state.shadowDistance))) state.shadowDistance = 100;
         const el = document.createElement('div');
         el.className = 'rr-c3d-spriteview';
         el.innerHTML = `<div class="rr-c3d-spriteview-main">
                 <div class="rr-c3d-spriteview-bar">
                     <span class="rr-c3d-seg" role="group"><button class="rr-btn-chip" data-v="frames">${esc(t('Animations'))}</button><button class="rr-btn-chip" data-v="sheet">${esc(t('Whole sheet'))}</button></span>
                     <span class="rr-c3d-spriteview-grounds" title="${esc(t('What the sprite is shown on'))}">${GROUNDS.map(g => `<button class="rr-c3d-ground" data-ground="${g.id}" title="${esc(t(g.label))}" style="${g.color ? 'background:' + g.color : ''}"></button>`).join('')}</span>
+                    <span class="rr-c3d-seg rr-c3d-spriteview-zoom" role="group" title="${esc(t('How large the sprite is shown. Ctrl and the wheel zoom too.'))}"><button class="rr-btn-chip" data-zoom="out" aria-label="${esc(t('Zoom out'))}">−</button><button class="rr-btn-chip" data-zoom="fit"></button><button class="rr-btn-chip" data-zoom="in" aria-label="${esc(t('Zoom in'))}">+</button></span>
+                    <label class="rr-c3d-spriteview-guide" title="${esc(t('A line one pixel wide along the edge of every frame, to see what the game will cut. It is not saved into the sheet.'))}"><input type="checkbox" data-guide="on"> ${esc(t('Frame edges'))}</label><button class="rr-c3d-color rr-c3d-spriteview-guidecolor" data-guide="color" title="${esc(t('The color of the frame edges'))}"></button>
                     <span class="rr-c3d-note" data-v="status" aria-live="polite"></span>
                 </div>
                 <div class="rr-c3d-spriteview-stage"></div>
@@ -1160,37 +1557,65 @@
         if (chip) chip.classList.add('is-active');
         const stage = el.querySelector('.rr-c3d-spriteview-stage');
         const live = { sheet: null, picture: null, settings: null, tiles: [], drawnFor: '', busy: false, steady: 0, timer: 0, frame: 0 };
+        const guide = loadGuide();
+        /** The guide as the stage shows it: a line round each animation's frame, and the grid of frames over the whole sheet. */
+        const applyGuide = () => {
+            const box = el.querySelector('[data-guide="on"]'), swatch = el.querySelector('[data-guide="color"]');
+            box.checked = guide.on;
+            swatch.style.setProperty('--rr-c3d-swatch', guide.color);
+            swatch.hidden = !guide.on;
+            stage.classList.toggle('has-guide', guide.on);
+            stage.style.setProperty('--rr-sprite-guide', guide.color);
+            const whole = stage.querySelector('.rr-c3d-sprite-whole');
+            if (whole && live.sheet) {
+                whole.style.setProperty('--rr-sprite-cols', String(Math.round(live.sheet.width / live.sheet.frame)));
+                whole.style.setProperty('--rr-sprite-rows', String(Math.round(live.sheet.height / live.sheet.frame)));
+            }
+        };
         const note = text => { el.querySelector('[data-v="status"]').textContent = text; };
 
         const draw = () => {
             const l = layout(state.layout), face = l.id === 'face', exprs = expressionList();
             const name = safeName(builder.name) || t('Villager');
             const presets = facePresets();
-            const frames = framesOf(l.id, state.frames), cols = columnsOf(l.id, frames), file = fileName(l.id, name, frames);
+            const frames = framesOf(l.id, state.frames), anim = faceAnimOf(state), cols = face ? l.columns * anim.frames : columnsOf(l.id, frames), file = fileName(l.id, name, frames, state);
             const presetOptions = presets.map(p => `<option value="${p.id}"${p.id === state.preset ? ' selected' : ''}>${esc(t(p.label))}</option>`).join('');
             const keep = panel.scrollTop;
             panel.innerHTML = `
-                <div class="rr-c3d-export-head"><span>${esc(t('Sprite sheet'))}</span><button class="rr-btn-chip" data-x="close" title="${esc(t('Back to the 3D model'))}">◂ ${esc(t('3D model'))}</button></div>
+                <div class="lit-section rr-c3d-card-sec rr-c3d-sheet-sec"><div class="lit-section-header rr-c3d-sechead rr-c3d-sheet-head"><span class="r3d-sec-title">${esc(t('Sprite sheet'))}</span><button class="rr-btn-chip" data-x="close" title="${esc(t('Back to the 3D model'))}">◂ ${esc(t('3D model'))}</button></div><div class="lit-section-body rr-c3d-secbody">
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Sheet'))}</span><select class="rr-select" data-x="layout">${LAYOUTS.map(o => `<option value="${o.id}"${o.id === l.id ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
                 <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Frame size'))}</span><input type="number" class="rr-input" data-x="frame" min="16" max="512" step="1" value="${state.frame}"><span class="rr-c3d-value">${cols * state.frame} × ${l.rows * state.frame}</span></label>
-                <div class="rr-c3d-row rr-c3d-export-sizes"><span class="rr-c3d-label"></span><span>${QUICK_SIZES.concat(face ? [144] : []).map(n => `<button class="rr-btn-chip${n === state.frame ? ' is-active' : ''}" data-x="size" data-n="${n}">${n}</button>`).join('')}</span></div>
+                <div class="rr-c3d-row rr-c3d-export-sizes"><span class="rr-c3d-label"></span><span>${QUICK_SIZES.map(n => `<button class="rr-btn-chip${n === state.frame ? ' is-active' : ''}" data-x="size" data-n="${n}">${n}</button>`).join('')}</span></div>
                 ${l.id === '8d' || l.id === 'mz' ? `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Frames'))}</span><select class="rr-select" data-x="frames">${FRAME_CHOICES.map(n => `<option value="${n}"${n === frames ? ' selected' : ''}>${esc(n === 3 ? t('3 (RPG Maker MZ)') : String(n))}</option>`).join('')}</select></label>` : ''}
+                </div></div>
+                <div class="lit-section rr-c3d-card-sec rr-c3d-sheet-sec"><div class="lit-section-header rr-c3d-sechead"><span class="r3d-sec-title">${esc(t(face ? 'Faces' : 'Look'))}</span></div><div class="lit-section-body rr-c3d-secbody">
                 ${face ? `
+                <label class="rr-c3d-row rr-c3d-choice" title="${esc(t('How many frames each face has. With more than one the file is named [4F], and a Show Text command chooses how they are played.'))}"><span class="rr-c3d-label">${esc(t('Frames'))}</span><select class="rr-select" data-x="faceFrames">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<option value="${n}"${n === anim.frames ? ' selected' : ''}>${n === 1 ? esc(t('1 (still)')) : n}</option>`).join('')}</select></label>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('View'))}</span><select class="rr-select" data-x="view"><option value="three"${state.view === 'three' ? ' selected' : ''}>${esc(t('Three-quarter'))}</option><option value="front"${state.view === 'front' ? ' selected' : ''}>${esc(t('Front'))}</option></select></label>
                 ${exprs.length > 1 ? `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Expressions'))}</span><select class="rr-select" data-x="preset">${presetOptions}</select></label>
                 <div class="rr-c3d-export-faces">${(state.expressions || presets[0].expressions).map((id, i) => `<select class="rr-select" data-x="expr" data-i="${i}">${exprs.map(e => `<option value="${esc(e.id)}"${e.id === id ? ' selected' : ''}>${esc(t(e.label || e.id))}</option>`).join('')}</select>`).join('')}</div>` : ''}
+                ${anim.frames > 1 ? `<div class="rr-c3d-row" title="${esc(t('What each face\'s frames hold: its mouth in several shapes for talking, or a sweep from the neutral face to its expression. Play a sweep with Play once in the Show Text command.'))}"><span class="rr-c3d-label">${esc(t('Each face'))}</span><span class="rr-c3d-note">${esc(t('talks or sweeps'))}</span></div>
+                <div class="rr-c3d-export-faces">${anim.kinds.map((kind, i) => `<select class="rr-select" data-x="faceKind" data-i="${i}"><option value="talk"${kind === 'talk' ? ' selected' : ''}>${esc(t('Talk'))}</option><option value="sweep"${kind === 'sweep' ? ' selected' : ''}>${esc(t('Sweep'))}</option></select>`).join('')}</div>
+                ${anim.kinds.includes('talk') ? `<div class="rr-c3d-row" title="${esc(t('A talking face\'s first frame is its mouth at rest. Choose the mouth for each frame after it, from the least open to the most open: the game shows a more open one for louder sounds like "ah" and the closed one for m, b and p.'))}"><span class="rr-c3d-label">${esc(t('Mouth shapes'))}</span><span class="rr-c3d-note">${esc(t('frame 1 is the mouth at rest'))}</span></div>
+                ${anim.mouths.map((id, i) => `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Frame {n}', { n: i + 2 }))}</span><select class="rr-select" data-x="mouth" data-i="${i}">${MOUTH_SHAPES.map(m => `<option value="${m}"${m === id ? ' selected' : ''}>${esc(t(mouthLabel(m)))}</option>`).join('')}</select></label>`).join('')}` : ''}` : ''}
                 <div class="rr-c3d-row rr-c3d-colorrow"><span class="rr-c3d-label">${esc(t('Background'))}</span><select class="rr-select" data-x="bgmode"><option value=""${state.background ? '' : ' selected'}>${esc(t('Transparent'))}</option><option value="color"${state.background ? ' selected' : ''}>${esc(t('Color'))}</option></select><button class="rr-c3d-color" data-x="bgcolor" style="--rr-c3d-swatch:${esc(state.background || '#3a3f4b')}" title="${esc(state.background || '')}"${state.background ? '' : ' hidden'}></button></div>`
                 : `
                 ${builder.human === false ? '' : `<label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Style'))}</span><select class="rr-select" data-x="style">${STYLES.map(o => `<option value="${o.id}"${o.id === state.style ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>`}
                 <label class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('Camera angle'))}</span><input type="range" data-x="elevation" min="0" max="60" step="1" value="${state.elevation}"><span class="rr-c3d-value">${state.elevation}°</span></label>
                 <label class="rr-c3d-row rr-c3d-choice"><span class="rr-c3d-label">${esc(t('Look'))}</span><select class="rr-select" data-x="look">${LOOKS.map(o => `<option value="${o.id}"${o.id === state.look ? ' selected' : ''}>${esc(t(o.label))}</option>`).join('')}</select></label>
                 ${state.look === 'cel' ? `<label class="rr-c3d-row" title="${esc(t('How many surface colors the whole sheet is drawn in; each has its own shadow and light.'))}"><span class="rr-c3d-label">${esc(t('Colors'))}</span><input type="range" data-x="colors" min="4" max="24" step="1" value="${state.colors}"><span class="rr-c3d-value">${state.colors}</span></label>` : ''}
-                <label class="rr-c3d-row rr-c3d-check"><span class="rr-c3d-label">${esc(t('Outline'))}</span><input type="checkbox" data-x="outline"${state.outline ? ' checked' : ''}></label>`}
+                <label class="rr-c3d-row rr-c3d-check"><span class="rr-c3d-label">${esc(t('Outline'))}</span><input type="checkbox" data-x="outline"${state.outline ? ' checked' : ''}></label>
+                <label class="rr-c3d-row rr-c3d-check" title="${esc(t('A shadow on the ground under the character, drawn into every frame of the sheet.'))}"><span class="rr-c3d-label">${esc(t('Shadow'))}</span><input type="checkbox" data-x="shadow"${state.shadow ? ' checked' : ''}></label>
+                ${state.shadow ? `${dialRow(t, state.shadowAngle)}
+                <label class="rr-c3d-row" title="${esc(t('How far the shadow reaches: 0 lies under the feet, 100 is the usual length, 200 twice that.'))}"><span class="rr-c3d-label">${esc(t('Shadow distance'))}</span><input type="range" data-x="shadowDistance" min="0" max="200" step="5" value="${state.shadowDistance}"><span class="rr-c3d-value">${state.shadowDistance}%</span></label>` : ''}`}
+                </div></div>
+                <div class="lit-section rr-c3d-card-sec rr-c3d-sheet-sec"><div class="lit-section-header rr-c3d-sechead"><span class="r3d-sec-title">${esc(t('Export'))}</span></div><div class="lit-section-body rr-c3d-secbody">
                 <div class="rr-c3d-row"><span class="rr-c3d-label">${esc(t('File'))}</span><span class="rr-c3d-export-file" title="img/${l.folder}/${esc(file)}">img/${l.folder}/${esc(file)}</span></div>
                 <p class="rr-c3d-note">${esc(t('The picture beside this is the sheet as it will be saved. Shape the character in the tabs on the left; it is drawn again as you go.'))}</p>
                 <div class="rr-c3d-export-progress" hidden><div></div></div>
                 <img class="rr-c3d-export-preview" data-x="sheet" alt="" hidden>
                 <div class="rr-c3d-export-status" aria-live="polite"></div>
+                </div></div>
                 <div class="rr-c3d-export-foot"><button class="rr-btn-chip rr-c3d-export-go" data-x="export">${esc(t('Export to the project'))}</button></div>`;
             for (const fill of panel.querySelectorAll('input[type="range"]')) fill.style.setProperty('--rr-fill', ((fill.value - fill.min) / (fill.max - fill.min) * 100) + '%');
             panel.scrollTop = keep;
@@ -1207,16 +1632,35 @@
             if (!sheet) return;
             const box = stage.getBoundingClientRect(), f = sheet.frame, width = Math.max(60, box.width - 24), height = Math.max(60, box.height - 24);
             live.tiles = [];
+            // The zoom chosen (`state.zoom`), else the largest that shows everything at once; past that the stage scrolls.
+            const chosen = ZOOMS.includes(state.zoom) ? state.zoom : 0;
+            const zoomLabel = el.querySelector('[data-zoom="fit"]');
             if (state.stage === 'sheet') {
-                const zoom = Math.max(1, Math.min(8, Math.floor(Math.min(width / sheet.width, height / sheet.height)))) || 1, fits = sheet.width <= width && sheet.height <= height;
-                stage.innerHTML = `<canvas class="rr-c3d-sprite-whole" width="${sheet.width}" height="${sheet.height}" style="width:${fits ? sheet.width * zoom + 'px' : 'auto'};max-width:100%;max-height:100%"></canvas>`;
+                const fit = Math.max(1, Math.min(8, Math.floor(Math.min(width / sheet.width, height / sheet.height)))) || 1, fits = sheet.width <= width && sheet.height <= height;
+                live.fit = fit;
+                const size = chosen ? `width:${sheet.width * chosen}px;${zoomStyle(chosen)}` : `width:${fits ? sheet.width * fit + 'px' : 'auto'};max-width:100%;max-height:100%;${fits ? '' : zoomStyle(0.5)}`;
+                stage.innerHTML = `<canvas class="rr-c3d-sprite-whole" width="${sheet.width}" height="${sheet.height}" style="${size}"></canvas>`;
                 stage.firstElementChild.getContext('2d').drawImage(live.picture, 0, 0);
+                if (zoomLabel) zoomLabel.textContent = chosen ? chosen + '×' : t('Fit');
+                applyGuide();
                 return;
             }
-            const list = strips(live.settings), zoom = tileZoom(list.length, f, width, height);
-            stage.innerHTML = `<div class="rr-c3d-sprite-tiles">${list.map(strip => `<figure class="rr-c3d-sprite-tile"><canvas width="${f}" height="${f}" style="width:${f * zoom}px;height:${f * zoom}px"></canvas><figcaption>${esc(t(strip.label))}</figcaption></figure>`).join('')}</div>`;
+            const list = strips(live.settings);
+            // A face sheet's portraits stand as they do on the sheet, four across and two down, so a face is found
+            // here where the game finds it; every other sheet's animations take as many across as fit.
+            const fixed = live.settings.layout === 'face' ? Math.min(list.length, 4) : 0;
+            const fit = fixed ? gridZoom(fixed, Math.ceil(list.length / fixed), f, width, height) : tileZoom(list.length, f, width, height), zoom = chosen || fit;
+            // As many across as fit at the zoom that shows them all, and the same number at any zoom: zooming in makes
+            // the whole layout larger and the stage scrolls across as well as down (wrapped to the stage's width, a
+            // zoom only ever grew downwards and there was nothing to scroll sideways to).
+            const across = fixed || Math.max(1, Math.min(list.length, Math.floor((width + 10) / (f * fit + 12))));
+            live.fit = fit;
+            if (zoomLabel) zoomLabel.textContent = chosen ? chosen + '×' : t('Fit');
+            const caption = strip => (strip.direction ? t(TITLE(strip.name)) + ' · ' + t(strip.direction) : t(TITLE(strip.name)));
+            stage.innerHTML = `<div class="rr-c3d-sprite-tiles" style="grid-template-columns:repeat(${across}, max-content)">${list.map(strip => `<figure class="rr-c3d-sprite-tile"><canvas width="${f}" height="${f}" style="width:${f * zoom}px;height:${f * zoom}px;${zoomStyle(zoom)}"></canvas><figcaption>${esc(caption(strip))}</figcaption></figure>`).join('')}</div>`;
             const canvases = stage.querySelectorAll('canvas');
             live.tiles = list.map((strip, i) => ({ strip, g: canvases[i].getContext('2d') }));
+            applyGuide();
         };
         const animate = time => {
             if (!el.isConnected) return;
@@ -1224,8 +1668,15 @@
             if (!live.picture || !live.tiles.length) return;
             const f = live.sheet.frame;
             for (const { strip, g } of live.tiles) {
-                // A walk steps as the game steps it; anything else plays through and rests a moment on its last frame.
-                const beat = Math.floor(time / (strip.walk ? 170 : 210)), at = strip.walk ? strip.order[beat % strip.order.length] : Math.min(strip.count - 1, beat % (strip.count + 2));
+                // At the game's pace (`strips`): a loop goes round; a motion played once rests three beats on its last frame.
+                const beat = Math.floor(time / strip.period), order = strip.order;
+                let at = strip.loops ? order[beat % order.length] : order[Math.min(order.length - 1, beat % (order.length + 3))];
+                if (strip.steps) {
+                    // [frame, updates] in turn, round and round.
+                    if (!strip.total) strip.total = strip.steps.reduce((sum, step) => sum + step[1], 0);
+                    let tick = Math.floor(time / (1000 / 60)) % strip.total;
+                    for (const [frame, updates] of strip.steps) { if (tick < updates) { at = frame; break; } tick -= updates; }
+                }
                 if (strip.shown === at) continue;
                 strip.shown = at;
                 g.clearRect(0, 0, f, f);
@@ -1236,10 +1687,16 @@
         const tick = async () => {
             if (!el.isConnected) { clearInterval(live.timer); return; }
             if (live.busy || panel.dataset.busy) return;
+            const settings = settingsOf(state), want = JSON.stringify([builder.recipe, settings]);
+            // The picture on the stage is of the character and settings it was drawn for. From the moment either
+            // changes until the new sheet is in (seconds for a large one), it is dimmed and says so: a Dog still
+            // standing there after Cat was picked read as the wrong animal.
+            const stale = want !== live.drawnFor;
+            stage.classList.toggle('is-stale', stale && !!live.sheet);
+            if (stale && live.sheet) note(t('Drawing…'));
             live.steady = idle() ? live.steady + 1 : 0;
             if (live.steady < 2) return;
-            const settings = settingsOf(state), want = JSON.stringify([builder.recipe, settings]);
-            if (want === live.drawnFor) return;
+            if (!stale) return;
             live.busy = true;
             const started = performance.now();
             note(t('Drawing…'));
@@ -1250,6 +1707,7 @@
                 live.picture = document.createElement('canvas');
                 live.picture.width = sheet.width; live.picture.height = sheet.height;
                 live.picture.getContext('2d').putImageData(new ImageData(sheet.data, sheet.width, sheet.height), 0, 0);
+                stage.classList.remove('is-stale');
                 show();
                 note(t('{w} × {h}, drawn in {s} s', { w: sheet.width, h: sheet.height, s: ((performance.now() - started) / 1000).toFixed(1) }));
             } catch (error) {
@@ -1273,15 +1731,41 @@
             const view = e.target.closest('[data-v="frames"], [data-v="sheet"]'), ground = e.target.closest('[data-ground]');
             if (view) { state.stage = view.dataset.v; draw(); show(); }
             if (ground) { state.ground = ground.dataset.ground; draw(); }
+            const zoom = e.target.closest('[data-zoom]');
+            if (zoom) step(zoom.dataset.zoom);
+            const pick = e.target.closest('[data-guide="color"]');
+            if (pick && root.RRColorPopover) {
+                const set = hex => { guide.color = hex; applyGuide(); };
+                root.RRColorPopover.open(pick, { value: guide.color, onInput: set, onChange: hex => { set(hex); saveGuide(guide); } });
+            }
         });
+        el.querySelector('[data-guide="on"]').addEventListener('change', e => { guide.on = e.target.checked; saveGuide(guide); applyGuide(); });
+        /** One step in or out from the zoom shown, or back to the one that fits. */
+        const step = way => {
+            if (way === 'fit') state.zoom = 0;
+            else {
+                const now = ZOOMS.includes(state.zoom) ? state.zoom : (live.fit || 1);
+                const next = way === 'in' ? ZOOMS.find(z => z > now) : [...ZOOMS].reverse().find(z => z < now);
+                if (!next) return;
+                state.zoom = next;
+            }
+            show();
+        };
+        stage.addEventListener('wheel', e => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            e.preventDefault();
+            step(e.deltaY < 0 ? 'in' : 'out');
+        }, { passive: false });
         const preview = panel => panel.querySelector('.rr-c3d-export-preview');
         panel.addEventListener('input', e => {
             const x = e.target.dataset.x;
             if (e.target.type === 'range') e.target.style.setProperty('--rr-fill', ((e.target.value - e.target.min) / (e.target.max - e.target.min) * 100) + '%');
             if (x === 'elevation') { state.elevation = Number(e.target.value); e.target.parentElement.querySelector('.rr-c3d-value').textContent = state.elevation + '°'; }
+            if (x === 'shadowDistance') { state.shadowDistance = Number(e.target.value); e.target.parentElement.querySelector('.rr-c3d-value').textContent = state.shadowDistance + '%'; }
             if (x === 'colors') { state.colors = Number(e.target.value); e.target.parentElement.querySelector('.rr-c3d-value').textContent = String(state.colors); }
-            if (x === 'frame') { const v = Math.round(Number(e.target.value)); if (v >= 16 && v <= 512) { state.frame = v; const l = layout(state.layout); e.target.parentElement.querySelector('.rr-c3d-value').textContent = `${columnsOf(l.id, state.frames) * v} × ${l.rows * v}`; } }
+            if (x === 'frame') { const v = Math.round(Number(e.target.value)); if (v >= 16 && v <= 512) { state.frame = v; const l = layout(state.layout), shown = e.target.closest('.rr-c3d-row')?.querySelector('.rr-c3d-value'); if (shown) shown.textContent = `${(l.id === 'face' ? l.columns * faceAnimOf(state).frames : columnsOf(l.id, state.frames)) * v} × ${l.rows * v}`; } }
         });
+        watchDial(panel, () => state.shadowAngle, angle => { state.shadowAngle = angle; });
         panel.addEventListener('change', e => {
             const x = e.target.dataset.x;
             if (x === 'layout') {
@@ -1291,6 +1775,7 @@
                 state.elevation = l.elevation;
                 draw();
             } else if (x === 'outline') state.outline = e.target.checked;
+            else if (x === 'shadow') { state.shadow = e.target.checked; draw(); }
             else if (x === 'style') state.style = e.target.value;
             else if (x === 'look') { state.look = e.target.value; draw(); }
             else if (x === 'view') state.view = e.target.value;
@@ -1299,6 +1784,9 @@
             else if (x === 'bgmode') { state.background = e.target.value ? (state.background || '#3a3f4b') : ''; draw(); }
             else if (x === 'frame') draw();
             else if (x === 'frames') { state.frames = Number(e.target.value); draw(); }
+            else if (x === 'faceFrames') { state.faceFrames = Number(e.target.value); state.talkMouths = null; draw(); }
+            else if (x === 'faceKind') { state.faceKinds = faceAnimOf(state).kinds.slice(); state.faceKinds[Number(e.target.dataset.i)] = e.target.value; draw(); }
+            else if (x === 'mouth') { state.talkMouths = faceAnimOf(state).mouths.slice(); state.talkMouths[Number(e.target.dataset.i)] = e.target.value; }
         });
         panel.addEventListener('click', async e => {
             const b = e.target.closest('[data-x]');
@@ -1314,6 +1802,7 @@
             }
         });
         draw();
+        applyGuide();
         return el;
     }
 
@@ -1342,7 +1831,7 @@
         }
         const fs = require('fs'), path = require('path'), l = layout(state.layout);
         const frames = framesOf(l.id, state.frames);
-        const file = path.join(project.path, 'img', l.folder, fileName(l.id, name, frames));
+        const file = path.join(project.path, 'img', l.folder, fileName(l.id, name, frames, state));
         if (fs.existsSync(file) && !await root.RRDialog.confirm(t('Replace {file}?', { file: 'img/' + l.folder + '/' + path.basename(file) }), { title: t('Export Sprite Sheet'), ok: t('Replace'), danger: true })) return;
         if (!current()) return;
         const bar = panel.querySelector('.rr-c3d-export-progress'), go = panel.querySelector('.rr-c3d-export-go');
@@ -1382,8 +1871,8 @@
 
     const api = {
         LAYOUTS, CLIPS, SV_MOTIONS, SV_CLIPS, FACE_PRESETS, YAW, SV_YAW, CARDINAL, DIAGONAL,
-        STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, columnsOf, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
-        downsample, outline, grade, skinLike, threshold, quantize, clusters, celCell, celRamp, celDraw, SPRITE_VIEW_HINT, settingsOf, strips, tileZoom, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
+        STYLES, LOOKS, STANDARD_HEIGHT, pixelsPerMeter, FRAME_CHOICES, frameTag, framesOf, faceAnimOf, faceTag, frameFace, mouthOpen, talkFrame, MOUTH_SHAPES, MOUTH_NAMES, columnsOf, layout, plan, resolveClip, blockOrigin, cellMetrics, fit, fitFace, frustum, project,
+        downsample, outline, softOutline, closeHoles, shadowStep, shadowFit, shadowed, castShadows, loadGuide, saveGuide, grade, skinLike, threshold, quantize, clusters, celCell, celRamp, celDraw, SPRITE_VIEW_HINT, settingsOf, dialRow, watchDial, facePresets, SHADOW, strips, tileZoom, gridZoom, chibiRecipe, headScale, headMeasure, blit, alphaBounds, fileName, safeName, measure, toPng, render, openPanel, expressionList
     };
     root.RRCharacterSpriteSheet = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -256,3 +256,35 @@ test('MZ async saveObject keeps the pako payload format', async () => {
         object
     );
 });
+
+test('MV\'s two special save numbers are the options and the list of saves, never the autosave', () => {
+    const compatSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_mv_compat.js'), 'utf8');
+    const storageSource = extractFunction(compatSource, 'installStorageManagerCompatibility', 'installInterpreterCompatibility');
+    const reads = [], writes = [];
+    // No file naming of the plugin's own: the runtime's names are used.
+    const StorageManager = {
+        fileDirectoryPath: () => '/virtual/save/',
+        filePath: saveName => `/virtual/save/${saveName}.rmmzsave`,
+        isLocalMode: () => true,
+        fsReadFile: filePath => { reads.push(filePath); return fixture; },
+        fsWriteFile: (filePath, data) => writes.push(filePath),
+        fsMkdir() {},
+        forageKey: saveName => saveName
+    };
+    const context = {
+        console, require, StorageManager,
+        DataManager: { makeSavename: savefileId => `file${savefileId}` },
+        LZString: loadLzString(),
+        pako: { inflate() { throw new Error('not a pako save'); }, deflate() { throw new Error('MV sync saves use LZString'); } }
+    };
+    // An MZ project running an MV plugin: no MV file naming is installed, so the runtime's own names are used.
+    vm.runInNewContext(`(function() { const global = globalThis; const mvGameSemantics = false; ${storageSource}
+        return installStorageManagerCompatibility; })()`, context)();
+    StorageManager.load(0);
+    StorageManager.load(-1);
+    StorageManager.load(3);
+    assert.deepEqual(reads, ['/virtual/save/global.rmmzsave', '/virtual/save/config.rmmzsave', '/virtual/save/file3.rmmzsave']);
+    StorageManager.save(-1, '{}');
+    StorageManager.save(0, '[]');
+    assert.deepEqual(writes, ['/virtual/save/config.rmmzsave', '/virtual/save/global.rmmzsave'], 'file0, the autosave, is not written');
+});

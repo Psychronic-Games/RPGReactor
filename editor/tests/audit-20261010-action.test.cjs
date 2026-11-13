@@ -43,12 +43,19 @@ test('the next weapon comes to every weapon carried in turn, not back and forth 
     still(w);
     const held = () => w.$gameActors.actor(1).weapons()[0].name;
     const seen = [held()];
+    // The HUD's number for the weapon: its place in the switching order (the Database's order), of how many.
+    const tag = () => { const weapon = fight.actionHud().weapon; return (weapon.index + 1) + '/' + weapon.count; };
+    const tags = [tag()];
     for (let i = 0; i < 3; i++) {
         assert.equal(fight.actionNextWeapon(1), true);
         seen.push(held());
+        tags.push(tag());
         w.run(30);
     }
     assert.deepEqual(seen, ['Rifle', 'Pistol', 'Blade', 'Rifle'], 'forward through all three and round again');
+    assert.deepEqual(tags, ['2/3', '3/3', '1/3', '2/3'], 'the number on the HUD moves with each switch');
+    // The carried weapons the HUD draws on a switch are listed in that same order, so the frame is on the one held.
+    assert.equal(w.ReactorFight.Action.weaponRound(w.$gameActors.actor(1)).map(weapon => weapon.name).join(), 'Blade,Rifle,Pistol');
     const back = [];
     for (let i = 0; i < 3; i++) {
         assert.equal(fight.actionNextWeapon(-1), true);

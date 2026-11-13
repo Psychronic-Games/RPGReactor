@@ -318,3 +318,50 @@ test('the editor asks the registry before showing equipment, in the page and the
     assert.ok(index.indexOf('EnemyEquipmentWindow.js') < index.indexOf('DatabaseEnemyEditor.js'));
     assert.match(index, /EnemyEquipmentCommandEditor\.js/);
 });
+
+test('rrEquipSource is where an enemy first reads its rows, and a plugin can replace it', () => {
+    const w = world();
+    const authored = spawn(w);
+    assert.equal(authored.rrEquipSource(), w.$dataEnemies[1].rrEquipment, 'the database rows by default');
+
+    const source = [{ etypeId: 1, kind: 2, itemId: 2 }, null, { etypeId: 2, kind: 0, itemId: 0 }];
+    const original = w.Game_Enemy.prototype.rrEquipSource;
+    w.Game_Enemy.prototype.rrEquipSource = function() { return this.enemyId() === 1 ? source : original.call(this); };
+    const enemy = spawn(w);
+    assert.deepEqual(names(enemy.equips()), ['Axe', null], 'read through the method, empty entries dropped');
+    assert.equal(enemy.paramPlus(2), 20, 'the axe counts');
+    assert.equal(enemy.changeEquip(0, SWORD), true);
+    assert.deepEqual(source[0], { etypeId: 1, kind: 2, itemId: 2 }, 'the returned list is copied, never changed');
+    assert.deepEqual(names(spawn(w, 2).equips()), ['Axe'], 'another enemy still reads its own rows');
+    enemy.transform(2);
+    assert.deepEqual(names(enemy.equips()), ['Axe'], 'asked again after a Transform');
+
+    w.Game_Enemy.prototype.rrEquipSource = () => undefined;
+    assert.deepEqual(names(spawn(w).equips()), [], 'a method that returns no list means no equipment');
+
+    const off = world({ on: false });
+    off.Game_Enemy.prototype.rrEquipSource = () => source;
+    assert.equal(spawn(off).equips().length, 0, 'not read with the feature off');
+});
+
+test('rrActionPatterns is the one list every battle mode chooses from', () => {
+    const w = world();
+    const enemy = spawn(w);
+    assert.equal(enemy.rrActionPatterns(), w.$dataEnemies[1].actions, 'the database patterns by default');
+    const other = w.$dataSkills.length;
+    w.$dataSkills[other] = { ...w.$dataSkills[1], id: other, name: 'Other' };
+    const patterns = [{ skillId: other, rating: 5, conditionType: 0, conditionParam1: 0, conditionParam2: 0 }];
+    enemy.rrActionPatterns = () => patterns;
+    enemy.isActionValid = () => true;
+    let offered = null;
+    enemy.selectAllActions = list => { offered = list; };
+    enemy.makeActions();
+    assert.deepEqual(Array.from(offered, pattern => pattern.skillId), [other], 'makeActions chooses from the method');
+    assert.deepEqual(w.$dataEnemies[1].actions.map(a => a.skillId), [1], 'the database entry is untouched');
+
+    // No battle mode reads the database list itself. The one remaining
+    // mention is the stage's fallback for a battler without the method.
+    const direct = fs.readdirSync(path.join(repoRoot, 'runtime')).filter(name => /^reactor_.*\.js$/.test(name))
+        .flatMap(name => (fs.readFileSync(path.join(repoRoot, 'runtime', name), 'utf8').match(/enemy\(\)\.actions/g) || []).map(() => name));
+    assert.deepEqual(direct, ['reactor_fight_stage.js']);
+});

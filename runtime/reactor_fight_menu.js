@@ -363,6 +363,9 @@
         const callMenu = Scene_Map.prototype.callMenu;
         Scene_Map.prototype.callMenu = function() {
             const fight = $gameFight;
+            // A later file with another use for the press takes it first (`F.menuPress(scene, fight)`, true when taken):
+            // someone only watching another player's battle leaves by it.
+            if (F.menuPress && F.menuPress(this, fight)) return;
             if (fight.isTactical() && fight.isHere()) {
                 const taken = In._ate === frameNow() || fight.commandCancel() || F.menuBlocked();
                 In._ate = frameNow();

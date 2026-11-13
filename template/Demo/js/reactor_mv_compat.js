@@ -626,6 +626,11 @@
 
         if (!StorageManager.__mvCompatSyncStorage) {
             const saveNameOf = function(savefileId) {
+                // In MV these two numbers are not saved games: -1 is the options and 0 the list of saves. Taken as
+                // numbers they named "file-1" and "file0", and file0 is this runtime's autosave. Either file is read
+                // back by this runtime's own loaders whichever of the two wrote it (`zipToJson` above).
+                if (savefileId === -1) return "config";
+                if (savefileId === 0) return "global";
                 if (typeof savefileId === "number" && global.DataManager && DataManager.makeSavename) {
                     return DataManager.makeSavename(savefileId);
                 }

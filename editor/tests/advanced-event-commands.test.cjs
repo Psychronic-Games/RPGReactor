@@ -102,6 +102,56 @@ test('all advanced expression families compile to executable numeric JavaScript'
     assert.equal(evaluateGenerated(ControlVariablesEditor.compileAdvancedExpression(variableData), { 4: 11, 7: 5 }), 16);
 });
 
+test('the formulas that give fractions take a multiplier and a rounding; a command without them is as it was', () => {
+    const body = data => ControlVariablesEditor.compileAdvancedExpressionBody(data);
+    // Saved before the multiplier existed: the same script, letter for letter.
+    assert.equal(body({ operator: 'sineDegrees', left: constant(30) }), 'Math.sin(30 * Math.PI / 180)');
+    assert.equal(body({ operator: 'cosineDegrees', left: constant(30) }), 'Math.cos(30 * Math.PI / 180)');
+    assert.equal(body({ operator: 'squareRoot', left: constant(2) }), 'Math.sqrt(2)');
+    assert.equal(body({ operator: 'divide', left: constant(7), right: constant(2) }), '(7 / 2)');
+    assert.equal(body({ operator: 'atan2', left: constant(1), right: constant(1) }), 'Math.atan2(1, 1)');
+
+    const run = data => {
+        const text = ControlVariablesEditor.compileAdvancedExpression(data);
+        assert.deepEqual(ControlVariablesEditor.parseAdvancedExpression(text), data, 'reopens as it was written');
+        return evaluateGenerated(text);
+    };
+    const sine = (round, scale = 1000) => ({ operator: 'sineDegrees', left: constant(30), scale, round });
+    assert.equal(run(sine('nearest')), 500);
+    assert.equal(run(sine('down')), 500, '499.99999999999994 is 500, not 499');
+    assert.equal(run(sine('up')), 500);
+    assert.equal(run({ operator: 'cosineDegrees', left: constant(60), scale: 100, round: 'up' }), 50,
+        '50.00000000000001 is 50, not 51');
+    assert.equal(run({ operator: 'squareRoot', left: constant(2), scale: 100, round: 'nearest' }), 141);
+    assert.equal(run({ operator: 'squareRoot', left: constant(2), scale: 100, round: 'up' }), 142);
+    assert.equal(run({ operator: 'divide', left: constant(7), right: constant(2), scale: 1, round: 'nearest' }), 4);
+    assert.equal(run({ operator: 'divide', left: constant(7), right: constant(2), scale: 1, round: 'down' }), 3);
+    assert.equal(run({ operator: 'divide', left: constant(-7), right: constant(2), scale: 1, round: 'down' }), -4);
+    assert.equal(run({ operator: 'atan2', left: constant(1), right: constant(1), scale: 1, round: 'nearest' }), 45,
+        'with a multiplier Atan2 answers in degrees');
+    assert.equal(run({ operator: 'atan2', left: constant(-1), right: constant(0), scale: 10, round: 'nearest' }), -900);
+
+    // Only these five, and only both keys together.
+    const normal = data => ControlVariablesEditor.normalizeAdvancedExpression(data);
+    assert.equal(normal({ operator: 'add', left: constant(1), right: constant(2), scale: 2, round: 'nearest' }), null);
+    assert.equal(normal({ operator: 'squareRoot', left: constant(2), scale: 100 }), null);
+    assert.equal(normal({ operator: 'squareRoot', left: constant(2), round: 'nearest' }), null);
+    assert.equal(normal({ operator: 'squareRoot', left: constant(2), scale: 100, round: 'sideways' }), null);
+    assert.equal(normal({ operator: 'squareRoot', left: constant(2), scale: '100', round: 'up' }), null);
+    assert.deepEqual(ControlVariablesEditor.defaultScaling('sineDegrees'), { scale: 1000, round: 'nearest' });
+    assert.deepEqual(ControlVariablesEditor.defaultScaling('divide'), { scale: 1, round: 'nearest' });
+    assert.equal(ControlVariablesEditor.defaultScaling('add'), null);
+
+    // The event list reads the same data (its own check of a generated command).
+    const EventCommandList = require(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'));
+    const built = ControlVariablesEditor.buildAdvancedCommand({
+        startId: 1, endId: 1, operationType: 0, expression: sine('nearest')
+    });
+    assert.ok(EventCommandList.generatedCommand(built, 'control-variables-expression'), 'the list knows the new form');
+    assert.equal(EventCommandList.isGeneratedDataValid('control-variables-expression',
+        { operator: 'add', left: constant(1), right: constant(2), scale: 2, round: 'nearest' }), false);
+});
+
 test('advanced expressions use exactly seven stock parameters and reopen only exact output', () => {
     const expression = { operator: 'maximum', left: variable(2), right: constant(10) };
     const generated = ControlVariablesEditor.buildAdvancedCommand({
@@ -339,21 +389,116 @@ test('generated loops parse and rebuild exactly while ordinary loops remain Fore
     assert.deepEqual(LoopEditor.parse(command(413, 4)).config, { mode: 'forever' });
 });
 
-test('Loop inserts a stock block directly and preserves existing loop structures', () => {
+// Until 2026-11-12 Loop had no dialog: show() called back at once with a plain
+// loop. It now opens one (open, then OK = buildCommands), so this test drives
+// those two; the dialog's controls themselves are not drawn here.
+test('the Loop dialog writes a new plain loop with its empty row and preserves existing loop structures', () => {
     const editor = new LoopEditor(null, null);
-    let inserted;
-    editor.show(null, commands => { inserted = commands; });
-    assert.deepEqual(inserted, [command(112, 0), command(413, 0)]);
+    assert.equal(editor.open(null), true);
+    assert.deepEqual(editor.buildCommands(), [command(112, 0), command(0, 1), command(413, 0)]);
 
     const existing = LoopEditor.build({
         mode: 'repeatCount',
         counterVariable: 8,
         count: constant(4)
     }, [command(230, 1, [10])], 2);
-    let preserved;
-    editor.show(existing, commands => { preserved = commands; });
-    assert.deepEqual(preserved, existing);
+    assert.equal(editor.open(existing), true);
+    assert.deepEqual(editor.buildCommands(), existing);
+
+    // A loop that was saved without the empty row is not given one on OK.
+    const old = [command(112, 3), command(230, 4, [10]), command(413, 3)];
+    editor.open(old);
+    assert.deepEqual(editor.buildCommands(), old);
+    const oldEmpty = [command(112, 0), command(413, 0)];
+    editor.open(oldEmpty);
+    assert.deepEqual(editor.buildCommands(), oldEmpty);
+
+    // Something that is not a loop is left alone: nothing opens, nothing is called back.
+    let called = false;
+    editor.show([command(230, 0, [10]), command(230, 0, [10])], () => { called = true; });
+    assert.equal(called, false);
     assert.equal(editor.modal, undefined);
+});
+
+test('the Loop dialog makes the three counted kinds in the shape the list reads back', () => {
+    const editor = new LoopEditor(null, null);
+    const kinds = {
+        repeatCount: { mode: 'repeatCount', counterVariable: 1, count: constant(5) },
+        whileVariable: { mode: 'whileVariable', variableId: 1, comparison: 'less', right: constant(10) },
+        variableRange: { mode: 'variableRange', variableId: 1, start: constant(1), end: constant(10), step: 1 }
+    };
+    for (const [mode, config] of Object.entries(kinds)) {
+        editor.open(null);
+        editor.setMode(mode);
+        assert.deepEqual(editor.config, config, `${mode} starts filled in`);
+        const built = editor.buildCommands();
+        assert.deepEqual(built, LoopEditor.build(config, [], 0), `${mode}: no empty row in a made loop`);
+        const parsed = LoopEditor.parse(built);
+        assert.equal(parsed.generated, true);
+        assert.deepEqual(parsed.config, config);
+    }
+
+    // What was typed for one kind is still there after a look at another.
+    editor.open(null);
+    editor.setMode('repeatCount');
+    editor.config.count = constant(3);
+    editor.setMode('whileVariable');
+    editor.setMode('repeatCount');
+    assert.deepEqual(editor.config.count, constant(3));
+
+    // A plain loop changed to a counted one keeps its commands; its empty last
+    // row goes, because the row that steps the counter follows the body.
+    const plain = [command(112, 1), command(230, 2, [10]), command(0, 2), command(413, 1)];
+    editor.open(plain);
+    editor.setMode('repeatCount');
+    assert.deepEqual(editor.buildCommands(),
+        LoopEditor.build(kinds.repeatCount, [command(230, 1, [10])], 1));
+    // Changed to "while a variable", nothing follows the body: the row stays.
+    editor.open(plain);
+    editor.setMode('whileVariable');
+    assert.deepEqual(editor.buildCommands(),
+        LoopEditor.build(kinds.whileVariable, [command(230, 1, [10]), command(0, 1)], 1));
+    // And back to a plain loop: the body as it is.
+    editor.open(LoopEditor.build(kinds.variableRange, [command(230, 1, [10])], 0));
+    editor.setMode('forever');
+    assert.deepEqual(editor.buildCommands(), [command(112, 0), command(230, 1, [10]), command(413, 0)]);
+});
+
+test('the Loop dialog refuses a loop it cannot write and says why', () => {
+    const asked = [];
+    global.RRDialog = { alert: (message, options) => asked.push({ message, options }) };
+    try {
+        const editor = new LoopEditor(null, null);
+        const refuse = (mode, change, message) => {
+            editor.open(null);
+            editor.setMode(mode);
+            change(editor.config);
+            assert.equal(editor.buildCommands(), null);
+            assert.equal(asked.pop().message, message);
+        };
+        refuse('repeatCount', config => { config.count = variable(1); },
+            'The counter cannot be the same variable as the number of times.');
+        refuse('variableRange', config => { config.end = variable(1); },
+            'The variable that counts cannot also be the value it counts to.');
+        refuse('variableRange', config => { config.step = 0; }, 'Step must be a whole number other than 0.');
+        refuse('variableRange', config => { config.step = 1.5; }, 'Step must be a whole number other than 0.');
+    } finally {
+        delete global.RRDialog;
+    }
+});
+
+test('the row that ends a made loop is named for what the loop does', () => {
+    const format = (text, values) => text.replace(/\{(\w+)\}/g, (_token, key) => String(values[key]));
+    const name = id => `[${id}]`;
+    const guard = config => LoopEditor.build(config, [], 0).find(item => item.code === 111);
+    assert.equal(LoopEditor.guardText(guard({ mode: 'repeatCount', counterVariable: 8, count: constant(4) }), name, format),
+        'Loop ends after 4 times (counted in [8])');
+    assert.equal(LoopEditor.guardText(guard({ mode: 'whileVariable', variableId: 3, comparison: 'notEqual', right: variable(5) }), name, format),
+        'Loop goes on while [3] ≠ [5]');
+    assert.equal(LoopEditor.guardText(guard({ mode: 'variableRange', variableId: 2, start: constant(10), end: variable(7), step: -1 }), name, format),
+        'Loop counts [2] from 10 to [7], step -1');
+    assert.equal(LoopEditor.guardText(command(111, 0, [12, 'true']), name, format), null);
+    assert.equal(LoopEditor.guardText(command(111, 0, [0, 1, 0]), name, format), null);
 });
 
 test('malformed generated guards fall back without being recognized as structured loops', () => {

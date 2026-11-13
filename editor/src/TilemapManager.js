@@ -3934,6 +3934,9 @@ class TilemapManager {
             const includeParallax = options.includeParallax !== false;
             const includeShadows = options.includeShadows !== false;
             const includeEvents = options.includeEvents !== false;
+            // The map's image layers (rrImageLayers) are drawn only when asked for: "Save map as image" asks,
+            // the small previews do not. The Image Layers tool knows the game's rules for them.
+            const imageTool = options.includeImageLayers === true && typeof window !== 'undefined' ? window.reactor?.mapImageLayersManager : null;
 
             // Load map data
             const mapFile = `Map${String(mapId).padStart(3, '0')}.json`;
@@ -3970,6 +3973,7 @@ class TilemapManager {
             if (includeParallax && mapData.parallaxShow && mapData.parallaxName && mapData.parallaxName !== '') {
                 await this.renderParallaxToCanvas(ctx, mapData, width, height, tileSize);
             }
+            if (imageTool?.drawToCanvas) await imageTool.drawToCanvas(ctx, mapData, 'back');
 
             // Load tileset images
             const tilesetImages = await this.loadTilesetImagesForPreview(tileset);
@@ -4012,9 +4016,15 @@ class TilemapManager {
             for (let layerIndex = 1; layerIndex < 4; layerIndex++) {
                 drawTileLayer(layerIndex, false);
             }
+            // Over the lower tiles and under the ☆ tiles, where the flat view has them.
+            if (imageTool?.drawToCanvas) {
+                await imageTool.drawToCanvas(ctx, mapData, 'ground');
+                await imageTool.drawToCanvas(ctx, mapData, 'same');
+            }
             for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
                 drawTileLayer(layerIndex, true);
             }
+            if (imageTool?.drawToCanvas) await imageTool.drawToCanvas(ctx, mapData, 'over');
 
             // Render events on top of tiles
             if (includeEvents && mapData.events && mapData.events.length > 0) {

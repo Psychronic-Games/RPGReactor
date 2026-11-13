@@ -406,6 +406,22 @@ test('the overflow scanner draws the line the way the game will', () => {
     assert.ok(Math.abs(grown - 2 * (25 / 13)) < 1e-9, 'font-size steps change the pen');
     assert.equal(scan('\\N[1]!', 100, { actor: () => 'Alice' }).width, 6, 'an actor code measures as the actual name');
     assert.equal(scan('\\G', 100, { currency: 'cr' }).width, 2, 'currency measures as the unit');
+
+    // \PX[n] puts the pen n pixels from the window's edge. The line starts
+    // past that edge (4 px, or 164 with a face), and `available` is counted
+    // from where the line starts: so the scan is told the start too.
+    const at = (line, available, startX) =>
+        TextCodes.scanMessageLine(line, context, 'x', 13, available, undefined, undefined, startX);
+    assert.equal(TextCodes.messageTextStart(false), 4);
+    assert.equal(TextCodes.messageTextStart(true), 164);
+    assert.deepEqual(at('ab\\PX[14]cd', 20, 4), { width: 12, overflowIndex: -1 }, 'moved right: 14 - 4, then two glyphs');
+    assert.deepEqual(at('ab\\PX[24]cd', 20, 4), { width: 22, overflowIndex: 9 }, 'moved past what is left: the glyphs after it are marked');
+    assert.deepEqual(at('abcdefgh\\PX[4]ij', 5, 4), { width: 8, overflowIndex: 5 }, 'moved back: what ran off before is still marked');
+    assert.deepEqual(at('abcdefgh\\PX[0]ij', 9, 4), { width: 8, overflowIndex: -1 }, 'moved back to the edge: the line is as wide as it reached');
+    assert.equal(at('ab\\PX[174]cd', 20, 164).width, 12, 'with a face the start is 164');
+    assert.equal(at('ab\\px[14]cd', 20, 4).width, 12, 'either case');
+    assert.equal(at('ab\\PX[14]', 20, 4).width, 2, 'a move with nothing drawn after it reaches nowhere');
+    assert.equal(scan('ab\\PX[14]cd', 20).width, 4, 'told no start, the code is passed over as before');
 });
 
 test('the overflow measurement follows the project font, switch included', () => {

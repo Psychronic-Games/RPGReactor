@@ -117,7 +117,8 @@ test('a stamped building\'s light keeps its own tag: the building is recorded be
     assert.equal(SP.removeGroupEffects(map, 7), true, 'the older map\'s light is still found by its tag');
     assert.deepEqual(map.reactor3d.lights.map(light => light.tag), ['porch']);
     // Saving a selection as a structure keeps a light's own tag and drops the building's marks.
-    for (const file of ['src/StructureWorkshop.js', 'src/utils/StructureFloors.js', 'src/utils/StructureCapture.js']) {
+    // (StructureFloors.js did this in `buildOut`, which nothing called and which was removed on 2026-11-12.)
+    for (const file of ['src/StructureWorkshop.js', 'src/utils/StructureCapture.js']) {
         const source = read(file);
         assert.match(source, /if \(!out\.tag \|\| \/\^structure:\\d\+\$\/\.test\(String\(out\.tag\)\)\) delete out\.tag; delete out\.structure;/, file);
         assert.doesNotMatch(source, /Object\.assign\(\{\}, row\); delete out\.tag;/, file);

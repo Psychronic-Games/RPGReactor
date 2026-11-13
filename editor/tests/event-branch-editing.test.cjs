@@ -676,6 +676,74 @@ test('ConditionalBranchEditor emits the Else marker only when createElse is set'
     assert.deepEqual(editor.buildCommands().map(c => c.code), [111, 412]);
 });
 
+test('a new Conditional Branch holds an empty row in each body, and the list keeps and uses it', () => {
+    const editor = new ConditionalBranchEditor(null, null);
+    Object.assign(editor, { conditionType: 0, switchId: 3, switchValue: 0, createElse: true, isNew: true });
+    const made = editor.buildCommands();
+    assert.deepEqual(made.map(c => [c.code, c.indent]), [[111, 0], [0, 1], [411, 0], [0, 1], [412, 0]]);
+    editor.createElse = false;
+    assert.deepEqual(editor.buildCommands().map(c => [c.code, c.indent]), [[111, 0], [0, 1], [412, 0]]);
+
+    // Made inside another branch: every row one level in.
+    const page = { list: [cmd(111, 0, [0, 1, 0]), cmd(412, 0), cmd(0, 0)] };
+    const ecl = makeList(made);
+    ecl.selectedIndices = [0];
+    ecl.commandPicker = { show: callback => callback({ code: 111 }) };
+    ecl.newCommand(page, 0);
+    assert.deepEqual(page.list.map(c => [c.code, c.indent]),
+        [[111, 0], [111, 1], [0, 2], [411, 1], [0, 2], [412, 1], [412, 0], [0, 0]]);
+
+    // A command added with the new branch's header selected goes above the empty row, in the body.
+    ecl.selectedIndices = [1];
+    ecl.commandPicker = { show: callback => callback({ code: 230 }) };
+    ecl.waitEditor = { show: (_command, callback) => callback(cmd(230, 0, [30])) };
+    ecl.newCommand(page, 0);
+    assert.deepEqual(page.list.slice(1, 4).map(c => [c.code, c.indent]), [[111, 1], [230, 2], [0, 2]]);
+
+    // Deleting it leaves the empty rows where they were.
+    EventCommandList.removeCommands(page.list, [2]);
+    assert.deepEqual(page.list.map(c => [c.code, c.indent]),
+        [[111, 0], [111, 1], [0, 2], [411, 1], [0, 2], [412, 1], [412, 0], [0, 0]]);
+    // The outer branch was there before: it was given no row.
+    assert.equal(page.list[page.list.length - 2].code, 412);
+});
+
+test('editing a Conditional Branch never adds an empty row to a body it already has', () => {
+    // As saved by this editor before: no empty rows. OK with an Else added.
+    const old = { list: [cmd(111, 0, [0, 1, 0]), cmd(230, 1, [10]), cmd(412, 0), cmd(0, 0)] };
+    let ecl = makeList([cmd(111, 0, [0, 2, 0]), cmd(411, 0), cmd(412, 0)]);
+    ecl.editCommand(0, old, 0);
+    assert.deepEqual(old.list.map(c => [c.code, c.indent]), [[111, 0], [230, 1], [411, 0], [412, 0], [0, 0]]);
+
+    // As RPG Maker MZ writes it: the body ends in its empty row. An Else added to it gets one too.
+    const mz = { list: [cmd(111, 0, [0, 1, 0]), cmd(230, 1, [10]), cmd(0, 1), cmd(412, 0), cmd(0, 0)] };
+    ecl = makeList([cmd(111, 0, [0, 2, 0]), cmd(411, 0), cmd(412, 0)]);
+    ecl.editCommand(0, mz, 0);
+    assert.deepEqual(mz.list.map(c => [c.code, c.indent]),
+        [[111, 0], [230, 1], [0, 1], [411, 0], [0, 1], [412, 0], [0, 0]]);
+
+    // An Else that was there keeps its body as it is.
+    const both = { list: [cmd(111, 0, [0, 1, 0]), cmd(0, 1), cmd(411, 0), cmd(230, 1, [10]), cmd(412, 0), cmd(0, 0)] };
+    ecl = makeList([cmd(111, 0, [0, 2, 0]), cmd(411, 0), cmd(412, 0)]);
+    ecl.editCommand(0, both, 0);
+    assert.deepEqual(both.list.map(c => [c.code, c.indent]),
+        [[111, 0], [0, 1], [411, 0], [230, 1], [412, 0], [0, 0]]);
+});
+
+test('the row that ends a made loop opens the Loop dialog, not the condition dialog', () => {
+    const generated = LoopEditor.build({ mode: 'repeatCount', counterVariable: 9,
+        count: { type: 'constant', value: 3 } }, [cmd(230, 1, [10])], 0);
+    const page = { list: [...generated, cmd(0, 0)] };
+    const ecl = Object.create(EventCommandList.prototype);
+    ecl.selectedIndices = [];
+    ecl.refreshCommandList = () => {};
+    let opened = null;
+    ecl.loopEditor = { show(block) { opened = block; } };
+    ecl.conditionalBranchEditor = { show() { assert.fail('the guard is not an ordinary condition'); } };
+    ecl.editCommand(2, page, 0); // 122, 112, then the guard
+    assert.deepEqual(opened, generated);
+});
+
 const mzConditionArrays = [
     ['Switch', [0, 7, 1]],
     ['Variable constant', [1, 8, 0, -12, 5]],

@@ -2917,6 +2917,19 @@
                     ["bgmVolume", terms.bgmVolume || "BGM Volume"], ["bgsVolume", terms.bgsVolume || "BGS Volume"],
                     ["meVolume", terms.meVolume || "ME Volume"], ["seVolume", terms.seVolume || "SE Volume"]
                 );
+                // What plugins (and the runtime's own later files) add to the stock Options window is listed after
+                // these, with the words the stock window would show for it: a replaced Options screen dropped them.
+                const probe = ReactorUI.optionProbe();
+                const stock = new Set(descriptors.map(entry => entry[0]).concat(["touchUI", "graphicsQuality"]));
+                const extras = [];
+                (probe ? probe._list : []).forEach((item, at) => {
+                    if (!item || !item.symbol || stock.has(item.symbol)) return;
+                    stock.add(item.symbol);
+                    let valueText = "";
+                    try { valueText = String(probe.statusText(at)); } catch (error) { valueText = ""; }
+                    extras.push({ key: "option:" + item.symbol, kind: "option", id: item.symbol, value: config[item.symbol], symbol: item.symbol,
+                        name: item.name, valueText, enabled: item.enabled !== false, defaultText: "{name}  {valueText}" });
+                });
                 for (const [symbol, name] of descriptors) {
                     if (symbol === "graphicsQuality") {
                         const value = Window_Options.GRAPHICS_VALUES.includes(config.graphicsQuality) ? config.graphicsQuality : "auto";
@@ -2929,6 +2942,7 @@
                     add({ key: "option:" + symbol, kind: "option", id: symbol, value, symbol, name,
                         valueText: volume ? value + "%" : value ? "ON" : "OFF", defaultText: "{name}  {valueText}" });
                 }
+                for (const extra of extras) add(extra);
                 break;
             }
             case "saveSlots": {
@@ -3513,7 +3527,9 @@
             const member = node.source === "partyFace" ? ReactorUI.resolveActor(node, this._uiScene) : null;
             const index = member ? member.faceIndex() : node.index;
             const pw = ImageManager.faceWidth, ph = ImageManager.faceHeight;
-            sx = (index % 4) * pw;
+            // A face set with frames ("Name[4F]"): each face is that many frames wide, and the first is shown.
+            const wide = (ImageManager.faceFrames && ImageManager.faceFrames(member ? member.faceName() : node.file)) || 1;
+            sx = (index % 4) * wide * pw;
             sy = Math.floor(index / 4) * ph;
             sw = pw;
             sh = ph;
@@ -4292,7 +4308,7 @@
             fw = ImageManager.faceWidth;
             fh = ImageManager.faceHeight;
             const index = actor.faceIndex();
-            fx = (index % 4) * fw;
+            fx = (index % 4) * ((ImageManager.faceFrames && ImageManager.faceFrames(actor.faceName())) || 1) * fw;
             fy = Math.floor(index / 4) * fh;
         }
         sprite.setFrame(fx, fy, fw, fh);
@@ -5728,8 +5744,47 @@
         if (window) window.activate();
     };
 
+    /** The options the stock list is made of. Any other is a plugin's, or a later runtime file's, and is changed through the stock window's own steps. */
+    ReactorUI.STOCK_OPTIONS = ["alwaysDash", "commandRemember", "touchUI", "graphicsQuality", "bgmVolume", "bgsVolume", "meVolume", "seVolume"];
+
+    /**
+     * The stock Options window's list, made with no window behind it: `makeCommandList` and everything plugins
+     * hang on it run on a stand-in that only keeps the list. Its `statusText`, `processOk`, `cursorRight` and
+     * `cursorLeft` are the stock window's and the plugins', so an added option reads and changes as it would
+     * there. Null where there is no stock window or its list cannot be made this way.
+     */
+    ReactorUI.optionProbe = function() {
+        if (typeof Window_Options !== "function" || typeof Window_Options.prototype.makeCommandList !== "function") return null;
+        const probe = Object.create(Window_Options.prototype);
+        probe._list = [];
+        probe._index = 0;
+        probe.addCommand = function(name, symbol, enabled = true, ext = null) { this._list.push({ name, symbol, enabled, ext }); };
+        probe.index = function() { return this._index; };
+        probe.findSymbol = function(symbol) { return this._list.findIndex(item => item.symbol === symbol); };
+        probe.commandSymbol = function(index) { return this._list[index] ? this._list[index].symbol : null; };
+        probe.commandName = function(index) { return this._list[index] ? this._list[index].name : ""; };
+        probe.redrawItem = probe.redrawCurrentItem = probe.refresh = probe.playCursorSound = probe.select = function() {};
+        try { probe.makeCommandList(); } catch (error) { return null; }
+        return probe;
+    };
+
     ReactorUI.changeOption = function(symbol, forward, wrap) {
         if (typeof ConfigManager === "undefined" || !symbol) return false;
+        if (!ReactorUI.STOCK_OPTIONS.includes(symbol)) {
+            const probe = ReactorUI.optionProbe();
+            const at = probe ? probe.findSymbol(symbol) : -1;
+            if (at >= 0) {
+                probe._index = at;
+                const read = () => { try { return String(probe.statusText(at)) + "\u0000" + JSON.stringify(ConfigManager[symbol]); } catch (error) { return ""; } };
+                const before = read();
+                try {
+                    if (wrap) probe.processOk(); else if (forward) probe.cursorRight(); else probe.cursorLeft();
+                } catch (error) { return false; }
+                if (read() === before) return false;
+                if (typeof SoundManager !== "undefined" && SoundManager.playCursor) SoundManager.playCursor();
+                return true;
+            }
+        }
         if (symbol === "graphicsQuality") {
             // The steps of Window_Options.changeGraphicsQuality: left and right stop at the ends, OK goes round.
             const values = typeof Window_Options !== "undefined" && Window_Options.GRAPHICS_VALUES || [];
@@ -7293,7 +7348,8 @@
         extra.carried.length = 0;
         const models = typeof Reactor3D !== "undefined" && Reactor3D.databaseModelSpec && Reactor3D.isLoaded && Reactor3D.isLoaded();
         if (driver && driver.weaponsOf && actor) {
-            for (const weapon of driver.weaponsOf(battler)) {
+            // In the switching order, as `hud.weapon.index` counts them: the frame is drawn on the one in hand.
+            for (const weapon of (driver.weaponRound ? driver.weaponRound(battler) : driver.weaponsOf(battler))) {
                 extra.carried.push(weapon.iconIndex || 0);
                 // As the battle opens: the portraits of everything carried, so a switch later costs nothing.
                 const spec = models && state.frame <= this.ACTION_WARMUP_FRAMES ? Reactor3D.databaseModelSpec("weapons", weapon.id) : null;

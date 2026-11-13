@@ -147,6 +147,19 @@ class DatabaseControlsEditor {
         return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true, mantle: true, mantleReach: 3, stepUp: true, stepUpReach: 1.5, battleClimb: true, climbHeight: 6, climbCost: 0.75, battleFall: 'hurt', lethalFall: 'ask' }, this.system().reactorPhysics || {});
     }
 
+    /** The variable a long fall's tiles are stored in, as the game reads it (`settings.fallVariable > 0`); 0 for none. */
+    static fallVariableOf(physics) {
+        const id = Math.floor(Number(physics && physics.fallVariable) || 0);
+        return id > 0 ? id : 0;
+    }
+
+    /** Sets that variable on the physics settings; none removes the key, so a project that stores nothing has no field. */
+    static setFallVariable(physics, value) {
+        const id = DatabaseControlsEditor.fallVariableOf({ fallVariable: value });
+        if (id) physics.fallVariable = id; else delete physics.fallVariable;
+        return physics;
+    }
+
     savePhysics(physics) {
         this.system().reactorPhysics = physics;
         this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
@@ -263,6 +276,11 @@ class DatabaseControlsEditor {
         const tt = text => this._t(text);
         const controls = this.controls(), physics = this.physics();
         const commonEvents = [[0, tt('(none)')]].concat((this.databaseManager.data.commonEvents || []).filter(Boolean).map(e => [e.id, `${String(e.id).padStart(4, '0')}: ${e.name || ''}`]));
+        // The variable the game sets to the tiles fallen before that common event runs (`reactorPhysics.fallVariable`).
+        // One the project no longer has stays listed by number, so opening the page does not change it.
+        const fallVariable = DatabaseControlsEditor.fallVariableOf(this.system().reactorPhysics);
+        const names = (this.system().variables || []);
+        const variables = [[0, tt('(none)')]].concat(Array.from({ length: Math.max(names.length - 1, fallVariable, 0) }, (_, index) => [index + 1, `${String(index + 1).padStart(4, '0')}: ${names[index + 1] || ''}`]));
         const presetValue = DatabaseControlsEditor.GRAVITY_PRESETS.some(([v]) => Number(v) === Number(physics.gravity)) ? String(DatabaseControlsEditor.GRAVITY_PRESETS.find(([v]) => Number(v) === Number(physics.gravity))[0]) : 'custom';
         return `
                 <div class="database-section rr-controls-card">
@@ -283,6 +301,7 @@ class DatabaseControlsEditor {
                         <label>${rrEscapeHtml(tt('Hard landing sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="hardLandSe" data-title="Hard landing sound">${rrEscapeHtml(physics.hardLandSe && physics.hardLandSe.name ? physics.hardLandSe.name : tt('(none)'))}</button></div>
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-ragdoll"${physics.ragdoll !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Go limp on a fatal fall'))}</label>
                         <label>${rrEscapeHtml(tt('Or run a common event'))}</label><select class="database-field-value rr-controls-event">${commonEvents.map(([id, name]) => `<option value="${id}"${Number(physics.fallCommonEvent) === Number(id) ? ' selected' : ''}>${rrEscapeHtml(name)}</option>`).join('')}</select>
+                        <label>${rrEscapeHtml(tt('Store the tiles fallen in variable'))}</label><select class="database-field-value rr-controls-fallvariable" title="${rrEscapeHtml(tt('Set just before the common event runs: the tiles fallen beyond the safe fall.'))}">${variables.map(([id, name]) => `<option value="${id}"${fallVariable === Number(id) ? ' selected' : ''}>${rrEscapeHtml(name)}</option>`).join('')}</select>
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-climb"${physics.battleClimb !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Battlers climb walls without a ladder'))}</label>
                         <label>${rrEscapeHtml(tt('Highest wall climbed'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="climbHeight" min="0" max="50" step="0.5" value="${physics.climbHeight}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
                         <label>${rrEscapeHtml(tt('Climb cost'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="climbCost" min="0" max="10" step="0.25" value="${physics.climbCost}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('move per tile climbed'))}</span></div>
@@ -372,6 +391,7 @@ class DatabaseControlsEditor {
         root.querySelector('.rr-controls-battlefall').addEventListener('change', event => { const p = this.physics(); p.battleFall = event.target.value; this.savePhysics(p); });
         root.querySelector('.rr-controls-lethalfall').addEventListener('change', event => { const p = this.physics(); p.lethalFall = event.target.value; this.savePhysics(p); });
         root.querySelector('.rr-controls-event').addEventListener('change', event => { const p = this.physics(); p.fallCommonEvent = Math.max(0, Number(event.target.value) || 0); this.savePhysics(p); });
+        root.querySelector('.rr-controls-fallvariable')?.addEventListener('change', event => { this.savePhysics(DatabaseControlsEditor.setFallVariable(this.physics(), event.target.value)); });
         root.querySelector('.rr-controls-gravity').addEventListener('change', event => {
             if (event.target.value === 'custom') return;
             const p = this.physics(); p.gravity = Number(event.target.value); this.savePhysics(p);

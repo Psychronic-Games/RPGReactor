@@ -1,5 +1,4 @@
-// Forge tools across closes and project switches, the Character Generator's
-// sheet saves, and a Black Hole slider at its limit.
+// Forge tools across closes and project switches, and a Black Hole slider at its limit.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -104,50 +103,6 @@ test('Sound Effect Generator: another project starts from the defaults', () => {
     assert.equal(gen.saveFormat, 'wav');
 });
 
-function characterGenerator(window, dialog = {}) {
-    // The tool asks and tells through the themed dialog.
-    const RRDialog = Object.assign({ alert: async () => {}, confirm: async () => true, prompt: async () => null }, dialog);
-    const CharacterGenerator = loadClass([read('CharacterGenerator/CharacterGenerator.js')], 'CharacterGenerator',
-        { window, document: {}, require, RRDialog, RR_CHARACTER_REGISTRY: [], CharacterRenderer: {} });
-    const gen = new CharacterGenerator();
-    gen.root = {
-        querySelector(selector) {
-            if (selector === '.rr-cg-name-input') return { value: 'Hero' };
-            if (selector === '.rr-cg-sheet-canvas') return { toDataURL: () => 'data:image/png;base64,AQID' };
-            return null;
-        }
-    };
-    return gen;
-}
-
-test('Character Generator: the Parts sheet downloads in the browser edition with no project open', async () => {
-    const saved = [];
-    const window = Object.assign(stubWindow(), { RPGReactorHost: { mode: 'web', saveFile: async (o) => { saved.push(o); return { project: false, path: 'Hero.png' }; } } });
-    const gen = characterGenerator(window);
-    gen._syncProjectPath = () => null;
-    await gen._savePartsSheet();
-    assert.equal(saved.length, 1);
-    assert.equal(saved[0].projectPath, null);
-    assert.equal(saved[0].suggestedName, '$Hero.png');
-});
-
-test('Character Generator: a sheet already in img/characters is replaced only when confirmed', async () => {
-    const project = tempProject('cg');
-    const outDir = path.join(project.path, 'img', 'characters');
-    fs.mkdirSync(outDir, { recursive: true });
-    const outPath = path.join(outDir, '$Hero.png');
-    fs.writeFileSync(outPath, 'original');
-    let asked = 0, answer = false;
-    const gen = characterGenerator(stubWindow(), { confirm: async () => { asked++; return answer; } });
-    gen._syncProjectPath = () => project.path;
-    await gen._savePartsSheet();
-    assert.equal(asked, 1);
-    assert.equal(fs.readFileSync(outPath, 'utf8'), 'original', 'declined: the old sheet stays');
-    answer = true;
-    await gen._savePartsSheet();
-    assert.deepEqual([...fs.readFileSync(outPath)], [1, 2, 3], 'confirmed: replaced');
-});
-
 test('Black Hole with no particles draws no jets instead of NaN arcs', () => {
     const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     const helpers = [...index.matchAll(/src="src\/forge\/(AnimationGenerator\/helpers\/[^"]+\.js)"/g)].map(m => read(m[1]));
@@ -167,37 +122,6 @@ test('Black Hole with no particles draws no jets instead of NaN arcs', () => {
     });
     for (let frame = 0; frame < 30; frame += 7) anim.render(ctx, 192, 192, frame, 30, params);
     assert.deepEqual(bad, []);
-});
-
-test('Character Generator: a forge part never takes a built-in part id, and saved parts leave with their project', async () => {
-    const project = tempProject('cg-hair');
-    const builtIn = { id: 'hair-psychronic-layered-bob', category: 'hair', name: 'Layered Bob' };
-    const registry = [builtIn];
-    const CharacterGenerator = loadClass([read('CharacterGenerator/CharacterGenerator.js')], 'CharacterGenerator',
-        { window: stubWindow(), document: {}, require, RRDialog: { alert: async () => {}, confirm: async () => true }, RR_CHARACTER_REGISTRY: registry, CharacterRenderer: {} });
-    const gen = new CharacterGenerator();
-    gen.projectPath = project.path;
-    gen._syncProjectPath = () => project.path;
-    const status = { textContent: '', style: {} };
-    gen.root = { querySelector: (selector) => (selector === '.rr-hair-status' ? status : null) };
-    gen._hairEngine = () => ({ generateHair: () => ({ palette: {}, sheet: [] }) });
-    gen._hairBodyTemplate = () => ({});
-    gen._hairEngineConfig = () => ({ tags: [] });
-    const hairDir = path.join(project.path, 'forge', 'character_generator', 'styles', 'psychronic', 'parts', 'hair');
-
-    gen._hairConfig = () => ({ name: 'Layered Bob' });   // the Hair Forge's default name
-    await gen._saveHairPart();
-    assert.equal(fs.existsSync(path.join(hairDir, 'hair-psychronic-layered-bob.js')), false,
-        'the next launch would load the built-in part and hide this file');
-    assert.deepEqual(registry, [builtIn], 'the built-in part stays in the picker');
-    assert.match(status.textContent, /built-in part/);
-
-    gen._hairConfig = () => ({ name: 'My Bob' });
-    await gen._saveHairPart();
-    assert.equal(fs.existsSync(path.join(hairDir, 'hair-psychronic-my-bob.js')), true);
-    assert.equal(registry.length, 2);
-    gen._removeProjectParts();   // the project closes or another one opens
-    assert.deepEqual(registry, [builtIn], "the saved part is not offered in the next project");
 });
 
 test('Sound Effect Generator: cancelling Save As leaves no hidden file input behind', async () => {

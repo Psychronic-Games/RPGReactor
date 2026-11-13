@@ -6504,7 +6504,7 @@ class DatabaseUserInterfaceEditor {
         }
         const image = node.source === 'icon' ? this.iconTile(entry.image, node.index) : entry.image;
         let sx = 0, sy = 0, sw = image.width, sh = image.height;
-        if (node.source === 'face' || node.source === 'partyFace') { sw = RRFaceSheet.sizeOf(this.databaseManager?.getSystem?.()); sh = sw; sx = (faceIndex % 4) * sw; sy = Math.floor(faceIndex / 4) * sh; }
+        if (node.source === 'face' || node.source === 'partyFace') { sw = RRFaceSheet.sizeOf(this.databaseManager?.getSystem?.()); sh = sw; sx = RRFaceSheet.columnOf(faceIndex, image) * sw; sy = Math.floor(faceIndex / 4) * sh; }
         else if (node.source === 'character') {
             const big = /^\$/.test(node.file) || /\$/.test(node.file);
             sw = image.width / (big ? 3 : 12); sh = image.height / (big ? 4 : 8);

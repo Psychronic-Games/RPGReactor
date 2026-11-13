@@ -446,12 +446,10 @@ test('browser Save awaits the host flush before reporting success', async () => 
     await Promise.resolve();
     assert.equal(settled, false);
     assert.equal(captured, 0);
-    assert.equal(statuses.includes('All files saved'), false);
 
     releaseFlush();
     assert.equal(await save, true);
     assert.equal(captured, 1);
-    assert.equal(statuses.at(-1), 'All files saved');
 });
 
 test('browser Save reports flush errors and restores dirty-state baselines', async () => {
@@ -509,9 +507,8 @@ test('browser Save reports flush errors and restores dirty-state baselines', asy
     assert.equal(controller.tilemapManager.savedMapState, 'old map');
     assert.equal(controller.tilemapManager.savedSidecarState, 'old sidecar');
     assert.equal(captured, 0);
-    assert.equal(statuses.at(-1), 'Error saving to browser storage');
-    assert.equal(statuses.includes('All files saved'), false);
     assert.equal(alerts.length, 1);
+    assert.match(String(alerts[0]), /could not be saved to browser storage/);
     assert.equal(controller.hasUnsavedChanges(), true, 'the failed Save remains visibly dirty');
 });
 

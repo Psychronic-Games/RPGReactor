@@ -66,16 +66,19 @@ test('route invalidation handles teleports and a looping map edge',()=>{
     n.temp.clearDestination();n.temp.setDestination(18,1);assert.ok(n.temp._destinationVersion>revision);
 });
 
-test('held clicks retarget only when the pointer moves, and use the live 3D camera',()=>{
+test('a held click keeps the walk aimed, at once when the pointer moves, and uses the live 3D camera',()=>{
     const source=read('reactor_scenes.js');
     const context={Scene_Map:function(){},TouchInput:{x:100,y:120,isTriggered:()=>true,isPressed:()=>true},Reactor3D:{screenToGroundTile:()=>({x:4,y:7})},$dataMap:{},$gameTemp:{setDestination(x,y){this.goal=[x,y];}}};
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf('Scene_Map.prototype.processMapTouch'),source.indexOf('Scene_Map.prototype.isSceneChangeOk')),context);
     const scene=new context.Scene_Map();scene._touchCount=0;scene._spriteset={_reactor3d:{camera:{}}};
     let picks=0;const original=scene.onMapTouch;scene.onMapTouch=function(){picks++;original.call(this);};
-    for(let i=0;i<60;i++)scene.processMapTouch();assert.equal(picks,1);assert.deepEqual(context.$gameTemp.goal,[4,7]);
-    context.TouchInput.x++;scene.processMapTouch();assert.equal(picks,2);
-    scene._reactor3dTouchConsumed=true;context.TouchInput.x++;scene.processMapTouch();assert.equal(picks,2,'pointer-lock click is consumed only once');
+    // A held button keeps the walk aimed, as the stock game does (the owner's answer, 2026-11-12): at once, then every 15 frames
+    // with the pointer still (the map scrolls under it), and at once when the pointer moves.
+    for(let i=0;i<14;i++)scene.processMapTouch();assert.equal(picks,1);assert.deepEqual(context.$gameTemp.goal,[4,7]);
+    for(let i=0;i<46;i++)scene.processMapTouch();assert.equal(picks,4,'frames 15, 30 and 45 of the hold');
+    context.TouchInput.x++;scene.processMapTouch();assert.equal(picks,5);
+    scene._reactor3dTouchConsumed=true;context.TouchInput.x++;scene.processMapTouch();assert.equal(picks,5,'pointer-lock click is consumed only once');
     context.TouchInput.isPressed=()=>false;scene.processMapTouch();scene.processMapTouch();assert.equal(scene._touchCount,0);
 });
 

@@ -260,7 +260,9 @@ test('the runtime corrects asset filename case against the disk', () => {
     let body = coreSource.slice(coreSource.indexOf('{', at) + 1, end);
     body = body.split('this.isNwjs()').join('true');
     body = body.split('path.dirname(process.mainModule.filename)').join('__base');
-    const correctFileCase = new Function('url', '__base', 'require', body);
+    // It asks its owner whether the exactly-cased file is there (`Utils.existsOnDisk`), so it runs as a method.
+    const utils = { existsOnDisk: file => fs.existsSync(file), run: new Function('url', '__base', 'require', body) };
+    const correctFileCase = (url, base, load) => utils.run(url, base, load);
 
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-case-'));
     try {

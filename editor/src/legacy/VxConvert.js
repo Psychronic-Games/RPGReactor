@@ -50,6 +50,9 @@
             const p = list(c.parameters).slice();
             const code = num(c.code);
             let out = p;
+            // Change Class in VX only swapped the class and kept the level; the MZ command it becomes starts the actor
+            // at level 1. Counted for the import report (`ids.notes`, the importer's tally).
+            if (code === 321 && ids.notes) ids.notes.changeClassResetsLevel = (ids.notes.changeClassResetsLevel || 0) + 1;
             switch (code) {
                 case 111:
                     if (p[0] === 4 && num(p[2]) >= 2) { out = p.slice(); out[2] = num(p[2]) + 1; }   // no class test in VX

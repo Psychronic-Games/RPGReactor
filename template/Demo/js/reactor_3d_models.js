@@ -2374,8 +2374,18 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
             resolve(null);
             return;
         }
+        // A game served over the web asks again when the line dropped (a request that ended with no answer, or a
+        // server error): twice more, a few seconds apart. A file that is not there (404) is not asked for again, and
+        // nor is anything read from the disk, where a missing file and a failed read look the same.
+        let dropped = false, tries = 0;
         const tryAt = index => {
             if (index >= jobs.length) {
+                if (dropped && tries < this.MODEL_RETRIES && this.modelRetryAllowed()) {
+                    tries++;
+                    dropped = false;
+                    setTimeout(() => tryAt(0), this.MODEL_RETRY_MS * tries);
+                    return;
+                }
                 entry.failed = true;
                 console.error("Reactor3D: could not load " + this.modelUrl(name, ext));
                 resolve(null);
@@ -2390,6 +2400,7 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
             xhr.onload = () => {
                 release();
                 if (xhr.status >= 400 || !xhr.response) {
+                    if (xhr.status >= 500) dropped = true;
                     tryAt(index + 1);
                     return;
                 }
@@ -2435,13 +2446,22 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                 }
                 buildFrom(() => this.readModel(xhr.response, job.ext, baseUrl, texture));
             };
-            xhr.onerror = () => { release(); tryAt(index + 1); };
+            xhr.onerror = () => { release(); dropped = true; tryAt(index + 1); };
             xhr.send();
             });
         };
         tryAt(0);
     });
     return entry.promise;
+};
+
+/** How often a model whose download dropped is asked for again, and the wait before the first of them (the next waits twice as long). */
+Reactor3D.MODEL_RETRIES = 2;
+Reactor3D.MODEL_RETRY_MS = 3000;
+
+/** Only a game served over the web: from the disk nothing drops. */
+Reactor3D.modelRetryAllowed = function() {
+    return typeof location !== "undefined" && /^https?:$/.test(location.protocol || "");
 };
 
 /**
@@ -3835,6 +3855,22 @@ Reactor3D._glbImageBlob = function(json, bin, image) {
     return new Blob([bytes], { type: image.mimeType || "image/png" });
 };
 
+/**
+ * How a model's picture carries on past its edges, where the file says: repeated, mirrored or held at the edge
+ * pixels (a glTF sampler's `wrapS` / `wrapT`). A file that says nothing keeps the edge pixels, as every model was
+ * drawn before 2026-11-12: the format's own default is to repeat, but a model that packs many pictures into one
+ * sheet would then show seams where one edge blends into the opposite one.
+ */
+Reactor3D.applyGlbWrap = function(texture, json, textureDef) {
+    const sampler = textureDef && json.samplers ? json.samplers[textureDef.sampler] : null;
+    if (!texture || !sampler) return texture;
+    const mode = value => value === 10497 ? THREE.RepeatWrapping : value === 33648 ? THREE.MirroredRepeatWrapping : value === 33071 ? THREE.ClampToEdgeWrapping : null;
+    const s = mode(sampler.wrapS), t = mode(sampler.wrapT);
+    if (s !== null) texture.wrapS = s;
+    if (t !== null) texture.wrapT = t;
+    return texture;
+};
+
 Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps) {
     if (!texInfo || !json.textures || !json.images) return null;
     const textureDef = json.textures[texInfo.index];
@@ -3850,6 +3886,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         const decoded = new THREE.Texture(bitmaps[textureDef.source]);
         decoded.userData.rrGlbImage = textureDef.source;
         decoded.flipY = false;
+        this.applyGlbWrap(decoded, json, textureDef);
         if (THREE.SRGBColorSpace) decoded.colorSpace = THREE.SRGBColorSpace;
         decoded.needsUpdate = true;
         textures.push(decoded);
@@ -3862,6 +3899,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     map.userData.rrGlbImage = textureDef.source;
     if (ownCap) map.userData.rrTextureCap = ownCap;
     map.flipY = false;
+    this.applyGlbWrap(map, json, textureDef);
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
     // An embedded picture's Blob goes with its <img> to the image worker, which decodes from it (its
     // object URL is given back as soon as the <img> has loaded).
@@ -3888,6 +3926,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
             throw error;
         }
         embedded.flipY = false;
+        this.applyGlbWrap(embedded, json, textureDef);
         embedded.userData.rrModelTexture = true;
         embedded.userData.rrGlbImage = textureDef.source;
         if (ownCap) embedded.userData.rrTextureCap = ownCap;
@@ -12920,199 +12959,6 @@ Reactor3D.ClosedMouth = {
 };
 
 /**
- * Another player far off, as one draw. A built character is 17 to 39 parts, each a draw, a material and its lights'
- * uniforms in every pass that sees it; a crowd of them was the frame (1,700 draws, the CPU never idle). Under a
- * twentieth of the view's height (Reactor3D.animationStride above 1) a remote player or sleeper is drawn instead as
- * its model's parts merged into one skinned mesh, coloured per vertex from each part's picture and colour, on the
- * copy's own skeleton (so it walks and lies as the copy does), with one lit material shared by every such body: the
- * same light, the outline the same, no texture detail (none shows at that size). Its parts leave the view's layer
- * only: they still cast, and nothing that shows or hides them is touched. It lives in the scene's `far-bodies` group,
- * outside the model's tree; distance levels (GeometryDetail) take it further when it is a speck. A battle unit is
- * never one (its fades and flashes are its parts'). `enabled` false: as before.
- */
-Reactor3D.FarBody = {
-    // Off until its look is judged against the real parts: the scenes measured (the raid's camera, a walk in the
-    // square) showed every player 130 to 300 pixels tall, where a flat-coloured body would be seen.
-    enabled: false,
-    MIN_PARTS: 6,
-    SAMPLE: 128,
-    _merged: new WeakMap(),
-    material() {
-        if (this._material) return this._material;
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, fog: false });
-        material.name = "far-body";
-        if (Reactor3D.litMaterial) Reactor3D.litMaterial(material);
-        material.__reactorModel = true;
-        return (this._material = material);
-    },
-    group(scene) {
-        let group = scene.userData.rrFarBodies;
-        if (!group || group.parent !== scene) {
-            group = new THREE.Group();
-            group.name = "far-bodies";
-            group.matrixAutoUpdate = false;
-            group.matrixWorldAutoUpdate = false;
-            scene.add(group);
-            scene.userData.rrFarBodies = group;
-        }
-        return group;
-    },
-    /** A picture's pixels, small, for colouring vertices: null until it is decoded (a one-pixel stand-in is not). */
-    pixels(texture) {
-        const image = texture && texture.image;
-        const w = image && (image.width || image.naturalWidth), h = image && (image.height || image.naturalHeight);
-        if (!image || !(w > 1) || !(h > 1) || typeof document === "undefined") return null;
-        const cache = this._pixels || (this._pixels = new WeakMap());
-        const key = texture.source || texture;
-        if (cache.has(key)) return cache.get(key);
-        const size = this.SAMPLE, canvas = document.createElement("canvas");
-        canvas.width = canvas.height = size;
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        try { context.drawImage(image, 0, 0, size, size); } catch (error) { return null; }
-        const data = { size, rgba: context.getImageData(0, 0, size, size).data, flipY: !!texture.flipY, srgb: texture.colorSpace === (THREE.SRGBColorSpace || "srgb") };
-        cache.set(key, data);
-        return data;
-    },
-    /**
-     * The merged body of a template: every skinned part on one skeleton, in bind space, with a colour per vertex.
-     * Null while a part's picture is still decoding (asked again later), or when the model is not one of these.
-     */
-    mergedOf(template) {
-        if (this._merged.has(template)) return this._merged.get(template);
-        const parts = [];
-        let skeleton = null, ok = true;
-        template.traverse(child => {
-            if (!child.isSkinnedMesh || !child.geometry || !child.geometry.attributes.position) return;
-            if (Array.isArray(child.material) || child.bindMode !== THREE.AttachedBindMode) { ok = false; return; }
-            if (!skeleton) skeleton = child.skeleton; else if (child.skeleton !== skeleton) ok = false;
-            if (Reactor3D.FarParts && Reactor3D.FarParts.PATTERN.test((child.name || "") + " " + ((child.material && child.material.name) || ""))) return;
-            parts.push(child);
-        });
-        if (!ok || parts.length < this.MIN_PARTS - 1) { this._merged.set(template, null); return null; }
-        const colours = [];
-        for (const part of parts) {
-            const m = part.material, map = m && m.map;
-            const px = map ? this.pixels(map) : null;
-            if (map && !px) return null;    // not decoded yet: asked again
-            colours.push({ px, base: m && m.color ? m.color : new THREE.Color(1, 1, 1), uv: part.geometry.attributes.uv });
-        }
-        let vertices = 0, indices = 0;
-        for (const part of parts) { const g = part.geometry, n = g.attributes.position.count; vertices += n; indices += g.index ? g.index.count : n; }
-        const position = new Float32Array(vertices * 3), normal = new Float32Array(vertices * 3), color = new Float32Array(vertices * 3);
-        const skinIndex = new Uint16Array(vertices * 4), skinWeight = new Float32Array(vertices * 4), index = new Uint32Array(indices);
-        const at = new THREE.Vector3(), nm = new THREE.Vector3(), normalMatrix = new THREE.Matrix3();
-        const lin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-        let v = 0, k = 0;
-        parts.forEach((part, p) => {
-            const g = part.geometry, P = g.attributes.position, N = g.attributes.normal, J = g.attributes.skinIndex, W = g.attributes.skinWeight, n = P.count;
-            const bind = part.bindMatrix, identity = bind.elements.every((e, i) => e === (i % 5 === 0 ? 1 : 0));
-            if (!identity) normalMatrix.getNormalMatrix(bind);
-            const { px, base, uv } = colours[p];
-            for (let i = 0; i < n; i++) {
-                const o = v + i;
-                at.fromBufferAttribute(P, i); if (!identity) at.applyMatrix4(bind);
-                position[o * 3] = at.x; position[o * 3 + 1] = at.y; position[o * 3 + 2] = at.z;
-                if (N) { nm.fromBufferAttribute(N, i); if (!identity) nm.applyMatrix3(normalMatrix).normalize(); normal[o * 3] = nm.x; normal[o * 3 + 1] = nm.y; normal[o * 3 + 2] = nm.z; }
-                let r = base.r, gg = base.g, b = base.b;
-                if (px && uv) {
-                    let u = uv.getX(i), w = uv.getY(i);
-                    u -= Math.floor(u); w -= Math.floor(w);
-                    if (px.flipY) w = 1 - w;
-                    const x = Math.min(px.size - 1, Math.floor(u * px.size)), y = Math.min(px.size - 1, Math.floor(w * px.size)), q = (y * px.size + x) * 4;
-                    const cr = px.rgba[q] / 255, cg = px.rgba[q + 1] / 255, cb = px.rgba[q + 2] / 255;
-                    r *= px.srgb ? lin(cr) : cr; gg *= px.srgb ? lin(cg) : cg; b *= px.srgb ? lin(cb) : cb;
-                }
-                color[o * 3] = r; color[o * 3 + 1] = gg; color[o * 3 + 2] = b;
-                if (J && W) {
-                    skinIndex[o * 4] = J.getX(i); skinIndex[o * 4 + 1] = J.getY(i); skinIndex[o * 4 + 2] = J.getZ(i); skinIndex[o * 4 + 3] = J.getW(i);
-                    skinWeight[o * 4] = W.getX(i); skinWeight[o * 4 + 1] = W.getY(i); skinWeight[o * 4 + 2] = W.getZ(i); skinWeight[o * 4 + 3] = W.getW(i);
-                }
-            }
-            if (g.index) { const src = g.index; for (let i = 0; i < src.count; i++) index[k++] = src.getX(i) + v; }
-            else for (let i = 0; i < n; i++) index[k++] = v + i;
-            v += n;
-        });
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
-        geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
-        geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
-        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
-        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
-        geometry.setIndex(new THREE.BufferAttribute(index, 1));
-        geometry.computeBoundingSphere();
-        geometry.name = "far-body";
-        const merged = { geometry, parts: parts.length };
-        this._merged.set(template, merged);
-        return merged;
-    },
-    /** The copy's parts in or out of the view's layer (they keep their shadow layers). */
-    showParts(object, on) {
-        if (object.userData.rrFarHidden === !on) return;
-        object.userData.rrFarHidden = !on;
-        object.traverse(child => { if (child.isMesh) { if (on) child.layers.enable(0); else child.layers.disable(0); } });
-        // FarParts' own choice for the parts it leaves out is made again on its next update.
-        object.userData.rrFarPartsApplied = undefined;
-        if (object.userData.rrMouth) object.userData.rrMouth.hidden = undefined;
-    },
-    release(holder) {
-        const far = holder.farBody;
-        if (!far) return;
-        if (far.mesh.parent) far.mesh.parent.remove(far.mesh);
-        if (far.object && far.object.userData) this.showParts(far.object, true);
-        holder.farBody = null;
-    },
-    /** Each update: far remote players (and sleepers) as their merged body, the rest as themselves. */
-    update(mapScene, camera) {
-        const instances = mapScene && mapScene._modelInstances;
-        if (!instances || typeof THREE === "undefined") return;
-        if (!this.enabled) {
-            // Off: nothing to look at each sync, once the bodies this scene was given are let go.
-            if (!mapScene._rrFarBodies) return;
-            for (const holder of instances.values()) if (holder.farBody) this.release(holder);
-            mapScene._rrFarBodies = false;
-            return;
-        }
-        let scene = null;
-        for (const holder of instances.values()) {
-            const object = holder.object, character = holder.character;
-            const remote = typeof Game_RemotePlayer !== "undefined" && character instanceof Game_RemotePlayer;
-            if (holder.farBody && (holder.farBody.object !== object || !object || !object.parent)) this.release(holder);
-            if (!remote || !object || !object.parent) continue;
-            let far = false;
-            if (this.enabled && camera && object.visible && !character.fight) {
-                const span = Reactor3D.instanceSpan(object), p = object.position;
-                far = Reactor3D.animationStride(p.x, p.y + span / 2, p.z, span, camera) > 1;
-            }
-            if (!far) { if (holder.farBody && holder.farBody.on) { holder.farBody.mesh.visible = false; holder.farBody.on = false; this.showParts(object, true); } continue; }
-            if (!holder.farBody) {
-                const entry = Reactor3D._glbCache && Reactor3D._glbCache[holder.spec], template = entry && entry.template;
-                const merged = template ? this.mergedOf(template) : null;
-                if (!merged) continue;
-                let skeleton = null;
-                object.traverse(child => { if (!skeleton && child.isSkinnedMesh && child.skeleton) skeleton = child.skeleton; });
-                if (!skeleton) continue;
-                if (!scene) { scene = object; while (scene.parent) scene = scene.parent; }
-                const mesh = new THREE.SkinnedMesh(merged.geometry, this.material());
-                mesh.name = "far-body";
-                mesh.bindMode = THREE.AttachedBindMode;
-                mesh.bind(skeleton, new THREE.Matrix4());
-                mesh.matrixAutoUpdate = false;
-                mesh.matrixWorldAutoUpdate = false;
-                mesh.frustumCulled = false;
-                mesh.castShadow = false;
-                mesh.userData.rrFarBodyFor = object;
-                this.group(scene).add(mesh);
-                holder.farBody = { mesh, object, on: false };
-                mapScene._rrFarBodies = true;
-            }
-            const far0 = holder.farBody;
-            far0.mesh.visible = !!object.visible;
-            if (!far0.on) { far0.on = true; this.showParts(object, false); }
-        }
-    }
-};
-
-/**
  * New models built a few a frame while a battle runs on the map, and while a map is laid as it loads
  * (Reactor3D.Arrival): each is a clone, a rig, its fingers and materials (3 to 5 ms, a hundred and more for a
  * rigged hand), and an army arriving together was one frame of 200 ms. Also while worlds stand past the borders
@@ -13610,15 +13456,11 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     }
 };
 
-// After syncCharacterModels is defined (a wrapper above it was overwritten by it): far bodies and closed mouths.
+// After syncCharacterModels is defined (a wrapper above it was overwritten by it): closed mouths.
 (function() {
     const sync = Reactor3D.MapScene.prototype.syncCharacterModels;
     Reactor3D.MapScene.prototype.syncCharacterModels = function() {
         const out = sync.apply(this, arguments);
-        try {
-            const viewport = Reactor3D.viewport && Reactor3D.viewport(), camera = viewport && viewport.camera ? viewport.camera() : null;
-            Reactor3D.FarBody.update(this, camera);
-        } catch (error) { console.warn("Reactor3D.FarBody", error); Reactor3D.FarBody.enabled = false; }
         try {
             if (Reactor3D.ClosedMouth.enabled && this._modelInstances) for (const holder of this._modelInstances.values()) if (holder.character && holder.object) Reactor3D.ClosedMouth.update(holder.object);
         } catch (error) { console.warn("Reactor3D.ClosedMouth", error); Reactor3D.ClosedMouth.enabled = false; }

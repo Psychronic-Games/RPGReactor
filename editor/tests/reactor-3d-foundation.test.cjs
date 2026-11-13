@@ -286,7 +286,10 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
     // 63 since 2026-10-25: reactor_features.js (which of Reactor's additions the project uses: Database › Reactor Features) is its own concern.
     // 67 since 2026-11-01: online worlds are their own concern (reactor_online.js: players and the connection; _ui: accounts, the shared
     // world and chat; _voice: speaking as a character), and reactor_character_creator.js serves single-player games too.
-    assert.ok(roots.length <= 67, `runtime js/ root has grown to ${roots.length} files`);
+    // 71 since 2026-11-03: shared play is four more online files (reactor_online_party.js: parties; _battle: a battle others
+    // join; _classic and _action: what the Classic and the real-time modes each need of it).
+    // 70 since 2026-11-12: reactor_vehicles_hints.js, which held only an empty namespace, is gone.
+    assert.ok(roots.length <= 70, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 test('the game boots every extension straight after the core, before anything reads them', () => {

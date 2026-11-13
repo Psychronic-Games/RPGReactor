@@ -461,7 +461,7 @@ test('database viewer owns the viewport while child panes own scrolling', () => 
     assert.match(troopSource, /className = 'rr-troop-editor'/);
     assert.match(troopSource, /className = 'rr-troop-upper-workspace'/);
     assert.match(troopSource, /className = 'rr-troop-sidebar'/);
-    assert.match(troopSource, /bar\.appendChild\(battleTestBtn\);[\s\S]*bar\.appendChild\(this\.createMembersSection\(\)\);[\s\S]*bar\.appendChild\(this\.createBattlebackSection\(\)\);[\s\S]*bar\.appendChild\(noteSection\);/);
+    assert.match(troopSource, /bar\.appendChild\(battleTestBtn\);[\s\S]*bar\.appendChild\(this\.createMembersSection\(\)\);[\s\S]*classicOnly\.push\(this\.createBattlebackSection\(\)\);\s*bar\.appendChild\(classicOnly\[classicOnly\.length - 1\]\);[\s\S]*bar\.appendChild\(noteSection\);/);
     assert.match(troopSource, /this\._previewResizeObserver=new ResizeObserver\(fit\)/);
     assert.match(styles, /\.rr-troop-upper-workspace \{ flex:0 1 52%;min-height:0;max-height:560px;/);
     assert.match(troopSource, /min-height:clamp\(180px,24vh,240px\)/);

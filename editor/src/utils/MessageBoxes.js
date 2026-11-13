@@ -32,6 +32,9 @@
      * it in runtime/reactor_speaker_face.js.
      */
     const FACE_FIELD = 'reactorFace';
+    // How a face set with frames ("Name[4F]") is played by this message, beside the parameters like the face choice:
+    // "once", "loop" or "still"; talking, the usual, is not written (the game's ImageManager.FACE_PLAYS).
+    const PLAY_FIELD = 'reactorFacePlay', FACE_PLAYS = ['talk', 'once', 'loop', 'still'];
 
     /** A header's parameters, defaulted the way the runtime reads them. */
     function readHeader(command) {
@@ -47,6 +50,7 @@
         };
         // Carried as it is written, so a box nobody changed is written back the same.
         if (command && typeof command[FACE_FIELD] === 'string') header.faceMode = command[FACE_FIELD];
+        if (command && typeof command[PLAY_FIELD] === 'string') header.facePlay = command[PLAY_FIELD];
         return header;
     }
 
@@ -54,6 +58,7 @@
     function headerCommand(header, indent) {
         const command = { code: SHOW_TEXT, indent: indent || 0, parameters: headerParameters(header) };
         if (typeof header.faceMode === 'string' && header.faceMode) command[FACE_FIELD] = header.faceMode;
+        if (typeof header.facePlay === 'string' && header.facePlay && header.facePlay !== 'talk') command[PLAY_FIELD] = header.facePlay;
         return command;
     }
 
@@ -73,7 +78,8 @@
             && a.background === b.background
             && a.positionType === b.positionType
             && a.speakerName === b.speakerName
-            && (a.faceMode || '') === (b.faceMode || '');
+            && (a.faceMode || '') === (b.faceMode || '')
+            && (a.facePlay || '') === (b.facePlay || '');
     }
 
     /**
@@ -220,7 +226,7 @@
     const api = {
         SHOW_TEXT,
         TEXT_LINE,
-        FACE_FIELD,
+        FACE_FIELD, PLAY_FIELD, FACE_PLAYS,
         readHeader,
         headerParameters,
         headerCommand,

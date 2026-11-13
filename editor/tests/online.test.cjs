@@ -230,11 +230,12 @@ test('another player shows their actor until their own model arrives, then that 
     assert.equal(world.Reactor3D.modelInstanceKey(peer), 'r3:' + spec.name, 'a new look is a new model instance');
 });
 
-test('the Demo plays on the demo server, and a project made from it is the author\'s own', () => {
+test('the Demo\'s server is the demo server, and a project made from it is the author\'s own', () => {
     const demo = JSON.parse(fs.readFileSync(path.join(appRoot, '../template/Demo/data/ReactorOnline.json'), 'utf8'));
-    assert.equal(demo.enabled, true);
+    // Online or single player is the owner's switch on the Demo, changed as the work needs: either is right.
+    assert.equal(typeof demo.enabled, 'boolean');
     assert.equal(demo.address, 'https://demo.rpgreactor.org');
-    assert.equal(demo.playtest, true, 'a playtest of the Demo reaches the server');
+    assert.equal(typeof demo.playtest, 'boolean');
     assert.equal(demo.accounts.mode, 'optional');
     assert.match(fs.readFileSync(path.join(appRoot, 'src/ProjectManager.js'), 'utf8'), /\['ReactorOnline\.json', 'ReactorCharacters\.json'\][\s\S]{0,160}unlinkSync/);
 });

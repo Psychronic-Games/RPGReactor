@@ -27,6 +27,12 @@ class AudioPlayer {
             this.stopExternal();
         }
         this.currentProject = project;
+        // The player's window stays open across projects: its list is the new project's.
+        const modal = typeof document !== 'undefined' ? document.getElementById('audio-player-modal') : null;
+        if (this.audioPlayer && this.uiInitialized && newPath !== oldPath && modal && modal.style.display === 'flex') {
+            this.updateTrackHeader(this.getCurrentChannel().currentTrack || null);
+            if (project) this.loadAudioTracks(this.audioPlayer.currentType);
+        }
     }
 
     initializeAudioPlayer() {
@@ -253,18 +259,26 @@ class AudioPlayer {
 
     showAudioPlayer() {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-        // Show modal: in the window it is opened from (the Database's, the event editor's, or the editor's).
-        const modal = window.RRPopoutBridge?.bringToWindowInUse?.(document.getElementById('audio-player-modal')) || document.getElementById('audio-player-modal');
+        // A window of its own (RRAudioPlayerWindow), as the Database and the Forge have: opened again, it comes to the front.
+        const modal = document.getElementById('audio-player-modal');
 
         if (!modal) {
             return;
         }
 
+        const shownBefore = modal.style.display === 'flex';
         modal.style.display = 'flex';
+        this.watchAudioPlayerWindow();
+        if (typeof RRAudioPlayerWindow !== 'undefined') {
+            RRAudioPlayerWindow.install(modal);
+            RRAudioPlayerWindow.open(modal, { shownBefore });
+        }
         // Tab stays inside, Escape closes as the cross does, and the focus goes back to what opened the player.
         window.RRKeyboardNavigation?.modal(modal, {
-            onEscape: () => { modal.style.display = 'none'; modal._rrModalKeys?.leave(); },
-            container: () => modal.querySelector('.modal-content') || modal
+            onEscape: () => this.hideAudioPlayer(),
+            container: () => modal.querySelector('.modal-content') || modal,
+            // The list, not the header's first button (the pin wore the focus ring as the window opened).
+            initialFocus: () => modal.querySelector('#audio-track-list')
         })?.enter();
 
         // Ensure audio player is initialized
@@ -316,7 +330,40 @@ class AudioPlayer {
         }
     }
 
+    /** Close the player's window. What is playing keeps playing, as it always has. */
+    hideAudioPlayer() {
+        const modal = document.getElementById('audio-player-modal');
+        if (!modal) return;
+        modal.style.display = 'none';
+        modal._rrModalKeys?.leave();
+        if (typeof RRAudioPlayerWindow !== 'undefined') RRAudioPlayerWindow.hidePopout();
+    }
+
+    /**
+     * Its own window destroyed under it (a crash, not its ×): the player comes back into the editor window
+     * with its handlers gone. Its body and its × are put back as copies, which carry none, and wired again.
+     */
+    watchAudioPlayerWindow() {
+        if (this._windowWatched || typeof window === 'undefined' || !window.addEventListener) return;
+        this._windowWatched = true;
+        window.addEventListener('rr-audio-player-docked', () => {
+            const modal = document.getElementById('audio-player-modal');
+            if (!modal) return;
+            for (const selector of ['.modal-body', '.modal-close']) {
+                const old = modal.querySelector(selector);
+                if (old) old.replaceWith(old.cloneNode(true));
+            }
+            modal.querySelector('.rr-window-controls')?.remove();
+            modal._rrModalKeys?.leave();
+            delete modal._rrModalKeys;
+            this.uiInitialized = false;
+            if (modal.style.display === 'flex') { modal.style.display = 'none'; this.showAudioPlayer(); }
+        });
+    }
+
     initializeUI() {
+        document.querySelector('#audio-player-modal .modal-close')?.addEventListener('click', () => this.hideAudioPlayer());
+
         // Set up button listeners
         document.getElementById('btn-play').addEventListener('click', () => {
             this.playAudio();

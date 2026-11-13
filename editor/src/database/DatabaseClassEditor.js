@@ -17,7 +17,10 @@ class DatabaseClassEditor {
         this.currentClass = classEntry;
 
         const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; padding: 16px;';
+        // The whole page scrolls as one, as the Actors page does. The columns used to scroll on their own inside it,
+        // so opening the cards under them (Action Sequences, Reactions and Idle Motions) squeezed the columns into
+        // a strip at the top of the window with a scrollbar of its own.
+        wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto; box-sizing: border-box;';
 
         // Two-column layout
         const columnsWrapper = document.createElement('div');
@@ -1564,13 +1567,8 @@ class DatabaseClassEditor {
 
         const newTrait = result.row;
 
-        if (traitIndex !== null) {
-            // Insert after selected trait
-            classEntry.traits.splice(traitIndex + 1, 0, newTrait);
-        } else {
-            // Add to end
-            classEntry.traits.push(newTrait);
-        }
+        // After the selected row, or at the end with none selected: the same on every page with a trait table.
+        DatabaseRowClipboard.insertPasted(classEntry.traits, traitIndex, newTrait);
 
         this.databaseManager.updateClass(classEntry.id, classEntry);
         this.refreshClassDetail(classEntry);

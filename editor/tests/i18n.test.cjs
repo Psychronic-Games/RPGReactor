@@ -148,7 +148,6 @@ test('high-visibility localized labels do not fall back to English', () => {
         'theme.underworld.description',
         'theme.creamsicle.description',
         'theme.royalty.description',
-        'forge.characterGenerator.description',
         'forge.animationGenerator.description',
         'forge.soundEffectGenerator.description',
         'forge.effekseerGenerator.description'

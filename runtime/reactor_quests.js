@@ -583,15 +583,18 @@
         if (typeof $gameSwitches === "undefined" || !$gameSwitches) return;
         const quests = ReactorQuests.quests();
         if (!quests.length) return;
-        const starting = !this._started;
         this._started = true;
         for (const quest of quests) {
             const id = quest.id;
+            // A quest that appears at the start does so once in a game, whenever it came into the Database: one
+            // added after a save was made still appears in that save, and one taken back by Reset Quest stays
+            // forgotten (it came back a frame later, and its rewards could be given twice).
+            const begun = this._begun || (this._begun = {});
             if (!this.isKnown(id)) {
                 const rule = quest.activation || {};
                 let appear = false;
                 switch (rule.type) {
-                    case "start": appear = starting || true; break;
+                    case "start": appear = !begun[id]; begun[id] = true; break;
                     case "switch": appear = rule.switchId > 0 && $gameSwitches.value(rule.switchId); break;
                     case "variable": appear = rule.variableId > 0 && ReactorQuests.compare($gameVariables.value(rule.variableId), rule.operator, rule.value); break;
                     default: appear = false;
@@ -599,6 +602,8 @@
                 if (appear) this.discover(id);
                 continue;
             }
+            // A save from before this record was kept: what it already knows has begun.
+            if (!begun[id] && quest.activation && quest.activation.type === "start") begun[id] = true;
             if (!this.isActive(id)) continue;
             const states = this.objectiveStates(id);
             let changed = false;

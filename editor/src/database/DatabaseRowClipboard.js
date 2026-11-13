@@ -151,6 +151,16 @@ class DatabaseRowClipboard {
         };
     }
 
+    /**
+     * Where a pasted row goes, the same on every page that has a trait or an effect table:
+     * after the selected row, or at the end when no row is selected.
+     */
+    static insertPasted(rows, selectedIndex, row) {
+        const index = Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < rows.length ? selectedIndex + 1 : rows.length;
+        rows.splice(index, 0, row);
+        return index;
+    }
+
     static isPasteTargetCurrent(target, parentEditor, projectManager, databaseManager, rows) {
         if (target.generation !== null && parentEditor?._detailGeneration !== target.generation) return false;
         if (projectManager?.getCurrentProject && projectManager.getCurrentProject() !== target.project) return false;

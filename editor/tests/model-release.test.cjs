@@ -192,3 +192,45 @@ test('the map scene opens a map change before it builds anything and sweeps as i
     const sweep = start.indexOf('Reactor3D.ModelUse.sweep($dataMap)'), warm = start.indexOf('Reactor3D.warmLoadedTemplates()');
     assert.ok(sweep > 0 && sweep < warm && warm < 600, 'start runs after the previous scene is destroyed and before the first drawn frame');
 });
+
+test('a model whose download dropped is asked for again in a web game, twice at most; a missing file and a game on disk are not', async () => {
+    const R = fresh(), XHR = global.XMLHttpRequest, timeout = global.setTimeout, allowed = R.modelRetryAllowed, error = console.error;
+    const waits = [];
+    let sent = 0, answer = 'drop';
+    global.XMLHttpRequest = function() {
+        this.open = () => {};
+        this.send = () => { sent++; if (answer === 'drop') this.onerror(); else { this.status = 404; this.response = null; this.onload(); } };
+    };
+    global.setTimeout = (run, ms) => { waits.push(ms); run(); return 0; };
+    console.error = () => {};
+    try {
+        // Over the web, the line dropping every time: the first round and two more.
+        R.modelRetryAllowed = () => true;
+        assert.equal(await R.loadModel('Props/dropped', '.glb'), null);
+        const round = sent / 3;
+        assert.ok(Number.isInteger(round) && round >= 1, 'three rounds of the same requests');
+        assert.deepEqual(waits, [R.MODEL_RETRY_MS, R.MODEL_RETRY_MS * 2]);
+        assert.equal(R._glbCache[R.modelCacheKey('Props/dropped', '.glb')].failed, true, 'then it has failed, as before');
+        // A file that is not there is not asked for again.
+        sent = 0; waits.length = 0; answer = 'missing';
+        assert.equal(await R.loadModel('Props/missing', '.glb'), null);
+        assert.equal(sent, round);
+        assert.deepEqual(waits, []);
+        // From the disk nothing is asked twice.
+        sent = 0; answer = 'drop';
+        R.modelRetryAllowed = allowed;
+        assert.equal(R.modelRetryAllowed(), false, 'no web address here');
+        assert.equal(await R.loadModel('Props/local', '.glb'), null);
+        assert.equal(sent, round);
+    } finally { global.XMLHttpRequest = XHR; global.setTimeout = timeout; R.modelRetryAllowed = allowed; console.error = error; }
+});
+
+test('a model\'s picture repeats, mirrors or holds its edge where the file says, and holds its edge where it says nothing', () => {
+    const R = fresh(), THREE = global.THREE;
+    const json = { samplers: [{ wrapS: 10497, wrapT: 33648 }, { magFilter: 9729 }, { wrapS: 33071 }] };
+    const wrap = sampler => { const t = R.applyGlbWrap(new THREE.Texture(), json, { sampler }); return [t.wrapS, t.wrapT]; };
+    assert.deepEqual(wrap(0), [THREE.RepeatWrapping, THREE.MirroredRepeatWrapping]);
+    assert.deepEqual(wrap(1), [THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping], 'a sampler that names no wrap');
+    assert.deepEqual(wrap(2), [THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping]);
+    assert.deepEqual(wrap(undefined), [THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping], 'no sampler at all');
+});

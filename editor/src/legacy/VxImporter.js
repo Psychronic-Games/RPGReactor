@@ -120,7 +120,7 @@ function open(folder, destination, options) {
         const families = C.scriptFamilies(familyTexts);
         C.setContext({ constants, messageCodes, families, engine: 'vx', names: { items: nameTable(vx.items), weapons: nameTable(vx.weapons), armors: nameTable(vx.armors), skills: nameTable(vx.skills) } });
         const db = V.database(vx, notes);
-        const ids = { attack: db.attackSkillId, guard: db.guardSkillId, escape: db.escapeSkillId };
+        const ids = { attack: db.attackSkillId, guard: db.guardSkillId, escape: db.escapeSkillId, notes };
         // Troops, common events and animations have Ace's shape once their commands are.
         const reshaped = {
             troops: vx.troops.map(t => (t ? Object.assign({}, t, { pages: (t.pages || []).map(pg => Object.assign({}, pg, { list: V.aceCommands(pg.list, ids) })) }) : t)),

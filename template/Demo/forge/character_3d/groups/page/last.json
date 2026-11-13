@@ -1,0 +1,89 @@
+{
+  "name": "Villagers",
+  "count": 100,
+  "seed": 1,
+  "species": [
+    "human",
+    "vampire",
+    "gnome",
+    "minotaur",
+    "tiefling",
+    "demon",
+    "undead"
+  ],
+  "shares": {
+    "human": 4,
+    "vampire": 5,
+    "gnome": 3,
+    "tiefling": 6,
+    "undead": 3
+  },
+  "skin": [],
+  "hairColours": [],
+  "eyeColours": [],
+  "female": 50,
+  "age": [
+    18,
+    65
+  ],
+  "height": [
+    0,
+    1
+  ],
+  "weight": [
+    0,
+    1
+  ],
+  "muscle": [
+    0,
+    1
+  ],
+  "themes": [
+    "Sci-fi",
+    "Cyberpunk"
+  ],
+  "keepOutfit": false,
+  "keepProps": false,
+  "accessories": 50,
+  "palette": [
+    "#212121",
+    "#b30000",
+    "#4500ec"
+  ],
+  "designs": true,
+  "walk": false,
+  "walkLayout": "mz",
+  "walkFrame": 48,
+  "walkFrames": 3,
+  "sv": false,
+  "svFrame": 64,
+  "faces": false,
+  "faceFrame": 144,
+  "style": "realistic",
+  "look": "smooth",
+  "outline": true,
+  "walkAngle": 30,
+  "colors": 12,
+  "shadow": false,
+  "shadowAngle": 25,
+  "shadowDistance": 100,
+  "faceKind": "one",
+  "facePreset": "everyday",
+  "faceFrames": 1,
+  "faceHold": "talk",
+  "faceView": "three",
+  "outfits": [],
+  "pieces": [],
+  "gear": [],
+  "gearMost": 2,
+  "cyberLimbs": [],
+  "cyberLimbShare": 50,
+  "models": false,
+  "svStyle": "realistic",
+  "svLook": "smooth",
+  "svOutline": true,
+  "svColors": 12,
+  "svShadow": false,
+  "svShadowAngle": 25,
+  "svShadowDistance": 100
+}

@@ -183,38 +183,113 @@
             graphics.context[method](...args);
             return graphics;
         };
+        // In PIXI 4 to 7 a line style made every later shape and path draw its own outline. In PIXI 8 a path is only
+        // drawn when `fill()` or `stroke()` is called on the context, so a plugin that drew lines and never filled
+        // (`lineStyle(...); moveTo(...); lineTo(...)`) drew nothing, and the one stroke there was, in `endFill`,
+        // dropped a black colour or a zero alpha and stroked in the default white. The stroke is issued here as the
+        // old API implied it: for a shape as it is added, for an open path as each piece of it is added (the one
+        // stroke of that path, taken back and issued again with the piece on it, so its corners join), and for
+        // what lies between `beginFill` and `endFill` after the fill. Width 0 is "no line", as in MV.
+        const line = graphics => !!graphics._rrLine;
+        const strokeShape = graphics => {
+            graphics._rrOpen = null;
+            if (line(graphics) && !graphics._rrFilling) graphics.context.stroke();
+            return graphics;
+        };
+        /** Before a piece is added to an open path: the path stroked so far is the path again. */
+        const reopen = graphics => {
+            const context = graphics.context, open = graphics._rrOpen;
+            graphics._rrOpen = null;
+            if (!open || !line(graphics) || graphics._rrFilling) return;
+            const instructions = context.instructions;
+            if (!instructions || instructions[instructions.length - 1] !== open || !open.data || !open.data.path) return;
+            instructions.pop();
+            context._activePath = open.data.path;
+        };
+        /** After a piece is added: the open path as it now is, stroked once. */
+        const strokeOpen = graphics => {
+            if (!line(graphics) || graphics._rrFilling) return graphics;
+            const context = graphics.context;
+            context.stroke();
+            const instructions = context.instructions, last = instructions && instructions[instructions.length - 1];
+            graphics._rrOpen = last && last.action === 'stroke' ? last : null;
+            return graphics;
+        };
         const quiet = {
             beginFill(color, alpha) {
                 const fillStyle = {};
                 if (color !== undefined) fillStyle.color = color;
                 if (alpha !== undefined) fillStyle.alpha = alpha;
                 this.context.fillStyle = fillStyle;
+                this._rrLegacy = true;
+                this._rrFilling = true;
+                this._rrOpen = null;
                 return this;
             },
             endFill() {
+                this._rrOpen = null;
+                if (this._rrLegacy && !this._rrFilling) {
+                    // Nothing was begun: shapes added with no fill and no line are not drawn, as before PIXI 8.
+                    if (!line(this)) this.context.beginPath();
+                    return this;
+                }
+                this._rrFilling = false;
                 this.context.fill();
                 const strokeStyle = this.context.strokeStyle;
-                if (!defaults || strokeStyle.width !== defaults.width
-                    || strokeStyle.color !== defaults.color || strokeStyle.alpha !== defaults.alpha) {
+                // A line style of the old API decides by itself; one set the new way is stroked unless it is the default.
+                if (this._rrLine !== undefined ? line(this) : (!defaults || strokeStyle.width !== defaults.width
+                    || strokeStyle.color !== defaults.color || strokeStyle.alpha !== defaults.alpha)) {
                     this.context.stroke();
                 }
                 return this;
             },
             lineStyle(width, color, alpha) {
-                const strokeStyle = {};
-                if (width) strokeStyle.width = width;
-                if (color) strokeStyle.color = color;
-                if (alpha) strokeStyle.alpha = alpha;
-                this.context.strokeStyle = strokeStyle;
+                if (width && typeof width === 'object') ({ width, color, alpha } = width);
+                this._rrLegacy = true;
+                this._rrOpen = null;
+                if (!(Number(width) > 0)) {
+                    this._rrLine = null;
+                    this.context.strokeStyle = {};
+                    return this;
+                }
+                // Black is a colour and 0 an alpha: MV's defaults are black and opaque.
+                this._rrLine = true;
+                this.context.strokeStyle = { width: Number(width), color: color === undefined || color === null ? 0 : color, alpha: alpha === undefined || alpha === null ? 1 : Number(alpha) };
                 return this;
             },
-            drawRect(...args) { return call(this, 'rect', args); },
-            drawCircle(...args) { return call(this, 'circle', args); },
-            drawEllipse(...args) { return call(this, 'ellipse', args); },
-            drawPolygon(...args) { return call(this, 'poly', args); },
-            drawRoundedRect(...args) { return call(this, 'roundRect', args); },
-            drawStar(...args) { return call(this, 'star', args); }
+            drawRect(...args) { return strokeShape(call(this, 'rect', args)); },
+            drawCircle(...args) { return strokeShape(call(this, 'circle', args)); },
+            drawEllipse(...args) { return strokeShape(call(this, 'ellipse', args)); },
+            drawPolygon(...args) { return strokeShape(call(this, 'poly', args)); },
+            drawRoundedRect(...args) { return strokeShape(call(this, 'roundRect', args)); },
+            drawStar(...args) { return strokeShape(call(this, 'star', args)); }
         };
+        // The pieces of an open path, which PIXI 8 still has under their old names. Wrapped only to issue the stroke
+        // a line style of the old API implies: a Graphics that never had one (all of the runtime's own) is untouched.
+        for (const name of ['lineTo', 'bezierCurveTo', 'quadraticCurveTo', 'arc', 'arcTo', 'closePath']) {
+            const original = proto[name];
+            if (typeof original !== 'function' || original.__rrLegacyLine) continue;
+            const wrapped = function(...args) {
+                if (!this._rrLine || this._rrFilling) return original.apply(this, args);
+                reopen(this);
+                original.apply(this, args);
+                return strokeOpen(this);
+            };
+            wrapped.__rrLegacyLine = true;
+            Object.defineProperty(proto, name, { value: wrapped, writable: true, configurable: true });
+        }
+        for (const name of ['moveTo', 'clear']) {
+            const original = proto[name];
+            if (typeof original !== 'function' || original.__rrLegacyLine) continue;
+            const wrapped = function(...args) {
+                // A new start is a new path; a cleared Graphics has no line and no fill, as before PIXI 8.
+                this._rrOpen = null;
+                if (name === 'clear' && this._rrLegacy) { this._rrLine = null; this._rrFilling = false; }
+                return original.apply(this, args);
+            };
+            wrapped.__rrLegacyLine = true;
+            Object.defineProperty(proto, name, { value: wrapped, writable: true, configurable: true });
+        }
         const targets = {
             drawRect: 'rect', drawCircle: 'circle', drawEllipse: 'ellipse',
             drawPolygon: 'poly', drawRoundedRect: 'roundRect', drawStar: 'star'

@@ -230,6 +230,33 @@ test('ungrouping a cell takes its footing mark with it', () => {
     assert.equal(Objects3D.groundAt(map, 0, 0, 0), false);
 });
 
+test('the eraser with Footing ticked takes off the mark and only the mark; unticked it ungroups the cell', () => {
+    // The map editor's own eraser for the 3D tab, lifted out of MapEditor.js and run on the real store.
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'MapEditor.js'), 'utf8');
+    const body = source.match(/\n    eraseObject3DArea\(minX, maxX, minY, maxY, includeFn\) \{\n([\s\S]*?)\n    \}\n/);
+    assert.ok(body, 'MapEditor has eraseObject3DArea');
+    const erase = new Function('window', `return function(minX, maxX, minY, maxY, includeFn) {\n${body[1]}\n}`)({ RRMapObjects3D: Objects3D });
+    const map = blank();
+    for (const x of [0, 1, 2]) { Objects3D.setAt(map, x, 1, 0, 3); Objects3D.setGroundAt(map, x, 1, 0, true); }
+    let refreshed = 0;
+    const editor = {
+        tilemapManager: { currentMap: map },
+        object3DManager: { groundMode: true, layersAt: () => [0], refresh() { refreshed++; } }
+    };
+
+    erase.call(editor, 0, 1, 1, 1, null);
+    assert.deepEqual([0, 1, 2].map(x => Objects3D.groundAt(map, x, 1, 0)), [false, false, true], 'the marks under the eraser are gone, the one beside stays');
+    assert.deepEqual([0, 1, 2].map(x => Objects3D.at(map, x, 1, 0)), [3, 3, 3], 'and every cell is still part of the object');
+    assert.equal(refreshed, 1);
+    erase.call(editor, 0, 1, 1, 1, null);
+    assert.equal(refreshed, 1, 'erasing where no mark is left changes nothing');
+
+    editor.object3DManager.groundMode = false;
+    erase.call(editor, 2, 2, 1, 1, null);
+    assert.equal(Objects3D.at(map, 2, 1, 0), 0, 'with Footing unticked the eraser takes the cell out of the object');
+    assert.equal(Objects3D.groundAt(map, 2, 1, 0), false, 'and its mark with it');
+});
+
 test('an emptied map keeps no planes of zeroes', () => {
     // A 2D project must not accumulate sidecars full of nothing, and the save
     // path decides whether to write a file by asking whether anything is set.

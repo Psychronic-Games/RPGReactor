@@ -1149,6 +1149,12 @@
                 if(v.family!==family||t<-.12||t>.4||Math.hypot(...d)>.13*s)continue;
                 radiusUp=Math.max(radiusUp,dot(d,up));radiusFront=Math.max(radiusFront,Math.abs(dot(d,fw)));
             }
+            // The cap covers the top of the shoulder: its height is what stands above the arm's axis. (The envelope's
+            // radius is the furthest flesh either way, and on a heavy arm that is what hangs under it: the cap rose as
+            // far as the arm sagged, into a wing. A body in the natural range is within the margin and keeps its cap.)
+            let above=0;
+            for(const v of fitted){if(v.family!==family)continue;const d=sub(v.p,E.B.head),t=dot(d,E.along)/E.length;if(t>=-.12&&t<=.4)above=Math.max(above,dot(d,up));}
+            radiusUp=Math.min(radiusUp,above+.03*s);
             // One dished shoulder cap, followed by two close overlapping lames.
             // The front/back cut edges remain open over the mail articulation.
             const axis=p=>E.point(dot(sub(p,E.B.head),E.along)/E.length);
@@ -1179,9 +1185,12 @@
         /** Elbow cop with a fan on its outer side, carried by the forearm. */
         function couter(side,family) {
             const E=C.envelope(side+'ForeArm',family,0,.25), joint=C.joint(side+'ForeArm'), back=mul(E.front,-1);
-            let ext=E.rz;
-            for(const v of fitted)if(v.family===family){const d=sub(v.p,E.B.head);if(Math.abs(dot(d,E.along))<.05*s)ext=Math.max(ext,dot(d,back));}
-            const Rc=Math.max(E.rx,E.rz)*.9+.005*s, apex=add(E.B.head,mul(back,ext+clearance+.004*s)), K=16;
+            let ext=E.rz,behind=0,across=0;
+            for(const v of fitted)if(v.family===family){const d=sub(v.p,E.B.head);if(Math.abs(dot(d,E.along))<.05*s){behind=Math.max(behind,dot(d,back));across=Math.max(across,Math.abs(dot(d,E.side)));}}
+            // The cop sits on the elbow, as the knee's does on the knee: held to the elbow's own back and width. (The
+            // forearm's envelope is its widest flesh, a heavy arm's: the cop grew into a dish behind the arm.)
+            ext=Math.max(Math.min(ext,behind+.07*s),behind);
+            const Rc=Math.min(Math.max(E.rx,E.rz)*.9+.005*s,behind*2.2+.005*s), apex=add(E.B.head,mul(back,ext+clearance+.004*s)), K=16;
             const rings=[.2,.48,.78,1.04,1.22].map(th=>Array.from({length:K},(_,k)=>{const f=k/K*Math.PI*2,rr=Rc*Math.sin(th);return add(sub(apex,mul(back,Rc*(1-Math.cos(th)))),add(mul(E.along,Math.cos(f)*rr*.85),mul(E.side,Math.sin(f)*rr)));}));
             const sphere=sub(apex,mul(back,Rc));
             metal.loft(rings,plateColor,joint,()=>sphere);metal.face(rings[0],plateColor,joint,back);
@@ -1195,9 +1204,13 @@
         /** Knee cop with a side wing, carried by the shin. */
         function poleyn(side,family,shin,thigh) {
             const joint=C.joint(side+'Leg'), fw=shin.front;
-            let ext=Math.max(thigh.rz,shin.rz);
-            for(const v of fitted)if(v.family===family){const d=sub(v.p,shin.B.head);if(Math.abs(dot(d,shin.along))<.05*s)ext=Math.max(ext,dot(d,fw));}
-            const Rc=shin.rx*.95, apex=add(shin.B.head,mul(fw,ext+.016*s)), K=18;
+            let ext=Math.max(thigh.rz,shin.rz),front=0;
+            for(const v of fitted)if(v.family===family){const d=sub(v.p,shin.B.head);if(Math.abs(dot(d,shin.along))<.05*s)front=Math.max(front,dot(d,fw));}
+            // The cop sits on the knee: no further out than the knee's own front and the stand-off a natural leg
+            // gives it, and no bigger than the knee. (The leg's envelope is its widest flesh anywhere, a heavy thigh's:
+            // the cop rode out on it, a ball hung in front of the leg. A natural leg is inside both limits.)
+            ext=Math.max(Math.min(ext,front+.075*s),front);
+            const Rc=Math.min(shin.rx*.95,front*1.5), apex=add(shin.B.head,mul(fw,ext+.016*s)), K=18;
             const rings=[.22,.52,.8,1.02].map(th=>Array.from({length:K},(_,k)=>{const f=k/K*Math.PI*2,rr=Rc*Math.sin(th);
                 // A Gothic cop rises to a point above and below the knee.
                 const point=style==='fluted'?1+.18*Math.abs(Math.cos(f))**6:1;
@@ -1242,6 +1255,14 @@
                 // One fitted radius per column for the whole tasset: the lames step out, never in.
                 const base=cols.map((f,c)=>{let r=0;for(let t=dTop;t<=dTop+H;t+=lameH/2)r=Math.max(r,reachAt(list,t,dirs[c],.03*s,Math.max(E.rx,E.rz)));return r;});
                 const smoothBase=base.map((r,c)=>Math.max(r,(base[Math.max(0,c-1)]+2*r+base[Math.min(K,c+1)])/4));
+                // A thigh that narrows fast under a heavy hip: a lame follows it in, never nearer than the flesh at its
+                // own height or below it, once the one radius would leave it more than 3 cm further off than the rest.
+                // (On a natural thigh nothing is that far in, and every lame keeps the one radius.)
+                // (Measured on everything there: the thigh, and the belly and seat of a heavy body that hang over it.)
+                const flesh=list.slice();for(const v of fitted)if(v.family!==family&&sx*v.p[0]>-.02*s){const d=sub(v.p,E.B.head),t=dot(d,E.along),q=sub(d,mul(E.along,t));flesh.push({t,q});}
+                const under=Array.from({length:count},(_,k)=>{const reach=cols.map((f,c)=>{let r=0;for(let t=dTop+k*lameH;t<=dTop+H+1e-9;t+=lameH/2)r=Math.max(r,reachAt(flesh,t,dirs[c],.03*s,0));return r;});
+                    return reach.map((r,c)=>Math.max(r,(reach[Math.max(0,c-1)]+2*r+reach[Math.min(K,c+1)])/4));});
+                const radiusOf=(k,c)=>(smoothBase[c]-under[k][c]>.03*s?under[k][c]+.03*s:smoothBase[c]);
                 const axisOf=p=>add(E.B.head,mul(E.along,dot(sub(p,E.B.head),E.along)));
                 // A point `r` out along `dir` from the thigh's axis, at height `y`.
                 const yTop=hip-.024*s, levelAt=(dir,r,y)=>{const q=add(E.B.head,mul(dir,r));return add(q,mul(E.along,(y-q[1])/Math.min(-.3,E.along[1])));};
@@ -1253,7 +1274,7 @@
                         return cols.map((f,c)=>{
                             // 24 mm off the cloth: the fauld's own stand-off. The mail's folded hem used to supply the last 9 mm of it; with
                             // the short turned hem (2026-10-30) a bare 15 mm drew the lames in under the breastplate's rim.
-                            let r=smoothBase[c]+.024*s+k*.0035*s+flare*.024*s*down+.0015*s*Math.sin(Math.PI*v);
+                            let r=radiusOf(k,c)+.024*s+k*.0035*s+flare*.024*s*down+.0015*s*Math.sin(Math.PI*v);
                             if(style==='fluted')r+=.0032*s*Math.exp(-((f/.12)**2));
                             let y=yTop-(d0-dTop)-(d1-d0)*v;if(style==='fluted'&&k===count-1&&v===1)y-=.018*s*Math.exp(-((f/.3)**2));
                             return levelAt(dirs[c],r,y);
