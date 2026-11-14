@@ -95,8 +95,13 @@ test('the editor loads the room images; Map Properties edits the switch, the Bui
     for (const key of ['mapProps.threeD', 'mapProps.map3D', 'mapProps.choose']) {
         assert.equal(html.includes(`data-i18n="${key}"`), true, key);
     }
-    // The room's height and pictures are set on the map, live: Build bar › Terrain › Room and Sky.
-    for (const key of ['mapProps.roomHeight', 'mapProps.parallaxFloor', 'mapProps.parallaxWalls', 'mapProps.parallaxCeiling', 'mapProps.roomHint']) {
+    // How tall the map is (Height, Z) is asked in Map Properties again (owner, 2026-11-13), beside Width (X) and Length (Y);
+    // it is the room's height, the same number as the Build bar's.
+    assert.equal(html.includes('data-i18n="mapProps.roomHeight"'), true);
+    assert.match(html, /id="map-3d-room-height"/); assert.match(html, /mapProps\.width">Width:<\/span> \(X\)/); assert.match(html, /mapProps\.height">Length:<\/span> \(Y\)/);
+    assert.match(controller, /document\.getElementById\('map-3d-room-height'\)\?\.value/);
+    // The room's pictures are set on the map, live: Build bar › Terrain › Room and Sky.
+    for (const key of ['mapProps.parallaxFloor', 'mapProps.parallaxWalls', 'mapProps.parallaxCeiling', 'mapProps.roomHint']) {
         assert.equal(html.includes(`data-i18n="${key}"`), false, key);
     }
     // The floor, its tint and scale, then the walls and the ceiling.

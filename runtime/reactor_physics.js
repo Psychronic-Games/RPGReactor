@@ -1515,6 +1515,9 @@
         if (character._reactorSwim || character._reactorOnLadder || character._reactorMantle) return false;
         const alt = Number.isFinite(character._reactorAlt) ? character._reactorAlt : character._reactorGround;
         if (!Number.isFinite(alt)) return false;
+        // Into an opening to the map under this one (Beyond the Border > Above and Below): a hatch is there to be
+        // gone down, so it is walked into whatever the drop. (Where that map sends a stair up, the step is a plain one.)
+        if (R.levelOpening && this.DIRS[d] && R.levelOpening($dataMap, "below", x + this.DIRS[d][0], y + this.DIRS[d][1])) return true;
         // On something built, any safe drop; off the ground itself, only the low ledge a push steps down (`stepUp`).
         const built = R.hasPieces($dataMap) && alt - R.pieceBaseAt($dataMap, x, y) >= 0.5;
         const pushed = character._reactorStepOff === d;

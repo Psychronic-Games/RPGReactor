@@ -3817,6 +3817,12 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch {
 .rr-color-swatch-btn:active {
     transform: translateY(1px);
 }
+/* No colour chosen (a tint of None): one of the theme's own fields, not a block of white. */
+.rr-color-swatch-btn.is-unset {
+    background: var(--color-bg-input, rgba(0, 0, 0, 0.35));
+    box-shadow: none;
+    --rr-swatch-ink: var(--color-text-muted, #9aa0aa);
+}
 .rr-color-swatch-hex {
     font-family: var(--font-mono, monospace);
     font-size: 9px;

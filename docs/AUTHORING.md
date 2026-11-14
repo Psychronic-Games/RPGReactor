@@ -908,6 +908,34 @@ For borders that read as one world: give both maps the same height along the sha
 
 In the editor: Build bar › Terrain › Beyond the Border › **Neighboring Maps**, one map per side, on a 3D or a 2D map; a neighbor's **Shift (tiles)** is under its map. The 3D view shows each neighbor standing past its border and moves it as Shift changes. A 2D map is entered and left by its borders with the usual fade; in the game its view goes half a screen past a side with a neighbor, and the neighbor's ground (not its events) is drawn there. The editor's 2D view does the same, dimmed: it pans as far past the edge and shows the neighbor's tiles as last saved; nothing there can be painted or picked, and the map bar's Surroundings tick hides it. Saving a map writes the way back into each neighbor whose facing side names no map; a neighbor that already names one is left alone, so a one-way border is made by clearing or changing the way back on the other map.
 
+### Maps above and below
+
+**Beyond the Border › Above and Below** puts a map under this one, a map over it, or both. Choose the map, then:
+
+- **Space between (tiles):** 0 unless changed. At 0 the lower map's top (its room height) sits one tile of floor under the upper map's ground at the first opening, wherever that ground is: on a hilltop the room lies inside the hill, just under the hole. A larger number moves the two further apart.
+- **The first opening comes out at:** the tile of the other map the first opening leads to (Across, Down). This is how the two maps are placed: type where the party should land. It is held inside the other map, whose size is shown. Moving the first opening keeps where it comes out.
+- With no opening yet, **Across** and **Down** say which tile of this map the other map's top left tile lies under.
+
+An opening that does not lie over the other map leads nowhere: its ground stays and nothing is cut.
+
+**Openings** are where there is no ground between the two maps: add one for a hatch or a stairwell, as a rectangle of this map's tiles (Across, Down, Width, Height). Inside an opening:
+
+- the upper map's ground and the lower map's ceiling are not drawn. From above the map below is seen; from below, the map above and its sky;
+- what is stood on is the map below. With nothing there the player falls through. With a stair or a ladder built in the map below, as tall as the two grounds are apart, the player steps onto its top and walks down: a basement.
+
+Once the other map stands built through an opening, the player passes into it with no fade: the fall or the climb goes on, the map left stays in view overhead (or underfoot), and the party comes after the leader through the opening. Until then, and with no opening, it is a transfer with a fade.
+
+**In the editor** each opening is outlined in both map views (blue: the way down; yellow: the way up). The 3D view also draws a shaft to where it comes out, cuts the ground there, and shows the other map as last saved: all of the map below, and of the map above only what lies within 3 tiles of an opening. The 2D view names the map it leads to. The Surroundings tick hides the other map.
+
+Without an opening the rule is the player's height alone:
+
+- **Down:** dig a pit deeper than half the distance between the grounds. A player who falls in comes out under the lower map's ceiling, on the matching tile, and falls the rest of the way to its floor.
+- **Up:** a ladder or a stair that reaches half that distance high. A player who climbs it comes up in the upper map on the matching tile: in the pit dug there, or on the ground.
+
+Fall damage, where the project has it on, counts the whole drop: a fall into a tall room can knock the party out. Give the drop a stair, a ladder or water to land in, or turn fall damage off for the map.
+
+Saving writes the way back into the other map, and keeps it in step: a map set as Below gets this one as its Above, with the same openings. Through an opening the other map's own build is seen (its tiles, pieces, water and land), not yet its placed models or events, and it is lit by the map being played. Nobody changes map this way while an event is running, during a battle on the map, or while riding. Data: `surround.levels` in the map's `.r3d.json`.
+
 ## Foliage
 
 ```json

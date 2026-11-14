@@ -8462,6 +8462,32 @@ Reactor3D.MapScene.prototype.addSkyImage = function(sky, bitmap, tileSize) {
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof skyCompile === "function") skyCompile.call(this, shader, renderer);
         shader.vertexShader = shader.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n\tgl_Position.z = gl_Position.w * 0.99999;");
+        // The sky of the map over this one (Reactor3D.Levels) is seen only through the openings up to it: where
+        // the line from the eye meets that map's ground inside one. Off (0) for a map's own sky.
+        const levels = Reactor3D.Levels;
+        if (levels && levels.cutUniforms) {
+            const shared = levels.cutUniforms(), n = levels.CUTS;
+            shader.uniforms.rrLvlBox = shared.rrLvlBox; shader.uniforms.rrLvlBand = shared.rrLvlBand; shader.uniforms.rrLvlCount = shared.rrLvlCount;
+            shader.uniforms.rrSkyWindow = this.userData.rrSkyWindow || (this.userData.rrSkyWindow = { value: 0 });
+            shader.vertexShader = "varying vec3 vRRSkyAt;\n" + shader.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n\tvRRSkyAt = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+            shader.fragmentShader = "varying vec3 vRRSkyAt;\nuniform float rrSkyWindow;\nuniform vec4 rrLvlBox[" + n + "];\nuniform vec4 rrLvlBand[" + n + "];\nuniform int rrLvlCount;\n" + shader.fragmentShader.replace("#include <map_fragment>", [
+                "if (rrSkyWindow > 0.5) {",
+                "\tbool rrSkyOpen = false;",
+                "\tvec3 rrSkyDir = vRRSkyAt - cameraPosition;",
+                "\tif (rrSkyDir.y > 0.0001) {",
+                "\t\tfor (int rrSi = 0; rrSi < " + n + "; rrSi++) {",
+                "\t\t\tif (rrSi >= rrLvlCount) break;",
+                "\t\t\tfloat rrSt = (rrLvlBand[rrSi].y - cameraPosition.y) / rrSkyDir.y;",
+                "\t\t\tvec2 rrSh = cameraPosition.xz + rrSkyDir.xz * rrSt;",
+                "\t\t\tvec4 rrSb = rrLvlBox[rrSi];",
+                "\t\t\tif (rrSt > 0.0 && rrSh.x > rrSb.x && rrSh.y > rrSb.y && rrSh.x < rrSb.z && rrSh.y < rrSb.w) rrSkyOpen = true;",
+                "\t\t}",
+                "\t}",
+                "\tif (!rrSkyOpen) discard;",
+                "}",
+                "\t#include <map_fragment>"
+            ].join("\n"));
+        }
     };
     material.customProgramCacheKey = function() { return (typeof skyKey === "function" ? skyKey.call(this) : "") + "|sky-infinite"; };
     this._materials.push(material);
@@ -8786,6 +8812,18 @@ Reactor3D.MapScene.prototype.setPass = function(which) {
             for (const side in bodies) {
                 const neighbor = bodies[side] && bodies[side].scene;
                 if (neighbor && neighbor !== this && typeof neighbor.setPass === "function") neighbor.setPass(which);
+            }
+        } finally { this._settingPass = false; }
+    }
+    // And the map over or under this one (Reactor3D.Levels), for the same reason: drawn over a cleared depth, the
+    // whole world over a room showed through its ceiling.
+    const levels = Reactor3D.Levels;
+    if (levels && levels.main === this && levels.bodies && !this._settingPass) {
+        this._settingPass = true;
+        try {
+            for (const side in levels.bodies) {
+                const level = levels.bodies[side] && levels.bodies[side].scene;
+                if (level && level !== this && typeof level.setPass === "function") level.setPass(which);
             }
         } finally { this._settingPass = false; }
     }

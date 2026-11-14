@@ -221,7 +221,7 @@ const RR_I18N_STRINGS = {
         'imgPick.hint': 'Select an image to preview',
         // Map properties modal & map context menu
         'mapProps.title': 'Map Properties', 'mapProps.general': 'General Settings', 'mapProps.mapName': 'Map Name:', 'mapProps.displayName': 'Display Name:',
-        'mapProps.tileset': 'Tileset:', 'mapProps.width': 'Width:', 'mapProps.height': 'Height:', 'mapProps.encounterSteps': 'Encounter Steps:',
+        'mapProps.tileset': 'Tileset:', 'mapProps.width': 'Width:', 'mapProps.height': 'Length:', 'mapProps.encounterSteps': 'Encounter Steps:',
         'mapProps.scrollType': 'Scroll Type:', 'mapProps.noLoop': 'No Loop', 'mapProps.loopVertical': 'Loop Vertically', 'mapProps.loopHorizontal': 'Loop Horizontally',
         'mapProps.loopBoth': 'Loop Both', 'mapProps.autoplayBgm': 'Autoplay BGM', 'mapProps.autoplayBgs': 'Autoplay BGS', 'mapProps.play': 'Play',
         'mapProps.pause': 'Pause', 'mapProps.stop': 'Stop', 'mapProps.noPreview': 'No preview playing', 'mapProps.previewPaused': 'Preview paused',
@@ -14594,7 +14594,7 @@ Object.assign(RR_I18N_STRINGS.en, {
     'mapProps.levels': 'Vol {volume} · Pitch {pitch} · Pan {pan}',
     'mapProps.threeD': '3D',
     'mapProps.map3D': '3D Map',
-    'mapProps.roomHeight': 'Room Height (tiles):',
+    'mapProps.roomHeight': 'Height:',
     'mapProps.parallaxFloor': 'Parallax Floor:',
     'mapProps.parallaxWalls': 'Parallax Walls:',
     'mapProps.parallaxCeiling': 'Parallax Ceiling:',

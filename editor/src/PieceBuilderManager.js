@@ -1553,7 +1553,8 @@ class PieceBuilderManager {
         if (!SP || typeof Reactor3D === 'undefined' || !plan) return null;
         const shaped = SP.transform(plan, rot, scale, name => this.resolvePlan(name));
         const pieces = SP.build(shaped, 0, 0, 1, 0, name => this.resolvePlan(name));
-        return Reactor3D.pieceGeometry(pieces, null);
+        // (As it will stand: its ladders and fences joined to each other. The footprint is cleared and levelled, so nothing of the map is met.)
+        return Reactor3D.pieceGeometry(Reactor3D.previewPieces ? Reactor3D.previewPieces(pieces, null, { x: 0, y: 0, z: 0 }) : pieces, null);
     }
 
     /**

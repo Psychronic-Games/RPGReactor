@@ -239,7 +239,10 @@ function diveView(sheets, eye, point, size = 48) {
 test('where two sheets meet, a dive is the colour of the sheet the eye is in, whatever order the map lists them in', () => {
     // The lines between `vec3 rrWaterTint` and the end are the rule the numbers below are worked from.
     const glsl = R.WATER_VOLUME_GLSL.split('\n').filter(line => !/^\s*\/\//.test(line)).join('\n');
-    assert.equal(glsl.slice(glsl.indexOf('vec3 rrWaterTint(vec3 color) {')), WATER_TINT_RULE);
+    // (One line more than the rule: what lies in the map under this one, Reactor3D.Levels, is not in this map's water.)
+    const under = '\tif (P.y < rrLvlTop && P.x > rrLvlFoot.x && P.z > rrLvlFoot.y && P.x < rrLvlFoot.z && P.z < rrLvlFoot.w) return color;\n';
+    assert.equal(glsl.includes(under), true);
+    assert.equal(glsl.slice(glsl.indexOf('vec3 rrWaterTint(vec3 color) {')).replace(under, ''), WATER_TINT_RULE);
     // (The uniforms hold single-precision numbers.)
     const near = (a, b, text) => a.forEach((v, k) => assert.ok(Math.abs(v - b[k]) < 1e-6, `${text}: ${a.map(n => n.toFixed(4))} against ${b.map(n => n.toFixed(4))}`));
     const green = c => c[1] > c[0] * 1.5 && c[1] > c[2] * 1.5, purple = c => c[2] > c[1] * 1.5 && c[2] > c[0];

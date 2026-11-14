@@ -2687,6 +2687,9 @@ class ProjectController {
         const physics = document.getElementById('map-physics-section');
         if (physics) physics.style.display = checkbox.checked ? '' : 'none';
 
+        // How tall the map is (Z): the room's height, the same number as Build › Terrain › Room and Sky.
+        const tall = document.getElementById('map-3d-room-height');
+        if (tall) tall.value = elevation && elevation.room ? elevation.room(mapData).height : 4;
         // The default camera: a mode, and blank overrides meaning "the mode's own".
         const camera = elevation && elevation.camera ? elevation.camera(mapData) : { mode: 'fixed' };
         const modeSelect = document.getElementById('map-3d-camera-select');
@@ -2759,7 +2762,10 @@ class ProjectController {
     readMap3DForm() {
         const elevation = this.mapElevation(), map = this.currentEditingMap;
         const room = elevation && map ? elevation.room(map) : { height: 4, floor: '', walls: '', ceiling: '', sky: '', skyScrollX: 0, skyScrollY: 0 };
-        return { height: room.height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY };
+        // Its height alone is asked here (Height (Z)): a whole number of tiles in the allowed range, else what the map has.
+        const typed = Number(document.getElementById('map-3d-room-height')?.value);
+        const height = Number.isFinite(typed) && typed >= 1 ? Math.min(512, Math.round(typed)) : room.height;
+        return { height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY };
     }
 
     /**

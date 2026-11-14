@@ -442,11 +442,11 @@
                                 </div>
                                 <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                                     <div>
-                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.width">Width:</label>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;"><span data-i18n="mapProps.width">Width:</span> (X)</label>
                                         <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-width-input" min="1" max="512" step="1" value="17" title="1-512 tiles" data-i18n-title="mapProps.sizeRange"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-width-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-width-input" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                     <div>
-                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.height">Height:</label>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;"><span data-i18n="mapProps.height">Length:</span> (Y)</label>
                                         <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-height-input" min="1" max="512" step="1" value="13" title="1-512 tiles" data-i18n-title="mapProps.sizeRange"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-height-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-height-input" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                     <div>
@@ -625,7 +625,13 @@
                                 <span data-i18n="mapProps.map3D">3D Map</span>
                             </label>
                             <div id="map-3d-options" style="display: none; margin-top: 6px; padding: 6px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px;">
-                                <div class="map-props-hint" data-i18n-text-source="The room and the sky are set on the map: Build, Terrain, Room and Sky.">The room and the sky are set on the map: Build, Terrain, Room and Sky.</div>
+                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px; align-items: end; margin-bottom: 6px;">
+                                    <div>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;"><span data-i18n="mapProps.roomHeight">Height:</span> (Z)</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-room-height" step="1" min="1" max="512" value="4"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-room-height" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-room-height" aria-label="-">&#9660;</button></div></div>
+                                    </div>
+                                    <div class="map-props-hint" data-i18n-text-source="The room and the sky are set on the map: Build, Terrain, Room and Sky.">The room and the sky are set on the map: Build, Terrain, Room and Sky.</div>
+                                </div>
                                 <div class="map-props-subhead is-first" data-i18n="mapProps.groupCamera">Camera</div>
                                 <div style="margin-bottom: 6px;">
                                     <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.defaultCamera">Default Camera:</label>
@@ -1277,6 +1283,7 @@
     <script src="src/utils/MapEdgeLabels.js"></script>
     <script src="src/utils/MapNeighborView.js"></script>
     <script src="src/utils/MapNeighbor2D.js"></script>
+    <script src="src/utils/MapLevelView.js"></script>
     <script src="src/utils/MapPicker3D.js"></script>
     <script src="src/utils/MapHistory.js"></script>
     <script src="src/PieceBuilderManager.js"></script>

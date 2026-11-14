@@ -7706,11 +7706,17 @@ Reactor3D.heldCloud = function(object) {
 // With `thumbStays` (a gun's grip) a thumb that lies against the thing when open stays open: closing would only sink it in.
 Reactor3D.solveGrip = function(layout, cloud, count, pad, out, thumbStays) {
     const fingers = layout.fingers, S = this._gripScratch || (this._gripScratch = {
-        near: new Int32Array(4096), nearCount: 0, s: new Float32Array(12), extra: new Float32Array(5 * 12), extras: 0, mask: [false, false, false, false],
-        f: null, thr2: 0, v1: [0, 0, 0], v2: [0, 0, 0], cloud: null
+        s: new Float32Array(12), extra: new Float32Array(5 * 12), extras: 0, mask: [false, false, false, false],
+        f: null, thr2: 0, reach2: 0, v1: [0, 0, 0], v2: [0, 0, 0], cloud: null,
+        cells: new Int32Array(1), order: new Int32Array(1), cellOf: new Int32Array(1), nx: 0, ny: 0, nz: 0, x0: 0, y0: 0, z0: 0, per: 0
     });
-    if (S.near.length < count) S.near = new Int32Array(count * 2);
     S.extras = 0; S.cloud = cloud;
+    if (count) {
+        // The points sorted into cells no smaller than the widest finger's reach for a touch, once for the solve.
+        let widest = 0;
+        for (const f of fingers) widest = Math.max(widest, f.radius + pad);
+        this._gripCells(S, cloud, count, widest);
+    }
     if (!S.blocked || S.blocked.length < fingers.length) S.blocked = new Uint8Array(Math.max(8, fingers.length));
     let blocked = 0, closed = 0, sum1 = 0, sum2 = 0;
     const order = layout.order || (layout.order = fingers.map((f, i) => i).sort((x, y) => (fingers[x].thumb ? 1 : 0) - (fingers[y].thumb ? 1 : 0)));
@@ -7726,13 +7732,8 @@ Reactor3D.solveGrip = function(layout, cloud, count, pad, out, thumbStays) {
         for (let i = 0; i < 3; i++) { S.v1[i] = f.mid[i] - f.base[i]; S.v2[i] = f.tip[i] - f.mid[i]; }
         const thr = f.radius + pad, reach = f.length + thr, reach2 = reach * reach;
         S.thr2 = thr * thr;
-        // Only the points this finger could ever touch.
-        let near = 0;
-        for (let i = 0; i < count; i++) {
-            const dx = cloud[i * 3] - f.base[0], dy = cloud[i * 3 + 1] - f.base[1], dz = cloud[i * 3 + 2] - f.base[2];
-            if (dx * dx + dy * dy + dz * dz < reach2) S.near[near++] = i;
-        }
-        S.nearCount = near;
+        // Only the points this finger could ever touch count (`_gripTouches`).
+        S.reach2 = reach2;
         this._gripPlace(S, f.open, 0);
         for (let k = 0; k < 4; k++) S.mask[k] = this._gripTouches(S, k);
         const ratio = f.thumb ? 0.5 : 0.9, step = 0.09;
@@ -7844,12 +7845,59 @@ Reactor3D._gripPlace = function(S, t1, t2) {
     s[9] = mx + bx; s[10] = my + by; s[11] = mz + bz;
 };
 
+/**
+ * A held thing's points sorted into cells `size` wide or wider, so a finger's place is tested against the points of
+ * the cells round it and not against every point of the thing. (Every point, for every place of every finger at
+ * every step of its closing, was 20 to 77 ms a solve on a long gun or a detailed sword, and a thing that moves in the
+ * hand is solved again each update: a battler's whole action at 10 to 25 pictures a second, 2026-11-13.)
+ */
+Reactor3D._gripCells = function(S, cloud, count, size) {
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0, k = 0; i < count; i++, k += 3) {
+        const x = cloud[k], y = cloud[k + 1], z = cloud[k + 2];
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    let cell = Math.max(size, 1e-6) * 1.0001, nx = 1, ny = 1, nz = 1;
+    for (;;) {
+        nx = Math.floor((x1 - x0) / cell) + 1; ny = Math.floor((y1 - y0) / cell) + 1; nz = Math.floor((z1 - z0) / cell) + 1;
+        if (nx * ny * nz <= 262144) break;
+        cell *= 1.5;
+    }
+    const total = nx * ny * nz, per = 1 / cell;
+    if (S.cells.length < total + 1) S.cells = new Int32Array((total + 1) * 2);
+    if (S.order.length < count) { S.order = new Int32Array(count * 2); S.cellOf = new Int32Array(count * 2); }
+    const cells = S.cells, order = S.order, cellOf = S.cellOf;
+    cells.fill(0, 0, total + 1);
+    for (let i = 0, k = 0; i < count; i++, k += 3) {
+        const c = Math.min(nx - 1, Math.floor((cloud[k] - x0) * per)) + nx * (Math.min(ny - 1, Math.floor((cloud[k + 1] - y0) * per)) + ny * Math.min(nz - 1, Math.floor((cloud[k + 2] - z0) * per)));
+        cellOf[i] = c; cells[c]++;
+    }
+    for (let c = 1; c < total; c++) cells[c] += cells[c - 1];
+    cells[total] = count;
+    // Each cell's points in a run of `order`, `cells[c]` to `cells[c + 1]`: `cells` holds each run's end, and, filled from the back, ends as its start.
+    for (let i = count - 1; i >= 0; i--) order[--cells[cellOf[i]]] = i;
+    S.nx = nx; S.ny = ny; S.nz = nz; S.x0 = x0; S.y0 = y0; S.z0 = z0; S.per = per;
+};
+
 /** Whether tested place `k` of the finger is against the thing (or, for the thumb, a closed finger). */
 Reactor3D._gripTouches = function(S, k) {
-    const x = S.s[k * 3], y = S.s[k * 3 + 1], z = S.s[k * 3 + 2], cloud = S.cloud, near = S.near, thr2 = S.thr2;
-    for (let j = 0; j < S.nearCount; j++) {
-        const i = near[j] * 3, dx = cloud[i] - x, dy = cloud[i + 1] - y, dz = cloud[i + 2] - z;
-        if (dx * dx + dy * dy + dz * dz < thr2) return true;
+    const x = S.s[k * 3], y = S.s[k * 3 + 1], z = S.s[k * 3 + 2], cloud = S.cloud, thr2 = S.thr2;
+    // The cells round the place: a point nearer than the finger's thickness is in one of them (`_gripCells`).
+    const per = S.per, nx = S.nx, ny = S.ny, nz = S.nz, cells = S.cells, order = S.order;
+    const cx = Math.floor((x - S.x0) * per), cy = Math.floor((y - S.y0) * per), cz = Math.floor((z - S.z0) * per);
+    if (cx >= -1 && cy >= -1 && cz >= -1 && cx <= nx && cy <= ny && cz <= nz) {
+        const base = S.f.base, bx = base[0], by = base[1], bz = base[2], reach2 = S.reach2;
+        const x1 = Math.min(nx - 1, cx + 1), y1 = Math.min(ny - 1, cy + 1), z1 = Math.min(nz - 1, cz + 1);
+        for (let iz = Math.max(0, cz - 1); iz <= z1; iz++) for (let iy = Math.max(0, cy - 1); iy <= y1; iy++) {
+            const row = nx * (iy + ny * iz);
+            for (let j = cells[row + Math.max(0, cx - 1)], end = cells[row + x1 + 1]; j < end; j++) {
+                const i = order[j] * 3, dx = cloud[i] - x, dy = cloud[i + 1] - y, dz = cloud[i + 2] - z;
+                if (dx * dx + dy * dy + dz * dz >= thr2) continue;
+                // Within this finger's reach of its base, as the points it is tested against always were.
+                const ex = cloud[i] - bx, ey = cloud[i + 1] - by, ez = cloud[i + 2] - bz;
+                if (ex * ex + ey * ey + ez * ez < reach2) return true;
+            }
+        }
     }
     if (S.f.thumb) for (let j = 0; j < S.extras; j++) {
         const dx = S.extra[j * 3] - x, dy = S.extra[j * 3 + 1] - y, dz = S.extra[j * 3 + 2] - z;
@@ -11100,6 +11148,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
         >= Math.max(...state.rules.map(rule => this.modelRuleDuration(rule, state.binding.clips)), 1)) {
         state.action = null;
     }
+    if (Reactor3D.battlerPictureRests(state, sprite)) return;
     if (state.binding && state.rules.length) {
         this.applyModelAnimation(state.binding, state.rules, {
             frame: state.frame,
@@ -11292,6 +11341,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
         >= Math.max(...state.rules.map(rule => this.modelRuleDuration(rule, state.binding.clips)), 1)) {
         state.action = null;
     }
+    if (Reactor3D.battlerPictureRests(state, main)) return;
     if (state.binding && state.rules.length) {
         this.applyModelAnimation(state.binding, state.rules, {
             frame: state.frame,
@@ -11302,6 +11352,22 @@ Reactor3D.updateActorModelSprite = function(sprite) {
         });
     }
     this.paintBattlerFrame(state, main);
+};
+
+/**
+ * A battler in a Battle Room is drawn by the room, from the room's own copy of its model: the picture of it that a
+ * flat battle shows is not on screen. Posing and drawing that picture all the same was a second pose and a draw of
+ * its own for every battler, every update (1.1 ms of an update with seven actors and two enemies, 2026-11-13). An
+ * actor's is not drawn at all there; an enemy's is what the turn-order icon shows at 32 pixels, and is drawn once
+ * every `ROOM_PICTURE_EVERY` updates.
+ */
+Reactor3D.ROOM_PICTURE_EVERY = 30;
+Reactor3D.battlerPictureRests = function(state, sprite) {
+    if (!sprite || sprite._reactorDrawnInRoom !== true) { state.roomPainted = undefined; return false; }
+    if (state.actorId !== undefined && state.roomPainted !== undefined) return true;
+    if (state.roomPainted !== undefined && state.frame - state.roomPainted < Reactor3D.ROOM_PICTURE_EVERY) return true;
+    state.roomPainted = state.frame;
+    return false;
 };
 
 /** Queue a named action on a 3D actor battler. */

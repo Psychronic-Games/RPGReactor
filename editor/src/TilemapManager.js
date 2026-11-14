@@ -548,6 +548,8 @@ class TilemapManager {
         this.captureSavedMapState();
         // The maps past its border, dimmed past its edges.
         try { globalThis.RRMapNeighbor2D?.sync(this); } catch (error) { console.warn('Neighboring maps:', error); }
+        // The openings to the maps above and below, outlined.
+        try { globalThis.RRMapLevelView?.sync2D(this); } catch (error) { console.warn('Maps above and below:', error); }
         return true;
     }
 
@@ -725,6 +727,7 @@ class TilemapManager {
         if (this.container) {
             // The neighboring maps' strips outlive the container (RRMapNeighbor2D).
             globalThis.RRMapNeighbor2D?.detach(this);
+            globalThis.RRMapLevelView?.detach(this);
             this.destroyAllVirtualChunkLayers();
             this.app.stage.removeChild(this.container);
             this.container.destroy({ children: true });

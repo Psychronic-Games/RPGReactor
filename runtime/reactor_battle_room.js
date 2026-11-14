@@ -299,7 +299,8 @@
             if(mode==='end'&&boneName&&record.binding){const end=BattleRoomView.partEndWorld(record,boneName);if(end)return end;}
             const name=boneName||attachment,cache=record.attachmentBones||=(new Map());
             if(!cache.has(name)){
-                const normalize=value=>String(value).toLowerCase().replace(/^.*[:|]/,'').replace(/[^a-z0-9]/g,'');
+                // (Mixamo's joints are "mixamorig:RightHand" in one file and "mixamorig_RightHand" in the next: Max Triton's hands were not found, and his gun hung in his chest with his arms at his sides.)
+                const normalize=value=>String(value).toLowerCase().replace(/^.*[:|]/,'').replace(/[^a-z0-9]/g,'').replace(/^mixamorig\d*/,'');
                 const wanted=boneName?[normalize(boneName)]:attachment==='leftHand'?['lefthand','handl','lhand']:['righthand','handr','rhand'];let found=null,any=null;
                 // A rigged model keeps the file's own skeleton beside the rig
                 // that actually moves it; the rig's bone is the hand that moves.
@@ -856,19 +857,56 @@
             if(!this.cinematicEnabled()||!user){this.cinematicShot=null;this.cinematicTransition=null;return;}
             const position=key=>(this.models.get(key)||this.billboards.get(key))?.position;
             const a=position(user),b=position(targets[0]);if(!a)return;
-            this.cinematicCut();this.cinematicLinger=null;
+            this.cinematicMove('in');this.cinematicLinger=null;
             this.cinematicShot={phase:'actor',start:this.frame,user,targets:[...new Set(targets)],yaw:b?root.ReactorBattleData.facingToward(a,b):a.facing||0};
         }
         /**
-         * The next shot begins as a cut: the picture changes on this frame and the glide starts over at the new shot.
-         * A cut made moments after another (an action that hits as it begins, one battler acting straight after the
-         * last) is a short ease from the shot before instead, so three pictures never flash by in a row.
+         * The next shot begins, from the picture shown now. How it gets there is settled when the new shot's first
+         * pose is known (`cinematicArrive`), as a film would:
+         *
+         *   'in'   an action opens. From the overview the camera swoops down to the actor (`SWOOP_IN` frames or
+         *          more for a long way); from another close shot it eases across when that is a short turn, and
+         *          cuts when it would have to swing round the room.
+         *   'cut'  the hit. A cut, unless the new shot is nearly the one shown (the camera rode in with a runner
+         *          and is already on the target): a cut of a few tiles and under `JUMP_ARC` degrees reads as a
+         *          skipped frame, so that is an ease too. A cut moments after another is an ease, so three
+         *          pictures never flash by in a row.
+         *   'out'  back to the saved overview: the camera pulls up and away over `SWOOP_OUT` frames or more.
+         *
+         * (Every one of these was a cut until 2026-11-13: three a action, an action every second or two.)
          */
-        cinematicCut(){
+        cinematicMove(kind){
+            const shown=this.cinematicShown;
             const soon=this.cinematicCutFrame!==undefined&&this.frame>=this.cinematicCutFrame&&this.frame-this.cinematicCutFrame<BattleRoomView.CUT_APART;
-            this.cinematicTransition=soon?{from:this.cameraState(),start:this.frame,duration:BattleRoomView.CUT_EASE}:null;
+            this.cinematicTransition=shown?{from:{...shown},start:this.frame,duration:0,kind,soon,wide:this.cinematicWide!==false,pending:true}:null;
             this.cinematicTrack=null;this.cinematicCutFrame=this.frame;
         }
+        /** The eye of a camera state, in room tiles (x, y on the floor, z up). */
+        static eyeOf(c){const yaw=c.yaw*Math.PI/180,pitch=(c.pitch||0)*Math.PI/180,d=c.distance||0;return {x:c.x-Math.sin(yaw)*Math.cos(pitch)*d,y:c.y+Math.cos(yaw)*Math.cos(pitch)*d,z:(c.z||0)+Math.sin(pitch)*d};}
+        /** How a move begun by `cinematicMove` reaches `target`, its first pose: the frames it takes (0 is a cut) and its curve. */
+        cinematicArrive(transition,target){
+            const V=BattleRoomView,from=transition.from,a=V.eyeOf(from),b=V.eyeOf(target);
+            const travel=Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z),apart=Math.hypot(from.x-target.x,from.y-target.y,(from.z||0)-(target.z||0));
+            const arc=Math.abs(((target.yaw-from.yaw)%360+540)%360-180);
+            const swoop=least=>Math.round(Math.max(least,Math.min(V.SWOOP_MOST,least+(travel-20)*.28)));
+            transition.pending=false;transition.swoop=false;
+            if(transition.kind==='out'){transition.duration=swoop(V.SWOOP_OUT);transition.swoop=true;}
+            else if(transition.kind==='in'){
+                if(transition.wide){transition.duration=swoop(V.SWOOP_IN);transition.swoop=true;}
+                else transition.duration=arc<=V.EASE_ARC?Math.round(Math.max(V.CUT_EASE,Math.min(30,V.CUT_EASE+apart*.8))):transition.soon?V.CUT_EASE:0;
+            }
+            else transition.duration=transition.soon||(apart<V.JUMP_REACH&&arc<V.JUMP_ARC)?V.CUT_EASE:0;
+            return transition;
+        }
+        /** Frames for the move down from the overview and back up to it: the least, and the most for the longest way (as a battle on the map: ReactorFight.Camera.SWOOP_IN). */
+        static get SWOOP_IN(){return 22;}
+        static get SWOOP_OUT(){return 26;}
+        static get SWOOP_MOST(){return 36;}
+        /** Between two close shots: a turn up to this many degrees is eased across, a wider one is a cut. */
+        static get EASE_ARC(){return 100;}
+        /** A cut to a shot this near the one shown (tiles between what they look at, degrees between where they stand) is an ease instead. */
+        static get JUMP_REACH(){return 4;}
+        static get JUMP_ARC(){return 60;}
         /** Frames a shot is held before another cut may follow it; a nearer one eases over `CUT_EASE` frames. */
         static get CUT_APART(){return 20;}
         static get CUT_EASE(){return 14;}
@@ -911,8 +949,15 @@
             return Math.max(3,Math.min(c.distance,limit));
         }
         static get EYE_CEILING(){return 6;}
-        /** How much of the way to its goal a cinematic shot moves each frame. */
-        static get CAMERA_GLIDE(){return .12;}
+        /** The most updates one picture moves the room's clock by (SceneManager.MAX_UPDATES). */
+        static get CLOCK_MOST(){return 4;}
+        /** How many frames behind its goal a cinematic shot follows (a critically damped spring: it starts and stops moving gently). */
+        static get CAMERA_FOLLOW(){return 6;}
+        /** One frame of that spring: `state.x` follows `target` (arrays), `tau` frames behind (ReactorFight.Camera.damp). */
+        static damp(state,target,tau){
+            const omega=2/Math.max(.5,tau),k=1/(1+omega+.48*omega*omega+.235*omega*omega*omega);
+            for(let i=0;i<target.length;i++){const change=state.x[i]-target[i],temp=state.v[i]+omega*change;state.v[i]=(state.v[i]-omega*temp)*k;state.x[i]=target[i]+(change+temp)*k;}
+        }
         /** World boxes of everything a cut must not look through, cached for the shot. */
         eyeBlockers(){
             if(this._eyeBoxes&&this._eyeBoxesShot===this.cinematicShot)return this._eyeBoxes;
@@ -991,27 +1036,66 @@
             const shot=this.cinematicShot;if(!shot)return;
             if(shot.phase==='impact'){
                 // A later hit of the same action: the shot stays as it is, or comes back if it had been let go.
-                if(shot.released){shot.released=false;this.cinematicCut();shot.start=this.frame;}
+                if(shot.released){shot.released=false;this.cinematicMove('cut');shot.start=this.frame;}
                 shot.hit=this.frame;return;
             }
-            this.cinematicCut();
+            this.cinematicMove('cut');
             shot.phase='impact';shot.start=shot.hit=this.frame;
         }
+        /** A target died of this action's hit: the hit shot closes in on it (the battle slows meanwhile: ReactorBattlePresentation.slowMotion). */
+        cinematicKill(){const shot=this.cinematicShot;if(shot&&shot.kill===undefined)shot.kill=this.frame;}
+        /** How much nearer the hit shot stands on a kill, as a share of its distance. */
+        static get KILL_PUSH(){return .16;}
+        /**
+         * The actor's shot before the hit, over its shoulder: the eye behind the actor and off to one side, at about
+         * its head, looking at who it aims at, so the actor stands large at one edge of the picture and its target
+         * down the line (owner, 2026-11-13: as XCOM frames a shot). It drifts a little further out as it holds.
+         * Null where that cannot be: nobody else to aim at, the target right against the actor, or no room behind
+         * the actor on either side (a wall, a prop); the shot of the actor alone is used then, as before.
+         */
+        overShoulder(base,shot,user,age){
+            if(shot.over===false||!user?.position)return null;
+            const targets=shot.targets.map(key=>this.models.get(key)||this.billboards.get(key)).filter(r=>r?.position&&r!==user&&r.object?.visible!==false);
+            if(!targets.length)return null;
+            const u=user.position,n=targets.length,tx=targets.reduce((a,r)=>a+r.position.x,0)/n,ty=targets.reduce((a,r)=>a+r.position.y,0)/n,tz=targets.reduce((a,r)=>a+(r.position.z||0),0)/n;
+            let dx=tx-u.x,dy=ty-u.y;const far=Math.hypot(dx,dy);
+            if(far<BattleRoomView.OVER_LEAST){shot.over=false;return null;}
+            dx/=far;dy/=far;
+            const size=this.focusSize(user),tall=Math.max(...targets.map(r=>this.focusSize(r).height));
+            const back=Math.max(size.height*.9,size.width*.8)+.6,aside=Math.max(size.height*.4,size.width*.55)+.35*(1-Math.exp(-age/120)),up=size.height*.92;
+            const look={x:tx,y:ty,z:tz+tall*.5};
+            for(const side of shot.overSide!==undefined?[shot.overSide]:[1,-1]){
+                const vx=u.x-dx*back-dy*side*aside-look.x,vy=u.y-dy*back+dx*side*aside-look.y,vz=(u.z||0)+up-look.z,d=Math.hypot(vx,vy,vz);
+                const state={...base,mode:'fixed',x:look.x,y:look.y,z:look.z,yaw:Math.atan2(-vx,vy)*180/Math.PI,pitch:Math.max(-10,Math.asin(Math.max(-1,Math.min(1,vz/d)))*180/Math.PI),distance:d};
+                if(this.distanceInsideRoom(state)>=d-.05){shot.overSide=side;return state;}
+            }
+            shot.over=false;return null;
+        }
+        /** Tiles between an actor and who it aims at under which the shot is of the actor alone. */
+        static get OVER_LEAST(){return 1.5;}
         /** Frames the hit shot stays after the last hit landed; the rest of the action (the walk home) is watched from the overview. */
         static get HIT_HOLD(){return 75;}
         endCinematicAction(){
             if(!this.cinematicShot)return;
             // The shot the action ended on stays a moment, then the cut back to the overview; an action that follows at once goes straight to its own shot.
             const last=this.cinematicEnabled()?this.cameraState():null;
-            this.cinematicLinger=last?{target:last,until:this.frame+BattleRoomView.CUT_LINGER}:null;
-            this.cinematicTransition=null;this.cinematicShot=null;this.cinematicTrack=null;
+            // (An action that ended on the overview, its hit shot let go, has nothing to hold: the pull back goes on.)
+            const wide=this.cinematicWide!==false;
+            this.cinematicLinger=last&&!wide?{target:last,until:this.frame+BattleRoomView.CUT_LINGER}:null;
+            if(!wide)this.cinematicTransition=null;
+            this.cinematicShot=null;this.cinematicTrack=null;
         }
         cinematicBlend(target){
             const transition=this.cinematicTransition;if(!transition)return target;
+            if(transition.pending)this.cinematicArrive(transition,target);
+            if(!(transition.duration>0)){this.cinematicTransition=null;return target;}
             const t=Math.max(0,Math.min(1,(this.frame-transition.start)/transition.duration));
-            if(t===1)return target;
-            const ease=t*t*(3-2*t),from=transition.from,result={...target};
-            for(const key of ['x','y','z','pitch','distance','fov'])result[key]=from[key]+(target[key]-from[key])*ease;
+            if(t===1){this.cinematicTransition=null;return target;}
+            // A swoop is at rest at both ends, in speed and in acceleration, and the eye's distance goes by ratio: the
+            // camera leaves the overview slowly and lands slowly. An ease between two close shots is the plain curve.
+            const ease=transition.swoop?t*t*t*(t*(t*6-15)+10):t*t*(3-2*t),from=transition.from,result={...target};
+            for(const key of ['x','y','z','pitch','fov'])result[key]=from[key]+(target[key]-from[key])*ease;
+            result.distance=transition.swoop&&from.distance>0&&target.distance>0?Math.exp(Math.log(from.distance)+(Math.log(target.distance)-Math.log(from.distance))*ease):from.distance+(target.distance-from.distance)*ease;
             // Interpolate the short arc across +/-180, never spin around the room.
             const arc=((target.yaw-from.yaw)%360+540)%360-180;
             result.yaw=from.yaw+arc*ease;
@@ -1022,7 +1106,12 @@
             const shot=this.cinematicShot;
             if(!shot){
                 const linger=this.cinematicLinger;
-                if(linger){if(this.frame<linger.until&&this.frame>=linger.until-BattleRoomView.CUT_LINGER)return {...linger.target};this.cinematicLinger=null;this.cinematicCutFrame=this.frame;}
+                if(linger){
+                    if(this.frame<linger.until&&this.frame>=linger.until-BattleRoomView.CUT_LINGER){this.cinematicWide=false;return {...linger.target};}
+                    // The last shot has stayed its moment: the camera pulls back to the overview.
+                    this.cinematicLinger=null;this.cinematicShown={...linger.target};this.cinematicMove('out');
+                }
+                this.cinematicWide=true;
                 return this.cinematicBlend(base);
             }
             const record=key=>this.models.get(key)||this.billboards.get(key),user=record(shot.user);
@@ -1033,9 +1122,11 @@
             // room faces. Camera.place puts the eye at (-sin yaw, cos yaw)·d.
             const impact=shot.phase==='impact';
             if(impact&&this.frame-(shot.hit??shot.start)>=BattleRoomView.HIT_HOLD){
-                if(!shot.released){shot.released=true;this.cinematicCut();}
+                if(!shot.released){shot.released=true;this.cinematicMove('out');}
+                this.cinematicWide=true;
                 return this.cinematicBlend(base);
             }
+            this.cinematicWide=false;
             let points,sizes,yawOffset=impact?70:45;
             if(told){
                 // The sequence said where the action is: a flying projectile
@@ -1043,7 +1134,7 @@
                 points=told.points;sizes=told.points.map(p=>p.key?this.focusSize(record(p.key)):{height:p.height||1,width:0});if(told.yawOffset!==undefined)yawOffset=told.yawOffset;
             }else{
                 const targets=shot.targets.map(record).filter(r=>r?.position&&r.object?.visible!==false),focus=impact&&targets.length?targets:[user];
-                if(!focus[0]?.position)return this.cinematicBlend(base);
+                if(!focus[0]?.position){this.cinematicWide=true;return this.cinematicBlend(base);}
                 // Frame the whole affected group for area attacks; repeated hits
                 // don't flick through a different camera once per resolver call.
                 points=focus.map(r=>r.position);sizes=focus.map(r=>this.focusSize(r));
@@ -1058,26 +1149,37 @@
             const age=Math.max(0,this.frame-shot.start);
             // The hit is seen nearer than the wind-up, from lower, and the shot creeps in while it holds.
             const fill=impact?1.15*(1-.1*(1-Math.exp(-age/45))):1.3;
-            const distance=Math.max(told?6:5,Math.max(height+Math.min(span,across)/Math.min(1,aspect),across/aspect)/(2*Math.tan(base.fov*Math.PI/360))*fill);
+            // A hit that kills is pushed in on, as the battle slows.
+            const push=impact&&shot.kill!==undefined?1-BattleRoomView.KILL_PUSH*(1-Math.exp(-Math.max(0,this.frame-shot.kill)/8)):1;
+            const distance=Math.max(told?6:5,Math.max(height+Math.min(span,across)/Math.min(1,aspect),across/aspect)/(2*Math.tan(base.fov*Math.PI/360))*fill)*push;
             // A restrained orbit keeps both shots on the same side of the action.
             // Bound the sweep so a long-running action cannot circle the room.
             const sweep=18*(1-Math.exp(-age/120));
             let target={...base,mode:'fixed',x,y,z:points.reduce((n,p)=>n+(p.z||0)*(p.weight||1),0)/weight+height*.5,yaw:180-shot.yaw+yawOffset+sweep,pitch:impact?15:20,distance};
-            const wanted=target.distance;target.distance=this.distanceInsideRoom(target);
+            // Before the hit, with someone to aim at: over the actor's shoulder, the target down the line.
+            const over=!told&&!impact?this.overShoulder(base,shot,user,age):null;
+            const wanted=target.distance;if(over)target=over;else target.distance=this.distanceInsideRoom(target);
             // A wall behind a big subject (the tank against the west wall) can leave the eye inside it: try the other side of the line, then the far side.
             const radius=height*.55;
-            if(shot.side!==undefined){const kept={...target,yaw:180-shot.yaw+shot.side+sweep,distance:wanted};kept.distance=this.distanceInsideRoom(kept);target=kept;}
+            if(over){/* placed whole, its eye inside the room */}
+            else if(shot.side!==undefined){const kept={...target,yaw:180-shot.yaw+shot.side+sweep,distance:wanted};kept.distance=this.distanceInsideRoom(kept);target=kept;}
             else if(target.distance<radius){for(const alt of [-yawOffset,180+yawOffset,180-yawOffset]){const other={...target,yaw:180-shot.yaw+alt+sweep,distance:wanted};other.distance=this.distanceInsideRoom(other);if(other.distance>target.distance){target=other;shot.side=alt;}if(target.distance>=radius)break;}}
             {
-                // The shot glides toward where it should be, one step per frame
+                // The shot follows where it should be on a spring, one step per frame
                 // however often the camera is read: a focus that moves (a shot
                 // crossing the room), a clamp that changes as the eye nears a
-                // wall, a swing to the other side, all ease instead of jumping.
-                const track=this.cinematicTrack,rate=BattleRoomView.CAMERA_GLIDE;
+                // wall, a swing to the other side, all start and stop gently instead of jumping.
+                const track=this.cinematicTrack;
                 if(track&&track.frame===this.frame)target=track.target;
                 else{
-                    if(track){const eased={...target};for(const key of ['x','y','z','distance'])eased[key]=track.target[key]+(target[key]-track.target[key])*rate;const arc=((target.yaw-track.target.yaw)%360+540)%360-180;eased.yaw=track.target.yaw+arc*rate;target=eased;}
-                    this.cinematicTrack={frame:this.frame,target};
+                    if(track){
+                        const state=track.state,arc=((target.yaw-state.x[4])%360+540)%360-180;
+                        // One step of the spring for each frame of the room's clock since the last.
+                        for(let step=Math.max(1,Math.min(BattleRoomView.CLOCK_MOST,this.frame-track.frame));step>0;step--)BattleRoomView.damp(state,[target.x,target.y,target.z,target.distance,state.x[4]+arc],BattleRoomView.CAMERA_FOLLOW);
+                        target={...target,x:state.x[0],y:state.x[1],z:state.x[2],distance:state.x[3],yaw:state.x[4]};
+                        this.cinematicTrack={frame:this.frame,target,state};
+                    }
+                    else this.cinematicTrack={frame:this.frame,target,state:{x:[target.x,target.y,target.z,target.distance,target.yaw],v:[0,0,0,0,0]}};
                 }
             }
             // The ease in from the saved overview passes through the blend too, so it cannot carry the eye through the ceiling on its way down.
@@ -1094,7 +1196,10 @@
                 const anchor=this.models.get('actor:0')?.position||this.billboards.get('actor:0')?.position||this.models.get('cast:actors:0')?.position||this.billboards.get('cast:actors:0')?.position||this.settings.actors?.[0]||root.ReactorBattleData?.position(this.settings,'actors',0)||stored;
                 c.x=anchor.x;c.y=anchor.y;c.z=(anchor.z||0)+(defaults.lift||0);c.yaw+=(anchor.facing||0);
             }
-            return this.cinematicCamera(c);
+            // What is shown this frame, for the next move to start from (the first reading of a frame: later ones are the same).
+            const shown=this.cinematicCamera(c);
+            if(this.cinematicEnabled())this.cinematicShown=shown;else{this.cinematicShown=null;this.cinematicWide=true;}
+            return shown;
         }
         aim() {
             const c=this.followCamera(this.cameraState());this.effectiveCamera=c;
@@ -1164,7 +1269,11 @@
         }
         render() {
             if(this.disposed||!this.renderer)return;
-            const R=root.Reactor3D;this.frame++;this.aim();
+            // The room's clock counts the game's updates, not its pictures: a frame of the screen that carried two updates
+            // (a machine under 60 pictures a second, a frame that came late) moves it two. It counted pictures, so on such
+            // a machine the models' motions, the camera and the dissolves ran slow against the sequences that move the
+            // battlers, which count updates (2026-11-13).
+            const R=root.Reactor3D;this.frame+=Math.max(1,Math.min(BattleRoomView.CLOCK_MOST,this.owed||1));this.owed=0;this.aim();
             // Flat projection: pictures stack as the flat battle stacks its
             // sprites. Enemies stand in their row order, the lower one in
             // front; actors are added after every enemy and so stand in front
@@ -1231,8 +1340,11 @@
          * shadows' rows, reflections and the pictures over the room move with the updates.
          */
         drawPaced(){
-            const R=root.Reactor3D,ease=(this.paceEase||0)/BattleRoomView.PACE_EASE;
-            const alpha=ease>0?root.Graphics.FramePacing.alphaNow(ease):1;
+            // In slow motion an update is several refreshes long: the picture goes from the update before to the last
+            // over all of them, on a screen at the game's own 60 too, so slowed motion is not shown in steps.
+            const R=root.Reactor3D,slow=this.slowScale<1,ease=slow&&this.paceList?1:(this.paceEase||0)/BattleRoomView.PACE_EASE;
+            let alpha=ease>0?root.Graphics.FramePacing.alphaNow(ease):1;
+            if(slow&&ease>0)alpha=Math.min(1,((this.slowSkipped||0)+alpha)*this.slowScale);
             const blended=alpha<1&&this.blendPace(alpha);
             try{this.view.renderGuest(this.scene,this.camera);}finally{if(blended)this.restorePace();}
             // Counted as a map's picture is: Auto quality judges a battle's frames and its levels act here.
@@ -1258,7 +1370,7 @@
          * beside where they stood an update ago. A thing new this update, or whose parts changed, has no place before.
          */
         capturePace(){
-            const E=BattleRoomView.PACE_EASE,paced=this.pacedNow();
+            const E=BattleRoomView.PACE_EASE,paced=this.pacedNow()||(this.slowScale<1&&this.drawsBetween());
             this.paceEase=paced?Math.min(E,(this.paceEase||0)+1):Math.max(0,(this.paceEase||0)-1);
             const stamp=this.paceStamp=(this.paceStamp||0)+1;
             if(!this.paceEase){this.paceList=null;return;}
@@ -1613,7 +1725,7 @@
             play._gpuEffectTarget?.dispose();play._gpuColourTarget?.dispose();
         }
         dispose() {
-            if(this.disposed)return;this.disposed=true;this.cinematicShot=null;this.cinematicTransition=null;this.cinematicLinger=null;
+            if(this.disposed)return;this.disposed=true;this.cinematicShot=null;this.cinematicTransition=null;this.cinematicLinger=null;this.cinematicShown=null;
             for(const interpreter of this.interpreters||[])interpreter.terminate();
             if(root.$gameTroop?._interpreter?._reactorRoom===this)delete root.$gameTroop._interpreter._reactorRoom;
             for(const sprite of this.eventSprites?.values()||[]){sprite.removeFromParent();sprite.destroy();}

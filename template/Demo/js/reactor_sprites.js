@@ -6219,8 +6219,12 @@ Spriteset_Map.prototype.createReactor3D = function() {
         this._reactor3d = { viewport, scene, camera, settings, arrival };
         // Entered over a border: the view goes on turning from where it was, in this map's own tiles.
         const neighbors = Reactor3D.Neighbors, cross = neighbors && neighbors.crossing;
-        const view = cross && scene._neighborBodies && neighbors.live ? neighbors.live.cameraCurrent : null;
-        if (view) this._reactor3d.cameraCurrent = Object.assign({}, view, { x: view.x - cross.offset.x, z: view.z - cross.offset.z });
+        const view = cross && (scene._neighborBodies || cross.level) && neighbors.live ? neighbors.live.cameraCurrent : null;
+        if (view) {
+            this._reactor3d.cameraCurrent = Object.assign({}, view, { x: view.x - cross.offset.x, z: view.z - cross.offset.z });
+            // Through an opening: the same height, in this map's own measure.
+            if (cross.level && Number.isFinite(view.y)) this._reactor3d.cameraCurrent.y = view.y - cross.offset.y;
+        }
         this._tilemap.lowerLayerVisible = false;
         if (this._tilemap._lowerLayer) this._tilemap._lowerLayer.visible = false;
         if (this._tilemap._upperLayer) this._tilemap._upperLayer.visible = false;
@@ -6541,6 +6545,8 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // steps a camera transition and the turn ease by one frame.
     // The maps past the borders the player is near: read, built beside this one, let go when left behind.
     if (Reactor3D.Neighbors) Reactor3D.Neighbors.update(state, this._tilemap.bitmaps);
+    // The map over or under this one, seen through the openings between them.
+    if (Reactor3D.Levels) Reactor3D.Levels.update(state);
     if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
     if (state.scene.updateWater) state.scene.updateWater(Graphics.frameCount);
     if (state.scene.updateRipples) {

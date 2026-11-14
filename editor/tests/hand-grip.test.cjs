@@ -586,3 +586,58 @@ test('a grip held before is the solve found then (Reactor3D.GripMemo): the same 
         M.enabled = true;
     }
 });
+
+test('the grip tests a finger against the points near it and closes exactly as a test against every point does', () => {
+    // The solve sorts the held thing's points into cells (`_gripCells`). What it answers must be what the plain
+    // test against every point answered: the same fingers, to the last bit, on things of every size and place.
+    const layout = Reactor3D.handGripLayout(handPoints(), 'Right', [0.02, -0.07, 0]);
+    let seed = 12345;
+    const random = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const plain = function(S, k) {
+        const x = S.s[k * 3], y = S.s[k * 3 + 1], z = S.s[k * 3 + 2], cloud = S.cloud, b = S.f.base;
+        for (let i = 0; i < S.testCount * 3; i += 3) {
+            const ex = cloud[i] - b[0], ey = cloud[i + 1] - b[1], ez = cloud[i + 2] - b[2];
+            if (ex * ex + ey * ey + ez * ez >= S.reach2) continue;
+            const dx = cloud[i] - x, dy = cloud[i + 1] - y, dz = cloud[i + 2] - z;
+            if (dx * dx + dy * dy + dz * dz < S.thr2) return true;
+        }
+        if (S.f.thumb) for (let j = 0; j < S.extras; j++) {
+            const dx = S.extra[j * 3] - x, dy = S.extra[j * 3 + 1] - y, dz = S.extra[j * 3 + 2] - z;
+            if (dx * dx + dy * dy + dz * dz < S.thr2 * 1.2) return true;
+        }
+        return false;
+    };
+    const touches = Reactor3D._gripTouches;
+    let closed = 0;
+    for (let round = 0; round < 60; round++) {
+        // A rod, a slab or a scatter, somewhere about the fingers, a few points to twenty thousand.
+        const count = [3, 40, 600, 5000, 20000][round % 5], cloud = new Float32Array(count * 3), kind = round % 3;
+        const at = [0.01 + random() * 0.04, -0.1 - random() * 0.05, (random() - 0.5) * 0.04], spread = 0.004 + random() * (round % 7 === 0 ? 2 : 0.06);
+        for (let i = 0; i < count; i++) {
+            cloud[i * 3] = at[0] + (random() - 0.5) * (kind === 0 ? 0.01 : spread);
+            cloud[i * 3 + 1] = at[1] + (random() - 0.5) * (kind === 1 ? 0.01 : spread);
+            cloud[i * 3 + 2] = at[2] + (random() - 0.5) * spread;
+        }
+        const pad = [0, 0.002, 0.01][round % 3], stays = round % 4 === 0;
+        const fast = new Float32Array(10), slow = new Float32Array(10);
+        Reactor3D.solveGrip(layout, cloud, count, pad, fast, stays);
+        Reactor3D._gripScratch.testCount = count;
+        Reactor3D._gripTouches = plain;
+        try { Reactor3D.solveGrip(layout, cloud, count, pad, slow, stays); } finally { Reactor3D._gripTouches = touches; }
+        assert.deepEqual([...fast], [...slow], `round ${round}: ${count} points`);
+        if (fast.some((v, i) => i % 2 === 0 && v > layout.fingers[i >> 1].open + 0.1)) closed++;
+    }
+    assert.ok(closed > 20, `the things were in reach: fingers closed on ${closed} of 60`);
+});
+
+test('a solve on a thing of twenty thousand points takes a small part of a frame', () => {
+    const layout = Reactor3D.handGripLayout(handPoints(), 'Right', [0.02, -0.07, 0]), count = 20000, cloud = new Float32Array(count * 3);
+    // A handle through the fist with a long blade on it: most of the points are in reach of some finger.
+    for (let i = 0; i < count; i++) { cloud[i * 3] = 0.035 + Math.cos(i) * 0.012; cloud[i * 3 + 1] = -0.13 + Math.sin(i) * 0.012; cloud[i * 3 + 2] = (i / count - 0.5) * 0.3; }
+    const out = new Float32Array(10);
+    for (let i = 0; i < 20; i++) Reactor3D.solveGrip(layout, cloud, count, 0.002, out);
+    const start = process.cpuUsage();
+    for (let i = 0; i < 50; i++) Reactor3D.solveGrip(layout, cloud, count, 0.002, out);
+    const each = (process.cpuUsage(start).user + process.cpuUsage(start).system) / 1000 / 50;
+    assert.ok(each < 4, `a solve takes ${each.toFixed(2)} ms (under 4; every point for every place took 20 and more)`);
+});

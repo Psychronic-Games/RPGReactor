@@ -21,11 +21,23 @@
   "skin": [],
   "hairColours": [],
   "eyeColours": [],
-  "female": 50,
+  "female": 100,
   "age": [
     18,
     65
   ],
+  "extreme": true,
+  "anatomy": false,
+  "ranges": {
+    "cup": [
+      2.85,
+      6
+    ],
+    "shapes.neck": [
+      -1,
+      1
+    ]
+  },
   "height": [
     0,
     1
@@ -76,7 +88,9 @@
   "pieces": [],
   "gear": [],
   "gearMost": 2,
-  "cyberLimbs": [],
+  "cyberLimbs": [
+    "handL"
+  ],
   "cyberLimbShare": 50,
   "models": false,
   "svStyle": "realistic",

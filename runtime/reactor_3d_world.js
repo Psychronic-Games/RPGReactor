@@ -77,6 +77,8 @@ Reactor3D.terrainHeightAt = function(mapData, wx, wz) {
 
 /** Where the ground is at a world point: the cell's elevation plus the terrain's rise there. */
 Reactor3D.groundHeightAt = function(mapData, wx, wz, near) {
+    // Over an opening to the map under this one, the ground is that map's (Reactor3D.groundThroughLevel).
+    if (this.groundThroughLevel) { const through = this.groundThroughLevel(mapData, wx, wz, near); if (through !== null) return through; }
     const base = this.elevationAt(mapData, Math.floor(wx), Math.floor(wz)) + this.terrainHeightAt(mapData, wx, wz);
     // `near` is a world height; the piece stacks count from the cell's ground.
     return base + this.pieceSurfaceAt(mapData, wx, wz, Number.isFinite(near) ? near - base : 0, base);
@@ -90,6 +92,8 @@ Reactor3D.groundHeightAt = function(mapData, wx, wz, near) {
  * is not ground anyone is on; the player's floor is.
  */
 Reactor3D.viewGroundAt = function(mapData, wx, wz, near) {
+    // The view's middle over an opening to the map under looks at the player's own floor, not down the opening.
+    if (Number.isFinite(near) && this.levelOpening && this.levelOpening(mapData, "below", wx, wz)) return near;
     const ground = this.groundHeightAt(mapData, wx, wz, near);
     if (Number.isFinite(near) && ground > near + 1 + this.TERRAIN_SLOPE_LIMIT) return near;
     return ground;
@@ -711,6 +715,25 @@ Reactor3D.piecesAt = function(mapData, x, y) {
  * frame, undoing its quarter turns: a stair rises along its own +v
  * whichever way it was turned.
  */
+/**
+ * Ladder levels given without a map (a preview of a ladder about to be laid): each is told which of its sides
+ * another level of the same list stands beside (`ladderJoin`), so they draw as one wide ladder, as laid ones do.
+ */
+Reactor3D.joinLadders = function(pieces) {
+    const at = new Set();
+    for (const p of pieces) if (p.kind === "ladder") at.add(p.x + "," + p.y + "," + p.z + "," + p.rot);
+    return pieces.map(piece => {
+        if (piece.kind !== "ladder") return piece;
+        const join = {};
+        for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const local = this.pieceLocal(piece, 0.5 + ox, 0.5 + oy);
+            if (Math.abs(local.u - 0.5) < 0.9) continue; // along the climb, not beside it
+            if (at.has((piece.x + ox) + "," + (piece.y + oy) + "," + piece.z + "," + piece.rot)) join[local.u > 0.5 ? "hi" : "lo"] = true;
+        }
+        return join.lo || join.hi ? Object.assign({}, piece, { ladderJoin: join }) : piece;
+    });
+};
+
 Reactor3D.pieceLocal = function(piece, u, v) {
     let du = u - 0.5, dv = v - 0.5;
     for (let i = 0; i < piece.rot; i++) {
@@ -2031,6 +2054,51 @@ Reactor3D.fenceJoins = function(piece, index) {
     return out.some(([dx, dz]) => fenceAt(dx, dz)) ? out : [];
 };
 
+/**
+ * Pieces about to be laid at `at` (a cell and a level; the pieces are counted from it), as they will be drawn
+ * there: each is told what the laid one would find on the map and beside it in the run. A ladder's level joins
+ * the level beside it, a fence joins the fences and walls round it, a raised stair's support stops on what is
+ * under it, and each stands on its own cell's ground (`previewBase`, from the ground at `at`). The answer is
+ * for `pieceGeometry(pieces, null)`: a preview is drawn with no map, so found none of this (a ladder 3 wide
+ * previewed as three ladders, owner, 2026-11-13).
+ */
+Reactor3D.previewPieces = function(pieces, mapData, at) {
+    const index = mapData ? this.pieceIndex(mapData) : null, cells = new Map();
+    const az = Number(at.z) || 0;
+    const stackAt = key => { let stack = cells.get(key); if (!stack) cells.set(key, stack = index ? (index.cells.get(key) || []).slice() : []); return stack; };
+    const placed = pieces.map(piece => Object.assign({}, piece, { x: piece.x + at.x, y: piece.y + at.y, z: (piece.z || 0) + az }));
+    for (const piece of placed) stackAt(piece.y * 65536 + piece.x).push(piece);
+    const both = { cells: { get: stackAt } };
+    const ground = mapData ? this.pieceBaseAt(mapData, at.x, at.y) : 0;
+    return pieces.map((piece, i) => {
+        const here = placed[i], more = {};
+        if (piece.kind === "ladder") {
+            const join = {};
+            for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const local = this.pieceLocal(here, 0.5 + ox, 0.5 + oy);
+                if (Math.abs(local.u - 0.5) < 0.9) continue; // along the climb, not beside it
+                if (stackAt((here.y + oy) * 65536 + here.x + ox).some(other => other.kind === "ladder" && other.rot === here.rot && other.z === here.z)) join[local.u > 0.5 ? "hi" : "lo"] = true;
+            }
+            if (join.lo || join.hi) more.ladderJoin = join;
+        }
+        if (piece.kind === "fence") {
+            const join = this.fenceJoins(here, both);
+            if (join.length) { more.fenceJoin = join; more.rot = 0; }
+        }
+        if (piece.kind === "stair" && here.z > 0) {
+            let top = 0;
+            for (const other of stackAt(here.y * 65536 + here.x)) {
+                if (other === here || other.kind === "ladder" || other.z >= here.z) continue;
+                top = Math.max(top, Math.min(here.z, this.pieceTop(other, 0.5, 0.5)));
+            }
+            // (Counted from the level it is laid at, as the preview's pieces are: under it, so negative; the ground when nothing is.)
+            more.supportTop = top - az;
+        }
+        if (mapData) { const lift = this.pieceBaseAt(mapData, here.x, here.y) - ground; if (Math.abs(lift) > 1e-4) more.previewBase = Math.round(lift * 1000) / 1000; }
+        return Object.keys(more).length ? Object.assign({}, piece, more) : piece;
+    });
+};
+
 Reactor3D.pieceGeometry = function(pieces, mapData) {
     const out = { positions: [], uvs: [], colors: [] };
     const index = mapData ? this.pieceIndex(mapData) : null;
@@ -2043,7 +2111,8 @@ Reactor3D.pieceGeometry = function(pieces, mapData) {
         pieces = pieces.filter(piece => piece.kind !== "rock");
     }
     for (let piece of pieces) {
-        const base = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : 0;
+        // (With no map, a preview: its pieces say how far over the first one's ground each stands, previewPieces.)
+        const base = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : (piece.previewBase || 0);
         // A ladder level beside another (same turn, same level): the two draw as one wide ladder.
         if (piece.kind === "ladder" && index) {
             const join = {};
@@ -4617,6 +4686,8 @@ Reactor3D.waterMaterial = function(texture, look) {
             ].join("\n")
         );
     };
+    // Not drawn inside the map under this one (a lake's sheet ran on under a hill, through the room inside it).
+    Reactor3D.keepOutOfLevel(material);
     material.customProgramCacheKey = function() { return "reactor3d-water" + (env ? "|env|mirror" : "") + (flowing ? "|river" : ""); };
     this.litMaterial(material);
     // The sheet takes the map's light as any surface does (its reflections with it: a night sky stays dark
@@ -4997,6 +5068,8 @@ Reactor3D.fallMaterial = function(texture, region, drop, sheet) {
             ].join("\n")
         );
     };
+    // Not drawn inside the map under this one (a lake's sheet ran on under a hill, through the room inside it).
+    Reactor3D.keepOutOfLevel(material);
     material.customProgramCacheKey = function() { return "reactor3d-waterfall"; };
     this.litMaterial(material);
     return this.shineAfterLight(material);
@@ -5086,6 +5159,8 @@ Reactor3D.foamMaterial = function(texture, region, sheet) {
             ].join("\n")
         );
     };
+    // Not drawn inside the map under this one (a lake's sheet ran on under a hill, through the room inside it).
+    Reactor3D.keepOutOfLevel(material);
     material.customProgramCacheKey = function() { return "reactor3d-fall-foam"; };
     this.litMaterial(material);
     return this.shineAfterLight(material);
