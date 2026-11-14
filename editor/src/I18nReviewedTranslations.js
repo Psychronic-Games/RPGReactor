@@ -12678,6 +12678,224 @@ for (const [locale, translations] of Object.entries(RR_REVIEWED_PASSIVE_TEXT)) {
   });
 }
 
+// Costs card on the Skills tab (the cost types of Skills and States Core).
+// A machine-assisted first pass, flagged for review.
+const RR_REVIEWED_SKILL_COSTS_TEXT_KEYS = [
+  "Skill Costs",
+  "Set in the Note",
+  "A JS block in the Note also sets this cost",
+  "A tag in the Note replaces the field above",
+  "Only the first tag is read",
+  "No record has this name",
+  "Several records have this name: the first is used",
+  "A later tag replaces this one"
+];
+
+const RR_REVIEWED_SKILL_COSTS_TEXT = {
+  "ja": [
+    "スキルコスト",
+    "メモ欄で設定",
+    "メモ欄の JS ブロックもこのコストを設定します",
+    "メモ欄のタグが上の欄の値を置き換えます",
+    "最初のタグのみ読み込まれます",
+    "この名前のレコードはありません",
+    "同じ名前のレコードが複数あります。最初のものが使われます",
+    "後のタグがこれを置き換えます"
+  ],
+  "zh-Hant": [
+    "技能消耗",
+    "在備註中設定",
+    "備註中的 JS 區塊也會設定此消耗",
+    "備註中的標籤會取代上方欄位的值",
+    "只會讀取第一個標籤",
+    "沒有此名稱的資料",
+    "有多筆資料使用此名稱：採用第一筆",
+    "後面的標籤會取代這個標籤"
+  ],
+  "zh-Hans": [
+    "技能消耗",
+    "在备注中设置",
+    "备注中的 JS 块也会设置此消耗",
+    "备注中的标签会替换上方字段的值",
+    "只读取第一个标签",
+    "没有此名称的记录",
+    "有多条记录使用此名称：采用第一条",
+    "后面的标签会替换此标签"
+  ],
+  "ko": [
+    "스킬 비용",
+    "메모에서 설정됨",
+    "메모의 JS 블록도 이 비용을 설정합니다",
+    "메모의 태그가 위 필드의 값을 대체합니다",
+    "첫 번째 태그만 읽습니다",
+    "이 이름의 레코드가 없습니다",
+    "이 이름의 레코드가 여러 개입니다: 첫 번째가 사용됩니다",
+    "뒤의 태그가 이 태그를 대체합니다"
+  ],
+  "es": [
+    "Costes de habilidad",
+    "Definido en las Notas",
+    "Un bloque JS en las Notas también define este coste",
+    "Una etiqueta en las Notas sustituye al campo de arriba",
+    "Solo se lee la primera etiqueta",
+    "Ningún registro tiene este nombre",
+    "Varios registros tienen este nombre: se usa el primero",
+    "Una etiqueta posterior sustituye a esta"
+  ],
+  "pt": [
+    "Custos de habilidade",
+    "Definido nas Notas",
+    "Um bloco JS nas Notas também define este custo",
+    "Uma tag nas Notas substitui o campo acima",
+    "Apenas a primeira tag é lida",
+    "Nenhum registro tem este nome",
+    "Vários registros têm este nome: o primeiro é usado",
+    "Uma tag posterior substitui esta"
+  ],
+  "fr": [
+    "Coûts de compétence",
+    "Défini dans les Notes",
+    "Un bloc JS dans les Notes définit aussi ce coût",
+    "Une balise dans les Notes remplace le champ ci-dessus",
+    "Seule la première balise est lue",
+    "Aucun enregistrement ne porte ce nom",
+    "Plusieurs enregistrements portent ce nom : le premier est utilisé",
+    "Une balise ultérieure remplace celle-ci"
+  ],
+  "it": [
+    "Costi dell'abilità",
+    "Impostato nelle Note",
+    "Anche un blocco JS nelle Note imposta questo costo",
+    "Un tag nelle Note sostituisce il campo qui sopra",
+    "Viene letto solo il primo tag",
+    "Nessun record ha questo nome",
+    "Più record hanno questo nome: viene usato il primo",
+    "Un tag successivo sostituisce questo"
+  ],
+  "de": [
+    "Fertigkeitskosten",
+    "In den Notizen festgelegt",
+    "Ein JS-Block in den Notizen legt diese Kosten ebenfalls fest",
+    "Ein Tag in den Notizen ersetzt das Feld oben",
+    "Nur das erste Tag wird gelesen",
+    "Kein Eintrag trägt diesen Namen",
+    "Mehrere Einträge tragen diesen Namen: der erste wird verwendet",
+    "Ein späteres Tag ersetzt dieses"
+  ],
+  "ru": [
+    "Стоимость навыка",
+    "Задано в заметках",
+    "JS-блок в заметках также задаёт эту стоимость",
+    "Тег в заметках заменяет поле выше",
+    "Читается только первый тег",
+    "Нет записи с таким именем",
+    "Несколько записей с таким именем: используется первая",
+    "Более поздний тег заменяет этот"
+  ],
+  "pl": [
+    "Koszty umiejętności",
+    "Ustawione w notatkach",
+    "Blok JS w notatkach również ustawia ten koszt",
+    "Tag w notatkach zastępuje pole powyżej",
+    "Odczytywany jest tylko pierwszy tag",
+    "Żaden rekord nie ma tej nazwy",
+    "Kilka rekordów ma tę nazwę: używany jest pierwszy",
+    "Późniejszy tag zastępuje ten"
+  ],
+  "el": [
+    "Κόστη δεξιότητας",
+    "Ορίζεται στις Σημειώσεις",
+    "Ένα μπλοκ JS στις Σημειώσεις ορίζει επίσης αυτό το κόστος",
+    "Μια ετικέτα στις Σημειώσεις αντικαθιστά το παραπάνω πεδίο",
+    "Διαβάζεται μόνο η πρώτη ετικέτα",
+    "Καμία εγγραφή δεν έχει αυτό το όνομα",
+    "Πολλές εγγραφές έχουν αυτό το όνομα: χρησιμοποιείται η πρώτη",
+    "Μια μεταγενέστερη ετικέτα αντικαθιστά αυτήν"
+  ],
+  "ar": [
+    "تكاليف المهارة",
+    "محدد في الملاحظات",
+    "كتلة JS في الملاحظات تحدد هذه الكلفة أيضًا",
+    "وسم في الملاحظات يستبدل الحقل أعلاه",
+    "يُقرأ الوسم الأول فقط",
+    "لا يوجد سجل بهذا الاسم",
+    "عدة سجلات تحمل هذا الاسم: يُستخدم الأول",
+    "وسم لاحق يستبدل هذا الوسم"
+  ],
+  "tr": [
+    "Beceri Bedelleri",
+    "Notlarda ayarlı",
+    "Notlardaki bir JS bloğu da bu bedeli ayarlar",
+    "Notlardaki bir etiket yukarıdaki alanın yerini alır",
+    "Yalnızca ilk etiket okunur",
+    "Bu adda kayıt yok",
+    "Birden çok kayıt bu adı taşıyor: ilki kullanılır",
+    "Sonraki bir etiket bunun yerini alır"
+  ],
+  "id": [
+    "Biaya Skill",
+    "Diatur di Catatan",
+    "Blok JS di Catatan juga mengatur biaya ini",
+    "Tag di Catatan menggantikan kolom di atas",
+    "Hanya tag pertama yang dibaca",
+    "Tidak ada data dengan nama ini",
+    "Beberapa data memiliki nama ini: yang pertama digunakan",
+    "Tag berikutnya menggantikan tag ini"
+  ],
+  "vi": [
+    "Chi phí kỹ năng",
+    "Đặt trong Ghi chú",
+    "Một khối JS trong Ghi chú cũng đặt chi phí này",
+    "Thẻ trong Ghi chú thay thế trường ở trên",
+    "Chỉ thẻ đầu tiên được đọc",
+    "Không có bản ghi nào mang tên này",
+    "Nhiều bản ghi mang tên này: bản đầu tiên được dùng",
+    "Thẻ phía sau thay thế thẻ này"
+  ],
+  "th": [
+    "ค่าใช้สกิล",
+    "กำหนดในหมายเหตุ",
+    "บล็อก JS ในหมายเหตุกำหนดค่าใช้นี้ด้วย",
+    "แท็กในหมายเหตุแทนที่ช่องด้านบน",
+    "อ่านเฉพาะแท็กแรกเท่านั้น",
+    "ไม่มีรายการที่ใช้ชื่อนี้",
+    "มีหลายรายการใช้ชื่อนี้: ใช้รายการแรก",
+    "แท็กที่อยู่ถัดไปแทนที่แท็กนี้"
+  ]
+};
+
+for (const [locale, translations] of Object.entries(RR_REVIEWED_SKILL_COSTS_TEXT)) {
+  const target = globalThis.RR_REVIEWED_TRANSLATIONS.text[locale];
+  RR_REVIEWED_SKILL_COSTS_TEXT_KEYS.forEach((key, index) => {
+    target[key] = translations[index];
+  });
+}
+
+// How MP and TP on the Skill Costs card relate to the Invocation fields.
+// A machine-assisted first pass, flagged for review.
+const RR_REVIEWED_SKILL_COSTS_NATIVE_NOTE = "MP and TP: Value is the cost field under Invocation, the same number in both places. % is a notetag the plugin adds on top of that field.";
+for (const [locale, text] of Object.entries({
+  "ja": "MPとTP：「値」は「発動」にあるコスト欄そのもので、どちらでも同じ数値です。「%」はノートタグで、プラグインがその欄の値に上乗せします。",
+  "zh-Hant": "MP 與 TP：「值」就是「調用」中的消耗欄位，兩處是同一個數字。「%」是備註標籤，外掛會把它加在該欄位之上。",
+  "zh-Hans": "MP 与 TP：“值”就是“调用”中的消耗字段，两处是同一个数字。“%”是备注标签，插件会把它加在该字段之上。",
+  "ko": "MP와 TP: \"값\"은 \"발동\"의 비용 필드 그 자체이며 양쪽에서 같은 숫자입니다. \"%\"는 노트 태그로, 플러그인이 그 필드 값에 더합니다.",
+  "es": "MP y TP: «Valor» es el campo de coste de Invocación, el mismo número en ambos sitios. «%» es una etiqueta de nota que el plugin suma a ese campo.",
+  "pt": "MP e TP: \"Valor\" é o campo de custo em Invocação, o mesmo número nos dois lugares. \"%\" é uma tag de nota que o plugin soma a esse campo.",
+  "fr": "MP et TP : « Valeur » est le champ de coût d'Invocation, le même nombre aux deux endroits. « % » est une balise de note que le plugin ajoute à ce champ.",
+  "it": "MP e TP: «Valore» è il campo del costo in Invocazione, lo stesso numero in entrambi i punti. «%» è un tag delle note che il plugin somma a quel campo.",
+  "de": "MP und TP: „Wert“ ist das Kostenfeld unter Auslösung, an beiden Stellen dieselbe Zahl. „%“ ist ein Notiz-Tag, den das Plugin zu diesem Feld addiert.",
+  "ru": "MP и TP: «Значение» — это поле стоимости в разделе «Применение», одно и то же число в обоих местах. «%» — тег в заметках, который плагин прибавляет к этому полю.",
+  "pl": "MP i TP: „Wartość” to pole kosztu w sekcji Wywołanie, ta sama liczba w obu miejscach. „%” to tag notatki, który wtyczka dodaje do tego pola.",
+  "el": "MP και TP: η «Τιμή» είναι το πεδίο κόστους στην Επίκληση, ο ίδιος αριθμός και στα δύο σημεία. Το «%» είναι ετικέτα σημείωσης που το πρόσθετο προσθέτει σε αυτό το πεδίο.",
+  "ar": "MP و TP: «القيمة» هي حقل الكلفة ضمن الاستدعاء، الرقم نفسه في الموضعين. «%» وسم في الملاحظات تضيفه الإضافة فوق ذلك الحقل.",
+  "tr": "MP ve TP: \"Değer\", Çağırma altındaki bedel alanının kendisidir; iki yerde de aynı sayıdır. \"%\", eklentinin o alanın üzerine eklediği bir not etiketidir.",
+  "id": "MP dan TP: \"Nilai\" adalah kolom biaya di Invokasi, angka yang sama di kedua tempat. \"%\" adalah tag catatan yang ditambahkan plugin di atas kolom itu.",
+  "vi": "MP và TP: \"Giá trị\" chính là trường chi phí trong mục Phát động, cùng một con số ở cả hai nơi. \"%\" là thẻ ghi chú mà plugin cộng thêm vào trường đó.",
+  "th": "MP และ TP: \"ค่า\" คือช่องค่าใช้ในส่วนการร่ายใช้ เป็นตัวเลขเดียวกันทั้งสองที่ ส่วน \"%\" คือแท็กในหมายเหตุที่ปลั๊กอินบวกเพิ่มจากช่องนั้น"
+})) {
+  globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][RR_REVIEWED_SKILL_COSTS_NATIVE_NOTE] = text;
+}
+
 // Battle Test identifies missing graphics before launching the game.
 for (const [locale, text] of Object.entries({
   "ja": "戦闘グラフィックが見つかりません。別のアクターを選ぶか、アクター設定でグラフィックを指定してください。",
