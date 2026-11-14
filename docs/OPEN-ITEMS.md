@@ -1,6 +1,6 @@
-# Open items (2026-11-13)
+# Open items (2026-11-14)
 
-Open in 0.99.6 (opened 2026-11-12, after the 0.99.5 release): Character Preview 98, Props 62, runtime 20261113.6. This is the working list; [STATUS.md](STATUS.md#open-work) holds the standing threads and [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md) the questions for the owner.
+Open in 0.99.6 (opened 2026-11-12, after the 0.99.5 release): Character Preview 98, Props 62, runtime 20261114.1. This is the working list; [STATUS.md](STATUS.md#open-work) holds the standing threads and [OWNER-QUESTIONS.md](OWNER-QUESTIONS.md) the questions for the owner.
 
 1. **CI.** Last green on [run 41513263959](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959) (2026-11-02). The 0.99.5 release push ([run 43174161472](https://github.com/Psychronic-Games/RPGReactor/actions/runs/43174161472)) failed with seven tests, the known ones, and nothing else. All seven are fixed in 0.99.6 ([changelog](../editor/changelog/0.99.6.md)). A whole run on 2026-11-13 passed but for two tests that wait on the commit's staging; a CI run comes with the next push. The 24 character failures and the five audit advisories are fixed: five regressions in product code, stale fixtures, intended changes recorded in the tests, and `overrides` for `glob` and `minimatch` under nw-builder. Exercise and floor poses now go through `limitLegs`, which moves feet 1.7 to 6 cm in 10 poses and needs a look (owner check [B3](OWNER-QUESTIONS.md)). The two kneeling stretches are the approved hold, so they keep their measured reach through a labelled allowance in `character-3d-poses`. A real `nwbuild` has not run on the overridden packages. Generated models need re-saving to pick up the cloth, seam and clip fixes.
 

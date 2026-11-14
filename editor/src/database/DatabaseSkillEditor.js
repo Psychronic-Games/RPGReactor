@@ -191,6 +191,12 @@ class DatabaseSkillEditor {
         `;
         gridWrapper.appendChild(invocationSection);
 
+        // ── Costs (only when the project's Skills and States Core defines cost types) ──
+        const costsSection = window.RRSkillCosts?.createSection({
+            record: skill, databaseManager: this.databaseManager, projectManager: this.projectManager
+        });
+        if (costsSection) gridWrapper.appendChild(costsSection);
+
         // ── Message Section ──
         const messageSection = document.createElement('div');
         messageSection.className = 'database-section';
