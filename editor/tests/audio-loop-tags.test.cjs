@@ -275,3 +275,125 @@ test('the Audio Player routes every loop switch through the loop-point aware set
     assert.match(source, /loadLoopPoints\(channel, channel\.currentTrack\)/);
     assert.match(source, /RRAudioLoopTags/);
 });
+
+// A media element stand-in for attachLoopPlayback: the properties and events
+// the controller uses, with frames driven by hand.
+function fakeAudio({ duration = 10 } = {}) {
+    const listeners = new Map();
+    const audio = {
+        currentTime: 0, duration, paused: true, ended: false, loop: false, plays: 0,
+        addEventListener(type, fn) { (listeners.get(type) || listeners.set(type, new Set()).get(type)).add(fn); },
+        removeEventListener(type, fn) { listeners.get(type)?.delete(fn); },
+        emit(type) { for (const fn of [...(listeners.get(type) || [])]) fn(); },
+        listenerCount() { let n = 0; for (const set of listeners.values()) n += set.size; return n; },
+        play() { this.paused = false; this.ended = false; this.plays++; this.emit('play'); return Promise.resolve(); }
+    };
+    return audio;
+}
+
+function withFrames(run) {
+    const queue = [];
+    const saved = { raf: globalThis.requestAnimationFrame, caf: globalThis.cancelAnimationFrame };
+    globalThis.requestAnimationFrame = fn => { queue.push(fn); return queue.length; };
+    globalThis.cancelAnimationFrame = id => { queue[id - 1] = null; };
+    const frame = () => { const due = queue.splice(0); for (const fn of due) if (fn) fn(); };
+    try {
+        return run(frame);
+    } finally {
+        globalThis.requestAnimationFrame = saved.raf;
+        globalThis.cancelAnimationFrame = saved.caf;
+    }
+}
+
+test('loop playback wraps at the loop points, keeping the overshoot', () => withFrames(frame => {
+    const audio = fakeAudio();
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: true });
+    assert.equal(audio.loop, true, 'no points yet: the whole file loops');
+    loop.setPoints({ start: 2, end: 6 });
+    assert.equal(audio.loop, false, 'with points the controller wraps, not the element');
+    audio.play();
+    audio.currentTime = 5.9;
+    frame();
+    assert.equal(audio.currentTime, 5.9);
+    audio.currentTime = 6.25;
+    frame();
+    assert.ok(Math.abs(audio.currentTime - 2.25) < 1e-9, `wrapped to ${audio.currentTime}`);
+}));
+
+test('loop playback off plays through, and a file without points loops whole only when on', () => withFrames(frame => {
+    const audio = fakeAudio();
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: false });
+    loop.setPoints({ start: 2, end: 6 });
+    audio.play();
+    audio.currentTime = 6.5;
+    frame();
+    assert.equal(audio.currentTime, 6.5, 'looping off: no wrap');
+    audio.ended = true;
+    audio.emit('ended');
+    assert.equal(audio.plays, 1, 'looping off: an ended track stays ended');
+    loop.setPoints(null);
+    assert.equal(audio.loop, false);
+    loop.setLoop(true);
+    assert.equal(audio.loop, true);
+    loop.setLoop(false);
+    assert.equal(audio.loop, false);
+}));
+
+test('loop playback wraps a loop that ends with the file, and plays a seeked tail out', () => withFrames(frame => {
+    const audio = fakeAudio({ duration: 6 });
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: true });
+    loop.setPoints({ start: 2, end: 6 });
+    audio.play();
+    audio.currentTime = 6;
+    audio.paused = true;
+    audio.ended = true;
+    audio.emit('ended');
+    assert.equal(audio.currentTime, 2);
+    assert.equal(audio.plays, 2, 'the wrap restarts playback');
+
+    const tail = fakeAudio({ duration: 10 });
+    const tailLoop = LoopTags.attachLoopPlayback(tail, { loop: true });
+    tailLoop.setPoints({ start: 2, end: 6 });
+    tail.play();
+    tail.currentTime = 8;
+    tail.emit('seeked');
+    frame();
+    assert.equal(tail.currentTime, 8, 'a seek past the loop end is not snapped back');
+    tail.currentTime = 3;
+    tail.emit('seeked');
+    frame();
+    tail.currentTime = 6.1;
+    frame();
+    assert.ok(Math.abs(tail.currentTime - 2.1) < 1e-9, 're-armed once before the end again');
+}));
+
+test('loop playback settles an Opus loop at 48 kHz once the track length is known', () => withFrames(() => {
+    const audio = fakeAudio({ duration: NaN });
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: true });
+    // 44.1 kHz header, but the counts only fit a 6.1 s track at 48 kHz.
+    const points = { start: 2 * 48000 / 44100, end: 6 * 48000 / 44100, at48k: { start: 2, end: 6 } };
+    loop.setPoints(points);
+    assert.equal(loop.points.end, points.end, 'length unknown: the recorded rate holds');
+    audio.duration = 6.1;
+    audio.emit('loadedmetadata');
+    assert.deepEqual(loop.points, { start: 2, end: 6 });
+}));
+
+test('loop playback disposes its listeners and its frame watch', () => withFrames(frame => {
+    const audio = fakeAudio();
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: true });
+    loop.setPoints({ start: 2, end: 6 });
+    audio.play();
+    loop.dispose();
+    assert.equal(audio.listenerCount(), 0);
+    audio.currentTime = 7;
+    frame();
+    assert.equal(audio.currentTime, 7);
+}));
+
+test('the Resource Manager previews audio through the loop controller and disposes it', () => {
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'ResourceManager.js'), 'utf8');
+    assert.match(source, /attachLoopPlayback\(audio, \{ loop: toggle\.checked \}\)/);
+    assert.match(source, /loopPointsFromFile\(record\.physicalAbsolutePath\)/);
+    assert.match(source, /clearPreview\(\) \{[\s\S]*?this\.audioLoop\?\.dispose\(\)/);
+});

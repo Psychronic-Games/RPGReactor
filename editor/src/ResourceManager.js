@@ -1252,6 +1252,8 @@ class ResourceManager {
         this.previewGeneration++;
         this.modelPreview?.dispose();
         this.modelPreview = null;
+        this.audioLoop?.dispose();
+        this.audioLoop = null;
         this.previewStage?.querySelectorAll('audio, video').forEach(media => {
             media.pause();
             media.removeAttribute('src');
@@ -1371,12 +1373,7 @@ class ResourceManager {
             image.src = url;
             this.previewStage.appendChild(image);
         } else if (this.folder.preview === 'audio') {
-            const audio = document.createElement('audio');
-            audio.controls = true;
-            audio.preload = 'metadata';
-            audio.src = url;
-            audio.addEventListener('error', () => { if (generation === this.previewGeneration) this.previewError(); });
-            this.previewStage.appendChild(audio);
+            this.showAudioPreview(record, url, generation);
         } else if (this.folder.preview === 'video') {
             const video = document.createElement('video');
             video.controls = true;
@@ -1405,6 +1402,69 @@ class ResourceManager {
                 if (generation === this.previewGeneration) this.previewError();
             }
         }
+    }
+
+    /**
+     * Audio preview with a Loop switch. With it on, the track loops as the
+     * game loops a BGM or BGS: at its own loop points when it carries them,
+     * over the whole file when it does not. The switch is kept per folder
+     * while the editor runs, on for BGM and BGS and off for ME and SE, which
+     * the game plays once.
+     */
+    showAudioPreview(record, url, generation) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'rr-resource-audio-preview';
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.preload = 'metadata';
+        audio.addEventListener('error', () => { if (generation === this.previewGeneration) this.previewError(); });
+
+        const row = document.createElement('div');
+        row.className = 'rr-resource-audio-loop';
+        const label = document.createElement('label');
+        const toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.className = 'rr-resource-audio-loop-toggle';
+        const caption = document.createElement('span');
+        caption.textContent = this.text('Loop');
+        label.append(toggle, caption);
+        const status = document.createElement('span');
+        status.className = 'rr-resource-audio-loop-points';
+        row.append(label, status);
+        wrapper.append(audio, row);
+
+        if (!this.audioLoopEnabled) this.audioLoopEnabled = { bgm: true, bgs: true, me: false, se: false };
+        const folderId = this.folder.id;
+        const tags = typeof window !== 'undefined' ? window.RRAudioLoopTags : null;
+        toggle.checked = !!this.audioLoopEnabled[folderId];
+        const loop = tags?.attachLoopPlayback ? tags.attachLoopPlayback(audio, { loop: toggle.checked }) : null;
+        if (!loop) audio.loop = toggle.checked;
+        this.audioLoop = loop;
+        toggle.addEventListener('change', () => {
+            this.audioLoopEnabled[folderId] = toggle.checked;
+            if (loop) loop.setLoop(toggle.checked);
+            else audio.loop = toggle.checked;
+        });
+        const describe = () => {
+            const points = loop?.points;
+            status.textContent = points
+                ? this.text('Loop points: {start} s to {end} s', { start: points.start.toFixed(3), end: points.end.toFixed(3) })
+                : this.text('No loop points in this file.');
+        };
+        audio.src = url;
+        this.previewStage.appendChild(wrapper);
+
+        if (!loop || !tags.loopPointsFromFile) return;
+        // An Opus loop settles against the track's length once that is known.
+        audio.addEventListener('loadedmetadata', () => { if (generation === this.previewGeneration) describe(); });
+        Promise.resolve()
+            .then(() => tags.loopPointsFromFile(record.physicalAbsolutePath))
+            .catch(() => null)
+            .then(points => {
+                if (generation !== this.previewGeneration) return;
+                loop.setPoints(points);
+                describe();
+            });
     }
 
     previewError() {

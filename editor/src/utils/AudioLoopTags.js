@@ -371,7 +371,101 @@
         return null;
     }
 
-    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile, fitLoopPoints };
+    /**
+     * Make a media element loop the way the game loops a BGM or BGS: from
+     * the loop end back to the loop start when the track has loop points,
+     * over the whole file when it has none, and not at all while looping is
+     * off. Wrapping keeps the overshoot past the loop end, so the phase stays
+     * exact. A seek past the loop end plays the tail out instead of snapping
+     * straight back; the loop re-arms once playback is before the end again.
+     *
+     * The Audio Player keeps its own copy of this on its channels, where an
+     * ended track must also rebuild the Web Audio graph.
+     *
+     * @returns {{ setLoop(on: boolean): void, setPoints(points: ?{start: number,
+     *   end: number}): void, readonly points: ?{start: number, end: number},
+     *   readonly loop: boolean, dispose(): void }}
+     */
+    function attachLoopPlayback(audio, options = {}) {
+        const raf = typeof root.requestAnimationFrame === 'function'
+            ? callback => root.requestAnimationFrame(callback) : callback => setTimeout(callback, 16);
+        const cancel = typeof root.cancelAnimationFrame === 'function'
+            ? id => root.cancelAnimationFrame(id) : id => clearTimeout(id);
+        let loop = !!options.loop;
+        let raw = null;
+        let points = null;
+        let armed = true;
+        let watch = 0;
+        let disposed = false;
+
+        const syncNativeLoop = () => { audio.loop = loop && !points; };
+        const rearm = () => { armed = !points || audio.currentTime < points.end; };
+        const tick = () => {
+            watch = 0;
+            if (disposed || !points || audio.paused || audio.ended) return;
+            if (loop) {
+                const time = audio.currentTime;
+                if (time < points.end) {
+                    armed = true;
+                } else if (armed) {
+                    audio.currentTime = points.start + ((time - points.end) % (points.end - points.start));
+                }
+            }
+            watch = raf(tick);
+        };
+        const startWatch = () => {
+            if (!watch && !disposed && points) watch = raf(tick);
+        };
+        // An Opus loop may only be settled against the track's length, as the
+        // game settles it; the length arrives with the metadata.
+        const fit = () => {
+            const fitted = fitLoopPoints(raw, audio.duration);
+            points = fitted && fitted.end > fitted.start ? fitted : null;
+            rearm();
+            syncNativeLoop();
+            startWatch();
+        };
+        const onEnded = () => {
+            // A loop that runs to the end of the file, or a tail auditioned
+            // past the loop end, finishes the file; wrap like the game does.
+            if (!loop || !points) return;
+            audio.currentTime = points.start;
+            armed = true;
+            const played = audio.play();
+            if (played && typeof played.catch === 'function') played.catch(() => {});
+        };
+        audio.addEventListener('play', startWatch);
+        audio.addEventListener('seeked', rearm);
+        audio.addEventListener('ended', onEnded);
+        audio.addEventListener('loadedmetadata', fit);
+        syncNativeLoop();
+
+        return {
+            setLoop(on) {
+                loop = !!on;
+                rearm();
+                syncNativeLoop();
+                startWatch();
+            },
+            setPoints(value) {
+                raw = value || null;
+                fit();
+            },
+            get points() { return points; },
+            get loop() { return loop; },
+            dispose() {
+                disposed = true;
+                if (watch) cancel(watch);
+                watch = 0;
+                audio.removeEventListener('play', startWatch);
+                audio.removeEventListener('seeked', rearm);
+                audio.removeEventListener('ended', onEnded);
+                audio.removeEventListener('loadedmetadata', fit);
+            }
+        };
+    }
+
+    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile, fitLoopPoints, attachLoopPlayback };
     root.RRAudioLoopTags = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
