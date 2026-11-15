@@ -384,7 +384,25 @@ function requiredLoopTags(buffer, ext) {
     }
     if (ext === '.mp3') return mp3LoopTags(buffer);
     if (ext === '.m4a') return []; // no loop-tag convention for M4A
+    if (ext === '.flac') {
+        const pair = flacLoopPair(buffer);
+        if (pair) return [`LOOPSTART=${pair.start}`, `LOOPLENGTH=${pair.length}`];
+    }
     return loopComments(buffer); // OGG and FLAC share vorbis comments
+}
+
+// The runtime reads a LOOP_START/LOOP_END pair from FLAC (an end sample in
+// place of a length) when it has no LOOPLENGTH, but not from Vorbis, so a
+// FLAC converting to OGG carries that loop over as LOOPSTART/LOOPLENGTH.
+function flacLoopPair(buffer) {
+    const text = buffer.toString('latin1');
+    if (/LOOPLENGTH=\d+/i.test(text)) return null;
+    const start = /LOOP_START=(\d+)/i.exec(text);
+    const end = /LOOP_END=(\d+)/i.exec(text);
+    if (!start || !end) return null;
+    const from = Number(start[1]);
+    const to = Number(end[1]);
+    return to > from ? { start: from, length: to - from } : null;
 }
 
 function verifyLoopTags(buffer, ext, required) {
@@ -508,7 +526,8 @@ async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfm
 // WAV and FLAC compress by becoming OGG Vorbis — the format the runtime
 // prefers when several carry one name, resolved from the same extensionless
 // data. A WAV's smpl loop is written out as the LOOPSTART/LOOPLENGTH
-// comments; FLAC's vorbis comments carry over through -map_metadata.
+// comments, and so is a FLAC's LOOP_START/LOOP_END pair; FLAC's other
+// vorbis comments carry over through -map_metadata.
 async function convertAudioToOgg(filePath, quality, ffmpegPath, execute = runFfmpeg) {
     const ext = path.extname(filePath).toLowerCase();
     const oggPath = filePath.slice(0, -ext.length) + '.ogg';
@@ -519,7 +538,7 @@ async function convertAudioToOgg(filePath, quality, ffmpegPath, execute = runFfm
     }
     const original = fs.readFileSync(filePath);
     const required = requiredLoopTags(original, ext);
-    const loopArgs = ext === '.wav'
+    const loopArgs = ext === '.wav' || (ext === '.flac' && flacLoopPair(original))
         ? required.flatMap(tag => ['-metadata', tag])
         : [];
     const temp = `${oggPath}.${process.pid}.${Date.now()}.part.ogg`;

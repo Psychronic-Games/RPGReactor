@@ -103,6 +103,27 @@ test('OGG optimization leaves an Opus stream untouched', async () => {
     }
 });
 
+test('a FLAC LOOP_START/LOOP_END pair becomes LOOPSTART/LOOPLENGTH in its OGG', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-flac-pair-'));
+    const flac = path.join(root, 'Theme.flac');
+    let encodeArgs = null;
+    try {
+        fs.writeFileSync(flac, Buffer.from(`fLaC${'x'.repeat(800)}loop_end=5967968\0loop_start=2895840`));
+        const result = await optimizer.optimizeAudioFile(flac, 5, '/mock/ffmpeg', async (_bin, args) => {
+            if (args.includes('image2')) throw new Error('no picture');
+            encodeArgs = args;
+            fs.writeFileSync(args.at(-1), Buffer.from(`OggS${'z'.repeat(40)}LOOPSTART=2895840\0LOOPLENGTH=3072128`));
+        });
+        assert.equal(result.converted, true);
+        assert.ok(encodeArgs.includes('LOOPSTART=2895840') && encodeArgs.includes('LOOPLENGTH=3072128'),
+            'the pair is passed to the encoder as the tags the Vorbis reader takes');
+        assert.deepEqual(optimizer.loopComments(fs.readFileSync(path.join(root, 'Theme.ogg'))),
+            ['LOOPSTART=2895840', 'LOOPLENGTH=3072128']);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('OGG optimization carries embedded cover art through the re-encode', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-art-'));
     const target = path.join(root, 'Theme.ogg');
