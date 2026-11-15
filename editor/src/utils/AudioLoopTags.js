@@ -379,8 +379,7 @@
      * exact. A seek past the loop end plays the tail out instead of snapping
      * straight back; the loop re-arms once playback is before the end again.
      *
-     * The Audio Player keeps its own copy of this on its channels, where an
-     * ended track must also rebuild the Web Audio graph.
+     * Used by the Audio Player's channels and the Resource Manager's preview.
      *
      * @returns {{ setLoop(on: boolean): void, setPoints(points: ?{start: number,
      *   end: number}): void, readonly points: ?{start: number, end: number},

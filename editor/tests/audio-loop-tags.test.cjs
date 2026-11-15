@@ -267,10 +267,11 @@ test('the editor loads the loop-tag reader after the asset reader it depends on'
 test('the Audio Player routes every loop switch through the loop-point aware setter', () => {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'AudioPlayer.js'), 'utf8');
     const rawAssignments = source.match(/audio\.loop\s*=/g) || [];
-    // The one assignment lives inside setChannelLoop; nothing else may
-    // hand the media element a whole-file loop behind the loop points.
+    // The one assignment is setChannelLoop's fallback for when the loop
+    // controller is missing; nothing else may hand the media element a
+    // whole-file loop behind the loop points.
     assert.equal(rawAssignments.length, 1);
-    assert.match(source, /setChannelLoop\(channel, wanted\)[\s\S]*channel\.audio\.loop = channel\.loopWanted && !channel\.loopPoints/);
+    assert.match(source, /setChannelLoop\(channel, wanted\)[\s\S]*?loopPlayback\.setLoop\(channel\.loopWanted\)[\s\S]*?else channel\.audio\.loop = channel\.loopWanted/);
     assert.match(source, /loadLoopPoints\(currentChannel, track\)/);
     assert.match(source, /loadLoopPoints\(channel, channel\.currentTrack\)/);
     assert.match(source, /RRAudioLoopTags/);
@@ -396,4 +397,53 @@ test('the Resource Manager previews audio through the loop controller and dispos
     assert.match(source, /attachLoopPlayback\(audio, \{ loop: toggle\.checked \}\)/);
     assert.match(source, /loopPointsFromFile\(record\.physicalAbsolutePath\)/);
     assert.match(source, /clearPreview\(\) \{[\s\S]*?this\.audioLoop\?\.dispose\(\)/);
+});
+
+test('the Audio Player channels loop through the shared controller', async () => {
+    const vm = require('node:vm');
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'AudioPlayer.js'), 'utf8');
+    const tags = { ...LoopTags, loopPointsFromFile: async file => (file === 'Tagged.ogg' ? { start: 2, end: 6 } : null) };
+    const AudioPlayer = vm.runInNewContext(`${source}\nAudioPlayer;`, { console, Intl, Symbol, window: { RRAudioLoopTags: tags } });
+    const player = Object.create(AudioPlayer.prototype);
+    const queue = [];
+    const saved = { raf: globalThis.requestAnimationFrame, caf: globalThis.cancelAnimationFrame };
+    globalThis.requestAnimationFrame = fn => { queue.push(fn); return queue.length; };
+    globalThis.cancelAnimationFrame = id => { queue[id - 1] = null; };
+    const frame = () => { for (const fn of queue.splice(0)) if (fn) fn(); };
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+    try {
+        const channel = { audio: fakeAudio(), loopWanted: true, loopPlayback: null, currentTrack: null, playing: false };
+        const tagged = { absolutePath: 'Tagged.ogg' };
+        channel.currentTrack = tagged;
+        player.loadLoopPoints(channel, tagged);
+        assert.equal(channel.audio.loop, true, 'until the tags are read, the whole file loops');
+        await settle();
+        assert.deepEqual(channel.loopPlayback.points, { start: 2, end: 6 });
+        assert.equal(channel.audio.loop, false);
+        assert.equal(player.channelWrapsAtLoopPoints(channel), true);
+
+        channel.audio.play();
+        channel.audio.currentTime = 6.5;
+        frame();
+        assert.ok(Math.abs(channel.audio.currentTime - 2.5) < 1e-9);
+
+        player.setChannelLoop(channel, false);
+        assert.equal(player.channelWrapsAtLoopPoints(channel), false);
+        channel.audio.currentTime = 6.5;
+        frame();
+        assert.equal(channel.audio.currentTime, 6.5, 'the loop switch reaches the controller');
+        player.setChannelLoop(channel, true);
+
+        // A read that answers after the track changed is dropped.
+        const plain = { absolutePath: 'Plain.ogg' };
+        player.loadLoopPoints(channel, tagged);
+        channel.currentTrack = plain;
+        player.loadLoopPoints(channel, plain);
+        await settle();
+        assert.equal(channel.loopPlayback.points, null);
+        assert.equal(channel.audio.loop, true, 'an untagged track loops whole');
+    } finally {
+        globalThis.requestAnimationFrame = saved.raf;
+        globalThis.cancelAnimationFrame = saved.caf;
+    }
 });
