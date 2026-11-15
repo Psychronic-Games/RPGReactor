@@ -714,3 +714,37 @@ test('without a Web Audio graph the controller never decodes', () => withQueuedF
     assert.equal(context.decoded, 0);
     assert.equal(loop.seamless, false);
 }));
+
+test('seamless looping waits for the element clock to move, as in a hidden window', () => withQueuedFrames(async () => {
+    const { audio, context, elementSource, output, loop } = seamlessRig();
+    loop.useWebAudio(context, elementSource, output);
+    loop.setPoints({ start: 2, end: 6 }, 'Track.ogg');
+    await settle();
+    // Chromium holds back a hidden page's first media load: play() leaves
+    // the element unpaused with nothing loaded.
+    audio.readyState = 0;
+    audio.play();
+    assert.equal(loop.seamless, false, 'no sound ahead of a stopped clock');
+    audio.readyState = 4;
+    audio.emit('playing');
+    assert.equal(loop.seamless, true);
+    assert.equal(live(context).at(-1).started.offset, 0, 'the buffer starts where the element does');
+
+    // Stopping for data stops the buffer with it; our own seek does not.
+    audio.readyState = 2;
+    audio.emit('waiting');
+    assert.equal(loop.seamless, false);
+    audio.readyState = 4;
+    audio.emit('playing');
+    assert.equal(loop.seamless, true);
+    context.currentTime = 6.5;
+    audio.currentTime = 6.1;
+    audio.emit('timeupdate');
+    audio.readyState = 1;
+    audio.emit('seeking');
+    audio.emit('waiting');
+    assert.equal(loop.seamless, true, 'a seek of our own keeps the buffer going');
+    audio.readyState = 4;
+    audio.emit('seeked');
+    assert.equal(loop.seamless, true);
+}));

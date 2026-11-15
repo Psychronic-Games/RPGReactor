@@ -512,12 +512,23 @@
                 fadeTo(graph.gate.gain, 1);
             }
         };
+        // Whether the element's clock is moving. play() alone does not start
+        // it: an element still loading -- Chromium holds back a page's first
+        // media load while the page is hidden -- has paused false and a clock
+        // stopped at its start, so the buffer waits for it rather than
+        // playing ahead of the controls. A seek of our own, or the wrap at
+        // the end of the file, does not count as stopping.
+        const elementRunning = () => {
+            if (audio.ended && running) return true;
+            if (audio.paused) return false;
+            if (running && selfSeeks > 0) return true;
+            return !(audio.readyState < 3);
+        };
         // The buffer plays exactly while the element would be audibly looping
         // at loop points: looping, playing, before the loop end, not mid-seek.
         const sync = () => {
             if (!graph) return;
-            const playing = !audio.paused || (audio.ended && running);
-            const want = !disposed && loop && !!points && !!buffer && armed && !seekPending && !!playing
+            const want = !disposed && loop && !!points && !!buffer && armed && !seekPending && elementRunning()
                 && graph.context.state !== 'closed';
             if (want && !running) startBuffer();
             else if (!want && running) stopBuffer();
@@ -650,6 +661,8 @@
         // frames stop, in a hidden window.
         const listeners = {
             play: onPlay, pause: onPause, timeupdate: check, seeking: onSeeking, seeked: onSeeked,
+            // The element's clock starting, or stopping for data.
+            playing: sync, canplay: sync, waiting: sync,
             loadstart: onLoadStart, ended: onEnded, loadedmetadata: fit,
             ratechange: onRateChange, volumechange: onVolumeChange
         };
