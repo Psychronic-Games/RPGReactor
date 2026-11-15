@@ -517,6 +517,8 @@ WebAudio.prototype._startLoading = function() {
         this._lastUpdateTime = currentTime - 0.5;
         this._isError = false;
         this._isLoaded = false;
+        this._loadedSize = -1;
+        this._decodedSize = 0;
         this._destroyDecoder();
         if (this._shouldUseDecoder()) {
             this._createDecoder();
@@ -647,6 +649,7 @@ WebAudio.prototype._onXhrLoad = function(xhr) {
     if (xhr.status < 400) {
         this._data = new Uint8Array(xhr.response);
         this._isLoaded = true;
+        this._loadedSize = this._data.length;
         this._updateBuffer();
     } else {
         this._onError();
@@ -671,8 +674,17 @@ WebAudio.prototype._onFetch = function(response, generation) {
                 this._isLoaded = true;
                 if (this._fetchedSize > 0) {
                     this._concatenateFetchedData();
+                    this._loadedSize = this._data.length;
                     this._updateBuffer();
                     this._data = null;
+                } else {
+                    this._loadedSize = this._data ? this._data.length : 0;
+                    // The whole file may already be decoded, before the
+                    // load was known to be complete: settle a loop read
+                    // against the whole track (_loopSampleRate) here.
+                    if (this._buffers.length > 0 && this._updateLoopTimes() && this._sourceNodes.length > 0) {
+                        this._refreshSourceNode();
+                    }
                 }
                 return 0;
             } else {
@@ -817,10 +829,13 @@ WebAudio.prototype._decodeAudioData = function(arrayBuffer) {
         // it comes from the newest attempt on fully fetched data.
         const generation = (this._decodeGeneration || 0) + 1;
         this._decodeGeneration = generation;
+        // How much of the file this decode covers, for _loopSampleRate.
+        const size = this._data ? this._data.length : 0;
         WebAudio._context
             .decodeAudioData(arrayBuffer.slice())
             .then(buffer => {
                 if (generation === this._decodeGeneration) {
+                    this._decodedSize = size;
                     this._onDecode(buffer);
                 }
             })
@@ -879,6 +894,24 @@ WebAudio._decodePcmWav = function(arrayBuffer) {
     }
 };
 
+// How far past the decoded track a loop end may sit and still count as
+// ending with it: decoders round a track's length by a few milliseconds.
+WebAudio.LOOP_END_SLACK = 0.05;
+
+// The rate the loop's sample counts convert at. An Opus file's counts are
+// read at the original rate OpusHead records, but some taggers count at
+// Opus's own 48 kHz whatever the header says. Once the whole file is
+// decoded, a loop that would end past the track at the recorded rate but
+// fits at 48 kHz is read at 48 kHz; when both fit, the recorded rate holds.
+WebAudio.prototype._loopSampleRate = function() {
+    const rate = this._sampleRate;
+    const whole = this._isLoaded && this._decodedSize === this._loadedSize;
+    if (!this._opusInputRate || !whole || !(this._loopLength > 0)) return rate;
+    const end = this._loopStart + this._loopLength;
+    const limit = this._totalTime + WebAudio.LOOP_END_SLACK;
+    return end / rate > limit && end / 48000 <= limit ? 48000 : rate;
+};
+
 WebAudio.prototype._onDecode = function(buffer) {
     if (!this._shouldUseDecoder()) {
         this._buffers = [];
@@ -886,17 +919,25 @@ WebAudio.prototype._onDecode = function(buffer) {
     }
     this._buffers.push(buffer);
     this._totalTime += buffer.duration;
-    if (this._loopLength > 0 && this._sampleRate > 0) {
-        this._loopStartTime = this._loopStart / this._sampleRate;
-        this._loopLengthTime = this._loopLength / this._sampleRate;
-    } else {
-        this._loopStartTime = 0;
-        this._loopLengthTime = this._totalTime;
-    }
+    this._updateLoopTimes();
     if (this._sourceNodes.length > 0) {
         this._refreshSourceNode();
     }
     this._onLoad();
+};
+
+WebAudio.prototype._updateLoopTimes = function() {
+    const startTime = this._loopStartTime;
+    const lengthTime = this._loopLengthTime;
+    const loopRate = this._loopSampleRate();
+    if (this._loopLength > 0 && loopRate > 0) {
+        this._loopStartTime = this._loopStart / loopRate;
+        this._loopLengthTime = this._loopLength / loopRate;
+    } else {
+        this._loopStartTime = 0;
+        this._loopLengthTime = this._totalTime;
+    }
+    return this._loopStartTime !== startTime || this._loopLengthTime !== lengthTime;
 };
 
 WebAudio.prototype._refreshSourceNode = function() {
@@ -1122,13 +1163,16 @@ WebAudio.prototype._isOggOpus = function(view) {
 // FLAC comment block after its 8-byte magic. The sample counts convert at
 // the input sample rate OpusHead records, the rate of the source the tags
 // were measured against; Opus itself always decodes at 48 kHz, which an
-// unspecified (0) rate falls back to.
+// unspecified (0) rate falls back to. Some taggers count at 48 kHz whatever
+// the header records, which _loopSampleRate catches once the track's length
+// is known.
 WebAudio.prototype._readOpusLoopComments = function(view) {
     const packets = this._readOggPackets(view, 2);
     const head = packets[0];
     if (head && head.byteLength >= 16) {
         const rate = head.getUint32(12, true);
         this._sampleRate = rate > 0 ? rate : 48000;
+        this._opusInputRate = rate > 0 && rate !== 48000;
     }
     const tags = packets[1];
     if (

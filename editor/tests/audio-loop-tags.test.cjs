@@ -166,8 +166,25 @@ function opusFile(inputRate, comments) {
 
 test('OGG Opus reads OpusTags at the source rate OpusHead records', () => {
     const bytes = opusFile(44100, ['ENCODER=opusenc', 'LOOPSTART=88200', 'LOOPLENGTH=132300']);
-    assert.deepEqual(LoopTags.parseLoopTags(bytes), { loopStart: 88200, loopLength: 132300, sampleRate: 44100, needMore: false });
-    assert.deepEqual(LoopTags.loopPointsFromBytes(bytes), { start: 2, end: 5 });
+    assert.deepEqual(LoopTags.parseLoopTags(bytes), { loopStart: 88200, loopLength: 132300, sampleRate: 44100, opusInputRate: true, needMore: false });
+    const points = LoopTags.loopPointsFromBytes(bytes);
+    assert.deepEqual({ start: points.start, end: points.end }, { start: 2, end: 5 });
+    assert.deepEqual(points.at48k, { start: 1.8375, end: 4.59375 });
+});
+
+test('fitLoopPoints reads an Opus loop at 48 kHz only when it overruns the track at the header rate', () => {
+    // Header 44100, counted at 48 kHz: 7828363 samples is the whole 163.09 s track.
+    const overrun = LoopTags.loopPointsFromBytes(opusFile(44100, ['LOOPSTART=96000', 'LOOPLENGTH=7732363']));
+    assert.deepEqual(LoopTags.fitLoopPoints(overrun, 163.09), { start: 2, end: 7828363 / 48000 });
+    // Length not known yet: the recorded rate holds until it is.
+    assert.equal(LoopTags.fitLoopPoints(overrun, NaN), overrun);
+    // Fits at the recorded rate: kept, even though it would fit at 48 kHz too.
+    const fits = LoopTags.loopPointsFromBytes(opusFile(44100, ['LOOPSTART=88200', 'LOOPLENGTH=132300']));
+    assert.equal(LoopTags.fitLoopPoints(fits, 6), fits);
+    // Not Opus, or a 48 kHz header: nothing to choose between.
+    const flac = LoopTags.loopPointsFromBytes(flacFile(44100, ['LOOPSTART=0', 'LOOPLENGTH=7828363']));
+    assert.equal(LoopTags.fitLoopPoints(flac, 163.09), flac);
+    assert.equal(LoopTags.loopPointsFromBytes(opusFile(48000, ['LOOPSTART=0', 'LOOPLENGTH=100'])).at48k, undefined);
 });
 
 test('OGG Opus with no recorded rate converts at 48 kHz, and reads LOOP_START/LOOP_END', () => {

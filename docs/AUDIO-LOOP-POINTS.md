@@ -17,7 +17,7 @@ The loop is two numbers counted in samples: where the loop starts, and how long 
 | Format | Where the loop lives | Tag names | Sample rate the numbers are counted at |
 | --- | --- | --- | --- |
 | Ogg Vorbis | comment header | `LOOPSTART`/`LOOPLENGTH`, or `LOOP_START`/`LOOP_END`; any case | the identification header |
-| Ogg Opus | `OpusTags` comments | as Vorbis | the original sample rate `OpusHead` records; 48000 when it records none |
+| Ogg Opus | `OpusTags` comments | as Vorbis | the original sample rate `OpusHead` records; 48000 when it records none, or when the loop only fits the track at 48000 (see [below](#when-an-opus-loop-is-counted-at-48-khz)) |
 | FLAC | `VORBIS_COMMENT` block | as Vorbis | `STREAMINFO` |
 | MP3 | ID3v2 `TXXX` frames | `LOOPSTART`, `LOOPLENGTH`; any case | the first MPEG frame header |
 | WAV | sampler (`smpl`) chunk, first loop | the loop's start and end | the format (`fmt `) chunk |
@@ -39,9 +39,15 @@ Only BGM and BGS loop. ME and SE play once, and their loop tags are ignored. A t
 3. Check it with `opusinfo theme.ogg`. The comments list should show both tags, and `Original sample rate` should be the rate of the WAV you measured in. `opusenc` writes the source file's rate there, which is what makes the numbers line up.
 4. Put `theme.ogg` in `audio/bgm/` (or `audio/bgs/`) and pick it as usual.
 
-**The one thing that breaks an Opus loop** is numbers counted at one rate in a file whose header records another. Opus always decodes at 48 kHz, but the runtime converts the loop at the original rate the header records, because that is the rate a tool working from the source counted in. A file converted from an already-tagged file by a tool that resamples to 48 kHz and copies the old tags unchanged can end up recording 48000 while its numbers still count 44100 samples a second, and then the loop lands about 9% early. `opusinfo` shows both the tags and the recorded rate, so it is the check.
-
 Opus files exported from another game or tool usually work as they are once renamed to `.ogg`, including those tagged `loop_start`/`loop_end`.
+
+### When an Opus loop is counted at 48 kHz
+
+Opus always decodes at 48 kHz, and some taggers count the loop in those samples whatever the header records; a loop finder working on the decoded audio does. So an Opus file whose header says 44100 can hold numbers counted at either rate, and the file alone does not say which.
+
+The runtime reads them at the recorded rate unless that is impossible. Once the whole track is decoded and its length is known, a loop that would end past the end of the track at the recorded rate, but ends within it at 48 kHz, is read at 48 kHz. For example, a 163.09 s track tagged `LOOPLENGTH=7828363` under a 44100 header would end at 177.5 s, so it is read at 48 kHz and ends at the track's end. The editor's Audio Player applies the same rule once the track's length is known.
+
+What it cannot catch is a loop that fits the track at both rates. That is read at the recorded rate, and if it was counted at 48 kHz it lands about 9% late; if a file counted at 44100 has a header recording 48000, it lands about 9% early. `opusinfo` shows both the tags and the recorded rate: when they disagree, re-encode from the WAV with `opusenc`, which records the rate you measured in.
 
 ## Opus elsewhere in the engine
 

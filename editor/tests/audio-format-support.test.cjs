@@ -232,6 +232,45 @@ test('LOOPLENGTH outranks a LOOP_END in the same comments', () => {
     assert.equal(buffer._loopLength, 200);
 });
 
+test('an Opus loop that overruns the track at the header rate but fits at 48 kHz is read at 48 kHz', () => {
+    const context = loadAudioRuntime();
+    // A 163.09 s track whose header records 44100 and whose tags were
+    // counted at 48 kHz: at 44.1 kHz the loop would end at 177.5 s.
+    const settle = (comments, { totalTime = 163.09, whole = true, inputRate = 44100 } = {}) => {
+        const buffer = bareBuffer(context);
+        buffer._readLoopComments(toArrayBuffer(buildOpus({ inputRate, comments })));
+        buffer._totalTime = totalTime;
+        buffer._isLoaded = whole;
+        buffer._loadedSize = 1000;
+        buffer._decodedSize = whole ? 1000 : 600;
+        buffer._updateLoopTimes();
+        return [+buffer._loopStartTime.toFixed(4), +(buffer._loopStartTime + buffer._loopLengthTime).toFixed(4)];
+    };
+    const overrun = ['LOOPSTART=96000', 'LOOPLENGTH=7732363'];
+    assert.deepEqual(settle(overrun), [2, 163.0909]);
+    // Until the whole file is decoded the recorded rate holds: a partial
+    // decode is shorter than the track, so it says nothing about the loop.
+    assert.deepEqual(settle(overrun, { whole: false }), [2.1769, 177.5139]);
+    // When the loop fits at the recorded rate, the recorded rate holds,
+    // even if it would also fit at 48 kHz.
+    assert.deepEqual(settle(['LOOPSTART=88200', 'LOOPLENGTH=132300'], { totalTime: 6 }), [2, 5]);
+    // A loop that overruns at both rates is left as tagged.
+    assert.deepEqual(settle(['LOOPSTART=0', 'LOOPLENGTH=9000000']), [0, 204.0816]);
+    // A 48 kHz header has nothing to fall back to.
+    assert.deepEqual(settle(['LOOPSTART=0', 'LOOPLENGTH=9000000'], { inputRate: 48000 }), [0, 187.5]);
+});
+
+test('the 48 kHz fallback is for Opus only', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    buffer._readLoopComments(toArrayBuffer(buildVorbis({
+        sampleRate: 44100, comments: ['LOOPSTART=0', 'LOOPLENGTH=7828363']
+    })));
+    Object.assign(buffer, { _totalTime: 163.09, _isLoaded: true, _loadedSize: 1, _decodedSize: 1 });
+    buffer._updateLoopTimes();
+    assert.equal(+buffer._loopLengthTime.toFixed(4), 177.5139);
+});
+
 test('Ogg Opus with an unspecified input rate converts at 48 kHz', () => {
     const context = loadAudioRuntime();
     const buffer = bareBuffer(context);

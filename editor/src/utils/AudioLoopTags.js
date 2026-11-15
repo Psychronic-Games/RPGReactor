@@ -126,6 +126,8 @@
             if (head.length >= 16) {
                 const rate = new DataView(head.buffer, head.byteOffset, head.byteLength).getUint32(12, true);
                 tags.sampleRate = rate > 0 ? rate : 48000;
+                // Counts may still be at Opus's own 48 kHz; fitLoopPoints decides.
+                if (rate > 0 && rate !== 48000) tags.opusInputRate = true;
             }
             const opusTags = packets[1];
             if (opusTags && fourChars(opusTags, 0) === 'Opus' && fourChars(opusTags, 4) === 'Tags') {
@@ -293,7 +295,29 @@
     function loopPointsFromTags(tags) {
         if (!tags || !(tags.loopLength > 0) || !(tags.sampleRate > 0)) return null;
         const start = tags.loopStart / tags.sampleRate;
-        return { start, end: start + tags.loopLength / tags.sampleRate };
+        const points = { start, end: start + tags.loopLength / tags.sampleRate };
+        if (tags.opusInputRate) {
+            // The same counts at 48 kHz, for fitLoopPoints.
+            points.at48k = { start: tags.loopStart / 48000, end: (tags.loopStart + tags.loopLength) / 48000 };
+        }
+        return points;
+    }
+
+    // How far past the track a loop end may sit and still count as ending
+    // with it; the runtime's WebAudio.LOOP_END_SLACK.
+    const LOOP_END_SLACK = 0.05;
+
+    /**
+     * The loop points to use once the track's length is known, as the
+     * runtime's _loopSampleRate decides: an Opus loop that would end past
+     * the track at the rate OpusHead records, but fits at 48 kHz, was
+     * counted at 48 kHz. When both fit, or the length is not known yet,
+     * the recorded rate holds.
+     */
+    function fitLoopPoints(points, durationSeconds) {
+        if (!points || !points.at48k || !(durationSeconds > 0)) return points;
+        const limit = durationSeconds + LOOP_END_SLACK;
+        return points.end > limit && points.at48k.end <= limit ? points.at48k : points;
     }
 
     function loopPointsFromBytes(bytes) {
@@ -347,7 +371,7 @@
         return null;
     }
 
-    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile };
+    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile, fitLoopPoints };
     root.RRAudioLoopTags = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
