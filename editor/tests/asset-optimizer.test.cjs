@@ -77,6 +77,32 @@ test('OGG optimization passes explicit quality and preserves loop comments', asy
     }
 });
 
+test('OGG optimization leaves an Opus stream untouched', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-opus-opt-'));
+    const target = path.join(root, 'Theme.ogg');
+    try {
+        const page = Buffer.alloc(28);
+        page.write('OggS', 0, 'latin1');
+        page[26] = 1;  // one segment
+        page[27] = 19; // OpusHead is 19 bytes
+        const head = Buffer.alloc(19);
+        head.write('OpusHead', 0, 'latin1');
+        head.writeUInt32LE(44100, 12);
+        const original = Buffer.concat([page, head, Buffer.from(`OggS${'x'.repeat(500)}LOOPSTART=88200\0LOOPLENGTH=132300`)]);
+        fs.writeFileSync(target, original);
+        assert.equal(optimizer.isOggOpus(original), true);
+        const result = await optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async () => {
+            assert.fail('an Opus file must not be re-encoded');
+        });
+        assert.equal(result.changed, false);
+        assert.ok(fs.readFileSync(target).equals(original));
+        // A Vorbis stream is still compressed.
+        assert.equal(optimizer.isOggOpus(Buffer.from(`OggS${'x'.repeat(500)}`)), false);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('OGG optimization carries embedded cover art through the re-encode', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-art-'));
     const target = path.join(root, 'Theme.ogg');

@@ -433,6 +433,13 @@ function verifyAudioHeader(buffer, ext) {
     return false;
 }
 
+// An Ogg file whose first packet is OpusHead rather than Vorbis's header.
+function isOggOpus(buffer) {
+    if (buffer.length < 27 || buffer.toString('latin1', 0, 4) !== 'OggS') return false;
+    const data = 27 + buffer[26];
+    return data + 8 <= buffer.length && buffer.toString('latin1', data, data + 8) === 'OpusHead';
+}
+
 // Re-encode an audio file in place (OGG, MP3, M4A keep their container).
 // Embedded cover art rides along: back into the comment header for Ogg,
 // as a copied attached-picture stream for MP3 and M4A. Art must never
@@ -440,6 +447,15 @@ function verifyAudioHeader(buffer, ext) {
 async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfmpeg) {
     const ext = path.extname(filePath).toLowerCase();
     const original = fs.readFileSync(filePath);
+    // Opus is left as it is. Re-encoding it to Vorbis stacks a second lossy
+    // pass on one already at least as compact, and it breaks the loop:
+    // FFmpeg decodes Opus at 48 kHz while copying LOOPSTART/LOOPLENGTH,
+    // counted at the source rate OpusHead records, unchanged, and the
+    // runtime's Vorbis reader ignores the LOOP_START/LOOP_END pair Opus
+    // files often carry instead.
+    if (ext === '.ogg' && isOggOpus(original)) {
+        return { before: original.length, after: original.length, changed: false };
+    }
     const originalStat = fs.statSync(filePath);
     const required = requiredLoopTags(original, ext);
     const codecArgs = ext === '.ogg' ? ['-c:a', 'libvorbis', '-q:a', String(quality)]
@@ -681,6 +697,7 @@ module.exports = {
     flacPictureComment,
     oggDurationSeconds,
     verifyOggDuration,
+    isOggOpus,
     optimizeAudioFile,
     optimizeStagedAssets,
 };
