@@ -136,7 +136,149 @@ function buildFlac({ sampleRate = 48000, comments = [] } = {}) {
     ]);
 }
 
+function commentBlock(comments) {
+    const parts = [u32le(7), Buffer.from('rr-test'), u32le(comments.length)];
+    for (const comment of comments) {
+        const encoded = Buffer.from(comment, 'utf8');
+        parts.push(u32le(encoded.length), encoded);
+    }
+    return Buffer.concat(parts);
+}
+
+/**
+ * Lays packets out as Ogg pages, each packet starting a new page and split
+ * across pages of at most `maxSegments` lacing values (CRC left zero; the
+ * runtime does not check it).
+ */
+function buildOgg(packets, { maxSegments = 255 } = {}) {
+    const pages = [];
+    let sequence = 0;
+    for (const packet of packets) {
+        const lacing = [];
+        let left = packet.length;
+        while (left >= 255) { lacing.push(255); left -= 255; }
+        lacing.push(left);
+        let offset = 0;
+        for (let first = 0; first < lacing.length; first += maxSegments) {
+            const table = lacing.slice(first, first + maxSegments);
+            const size = table.reduce((sum, value) => sum + value, 0);
+            const header = Buffer.alloc(27);
+            header.write('OggS', 0, 'ascii');
+            header[5] = first > 0 ? 1 : 0; // continued packet
+            header.writeUInt32LE(sequence++, 18);
+            header[26] = table.length;
+            pages.push(header, Buffer.from(table), packet.subarray(offset, offset + size));
+            offset += size;
+        }
+    }
+    return Buffer.concat(pages);
+}
+
+function buildOpus({ inputRate = 44100, comments = [], maxSegments } = {}) {
+    const head = Buffer.alloc(19);
+    head.write('OpusHead', 0, 'ascii');
+    head[8] = 1;                       // version
+    head[9] = 2;                       // channels
+    head.writeUInt16LE(312, 10);       // pre-skip
+    head.writeUInt32LE(inputRate, 12); // input sample rate
+    const tags = Buffer.concat([Buffer.from('OpusTags'), commentBlock(comments)]);
+    return buildOgg([head, tags], { maxSegments });
+}
+
+function buildVorbis({ sampleRate = 44100, comments = [] } = {}) {
+    const ident = Buffer.alloc(30);
+    ident[0] = 1;
+    ident.write('vorbis', 1, 'ascii');
+    ident.writeUInt32LE(sampleRate, 12);
+    const comment = Buffer.concat([
+        Buffer.from([3]), Buffer.from('vorbis'), commentBlock(comments), Buffer.from([1, 0])
+    ]);
+    return buildOgg([ident, comment]);
+}
+
 // ── Loop metadata ────────────────────────────────────────────────────
+
+test('Ogg Opus OpusTags yield loop points at the header input rate', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    buffer._readLoopComments(toArrayBuffer(buildOpus({
+        inputRate: 44100,
+        comments: ['TITLE=Field', 'LOOPSTART=264600', 'LOOPLENGTH=1323000']
+    })));
+    assert.equal(buffer._sampleRate, 44100);
+    assert.equal(buffer._loopStart, 264600);
+    assert.equal(buffer._loopLength, 1323000);
+});
+
+test('Ogg Opus loop_start/loop_end pairs set the loop from start to end', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    // The order and case one ripped game soundtrack ships with.
+    buffer._readLoopComments(toArrayBuffer(buildOpus({
+        inputRate: 48000, comments: ['loop_end=5967968', 'loop_start=2895840']
+    })));
+    assert.equal(buffer._sampleRate, 48000);
+    assert.equal(buffer._loopStart, 2895840);
+    assert.equal(buffer._loopLength, 5967968 - 2895840);
+});
+
+test('LOOPLENGTH outranks a LOOP_END in the same comments', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    buffer._readLoopComments(toArrayBuffer(buildFlac({
+        comments: ['LOOP_START=50', 'LOOP_END=900', 'LOOPSTART=100', 'LOOPLENGTH=200']
+    })));
+    assert.equal(buffer._loopStart, 100);
+    assert.equal(buffer._loopLength, 200);
+});
+
+test('Ogg Opus with an unspecified input rate converts at 48 kHz', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    buffer._readLoopComments(toArrayBuffer(buildOpus({
+        inputRate: 0, comments: ['loopstart=48000', 'LOOPLENGTH=96000']
+    })));
+    assert.equal(buffer._sampleRate, 48000);
+    assert.equal(buffer._loopStart, 48000);
+    assert.equal(buffer._loopLength, 96000);
+});
+
+test('Ogg Opus comments continued across pages are joined', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    // Cover art ahead of the loop tags pushes them onto a later page.
+    const art = 'METADATA_BLOCK_PICTURE=' + 'A'.repeat(4000);
+    const opus = buildOpus({
+        comments: [art, 'LOOPSTART=100', 'LOOPLENGTH=200'], maxSegments: 4
+    });
+    buffer._readLoopComments(toArrayBuffer(opus));
+    assert.equal(buffer._loopStart, 100);
+    assert.equal(buffer._loopLength, 200);
+});
+
+test('Ogg Opus parsing tolerates a truncated streaming prefix', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    const opus = buildOpus({ comments: ['LOOPSTART=10', 'LOOPLENGTH=20'] });
+    for (const end of [0, 20, 27, 40, opus.length - 1]) {
+        buffer._readLoopComments(toArrayBuffer(opus.subarray(0, end)));
+        assert.equal(buffer._loopLength, 0, `prefix of ${end} bytes`);
+    }
+    buffer._readLoopComments(toArrayBuffer(opus));
+    assert.equal(buffer._loopStart, 10);
+    assert.equal(buffer._loopLength, 20);
+});
+
+test('Ogg Vorbis loop comments still read through the Vorbis path', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    buffer._readLoopComments(toArrayBuffer(buildVorbis({
+        sampleRate: 22050, comments: ['LOOPSTART=300', 'LOOPLENGTH=600']
+    })));
+    assert.equal(buffer._sampleRate, 22050);
+    assert.equal(buffer._loopStart, 300);
+    assert.equal(buffer._loopLength, 600);
+});
 
 test('WAV smpl chunk yields sample rate and loop points', () => {
     const context = loadAudioRuntime();
