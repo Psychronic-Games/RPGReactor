@@ -447,3 +447,40 @@ test('the Audio Player channels loop through the shared controller', async () =>
         globalThis.cancelAnimationFrame = saved.caf;
     }
 });
+
+test('loop playback wraps on timeupdate too, for a window whose frames have stopped', () => withFrames(() => {
+    const audio = fakeAudio();
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: true });
+    loop.setPoints({ start: 2, end: 6 });
+    audio.play();
+    audio.currentTime = 6.5;
+    audio.emit('timeupdate');
+    assert.ok(Math.abs(audio.currentTime - 2.5) < 1e-9);
+}));
+
+test('a seek past the loop end is not wrapped by the seek\'s own timeupdate', () => withFrames(frame => {
+    const audio = fakeAudio();
+    const loop = LoopTags.attachLoopPlayback(audio, { loop: true });
+    loop.setPoints({ start: 2, end: 6 });
+    audio.play();
+    audio.currentTime = 4;
+    frame();
+    // Browsers fire seeking, then timeupdate, then seeked.
+    audio.emit('seeking');
+    audio.currentTime = 8;
+    frame();
+    audio.emit('timeupdate');
+    assert.equal(audio.currentTime, 8, 'nothing wraps while the seek is in flight');
+    audio.emit('seeked');
+    audio.emit('timeupdate');
+    frame();
+    assert.equal(audio.currentTime, 8, 'the tail plays out after the seek');
+    // A new source abandons a seek whose seeked never comes.
+    audio.emit('seeking');
+    audio.emit('loadstart');
+    audio.currentTime = 5;
+    frame();
+    audio.currentTime = 6.5;
+    frame();
+    assert.ok(Math.abs(audio.currentTime - 2.5) < 1e-9);
+}));

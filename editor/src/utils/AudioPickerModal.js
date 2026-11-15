@@ -183,10 +183,12 @@
         let pannerNode = null;
         let isPlaying = false;
         let loopActive = Boolean(options.loopDefault);
-        let loopPoints = null;
-        let loopArmed = true;
         let loopGeneration = 0;
-        let loopWatch = 0;
+        // The shared loop controller: wraps at the track's own loop points,
+        // or lets the element loop the whole file when it has none.
+        const loopTags = root.RRAudioLoopTags;
+        const loopPlayback = loopTags && loopTags.attachLoopPlayback
+            ? loopTags.attachLoopPlayback(audioElement, { loop: loopActive }) : null;
 
         const formatTime = seconds => {
             if (isNaN(seconds)) return '0:00';
@@ -208,6 +210,7 @@
         const releaseAudio = () => {
             loopGeneration++;
             stopAudio();
+            if (loopPlayback) loopPlayback.dispose();
             if (audioContext) {
                 try { audioContext.close(); } catch (e) {}
                 audioContext = null;
@@ -218,47 +221,19 @@
         };
 
         const applyLoopMode = () => {
-            audioElement.loop = loopActive && !loopPoints;
+            if (loopPlayback) loopPlayback.setLoop(loopActive);
+            else audioElement.loop = loopActive;
         };
 
-        const wrapLoopPoint = () => {
-            if (!loopActive || !loopPoints) return;
-            const time = audioElement.currentTime;
-            if (time < loopPoints.end) {
-                loopArmed = true;
-            } else if (loopArmed) {
-                const length = loopPoints.end - loopPoints.start;
-                audioElement.currentTime = loopPoints.start + ((time - loopPoints.end) % length);
-            }
-        };
-
-        const watchLoopPoints = () => {
-            if (loopWatch) return;
-            const raf = typeof root.requestAnimationFrame === 'function'
-                ? root.requestAnimationFrame.bind(root)
-                : callback => setTimeout(callback, 16);
-            const tick = () => {
-                loopWatch = 0;
-                if (!isPlaying || audioElement.paused || audioElement.ended || !loopPoints) return;
-                wrapLoopPoint();
-                loopWatch = raf(tick);
-            };
-            loopWatch = raf(tick);
-        };
-
+        // The read is asynchronous; a track picked since, or a closed
+        // picker, drops its answer.
         const loadLoopPoints = record => {
             const generation = ++loopGeneration;
-            loopPoints = null;
-            loopArmed = true;
+            if (loopPlayback) loopPlayback.setPoints(null);
             applyLoopMode();
-            const tags = root.RRAudioLoopTags;
-            if (!tags || !tags.loopPointsFromFile || !record?.absolutePath) return;
-            Promise.resolve(tags.loopPointsFromFile(record.absolutePath)).then(points => {
-                if (generation !== loopGeneration) return;
-                loopPoints = points && points.end > points.start ? points : null;
-                loopArmed = !loopPoints || audioElement.currentTime < loopPoints.end;
-                applyLoopMode();
-                watchLoopPoints();
+            if (!loopPlayback || !loopTags.loopPointsFromFile || !record?.absolutePath) return;
+            Promise.resolve(loopTags.loopPointsFromFile(record.absolutePath)).then(points => {
+                if (generation === loopGeneration) loopPlayback.setPoints(points);
             }).catch(() => {});
         };
 
@@ -317,19 +292,15 @@
             audioElement.play().then(() => {
                 isPlaying = true;
                 updateButtons();
-                watchLoopPoints();
             }).catch(err => {
                 console.error('Error playing audio:', err);
             });
         };
 
         audioElement.onended = () => {
-            if (loopActive && loopPoints) {
-                audioElement.currentTime = loopPoints.start;
-                loopArmed = true;
-                audioElement.play().catch(err => console.error('Error playing audio:', err));
-                return;
-            }
+            // The loop controller wraps a track that ends while looping at
+            // its loop points; only a track that played out stops here.
+            if (loopPlayback && loopPlayback.loop && loopPlayback.points) return;
             isPlaying = false;
             updateButtons();
         };
@@ -369,7 +340,6 @@
         });
         audioElement.addEventListener('timeupdate', () => {
             if (!audioElement.duration) return;
-            wrapLoopPoint();
             if (!isSeeking) {
                 seekSlider.value = (audioElement.currentTime / audioElement.duration) * 100;
                 seekCurrentTime.textContent = formatTime(audioElement.currentTime);
@@ -379,9 +349,6 @@
         audioElement.addEventListener('loadedmetadata', () => {
             seekDuration.textContent = formatTime(audioElement.duration);
             infoTime.textContent = `${formatTime(audioElement.currentTime)} / ${formatTime(audioElement.duration)}`;
-        });
-        audioElement.addEventListener('seeked', () => {
-            loopArmed = !loopPoints || audioElement.currentTime < loopPoints.end;
         });
 
         // ── Playback buttons + inline level controls ─────────────────────

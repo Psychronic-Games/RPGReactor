@@ -379,7 +379,8 @@
      * exact. A seek past the loop end plays the tail out instead of snapping
      * straight back; the loop re-arms once playback is before the end again.
      *
-     * Used by the Audio Player's channels and the Resource Manager's preview.
+     * Used by the Audio Player's channels, the Resource Manager's preview and
+     * the audio picker.
      *
      * @returns {{ setLoop(on: boolean): void, setPoints(points: ?{start: number,
      *   end: number}): void, readonly points: ?{start: number, end: number},
@@ -396,22 +397,35 @@
         let armed = true;
         let watch = 0;
         let disposed = false;
+        // Between 'seeking' and 'seeked' the position is the seek target and
+        // the loop has not been re-armed for it yet; the seek's own
+        // 'timeupdate' lands in that gap, so nothing wraps until it closes.
+        let seekPending = false;
 
         const syncNativeLoop = () => { audio.loop = loop && !points; };
         const rearm = () => { armed = !points || audio.currentTime < points.end; };
+        const check = () => {
+            if (disposed || !loop || !points || seekPending) return;
+            const time = audio.currentTime;
+            if (time < points.end) {
+                armed = true;
+            } else if (armed) {
+                audio.currentTime = points.start + ((time - points.end) % (points.end - points.start));
+            }
+        };
         const tick = () => {
             watch = 0;
             if (disposed || !points || audio.paused || audio.ended) return;
-            if (loop) {
-                const time = audio.currentTime;
-                if (time < points.end) {
-                    armed = true;
-                } else if (armed) {
-                    audio.currentTime = points.start + ((time - points.end) % (points.end - points.start));
-                }
-            }
+            check();
             watch = raf(tick);
         };
+        const onSeeking = () => { seekPending = true; };
+        const onSeeked = () => {
+            seekPending = false;
+            rearm();
+        };
+        // A new source abandons any seek in flight, and its 'seeked' with it.
+        const onLoadStart = () => { seekPending = false; };
         const startWatch = () => {
             if (!watch && !disposed && points) watch = raf(tick);
         };
@@ -433,10 +447,13 @@
             const played = audio.play();
             if (played && typeof played.catch === 'function') played.catch(() => {});
         };
-        audio.addEventListener('play', startWatch);
-        audio.addEventListener('seeked', rearm);
-        audio.addEventListener('ended', onEnded);
-        audio.addEventListener('loadedmetadata', fit);
+        // Frames give a tight wrap; 'timeupdate' keeps the loop going where
+        // frames stop, in a hidden window.
+        const listeners = {
+            play: startWatch, timeupdate: check, seeking: onSeeking, seeked: onSeeked,
+            loadstart: onLoadStart, ended: onEnded, loadedmetadata: fit
+        };
+        for (const [type, listener] of Object.entries(listeners)) audio.addEventListener(type, listener);
         syncNativeLoop();
 
         return {
@@ -456,10 +473,7 @@
                 disposed = true;
                 if (watch) cancel(watch);
                 watch = 0;
-                audio.removeEventListener('play', startWatch);
-                audio.removeEventListener('seeked', rearm);
-                audio.removeEventListener('ended', onEnded);
-                audio.removeEventListener('loadedmetadata', fit);
+                for (const [type, listener] of Object.entries(listeners)) audio.removeEventListener(type, listener);
             }
         };
     }
