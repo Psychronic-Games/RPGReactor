@@ -372,25 +372,65 @@
     }
 
     /**
+     * The whole of a track's bytes, decrypted, for decoding: the same reader
+     * the tag scan uses, or a fetch of the served file in the browser editor.
+     */
+    async function readTrackBytes(filePath) {
+        if (!filePath) return null;
+        const assets = root.RREncryptedAssets;
+        if (assets && assets.readAssetBytesAsync) {
+            const bytes = await assets.readAssetBytesAsync(filePath);
+            if (bytes) return bytes;
+        }
+        const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
+        if (host && host.mode === 'web' && typeof window.RPGReactorAssetUrl === 'function') {
+            try {
+                const response = await fetch(window.RPGReactorAssetUrl(filePath));
+                if (response.ok) return new Uint8Array(await response.arrayBuffer());
+            } catch (error) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    // Crossfade between the element and the buffer when either takes over,
+    // so a hand-over never clicks.
+    const HANDOVER_SECONDS = 0.01;
+
+    /**
      * Make a media element loop the way the game loops a BGM or BGS: from
      * the loop end back to the loop start when the track has loop points,
      * over the whole file when it has none, and not at all while looping is
-     * off. Wrapping keeps the overshoot past the loop end, so the phase stays
-     * exact. A seek past the loop end plays the tail out instead of snapping
+     * off. A seek past the loop end plays the tail out instead of snapping
      * straight back; the loop re-arms once playback is before the end again.
+     *
+     * Seamless looping. Given the element's Web Audio graph (useWebAudio) and
+     * the track's file (setPoints' second argument), the controller decodes
+     * the track and, while it loops at loop points, plays it from an
+     * AudioBufferSourceNode with loopStart/loopEnd -- the way the game's
+     * WebAudio plays a BGM -- so the wrap is sample-exact. The element keeps
+     * playing, silenced, as the clock the preview's controls read, and is
+     * moved to the buffer's position whenever it passes the loop end.
+     * Without a graph (no Web Audio, or the HTML-audio-only fallback) the
+     * element itself plays and is seeked back at the loop end, which wraps a
+     * frame late and can drop out briefly while the seek decodes.
      *
      * Used by the Audio Player's channels, the Resource Manager's preview and
      * the audio picker.
      *
      * @returns {{ setLoop(on: boolean): void, setPoints(points: ?{start: number,
-     *   end: number}): void, readonly points: ?{start: number, end: number},
-     *   readonly loop: boolean, dispose(): void }}
+     *   end: number}, filePath?: string): void, useWebAudio(context: AudioContext,
+     *   elementSource: AudioNode, output: AudioNode): boolean,
+     *   readonly points: ?{start: number, end: number}, readonly loop: boolean,
+     *   readonly seamless: boolean, dispose(): void }}
      */
     function attachLoopPlayback(audio, options = {}) {
         const raf = typeof root.requestAnimationFrame === 'function'
             ? callback => root.requestAnimationFrame(callback) : callback => setTimeout(callback, 16);
         const cancel = typeof root.cancelAnimationFrame === 'function'
             ? id => root.cancelAnimationFrame(id) : id => clearTimeout(id);
+        const readBytes = options.readBytes || readTrackBytes;
         let loop = !!options.loop;
         let raw = null;
         let points = null;
@@ -402,15 +442,123 @@
         // 'timeupdate' lands in that gap, so nothing wraps until it closes.
         let seekPending = false;
 
+        // Seamless playback: the graph it plays into, the decoded track, and
+        // the buffer source while one is running.
+        let graph = null;
+        let trackPath = null;
+        let buffer = null;
+        let decodeToken = 0;
+        let running = null; // { node, fade, ctxTime, offset, rate }
+        // Seeks and plays the controller makes itself, to keep the silenced
+        // element in step, are not the user's and must not restart the buffer.
+        let selfSeeks = 0;
+        let selfSeekTarget = 0;
+        let selfPlays = 0;
+
+        const loopLength = () => points.end - points.start;
+        const wrapTime = time => (time >= points.end
+            ? points.start + ((time - points.end) % loopLength()) : time);
         const syncNativeLoop = () => { audio.loop = loop && !points; };
         const rearm = () => { armed = !points || audio.currentTime < points.end; };
+        const elementVolume = () => (audio.muted ? 0 : (typeof audio.volume === 'number' ? audio.volume : 1));
+        const fadeTo = (param, value) => {
+            const now = graph.context.currentTime;
+            if (param.cancelScheduledValues) param.cancelScheduledValues(now);
+            if (param.setValueAtTime && param.linearRampToValueAtTime) {
+                param.setValueAtTime(param.value, now);
+                param.linearRampToValueAtTime(value, now + HANDOVER_SECONDS);
+            } else {
+                param.value = value;
+            }
+        };
+
+        /** Where the buffer is now, in track seconds, or null when none runs. */
+        const bufferTime = () => {
+            if (!running || !points) return null;
+            const elapsed = (graph.context.currentTime - running.ctxTime) * running.rate;
+            return wrapTime(running.offset + Math.max(0, elapsed));
+        };
+        const startBuffer = () => {
+            const context = graph.context;
+            const node = context.createBufferSource();
+            node.buffer = buffer;
+            node.loop = true;
+            node.loopStart = points.start;
+            node.loopEnd = points.end;
+            const rate = audio.playbackRate || 1;
+            node.playbackRate.value = rate;
+            const fade = context.createGain();
+            fade.gain.value = 0;
+            node.connect(fade);
+            fade.connect(graph.volume);
+            const offset = wrapTime(Math.max(0, audio.currentTime || 0));
+            node.start(0, offset);
+            running = { node, fade, ctxTime: context.currentTime, offset, rate };
+            fadeTo(fade.gain, 1);
+            fadeTo(graph.gate.gain, 0);
+        };
+        const stopBuffer = (immediate = false) => {
+            if (!running) return;
+            const { node, fade } = running;
+            running = null;
+            const when = immediate ? 0 : graph.context.currentTime + HANDOVER_SECONDS;
+            if (!immediate) fadeTo(fade.gain, 0);
+            try { node.stop(when); } catch (error) { /* already stopped */ }
+            if (node.addEventListener) node.addEventListener('ended', () => { try { fade.disconnect(); } catch (error) { /* gone */ } });
+            if (immediate) {
+                if (graph.gate.gain.cancelScheduledValues) graph.gate.gain.cancelScheduledValues(0);
+                graph.gate.gain.value = 1;
+            } else {
+                fadeTo(graph.gate.gain, 1);
+            }
+        };
+        // The buffer plays exactly while the element would be audibly looping
+        // at loop points: looping, playing, before the loop end, not mid-seek.
+        const sync = () => {
+            if (!graph) return;
+            const playing = !audio.paused || (audio.ended && running);
+            const want = !disposed && loop && !!points && !!buffer && armed && !seekPending && !!playing
+                && graph.context.state !== 'closed';
+            if (want && !running) startBuffer();
+            else if (!want && running) stopBuffer();
+        };
+        const selfSeek = time => {
+            selfSeeks++;
+            selfSeekTarget = time;
+            audio.currentTime = time;
+        };
+        const decode = () => {
+            if (!graph || !trackPath || buffer || !raw) return;
+            const token = ++decodeToken;
+            const context = graph.context;
+            Promise.resolve(readBytes(trackPath)).then(bytes => {
+                if (!bytes || token !== decodeToken || disposed) return null;
+                // decodeAudioData takes the buffer over; hand it a copy.
+                const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+                return context.decodeAudioData(copy);
+            }).then(decoded => {
+                if (!decoded || token !== decodeToken || disposed) return;
+                buffer = decoded;
+                sync();
+            }).catch(() => {});
+        };
+
         const check = () => {
             if (disposed || !loop || !points || seekPending) return;
             const time = audio.currentTime;
+            if (running) {
+                // The buffer loops by itself; keep the silenced element's
+                // position, which the controls show, inside the loop with it.
+                if (time >= points.end) selfSeek(bufferTime());
+                return;
+            }
             if (time < points.end) {
-                armed = true;
+                if (!armed) {
+                    armed = true;
+                    sync();
+                }
             } else if (armed) {
-                audio.currentTime = points.start + ((time - points.end) % (points.end - points.start));
+                audio.currentTime = wrapTime(time);
             }
         };
         const tick = () => {
@@ -419,42 +567,105 @@
             check();
             watch = raf(tick);
         };
-        const onSeeking = () => { seekPending = true; };
-        const onSeeked = () => {
-            seekPending = false;
-            rearm();
-        };
-        // A new source abandons any seek in flight, and its 'seeked' with it.
-        const onLoadStart = () => { seekPending = false; };
         const startWatch = () => {
             if (!watch && !disposed && points) watch = raf(tick);
+        };
+        const onPlay = () => {
+            startWatch();
+            if (selfPlays > 0) {
+                selfPlays--;
+                return;
+            }
+            sync();
+        };
+        const onPause = () => {
+            // An element reaching the end of the file pauses first; the
+            // buffer plays on through the wrap that 'ended' makes.
+            if (audio.ended && running) return;
+            sync();
+        };
+        const onSeeking = () => {
+            // One of ours, unless the position is somewhere else: a user seek
+            // that replaced it, whose single 'seeked' stands for both.
+            if (selfSeeks > 0 && Math.abs(audio.currentTime - selfSeekTarget) < 0.05) return;
+            selfSeeks = 0;
+            seekPending = true;
+            sync();
+        };
+        const onSeeked = () => {
+            if (!seekPending && selfSeeks > 0) {
+                selfSeeks = 0;
+                return;
+            }
+            seekPending = false;
+            selfSeeks = 0;
+            rearm();
+            sync();
+        };
+        // A new source abandons any seek in flight, and its 'seeked' with it.
+        const onLoadStart = () => {
+            seekPending = false;
+            selfSeeks = 0;
+            selfPlays = 0;
+        };
+        const onRateChange = () => {
+            if (!running) return;
+            const now = bufferTime();
+            running.offset = now;
+            running.ctxTime = graph.context.currentTime;
+            running.rate = audio.playbackRate || 1;
+            running.node.playbackRate.value = running.rate;
+        };
+        const onVolumeChange = () => {
+            if (graph) graph.volume.gain.value = elementVolume();
         };
         // An Opus loop may only be settled against the track's length, as the
         // game settles it; the length arrives with the metadata.
         const fit = () => {
             const fitted = fitLoopPoints(raw, audio.duration);
-            points = fitted && fitted.end > fitted.start ? fitted : null;
+            const next = fitted && fitted.end > fitted.start ? fitted : null;
+            const moved = !next || !points || next.start !== points.start || next.end !== points.end;
+            if (moved && running) stopBuffer(true);
+            points = next;
             rearm();
             syncNativeLoop();
             startWatch();
+            sync();
         };
         const onEnded = () => {
             // A loop that runs to the end of the file, or a tail auditioned
             // past the loop end, finishes the file; wrap like the game does.
             if (!loop || !points) return;
-            audio.currentTime = points.start;
-            armed = true;
+            if (running) {
+                selfSeek(bufferTime());
+                selfPlays++;
+            } else {
+                audio.currentTime = points.start;
+                armed = true;
+            }
             const played = audio.play();
             if (played && typeof played.catch === 'function') played.catch(() => {});
         };
         // Frames give a tight wrap; 'timeupdate' keeps the loop going where
         // frames stop, in a hidden window.
         const listeners = {
-            play: startWatch, timeupdate: check, seeking: onSeeking, seeked: onSeeked,
-            loadstart: onLoadStart, ended: onEnded, loadedmetadata: fit
+            play: onPlay, pause: onPause, timeupdate: check, seeking: onSeeking, seeked: onSeeked,
+            loadstart: onLoadStart, ended: onEnded, loadedmetadata: fit,
+            ratechange: onRateChange, volumechange: onVolumeChange
         };
         for (const [type, listener] of Object.entries(listeners)) audio.addEventListener(type, listener);
         syncNativeLoop();
+
+        const releaseGraph = () => {
+            if (!graph) return;
+            stopBuffer(true);
+            const { gate, volume, elementSource, output } = graph;
+            graph = null;
+            try { elementSource.disconnect(); } catch (error) { /* gone */ }
+            try { elementSource.connect(output); } catch (error) { /* context closed */ }
+            try { gate.disconnect(); } catch (error) { /* gone */ }
+            try { volume.disconnect(); } catch (error) { /* gone */ }
+        };
 
         return {
             setLoop(on) {
@@ -462,23 +673,65 @@
                 rearm();
                 syncNativeLoop();
                 startWatch();
+                sync();
             },
-            setPoints(value) {
+            /**
+             * The track's loop points, and the file they belong to; a new
+             * file drops the old decoded track, and is decoded when the
+             * controller has a graph to play it in.
+             */
+            setPoints(value, filePath) {
                 raw = value || null;
+                if (filePath !== undefined && (filePath || null) !== trackPath) {
+                    trackPath = filePath || null;
+                    if (running) stopBuffer(true);
+                    buffer = null;
+                    decodeToken++;
+                }
                 fit();
+                decode();
+            },
+            /**
+             * Play seamlessly into this graph: the element's source node is
+             * re-routed through a gate the controller closes while the buffer
+             * plays, and the buffer joins at `output`, so whatever follows it
+             * (volume, pan) applies to both.
+             */
+            useWebAudio(context, elementSource, output) {
+                if (disposed || !context || !elementSource || !output) return false;
+                if (graph && graph.context === context && graph.elementSource === elementSource) return true;
+                releaseGraph();
+                const gate = context.createGain();
+                const volume = context.createGain();
+                try { elementSource.disconnect(); } catch (error) { /* not connected */ }
+                elementSource.connect(gate);
+                gate.connect(output);
+                volume.connect(output);
+                volume.gain.value = elementVolume();
+                graph = { context, gate, volume, elementSource, output };
+                buffer = null;
+                decodeToken++;
+                decode();
+                sync();
+                return true;
             },
             get points() { return points; },
             get loop() { return loop; },
+            /** Whether the decoded buffer, not the element, is playing now. */
+            get seamless() { return !!running; },
             dispose() {
                 disposed = true;
                 if (watch) cancel(watch);
                 watch = 0;
                 for (const [type, listener] of Object.entries(listeners)) audio.removeEventListener(type, listener);
+                releaseGraph();
+                buffer = null;
+                decodeToken++;
             }
         };
     }
 
-    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile, fitLoopPoints, attachLoopPlayback };
+    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile, fitLoopPoints, attachLoopPlayback, readTrackBytes };
     root.RRAudioLoopTags = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

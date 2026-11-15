@@ -233,7 +233,7 @@
             applyLoopMode();
             if (!loopPlayback || !loopTags.loopPointsFromFile || !record?.absolutePath) return;
             Promise.resolve(loopTags.loopPointsFromFile(record.absolutePath)).then(points => {
-                if (generation === loopGeneration) loopPlayback.setPoints(points);
+                if (generation === loopGeneration) loopPlayback.setPoints(points, record.absolutePath);
             }).catch(() => {});
         };
 
@@ -272,6 +272,8 @@
                         } else {
                             sourceNode.connect(audioContext.destination);
                         }
+                        // Seamless looping joins ahead of the gain and pan.
+                        if (loopPlayback) loopPlayback.useWebAudio(audioContext, sourceNode, gainNode || audioContext.destination);
                     } catch (error) {
                         try { if (audioContext) audioContext.close(); } catch (closeError) {}
                         audioContext = null;

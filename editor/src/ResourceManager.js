@@ -1254,6 +1254,9 @@ class ResourceManager {
         this.modelPreview = null;
         this.audioLoop?.dispose();
         this.audioLoop = null;
+        // Chromium caps live AudioContexts per page; one per preview is closed with it.
+        try { this.audioContext?.close()?.catch?.(() => {}); } catch (error) { /* already closed */ }
+        this.audioContext = null;
         this.previewStage?.querySelectorAll('audio, video').forEach(media => {
             media.pause();
             media.removeAttribute('src');
@@ -1462,9 +1465,36 @@ class ResourceManager {
             .catch(() => null)
             .then(points => {
                 if (generation !== this.previewGeneration) return;
-                loop.setPoints(points);
+                loop.setPoints(points, record.physicalAbsolutePath);
+                if (points) this.useSeamlessAudioLoop(audio, loop);
                 describe();
             });
+    }
+
+    /**
+     * Route a tagged track's preview through Web Audio, so the loop
+     * controller can play it from the decoded track and wrap it exactly where
+     * the game does. Only a track with loop points needs it; anything else,
+     * or an editor without Web Audio, plays from the element as before.
+     */
+    useSeamlessAudioLoop(audio, loop) {
+        if (this.audioContext || typeof window === 'undefined') return;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass || window.reactor?.audioPlayer?.shouldUseHtmlAudioOnly?.()) return;
+        try {
+            const context = new AudioContextClass();
+            const source = context.createMediaElementSource(audio);
+            source.connect(context.destination);
+            this.audioContext = context;
+            loop.useWebAudio(context, source, context.destination);
+            // A context made outside a click may start suspended, which
+            // would silence the element routed through it.
+            const resume = () => { if (context.state === 'suspended') context.resume().catch(() => {}); };
+            resume();
+            audio.addEventListener('play', resume);
+        } catch (error) {
+            // The element keeps playing on its own.
+        }
     }
 
     previewError() {

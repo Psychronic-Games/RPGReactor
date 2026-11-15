@@ -508,13 +508,19 @@ class AudioPlayer {
      * Give a channel the shared loop controller, which wraps at the track's
      * own loop points -- keeping the overshoot, playing a seeked tail out,
      * settling an Opus loop against the track's length -- and lets the media
-     * element loop the whole file when the track has none. The Resource
-     * Manager's preview uses the same controller.
+     * element loop the whole file when the track has none. With the
+     * channel's Web Audio graph it loops seamlessly, from the decoded track
+     * into the channel's gain and pan. The Resource Manager's preview and the
+     * audio picker use the same controller.
      */
     attachChannelLoop(channel) {
         const tags = typeof window !== 'undefined' ? window.RRAudioLoopTags : null;
         if (!channel.loopPlayback && tags && tags.attachLoopPlayback) {
             channel.loopPlayback = tags.attachLoopPlayback(channel.audio, { loop: channel.loopWanted });
+            const context = this.audioPlayer && this.audioPlayer.audioContext;
+            if (context && channel.sourceNode && channel.gainNode) {
+                channel.loopPlayback.useWebAudio(context, channel.sourceNode, channel.gainNode);
+            }
         }
         return channel.loopPlayback;
     }
@@ -559,7 +565,7 @@ class AudioPlayer {
         promise.then(points => {
             // The controller settles an Opus loop against the track's length
             // now, and again once the media element knows that length.
-            if (channel.currentTrack === track) loop.setPoints(points);
+            if (channel.currentTrack === track) loop.setPoints(points, track.absolutePath);
         });
     }
 

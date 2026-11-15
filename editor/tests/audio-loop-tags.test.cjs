@@ -484,3 +484,233 @@ test('a seek past the loop end is not wrapped by the seek\'s own timeupdate', ()
     frame();
     assert.ok(Math.abs(audio.currentTime - 2.5) < 1e-9);
 }));
+
+// ── Seamless looping: the decoded track plays from a buffer source ─────────
+
+function fakeParam(value) {
+    return {
+        value,
+        cancelScheduledValues() {},
+        setValueAtTime() {},
+        // Ramps land at once; what is checked is where they go.
+        linearRampToValueAtTime(target) { this.value = target; }
+    };
+}
+
+function fakeNode(extra = {}) {
+    return Object.assign({
+        outputs: new Set(),
+        connect(node) { this.outputs.add(node); return node; },
+        disconnect() { this.outputs.clear(); }
+    }, extra);
+}
+
+function fakeContext() {
+    const context = {
+        currentTime: 0,
+        state: 'running',
+        sources: [],
+        decoded: 0,
+        createGain() { return fakeNode({ gain: fakeParam(1) }); },
+        createBufferSource() {
+            const node = fakeNode({
+                playbackRate: fakeParam(1), loop: false, loopStart: 0, loopEnd: 0, buffer: null,
+                started: null, stopped: null,
+                start(when, offset) { this.started = { when, offset }; },
+                stop(when) { this.stopped = when || 0; },
+                addEventListener() {}
+            });
+            context.sources.push(node);
+            return node;
+        },
+        async decodeAudioData(bytes) { context.decoded++; return { duration: 10, bytes }; }
+    };
+    return context;
+}
+
+function seamlessRig() {
+    const audio = fakeAudio();
+    Object.assign(audio, { muted: false, volume: 1, playbackRate: 1 });
+    audio.pause = function () { this.paused = true; this.emit('pause'); };
+    const context = fakeContext();
+    const elementSource = fakeNode();
+    const output = fakeNode();
+    elementSource.connect(output);
+    const reads = [];
+    const loop = LoopTags.attachLoopPlayback(audio, {
+        loop: true,
+        readBytes: async filePath => { reads.push(filePath); return new Uint8Array([1, 2, 3, 4]); }
+    });
+    return { audio, context, elementSource, output, loop, reads };
+}
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+// Frames by hand for async tests, always restored: a playing stand-in would
+// otherwise keep the controller's frame watch, and the runner, alive.
+async function withQueuedFrames(run) {
+    const queue = [];
+    const saved = { raf: globalThis.requestAnimationFrame, caf: globalThis.cancelAnimationFrame };
+    globalThis.requestAnimationFrame = fn => { queue.push(fn); return queue.length; };
+    globalThis.cancelAnimationFrame = id => { queue[id - 1] = null; };
+    const frame = () => { for (const fn of queue.splice(0)) if (fn) fn(); };
+    try {
+        return await run(frame);
+    } finally {
+        globalThis.requestAnimationFrame = saved.raf;
+        globalThis.cancelAnimationFrame = saved.caf;
+    }
+}
+const live = context => context.sources.filter(node => node.started && node.stopped === null);
+const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-9, `${label}: ${actual}`);
+
+test('seamless looping plays the decoded track with its loop points, the element gated off', () => withQueuedFrames(async () => {
+    const { audio, context, elementSource, output, loop, reads } = seamlessRig();
+    assert.equal(loop.useWebAudio(context, elementSource, output), true);
+    assert.equal(elementSource.outputs.has(output), false, 'the element now goes through the gate');
+    const [gate] = [...elementSource.outputs];
+    assert.equal(gate.outputs.has(output), true);
+
+    loop.setPoints({ start: 2, end: 6 }, 'Track.ogg');
+    await settle();
+    assert.deepEqual(reads, ['Track.ogg']);
+    assert.equal(context.decoded, 1);
+    assert.equal(loop.seamless, false, 'nothing plays while the element is paused');
+
+    audio.currentTime = 1.5;
+    audio.play();
+    assert.equal(loop.seamless, true);
+    const [source] = live(context);
+    assert.equal(source.loop, true);
+    assert.equal(source.loopStart, 2);
+    assert.equal(source.loopEnd, 6);
+    assert.equal(source.started.offset, 1.5);
+    assert.equal(gate.gain.value, 0, 'the element is silenced');
+    assert.equal(audio.loop, false);
+}));
+
+test('seamless looping keeps the silenced element in step without restarting the buffer', () => withQueuedFrames(async frame => {
+    {
+        const { audio, context, elementSource, output, loop } = seamlessRig();
+        loop.useWebAudio(context, elementSource, output);
+        loop.setPoints({ start: 2, end: 6 }, 'Track.ogg');
+        await settle();
+        audio.play();
+        // 6.5 s of audio from offset 0 is 2.5 s into the second pass.
+        context.currentTime = 6.5;
+        audio.currentTime = 6.1;
+        frame();
+        near(audio.currentTime, 2.5, 'element moved to');
+        audio.emit('seeking');
+        audio.emit('seeked');
+        assert.equal(context.sources.length, 1, 'our own seek leaves the buffer playing');
+        assert.equal(loop.seamless, true);
+
+        // The element reaches the end of the file before the buffer wraps it:
+        // it pauses, ends, and is put back in the loop, all without a restart.
+        audio.currentTime = 10;
+        audio.ended = true;
+        audio.paused = true;
+        audio.emit('pause');
+        assert.equal(loop.seamless, true);
+        context.currentTime = 7;
+        audio.emit('ended');
+        near(audio.currentTime, 3, 'element after the end');
+        assert.equal(audio.plays, 2);
+        assert.equal(context.sources.length, 1);
+        assert.equal(loop.seamless, true);
+    }
+}));
+
+test('seamless looping follows pause, seeks, the loop switch and a seeked tail', () => withQueuedFrames(async () => {
+    const { audio, context, elementSource, output, loop } = seamlessRig();
+    loop.useWebAudio(context, elementSource, output);
+    loop.setPoints({ start: 2, end: 6 }, 'Track.ogg');
+    await settle();
+    const gate = [...elementSource.outputs][0];
+    audio.play();
+    audio.pause();
+    assert.equal(loop.seamless, false);
+    assert.equal(gate.gain.value, 1, 'the element is heard again');
+
+    audio.currentTime = 4;
+    audio.play();
+    assert.equal(live(context).at(-1).started.offset, 4);
+
+    // A user seek stops the buffer for its duration and restarts it there.
+    audio.emit('seeking');
+    assert.equal(loop.seamless, false);
+    audio.currentTime = 3;
+    audio.emit('seeked');
+    assert.equal(loop.seamless, true);
+    assert.equal(live(context).at(-1).started.offset, 3);
+
+    // A seek past the loop end plays the tail from the element.
+    audio.emit('seeking');
+    audio.currentTime = 8;
+    audio.emit('seeked');
+    assert.equal(loop.seamless, false);
+    assert.equal(gate.gain.value, 1);
+
+    loop.setLoop(false);
+    audio.emit('seeking');
+    audio.currentTime = 3;
+    audio.emit('seeked');
+    assert.equal(loop.seamless, false, 'looping off plays the element straight through');
+    loop.setLoop(true);
+    assert.equal(loop.seamless, true);
+}));
+
+test('seamless looping follows the element rate and volume, and decodes each new track', () => withQueuedFrames(async () => {
+    const { audio, context, elementSource, output, loop, reads } = seamlessRig();
+    loop.useWebAudio(context, elementSource, output);
+    loop.setPoints({ start: 2, end: 6 }, 'One.ogg');
+    await settle();
+    audio.play();
+    context.currentTime = 1;
+    audio.playbackRate = 0.5;
+    audio.emit('ratechange');
+    const [source] = live(context);
+    assert.equal(source.playbackRate.value, 0.5);
+    context.currentTime = 3;
+    // 1 s at full rate, then 2 s at half: 2 s into the track.
+    audio.currentTime = 6.2;
+    audio.emit('timeupdate');
+    near(audio.currentTime, 2, 'element moved to');
+
+    audio.volume = 0.25;
+    audio.emit('volumechange');
+    const fade = [...source.outputs][0];
+    const volumeNode = [...fade.outputs][0];
+    assert.equal(volumeNode.gain.value, 0.25);
+    assert.equal(volumeNode.outputs.has(output), true);
+
+    loop.setPoints(null);
+    assert.equal(loop.seamless, false, 'a track change stops the buffer at once');
+    loop.setPoints({ start: 1, end: 3 }, 'Two.ogg');
+    await settle();
+    assert.deepEqual(reads, ['One.ogg', 'Two.ogg']);
+    assert.equal(live(context).at(-1).loopEnd, 3);
+}));
+
+test('seamless looping hands the element back to its output when disposed', () => withQueuedFrames(async () => {
+    const { audio, context, elementSource, output, loop } = seamlessRig();
+    loop.useWebAudio(context, elementSource, output);
+    loop.setPoints({ start: 2, end: 6 }, 'Track.ogg');
+    await settle();
+    audio.play();
+    loop.dispose();
+    assert.equal(live(context).length, 0);
+    assert.deepEqual([...elementSource.outputs], [output]);
+    assert.equal(audio.listenerCount(), 0);
+}));
+
+test('without a Web Audio graph the controller never decodes', () => withQueuedFrames(async () => {
+    const { audio, context, loop, reads } = seamlessRig();
+    loop.setPoints({ start: 2, end: 6 }, 'Track.ogg');
+    await settle();
+    audio.play();
+    assert.deepEqual(reads, []);
+    assert.equal(context.decoded, 0);
+    assert.equal(loop.seamless, false);
+}));
