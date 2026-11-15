@@ -666,22 +666,197 @@ class AudioPlayer {
             };
         });
 
-        // Get Unicode section symbols that exist in the file list.
-        const firstLetters = new Set(this.audioPlayer.tracks[type].map(track => track.section));
+        this.renderAudioTrackList(type);
+    }
 
-        const sortedLetters = Array.from(firstLetters).sort((a, b) => this.compareAudioSectionKeys(a, b));
+    /**
+     * The folders shown open in one type's track list. They persist while the
+     * project stays open, and the folder of the track loaded in that type's
+     * channel is always among them, so the playing row is never hidden.
+     */
+    getOpenAudioFolders(type) {
+        const key = `${(this.currentProject && this.currentProject.path) || ''}|${type}`;
+        if (!this._audioOpenFolders) this._audioOpenFolders = new Map();
+        let open = this._audioOpenFolders.get(key);
+        if (!open) {
+            open = new Set();
+            this._audioOpenFolders.set(key, open);
+            const loaded = this.getChannel(type)?.currentTrack;
+            if (loaded && typeof RRPickerIndex !== 'undefined' && RRPickerIndex.foldersLeadingTo) {
+                for (const folder of RRPickerIndex.foldersLeadingTo(loaded.name)) open.add(folder);
+            }
+        }
+        return open;
+    }
 
-        // Render alphabet tabs
+    /**
+     * Draw one type's track list the way the audio picker and the Resource
+     * Manager show a folder: its subfolders first, as collapsible sections,
+     * then its own tracks under letter headings. The rail jumps to either.
+     */
+    renderAudioTrackList(type, focusFolder = null) {
+        const tracks = this.audioPlayer.tracks[type] || [];
+        const pickerIndex = typeof RRPickerIndex !== 'undefined' ? RRPickerIndex : null;
+        const tree = pickerIndex && pickerIndex.buildFolderTree
+            ? pickerIndex.buildFolderTree(tracks.map(track => track.name))
+            : { files: tracks.map(track => track.name), folders: [] };
+        const trackByName = new Map(tracks.map(track => [track.name, track]));
+        const openFolders = this.getOpenAudioFolders(type);
+        const baseName = name => String(name).split('/').pop();
+        const compareBaseNames = (a, b) => this.compareAudioTrackNames(baseName(a), baseName(b));
+
         const tabBar = document.getElementById('audio-alphabet-tabs');
+        const trackListEl = document.getElementById('audio-track-list');
+        // Opening or closing a folder redraws the list; keep it where it was.
+        const scrollTop = focusFolder !== null ? trackListEl.scrollTop : 0;
         tabBar.innerHTML = '';
+        trackListEl.innerHTML = '';
+        if (pickerIndex) pickerIndex.bindListNavigation(trackListEl, {
+            items: () => trackListEl.querySelectorAll('.audio-track-item'),
+            isSelected: item => item.classList.contains('playing'),
+            select: item => this.selectAudioTrack(item.dataset.track, item.dataset.type)
+        });
 
-        sortedLetters.forEach((letter, index) => {
+        // Album art loads lazily, only for rows that scroll into view.
+        if (this._artObserver) this._artObserver.disconnect();
+        this._artObserver = new IntersectionObserver(entries => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                const img = entry.target;
+                this._artObserver.unobserve(img);
+                this.getCoverArt(img.dataset.artPath).then(url => {
+                    if (url) img.src = url;
+                });
+            }
+        }, { root: trackListEl, rootMargin: '200px' });
+
+        const currentChannel = this.getCurrentChannel();
+        const makeRow = (track, label, depth) => {
+            const isPlaying = currentChannel.currentTrack && currentChannel.currentTrack.path === track.path;
+            const trackItem = document.createElement('div');
+            trackItem.className = `audio-track-item ${isPlaying ? 'playing' : ''}`;
+            trackItem.dataset.track = track.name;
+            trackItem.dataset.type = type;
+            if (depth > 0) trackItem.style.paddingLeft = `${12 + depth * 14}px`;
+
+            if (window.RRAudioCoverArt) {
+                const art = document.createElement('img');
+                art.className = 'track-art track-art-small';
+                art.alt = '';
+                art.draggable = false;
+                art.src = window.RRAudioCoverArt.placeholderFor(track.name);
+                if (track.absolutePath) {
+                    art.dataset.artPath = track.absolutePath;
+                    this._artObserver.observe(art);
+                }
+                trackItem.appendChild(art);
+            }
+
+            const labelEl = document.createElement('span');
+            labelEl.className = 'track-label';
+            labelEl.textContent = label;
+            if (label !== track.name) labelEl.title = track.name;
+            trackItem.appendChild(labelEl);
+
+            trackItem.addEventListener('click', () => {
+                this.selectAudioTrack(track.name, type);
+            });
+            return trackItem;
+        };
+
+        const setFolderOpen = (folderPath, open) => {
+            if (open) openFolders.add(folderPath);
+            else openFolders.delete(folderPath);
+            this.renderAudioTrackList(type, folderPath);
+        };
+        const folderHeader = folderPath => Array.from(trackListEl.querySelectorAll('.audio-folder-section'))
+            .find(candidate => candidate.dataset.folder === folderPath);
+
+        const railTargets = [];
+        const renderFolder = (folder, depth) => {
+            const open = openFolders.has(folder.path);
+            const header = document.createElement('div');
+            header.className = 'audio-folder-section';
+            header.dataset.folder = folder.path;
+            header.tabIndex = 0;
+            header.setAttribute('role', 'button');
+            header.setAttribute('aria-expanded', String(open));
+            header.setAttribute('data-rr-i18n-skip', '1');
+            header.textContent = `${open ? '▾' : '▸'} ${folder.name} (${folder.total})`;
+            header.style.cssText = `padding:6px 12px 6px ${12 + depth * 14}px;`
+                + 'background:var(--color-bg-panel);color:var(--color-accent-hover);'
+                + 'border-bottom:1px solid var(--color-border);font-size:12px;font-weight:bold;cursor:pointer;';
+            header.addEventListener('click', () => setFolderOpen(folder.path, !openFolders.has(folder.path)));
+            header.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setFolderOpen(folder.path, !openFolders.has(folder.path));
+                } else if (event.key === 'ArrowRight' && !open) {
+                    event.preventDefault();
+                    setFolderOpen(folder.path, true);
+                } else if (event.key === 'ArrowLeft' && open) {
+                    event.preventDefault();
+                    setFolderOpen(folder.path, false);
+                }
+            });
+            trackListEl.appendChild(header);
+            if (!open) return;
+            for (const child of folder.folders) renderFolder(child, depth + 1);
+            for (const name of folder.files.slice().sort(compareBaseNames)) {
+                const track = trackByName.get(name);
+                if (track) trackListEl.appendChild(makeRow(track, baseName(name), depth + 1));
+            }
+        };
+
+        for (const folder of tree.folders) {
+            railTargets.push({ folder });
+            renderFolder(folder, 0);
+        }
+
+        // The folder's own tracks, in the order loadAudioTracks sorted them.
+        const rootNames = new Set(tree.files);
+        let currentLetter = null;
+        for (const track of tracks) {
+            if (!rootNames.has(track.name)) continue;
+            const letter = track.section;
+
+            // Add letter header if it's a new letter
+            if (letter !== currentLetter) {
+                currentLetter = letter;
+                railTargets.push({ letter });
+                const letterHeader = document.createElement('div');
+                letterHeader.className = 'letter-section';
+                letterHeader.dataset.letter = letter;
+                letterHeader.textContent = letter;
+                letterHeader.style.cssText = `
+                    font-weight: bold;
+                    font-size: 14px;
+                    color: var(--color-accent-hover);
+                    margin-top: 12px;
+                    margin-bottom: 6px;
+                    padding: 0 12px 4px 12px;
+                    border-bottom: 1px solid var(--color-border);
+                `;
+                trackListEl.appendChild(letterHeader);
+            }
+            trackListEl.appendChild(makeRow(track, track.name, 0));
+        }
+
+        // Render the rail: one button per top-level folder, then per letter.
+        railTargets.forEach((target, index) => {
             const tab = document.createElement('button');
-            tab.textContent = letter;
-            tab.dataset.letter = letter;
+            if (target.folder) {
+                tab.textContent = this.getAudioSectionKey(target.folder.name);
+                tab.title = target.folder.name;
+                tab.dataset.folder = target.folder.path;
+                tab.setAttribute('data-rr-i18n-skip', '1');
+            } else {
+                tab.textContent = target.letter;
+                tab.dataset.letter = target.letter;
+            }
 
             // Add margin between buttons except the last one
-            const marginBottom = (index < sortedLetters.length - 1) ? '1px' : '0px';
+            const marginBottom = (index < railTargets.length - 1) ? '1px' : '0px';
 
             tab.style.cssText = `
                 padding: 1px 4px;
@@ -701,7 +876,12 @@ class AudioPlayer {
             `;
 
             tab.addEventListener('click', () => {
-                this.scrollToLetter(letter);
+                if (!target.folder) {
+                    this.scrollToLetter(target.letter);
+                    return;
+                }
+                if (!openFolders.has(target.folder.path)) setFolderOpen(target.folder.path, true);
+                folderHeader(target.folder.path)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
 
             tab.addEventListener('mouseenter', () => {
@@ -721,83 +901,9 @@ class AudioPlayer {
             tabBar.appendChild(tab);
         });
 
-        // Render track list with letter headers
-        const trackListEl = document.getElementById('audio-track-list');
-        trackListEl.innerHTML = '';
-        if (typeof RRPickerIndex !== 'undefined') RRPickerIndex.bindListNavigation(trackListEl, {
-            items: () => trackListEl.querySelectorAll('.audio-track-item'),
-            isSelected: item => item.classList.contains('playing'),
-            select: item => this.selectAudioTrack(item.dataset.track, item.dataset.type)
-        });
-
-        // Album art loads lazily, only for rows that scroll into view.
-        if (this._artObserver) this._artObserver.disconnect();
-        this._artObserver = new IntersectionObserver(entries => {
-            for (const entry of entries) {
-                if (!entry.isIntersecting) continue;
-                const img = entry.target;
-                this._artObserver.unobserve(img);
-                this.getCoverArt(img.dataset.artPath).then(url => {
-                    if (url) img.src = url;
-                });
-            }
-        }, { root: trackListEl, rootMargin: '200px' });
-
-        let currentLetter = null;
-
-        for (const track of this.audioPlayer.tracks[type]) {
-            const letter = track.section;
-
-            // Add letter header if it's a new letter
-            if (letter !== currentLetter) {
-                currentLetter = letter;
-                const letterHeader = document.createElement('div');
-                letterHeader.className = 'letter-section';
-                letterHeader.dataset.letter = letter;
-                letterHeader.textContent = letter;
-                letterHeader.style.cssText = `
-                    font-weight: bold;
-                    font-size: 14px;
-                    color: var(--color-accent-hover);
-                    margin-top: 12px;
-                    margin-bottom: 6px;
-                    padding: 0 12px 4px 12px;
-                    border-bottom: 1px solid var(--color-border);
-                `;
-                trackListEl.appendChild(letterHeader);
-            }
-
-            // Check if this track is playing in the current channel
-            const currentChannel = this.getCurrentChannel();
-            const isPlaying = currentChannel.currentTrack && currentChannel.currentTrack.path === track.path;
-            const trackItem = document.createElement('div');
-            trackItem.className = `audio-track-item ${isPlaying ? 'playing' : ''}`;
-            trackItem.dataset.track = track.name;
-            trackItem.dataset.type = type;
-
-            if (window.RRAudioCoverArt) {
-                const art = document.createElement('img');
-                art.className = 'track-art track-art-small';
-                art.alt = '';
-                art.draggable = false;
-                art.src = window.RRAudioCoverArt.placeholderFor(track.name);
-                if (track.absolutePath) {
-                    art.dataset.artPath = track.absolutePath;
-                    this._artObserver.observe(art);
-                }
-                trackItem.appendChild(art);
-            }
-
-            const label = document.createElement('span');
-            label.className = 'track-label';
-            label.textContent = track.name;
-            trackItem.appendChild(label);
-
-            trackItem.addEventListener('click', () => {
-                this.selectAudioTrack(track.name, type);
-            });
-
-            trackListEl.appendChild(trackItem);
+        if (focusFolder !== null) {
+            trackListEl.scrollTop = scrollTop;
+            folderHeader(focusFolder)?.focus({ preventScroll: true });
         }
 
         // Scroll detection for active letter tab. The list element persists
