@@ -384,17 +384,17 @@ function requiredLoopTags(buffer, ext) {
     }
     if (ext === '.mp3') return mp3LoopTags(buffer);
     if (ext === '.m4a') return []; // no loop-tag convention for M4A
-    if (ext === '.flac') {
-        const pair = flacLoopPair(buffer);
-        if (pair) return [`LOOPSTART=${pair.start}`, `LOOPLENGTH=${pair.length}`];
-    }
+    const pair = commentLoopPair(buffer);
+    if (pair) return [`LOOPSTART=${pair.start}`, `LOOPLENGTH=${pair.length}`];
     return loopComments(buffer); // OGG and FLAC share vorbis comments
 }
 
-// The runtime reads a LOOP_START/LOOP_END pair from FLAC (an end sample in
-// place of a length) when it has no LOOPLENGTH, but not from Vorbis, so a
-// FLAC converting to OGG carries that loop over as LOOPSTART/LOOPLENGTH.
-function flacLoopPair(buffer) {
+// A LOOP_START/LOOP_END pair (an end sample in place of a length) in OGG or
+// FLAC comments, which the runtime reads when there is no LOOPLENGTH. The
+// encode writes it out as LOOPSTART/LOOPLENGTH too, so the loop is one the
+// verification below can see in the output, and one older runtimes, which
+// read only that pair of names, still loop.
+function commentLoopPair(buffer) {
     const text = buffer.toString('latin1');
     if (/LOOPLENGTH=\d+/i.test(text)) return null;
     const start = /LOOP_START=(\d+)/i.exec(text);
@@ -466,11 +466,9 @@ async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfm
     const ext = path.extname(filePath).toLowerCase();
     const original = fs.readFileSync(filePath);
     // Opus is left as it is. Re-encoding it to Vorbis stacks a second lossy
-    // pass on one already at least as compact, and it breaks the loop:
-    // FFmpeg decodes Opus at 48 kHz while copying LOOPSTART/LOOPLENGTH,
-    // counted at the source rate OpusHead records, unchanged, and the
-    // runtime's Vorbis reader ignores the LOOP_START/LOOP_END pair Opus
-    // files often carry instead.
+    // pass on one already at least as compact, and it can move the loop:
+    // FFmpeg decodes Opus at 48 kHz while copying loop points, counted at
+    // the source rate OpusHead records, unchanged.
     if (ext === '.ogg' && isOggOpus(original)) {
         return { before: original.length, after: original.length, changed: false };
     }
@@ -481,16 +479,19 @@ async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfm
         : ['-c:a', 'aac', '-b:a', aacBitrate(quality)];
     const temp = `${filePath}.${process.pid}.${Date.now()}.part${ext}`;
     const metaPath = `${temp}.meta.txt`;
+    const loopArgs = ext === '.ogg' && commentLoopPair(original)
+        ? required.flatMap(tag => ['-metadata', tag])
+        : [];
     const cover = await extractCoverImage(filePath, ffmpegPath, execute);
     const attempts = [];
     if (cover && ext === '.ogg') {
         attempts.push(['-i', filePath, ...writeCoverMetadataFile(cover, metaPath),
-            '-map_metadata', '0', '-vn', ...codecArgs, temp]);
+            '-map_metadata', '0', ...loopArgs, '-vn', ...codecArgs, temp]);
     } else if (cover) {
         attempts.push(['-i', filePath, '-map_metadata', '0', '-map', '0:a:0',
             '-map', '0:v:0', '-c:v', 'copy', '-disposition:v:0', 'attached_pic', ...codecArgs, temp]);
     }
-    attempts.push(['-i', filePath, '-map_metadata', '0', '-vn', ...codecArgs, temp]);
+    attempts.push(['-i', filePath, '-map_metadata', '0', ...loopArgs, '-vn', ...codecArgs, temp]);
     try {
         let optimized = null;
         for (let i = 0; i < attempts.length; i++) {
@@ -538,7 +539,7 @@ async function convertAudioToOgg(filePath, quality, ffmpegPath, execute = runFfm
     }
     const original = fs.readFileSync(filePath);
     const required = requiredLoopTags(original, ext);
-    const loopArgs = ext === '.wav' || (ext === '.flac' && flacLoopPair(original))
+    const loopArgs = ext === '.wav' || (ext === '.flac' && commentLoopPair(original))
         ? required.flatMap(tag => ['-metadata', tag])
         : [];
     const temp = `${oggPath}.${process.pid}.${Date.now()}.part.ogg`;

@@ -269,6 +269,73 @@ test('Ogg Opus parsing tolerates a truncated streaming prefix', () => {
     assert.equal(buffer._loopLength, 20);
 });
 
+test('Ogg Vorbis reads lowercase names and a LOOP_START/LOOP_END pair', () => {
+    const context = loadAudioRuntime();
+    const lower = bareBuffer(context);
+    lower._readLoopComments(toArrayBuffer(buildVorbis({
+        sampleRate: 44100, comments: ['loopstart=44100', 'looplength=88200']
+    })));
+    assert.equal(lower._loopStart, 44100);
+    assert.equal(lower._loopLength, 88200);
+    const pair = bareBuffer(context);
+    pair._readLoopComments(toArrayBuffer(buildVorbis({
+        sampleRate: 48000, comments: ['LOOP_END=5967968', 'LOOP_START=2895840']
+    })));
+    assert.equal(pair._loopStart, 2895840);
+    assert.equal(pair._loopLength, 5967968 - 2895840);
+});
+
+test('Ogg Vorbis comments behind a large picture are read across pages', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    const art = 'METADATA_BLOCK_PICTURE=' + 'A'.repeat(100000);
+    buffer._readLoopComments(toArrayBuffer(buildVorbis({
+        sampleRate: 44100, comments: [art, 'LOOPSTART=44100', 'LOOPLENGTH=88200']
+    })));
+    assert.equal(buffer._sampleRate, 44100);
+    assert.equal(buffer._loopStart, 44100);
+    assert.equal(buffer._loopLength, 88200);
+});
+
+test('Ogg Vorbis parsing never reads past a streamed prefix', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    const ogg = buildVorbis({ comments: ['LOOPSTART=10', 'LOOPLENGTH=20'] });
+    // Every cut, including one right after the last tag's digits, where the
+    // older scan read on past the end of the buffer looking for a zero.
+    for (let end = 0; end < ogg.length; end++) {
+        assert.doesNotThrow(() => buffer._readLoopComments(toArrayBuffer(ogg.subarray(0, end))),
+            `prefix of ${end} bytes`);
+    }
+    buffer._readLoopComments(toArrayBuffer(ogg));
+    assert.equal(buffer._loopStart, 10);
+    assert.equal(buffer._loopLength, 20);
+});
+
+test('Ogg Vorbis keeps the older name-then-number layout as a fallback', () => {
+    const context = loadAudioRuntime();
+    const buffer = bareBuffer(context);
+    // "LOOPSTART" and its number as separate NUL-terminated strings, the
+    // number 16 bytes past the name's terminator, as the older scan reads.
+    const field = (name, value) => {
+        const out = Buffer.alloc(name.length + 16 + value.length + 1);
+        out.write(name, 0, 'ascii');
+        out.write(value, name.length + 16, 'ascii');
+        return out;
+    };
+    const ident = Buffer.alloc(30);
+    ident[0] = 1;
+    ident.write('vorbis', 1, 'ascii');
+    ident.writeUInt32LE(22050, 12);
+    const comment = Buffer.concat([
+        Buffer.from([3]), Buffer.from('vorbis'), u32le(7), Buffer.from('rr-test'), u32le(0),
+        field('LOOPSTART', '300'), field('LOOPLENGTH', '600'), Buffer.alloc(16)
+    ]);
+    buffer._readLoopComments(toArrayBuffer(buildOgg([ident, comment])));
+    assert.equal(buffer._loopStart, 300);
+    assert.equal(buffer._loopLength, 600);
+});
+
 test('Ogg Vorbis loop comments still read through the Vorbis path', () => {
     const context = loadAudioRuntime();
     const buffer = bareBuffer(context);

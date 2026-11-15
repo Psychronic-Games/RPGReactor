@@ -124,6 +124,32 @@ test('a FLAC LOOP_START/LOOP_END pair becomes LOOPSTART/LOOPLENGTH in its OGG', 
     }
 });
 
+test('an OGG Vorbis LOOP_START/LOOP_END pair is written out and verified in the re-encode', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-pair-'));
+    const target = path.join(root, 'Theme.ogg');
+    const source = Buffer.from(`OggS${'x'.repeat(800)}loop_start=1200\0loop_end=49200`);
+    let encodeArgs = null;
+    try {
+        fs.writeFileSync(target, source);
+        const result = await optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async (_bin, args) => {
+            if (args.includes('image2')) throw new Error('no picture');
+            encodeArgs = args;
+            fs.writeFileSync(args.at(-1), Buffer.from(`OggS${'z'.repeat(40)}LOOPSTART=1200\0LOOPLENGTH=48000`));
+        });
+        assert.equal(result.changed, true);
+        assert.ok(encodeArgs.includes('LOOPSTART=1200') && encodeArgs.includes('LOOPLENGTH=48000'));
+        // An encode that loses the loop is refused, and the file is kept.
+        fs.writeFileSync(target, source);
+        await assert.rejects(optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async (_bin, args) => {
+            if (args.includes('image2')) throw new Error('no picture');
+            fs.writeFileSync(args.at(-1), Buffer.from(`OggS${'z'.repeat(40)}`));
+        }), /did not preserve loop metadata/);
+        assert.ok(fs.readFileSync(target).equals(source));
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('OGG optimization carries embedded cover art through the re-encode', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-art-'));
     const target = path.join(root, 'Theme.ogg');

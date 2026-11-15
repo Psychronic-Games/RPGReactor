@@ -3,7 +3,7 @@
 // Reads the loop points a track carries in its own container, the same way
 // the game runtime does, so the editor's Audio Player loops where the game
 // will: OGG (Vorbis or Opus) and FLAC comments (LOOPSTART / LOOPLENGTH in
-// samples; on Opus and FLAC also LOOP_START / LOOP_END), ID3v2 TXXX frames
+// samples, or LOOP_START / LOOP_END), ID3v2 TXXX frames
 // of the same names on MP3, and the sampler chunk of a WAV. The result is
 // in seconds, converted with the sample rate read from the same header --
 // for Opus the source rate OpusHead records, 48 kHz when it records none.
@@ -38,7 +38,7 @@
     }
 
     /**
-     * A FLAC or Opus comment list, as the runtime's shared comment reader
+     * A Vorbis, Opus or FLAC comment list, as the runtime's shared comment reader
      * takes it: LOOPSTART / LOOPLENGTH, or else a LOOP_START / LOOP_END pair
      * (an end sample in place of a length) when no LOOPLENGTH is present.
      */
@@ -142,7 +142,7 @@
                 tags.sampleRate = view.getUint32(12, true);
             } else if (packet[0] === 3) {
                 const comments = readVorbisComments(view, packet, 7, packet.length);
-                if (comments) comments.forEach(comment => applyComment(tags, comment));
+                if (comments) applyCommentsWithPairs(tags, comments);
             }
         }
         return truncated;

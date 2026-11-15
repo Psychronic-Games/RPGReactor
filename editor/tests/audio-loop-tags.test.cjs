@@ -185,12 +185,12 @@ test('a prefix that cuts the OpusTags packet off asks for more', () => {
     assert.equal(cut.loopLength, 0);
 });
 
-test('LOOP_START/LOOP_END count on FLAC only without a LOOPLENGTH, and never on Vorbis', () => {
+test('LOOP_START/LOOP_END count on FLAC and Vorbis only without a LOOPLENGTH', () => {
     assert.deepEqual(LoopTags.loopPointsFromBytes(flacFile(1000, ['LOOP_START=1000', 'LOOP_END=3000'])), { start: 1, end: 3 });
     assert.deepEqual(LoopTags.loopPointsFromBytes(flacFile(1000,
         ['LOOP_START=1000', 'LOOP_END=3000', 'LOOPSTART=2000', 'LOOPLENGTH=1000'])), { start: 2, end: 3 });
-    // The runtime's Vorbis reader takes LOOPSTART/LOOPLENGTH only; the preview must match it.
-    assert.equal(LoopTags.loopPointsFromBytes(oggFile(1000, ['LOOP_START=1000', 'LOOP_END=3000'])), null);
+    // The runtime's Vorbis reader shares the FLAC/Opus comment reader, so the preview does too.
+    assert.deepEqual(LoopTags.loopPointsFromBytes(oggFile(1000, ['loop_start=1000', 'loop_end=3000'])), { start: 1, end: 3 });
 });
 
 test('FLAC reads the STREAMINFO sample rate and the same vorbis comments', () => {

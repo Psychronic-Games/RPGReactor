@@ -1107,8 +1107,8 @@ WebAudio.prototype._readLoopComments = function(arrayBuffer) {
 };
 
 // An Ogg Opus stream opens with an "OpusHead" packet where Vorbis has
-// "\x01vorbis"; the Vorbis reader below stops at the first page that has
-// none, so an Opus file never reached its comments.
+// "\x01vorbis", and keeps its comments and sample rate where the Vorbis
+// reader below does not look.
 WebAudio.prototype._isOggOpus = function(view) {
     if (view.byteLength < 27) return false;
     const data = 27 + view.getUint8(26);
@@ -1202,7 +1202,7 @@ WebAudio.prototype._readFlacLoopComments = function(view) {
     }
 };
 
-// Comment blocks shared by FLAC and Ogg Opus. LOOPSTART/LOOPLENGTH is the
+// Comment blocks shared by FLAC, Ogg Vorbis and Ogg Opus. LOOPSTART/LOOPLENGTH is the
 // RPG Maker pair; LOOP_START/LOOP_END, an end sample in place of a length,
 // is what other tools and rips write, and counts only without LOOPLENGTH.
 WebAudio.prototype._readFlacComments = function(view, index, size) {
@@ -1242,55 +1242,50 @@ WebAudio.prototype._readFlacComments = function(view, index, size) {
     }
 };
 
+// Vorbis keeps its sample rate in the identification header ("\x01vorbis")
+// and its loop in the comment header ("\x03vorbis"), the first two packets,
+// the comments laid out like a FLAC comment block after the 7-byte magic.
+// Both are read whole through _readOggPackets, as Opus is: a comment header
+// continued across pages (behind cover art) is still found, names match in
+// any case, LOOP_START/LOOP_END counts as it does on Opus and FLAC, and a
+// streamed prefix cut inside a header waits for the next pass instead of
+// reading past its end. A comment header the block reader finds no loop in
+// still gets the older scan, which also takes LOOPSTART and LOOPLENGTH
+// written as a name with the number 16 bytes after it.
 WebAudio.prototype._readOggLoopComments = function(view) {
-    let index = 0;
-    while (index < view.byteLength - 30) {
-        if (this._readFourCharacters(view, index) !== "OggS") {
-            break;
-        }
-        index += 26;
-        const numSegments = view.getUint8(index++);
-        const segments = [];
-        for (let i = 0; i < numSegments; i++) {
-            segments.push(view.getUint8(index++));
-        }
-        const packets = [];
-        while (segments.length > 0) {
-            let packetSize = 0;
-            while (segments[0] === 255) {
-                packetSize += segments.shift();
-            }
-            if (segments.length > 0) {
-                packetSize += segments.shift();
-            }
-            packets.push(packetSize);
-        }
-        let vorbisHeaderFound = false;
-        for (const size of packets) {
-            if (this._readFourCharacters(view, index + 1) === "vorb") {
-                const headerType = view.getUint8(index);
-                if (headerType === 1) {
-                    this._sampleRate = view.getUint32(index + 12, true);
-                } else if (headerType === 3) {
-                    this._readMetaData(view, index, size);
-                }
-                vorbisHeaderFound = true;
-            }
-            index += size;
-        }
-        if (!vorbisHeaderFound) {
-            break;
+    const isVorbis = (packet, type) =>
+        packet.byteLength >= 7 &&
+        packet.getUint8(0) === type &&
+        this._readFourCharacters(packet, 1) === "vorb" &&
+        this._readFourCharacters(packet, 3) === "rbis";
+    const packets = this._readOggPackets(view, 2);
+    const ident = packets[0];
+    if (ident && ident.byteLength >= 16 && isVorbis(ident, 1)) {
+        this._sampleRate = ident.getUint32(12, true);
+    }
+    const comments = packets[1];
+    if (comments && isVorbis(comments, 3)) {
+        this._readFlacComments(comments, 7, comments.byteLength - 7);
+        if (!(this._loopLength > 0)) {
+            this._readMetaData(comments, 0, comments.byteLength);
         }
     }
 };
 
 WebAudio.prototype._readMetaData = function(view, index, size) {
-    for (let i = index; i < index + size - 10; i++) {
+    const end = Math.min(index + size, view.byteLength);
+    const readText = at => {
+        let text = "";
+        while (at < end && view.getUint8(at) > 0) {
+            text += String.fromCharCode(view.getUint8(at++));
+        }
+        return { text, at };
+    };
+    for (let i = index; i < end - 10; i++) {
         if (this._readFourCharacters(view, i) === "LOOP") {
-            let text = "";
-            while (view.getUint8(i) > 0) {
-                text += String.fromCharCode(view.getUint8(i++));
-            }
+            const read = readText(i);
+            const text = read.text;
+            i = read.at;
             if (text.match(/LOOPSTART=([0-9]+)/)) {
                 this._loopStart = parseInt(RegExp.$1);
             }
@@ -1298,11 +1293,9 @@ WebAudio.prototype._readMetaData = function(view, index, size) {
                 this._loopLength = parseInt(RegExp.$1);
             }
             if (text === "LOOPSTART" || text === "LOOPLENGTH") {
-                let text2 = "";
-                i += 16;
-                while (view.getUint8(i) > 0) {
-                    text2 += String.fromCharCode(view.getUint8(i++));
-                }
+                const value = readText(i + 16);
+                const text2 = value.text;
+                i = value.at;
                 if (text === "LOOPSTART") {
                     this._loopStart = parseInt(text2);
                 } else {

@@ -139,7 +139,7 @@ imports only through explicit Starting Layout / Add to Front actions.
 
 ### Audio Player
 - **Multi-channel playback**: BGM, BGS, ME, and SE tracks
-- **Formats**: OGG (Vorbis or Opus), MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` comments, `LOOP_START`/`LOOP_END` on Opus and FLAC, ID3 `TXXX`, WAV `smpl`; see [Audio formats and loop points](../docs/AUDIO-LOOP-POINTS.md)) and embedded album art shown beside each track; the same interface and one shared extraction cache back every audio picker, System music/sound picker, event command, and plugin audio field in the editor
+- **Formats**: OGG (Vorbis or Opus), MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` or `LOOP_START`/`LOOP_END` comments, ID3 `TXXX`, WAV `smpl`; see [Audio formats and loop points](../docs/AUDIO-LOOP-POINTS.md)) and embedded album art shown beside each track; the same interface and one shared extraction cache back every audio picker, System music/sound picker, event command, and plugin audio field in the editor
 - **Playback controls**: Volume, pitch, pan, and seek
 - **Loop configuration**: Set custom loop points
 - **BGM sequences**: Sequences in Database › Music Sequences or a map's Map Properties repeat ordered tracks, silence, and layered palettes with random pools, timing, and fades; a map, a troop, or Change Battle BGM can name a library sequence. Native track loop points are ignored inside a sequence

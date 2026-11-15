@@ -1,6 +1,6 @@
 # Audio formats and loop points
 
-How the game finds an audio file, where each format keeps the point a track loops back to, and how to make a looping Opus track. Everything here is what the runtime reads today; the editor's Audio Player reads the same tags the same way, so a preview loops where the game will, except for the two Vorbis cases under [Known gaps](#known-gaps).
+How the game finds an audio file, where each format keeps the point a track loops back to, and how to make a looping Opus track. Everything here is what the runtime reads today; the editor's Audio Player reads the same tags the same way, so a preview loops where the game will.
 
 ## Which files the game finds
 
@@ -16,14 +16,14 @@ The loop is two numbers counted in samples: where the loop starts, and how long 
 
 | Format | Where the loop lives | Tag names | Sample rate the numbers are counted at |
 | --- | --- | --- | --- |
-| Ogg Vorbis | comment header | `LOOPSTART`, `LOOPLENGTH`, in capitals | the identification header |
-| Ogg Opus | `OpusTags` comments | `LOOPSTART`/`LOOPLENGTH`, or `LOOP_START`/`LOOP_END`; any case | the original sample rate `OpusHead` records; 48000 when it records none |
-| FLAC | `VORBIS_COMMENT` block | as Opus | `STREAMINFO` |
+| Ogg Vorbis | comment header | `LOOPSTART`/`LOOPLENGTH`, or `LOOP_START`/`LOOP_END`; any case | the identification header |
+| Ogg Opus | `OpusTags` comments | as Vorbis | the original sample rate `OpusHead` records; 48000 when it records none |
+| FLAC | `VORBIS_COMMENT` block | as Vorbis | `STREAMINFO` |
 | MP3 | ID3v2 `TXXX` frames | `LOOPSTART`, `LOOPLENGTH`; any case | the first MPEG frame header |
 | WAV | sampler (`smpl`) chunk, first loop | the loop's start and end | the format (`fmt `) chunk |
 | M4A | no loop convention; the whole track loops | | |
 
-`LOOP_END` is the sample the loop ends at, not a length, so the loop is end − start. When a file carries both pairs, `LOOPLENGTH` wins. The same rule holds for an Opus file and a FLAC file, which share one comment reader.
+`LOOP_END` is the sample the loop ends at, not a length, so the loop is end − start. When a file carries both pairs, `LOOPLENGTH` wins. Vorbis, Opus and FLAC share one comment reader, so the same rules hold for all three, and the comments are read whole even when a large embedded picture pushes them across several Ogg pages.
 
 Only BGM and BGS loop. ME and SE play once, and their loop tags are ignored. A track inside a [music sequence](../editor/README.md#audio-player) also plays once, because the sequence decides what follows it; a sequence that is a single plain track is ordinary BGM and keeps its loop.
 
@@ -47,12 +47,11 @@ Opus files exported from another game or tool usually work as they are once rena
 
 - **Desktop builds** decode Opus natively. A browser that cannot play Ogg at all uses the runtime's bundled fallback decoder, which only decodes Vorbis, so Opus does not play there; Vorbis does.
 - **The Forge's Sound Effect Generator** saves its `.ogg` exports as Opus.
-- **Deploy Game's audio compression** leaves Opus files as they are. Re-encoding them to Vorbis would cost quality on a file already as compact, and moved or dropped the loop: FFmpeg decodes Opus at 48 kHz but carried loop numbers counted at the original rate over unchanged, and `LOOP_START`/`LOOP_END` is not read from Vorbis. Vorbis, MP3 and M4A are still re-encoded; WAV and FLAC still become Vorbis, with a WAV's sampler loop and a FLAC's `LOOP_START`/`LOOP_END` pair written out as `LOOPSTART`/`LOOPLENGTH`, the tags the Vorbis reader takes.
+- **Deploy Game's audio compression** leaves Opus files as they are. Re-encoding them to Vorbis would cost quality on a file already as compact, and could move the loop: FFmpeg decodes Opus at 48 kHz but carries loop numbers counted at the original rate over unchanged. Vorbis, MP3 and M4A are still re-encoded; WAV and FLAC still become Vorbis. A WAV's sampler loop, and a `LOOP_START`/`LOOP_END` pair on Vorbis or FLAC, are written into the output as `LOOPSTART`/`LOOPLENGTH`, and an encode that loses the loop is refused, leaving that file uncompressed.
 - **Encrypted audio** is decrypted before its loop is read, so encryption changes nothing above.
 
-## Known gaps
+## Older games and tools
 
-Both are in the runtime's Ogg Vorbis reader, which still scans a single page for the comment header; the Opus reader does not have either.
+Before runtime 20261115.2 the game read Ogg Vorbis loops with a narrower scan: tag names only in capitals, no `LOOP_START`/`LOOP_END`, and only comments on the first Ogg page, so a large picture ahead of them hid them. A track that relied on any of those looped from its start, or not where it was tagged, while the editor preview already looped it correctly. Such tracks now loop where they are tagged, which can change how a game that shipped with them sounds. The older scan is still tried on a comment header the new reader finds no loop in, so a file tagged in the older layout it accepted, a name with its number 16 bytes after it, keeps working.
 
-- **Vorbis tag names must be in capitals.** The game ignores `loopstart=`; the editor preview accepts it and loops where the game will not.
-- **Vorbis tags behind a large embedded picture are missed.** Cover art big enough to push the comments past the first Ogg page (tens of kilobytes) hides the tags from the game, while the preview still finds them. Put the tags before the picture, or keep the art small.
+RPG Maker MZ's own corescript (checked against 1.9.0) and older RPG Reactor versions use that narrower scan: capitalised `LOOPSTART`/`LOOPLENGTH` from Ogg Vorbis, and nothing from Opus. For a file that has to loop the same everywhere, use Ogg Vorbis with those two names in capitals, ahead of any embedded picture.
