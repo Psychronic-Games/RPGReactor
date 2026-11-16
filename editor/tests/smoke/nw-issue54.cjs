@@ -34,7 +34,7 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
             const [width, height] = option('size').split('x').map(Number);
             await driver.sessionRequest('POST', '/window/rect', { width, height });
         }
-        await driver.setScriptTimeout(120000);
+        await driver.setScriptTimeout(300000);   // the whole walk in one script: two minutes was not enough on a slow machine
         await driver.waitForScript('return !!window.reactor?.databaseEditorUI && getComputedStyle(document.getElementById("splash-screen")).display === "none";', [], { timeout: 90000 });
         const opened = await driver.executeAsync(`const done=arguments[arguments.length-1];(async()=>{
             window.__interactionErrors=[];addEventListener('error',e=>{if(!e.error&&/^ResizeObserver loop/.test(e.message))return;__interactionErrors.push(String(e.error||e.message));});

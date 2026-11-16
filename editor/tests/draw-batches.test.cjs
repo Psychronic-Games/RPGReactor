@@ -16,6 +16,8 @@ require(path.join(repoRoot, 'runtime/libs/three.js'));
 const THREE = global.THREE;
 const R = require(path.join(repoRoot, 'runtime/reactor_3d.js'));
 const B = R.DrawBatches;
+// No clock in these tests: a merge is never put off because the machine was slow (the test of BUILD_MS sets its own).
+B.BUILD_MS = Infinity;
 
 const block = (id, x, y, material = 'Stone') => ({ id, kind: 'block', x, y, z: 0, rot: 0, material });
 const wideMap = pieces => ({ width: 160, height: 80, reactor3d: { version: 1, elevation: new Array(160 * 80).fill(0), pieces } });
