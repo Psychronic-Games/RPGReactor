@@ -203,9 +203,10 @@ function main() {
     // The suite's report passed 1 MB (execFileSync's default buffer) at 0.99.1.
     let testOutput;
     try {
-        // Local release checks share the workstation with the editor. Keep
-        // suites serial; CI owns its separately bounded shard concurrency.
-        testOutput = execFileSync('node', ['--require=./tests/helpers/small-pictures.cjs', '--test', '--test-concurrency=1'], {
+        // The suite's own runner (`npm run test:all`): it picks its worker count from the machine's threads and
+        // the memory it may use, so it shares the workstation as the day's runs do. One file at a time, as this
+        // ran before, took the better part of an hour where the runner takes six minutes (0.99.6, 2026-11-15).
+        testOutput = execFileSync('node', ['tests/run-tier.cjs', 'all'], {
             cwd: path.join(repoRoot, 'editor'), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024
         });
     } catch (error) {
