@@ -2372,6 +2372,30 @@ input[type="number"]::-webkit-outer-spin-button {
 .rr-resource-preview-stage audio {
     width: 100%;
 }
+.rr-resource-audio-preview {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.rr-resource-audio-loop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+.rr-resource-audio-loop label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-strong);
+    cursor: pointer;
+}
+.rr-resource-audio-loop-points {
+    font-variant-numeric: tabular-nums;
+}
 .rr-resource-model-preview {
     position: relative;
     width: 100%;
