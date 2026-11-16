@@ -5,6 +5,8 @@
 globalThis.RR_REVIEWED_TRANSLATIONS = {
   "text": {
     "ja": {
+      "Loop points: {start} s to {end} s": "ループ位置: {start} 秒 ～ {end} 秒",
+      "No loop points in this file.": "このファイルにはループ位置がありません。",
       "Tools run code from this project.": "ツールはこのプロジェクトのコードを実行します。",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "ツールはサンドボックス内で実行され、ファイルにアクセスできません。エディターを介してデータベースファイルの読み書きのみが可能です。信頼できるツールのみを実行してください。",
       "No project tools found.": "プロジェクトツールが見つかりません。",
@@ -600,6 +602,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "検証を通過し、元より小さくなった結果だけがステージング済みのアセットを置き換えます。OGG、MP3、M4Aはその場で再エンコードし、WAVとFLACはOGGに変換します。ループ位置は引き継がれます。"
     },
     "zh-Hant": {
+      "Loop points: {start} s to {end} s": "循環點：{start} 秒至 {end} 秒",
+      "No loop points in this file.": "此檔案沒有循環點。",
       "Tools run code from this project.": "工具會執行此專案中的程式碼。",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "工具在沙箱中執行，無法存取檔案，只能透過編輯器讀寫資料庫檔案。請只執行你信任的工具。",
       "No project tools found.": "找不到專案工具。",
@@ -1199,6 +1203,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "只有更小且通過驗證的結果才會取代暫存資源。OGG、MP3 和 M4A 會原地重新編碼；WAV 和 FLAC 會轉換為 OGG；循環點會保留。"
     },
     "zh-Hans": {
+      "Loop points: {start} s to {end} s": "循环点：{start} 秒至 {end} 秒",
+      "No loop points in this file.": "此文件没有循环点。",
       "Tools run code from this project.": "工具会运行此项目中的代码。",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "工具在沙箱中运行，无法访问文件，只能通过编辑器读写数据库文件。请只运行你信任的工具。",
       "No project tools found.": "未找到项目工具。",
@@ -1751,6 +1757,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "只有更小且通过验证的结果才会替换暂存资源。OGG、MP3 和 M4A 原地重新编码；WAV 和 FLAC 转换为 OGG；循环点会保留。"
     },
     "ko": {
+      "Loop points: {start} s to {end} s": "루프 지점: {start}초 ~ {end}초",
+      "No loop points in this file.": "이 파일에는 루프 지점이 없습니다.",
       "Tools run code from this project.": "도구는 이 프로젝트의 코드를 실행합니다.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "도구는 샌드박스에서 실행되어 파일에 접근할 수 없으며, 에디터를 통해서만 데이터베이스 파일을 읽고 쓸 수 있습니다. 신뢰할 수 있는 도구만 실행하세요.",
       "No project tools found.": "프로젝트 도구를 찾을 수 없습니다.",
@@ -2351,6 +2359,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "더 작고 검증을 통과한 결과만 스테이징된 에셋을 대체합니다. OGG, MP3, M4A는 그 자리에서 다시 인코딩하고, WAV와 FLAC은 OGG로 변환합니다. 루프 지점은 유지됩니다."
     },
     "es": {
+      "Loop points: {start} s to {end} s": "Puntos de bucle: de {start} s a {end} s",
+      "No loop points in this file.": "Este archivo no tiene puntos de bucle.",
       "Tools run code from this project.": "Las herramientas ejecutan código de este proyecto.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Una herramienta se ejecuta aislada, sin acceso a archivos, y solo puede leer y escribir archivos de base de datos a través del editor. Ejecuta únicamente herramientas de confianza.",
       "No project tools found.": "No se encontraron herramientas del proyecto.",
@@ -2984,6 +2994,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Solo los resultados validados que son más pequeños sustituyen a los recursos preparados. OGG, MP3 y M4A se recodifican en su lugar; WAV y FLAC se convierten a OGG; los puntos de bucle se conservan."
     },
     "pt": {
+      "Loop points: {start} s to {end} s": "Pontos de loop: de {start} s a {end} s",
+      "No loop points in this file.": "Este arquivo não tem pontos de loop.",
       "Tools run code from this project.": "As ferramentas executam código deste projeto.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Uma ferramenta é executada isolada, sem acesso a arquivos, e só pode ler e gravar arquivos de banco de dados através do editor. Execute apenas ferramentas confiáveis.",
       "No project tools found.": "Nenhuma ferramenta do projeto encontrada.",
@@ -3614,6 +3626,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Somente resultados validados e menores substituem os recursos preparados. OGG, MP3 e M4A são recodificados no próprio lugar; WAV e FLAC são convertidos para OGG; os pontos de loop são mantidos."
     },
     "fr": {
+      "Loop points: {start} s to {end} s": "Points de boucle : de {start} s à {end} s",
+      "No loop points in this file.": "Ce fichier n’a pas de points de boucle.",
       "Tools run code from this project.": "Les outils exécutent du code provenant de ce projet.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Un outil s'exécute en bac à sable, sans accès aux fichiers, et ne peut lire et écrire que des fichiers de base de données via l'éditeur. N'exécutez que des outils de confiance.",
       "No project tools found.": "Aucun outil de projet trouvé.",
@@ -4242,6 +4256,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Seuls les résultats validés plus légers remplacent les ressources préparées. OGG, MP3 et M4A sont réencodés sur place ; WAV et FLAC sont convertis en OGG ; les points de boucle sont conservés."
     },
     "it": {
+      "Loop points: {start} s to {end} s": "Punti di loop: da {start} s a {end} s",
+      "No loop points in this file.": "Questo file non ha punti di loop.",
       "Tools run code from this project.": "Gli strumenti eseguono codice di questo progetto.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Uno strumento viene eseguito in sandbox, senza accesso ai file, e può solo leggere e scrivere file di database tramite l'editor. Esegui solo strumenti di cui ti fidi.",
       "No project tools found.": "Nessuno strumento del progetto trovato.",
@@ -4880,6 +4896,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Solo i risultati convalidati più piccoli sostituiscono le risorse preparate. OGG, MP3 e M4A vengono ricodificati sul posto; WAV e FLAC vengono convertiti in OGG; i punti di loop vengono mantenuti."
     },
     "de": {
+      "Loop points: {start} s to {end} s": "Schleifenpunkte: {start} s bis {end} s",
+      "No loop points in this file.": "Diese Datei hat keine Schleifenpunkte.",
       "Tools run code from this project.": "Werkzeuge führen Code aus diesem Projekt aus.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Ein Werkzeug läuft in einer Sandbox ohne Dateizugriff und kann Datenbankdateien nur über den Editor lesen und schreiben. Führe nur Werkzeuge aus, denen du vertraust.",
       "No project tools found.": "Keine Projektwerkzeuge gefunden.",
@@ -5486,6 +5504,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Nur kleinere, geprüfte Ergebnisse ersetzen die bereitgestellten Assets. OGG, MP3 und M4A werden direkt neu kodiert; WAV und FLAC werden in OGG umgewandelt; Schleifenpunkte bleiben erhalten."
     },
     "ru": {
+      "Loop points: {start} s to {end} s": "Точки цикла: с {start} с до {end} с",
+      "No loop points in this file.": "В этом файле нет точек цикла.",
       "Tools run code from this project.": "Инструменты выполняют код из этого проекта.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Инструмент работает в песочнице без доступа к файлам и может только читать и записывать файлы базы данных через редактор. Запускайте только те инструменты, которым доверяете.",
       "No project tools found.": "Инструменты проекта не найдены.",
@@ -6099,6 +6119,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Подготовленные ресурсы заменяются только результатами меньшего размера, прошедшими проверку. OGG, MP3 и M4A перекодируются на месте; WAV и FLAC преобразуются в OGG; точки зацикливания сохраняются."
     },
     "pl": {
+      "Loop points: {start} s to {end} s": "Punkty pętli: od {start} s do {end} s",
+      "No loop points in this file.": "Ten plik nie ma punktów pętli.",
       "Tools run code from this project.": "Narzędzia uruchamiają kod z tego projektu.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Narzędzie działa w piaskownicy bez dostępu do plików i może jedynie odczytywać i zapisywać pliki bazy danych poprzez edytor. Uruchamiaj tylko zaufane narzędzia.",
       "No project tools found.": "Nie znaleziono narzędzi projektu.",
@@ -6711,6 +6733,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Przygotowane zasoby są zastępowane tylko mniejszymi wynikami, które przeszły weryfikację. OGG, MP3 i M4A są ponownie kodowane w miejscu; WAV i FLAC są konwertowane do OGG; punkty pętli zostają zachowane."
     },
     "el": {
+      "Loop points: {start} s to {end} s": "Σημεία επανάληψης: από {start} s έως {end} s",
+      "No loop points in this file.": "Αυτό το αρχείο δεν έχει σημεία επανάληψης.",
       "Tools run code from this project.": "Τα εργαλεία εκτελούν κώδικα από αυτό το έργο.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Ένα εργαλείο εκτελείται σε sandbox χωρίς πρόσβαση σε αρχεία και μπορεί μόνο να διαβάζει και να γράφει αρχεία βάσης δεδομένων μέσω του επεξεργαστή. Εκτελείτε μόνο εργαλεία που εμπιστεύεστε.",
       "No project tools found.": "Δεν βρέθηκαν εργαλεία έργου.",
@@ -7323,6 +7347,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Μόνο μικρότερα αποτελέσματα που περνούν τον έλεγχο αντικαθιστούν τα προετοιμασμένα αρχεία. Τα OGG, MP3 και M4A επανακωδικοποιούνται επί τόπου· τα WAV και FLAC μετατρέπονται σε OGG· τα σημεία επανάληψης διατηρούνται."
     },
     "ar": {
+      "Loop points: {start} s to {end} s": "نقاط التكرار: من {start} ث إلى {end} ث",
+      "No loop points in this file.": "لا يحتوي هذا الملف على نقاط تكرار.",
       "Tools run code from this project.": "تُشغّل الأدوات تعليمات برمجية من هذا المشروع.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "تعمل الأداة في بيئة معزولة بلا وصول إلى الملفات، ولا يمكنها سوى قراءة ملفات قاعدة البيانات وكتابتها عبر المحرر. شغّل الأدوات الموثوقة فقط.",
       "No project tools found.": "لم يتم العثور على أدوات للمشروع.",
@@ -8015,6 +8041,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "لا تحلّ محلّ الأصول المجهّزة إلا النتائج الأصغر حجمًا التي اجتازت التحقق. يُعاد ترميز OGG وMP3 وM4A في مكانها؛ ويُحوَّل WAV وFLAC إلى OGG؛ وتُحفظ نقاط التكرار."
     },
     "tr": {
+      "Loop points: {start} s to {end} s": "Döngü noktaları: {start} sn - {end} sn",
+      "No loop points in this file.": "Bu dosyada döngü noktası yok.",
       "Tools run code from this project.": "Araçlar bu projedeki kodu çalıştırır.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Bir araç, dosya erişimi olmadan yalıtılmış ortamda çalışır ve veritabanı dosyalarını yalnızca düzenleyici aracılığıyla okuyup yazabilir. Yalnızca güvendiğiniz araçları çalıştırın.",
       "No project tools found.": "Proje aracı bulunamadı.",
@@ -8723,6 +8751,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Yalnızca daha küçük ve doğrulanmış sonuçlar hazırlanan varlıkların yerini alır. OGG, MP3 ve M4A yerinde yeniden kodlanır; WAV ve FLAC, OGG'ye dönüştürülür; döngü noktaları korunur."
     },
     "id": {
+      "Loop points: {start} s to {end} s": "Titik loop: {start} d sampai {end} d",
+      "No loop points in this file.": "Berkas ini tidak memiliki titik loop.",
       "Tools run code from this project.": "Alat menjalankan kode dari proyek ini.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Alat berjalan dalam sandbox tanpa akses berkas, dan hanya dapat membaca serta menulis berkas basis data melalui editor. Jalankan hanya alat yang Anda percayai.",
       "No project tools found.": "Tidak ada alat proyek yang ditemukan.",
@@ -9361,6 +9391,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Hanya hasil tervalidasi yang lebih kecil yang menggantikan aset yang disiapkan. OGG, MP3, dan M4A dienkode ulang di tempat; WAV dan FLAC dikonversi ke OGG; titik loop tetap dipertahankan."
     },
     "vi": {
+      "Loop points: {start} s to {end} s": "Điểm lặp: từ {start} giây đến {end} giây",
+      "No loop points in this file.": "Tệp này không có điểm lặp.",
       "Tools run code from this project.": "Công cụ chạy mã từ dự án này.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Công cụ chạy trong môi trường cách ly, không truy cập tệp, và chỉ có thể đọc và ghi tệp cơ sở dữ liệu thông qua trình chỉnh sửa. Chỉ chạy những công cụ bạn tin tưởng.",
       "No project tools found.": "Không tìm thấy công cụ dự án nào.",
@@ -10023,6 +10055,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Chỉ những kết quả nhỏ hơn đã được kiểm định mới thay thế tài nguyên đã chuẩn bị. OGG, MP3 và M4A được mã hóa lại tại chỗ; WAV và FLAC được chuyển sang OGG; điểm lặp được giữ nguyên."
     },
     "th": {
+      "Loop points: {start} s to {end} s": "จุดวนซ้ำ: {start} วินาที ถึง {end} วินาที",
+      "No loop points in this file.": "ไฟล์นี้ไม่มีจุดวนซ้ำ",
       "Tools run code from this project.": "เครื่องมือจะรันโค้ดจากโปรเจกต์นี้",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "เครื่องมือทำงานในแซนด์บ็อกซ์โดยไม่มีสิทธิ์เข้าถึงไฟล์ และอ่านหรือเขียนไฟล์ฐานข้อมูลได้ผ่านโปรแกรมแก้ไขเท่านั้น เรียกใช้เฉพาะเครื่องมือที่คุณเชื่อถือ",
       "No project tools found.": "ไม่พบเครื่องมือของโปรเจกต์",

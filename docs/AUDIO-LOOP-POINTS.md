@@ -1,6 +1,6 @@
 # Audio formats and loop points
 
-How the game finds an audio file, where each format keeps the point a track loops back to, and how to make a looping Opus track. Everything here is what the runtime reads today; the editor's Audio Player reads the same tags the same way, so a preview loops where the game will.
+How the game finds an audio file, where each format keeps the point a track loops back to, and how to make a looping Opus track. Everything here is what the runtime reads today; the editor's previews (the Audio Player, the audio file picker and the Resource Manager) read the same tags the same way and, where Web Audio is available, loop the decoded track the same way, so a preview loops where, and as cleanly as, the game will.
 
 ## Which files the game finds
 
