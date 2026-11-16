@@ -1,5 +1,7 @@
 # Editor changelog
 
+- The Audio Player shows a folder's subfolders the way the audio file picker and the Resource Manager do: as collapsible sections above the folder's own tracks, each with its file count, and its tracks listed by their own names. It used to list every file from a subfolder among the root tracks as `Folder/Name`, filed under the folder's initial. The rail jumps to a folder as well as to a letter, the folder holding the loaded track starts open, and folders stay as they were left when switching between BGM, BGS, ME and SE.
+
 The full technical list, one file per release or labeled development checkpoint, newest first. The short version of each release is in the [root changelog](../CHANGELOG.md).
 
 - [0.99.6](changelog/0.99.6.md) - 2026-11-16
