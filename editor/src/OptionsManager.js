@@ -261,7 +261,47 @@ class OptionsManager {
         document.body.appendChild(this.modal);
     }
 
+    /**
+     * The editor's own graphics backend under Windows: "" (Auto: what the game found fastest on this machine, from
+     * its record of play), "d3d11", "d3d11on12" or "gl". Kept in localStorage `rr.editorBackend`, where the
+     * editor's start reads it (RPGReactor.relaunchOnMachineBackend, PlaytestManager.editorBackend); the browser
+     * takes its backend from its command line, so a change is in force from the editor's next start.
+     */
+    static EDITOR_BACKEND_KEY = 'rr.editorBackend';
+    static EDITOR_BACKENDS = Object.freeze(['d3d11', 'd3d11on12', 'gl', 'vulkan']);
+    /** Whether this editor can choose its backend at all: the desktop editor under Windows. */
+    editorBackendOffered() {
+        return typeof process !== 'undefined' && process.platform === 'win32' && typeof nw !== 'undefined';
+    }
+    getEditorBackend() {
+        let value = '';
+        try { value = localStorage.getItem(OptionsManager.EDITOR_BACKEND_KEY) || ''; } catch (error) { value = ''; }
+        // "default" is the older spelling of the browser's own (Direct3D 11).
+        if (value === 'default') return 'd3d11';
+        return OptionsManager.EDITOR_BACKENDS.includes(value) ? value : '';
+    }
+    setEditorBackend(value) {
+        const next = OptionsManager.EDITOR_BACKENDS.includes(value) ? value : '';
+        try {
+            if (next) localStorage.setItem(OptionsManager.EDITOR_BACKEND_KEY, next);
+            else localStorage.removeItem(OptionsManager.EDITOR_BACKEND_KEY);
+        } catch (error) { /* no storage: the choice is not kept */ }
+        // The launcher's note for the next start is written now, not at the start after next.
+        try { if (window.reactor && typeof window.reactor.relaunchOnMachineBackend === 'function') window.reactor.relaunchOnMachineBackend(); }
+        catch (error) { /* written at the next start */ }
+        return next;
+    }
+
     _renderContent() {
+        const tt = text => (window.I18n && typeof window.I18n.tText === 'function' ? window.I18n.tText(text) : text);
+        const editorBackend = this.getEditorBackend();
+        const editorBackendRow = !this.editorBackendOffered() ? '' : `
+                        <label for="rr-opt-editor-backend" style="font-size: 12px; color: var(--color-text-muted);">${tt('Graphics Backend')}</label>
+                        <select id="rr-opt-editor-backend" class="rr-opt-editor-backend database-field-value" style="justify-self: start; font-size: 12px; min-width: 220px;">
+                            ${[['', 'Auto (best for this machine)'], ['d3d11', 'Direct3D 11'], ['d3d11on12', 'Direct3D 11 on 12'], ['gl', 'OpenGL'], ['vulkan', 'Vulkan']]
+                                .map(([value, label]) => `<option value="${value}"${value === editorBackend ? ' selected' : ''}>${tt(label)}</option>`).join('')}
+                        </select>
+                        <div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: -2px;">${tt('How the editor reaches the graphics card. Auto uses what the game found fastest on this machine. A change is used from the next time the editor starts.')}</div>`;
         const { palette: currentPalette, mode: currentMode } = this._parseTheme(this.settings.theme);
         const animateAutotiles = this.getAnimateAutotiles();
         const databaseListLabels = this.getDatabaseListLabels();
@@ -356,6 +396,7 @@ class OptionsManager {
                             <button type="button" data-value="gameOnly" class="rr-opt-database-list-labels-btn" aria-pressed="${databaseListLabels === 'gameOnly'}" style="padding: 6px 8px; background: ${databaseListLabels === 'gameOnly' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; border-left: 1px solid var(--color-border-input); cursor: pointer; font-size: 11px; font-weight: 600; flex: 0 1 auto; min-width: 0; white-space: normal; text-align: center; line-height: 1.25;">${t('options.databaseListLabelsGameOnly')}</button>
                         </div>
                         <div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: -2px;">${t('options.databaseListLabelsNote')}</div>
+${editorBackendRow}
                     </div>
                 </div>
 
@@ -471,6 +512,9 @@ class OptionsManager {
         animateAutotilesInput.addEventListener('change', () => {
             this.setAnimateAutotiles(animateAutotilesInput.checked);
         });
+
+        const editorBackendSelect = this.modal.querySelector('.rr-opt-editor-backend');
+        if (editorBackendSelect) editorBackendSelect.addEventListener('change', () => { editorBackendSelect.value = this.setEditorBackend(editorBackendSelect.value); });
 
         databaseListLabelButtons.forEach(btn => {
             btn.addEventListener('click', () => {

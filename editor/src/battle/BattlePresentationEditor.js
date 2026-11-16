@@ -242,7 +242,7 @@ class BattlePresentationEditor {
             if(resolved.type==='model'&&resolved.model){
                 Promise.resolve(RRDatabase3DBindings.modelThumbnail(this.parent.reactor3dEditor,resolved.model)).then(url=>{if(token!==generation||!previewCanvas.isConnected||!url)return;const image=new Image();image.onload=()=>{if(token!==generation)return;const scale=Math.min(W/image.width,H/image.height);previewCanvas.getContext('2d').drawImage(image,(W-image.width*scale)/2,(H-image.height*scale)/2,image.width*scale,image.height*scale);};image.src=url;}).catch(console.warn);
             }else if(resolved.name){
-                const image=new Image();image.onload=()=>{if(token!==generation||!previewCanvas.isConnected)return;const f=B.graphicFrame(resolved,image.width,image.height,'idle',0,kind==='actors'?-90:90),c=previewCanvas.getContext('2d'),scale=Math.min((W-20)/f.width,(H-20)/f.height);c.imageSmoothingEnabled=false;c.save();c.translate(W/2,H/2-(resolved.offsetY||0));c.scale(resolved.mirror?-1:1,1);c.drawImage(image,f.x,f.y,f.width,f.height,-f.width*scale/2,-f.height*scale/2,f.width*scale,f.height*scale);c.restore();};
+                const image=new Image();image.onload=()=>{if(token!==generation||!previewCanvas.isConnected)return;const f=B.graphicFrame(resolved,image.width,image.height,'idle',0,kind==='actors'?-90:90),c=previewCanvas.getContext('2d'),scale=Math.min((W-20)/f.width,(H-20)/f.height);c.imageSmoothingEnabled=false;c.save();c.translate(W/2,H/2-(kind==='actors'?resolved.offsetY||0:0));c.scale(resolved.mirror?-1:1,1);c.drawImage(image,f.x,f.y,f.width,f.height,-f.width*scale/2,-f.height*scale/2,f.width*scale,f.height*scale);c.restore();};
                 image.src=RRAssetFiles.urlFor(require('path').join(project.path,'img',resolved.folder),resolved.name,['.png']);
             }
         };
@@ -254,6 +254,8 @@ class BattlePresentationEditor {
             const dimensions=this.element('div','rr-battle-graphic-options');options.append(dimensions);
             this.number(basic,'Scale',g.scale||1,value=>{set({...get(),scale:Math.max(.1,Math.min(10,value))});draw();},.1);
             this.number(dimensions,'Vertical Offset (pixels)',g.offsetY||0,value=>{set({...get(),offsetY:value});draw();},1);
+            // The game moves only an actor's picture on the flat battle screen (P.updateGraphicBitmap): the field says where it does nothing.
+            dimensions.append(this.element('p','rr-battle-help',kind==='enemies'?'Vertical Offset is not used for enemies: the game does not move an enemy by it.':'Vertical Offset is not used in a Battle Room.'));
             const mirror=this.element('input');mirror.type='checkbox';mirror.checked=!!g.mirror;mirror.onchange=()=>{set({...get(),mirror:mirror.checked});draw();};this.field(basic,'Mirror',mirror);
             // Sheet battlers only: whether the stock weapon swing draws with attack motions. Weapons in hand are the sequences' business.
             for(const [key,label,def] of [['showWeapon','Show Weapon Motion',true]]){const box=this.element('input');box.type='checkbox';box.checked=g[key]??def;box.onchange=()=>set({...get(),[key]:box.checked});this.field(dimensions,label,box);}
@@ -469,7 +471,8 @@ class BattlePresentationEditor {
     drawRoomCast(view,settings,cast) {
         for(const item of cast){
             const p=ReactorBattleData.position(settings,item.side,item.index);
-            if(item.bitmap)view.billboard(item.key,item.bitmap.image,item.frame,{...p,flipX:item.side==='actors'?p.facing>0:p.facing<0},Math.max(.2,item.frame.height/48)*(item.graphic?.scale||1));
+            // Mirror (Battler Options) reverses the flip, as the game's room does (P.updateRoom).
+            if(item.bitmap)view.billboard(item.key,item.bitmap.image,item.frame,{...p,flipX:(item.side==='actors'?p.facing>0:p.facing<0)!==!!item.graphic?.mirror},Math.max(.2,item.frame.height/48)*(item.graphic?.scale||1));
             else view.place(item.key,p);
         }
     }

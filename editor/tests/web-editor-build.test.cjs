@@ -116,10 +116,8 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
             'models no map places are trimmed');
         const bundleSource = execFileSync('unzip', ['-p', archive, 'web/editor.bundle.js'],
             { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-        assert.ok(!bundleSource.includes('styles/looseleaf/'),
-            'the bulk style pack stays out of the web bundle');
-        assert.ok(bundleSource.includes('styles/psychronic/'),
-            'the compact style pack ships');
+        assert.ok(!bundleSource.includes('forge/CharacterGenerator/'),
+            'the retired 2D Character Generator is not in the web bundle');
         assert.ok(!entries.some(line => line.includes('.rpgreactor.lock')),
             'no project lock ships');
         const notices = execFileSync('unzip', ['-p', archive, 'THIRD_PARTY_NOTICES.md'], { encoding: 'utf8' });
@@ -155,9 +153,7 @@ test('Web package and browser host use a root-scoped saved-file overlay', () => 
 
     assert.match(worker, /path\.join\(webRoot, 'service-worker\.js'\)/);
     assert.match(worker, /patchWebProject\(path\.join\(webRoot, 'project'\)\)/);
-    assert.match(worker, /CharacterGenerator\/procgen\/outfit_engine\.js/);
-    assert.match(worker, /CharacterGenerator\/procgen\/hair_engine\.js/);
-    assert.match(worker, /characterStyleScripts/);
+    assert.doesNotMatch(worker, /CharacterGenerator/, 'the 2D Character Generator was retired on 2026-11-12');
     assert.match(host, /mode: 'web'/);
     assert.match(host, /register\('service-worker\.js', \{ scope: '\.\/' \}\)/);
     assert.match(host, /openPlaytest/);

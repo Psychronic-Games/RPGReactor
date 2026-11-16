@@ -57,7 +57,8 @@ test('a map character holds its weapon: shown in the fist, carried, aimed at a t
         Reactor3D.characterGround = () => 0;
         const battler = id => ({ weapons: () => [{ id }] });
         const place = b => { b.root.position.set(4.5, 0, 4.5); b.root.updateMatrixWorld(true); return { object: b.root, character: unit }; };
-        const frame = holder => { Graphics.frameCount++; return M.update(holder, unit, null, false); };
+        // (`world`: a 3D map's scene, where what is held has its size in tiles; without one the holder is a flat map's picture.)
+        const world = {}, frame = (holder, flat) => { Graphics.frameCount++; return M.update(holder, unit, flat ? null : world, false); };
         const barrel = object => { object.updateWorldMatrix(true, false); const s = Reactor3D.heldShape(object); return new THREE.Vector3(...s.axis).transformDirection(object.matrixWorld); };
 
         assert.equal(M.show(bare, { battler: battler(1), hold: 'fist', attachment: 'rightHand' }), false, 'a character without a model holds nothing here');
@@ -72,6 +73,9 @@ test('a map character holds its weapon: shown in the fist, carried, aimed at a t
         frame(holder);
         const state = M.states.get('e1'), gun = state.record.object;
         assert.equal(gun.parent, a.hands.Right, 'the pistol rides the hand as its child');
+        const across = () => { gun.updateWorldMatrix(true, false); return new THREE.Vector3().setFromMatrixScale(gun.matrixWorld).x * .5; };
+        assert.equal(state.flat, false);
+        assert.ok(Math.abs(across() - .3) < 1e-6, 'its size in tiles in a scene (' + across() + ')');
         assert.ok(Reactor3D._handGrips.get(a.hands.Right).pinned, 'and the hand keeps hold of it');
         const goal = new THREE.Vector3(4.5, 1.8 * .6, 9.5), muzzle = gun.localToWorld(new THREE.Vector3(...Reactor3D.heldShape(gun).base).add(new THREE.Vector3(...Reactor3D.heldShape(gun).axis).multiplyScalar(Reactor3D.heldShape(gun).length)));
         assert.ok(barrel(gun).angleTo(goal.clone().sub(muzzle)) < .06, `the barrel points at the target (${(barrel(gun).angleTo(goal.clone().sub(muzzle)) * 57.3).toFixed(1)} degrees off)`);
@@ -157,6 +161,32 @@ test('a map character holds its weapon: shown in the fist, carried, aimed at a t
         Object.assign(Reactor3D, kept);
         delete global.$gameMap; delete global.Graphics;
     }
+});
+
+test('in the hand of a flat map\'s picture a weapon is sized to that picture\'s figure, not in tiles', async () => {
+    const M = Reactor3D.MapHeld, kept = {};
+    for (const name of ['characterModelSpec', 'databaseModelSpec', 'loadModel', 'loadModelSidecar', 'characterGround']) kept[name] = Reactor3D[name];
+    global.$gameMap = { mapId: () => 5 }; global.Graphics = { frameCount: 0 };
+    const pistol = new THREE.Group(); pistol.add(box(.5, .06, .04, 0, 0, 0), box(.07, .2, .04, -.2, -.12, 0)); pistol.userData.glbSize = { x: .5, y: .26, z: .04 };
+    try {
+        const unit = character(1, 4, 4);
+        Reactor3D.characterModelSpec = () => ({ name: 'Actors/Unit', size: 2, scale: 1.5 });
+        Reactor3D.databaseModelSpec = section => (section === 'weapons' ? { name: 'Pistol', ext: '.glb', file: '', size: .3, scale: 1 } : null);
+        Reactor3D.loadModel = async () => pistol; Reactor3D.loadModelSidecar = async () => ({}); Reactor3D.characterGround = () => 0;
+        assert.ok(Math.abs(M.flatScale(unit) - 1 / 3) < 1e-9, 'the picture draws the figure one unit across, the scene at 2 x 1.5 tiles');
+        // The picture's model: the body one unit across (1 / its largest side), as updateMapModelSprite stands it.
+        const a = body(); a.root.scale.setScalar(1 / 1.8); a.root.updateMatrixWorld(true);
+        const holder = { object: a.root, character: unit };
+        assert.equal(M.show(unit, { battler: { weapons: () => [{ id: 1 }] }, hold: 'fist', attachment: 'rightHand', hands: 'one', gripY: 0, duration: 0 }), true);
+        await settle();
+        Graphics.frameCount++; M.update(holder, unit, null, false);
+        const state = M.states.get('e1'), gun = state.record.object;
+        gun.updateWorldMatrix(true, false);
+        const across = new THREE.Vector3().setFromMatrixScale(gun.matrixWorld).x * .5;
+        assert.equal(state.flat, true);
+        assert.ok(Math.abs(across - .3 / 3) < 1e-6, 'a third of its size in tiles, as the figure is (' + across + ')');
+        M.hide(unit); M.clear && M.clear();
+    } finally { Object.assign(Reactor3D, kept); }
 });
 
 test('hand markers go with a model that was stood on its idle clip: the finger joints stay on the fingers', () => {

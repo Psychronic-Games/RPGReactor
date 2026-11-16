@@ -120,6 +120,23 @@ test('the rules run on the map: start, switch and variable activation; switch-dr
     world.switches[6] = true;
     quests.update();
     assert.equal(quests.status(3), 'completed', 'a quest completing by switch');
+    // Reset Quest on a start-of-game quest: it stays forgotten (it came back a frame later, rewards and all).
+    quests.reset(2);
+    quests.update(); quests.update();
+    assert.equal(quests.isKnown(2), false, 'a reset start quest stays reset');
+    // A save from before the record of what has begun: a start quest it knows is not begun twice after a reset,
+    // and one added to the Database since still appears.
+    const old = loadRuntime(DATA, { switches: {}, variables: {} }).quests;
+    old.update();
+    delete old._begun;
+    old.update();
+    old.reset(2);
+    old.update();
+    assert.equal(old.isKnown(2), false, 'an old save: reset stays reset too');
+    const later = loadRuntime(DATA, { switches: {}, variables: {} }).quests;
+    later._started = true;
+    later.update();
+    assert.equal(later.isKnown(2), true, 'a start quest the save has never met appears');
 });
 
 test('tracking follows one active quest and lets go when it ends', () => {

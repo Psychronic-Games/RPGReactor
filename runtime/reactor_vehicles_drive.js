@@ -1576,8 +1576,8 @@
                     // Ridden over a border into the map shown past it (Reactor3D.Neighbors): the ride goes on as it
                     // was, at its speed and on its heading, from the very place it crossed at.
                     const N = root.Reactor3D && root.Reactor3D.Neighbors, whole = !!(N && N.crossing && N.crossing.to === this._newMapId);
-                    const d = this._rrDrive, ride = whole && d && Number.isFinite(d.crossV) ? { v: d.crossV, yaw: d.crossYaw, steer: d.crossSteer } : null;
-                    if (d) { delete d.crossV; delete d.crossYaw; delete d.crossSteer; }
+                    const d = this._rrDrive, ride = whole && d && Number.isFinite(d.crossV) ? { v: d.crossV, yaw: d.crossYaw, steer: d.crossSteer, fall: d.crossFall || null } : null;
+                    if (d) { delete d.crossV; delete d.crossYaw; delete d.crossSteer; delete d.crossFall; }
                     const result = _performTransfer.apply(this, arguments);
                     this._rrVehicleTransfer = null;
                     const event = ReactorVehicles.bind();
@@ -1588,6 +1588,9 @@
                     shapeFor(event, typeFor(event));
                     Drive.seat(this);
                     if (ride) { d.v = ride.v; d.steer = ride.steer; }
+                    // Through an opening to the map under or over (`leaveByLevel`): still in the air, at the height it had
+                    // in this map's measure and falling as it was. It lands on this map's floor by the drive's own rules.
+                    if (ride && ride.fall) { d.alt = ride.fall.alt; d.air = 1; d.vz = ride.fall.vz; d.peak = ride.fall.peak; }
                     arrived(this, d);
                     ReactorVehicles.refresh();
                     if (!ride && (ReactorVehicles.scenery(event) || !fitsAt(event, this, this._x, this._y, d.yaw))) standDown(this);

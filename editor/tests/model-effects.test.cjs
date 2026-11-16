@@ -98,7 +98,7 @@ test('a model base transform wraps every instance and effects carry a turn', () 
     const rules = Reactor3D.readModelAnimationRules({ animations: [{ name: 'idle-loop', trigger: 'action', repeat: true }] });
     assert.equal(rules[0].repeat, true);
     const runtime = source3D();
-    assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D)\.readModelTransform\(sidecar, spec\)\)/g) || []).length, 5, 'every instance site applies the base transform, read with the use\'s spec');
+    assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D|R)\.readModelTransform\(sidecar, spec\)\)/g) || []).length, 5, 'every instance site applies the base transform, read with the use\'s spec');
     assert.match(runtime, /sprite\._animation = Object\.assign\(\{\}, animation, \{/, 'effect turn and size ride on a copy of the record');
     assert.match(runtime, /holder\.action = !ended\.sequence && rule && \(rule\.repeat \|\| holder\.action\.repeat\)/, 'a repeating action starts over');
     assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);

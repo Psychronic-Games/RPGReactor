@@ -71,8 +71,25 @@ class StructureWorkshop {
                 : (plan.pieces || []).map((piece, i) => Object.assign({}, piece, { id: i + 1 }));
             E.restorePieces(mapData, pieces);
             if (SP) SP.addEffects(mapData, SP.effectsOf(plan, 0, 0, name => this.resolve(name)).filter(fx => fx.type !== 'animation'), 0);
+            // The sun that lit the build last time is the workshop's own (a stamp never carries one): put back as it was.
+            const suns = StructureWorkshop.sunsOf(plan);
+            if (suns.length) {
+                const sidecar = mapData.reactor3d || (mapData.reactor3d = { version: 1 });
+                const lights = Array.isArray(sidecar.lights) ? sidecar.lights : (sidecar.lights = []);
+                let next = lights.length + 1;
+                for (const row of suns) {
+                    while (lights.some(light => light && light.id === 'light' + next)) next++;
+                    lights.push(Object.assign(JSON.parse(JSON.stringify(row)), { id: 'light' + next++ }));
+                }
+            }
         }
         return mapData;
+    }
+
+    /** A plan's suns: the workshop's own, and any an older file kept among the structure's lights. */
+    static sunsOf(plan) {
+        const own = plan && plan.workshop && Array.isArray(plan.workshop.lights) ? plan.workshop.lights : [];
+        return own.concat(((plan && plan.lights) || []).filter(row => row && row.type === 'sun')).filter(row => row && typeof row === 'object');
     }
 
     /** From the Structures page: save the database, close it, and open the plot. */
@@ -130,7 +147,11 @@ class StructureWorkshop {
         const plan = entry.plan;
         plan.pieces = E.pieces(map).map(piece => { const out = Object.assign({}, piece); delete out.id; delete out.group; return out; });
         const sidecar = map.reactor3d || {};
-        plan.lights = (sidecar.lights || []).filter(Boolean).map(row => { const out = Object.assign({}, row); if (!out.tag || /^structure:\d+$/.test(String(out.tag))) delete out.tag; delete out.structure; return out; });
+        const lights = (sidecar.lights || []).filter(Boolean).map(row => { const out = Object.assign({}, row); if (!out.tag || /^structure:\d+$/.test(String(out.tag))) delete out.tag; delete out.structure; return out; });
+        // A sun only lights the build: it is kept under the workshop's own settings, which a stamp does not copy.
+        plan.lights = lights.filter(row => row.type !== 'sun');
+        const suns = lights.filter(row => row.type === 'sun');
+        if (suns.length || plan.workshop) plan.workshop = Object.assign({}, plan.workshop, { lights: suns });
         plan.surfaces = (sidecar.mediaSurfaces || []).filter(Boolean).map(row => { const out = Object.assign({}, row); delete out.structure; return out; });
         // What the pieces replace: a built structure is its pieces, not rooms described in words.
         plan.floors = []; plan.stairs = []; plan.shapes = []; plan.parts = []; plan.paths = [];

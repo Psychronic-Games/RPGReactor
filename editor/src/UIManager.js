@@ -867,6 +867,8 @@ class UIManager {
     isEditorModalOpenForGlobalShortcuts() {
         if (typeof RRForgeWindow !== 'undefined' && RRForgeWindow.ownsKeys()) return true;
         if (typeof RRPluginManagerWindow !== 'undefined' && RRPluginManagerWindow.ownsKeys()) return true;
+        // The Audio Player stays open beside the map: it has the keys only after a click or Tab into it.
+        if (typeof RRAudioPlayerWindow !== 'undefined' && RRAudioPlayerWindow.ownsKeys()) return true;
         // The Database beside a live map has the keys only after a click or Tab into it.
         if (typeof RRDatabaseWindow !== 'undefined') {
             if (RRDatabaseWindow.ownsKeys()) return true;
@@ -878,7 +880,7 @@ class UIManager {
         const modalIds = [
             'map-properties-modal',
             'image-picker-modal',
-            'audio-player-modal'
+            ...(typeof RRAudioPlayerWindow === 'undefined' ? ['audio-player-modal'] : [])
         ];
 
         if (modalIds.some(id => {
@@ -891,7 +893,7 @@ class UIManager {
         // A dialog in another window (the Database's, the event editor's) only while that window was the last one worked in.
         const worked = (typeof RRDetachedWindow !== 'undefined' && RRDetachedWindow.lastWorked()?.ownerDocument) || document;
         return Array.from(document.querySelectorAll?.('.rr-modal-overlay, .modal-overlay, .modal, .plugin-manager-child-modal') || [])
-            .some(el => !['event-editor-modal', 'forge-workspace', 'plugin-manager-modal'].includes(el.id) && (!el.ownerDocument || el.ownerDocument === document || el.ownerDocument === worked) && el.getClientRects?.().length > 0);
+            .some(el => !['event-editor-modal', 'forge-workspace', 'plugin-manager-modal', 'audio-player-modal'].includes(el.id) && (!el.ownerDocument || el.ownerDocument === document || el.ownerDocument === worked) && el.getClientRects?.().length > 0);
     }
 
     /**
@@ -1623,6 +1625,8 @@ class UIManager {
         document.getElementById('editor-ui').style.display = 'flex';
         document.getElementById('toolbar').style.display = 'flex';
         this.projectLoaded = true;
+        // A note held from before the map area was on screen is said now, and for longer: the project is still loading.
+        if (this._heldMapNote) { const held = this._heldMapNote; this._heldMapNote = null; this.showMapNote(held, 12000); }
 
         // Scale toolbar icons after toolbar becomes visible
         requestAnimationFrame(() => {
@@ -1641,7 +1645,10 @@ class UIManager {
      * map (the one an undo or a redo names its step in). It stays longer than
      * those: it is the only place the reason is given.
      */
-    showMapNote(message, duration = 6000) {
+    showMapNote(message, duration = 6000, hold = false) {
+        // Said at start, with the welcome screen up, the note would be shown where nobody sees it:
+        // a caller that asks for it has it kept until the editor is on screen.
+        if (hold && message && !this.projectLoaded) { this._heldMapNote = message; return; }
         const stage = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
         if (!stage || !message) return;
         let note = stage.querySelector(':scope > .rr-history-note');

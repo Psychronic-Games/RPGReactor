@@ -263,7 +263,8 @@ test('Cancel takes a card\'s change back, Apply keeps it, and the list\'s Undo r
     assert.notEqual(text('Skills.json'), before);
     // The list's Undo keeps the records as they were before a list action (a copy of them all) and puts them back.
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'DatabaseEditorUI.js'), 'utf8');
-    assert.match(source, /const snapshotForUndo = \(\) => undoStack\.push\(\{\s*entries: JSON\.parse\(JSON\.stringify\(this\.databaseManager\.data\[type\]\)\),/);
+    // (The copy passes through carryStructureMemory, which hands it back: a structure's copy keeps its note of what its file had.)
+    assert.match(source, /const snapshotForUndo = \(\) => undoStack\.push\(\{\s*entries: DatabaseEditorUI\.carryStructureMemory\(type, this\.databaseManager\.data\[type\], JSON\.parse\(JSON\.stringify\(this\.databaseManager\.data\[type\]\)\)\),/);
     assert.match(source, /const snapshot = undoStack\.pop\(\);\s*this\.databaseManager\.data\[type\] = snapshot\.entries;/);
     const undo = [];
     ui._snapshotForUndo = () => undo.push(JSON.parse(JSON.stringify(manager.data.skills)));

@@ -46,8 +46,15 @@
             return L > 0.179 ? '#000000' : '#ffffff';
         },
 
-        swatch(cls, value, disabled = false) {
+        /**
+         * `unset`: the swatch stands for "no colour chosen" (a tint of None). It is drawn as one of the theme's own
+         * fields with a dash in it, not as a block of the colour that stands in for none: a tint of None was a
+         * plain white box reading #FFFFFF, which looked like a field the theme had missed (owner, 2026-11-13).
+         * Picking a colour makes it an ordinary swatch.
+         */
+        swatch(cls, value, disabled = false, unset = false) {
             const hex = valid(value) ? value.toLowerCase() : '#ffffff';
+            if (unset) return `<button type="button" class="rr-color-swatch-btn is-unset ${escape(cls)}" data-value="${hex}"${disabled ? ' disabled' : ''}><span class="rr-color-swatch-hex">—</span></button>`;
             return `<button type="button" class="rr-color-swatch-btn ${escape(cls)}" data-value="${hex}" style="background:${hex};--rr-swatch-ink:${api.ink(hex)};"${disabled ? ' disabled' : ''}><span class="rr-color-swatch-hex">${hex.toUpperCase()}</span></button>`;
         },
 
@@ -59,6 +66,7 @@
                 if (open && open.anchor === button) { close(); return; }
                 api.open(button, button.dataset.value, hex => {
                     button.dataset.value = hex;
+                    button.classList.remove('is-unset');
                     button.style.background = hex;
                     button.style.setProperty('--rr-swatch-ink', api.ink(hex));
                     const label = button.querySelector('.rr-color-swatch-hex');

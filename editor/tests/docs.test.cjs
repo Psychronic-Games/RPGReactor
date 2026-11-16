@@ -20,10 +20,7 @@ const DOC_DIRS = [
     path.join(workspaceRoot, 'docs', 'archive', 'sessions'),
     path.join(workspaceRoot, 'changelog'),
     path.join(repoRoot),
-    path.join(repoRoot, 'changelog'),
-    path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'procgen'),
-    path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'procgen', 'analysis'),
-    path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'styles', 'psychronic')
+    path.join(repoRoot, 'changelog')
 ];
 
 function markdownFiles(dir) {

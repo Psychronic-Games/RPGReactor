@@ -562,6 +562,7 @@ Game_Message.prototype.clear = function() {
     this._speakerName = "";
     this._faceName = "";
     this._faceIndex = 0;
+    this._rrFacePlay = "";
     this._background = 0;
     this._positionType = 2;
     this._choiceDefaultType = 0;
@@ -657,6 +658,15 @@ Game_Message.prototype.setSpeakerName = function(speakerName) {
 Game_Message.prototype.setFaceImage = function(faceName, faceIndex) {
     this._faceName = faceName;
     this._faceIndex = faceIndex;
+};
+
+/** How this message plays a face set with frames (ImageManager.FACE_PLAYS); anything else is "talk". */
+Game_Message.prototype.setFacePlay = function(play) {
+    this._rrFacePlay = ImageManager.FACE_PLAYS.includes(play) ? play : "";
+};
+
+Game_Message.prototype.facePlay = function() {
+    return this._rrFacePlay || "talk";
 };
 
 Game_Message.prototype.setBackground = function(background) {

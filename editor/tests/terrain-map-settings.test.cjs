@@ -694,3 +694,18 @@ test('a map that is not 3D takes the maps past its sides, in a sidecar that says
     terrain.undo();
     assert.equal(map.reactor3d.surround || null, null, 'undo takes the neighbor back');
 });
+
+test('a tint of None is drawn as a themed field, not a white block', () => {
+    const popup = require(path.join(repoRoot, 'editor/src/utils/ColorPopup.js'));
+    const api = popup.RRColorPopup || popup;
+    const unset = api.swatch('rr-build-floortint', '#ffffff', false, true), set = api.swatch('rr-build-floortint', '#ffffff');
+    assert.match(unset, /class="rr-color-swatch-btn is-unset rr-build-floortint"/);
+    assert.doesNotMatch(unset, /style=/, 'no block of the stand-in colour');
+    assert.doesNotMatch(unset, /#FFFFFF/, 'and no hex of a colour nobody chose');
+    assert.match(set, /background:#ffffff/, 'a white that was chosen is shown as white');
+    const css = fs.readFileSync(path.join(repoRoot, 'editor/css/theme.css'), 'utf8');
+    assert.match(css, /\.rr-color-swatch-btn\.is-unset \{\s*background: var\(--color-bg-input/);
+    const bar = fs.readFileSync(path.join(repoRoot, 'editor/src/BuildHotbar.js'), 'utf8');
+    assert.match(bar, /RRColorPopup\.swatch\('rr-build-floortint', room\.floorTint \|\| '#ffffff', false, !room\.floorTint\)/);
+    assert.match(bar, /swatchOf\('rr-build-ptint', look\.tint \|\| '#ffffff', !look\.tint\)/);
+});

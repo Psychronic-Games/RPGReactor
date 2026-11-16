@@ -353,7 +353,8 @@ Scene_Boot.prototype.start = function() {
 Scene_Boot.prototype.startNormalGame = function() {
     this.checkPlayerLocation();
     DataManager.setupNewGame();
-    SceneManager.goto(Scene_Title);
+    // Database › System 1 › Show Splash Screen: `img/system/Splash.png` before the title, as RPG Maker MZ shows it.
+    SceneManager.goto($dataSystem.optSplashScreen ? Scene_Splash : Scene_Title);
     Window_TitleCommand.initCommandPosition();
 };
 
@@ -411,6 +412,103 @@ Scene_Boot.prototype.checkPlayerLocation = function() {
     if ($dataSystem.startMapId === 0) {
         throw new Error("Player's starting position is not set");
     }
+};
+
+//-----------------------------------------------------------------------------
+// Scene_Splash
+//
+// The scene class of the splash screen: the picture `img/system/Splash.png`,
+// faded in, held for two seconds (OK or a click ends the hold) and faded out
+// to the title. The names and the timing are RPG Maker MZ's.
+
+function Scene_Splash() {
+    this.initialize(...arguments);
+}
+
+Scene_Splash.prototype = Object.create(Scene_Base.prototype);
+Scene_Splash.prototype.constructor = Scene_Splash;
+
+Scene_Splash.prototype.initialize = function() {
+    Scene_Base.prototype.initialize.call(this);
+    this.initWaitCount();
+};
+
+Scene_Splash.prototype.create = function() {
+    Scene_Base.prototype.create.call(this);
+    if (this.isEnabled()) this.createBackground();
+};
+
+// The picture is loaded on its own, outside the image cache: a project with the
+// option on and no Splash.png goes on to its title, where a cached picture that
+// failed would stop the game with a load error.
+Scene_Splash.prototype.isReady = function() {
+    const bitmap = this._backSprite && this._backSprite.bitmap;
+    if (bitmap && !bitmap.isReady() && !bitmap.isError()) return false;
+    return Scene_Base.prototype.isReady.call(this);
+};
+
+Scene_Splash.prototype.start = function() {
+    Scene_Base.prototype.start.call(this);
+    if (this.hasPicture()) {
+        this.adjustBackground();
+    } else {
+        if (this._backSprite) this._backSprite.visible = false;
+        this._waitCount = 0;
+    }
+    this.startFadeIn(this.fadeSpeed(), false);
+};
+
+Scene_Splash.prototype.update = function() {
+    Scene_Base.prototype.update.call(this);
+    if (this.isActive()) {
+        if (!this.updateWaitCount()) this.gotoTitle();
+        this.checkSkip();
+    }
+};
+
+Scene_Splash.prototype.stop = function() {
+    Scene_Base.prototype.stop.call(this);
+    this.startFadeOut(this.fadeSpeed());
+};
+
+Scene_Splash.prototype.createBackground = function() {
+    this._backSprite = new Sprite();
+    this._backSprite.bitmap = Bitmap.load("img/system/Splash.png");
+    this.addChild(this._backSprite);
+};
+
+Scene_Splash.prototype.adjustBackground = function() {
+    this.scaleSprite(this._backSprite);
+    this.centerSprite(this._backSprite);
+};
+
+Scene_Splash.prototype.isEnabled = function() {
+    return !!$dataSystem.optSplashScreen;
+};
+
+Scene_Splash.prototype.hasPicture = function() {
+    const bitmap = this._backSprite && this._backSprite.bitmap;
+    return !!bitmap && bitmap.isReady() && !bitmap.isError();
+};
+
+Scene_Splash.prototype.initWaitCount = function() {
+    this._waitCount = this.isEnabled() ? 120 : 0;
+};
+
+Scene_Splash.prototype.updateWaitCount = function() {
+    if (this._waitCount > 0) {
+        this._waitCount--;
+        return true;
+    }
+    return false;
+};
+
+Scene_Splash.prototype.checkSkip = function() {
+    if (Input.isTriggered("ok") || TouchInput.isTriggered()) this._waitCount = 0;
+};
+
+Scene_Splash.prototype.gotoTitle = function() {
+    SceneManager.goto(Scene_Title);
 };
 
 //-----------------------------------------------------------------------------
@@ -959,8 +1057,11 @@ Scene_Map.prototype.processMapTouch = function() {
     }
     if (TouchInput.isTriggered() || this._touchCount > 0) {
         if (TouchInput.isPressed() && !this.isAnyButtonPressed()) {
+            // A held button keeps the walk aimed at the pointer, as the stock game does: the map scrolls under a
+            // still pointer, so the tile under it changes without the pointer moving. Aimed again when the pointer
+            // moves, and otherwise every 15 frames (a pick on a 3D map is a ray through the scene, not free).
             const pointerMoved = TouchInput.x !== this._lastMapTouchX || TouchInput.y !== this._lastMapTouchY;
-            if (this._touchCount === 0 || (this._touchCount >= 15 && pointerMoved)) {
+            if (this._touchCount === 0 || (this._touchCount >= 15 && (pointerMoved || this._touchCount % 15 === 0))) {
                 this.onMapTouch();
                 this._lastMapTouchX = TouchInput.x;
                 this._lastMapTouchY = TouchInput.y;
@@ -2253,7 +2354,11 @@ Scene_Options.prototype.optionsWindowRect = function() {
 Scene_Options.prototype.maxCommands = function() {
     // Increase this value when adding option items.
     // The Graphics row is there once this machine has drawn a 3D map (Window_Options.addGraphicsOption).
-    return 7 + (typeof Reactor3D !== "undefined" && Reactor3D.Quality && ConfigManager.reactor3dSeen ? 1 : 0);
+    // The Frame Rate row is there where the monitor's refresh is known (Window_Options.offersFrameRate).
+    // The Battle Camera row is there in a game being played, in a project whose battles use it (Window_Options.offersBattleCamera).
+    return 7 + (typeof Reactor3D !== "undefined" && Reactor3D.Quality && ConfigManager.reactor3dSeen ? 1 : 0)
+        + (Window_Options.offersFrameRate && Window_Options.offersFrameRate() ? 1 : 0)
+        + (Window_Options.offersBattleCamera && Window_Options.offersBattleCamera() ? 1 : 0);
 };
 
 Scene_Options.prototype.maxVisibleCommands = function() {

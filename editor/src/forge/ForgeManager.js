@@ -13,11 +13,10 @@
  *
  * Project-side data layout (under <projectPath>/forge/):
  *   forge/
- *     character_generator/
- *       styles/<style>/parts/<category>/*.{png,js}
- *       parts/<category>/*.png   (legacy Complex-template path; still scanned)
- *       config.json
- *     ... (future tools)
+ *     character_3d/        designs and groups of the 3D Character Builder
+ *     animation_generator/, sound_effect_generator/, ... one folder a tool
+ *   (A project may still hold forge/character_generator/ from the 2D Character
+ *   Generator, retired on 2026-11-12; nothing reads it.)
  *
  * Adding a tool: drop a class in src/forge/<ToolName>/, register an entry in
  * FORGE_TOOLS below. The launcher picks it up; the sidebar shows it; the
@@ -30,9 +29,6 @@
 const FORGE_ICONS = {
     // A large gold anvil and curved four-point spark remain clear at 22px.
     forge: (size) => `<img src="images/icon-forge.svg" width="${size}" height="${size}" style="display: block;" alt="">`,
-
-    // Person silhouette (head + shoulders).
-    characterGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6v1"/></svg>`,
 
     // Clapperboard — universal "animation" symbol.
     // A figure in front of a cube's edges: a body built in 3D.
@@ -57,14 +53,6 @@ const FORGE_ICONS = {
 };
 
 const FORGE_TOOLS = [
-    {
-        id: 'character-generator',
-        nameKey: 'menu.characterGenerator',
-        descriptionKey: 'forge.characterGenerator.description',
-        icon: FORGE_ICONS.characterGenerator,
-        ctor: () => new CharacterGenerator(),
-        getter: 'characterGenerator'
-    },
     {
         id: 'character-3d-builder',
         nameKey: 'menu.character3dBuilder',
@@ -165,7 +153,19 @@ class ForgeManager {
 
     /** Open the workspace and activate a specific tool by id. */
     openTool(toolId) {
-        if (FORGE_TOOLS.some(tool => tool.id === toolId)) this._open(toolId);
+        if (!FORGE_TOOLS.some(tool => tool.id === toolId)) return;
+        // The Forge is showing another tool that holds work (a running project tool), and
+        // opening this one closes it: the same question first that the sidebar asks.
+        // With nothing held it opens at once, in the same turn, as callers expect.
+        const shown = !!this.workspaceModal && this.workspaceModal.style.display !== 'none';
+        if (shown && toolId !== this.activeToolId && this._holdsWork()) {
+            const from = this.activeToolId;
+            this._confirmDiscard().then(discard => {
+                if (discard && this.activeToolId === from && this.workspaceModal) this._open(toolId);
+            });
+            return;
+        }
+        this._open(toolId);
     }
 
     _open(toolId = this.activeToolId) {

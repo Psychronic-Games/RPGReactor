@@ -8,7 +8,8 @@ import { MeshoptSimplifier } from './meshopt_simplifier.js';
 // seconds, 57 after; 2026-11-11). All of it here, off the main thread; a store that cannot be opened, read or
 // written is simply not used. `RECIPE` names how the levels are made: change it with the steps below, and what was
 // kept under the old one is no longer found.
-const RECIPE = 'levels-3:chained:0.00025..0.032:LockBorder+Permissive@0.8';
+// levels-4 (2026-11-15): each level says whether it was made across texture seams (`loose`).
+const RECIPE = 'levels-4:chained:0.00025..0.032:LockBorder+Permissive@0.8';
 const STORE = 'levels';
 /** Entries kept at most; past it the store is emptied and fills again from what is played. */
 const MOST = 1500;
@@ -51,6 +52,11 @@ const make = job => {
     // distance. Once doubling the error removes less than a fifth of what is left, the levels from
     // there on may collapse across seams (Permissive); the texture coordinates still count in the
     // error, so the result stays inside the same distance on screen. 128k -> 18.5k at the same error.
+    // That holds while the level is drawn where its error is under a pixel. A triangle that spans two islands reads
+    // the picture between them, so drawn nearer than that (a Quality level allows the levels several pixels) it shows
+    // as patches of another part's colour: brown leather over a coat and hair on the Demo's first actor at Auto's
+    // low levels (owner, 2026-11-15). Such a level is marked `loose`, and is chosen only under the levels' own
+    // pixel (Reactor3D.GeometryDetail.begin).
     //
     // Each level is made from the one before it, not from the whole mesh again: seven or more passes over a
     // 149k-triangle model took this worker 3.7 to 4.9 s on a four-core laptop, and a model is drawn at full detail
@@ -75,7 +81,7 @@ const make = job => {
         spent += achieved;
         // A level that is barely smaller than the one before costs memory and buys nothing.
         const last = levels[levels.length - 1];
-        if (indices.length < job.indices.length * 0.9 && (!last || indices.length < last.indices.length * 0.92)) levels.push({ indices, error: spent * scale });
+        if (indices.length < job.indices.length * 0.9 && (!last || indices.length < last.indices.length * 0.92)) levels.push({ indices, error: spent * scale, loose: flags.length > 1 });
     }
     return levels;
 };

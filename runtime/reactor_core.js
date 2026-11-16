@@ -1817,7 +1817,12 @@ Graphics.FrameGovernor = {
     WINDOW_MS: 4000,
     WINDOWS: 3,
     STALLS: 2,
-    STALL_MS: 50,
+    /**
+     * A stall is a frame this long: the laptop's were 150 to 250 ms. At 50 an RTX 5070 turning its camera in the
+     * Reactor Room (600 frames a second, stops of 30 to 55 ms) could be held, and the hold, asked for 70 frames a
+     * second, gave it about 43 drawn frames with 24 ms between them (2026-11-14).
+     */
+    STALL_MS: 100,
     FAST: 75,
     HOLD: 63,
     /** The most the ticker is asked for to get HOLD out of it. */
@@ -1834,7 +1839,8 @@ Graphics.FrameGovernor = {
     rate() { return Math.max(this.HOLD, this.screenHz > 0 ? this.screenHz + 3 : 0); },
     key() {
         const Q = typeof Reactor3D !== "undefined" && Reactor3D.Quality;
-        return "rrFrameHold2:" + (Q && Q.device ? Q.device() : "");
+        // (3: verdicts kept before 2026-11-14 held machines drawing hundreds of frames a second; they are not read.)
+        return "rrFrameHold3:" + (Q && Q.device ? Q.device() : "");
     },
     /** Whether this frame is play to be judged: a map being made ready, a scene on its way and a window left are not. */
     judged() {
@@ -1917,6 +1923,149 @@ Graphics.FrameGovernor = {
 };
 
 /**
+ * A game draws as many frames a second as the monitor its window is on can show, and no more.
+ *
+ * With no vsync and no limit a strong card draws every frame it can: 600 a second in the Demo's first room on an
+ * RTX 5070 for a monitor that shows 180, the card full the whole time for frames nobody sees (owner, 2026-11-14).
+ * This is not vsync (which held 58 frames a second for two refreshes each on that desktop): nothing waits for the
+ * monitor. A tick that comes before the next frame's time does nothing at all, updates included (the game's clock
+ * is the real one, so the tick that runs makes the updates owed, as with GpuPace); frames are begun on an even
+ * schedule, one every 1000 / refresh ms, each from the time the last was due and not from when it happened to
+ * start, so one late frame does not push the rest.
+ *
+ * The rate is the refresh of the monitor the window is on, asked of the system (reactor_main.js:
+ * `RPG_REACTOR_SCREEN_HZ`, and again when the window has moved); nothing is assumed where the system will not
+ * say, and the game runs unlimited there as it always did. Options › Frame Rate (`ConfigManager.frameLimit`)
+ * chooses Monitor (the default) or Unlimited.
+ *
+ * F2 goes on showing what the machine makes of the game, not the limit: while the limit is met, the frames a
+ * second the frame's own work would allow (`capable`: the main thread's time to draw a frame with the updates'
+ * time taken off the second, or the graphics card's time for a frame, whichever allows fewer); as soon as fewer
+ * frames come than the monitor shows, the frames that came.
+ */
+Graphics.FrameLimit = {
+    enabled: true,
+    /** How often (ms) the window's place is looked at for a move to another monitor, and the least between two askings. */
+    LOOK_MS: 1000, ASK_MS: 3000,
+    /** The share of the monitor's rate at which the limit counts as met. */
+    MET: 0.9,
+    /** Ticks left alone because their frame was not due, since the game began. */
+    skipped: 0,
+    /** The frames a second the frame's own work would allow (0: not measured yet). */
+    capable: 0,
+    _next: 0, _looked: 0, _asked: 0, _place: "", _from: 0, _update: 0, _draw: 0, _draws: 0,
+    on() { return this.enabled && !(typeof ConfigManager !== "undefined" && ConfigManager.frameLimit === false); },
+    /** The monitor's refresh a second where the system said, else 0. */
+    hz() { const hz = Number(globalThis.RPG_REACTOR_SCREEN_HZ); return hz >= 24 && hz <= 1000 ? hz : 0; },
+    /** The frames a second the game is held to now; 0 unlimited. */
+    rate() { return this.on() ? this.hz() : 0; },
+    /** Whether this tick's frame is not due yet. Nothing is spent: a tick that is due and then not begun (GpuPace) is due still. */
+    wait(now) {
+        this.look(now);
+        if (!(this.rate() > 0)) { this._next = 0; return false; }
+        if (this._next > 0 && now < this._next) { this.skipped++; this.arm(); return true; }
+        return false;
+    },
+    /** A frame is begun now: when the next is due. */
+    begun(now) {
+        const rate = this.rate();
+        if (!(rate > 0)) return;
+        const period = 1000 / rate;
+        // The first frame, or one long overdue (a stop, the window away): the schedule starts from here.
+        if (!(this._next > 0) || now - this._next > period * 4) this._next = now + period;
+        else { this._next += period; if (this._next <= now) this._next = now + period; }
+        this.arm();
+    },
+    /**
+     * The limit's own clock. The browser calls the game back when it has drawn: a tick that draws nothing is not
+     * followed by another until the browser's own next frame, so frames begun only on its ticks came about 22 ms
+     * apart for a limit of 180 a second (measured on the RTX 5070, 2026-11-14; the same was behind the uneven
+     * frames of FrameGovernor's hold). So the frame that is due is begun from a clock of the limit's own: a timeout
+     * to within NEAR_MS of its time where that is over HOP_MS away (timeouts come a millisecond or more late), then
+     * message hops, which come back at once, until it is due; then the ticker is run. Measured at 180 a second:
+     * frames begun 3.1 to 7.9 ms apart for 5.56 (1st to 99th in a hundred), the longest 10. Hops alone the whole
+     * way were worse (1.9 to 10.8, the longest 31): they crowd out the browser's own work. The ticker's own ticks
+     * still come, and find the frame begun or not yet due.
+     */
+    NEAR_MS: 1.5, HOP_MS: 4.5,
+    _armed: false, _channel: null, _hopTo: null,
+    arm() {
+        if (this._armed || !(this._next > 0) || typeof setTimeout !== "function") return;
+        this._armed = true;
+        const fire = () => {
+            if (!(this.rate() > 0) || !(this._next > 0)) { this._armed = false; return; }
+            const left = this._next - performance.now();
+            if (left > this.HOP_MS) { setTimeout(fire, left - this.NEAR_MS); return; }
+            if (left > 0.05 && this.hop(fire)) return;
+            this._armed = false;
+            this.run();
+        };
+        fire();
+    },
+    hop(then) {
+        if (typeof MessageChannel !== "function") return false;
+        if (!this._channel) {
+            this._channel = new MessageChannel();
+            this._channel.port1.onmessage = () => { const to = this._hopTo; this._hopTo = null; if (to) to(); };
+        }
+        this._hopTo = then;
+        this._channel.port2.postMessage(0);
+        return true;
+    },
+    /** The ticker run now, as its own tick runs it: the frame that is due is begun (Graphics._onTick). */
+    run() {
+        const ticker = typeof Graphics !== "undefined" && Graphics._app ? Graphics._app.ticker : null;
+        if (!ticker || ticker.started === false || typeof ticker.update !== "function") return;
+        if (typeof document !== "undefined" && document.hidden === true) return;
+        try { ticker.update(performance.now()); } catch (error) { console.warn("Graphics.FrameLimit: the frame begun by the limit's clock threw", error); }
+    },
+    /**
+     * Whether the limit is what paces this machine: it is on, and the frame's own work would allow more frames
+     * than the monitor shows (by SPARE). Such a machine's card is never handed frames faster than it finishes
+     * them, so nothing else paces it (GpuPace.armed).
+     */
+    SPARE: 1.1,
+    spare() {
+        const rate = this.rate();
+        return rate > 0 && this.capable >= rate * this.SPARE;
+    },
+    /** The window moved or changed size: the monitor it is on is asked for again (its refresh may be another). */
+    look(now) {
+        if (now - this._looked < this.LOOK_MS) return;
+        this._looked = now;
+        if (typeof window === "undefined" || typeof globalThis.RPG_REACTOR_ASK_SCREEN !== "function") return;
+        const place = [window.screenX, window.screenY, window.outerWidth, window.outerHeight].join(",");
+        if (place === this._place) return;
+        if (this._place && now - this._asked >= this.ASK_MS) { this._asked = now; try { globalThis.RPG_REACTOR_ASK_SCREEN(); } catch (error) { /* stays as it was */ } this._place = place; }
+        else if (!this._place) this._place = place;
+    },
+    /** A tick's work: the ms its updates took and, where it drew, the ms the drawing took. */
+    note(now, updateMs, drawMs, drew) {
+        if (!this._from) this._from = now;
+        this._update += updateMs;
+        if (drew) { this._draw += drawMs; this._draws++; }
+        const span = now - this._from;
+        if (span < 500) return;
+        if (this._draws >= 4 && this._draw > 0) {
+            // What the main thread could draw in a second once the second's updates are made...
+            const each = this._draw / this._draws, updates = Math.min(900, this._update * 1000 / span);
+            let capable = (1000 - updates) / each;
+            // ...and what the graphics card could, by its own clock for a frame (Reactor3D.Quality.GpuClock).
+            const clock = typeof Reactor3D !== "undefined" && Reactor3D.Quality && Reactor3D.Quality.GpuClock ? Reactor3D.Quality.GpuClock.recent : 0;
+            if (clock > 0) capable = Math.min(capable, 1000 / clock);
+            this.capable = this.capable > 0 ? this.capable * 0.6 + capable * 0.4 : capable;
+        }
+        this._from = now; this._update = 0; this._draw = 0; this._draws = 0;
+    },
+    /** The frames a second F2 shows for `delivered` frames a second that came: see above. */
+    shown(delivered) {
+        const rate = this.rate();
+        if (!(rate > 0) || !(delivered >= rate * this.MET) || !(this.capable > 0)) return delivered;
+        return Math.max(delivered, this.capable);
+    }
+};
+
+/**
  * No frame is begun while the graphics card still owes two.
  *
  * With no vsync and no frame limit nothing paces a game but the machine. Where the processor is what a frame waits
@@ -1962,13 +2111,21 @@ Graphics.GpuPace = {
     UNDER_MS: 10,
     /** Paced frames closer than this for a second: the card keeps up, and a hold after stops is let go. */
     FAST_MS: 5,
-    STALL_MS: 50, STALLS: 2, STALL_WINDOW: 4000, ARM_MS: 30000, ARM_MOST: 600000,
+    /** Paced frames closer than this for a second let a hold after stops go (125 a second: twice what any paced machine short of its card delivers; a 5070 with every frame marked makes 176 to 185, and never the 200 FAST_MS asked). */
+    LET_GO_MS: 8,
+    STALL_MS: 100, STALLS: 2, STALL_WINDOW: 4000, ARM_MS: 30000, ARM_MOST: 600000,
     _gl: null, _pending: [], _since: 0, _period: 0, _begunAt: 0, _stalls: [], _armedUntil: 0, _armFor: 0, _rate: 0, _rateHeld: false, _secStart: 0, _secCount: 0,
     /** A frame is begun now: the pace they come at, smoothed (a pause is not a pace), and the stops between them. */
     begun(now) {
         const gap = now - this._begunAt;
         if (this._begunAt > 0 && gap > 0 && gap < 250) this._period = this._period > 0 ? this._period * 0.85 + gap * 0.15 : gap;
         // A stop in play (not a map being made ready, a scene on its way or the window left: FrameGovernor.judged).
+        // A stop is STALL_MS or more: the backlog shown at once was 150 to 250 ms on the Iris Xe. At 50 ms an RTX
+        // 5070 turning its camera in the Reactor Room at 600 a second (stops of 30 to 55 ms, a few a second) was
+        // paced for 30 seconds at about 180 in uneven pairs (a frame of 23 ms forty times a second), could not
+        // reach the 200 a second that let a paced machine go, and was paced twice as long at the next pair
+        // (owner, 2026-11-14: "FPS remains relatively high, but dips down into the 100's", the whole scene
+        // choppy as the camera turns). 100 since, and a paced machine is let go at LET_GO_MS (below).
         if (this._begunAt > 0 && gap >= this.STALL_MS && gap < 2000 && this.judged()) {
             const stalls = this._stalls;
             stalls.push(now);
@@ -1993,11 +2150,16 @@ Graphics.GpuPace = {
     /** Whether frames are marked and waited for now: this machine is near what it can do, or it has been stopping. */
     armed(now) {
         if (!this.enabled) return false;
+        // Held to its monitor's refresh with work to spare (Graphics.FrameLimit.spare), a machine is never handed
+        // frames faster than its card finishes them: the limit paces it, and marking its frames as well gave an
+        // RTX 5070 held to 180 about 52 frames a second, 22 ms apart (a marker is looked for only on a tick the
+        // limit lets through; 2026-11-14). A 60 Hz monitor's 16.7 ms is also over UNDER_MS on any machine.
+        if (typeof Graphics !== "undefined" && Graphics.FrameLimit && Graphics.FrameLimit.spare()) return false;
         if (now < this._armedUntil) {
             // Paced, frames come as fast as the card finishes them: one that finishes over 200 a second for a
             // second running was not what stopped (a fast machine's stops as a map arrives), and is let go.
             // (Counted over a whole second: paced frames come in uneven pairs, and the smoothed gap swings with them.)
-            if (this._rateHeld && this._rate >= 1000 / this.FAST_MS) { this._armedUntil = 0; this._armFor = 0; }
+            if (this._rateHeld && this._rate >= 1000 / this.LET_GO_MS) { this._armedUntil = 0; this._armFor = 0; }
             if (now < this._armedUntil) return true;
         }
         // (Nothing known of its pace yet: paced, as a slow machine's first frames are.)
@@ -2057,8 +2219,11 @@ Graphics.GpuPace = {
 };
 
 Graphics._onTick = function(deltaTime) {
+    // The next frame is not due yet: the monitor would not show this one (FrameLimit).
+    if (this.FrameLimit.wait(performance.now())) return;
     // The graphics card still owes two frames: this tick is left to it (GpuPace).
     if (this.GpuPace.behind(performance.now())) return;
+    this.FrameLimit.begun(performance.now());
     const prof = ReactorProfiler._active ? ReactorProfiler : null;
     if (prof) prof.frameBegin();
     this._fpsCounter.startTick();
@@ -2085,7 +2250,7 @@ Graphics._onTick = function(deltaTime) {
             console.warn("Graphics._onTick: watchdog sweep threw", e);
         }
     }
-    let updates;
+    let updates, updateMs = 0, drawMs = 0;
     if (this._tickHandler) {
         // v5/v6/v7: callback receives delta as a number.
         // v8: callback receives the Ticker instance; extract its deltaTime.
@@ -2095,7 +2260,7 @@ Graphics._onTick = function(deltaTime) {
                 : (deltaTime && typeof deltaTime.deltaTime === "number"
                     ? deltaTime.deltaTime
                     : 1));
-        const tUpdate = prof ? performance.now() : 0;
+        const tUpdate = performance.now();
         updates = this._tickHandler(dt);
         // Send any batched canvas->GPU uploads now that the frame's drawing is
         // done. pixi_compat also flushes from render(), but plugins that do
@@ -2105,14 +2270,15 @@ Graphics._onTick = function(deltaTime) {
         if (window.PIXI && PIXI.__reactorFlushTextureUploads) {
             PIXI.__reactorFlushTextureUploads();
         }
-        if (prof) prof.phase("update", performance.now() - tUpdate);
+        updateMs = performance.now() - tUpdate;
+        if (prof) prof.phase("update", updateMs);
     }
     // Draw intermediate map poses on available refreshes between game updates.
     const paced = pacing.decide(updates);
     try {
         if (this._canRender() && (paced === pacing.DRAW || (paced !== pacing.SKIP && this._frameChanged(updates))
             || (paced === pacing.SKIP && this._mustComposite()))) {
-            const tRender = prof ? performance.now() : 0;
+            const tRender = performance.now();
             if (paced === pacing.DRAW) pacing.draw();
             // Draws from here to the composite are its own (Graphics._frameChanged).
             this._compositing = true;
@@ -2125,7 +2291,8 @@ Graphics._onTick = function(deltaTime) {
             } finally { this._compositing = false; }
             this._noteComposite();
             this.GpuPace.mark();
-            if (prof) prof.phase("render", performance.now() - tRender);
+            drawMs = performance.now() - tRender;
+            if (prof) prof.phase("render", drawMs);
             // v8: Sprite_Animation._render runs via the onRender bridge, which v8
             // invokes BEFORE the actual GPU draws happen. Effekseer's draws would
             // therefore be overwritten by v8's subsequent rendering. Instead, on
@@ -2147,6 +2314,8 @@ Graphics._onTick = function(deltaTime) {
     const world = pacing.spriteset()?._reactor3d;
     this._fpsCounter.endTick(composited && (!world || (this.worldFrameCount || 0) !== worldBefore));
     if (quality) quality.tickEnd(performance.now());
+    // What this tick's work came to, for the frames a second F2 shows under the limit (FrameLimit).
+    this.FrameLimit.note(performance.now(), updateMs, drawMs, composited);
     // A machine that stalls drawing as fast as it can is held to the game's rate (FrameGovernor).
     this.FrameGovernor.tick(performance.now());
     if (prof) prof.frameEnd();
@@ -3586,10 +3755,13 @@ Graphics.FPSCounter.prototype._createElements = function() {
         reset + "font-size:11px; line-height:12px; letter-spacing:1px;" +
         "color:rgba(255,255,255,0.7);";
     // Renderer mode on its own line under the number, the way RPG Maker's
-    // meter reported "WebGL mode" / "Canvas mode".
+    // meter reported "WebGL mode" / "Canvas mode"; under it the graphics
+    // device and the backend it is reached through, a line each
+    // (white-space:pre-line), so the box is as wide as its longest line and
+    // not as all three in a row.
     this._modeDiv.style.cssText =
         reset + "align-self:stretch; text-align:center; margin-top:2px;" +
-        "font-size:9px; line-height:11px; letter-spacing:1px;" +
+        "font-size:9px; line-height:11px; letter-spacing:1px; white-space:pre-line;" +
         "color:rgba(255,255,255,0.55);";
     this._rowDiv.appendChild(this._numberDiv);
     this._rowDiv.appendChild(this._labelDiv);
@@ -3599,7 +3771,8 @@ Graphics.FPSCounter.prototype._createElements = function() {
 };
 
 Graphics.FPSCounter.prototype._update = function() {
-    const count = this._showFps ? this.fps : this.duration;
+    // Under the frame limit, the frames a second the frame's work would allow; short of the monitor's, the frames that came (Graphics.FrameLimit).
+    const count = this._showFps ? (Graphics.FrameLimit ? Graphics.FrameLimit.shown(this.fps) : this.fps) : this.duration;
     this._labelDiv.textContent = this._showFps ? "FPS" : "ms";
     this._numberDiv.textContent = count.toFixed(0);
     // The PIXI app initializes asynchronously, so the mode is read here
@@ -3608,8 +3781,11 @@ Graphics.FPSCounter.prototype._update = function() {
     let mode = app && app.renderer ? Graphics.rendererModeName(app.renderer) : "";
     // And what draws it: a graphics card, or the browser drawing in software when it could not get one
     // (SwiftShader, llvmpipe), which runs a quiet map fast and a crowd at a crawl.
+    // Each on a line of its own: "WebGL", "Iris Xe Graphics", "OpenGL".
     const device = mode ? Graphics.graphicsDeviceName(app.renderer) : "";
-    if (device) mode += " · " + device;
+    if (device) mode += "\n" + device;
+    const backend = device ? Graphics.graphicsBackendName() : "";
+    if (backend) mode += "\n" + backend;
     if (this._modeDiv.textContent !== mode) this._modeDiv.textContent = mode;
 };
 
@@ -3625,14 +3801,34 @@ Graphics.graphicsDeviceName = function(renderer) {
     } catch (e) {
         name = "";
     }
+    this._deviceString = name;
     const software = /SwiftShader|llvmpipe|softpipe|Software/i.exec(name);
     if (software) return (this._deviceName = "software (" + software[0] + ")");
     // "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070/PCIe/SSE2, OpenGL 4.5.0)" -> "RTX 5070".
     const inner = /^ANGLE \((.*)\)$/.exec(name);
     if (inner) { const parts = inner[1].split(", "); name = parts.length > 1 ? parts[1] : parts[0]; }
-    name = name.replace(/\/PCIe.*$|\(R\)|\(TM\)|NVIDIA |GeForce |AMD |Intel |Mesa |Direct3D11 vs_5_0 ps_5_0|, D3D11.*$|\(0x[0-9A-Fa-f]+\)/g, "").replace(/\s+/g, " ").trim();
+    // "Vulkan 1.4.323 (Intel(R) Iris(R) Xe Graphics (0x00009A49))": the card is what stands in the brackets.
+    const vulkan = /^Vulkan [\d.]+ \((.*)\)$/.exec(name);
+    if (vulkan) name = vulkan[1];
+    name = name.replace(/\/PCIe.*$|\(R\)|\(TM\)|NVIDIA |GeForce |AMD |Intel |Mesa |ANGLE Metal Renderer: |Direct3D\d+(on\d+)?( [vp]s_\d+_\d+)*|, D3D11.*$|,? ?OpenGL( ES)? [\d.]+.*$|\(0x[0-9A-Fa-f]+\)/g, "").replace(/\s+/g, " ").trim();
     this._deviceName = name.slice(0, 32);
     return this._deviceName;
+};
+
+/**
+ * How the browser reaches the graphics device, as its renderer string says ("Direct3D 11", "Direct3D 11 on 12",
+ * "OpenGL", "Vulkan", "Metal"); "" where it does not say or draws in software. Read after graphicsDeviceName.
+ */
+Graphics.graphicsBackendName = function() {
+    const s = String(this._deviceString || "");
+    if (!s || /SwiftShader|llvmpipe|softpipe|Software/i.test(s)) return "";
+    const d3d = /Direct3D(\d+)(?:on(\d+))?/i.exec(s);
+    if (d3d) return "Direct3D " + d3d[1] + (d3d[2] ? " on " + d3d[2] : "");
+    if (/Vulkan/i.test(s)) return "Vulkan";
+    if (/Metal/i.test(s)) return "Metal";
+    if (/OpenGL ES/i.test(s)) return "OpenGL ES";
+    if (/OpenGL/i.test(s)) return "OpenGL";
+    return "";
 };
 
 /**
@@ -3904,7 +4100,7 @@ Bitmap._sweepStalledLoads = function() {
     for (let i = list.length - 1; i >= 0; i--) {
         const bitmap = list[i];
         if (bitmap._loadingState === "loaded" || bitmap._loadingState === "none" ||
-            bitmap._degradedToBlank) {
+            bitmap._degradedToBlank || bitmap._watchDropped) {
             list.splice(i, 1);
             continue;
         }
@@ -4111,6 +4307,9 @@ Object.defineProperty(Bitmap.prototype, "paintOpacity", {
  * Destroys the bitmap.
  */
 Bitmap.prototype.destroy = function() {
+    // A picture destroyed while it loads is let finish (something may still hold it across a map transfer and
+    // wants the picture), but the stall watchdog stops watching it: nothing waits on it any more.
+    this._watchDropped = true;
     this._revokeObjectUrl();
     this._animation = null;
     if (this._baseTexture) {
@@ -4711,6 +4910,7 @@ Bitmap.prototype._startLoading = function() {
     // image loads can silently die without onload OR onerror.
     this._loadStartTime = performance.now();
     this._loadAttempts = (this._loadAttempts || 0) + 1;
+    this._watchDropped = false;
     Bitmap._loadWatchList = Bitmap._loadWatchList || [];
     if (Bitmap._loadWatchList.indexOf(this) < 0) {
         Bitmap._loadWatchList.push(this);

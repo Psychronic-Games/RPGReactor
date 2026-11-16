@@ -12,7 +12,7 @@ test('the battle room is drawn once for the frame shown, not once per update, an
     assert.match(core, /Graphics\._reactorBeforeRender = Graphics\._reactorBeforeRender \|\| new Set\(\);/);
     assert.match(core, /for \(const hook of this\._reactorBeforeRender\) \{\n\s+try \{ hook\(\); \} catch \(e\) \{[^\n]+\}\n\s+\}\n\s+this\._app\.render\(\);/);
     // An update marks the room; the hook renders and copies it; with no game loop it draws at once.
-    assert.match(presentation, /ss\._reactorRoomDirty=true;if\(!\(typeof Graphics!=='undefined'&&Graphics\._reactorBeforeRender\)\)P\.flushRoom\(ss\);/);
+    assert.match(presentation, /ss\._reactorRoomDirty=true;room\.owed=\(room\.owed\|\|0\)\+1;if\(!\(typeof Graphics!=='undefined'&&Graphics\._reactorBeforeRender\)\)P\.flushRoom\(ss\);/);
     // A refresh with no update never poses the room again (`render`): it draws the same update's picture (`renderBetween`).
     assert.match(presentation, /P\.flushRoom=function\(ss\)\{\n\s+const room=ss\._reactorRoom;if\(!room\|\|room\.disposed\|\|!ss\._reactorRoomSprite\)return;\n[^\n]+\n\s+if\(!ss\._reactorRoomDirty\)\{if\(room\.renderBetween\?\.\(\)\)P\.showRoomPass\(ss\._reactorRoomSprite,room\);return;\}\n\s+ss\._reactorRoomDirty=false;\n\s+room\.render\(\);/);
     const between = room.slice(room.indexOf('renderBetween(){'), room.indexOf('pacedNow(){'));

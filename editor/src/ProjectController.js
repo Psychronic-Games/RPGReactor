@@ -290,9 +290,6 @@ class ProjectController {
         if (typeof RRDialog !== 'undefined') {
             RRDialog.alert(message + `\n\n${projectPath}`, { title: this._t('menu.openProject'), kind: live ? 'warning' : 'error' });
         }
-        this.uiManager?.updateStatus(live
-            ? 'Project already open in another instance'
-            : this._tt('Could not verify project lock'));
         return false;
     }
 
@@ -374,7 +371,6 @@ class ProjectController {
             }
             this.currentProject = loadedProject;
             await this.uiManager.showEditorUI();
-            this.uiManager.updateStatus('Opened project: ' + loadedProject.name);
             await this.populateProjectUI();
             webHost.applyBrowserUi();
             return;
@@ -400,8 +396,6 @@ class ProjectController {
             return;
         }
 
-        this.uiManager.updateStatus('Loading last project...');
-
         try {
             // Load the project
             const loadedProject = await this.projectManager.loadProject(lastProjectPath);
@@ -414,7 +408,6 @@ class ProjectController {
             if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
                 this.currentProject = loadedProject;
                 await this.uiManager.showEditorUI();
-                this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
                 await this.populateProjectUI();
             } else {
                 this.logProjectOpen('auto-load:failed', { projectPath: lastProjectPath });
@@ -532,7 +525,6 @@ class ProjectController {
 
         this._notifyProjectChanged();
         this.uiManager.showWelcomeScreen();
-        this.uiManager.updateStatus('Project closed');
         this.projectLoaded = false;
         this.updateWindowTitle();
     }
@@ -607,8 +599,6 @@ class ProjectController {
             chooser.addEventListener('change', async (e) => {
                 const basePath = chooser.value;
                 if (basePath) {
-                    this.uiManager.updateStatus('Creating project...');
-
                     // Create project in a subdirectory with the project name
                     const path = require('path');
                     const projectPath = path.join(basePath, projectName);
@@ -626,18 +616,15 @@ class ProjectController {
                             localStorage.setItem('lastProjectPath', projectPath);
 
                             await this.uiManager.showEditorUI();
-                            this.uiManager.updateStatus('New project created: ' + projectName);
                             await this.populateProjectUI();
                         } else {
                             RRDialog.alert(this._tt('Failed to load the newly created project'), { title: this._t('menu.newProject'), kind: 'error' });
-                            this.uiManager.updateStatus('Error creating project');
                         }
                     } else {
                         const details = this.projectManager.lastCreateError
                             ? `\n\n${this.projectManager.lastCreateError}`
                             : '';
                         RRDialog.alert(this._tt('Failed to create project. Check console for details.') + details, { title: this._t('menu.newProject'), kind: 'error' });
-                        this.uiManager.updateStatus('Error creating project');
                     }
                 }
             });
@@ -647,7 +634,6 @@ class ProjectController {
             // For testing without NW.js
             this.currentProject = { path: '/demo', name: 'Demo Project' };
             await this.uiManager.showEditorUI();
-            this.uiManager.updateStatus('Demo project loaded');
             this.initializeNewProject();
         }
     }
@@ -673,7 +659,6 @@ class ProjectController {
             // For testing without NW.js
             this.currentProject = { path: '/demo', name: 'Demo Project', maps: [] };
             await this.uiManager.showEditorUI();
-            this.uiManager.updateStatus('Demo project loaded');
             this.initializeNewProject();
         }
     }
@@ -682,7 +667,6 @@ class ProjectController {
     async openProjectAtPath(projectPath) {
             try {
                 this.logProjectOpen('manual-open:start', { projectPath });
-                this.uiManager.updateStatus('Loading project...');
 
                 // Use ProjectManager to load the project
                 const loadedProject = await this.projectManager.loadProject(projectPath);
@@ -698,7 +682,6 @@ class ProjectController {
                     this.logProjectOpen('manual-open:failed', { projectPath, loadError });
                     const details = loadError?.message ? `\n\n${loadError.message}` : '';
                     RRDialog.alert(this._tt("Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.") + `\n\n${projectPath}${details}`, { title: this._t('menu.openProject'), kind: 'error' });
-                    this.uiManager.updateStatus('Error loading project');
                     return;
                 }
 
@@ -711,14 +694,12 @@ class ProjectController {
                 this.currentProject = loadedProject;
                 this.lastLoadedProjectPath = null;
                 await this.uiManager.showEditorUI();
-                this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
                 await this.populateProjectUI();
                 if (this.currentProject) localStorage.setItem('lastProjectPath', projectPath);
             } catch (error) {
                 console.error(`Error opening project at ${projectPath}:`, error);
                 this.logProjectOpen('manual-open:error', { projectPath, error: error.message || String(error) });
                 RRDialog.alert(`${this._tt('Error opening project:')}\n${projectPath}\n\n${error.message || error}`, { title: this._t('menu.openProject'), kind: 'error' });
-                this.uiManager.updateStatus('Error loading project');
             }
     }
 
@@ -792,14 +773,12 @@ class ProjectController {
         }
 
         // Load database
-        this.uiManager.updateStatus('Loading database...');
         this.logProjectOpen('populate:start', { projectPath: this.currentProject?.path || null });
         this._notifyProjectChanged();
         const dbLoaded = await this.databaseManager.loadAllData(this.currentProject.path);
         this.logProjectOpen('populate:database', { loaded: dbLoaded });
 
         if (!dbLoaded) {
-            this.uiManager.updateStatus('Error loading database');
             this.logProjectOpen('populate:database-failed');
             this.mediaSurfacePreviewManager?.beforeMapChange?.();
             if (typeof this.disableMap3DView === 'function') await this.disableMap3DView();
@@ -996,7 +975,6 @@ class ProjectController {
 
         this.updateWindowTitle();
 
-        this.uiManager.updateStatus('Project loaded successfully');
         this.projectLoaded = true;
         this.captureProjectSavedState();
         this.logProjectOpen('populate:complete', { projectPath: this.currentProject.path });
@@ -1352,7 +1330,7 @@ class ProjectController {
 
         // Prevent making a map its own ancestor
         if (this.isAncestor(draggedMapId, targetMapId)) {
-            this.uiManager.updateStatus('Cannot move a parent into its own child');
+            this.uiManager.showMapNote?.(this._tt('Cannot move a parent into its own child'));
             return;
         }
 
@@ -1366,7 +1344,6 @@ class ProjectController {
         this.recalculateMapOrder(targetMap.parentId);
 
         this.renderMapsList();
-        this.uiManager.updateStatus(`Moved "${draggedMap.name}" before "${targetMap.name}"`);
     }
 
     // Move a map to be after another map (same parent)
@@ -1378,7 +1355,7 @@ class ProjectController {
 
         // Prevent making a map its own ancestor
         if (this.isAncestor(draggedMapId, targetMapId)) {
-            this.uiManager.updateStatus('Cannot move a parent into its own child');
+            this.uiManager.showMapNote?.(this._tt('Cannot move a parent into its own child'));
             return;
         }
 
@@ -1391,7 +1368,6 @@ class ProjectController {
         this.recalculateMapOrder(targetMap.parentId);
 
         this.renderMapsList();
-        this.uiManager.updateStatus(`Moved "${draggedMap.name}" after "${targetMap.name}"`);
     }
 
     // Move a map to be a child of another map
@@ -1403,7 +1379,7 @@ class ProjectController {
 
         // Prevent making a map its own ancestor
         if (this.isAncestor(draggedMapId, targetMapId)) {
-            this.uiManager.updateStatus('Cannot move a parent into its own child');
+            this.uiManager.showMapNote?.(this._tt('Cannot move a parent into its own child'));
             return;
         }
 
@@ -1417,7 +1393,6 @@ class ProjectController {
         this.recalculateMapOrder(targetMapId);
 
         this.renderMapsList();
-        this.uiManager.updateStatus(`Moved "${draggedMap.name}" into "${targetMap.name}"`);
     }
 
     // Check if a map is an ancestor of another (to prevent circular references)
@@ -1546,21 +1521,18 @@ class ProjectController {
             && (tilemap.savedMapState == null || typeof tilemap.isMapDirty !== 'function' || tilemap.isMapDirty());
         if (mapNeedsSave && tilemap.saveMap() !== true) {
             restoreSavedState();
-            this.uiManager.updateStatus('Error saving current map');
             await this._alertSaveProblem('The current map could not be saved.');
             return false;
         }
 
         if (!await this.databaseManager.saveAllData(this.currentProject.path)) {
             restoreSavedState();
-            this.uiManager.updateStatus('Error saving database');
             await this._alertSaveProblem('One or more database files could not be saved.');
             return false;
         }
 
         if (!await this.projectManager.saveProject(this.currentProject)) {
             restoreSavedState();
-            this.uiManager.updateStatus('Error saving project');
             await this._alertSaveProblem('The project metadata or map list could not be saved.');
             return false;
         }
@@ -1572,7 +1544,6 @@ class ProjectController {
             } catch (error) {
                 restoreSavedState();
                 console.error('Error saving to browser storage:', error);
-                this.uiManager.updateStatus('Error saving to browser storage');
                 await this._alertSaveProblem('The project could not be saved to browser storage.');
                 return false;
             }
@@ -1585,7 +1556,6 @@ class ProjectController {
         }
 
         this.captureProjectSavedState();
-        this.uiManager.updateStatus('All files saved');
         this.updateWindowTitle();
         return true;
     }
@@ -1637,14 +1607,12 @@ class ProjectController {
         const gameTitle = this.databaseManager.data.system?.gameTitle || this.currentProject.name;
         const result = await pm.installReactorRuntime(projectPath, gameTitle, { regenerateManifest });
         if (!result.ok) {
-            this.uiManager.updateStatus('Reactor runtime install failed');
             await ui.showAlert(
                 title,
                 `${this._tt('Could not install the Reactor runtime:')}\n${result.error}`
             );
             return false;
         }
-        this.uiManager.updateStatus('Reactor runtime installed');
         await ui.showAlert(
             title,
             this._tt('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.')
@@ -1673,8 +1641,6 @@ class ProjectController {
         if (!options.skipDirtyCheck && !await this.confirmUnsavedChanges('map')) return false;
         if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager) return false;
 
-        this.uiManager.updateStatus(`Loading map ${mapId}...`);
-
         this.mediaSurfacePreviewManager?.beforeMapChange?.();
         this._mapLoadPending = true;
         const success = await tilemapManager.loadMap(mapId);
@@ -1682,8 +1648,6 @@ class ProjectController {
         if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager) return false;
 
         if (success) {
-            this.uiManager.updateStatus(`Map ${mapId} loaded`);
-
             // Save last edited map
             localStorage.setItem(this.getLastMapStorageKey(), mapId.toString());
 
@@ -1701,7 +1665,6 @@ class ProjectController {
             return true;
         } else {
             this.mediaSurfacePreviewManager?.setMap?.(tilemapManager.currentMap, tilemapManager);
-            this.uiManager.updateStatus(`Failed to load map ${mapId}`);
             // A click in the map list that does nothing says why.
             const reason = tilemapManager.lastLoadError;
             this.uiManager.showMapNote?.(`${this._tt('This map could not be opened.')}${reason ? ' ' + reason : ''}`);
@@ -2063,7 +2026,6 @@ class ProjectController {
             if (quickAccessTab && quickAccessTab.classList.contains('active')) {
                 this.renderQuickAccessList();
             }
-            this.uiManager.updateStatus(map.quick ? `Added "${map.name}" to Quick Access` : `Removed "${map.name}" from Quick Access`);
         }
     }
 
@@ -2725,6 +2687,9 @@ class ProjectController {
         const physics = document.getElementById('map-physics-section');
         if (physics) physics.style.display = checkbox.checked ? '' : 'none';
 
+        // How tall the map is (Z): the room's height, the same number as Build › Terrain › Room and Sky.
+        const tall = document.getElementById('map-3d-room-height');
+        if (tall) tall.value = elevation && elevation.room ? elevation.room(mapData).height : 4;
         // The default camera: a mode, and blank overrides meaning "the mode's own".
         const camera = elevation && elevation.camera ? elevation.camera(mapData) : { mode: 'fixed' };
         const modeSelect = document.getElementById('map-3d-camera-select');
@@ -2797,7 +2762,10 @@ class ProjectController {
     readMap3DForm() {
         const elevation = this.mapElevation(), map = this.currentEditingMap;
         const room = elevation && map ? elevation.room(map) : { height: 4, floor: '', walls: '', ceiling: '', sky: '', skyScrollX: 0, skyScrollY: 0 };
-        return { height: room.height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY };
+        // Its height alone is asked here (Height (Z)): a whole number of tiles in the allowed range, else what the map has.
+        const typed = Number(document.getElementById('map-3d-room-height')?.value);
+        const height = Number.isFinite(typed) && typed >= 1 ? Math.min(512, Math.round(typed)) : room.height;
+        return { height, floor: room.floor, walls: room.walls, ceiling: room.ceiling, sky: room.sky, skyScrollX: room.skyScrollX, skyScrollY: room.skyScrollY };
     }
 
     /**
@@ -3566,8 +3534,6 @@ class ProjectController {
 
             // Refresh maps list
             this.renderMapsList();
-
-            this.uiManager.updateStatus(`Created map: ${mapData.name}`);
         } else {
             // Update existing map
 
@@ -3633,8 +3599,6 @@ class ProjectController {
                 // The Build bar says whether the map is 3D; switching it here changes what the bar offers.
                 if (was3D !== wants3D && this.buildHotbar?.visible) this.buildHotbar.render();
             }
-
-            this.uiManager.updateStatus(`Updated map: ${mapData.name}`);
         }
         return true;
     }
@@ -4298,8 +4262,6 @@ class ProjectController {
             if (typeof ReactorClipboard !== 'undefined') {
                 await ReactorClipboard.write('map', payload);
             }
-
-            this.uiManager.updateStatus(`Copied map ${mapId} to clipboard`);
         } catch (error) {
             console.error('Error copying map:', error);
             await RRDialog.alert(this._tt('Failed to copy map. Check console for details.'), { title: this._t('mapCtx.copyMap'), kind: 'error' });
@@ -4376,7 +4338,6 @@ class ProjectController {
             previousMaps = null;
             this.bumpVersionId();
             this.renderMapsList();
-            this.uiManager.updateStatus(`Pasted map as ${String(newMapId).padStart(3, '0')}: ${mapName}`);
         } catch (error) {
             if (previousMaps) {
                 targetProject.maps = previousMaps;
@@ -4565,8 +4526,6 @@ class ProjectController {
             if (deletingCurrentMap && nextMapId) {
                 await this.loadMap(nextMapId, { forceReload: true, skipDirtyCheck: true });
             }
-
-            this.uiManager.updateStatus(`Deleted map: ${map.name || String(mapId).padStart(3, '0')}`);
         } catch (error) {
             if (!metadataSaved) {
                 if (priorMaps) {
@@ -4653,7 +4612,8 @@ class ProjectController {
             Object.assign(sourceSystem, system);
             // What was just written is what the Database now holds: nothing of it is unsaved.
             this.databaseManager.captureSavedState?.('system');
-            this.uiManager.updateStatus(`Updated starting positions to avoid deleted maps`);
+            // A change the author did not ask for by name: said in the note over the map.
+            this.uiManager.showMapNote?.(this._tt('Updated starting positions to avoid deleted maps'));
         }
 
         return changed;
@@ -4703,8 +4663,21 @@ class ProjectController {
             const fs = require('fs');
             const path = require('path');
 
-            if (this.tilemapManager.currentMap?.id === mapId) {
-                this.tilemapManager.saveMap();
+            // The picture is drawn from the map's file, so the open map's unsaved changes have to be
+            // saved to be in it. That is the author's to say: asked first, and Cancel makes no picture.
+            const tilemap = this.tilemapManager;
+            if (tilemap.currentMap?.id === mapId
+                && (tilemap.savedMapState == null || typeof tilemap.isMapDirty !== 'function' || tilemap.isMapDirty())) {
+                const save = await RRDialog.confirm(
+                    `${this._tt('This map has unsaved changes. The picture is made from the saved map.')}\n\n${this._tt('Save the map and make the picture?')}`,
+                    { title: this._t('mapCtx.saveImage'), ok: this._tt('Save'), cancel: this._tt('Cancel') });
+                if (!save) return;
+                // The map may have been left or the project closed while the question was up.
+                if (this.tilemapManager !== tilemap || tilemap.currentMap?.id !== mapId || !this.currentProject) return;
+                if (tilemap.saveMap() !== true) {
+                    await this._alertSaveProblem('The current map could not be saved.');
+                    return;
+                }
             }
 
             const mapPath = path.join(this.currentProject.path, 'data', `Map${String(mapId).padStart(3, '0')}.json`);
@@ -4742,18 +4715,17 @@ class ProjectController {
                     outputPath += '.png';
                 }
 
-                this.uiManager.updateStatus(`Exporting ${mapInfo.name || safeName}...`);
-
                 const canvas = document.createElement('canvas');
                 const success = await this.tilemapManager.renderMapToCanvas(mapId, canvas, {
                     includeEvents: false,
                     includeShadows: true,
-                    includeParallax: true
+                    includeParallax: true,
+                    // The picture is what the author sees: the map's image layers are part of it.
+                    includeImageLayers: true
                 });
 
                 if (!success) {
                     RRDialog.alert(this._tt('Failed to render map image.'), { title: this._t('mapCtx.saveImage'), kind: 'error' });
-                    this.uiManager.updateStatus('Map image export failed');
                     return;
                 }
 
@@ -4764,17 +4736,14 @@ class ProjectController {
                 } catch (error) {
                     console.error('Error saving map image:', error);
                     RRDialog.alert(this._tt('Failed to save map image. Check console for details.'), { title: this._t('mapCtx.saveImage'), kind: 'error' });
-                    this.uiManager.updateStatus('Map image export failed');
                     return;
                 }
-                this.uiManager.updateStatus(`Saved map image: ${outputPath}`);
             });
 
             input.click();
         } catch (error) {
             console.error('Error saving map image:', error);
             RRDialog.alert(this._tt('Failed to save map image. Check console for details.'), { title: this._t('mapCtx.saveImage'), kind: 'error' });
-            this.uiManager.updateStatus('Map image export failed');
         }
     }
 }

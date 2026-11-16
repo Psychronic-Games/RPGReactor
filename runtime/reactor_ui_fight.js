@@ -806,7 +806,9 @@
                 const cell = theme.faceSize || 144;
                 ctx.imageSmoothingEnabled = true;
                 if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(picture, (view.faceIndex % 4) * cell, Math.floor(view.faceIndex / 4) * cell, cell, cell, ix, iy, inner, inner);
+                // A face set with frames ("Name[4F]"): each face is that many frames wide, and the first is shown.
+                const named = /\[(?:(\d+)F|F(\d+))\]/i.exec(String(view.faceName || '')), wide = named ? Math.max(1, Number(named[1] || named[2])) : 1;
+                ctx.drawImage(picture, (view.faceIndex % 4) * wide * cell, Math.floor(view.faceIndex / 4) * cell, cell, cell, ix, iy, inner, inner);
                 drawn = true;
             } else if (picture === null) ready = false;
         } else if (kind === 'character') {

@@ -62,6 +62,34 @@ test('a map change lets go of the models the new map did not claim, and keeps th
     } finally { U.graceBytes = grace; }
 });
 
+test('the models a border crossing carries over are not let go by the sweeps at the crossing (a rider\'s clothing drew black)', () => {
+    const R = fresh(), U = R.ModelUse, grace = U.graceBytes, N = R.Neighbors, was = { crossing: N.crossing, live: N.live };
+    U.graceBytes = 0;
+    try {
+        U.begin(1);
+        const rider = put(R, 'Actors/Rider'), bike = put(R, 'Vehicles/Bike'), tree = put(R, 'Props/Tree');
+        U.sweep({ events: [] });
+        assert.equal(U.wornKeys(), null, 'outside a crossing nothing is exempt');
+        // The border is crossed: the scene left still holds the party's and the ride's models, no file is asked for again.
+        const left = { _modelInstances: new Map([['p', { spec: rider.key, object: new THREE.Group() }], ['e4', { spec: bike.key, object: new THREE.Group() }]]) };
+        N.crossing = { from: 1, to: 2, ride: 'e4' }; N.live = { scene: left };
+        U.begin(2);
+        assert.deepEqual(U.sweep({ events: [] }, true), [tree.key], 'the early sweep lets go of the map\'s own, not what the crossing carries');
+        assert.deepEqual(rider.gone, { geometry: 0, texture: 0, material: 0 });
+        // Carried into the scene entered: claimed there as a load would claim them.
+        const entered = { _modelInstances: new Map(), modelsGroup: () => new THREE.Group() };
+        N.carryParty(left, entered, 'e4', 'e9', [], null);
+        assert.ok(entered._modelInstances.get('p') && entered._modelInstances.get('e9'), 'the party and its ride went over');
+        N.crossing = null; N.live = { scene: entered };
+        assert.deepEqual(U.sweep({ events: [] }), [], 'and the sweep at the map\'s start leaves them');
+        assert.ok(R._glbCache[rider.key] && R._glbCache[bike.key]);
+        assert.deepEqual(bike.gone, { geometry: 0, texture: 0, material: 0 });
+        // Left behind on a later map with no crossing, they go as any model does.
+        U.begin(3);
+        assert.deepEqual(U.sweep({ events: [] }).sort(), [rider.key, bike.key].sort());
+    } finally { U.graceBytes = grace; N.crossing = was.crossing; N.live = was.live; }
+});
+
 test('the newest unclaimed models stay while they fit the grace; a low-memory machine has a smaller one', () => {
     const R = fresh(), U = R.ModelUse, grace = U.graceBytes, low = U.lowMemoryGraceBytes, tier = R.memoryTier;
     try {
@@ -191,4 +219,46 @@ test('the map scene opens a map change before it builds anything and sweeps as i
     const start = source.slice(source.indexOf('Scene_Map.prototype.start = function() {\n    _reactorSceneMapStart.call(this);'));
     const sweep = start.indexOf('Reactor3D.ModelUse.sweep($dataMap)'), warm = start.indexOf('Reactor3D.warmLoadedTemplates()');
     assert.ok(sweep > 0 && sweep < warm && warm < 600, 'start runs after the previous scene is destroyed and before the first drawn frame');
+});
+
+test('a model whose download dropped is asked for again in a web game, twice at most; a missing file and a game on disk are not', async () => {
+    const R = fresh(), XHR = global.XMLHttpRequest, timeout = global.setTimeout, allowed = R.modelRetryAllowed, error = console.error;
+    const waits = [];
+    let sent = 0, answer = 'drop';
+    global.XMLHttpRequest = function() {
+        this.open = () => {};
+        this.send = () => { sent++; if (answer === 'drop') this.onerror(); else { this.status = 404; this.response = null; this.onload(); } };
+    };
+    global.setTimeout = (run, ms) => { waits.push(ms); run(); return 0; };
+    console.error = () => {};
+    try {
+        // Over the web, the line dropping every time: the first round and two more.
+        R.modelRetryAllowed = () => true;
+        assert.equal(await R.loadModel('Props/dropped', '.glb'), null);
+        const round = sent / 3;
+        assert.ok(Number.isInteger(round) && round >= 1, 'three rounds of the same requests');
+        assert.deepEqual(waits, [R.MODEL_RETRY_MS, R.MODEL_RETRY_MS * 2]);
+        assert.equal(R._glbCache[R.modelCacheKey('Props/dropped', '.glb')].failed, true, 'then it has failed, as before');
+        // A file that is not there is not asked for again.
+        sent = 0; waits.length = 0; answer = 'missing';
+        assert.equal(await R.loadModel('Props/missing', '.glb'), null);
+        assert.equal(sent, round);
+        assert.deepEqual(waits, []);
+        // From the disk nothing is asked twice.
+        sent = 0; answer = 'drop';
+        R.modelRetryAllowed = allowed;
+        assert.equal(R.modelRetryAllowed(), false, 'no web address here');
+        assert.equal(await R.loadModel('Props/local', '.glb'), null);
+        assert.equal(sent, round);
+    } finally { global.XMLHttpRequest = XHR; global.setTimeout = timeout; R.modelRetryAllowed = allowed; console.error = error; }
+});
+
+test('a model\'s picture repeats, mirrors or holds its edge where the file says, and holds its edge where it says nothing', () => {
+    const R = fresh(), THREE = global.THREE;
+    const json = { samplers: [{ wrapS: 10497, wrapT: 33648 }, { magFilter: 9729 }, { wrapS: 33071 }] };
+    const wrap = sampler => { const t = R.applyGlbWrap(new THREE.Texture(), json, { sampler }); return [t.wrapS, t.wrapT]; };
+    assert.deepEqual(wrap(0), [THREE.RepeatWrapping, THREE.MirroredRepeatWrapping]);
+    assert.deepEqual(wrap(1), [THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping], 'a sampler that names no wrap');
+    assert.deepEqual(wrap(2), [THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping]);
+    assert.deepEqual(wrap(undefined), [THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping], 'no sampler at all');
 });

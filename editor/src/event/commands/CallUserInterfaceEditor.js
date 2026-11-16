@@ -77,8 +77,21 @@ class CallUserInterfaceEditor {
             const interfaceId = modal.querySelector('.cui-interface').value;
             if (!interfaceId) return;
             close();
+            this.needInterfacesFile();
             callback(CallUserInterfaceEditor.build(interfaceId, (command && command.indent) || 0));
         });
+    }
+
+    /**
+     * From the moment a command names an interface the game looks for it in
+     * data/UserInterfaces.json, which a project still on its stock interfaces
+     * has not been given: the next save writes it (DatabaseManager's
+     * seededInterfacesInUse), as it does before a playtest of an interface.
+     */
+    needInterfacesFile() {
+        const manager = this.databaseManager
+            || (typeof window !== 'undefined' && window.reactor && window.reactor.databaseManager) || null;
+        if (manager) manager.writeSeededInterfaces = true;
     }
 
     static build(interfaceId, indent = 0) {

@@ -411,7 +411,14 @@ test('the worker keeps a mesh\'s levels between sessions and reads them back ins
     await first.onmessage(job(1));
     assert.ok(first.posted.levels.length && !first.posted.kept && simplified > 0);
     assert.equal(held.size, 1, 'kept under one key');
-    assert.match(Array.from(held.keys())[0], /^levels-3:chained:/, 'the recipe is part of the key');
+    assert.match(Array.from(held.keys())[0], /^levels-4:chained:/, 'the recipe is part of the key');
+    // Each level says whether it was made across texture seams; the view draws such a one only under the levels' own
+    // pixel, whatever a Quality level allows the others (runtime 20261115.2: brown patches on the Demo's first actor).
+    assert.ok(first.posted.levels.every(level => typeof level.loose === 'boolean'));
+    const view = fs.readFileSync(path.join(repo, 'runtime/reactor_3d.js'), 'utf8');
+    assert.match(view, /const looseAllowed = Math\.min\(allowed, this\.pixelError \* this\.LOOSE_DETAIL\);/);
+    assert.match(view, /if \(level\.error \* pixels <= \(level\.loose \? looseAllowed : allowed\)\) selected = level\.geometry;/);
+    assert.match(view, /state\.levels\.push\(\{ geometry: g, error: level\.error, loose: level\.loose === true \}\);/);
     // Each level is made from the one before: smaller every time, its error the sum so far (never under the last).
     for (let i = 1; i < first.posted.levels.length; i++) {
         assert.ok(first.posted.levels[i].indices.length < first.posted.levels[i - 1].indices.length);

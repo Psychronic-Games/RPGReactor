@@ -558,6 +558,12 @@ class DatabaseActionSequenceEditor {
         details.dataset.disclosureKey=id;details.open=this.disclosures?.get(id)??open;details.append(U.element('summary','',title));const body=U.element('div','rr-sequence-disclosure-body');details.append(body);
         details.ontoggle=()=>{if(!details.isConnected)return;this.disclosures||=new Map();this.disclosures.set(id,details.open);};this.inspector.append(details);return body;
     }
+    /**
+     * Whether a field does nothing on this step because its Operation is Move: the game moves a
+     * Picture, an Icon or a Scrolling Plane by X, Y and Opacity only (reactor_battle_presentation.js),
+     * and keeps the Angle and Scale of the step that showed it.
+     */
+    static moveIgnores(type,operation,key){return ['picture','plane','icon'].includes(type)&&operation==='move'&&['angle','scale'].includes(key);}
     setInspectorTitle(title){this.inspectorHeader.setAttribute('data-i18n-text-source',title);this.inspectorHeader.textContent=this.ui.text(title);}
     drawInspector(){if(this.controls?.mode==='formation'){this.controls.inspectFormation();return;}const U=this.ui,step=this.sequence.steps[this.selected];for(const details of this.inspector.querySelectorAll('[data-disclosure-key]'))this.disclosures.set(details.dataset.disclosureKey,details.open);this.inspector.replaceChildren();this.setInspectorTitle(step?this.label(step.type):'Action Steps');if(!step)return;
         const change=(key,value)=>{this.edit(()=>{step[key]=value;if(key==='duration'){const rider=this.poseWeaponStep(step);if(rider)rider.duration=value;}});if(['name','weaponImageId','weaponGraphic'].includes(key))this.loadSequenceImages();};
@@ -583,6 +589,8 @@ class DatabaseActionSequenceEditor {
             if(['formula','element'].includes(step.type)&&operation==='clear'&&field.key!=='operation')continue;
             if(step.type==='battleback'&&operation!=='change'&&field.key!=='operation')continue;
             if(['picture','plane','icon'].includes(step.type)&&operation==='clear'&&!['operation','index'].includes(field.key))continue;
+            // A Move changes only X, Y and Opacity in the game; the Angle and Scale a step already stores are kept, unshown.
+            if(DatabaseActionSequenceEditor.moveIgnores(step.type,operation,field.key))continue;
             if(step.type==='pose'&&operation==='clear'&&field.key!=='operation')continue;
             if(step.type==='battlelog'&&operation!=='text'&&field.key==='text')continue;
             if(step.type==='weapon'&&(field.key==='mode'||field.key==='hold'||step.weaponGraphic!=='sheet'&&['weaponImageId','weaponFrame'].includes(field.key)))continue;

@@ -3757,10 +3757,12 @@
                 F.setBattleBranch(this, F.WIN, variable);
                 return;
             }
+            // The music is the game's battle BGM (Change Battle BGM sets it). A command saved with a `bgm`
+            // argument, which no dialog writes, starts its battle like any other: the argument is not read.
             const serial = fight.start({
                 mode, troopId, who, taken, canEscape, canLose,
                 turns: args.turns === "initiative" || args.turns === "team" ? args.turns : undefined,
-                objective, onTransfer: args.onTransfer, bgm: args.bgm, view: args.view
+                objective, onTransfer: args.onTransfer, view: args.view
             });
             if (serial && bool(args.wait)) F.waitForBattle(this, serial, variable);
         });

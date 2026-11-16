@@ -145,7 +145,7 @@ function worldEvents(dataFolder) {
  * Writes reactor-online/ into the deployed folder. The secret is made once and kept, so a rebuild
  * updates the server without signing players out; only api.php and the config's labels change.
  */
-function writeOnlineServer(folder, { appRoot, project, title, runtime, maxPlayers = 64, rules = {}, settings = {}, dataFolder = path.join(folder, 'data') }) {
+function writeOnlineServer(folder, { appRoot, project, title, runtime, maxPlayers = 64, rules = {}, settings = {}, dataFolder = path.join(folder, 'data'), theme = '' }) {
     const target = path.join(folder, SERVER_FOLDER);
     fs.mkdirSync(target, { recursive: true });
     const configPath = path.join(target, 'config.php');
@@ -159,7 +159,7 @@ function writeOnlineServer(folder, { appRoot, project, title, runtime, maxPlayer
     const adminKey = keptAdmin ? keptAdmin[1] : crypto.randomBytes(12).toString('hex');
     const events = worldEvents(dataFolder);
     const sharedWorld = events ? { ...(settings.world || {}), events } : settings.world;
-    const config = `<?php\nreturn [\n    'secret' => '${secret}',\n    'project' => ${phpString(project)},\n    'title' => ${phpString(title)},\n    'runtime' => ${phpString(runtime)},\n    'maxPlayers' => ${Math.max(1, Math.min(1024, Number(maxPlayers) || 64))},\n    'rules' => ${phpString(JSON.stringify(rules || {}))},\n    'settings' => ${phpString(JSON.stringify({ accounts: settings.accounts, chat: settings.chat, world: sharedWorld, engine: settings.engine, storage: settings.storage, voice: { enabled: !!settings.voice?.enabled, who: settings.voice?.who || 'all' } }))},\n    'adminKey' => '${adminKey}',\n    'enginePort' => ${enginePort},\n];\n`;
+    const config = `<?php\nreturn [\n    'secret' => '${secret}',\n    'project' => ${phpString(project)},\n    'title' => ${phpString(title)},\n    'runtime' => ${phpString(runtime)},\n    'maxPlayers' => ${Math.max(1, Math.min(1024, Number(maxPlayers) || 64))},\n    'rules' => ${phpString(JSON.stringify(rules || {}))},\n    'settings' => ${phpString(JSON.stringify({ accounts: settings.accounts, chat: settings.chat, world: sharedWorld, engine: settings.engine, storage: settings.storage, voice: { enabled: !!settings.voice?.enabled, who: settings.voice?.who || 'all' } }))},\n    'adminKey' => '${adminKey}',\n    'enginePort' => ${enginePort},\n    'theme' => ${phpString(JSON.stringify(require('./online-theme.cjs').themeColors(appRoot, theme) || {}))},\n];\n`;
     // In place, then swapped, so a player's request never reads half a file.
     const swap = (name, contents) => {
         const temporary = path.join(target, `.${name}.${process.pid}.tmp`);
@@ -168,8 +168,15 @@ function writeOnlineServer(folder, { appRoot, project, title, runtime, maxPlayer
     };
     swap('config.php', config);
     for (const name of ['common.php', 'api.php', 'admin.php', 'engine.cjs']) swap(name, fs.readFileSync(path.join(appRoot, 'build-scripts', 'online-server', name)));
+    // The admin page's words in the editor's other languages (lang-<id>.json: the English is the key).
+    for (const name of fs.readdirSync(path.join(appRoot, 'build-scripts', 'online-server'))) {
+        if (/^lang-[A-Za-z-]+\.json$/.test(name)) swap(name, fs.readFileSync(path.join(appRoot, 'build-scripts', 'online-server', name)));
+    }
     // With a host's WebSocket proxy on, this one rule carries wss://…/ws to the Engine. Without it, the rule does nothing.
-    swap('.htaccess', `<IfModule mod_proxy_wstunnel.c>\nRewriteEngine On\nRewriteCond %{HTTP:Upgrade} =websocket [NC]\nRewriteRule ^ws$ ws://127.0.0.1:${enginePort}/ [P,L]\n</IfModule>\n`);
+    // And the admin page without ".php" in its address, a tab as a folder: /reactor-online/admin/accounts. The page learns
+    // from the mark (RR_CLEAN_URLS) that these addresses work here, and from then on shows only them.
+    swap('.htaccess', `<IfModule mod_proxy_wstunnel.c>\nRewriteEngine On\nRewriteCond %{HTTP:Upgrade} =websocket [NC]\nRewriteRule ^ws$ ws://127.0.0.1:${enginePort}/ [P,L]\n</IfModule>\n`
+        + `<IfModule mod_rewrite.c>\nRewriteEngine On\nRewriteRule ^admin/?$ admin.php [L,QSA,E=RR_CLEAN_URLS:1]\nRewriteRule ^admin/([a-z]+)/?$ admin.php?tab=$1 [L,QSA,E=RR_CLEAN_URLS:1]\nRewriteRule ^admin\\.php$ - [E=RR_CLEAN_URLS:1]\n</IfModule>\n`);
     const grids = settings.engine?.movement === 'walls' ? writeGrids(target, dataFolder) : 0;
     return { folder: target, newSecret: !kept, adminKey: keptAdmin ? '' : adminKey, grids };
 }

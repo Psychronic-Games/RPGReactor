@@ -1397,7 +1397,7 @@
         if (tones.length) r.skin = pick(tones);
         const theme = o.theme || pick(['Everyday', 'Everyday', 'Fantasy', 'Armor', 'Sci-fi', 'Wasteland', 'Cyberpunk']);
         // An outfit of the setting in its colors, with an accessory that belongs to it.
-        const dressed = Wardrobe.dressRandom(rand, theme, Body.sexOf(body) === 'female');
+        const dressed = Wardrobe.dressRandom(rand, theme, Body.sexOf(body) === 'female', o.outfits);
         r.outfit = dressed.outfit;
         const gender = r.gender > 0.5 ? 'male' : 'female';
         const bald = o.species && (Species.BY_ID.get(o.species)?.recipe || {}).bald;
@@ -1413,7 +1413,7 @@
         // Cyberware (RRCharacterCyberGear): a sci-fi character sometimes wears a cyber look, drawn from its own
         // sequence so the rest of the roll stays as it was.
         const Cyber = root.RRCharacterCyberGear || (typeof require === 'function' ? require('./CharacterCyberGear.js') : null);
-        if (theme === 'Sci-fi' && Cyber) {
+        if ((o.outfits && o.outfits.length ? dressed.group : theme) === 'Sci-fi' && Cyber) {
             let c = scramble(seed + 7);
             const roll = () => { c ^= c << 13; c >>>= 0; c ^= c >> 17; c ^= c << 5; c >>>= 0; return c / 4294967296; };
             if (roll() < 0.45) r.props = r.props.concat(Cyber.randomLook(roll));
@@ -1455,6 +1455,21 @@
                 }
             }
         }
+        // Each limb's own box too ('limb:armL', 'limb:shinR'...), for a picture framed on one limb: what moves with its bones.
+        const LIMBS = { arm: /^(Arm|ForeArm|Hand)/, forearm: /^(ForeArm|Hand)/, hand: /^Hand/, leg: /^(UpLeg|Leg|Foot|ToeBase)/, shin: /^(Leg|Foot|ToeBase)/ };
+        const limbs = [];
+        for (const [side, tag] of [['Left', 'L'], ['Right', 'R']]) for (const [name, rule] of Object.entries(LIMBS)) {
+            const joints = new Set();
+            bones.forEach((b, i) => { if (b.name.startsWith(side) && rule.test(b.name.slice(side.length))) joints.add(i); });
+            limbs.push({ key: 'limb:' + name + tag, joints, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] });
+        }
+        for (const part of result.parts) for (let v = 0; v < part.positions.length / 3; v++) for (const limb of limbs) {
+            let w = 0;
+            for (let k = 0; k < 4; k++) if (limb.joints.has(part.joints[v * 4 + k])) w += part.weights[v * 4 + k];
+            if (w < 0.75) continue;
+            for (let k = 0; k < 3; k++) { limb.min[k] = Math.min(limb.min[k], part.positions[v * 3 + k]); limb.max[k] = Math.max(limb.max[k], part.positions[v * 3 + k]); }
+        }
+        for (const limb of limbs) bounds[limb.key] = { min: limb.min, max: limb.max };
         return Object.fromEntries(Object.entries(bounds).filter(([, b]) => Number.isFinite(b.min[0])));
     }
 

@@ -155,15 +155,23 @@ test('the weapon: magazine large and reserve small, a reload bar, a blade\'s com
     assert.equal(calls.drawImage, 1, 'the weapon\'s icon');
     const big = (() => { const copy = JSON.parse(JSON.stringify(sample.hud)); Object.assign(copy.ammo, { magazine: 22, capacity: 30 }); return copy; })();
     assert.ok(words(big, sample.extra).paths < words(Object.assign({}, big, { ammo: Object.assign({}, big.ammo, { capacity: 12, magazine: 9 }) }), sample.extra).paths + 2, 'a long magazine is one bar');
-    // A reserve the battle counts is written beside the magazine; a reload shows its word, and the bar fills.
+    // A reload shows its word, and the bar fills. No reserve is drawn: the battle keeps none, and the "Reserve"
+    // setting is gone with it. A node stored with the old setting loads, and draws the same.
     const reloading = JSON.parse(JSON.stringify(sample.hud));
     Object.assign(reloading.ammo, { magazine: 0, reserve: 24, reload: 0.5 });
     calls = words(reloading, sample.extra);
-    assert.deepEqual(text(), ['1/3', 'Rifle', 'Reloading', '0', '/ 24']);
-    const magazine = calls.fillText.find(call => call[0] === '0'), reserve = calls.fillText.find(call => call[0] === '/ 24');
-    assert.ok(magazine[1] < reserve[1], 'the magazine, then the reserve');
-    calls = (() => { const ctx = fakeContext(); Hud.drawWeapon(ctx, 220, 80, Object.assign({}, node, { showReserve: false }), reloading, theme(), sample.extra); return ctx.calls; })();
-    assert.ok(!text().includes('/ 24'));
+    assert.deepEqual(text(), ['1/3', 'Rifle', 'Reloading', '0']);
+    assert.ok(!Hud.SETTINGS.actionWeapon.some(setting => setting[0] === 'showReserve'), 'the editor lists no Reserve setting');
+    const stored = Hud.normalizeProps({ showReserve: true, showWeaponName: false }, 'actionWeapon');
+    assert.equal('showReserve' in stored, false);
+    assert.equal(stored.showWeaponName, false, 'a record stored with Reserve keeps its other settings');
+    calls = (() => { const ctx = fakeContext(); Hud.drawWeapon(ctx, 220, 80, Object.assign({}, node, { showReserve: true }), reloading, theme(), sample.extra); return ctx.calls; })();
+    assert.deepEqual(text(), ['1/3', 'Rifle', 'Reloading', '0']);
+    // The number beside the name is the weapon's place in the switching order.
+    const second = JSON.parse(JSON.stringify(sample.hud));
+    second.weapon.index = 1;
+    calls = words(second, sample.extra);
+    assert.deepEqual(text(), ['2/3', 'Rifle', '7']);
     // The weapon's own model as its picture, when there is one.
     calls = words(sample.hud, Object.assign({}, sample.extra, { picture: { width: 128, height: 128 } }));
     assert.equal(calls.images[0].length, 4, 'drawn whole, not cut from the icon sheet');

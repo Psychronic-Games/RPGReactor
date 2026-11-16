@@ -2096,6 +2096,14 @@
         return list;
     };
 
+    /**
+     * The switching order: the weapons carried in the Database's order, whichever is in hand (a list of its own,
+     * not `weaponsOf`'s). Next Weapon steps round it, and the HUD's "2/3" is the held weapon's place in it.
+     */
+    A.weaponRound = function(battler) {
+        return A.weaponsOf(battler).slice().sort((a, b) => a.id - b.id);
+    };
+
     /** The hotbar: the actor's skills other than attack and guard, then the party's items usable in battle; eight at most. */
     A.hotbarOf = function(battler) {
         const list = A._hotbar || (A._hotbar = []);
@@ -2428,11 +2436,11 @@
         if (!battler || !battler.isAlive() || !battler.isActor() || p.swing || p.reload > 0) return false;
         // (A weapon the Database locks or seals in the hand is not changed here either.)
         if (battler.isEquipChangeOk && !battler.isEquipChangeOk(0)) return false;
-        const list = A.weaponsOf(battler), held = battler.weapons()[0] || null;
-        if (list.length < 2) return false;
+        const held = battler.weapons()[0] || null;
         // The round is the weapons carried in the Database's order, whichever is in hand: a step on from the one held
-        // comes to each in turn (the list itself starts with the one held, so its second is only ever the last one held).
-        const round = list.slice().sort((a, b) => a.id - b.id), at = round.indexOf(held);
+        // comes to each in turn (`weaponsOf` itself starts with the one held, so its second is only ever the last one held).
+        const round = A.weaponRound(battler), at = round.indexOf(held);
+        if (round.length < 2) return false;
         const next = round[((at < 0 && step < 0 ? 0 : at) + (step < 0 ? -1 : 1) + round.length) % round.length];
         battler.changeEquip(0, next);
         if (battler.weapons()[0] !== next) return false;
@@ -3208,10 +3216,12 @@
         const pay = battler.mp * 4096 + battler.tp;
         if (hudRev !== st.rev || hudPay !== pay) {
             hudRev = st.rev; hudPay = pay;
-            const weapons = battler.isActor() ? A.weaponsOf(battler) : [];
+            // The weapon's number on the HUD is its place in the switching order, so it changes with each switch
+            // (the carried weapons the HUD draws on a switch are in the same order: ReactorUI.refreshActionState).
+            const weapons = battler.isActor() ? A.weaponRound(battler) : [];
             const weapon = battler.isActor() ? battler.weapons()[0] || null : null;
             hud.weapon.id = weapon ? weapon.id : 0; hud.weapon.name = weapon ? weapon.name : ""; hud.weapon.iconIndex = weapon ? weapon.iconIndex : 0;
-            hud.weapon.ranged = profile.ranged; hud.weapon.index = 0; hud.weapon.count = weapons.length;
+            hud.weapon.ranged = profile.ranged; hud.weapon.index = Math.max(0, weapons.indexOf(weapon)); hud.weapon.count = weapons.length;
             const bar = battler.isActor() ? A.hotbarOf(battler) : [];
             hud.hotbar.length = bar.length;
             for (let i = 0; i < bar.length; i++) {

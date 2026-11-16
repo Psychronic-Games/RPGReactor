@@ -130,10 +130,13 @@ test('the light\'s combines for the map past a border are compiled ahead, one a 
         const drawn = H.combineQuad(true, false); r.properties.get(drawn.material).currentProgram = {};
         for (let i = 0; i < 6; i++) H.warmAhead(r, 'combine');
         assert.equal(r.compiles.length, 9, 'three combines left to build');
-        // Without parallel compiling nothing is started (it could not be without waiting for it).
+        // Without parallel compiling it is built ahead all the same, one a call (ShaderWarmup.SERIAL: waited for at its
+        // read, a frame before its draw, where it was waited for in the crossing's own draw); the switch off: nothing started.
         const plain = fakeRenderer(); plain.extensions = { has: () => false };
+        W.SERIAL = false;
+        try { H._programs = {}; H.warmAhead(plain, 'light'); assert.equal(plain.compiles.length, 0); } finally { W.SERIAL = true; }
         H._programs = {}; H.warmAhead(plain, 'light');
-        assert.equal(plain.compiles.length, 0);
+        assert.equal(plain.compiles.length, 1);
     } finally { Object.assign(H, { _expected: saved.expected, _programs: saved.programs, _upsamples: saved.upsamples, _combines: saved.combines }); }
     const surround = runtimeSource('reactor_3d_surround.js');
     assert.match(surround, /if \(depth === 1 && R\.HalfLight && R\.HalfLight\.expect\) R\.HalfLight\.expect\(\);/, 'asked for beside the map played');

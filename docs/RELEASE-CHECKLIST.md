@@ -33,7 +33,7 @@ When the owner asks to publish the current release, use a regular Latest source 
 
 ## Development source previews
 
-A development preview can make current work visible in GitHub Releases while a stable cut is still pending. Give it a separate tag such as `v0.99.5-preview.20261102`, mark the GitHub release **Pre-release**, and leave **Latest** on the last stable version. Keep the package version, stable release links and changelog development markers unchanged. Do not attach unvalidated native binaries or claim a green CI run.
+A development preview can make current work visible in GitHub Releases while a stable cut is still pending. Give it a separate tag such as `v0.99.6-preview.20261112`, mark the GitHub release **Pre-release**, and leave **Latest** on the last stable version. Keep the package version, stable release links and changelog development markers unchanged. Do not attach unvalidated native binaries or claim a green CI run.
 
 Prepare the current README gallery, versioned captions and public release notes first. Link images and repository pages to the exact preview tag, not `main` or the future stable tag. Record the source commit, validation scope and remaining CI failures. Commit and push the prepared documentation, create an annotated preview tag at that commit, then publish with `gh release create <tag> --verify-tag --prerelease --latest=false --notes-file <prepared-notes>`. Verify the published prerelease flag, target commit, body and image URLs. This publishes source only; stable versions still use the ordered checklist and `cut-release.cjs` below.
 
@@ -112,7 +112,7 @@ curl --fail --location https://dl.nwjs.io/v0.107.0/SHASUMS256.txt
 ## 3. Clean-Checkout Validation
 
 Validate the commit intended for `vX.Y.Z` from a clean checkout. Replace
-`0.99.5` below with the exact `editor/package.json` version. This validation
+`0.99.6` below with the exact `editor/package.json` version. This validation
 does not create the tag; the source-release command in section 5 owns the
 release commit and tag.
 
@@ -132,7 +132,7 @@ cd ..
 git diff --check
 git diff --exit-code
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
-node -e "const p=require('./editor/package.json'); if(p.version!=='0.99.5') process.exit(1)"
+node -e "const p=require('./editor/package.json'); if(p.version!=='0.99.6') process.exit(1)"
 ```
 
 The test suite statically rejects hard dependencies on ignored local projects.
@@ -184,7 +184,7 @@ depend on ignored project files being available.
 
 Before that smoke test, open Haven through the candidate editor and confirm its
 `project.rpgreactor` `engineVersion` and the version marker at the top of
-`js/reactor_main.js` both advance to `0.99.5`, while `js/reactor_plugins.js`
+`js/reactor_main.js` both advance to `0.99.6`, while `js/reactor_plugins.js`
 remains unchanged. Also compare `RPG_REACTOR_RUNTIME_REVISION` in the running
 game with the candidate entry point; a matching version alone does not detect
 a stale copy from earlier in the same development cycle.
@@ -203,7 +203,7 @@ verification:
 
 ```bash
 gh workflow run release-candidate.yml \
-  -f version=0.99.5 \
+  -f version=0.99.6 \
   -f publishable=false
 gh run list --workflow release-candidate.yml --limit 5
 ```
@@ -212,7 +212,7 @@ The equivalent local command may only build the host platform:
 
 ```bash
 node editor/build-scripts/release-editor.cjs \
-  --target linux --mode candidate --version 0.99.5 \
+  --target linux --mode candidate --version 0.99.6 \
   --output-root "$PWD/dist-editor/releases"
 ```
 
@@ -221,7 +221,7 @@ on non-matching hosts. Add `--pack-web true` to the `web` target to ship the
 bundled project inside pack archives (fewer files, smaller extracted size). The bundled
 project leaves out the files its game never uses in the `web` target; `--unused-files off`
 ships them all and `--unused-files all` trims the desktop packages too. Each target gets a fresh
-`dist-editor/releases/v0.99.5/<target>/` directory and an
+`dist-editor/releases/v0.99.6/<target>/` directory and an
 `artifact-manifest-<target>.json` containing byte sizes and SHA-256 hashes.
 
 ## 5. Source Release And Publishable Candidate
@@ -242,15 +242,15 @@ after finalizing both changelogs and the other version surfaces.
 git switch main
 git pull --ff-only origin main
 git status --short
-node editor/build-scripts/cut-release.cjs 0.99.5 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.5
+node editor/build-scripts/cut-release.cjs 0.99.6 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.6
 ```
 
 The second command stops if GitHub's `main` has commits the checkout lacks,
 runs CI's syntax check and the full test suite again, dates both changelog
 files for the version and their index lines, updates the package version and root README release link/count
 sentence, moves the cycle's dated handoff entries to `docs/archive/handoff/<version>.md`,
-creates a release commit when needed, creates `v0.99.5`, and pushes
+creates a release commit when needed, creates `v0.99.6`, and pushes
 the branch and tag. The editor README, status page, other version prose, and
 validation dates are not automatically refreshed; review those before cutting
 the release. The tag starts **Publish Release**, which publishes
@@ -262,16 +262,16 @@ and verify the tag before starting signed builds:
 ```bash
 gh run list --workflow publish-release.yml --limit 5
 gh run watch SOURCE_RELEASE_RUN_ID
-gh release view v0.99.5
-test "$(git rev-parse v0.99.5^{commit})" = "$(git rev-parse origin/main)"
+gh release view v0.99.6
+test "$(git rev-parse v0.99.6^{commit})" = "$(git rev-parse origin/main)"
 ```
 
 Run the signed candidate from that immutable tag:
 
 ```bash
 gh workflow run release-candidate.yml \
-  --ref v0.99.5 \
-  -f version=0.99.5 \
+  --ref v0.99.6 \
+  -f version=0.99.6 \
   -f publishable=true
 gh run list --workflow release-candidate.yml --limit 5
 gh run watch RUN_ID
@@ -298,7 +298,7 @@ sha256sum /tmp/rpg-reactor-candidate/*/*
 
 Inspect every `artifact-manifest-*.json` and confirm:
 
-- `version` is `0.99.5`, `nwjsVersion` is `0.107.0`, and `sourceCommit` is the tag commit.
+- `version` is `0.99.6`, `nwjsVersion` is `0.107.0`, and `sourceCommit` is the tag commit.
 - `mode` is `publish`; Windows/macOS have `signed: true`.
 - `releaseBuild` is true and `starter` is `bundled-demo`.
 - Every listed size and SHA-256 matches the adjacent file.
@@ -325,7 +325,7 @@ xcrun stapler validate "RPG Reactor.app"
 On each actual target OS, extract into a new directory and perform these tests:
 
 1. Launch the editor without a console error or signing warning.
-2. Confirm About/package version is `0.99.5`.
+2. Confirm About/package version is `0.99.6`.
 3. Open the bundled Reactor One Demo and verify its maps, database, plugins, music, images, and effects are present.
 4. On Reactor One, check 3D, orbit the rendered map, uncheck 3D, confirm the 2D map is intact, then check 3D again. Repeat this on physical Windows and the other desktop targets; the process must remain alive throughout.
 5. Create and save a new project outside the extracted application directory.
@@ -353,12 +353,12 @@ is absent, it recovers with `gh release create --verify-tag`. It does not run
 the build worker.
 
 If recovery creates the release because **Publish Release** did not run, rerun
-**Publish Release** with version `0.99.5` before announcing the release. That
+**Publish Release** with version `0.99.6` before announcing the release. That
 replaces generated fallback notes with the authoritative changelog file.
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.99.5 \
+  -f version=0.99.6 \
   -f candidate_run_id=RUN_ID \
   -f publish_itch=false
 gh run watch RELEASE_RUN_ID
@@ -389,15 +389,15 @@ Release as a draft or delete it and use the itch dashboard to select the prior
 build on each channel. Do not reuse the version or silently replace assets.
 
 ```bash
-gh release delete v0.99.5 --yes
+gh release delete v0.99.6 --yes
 ```
 
 If the tag points to the wrong commit, delete the remote tag only after the
 Release is removed and before announcing the version:
 
 ```bash
-git push origin :refs/tags/v0.99.5
-git tag -d v0.99.5
+git push origin :refs/tags/v0.99.6
+git tag -d v0.99.6
 ```
 
 Correct the source, increment the version, rerun the complete checklist, and

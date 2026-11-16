@@ -385,5 +385,5 @@
       {"name":"Paving","material":"Cobble","tint":"#b8b0a4","bare":true,"paint":"0x5975 6 9x4 6 0x113 9x8 0x111 6 9x8 6 0x110 9x10 0x110 9x10 0x110 9x10 0x110 9x10 0x110 6 9x8 6 0x111 9x8 0x113 6 9x4 6"}
     ]
   },
-  "surround": {"style":"mountains","rough":1,"seed":12,"height":60,"neighbors":{"west":{"map":11}}}
+  "surround": {"style":"mountains","rough":1,"seed":12,"height":60,"neighbors":{"west":{"map":11}},"levels":{"below":{"map":1,"gap":0,"x":73,"y":30,"openings":[{"x":97,"y":53,"w":3,"h":3}]}}}
 }

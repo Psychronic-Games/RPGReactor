@@ -1237,9 +1237,11 @@ test('the wrapper asks the world nothing but one aim and what keeps the map\'s o
     w.plainCamera();
     const below = names();
     assert.ok(below.includes('aimCamera') && below.includes('clearCameraGround'), 'the map camera asks its own questions: ' + below.join(' '));
-    // What the map camera's own place asks once it has aimed: over a roof, out of a roof's hollow, out of a solid, out of the ground.
+    // What the map camera's own place asks once it has aimed: over a roof, out of a roof's hollow, out of a solid, out of the ground,
+    // and under the map's top where another map lies over it (2026-11-14).
+    // (The ride's own camera asks the first four only: nobody changes map by height while riding.)
     const CLEAR = ['aimCamera', 'clearCameraRoof', 'clearCameraAttic', 'clearCameraPath', 'clearCameraGround'];
-    assert.deepEqual(below.slice(below.lastIndexOf('aimCamera')), CLEAR, 'the map camera keeps itself clear with these four, in this order');
+    assert.deepEqual(below.slice(below.lastIndexOf('aimCamera')), CLEAR.concat('clearCameraLevel'), 'the map camera keeps itself clear with these five, in this order');
     asked.length = 0;
     w.draw();
     assert.deepEqual(names().slice(0, below.length), below, 'first what the wrappers below ask, as without a vehicle');

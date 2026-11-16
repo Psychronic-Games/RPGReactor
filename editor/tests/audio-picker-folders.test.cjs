@@ -49,6 +49,9 @@ class FakeElement {
         return child;
     }
     addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+    removeEventListener(type, listener) {
+        this.listeners[type] = (this.listeners[type] || []).filter(candidate => candidate !== listener);
+    }
     dispatch(type, extra = {}) {
         const event = { target: this, preventDefault() {}, ...extra };
         for (const listener of this.listeners[type] || []) listener(event);
@@ -120,7 +123,7 @@ function openPicker(files, selected = '', options = {}) {
         } },
         IntersectionObserver: FakeIntersectionObserver,
         AudioContext: FakeAudioContext,
-        reactor: options.htmlAudioOnly ? { audioPlayer: {
+        reactor: options.reactor ? options.reactor : options.htmlAudioOnly ? { audioPlayer: {
             audioPlayer: { htmlAudioOnly: true },
             getAudioSectionKey: name => String(name || '').charAt(0).toUpperCase() || '#',
             compareAudioTrackNames: (a, b) => a.localeCompare(b),
@@ -134,12 +137,17 @@ function openPicker(files, selected = '', options = {}) {
             extractFromFile: async () => options.coverUrl || null,
             forFile: async () => options.coverUrl || null
         },
-        RRAudioLoopTags: {
-            loopPointsFromFile: async () => options.loopPoints || null
-        },
         setTimeout
     };
     sandbox.window = sandbox;
+    // The real loop-tag module and its loop controller, inside the sandbox so
+    // its frames are the sandbox frames that never fire; the tests drive the
+    // wrap through timeupdate.
+    vm.runInNewContext(
+        fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'AudioLoopTags.js'), 'utf8'),
+        sandbox
+    );
+    sandbox.RRAudioLoopTags.loopPointsFromFile = async () => options.loopPoints || null;
     vm.runInNewContext(
         fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'PickerIndex.js'), 'utf8'),
         sandbox
@@ -149,6 +157,7 @@ function openPicker(files, selected = '', options = {}) {
         sandbox
     );
     sandbox.RRAudioPickerModal.open({
+        folderLabel: options.folderLabel,
         files,
         selected,
         levels: options.levels || null,
@@ -199,8 +208,9 @@ test('the shared picker follows embedded loop points and can fall back to HTML a
     audioElement.dispatch('seeked');
     audioElement.dispatch('timeupdate');
     assert.equal(audioElement.currentTime, 5, 'seeking past the loop end auditions the tail');
+    audioElement.dispatch('ended');
     audioElement.onended();
-    assert.equal(audioElement.currentTime, 1);
+    assert.equal(audioElement.currentTime, 1, 'a loop that ends with the file wraps');
 });
 
 test('a flat audio folder keeps letter sections and full row labels', () => {
@@ -307,4 +317,55 @@ test('leading items can represent the selected blank value without hiding empty 
     assert.equal(leading['aria-selected'], 'true');
     assert.equal(cleared, 1);
     assert.ok(browser.list.children.some(child => child.textContent === 'No files found'));
+});
+
+test('the shared picker settles an Opus loop counted at 48 kHz against the track length', async () => {
+    const files = [{ name: 'Opus', absolutePath: '/audio/Opus.ogg' }];
+    // A 44.1 kHz header whose counts only fit the 6.1 s track at 48 kHz.
+    const { audioElement, list } = openPicker(files, 'Opus', {
+        loopDefault: true,
+        loopPoints: { start: 2 * 48000 / 44100, end: 6 * 48000 / 44100, at48k: { start: 2, end: 6 } }
+    });
+    list.querySelectorAll('.audio-track-item')
+        .find(row => row.dataset.fileName === 'Opus').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    audioElement.duration = 6.1;
+    audioElement.dispatch('loadedmetadata');
+    audioElement.currentTime = 6.25;
+    audioElement.dispatch('timeupdate');
+    assert.ok(Math.abs(audioElement.currentTime - 2.25) < 1e-9, `wrapped at the 48 kHz end, to ${audioElement.currentTime}`);
+});
+
+function waitingPlayer() {
+    const calls = [];
+    return { calls, reactor: { audioPlayer: {
+        audioPlayer: { htmlAudioOnly: true },
+        getAudioSectionKey: name => String(name || '').charAt(0).toUpperCase() || '#',
+        compareAudioTrackNames: (a, b) => a.localeCompare(b),
+        getCoverArt: async () => null,
+        holdForPreview: label => calls.push(`hold:${label}`),
+        releasePreview: () => calls.push('release')
+    } } };
+}
+
+test('a track played in a picker makes the Audio Player wait, and stopping or closing gives it back', async () => {
+    const files = [{ name: 'Town', absolutePath: '/audio/Town.ogg' }];
+    const { calls, reactor } = waitingPlayer();
+    const { audioElement, list } = openPicker(files, '', { reactor, folderLabel: 'BGM' });
+    list.querySelectorAll('.audio-track-item').find(row => row.dataset.fileName === 'Town').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(calls, ['hold:[BGM] Town']);
+    audioElement.onended();
+    assert.deepEqual(calls, ['hold:[BGM] Town', 'release'], 'a track that ends gives the player back');
+    audioElement.onended();
+    assert.equal(calls.length, 2, 'and gives it back once');
+});
+
+test('a sound effect played in a picker plays over the Audio Player', async () => {
+    const files = [{ name: 'Click', absolutePath: '/audio/Click.ogg' }];
+    const { calls, reactor } = waitingPlayer();
+    const { list } = openPicker(files, '', { reactor, folderLabel: 'SE' });
+    list.querySelectorAll('.audio-track-item').find(row => row.dataset.fileName === 'Click').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(calls, []);
 });

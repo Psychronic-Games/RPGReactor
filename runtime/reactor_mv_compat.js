@@ -626,6 +626,11 @@
 
         if (!StorageManager.__mvCompatSyncStorage) {
             const saveNameOf = function(savefileId) {
+                // In MV these two numbers are not saved games: -1 is the options and 0 the list of saves. Taken as
+                // numbers they named "file-1" and "file0", and file0 is this runtime's autosave. Either file is read
+                // back by this runtime's own loaders whichever of the two wrote it (`zipToJson` above).
+                if (savefileId === -1) return "config";
+                if (savefileId === 0) return "global";
                 if (typeof savefileId === "number" && global.DataManager && DataManager.makeSavename) {
                     return DataManager.makeSavename(savefileId);
                 }
@@ -4278,6 +4283,32 @@
                     return scratchTexture(screen.width, screen.height, resolution || 1);
                 };
             }
+            if (!Object.getOwnPropertyDescriptor(filterSystemProto, "activeState")) {
+                // v5 filters that place something by screen position read the
+                // running pass from `filterManager.activeState`: the rectangle
+                // being filtered (sourceFrame, in screen pixels) and the object
+                // it belongs to (target). Hendrix 3D Light and Shadow's cover
+                // filter does, and stopped the game with "Cannot read
+                // properties of undefined (reading 'sourceFrame')".
+                Object.defineProperty(filterSystemProto, "activeState", {
+                    get: function() {
+                        const data = this._activeFilterData;
+                        if (!data || !data.bounds) return null;
+                        const b = data.bounds;
+                        const frame = new PIXI.Rectangle(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
+                        return {
+                            target: data.container || null,
+                            sourceFrame: frame,
+                            destinationFrame: frame.clone(),
+                            filters: data.filters || [],
+                            resolution: data.resolution || 1,
+                            renderTexture: data.inputTexture || null,
+                            legacy: false
+                        };
+                    },
+                    configurable: true
+                });
+            }
             if (!filterSystemProto.returnFilterTexture) {
                 filterSystemProto.returnFilterTexture = function(texture) {
                     if (texture) PIXI.TexturePool.returnTexture(texture);
@@ -4361,6 +4392,13 @@
                         if (!source.pixelWidth || !source.pixelHeight) {
                             try { source.resize(1, 1, source._resolution || source.resolution || 1); } catch (e) {}
                         }
+                    }
+                    // A tile layer a plugin made for itself and draws by hand
+                    // (Hendrix 3D Light and Shadow renders its own copies of
+                    // the upper tiles into a mask) is no child of the tilemap,
+                    // so nothing built its mesh: it drew nothing. Build it now.
+                    if (displayObject && typeof displayObject._syncV8Backend === "function") {
+                        try { displayObject._syncV8Backend(); } catch (e) { /* drawn as it stands */ }
                     }
                     return originalRender.call(this, {
                         container: displayObject,

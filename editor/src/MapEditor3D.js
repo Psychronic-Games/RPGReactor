@@ -684,7 +684,7 @@ class MapEditor3D {
             console.error('Could not completely clear the 3D scene:', error);
         }
         // The maps past the border were kept for the next scene: there is none.
-        try { globalThis.RRMapNeighborView?.dispose(this); } catch (error) {
+        try { globalThis.RRMapNeighborView?.dispose(this); globalThis.RRMapLevelView?.dispose(this); } catch (error) {
             console.error('Could not clear the neighboring maps:', error);
         }
         const sharedPixiRenderer = this._sharedPixiRenderer;
@@ -1108,6 +1108,8 @@ class MapEditor3D {
         globalThis.RRMapEdges?.syncView?.(this);
         // The maps past the border: those kept from the scene before stand again now, a new one is built once this map is drawn.
         globalThis.RRMapNeighborView?.sync(this);
+        // The map over and under it, through the openings between them (RRMapLevelView).
+        try { globalThis.RRMapLevelView?.sync(this); } catch (error) { console.warn('Maps above and below:', error); }
         this.buildGrid(mapData);
         this.buildHoverCell();
         if (!await this.buildEvents(mapData, request)) return false;
@@ -2885,7 +2887,17 @@ class MapEditor3D {
         const doorKey = door ? ':door:' + [door.x - target.x, door.y - target.y, door.rot, door.width, door.style].join(',') : '';
         // A building turned or grown while picked up has a new footprint: its slab is made again.
         const intoKey = carved ? ':into:' + JSON.stringify(carved.map(p => [p.kind, p.x - into.wall.x, p.y - into.wall.y, p.z - into.wall.z, p.height || 5, p.rot, p.size, p.offset])) : '';
-        const key = intoKey + doorKey + (stamp ? (bounds ? 'move:' + manager.selectedGroup + ':' + stamp.size.join('x') : 'stamp:' + manager.structure + ':' + turn + ':' + (manager.stampScale || 1)) : (erase ? 'erase' : manager.kind) + ':' + (manager.kind === 'ladder' && manager.ladderRotFor ? manager.ladderRotFor(target) ?? manager.rot : manager.rot) + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? [manager.ladderHeight, manager.ladderWidth] : manager.kind === 'rock' ? [manager.rockVary && manager.rockSeed, manager.rockCap, manager.rockTint] : null, manager.heightFor ? manager.heightFor(manager.kind) : 5, manager.kind === 'floor' ? manager.floorBrush : 1, manager.tints ? manager.tints[manager.kind] || '' : '', manager.pillarThick, manager.roofRise]));
+        const baseKey = intoKey + doorKey + (stamp ? (bounds ? 'move:' + manager.selectedGroup + ':' + stamp.size.join('x') : 'stamp:' + manager.structure + ':' + turn + ':' + (manager.stampScale || 1)) : (erase ? 'erase' : manager.kind) + ':' + (manager.kind === 'ladder' && manager.ladderRotFor ? manager.ladderRotFor(target) ?? manager.rot : manager.rot) + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? [manager.ladderHeight, manager.ladderWidth] : manager.kind === 'rock' ? [manager.rockVary && manager.rockSeed, manager.rockCap, manager.rockTint] : null, manager.heightFor ? manager.heightFor(manager.kind) : 5, manager.kind === 'floor' ? manager.floorBrush : 1, manager.tints ? manager.tints[manager.kind] || '' : '', manager.pillarThick, manager.roofRise]));
+        // What will be laid, as it will be drawn there: joined to what stands beside it and stood on its own cells' ground
+        // (Reactor3D.previewPieces). A stair run shows whole, every step as wide as it will be laid; so do a ladder and a floor brush.
+        const plainRun = !stamp && !erase && !carved && !door;
+        const run = !plainRun ? null : Reactor3D.previewPieces(manager.kind === 'stair' && manager.stairRun ? manager.stairRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 })))
+            : manager.kind === 'ladder' && manager.ladderRun ? manager.ladderRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }), { rot: manager.ladderRotFor(target) ?? manager.rot }))
+            : manager.kind === 'floor' && manager.floorBrush > 1 && manager.brushCells
+                ? manager.brushCells({ x: 0, y: 0, z: 0 }).map(cell => Object.assign({ id: 0, material: '' }, manager.pieceFor(cell)))
+                : [Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }))], mapData, { x: target.x, y: target.y, z: target.z || 0 });
+        // (Made again when what it meets changes: another neighbor, other ground.)
+        const key = baseKey + (run ? ':meets:' + JSON.stringify(run.map(p => [p.ladderJoin || 0, p.fenceJoin || 0, p.supportTop || 0, p.previewBase || 0])) : '');
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected
@@ -2898,12 +2910,7 @@ class MapEditor3D {
                 || (stamp
                     ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
                     : Reactor3D.pieceGeometry(erase ? [{ id: 0, material: '', kind: 'block', x: 0, y: 0, z: 0, rot: 0 }]
-                        // A stair run shows whole: every step, as wide as it will be laid.
-                        : (manager.kind === 'stair' && manager.stairRun ? manager.stairRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 })))
-                            : manager.kind === 'ladder' && manager.ladderRun ? manager.ladderRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }), { rot: manager.ladderRotFor(target) ?? manager.rot }))
-                            : manager.kind === 'floor' && manager.floorBrush > 1 && manager.brushCells
-                                ? manager.brushCells({ x: 0, y: 0, z: 0 }).map(cell => Object.assign({ id: 0, material: '' }, manager.pieceFor(cell)))
-                                : [Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }))]), null));
+                        : run, null));
             const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
             this.pieceGhost = new THREE.Mesh(geometry, material);
             this.pieceGhost.renderOrder = 998;
@@ -5056,6 +5063,7 @@ class MapEditor3D {
         if (this.mapScene) {
             // The maps past the border are not this scene's to destroy: they stand in the next one.
             globalThis.RRMapNeighborView?.hold(this);
+            globalThis.RRMapLevelView?.hold(this);
             this.mapScene.destroy();
             this.mapScene = null;
         }
@@ -6298,7 +6306,7 @@ class MapEditor3D {
         clearTimeout(this._rebuildTimer);
         this._rebuildTimer = null;
         try { this.clearScene(); } catch (error) { console.error('Could not completely clear the 3D scene:', error); }
-        try { globalThis.RRMapNeighborView?.dispose(this); } catch (error) { console.error('Could not clear the neighboring maps:', error); }
+        try { globalThis.RRMapNeighborView?.dispose(this); globalThis.RRMapLevelView?.dispose(this); } catch (error) { console.error('Could not clear the neighboring maps:', error); }
         try { this.lastPark = this.releaseGraphics(this.renderer); } catch (error) { console.error('Could not release the 3D view\'s models:', error); }
         try { this.unbindGraphics(); } catch (error) { console.error('Could not unbind the 3D view\'s graphics:', error); }
         // A frame from each renderer: the GPU process gives deleted things back when a frame is
@@ -6759,6 +6767,7 @@ class MapEditor3D {
                 if (this.hoverCell) this.hoverCell.visible = false;
                 // The maps past the border are drawn once, with the ground: setPass does not reach their groups.
                 globalThis.RRMapNeighborView?.pass(this, false);
+                globalThis.RRMapLevelView?.pass(this, false);
             };
             if (this.mapScene.hasAbove()) {
                 hideEditorLayers();
@@ -6787,6 +6796,7 @@ class MapEditor3D {
             if (this.grid && gridVisible !== null) this.grid.visible = gridVisible;
             if (this.hoverCell && hoverVisible !== null) this.hoverCell.visible = hoverVisible;
             globalThis.RRMapNeighborView?.pass(this, true);
+            globalThis.RRMapLevelView?.pass(this, true);
             this.mapScene.setPass('all');
         }
     }

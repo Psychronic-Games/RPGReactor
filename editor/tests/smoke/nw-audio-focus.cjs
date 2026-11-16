@@ -78,7 +78,7 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
             check(type+': selected track has inset keyboard focus',[result.rowOutline,result.rowOffset],['solid','-2px']);
         }
         fs.writeFileSync(evidence+'-player.png',Buffer.from(await driver.sessionRequest('GET','/screenshot'),'base64'));
-        await driver.execute(`reactor.audioPlayer.stopAudio();document.getElementById('audio-player-modal').style.display='none';const folder=require('path').join(reactor.projectController.currentProject.path,'audio/se');RRAudioPickerModal.open({title:'Select SE',folderLabel:'SE',files:RRAssetFiles.listUnique(folder,RRAssetFiles.AUDIO_EXTENSIONS),onOk:()=>{}});`);
+        await driver.execute(`reactor.audioPlayer.stopAudio();reactor.audioPlayer.hideAudioPlayer();const folder=require('path').join(reactor.projectController.currentProject.path,'audio/se');RRAudioPickerModal.open({title:'Select SE',folderLabel:'SE',files:RRAssetFiles.listUnique(folder,RRAssetFiles.AUDIO_EXTENSIONS),onOk:()=>{}});`);
         await driver.waitForScript('return document.activeElement?.classList.contains("audio-track-item");');
         await key('\uE015');
         const row=await driver.execute('const e=document.activeElement,s=getComputedStyle(e);return [e.classList.contains("audio-track-item"),s.outlineStyle,s.outlineOffset];');

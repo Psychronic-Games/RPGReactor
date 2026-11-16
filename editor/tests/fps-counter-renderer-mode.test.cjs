@@ -51,3 +51,28 @@ test('the counter draws the mode line under the FPS label', () => {
     assert.ok(/_update = function\(\) \{[\s\S]*?Graphics\.rendererModeName\(app\.renderer\)/.test(coreSource),
         'the mode is resolved on each update, after the async PIXI init');
 });
+
+test('the mode, the graphics device and the backend are a row each, so the box stays narrow (runtime 20261115.1)', () => {
+    // One line "WebGL · Intel Iris Xe Graphics Direct3D11on12 v" made the box as wide as all of it (owner, 2026-11-15).
+    assert.ok(coreSource.includes('white-space:pre-line;'), 'the mode element breaks at its line ends');
+    assert.match(coreSource, /if \(device\) mode \+= "\\n" \+ device;\s*const backend = device \? Graphics\.graphicsBackendName\(\) : "";\s*if \(backend\) mode \+= "\\n" \+ backend;/);
+    const at = coreSource.indexOf('Graphics.graphicsDeviceName = function(renderer)');
+    const end = coreSource.indexOf('Graphics.rendererModeName = function(renderer)');
+    const G = {};
+    // eslint-disable-next-line no-new-func
+    new Function('Graphics', coreSource.slice(at, coreSource.lastIndexOf('/**', end)))(G);
+    const names = renderer => {
+        delete G._deviceName; delete G._deviceString;
+        const gl = { getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => renderer };
+        return [G.graphicsDeviceName({ gl }), G.graphicsBackendName()];
+    };
+    assert.deepStrictEqual(names('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)'), ['Intel Iris Xe Graphics', 'Direct3D 11']);
+    assert.deepStrictEqual(names('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11on12 vs_5_0 ps_5_0, D3D11)'), ['Intel Iris Xe Graphics', 'Direct3D 11 on 12']);
+    assert.deepStrictEqual(names('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics, OpenGL 4.5.0)'), ['Intel Iris Xe Graphics', 'OpenGL']);
+    assert.deepStrictEqual(names('ANGLE (NVIDIA, NVIDIA GeForce RTX 5070/PCIe/SSE2, OpenGL 4.5.0)'), ['RTX 5070', 'OpenGL']);
+    assert.deepStrictEqual(names('ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)'), ['Apple M2', 'Metal']);
+    assert.deepStrictEqual(names('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)'), ['software (SwiftShader)', ''], 'software drawing names no backend');
+    assert.deepStrictEqual(names('ANGLE (Intel, Vulkan 1.4.323 (Intel(R) Iris(R) Xe Graphics (0x00009A49)), Intel Corporation)'), ['Intel Iris Xe Graphics', 'Vulkan']);
+    assert.deepStrictEqual(names('ANGLE (NVIDIA, Vulkan 1.3.277 (NVIDIA NVIDIA GeForce RTX 5070 (0x00002F04)), NVIDIA)'), ['RTX 5070', 'Vulkan']);
+    assert.deepStrictEqual(names(''), ['', '']);
+});

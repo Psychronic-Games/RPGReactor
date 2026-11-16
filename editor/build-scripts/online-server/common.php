@@ -496,10 +496,25 @@ function writeParties(string $dir, array $state): void {
     if (file_put_contents($temporary, jsonText($state)) !== false) rename($temporary, $dir . '/parties.json');
 }
 
-/** The party someone is in, as [id, party], or nothing. People are known by name, because a slot lasts one visit. */
-function partyOf(array $state, string $name): array {
-    foreach ($state['parties'] as $id => $party) if (in_array($name, $party['members'], true)) return [$id, $party];
+/**
+ * The party someone is in, as [id, party], or nothing. People are listed by name, because a slot lasts one visit,
+ * and each name is held for the account that joined under it (`owners`): while that account is away, someone else
+ * who takes the name is not that member, so gets neither the party's chat nor its place. A guest has no account
+ * (''), and a party from before owners were kept has none recorded: there the name alone decides, as it did.
+ * `$account` null asks by name only.
+ */
+function partyOf(array $state, string $name, ?string $account = null): array {
+    foreach ($state['parties'] as $id => $party) {
+        if (!in_array($name, $party['members'], true)) continue;
+        if ($account !== null && isset($party['owners'][$name]) && (string)$party['owners'][$name] !== $account) continue;
+        return [$id, $party];
+    }
     return ['', null];
+}
+
+/** Whether an invitation or a challenge kept under a name is for this account: one from before accounts were kept is for the name. */
+function meantFor(?array $entry, string $account): bool {
+    return $entry !== null && (!isset($entry['for']) || (string)$entry['for'] === $account);
 }
 
 /** Someone online by name, in any case, other than `$not`: their slot, or -1. */
@@ -517,6 +532,7 @@ function slotNamed(string $dir, string $name, int $not = -1, ?array $names = nul
 
 // ---- Shared battles: the server lists them and carries their messages; the host's game runs them ----
 
+const BATTLE_CLOSED_SECONDS = 60;       // a battle its host closed keeps its log this long, for guests still reading the ending
 const BATTLE_SECONDS = 20;              // a battle whose host hasn't been heard from for this long is over
 const BATTLE_LOG_BYTES = 16777216;
 

@@ -742,6 +742,20 @@ The levels above move a few of these; all remain engine defaults a script call o
 
 The Options menu's Graphics row (Quality levels, above) is the player-facing preset over some of these: High, Medium and Low hold a level, saved with the other options. The rest stay script settings.
 
+
+### Switches kept as a way back
+
+These can only be flipped from the developer console; nothing in the game flips them. Each keeps an older way of doing something alive, and is the way back if the newer way misbehaves on some machine. The owner's decision (2026-11-12) is to keep them all until the weak-PC test is done, then look again.
+
+| Switch | Default | Off means |
+| --- | --- | --- |
+| `Reactor3D.CasterCrowd.enabled` | true | each shadow-casting character is drawn on its own, not as one crowd |
+| `Reactor3D.WaterSight.enabled` | true | water's mirror is drawn whether or not water shows |
+| `Reactor3D.Shadows.rowClearEnabled` | true | a shadow row is redrawn the older way (`_renderFacesOriginal`) |
+| `Reactor3D.LightGrid.cacheEnabled` | true | the light grid is worked out again every time it is asked for |
+
+The descriptions are from the names and the comments beside each switch, not from a measurement. Others of the kind are listed in the audit log `rt-3d-lighting-effects`.
+
 ## Editor memory
 
 Editor previews hold only what they show. A model loaded to draw a thumbnail is released as soon as the picture exists, and the thumbnail renderer is dropped with its WebGL context four seconds after its last use. The 3D Models page keeps the model on screen and the one before it; closing the page releases every model and both renderers. The 3D map view frees its models' graphics-card copies before its renderer is disposed, because a renderer's own dispose leaves them behind on the context it shares with the 2D view. On North Haven (video memory / ArrayBuffers, MB): closing the Database after eight previews ended at 804, 978, 975 / 323, 351, 351 over three rounds before and 502, 475, 477 / 207, 219, 219 after; three 2D/3D toggles went 1103, 1179, 1256 before and 471, 484, 482 after. Switching maps releases the models the new map does not use (`MapEditor3D.SWEEP_MODELS_ON_MAP_CHANGE`, on since the shadow lists forget old scenes, runtime 20261014.4). Still open: the builder's 50-step undo can hold about 97 MB on North Haven. Measure with `scratchpad/memory/ed-mem.cjs <out> 5 --loops`: three rounds of each open-and-close loop should end where the first ended.

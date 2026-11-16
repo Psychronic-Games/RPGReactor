@@ -577,3 +577,9 @@ test('an imported parallel common event pauses while its switch is off and resum
     assert.match(objects, /\} else if \(!\(\$dataSystem && \$dataSystem\.rrLegacyEventOrder\)\) \{\s*this\._interpreter = null;/, 'Deep 8\'s menu cursor bob (+4 / -4) must not restart halfway');
     assert.match(objects, /Game_CommonEvent\.prototype\.update = function\(\) \{\s*if \(this\._interpreter && this\.isActive\(\)\) \{/);
 });
+
+test('an item only some heroes or classes may use is counted for the import report, since the rule is not carried', () => {
+    const notes = {};
+    D.items(withIds({ items: [null, { name: 'Blade', type: 1, actor_set: [true, false] }, { name: 'Robe', type: 3, class_set: [false] }, { name: 'Potion', type: 6, actor_set: [true, true] }, { name: 'Ring', type: 5 }] }), notes, null, []);
+    assert.equal(notes.usableByNotCarried, 2);
+});

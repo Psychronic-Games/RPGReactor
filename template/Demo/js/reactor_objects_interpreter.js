@@ -343,6 +343,9 @@ Game_Interpreter.prototype.command101 = function(params) {
     const legacy = $gameSystem && $gameSystem._rrMessage;
     if (legacy) params = [legacy.faceName, legacy.faceIndex, legacy.background, legacy.position, params[4]];
     $gameMessage.setFaceImage(params[0], params[1]);
+    // How a face set with frames is played is the command's own, beside its parameters (the editor's Show Text).
+    const shown = this.currentCommand();
+    $gameMessage.setFacePlay(shown && shown.code === 101 ? shown.reactorFacePlay : "");
     $gameMessage.setBackground(params[2]);
     $gameMessage.setPositionType(params[3]);
     $gameMessage.setSpeakerName(params[4]);

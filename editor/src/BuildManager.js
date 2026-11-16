@@ -6,6 +6,19 @@ const WebPackPreference = {
 };
 if (typeof window !== 'undefined') window.WebPackPreference = WebPackPreference;
 
+/** Whether a Web build is one page that shows the game from a server, and that address, remembered between deployments. */
+const WebRemotePreference = {
+    KEY: 'rr-web-remote',
+    load() { try { const kept = JSON.parse(localStorage.getItem(this.KEY) || '{}'); return { on: !!kept.on, url: typeof kept.url === 'string' ? kept.url : '' }; } catch (error) { return { on: false, url: '' }; } },
+    save(on, url) { try { localStorage.setItem(this.KEY, JSON.stringify({ on: !!on, url: String(url || '') })); } catch (error) { /* a preference only */ } },
+    /** The address as a browser may be sent to it (https or http), or ''. */
+    address(value) {
+        try { const url = new URL(String(value || '').trim()); return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname && !url.username && !url.password ? url.href : ''; }
+        catch (error) { return ''; }
+    },
+};
+if (typeof window !== 'undefined') window.WebRemotePreference = WebRemotePreference;
+
 class BuildManager {
     constructor() {
         this.isBuilding = false;
@@ -82,6 +95,20 @@ class BuildManager {
                                             <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('A few zip archives in place of many files, for web hosts with file limits.')}</span>
                                         </span>
                                     </label>
+
+                                    <div id="build-remote-option" style="display: none; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px;">
+                                        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                            <input id="build-remote-on" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                            <span>
+                                                <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Play from a server')}</span>
+                                                <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('The build is one small page that shows the game from the address below. For store pages with size limits, such as itch.io: the game itself stays on your server.')}</span>
+                                            </span>
+                                        </label>
+                                        <div id="build-remote-address" style="display: none; margin-top: 8px;">
+                                            <label for="build-remote-url" style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Game address')}</label>
+                                            <input id="build-remote-url" class="rr-input" type="url" spellcheck="false" placeholder="https://" style="width: 100%; box-sizing: border-box; margin-top: 4px; font-size: 12px; padding: 5px 7px;">
+                                        </div>
+                                    </div>
 
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="build-platform-online" value="online" class="system-checkbox" style="margin-right: 10px;">
@@ -202,6 +229,7 @@ class BuildManager {
                                     <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt("Don't bundle unused files")}</span>
                                 </label>
                                 <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('A picture, sound, movie, effect, model or font is left out only when nothing names it: the database, maps and events, plugin parameters, the code of the plugins switched on, and what playtests loaded.')}</div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 4px;">${tt('A helper script that is not in the plugin list is left out unless it is added under "Always include".')}</div>
                                 <button id="build-unused-review" class="graphic-selector-button" style="margin-top: 8px; padding: 6px 14px; font-size: 12px;">${tt('Review unused files...')}</button>
                                 <div id="build-unused-panel" style="display: none; margin-top: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px;">
                                     <div id="build-unused-summary" style="color: var(--color-text); font-size: 12px; line-height: 1.4;"></div>
@@ -514,6 +542,9 @@ class BuildManager {
         document.getElementById('build-platform-linux').addEventListener('change', () => this.updateAppImageAvailability());
         document.getElementById('build-platform-web').addEventListener('change', () => this.updatePackAvailability());
         document.getElementById('build-pack-files').addEventListener('change', event => WebPackPreference.save(event.target.checked));
+        const keepRemote = () => WebRemotePreference.save(document.getElementById('build-remote-on').checked, document.getElementById('build-remote-url').value.trim());
+        document.getElementById('build-remote-on').addEventListener('change', () => { keepRemote(); this.updatePackAvailability(true); });
+        document.getElementById('build-remote-url').addEventListener('change', keepRemote);
         document.getElementById('build-platform-online').addEventListener('change', () => this.updateOnlineAvailability());
         document.getElementById('build-online-folder-btn').addEventListener('click', () => this.selectOnlineFolder());
 
@@ -539,10 +570,21 @@ class BuildManager {
     }
 
     /** Packing is a choice of the Web build alone: shown with it, and remembered between deployments. */
-    updatePackAvailability() {
+    updatePackAvailability(keepRemoteChoice = false) {
         const web = document.getElementById('build-platform-web').checked;
-        document.getElementById('build-pack-option').style.display = web ? 'flex' : 'none';
-        document.getElementById('build-pack-files').checked = web && WebPackPreference.load();
+        // Played from a server (one page, none of the game's files): shown with Web, remembered, and its address
+        // offered from the project's own (Database > Online) until one is typed. There is nothing to pack then.
+        const remoteBox = document.getElementById('build-remote-on'), remoteUrl = document.getElementById('build-remote-url');
+        if (!keepRemoteChoice) {
+            const kept = WebRemotePreference.load();
+            remoteBox.checked = web && kept.on;
+            if (!remoteUrl.value) remoteUrl.value = kept.url || String(this.onlineSettings()?.address || '').trim();
+        }
+        const remote = web && remoteBox.checked;
+        document.getElementById('build-remote-option').style.display = web ? 'block' : 'none';
+        document.getElementById('build-remote-address').style.display = remote ? 'block' : 'none';
+        document.getElementById('build-pack-option').style.display = web && !remote ? 'flex' : 'none';
+        document.getElementById('build-pack-files').checked = web && !remote && WebPackPreference.load();
     }
 
     /** The server's folder and address show with Online Server, as they were left last time. */
@@ -858,6 +900,14 @@ class BuildManager {
         const runtimeSource = document.querySelector('input[name="build-runtime-source"]:checked').value;
         const includeProprietaryCodecs = document.getElementById('build-include-proprietary-codecs').checked;
         const runtimeLocales = this.selectedRuntimeLocales();
+        // A Web build played from a server needs the address it is played at.
+        const webRemoteOn = platforms.includes('web') && document.getElementById('build-remote-on').checked;
+        const webRemoteUrl = webRemoteOn ? WebRemotePreference.address(document.getElementById('build-remote-url').value) : '';
+        if (webRemoteOn && !webRemoteUrl) {
+            await RRDialog.alert(tt('Enter the address the game is played at. It starts with https://'), { title: tt('Deploy Game') });
+            return;
+        }
+        if (webRemoteOn) WebRemotePreference.save(true, webRemoteUrl);
         const assetOptimization = this.assetOptimizationSettings();
         const assetEncryption = this.encryptionSettings();
         const createLinuxAppImage = document.getElementById('build-create-linux-appimage').checked;
@@ -895,10 +945,13 @@ class BuildManager {
                     assetEncryption,
                     createLinuxAppImage,
                     packWebFiles,
+                    webRemoteUrl,
                     unusedFiles,
                     online: platforms.includes('online') ? {
                         folder: onlineFolder, address: onlineAddress, maxPlayers: onlineProject.maxPlayers,
                         pack: document.getElementById('build-online-pack').checked,
+                        // The server's admin page takes the editor's theme as it is now (File › Options).
+                        theme: document.documentElement.getAttribute('data-theme') || '',
                     } : null,
                     appRoot: appRoot,
                     editorExecPath: process.execPath,

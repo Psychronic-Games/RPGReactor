@@ -136,6 +136,7 @@ test('a preview build is quick enough for a live slider', t => {
     const start = cpuMicros();
     for (const kind of ['dog', 'horse', 'drake']) Creature.build(Creature.kindRecipe(kind), { quality: 'preview' });
     const ms = (cpuMicros() - start) / 1000 / 3;
+    t.diagnostic('preview ' + Math.round(ms) + ' ms a build');
     withinBudget(t, ms, 400, 'preview ' + Math.round(ms) + ' ms');
 });
 

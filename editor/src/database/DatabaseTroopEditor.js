@@ -139,10 +139,24 @@ class DatabaseTroopEditor {
         battleTestBtn.onclick = () => this.openBattleTestConfig();
         bar.appendChild(battleTestBtn);
 
-        if (this.parentEditor.battlePresentationEditor) bar.appendChild(this.parentEditor.battlePresentationEditor.roomPanel(this));
+        // The Battle Scene and the Battleback are the Classic screen's backdrop: a troop whose own
+        // mode is fought on the map shows neither, so their controls are hidden while it is chosen.
+        const classicOnly = [];
+        const showClassicOnly = () => {
+            const onMap = DatabaseTroopEditor.MAP_MODES.includes(DatabaseTroopEditor.troopMode(this.currentTroop));
+            for (const element of classicOnly) element.style.display = onMap ? 'none' : '';
+        };
+        const modeSection = this.createBattleModeSection(showClassicOnly);
+        if (modeSection) bar.appendChild(modeSection);
+        if (this.parentEditor.battlePresentationEditor) {
+            classicOnly.push(this.parentEditor.battlePresentationEditor.roomPanel(this));
+            bar.appendChild(classicOnly[0]);
+        }
         bar.appendChild(this.createMembersSection());
-        bar.appendChild(this.createBattlebackSection());
+        classicOnly.push(this.createBattlebackSection());
+        bar.appendChild(classicOnly[classicOnly.length - 1]);
         bar.appendChild(this.createBattleMusicSection());
+        showClassicOnly();
 
         // Note
         const noteSection = document.createElement('div');
@@ -157,6 +171,74 @@ class DatabaseTroopEditor {
         `;
         bar.appendChild(noteSection);
         return bar;
+    }
+
+    /** The modes the game knows (`F.MODES` in runtime/reactor_fight.js) and the ones fought on the map (`F.ON_MAP`). */
+    static MODES = ['classic', 'tactical', 'action', 'firstPerson'];
+    static MAP_MODES = ['tactical', 'action', 'firstPerson'];
+
+    /** A troop's own battle mode as the game reads it (`F.troopMode`): `reactorBattle.mode` when it names a mode, else ''. */
+    static troopMode(troop) {
+        const mode = troop && troop.reactorBattle && troop.reactorBattle.mode;
+        return DatabaseTroopEditor.MODES.includes(mode) ? mode : '';
+    }
+
+    /**
+     * Sets a troop's own battle mode where the game reads it, `reactorBattle.mode`. '' (the
+     * project's mode) removes the key, and `reactorBattle` with it once it holds nothing else,
+     * so a troop left at the project's mode has no field written.
+     */
+    static setTroopMode(troop, mode) {
+        if (!troop) return;
+        if (DatabaseTroopEditor.MODES.includes(mode)) {
+            troop.reactorBattle = { ...(troop.reactorBattle && typeof troop.reactorBattle === 'object' ? troop.reactorBattle : {}), mode };
+        } else if (troop.reactorBattle && typeof troop.reactorBattle === 'object') {
+            delete troop.reactorBattle.mode;
+            if (!Object.keys(troop.reactorBattle).length) delete troop.reactorBattle;
+        }
+    }
+
+    /**
+     * Battle mode: the mode this troop is always fought in, ahead of the map's and the game's
+     * (docs/BATTLE-MODES.md). Not shown while Reactor Features › On-Map Battles is off: the game
+     * then fights every battle on the Classic screen.
+     */
+    createBattleModeSection(onChange) {
+        const features = globalThis.ReactorFeatures;
+        const system = this.databaseManager.getSystem();
+        if (features && system && !features.on('mapBattles', system)) return null;
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const troop = this.currentTroop;
+        const isCurrent = this.parentEditor?.captureDetailContext?.() || (() => troop === this.currentTroop);
+        const section = document.createElement('div');
+        section.className = 'database-section';
+        section.style.cssText = 'width:100%;min-width:0;';
+        const chosen = DatabaseTroopEditor.troopMode(troop);
+        const options = [['', "(The project's mode)"], ['classic', 'Classic'], ['tactical', 'Tactical'], ['action', 'Action'], ['firstPerson', 'First Person']]
+            .map(([value, label]) => `<option value="${value}"${value === chosen ? ' selected' : ''}>${this.escapeHTML(tt(label))}</option>`).join('');
+        section.innerHTML = `
+            <div class="database-section-header" data-section-key="battle-mode">${this.escapeHTML(tt('Battle Mode'))}</div>
+            <div class="database-section-content">
+                <select class="database-field-value" id="troop-battle-mode" style="width: 100%; min-width: 0; box-sizing: border-box;">${options}</select>
+                <div id="troop-battle-mode-hint" style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;"></div>
+            </div>
+        `;
+        const select = section.querySelector('#troop-battle-mode'), hint = section.querySelector('#troop-battle-mode-hint');
+        const describe = () => {
+            const mode = DatabaseTroopEditor.troopMode(troop);
+            hint.textContent = tt(!mode ? "This troop is fought in the map's battle mode, or the game's (System 1) when the map has none."
+                : DatabaseTroopEditor.MAP_MODES.includes(mode) ? 'This troop is always fought on the map in this mode, so it has no Battle Scene or Battleback.'
+                    : 'This troop is always fought on the Classic battle screen.');
+        };
+        select.addEventListener('change', () => {
+            if (!isCurrent()) return;
+            DatabaseTroopEditor.setTroopMode(troop, select.value);
+            this.persistTroop();
+            describe();
+            if (onChange) onChange();
+        });
+        describe();
+        return section;
     }
 
     /** Battle music: a track or an entry of Database > Music Sequences, played instead of any other battle music. */

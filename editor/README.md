@@ -2,7 +2,7 @@
 
 For the consolidated update, read the [0.99.4 release notes](../docs/posts/release-notes-0.99.4.md). Battle Rooms and visual Action Sequences are opt-in systems; see the [battle guide](../docs/BATTLE-PRESENTATION.md) and the [rigging guide](../docs/RIGGING-MODELS.md) for setup and current limits.
 
-RPG Reactor 0.99.5 (in development) is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.99.6 (in development) is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -138,8 +138,10 @@ imports only through explicit Starting Layout / Add to Front actions.
 - **Current boundaries**: There is no Container node, general flow layout, or alignment-guide system. The battle's flow and message inputs (Input Number, Select Item) remain stock; arbitrary named plugin scenes are not replaceable. The standalone MZ plugin is deferred per owner direction, not the next active task.
 
 ### Audio Player
+- **A window of its own**: like the Database and the Forge, it can be dragged to another monitor, sized from any edge, pinned on top, minimized or filled to the screen; it remembers its place and stays open while you work on the map. In the web editor it is a floating panel
 - **Multi-channel playback**: BGM, BGS, ME, and SE tracks
-- **Formats**: OGG, MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` comments, ID3 `TXXX`, WAV `smpl`) and embedded album art shown beside each track; the same interface and one shared extraction cache back every audio picker, System music/sound picker, event command, and plugin audio field in the editor
+- **It waits for a track you try out elsewhere**: playing a BGM, BGS or ME in any picker (a map's music, battle music, an event's Play BGM) pauses what the Audio Player has on; its window says which track it is waiting for, and it carries on from the same place when you pause, stop or close the picker. Sound effects play over it
+- **Formats**: OGG (Vorbis or Opus), MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` or `LOOP_START`/`LOOP_END` comments, ID3 `TXXX`, WAV `smpl`; see [Audio formats and loop points](../docs/AUDIO-LOOP-POINTS.md)) and embedded album art shown beside each track; the same interface and one shared extraction cache back every audio picker, System music/sound picker, event command, and plugin audio field in the editor
 - **Playback controls**: Volume, pitch, pan, and seek
 - **Loop configuration**: Set custom loop points
 - **BGM sequences**: Sequences in Database › Music Sequences or a map's Map Properties repeat ordered tracks, silence, and layered palettes with random pools, timing, and fades; a map, a troop, or Change Battle BGM can name a library sequence. Native track loop points are ignored inside a sequence
@@ -209,14 +211,14 @@ imports only through explicit Starting Layout / Add to Front actions.
 - **Package preflight**: Launch-critical `package.json` metadata is validated before NW.js starts, preventing MV projects with an empty `name` from reaching NW.js's generic required-value error
 
 ### Build & Deploy (Games)
-- **Cross-platform builds**: Package games for Windows, macOS, Linux, and Web (HTML5)
+- **Cross-platform builds**: Package games for Windows, macOS, Linux, and Web (HTML5). A Web build can instead be one page that shows the game from your own server (**Play from a server**), for a store page such as itch.io with upload limits; **Online Server** puts the game and its server in a web folder and, after the first time, sends only the files that changed
 - **Standalone executables**: No runtime dependencies for players
 - **Custom icons**: Game builds embed your project's `icon/icon.png` into Windows `.exe` and macOS `.app`; Linux uses runtime icon. Falls back to NW.js default if no icon is found
 - **Asset bundling**: Game files copied into `package.nw` alongside NW.js runtime
 - **NW.js runtime options**: Reuse bundled/cached runtimes first or download from dl.nwjs.io; choose latest stable, the editor's version, or an exact version through a themed selector searchable by version or release date
 - **Runtime locales**: Optionally retain only selected Chromium locale families in desktop packages; English is always kept as a fallback and project translation assets are untouched
 - **Desktop proprietary codecs**: Game and full editor deployments default to an exact-version `nwjs-ffmpeg-prebuilt` H.264/AAC overlay, verified against a checked-in trusted SHA-256 manifest and cached separately. Users may disable it; unchecked builds acquire a clean official runtime so an existing overlay cannot leak into the package. Codec packages include the LGPL 2.1 text, immutable corresponding-source/build references, and a patent notice
-- **Optional asset optimization**: Deploy Game can losslessly recompress staged PNG files with Oxipng and optionally compress every supported audio format at an explicit quality. OGG, MP3, and M4A re-encode in place with their corresponding encoders; WAV and FLAC convert to OGG. Existing project files are never modified, larger or invalid results are discarded, and native loop points are preserved. Embedded cover art is retained when FFmpeg can carry it through safely; a failed art-preserving encode retries without art rather than failing the deployment. Audio optimization automatically downloads a pinned, SHA-256-verified FFmpeg executable into a separate cache on first use; the corresponding GPL license and verification manifest are retained beside it. Per-file progress appears in the existing build log and progress bar
+- **Optional asset optimization**: Deploy Game can losslessly recompress staged PNG files with Oxipng and optionally compress every supported audio format at an explicit quality. OGG Vorbis, MP3, and M4A re-encode in place with their corresponding encoders; OGG Opus is left as it is; WAV and FLAC convert to OGG. Existing project files are never modified, larger or invalid results are discarded, and native loop points are preserved. Embedded cover art is retained when FFmpeg can carry it through safely; a failed art-preserving encode retries without art rather than failing the deployment. Audio optimization automatically downloads a pinned, SHA-256-verified FFmpeg executable into a separate cache on first use; the corresponding GPL license and verification manifest are retained beside it. Per-file progress appears in the existing build log and progress bar
 - **Persistent choices**: Game output directory, runtime locales, PNG optimization, and audio quality are restored independently on the next editor session. Lossy audio compression starts unchecked for every deployment
 - **Optional Linux AppImage**: On Linux x86_64 build hosts, Linux game deployment can also emit one portable `.AppImage` file beside the normal Linux folder. The existing folder remains unchanged, and the AppImage option is off by default
 - **Web export**: HTML5 builds for browser deployment
@@ -288,18 +290,6 @@ Recipe-driven generator for native Effekseer particle effects (`.efkefc`), no ex
 - **Layers**: stack any animations into one effect (＋ on each sidebar row), managed beside the preview when space permits and below it on narrow windows; visibility, live-percentage opacity, reorder, duplicate, and Delay/Duration windows merge into one `.efkefc` on export, including opacity applied to animated alpha curves
 - **Keyframes**: pin full parameter states to chosen frames per layer; selection, add/delete, frame fields, Start Frame, and layer timing stay synchronized. Transitions compile to native Effekseer curves (colors, size, spin), differing custom textures cross-fade, and the pattern repeats every master cycle (the **Frames** field in the playback bar)
 - **Randomize & presets**: a 🎲 Randomize button rolls all parameters (like the standard Animation Generator), and named presets save/recall parameter sets per project (`forge/effekseer_generator/presets.json`)
-
-#### Character Generator
-Composable character sprite generator for actor walking sprites and generated outfit parts.
-
-- **Style selector**: `Psychronic` and `Looseleaf` are bundled, with Psychronic selected by default. Project JavaScript and PNG style folders remain supported and load automatically.
-- **Procedural tab**: Renders layered ASCII/template parts from the part registry, with configurable frame size, alignment, palette overrides, and 3x4 walking-sheet export
-- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The bundled `Nova Sentinel` recipe targets both Psychronic and Looseleaf through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt**, beside the segmented leg armor.
-- **Outfit engine**: Browser/Node-compatible generator in `src/forge/CharacterGenerator/procgen/outfit_engine.js`, with per-zone palette families, role-based painters, extensions such as pauldrons/gauntlets, live 4-direction preview, walk preview, zone debug overlays, and save-to-library output under `styles/<style>/parts/full outfits/`
-- **Hair Forge tab**: Generates 4-direction walking hair parts with live walk preview, save-to-library output, expanded palettes (`auburn`, `platinum`, `rose`, `violet`, `navy`, `emerald`), front-view Eye Zone controls, and Hair Pattern sliders for lower-hair banding/scraggle or Short Spiky triangular texture.
-- **Hair Forge styles**: Includes `Layered Bob`, `Long Layered`, `Short Shag`, `Short Spiky`, and `Center Part Long`. Short Spiky uses style-specific spike silhouettes, spiky side bangs, connected rear spikes, and length-aware back/nape behavior; Center Part Long uses symmetrical straight strands, a visible middle part, smooth side bangs, face-framing long curtains, and subtle walk-frame sway.
-- **Template analyzer**: Imports PNG/JPEG/WebP sprite sheets, classifies pixels into material letters, supports material-paint correction, and emits style-specific `RR_CG_BODY_TEMPLATE_SHEETS[style][variant]` snippets for body-template work
-- **Parts (PNG) tab**: Layers user-supplied PNG sprite-sheet parts from the active project's `forge/character_generator/styles/<style>/parts/` folder with draggable ordering
 
 #### 3D Character Builder
 Shapes humans, humanoid species and creatures with sliders and pickers, dresses them from the wardrobe and saves them to the project as rigged GLB models with their recipes, so they can be reopened and edited. Sheets export to `img/characters`, `img/sv_actors` and `img/faces`. Default human faces and body appearance are still under review. See the [guide](../docs/CHARACTER-BUILDER.md).
@@ -552,7 +542,7 @@ their own licenses; see [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)
 
 ## Trusted Project Code
 
-Opening an RPG project is a trusted-code operation. Project plugins and project-local Character Generator `.js` parts execute in the Node-enabled desktop process and may access the local machine. Inspect downloaded projects and plugins before opening, playtesting, or capturing their interfaces.
+Opening an RPG project is a trusted-code operation. Project plugins execute in the Node-enabled desktop process and may access the local machine. Inspect downloaded projects and plugins before opening, playtesting, or capturing their interfaces.
 
 ## Author
 

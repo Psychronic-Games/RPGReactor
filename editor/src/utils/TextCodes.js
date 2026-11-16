@@ -668,6 +668,15 @@
     }
 
     /**
+     * Where a line of text starts inside the message window, in pixels from
+     * its left edge: past the face when there is one. `\PX[n]` counts from
+     * the window's edge, not from here, so the scan below needs this.
+     */
+    function messageTextStart(hasFace) {
+        return hasFace ? FACE_MARGIN : NEW_LINE_X;
+    }
+
+    /**
      * Walk one raw message line the way Window_Message draws it and find
      * where the window's width runs out. Escape codes are consumed, not
      * measured: colours and speed cost nothing, an icon costs its 36 px,
@@ -682,15 +691,22 @@
      * Window_Message resets the font once per box, not per line, so the
      * caller passes one pen per box and a fresh one at each box boundary.
      *
-     * Returns { width, overflowIndex }: the line's drawn width in pixels and
-     * the RAW string index of the first character that no longer fits, or -1
-     * when the whole line fits.
+     * `startX`, when given, is where the line starts inside the window
+     * (messageTextStart). With it `\PX[n]` moves the pen to n pixels from the
+     * window's edge for the rest of the line, as the game does; without it
+     * the code is passed over, as any code that draws nothing.
+     *
+     * Returns { width, overflowIndex }: how far right of its start the line
+     * reaches, in pixels, and the RAW string index of the first character that
+     * no longer fits, or -1 when the whole line fits.
      */
-    function scanMessageLine(line, context, fontFamily, baseSize, available, substitutions, pen) {
+    function scanMessageLine(line, context, fontFamily, baseSize, available, substitutions, pen, startX) {
         const text = String(line || '');
         const subs = substitutions || {};
         let size = pen && pen.size > 0 ? pen.size : (baseSize > 0 ? baseSize : 26);
         let width = 0;
+        let reach = 0;
+        const origin = typeof startX === 'number' && Number.isFinite(startX) ? startX : null;
         let overflowIndex = -1;
         const baseFamily = String(fontFamily || 'sans-serif');
         let family = (pen && pen.family) || baseFamily;
@@ -729,6 +745,11 @@
                     // The game sets the size as given, to the end of the box.
                     if (Number(matched[1]) > 0) size = Number(matched[1]);
                     setFont();
+                    i += 1 + matched[0].length;
+                } else if (origin !== null && (matched = rest.match(/^PX\[(\d+)\]/i))) {
+                    // The pen goes to n pixels from the window's edge, which
+                    // may be left of where the line began or right of it.
+                    width = Number(matched[1]) - origin;
                     i += 1 + matched[0].length;
                 } else if (rest[0] === '{') {
                     size = Math.min(96, size + 12);
@@ -769,6 +790,7 @@
                 i += 1;
             }
             width += advance;
+            if (advance > 0 && width > reach) reach = width;
             if (overflowIndex < 0 && advance > 0 && width > available + 1e-6) {
                 overflowIndex = startedAt;
             }
@@ -777,7 +799,8 @@
             pen.family = family;
             pen.size = size;
         }
-        return { width, overflowIndex };
+        // Without \PX the pen only moves right, so this is the width it always was.
+        return { width: reach, overflowIndex };
     }
 
     /** Word wrap makes a per-line width guide meaningless; say so explicitly. */
@@ -890,6 +913,7 @@
         readManifest,
         messageRows,
         messageTextWidth,
+        messageTextStart,
         customFonts,
         scanMessageLine,
         hasWordWrap

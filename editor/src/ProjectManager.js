@@ -169,6 +169,37 @@ class ProjectManager {
     static UNCAPPED_CHROMIUM_ARGS = Object.freeze(['--disable-gpu-vsync', '--disable-frame-rate-limit']);
 
     /**
+     * The graphics backends a project can fix for its game under Windows (Database > System 2 > Advanced Settings >
+     * Graphics Backend, kept as System.json `advanced.graphicsBackend`); anything else is Auto, where each machine
+     * finds its own by playing (runtime/reactor_main.js, ReactorBackend). The browser takes its backend from its
+     * command line before any of the game runs, so a fixed choice is carried into the manifest's chromium-args as
+     * `--use-angle=<name>`, with `"reactorAngle": "<name>"` beside it to say the editor wrote it
+     * (applyGpuChromiumArgs). The game's own learning stands down for a project that names its backend.
+     * Vulkan can be named and is never tried by Auto: on the Iris Xe laptop the game ran on it and the window
+     * stayed white (2026-11-08 and 2026-11-15), so it is for whoever has seen it draw on the machines they ship to.
+     */
+    static GRAPHICS_BACKENDS = Object.freeze(['d3d11', 'd3d11on12', 'gl', 'vulkan']);
+    static SOFTWARE_VIDEO_ARG = '--disable-accelerated-video-decode';
+    // Vulkan builds shaders on its own threads only when asked: without this the browser reports no
+    // KHR_parallel_shader_compile, the game cannot hold a thing back until its shader is ready, and each build stops
+    // the frame that first draws it (RTX 5070 on Linux, first room of the Demo: the game's thread waited 170 to 515 ms
+    // and one frame took 0.9 to 1.15 s; with it 25 to 35 ms and 0.2 s, 2026-11-15).
+    static PARALLEL_SHADERS_ARG = '--enable-angle-features=enableParallelCompileAndLink';
+    static normalizeGraphicsBackend(value) {
+        return ProjectManager.GRAPHICS_BACKENDS.includes(value) ? value : 'auto';
+    }
+    /** The project's own choice, read from its System.json: one of GRAPHICS_BACKENDS or "auto"; undefined where it cannot be read. */
+    projectGraphicsBackend(projectPath) {
+        try {
+            if (!this.fs || !this.path || !projectPath) return undefined;
+            const file = this.path.join(projectPath, 'data', 'System.json');
+            if (!this.fs.existsSync(file)) return undefined;
+            const system = RRJson.parse(this.fs.readFileSync(file, 'utf8'));
+            return ProjectManager.normalizeGraphicsBackend(system && system.advanced && system.advanced.graphicsBackend);
+        } catch (error) { return undefined; }
+    }
+
+    /**
      * What a new project leaves behind when it copies the template: the template's own
      * editor lock (held while the template is open), its saves, backups, screenshots and
      * battle-test copies of the database.
@@ -1138,9 +1169,12 @@ class ProjectManager {
     /**
      * Put the GPU switches and the no-vsync switches in a game manifest's chromium-args, after the project's own
      * arguments; `"reactorHighPerformanceGpu": false` takes the GPU ones out instead, `"reactorVsync": true` the
-     * no-vsync ones. Returns true when the manifest changed.
+     * no-vsync ones. `backend` (the project's Graphics Backend: one of GRAPHICS_BACKENDS, or "auto") puts the
+     * project's own backend in as `--use-angle=<name>` and marks it `reactorAngle`; "auto" takes out one the
+     * editor put there, and leaves a `--use-angle` someone wrote by hand (no such mark) and `"reactorAngle":
+     * "default"` alone; undefined changes nothing of it. Returns true when the manifest changed.
      */
-    applyGpuChromiumArgs(packageData) {
+    applyGpuChromiumArgs(packageData, backend) {
         if (!packageData || typeof packageData !== 'object') return false;
         const current = typeof packageData['chromium-args'] === 'string' ? packageData['chromium-args'] : '';
         const args = current.split(/\s+/).filter(Boolean);
@@ -1151,8 +1185,29 @@ class ProjectManager {
         next = packageData.reactorVsync === true
             ? next.filter(arg => !uncapped.includes(arg))
             : next.concat(uncapped.filter(arg => !next.includes(arg)));
-        if (next.length === args.length && next.every((arg, i) => arg === args[i])) return false;
-        packageData['chromium-args'] = next.join(' ');
+        let marked = false;
+        const fixed = ProjectManager.GRAPHICS_BACKENDS, isAngle = arg => /^--use-angle=/.test(arg);
+        // Vulkan cannot take a frame from the hardware video decoder (every upload fails and a 3D map's video screens
+        // stay dark: the RTX 5070 on Linux, 2026-11-15), so a project on Vulkan decodes its videos in software, which
+        // plays. The switch comes and goes with the editor's own Vulkan mark.
+        // Its shaders build on the driver's threads (PARALLEL_SHADERS_ARG), unless the project names ANGLE features itself.
+        const software = ProjectManager.SOFTWARE_VIDEO_ARG, parallel = ProjectManager.PARALLEL_SHADERS_ARG;
+        if (backend === 'vulkan') {
+            if (!next.includes(software)) next = next.concat([software]);
+            if (!next.some(arg => /^--enable-angle-features=/.test(arg))) next = next.concat([parallel]);
+        } else if ((fixed.includes(backend) || backend === 'auto') && packageData.reactorAngle === 'vulkan') next = next.filter(arg => arg !== software && arg !== parallel);
+        if (fixed.includes(backend)) {
+            const wantedAngle = '--use-angle=' + backend, angles = next.filter(isAngle);
+            if (!(angles.length === 1 && angles[0] === wantedAngle)) next = next.filter(arg => !isAngle(arg)).concat([wantedAngle]);
+            if (packageData.reactorAngle !== backend) { packageData.reactorAngle = backend; marked = true; }
+        } else if (backend === 'auto' && fixed.includes(packageData.reactorAngle)) {
+            next = next.filter(arg => !isAngle(arg));
+            delete packageData.reactorAngle;
+            marked = true;
+        }
+        const same = next.length === args.length && next.every((arg, i) => arg === args[i]);
+        if (same && !marked) return false;
+        if (!same) packageData['chromium-args'] = next.join(' ');
         return true;
     }
 
@@ -1167,13 +1222,14 @@ class ProjectManager {
             if (!packageData || typeof packageData !== 'object' || Array.isArray(packageData)) {
                 return { ok: true, updated: false };
             }
-            const before = packageData['chromium-args'];
-            if (!this.applyGpuChromiumArgs(packageData)) return { ok: true, updated: false };
+            const before = packageData['chromium-args'], markBefore = packageData.reactorAngle;
+            if (!this.applyGpuChromiumArgs(packageData, this.projectGraphicsBackend(projectPath))) return { ok: true, updated: false };
             const after = packageData['chromium-args'];
             const pattern = /("chromium-args"\s*:\s*)("(?:[^"\\]|\\.)*")/;
             const match = typeof before === 'string' ? text.match(pattern) : null;
             let output;
-            if (match && JSON.parse(match[2]) === before) {
+            // (The whole file is written again where the backend's mark came or went: it is a key of its own.)
+            if (match && JSON.parse(match[2]) === before && packageData.reactorAngle === markBefore) {
                 output = text.replace(pattern, (_, key) => key + JSON.stringify(after));
             } else {
                 const indent = text.match(/\n([ \t]+)"/)?.[1] || 2;

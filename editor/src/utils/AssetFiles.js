@@ -218,12 +218,28 @@
         const rows = Math.floor(height / faceSize);
         return { columns: FACE_COLUMNS, rows, count: FACE_COLUMNS * rows, faceSize };
     };
-    const faceSourceRect = (index, imageOrHeight, system) => {
+    /**
+     * The frames of a face set, from its name, the way the game reads them (ImageManager.faceFrames): "Name[4F]"
+     * (or "Name[F4]") has each of its eight faces four frames wide. 1 for a plain set. Takes a name, an address,
+     * or a picture, whose own address is read.
+     */
+    const faceFramesOf = source => {
+        let name = source && typeof source === 'object' ? (source.currentSrc || source.src || '') : String(source || '');
+        try { name = decodeURIComponent(name); } catch (error) { /* as written */ }
+        const m = /\[(?:(\d+)F|F(\d+))\]/i.exec(name.split(/[?#]/)[0].split('/').pop() || '');
+        const n = m ? Number(m[1] || m[2]) : 0;
+        return n > 1 ? Math.min(n, 64) : 1;
+    };
+    /** The column of face `index`'s first frame on its sheet, in faces. */
+    const faceColumnOf = (index, source) => (Number(index) % FACE_COLUMNS) * faceFramesOf(source);
+    /** Where face `index` is on its sheet: its first frame, or `frame` of a set with frames. `imageOrHeight` a picture tells the frames by its name. */
+    const faceSourceRect = (index, imageOrHeight, system, frame = 0) => {
         const value = Number(index);
         const sheet = faceSheetMetrics(imageOrHeight, system);
         if (!Number.isInteger(value) || value < 0 || value >= sheet.count) return null;
+        const frames = imageOrHeight && typeof imageOrHeight === 'object' ? faceFramesOf(imageOrHeight) : 1;
         return {
-            x: (value % FACE_COLUMNS) * sheet.faceSize,
+            x: ((value % FACE_COLUMNS) * frames + Math.max(0, Math.min(frames - 1, Math.floor(Number(frame) || 0)))) * sheet.faceSize,
             y: Math.floor(value / FACE_COLUMNS) * sheet.faceSize,
             width: sheet.faceSize,
             height: sheet.faceSize
@@ -322,6 +338,8 @@
         get FACE_SIZE() { return faceSizeOf(); },
         sizeOf: faceSizeOf,
         metrics: faceSheetMetrics,
+        framesOf: faceFramesOf,
+        columnOf: faceColumnOf,
         sourceRect: faceSourceRect
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

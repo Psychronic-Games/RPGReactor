@@ -28,6 +28,10 @@
     const SIDES = ['north', 'east', 'south', 'west'];
     const SIDE_LABEL = { north: 'North', east: 'East', south: 'South', west: 'West' };
     const OPPOSITE = { north: 'south', east: 'west', south: 'north', west: 'east' };
+    // The maps over and under this one (`surround.levels`): not sides of the border, so not in SIDES.
+    const LEVELS = ['above', 'below'];
+    const LEVEL_LABEL = { above: 'Above', below: 'Below' };
+    const LEVEL_OPPOSITE = { above: 'below', below: 'above' };
     /** The numbers under Advanced: the key in `surround`, the label, the range, and the use (see `uses`) that shows the field. */
     const NUMBERS = [
         { key: 'seed', label: 'Seed', min: 0, max: 99999, step: 1, use: 'seed' },
@@ -40,7 +44,7 @@
     const blank = value => value === null || value === undefined || value === '';
 
     const api = {
-        STYLES, SIDES, SIDE_LABEL, NUMBERS, OPPOSITE,
+        STYLES, SIDES, SIDE_LABEL, NUMBERS, OPPOSITE, LEVELS, LEVEL_LABEL, LEVEL_OPPOSITE,
         /** The animation frame the land waits for; 0 when none does. */
         _layFrame: 0,
         /** The view and the map the waiting frame lays. */
@@ -67,6 +71,7 @@
             if (normal.level !== null) out.level = normal.level;
             if (normal.water) out.water = normal.water;
             if (normal.neighbors && Object.keys(normal.neighbors).length) out.neighbors = normal.neighbors;
+            if (normal.levels && Object.keys(normal.levels).length) out.levels = normal.levels;
             return out;
         },
 
@@ -84,6 +89,9 @@
             // The map past each side (`{ map, shift }`), null where the border is the world's end.
             view.neighbors = {};
             for (const side of SIDES) { const n = kept && kept.neighbors && kept.neighbors[side]; view.neighbors[side] = n ? { map: n.map, shift: n.shift || 0 } : null; }
+            // The map over and the map under (`{ map, x, y, gap }`), null where there is none.
+            view.levels = {};
+            for (const side of LEVELS) { const n = kept && kept.levels && kept.levels[side]; view.levels[side] = n ? { map: n.map, x: n.x || 0, y: n.y || 0, gap: n.gap, lining: n.lining || 'walls', openings: (n.openings || []).map(o => ({ x: o.x, y: o.y, w: o.w, h: o.h })) } : null; }
             return view;
         },
 
@@ -142,6 +150,15 @@
                         else delete raw.neighbors[side];
                     }
                 }
+                else if (key === 'levels') {
+                    raw.levels = Object.assign({}, raw.levels);
+                    for (const side of LEVELS) if (side in (value || {})) {
+                        const entry = value[side];
+                        // (`lining`: what the openings' sides wear; the room's walls are the usual one and are not written.)
+                        if (entry && Number(entry.map) > 0) raw.levels[side] = { map: Number(entry.map), x: Number(entry.x) || 0, y: Number(entry.y) || 0, gap: Number(entry.gap) || undefined, lining: entry.lining && entry.lining !== 'walls' ? entry.lining : undefined, openings: Array.isArray(entry.openings) ? entry.openings : undefined };
+                        else delete raw.levels[side];
+                    }
+                }
                 else if (key === 'style') raw.style = value;
                 else if (!numbers.includes(key)) continue;
                 else if (blank(value) || !Number.isFinite(Number(value))) delete raw[key];
@@ -159,12 +176,94 @@
          * a map there, this map itself, or a neighbor whose file cannot be read is left alone. `write`
          * (filePath, text) writes a file. Answers the ids of the maps written.
          */
+        //---------------------------------------------------------------------
+        // Where an opening comes out
+        //
+        // The two maps are placed by `x`, `y`: the tile of this map the other map's first tile lies under. That is
+        // hard to think in ("Down 23" was read as "lands on row 23", owner, 2026-11-13), so the panel asks the
+        // other way round: which tile of the other map the first opening comes out at. These turn one into the other.
+
+        /** The tile of the other map a level's first opening comes out at; null with no opening. */
+        landing(level) {
+            const o = level && level.openings && level.openings[0];
+            return o ? { x: o.x - (level.x || 0), y: o.y - (level.y || 0) } : null;
+        },
+
+        /** `land` held inside the other map, so that the whole opening comes out in it (`size`: `{ width, height }`, or none known). */
+        heldLanding(land, opening, size) {
+            if (!size || !(size.width > 0) || !(size.height > 0)) return { x: Math.round(land.x), y: Math.round(land.y) };
+            const most = (span, part) => Math.max(0, span - Math.max(1, part || 1));
+            return { x: Math.max(0, Math.min(most(size.width, opening && opening.w), Math.round(land.x))), y: Math.max(0, Math.min(most(size.height, opening && opening.h), Math.round(land.y))) };
+        },
+
+        /** The level placed so that its first opening comes out at `land` of the other map. */
+        withLanding(level, land, size) {
+            const o = level && level.openings && level.openings[0];
+            if (!o) return level;
+            const held = this.heldLanding(land, o, size);
+            return Object.assign({}, level, { x: o.x - held.x, y: o.y - held.y });
+        },
+
+        /**
+         * A number of an opening changed. Moving the first opening keeps where it comes out (the other map moves
+         * with it); the others are places on this map and move alone.
+         */
+        withOpening(level, index, key, value, size) {
+            const openings = level.openings.map(o => Object.assign({}, o)), o = openings[index];
+            if (!o) return level;
+            const land = this.landing(level);
+            o[key] = value;
+            const next = Object.assign({}, level, { openings });
+            return index === 0 && land ? this.withLanding(next, land, size) : next;
+        },
+
+        /** An opening added at `at`. The first one comes out in the middle of the other map until said otherwise. */
+        withNewOpening(level, at, size) {
+            const openings = level.openings.map(o => Object.assign({}, o));
+            openings.push({ x: at.x, y: at.y, w: 1, h: 1 });
+            const next = Object.assign({}, level, { openings });
+            if (openings.length > 1) return next;
+            return this.withLanding(next, size && size.width > 0 ? { x: Math.floor(size.width / 2), y: Math.floor(size.height / 2) } : { x: at.x - (level.x || 0), y: at.y - (level.y || 0) }, size);
+        },
+
         linkBack(fs, path, projectPath, mapData, write) {
             const linked = [];
             const mine = R()?.neighborsOf ? R().neighborsOf(mapData) : {};
             const id = Number(mapData && mapData.id);
             if (!fs || !path || !projectPath || !(id > 0)) return linked;
             const stringify = sidecar => (root.RRMapElevation && root.RRMapElevation.stringifySidecar ? root.RRMapElevation.stringifySidecar(sidecar) : JSON.stringify(sidecar));
+            // The map over or under gets this one under or over it, the same distance apart and the same tiles matched.
+            const levels = R()?.levelsOf ? R().levelsOf(mapData) : {};
+            for (const side of LEVELS) {
+                const level = levels[side];
+                if (!level || level.map === id) continue;
+                const stem = path.join(projectPath, 'data', 'Map' + String(level.map).padStart(3, '0'));
+                if (!fs.existsSync(stem + '.json')) continue;
+                const filePath = stem + '.r3d.json';
+                let sidecar = { version: 1 };
+                try {
+                    if (fs.existsSync(filePath)) sidecar = (root.RRJson ? root.RRJson.parse(fs.readFileSync(filePath)) : JSON.parse(fs.readFileSync(filePath, 'utf8')));
+                } catch (error) { continue; }
+                if (!sidecar || typeof sidecar !== 'object' || Array.isArray(sidecar)) continue;
+                const theirs = R().normalizeLevels(sidecar.surround && sidecar.surround.levels), back = LEVEL_OPPOSITE[side];
+                // A map there that is another map's is left alone; this map's own entry there is kept in step (the gap, the place, the openings).
+                if (theirs[back] && theirs[back].map !== id) continue;
+                const surround = sidecar.surround && typeof sidecar.surround === 'object' ? sidecar.surround : { style: 'none' };
+                const entry = { map: id, gap: level.gap };
+                if (level.x) entry.x = -level.x;
+                if (level.y) entry.y = -level.y;
+                // The same openings, in the other map's own tiles.
+                if (level.openings) entry.openings = level.openings.map(o => ({ x: o.x - (level.x || 0), y: o.y - (level.y || 0), w: o.w, h: o.h }));
+                if (level.lining) entry.lining = level.lining;
+                if (theirs[back] && JSON.stringify(R().normalizeLevels({ [back]: entry })[back]) === JSON.stringify(theirs[back])) continue;
+                surround.levels = Object.assign({}, theirs, { [back]: entry });
+                sidecar.surround = surround;
+                try {
+                    const text = stringify(sidecar);
+                    if (typeof write === 'function') write(filePath, text); else fs.writeFileSync(filePath, text, 'utf8');
+                    linked.push(level.map);
+                } catch (error) { console.warn('Map above or below:', error); }
+            }
             for (const side of SIDES) {
                 const neighbor = mine[side];
                 if (!neighbor || neighbor.map === id) continue;

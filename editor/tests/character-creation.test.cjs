@@ -193,6 +193,16 @@ test('a built character is that actor\'s model everywhere; other actors stay as 
     assert.equal(world.Reactor3D.databaseModelSpec('actors', 2), spec);
     assert.notEqual(world.Reactor3D.databaseModelSpec('actors', 3), spec);
     assert.notEqual(world.Reactor3D.databaseModelSpecOfProject(2), spec);
+    // In battle too: the battler's model is asked for by its own slot. Only where the actor's battler is a model.
+    const R = world.Reactor3D, load = R.loadDatabaseSidecar, sidecar = R._databaseSidecar;
+    R.loadDatabaseSidecar = () => {};
+    R._databaseSidecar = { actors: { 2: { character: { name: 'Actors/Walk' }, battler: { name: 'Actors/Fight' } }, 3: { battler: { name: 'Actors/Other' } }, 4: { character: { name: 'Actors/Walk' } } } };
+    try {
+        assert.equal(R.actorSlotSpec(2, 'battler'), spec, 'the built character fights as itself');
+        assert.equal(R.actorSlotSpec(3, 'battler').name, 'Actors/Other');
+        characters.setCurrent({ actorId: 4, id: 'one', name: 'Ada' });
+        assert.equal(R.actorSlotSpec(4, 'battler'), null, 'an actor whose battler is a picture keeps it');
+    } finally { R.loadDatabaseSidecar = load; R._databaseSidecar = sidecar; }
 });
 
 test('a map waits for this save\'s character, and a missing one falls back to the actor', async () => {

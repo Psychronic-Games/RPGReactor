@@ -194,6 +194,8 @@
     ReactorPhysics.LADDER_GAP = 3;
     /** Climbing a ladder, tiles per frame. */
     ReactorPhysics.LADDER_SPEED = 0.045;
+    /** How far over a ladder's foot a climber still lets go by a step sideways: a walked step's height. */
+    ReactorPhysics.LADDER_LET_GO = 0.75;
 
     /** The ladder a character holds: on a ladder's cell, between its foot and its top, off the ground. */
     ReactorPhysics.ladderHeld = function(character) {
@@ -1515,6 +1517,9 @@
         if (character._reactorSwim || character._reactorOnLadder || character._reactorMantle) return false;
         const alt = Number.isFinite(character._reactorAlt) ? character._reactorAlt : character._reactorGround;
         if (!Number.isFinite(alt)) return false;
+        // Into an opening to the map under this one (Beyond the Border > Above and Below): a hatch is there to be
+        // gone down, so it is walked into whatever the drop. (Where that map sends a stair up, the step is a plain one.)
+        if (R.levelOpening && this.DIRS[d] && R.levelOpening($dataMap, "below", x + this.DIRS[d][0], y + this.DIRS[d][1])) return true;
         // On something built, any safe drop; off the ground itself, only the low ledge a push steps down (`stepUp`).
         const built = R.hasPieces($dataMap) && alt - R.pieceBaseAt($dataMap, x, y) >= 0.5;
         const pushed = character._reactorStepOff === d;
@@ -1987,7 +1992,11 @@
             }
             // The way the player pushed against something last frame; this frame's push is noted below.
             this._reactorPush = 0; this._reactorPushAlso = 0;
+            const stood = !this.isMoving();
             _updateP.apply(this, arguments);
+            // The key that came through a ladder's rungs was let go (standing, and no step asked for this update):
+            // it is an ordinary way again.
+            if ((this._reactorLadderWay || this._reactorLadderDone) && stood && !this.isMoving() && this._reactorLadderAsked !== (typeof Graphics !== "undefined" ? Graphics.frameCount : 0)) { this._reactorLadderWay = 0; this._reactorLadderDone = 0; }
             // Pushing on against a low ledge, frame after frame without moving, climbs it without Jump. A walk along
             // a wall pushes only as each step begins, so it never counts up.
             const push = this._reactorPush;
@@ -2004,13 +2013,23 @@
         };
         // On a ladder the way toward the wall climbs and the way back climbs
         // down; at the top the way on steps onto the ledge, at the foot the way
-        // back walks off, and sideways lets go of nothing: it is not taken.
+        // back walks off, and sideways steps along a wide ladder or off its side.
         const _moveStraight = Game_Player.prototype.moveStraight;
         Game_Player.prototype.moveStraight = function(d) {
             const ladder = typeof Reactor3D !== "undefined" && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && $dataMap
                 && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap) ? Reactor3D.ladderAt($dataMap, this.x, this.y) : null;
+            this._reactorLadderAsked = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+            // Off the ladder's top by the key that came through its rungs: it rests there until the key is let go
+            // (held on, it walked back onto the ladder and down again).
+            if (this._reactorLadderDone) { if (this._reactorLadderDone === d) return; this._reactorLadderDone = 0; }
+            const asked = d;
             if (ladder && !this.isMoving()) {
                 const alt = Number.isFinite(this._reactorAlt) ? this._reactorAlt : ladder.bottom;
+                // Walked onto the ladder's tile through its rungs, the key still held (`_reactorLadderWay`): that
+                // way goes on up the ladder, and off its top, until the key is let go. A ladder standing free was
+                // walked straight through from behind (owner, 2026-11-14: the Reactor room's, come at from the door).
+                if (this._reactorLadderWay === d && d === 10 - ladder.dir) d = arguments[0] = ladder.dir;
+                else this._reactorLadderWay = 0;
                 const up = d === ladder.dir, down = d === 10 - ladder.dir;
                 if (up && alt < ladder.top - 0.01) {
                     this.setDirection(ladder.dir);
@@ -2023,9 +2042,31 @@
                     this._reactorAlt = Math.max(ladder.bottom, alt - ReactorPhysics.LADDER_SPEED);
                     return;
                 }
-                if (!up && !down && this._reactorOnLadder) return;
-            }
+                // Sideways: within a step of its foot it lets go and walks (a walk across a wide ladder's tiles caught
+                // on it at every one and stood there). Up on the ladder it is a step along it: onto the ladder
+                // beside this one at the same height, still facing the rungs (a wide ladder held its climber in the
+                // column it was taken at, off to one side; owner, 2026-11-15), and past the ladder's side into the
+                // air, where nothing holds it and it drops (`ladderHeld` finds no ladder there).
+                if (!up && !down && this._reactorOnLadder && alt > ladder.bottom + ReactorPhysics.LADDER_LET_GO) {
+                    // (The step is judged as one along the ladder: `isMapPassable` below.)
+                    this._reactorLadderSide = true;
+                    let result;
+                    try { result = _moveStraight.apply(this, arguments); } finally { this._reactorLadderSide = false; }
+                    if (this.isMovementSucceeded()) {
+                        const beside = Reactor3D.ladderAt($dataMap, this.x, this.y);
+                        if (beside && beside.dir === ladder.dir && alt >= beside.bottom - 0.01 && alt <= beside.top + 0.05) this.setDirection(ladder.dir);
+                        else this._reactorOnLadder = false;
+                    }
+                    return result;
+                }
+            } else if (!ladder) this._reactorLadderWay = 0;
             const result = _moveStraight.apply(this, arguments);
+            if (asked !== d && this.isMovementSucceeded()) this._reactorLadderDone = asked;
+            // A step onto a ladder's tile from behind it, on the ground: the key that made it climbs (above).
+            if (this.isMovementSucceeded() && typeof Reactor3D !== "undefined" && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && $dataMap && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap)) {
+                const onto = Reactor3D.ladderAt($dataMap, this.x, this.y), feet = Number.isFinite(this._reactorAlt) ? this._reactorAlt : this._reactorGround;
+                this._reactorLadderWay = onto && d === 10 - onto.dir && !(feet > onto.bottom + ReactorPhysics.LADDER_LET_GO) ? d : 0;
+            }
             // Stopped by something: noted for a Jump press, and in the air an edge within reach is caught.
             if (!this.isMovementSucceeded() && !this._reactorMantle) {
                 // A diagonal into a corner is stopped both ways: both are kept, the later one first.
@@ -2035,6 +2076,21 @@
                 if (ReactorPhysics.isAirborne(this) && !ReactorPhysics.fellOff(this)) ReactorPhysics.tryMantle(this, d);
             }
             return result;
+        };
+        // A diagonal on a ladder's tile: the part of it that climbs (or climbs down) is the step; up on the
+        // ladder the rest is not taken. It was a walk off the ladder's side, through its rungs or into the air.
+        const _moveDiagonally = Game_Player.prototype.moveDiagonally;
+        Game_Player.prototype.moveDiagonally = function(horz, vert) {
+            const ladder = !this.isMoving() && typeof Reactor3D !== "undefined" && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && $dataMap
+                && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap) ? Reactor3D.ladderAt($dataMap, this.x, this.y) : null;
+            if (ladder) {
+                const alt = Number.isFinite(this._reactorAlt) ? this._reactorAlt : ladder.bottom, way = this._reactorLadderWay;
+                const up = horz === ladder.dir || vert === ladder.dir ? ladder.dir : way && (horz === way || vert === way) ? way : 0;
+                const high = this._reactorOnLadder && alt > ladder.bottom + ReactorPhysics.LADDER_LET_GO;
+                if (up && alt < ladder.top - 0.01) { this.moveStraight(up); this.setMovementSuccess(true); return; }
+                if (high) { const down = 10 - ladder.dir; if (horz === down || vert === down) this.moveStraight(down); this.setMovementSuccess(true); return; }
+            }
+            return _moveDiagonally.apply(this, arguments);
         };
         // A follower still climbing does not step on yet; it catches up once there.
         if (typeof Game_Follower !== "undefined") {
@@ -2094,6 +2150,12 @@
                 const x2 = $gameMap.roundXWithDirection(x, d), y2 = $gameMap.roundYWithDirection(y, d);
                 if (!$gameMap.isValid(x2, y2)) return false;
                 if (!($gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, this.reverseDir(d)))) return false;
+                // A step sideways along the ladder, or off its side: over open air it is free (the ground far below
+                // is no wall), and only ground standing higher than the climber holds stops it.
+                if (this._reactorLadderSide) {
+                    const held = Number.isFinite(this._reactorAlt) ? this._reactorAlt : 0;
+                    return !(Reactor3D.groundHeightAt($dataMap, x2 + 0.5, y2 + 0.5, held) > held + Reactor3D.TERRAIN_SLOPE_LIMIT);
+                }
                 return !Reactor3D.terrainBlocks($dataMap, x, y, x2, y2, this._reactorAlt);
             }
             // Under the water, a swimmer is stopped by rock it would swim into, and nothing else in the water.

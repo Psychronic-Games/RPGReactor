@@ -3,8 +3,8 @@
  * its own: its header drags it, its corner sizes it, its × closes it, and it keeps its place
  * between openings and between sessions. It stays in front of the editor while Reactor is the
  * app in use, and drops behind other apps with it. Previews follow the active window; keys go where the person
- * last worked. EventEditorWindow.js, DatabaseWindow.js, ForgeWindow.js and
- * PluginManagerWindow.js each use one, and all can be open at once.
+ * last worked. EventEditorWindow.js, DatabaseWindow.js, ForgeWindow.js, PluginManagerWindow.js and
+ * AudioPlayerWindow.js each use one, and all can be open at once.
  *
  * Where the desktop app can open windows (NW.js) that is the only way it shows. Without it (the
  * web editor) the dialog floats inside the page instead: no backdrop, dragged by its header,

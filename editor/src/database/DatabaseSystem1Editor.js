@@ -222,22 +222,7 @@ class DatabaseSystem1Editor {
             const posFields = container.querySelectorAll('.system-pos-field');
             posFields.forEach(field => {
                 field.addEventListener('change', (e) => {
-                    const target = e.target.dataset.posTarget;
-                    const val = parseInt(e.target.value) || 0;
-                    if (target.includes('.')) {
-                        // Nested: e.g. "boat.startMapId"
-                        const parts = target.split('.');
-                        const vehicleKey = parts[0]; // "boat", "ship", "airship"
-                        const prop = parts[1];        // "startMapId", "startX", "startY"
-                        if (system[vehicleKey]) {
-                            system[vehicleKey][prop] = val;
-                            console.debug(`Updated system.${vehicleKey}.${prop} to:`, val);
-                        }
-                    } else {
-                        // Top-level: e.g. "startMapId", "startX", "startY"
-                        system[target] = val;
-                        console.debug(`Updated system.${target} to:`, val);
-                    }
+                    DatabaseSystem1Editor.setStartField(system, e.target.dataset.posTarget, e.target.value);
                 });
             });
 
@@ -375,6 +360,22 @@ class DatabaseSystem1Editor {
         column.appendChild(startingPosSection);
 
         return column;
+    }
+
+    /**
+     * A Map, X or Y typed into a Starting Position row. `target` is "startX" for the player and
+     * "boat.startX" for a vehicle. A vehicle whose block is missing from System.json gets one,
+     * as Browse gives it (`applyStartLocation`): the number typed used to be dropped.
+     */
+    static setStartField(system, target, value) {
+        const number = parseInt(value) || 0;
+        const [owner, prop] = String(target || '').includes('.') ? String(target).split('.') : ['', String(target || '')];
+        if (!system || !['startMapId', 'startX', 'startY'].includes(prop)) return false;
+        if (!owner) { system[prop] = number; return true; }
+        if (!['boat', 'ship', 'airship'].includes(owner)) return false;
+        if (!system[owner] || typeof system[owner] !== 'object') system[owner] = { characterName: '', characterIndex: 0 };
+        system[owner][prop] = number;
+        return true;
     }
 
     applyStartLocation(system, ownerKey, location) {

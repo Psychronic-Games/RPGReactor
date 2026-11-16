@@ -1553,7 +1553,8 @@ class PieceBuilderManager {
         if (!SP || typeof Reactor3D === 'undefined' || !plan) return null;
         const shaped = SP.transform(plan, rot, scale, name => this.resolvePlan(name));
         const pieces = SP.build(shaped, 0, 0, 1, 0, name => this.resolvePlan(name));
-        return Reactor3D.pieceGeometry(pieces, null);
+        // (As it will stand: its ladders and fences joined to each other. The footprint is cleared and levelled, so nothing of the map is met.)
+        return Reactor3D.pieceGeometry(Reactor3D.previewPieces ? Reactor3D.previewPieces(pieces, null, { x: 0, y: 0, z: 0 }) : pieces, null);
     }
 
     /**
@@ -2249,11 +2250,25 @@ class PieceBuilderManager {
             if (elevation.setPiece(map, straight)) changed = true;
             cells.length = 0;
         }
+        // A ladder and a stair go down the size the panel says, as the brush lays them and the preview shows them
+        // (a Line or a Rectangle laid one piece a cell: a ladder set 3 wide and 26 tall went down 1 by 1, owner,
+        // 2026-11-14). One cell, a click: the whole ladder or flight. A run of cells: a ladder its whole height on
+        // each (the run is its width); a stair stays a step a cell, the run being the stair that is drawn.
+        const single = cells.length === 1;
+        let reach = 1;
         for (const cell of cells) {
             if (this._stroke.mode === 'erase') { if (this.eraseAt(map, cell)) changed = true; continue; }
             const piece = this.pieceFor(cell);
             if (group) piece.group = group;
-            if (elevation.setPiece(map, piece)) changed = true;
+            const run = piece.kind === 'ladder' && (this.ladderHeight !== 1 || this.ladderWidth !== 1)
+                ? this._layLadder(piece, single ? this.ladderWidth : Math.min(1, this.ladderWidth), this.ladderHeight, 0).map(({ piece: next }) => next)
+                : piece.kind === 'stair' && single && (this.stairSteps > 1 || this.stairWidth > 1) ? this.stairRun(piece) : null;
+            if (!run) { if (elevation.setPiece(map, piece)) changed = true; continue; }
+            for (const step of run) {
+                if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) continue;
+                reach = Math.max(reach, Math.abs(step.x - cell.x) + 1, Math.abs(step.y - cell.y) + 1);
+                if (elevation.setPiece(map, step)) changed = true;
+            }
         }
         if (changed && group && elevation.structureOf(map, group)) {
             elevation.removeStructure(map, group);
@@ -2262,7 +2277,7 @@ class PieceBuilderManager {
         }
         this._lastList = map.reactor3d?.pieces;
         this._stroke.moved = true;
-        this.announce(false, { x0: x0 - 1, y0: y0 - 1, x1: x1 + 1, y1: y1 + 1 });
+        this.announce(false, { x0: x0 - reach, y0: y0 - reach, x1: x1 + reach, y1: y1 + reach });
         return changed;
     }
 

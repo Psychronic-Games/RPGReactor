@@ -1792,7 +1792,8 @@ class Character3DBuilder {
         return material;
     }
 
-    async _renderThumb({ result, frame }, current = () => true) {
+    /** (`size`: the picture's side in pixels where 96 is too small to show what a character has, a group's members.) */
+    async _renderThumb({ result, frame, size: pixels }, current = () => true) {
         const tv = this._ensureThumbView();
         const previous = tv.pending;
         let release;
@@ -1803,14 +1804,14 @@ class Character3DBuilder {
             if (!current() || tv.disposed || this._previewPaused || (this._thumbView && this._thumbView !== tv)) {
                 const error = new Error('Character preview canceled'); error.name = 'AbortError'; throw error;
             }
-            return await this._drawThumb({ result, frame }, tv, current);
+            return await this._drawThumb({ result, frame, pixels }, tv, current);
         } finally {
             if (!--tv.jobs) tv.pending = null;
             release();
         }
     }
 
-    async _drawThumb({ result, frame }, tv, current) {
+    async _drawThumb({ result, frame, pixels }, tv, current) {
         const group = new THREE.Group(), made = [], textures = new Map();
         const textureFor = (name, tex) => {
             if (!textures.has(name)) {
@@ -1867,9 +1868,13 @@ class Character3DBuilder {
             if (!current() || tv.disposed || this._previewPaused || (this._thumbView && this._thumbView !== tv)) {
                 const error = new Error('Character preview canceled'); error.name = 'AbortError'; throw error;
             }
-            tv.renderer.render(tv.scene, cam);
-            rendered = true;
-            return tv.canvas.toDataURL('image/webp', 0.85);
+            const own = tv.canvas.width, side = Number.isFinite(pixels) ? Math.max(48, Math.min(512, Math.round(pixels))) : own;
+            if (side !== own) tv.renderer.setSize(side, side, false);
+            try {
+                tv.renderer.render(tv.scene, cam);
+                rendered = true;
+                return tv.canvas.toDataURL('image/webp', 0.85);
+            } finally { if (side !== own) tv.renderer.setSize(own, own, false); }
         } finally {
             tv.scene.remove(group);
             for (const mesh of made) mesh.geometry.dispose();
@@ -4024,26 +4029,15 @@ class Character3DBuilder {
         finally { this._savingModel = false; }
     }
 
-    async _saveModel() {
-        const project = this._project();
-        if (!project || !this.pack) return;
-        const root = this.root, view = this._view, directory = this._charactersDir();
-        const current = () => this.root === root && this._view === view && this._project()?.path === project.path;
-        let name = this._folderName(this.name);
-        if (!name) {
-            name = this._folderName(await RRDialog.prompt(this._t('Name this character:'), { title: this._t('Export Model To Project'), value: this._t('Villager') }));
-            if (!name || !current()) return;
-            this.name = name;
-            const input = this.root.querySelector('.rr-c3d-name-input');
-            if (input) input.value = name;
-        }
-        const fs = require('fs'), path = require('path');
-        const folder = path.join(directory, name);
-        const file = path.join(folder, 'source', name + '.glb');
-        if (fs.existsSync(file) && !await RRDialog.confirm(this._t('Replace the saved character {name}?', { name }), { title: this._t('Export Model To Project'), ok: this._t('Replace'), danger: true })) return;
-        if (!current()) return;
-        this._status(this._t('Saving…'));
-        try {
+    /**
+     * The character as it stands written to the project as a 3D model named `name`: 3d/Characters/<name> with its GLB,
+     * design, thumbnail and rig. False when `current()` stopped holding on the way. Export Model To Project and a
+     * character group's 3D models both write through here.
+     */
+    async _writeModel(name, current) {
+        const project = this._project(), fs = require('fs'), path = require('path');
+        const folder = path.join(this._charactersDir(), name), file = path.join(folder, 'source', name + '.glb');
+        {
             // One export describes one design, even if the controls change while
             // skin painting, cloth baking or PNG encoding yields to the editor.
             const recipe = JSON.parse(JSON.stringify(this.recipe)), motions = this.motions || 'useful';
@@ -4052,7 +4046,7 @@ class Character3DBuilder {
             const thumb = this._thumbnail();
             await this._loadOutfitEmblems?.(recipe);
             await this._loadArtPictures?.(recipe);
-            if (!current()) return;
+            if (!current()) return false;
             for (const [name, picture] of this._artPictures || []) bodyArtPictures.set(name, picture);
             for (const [name, picture] of this.cache?.wardrobe?.emblemPictures || []) emblemPictures.set(name, picture);
             const requiredPictures=[...(recipe.outfit||[]),...(recipe.props||[])].flatMap(item=>[item.pattern==='emblem'?item.emblemPicture:'',item.mark?.shape==='picture'?item.mark.picture:'']).filter(Boolean);
@@ -4063,7 +4057,7 @@ class Character3DBuilder {
             let wanted = null;
             RRCharacterModel.build(this.pack, recipe, cache, { quality: 'save', eyeSource, bodyArtPictures, paintSkin: (key, args) => { wanted = { key, args }; return null; } });
             const skin = wanted ? await this._paintSkinNow(wanted.args) : null;
-            if (!current()) return;
+            if (!current()) return false;
             const result = RRCharacterModel.build(this.pack, recipe, cache, { quality: 'save', eyeSource, bodyArtPictures, paintSkin: skin ? () => skin : undefined });
             // A person saved ready to use: its poses and motions as clips, rigged, each motion where the game plays it.
             const ready = window.RRCharacterPoses && RRCharacterPoses.savedModel ? RRCharacterPoses.savedModel(result, motions) : null;
@@ -4072,7 +4066,7 @@ class Character3DBuilder {
                 result.clips = (result.clips || []).concat(ready.clips.filter(clip => !names.has(clip.name)));
             }
             const glb = await RRCharacterModel.toGlb(result, name, tex => this._png(tex));
-            if (!current()) return;
+            if (!current()) return false;
             // Written whole or not at all: a save cut short leaves the last good file.
             const atomic = window.RRWriteFileAtomicSync || ((io, target, data) => io.writeFileSync(target, data));
             fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -4095,8 +4089,33 @@ class Character3DBuilder {
                 if (ready && ready.rigBinary) atomic(fs, path.join(folder, 'model.rig.bin'), Buffer.from(ready.rigBinary));
             }
             await window.RPGReactorHost?.flush?.();
-            this._status(this._t('Saved to 3D Models › Characters/{name}.', { name }), 'ok');
             window.dispatchEvent(new CustomEvent('rr-models-changed', { detail: { name: 'Characters/' + name } }));
+            return !!project;
+        }
+    }
+
+    async _saveModel() {
+        const project = this._project();
+        if (!project || !this.pack) return;
+        const root = this.root, view = this._view, directory = this._charactersDir();
+        const current = () => this.root === root && this._view === view && this._project()?.path === project.path;
+        let name = this._folderName(this.name);
+        if (!name) {
+            name = this._folderName(await RRDialog.prompt(this._t('Name this character:'), { title: this._t('Export Model To Project'), value: this._t('Villager') }));
+            if (!name || !current()) return;
+            this.name = name;
+            const input = this.root.querySelector('.rr-c3d-name-input');
+            if (input) input.value = name;
+        }
+        const fs = require('fs'), path = require('path');
+        const folder = path.join(directory, name);
+        const file = path.join(folder, 'source', name + '.glb');
+        if (fs.existsSync(file) && !await RRDialog.confirm(this._t('Replace the saved character {name}?', { name }), { title: this._t('Export Model To Project'), ok: this._t('Replace'), danger: true })) return;
+        if (!current()) return;
+        this._status(this._t('Saving…'));
+        try {
+            if (!await this._writeModel(name, current)) return;
+            this._status(this._t('Saved to 3D Models › Characters/{name}.', { name }), 'ok');
         } catch (error) {
             console.error('[Character3DBuilder] save', error);
             if (current()) this._status(this._t('{name} could not be saved.', { name }), 'error');

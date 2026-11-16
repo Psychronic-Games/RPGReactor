@@ -77,6 +77,79 @@ test('OGG optimization passes explicit quality and preserves loop comments', asy
     }
 });
 
+test('OGG optimization leaves an Opus stream untouched', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-opus-opt-'));
+    const target = path.join(root, 'Theme.ogg');
+    try {
+        const page = Buffer.alloc(28);
+        page.write('OggS', 0, 'latin1');
+        page[26] = 1;  // one segment
+        page[27] = 19; // OpusHead is 19 bytes
+        const head = Buffer.alloc(19);
+        head.write('OpusHead', 0, 'latin1');
+        head.writeUInt32LE(44100, 12);
+        const original = Buffer.concat([page, head, Buffer.from(`OggS${'x'.repeat(500)}LOOPSTART=88200\0LOOPLENGTH=132300`)]);
+        fs.writeFileSync(target, original);
+        assert.equal(optimizer.isOggOpus(original), true);
+        const result = await optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async () => {
+            assert.fail('an Opus file must not be re-encoded');
+        });
+        assert.equal(result.changed, false);
+        assert.ok(fs.readFileSync(target).equals(original));
+        // A Vorbis stream is still compressed.
+        assert.equal(optimizer.isOggOpus(Buffer.from(`OggS${'x'.repeat(500)}`)), false);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a FLAC LOOP_START/LOOP_END pair becomes LOOPSTART/LOOPLENGTH in its OGG', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-flac-pair-'));
+    const flac = path.join(root, 'Theme.flac');
+    let encodeArgs = null;
+    try {
+        fs.writeFileSync(flac, Buffer.from(`fLaC${'x'.repeat(800)}loop_end=5967968\0loop_start=2895840`));
+        const result = await optimizer.optimizeAudioFile(flac, 5, '/mock/ffmpeg', async (_bin, args) => {
+            if (args.includes('image2')) throw new Error('no picture');
+            encodeArgs = args;
+            fs.writeFileSync(args.at(-1), Buffer.from(`OggS${'z'.repeat(40)}LOOPSTART=2895840\0LOOPLENGTH=3072128`));
+        });
+        assert.equal(result.converted, true);
+        assert.ok(encodeArgs.includes('LOOPSTART=2895840') && encodeArgs.includes('LOOPLENGTH=3072128'),
+            'the pair is passed to the encoder as the tags the Vorbis reader takes');
+        assert.deepEqual(optimizer.loopComments(fs.readFileSync(path.join(root, 'Theme.ogg'))),
+            ['LOOPSTART=2895840', 'LOOPLENGTH=3072128']);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('an OGG Vorbis LOOP_START/LOOP_END pair is written out and verified in the re-encode', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-pair-'));
+    const target = path.join(root, 'Theme.ogg');
+    const source = Buffer.from(`OggS${'x'.repeat(800)}loop_start=1200\0loop_end=49200`);
+    let encodeArgs = null;
+    try {
+        fs.writeFileSync(target, source);
+        const result = await optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async (_bin, args) => {
+            if (args.includes('image2')) throw new Error('no picture');
+            encodeArgs = args;
+            fs.writeFileSync(args.at(-1), Buffer.from(`OggS${'z'.repeat(40)}LOOPSTART=1200\0LOOPLENGTH=48000`));
+        });
+        assert.equal(result.changed, true);
+        assert.ok(encodeArgs.includes('LOOPSTART=1200') && encodeArgs.includes('LOOPLENGTH=48000'));
+        // An encode that loses the loop is refused, and the file is kept.
+        fs.writeFileSync(target, source);
+        await assert.rejects(optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async (_bin, args) => {
+            if (args.includes('image2')) throw new Error('no picture');
+            fs.writeFileSync(args.at(-1), Buffer.from(`OggS${'z'.repeat(40)}`));
+        }), /did not preserve loop metadata/);
+        assert.ok(fs.readFileSync(target).equals(source));
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('OGG optimization carries embedded cover art through the re-encode', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-art-'));
     const target = path.join(root, 'Theme.ogg');

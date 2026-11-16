@@ -372,8 +372,16 @@
                 if(elements)override('calcElementRate',target=>Math.max(...elements.map(id=>target.elementRate(id))));
                 if(rate!==100){const make=action.makeDamageValue;override('makeDamageValue',function(...args){return Math.round(make.apply(this,args)*rate/100);});}
             }
+            const alive=typeof target?.isAlive==='function'&&target.isAlive();
             try{manager.invokeAction(subject,target);}finally{for(const [key,entry] of Object.entries(methods)){if(entry.own)action[key]=entry.value;else delete action[key];}}
+            if(alive&&typeof target.isDead==='function'&&target.isDead())killed=true;
         };
+        // Every battler the action was aimed at is down, and a hit of this sequence did it: the hits it has left have
+        // nobody to land on (ReactorBattleData.Player leaves out the rest of its attack). A sequence that authors its
+        // own hits only: one hit with the skill's repeats has no later shot. (Max Triton's three-round burst went on
+        // firing at an enemy its first round had killed, owner 2026-11-13.)
+        let killed=false;
+        adapter.spent=()=>killed&&adapter.hitPolicy==='authored'&&targets.length>0&&targets.every(b=>typeof b?.isDead==='function'&&b.isDead());
         // An impact lands on every distinct battler in its queue on the same frame, their popups and
         // reactions together ahead of the log's lines; a battler listed again (a repeat) waits for the next wave.
         adapter.resolveNext=()=>{
@@ -677,6 +685,31 @@
      * the sprite at a few points of opacity; a model that faint still reads
      * as standing there).
      */
+    /** How slow a kill makes the battle and for how many frames of the screen (a battle on the map: 0.4 for 36 to 44). */
+    P.SLOW_KILL={scale:.4,frames:44};
+    /** Slow motion comes and goes by this much of the battle's speed a frame. */
+    P.TIME_RAMP=.08;
+    P._slow=null;P._ts=1;P._clock=0;
+    /** Only in a room on Cinematic Cuts, with the game's battle camera not off and its slow motion on, and never in a battle shared online (each player's game would fall out of step with the others). */
+    P.slowAllowed=function(){
+        const manager=typeof BattleManager!=='undefined'?BattleManager:null,room=manager?._spriteset?._reactorRoom;
+        if(!room?.cinematicEnabled?.()||room.disposed)return false;
+        if(typeof SceneManager==='undefined'||typeof Scene_Battle==='undefined'||!(SceneManager._scene instanceof Scene_Battle))return false;
+        if(root.ReactorOnlineBattle?.isShared?.())return false;
+        const camera=root.ReactorFight?.Camera?.settings?.();
+        return !camera||(camera.level!=='off'&&camera.slowMotion!==false);
+    };
+    P.slowMotion=function(scale,frames){P._slow={scale:Math.max(.1,Math.min(1,scale)),left:Math.max(0,frames|0)};};
+    /** How fast the battle runs: 1, or less in slow motion. Eased, never a step. */
+    P.timeScale=()=>P._ts;
+    /** One frame of the screen: the speed moves toward what is asked, and what is asked runs out. */
+    P.rampSlow=function(){
+        const slow=P._slow,target=slow&&slow.left>0?slow.scale:1;
+        if(slow&&slow.left>0)slow.left--;else P._slow=null;
+        const d=target-P._ts;P._ts=Math.abs(d)<=P.TIME_RAMP?target:P._ts+Math.sign(d)*P.TIME_RAMP;
+        return P._ts;
+    };
+    P.resetSlow=function(){P._slow=null;P._ts=1;P._clock=0;};
     P.mirrorSpriteLook=function(sprite,battler,record){
         const object=record?.object;if(!object)return;
         // A dissolving model owns its own look: the room eats it from the feet up and hides it at the end.
@@ -694,7 +727,14 @@
             material.userData||={};material.userData.rrOriginalOpacity??=material.opacity;
             const was=material.userData.rrBlend?.value,wasKey=material.opacity+'|'+material.transparent+'|'+material.blending+'|'+(was?was.x+','+was.y+','+was.z+','+was.w:'');
             material.opacity=material.userData.rrOriginalOpacity*opacity/255;
-            if(opacity<255||additive)material.transparent=true;
+            // See-through only while it fades or glows, and in one pass. three draws a see-through two-sided material
+            // as two programs, its back and its front, and marks the material changed twice a frame to do it: the
+            // shader warm-up took that for a material that keeps changing and let both be built at once, with the
+            // game stopped (190 to 240 ms at an enemy's collapse, 2026-11-13). Marked changed once here, the model
+            // keeps its solid program until the see-through one is built (`ShaderWarmup.recompile`). A one-sided
+            // material was never marked at all, and stayed solid through its fade.
+            if(opacity<255||additive){if(!material.transparent){material.userData.rrFade={single:material.forceSinglePass===true};material.transparent=true;material.forceSinglePass=true;material.needsUpdate=true;}}
+            else if(material.userData.rrFade){material.transparent=false;material.forceSinglePass=material.userData.rrFade.single;material.userData.rrFade=null;material.needsUpdate=true;}
             const tint=material.userData.rrBlend||(material.userData.rrBlend={value:{x:0,y:0,z:0,w:0}});
             if(blinkOff){tint.value.x=1;tint.value.y=1;tint.value.z=1;tint.value.w=.7;}
             else{tint.value.x=(blend[0]||0)/255;tint.value.y=(blend[1]||0)/255;tint.value.z=(blend[2]||0)/255;tint.value.w=strength;}
@@ -887,6 +927,27 @@
         const invoke=BattleManager.invokeAction,endAction=BattleManager.endAction;
         BattleManager.invokeAction=function(...args){this._spriteset?._reactorRoom?.cinematicImpact?.();return invoke.apply(this,args);};
         BattleManager.endAction=function(...args){try{return endAction.apply(this,args);}finally{this._spriteset?._reactorRoom?.endCinematicAction?.();}};
+        // A hit that kills, in a room on Cinematic Cuts: the battle slows for a moment and the hit shot closes in.
+        if(typeof Game_Action!=='undefined'){
+            const apply=Game_Action.prototype.apply;
+            Game_Action.prototype.apply=function(target){
+                const alive=!!target&&typeof target.isAlive==='function'&&target.isAlive();
+                const result=apply.apply(this,arguments);
+                if(alive&&target.isDead()&&P.slowAllowed()){P.slowMotion(P.SLOW_KILL.scale,P.SLOW_KILL.frames);BattleManager._spriteset?._reactorRoom?.cinematicKill?.();}
+                return result;
+            };
+        }
+        // Effects slow with the battle: the effect player is stepped by the battle's speed (as ReactorFight.Director does on a map).
+        if(typeof SceneManager!=='undefined'&&SceneManager.updateEffekseer){
+            const updateEffekseer=SceneManager.updateEffekseer;
+            SceneManager.updateEffekseer=function(){
+                const scale=P.timeScale(),player=typeof Graphics!=='undefined'?Graphics.effekseer:null;
+                if(scale>=1||!player||typeof player.update!=='function')return updateEffekseer.call(this);
+                const own=Object.prototype.hasOwnProperty.call(player,'update'),update=player.update;
+                player.update=function(frames){return update.call(this,(frames||1)*scale);};
+                try{return updateEffekseer.call(this);}finally{if(own)player.update=update;else delete player.update;}
+            };
+        }
         const logStart=Window_BattleLog.prototype.startAction;
         Window_BattleLog.prototype.startAction=function(subject,action,targets){
             if(BattleManager._reactorStarting){this.displayAction(subject,action.item());return;}
@@ -918,6 +979,20 @@
         const force=BattleManager.forceAction;
         BattleManager.forceAction=function(...args){this._spriteset?._reactorRoom?.endCinematicAction?.();if(this._reactorSequence){this._reactorSequence.cancel();this._targets=[];}this._reactorSequence=null;return force.apply(this,args);};
         const create=Scene_Battle.prototype.create,ready=Scene_Battle.prototype.isReady,terminate=Scene_Battle.prototype.terminate;
+        // Slow motion: the battle's own update on a share of the frames (`P.timeScale`), as a battle on the map slows.
+        // Battlers, their sequences, the damage numbers and the room's camera slow together; sound does not. The room
+        // is told how far between two updates each refresh stands (`slowScale`, `slowSkipped`), and draws it there.
+        const sceneUpdate=Scene_Battle.prototype.update;
+        Scene_Battle.prototype.update=function(){
+            const room=this._spriteset?._reactorRoom;
+            if(!room){P.resetSlow();return sceneUpdate.apply(this,arguments);}
+            const scale=P.rampSlow();
+            room.slowScale=scale;
+            if(scale>=1){P._clock=0;room.slowSkipped=0;return sceneUpdate.apply(this,arguments);}
+            P._clock+=scale;
+            if(P._clock>=1){P._clock-=1;room.slowSkipped=0;return sceneUpdate.apply(this,arguments);}
+            room.slowSkipped=(room.slowSkipped||0)+1;
+        };
         Scene_Battle.prototype.create=function(){
             const config=P.settings.troops?.[$gameTroop._troopId];
             this._reactorUsesBattleRoom=config?.type==='room';
@@ -928,7 +1003,7 @@
                 P.createRoom(this,config,token).catch(P.warn).finally(()=>{if(this._reactorRoomToken===token)this._reactorRoomLoading=false;});}
         };
         Scene_Battle.prototype.isReady=function(){return !this._reactorRoomLoading&&ready.call(this);};
-        Scene_Battle.prototype.terminate=function(){P.cancelStates(this._spriteset);P.clearBattlerLayers(this._spriteset);this._reactorRoomToken=null;{const holder=this._spriteset?._reactorRoomSprite;if(holder?._rrPass){holder._rrPass.removeFromParent();holder._rrPass.destroy();holder._rrPass=null;holder._rrPassGeneration=-1;}}this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
+        Scene_Battle.prototype.terminate=function(){P.resetSlow();P.cancelStates(this._spriteset);P.clearBattlerLayers(this._spriteset);this._reactorRoomToken=null;{const holder=this._spriteset?._reactorRoomSprite;if(holder?._rrPass){holder._rrPass.removeFromParent();holder._rrPass.destroy();holder._rrPass=null;holder._rrPassGeneration=-1;}}this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
         const updateSprites=Spriteset_Battle.prototype.update;
         Spriteset_Battle.prototype.update=function(){updateSprites.call(this);P.updateStates(this);if(this._reactorRoom)P.updateRoom(this);else for(const update of this._rrSequenceVisualUpdates||[])update();};
         PluginManager.registerCommand('RPGReactor','BattleSequenceSkip',()=>{const player=BattleManager._reactorSequence;if(player){player.skip();while(player.adapter.pendingImpact)player.adapter.resolveNext();}});
@@ -1057,7 +1132,7 @@
         for(const key of [...room.models.keys(),...room.billboards.keys()])if(!key.startsWith('prop:')&&!key.startsWith('event:')&&!key.startsWith('extra:')&&!live.has(key))room.remove(key);
         P.updateRoomEvents?.(room);
         // Drawn once for the frame shown (a tick catching up updates several times), else at once.
-        ss._reactorRoomDirty=true;if(!(typeof Graphics!=='undefined'&&Graphics._reactorBeforeRender))P.flushRoom(ss);
+        ss._reactorRoomDirty=true;room.owed=(room.owed||0)+1;if(!(typeof Graphics!=='undefined'&&Graphics._reactorBeforeRender))P.flushRoom(ss);
     };
     /**
      * The view's pass sprite for a room on the game's context, inside `holder`: made when there is none, and again

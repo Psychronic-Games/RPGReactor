@@ -37,7 +37,7 @@ function openEditor(raw, resolve = () => null) {
     const context = loadEditor();
     const E = context.DatabaseStructureEditor;
     const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    for (const name of ['renderInspector', 'renderMore', 'renderTools', 'renderBar', 'renderSide', 'renderFloorTabs', 'schedulePreview', 'render', 'drawPaint', 'requestPlanRedraw']) editor[name] = () => {};
+    for (const name of ['renderBar', 'renderSide', 'schedulePreview', 'render', 'drawPaint']) editor[name] = () => {};
     editor._detail = null;
     editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
     editor.materials = () => ['Stone', 'Wood', 'Plaster', 'RoofTile', 'Timber', 'Thatch'];
@@ -311,4 +311,44 @@ test('the workshop banner leaves the Build panel clear', () => {
     const banner = css.match(/\.rr-workshop-banner \{[^}]*\}/)[0], panel = css.match(/\.rr-build-panel \{[^}]*\}/)[0];
     const px = (block, prop) => Number(block.match(new RegExp(prop + ':\\s*(\\d+)px'))[1]);
     assert.ok(px(banner, 'right') >= px(panel, 'right') + px(panel, 'width') + 8, 'the banner ends before the panel begins');
+});
+
+test('"Rebuild roof" on a new plan lays the usual pitch (6 rows, 3 slanted), and a typed pitch is saved with a built plan', () => {
+    const ridge = plan => Math.max(...plan.pieces.filter(p => p.z >= 5).map(p => p.z)) - 5;
+    const lay = built => {
+        F.paintFloor(built.plan, 0, F.rectCells(1, 1, 18, 16), 'Wood');
+        F.paintWall(built.plan, 0, F.outlineCells(1, 1, 18, 16), 'Stone', 'Wood');
+        built.plan.height = 1;
+    };
+    // A new plan was never given a pitch: none is stored, and the roof laid is six rows high.
+    const fresh = openEditor({ name: 'New Plan', size: [20, 18], storey: 5, height: 2, pieces: [] });
+    assert.equal(fresh.plan.roof.pitch, null, 'no pitch of its own');
+    assert.equal(fresh.editor._roofPitch(fresh.plan), 6, 'the field shows the usual pitch');
+    lay(fresh);
+    fresh.editor.rebuildRoof();
+    assert.equal(ridge(fresh.plan), 6, 'six rows of roof, not two');
+    assert.equal('roof' in fresh.E.trimPlan(fresh.plan), false, 'and the file gains no roof setting from it');
+    // A slanted roof with nothing typed is three rows.
+    const slanted = openEditor({ name: 'Lean-to', size: [20, 18], storey: 5, height: 2, pieces: [] });
+    lay(slanted);
+    slanted.editor.setRoof({ style: 'shed' });
+    assert.equal(slanted.editor._roofPitch(slanted.plan), 3);
+    assert.equal(slanted.plan.pieces.filter(p => p.kind === 'wedge').length > 0, true, 'the slanted roof is laid');
+    // A typed pitch is used, kept in the plan and written to its file; opened again it is still there.
+    fresh.editor.setRoof({ pitch: 4 });
+    assert.equal(ridge(fresh.plan), 4, 'the roof is laid at the pitch typed');
+    assert.equal(fresh.plan.roof.pitch, 4);
+    const saved = fresh.E.trimPlan(fresh.plan);
+    assert.equal(saved.roof.pitch, 4, 'saved with the built plan');
+    const reopened = openEditor(JSON.parse(JSON.stringify(saved)));
+    assert.equal(reopened.editor._roofPitch(reopened.plan), 4, 'the field shows it when the structure is opened again');
+    // Stored values are read as they are: a plan of rooms keeps its 2, a built plan its null or its number.
+    assert.equal(fresh.E.normalizePlan(cottage({})).roof.pitch, 2, 'a plan of rooms with no pitch written still builds at 2');
+    assert.equal(fresh.E.normalizePlan(cottage({ pitch: 5 })).roof.pitch, 5);
+    assert.equal(fresh.E.normalizePlan({ name: 'B', size: [8, 8], pieces: [], roof: { pitch: 2 } }).roof.pitch, 2, 'a built plan\'s stored 2 stays 2');
+    assert.equal(fresh.E.normalizePlan({ name: 'B', size: [8, 8], pieces: [], roof: { pitch: null } }).roof.pitch, null);
+    for (const name of ['Chapel', 'Bridge', 'Cottage', 'Inn', 'Stall', 'Square']) {
+        const original = JSON.parse(read(`template/Demo/3d/Structures/${name}.json`));
+        assert.equal(JSON.stringify(fresh.E.trimPlan(fresh.E.normalizePlan(JSON.parse(JSON.stringify(original))))), JSON.stringify(original), `${name}.json is written back as it was read`);
+    }
 });

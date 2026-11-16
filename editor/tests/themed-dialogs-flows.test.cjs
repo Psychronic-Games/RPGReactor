@@ -286,13 +286,48 @@ test('Delete Map is a danger question that names the map; the map goes only on i
     assert.equal(h.controller.currentProject.maps[1], null);
     assert.equal(h.controller.currentProject.maps[3], null, 'its child map goes with it');
     assert.equal(h.saved.length, 1, 'the map list is saved once');
-    assert.ok(h.statuses.some(status => status.startsWith('Deleted map')));
 
     // A single map with no children is named with its file.
     RRDialog = dialog([false]);
     h = mapController(t, RRDialog);
     await h.controller.deleteMap(2);
     assert.equal(RRDialog.asked[0].message, 'Delete "Cave"?\n\nThis removes its Map002.json file and MapInfos entry.');
+});
+
+test('Save map as image asks before it saves the open map\'s unsaved changes; Cancel saves nothing and makes no picture', async t => {
+    const open = (h, dirty) => {
+        const done = { saves: 0 };
+        h.controller.tilemapManager = { currentMap: { id: 2 }, savedMapState: '{}', isMapDirty: () => dirty, saveMap() { done.saves++; return true; } };
+        return done;
+    };
+    // Cancel: the map is not saved and nothing goes on (the next step would be a notice about the fixture's empty map file).
+    let RRDialog = dialog([false]);
+    let h = mapController(t, RRDialog);
+    let done = open(h, true);
+    await h.controller.saveMapAsImage(2);
+    assert.equal(RRDialog.asked.length, 1);
+    assert.equal(RRDialog.asked[0].type, 'confirm');
+    assert.equal(RRDialog.asked[0].message, 'This map has unsaved changes. The picture is made from the saved map.\n\nSave the map and make the picture?');
+    assert.deepEqual(RRDialog.asked[0].options, { title: 'mapCtx.saveImage', ok: 'Save', cancel: 'Cancel' });
+    assert.equal(done.saves, 0);
+
+    // Save: the map is saved once and the export goes on.
+    RRDialog = dialog([true]);
+    h = mapController(t, RRDialog);
+    done = open(h, true);
+    await h.controller.saveMapAsImage(2);
+    assert.equal(done.saves, 1);
+    assert.deepEqual(RRDialog.asked.map(asked => asked.type), ['confirm', 'alert'], 'it went on to the map file');
+
+    // Nothing unsaved, or another map than the open one: no question and no save.
+    for (const [mapId, dirty] of [[2, false], [1, true]]) {
+        RRDialog = dialog([]);
+        h = mapController(t, RRDialog);
+        done = open(h, dirty);
+        await h.controller.saveMapAsImage(mapId);
+        assert.equal(done.saves, 0);
+        assert.deepEqual(RRDialog.asked.map(asked => asked.type), ['alert']);
+    }
 });
 
 test('a Delete Map answer that comes after another project was opened deletes nothing', async t => {

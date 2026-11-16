@@ -298,7 +298,8 @@
      */
     function effectsOf(plan, X0 = 0, Y0 = 0, resolve = null, prefix = '', out = []) {
         // A built structure's lights and screens, as the map had them, moved to the stamp.
-        for (const row of plan.lights || []) if (row) out.push({ type: 'mapLight', row, key: prefix + 'light', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
+        // Not a sun: one lights a whole map, so a sun in a file from before the workshop kept its own is not stamped.
+        for (const row of plan.lights || []) if (row && row.type !== 'sun') out.push({ type: 'mapLight', row, key: prefix + 'light', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
         for (const row of plan.surfaces || []) if (row) out.push({ type: 'mapSurface', row, key: prefix + 'screen', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
         // Its placed models (cell coordinates, as the map's props) and the water standing in it (a sheet's box and mask, its level above the pad).
         for (const row of plan.props || []) if (row && row.name) out.push({ type: 'mapProp', row, key: prefix + 'prop', at: [X0 + Math.round(Number(row.x) || 0), Y0 + Math.round(Number(row.y) || 0)], shift: [X0, Y0] });

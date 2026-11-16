@@ -5302,7 +5302,9 @@ class Database3DEditor {
                 const local = to.worldToLocal(world);
                 offset = [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000);
             }
-            work.anchor = { part, offset };
+            // The author picking "the model's origin" here is remembered (`wholeModel`), so the
+            // card does not move the effect back onto a carved part the next time it opens.
+            work.anchor = Database3DEditor.followAnchor(part, offset, previous);
             this._syncEffectAnchorMarker();
             if (this._fxVideo) this._updateVideoPreview();
         };
@@ -6609,6 +6611,28 @@ class Database3DEditor {
     }
 
     /**
+     * Whether an effect's anchor was set to follow the whole model by the author: no part, and
+     * the marker `wholeModel: true` the Follows list writes into `model.json` when "the model's
+     * origin" is chosen. A file without the marker cannot say, and is healed as before.
+     */
+    static followsWholeModel(anchor) {
+        return !!anchor && typeof anchor === 'object' && !anchor.part && anchor.wholeModel === true;
+    }
+
+    /**
+     * The anchor after the Follows list (or a move of the dot, `keep`) set what the effect
+     * follows. The marker is written only for the model's origin, and only when the author
+     * chose it now (the part changed) or had chosen it before; a part never carries it.
+     */
+    static followAnchor(part, offset, previous, keep = false) {
+        const anchor = { part: part || '', offset };
+        const was = previous && typeof previous === 'object' ? previous : null;
+        const chosen = !keep && !!was && (was.part || '') !== anchor.part;
+        if (!anchor.part && (chosen || Database3DEditor.followsWholeModel(was))) anchor.wholeModel = true;
+        return anchor;
+    }
+
+    /**
      * An effect saved before anchors bound to parts (anchor.part '') is
      * quietly rebound to the part whose piece contains its point, most
      * specific first — the screen claims the video that sits on it, and
@@ -6619,6 +6643,8 @@ class Database3DEditor {
         if (!work || !this._object || typeof THREE === 'undefined') return;
         const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : null;
         if (!anchor || anchor.part || !Array.isArray(anchor.offset)) return;
+        // Set to follow the whole model by the author (the Follows list): not an old file, left alone.
+        if (Database3DEditor.followsWholeModel(anchor)) return;
         if (!this.customParts.length) return;
         this._object.updateWorldMatrix(true, true);
         const world = this._object.localToWorld(new THREE.Vector3(anchor.offset[0] || 0, anchor.offset[1] || 0, anchor.offset[2] || 0));
@@ -6663,7 +6689,8 @@ class Database3DEditor {
         const frame = (anchor.part && this._anchorNode(anchor.part)) || this._object;
         frame.updateWorldMatrix(true, false);
         const local = frame.worldToLocal(this._fxMarker.position.clone());
-        work.anchor = { part: anchor.part || '', offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
+        // (Moving the dot keeps what the effect follows, the author's "whole model" included.)
+        work.anchor = Database3DEditor.followAnchor(anchor.part || '', [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000), anchor, true);
     }
 
     _effectMarker() {

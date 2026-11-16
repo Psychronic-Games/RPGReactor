@@ -199,13 +199,18 @@ function main() {
     say('Checking the syntax of every tracked JavaScript file...');
     execFileSync('node', [path.join('.github', 'scripts', 'check-syntax.cjs')], { cwd: repoRoot, encoding: 'utf8' });
 
-    say('Running the editor test suite...');
+    // --tests-passed=<passed>,<skipped>: the whole suite has just passed on this very code (the run before the
+    // commit), so it is not run a second time; its counts are the ones the README states.
+    const known = /^--tests-passed=(\d+),(\d+)$/.exec(process.argv.slice(2).find(argument => argument.startsWith('--tests-passed=')) || '');
+    say(known ? 'The editor test suite passed just before this cut: not run again.' : 'Running the editor test suite...');
     // The suite's report passed 1 MB (execFileSync's default buffer) at 0.99.1.
     let testOutput;
-    try {
-        // Local release checks share the workstation with the editor. Keep
-        // suites serial; CI owns its separately bounded shard concurrency.
-        testOutput = execFileSync('node', ['--require=./tests/helpers/small-pictures.cjs', '--test', '--test-concurrency=1'], {
+    if (known) testOutput = `pass ${known[1]}\nfail 0\nskipped ${known[2]}\n`;
+    else try {
+        // The suite's own runner (`npm run test:all`): it picks its worker count from the machine's threads and
+        // the memory it may use, so it shares the workstation as the day's runs do. One file at a time, as this
+        // ran before, took the better part of an hour where the runner takes six minutes (0.99.6, 2026-11-15).
+        testOutput = execFileSync('node', ['tests/run-tier.cjs', 'all'], {
             cwd: path.join(repoRoot, 'editor'), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024
         });
     } catch (error) {

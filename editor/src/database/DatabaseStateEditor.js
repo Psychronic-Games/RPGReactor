@@ -390,7 +390,7 @@ class DatabaseStateEditor {
             }
         });
         btnPaste.addEventListener('click', () => {
-            this.pasteTrait(entry);
+            this.pasteTrait(entry, this.getSelectedTraitIndex(table));
         });
         btnDelete.addEventListener('click', () => {
             const idx = this.getSelectedTraitIndex(table);
@@ -451,7 +451,7 @@ class DatabaseStateEditor {
             } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
-                this.pasteTrait(entry);
+                this.pasteTrait(entry, idx);
             }
         });
     }
@@ -487,7 +487,7 @@ class DatabaseStateEditor {
                 { label: 'Edit', action: () => this.editTrait(state, traitIndex), enabled: traitIndex !== null },
                 { label: 'Cut', action: () => this.cutTrait(state, traitIndex), enabled: traitIndex !== null },
                 { label: 'Copy', action: () => this.copyTrait(state, traitIndex), enabled: traitIndex !== null },
-                { label: 'Paste', action: () => this.pasteTrait(state), enabled: true },
+                { label: 'Paste', action: () => this.pasteTrait(state, traitIndex), enabled: true },
                 { label: 'Delete', action: () => this.deleteTrait(state, traitIndex), enabled: traitIndex !== null },
             ];
 
@@ -556,8 +556,9 @@ class DatabaseStateEditor {
         return this.traitsClipboard;
     }
 
-    async pasteTrait(state) {
-        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, state.traits);
+    /** Paste goes after the selected row, or at the end with none selected: the same on every page with a trait table. */
+    async pasteTrait(state, traitIndex = null) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, state.traits, state.traits ? traitIndex : null);
         const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
         if (this.currentState !== state
             || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, state.traits)) return;
@@ -566,7 +567,7 @@ class DatabaseStateEditor {
             return;
         }
         if (!state.traits) state.traits = [];
-        state.traits.push(result.row);
+        DatabaseRowClipboard.insertPasted(state.traits, traitIndex, result.row);
         this.databaseManager.updateState(state.id, state);
         this.refreshStateDetail(state);
     }

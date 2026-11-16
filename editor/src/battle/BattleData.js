@@ -884,6 +884,8 @@
         if(poses.target0)poses.target={...poses.target0};
         return {poses,opacity,tones,held,layers:[...layers.values()],flash,screenTone,shake,trace};
     };
+    /** The kinds of step an action with nobody left to hit leaves out (`Player.spentCue`). */
+    B.SPENT_SKIPS=['impact','projectile','sound','animation','shake','flash','wait','motion'];
     B.Player = class {
         constructor(sequence, adapter) {
             const errors = B.validateSequence(sequence); if (errors.length) throw Error(errors.join(' '));
@@ -904,11 +906,11 @@
             let frame = Math.min(this.duration, Math.max(0, this.frame) + Math.max(0, delta));
             while (this.cursor < this.timeline.length && this.timeline[this.cursor].start <= frame) {
                 const cue = this.timeline[this.cursor++];
-                const step=cue.step,active=this.branches.every(b=>b.active);
+                const step=cue.step,active=this.branches.every(b=>b.active);let spent=false;
                 if(step.type==='branch'){const matched=active&&!!this.adapter.condition?.(step.condition);this.branches.push({parent:active,active:matched,matched});}
                 else if(step.type==='elseIf'||step.type==='else'){const b=this.branches.at(-1);b.active=b.parent&&!b.matched&&(step.type==='else'||!!this.adapter.condition?.(step.condition));b.matched||=b.active;}
                 else if(step.type==='end')this.branches.pop();
-                else if(active){this.executed.push(cue);
+                else if(active&&!(spent=this.spentCue(cue))){this.executed.push(cue);
                     if(step.type==='wait'&&(step.waitFor==='move'||step.waitFor==='jump')){
                         // The wait lasts until the travel or lift already under way for that battler ends; only cues that actually ran count, so a skipped branch cannot stretch it.
                         const kinds=step.waitFor==='move'?['move']:['jump','leap','float','fall'],key=B.roleKey(step);
@@ -916,7 +918,7 @@
                         const delta=until-cue.end;if(delta){cue.end=until;for(let i=this.cursor;i<this.timeline.length;i++){const c=this.timeline[i];c.start+=delta;c.end+=delta;if(c.cut!==undefined)c.cut+=delta;}this.duration+=delta;}
                     }
                 }
-                if(!active||['branch','elseIf','else','end'].includes(step.type)){
+                if(!active||spent||['branch','elseIf','else','end'].includes(step.type)){
                     const removed=cue.advance??(cue.end-cue.start);for(let i=this.cursor;i<this.timeline.length;i++){const c=this.timeline[i];c.start-=removed;c.end-=removed;if(c.cut!==undefined)c.cut-=removed;}this.duration-=removed;frame=Math.min(frame,this.duration);continue;
                 }
                 const media = this.adapter.cue?.(cue.step, cue.start);
@@ -927,6 +929,27 @@
             }
             this.frame = frame; this.pose(frame);
             if (frame >= this.duration) this.finish();
+        }
+        /**
+         * Whether a cue is left out because the action has nobody left to hit (`adapter.spent`): the shots, swings,
+         * sounds, flashes and waits up to the sequence's last hit and the recoil after it. What puts things back
+         * (weapons, places, targets, pictures) and everything after the last hit is played as written, so the
+         * battler lowers its weapon and goes home at once.
+         */
+        spentCue(cue) {
+            const type = cue.step.type;
+            if (!this.adapter?.spent?.()) { this.justHit = type === 'impact' || (type === 'shake' && !!this.justHit); return false; }
+            if (this.spentUntil === undefined) {
+                let last = -1;
+                this.timeline.forEach((c, i) => { if (c.step.type === 'impact') last = i; });
+                this.spentUntil = last;
+            }
+            // The recoil straight after a hit that landed goes with that hit, and is played.
+            if (type === 'shake' && this.justHit) return false;
+            this.justHit = false;
+            const index = this.timeline.indexOf(cue);
+            if (index > this.spentUntil) return type === 'shake' && this.timeline.slice(this.spentUntil + 1, index).every(c => c.step.type === 'shake');
+            return B.SPENT_SKIPS.includes(type);
         }
         pose(frame) {
             // A blocking cue can share a timestamp with later moves or motions.

@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
-// RPG Reactor runtime version: 0.99.5
-// RPG Reactor runtime revision: 20261113.1
+// RPG Reactor runtime version: 0.99.6
+// RPG Reactor runtime revision: 20261115.12
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261113.1";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261115.12";
 //=============================================================================
 
 const scriptUrls = [
@@ -88,7 +88,6 @@ const scriptUrls = [
     "js/reactor_vehicles.js",
     "js/reactor_vehicles_drive.js",
     "js/reactor_vehicles_feel.js",
-    "js/reactor_vehicles_hints.js",
     "js/reactor_vehicles_mount.js",
     "js/reactor_plugins.js"
 ];
@@ -202,12 +201,27 @@ const ReactorBackend = {
         const backends = entry.backends || {};
         return this.paired(backends[name], backends[this.ORDER[0]]).windows >= this.EARLY_WINDOWS;
     },
-    /** How far `name` is ahead of the first backend: on the maps both were played on where that is enough, else over all their play; null where either is unknown. */
+    /** Whether a backend's play is kept by the map it was played on (records since runtime 20261110.8). */
+    hasMaps(record) {
+        if (!record || !record.maps) return false;
+        for (const id in record.maps) return true;
+        return false;
+    },
+    /**
+     * How far `name` is ahead of the first backend, on the maps both were played on; null where that is not known.
+     * Two backends each known by its maps, with no map enough in common, are not set against each other at all:
+     * over all their play it is the maps that are compared. On the Iris Xe laptop Direct3D 11 on 12 had been played
+     * on the forest road and Direct3D 11 in North Haven, the first came out 0.35 "ahead" and was chosen over OpenGL,
+     * which was 0.07 ahead in the town itself; like for like in the first Reactor room that day OpenGL walked at 58
+     * to 60 frames a second, 11 on 12 at 38 to 40 and 11 at 34 to 53 (2026-11-15). Only records older than the maps
+     * (neither has any) are still compared over all their play.
+     */
     ahead(entry, name) {
         const backends = entry.backends || {}, first = this.ORDER[0];
         if (name === first) return 0;
         const pair = this.paired(backends[name], backends[first]);
         if (pair.windows >= this.EARLY_WINDOWS) return pair.gap;
+        if (this.hasMaps(backends[name]) && this.hasMaps(backends[first])) return null;
         const a = this.score(backends[name]), b = this.score(backends[first]);
         return a === null || b === null ? null : a - b;
     },
@@ -225,9 +239,11 @@ const ReactorBackend = {
         const first = usable[0];
         const windows = name => (backends[name] ? backends[name].windows || 0 : 0), score = name => this.score(backends[name]);
         const ahead = name => { const a = this.ahead(entry, name); return a === null ? -Infinity : a; };
-        // A choice played out and found behind the first after all is thought over again.
+        // A choice played out and found behind the first after all is thought over again. So is one that was never
+        // set against the first on a map both have seen (`ahead`: chosen by an earlier runtime from play on
+        // different maps), unless it holds near the full picture itself.
         if (entry.choice && entry.choice !== first && windows(entry.choice) >= this.MIN_WINDOWS && windows(first) >= this.EARLY_WINDOWS
-            && ahead(entry.choice) < -this.MARGIN) entry.choice = null;
+            && ahead(entry.choice) < -this.MARGIN && !(this.ahead(entry, entry.choice) === null && score(entry.choice) >= this.HOLDS)) entry.choice = null;
         // The first, kept because it held near the full picture, is thought over too once its play no longer does (a
         // light room in its first minutes, a heavy town since): the others then get their try.
         if (entry.choice === first && windows(first) >= this.MIN_WINDOWS && score(first) !== null && score(first) < this.HOLDS - this.MARGIN) entry.choice = null;
@@ -257,7 +273,14 @@ const ReactorBackend = {
         if (close.length) return close[0];
         // All judged: the best, if it beats the first by the margin.
         const best = known.filter(name => name !== first && windows(name) >= this.MIN_WINDOWS).sort((a, b) => ahead(b) - ahead(a))[0];
-        return (entry.choice = best && ahead(best) > this.MARGIN ? best : first);
+        if (best && ahead(best) > this.MARGIN) return (entry.choice = best);
+        // One not yet seen on a map the first was seen on is played some more (the next session is most likely on
+        // such a map), the least played first, and nothing is settled meanwhile; past twice the windows a backend
+        // is judged on, it has had its chance.
+        const open = usable.filter(name => name !== first && windows(name) > 0 && windows(name) < this.MIN_WINDOWS * 2 && this.ahead(entry, name) === null)
+            .sort((a, b) => windows(a) - windows(b));
+        if (open.length) return open[0];
+        return (entry.choice = first);
     },
     /** `name` cannot be had or does not draw on this card: never planned again. */
     markFailed(entry, name) {
@@ -601,6 +624,47 @@ const ReactorPlayLog = {
     }
 };
 
+/**
+ * The monitors of this machine as the system lists them, and the one a point of the desktop lies on: for the
+ * refresh of the monitor the game's window is on (Main.askScreenRefresh), which the frame limit holds the game to
+ * (Graphics.FrameLimit). Each output is `{ name, x, y, w, h, hz, primary }`, `hz` the rate of the mode it shows.
+ */
+const ReactorScreen = {
+    /** `xrandr --current`: a connected output's line (name, place and size), then its modes, the one shown starred. */
+    parseXrandr(text) {
+        const out = [];
+        let current = null;
+        for (const line of String(text || "").split("\n")) {
+            const head = /^(\S+) connected( primary)? (\d+)x(\d+)\+(-?\d+)\+(-?\d+)/.exec(line);
+            if (head) { current = { name: head[1], primary: !!head[2], w: Number(head[3]), h: Number(head[4]), x: Number(head[5]), y: Number(head[6]), hz: 0 }; out.push(current); continue; }
+            if (/^\S/.test(line)) { current = null; continue; }
+            const shown = current ? /(\d+(?:\.\d+)?)\*/.exec(line) : null;
+            if (shown) current.hz = Number(shown[1]);
+        }
+        return out.filter(o => o.hz > 0);
+    },
+    /** `kscreen-doctor -o` (KDE): an Output block each, its modes (the one shown starred), its Geometry and its priority (1 is the primary). */
+    parseKscreen(text) {
+        const out = [];
+        for (const block of String(text || "").replace(/\x1b\[[0-9;]*m/g, "").split(/^Output:/m).slice(1)) {
+            if (!/\benabled\b/.test(block) || /\bdisabled\b/.test(block.split("\n").slice(0, 4).join(" "))) continue;
+            const mode = /\d+x\d+@(\d+(?:\.\d+)?)\*/.exec(block), place = /Geometry:\s*(-?\d+),(-?\d+)\s+(\d+)x(\d+)/.exec(block), priority = /priority\s+(\d+)/.exec(block);
+            if (!mode || !place) continue;
+            out.push({ name: (block.trim().split(/\s+/)[1] || ""), primary: !!priority && Number(priority[1]) === 1, x: Number(place[1]), y: Number(place[2]), w: Number(place[3]), h: Number(place[4]), hz: Number(mode[1]) });
+        }
+        return out;
+    },
+    /** The refresh of the monitor a point lies on; of the primary one where the point is on none; of the only one; else 0. */
+    refreshAt(outputs, x, y) {
+        const list = Array.isArray(outputs) ? outputs.filter(o => o && o.hz > 0) : [];
+        if (!list.length) return 0;
+        const on = Number.isFinite(x) && Number.isFinite(y) ? list.find(o => x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h) : null;
+        const chosen = on || list.find(o => o.primary) || (list.length === 1 ? list[0] : null);
+        return chosen ? chosen.hz : 0;
+    }
+};
+if (typeof globalThis !== "undefined") globalThis.ReactorScreen = ReactorScreen;
+
 class Main {
     constructor() {
         this.xhrSucceeded = false;
@@ -628,15 +692,30 @@ class Main {
      * be had. Read by Graphics.FrameGovernor once the engine is up.
      */
     askScreenRefresh() {
+        // Asked again when the window has moved (Graphics.FrameLimit): another monitor may refresh at another rate.
+        globalThis.RPG_REACTOR_ASK_SCREEN = () => this.askScreenRefresh();
         try {
-            if (typeof nw !== "object" || typeof process !== "object" || process.platform !== "win32" || typeof require !== "function") return;
-            const done = (error, out) => {
-                const hz = Number(String(out || "").trim());
-                if (!error && hz >= 24 && hz <= 1000) globalThis.RPG_REACTOR_SCREEN_HZ = hz;
-            };
-            require("child_process").execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
-                "(Get-CimInstance Win32_VideoController | Measure-Object CurrentRefreshRate -Maximum).Maximum"], { windowsHide: true, timeout: 15000 }, done);
-        } catch (error) { /* not known: the governor judges a map at a time */ }
+            if (typeof nw !== "object" || typeof process !== "object" || typeof require !== "function") return;
+            const run = require("child_process").execFile;
+            if (process.platform === "win32") {
+                const done = (error, out) => {
+                    const hz = Number(String(out || "").trim());
+                    if (!error && hz >= 24 && hz <= 1000) globalThis.RPG_REACTOR_SCREEN_HZ = hz;
+                };
+                run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+                    "(Get-CimInstance Win32_VideoController | Measure-Object CurrentRefreshRate -Maximum).Maximum"], { windowsHide: true, timeout: 15000 }, done);
+                return;
+            }
+            if (process.platform !== "linux") return;
+            // Linux: the monitor the window stands on, by the system's own list of its monitors (xrandr, which
+            // answers under X11 and under XWayland; else KDE's kscreen-doctor).
+            const where = () => [Number(window.screenX) + Number(window.outerWidth) / 2, Number(window.screenY) + Number(window.outerHeight) / 2];
+            const take = outputs => { const [x, y] = where(), hz = ReactorScreen.refreshAt(outputs, x, y); if (hz >= 24 && hz <= 1000) { globalThis.RPG_REACTOR_SCREEN_HZ = hz; return true; } return false; };
+            run("xrandr", ["--current"], { timeout: 8000 }, (error, out) => {
+                if (!error && take(ReactorScreen.parseXrandr(out))) return;
+                try { run("kscreen-doctor", ["-o"], { timeout: 8000 }, (error2, out2) => { if (!error2) take(ReactorScreen.parseKscreen(out2)); }); } catch (e) { /* not known */ }
+            });
+        } catch (error) { /* not known: the governor judges a map at a time, and frames are not limited */ }
     }
 
     /**

@@ -342,7 +342,7 @@
         /** The vehicle a unit rides when it can attack for itself (Attack then asks whose attack it is to be), else null. */
         Game_Fight.prototype.vehicleAttacker = function(unit) {
             const battler = f.mountBattler(unit);
-            return battler && !battler.isDead() && battler.canAttack() ? battler : null;
+            return battler && !battler.isDead() && battler.canAttack() && M.armed(battler) ? battler : null;
         };
 
         /** A skill list for the unit: its own skills and then its vehicle's, or (Attack chosen by one who rides) whose attack. */
@@ -518,6 +518,18 @@
     const WHOM_RIDER = { rrWhom: "rider", description: "" }, WHOM_VEHICLE = { rrWhom: "vehicle", description: "" };
 
     /**
+     * Whether a vehicle has an attack of its own to offer: a weapon, or an attack skill other than the stock one
+     * (an Attack Skill trait). One with neither would strike bare, the same Attack its rider has, and the menu asked
+     * "whose attack" between two rows that did the same thing (the Demo's motorcycle, the owner, 2026-11-15).
+     */
+    M.armed = function(battler) {
+        if (!battler) return false;
+        const weapons = typeof battler.weapons === "function" ? battler.weapons() : [];
+        if (weapons && weapons.some(Boolean)) return true;
+        return typeof battler.attackSkillId === "function" && battler.attackSkillId() !== 1;
+    };
+
+    /**
      * What a skill list shows from its next refresh: `actor` alone (`vehicle` null), or with the vehicle it rides.
      * `mode`: "skills", "attack", or "whom" (an action aimed where a rider and its vehicle both are: `rider` and
      * `vehicle` are those two, and the list asks which of them it is for).
@@ -613,12 +625,14 @@
             }
             if (ride.mode === "attack") {
                 // The weapon it is made with (the attack's own name without one), and whose it is.
-                const weapon = user.weapons()[0], who = user.name(), whoWidth = Math.min(this.textWidth(who), Math.floor(rect.width * 0.45));
+                // Whose first, on the left where the eye starts: at the right edge the name was easy to miss, and two rows
+                // both reading "Attack" did not say which was which (the owner, 2026-11-15).
+                const weapon = user.weapons()[0], who = user.name() + ":", whoWidth = Math.min(this.textWidth(who) + 8, Math.floor(rect.width * 0.5));
                 this.changePaintOpacity(M.rowEnabled(this, index));
-                this.drawItemName(weapon || item, rect.x, rect.y, rect.width - whoWidth - 8);
                 this.changeTextColor(ColorManager.systemColor());
-                this.drawText(who, rect.x + rect.width - whoWidth, rect.y, whoWidth, "right");
+                this.drawText(who, rect.x, rect.y, whoWidth);
                 this.resetTextColor();
+                this.drawItemName(weapon || item, rect.x + whoWidth, rect.y, rect.width - whoWidth);
                 this.changePaintOpacity(true);
                 return;
             }
@@ -724,7 +738,7 @@
         /** The vehicle an actor rides when it can attack for itself, else null. */
         M.attackerOf = function(actor) {
             const battler = M.battlerOf(actor);
-            return battler && battler.canAttack() ? battler : null;
+            return battler && battler.canAttack() && M.armed(battler) ? battler : null;
         };
 
         /** Attack can be chosen by one who can attack, or whose vehicle can. */

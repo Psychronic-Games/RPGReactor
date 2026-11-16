@@ -1569,7 +1569,7 @@ class TerrainManager {
         if (phase !== 'live' && !this._surroundSnapshot && !changed) return false;
         if (!this._surroundSnapshot) this._surroundSnapshot = { surround: before ? JSON.parse(JSON.stringify(before)) : null };
         if (changed && before && !next) {
-            const { style, edges, neighbors, ...numbers } = JSON.parse(JSON.stringify(before));
+            const { style, edges, neighbors, levels, ...numbers } = JSON.parse(JSON.stringify(before));
             this._surroundNumbers = numbers;
         }
         if (changed) { this._writeSurround(map, next); this.announceSurround(); }

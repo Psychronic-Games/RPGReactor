@@ -1218,20 +1218,28 @@ test('an array element\'s editor has Cancel, which puts back what its fields cha
     assert.equal(saved, 0, 'nothing is saved');
 });
 
-test('Show Choices refuses fewer than two choices with a notice', () => {
+// The rule was two choices until 2026-11-12; the owner chose to allow one.
+test('Show Choices refuses no choice at all with a notice, and takes a single choice', () => {
     const { Class, asked } = loadWithDialog('src/event/commands/ShowChoicesCommandEditor.js', 'ShowChoicesCommandEditor', [], { window: {} });
     const editor = Object.create(Class.prototype);
-    Object.assign(editor, { choices: ['Yes', '  ', ''], cancelType: -2, defaultType: 0, background: 0, positionType: 2 });
+    Object.assign(editor, { choices: ['', '  ', ''], cancelType: -2, defaultType: 0, background: 0, positionType: 2 });
     assert.equal(editor.buildCommands(), null);
     assert.equal(asked.length, 1);
     assert.equal(asked[0].type, 'alert');
-    assert.equal(asked[0].message, 'You must have at least 2 choices.');
+    assert.equal(asked[0].message, 'You must have at least 1 choice.');
     assert.equal(asked[0].options.title, 'Show Choices');
     assert.equal(asked[0].options.kind, 'warning');
 
     editor.choices = ['Yes', 'No'];
     assert.equal(Array.isArray(editor.buildCommands()), true);
     assert.equal(asked.length, 1, 'two choices: nothing to say');
+
+    // A one-choice command (as another editor may have written it) opens and is written back with one choice.
+    editor.parseCommand({ code: 102, indent: 0, parameters: [['Continue'], -1, 0, 2, 0] });
+    const one = editor.buildCommands();
+    assert.equal(asked.length, 1, 'one choice: nothing to say');
+    assert.equal(JSON.stringify(one[0].parameters), '[["Continue"],-1,0,2,0]');
+    assert.equal(one.map(row => row.code).join(), '102,402,0,404');
 });
 
 test('pasting event commands with nothing copied says so and leaves the list alone', async () => {

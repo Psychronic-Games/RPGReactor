@@ -71,7 +71,10 @@ class PlaytestManager {
         const list = (args || []).map(String);
         if (list.some(a => /^--use-angle=/.test(a)) && PlaytestManager.editorHop(list) === null) return null;
         if (packageData && typeof packageData['chromium-args'] === 'string' && /--use-angle=/.test(packageData['chromium-args'])) return null;
-        if (choice === 'default') return '';
+        // The user's own choice for the editor (File > Options > Graphics Backend): Direct3D 11 is the browser's own.
+        if (choice === 'default' || choice === 'd3d11') return '';
+        // (Vulkan only ever by choice: the game's own record never plans it.)
+        if (choice === 'gl' || choice === 'd3d11on12' || choice === 'vulkan') return choice;
         return plan === 'gl' || plan === 'd3d11on12' ? plan : '';
     }
     /** The backend the launcher started this editor on from that note (its marker among the arguments), or null. */
@@ -385,6 +388,9 @@ class PlaytestManager {
             launchArgs.unshift(`--user-data-dir=${userDataDir}`);
             console.log('Playtest user data dir:', userDataDir);
         }
+        // The project's own Graphics Backend (Database > System 2), carried into its manifest before it is read here.
+        try { if (this.projectManager && typeof this.projectManager.ensureGpuChromiumArgs === 'function') this.projectManager.ensureGpuChromiumArgs(projectPath); }
+        catch (error) { console.warn('Could not bring the project manifest up to date before the playtest:', error); }
         // A weak GPU on Windows: the faster WebGL backend for this machine (WEAK_ANGLE_ARGS), after the profile path.
         let packageData = null;
         try { packageData = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')); } catch (error) { packageData = null; }

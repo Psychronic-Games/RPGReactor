@@ -68,11 +68,12 @@ class DatabaseSystem2Editor {
         }
         columnsGrid.appendChild(col1);
 
-        // Col 2: Attack Motions, Editor Settings
+        // Col 2: Attack Motions, Compatibility
+        // (The Editor Settings card is gone: nothing reads its two message widths or its JSON
+        // format level. A System.json that has `editor` keeps it as it is; the page never touches it.)
         const col2 = document.createElement('div');
         col2.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
         col2.appendChild(this.createAttackMotionsSection(system));
-        col2.appendChild(this.createEditorSettingsSection(system));
         // (Higher Limits, once a Limits card here, is a tick on Database › Reactor Features.)
         col2.appendChild(this.createCompatibilitySection(system));
         columnsGrid.appendChild(col2);
@@ -237,33 +238,6 @@ class DatabaseSystem2Editor {
         return this.keyedSection('asset-sizes', tt('Asset Sizes'), html);
     }
 
-    createEditorSettingsSection(system) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        if (!system.editor) system.editor = { messageWidth1: 60, messageWidth2: 47, jsonFormatLevel: 1 };
-        const editor = system.editor;
-        const editorHTML = `
-            <table class="traits-table" style="width: 100%;">
-                <thead>
-                    <tr><th>${tt('Setting')}</th><th>${tt('Value')}</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">${tt('Message Width (Normal)')}</td>
-                        <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="messageWidth1" value="${editor.messageWidth1 || 60}" style="width: 70px; font-size: 12px;"></td>
-                    </tr>
-                    <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">${tt('Message Width (with Face)')}</td>
-                        <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="messageWidth2" value="${editor.messageWidth2 || 47}" style="width: 70px; font-size: 12px;"></td>
-                    </tr>
-                    <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">${tt('JSON Format Level')}</td>
-                        <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="jsonFormatLevel" value="${editor.jsonFormatLevel || 1}" min="0" style="width: 70px; font-size: 12px;"></td>
-                    </tr>
-                </tbody>
-            </table>`;
-        return this.keyedSection('editor-settings', tt('Editor Settings'), editorHTML);
-    }
-
     createAdvancedSettingsSection(system) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const adv = system.advanced || {};
@@ -284,6 +258,12 @@ class DatabaseSystem2Editor {
             { label: 'Main Font', field: 'mainFontFilename', value: adv.mainFontFilename || '', type: 'text' },
             { label: 'Number Font', field: 'numberFontFilename', value: adv.numberFontFilename || '', type: 'text' },
             { label: 'Fallback Fonts', field: 'fallbackFonts', value: adv.fallbackFonts || '', type: 'text' },
+            // How the game reaches the graphics card under Windows. Auto: each player's machine finds its own by
+            // playing (the game's ReactorBackend); a named one is carried into the manifest (ProjectManager.GRAPHICS_BACKENDS).
+            { label: 'Graphics Backend (Windows)', field: 'graphicsBackend', type: 'select',
+                value: ['d3d11', 'd3d11on12', 'gl', 'vulkan'].includes(adv.graphicsBackend) ? adv.graphicsBackend : 'auto',
+                title: 'Auto lets each machine find its fastest by playing: a strong graphics card stays on Direct3D 11, a weak one is tried on OpenGL. A named backend is used on every machine.',
+                options: [['auto', 'Auto (best for each machine)'], ['d3d11', 'Direct3D 11'], ['d3d11on12', 'Direct3D 11 on 12'], ['gl', 'OpenGL'], ['vulkan', 'Vulkan']] },
         ];
         let rows = '';
         for (const f of fields) {
@@ -292,6 +272,13 @@ class DatabaseSystem2Editor {
             const bounds = f.min !== undefined ? ` min="${f.min}" max="${f.max}"` : '';
             const inputClass = f.type === 'checkbox' ? 'system-checkbox' : 'database-field-value';
             const inputStyle = f.type === 'checkbox' ? '' : 'width: 100%; font-size: 12px; box-sizing: border-box;';
+            if (f.type === 'select') {
+                rows += `<tr>
+                <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td>
+                <td><select class="database-field-value sys2-advanced-field" aria-label="${rrEscapeHtml(tt(f.label))}" data-advanced-field="${f.field}" title="${rrEscapeHtml(tt(f.title || ''))}" style="${inputStyle}">${f.options.map(([value, label]) => `<option value="${rrEscapeHtml(value)}"${value === f.value ? ' selected' : ''}>${rrEscapeHtml(tt(label))}</option>`).join('')}</select></td>
+            </tr>`;
+                continue;
+            }
             rows += `<tr>
                 <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td>
                 <td><input type="${f.type}" class="${inputClass} sys2-advanced-field" aria-label="${rrEscapeHtml(tt(f.label))}" data-advanced-field="${f.field}" value="${rrEscapeHtml(f.value)}" style="${inputStyle}"${step}${bounds}${ro}${f.type === 'checkbox' && f.value ? ' checked' : ''}></td>
@@ -513,21 +500,6 @@ class DatabaseSystem2Editor {
             radio.addEventListener('change', (e) => {
                 system.faceSize = parseInt(e.target.value);
                 console.debug('Updated faceSize to:', system.faceSize);
-            });
-        });
-
-        // Editor Settings fields
-        container.querySelectorAll('.sys2-editor-field').forEach(field => {
-            field.addEventListener('change', (e) => {
-                const editorField = e.target.dataset.editorField;
-                if (editorField) {
-                    if (!system.editor) system.editor = {};
-                    // A cleared or unreadable number keeps the value it had (NaN would be saved as null).
-                    const number = parseFloat(e.target.value);
-                    if (!Number.isFinite(number)) { e.target.value = system.editor[editorField] ?? ''; return; }
-                    system.editor[editorField] = number;
-                    console.debug(`Updated editor.${editorField} to:`, system.editor[editorField]);
-                }
             });
         });
 

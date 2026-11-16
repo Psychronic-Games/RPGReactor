@@ -44,6 +44,29 @@ test('an event graphic taken from the right half of a B-E palette gets the right
     }
 });
 
+test('on a 2D map a ground tile (A1 to A5) is not offered as a new event\'s picture', () => {
+    const EventManager = require(path.join(editorRoot, 'src', 'EventManager.js'));
+    const manager = Object.create(EventManager.prototype);
+    const flat = { note: '' }, world = { note: 'Town <3d>' }, switchedOff = { note: '<3D>', reactor3d: { mode: '2d' } };
+    for (const layer of ['A1', 'A2', 'A3', 'A4', 'A5']) {
+        assert.equal(manager.eventTileIdFor({ layer, x: 1, y: 1 }, flat), 0, `${layer} on a 2D map`);
+        assert.equal(manager.eventTileIdFor({ layer, x: 1, y: 1 }, switchedOff), 0, `${layer} on a map switched to 2D`);
+        // The 3D map is left as it was.
+        assert.equal(manager.eventTileIdFor({ layer, x: 1, y: 1 }, world), manager.convertToTileId(layer, 1, 1), `${layer} on a 3D map`);
+        assert.ok(manager.eventTileIdFor({ layer, x: 1, y: 1 }, world) >= 1536);
+    }
+    // The B to E sheets are offered on both, as before.
+    for (const map of [flat, world]) {
+        assert.equal(manager.eventTileIdFor({ layer: 'B', x: 9, y: 3 }, map), manager.convertToTileId('B', 9, 3));
+        assert.equal(manager.eventTileIdFor({ layer: 'E', x: 2, y: 0 }, map), 768 + 2);
+    }
+    assert.equal(manager.eventTileIdFor(null, flat), 0);
+    // Both ways of making a tile event ask this, and nothing rewrites the tile an event already has.
+    const source = read('src/EventManager.js');
+    assert.equal(source.split('this.eventTileIdFor(tile)').length - 1, 2, 'the click and the menu');
+    assert.equal(source.split('this.convertToTileId(').length - 1, 1, 'only eventTileIdFor converts');
+});
+
 test('the C, D and E pages keep their base offsets after the fold', () => {
     const convert = liftTileConversion();
     for (const [layer, base] of [['B', 0], ['C', 256], ['D', 512], ['E', 768]]) {

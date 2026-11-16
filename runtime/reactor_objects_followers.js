@@ -1364,15 +1364,22 @@
      * walk it was on move with it into the entered map's tiles, so the line keeps walking the way the
      * leader came. A follower still past the border walks back onto the map (canPass below).
      */
-    Game_Followers.prototype.rrShift = function(dx, dy) {
-        const trail = this._rrTrail;
+    Game_Followers.prototype.rrShift = function(dx, dy, dh, within) {
+        const trail = this._rrTrail, up = Number(dh) || 0;
         if (trail) {
-            for (let i = 0; i < trail.cap; i++) { trail.x[i] += dx; trail.y[i] += dy; }
+            for (let i = 0; i < trail.cap; i++) { trail.x[i] += dx; trail.y[i] += dy; if (up && trail.h) trail.h[i] += up; }
             trail.dirty = true;
         }
         for (const follower of this._data) {
             follower._x += dx; follower._y += dy;
             follower._realX += dx; follower._realY += dy;
+            // Into the map over or under (`dh`: what a height of the map left is in the one entered).
+            if (up) for (const key of ["_reactorAlt", "_reactorGround", "_reactorPeak", "_rrTh"]) if (Number.isFinite(follower[key])) follower[key] += up;
+            // (`within`: the opening passed through, `{ x, y, w, h }` in the entered map's tiles.)
+            if (within) {
+                const tx = Math.max(within.x, Math.min(within.x + within.w - 1, Math.round(follower._x))), ty = Math.max(within.y, Math.min(within.y + within.h - 1, Math.round(follower._y)));
+                if (tx !== follower._x || ty !== follower._y) { follower._x = follower._realX = tx; follower._y = follower._realY = ty; if (follower._rrTx !== undefined) { follower._rrTx = tx; follower._rrTy = ty; } if (follower._reactorWalk) follower._reactorWalk = null; continue; }
+            }
             if (follower._rrTx !== undefined) { follower._rrTx += dx; follower._rrTy += dy; }
             const walk = follower._reactorWalk;
             if (walk) { walk.x += dx; walk.y += dy; }

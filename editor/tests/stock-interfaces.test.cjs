@@ -357,3 +357,37 @@ test('a save writes the seeded stock interfaces once Use As binds one of them, e
     assert.equal(await manager.saveAllData(project), true);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8'))[1].id, 1, 'the bound record is on disk for the game to find');
 });
+
+test('a save writes the seeded stock interfaces once a Call User Interface command was confirmed, in that project only', async t => {
+    const os = require('node:os');
+    const projects = ['rr-stock-interfaces-called-', 'rr-stock-interfaces-other-'].map(prefix => {
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+        t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+        fs.mkdirSync(path.join(project, 'data'));
+        fs.writeFileSync(path.join(project, 'data', 'System.json'), JSON.stringify(fixtureSystem));
+        return project;
+    });
+    const fileOf = project => path.join(project, 'data', 'UserInterfaces.json');
+    const DatabaseManager = new Function('RRStockInterfaces', 'require', 'RRJson',
+        read('editor/src/DatabaseManager.js') + '\nreturn DatabaseManager;')(Stock, require, require('../src/utils/JsonFiles.js'));
+    const manager = new DatabaseManager(); manager.fs = fs; manager.path = path;
+    assert.equal(await manager.loadAllData(projects[0]), true);
+    assert.equal(await manager.saveAllData(projects[0]), true);
+    assert.equal(fs.existsSync(fileOf(projects[0])), false, 'nothing asked for it yet');
+
+    // What the dialog's OK does before it hands the command back.
+    const CallUserInterfaceEditor = require('../src/event/commands/CallUserInterfaceEditor.js');
+    const dialog = new CallUserInterfaceEditor(manager);
+    assert.match(CallUserInterfaceEditor.prototype.show.toString(),
+        /close\(\);\s*this\.needInterfacesFile\(\);\s*callback\(CallUserInterfaceEditor\.build\(/, 'OK asks for the file');
+    dialog.needInterfacesFile();
+    assert.equal(await manager.saveAllData(projects[0]), true);
+    assert.equal(JSON.parse(fs.readFileSync(fileOf(projects[0]), 'utf8'))[1].id, 1,
+        'the record the command names is on disk for the game to find, with no interface bound or edited');
+
+    // Another project opened afterwards is not given a file it never asked for.
+    assert.equal(await manager.loadAllData(projects[1]), true);
+    manager.data.system.gameTitle = 'Changed';
+    assert.equal(await manager.saveAllData(projects[1]), true);
+    assert.equal(fs.existsSync(fileOf(projects[1])), false);
+});

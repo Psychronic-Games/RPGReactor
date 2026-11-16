@@ -1046,9 +1046,13 @@ test('System 1 and System 2 offer no interface pickers, and their pages leave th
 
     let page = pages.system2();
     assert.deepEqual(page.querySelectorAll('.database-section-header').map(header => header.dataset.sectionKey),
-        ['menu-commands', 'item-categories', 'sv-magic-skills', 'sv-attack-motions', 'editor-settings', 'compatibility', 'asset-sizes', 'advanced-settings', 'window-text']);
+        ['menu-commands', 'item-categories', 'sv-magic-skills', 'sv-attack-motions', 'compatibility', 'asset-sizes', 'advanced-settings', 'window-text']);
+    // The Editor Settings card is gone (nothing read its values): the page adds no `editor` block to a file without one.
+    assert.equal('editor' in system, false);
     assert.equal(page.querySelectorAll('.sys2-interface, [data-system-field]').length, 0);
-    assert.deepEqual(page.querySelectorAll('select').map(select => select.className), ['database-field-value sys2-magic-skill', 'database-field-value sys2-magic-skill'], 'the only lists left are the casting skill types');
+    assert.deepEqual(page.querySelectorAll('select').map(select => select.className), ['database-field-value sys2-magic-skill', 'database-field-value sys2-magic-skill', 'database-field-value sys2-advanced-field'],
+        'the only lists left are the casting skill types and, in Advanced Settings, the game\'s graphics backend (2026-11-15)');
+    assert.equal(page.querySelector('select.sys2-advanced-field').dataset.advancedField, 'graphicsBackend');
     untouched();
     // Every control of the page is changed in turn: none reaches a binding.
     for (const box of page.querySelectorAll('input')) {
@@ -1057,6 +1061,12 @@ test('System 1 and System 2 offer no interface pickers, and their pages leave th
         else box.choose(box.getAttribute('type') === 'number' ? '7' : 'text');
     }
     untouched();
+    // A file that has the old card's three values keeps them through the page, whatever is changed on it.
+    system.editor = { messageWidth1: 55, messageWidth2: 40, jsonFormatLevel: 2 };
+    page = pages.system2();
+    for (const box of page.querySelectorAll('input')) if (box.getAttribute('type') === 'number') box.choose('7');
+    assert.deepEqual(system.editor, { messageWidth1: 55, messageWidth2: 40, jsonFormatLevel: 2 });
+    delete system.editor;
 
     page = pages.system1();
     assert.equal(page.querySelectorAll('.system-title-interface').length, 0);
@@ -1164,6 +1174,40 @@ test('options rows mirror MZ symbols and mutate booleans and volumes with stock 
     assert.equal(sandbox.ReactorUI.changeOption('graphicsQuality', true, false), false, 'right stops at the last level');
     assert.equal(sandbox.ReactorUI.changeOption('graphicsQuality', true, true), true);
     assert.deepEqual([sandbox.ConfigManager.graphicsQuality, resets], ['auto', 1], 'OK goes round, and Auto starts from the full picture');
+
+    // What a plugin adds to the stock Options window shows in a replaced Options screen too, read and changed by the
+    // plugin's own steps on the stock window (the owner's answer, 2026-11-12: such an option used to disappear).
+    function Window_Options() {}
+    Object.assign(Window_Options, { GRAPHICS_VALUES: ['auto', 'high', 'medium', 'low'], GRAPHICS_TEXT: { name: 'Graphics', auto: 'Auto', high: 'High', medium: 'Medium', low: 'Low' } });
+    Object.assign(Window_Options.prototype, {
+        makeCommandList() { this.addCommand('Always Dash', 'alwaysDash'); this.addCommand('BGM Volume', 'bgmVolume'); },
+        getConfigValue(symbol) { return sandbox.ConfigManager[symbol]; },
+        statusText(index) { const value = this.getConfigValue(this.commandSymbol(index)); return value ? 'ON' : 'OFF'; },
+        changeValue(symbol, value) { if (sandbox.ConfigManager[symbol] !== value) { sandbox.ConfigManager[symbol] = value; this.redrawItem(this.findSymbol(symbol)); this.playCursorSound(); } },
+        processOk() { const symbol = this.commandSymbol(this.index()); this.changeValue(symbol, !this.getConfigValue(symbol)); },
+        cursorRight() { this.changeValue(this.commandSymbol(this.index()), true); },
+        cursorLeft() { this.changeValue(this.commandSymbol(this.index()), false); }
+    });
+    // The plugin: one option of its own, with words of its own, the way plugins hang them on the stock window.
+    const stockList = Window_Options.prototype.makeCommandList, stockText = Window_Options.prototype.statusText, stockRight = Window_Options.prototype.cursorRight;
+    Window_Options.prototype.makeCommandList = function() { stockList.call(this); this.addCommand('Text Speed', 'textSpeed'); };
+    Window_Options.prototype.statusText = function(index) { return this.commandSymbol(index) === 'textSpeed' ? ['Slow', 'Fast'][sandbox.ConfigManager.textSpeed] : stockText.call(this, index); };
+    Window_Options.prototype.cursorRight = function() { if (this.commandSymbol(this.index()) === 'textSpeed') { sandbox.ConfigManager.textSpeed = 1; this.redrawItem(this.index()); } else stockRight.call(this); };
+    sandbox.Window_Options = Window_Options;
+    sandbox.ConfigManager.textSpeed = 0;
+    rows = sandbox.ReactorUI.listRows(node);
+    assert.equal(rows.filter(row => row.symbol === 'alwaysDash' || row.symbol === 'bgmVolume').length, 2, 'the stock options are listed once');
+    assert.equal(rows[rows.length - 1].text, 'textSpeed:Slow', 'the plugin\'s option, after the stock ones, in its own words');
+    const played = sounds.length;
+    assert.equal(sandbox.ReactorUI.changeOption('textSpeed', true, false), true);
+    assert.equal(sandbox.ConfigManager.textSpeed, 1);
+    assert.equal(sandbox.ReactorUI.listRows(node).pop().text, 'textSpeed:Fast');
+    assert.equal(sandbox.ReactorUI.changeOption('textSpeed', true, false), false, 'no change, no sound');
+    assert.equal(sounds.length, played + 1);
+    // A stock window whose list cannot be made with no window behind it: the stock rows still show.
+    Window_Options.prototype.makeCommandList = function() { throw new Error('needs a window'); };
+    assert.equal(sandbox.ReactorUI.listRows(node).some(row => row.symbol === 'textSpeed'), false);
+    assert.equal(sandbox.ReactorUI.listRows(node).some(row => row.symbol === 'bgmVolume'), true);
 });
 
 test('custom Options saves ConfigManager on termination after pointer or directional changes', () => {

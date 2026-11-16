@@ -70,7 +70,7 @@ test('normalizing fills defaults and clamps, and trimming drops what is default'
 /** The cottage two rooms drawn on a new page make. */
 // A plan in the older, described format: rooms, doors and a style.
 function cottagePlan(E, name) {
-    const plan = E.normalizePlan({ name, size: [20, 16], storey: 5, materials: E.styleMaterials('Stone and tile'), floors: [{ rooms: {}, doors: [] }], roof: { pitch: 2 }, windows: { every: 6, width: 2 } });
+    const plan = E.normalizePlan({ name, size: [20, 16], storey: 5, materials: { wall: 'Stone', inner: 'Plaster', floor: 'Wood', wet: 'Stone', roof: 'RoofTile', stair: 'Wood', path: 'Sand' }, floors: [{ rooms: {}, doors: [] }], roof: { pitch: 2 }, windows: { every: 6, width: 2 } });
     plan.floors[0].rooms = { hall: [1, 1, 6, 8], kitchen: [8, 1, 12, 8] };
     plan.floors[0].doors = [['hall', 'outside', 3], ['hall', 'kitchen', 3]];
     plan.floors[0].wet = ['kitchen'];
@@ -213,114 +213,25 @@ test('a room and a part may wear their own materials, and the file keeps them', 
     assert.equal('materials' in trimmed.parts[1], false);
 });
 
-test('a style names a set of materials, and a set that is its own is Custom', () => {
-    const { DatabaseStructureEditor: E } = loadEditor();
-    const available = ['Stone', 'Plaster', 'Wood', 'Thatch', 'RoofTile', 'Sand'];
-    const stone = E.styleMaterials('Stone and thatch', available);
-    assert.equal(stone.roof, 'Thatch');
-    assert.equal(E.styleOf(stone, available), 'Stone and thatch');
-    assert.equal(E.styleOf({ ...stone, roof: 'RoofTile' }, available), 'Stone and tile');
-    assert.equal(E.styleOf({ ...stone, wall: 'Marble' }, available), null, 'its own');
-    assert.equal(E.styleMaterials('Stone and thatch', ['Stone']).roof, '', 'a material the project lacks is left plain');
-});
-
-test('drawing on the plan: rooms are drawn, moved and resized; doors, windows, stairs and people are placed and picked up again; undo takes it back', () => {
+test('the page\'s own undo and redo put a plan back, in the record\'s own plan object', () => {
     const { DatabaseStructureEditor: E } = loadEditor();
     const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
+    editor.render = () => {}; editor.schedulePreview = () => {}; editor.drawPaint = () => {}; editor._detail = null;
     editor.parentEditor = { _markDatabaseMutation() { editor._dirty = (editor._dirty || 0) + 1; }, refreshDatabaseListLabel() {} };
-    editor.eventTemplates = () => ['villager'];
-    const plan = E.normalizePlan({ name: 'D', size: [16, 12], floors: [{ rooms: {}, doors: [] }] });
+    const plan = E.normalizePlan({ name: 'D', size: [16, 12], storey: 5, height: 2, pieces: [] });
     editor.current = { entry: { id: 1, name: 'D', file: 'D.json', plan }, plan };
-    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
-    const floor = plan.floors[0];
-    const press = (x, y) => editor.beginPlanGesture({ x, y });
-    const drag = (x, y) => editor.updatePlanGesture({ x, y });
-    const release = (x, y) => editor.endPlanGesture({ x, y });
-    const stroke = (from, to) => { press(...from); drag(...to); release(...to); };
-    const click = (x, y) => { press(x, y); release(x, y); };
-    assert.deepEqual({ ...editor.cellAt(35, 25) }, { x: 3, y: 2 });
-    assert.equal(editor.cellAt(500, 25), null, 'outside the plan');
-    // Room tool: a drag on empty ground draws; it stops one cell inside the ring, where the walls go.
-    editor.tool = 'room';
-    stroke([2, 2], [6, 5]);
-    const [first] = Object.keys(floor.rooms);
-    assert.deepEqual([...floor.rooms[first]], [2, 2, 6, 5]);
-    assert.deepEqual({ ...editor.selection }, { kind: 'room', key: first });
-    stroke([9, 2], [40, 40]);
-    const second = Object.keys(floor.rooms)[1];
-    assert.deepEqual([...floor.rooms[second]], [9, 2, 14, 10]);
-    // Whatever the tool, a press on a room moves it, a press on its edge resizes it.
-    editor.tool = 'select';
-    stroke([4, 3], [4, 4]);
-    assert.deepEqual([...floor.rooms[first]], [2, 3, 6, 6], 'moved down one');
-    stroke([6, 4], [7, 4]);
-    assert.deepEqual([...floor.rooms[first]], [2, 3, 7, 6], 'right edge out by one');
-    // Door tool: a click on the wall between the rooms puts a door where the click was; a drag slides it.
-    editor.tool = 'door';
-    click(8, 5);
-    assert.equal(JSON.stringify(floor.doors), JSON.stringify([[first, second, 3, 5]]), 'the door carries where along the wall it sits');
-    assert.deepEqual({ ...editor.selection }, { kind: 'door', key: 0 });
-    const cellsOf = i => Array.from(editor.doorCellsOf(i), c => c.join(',')).sort();
-    assert.deepEqual(cellsOf(0), ['8,4', '8,5', '8,6'], 'three cells centred on the click');
-    stroke([8, 5], [8, 3]);
-    assert.equal(floor.doors[0][3], 3, 'slid up its wall');
-    assert.deepEqual(cellsOf(0), ['8,3', '8,4', '8,5']);
-    click(15, 5);
-    assert.equal(JSON.stringify(floor.doors[1]), JSON.stringify([second, 'outside', 3, 5, 'east']), 'an outer wall cell beside a room is the front door, on the side clicked');
-    assert.deepEqual(cellsOf(1), ['15,4', '15,5', '15,6'], 'through the east wall, not the first side that faces open ground');
-    assert.equal(editor.addDoorAt(0, 4), false, 'open ground beside the wall is not a wall');
-    assert.equal(editor.addDoorAt(0, 0), false, 'a corner touches no room');
-    assert.equal(editor.addDoorAt(4, 4), false, 'inside a room is not a wall');
-    // Window tool: a click on a room's outer wall places one; a drag slides it along; not onto a corner or open ground.
-    editor.tool = 'window';
-    click(1, 4);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 4]]));
-    assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
-    stroke([1, 4], [1, 6]);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 6]]));
-    stroke([1, 6], [1, 7]);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 6]]), 'the building\'s corner has no room behind it');
-    stroke([1, 6], [0, 4]);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 6]]), 'open ground beside the wall is no wall');
-    click(4, 4);
-    assert.equal(floor.windows.length, 1, 'inside a room is no window');
-    // Stairs tool: a click in a room starts stairs; a drag moves them; a wall cell starts none.
-    editor.tool = 'stairs';
-    click(10, 8);
-    assert.equal(JSON.stringify(plan.stairs), JSON.stringify([{ floor: 0, from: [10, 8], dir: 'north', width: 1 }]));
-    stroke([10, 8], [12, 9]);
-    assert.equal(JSON.stringify(plan.stairs[0].from), JSON.stringify([12, 9]));
-    click(0, 3);
-    assert.equal(plan.stairs.length, 1);
-    // Person tool: a click puts a spot and someone at it; a drag moves them.
-    editor.tool = 'person';
-    click(3, 4);
-    const [who] = Object.keys(plan.spots);
-    assert.ok(who && JSON.stringify(plan.spots[who]) === JSON.stringify([3, 4]));
-    assert.equal(JSON.stringify(plan.events), JSON.stringify([{ spot: who, name: '', template: 'villager', direction: 2 }]), 'the first template stands there');
-    stroke([3, 4], [5, 5]);
-    assert.equal(JSON.stringify(plan.spots[who]), JSON.stringify([5, 5]));
-    // A press on any of them selects it, whatever the tool.
-    editor.tool = 'room';
-    click(12, 9); assert.deepEqual({ ...editor.selection }, { kind: 'stair', key: 0 });
-    click(1, 6); assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
-    click(8, 4); assert.deepEqual({ ...editor.selection }, { kind: 'door', key: 0 });
-    click(5, 5); assert.deepEqual({ ...editor.selection }, { kind: 'spot', key: who });
-    // Remove takes the selection; Undo brings it back, Redo takes it again; a moved room undoes to where it was.
-    editor.removeSelection();
-    assert.deepEqual(Object.keys(plan.spots), []);
+    editor.pushHistory();
+    plan.pieces.push({ kind: 'wall', x: 3, y: 4 });
+    editor.markDirty();
     assert.equal(editor.undo(), true);
-    assert.deepEqual(Object.keys(editor.current.plan.spots), [who], 'undo restores the person');
+    assert.equal(editor.current.plan.pieces.length, 0, 'undo takes the wall back');
     assert.equal(editor.redo(), true);
-    assert.deepEqual(Object.keys(editor.current.plan.spots), []);
+    assert.equal(editor.current.plan.pieces.length, 1, 'redo lays it again');
     assert.equal(editor.current.plan, plan, 'the record keeps the same plan object through undo');
-    const before = JSON.stringify(plan.floors[0].rooms[first]);
-    editor.tool = 'select'; stroke([4, 4], [4, 5]);
-    assert.notEqual(JSON.stringify(plan.floors[0].rooms[first]), before);
-    editor.undo();
-    assert.equal(JSON.stringify(plan.floors[0].rooms[first]), before, 'a move undoes to where the room was');
-    assert.ok(editor._dirty > 0, 'the database heard about all of it');
+    assert.deepEqual(Object.keys(E.trimPlan(plan)), ['name', 'size', 'storey', 'height', 'pieces'], 'and the file still gains nothing it did not have');
+    assert.equal(editor.undo(), true);
+    assert.equal(editor.undo(), false, 'nothing further back');
+    assert.ok(editor._dirty > 0, 'the database heard about it');
 });
 
 test('a door anchor and hand-placed windows round-trip through the form', () => {
@@ -348,7 +259,7 @@ test('a tower of eight floors is stored whole and walked to its top', () => {
     assert.equal(SP.build(plan, 0, 0, 1, 0, null).every(piece => piece.z <= Reactor3D.PIECE_MAX_LEVEL), true);
 });
 
-test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with the plan, and kept in the file', () => {
+test('shapes on a plan: built at a size and a turn, turned and grown with the plan, and kept in the file', () => {
     const { DatabaseStructureEditor: E, RRStructurePlan: SP } = loadEditor();
     const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
     const original = { name: 'T', size: [16, 16], storey: 5, floors: [{ rooms: { hall: [1, 1, 6, 6] }, doors: [['hall', 'outside', 3]] }], roof: { pitch: 2 }, windows: { every: 6, width: 2 }, shapes: [{ kind: 'cylinder', at: [11, 11], size: [5, 8, 5], material: 'Stone' }, { kind: 'dome', at: [11, 11], z: 8, size: [5, 2.5, 5], angle: 15, material: 'RoofTile' }] };
@@ -364,50 +275,11 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     assert.deepEqual([...turned.shapes[0].at], [4, 11], 'and moves the shape with the plan');
     const grown = SP.transform(plan, 0, 2);
     assert.deepEqual([...grown.shapes[0].size], [10, 16, 10], 'a scale grows the shape');
-    // The page: the Shape tool puts one down, a drag moves it, the inspector's kind and size are its own.
-    const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
-    editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
-    editor.current = { entry: { id: 1, name: 'T', file: 'T.json', plan }, plan };
-    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
-    editor.tool = 'shape';
-    editor._shape = { kind: 'dome', size: [5, 2.5, 5] };
-    editor.beginPlanGesture({ x: 14, y: 3 }); editor.endPlanGesture({ x: 14, y: 3 });
-    assert.equal(plan.shapes.length, 3);
-    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: '' }), 'a new shape is what the tool says (a dome wears the roof material once the plan has one)');
-    // A shape placed on another sits on top of it: a dome on the cylinder's dome, at ten and a half.
-    editor.beginPlanGesture({ x: 11, y: 11 }); editor.endPlanGesture({ x: 11, y: 11 });
-    assert.equal(plan.shapes[3].z, 10.5, 'stacked on the tallest shape under the click');
-    editor.undo();
-    assert.equal(plan.shapes.length, 3);
-    // A tower is a cylinder with a dome on top, in one click, the dome in the roof's material.
-    plan.materials.roof = 'RoofTile';
-    editor._shape = { kind: 'tower', size: [4, 6, 4] };
-    editor.beginPlanGesture({ x: 3, y: 14 }); editor.endPlanGesture({ x: 3, y: 14 });
-    assert.equal(plan.shapes.length, 5);
-    assert.equal(JSON.stringify(plan.shapes[3]), JSON.stringify({ kind: 'cylinder', at: [3, 14], z: 0, size: [4, 6, 4], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: '' }));
-    assert.equal(JSON.stringify(plan.shapes[4]), JSON.stringify({ kind: 'dome', at: [3, 14], z: 6, size: [4, 2, 4], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: 'RoofTile' }));
-    assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 3 }, 'the cylinder is selected');
-    editor.removeSelection();
-    plan.shapes.splice(3, 1);
-    assert.equal(plan.shapes.length, 3, 'the tower is gone again');
-    editor.selection = { kind: 'shape', key: 2 };
-    assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 2 });
-    editor.tool = 'select';
-    assert.deepEqual({ ...editor.hitAt(12, 12) }, { kind: 'shape', key: 1 }, 'the topmost shape under the cell is the one picked');
-    editor.beginPlanGesture({ x: 14, y: 3 }); editor.updatePlanGesture({ x: 13, y: 4 }); editor.endPlanGesture({ x: 13, y: 4 });
-    assert.deepEqual([...plan.shapes[2].at], [13, 4], 'dragged');
-    assert.equal(new E(null, { getCurrentProject: () => null }, null, null)._shape.kind, 'cylinder', 'the tool starts on a plain cylinder');
-    assert.ok(editor.shapeCells(plan.shapes[0]).length === Reactor3D.pieceFootprint({ kind: 'cylinder', x: 11, y: 11, z: 0, rot: 0, size: [5, 8, 5], angle: 0 }).length, 'the page and the runtime agree on the footprint');
-    editor.removeSelection();
-    assert.equal(plan.shapes.length, 2);
-    editor.undo();
-    assert.equal(plan.shapes.length, 3, 'undo brings the shape back');
     const report = E.report(plan, () => null, Reactor3D);
     assert.ok(report.pieces > 100 && (report.triangles === null || report.triangles > 1000), 'the report builds the shapes too (triangles need three.js, absent here)');
 });
 
-test('shapes with handles: the picker defaults, a middle anywhere, sizes that keep step, snapping onto a neighbour, a duplicate beside, hollow shapes picked in their middle', () => {
+test('shapes with handles: the starting sizes, a middle anywhere, sizes that keep step, snapping onto a neighbour', () => {
     const { DatabaseStructureEditor: E } = loadEditor();
     assert.deepEqual([...E.SHAPE_KINDS], [...E.Reactor3D?.SHAPE_KINDS || require(path.join(repoRoot, 'runtime', 'reactor_3d.js')).SHAPE_KINDS], 'the page offers every shape the runtime builds');
     for (const kind of [...E.SHAPE_KINDS, 'tower']) assert.ok(Array.isArray(E.SHAPE_DEFAULTS[kind]) && E.SHAPE_DEFAULTS[kind].length === 3, kind + ' has a starting size');
@@ -420,24 +292,19 @@ test('shapes with handles: the picker defaults, a middle anywhere, sizes that ke
     assert.equal(JSON.stringify(trimmed.shapes[0]), JSON.stringify({ kind: 'box', at: [7, 3], z: 2.25, size: [4, 3, 4], tilt: 30, offset: [-0.25, -0.5] }), 'the file carries a quarter height, a tilt and an offset, and nothing that is zero');
     const back = E.normalizePlan(JSON.parse(JSON.stringify(trimmed)));
     assert.equal(back.shapes[0].roll, 0); assert.equal(back.shapes[0].tilt, 30);
-    // The page with a plan: sizes, duplicates, snapping and picking.
+    // The page with a plan: sizes and snapping (what the 3D view's handles use).
     const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
+    editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
     editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
     const plan = E.normalizePlan({ name: 'S', size: [30, 30], floors: [{ rooms: {}, doors: [] }], shapes: [
         { kind: 'cylinder', at: [5, 5], size: [4, 6, 4] },
         { kind: 'tube', at: [15, 15], size: [6, 5, 6] } ] });
     editor.current = { entry: { id: 1, name: 'S', file: 'S.json', plan }, plan };
-    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
     const column = plan.shapes[0], tube = plan.shapes[1];
     editor.resizeShape(column, 1, 8, false);
     assert.deepEqual([...column.size], [4, 8, 4], 'one side alone');
     editor.resizeShape(column, 0, 2, true);
     assert.deepEqual([...column.size], [2, 4, 2], 'with the lock on the others follow in proportion');
-    assert.deepEqual({ ...editor.hitAt(15, 15) }, { kind: 'shape', key: 1 }, 'a tube is picked in its open middle');
-    assert.deepEqual({ ...editor.hitAt(12, 15) }, { kind: 'shape', key: 1 }, 'and at its wall');
-    assert.equal(editor.hitAt(11, 15), null, 'not outside its box');
-    assert.equal(editor.shapeTopAt(15, 15), 5, 'a shape placed in a tube\'s middle sits on the tube');
     // Dragging the column's face toward the tube clicks onto the tube's face; a free drag lands on the quarter grid.
     const from = E.shapeBounds(column);
     const tubeBounds = E.shapeBounds(tube);
@@ -446,20 +313,10 @@ test('shapes with handles: the picker defaults, a middle anywhere, sizes that ke
     assert.equal(editor.snapTravel(column, 0, 1.13, from), 1.25, 'else the quarter grid');
     const lift = tubeBounds.z1 - from.z1;
     assert.ok(Math.abs(editor.snapTravel(column, 1, lift + 0.1, from) - lift) < 1e-9, 'and up onto the tube\'s top');
-    const copy = editor.duplicateShape(0);
-    assert.equal(plan.shapes.length, 3);
-    assert.equal(copy.kind, 'cylinder');
-    assert.ok(E.shapeBounds(copy).x0 >= E.shapeBounds(column).x1, 'the duplicate stands beside the original, not on it');
-    assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 2 });
-    editor.undo();
-    assert.equal(plan.shapes.length, 2, 'undo takes the duplicate back');
-    // A tilted shape's outline on the plan is the shadow of its box, wider than its size.
+    // A tilted shape's bounds are those of its turned box, wider than its size.
     const leaning = { kind: 'cylinder', at: [5, 5], z: 0, size: [2, 8, 2], angle: 0, tilt: 0, roll: 90, offset: [0, 0], material: '' };
     const bounds = E.shapeBounds(leaning);
     assert.ok(Math.abs((bounds.x1 - bounds.x0) - 8) < 1e-9 && Math.abs(bounds.z1 - 2) < 1e-9, 'a rolled column lies eight long and two tall');
-    assert.equal(E.shapeCovers(leaning, 9, 5.5), true, 'and is picked along its length');
-    assert.ok(E.shapeOutline('tube').solid.length === 2 && E.shapeOutline('arch').solid.length === 2 && E.shapeOutline('box').solid.length === 1, 'outlines: a ring for a tube, two posts for an arch, a square for a box');
-    assert.equal(E.shapeOutline('hull', { sides: 6 }).solid[0].length, 6, 'a hull draws its own sides on the plan');
     // A hull's sides and taper are kept in the file only when they differ from the kind's own.
     const ship = E.trimPlan(E.normalizePlan({ name: 'H', size: [20, 20], floors: [], shapes: [{ kind: 'hull', at: [3, 3], size: [4, 6, 4], sides: 12, taper: 0.8 }, { kind: 'fin', at: [8, 3], size: [3, 3, 0.25] }] }));
     assert.equal(JSON.stringify(ship.shapes[0]), JSON.stringify({ kind: 'hull', at: [3, 3], size: [4, 6, 4], sides: 12 }));
@@ -472,7 +329,7 @@ test('shapes with handles: the picker defaults, a middle anywhere, sizes that ke
     assert.equal(turned.shapes[0].tilt, 20); assert.equal(turned.shapes[0].roll, 40); assert.equal(turned.shapes[0].angle, 90);
 });
 
-test('screens, lights and animations on a plan: kept in the file, drawn on the page, put on the map with the building, taken off with it', () => {
+test('screens, lights and animations on a plan: kept in the file, put on the map with the building, taken off with it', () => {
     const { DatabaseStructureEditor: E, RRStructurePlan: SP } = loadEditor();
     const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
     const plan = E.normalizePlan({ name: 'Deck', size: [20, 16], storey: 9, materials: { wall: 'Panel', glass: 'Glass' },
@@ -512,29 +369,6 @@ test('screens, lights and animations on a plan: kept in the file, drawn on the p
     assert.equal(SP.removeGroupEffects(map, 3), true);
     assert.equal('mediaSurfaces' in map.reactor3d, false); assert.equal('lights' in map.reactor3d, false);
     assert.equal(SP.removeGroupEvents(map, 3), 1);
-    // The page: the Effect tool places a screen only on a wall beside a room, facing the room; a light anywhere; picks and moves them; undo.
-    const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
-    editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
-    editor.current = { entry: { id: 1, name: 'Deck', file: 'Deck.json', plan }, plan };
-    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
-    editor.tool = 'effect'; editor._effect.kind = 'screen';
-    editor.beginPlanGesture({ x: 5, y: 5 }); editor.endPlanGesture({ x: 5, y: 5 });
-    assert.equal(plan.effects.length, 3, 'inside a room is no place for a screen');
-    editor.beginPlanGesture({ x: 16, y: 7 }); editor.endPlanGesture({ x: 16, y: 7 });
-    assert.equal(plan.effects.length, 4); assert.equal(plan.effects[3].facing, 'west', 'on the east wall it faces west, into the room');
-    assert.deepEqual({ ...editor.selection }, { kind: 'effect', key: 3 });
-    editor._effect.kind = 'light';
-    editor.beginPlanGesture({ x: 5, y: 5 }); editor.endPlanGesture({ x: 5, y: 5 });
-    assert.equal(plan.effects[4].type, 'light'); assert.equal(plan.effects[4].z, 4);
-    assert.deepEqual({ ...editor.hitAt(5, 5) }, { kind: 'effect', key: 4 }, 'an effect is picked before the shape under it');
-    editor.tool = 'select';
-    editor.beginPlanGesture({ x: 5, y: 5 }); editor.updatePlanGesture({ x: 6, y: 6 }); editor.endPlanGesture({ x: 6, y: 6 });
-    assert.deepEqual([...plan.effects[4].at], [6, 6], 'dragged');
-    editor.removeSelection(); assert.equal(plan.effects.length, 4);
-    editor.undo(); assert.equal(plan.effects.length, 5, 'undo brings it back');
-    assert.equal(editor.effectName('screen').length > 0, true);
-    assert.ok(E.shapeOutline('tube', { sweep: 230 }).solid[0].length > 40, 'a swept tube draws an annular sector on the plan');
 });
 
 test('the plot never shrinks past what is built on it', () => {
@@ -550,4 +384,64 @@ test('the plot never shrinks past what is built on it', () => {
     const village = E.normalizePlan({ name: 'Village', size: [40, 40], parts: [{ name: 'a', plan: 'Hut', at: [10, 20], rot: 1, scale: 2 }], paths: [[0, 30, 34, 31]] });
     assert.deepEqual([...E.builtExtent(village, () => ({ size: [6, 4] }))], [35, 32], 'a plan of parts keeps the plot its parts and paving cover');
     assert.match(source, /const size = Math\.max\(least\(\), Math\.min\(DatabaseStructureEditor\.SIZE_MAX,/);
+});
+
+test('a Cancel, a list Undo, a copy, a paste or a duplicate leaves a structure file with the settings it had', async () => {
+    // The page remembers which settings a file had in a property JSON does not carry. Each of the
+    // Database's JSON copies of a record lost it, and the next save wrote every empty setting into the file.
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, querySelectorAll: () => [] }, require, setTimeout, clearTimeout, module: { exports: {} }, rrEscapeHtml: text => String(text) };
+    context.window = context;
+    vm.createContext(context);
+    vm.runInContext(read('editor/src/database/DatabaseStructureEditor.js') + '\n;globalThis.DatabaseStructureEditor = DatabaseStructureEditor;', context);
+    vm.runInContext(read('editor/src/DatabaseEditorUI.js') + '\n;globalThis.DatabaseEditorUI = DatabaseEditorUI;', context);
+    const E = context.DatabaseStructureEditor, UI = context.DatabaseEditorUI;
+    const OWN = 'name,size,storey,height,pieces';
+    const keys = plan => Object.keys(E.trimPlan(E.normalizePlan(plan))).join(',');
+    const tower = { id: 1, name: 'Tower', file: 'Tower.json', plan: E.newPlan('Tower') };
+    const hall = { id: 2, name: 'Hall', file: 'Hall.json', plan: E.normalizePlan({ name: 'Hall', size: [12, 10], storey: 5, height: 1, pieces: [], lights: [] }) };
+    assert.equal(keys(tower.plan), OWN);
+    assert.equal(keys(hall.plan), OWN + ',lights', 'an empty list the file had is kept');
+    assert.notEqual(keys(JSON.parse(JSON.stringify(tower.plan))), OWN, 'a bare JSON copy is what went wrong: it reads as a file with every setting');
+    const data = { structures: [null, tower, hall], editorNames: {} };
+    const ui = Object.create(UI.prototype);
+    ui.databaseManager = { data, mutationGeneration: 0, dataGeneration: 0, addEntry(type, record) { record.id = data[type].length; data[type].push(record); return record; } };
+    Object.assign(ui, { currentProject: { path: '/project' }, _t: key => key, getEditorName: () => '', setEditorName() {}, readModelBinding: () => null, writeModelBinding() {}, updateStatus() {}, showDatabaseDetail() {}, _listGeneration: 0, _activeDatabaseList: null });
+    // Copy, then paste from the editor's own clipboard.
+    ui.writeDatabaseEntryClipboard('structures', [tower, hall]);
+    assert.deepEqual(ui.listClipboard.entries.map(entry => keys(entry.plan)), [OWN, OWN + ',lights'], 'copied');
+    data.structures.push(null, null);
+    const list = [], search = { value: '' };
+    const pasted = await ui.pasteListEntries({ id: 3 }, list, 'structures', () => {}, search, null);
+    assert.deepEqual(pasted.map(entry => keys(entry.plan)), [OWN, OWN + ',lights'], 'pasted');
+    assert.deepEqual(pasted.map(entry => entry.file), ['', ''], 'each copy takes a file of its own');
+    // Paste through the system clipboard, which holds text: the note comes from the copy the editor kept.
+    let text = '';
+    context.ReactorClipboard = { write: (kind, payload) => { text = JSON.stringify(payload); return true; }, read: async () => ({ payload: JSON.parse(text) }) };
+    ui.writeDatabaseEntryClipboard('structures', [hall]);
+    const fromSystem = await ui.readDatabaseEntryClipboard('structures');
+    assert.equal(keys(fromSystem.entries[0].plan), OWN + ',lights', 'read back from the system clipboard');
+    // Text copied somewhere else has no such note, and is read as it always was.
+    text = JSON.stringify({ databaseType: 'structures', entries: [{ name: 'Other', file: 'Other.json', plan: { name: 'Other', size: [8, 8], pieces: [] } }] });
+    assert.equal(keys((await ui.readDatabaseEntryClipboard('structures')).entries[0].plan), 'name,size,pieces,storey,height');
+    delete context.ReactorClipboard;
+    // Duplicate.
+    ui.duplicateListEntry(hall, list, 'structures', () => {}, search);
+    const duplicate = data.structures[data.structures.length - 1];
+    assert.equal(duplicate.name, 'Hall (common.copy)');
+    assert.equal(keys(duplicate.plan), OWN + ',lights', 'duplicated');
+    // Cancel: the database goes back to the snapshot, and every record still knows its file.
+    ui._dataSnapshot = JSON.stringify(data);
+    tower.plan.pieces.push({ kind: 'wall', x: 1, y: 1 });
+    ui.revertDatabaseSnapshot();
+    assert.notEqual(data.structures[1], tower, 'Cancel put copies back');
+    assert.equal(data.structures[1].plan.pieces.length, 0);
+    // (the list is the vm's own array after Cancel: compared as text)
+    assert.equal(data.structures.filter(Boolean).map(entry => keys(entry.plan)).join(' | '), [OWN, OWN + ',lights', OWN, OWN + ',lights', OWN + ',lights'].join(' | '), 'cancelled');
+    // A record that took another's place since the snapshot is not given that one's note.
+    assert.equal(keys(E.carryFileMemory({ file: 'A.json', plan: hall.plan }, { file: 'B.json', plan: JSON.parse(JSON.stringify(tower.plan)) }).plan) === OWN + ',lights', false);
+    // The note never reaches a file or a JSON copy.
+    assert.equal(JSON.stringify(data).includes('_had'), false);
+    // The list's Undo keeps its copies through the same call.
+    const ui_source = read('editor/src/DatabaseEditorUI.js');
+    assert.match(ui_source, /entries: DatabaseEditorUI\.carryStructureMemory\(type, this\.databaseManager\.data\[type\], JSON\.parse\(JSON\.stringify\(this\.databaseManager\.data\[type\]\)\)\),/, 'the list Undo snapshot carries it too');
 });

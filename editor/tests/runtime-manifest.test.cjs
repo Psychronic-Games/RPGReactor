@@ -73,7 +73,7 @@ test('MV compatibility loads before the plugin configuration', () => {
     assert.ok(compatIndex < pluginsIndex, 'MV compatibility loads before plugin setup');
 });
 
-test('the vehicle files boot where each must: the 3D pair with the 3D runtime, the five game files after every file they wrap', () => {
+test('the vehicle files boot where each must: the 3D pair with the 3D runtime, the four game files after every file they wrap', () => {
     const { scripts } = readRuntimeManifest(path.join(runtimeRoot, 'reactor_main.js'));
     const at = name => scripts.indexOf('js/' + name);
 
@@ -85,8 +85,8 @@ test('the vehicle files boot where each must: the 3D pair with the 3D runtime, t
     // The four game files boot back to back, in this order, and no file reads a later one at load time.
     const first = at('reactor_vehicles.js');
     assert.ok(first >= 0, 'reactor_vehicles.js is in the manifest');
-    assert.deepEqual(scripts.slice(first, first + 5),
-        ['js/reactor_vehicles.js', 'js/reactor_vehicles_drive.js', 'js/reactor_vehicles_feel.js', 'js/reactor_vehicles_hints.js', 'js/reactor_vehicles_mount.js']);
+    assert.deepEqual(scripts.slice(first, first + 4),
+        ['js/reactor_vehicles.js', 'js/reactor_vehicles_drive.js', 'js/reactor_vehicles_feel.js', 'js/reactor_vehicles_mount.js']);
     // After everything they wrap: the map's objects and the followers, the physics, every battle file
     // (a battle's start is wrapped outermost, and the ride's camera is laid over the battle drivers').
     const battle = scripts.filter(url => /^js\/reactor_fight(_[a-z]+)?\.js$/.test(url));
@@ -99,10 +99,10 @@ test('the vehicle files boot where each must: the 3D pair with the 3D runtime, t
     // face boots before them; its boot hook stays the outermost of the engine's because no vehicle
     // file wraps the boot scene's start, the Show Text command, the interpreter's setup or the face
     // loaders (speaker-face.test.cjs reads every engine file listed after it for exactly those).
-    assert.deepEqual(scripts.slice(first + 5, at('reactor_plugins.js')), [], 'the five vehicle files are the last entries before reactor_plugins.js');
+    assert.deepEqual(scripts.slice(first + 4, at('reactor_plugins.js')), [], 'the four vehicle files are the last entries before reactor_plugins.js');
     assert.equal(at('reactor_plugins.js'), scripts.length - 1, 'and the plugin list is the last script');
     assert.ok(at('reactor_speaker_face.js') >= 0 && at('reactor_speaker_face.js') < first, 'reactor_speaker_face.js boots before the vehicle files');
-    for (const name of ['reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_hints.js', 'reactor_vehicles_mount.js']) {
+    for (const name of ['reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_mount.js']) {
         const code = fs.readFileSync(path.join(runtimeRoot, name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
         assert.doesNotMatch(code, /Scene_Boot\.prototype\.start\s*=|command101|Game_Interpreter\.prototype\.setup\s*=|ImageManager\.(loadFace|loadBitmap)\s*=/,
             `${name} leaves alone what the speaker's face hooks`);
@@ -125,7 +125,10 @@ test('the six vehicle files load cleanly where the tests load them: the 3D pair 
     assert.equal(typeof plain.ReactorVehicles, 'undefined', 'not loaded unless a test asks');
     const world = fightWorld({ tactical: true, action: true, classic: true, vehicles: true });
     assert.equal(typeof world.ReactorVehicles, 'object');
-    for (const part of ['Drive', 'Feel', 'Hints']) assert.equal(typeof world.ReactorVehicles[part], 'object', `ReactorVehicles.${part}`);
+    for (const part of ['Drive', 'Feel']) assert.equal(typeof world.ReactorVehicles[part], 'object', `ReactorVehicles.${part}`);
+    // The label and the hint strip are not built: there is no Hints, and whoever would tell it asks first.
+    assert.equal(world.ReactorVehicles.Hints, undefined);
+    for (const name of ['reactor_vehicles.js', 'reactor_vehicles_drive.js']) assert.match(fs.readFileSync(path.join(runtimeRoot, name), 'utf8'), /[hH]ints && typeof (?:V\.Hints|hints)\.note === "function"/, name);
     // A project with no vehicle plays on: the map runs with all four loaded.
     assert.doesNotThrow(() => world.run(30));
     assert.equal(world.$gamePlayer.isInVehicle(), false);

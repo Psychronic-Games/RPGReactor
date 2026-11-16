@@ -21,6 +21,12 @@ Status: **proposal, 2026-09-29.** Nothing here is built yet (checked against the
 - **Headers.** `PluginAnnotations.js` recognizes `@target` and `@base` only to split annotation lines; nothing reads their values. `@orderAfter` / `@orderBefore` are not parsed, although our own importer ports `RR_WoraFog.js` and the four `RR_PinnacleGtbs*` files use `@orderAfter`.
 - **Engine identity.** `Utils.REACTOR_NAME` is `"Reactor"`. A comment in `reactor_core.js` names `REACTOR_VERSION`, but no such constant exists; the version lives only in `reactor_main.js`'s header and the `RPG_REACTOR_RUNTIME_REVISION` global.
 - **Changing engine behavior** means replacing a prototype method, usually as an alias. The Demo's plugins make about 1,900 such assignments (1,935 matches of `.prototype.<method> =` in `template/Demo/js/plugins` on 2026-11-06), with no declared order between plugins that touch the same method. `PluginOverrides.js` can name which plugin replaced a method (by scanning for `.prototype.<method> =`), but not what it changed or in what order.
+- **Functions a game's scripts may call** (made official by the owner on 2026-11-12; nothing in the engine calls them, they are there for events and plugins):
+  - `Reactor3D.deriveElevation(mapData, flags, options)`: a starting height for a 2D map, raised from the tiles nobody can walk on.
+  - `Reactor3D.stairAt(mapData, x, y)`: whether a stair piece stands on a cell.
+  - `character.reactorIsWalking()` (any `Game_Character`): whether a walk to a tile is under way.
+  - `ReactorVehicles.Drive.state()`: the player's driving record while driving (every field a number), else `null`.
+  - `$gameFight.commandVehicleAttack()`: a mounted unit's vehicle attack, aimed at once (for a HUD with its own lists).
 - **Observing** already has a clean answer: [`ReactorEvents`](RUNTIME-EVENTS.md), an additive, isolated, synchronous feed at fixed points of a battle (and of on-map battles, doors and vehicles). Hooks follow its guarantees.
 
 ## 1. Plugin header

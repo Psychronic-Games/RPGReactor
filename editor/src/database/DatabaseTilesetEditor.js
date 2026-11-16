@@ -2935,7 +2935,8 @@ class DatabaseTilesetEditor {
         if (this._sheetImages.has(fileName)) return this._sheetImages.get(fileName);
         const projectPath = this.getProjectPath();
         if (!projectPath) return null;
-        const imagePath = this.path.join(projectPath, 'img', 'tilesets', `${fileName}.png`);
+        // A name stored with its extension is the file as it is, as the page's other loaders take it.
+        const imagePath = this.path.join(projectPath, 'img', 'tilesets', fileName.endsWith('.png') ? fileName : `${fileName}.png`);
         if (!this.fs.existsSync(imagePath)) return null;
         const image = new Image();
         // Repaint once it arrives; until then the preview draws placeholders.

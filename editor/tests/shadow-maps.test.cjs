@@ -491,10 +491,22 @@ test('both viewports render the maps once a frame before the first pass, and the
     assert.match(three, /Reactor3D\.Shadows\.markCaster\(object, Reactor3D\.modelCasterMoves\(character, current\.rules\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.
     assert.match(three, /mesh\.onBeforeRender = \(\) => this\._flush\(\);/);
-    assert.match(three, /this\._pending = \{ renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs, activate: !this\._active \};/);
+    assert.match(three, /this\._pending = \{ renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs \};/);
+    // Shadows come on before the pass, with the atlas made and bound, never inside it (runtime 20261115.1): switched
+    // on at the first rows' draw, every lit material was marked changed in the middle of a draw and three built each
+    // one's shadow program on the spot, one frame of 12 to 22 s on a machine that builds programs slowly.
+    assert.match(three, /this\._ensureAtlas\(renderer\);\n\s*if \(this\._sentinel\.parent !== scene\) scene\.add\(this\._sentinel\);\n[\s\S]{0,300}?this\.activate\(scene\);/);
+    assert.match(three, /activate\(scene\) \{\n\s*if \(this\._active\) return false;\n\s*this\._active = true;\n\s*this\.refreshMaterials\(scene\);\n\s*return true;\n\s*\},/);
+    const flush = three.slice(three.indexOf('    _flushRows() {'), three.indexOf('     * Shadows on: every lit program'));
+    assert.ok(flush.length > 500 && !/refreshMaterials|this\._active = true/.test(flush), 'nothing is switched on from the sentinel\'s hook');
+    // A map that wants them has them on before its first lit program is built, and the sentinel is not queued behind the map's programs.
+    assert.match(three, /prime\(renderer, scene, mapData\) \{[\s\S]{0,700}?if \(!Reactor3D\.shadowsWanted\(mapData\)\) return false;[\s\S]{0,500}?this\._ensureAtlas\(renderer\);\n\s*this\.activate\(scene \|\| null\);/);
+    assert.match(read('runtime/reactor_sprites.js'), /const viewport = Reactor3D\.acquireViewport\(\);\n\s*if \(!viewport\) return;[^\n]*\n[\s\S]{0,400}?Reactor3D\.Shadows\.prime\(viewport\._renderer, null, \$dataMap\);/);
+    assert.match(three, /material\.__rrUrgent = true;\n\s*const mesh = new THREE\.Mesh\(geometry, material\);\n\s*mesh\.name = "shadow-sentinel";/);
+    assert.match(three, /if \(!material\.__rrUrgent && \(this\._startedThisFrame >= this\.COMPILES_PER_FRAME \|\| this\.readsOwed\(\)\)\) return false;/);
     assert.match(three, /const object = new THREE\.Mesh\(geometry, material\);\n\s*group\.add\(object\);\n[\s\S]{0,300}?Reactor3D\.Shadows\.markCaster\(object, true\);/);
     assert.match(three, /if \(level !== current\) this\._lodSwaps\+\+;/);
-    assert.match(three, /Reactor3D\.Shadows\._renderer === this\._renderer\) Reactor3D\.Shadows\.dispose\(\);/);
+    // (`Viewport.prototype.destroy`, which let the shadows go with its renderer, had no caller and was removed on 2026-11-12.)
     // The picture a map stands on (a pinned parallax as ground) is lit like
     // the tiles over it: it is the whole floor of a parallax room.
     assert.match(three, /const geometry = this\.groundPlane\(width, height, lift\);[\s\S]{0,2600}?material\.__reactorShaded = true;\n\s*Reactor3D\.litMaterial\(material\);\n\s*this\._materials\.push\(material\);\n\n\s*const mesh = new THREE\.Mesh\(geometry, material\);\n\s*\/\/ Beneath the tile geometry/);

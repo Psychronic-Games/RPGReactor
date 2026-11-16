@@ -207,9 +207,8 @@ class RPGReactor {
                 // a change to the map, and an author who did not want it needs
                 // to know where to undo it.
                 this.mapEditor.onMarkedMap3D = () => {
-                    this.uiManager.updateStatus(
-                        'Map marked <3d> so the game draws it in 3D. '
-                        + 'Remove the note in Map Properties to go back to 2D.');
+                    const tt = text => (window.I18n?.tText ? window.I18n.tText(text) : text);
+                    this.uiManager.showMapNote?.(tt('Map marked <3d> so the game draws it in 3D. Remove the note in Map Properties to go back to 2D.'));
                 };
 
                 // Register with project controller so it can update references when switching projects
@@ -398,9 +397,6 @@ class RPGReactor {
             // follow one made anywhere else.
             if (event && this.eventManager) this.eventManager.selectEventById(event.id);
             else this.eventManager?.selectEvent(null);
-            this.uiManager.updateStatus(event
-                ? `${String(event.id).padStart(3, '0')}: ${event.name || ''}`
-                : '');
         };
         this.mapEditor3D.onEventContextMenu = (event, clientX, clientY) => {
             if (this.eventManager) {
@@ -480,8 +476,9 @@ class RPGReactor {
                 console.error('The 3D map view crashed the editor last session at stage "'
                     + stage + '" using the ' + strategy + ' context strategy.');
                 const tt = text => window.I18n ? window.I18n.tText(text) : text;
-                this.uiManager.updateStatus(
-                    tt('The 3D view crashed the editor last time; a safer graphics path will be tried on the next attempt.'));
+                // This runs at start, before the map area is on screen: the note is held until it is.
+                this.uiManager.showMapNote?.(
+                    tt('The 3D view crashed the editor last time; a safer graphics path will be tried on the next attempt.'), 12000, true);
             }
         } catch (error) { /* localStorage unavailable */ }
 
@@ -709,7 +706,6 @@ class RPGReactor {
         const checkbox = document.getElementById('map-3d-view');
         if (checkbox) checkbox.checked = false;
         const reason = message || (window.I18n ? window.I18n.tText('3D view unavailable') : '3D view unavailable');
-        this.uiManager.updateStatus(reason);
         // The box unticking itself said nothing of why.
         this.uiManager.showMapNote?.(reason);
     }
@@ -718,7 +714,7 @@ class RPGReactor {
     async playtest() {
         const project = this.projectController.getCurrentProject();
         if (!project) {
-            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.noProjectLoaded') : 'No project loaded');
+            this.uiManager.showMapNote?.(window.I18n ? window.I18n.t('status.noProjectLoaded') : 'No project loaded');
             return;
         }
 
@@ -736,8 +732,8 @@ class RPGReactor {
         // launching, so the playtest process reads current data from disk.
         const saved = await this.projectController.saveAll();
         if (!saved) {
-            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.playtestSaveFailed') : 'Playtest cancelled: project could not be saved');
-            // (saveAll says itself what could not be saved.)
+            // saveAll says in its own dialog what could not be saved; the note adds that the playtest did not start.
+            this.uiManager.showMapNote?.(window.I18n ? window.I18n.t('status.playtestSaveFailed') : 'Playtest cancelled: project could not be saved');
             return;
         }
 
@@ -748,7 +744,7 @@ class RPGReactor {
 
         const success = this.playtestManager.playtest(project.path);
         if (!success) {
-            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.playtestNotImplemented') : 'Playtest mode not yet implemented');
+            this.uiManager.showMapNote?.(window.I18n ? window.I18n.t('status.playtestNotImplemented') : 'Playtest mode not yet implemented');
         }
     }
 
@@ -933,22 +929,14 @@ class RPGReactor {
         const tt = text => (window.I18n?.tText ? window.I18n.tText(text) : text);
         const action = tt(step.kind === 'undo' ? 'Undo' : 'Redo');
         const text = step.label ? `${action}: ${tt(step.label)}` : action;
-        this.uiManager.updateStatus(text);
         // A short note over the map: the step may belong to a tool whose panel is not up.
-        const stage = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
-        if (!stage) return;
-        let note = stage.querySelector(':scope > .rr-history-note');
-        if (!note) { note = document.createElement('div'); note.className = 'rr-history-note'; note.setAttribute('role', 'status'); stage.appendChild(note); }
-        note.textContent = text;
-        note.classList.add('is-shown');
-        // The timer is kept on the note: a failure said there (UIManager.showMapNote) shares it.
-        clearTimeout(note._rrHideTimer);
-        note._rrHideTimer = setTimeout(() => note.classList.remove('is-shown'), 2200);
+        // It is the note a failure is said in (UIManager.showMapNote), shown for less long.
+        this.uiManager.showMapNote?.(text, 2200);
     }
 
     toggleEventMode() {
         if (!this.eventManager) {
-            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.loadMapFirst') : 'Load a map first');return;
+            this.uiManager.showMapNote?.(window.I18n ? window.I18n.t('status.loadMapFirst') : 'Load a map first');return;
         }
         this.eventManager.setTilesetPaletteViewer(this.tilesetPaletteViewer);
         const enabled=!this.eventManager.eventMode;
@@ -956,7 +944,6 @@ class RPGReactor {
         if (!enabled) this.releaseMapTool('events');
         const history=enabled?this.eventManager:this.mapEditor;
         if (history) this.uiManager.updateUndoRedoButtons(history.canUndo(),history.canRedo());
-        this.uiManager.updateStatus(window.I18n ? window.I18n.t(enabled?'status.eventModeEnabled':'status.eventModeDisabled') : (enabled?'Event mode enabled':'Event mode disabled'));
     }
 
     // Legacy callback name used by drawing buttons and keyboard shortcuts.
@@ -1140,9 +1127,6 @@ class RPGReactor {
                     if (button) {
                         button.classList.remove('active');
                     }
-
-                    // Update status
-                    this.uiManager.updateStatus('Tileset mode enabled');
                 }
             };
 
@@ -1341,13 +1325,9 @@ class RPGReactor {
             return;
         }
 
-        this.updateStatus(`Loading map ${mapId}...`);
-
         const success = await this.tilemapManager.loadMap(mapId);
 
         if (success) {
-            this.updateStatus(`Map ${mapId} loaded`);
-
             // Highlight selected map in list
             document.querySelectorAll('[data-map-id]').forEach(item => {
                 item.classList.remove('selected');
@@ -1374,12 +1354,15 @@ class RPGReactor {
                 this.mapEditor.setupMapInteraction();
             }
         } else {
-            this.updateStatus(`Failed to load map ${mapId}`);
+            // The same words, and the loader's reason, as ProjectController.loadMap.
+            const tt = text => (window.I18n?.tText ? window.I18n.tText(text) : text);
+            const reason = this.tilemapManager.lastLoadError;
+            this.uiManager.showMapNote?.(`${tt('This map could not be opened.')}${reason ? ' ' + reason : ''}`);
         }
     }
 
     updateStatus(message) {
-        // Status bar removed - status updates handled by UIManager
+        // There is no status bar. The Database pages still call this through their callbacks; nothing is shown.
     }
 
     // Update map info banner with current map information

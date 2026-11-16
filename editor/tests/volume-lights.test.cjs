@@ -77,8 +77,9 @@ test('a lit material composes with earlier injections and keys its program apart
     };
     material.onBeforeCompile(shader, null);
     assert.deepEqual(calls, ['earlier'], 'the earlier hook ran first');
-    assert.ok(shader.vertexShader.startsWith('varying vec3 vRRWorldPos;\n/*E*/'));
-    assert.match(shader.vertexShader, /#include <project_vertex>\n\tvRRWorldPos = \(modelMatrix \* vec4\(transformed, 1\.0\)\)\.xyz;/);
+    // (The world normal is declared ahead of it since 2026-11-13: every lit material asks which way a surface faces, for the openings between a map and the map under it.)
+    assert.ok(shader.vertexShader.replace(Reactor3D.WORLD_NORMAL_VARYING, '').startsWith('varying vec3 vRRWorldPos;\n/*E*/'));
+    assert.match(shader.vertexShader, /#include <project_vertex>\n(\{\n[\s\S]*?vRRWorldNormal = [^\n]*\n\})?\n?\tvRRWorldPos = \(modelMatrix \* vec4\(transformed, 1\.0\)\)\.xyz;/);
     assert.match(shader.fragmentShader, /vec3 rrLightTerm = mix\(rrLight\(vRRWorldPos\), vec3\(1\.0\), rrSelfLit\);\n\tvec4 diffuseColor = vec4\( diffuse \* rrLightTerm, opacity \);/);
     assert.match(shader.fragmentShader, /uniform vec4 rrLightPos\[32\];/);
     assert.match(shader.fragmentShader, /smoothstep\(aim\.w, mix\(aim\.w, 1\.0, 0\.35\), c\)/, 'a cone is soft at its rim');

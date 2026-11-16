@@ -1974,7 +1974,8 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
         this._cutBodiesMarked = true;
     }
     shared.rrCutBattle.value = battle ? 1 : 0;
-    if (!camera || !mapData || !character || !Reactor3D.hasPieces(mapData)) {
+    // (Nothing built but ladders: no inside, no wall, nothing to thin for. Reactor3D.hasCover.)
+    if (!camera || !mapData || !character || !Reactor3D.hasCover(mapData)) {
         shared.rrCutTop.value = 1e9;
         shared.rrCutRadius.value = 0;
         if (this._cutLook) this.setCutLook(false);
@@ -2302,7 +2303,12 @@ Reactor3D.pieceSolidAt = function(mapData, wx, wy, wz, cut, thin, doors) {
         if (kind === "door") { if (doors !== 1 && this.doorSolidAt(piece, h, doors === 2)) return true; continue; }
         if (Number.isFinite(piece.rockTop)) { if (h >= piece.z && h <= piece.rockTop) return true; continue; }
         if (this.isShapeKind(kind)) { if (this.shapeHolds(mapData, piece, wx, wy, wz, base, slim)) return true; continue; }
-        if (slim && (kind === "pillar" || kind === "fence" || kind === "ladder")) continue;
+        // A ladder is rails and rungs on one side of its tile, never a solid: taken for one (its whole tile, as
+        // tall as it stands), a camera turning round a party beside a ladder 3 wide and 27 tall was pulled in
+        // to the player each time it passed through those tiles and let out again, a tug at every turn (owner,
+        // 2026-11-14: "it feels like it's chopping or fighting me as I try to rotate").
+        if (kind === "ladder") continue;
+        if (slim && (kind === "pillar" || kind === "fence")) continue;
         if (h < piece.z || h > piece.z + this.pieceHeight(kind, piece)) continue;
         if (kind === "stair" || kind === "ramp") { if (h > this.pieceTop(piece, u, v)) continue; }
         return true;
@@ -2625,6 +2631,50 @@ Reactor3D.clearCameraAttic = function(camera, focus, mapData) {
 /** How wide the opening in a wall between the camera and the player is, in tiles. */
 Reactor3D.CUTAWAY_RADIUS = 4.5;
 
+/**
+ * The openings between a map and the map under or over it (Reactor3D.Levels): inside each box, what faces up
+ * within the upper map's ground band and what faces down at the lower map's ceiling is not drawn, so the other
+ * map is seen through. One set of values for every lit material, written once a frame; a count of 0 cuts nothing.
+ * (A surface with no normal of its own is taken for either.)
+ */
+Reactor3D.injectLevelCut = function(material, shader) {
+    const levels = Reactor3D.Levels;
+    if (!levels || !material || !shader || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
+    const shared = levels.cutUniforms();
+    for (const name of Object.keys(shared)) shader.uniforms[name] = shared[name];
+    if (shader.fragmentShader.indexOf("uniform int rrLvlCount;") >= 0) return;
+    this.injectWorldNormal(shader);
+    const n = levels.CUTS;
+    shader.fragmentShader = "uniform vec4 rrLvlBox[" + n + "];\nuniform vec4 rrLvlBand[" + n + "];\nuniform int rrLvlCount;\nuniform vec2 rrLvlOver;\n" + shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        [
+            "if (rrLvlCount > 0) {",
+            "\tfor (int rrLi = 0; rrLi < " + n + "; rrLi++) {",
+            "\t\tif (rrLi >= rrLvlCount) break;",
+            "\t\tvec4 rrLb = rrLvlBox[rrLi];",
+            "\t\tif (vRRWorldPos.x > rrLb.x && vRRWorldPos.z > rrLb.y && vRRWorldPos.x < rrLb.z && vRRWorldPos.z < rrLb.w) {",
+            "\t\t\tvec4 rrLd = rrLvlBand[rrLi];",
+            // (Whatever lies flat there: the ground, and the underside of a slab laid on it, which closed the opening seen from below.)
+            "\t\t\tif (vRRWorldPos.y > rrLd.x && vRRWorldPos.y < rrLd.y && !(abs(vRRWorldNormal.y) < 0.5)) discard;",
+            // (A ceiling is laid facing up or down, as its maker laid it: whatever lies flat at its height.)
+            "\t\t\tif (vRRWorldPos.y > rrLd.z && vRRWorldPos.y < rrLd.w && !(abs(vRRWorldNormal.y) < 0.5)) discard;",
+            "\t\t}",
+            "\t}",
+            "\tif (vRRWorldPos.y > rrLvlOver.x) {",
+            "\t\tbool rrLnear = false;",
+            "\t\tfor (int rrLi = 0; rrLi < " + n + "; rrLi++) {",
+            "\t\t\tif (rrLi >= rrLvlCount) break;",
+            "\t\t\tvec4 rrLb = rrLvlBox[rrLi];",
+            "\t\t\tif (vRRWorldPos.x > rrLb.x - rrLvlOver.y && vRRWorldPos.z > rrLb.y - rrLvlOver.y && vRRWorldPos.x < rrLb.z + rrLvlOver.y && vRRWorldPos.z < rrLb.w + rrLvlOver.y) rrLnear = true;",
+            "\t\t}",
+            "\t\tif (!rrLnear) discard;",
+            "\t}",
+            "}",
+            "\t#include <map_fragment>"
+        ].join("\n")
+    );
+};
+
 Reactor3D.injectDissolve = function(material, shader) {
     if (!material || !shader || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
     material.userData = material.userData || {};
@@ -2782,9 +2832,15 @@ Reactor3D.WATER_VOLUME_GLSL = [
     "uniform float rrWaterLevel[" + 4 + "];",
     "uniform vec4 rrWaterFog[" + 4 + "];",
     "varying vec3 vRRWaterPos;",
+    // The map under this one (Reactor3D.Levels) is not in this map's water: what lies under its top, over its
+    // own tiles (`rrLvlFoot`: x0, z0, x1, z1), keeps its colour. A lake beside a hill laid its haze over the
+    // room inside the hill, seen down the opening (owner, 2026-11-13).
+    "uniform vec4 rrLvlFoot;",
+    "uniform float rrLvlTop;",
     "vec3 rrWaterTint(vec3 color) {",
     "	if (rrWaterCount == 0) return color;",
     "	vec3 P = vRRWaterPos, C = cameraPosition;",
+    "	if (P.y < rrLvlTop && P.x > rrLvlFoot.x && P.z > rrLvlFoot.y && P.x < rrLvlFoot.z && P.z < rrLvlFoot.w) return color;",
     // In the order loaded (useSceneWater): the sheet the eye is in comes last, so its colour is the one seen.
     "	for (int i = 0; i < 4; i++) {",
     "		if (i >= rrWaterCount) break;",
@@ -2814,6 +2870,9 @@ Reactor3D.injectWaterVolume = function(material, shader) {
     if (!shader || (material && material.__reactorWater) || shader.fragmentShader.indexOf("#include <opaque_fragment>") < 0) return;
     const uniforms = this.waterVolumeUniforms();
     for (const key of Object.keys(uniforms)) shader.uniforms[key] = uniforms[key];
+    const under = this.Levels && this.Levels.cutUniforms ? this.Levels.cutUniforms() : null;
+    shader.uniforms.rrLvlFoot = under ? under.rrLvlFoot : { value: new Float32Array(4) };
+    shader.uniforms.rrLvlTop = under ? under.rrLvlTop : { value: -1e9 };
     shader.vertexShader = "varying vec3 vRRWaterPos;\n" + shader.vertexShader.replace(
         "#include <project_vertex>",
         "#include <project_vertex>\n\tvRRWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
@@ -2822,6 +2881,29 @@ Reactor3D.injectWaterVolume = function(material, shader) {
     shader.fragmentShader = this.WATER_VOLUME_GLSL + "\n" + shader.fragmentShader.replace(
         "#include <opaque_fragment>",
         sheen + "outgoingLight = rrWaterTint(outgoingLight);\n#include <opaque_fragment>");
+};
+
+/**
+ * A material whose surface is not drawn inside the map under this one (Reactor3D.Levels: `rrLvlFoot`, `rrLvlTop`):
+ * a water sheet is laid over its whole box at its level, under a hill too, and showed inside the room in the hill.
+ */
+Reactor3D.keepOutOfLevel = function(material) {
+    if (!material || material.__reactorOutOfLevel) return material;
+    material.__reactorOutOfLevel = true;
+    const earlier = material.onBeforeCompile, ownKey = Object.prototype.hasOwnProperty.call(material, "customProgramCacheKey") ? material.customProgramCacheKey : null;
+    const said = typeof earlier === "function" ? earlier.toString() : "";
+    material.onBeforeCompile = function(shader, renderer) {
+        if (typeof earlier === "function") earlier.call(this, shader, renderer);
+        const under = Reactor3D.Levels && Reactor3D.Levels.cutUniforms ? Reactor3D.Levels.cutUniforms() : null;
+        if (!under || shader.fragmentShader.indexOf("vRRUnderPos") >= 0 || shader.fragmentShader.indexOf("void main() {") < 0) return;
+        if (!shader.uniforms.rrLvlFoot) { shader.uniforms.rrLvlFoot = under.rrLvlFoot; shader.uniforms.rrLvlTop = under.rrLvlTop; }
+        const declared = shader.fragmentShader.indexOf("uniform vec4 rrLvlFoot;") >= 0;
+        shader.vertexShader = "varying vec3 vRRUnderPos;\n" + shader.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n\tvRRUnderPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+        shader.fragmentShader = "varying vec3 vRRUnderPos;\n" + (declared ? "" : "uniform vec4 rrLvlFoot;\nuniform float rrLvlTop;\n") + shader.fragmentShader.replace("void main() {",
+            "void main() {\n\tif (vRRUnderPos.y < rrLvlTop && vRRUnderPos.x > rrLvlFoot.x && vRRUnderPos.z > rrLvlFoot.y && vRRUnderPos.x < rrLvlFoot.z && vRRUnderPos.z < rrLvlFoot.w) discard;");
+    };
+    material.customProgramCacheKey = function() { return (ownKey ? ownKey.call(this) : said) + "|out-of-level"; };
+    return material;
 };
 
 /** The water volume on a material that is not lit (the sky). */
@@ -3152,6 +3234,9 @@ Reactor3D.mirrorUniformDeclarations = function() {
     return lines.join("\n");
 };
 
+/** How far past a mirror picture's drawn area a lookup still reads its edge, in picture widths (`mirrorLookup`). */
+Reactor3D.MIRROR_EDGE_REACH = 0.1;
+
 /**
  * The fragment code that takes the first mirror slot this fragment lies on
  * (`on(slot)` says whether it does) and writes its picture into `target`,
@@ -3162,7 +3247,13 @@ Reactor3D.mirrorLookup = function(target, on, offset, scale) {
     for (let slot = 0; slot < this.MIRROR_SLOTS; slot++) {
         lines.push((slot ? "\t} else if (" : "\tif (") + "rrMirrorOn" + slot + " > 0.5 && " + on(slot) + ") {",
             "\t\tvec4 rrMC = rrMirrorMatrix" + slot + " * vec4(vRRWorldPos, 1.0); vec2 rrMU = rrMC.xy / rrMC.w" + (offset ? " + " + offset : "") + ";",
-            "\t\tif (rrMC.w > 0.0 && all(greaterThan(rrMU, rrMirrorArea" + slot + ".xy)) && all(lessThan(rrMU, rrMirrorArea" + slot + ".zw))) " + target + " = rrSRGBToLinear(textureLod(rrMirrorMap" + slot + ", rrMU, 0.0).rgb) * " + scale + ";");
+            // A lookup a little past the drawn area reads the area's edge. The picture is drawn for the camera of the
+            // last update and read by every refresh until the next: a view turned since has water at its side
+            // that the picture's area ends short of, and that strip fell back to the capture (a straight edge down
+            // a lake, growing and snapping back as the view turned; owner, 2026-11-14). Far past it (water just
+            // come into sight, no picture yet) the capture still stands in.
+            "\t\tvec2 rrMA = clamp(rrMU, rrMirrorArea" + slot + ".xy, rrMirrorArea" + slot + ".zw);",
+            "\t\tif (rrMC.w > 0.0 && rrMirrorArea" + slot + ".z > rrMirrorArea" + slot + ".x && all(lessThan(abs(rrMU - rrMA), vec2(" + Reactor3D.MIRROR_EDGE_REACH.toFixed(3) + ")))) " + target + " = rrSRGBToLinear(textureLod(rrMirrorMap" + slot + ", rrMA, 0.0).rgb) * " + scale + ";");
     }
     lines.push("\t}");
     return lines.join("\n");
@@ -4169,6 +4260,7 @@ Reactor3D.litMaterial = function(material) {
         shader.uniforms.rrSelfLit = { value: this.__reactorSelfLit ? 1 : 0 };
         Reactor3D.injectBlendColor(this, shader);
         Reactor3D.injectDissolve(this, shader);
+        Reactor3D.injectLevelCut(this, shader);
         Reactor3D.injectCutaway(this, shader);
         Reactor3D.injectWaterVolume(this, shader);
         Reactor3D.injectShine(this, shader);
@@ -5804,6 +5896,8 @@ Reactor3D.Shadows = {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
         const material = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false });
+        // Every shadow waits on this one draw: its program is not queued behind the map's (ShaderWarmup.readNow).
+        material.__rrUrgent = true;
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = "shadow-sentinel";
         mesh.frustumCulled = false;
@@ -6409,6 +6503,9 @@ Reactor3D.Shadows = {
         const fresh = !this._atlas || this._renderer !== renderer;
         this._ensureAtlas(renderer);
         if (this._sentinel.parent !== scene) scene.add(this._sentinel);
+        // Shadows come on here, before the pass, with the atlas made and bound (`_ensureAtlas`), and not at the
+        // first rows' draw inside it (`activate`).
+        this.activate(scene);
         if (scene.matrixWorldAutoUpdate !== false) scene.updateMatrixWorld();
         const quality = this.quality();
         const tiles = this._tiles;
@@ -6540,7 +6637,7 @@ Reactor3D.Shadows = {
         this.backlog = tiles.filter(t => t.id !== null && t.dirty).length - staticJobs.length
             + dynTiles.filter(d => d.id !== null && d.dirty).length - dynJobs.length;
         this._publish(uniforms);
-        this._pending = { renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs, activate: !this._active };
+        this._pending = { renderer, scene, statics: staticJobs, dynamics: dynJobs, sun: sunJobs };
         this.lastFrame = {
             statics: staticJobs.length, dynamics: dynJobs.length,
             sunStatics: sunJobs ? sunJobs.statics.length : 0, sunDynamics: sunJobs ? sunJobs.dynamics.length : 0,
@@ -7111,9 +7208,8 @@ Reactor3D.Shadows = {
     },
 
     /**
-     * The depth passes, from the sentinel's hook. On the frame shadows come
-     * on, the atlas is bound before any program declares a sampler for it,
-     * and only then do the lit materials switch to the shadow variant — a
+     * The depth passes, from the sentinel's hook. The atlas is bound before
+     * any program declares a sampler for it (`activate`, before the pass) — a
      * shadow sampler bound to no depth texture fails the draw outright.
      * Drawn from the scene whole: the hook runs inside the first half of a
      * split pass (HalfLight.whole), and the casters lit at full size wait
@@ -7254,10 +7350,44 @@ Reactor3D.Shadows = {
         const uniforms = Reactor3D.lightUniforms();
         this._bindMaps(uniforms);
         this._publish(uniforms);
-        if (pending.activate) {
-            this._active = true;
-            this.refreshMaterials(scene);
-        }
+    },
+
+    /**
+     * Shadows on: every lit program from here on is the shadow variant, and the lit materials of `scene` built
+     * without it are asked to change (`refreshMaterials`). Called between draws, with the atlas made and bound
+     * (`_ensureAtlas`: both depth textures exist, cleared, and no light reads a row until one is drawn), so a
+     * shadow sampler always has its depth texture.
+     *
+     * It was done at the first rows' draw, from the sentinel's hook inside a pass. Two things went wrong with that
+     * on a machine that builds programs slowly (the Iris Xe laptop on Direct3D 11, a browser profile with no
+     * programs kept, 2026-11-15). The sentinel is a mesh like any other and waited for its own program behind the
+     * whole map's (ShaderWarmup): 14 s on the first map of a session, so the map's programs were all built once
+     * without shadows first. And when it drew at last, the 232 lit materials of the first Reactor room were marked
+     * changed in the middle of the draw, after the warm-up had looked at them: three built each one's shadow
+     * program on the spot and waited for it, 23 programs one after another, one frame of 12 to 17 s (22 s in the
+     * owner's playtest). Here the change is seen by the warm-up before the next draw: a material on screen keeps
+     * its program until the next is built (`ShaderWarmup.recompile`), one not yet seen waits for it unseen.
+     */
+    activate(scene) {
+        if (this._active) return false;
+        this._active = true;
+        this.refreshMaterials(scene);
+        return true;
+    },
+
+    /**
+     * A map that wants shadows has them on before its first lit program is built (`activate` at the first frame
+     * came after the models readied for the map had built theirs without, 20 programs in the first Reactor room).
+     * `renderer` is the one that will draw the map; the atlas is made for it now. Returns whether they are on.
+     */
+    prime(renderer, scene, mapData) {
+        if (typeof THREE === "undefined" || !renderer || typeof renderer.setRenderTarget !== "function") return false;
+        if (!Reactor3D.shadowsWanted(mapData)) return false;
+        // Another renderer's rows (a battle room's, an editor preview's) are theirs until the map claims them by drawing.
+        if (this._renderer && this._renderer !== renderer && !(Reactor3D.claimShadows && Reactor3D.claimShadows(renderer))) return false;
+        this._ensureAtlas(renderer);
+        this.activate(scene || null);
+        return true;
     },
 
     /**
@@ -10672,8 +10802,8 @@ Reactor3D.HalfLight = {
      * starts compiling on the driver's threads, from inside the pass that draws that kind, so its
      * target (and the output it decides) is the one its draw will have. The first draw after a
      * border crossing then finds it linked: built in that draw, it stopped the frame on the
-     * driver's answer (48 ms on an integrated Radeon). Nothing without parallel compiling: there
-     * a compile cannot be started without waiting for it.
+     * driver's answer (48 ms on an integrated Radeon). Without parallel compiling it is built ahead
+     * too and waited for at its read, one a frame, before the crossing (ShaderWarmup.SERIAL).
      */
     warmAhead(renderer, kind) {
         const W = Reactor3D.ShaderWarmup;

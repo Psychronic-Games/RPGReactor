@@ -1355,6 +1355,76 @@
             tm.requestRender?.();
         }
 
+        /** A picture of img/parallaxes as an image a 2D canvas can draw, or null when it will not load. */
+        _image(name) {
+            const url = this.urlOf(name);
+            if (!url || typeof Image === 'undefined') return Promise.resolve(null);
+            return new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => resolve(null);
+                image.src = url;
+            });
+        }
+
+        /**
+         * The image layers of a map in a picture of the whole map ("Save map as image"), as the game draws them
+         * at the start of play with its camera at the map's top left. `stage` is the part asked for, in the flat
+         * view's own order: 'back' (behind the tiles), 'ground' and 'same' (over the lower tiles) or 'over'
+         * (over everything). `map` is the map as its file has it, so the eye that hides a layer in the tool does
+         * not count here. A layer that fills the screen lies as the flat view lays it with the whole map in view:
+         * over the game's screen around a smaller map, over the whole of a larger one.
+         */
+        async drawToCanvas(ctx, map, stage) {
+            if (!ctx || !map || !Array.isArray(map.rrImageLayers) || !map.rrImageLayers.some(layer => layer && layer.name)) return 0;
+            if (!(await this.ensureRuntime())) return 0;
+            const R = root.ReactorImageLayers, DEPTH = R.DEPTH, is3D = this.is3DMap(map), tile = this.tile();
+            const size = this.mapSize(map), shown = this.gameScreen();
+            const stageOf = depth => depth < 0 ? 'back' : depth < DEPTH.same ? 'ground' : depth < 4 ? 'same' : 'over';
+            const plan = [];
+            map.rrImageLayers.forEach((layer, index) => {
+                if (!layer || !layer.name) return;
+                const record = R.normalize(layer);
+                if (!R.drawn(record, is3D)) return;
+                const depth = R.depth(record, index);
+                if (stageOf(depth) === stage) plan.push({ record, depth });
+            });
+            plan.sort((a, b) => a.depth - b.depth);
+            const BLEND = { normal: 'source-over', add: 'lighter', multiply: 'multiply', screen: 'screen' };
+            let drawn = 0;
+            for (const { record } of plan) {
+                const image = await this._image(record.name);
+                const width = image ? image.naturalWidth || image.width : 0, height = image ? image.naturalHeight || image.height : 0;
+                if (!width || !height) continue;
+                ctx.save();
+                ctx.globalAlpha = record.opacity / 255;
+                ctx.globalCompositeOperation = BLEND[R.BLENDS[record.blendMode]] || 'source-over';
+                if (record.fit === 'repeat') {
+                    // Where the tiling starts at the first moment of play, the camera at the top left (_placeRepeat).
+                    const o = R.origin(record, 0, 0, 0, tile.width, tile.height, width, height), one = record.repeat;
+                    // Adding zero turns a negative zero into zero.
+                    const left = Math.round(-o.x) + 0, top = Math.round(-o.y) + 0;
+                    const x = one === 'y' ? left : 0, y = one === 'x' ? top : 0;
+                    const w = one === 'y' ? width : size.width, h = one === 'x' ? height : size.height;
+                    ctx.beginPath();
+                    ctx.rect(x, y, w, h);
+                    ctx.clip();
+                    ctx.translate(left, top);
+                    ctx.fillStyle = ctx.createPattern(image, 'repeat');
+                    ctx.fillRect(x - left, y - top, w, h);
+                } else if (record.fit === 'fill') {
+                    const small = size.width <= shown.width, low = size.height <= shown.height;
+                    const x = small ? (size.width - shown.width) / 2 : 0, y = low ? (size.height - shown.height) / 2 : 0;
+                    ctx.drawImage(image, x, y, small ? shown.width : size.width, low ? shown.height : size.height);
+                } else {
+                    ctx.drawImage(image, 0, 0);
+                }
+                ctx.restore();
+                drawn++;
+            }
+            return drawn;
+        }
+
         /**
          * Where the game's camera stands for what the view shows, in map pixels. Along an axis on which the
          * map is no larger than the game's screen the game keeps the map centered, so the camera is fixed

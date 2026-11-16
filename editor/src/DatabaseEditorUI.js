@@ -548,7 +548,7 @@ class DatabaseEditorUI {
 
     revertDatabaseSnapshot() {
         if (this._dataSnapshot) {
-            Object.assign(this.databaseManager.data, JSON.parse(this._dataSnapshot));
+            Object.assign(this.databaseManager.data, DatabaseEditorUI.carryStructureMemory('structures', this.databaseManager.data.structures, JSON.parse(this._dataSnapshot), 'structures'));
             if (this.currentProject?.maps) {
                 this.databaseManager.data.mapInfos = this.currentProject.maps;
             }
@@ -1274,7 +1274,7 @@ class DatabaseEditorUI {
 
         const undoStack = [];
         const snapshotForUndo = () => undoStack.push({
-            entries: JSON.parse(JSON.stringify(this.databaseManager.data[type])),
+            entries: DatabaseEditorUI.carryStructureMemory(type, this.databaseManager.data[type], JSON.parse(JSON.stringify(this.databaseManager.data[type]))),
             editorNames: JSON.parse(JSON.stringify(this.databaseManager.data.editorNames)),
             battlePresentation: JSON.parse(JSON.stringify(this.databaseManager.data.battlePresentation||null)),
             // Clearing an interface also takes it off System's scenes; a tileset carries its 3D classes.
@@ -1932,7 +1932,7 @@ class DatabaseEditorUI {
         const sourceEntries = Array.isArray(entries) ? entries : [entries];
         const editorNames = sourceEntries.map(entry => this.getEditorName(type, entry.id));
         const copiedEntries = sourceEntries.map(entry => {
-            const copied = JSON.parse(JSON.stringify(entry));
+            const copied = DatabaseEditorUI.carryStructureMemory(type, entry, JSON.parse(JSON.stringify(entry)));
             delete copied.id;
             return copied;
         });
@@ -1967,9 +1967,13 @@ class DatabaseEditorUI {
             const payload = clipboardData?.payload;
             const payloadEntries = Array.isArray(payload?.entries) ? payload.entries : payload?.entry ? [payload.entry] : [];
             if (!payload || payload.databaseType !== type || payloadEntries.length === 0) return null;
-            const entries = payloadEntries.map(sourceEntry => {
+            const mine = type === 'structures' && this.listClipboard?.type === type ? this.listClipboard.entries : null;
+            const entries = payloadEntries.map((sourceEntry, index) => {
                 const entry = JSON.parse(JSON.stringify(sourceEntry));
                 delete entry.id;
+                // The system clipboard holds text, which drops a structure's hidden note of what its file had:
+                // when the text is what this editor copied, the note comes from the copy kept here.
+                if (mine?.[index] && JSON.stringify(mine[index]) === JSON.stringify(entry)) DatabaseEditorUI.carryStructureMemory(type, mine[index], entry);
                 return entry;
             });
             const editorNames = entries.map((_, index) =>
@@ -2087,7 +2091,7 @@ class DatabaseEditorUI {
         if (session) session.mutationGeneration++;
 
         const pastedEntries = copiedEntries.map((sourceEntry, index) => {
-            const pasted = JSON.parse(JSON.stringify(sourceEntry));
+            const pasted = DatabaseEditorUI.carryStructureMemory(type, sourceEntry, JSON.parse(JSON.stringify(sourceEntry)));
             pasted.id = targetId + index;
             this.releaseSharedIdentity(type, pasted, targetArray);
             targetArray[pasted.id] = pasted;
@@ -2132,6 +2136,16 @@ class DatabaseEditorUI {
     }
 
     /**
+     * A JSON copy of structure records keeps their hidden note of which settings each file had, or the next
+     * save wrote about fifteen empty settings into every structure file (DatabaseStructureEditor.carryFileMemory).
+     * `key` names the list inside a copy of the whole database (Cancel). Returns the copy.
+     */
+    static carryStructureMemory(type, from, to, key = null) {
+        if (type === 'structures' && typeof DatabaseStructureEditor !== 'undefined' && to) DatabaseStructureEditor.carryFileMemory(from, key ? to[key] : to);
+        return to;
+    }
+
+    /**
      * A copy must not share what names its source outside the list: a structure's
      * file (the earlier record keeps a file two claim, so a copy pasted above its
      * source would take it) or a quest's key (scripts find the first quest with it).
@@ -2149,7 +2163,7 @@ class DatabaseEditorUI {
         // The record as it stands now: an editor that works on a copy (Troops) has put its edits into the store,
         // while the list may still hold the object it was drawn from.
         const current = (this.databaseManager.data[type] || [])[entry.id] || entry;
-        const cloned = JSON.parse(JSON.stringify(current));
+        const cloned = DatabaseEditorUI.carryStructureMemory(type, current, JSON.parse(JSON.stringify(current)));
         delete cloned.id;
         this.releaseSharedIdentity(type, cloned, this.databaseManager.data[type]);
         cloned.name = (cloned.name || this._t('common.unnamed')) + ` (${this._t('common.copy')})`;
@@ -2624,15 +2638,45 @@ class DatabaseEditorUI {
         const entries = this.databaseManager?.data?.[type];
         if (!entries) return 0;
         let restored = 0;
+        const filled = [];
         for (let id = 1; id < entries.length; id++) {
             if (entries[id] !== null) continue;
             const blank = this.createBlankDatabaseEntry(type, id);
             if (!blank) break;
             entries[id] = blank;
+            filled.push(id);
             restored++;
         }
-        if (restored > 0) this._markDatabaseMutation();
+        if (restored > 0) {
+            this._markDatabaseMutation();
+            this._adoptRepairedEntries(type, filled);
+        }
         return restored;
+    }
+
+    /**
+     * The repair above runs when a page is first opened, which is after the copy for Cancel
+     * was taken: without this, Cancel asked to discard changes nobody made. The copy takes the
+     * repaired slots, and only those: a slot that is not an empty gap in the copy (the author
+     * changed the list since, or the copy was retaken) is left as the copy has it, so the
+     * author's own edits, before or after, still read as changes.
+     */
+    _adoptRepairedEntries(type, ids) {
+        if (!this._dataSnapshot || !ids.length) return;
+        try {
+            const snapshot = JSON.parse(this._dataSnapshot);
+            const list = snapshot[type], entries = this.databaseManager.data[type];
+            if (!Array.isArray(list)) return;
+            let changed = false;
+            for (const id of ids) {
+                if (id >= list.length || list[id] !== null) continue;
+                list[id] = JSON.parse(JSON.stringify(entries[id]));
+                changed = true;
+            }
+            if (changed) this._dataSnapshot = JSON.stringify(snapshot);
+        } catch (error) {
+            console.warn('Database baseline was not updated:', error);
+        }
     }
 
     /**

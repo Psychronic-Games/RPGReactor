@@ -73,7 +73,6 @@
         actionWeapon: [
             ['showWeaponName', 'check', 'Weapon name', true],
             ['showWeaponPicture', 'check', 'Weapon picture', true],
-            ['showReserve', 'check', 'Reserve', true],
             ['showCombo', 'check', 'Melee combo steps', true],
             ['showCarried', 'check', 'Carried weapons on a switch', true],
             ['accentColor', 'color', 'Color', A.PLAYER_COLOR]
@@ -301,9 +300,13 @@
     /**
      * The weapon at the origin: its picture and name above, the magazine's
      * count large over the magazine drawn as a bar (round by round when it
-     * is small), a reserve beside the count where the battle keeps one, and
-     * for a blade its combo's steps. While it reloads the bar fills. `extra`: `{ steps, picture,
-     * carried: [iconIndex], switching }`.
+     * is small), and for a blade its combo's steps. While it reloads the bar
+     * fills. The number beside the name ("2/3") is the weapon's place in the
+     * switching order, `hud.weapon.index`, so it changes with each switch.
+     * (No reserve is drawn: the battle keeps no reserve ammunition, and the
+     * "Reserve" setting went with it; a stored `showReserve` is ignored.)
+     * `extra`: `{ steps, picture, carried: [iconIndex], switching }`, the
+     * carried weapons in the switching order.
      */
     A.drawWeapon = function(ctx, width, height, node, hud, theme, extra) {
         const top = Math.round(height * 0.36), big = clamp(Math.round((height - top) * 0.8), 14, 64), small = clamp(Math.round(top * 0.66), 9, 22);
@@ -340,15 +343,10 @@
         const y = top, h = height - top - (ammo.capacity > 0 ? bar + 4 : 0);
         if (ammo.capacity > 0) {
             // The magazine: its count large, and under it the magazine itself, one pip a round (a long one as a bar).
-            // A reserve is written beside the count only when the battle keeps one.
-            const counted = node.showReserve && ammo.reserve !== null && ammo.reserve !== undefined;
-            const reserve = counted ? '/ ' + ammo.reserve : '';
-            const reserveWidth = reserve ? Math.round(big * 1.7) : 0;
             const color = ammo.magazine <= 0 ? theme.deathColor : ammo.magazine <= ammo.capacity * 0.25 ? theme.crisisColor : theme.textColor;
             const reloading = ammo.reload > 0;
             if (reloading) F.text(ctx, theme, A.label(node, 'reloading'), 0, y, width * 0.5, h, 'left', theme.crisisColor, clamp(Math.round(big * 0.42), 9, 22), false);
-            F.text(ctx, theme, String(ammo.magazine), 0, y, width - reserveWidth - (reserve ? 4 : 0), h, 'right', color, big, true);
-            if (reserve) F.text(ctx, theme, reserve, width - reserveWidth, y + h * 0.18, reserveWidth, h * 0.82, 'left', theme.systemColor, clamp(Math.round(big * 0.5), 9, 28), false);
+            F.text(ctx, theme, String(ammo.magazine), 0, y, width, h, 'right', color, big, true);
             const by = height - bar, rate = reloading ? clamp(ammo.reload, 0, 1) : clamp(ammo.magazine / ammo.capacity, 0, 1);
             const fill = reloading ? node.accentColor : ammo.magazine <= ammo.capacity * 0.25 ? theme.crisisColor : theme.textColor;
             if (!reloading && ammo.capacity <= A.MAGAZINE_PIPS) {

@@ -22,6 +22,8 @@ const unusedAssets = require('./unused-assets.cjs');
 
 // ── Logging ──────────────────────────────────────────────────────────
 const onlineDeploy = require('./online-deploy.cjs');
+const onlineSync = require('./online-sync.cjs');
+const webRemote = require('./web-remote.cjs');
 
 /** The runtime revision of a staged game, for the server's own record. */
 function runtimeRevision(root) {
@@ -75,6 +77,7 @@ const {
     assetEncryption: encryption = { images: false, audio: false, keyText: '' },
     createLinuxAppImage = false,
     packWebFiles = false,   // a Web build's files go into a few archives (web-pack.cjs)
+    webRemoteUrl = '',      // a Web build that is one page showing the game from this address (web-remote.cjs)
     online = null,          // Build › Online Server: { folder, address }
     unusedFiles = 'off',    // leave out files nothing uses: 'off' or 'all' (unused-assets.cjs)
     appImageToolPath,
@@ -249,7 +252,7 @@ function validateProjectRuntime(root) {
         'reactor_objects.js', 'reactor_objects_actions.js', 'reactor_objects_battlers.js', 'reactor_objects_map.js', 'reactor_objects_interpreter.js', 'reactor_objects_followers.js', 'reactor_objects_legacy.js',
         'reactor_hdr_overlay.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
         'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
-            'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_character_creator.js', 'reactor_online.js', 'reactor_online_ui.js', 'reactor_online_voice.js', 'reactor_online_party.js', 'reactor_online_battle.js', 'reactor_online_classic.js', 'reactor_online_action.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_hints.js', 'reactor_vehicles_mount.js',
+            'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_character_creator.js', 'reactor_online.js', 'reactor_online_ui.js', 'reactor_online_voice.js', 'reactor_online_party.js', 'reactor_online_battle.js', 'reactor_online_classic.js', 'reactor_online_action.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_mount.js',
         'reactor_windows.js', 'reactor_ui_victory.js', 'reactor_ui_fight.js', 'reactor_ui_action.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
         path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
@@ -646,7 +649,15 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 fs.rmSync(platformOutDir, { recursive: true, force: true });
             }
 
-            if (browserGame) {
+            if (platform === 'web' && webRemoteUrl) {
+                // ── Web, played from a server: one page, none of the game's files ─────────
+                progress(Math.round(pCopy), 'Writing the page...');
+                const made = webRemote.writeRemoteBuild(platformOutDir, { url: webRemoteUrl, title: gameTitle });
+                logGood(`One page written (${made.bytes} bytes): it shows the game from ${made.address}`);
+                logInfo('Zip this folder for the store page. The game itself is not in it: players get it from that address, so a deploy there is what they see.');
+                if (/^http:\/\//i.test(made.address)) logWarn('This address is not https. A store page served over https will refuse to show it.');
+                progress(Math.round(pRename), 'Finalizing...');
+            } else if (browserGame) {
                 // ── Web deployment — no NW.js runtime needed ─────────
                 logInfo('Web deployment — no NW.js runtime needed');
                 logInfo('Copying game files...');
@@ -656,7 +667,9 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 // copy of the game and never the web folder, which can hold other things.
                 const packOnline = platform === 'online' && online.pack;
                 const browserDir = packOnline ? path.join(stagingDir, '..', `${path.basename(stagingDir)}-online`) : platformOutDir;
-                copyDirRecursive(stagingDir, browserDir);
+                // An Online Server's folder gets only what changed since the deploy before (online-sync.cjs).
+                if (platform === 'online' && !packOnline) logGood(onlineSync.describe(onlineSync.syncFolder(stagingDir, browserDir, { full: !!online.full, trustExisting: !!online.trustExisting })));
+                else copyDirRecursive(stagingDir, browserDir);
                 logGood('Game files copied.');
                 // The server's folder is never cleared: packs left by an earlier deploy would still be what a
                 // returning player's pack worker serves, in place of the files just copied.
@@ -677,7 +690,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 }
                 if (platform !== 'online') for (const warning of webFileIndex.storefrontWarnings(platformOutDir)) logWarn(warning);
                 if (packOnline) {
-                    copyDirRecursive(browserDir, platformOutDir);
+                    logGood(onlineSync.describe(onlineSync.syncFolder(browserDir, platformOutDir, { full: !!online.full, trustExisting: !!online.trustExisting })));
                     fs.rmSync(browserDir, { recursive: true, force: true });
                 }
                 if (platform === 'online') {
@@ -686,6 +699,8 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                         rules: onlineDeploy.readData(stagingDir, 'ReactorCharacters.json').rules,
                         settings: onlineDeploy.readData(stagingDir, 'ReactorOnline.json'),
                         dataFolder: path.join(stagingDir, 'data'),
+                        // The admin page in the colours the author works in (online-theme.cjs).
+                        theme: online.theme || '',
                     });
                     logGood(written.newSecret ? 'Online server written, with a new secret.' : 'Online server updated; players stay signed in.');
                     if (written.grids) logGood(`Walls of ${written.grids} maps given to the server.`);

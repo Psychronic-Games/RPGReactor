@@ -1,15 +1,15 @@
 # Current status
 
-**0.99.5**, runtime 20261111.18, adds shared battles and parties online, Character Groups, pictures and motion in User Interfaces, real frame rates and automatic quality that fits weak and strong machines, and the fixes of two audits. See the [release notes](posts/release-notes-0.99.5.md) and [changelog](../CHANGELOG.md). Published at the owner's request with eight failing tests. Signed binaries and itch publication are separate; the previous binary release is 0.99.2 (2026-10-25).
+**0.99.6** is released (runtime 20261115.12): faces that talk, the builder's Sprite view and Character Groups pages, the audits' answers, the 2D Character Generator retired, a graphics backend to choose, an online admin page, and audio loop points. **0.99.5** adds shared battles and parties online, Character Groups, interface pictures and motion, real frame rates, automatic quality, and two audits' fixes. See the [release notes](posts/release-notes-0.99.6.md) and [changelog](../CHANGELOG.md). Signed binaries and itch publication are separate; the last binary release is 0.99.2.
 
 ## Version and validation
 
 Each area keeps its latest check.
 
 - **Release:** [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5) is Latest source (2026-11-12); the itch.io devlog is drafted in [posts](posts/itch-devlog-0.99.5.md) and not posted. Native binaries use the [release checklist](RELEASE-CHECKLIST.md).
-- **Runtime:** release **0.99.5**, revision **20261111.18**, PixiJS **8.22.0**, Three.js **0.187.0**; `runtime/` and all 17 bundled projects on the desktop match (`node editor/build-scripts/sync-runtime.cjs --check`, 2026-11-12).
+- **Runtime:** development **0.99.6**, revision **20261115.2**, PixiJS **8.22.0**, Three.js **0.187.0**; synced into the laptop's Demo only (2026-11-15): run the sync on the desktop.
 - **Legacy imports** (2026-10-29): timer/event logic, BMP/XYZ art, RTP discovery, nested assets and repeat imports refined; source gaps are reported. [Audit and limits](IMPORTING-LEGACY-PROJECTS.md#reliability-audit).
-- **Node suites, local** (2026-11-12, before the 0.99.5 cut): the whole suite through `run-tier.cjs all`: 9,718 of 9,737 passed, 11 skipped; 8 failures: the 7 in CLAUDE.md and a timing test in `character-3d-creatures` that passes alone.
+- **Node suites, local** (2026-11-13, 0.99.6 before its commit): `run-tier.cjs all`: 9,768 of 9,781 passed, 11 skipped; the 2 failures were files not yet staged and pass on the commit.
 - **Node suites** (2026-11-02): 9,328 passed, 35 skipped, none failed, across CI's eight shards on Node 22 ([run](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959)). [Scroll alignment evidence](archive/evidence/event-camera-drift-20261101.json).
 - **Editor performance** (2026-10-19): inactive previews pause; thumbnails/skin builds are faster; steady lights/cameras skip repeat work. Streaming grass merges 388→55 times, with identical final geometry. 160 focused tests and native game/map/Forge checks pass. Generic matrix caching was not a consistent win and is removed. Shaders/large jobs/traversal remain; weak-PC/two-monitor checks await owner. [Measurements](PERFORMANCE.md).
 - **CI** (`.github/workflows/ci.yml`): green on [run 41513263959](https://github.com/Psychronic-Games/RPGReactor/actions/runs/41513263959) (2026-11-02, a branch since removed): audit, clean checkout, GUI smokes and all eight Node shards. Tests use CPU-time budgets and poll asynchronous work.

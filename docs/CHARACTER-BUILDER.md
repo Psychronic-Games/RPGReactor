@@ -1,6 +1,6 @@
 # 3D Character Builder
 
-The current revision is Preview **98** (the face and exercise work arrived with runtime **20261101.41**; the runtime is now **20261107.5**). The default human face uses one sculpt: feminine, masculine and intermediate bodies use continuous shapes. Face and body appearance are still under owner review. Human defaults include finer skin detail and a centre-parted long hairstyle on a newly created female recipe. Existing hairstyle choices stay as authored. Sliders, skin patterns, eye colors, expressions, speech and saved face shapes remain editable; blinking uses fitted lids. Other species retain their own heads. Restart the editor for new previews, and rebuild/re-export existing characters to update their saved geometry. [Current face implementation and verification](HUMAN-FACE-HANDOFF.md).
+The current revision is Preview **98** (the face and exercise work arrived with runtime **20261101.41**; the runtime is now **20261112.5**). The default human face uses one sculpt: feminine, masculine and intermediate bodies use continuous shapes. Face and body appearance are still under owner review. Human defaults include finer skin detail and a centre-parted long hairstyle on a newly created female recipe. Existing hairstyle choices stay as authored. Sliders, skin patterns, eye colors, expressions, speech and saved face shapes remain editable; blinking uses fitted lids. Other species retain their own heads. Restart the editor for new previews, and rebuild/re-export existing characters to update their saved geometry. [Current face implementation and verification](HUMAN-FACE-HANDOFF.md).
 
 The catalog now holds 152 garments, 74 outfit presets, 84 accessories, 52 hairstyles, 20 facial-hair choices, 36 species presets, 47 non-humanoid presets and 51 poses. The Preview notes below record what each revision added, and the counts they quote are from that revision.
 
@@ -159,11 +159,27 @@ The pictures on the tiles (species, outfits, garments, accessories, hair) show a
 
 **Forge › Character Groups** (or **Generate Group** in the builder's toolbar) makes many characters at once to one description: a town, an army, a people.
 
-- **Who:** tick the species that may appear, set the share of women, and give ranges for age, height, weight and muscle.
-- **Dress:** tick the settings outfits come from (Everyday, Fantasy, Armor, Sci-fi, Wasteland, Cyberpunk), add up to six colours for the garments' main colour, and set how often an accessory is worn. **Everyone wears this outfit** and **Everyone has these accessories** put the open character's on every member: design one soldier, then make forty different people in the uniform.
-- **Make:** tick what each member gets: a saved design (in a design group of the group's name), a walking sheet (4 or 8 directions), a side-view battler, a portrait (eight members to a face sheet, `img/faces/<Group>_Faces.png`). Style, Look and Outline are the sheet export's.
+The left side is a form of cards:
 
-The right side shows the first members at once as drawn figures in their own colours and build, each replaced by its real picture as that is made; **Roll again** makes another group to the same description, and a click on a member opens it in the 3D Character Builder (the page keeps its description for when you come back). **Make** builds each member in turn on the builder's view (about 15 seconds each with every output on the desktop under software-assisted graphics; faster on a real card), and **Stop** ends after the one in hand. Members are named `<Group> 01`, `02`…; the same description and roll always give the same people. `forge/character_3d/groups/<Group>.json` lists each member's files. Up to 200 members; adults only; slimefolk, centaurs and merfolk are made on their own pages.
+- **Group:** its name and the number of characters.
+- **People:** tick the species that may appear and set the share of women. With two or more species ticked, **How common each species is** gives each a slider and shows its part of the group in percent.
+- **Body:** age, height, weight and muscle are each one slider with two handles, the least and the most. **Extreme proportions** carries height, weight and muscle as far as the builder's Extreme does, and **Anatomical detail** is the builder's switch for every character. Folded sections under it (Build, Proportions, Torso, Bust, Arms and legs) and the **Face and head** card hold every other Body and Face slider of the builder as a range: a slider reads "Any" until its handles are moved, and ✕ lets it go again.
+- **Colouring:** up to six colours for the garments' main colour.
+- **Clothing:** says how many outfits, clothing pieces and accessories are chosen and opens their tabs (below). **Everyone wears this outfit** and **Everyone has these accessories** put the open character's on every member: design one soldier, then make forty different people in the uniform.
+- **What to create,** in three parts, each kind a tick with its own settings under it while ticked:
+  - *To keep editing:* a saved design, in a design group of the group's name.
+  - *3D:* **3D models**, one per character, written where Export Model To Project writes them (`3d/Characters/<name>`).
+  - *2D sprites:* walking sprites (directions, frame size, walk frames, camera angle), side-view battlers, and faces. Walking sprites and battlers each have their own body style, drawing style, colours, outline and shadow, with the Sprite view's dial. **Faces** are either shared (eight characters per file, `img/faces/<Group>_Faces.png`) or one file per character with eight expressions; either can have frames, Talking or Changing expression, as a [face sheet](#faces-with-frames) does.
+
+The right side has tabs. **Preview** shows the first characters as pictures, and one with a cyber limb says so under its name. **Outfits**, **Clothing pieces** and **Accessories** are a picture catalog of what the group may wear (74 outfits, 152 garments, 84 accessories and ten cyber limbs): a click puts a tile in or out, and each set of tiles has All and None.
+
+- **Outfits:** each character wears one of the ticked. One always stays ticked.
+- **Clothing pieces:** of each kind with pieces ticked, a character wears one of them in place of its outfit's (a dress takes the place of a top and a bottom).
+- **Accessories and cyber limbs:** how many accessories a character may have and what share of the characters have any; cyber limbs have a share of their own.
+
+**Shuffle** makes another group to the same description, and a click on a character opens it in the 3D Character Builder (the page keeps its description for when you come back). **Create** builds each character in turn on the builder's view (about 15 seconds each with every 2D output on the desktop under software-assisted graphics, and about a minute for a 3D model; faster on a real card), and **Stop** ends after the one in hand.
+
+Clothes on bodies far past the natural range are not finished: plate armor follows a heavy body to about 300% weight, and cloth breaks up at the top of the Extreme range. Members are named `<Group> 01`, `02`…; the same description and roll always give the same people. `forge/character_3d/groups/<Group>.json` lists each member's files. Up to 200 members; adults only; slimefolk, centaurs and merfolk are made on their own pages.
 
 **Open** shows saved characters as pictures: the Designs, by group (✕ deletes one after asking), then the Exported Models. Choosing one loads it to edit. Opening a design retires obsolete slider/build work and reports success after the requested recipe appears. Switching species or reopening the Builder restores preview updates; editing a body slider keeps the active pose and orientation.
 
@@ -196,6 +212,27 @@ Humanoids use the same shared motion library in the builder and game. Saved move
 | Face portraits | `img/faces/Name.png` | 4 × 2 portraits, the project's face size |
 
 **Frame size** sets the cell. **Style** is Realistic or RPG chibi (a big head, short limbs, big hands and feet; only the sheet changes, not the character). **Camera angle** is how far the camera looks down (30° by default; 15° for a battler). **Look** is Smooth or Pixel art (hard edges, a 32-color palette). **Outline** draws a one-pixel dark edge. Portraits are head and shoulders, front or three-quarter, eight expressions from a preset (Everyday, Battle, Story) or picked one by one, the eyes on one line in every cell, on a transparent or solid background. Every frame uses one scale, the largest at which all of them fit, centered, its feet on the same baseline.
+
+### The Sprite view
+
+**Sprite** (beside Whole Body and Face over the preview) turns the preview into the sheet itself, with its settings in three cards beside it: Sprite sheet, Faces or Look, and Export. The Forge lists the builder as **2D/3D Character Builder** for this reason: it saves 3D models or 2D sprite sheets.
+
+- **Animations** plays each animation of the sheet at the game's own pace, named for what it is and which way it faces ("Walk · Down", "Guard · Up"). **Whole sheet** shows the picture as it will be saved. While a sheet is being drawn the stage is dimmed and says "Drawing…".
+- **Ground:** the checks of a transparent picture, or grass, dark or light to judge the sprite against.
+- **Zoom:** −, + and Fit, from a quarter to twelve times, and Ctrl with the wheel. Past Fit the stage scrolls.
+- **Frame edges** draws a one-pixel line round every frame, in a colour you choose, to see what the game will cut. It is never saved into the sheet.
+- **Frame size:** the quick sizes end in 144, three tiles in the game.
+- **Outline:** a soft rim in the Smooth look, a ring of solid dark pixels in the pixel art looks.
+- **Shadow** (off by default) lays the figure's own shape on the ground in every frame. **Shadow angle** is a dial whose hand points the way the shadow falls (30° unless chosen; drag it, Shift for single degrees, arrow keys step it), and **Shadow distance** is how far it reaches (0 lies under the feet, 100 is the usual length). A shadow with no room in its frame fades out before the edge.
+
+### Faces with frames
+
+A face sheet has **Frames**: 1 (a still portrait) to 8. With more than one, the file is named with its frames (`img/faces/Name[4F].png`) and each of the eight faces is set to **Talk** or **Sweep**:
+
+- **Talk:** the first frame is the expression with its mouth at rest, and each frame after it a mouth shape you choose, least open first ("Lips closed (m, b, p)", "Wide open (ah)").
+- **Sweep:** the frames go from the neutral face to the expression.
+
+The Sprite view plays each as the game will: a talking face says a sample line, a sweep runs once and holds. How the game plays them is in [AUTHORING.md](AUTHORING.md#face-sets-with-frames).
 
 Chibi proportions stay in place for every frame while background preview builds wait. Finishing or interrupting an export restores the original character and viewport. Face portraits keep the studio exposure and colors; the brighter sprite grade applies only to sprite sheets.
 

@@ -80,8 +80,8 @@
                 if (R.SURROUND_STYLES.includes(s) && s !== "void" && s !== style) edges[side] = s;
             }
         }
-        const neighbors = R.normalizeNeighbors(raw.neighbors);
-        if (style === "none" && !Object.keys(edges).length && !Object.keys(neighbors).length) return null;
+        const neighbors = R.normalizeNeighbors(raw.neighbors), levels = R.normalizeLevels(raw.levels), layered = Object.keys(levels).length > 0;
+        if (style === "none" && !Object.keys(edges).length && !Object.keys(neighbors).length && !layered) return null;
         const D = R.SURROUND_DEFAULTS, range = R.SURROUND_DISTANCE;
         const out = {
             style, edges, neighbors,
@@ -94,7 +94,268 @@
             haze: clamp(num(raw.haze, D.haze), 0, 1),
             water: typeof raw.water === "string" && raw.water.trim() ? raw.water.trim() : ""
         };
+        // (Only a map that has one says so: every other map's settings are what they were.)
+        if (layered) out.levels = levels;
         return out;
+    };
+
+    /**
+     * The maps over and under a map: `surround.levels = { above: { map, x, y, gap }, below: { ... } }`.
+     * The two maps lie one over the other, `gap` tiles apart from ground to ground (2 to 200, 8 unless
+     * said); `x`, `y` is the tile of this map that the other map's first tile lies over or under (0, 0:
+     * corner on corner). A player whose height passes the middle of the gap (through an opening: `LEVEL_CROSS` under the upper ground, `levelMiddle`) goes on in the other map, at the
+     * same place and height and still moving as it was: fallen down a pit dug that deep, it comes in under the
+     * lower map's ceiling and lands on its floor; climbed up a ladder or a stair that reaches that high, it
+     * comes up in the upper map, in whatever was dug there or onto its ground (`levelExit`,
+     * `Game_Player.leaveByLevel`). A hatch to a cellar, the floors of a house, a reactor room under a forest
+     * trail. Kept apart from `neighbors`, whose four sides are also places round a border.
+     */
+    R.LEVEL_SIDES = ["above", "below"];
+    /**
+     * `gap`: the tiles between the two maps, over the floor that parts them. 0: the upper map's ground is the
+     * top of that floor, `LEVEL_FLOOR` over the top of the lower map (its room's height), so a ceiling never lies
+     * in the same plane as the ground over it.
+     */
+    R.LEVEL_GAP = { min: 0, max: 200, usual: 0 };
+    R.LEVEL_FLOOR = 1;
+    /** How tall a map with no room height of its own is taken to be, and the least two maps' grounds are apart. */
+    R.LEVEL_TOP = 8;
+    R.LEVEL_LEAST = 2;
+    /** How tall a map is: what a map over it stands on. */
+    R.levelTop = function(mapData) {
+        const room = mapData && mapData.reactor3d && mapData.reactor3d.room;
+        const height = room && typeof room === "object" && R.clampRoomHeight ? R.clampRoomHeight(room.height) : NaN;
+        return Number.isFinite(height) && height > 0 ? height : R.LEVEL_TOP;
+    };
+    /**
+     * How far the lower map's ground lies under the upper map's height 0, in tiles: the lower map's height, the
+     * floor between them and the level's gap, less how high the upper map's ground is at the first opening
+     * (`levelBase`; negative on a hilltop is usual: the map under then lies inside the hill). `other` is that map when the caller holds it; without it the map under is asked for
+     * (Neighbors.request), and the answer is null until it is read.
+     */
+    R.levelRise = function(mapData, side, level, other) {
+        const open = !!(level.openings && level.openings.length);
+        // The other map is wanted for its height (from above) or for its ground at the opening (from below).
+        if (!other && (side === "below" || open)) {
+            const N = R.Neighbors, record = N && N.request ? N.request(level.map) : null;
+            other = record && record.state === "ready" ? record.map : null;
+            if (!other) return null;
+        }
+        const lower = side === "above" ? mapData : other, upper = side === "above" ? other : mapData;
+        return Math.max(R.LEVEL_LEAST, R.levelTop(lower) + R.LEVEL_FLOOR + level.gap) - (open ? R.levelBase(upper, side, level) : 0);
+    };
+    /**
+     * The height, in this map's measure, at which someone passes into the map on `side`: with no opening, halfway
+     * between the two maps' grounds; through an opening, `LEVEL_CROSS` under the upper map's ground there. Null
+     * while the other map is not read.
+     */
+    R.levelMiddle = function(mapData, side, level, other, outside) {
+        const rise = R.levelRise(mapData, side, level, other);
+        if (rise === null) return null;
+        const open = !!(level.openings && level.openings.length);
+        if (!open) return side === "below" ? -rise / 2 : rise / 2;
+        // Through an opening: `LEVEL_CROSS` under the upper map's ground there, so a climber is in the lower map
+        // (its lights, its events, a camera inside its room) until its chest comes out of the opening, and one
+        // coming down is in it as soon as it is under the ground. Never under the middle of a low gap.
+        // `outside`: on a tile that is no opening the height is halfway, as it was: the higher one is the
+        // opening's alone. Asked of every tile, a swim in the Lake (its water 2 tiles under the road's end) was
+        // "under the ground at the opening": the party was sent to the room below and fell to its floor (owner, 2026-11-14).
+        if (side === "below") { const base = R.levelBase(mapData, side, level); return outside ? (base - rise) / 2 : Math.max((base - rise) / 2, base - R.LEVEL_CROSS); }
+        if (!other) { const record = R.Neighbors.request(level.map); other = record && record.state === "ready" ? record.map : null; }
+        if (!other) return null;
+        const top = rise + R.levelBase(other, side, level);
+        return outside ? top / 2 : Math.max(top / 2, top - R.LEVEL_CROSS);
+    };
+    /**
+     * How far under the upper map's ground at an opening the two maps change over: about a chest's height on a
+     * character 3 tiles tall. It was halfway down (13 tiles under the Lake road over the Reactor room): from
+     * there up, the camera of the upper map had nowhere to stand but inside the climber (owner, 2026-11-14).
+     */
+    R.LEVEL_CROSS = 1.5;
+    /**
+     * How high the upper map's ground is at the first opening (its lowest whole tile height there): the two maps
+     * are measured apart from it, not from the upper map's height 0, so the map under lies just under an opening
+     * cut into a hilltop (the Lake road's end stands 21.8 tiles up: the room lay 22 tiles under the hole,
+     * 2026-11-13). Kept a second: asked at every ground height over an opening.
+     */
+    const basesKept = new WeakMap();
+    R.levelBase = function(upper, side, level) {
+        const o = level.openings[0], x = side === "above" ? o.x - (level.x || 0) : o.x, y = side === "above" ? o.y - (level.y || 0) : o.y;
+        const now = typeof performance !== "undefined" ? performance.now() : 0, key = x + "," + y + "," + o.w + "," + o.h, kept = basesKept.get(upper);
+        if (kept && kept.key === key && now - kept.at < 1000) return kept.base;
+        let low = Infinity;
+        for (let cz = 0; cz < o.h; cz++) for (let cx = 0; cx < o.w; cx++) {
+            const g = R.ownGroundAt(upper, x + cx + 0.5, y + cz + 0.5);
+            if (g < low) low = g;
+        }
+        const base = Number.isFinite(low) ? Math.floor(low + 0.01) : 0;
+        basesKept.set(upper, { key, at: now, base });
+        return base;
+    };
+    R.normalizeLevels = function(raw) {
+        const out = {};
+        if (!raw || typeof raw !== "object") return out;
+        for (const side of R.LEVEL_SIDES) {
+            const entry = raw[side], said = entry && typeof entry === "object";
+            const map = Math.round(num(said ? entry.map : entry, 0));
+            if (!(map > 0)) continue;
+            const level = { map, gap: Math.round(clamp(num(said ? entry.gap : R.LEVEL_GAP.usual, R.LEVEL_GAP.usual), R.LEVEL_GAP.min, R.LEVEL_GAP.max)) };
+            const x = Math.round(clamp(num(said ? entry.x : 0, 0), -9999, 9999)), y = Math.round(clamp(num(said ? entry.y : 0, 0), -9999, 9999));
+            if (x) level.x = x;
+            if (y) level.y = y;
+            // Where there is no ground between the two maps, in this map's own tiles: each `{ x, y, w, h }`.
+            const openings = [];
+            for (const o of (said && Array.isArray(entry.openings) ? entry.openings : [])) {
+                if (!o || typeof o !== "object" || openings.length >= R.LEVEL_OPENINGS) continue;
+                const w = Math.round(clamp(num(o.w, 1), 1, 64)), h = Math.round(clamp(num(o.h, 1), 1, 64));
+                openings.push({ x: Math.round(clamp(num(o.x, 0), -9999, 9999)), y: Math.round(clamp(num(o.y, 0), -9999, 9999)), w, h });
+            }
+            if (openings.length) level.openings = openings;
+            // What lines an opening between the lower map's ceiling and the upper map's ground: the lower map's
+            // room walls unless said (`LEVEL_LININGS`).
+            if (said && R.LEVEL_LININGS.indexOf(entry.lining) > 0) level.lining = entry.lining;
+            out[side] = level;
+        }
+        return out;
+    };
+    /** The most openings a level keeps. */
+    R.LEVEL_OPENINGS = 8;
+    /** What an opening's sides can be lined with: the lower map's room walls (the usual one, not stored), its ceiling, or nothing. */
+    R.LEVEL_LININGS = ["walls", "ceiling", "none"];
+
+    /**
+     * The level whose opening a tile of this map lies in: for `below`, a tile with no ground of this map's own
+     * (what is stood on there is the map under: its floor, or the stair it sends up); for `above`, a tile with no
+     * ceiling. Null elsewhere.
+     */
+    R.levelOpening = function(mapData, side, x, y) {
+        const level = R.levelsOf(mapData)[side], openings = level && level.openings;
+        if (!openings) return null;
+        const tx = Math.floor(x), ty = Math.floor(y);
+        for (let i = 0; i < openings.length; i++) { const o = openings[i]; if (tx >= o.x && tx < o.x + o.w && ty >= o.y && ty < o.y + o.h) return level; }
+        return null;
+    };
+
+    /**
+     * The ground at a place over an opening to the map under: that map's ground there (its floor, a stair, a
+     * ladder's landing), in this map's measure, so a walker steps from this map's ground onto a stair the map
+     * under sends up and walks down it, and one that steps onto nothing falls. Null where this map has ground of
+     * its own, or while the map under is still being read (the opening is ground until then).
+     */
+    let throughDepth = 0, throughOff = 0;
+    R.groundThroughLevel = function(mapData, wx, wz, near) {
+        if (throughOff || R.levelsOf(mapData) === R.NO_LEVELS) return null;
+        const level = R.levelOpening(mapData, "below", wx, wz);
+        const N = R.Neighbors;
+        if (!level || !N || !N.request || throughDepth > 3) return null;
+        const record = N.request(level.map), lower = record && record.state === "ready" ? record.map : null;
+        if (!lower) return null;
+        const lx = wx - (level.x || 0), lz = wz - (level.y || 0), rise = R.levelRise(mapData, "below", level, lower);
+        // Past the edge of the map under there is nothing to come out in: the ground stays this map's (a fall
+        // there landed the party outside that map's border, owner, 2026-11-13).
+        if (lx < 0 || lz < 0 || lx >= lower.width || lz >= lower.height) return null;
+        throughDepth++;
+        try { return R.groundHeightAt(lower, lx, lz, Number.isFinite(near) ? near + rise : undefined) - rise; } finally { throughDepth--; }
+    };
+
+    /**
+     * The ladder on a tile over an opening to the map under: that map's ladder there, its foot and its top in
+     * this map's measure, so a climber that changes map on it (`levelMiddle`) is still on it in this map, and
+     * one that steps into the opening from this map's ground takes hold of it. Null where the map under has no
+     * ladder there (or is not read yet). `through` says whose ladder it is.
+     */
+    R.ladderThroughLevel = function(mapData, x, y) {
+        if (R.levelsOf(mapData) === R.NO_LEVELS) return null;
+        const level = R.levelOpening(mapData, "below", x, y), N = R.Neighbors;
+        if (!level || !N || !N.request) return null;
+        const record = N.request(level.map), lower = record && record.state === "ready" ? record.map : null;
+        if (!lower || lower === mapData) return null;
+        const lx = x - (level.x || 0), ly = y - (level.y || 0);
+        if (lx < 0 || ly < 0 || lx >= lower.width || ly >= lower.height) return null;
+        // (Only the map under's own pieces: its own map under is another crossing.)
+        const stack = R.piecesAt(lower, lx, ly);
+        if (!stack || !stack.some(piece => piece.kind === "ladder")) return null;
+        const rise = R.levelRise(mapData, "below", level, lower), ladder = R.ladderAt(lower, lx, ly);
+        return ladder && rise !== null ? { dir: ladder.dir, bottom: ladder.bottom - rise, top: ladder.top - rise, through: level.map } : null;
+    };
+
+    /**
+     * The height a camera on the player looks at, for a player at `elevation` on tile (x, y): in an opening to
+     * the map under and below this map's ground there (on a ladder or a stair that comes up through it, or
+     * falling in), the ground at the opening, so the camera stays over the opening and looks into it. It
+     * followed the body down into ground it cannot stand in, and came in until it was inside the body.
+     */
+    R.levelFocus = function(mapData, x, y, elevation) {
+        if (R.levelsOf(mapData) === R.NO_LEVELS || !Number.isFinite(elevation)) return elevation;
+        const level = R.levelOpening(mapData, "below", x + 0.5, y + 0.5);
+        return level ? Math.max(elevation, R.levelBase(mapData, "below", level)) : elevation;
+    };
+
+    /** How far under its map's top a camera is held where another map lies over it. */
+    R.LEVEL_CAMERA_ROOM = 0.3;
+    /**
+     * A camera on the player (looking at `focus`) in a map with a map over it stays under this map's top: over
+     * it stands the other map's ground, drawn through the openings, and a camera that rose past the ceiling
+     * with a climber sat in that map's grass. It is held at that height, where it stands, and looks at the
+     * player from there; the body is out of this map before its chest passes the opening (`LEVEL_CROSS`).
+     */
+    R.clearCameraLevel = function(camera, focus, mapData) {
+        if (R.levelsOf(mapData) === R.NO_LEVELS || !R.levelsOf(mapData).above) return false;
+        const limit = R.levelTop(mapData) - R.LEVEL_CAMERA_ROOM, at = camera.position;
+        if (!(at.y > limit)) return false;
+        // Lowered where it stands, and turned to the player again: it looks up the ladder at the climber. (Brought
+        // in along its line of sight it ended inside the body, the camera of a climber being well over its head.)
+        at.y = limit;
+        camera.lookAt(focus.x, focus.y, focus.z);
+        camera.updateMatrixWorld();
+        return true;
+    };
+
+    /**
+     * A map's own ground at a place, whatever opening is there: what is stood on nearest its bare ground (the
+     * ground itself, a floor or a slab laid on it), as `groundHeightAt` answers with no map under it.
+     */
+    R.ownGroundAt = function(mapData, x, z) {
+        const bare = (R.elevationAt ? R.elevationAt(mapData, Math.floor(x), Math.floor(z)) : 0) + (R.terrainHeightAt ? R.terrainHeightAt(mapData, x, z) : 0);
+        if (!R.groundHeightAt) return bare;
+        throughOff++;
+        try { const ground = R.groundHeightAt(mapData, x, z, bare); return Number.isFinite(ground) ? ground : bare; }
+        catch (error) { return bare; }
+        finally { throughOff--; }
+    };
+
+    /** The maps over and under a map, by side; empty when it has none. Kept for the settings it was read from. */
+    const levelsKept = new WeakMap();
+    R.levelsOf = function(mapData) {
+        const surround = mapData && mapData.reactor3d && mapData.reactor3d.surround, raw = surround && surround.levels;
+        if (!raw || typeof raw !== "object") return R.NO_LEVELS;
+        // (Asked for every ground height on such a map: the settings are compared by what they say, cheaply.)
+        const a = raw.above, b = raw.below, kept = levelsKept.get(raw);
+        const stamp = (a && typeof a === "object" ? a.map + "," + a.gap + "," + a.x + "," + a.y + "," + (a.openings ? a.openings.length : 0) + "," + a.lining : String(a))
+            + "|" + (b && typeof b === "object" ? b.map + "," + b.gap + "," + b.x + "," + b.y + "," + (b.openings ? b.openings.length : 0) + "," + b.lining : String(b));
+        if (kept && kept.stamp === stamp && kept.above === (a && a.openings) && kept.below === (b && b.openings)) return kept.levels;
+        const levels = R.normalizeLevels(raw);
+        levelsKept.set(raw, { stamp, levels, above: a && a.openings, below: b && b.openings });
+        return levels;
+    };
+    R.NO_LEVELS = Object.freeze({});
+
+    /**
+     * Where someone at height `alt` (tiles over the map's ground level) on tile (x, y) has gone: past the middle
+     * of the gap to the map under or over this one. `{ side, mapId, x, y, rise }`: the tile in that map's own
+     * tiles and what to add to a height to have it in that map's; null while still in this map.
+     */
+    R.levelExit = function(mapData, x, y, alt) {
+        if (!Number.isFinite(alt)) return null;
+        const levels = R.levelsOf(mapData), below = levels.below, above = levels.above;
+        // (The other map is not read yet: nobody has left this one.)
+        // (The tile the body is on: in an opening the maps change near the upper ground, anywhere else halfway.)
+        const tx = Math.round(x) + 0.5, ty = Math.round(y) + 0.5;
+        const downAt = below ? R.levelMiddle(mapData, "below", below, undefined, !R.levelOpening(mapData, "below", tx, ty)) : null;
+        const upAt = above ? R.levelMiddle(mapData, "above", above, undefined, !R.levelOpening(mapData, "above", tx, ty)) : null;
+        const out = downAt !== null && alt < downAt ? { side: "below", level: below, rise: R.levelRise(mapData, "below", below) }
+            : upAt !== null && alt > upAt ? { side: "above", level: above, rise: -R.levelRise(mapData, "above", above) } : null;
+        return out ? { side: out.side, mapId: out.level.map, x: Math.round(x) - (out.level.x || 0), y: Math.round(y) - (out.level.y || 0), rise: out.rise } : null;
     };
 
     /** The maps past a border as stored, checked: only the sides that name a map, each `{ map }` or `{ map, shift }`. */
@@ -169,6 +430,25 @@
     /** The style past one side. */
     R.surroundStyleOf = function(surround, side) {
         return (surround.edges && surround.edges[R.SURROUND_SIDES[side]]) || surround.style;
+    };
+
+    /** The styles that raise the land at a border (a wall of it, seen from far off). */
+    R.SURROUND_RAISED = ["mountains", "cliffs", "plateau"];
+    /**
+     * A map's land past its border, with every side that names a neighboring map and is raised laid as land that
+     * goes on ("continue"): what is drawn there while that map's own world does not stand (`none`: the sides
+     * where it does, which have no land at all). The same object back when nothing changes.
+     */
+    R.surroundPastNeighbors = function(surround, none) {
+        const neighbors = surround && surround.neighbors;
+        if (!neighbors) return surround;
+        let edges = null;
+        for (let k = 0; k < R.SURROUND_SIDES.length; k++) {
+            const side = R.SURROUND_SIDES[k];
+            if (!neighbors[side] || (none && none[side]) || R.SURROUND_RAISED.indexOf(R.surroundStyleOf(surround, k)) < 0) continue;
+            (edges || (edges = Object.assign({}, surround.edges)))[side] = "continue";
+        }
+        return edges ? Object.assign({}, surround, { edges }) : surround;
     };
 
     //-------------------------------------------------------------------------
@@ -665,10 +945,16 @@
     R.MapScene.prototype.addSurround = function(mapData) {
         this.removeSurround();
         if (!mapData || !this._scene) return false;
-        const surround = R.surroundOf(mapData);
-        if (!surround) return false;
+        const said = R.surroundOf(mapData);
+        if (!said) return false;
         const floor = floorMeshOf(this);
         if (!floor) return false;
+        // A side that leads into another map whose world does not stand (it is further out than worlds are built:
+        // Neighbors.DEPTH) is land that goes on, not the mountains or cliffs chosen for that side: those rise from
+        // the border's own tiles, a road at the border with them, and from two maps off the way into North Haven
+        // was a mountain with the trail running straight up its face (owner, 2026-11-14). The style is the side's
+        // own again where no map is named.
+        const surround = R.surroundPastNeighbors(said, this._surroundNone || null);
         const built = R.surroundGeometry(mapData, surround, { floorY: R.PARALLAX_GROUND_DROP - R.PARALLAX_LAYER_STEP, weak: !!(R.isWeakGpu && R.isWeakGpu()),
             none: this._surroundNone || null, origin: this._surroundOrigin || null, seamStyles: R.surroundSeamStyles ? R.surroundSeamStyles(this, surround) : null });
         if (!built || !built.ground.index.length) return false;
@@ -1011,6 +1297,7 @@
 
     /** Whether the border on `side` can be crossed without a break now: the map past it stands built and is read. */
     N.ready = function(side) {
+        if (R.LEVEL_SIDES.indexOf(side) >= 0) return !!(R.Levels && R.Levels.ready(side));
         const live = N.live, body = live && live.scene && live.scene._neighborBodies ? live.scene._neighborBodies[side] : null;
         const record = body ? N.records.get(body.mapId) : null;
         return !!(N.enabled && body && !body.stage && record && record.state === "ready" && (record.copy || record.text));
@@ -1034,17 +1321,39 @@
         N.crossing = null;
         N.leftMap = null;
         if (!N.ready(exit.side)) { N.stats.faded++; return false; }
+        // Down or up through an opening: the world under (or over) is entered as one past a border is. `offset.y`
+        // is how far up that map's ground lies from this one's.
+        if (R.LEVEL_SIDES.indexOf(exit.side) >= 0) {
+            const level = R.Levels.bodies[exit.side];
+            N.crossing = { from: fromMapId, to: exit.mapId, side: exit.side, level: true, offset: { x: level.offset.x, y: level.rise, z: level.offset.z } };
+            N.leftMap = root.$dataMap || null;
+            N.noteRide();
+            return true;
+        }
         const body = N.live.scene._neighborBodies[exit.side];
         N.crossing = { from: fromMapId, to: exit.mapId, side: exit.side, offset: { x: body.offset.x, z: body.offset.z } };
         // The map left, as the game held it: what the world it leaves behind past the border is lit by.
         N.leftMap = root.$dataMap || null;
+        N.noteRide();
+        return true;
+    };
+
+    /** What is ridden into the crossing, over a border or through an opening: carried into the map entered (`carryRide`). */
+    N.noteRide = function() {
         // What the leader rides goes with it, model and all (the event it is on the map entered has another number).
         const ride = root.$gamePlayer && root.$gamePlayer._rrRide;
         if (ride && ride.id) N.crossing.ride = "e" + ride.id;
         // And what the followers ride behind it (ReactorVehicles.Convoy): each by the name it keeps on every map.
         const V = root.ReactorVehicles;
         if (ride && V && V.Convoy && V.Convoy.riders) N.crossing.convoy = V.Convoy.riders().map(rider => ["e" + rider.event._eventId, V.idOf(rider.event)]);
-        return true;
+    };
+
+    /** The ride and the convoy of a crossing as they are named on the map entered: `[ride now, convoy pairs]`. */
+    N.rideNow = function(cross) {
+        const riding = root.$gamePlayer && root.$gamePlayer._rrRide;
+        const V = root.ReactorVehicles, vehicles = V && V.list && cross.convoy ? V.list() : [];
+        const convoy = (cross.convoy || []).map(pair => { const now = vehicles.find(event => V.idOf(event) === pair[1]); return [pair[0], now ? "e" + now._eventId : null]; });
+        return [riding && riding.id ? "e" + riding.id : null, convoy];
     };
 
     /** The map crossed into has started (or the crossing was given up). */
@@ -1663,6 +1972,9 @@
             const before = to._modelInstances.get(as);
             if (before && before.object && before.object.parent) before.object.parent.remove(before.object);
             to._modelInstances.set(as, holder);
+            // Its model is this map's now: claimed as `loadModel` claims one, or the sweep at this map's start lets it go (ModelUse.wornKeys).
+            const cached = R._glbCache && holder.spec ? R._glbCache[holder.spec] : null;
+            if (cached && R.ModelUse && R.ModelUse.claim) R.ModelUse.claim(cached);
             // What is ridden is another event on the map entered: its model follows that one from here (its wheels turn by the road that event rolls).
             if (ridden && root.$gameMap && root.$gameMap.event) {
                 const event = root.$gameMap.event(Number(String(as).slice(1)));
@@ -1672,8 +1984,9 @@
                 group.add(holder.object);
                 // Into the entered map's tiles at once: the first frame of that map is drawn before an update syncs
                 // the models, and the party stood a map's width from the camera for it (2026-11-07).
-                if (shift && (shift.x || shift.z)) {
+                if (shift && (shift.x || shift.y || shift.z)) {
                     holder.object.position.x += shift.x;
+                    holder.object.position.y += shift.y || 0;
                     holder.object.position.z += shift.z;
                     holder.object.updateMatrixWorld(true);
                 }
@@ -1689,15 +2002,14 @@
     N.adopt = function(mapId) {
         const cross = N.crossing, old = N.live;
         if (!cross || cross.to !== mapId || !old || !old.scene || !old.scene._scene) return null;
+        if (cross.level) return R.Levels.adopt(mapId, cross, old);
         const bodies = old.scene._neighborBodies || {}, body = bodies[cross.side];
         if (!body || body.mapId !== mapId) return null;
         // (What else stands beside the map left stays beside it: nothing behind the party changes as it crosses.)
         N.detach(old.scene, cross.side);
         const scene = body.scene;
-        const riding = root.$gamePlayer && root.$gamePlayer._rrRide;
-        const V = root.ReactorVehicles, vehicles = V && V.list && cross.convoy ? V.list() : [];
-        const convoy = (cross.convoy || []).map(pair => { const now = vehicles.find(event => V.idOf(event) === pair[1]); return [pair[0], now ? "e" + now._eventId : null]; });
-        N.carryParty(old.scene, scene, cross.ride, riding && riding.id ? "e" + riding.id : null, convoy, { x: -cross.offset.x, z: -cross.offset.z });
+        const [rideNow, convoy] = N.rideNow(cross);
+        N.carryParty(old.scene, scene, cross.ride, rideNow, convoy, { x: -cross.offset.x, z: -cross.offset.z });
         N.keepAhead(scene);
         // The map entered is the one everything reads now; what the map left read is kept for a way back.
         old.scene._neighborGlobals = globalsOf();
@@ -1727,6 +2039,380 @@
         }
         N.stats.adopted++;
         return scene;
+    };
+
+    //-------------------------------------------------------------------------
+    // The map over or under this one, seen through the openings between them
+    //
+    // A level with openings has its world stood under this map's (or over it), `gap` tiles down (or up), built
+    // by the same steps a neighbor's is. So that it is seen, the ground of the upper map and the ceiling of the
+    // lower one are not drawn inside an opening: every lit material discards what faces up within a hand of the
+    // upper map's ground there and what faces down at the lower map's ceiling (`injectLevelCut`,
+    // reactor_3d_lighting.js), from boxes and heights written here each frame. Nothing else of either map is cut,
+    // so a stair that comes up through the opening stands whole.
+    //
+    // Only what the level's map is built of is shown (its tiles, pieces, water and land), lit by the map being
+    // played; its placed models and its events are not. Once it stands built the party passes into it without a
+    // break (N.begin, L.adopt), as over a border: its world becomes the map's own and the world left stands on
+    // over it (or under).
+
+    const L = R.Levels = { enabled: true, bodies: null, main: null, cut: null, CUTS: 4, stats: { built: 0 } };
+    L.cutUniforms = function() {
+        // `rrLvlOver`: above its first height only what lies within its second of an opening is drawn (the editor's
+        // view of the map over the one being edited: the part around the opening, not a lid over the whole map).
+        return L.cut || (L.cut = { rrLvlBox: { value: new Float32Array(4 * L.CUTS) }, rrLvlBand: { value: new Float32Array(4 * L.CUTS) }, rrLvlCount: { value: 0 },
+            rrLvlOver: { value: new Float32Array([L.NO_CROP, 0]) },
+            // The map under this one: its tiles (x0, z0, x1, z1) and its top, in this map's measure. Under that it is not in this map's water.
+            rrLvlFoot: { value: new Float32Array(4) }, rrLvlTop: { value: -1e9 } });
+    };
+    /** Where a level's first tile lies from this map's: across, up and down the map. */
+    L.offsetOf = (side, level, rise) => ({ x: level.x || 0, y: side === "below" ? -rise : rise, z: level.y || 0 });
+    L.NO_CROP = 1e9;
+    const levelKey = L.keyOf = (level, rise) => level.map + ":" + (level.x || 0) + ":" + (level.y || 0) + ":" + rise;
+
+    /** A map's own ground at a place, whatever opening is there: its cell's height and the terrain's rise. */
+    const ownGround = (map, x, z) => R.ownGroundAt(map, x, z);
+
+    /** Take a level's world out of the scene and let it go. */
+    L.remove = function(side) {
+        const body = L.bodies && L.bodies[side];
+        if (!body) return;
+        delete L.bodies[side];
+        // (A world that was a map's own, left through an opening: what stood beside it goes with it.)
+        if (body.scene._neighborBodies) for (const far of Object.keys(body.scene._neighborBodies)) { try { N.removeBody(body.scene, far); } catch (error) { /* a renderer already gone */ } }
+        try {
+            if (body.group.parent) body.group.parent.remove(body.group);
+            body.group.remove(body.scene._scene);
+            body.scene.destroy();
+        } catch (error) { /* a renderer already gone */ }
+    };
+    L.drop = function() {
+        L.unfresh();
+        for (const side of Object.keys(L.linings || {})) L.unline(side);
+        if (L.bodies) for (const side of Object.keys(L.bodies)) L.remove(side);
+        L.bodies = null;
+    };
+
+    /**
+     * The world of a map that was played, left through an opening, stands on over the map entered as it was
+     * played: every tile, its grass and trees, its models, the map past its own border. Over a map it shows only
+     * up through the openings, and it was drawn whole: back in the Reactor room after a climb to the Lake, 1.4
+     * million triangles stood overhead where 45,000 had before the climb, and the middle of the room, under the
+     * opening, ran at two thirds of its frames (owner, 2026-11-14: "FPS goes down quite a bit" there). So the
+     * world such a map gets when it is come to fresh is built beside it, unseen, a part a frame, and takes its
+     * place when it stands whole. Only the map over: the map under is looked down into, its models and all.
+     */
+    L.fresh = null;
+    L.unfresh = function() {
+        const body = L.fresh;
+        L.fresh = null;
+        if (!body) return;
+        try {
+            if (body.group.parent) body.group.parent.remove(body.group);
+            body.group.remove(body.scene._scene);
+            body.scene.destroy();
+        } catch (error) { /* a renderer already gone */ }
+    };
+    L.lighten = function(main, mapData, side, level, record, played, key) {
+        let fresh = L.fresh;
+        if (fresh && (fresh.side !== side || fresh.key !== key || fresh.main !== main)) { L.unfresh(); fresh = null; }
+        if (!fresh) {
+            fresh = L.add(main, mapData, side, level, record);
+            // (`add` names what it made the level on that side: the played world is that until the new one stands.)
+            L.bodies[side] = played;
+            if (!fresh) { played.played = false; return played; }
+            fresh.group.visible = false;
+            fresh.main = main;
+            L.fresh = fresh;
+        }
+        if (fresh.stage) { try { N.stage(fresh); } catch (error) { fresh.stage = 0; } }
+        if (fresh.stage) return played;
+        L.fresh = null;
+        L.remove(side);
+        (L.bodies || (L.bodies = {}))[side] = fresh;
+        fresh.group.visible = true;
+        L.stats.lightened = (L.stats.lightened || 0) + 1;
+        return fresh;
+    };
+
+    /**
+     * Stand the world of the map over or under this one in its place. `bitmaps` and `host` are a view's with no
+     * game behind it (the editor's), as N.addBody takes them.
+     */
+    L.add = function(main, mapData, side, level, record, bitmaps, host) {
+        const map = record.map, rise = R.levelRise(mapData, side, level, map), offset = L.offsetOf(side, level, rise), at = { x: offset.x, z: offset.z };
+        const tileset = host ? null : root.$dataTilesets && root.$dataTilesets[map.tilesetId];
+        const flags = (host ? host.flags : tileset && tileset.flags) || undefined;
+        const base = main._surroundOrigin || { x: 0, z: 0 };
+        let scene = null;
+        try {
+            scene = N.inBody(map, at, null, () => {
+                const made = new R.MapScene(map, bitmaps || tilesetBitmaps(map), Object.assign({}, host && host.settings, { body: true, staged: true, deferTiles: true, tilesetId: map.tilesetId, flags,
+                    surroundNone: { north: true, east: true, south: true, west: true }, surroundOrigin: { x: base.x + offset.x, z: base.z + offset.z } }));
+                made._neighborGlobals = globalsOf();
+                return made;
+            });
+        } catch (error) {
+            if (typeof console !== "undefined") console.warn("Reactor3D: the map " + (side === "below" ? "under" : "over") + " this one (" + record.mapId + ") could not be built.", error);
+            record.state = "failed";
+            return null;
+        }
+        if (!scene) return null;
+        const group = new THREE.Group();
+        group.name = "level:" + side;
+        group.position.set(offset.x, offset.y, offset.z);
+        scene._scene.matrixWorldAutoUpdate = true;
+        group.add(scene._scene);
+        main._scene.add(group);
+        group.updateMatrixWorld(true);
+        if (scene._groundFrame) scene._groundFrame.shift.set(at.x, 0, at.z);
+        if (scene._sky) scene._sky.visible = false;
+        const body = { mapId: record.mapId, side, scene, group, offset: at, at, rise: offset.y, record, props: null, ahead: null, settle: N.SETTLE, stage: 1, masks: 0, key: levelKey(level, rise) };
+        if (host && host.settings && host.settings.loadMaterial) body.load = host.settings.loadMaterial;
+        (L.bodies || (L.bodies = {}))[side] = body;
+        L.stats.built++;
+        return body;
+    };
+
+    /** Whether the map on `side` can be passed into without a break now: its world stands built and its files are read. */
+    L.ready = function(side) {
+        const body = L.bodies ? L.bodies[side] : null, record = body ? N.records.get(body.mapId) : null;
+        return !!(L.enabled && N.enabled && body && !body.stage && N.live && N.live.scene === L.main && record && record.state === "ready" && (record.copy || record.text));
+    };
+
+    /**
+     * The scene of the map passed into through an opening, for its spriteset: the world that stood under (or
+     * over) the map left, as it stands, with the map left standing over it (or under) in its turn. Null when
+     * there is none (the map is then built as any map is).
+     */
+    L.adopt = function(mapId, cross, old) {
+        const body = L.bodies ? L.bodies[cross.side] : null;
+        if (!body || body.mapId !== mapId || L.main !== old.scene) return null;
+        delete L.bodies[cross.side];
+        // (The map on the other side of the one left is two maps away now.)
+        L.drop();
+        const scene = body.scene, o = cross.offset;
+        if (body.group.parent) body.group.parent.remove(body.group);
+        body.group.remove(scene._scene);
+        if (scene._groundFrame) scene._groundFrame.shift.set(0, 0, 0);
+        scene._scene.updateMatrixWorld(true);
+        // What is ridden through the opening goes with its rider, as over a border.
+        const [rideNow, convoy] = N.rideNow(cross);
+        N.carryParty(old.scene, scene, cross.ride || null, rideNow, convoy, { x: -o.x, y: -o.y, z: -o.z });
+        N.keepAhead(scene);
+        old.scene._neighborGlobals = globalsOf();
+        old.scene._rrBody = true;
+        scene._rrBody = false;
+        scene._neighborKept = false;
+        if (scene._neighborGlobals) setGlobals(scene._neighborGlobals);
+        if (R.Reflections && R.Reflections.shift) R.Reflections.shift(o);
+        if (scene._sky) {
+            scene._sky.visible = true;
+            scene._sky.position.set(0, 0, 0); scene._sky.updateMatrix();
+            const window = scene._sky.material && scene._sky.material.userData ? scene._sky.material.userData.rrSkyWindow : null;
+            if (window) window.value = 0;
+        }
+        // It was built with no land past its borders (nothing of it shows through an opening): laid now.
+        scene._surroundNone = null;
+        if (root.$dataMap && scene.addSurround) { try { scene.addSurround(root.$dataMap); } catch (error) { /* the map stands without it */ } }
+        // The map left stands on, kept by its old spriteset no longer.
+        old.scene._neighborKept = true;
+        const back = cross.side === "below" ? "above" : "below", at = { x: -o.x, z: -o.z };
+        const group = new THREE.Group();
+        group.name = "level:" + back;
+        group.position.set(-o.x, -o.y, -o.z);
+        old.scene._scene.matrixWorldAutoUpdate = true;
+        group.add(old.scene._scene);
+        scene._scene.add(group);
+        group.updateMatrixWorld(true);
+        if (old.scene._groundFrame) old.scene._groundFrame.shift.set(at.x, 0, at.z);
+        if (old.scene._sky) old.scene._sky.visible = false;
+        const kept = N.records.get(cross.from);
+        const record = (kept && kept.state === "ready" ? kept : null) || N.played(cross.from, N.leftMap);
+        // (`key`: worked out against the entered map's own entry on its first frame, L.update.)
+        L.bodies = { [back]: { mapId: cross.from, side: back, scene: old.scene, group, offset: at, at, rise: -o.y, record, props: null, ahead: null, settle: 0, stage: 0, masks: 0, key: null, played: true } };
+        L.main = scene;
+        N.leftMap = null;
+        L.stats.adopted = (L.stats.adopted || 0) + 1;
+        return scene;
+    };
+
+    /**
+     * A level's sky: the map under shows none; the map over shows its own through the openings up to it and
+     * nowhere else (the sky's own shader: `rrSkyWindow`, addSkyImage), stood round the eye that draws.
+     */
+    L.sky = function(body, eye) {
+        const sky = body && body.scene ? body.scene._sky : null;
+        if (!sky) return;
+        const through = body.side === "above" && L.cut && L.cut.rrLvlCount.value > 0;
+        sky.visible = through;
+        const window = sky.material && sky.material.userData ? (sky.material.userData.rrSkyWindow || (sky.material.userData.rrSkyWindow = { value: 0 })) : null;
+        if (window) window.value = 1;
+        if (through && eye) { sky.position.set(eye.x - body.offset.x, eye.y - body.rise, eye.z - body.offset.z); sky.updateMatrix(); }
+    };
+
+    /**
+     * Whether an opening (in this map's tiles) lies wholly over the other map. From above the other map's first
+     * tile lies at the level's x, y of this one; from below this map's first tile lies at -x, -y of the other.
+     */
+    L.within = function(o, below, other, above) {
+        const level = below || above;
+        if (!other || !(other.width > 0) || !(other.height > 0)) return true;
+        const x = o.x - (level.x || 0), y = o.y - (level.y || 0);
+        return x >= 0 && y >= 0 && x + o.w <= other.width && y + o.h <= other.height;
+    };
+
+    /** The map under this one, for what must leave it alone (this map's water): its tiles and its top. */
+    L.under = function(cut, body, lower) {
+        // (Half a tile over each side: its walls stand on its very edge.)
+        cut.rrLvlFoot.value.set([body.offset.x - 0.5, body.offset.z - 0.5, body.offset.x + lower.width + 0.5, body.offset.z + lower.height + 0.5]);
+        cut.rrLvlTop.value = body.rise + R.levelTop(lower) + 0.1;
+    };
+
+    /** The boxes and heights the opening of a level cuts this frame, added to what is cut. */
+    L.cutFor = function(cut, mapData, side, level, other) {
+        const upper = side === "below" ? mapData : other, lower = side === "below" ? other : mapData;
+        // Heights are this map's: the other map stands `gap` under it, or over it.
+        const rise = R.levelRise(mapData, side, level, other);
+        const upperAt = side === "below" ? 0 : rise, lowerAt = side === "below" ? -rise : 0;
+        // The upper map's tiles from this map's (the other map's first tile lies at x, y of this one).
+        const ux = side === "below" ? 0 : -(level.x || 0), uz = side === "below" ? 0 : -(level.y || 0);
+        const room = R.roomFor ? R.roomFor(lower) : null, ceiling = room && room.ceiling ? lowerAt + room.height : null;
+        for (const o of level.openings) {
+            const i = cut.rrLvlCount.value;
+            if (i >= L.CUTS) return;
+            // An opening that does not lie over (or under) the other map opens onto nothing: it is not cut.
+            if (!L.within(o, side === "below" ? level : null, side === "below" ? lower : upper, side === "below" ? null : level)) continue;
+            let low = Infinity, high = -Infinity;
+            for (let cz = 0; cz <= o.h; cz++) for (let cx = 0; cx <= o.w; cx++) {
+                // What is stood on there (a slab, a floor) and the bare ground under it: both are open.
+                const gx = Math.min(o.x + cx, o.x + o.w - 0.001) + ux, gz = Math.min(o.y + cz, o.y + o.h - 0.001) + uz;
+                const g = ownGround(upper, gx, gz), bare = (R.elevationAt ? R.elevationAt(upper, Math.floor(gx), Math.floor(gz)) : 0) + (R.terrainHeightAt ? R.terrainHeightAt(upper, gx, gz) : 0);
+                if (Math.min(g, bare) < low) low = Math.min(g, bare);
+                if (Math.max(g, bare) > high) high = Math.max(g, bare);
+            }
+            if (!Number.isFinite(low)) { low = 0; high = 0; }
+            cut.rrLvlBox.value.set([o.x, o.y, o.x + o.w, o.y + o.h], i * 4);
+            cut.rrLvlBand.value.set([upperAt + low - L.GROUND_UNDER, upperAt + high + L.GROUND_OVER, ceiling === null ? 1 : ceiling - 0.06, ceiling === null ? 0 : ceiling + 0.06], i * 4);
+            cut.rrLvlCount.value = i + 1;
+        }
+    };
+    /**
+     * The sides of an opening, between the lower map's ceiling and the upper map's ground: a wall round it, facing
+     * in, as tall at each place as the ground over it stands. Without it the tile of floor between the two maps
+     * (and whatever more the ground rises, or the level's gap adds) was a hollow: from the ladder, the underside
+     * of the map above was seen all round the hole (owner, 2026-11-14). It wears the lower map's room walls, or
+     * its ceiling (`lining` on the level; "none" leaves the hollow), lit as they are, and is the lower map's
+     * own thing: it stands in that map's world whichever of the two is played.
+     */
+    L.linings = {};
+    L.unline = function(side) {
+        const kept = L.linings[side];
+        delete L.linings[side];
+        if (!kept || !kept.mesh) return;
+        try { if (kept.mesh.parent) kept.mesh.parent.remove(kept.mesh); kept.mesh.geometry.dispose(); } catch (error) { /* a renderer already gone */ }
+    };
+    /** How far outside the opening its lining stands (what is cut is cut inside it), and how far under the ceiling it begins. */
+    L.LINING_OUT = 0.02;
+    L.LINING_UNDER = 0.05;
+    L.line = function(main, mapData, side, level, other, body) {
+        const kind = level.lining || "walls";
+        const lowerScene = side === "below" ? body.scene : main, lower = side === "below" ? other : mapData, upper = side === "below" ? mapData : other;
+        const rise = R.levelRise(mapData, side, level, other);
+        if (kind === "none" || !lowerScene || !lowerScene._scene || rise === null || typeof THREE === "undefined") { L.unline(side); return null; }
+        const key = kind + "|" + levelKey(level, rise) + "|" + level.openings.map(o => [o.x, o.y, o.w, o.h].join(",")).join(";");
+        const kept = L.linings[side];
+        if (kept && kept.key === key && kept.scene === lowerScene && (!kept.mesh || kept.mesh.parent)) return kept.mesh;
+        L.unline(side);
+        // The lower map's own picture of that kind, as its room wears it (lit, and already uploaded).
+        let source = null;
+        lowerScene._scene.traverse(o => { if (!source && o.isMesh && o.userData && o.userData.roomPiece === kind && o.parent) source = o; });
+        // (Its room is not laid yet, or it has no such picture: asked again next frame, a few times a second later.)
+        if (!source) { L.linings[side] = { key: null, scene: lowerScene, mesh: null }; return null; }
+        const top = R.levelTop(lower), bottom = top - L.LINING_UNDER, out = L.LINING_OUT;
+        // The upper map's tiles from the lower map's, and its ground there in the lower map's measure.
+        const tx = side === "below" ? (level.x || 0) : -(level.x || 0), tz = side === "below" ? (level.y || 0) : -(level.y || 0);
+        const groundAt = (x, z) => rise + ownGround(upper, x + (side === "below" ? tx : tx), z + (side === "below" ? tz : tz));
+        const positions = [], uvs = [], normals = [];
+        const width = Math.max(1, lower.width || 1), height = Math.max(1, lower.height || 1);
+        for (const o of level.openings) {
+            // The opening in the lower map's own tiles.
+            const x0 = (side === "below" ? o.x - (level.x || 0) : o.x) - out, z0 = (side === "below" ? o.y - (level.y || 0) : o.y) - out, x1 = x0 + o.w + 2 * out, z1 = z0 + o.h + 2 * out;
+            // Round it, each side walked so that it faces in: north (toward +z), east (-x), south (-z), west (+x).
+            const sides = [[x0, z0, x1, z0, 0, 1, 0, -0.3], [x1, z0, x1, z1, -1, 0, 0.3, 0], [x1, z1, x0, z1, 0, -1, 0, 0.3], [x0, z1, x0, z0, 1, 0, -0.3, 0]];
+            let along = 0;
+            for (const [ax, az, bx, bz, nx, nz, ox, oz] of sides) {
+                const length = Math.hypot(bx - ax, bz - az), steps = Math.max(1, Math.round(length));
+                for (let i = 0; i < steps; i++) {
+                    const p = [ax + (bx - ax) * i / steps, az + (bz - az) * i / steps], q = [ax + (bx - ax) * (i + 1) / steps, az + (bz - az) * (i + 1) / steps];
+                    // As tall as the ground just outside the opening there.
+                    const tp = Math.max(bottom + 0.1, groundAt(p[0] + ox, p[1] + oz)), tq = Math.max(bottom + 0.1, groundAt(q[0] + ox, q[1] + oz));
+                    const a0 = along + length * i / steps, a1 = along + length * (i + 1) / steps;
+                    const corners = [[p, bottom, a0], [q, bottom, a1], [q, tq, a1], [p, bottom, a0], [q, tq, a1], [p, tp, a0]];
+                    for (const [at, y, a] of corners) {
+                        positions.push(at[0], y, at[1]); normals.push(nx, 0, nz);
+                        // Laid at the picture's own scale on the room: its texture repeats over the room's width (and its height, or the map's length).
+                        if (kind === "walls") uvs.push(a / width, 1 - (top + 2 - y) / Math.max(1, top));
+                        else uvs.push(a / width, y / height);
+                    }
+                }
+                along += length;
+            }
+        }
+        if (!positions.length) { L.linings[side] = { key, scene: lowerScene, mesh: null }; return null; }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+        geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+        const mesh = new THREE.Mesh(geometry, source.material);
+        mesh.name = "level-lining";
+        mesh.renderOrder = source.renderOrder;
+        mesh.userData.levelLining = kind;
+        source.parent.add(mesh);
+        L.linings[side] = { key, scene: lowerScene, mesh };
+        return mesh;
+    };
+
+    /** How far under and over the upper map's ground what faces up is cut inside an opening (its floor's picture and its tiles lie a little under it). */
+    L.GROUND_UNDER = 0.12;
+    L.GROUND_OVER = 0.04;
+
+    /** Once a frame: the levels of the map played are read, built a part a frame, and their openings cut. */
+    L.update = function(live) {
+        const cut = L.cutUniforms(), scene = live && live.scene, mapData = root.$dataMap;
+        if (L.main !== scene) { L.drop(); L.main = scene || null; }
+        cut.rrLvlCount.value = 0;
+        cut.rrLvlOver.value[0] = L.NO_CROP;
+        cut.rrLvlTop.value = -1e9;
+        if (!L.enabled || !scene || !scene._scene || !mapData) { if (!L.enabled) L.drop(); return; }
+        const levels = R.levelsOf(mapData);
+        for (const side of R.LEVEL_SIDES) {
+            const level = levels[side], open = !!(level && level.openings && level.openings.length);
+            let body = L.bodies ? L.bodies[side] : null;
+            if (body && !open) { L.remove(side); body = null; }
+            if (!open) L.unline(side);
+            if (!open || N.crossing) continue;
+            const record = N.request(level.map);
+            if (!record || record.state !== "ready" || !record.map) continue;
+            const key = levelKey(level, R.levelRise(mapData, side, level, record.map));
+            // (The world left through the opening: it stands where this map's entry says the map there does.)
+            if (body && body.key === null && body.mapId === level.map) body.key = key;
+            if (body && body.key !== key) { L.remove(side); body = null; }
+            if (!body) body = L.add(scene, mapData, side, level, record);
+            if (!body) continue;
+            // The world of the map over this one as it was played: the light one is built and takes its place.
+            if (body.played && side === "above") body = L.lighten(scene, mapData, side, level, record, body, key);
+            else if (L.fresh && L.fresh.side === side) L.unfresh();
+            if (body.stage) { try { N.stage(body); } catch (error) { body.stage = 0; } }
+            L.cutFor(cut, mapData, side, level, record.map);
+            // (Asked for a picture not laid yet: again every twentieth frame, not every one.)
+            if (!(L.linings[side] && L.linings[side].key === null && (L._lineTick = (L._lineTick || 0) + 1) % 20)) L.line(scene, mapData, side, level, record.map, body);
+            if (side === "below") L.under(cut, body, record.map);
+            // Its sky is laid with its world a few frames after it is stood, so it is seen to each frame: the map
+            // under shows none, the map over shows its own up through the openings only (L.sky). (Shown whole, the
+            // upper map's sky covered the picture of a room under it, 2026-11-13.)
+            L.sky(body, live.camera ? live.camera.position : null);
+        }
     };
 
     R.Surround = { file: "reactor_3d_surround.js" };

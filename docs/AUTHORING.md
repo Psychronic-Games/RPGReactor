@@ -300,6 +300,18 @@ In the editor: Database › Classes › **Equipment Slots**. Add a slot, pick it
 
 A file in `img/characters` whose name has `[8D]` (`$Hero[8D].png`) is cut as eight blocks of 3 × 4 frames, whatever its `$` says. Block 0 walks down, left, right and up; block 1 holds its diagonals (rows down-left, down-right, up-left, up-right); block 2 is the dash, block 3 its diagonals. A character set to block 0 dashes on block 2, and shows the block to the right while it steps or faces diagonally; blocks 2 and 4 take their own diagonals the same way. Blocks 1, 3, 5, 6 and 7 show as picked in the event's graphic. The player, followers and events all follow it (the player steps diagonally with Database › System 1 › Options › Diagonal movement on). Sheets without the tag are cut as in MZ. Forge › 3D Character Builder › Export Sprite Sheet makes one.
 
+## Face sets with frames
+
+A file in `img/faces` whose name has its frames, `Name[4F].png` (or `Name[F4]`), holds each of its eight faces that many frames wide: for four frames, 16 faces across and 2 down, frame k of face i in column (i % 4) × 4 + k. It follows Database › System 2 › **Multi-frame Sheets ([NF])**, which is on unless turned off, as a character sheet's `[NF]` does.
+
+Show Text has a **Frames** choice under the face, shown only for such a picture:
+
+- **Talk** (the usual): the mouth follows the message's own letters at the pace of speech, shut for spaces, punctuation and m, b, p and widest for a. Frame 0 is the mouth at rest and the last frame the widest.
+- **Play once:** through the frames when the face appears, the last one held. Use it for a face whose frames sweep into an expression.
+- **Loop** and **Still.**
+
+Every other window, custom interfaces and the battle HUD show the first frame, as do the editor's pickers. A plugin that draws faces its own way does not know the naming and will cut such a sheet wrongly. The 3D Character Builder makes these sheets ([Faces with frames](CHARACTER-BUILDER.md#faces-with-frames)).
+
 ## Pieces
 
 ```json
@@ -379,10 +391,13 @@ it with floors, blocks and roofs and lines its edge with the rest (a room of
 walls), **Filled** and **Outline** say which. A wall, glass or block line
 that runs off the grid's axes is one **Straight** wall from end to end (a
 turned box, a tile thick, as tall as the wall in hand) or, **Stepped**, a
-staircase of cells. The **Level** card (− and +, or Q and E) is where the
-next piece goes above the ground: zero sits on the ground. The bottom bar calls
+staircase of cells. A ladder or a stair in hand goes down the size its
+**Size** card says in every one of the three: a click lays the whole ladder
+or flight; a ladder dragged as a line or a rectangle stands its whole height
+on every cell of it. The **Height off the ground (Z)** card (− and +, or Q and E) is where the
+next piece goes above the ground, in tiles: zero sits on the ground. The bottom bar calls
 this **Placement height**; it is a height offset, not a storey number. Selected,
-it raises and lowers what is selected, as Q and E do, and a placed piece's **Position** card moves it by typing. The
+it raises and lowers what is selected, as Q and E do, and a placed piece's **Position** card has its tile (X, Y) and that height (Z) on one row, to type or step. A number typed into the panel counts at the next click on the map. The
 **Size** card sets a wall's, glass's, pillar's, doorway's, window's or fence's height, of one in hand, one
 placed or every one in a selection. A **Window**, **Doorway**, **Glass** or
 **Door** pointed at a wall goes into it, in place of the piece of wall
@@ -895,6 +910,38 @@ The neighbor is shown and entered without a break. As a map starts, the maps pas
 For borders that read as one world: give both maps the same height along the shared border (the terrain is a grid of corners, and each border corner belongs to both), carry roads and painted ground across, and keep trees, rocks and buildings a few tiles back from the border. The Demo's Open Road (maps 8 to 12) is five maps in a row built this way, joined to North Haven's east side: ride out of the village by the east lane, or enter from the Reactor Room.
 
 In the editor: Build bar › Terrain › Beyond the Border › **Neighboring Maps**, one map per side, on a 3D or a 2D map; a neighbor's **Shift (tiles)** is under its map. The 3D view shows each neighbor standing past its border and moves it as Shift changes. A 2D map is entered and left by its borders with the usual fade; in the game its view goes half a screen past a side with a neighbor, and the neighbor's ground (not its events) is drawn there. The editor's 2D view does the same, dimmed: it pans as far past the edge and shows the neighbor's tiles as last saved; nothing there can be painted or picked, and the map bar's Surroundings tick hides it. Saving a map writes the way back into each neighbor whose facing side names no map; a neighbor that already names one is left alone, so a one-way border is made by clearing or changing the way back on the other map.
+
+### Maps above and below
+
+**Beyond the Border › Above and Below** puts a map under this one, a map over it, or both. Choose the map, then:
+
+- **Space between (tiles):** 0 unless changed. At 0 the lower map's top (its room height) sits one tile of floor under the upper map's ground at the first opening, wherever that ground is: on a hilltop the room lies inside the hill, just under the hole. A larger number moves the two further apart.
+- **The first opening comes out at:** the tile of the other map the first opening leads to (Across, Down). This is how the two maps are placed: type where the party should land. It is held inside the other map, whose size is shown. Moving the first opening keeps where it comes out.
+- With no opening yet, **Across** and **Down** say which tile of this map the other map's top left tile lies under.
+
+An opening that does not lie over the other map leads nowhere: its ground stays and nothing is cut.
+
+**Openings** are where there is no ground between the two maps: add one for a hatch or a stairwell, as a rectangle of this map's tiles (Across, Down, Width, Height). Inside an opening:
+
+- the upper map's ground and the lower map's ceiling are not drawn. From above the map below is seen; from below, the map above and its sky;
+- what is stood on is the map below. With nothing there the player falls through. With a stair or a ladder built in the map below, as tall as the two grounds are apart, the player steps onto its top and walks down: a basement.
+
+Once the other map stands built through an opening, the player passes into it with no fade: the fall or the climb goes on, the map left stays in view overhead (or underfoot), and the party comes after the leader through the opening. Until then, and with no opening, it is a transfer with a fade.
+
+**Lining of the openings** says what the sides of an opening wear between the lower map's ceiling and the upper map's ground: the lower room's walls (the usual one), its ceiling, or None, which leaves the gap open. The lining is as tall at each place as the ground above stands there, so Space between makes a longer shaft.
+
+**A ladder through an opening** is built in the map below, tall enough to reach the upper map's ground (the room's height plus 1 with Space between at 0, or a little more: the Reactor room is 25 tall and its ladder 27). It is one ladder in both maps: the party climbs it out of the lower map and steps off onto the upper map's ground, and a player who walks or jumps into the opening onto the ladder's tile takes hold of it and climbs down. A tile of the opening with no ladder under it is a fall. The map changes a tile and a half under the upper map's ground, as the climber's chest comes out of the opening: until then the lower map's camera stays under its ceiling and looks up the ladder, and from then the upper map's camera looks at the opening.
+
+**In the editor** each opening is outlined in both map views (blue: the way down; yellow: the way up). The 3D view also draws a shaft to where it comes out, cuts the ground there, and shows the other map as last saved: all of the map below, and of the map above only what lies within 3 tiles of an opening. The 2D view names the map it leads to. The Surroundings tick hides the other map.
+
+Without an opening the rule is the player's height alone:
+
+- **Down:** dig a pit deeper than half the distance between the grounds. A player who falls in comes out under the lower map's ceiling, on the matching tile, and falls the rest of the way to its floor.
+- **Up:** a ladder or a stair that reaches half that distance high. A player who climbs it comes up in the upper map on the matching tile: in the pit dug there, or on the ground.
+
+Fall damage, where the project has it on, counts the whole drop: a fall into a tall room can knock the party out. Give the drop a stair, a ladder or water to land in, or turn fall damage off for the map.
+
+Saving writes the way back into the other map, and keeps it in step: a map set as Below gets this one as its Above, with the same openings. Through an opening the other map's own build is seen (its tiles, pieces, water and land), not yet its placed models or events, and it is lit by the map being played. Nobody changes map this way while an event is running, during a battle on the map, or while riding. Data: `surround.levels` in the map's `.r3d.json`.
 
 ## Foliage
 

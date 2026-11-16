@@ -879,6 +879,67 @@ test('the flat view draws each layer in the container of its depth, with its opa
     assert.deepEqual(['imageBack', 'imageGround', 'imageSame', 'imageOver'].map(host => haven.tm.layers[host].children.map(pictureOf)), [[], [], [], ['Fog', 'Vignette']]);
 });
 
+test('Save map as image draws the image layers into the picture: each part in its turn, with its opacity, blend and placement', async () => {
+    const stored = [
+        { name: 'Sky', layer: 'back', fit: 'repeat', follow: 0.5 },
+        { name: 'Ground', layer: 'ground' },
+        { name: 'Trees', layer: 'same' },
+        { name: 'Fog', layer: 'over', opacity: 128, blendMode: 3, fit: 'repeat', repeat: 'x', drift: [12, 4] },
+        { name: 'Vignette', layer: 'over', blendMode: 2, fit: 'fill' },
+        null,
+        { name: 'Gone', layer: 'over' }
+    ];
+    const files = ['Sky', 'Ground', 'Trees', 'Fog', 'Vignette'];
+    // The map as its file has it: not the object the tool holds, so the tool's eye cannot hide a layer of it.
+    const map = { width: 21, height: 15, rrImageLayers: stored };
+    const { manager } = makeEditor({ width: 21, height: 15, rrImageLayers: [] }, { files });
+    manager._image = async name => (files.includes(name) ? { name, naturalWidth: 256, naturalHeight: 128 } : null);
+    const canvas = () => {
+        const calls = [], state = { globalAlpha: 1, globalCompositeOperation: 'source-over' }, stack = [];
+        const ctx = {
+            calls,
+            save() { stack.push({ globalAlpha: this.globalAlpha, globalCompositeOperation: this.globalCompositeOperation }); },
+            restore() { Object.assign(this, stack.pop()); },
+            beginPath() {}, clip() {}, translate(x, y) { calls.push(['translate', x, y]); },
+            rect(...at) { calls.push(['clip', ...at]); },
+            createPattern: (image, how) => ({ pattern: image.name, how }),
+            fillRect(...at) { calls.push(['tile', this.fillStyle.pattern, this.globalAlpha, this.globalCompositeOperation, ...at]); },
+            drawImage(image, ...at) { calls.push(['image', image.name, this.globalAlpha, this.globalCompositeOperation, ...at]); }
+        };
+        return Object.assign(ctx, state);
+    };
+    const part = async stage => { const ctx = canvas(); const count = await manager.drawToCanvas(ctx, map, stage); return { count, calls: ctx.calls, ctx }; };
+
+    const back = await part('back');
+    assert.deepEqual(back.calls, [['clip', 0, 0, 1008, 720], ['translate', 0, 0], ['tile', 'Sky', 1, 'source-over', 0, 0, 1008, 720]], 'a repeating picture tiles the whole map from its top left');
+    assert.deepEqual((await part('ground')).calls, [['image', 'Ground', 1, 'source-over', 0, 0]], 'a picture locked to the map lies on it at its own size');
+    assert.deepEqual((await part('same')).calls, [['image', 'Trees', 1, 'source-over', 0, 0]]);
+    const over = await part('over');
+    assert.deepEqual(over.calls, [
+        ['clip', 0, 0, 1008, 128], ['translate', 0, 0], ['tile', 'Fog', 128 / 255, 'screen', 0, 0, 1008, 128],
+        ['image', 'Vignette', 1, 'multiply', 0, 0, 1008, 720]
+    ], 'a strip repeats across only; a screen-filling picture covers a map larger than the screen; a picture with no file draws nothing');
+    assert.equal(over.count, 2);
+    assert.deepEqual([over.ctx.globalAlpha, over.ctx.globalCompositeOperation], [1, 'source-over'], 'and the canvas is left as it was found');
+
+    // On a map smaller than the game's screen a screen-filling picture lies over the screen around the centered map.
+    const small = canvas();
+    await manager.drawToCanvas(small, { width: 10, height: 10, rrImageLayers: [{ name: 'Vignette', layer: 'over', fit: 'fill' }] }, 'over');
+    assert.deepEqual(small.calls, [['image', 'Vignette', 1, 'source-over', (480 - 816) / 2, (480 - 624) / 2, 816, 624]]);
+
+    // A 3D map draws only what lies on the screen above the characters.
+    const haven = makeEditor({ width: 21, height: 15, rrImageLayers: [] }, { files, is3D: true });
+    haven.manager._image = manager._image;
+    const names = async stage => { const ctx = canvas(); await haven.manager.drawToCanvas(ctx, map, stage); return ctx.calls.filter(call => call[0] !== 'clip' && call[0] !== 'translate').map(call => call[1]); };
+    assert.deepEqual([await names('back'), await names('ground'), await names('same'), await names('over')], [[], [], [], ['Fog', 'Vignette']]);
+
+    // A map with no image layers asks for nothing.
+    let asked = 0;
+    manager._image = async () => { asked++; return null; };
+    assert.equal(await manager.drawToCanvas(canvas(), { width: 4, height: 4 }, 'over'), 0);
+    assert.equal(asked, 0);
+});
+
 test('a dragged slider sets the sprites that stand: nothing is built again and the disk is not asked', async () => {
     const map = { width: 21, height: 15, rrImageLayers: [{ name: 'Ground', layer: 'ground' }, M.make('fog', 'Fog'), M.make('overlay', 'Vignette'), { name: 'Late', layer: 'over' }] };
     const files = ['Ground', 'Fog', 'Vignette', 'Other'];

@@ -42,7 +42,7 @@ class TraitHelp {
             52: 'Lets this battler equip armor of this type.',
             53: 'Freezes the slot: whatever is equipped there cannot be changed or removed.',
             54: 'Empties the slot and stops anything being equipped in it.',
-            55: 'Changes what the equipment slots of this battler are.',
+            55: 'Changes what the equipment slots of this battler are. Dual Wield does nothing for an actor whose class has its own Equipment Slots list.',
             61: 'A chance of one extra action this turn. Each trait is rolled on its own, so several can stack.',
             62: 'Switches on one fixed battler behavior.',
             63: 'Changes the animation played on defeat. Enemies only - actors ignore it.',
@@ -141,7 +141,9 @@ class TraitHelp {
         const tt = text => (window.I18n ? window.I18n.tText(text) : text);
         const slotHelp = [
             'The normal slot layout for this battler.',
-            'The second slot becomes a copy of the first - usually a second weapon in place of the shield.'
+            // The game returns the slot list of a class as it is and never asks about Dual Wield
+            // (Game_Actor.equipSlots), so the explanation says so.
+            'The second slot becomes a copy of the first - usually a second weapon in place of the shield. A class that has its own Equipment Slots list (Database, Classes) uses that list instead, and Dual Wield then does nothing for its actors.'
         ].map(tt);
         return slotHelp;
     }

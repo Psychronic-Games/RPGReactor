@@ -3304,9 +3304,10 @@ Game_Enemy.prototype.performCollapse = function() {
             this.playCollapseSe(null);
             break;
         // 3 is "No Disappear": the sprite stays put, so no effect is requested.
-        // It has no sound of its own; a chosen one still plays.
+        // The enemy still fell: it sounds as in a battle on the map (`ReactorFight.collapseSound`), the stock
+        // collapse sound unless one is chosen for it.
         case 3:
-            this.playCollapseSe(null);
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 4:
             this.requestEffect("ashCollapse");

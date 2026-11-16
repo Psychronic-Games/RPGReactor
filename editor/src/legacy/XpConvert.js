@@ -232,6 +232,9 @@
                 case 119: push(119, indent, [str(p[0])]); break;
                 case 121: case 123: case 124: case 125: case 126: case 127: case 128: case 129:
                 case 134: case 135: case 136: case 320: case 321: case 351: case 352: case 353: case 354:
+                    // Change Class in XP only swapped the class and kept the level; here it is the MZ command, which
+                    // gives the other class's curves and starts the actor at level 1. Counted for the import report.
+                    if (code === 321) tag(notes, 'changeClassResetsLevel');
                     push(code, indent, p.map(x => (x && typeof x === 'object' ? audio(x) : x)));
                     break;
                 case 122: {

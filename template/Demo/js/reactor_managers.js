@@ -735,6 +735,8 @@ ConfigManager.commandRemember = false;
 ConfigManager.touchUI = true;
 // "auto" keeps the frame rate by itself (reactor_3d.js, `Reactor3D.Quality`); "high", "medium" and "low" hold a level.
 ConfigManager.graphicsQuality = "auto";
+// Frames held to the refresh of the monitor the window is on (Graphics.FrameLimit); false draws every frame the machine can.
+ConfigManager.frameLimit = true;
 ConfigManager.graphicsAuto = null;
 ConfigManager.reactor3dSeen = false;
 ConfigManager._isLoaded = false;
@@ -811,6 +813,8 @@ ConfigManager.makeData = function() {
     config.graphicsQuality = this.graphicsQuality;
     config.graphicsAuto = this.graphicsAuto;
     config.reactor3dSeen = this.reactor3dSeen;
+    // Whether frames are held to the monitor's refresh (Graphics.FrameLimit).
+    config.frameLimit = this.frameLimit;
     return config;
 };
 
@@ -823,6 +827,7 @@ ConfigManager.applyData = function(config) {
     this.meVolume = this.readVolume(config, "meVolume");
     this.seVolume = this.readVolume(config, "seVolume");
     this.graphicsQuality = ["auto", "high", "medium", "low"].includes(config.graphicsQuality) ? config.graphicsQuality : "auto";
+    this.frameLimit = this.readFlag(config, "frameLimit", true);
     this.graphicsAuto = config.graphicsAuto && typeof config.graphicsAuto === "object" ? config.graphicsAuto : null;
     this.reactor3dSeen = config.reactor3dSeen === true;
 };
@@ -1217,8 +1222,9 @@ const _setBitmapNearest = function(bitmap) {
 // the mode of every texture it makes later (Bitmap._updateScaleMode), and it
 // makes a new one as soon as something reads a pixel of it or draws on it: a
 // sheet marked only on its first texture went back to LINEAR there.
-// img/system is left as it was: the window skin lives there, and its back is
-// stretched to the window's size.
+// In img/system only the sheets of cells are marked, by name (`SYSTEM_SHEETS`):
+// the rest of that folder is whole pictures (the window skin, whose back is
+// stretched to the window's size, Game Over, an interface's art), drawn smooth.
 const _setSheetNearest = function(bitmap) {
     if (bitmap && bitmap !== ImageManager._emptyBitmap) bitmap.smooth = false;
     return _setBitmapNearest(bitmap);
@@ -1231,6 +1237,30 @@ ImageManager.loadEnemy = function(filename) {
 ImageManager.loadCharacter = function(filename) {
     return _setSheetNearest(this.loadBitmap("img/characters/", filename));
 };
+
+/**
+ * A face set with frames says how many in its name: "Name[4F]" (or "Name[F4]") has each of its eight faces four
+ * frames wide, so the sheet is 16 faces across and 2 down, frame k of face i at column (i % 4) * 4 + k, the way a
+ * character sheet's [NF] is laid. What the frames hold is the artist's (a mouth opening for speech, a sweep from
+ * the neutral face to an expression); how they are played is the message's (`FACE_PLAYS`, a Show Text command's
+ * `reactorFacePlay`). Every other window shows the first frame. 0 for a plain face set, and with System's
+ * rrMultiFrames switched off.
+ */
+ImageManager.faceFrames = function(filename) {
+    if (typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.rrMultiFrames != null && !$dataSystem.rrMultiFrames) return 0;
+    const m = /\[(?:(\d+)F|F(\d+))\]/i.exec(String(filename || ""));
+    const n = m ? Number(m[1] || m[2]) : 0;
+    return n > 1 ? Math.min(n, 64) : 0;
+};
+
+/**
+ * How a message plays a face set's frames:
+ *   talk   the mouth follows the letters while the text appears and rests on the first frame (the usual);
+ *   once   the frames are played through once when the face appears, and the last is held: a sweep;
+ *   loop   the frames go round for as long as the face is shown;
+ *   still  the first frame.
+ */
+ImageManager.FACE_PLAYS = ["talk", "once", "loop", "still"];
 
 ImageManager.loadFace = function(filename) {
     return _setSheetNearest(this.loadBitmap("img/faces/", filename));
@@ -1252,8 +1282,19 @@ ImageManager.loadSvEnemy = function(filename) {
     return _setSheetNearest(this.loadBitmap("img/sv_enemies/", filename));
 };
 
+// The sheets of img/system: icons, balloons, state marks, weapon swings, the touch buttons, the damage digits and
+// the shadows. Until 2026-11-12 the whole folder was marked on its first texture only, so a whole picture there was
+// enlarged in hard pixels, and every file went smooth as soon as a pixel of it was read (the window skin always was).
+ImageManager.SYSTEM_SHEETS = ["iconset", "balloon", "states", "weapons1", "weapons2", "weapons3", "buttonset", "damage", "shadow1", "shadow2"];
+
+ImageManager.isSystemSheet = function(filename) {
+    const name = String(filename || "").split("/").pop().replace(/\.[A-Za-z0-9]+$/, "").toLowerCase();
+    return this.SYSTEM_SHEETS.includes(name);
+};
+
 ImageManager.loadSystem = function(filename) {
-    return _setBitmapNearest(this.loadBitmap("img/system/", filename));
+    const bitmap = this.loadBitmap("img/system/", filename);
+    return this.isSystemSheet(filename) ? _setSheetNearest(bitmap) : bitmap;
 };
 
 ImageManager.loadTileset = function(filename) {

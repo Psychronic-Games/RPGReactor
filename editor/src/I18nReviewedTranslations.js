@@ -5,6 +5,8 @@
 globalThis.RR_REVIEWED_TRANSLATIONS = {
   "text": {
     "ja": {
+      "Loop points: {start} s to {end} s": "ループ位置: {start} 秒 ～ {end} 秒",
+      "No loop points in this file.": "このファイルにはループ位置がありません。",
       "Tools run code from this project.": "ツールはこのプロジェクトのコードを実行します。",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "ツールはサンドボックス内で実行され、ファイルにアクセスできません。エディターを介してデータベースファイルの読み書きのみが可能です。信頼できるツールのみを実行してください。",
       "No project tools found.": "プロジェクトツールが見つかりません。",
@@ -600,6 +602,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "検証を通過し、元より小さくなった結果だけがステージング済みのアセットを置き換えます。OGG、MP3、M4Aはその場で再エンコードし、WAVとFLACはOGGに変換します。ループ位置は引き継がれます。"
     },
     "zh-Hant": {
+      "Loop points: {start} s to {end} s": "循環點：{start} 秒至 {end} 秒",
+      "No loop points in this file.": "此檔案沒有循環點。",
       "Tools run code from this project.": "工具會執行此專案中的程式碼。",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "工具在沙箱中執行，無法存取檔案，只能透過編輯器讀寫資料庫檔案。請只執行你信任的工具。",
       "No project tools found.": "找不到專案工具。",
@@ -1199,6 +1203,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "只有更小且通過驗證的結果才會取代暫存資源。OGG、MP3 和 M4A 會原地重新編碼；WAV 和 FLAC 會轉換為 OGG；循環點會保留。"
     },
     "zh-Hans": {
+      "Loop points: {start} s to {end} s": "循环点：{start} 秒至 {end} 秒",
+      "No loop points in this file.": "此文件没有循环点。",
       "Tools run code from this project.": "工具会运行此项目中的代码。",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "工具在沙箱中运行，无法访问文件，只能通过编辑器读写数据库文件。请只运行你信任的工具。",
       "No project tools found.": "未找到项目工具。",
@@ -1751,6 +1757,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "只有更小且通过验证的结果才会替换暂存资源。OGG、MP3 和 M4A 原地重新编码；WAV 和 FLAC 转换为 OGG；循环点会保留。"
     },
     "ko": {
+      "Loop points: {start} s to {end} s": "루프 지점: {start}초 ~ {end}초",
+      "No loop points in this file.": "이 파일에는 루프 지점이 없습니다.",
       "Tools run code from this project.": "도구는 이 프로젝트의 코드를 실행합니다.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "도구는 샌드박스에서 실행되어 파일에 접근할 수 없으며, 에디터를 통해서만 데이터베이스 파일을 읽고 쓸 수 있습니다. 신뢰할 수 있는 도구만 실행하세요.",
       "No project tools found.": "프로젝트 도구를 찾을 수 없습니다.",
@@ -2351,6 +2359,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "더 작고 검증을 통과한 결과만 스테이징된 에셋을 대체합니다. OGG, MP3, M4A는 그 자리에서 다시 인코딩하고, WAV와 FLAC은 OGG로 변환합니다. 루프 지점은 유지됩니다."
     },
     "es": {
+      "Loop points: {start} s to {end} s": "Puntos de bucle: de {start} s a {end} s",
+      "No loop points in this file.": "Este archivo no tiene puntos de bucle.",
       "Tools run code from this project.": "Las herramientas ejecutan código de este proyecto.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Una herramienta se ejecuta aislada, sin acceso a archivos, y solo puede leer y escribir archivos de base de datos a través del editor. Ejecuta únicamente herramientas de confianza.",
       "No project tools found.": "No se encontraron herramientas del proyecto.",
@@ -2984,6 +2994,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Solo los resultados validados que son más pequeños sustituyen a los recursos preparados. OGG, MP3 y M4A se recodifican en su lugar; WAV y FLAC se convierten a OGG; los puntos de bucle se conservan."
     },
     "pt": {
+      "Loop points: {start} s to {end} s": "Pontos de loop: de {start} s a {end} s",
+      "No loop points in this file.": "Este arquivo não tem pontos de loop.",
       "Tools run code from this project.": "As ferramentas executam código deste projeto.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Uma ferramenta é executada isolada, sem acesso a arquivos, e só pode ler e gravar arquivos de banco de dados através do editor. Execute apenas ferramentas confiáveis.",
       "No project tools found.": "Nenhuma ferramenta do projeto encontrada.",
@@ -3614,6 +3626,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Somente resultados validados e menores substituem os recursos preparados. OGG, MP3 e M4A são recodificados no próprio lugar; WAV e FLAC são convertidos para OGG; os pontos de loop são mantidos."
     },
     "fr": {
+      "Loop points: {start} s to {end} s": "Points de boucle : de {start} s à {end} s",
+      "No loop points in this file.": "Ce fichier n’a pas de points de boucle.",
       "Tools run code from this project.": "Les outils exécutent du code provenant de ce projet.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Un outil s'exécute en bac à sable, sans accès aux fichiers, et ne peut lire et écrire que des fichiers de base de données via l'éditeur. N'exécutez que des outils de confiance.",
       "No project tools found.": "Aucun outil de projet trouvé.",
@@ -4242,6 +4256,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Seuls les résultats validés plus légers remplacent les ressources préparées. OGG, MP3 et M4A sont réencodés sur place ; WAV et FLAC sont convertis en OGG ; les points de boucle sont conservés."
     },
     "it": {
+      "Loop points: {start} s to {end} s": "Punti di loop: da {start} s a {end} s",
+      "No loop points in this file.": "Questo file non ha punti di loop.",
       "Tools run code from this project.": "Gli strumenti eseguono codice di questo progetto.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Uno strumento viene eseguito in sandbox, senza accesso ai file, e può solo leggere e scrivere file di database tramite l'editor. Esegui solo strumenti di cui ti fidi.",
       "No project tools found.": "Nessuno strumento del progetto trovato.",
@@ -4880,6 +4896,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Solo i risultati convalidati più piccoli sostituiscono le risorse preparate. OGG, MP3 e M4A vengono ricodificati sul posto; WAV e FLAC vengono convertiti in OGG; i punti di loop vengono mantenuti."
     },
     "de": {
+      "Loop points: {start} s to {end} s": "Schleifenpunkte: {start} s bis {end} s",
+      "No loop points in this file.": "Diese Datei hat keine Schleifenpunkte.",
       "Tools run code from this project.": "Werkzeuge führen Code aus diesem Projekt aus.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Ein Werkzeug läuft in einer Sandbox ohne Dateizugriff und kann Datenbankdateien nur über den Editor lesen und schreiben. Führe nur Werkzeuge aus, denen du vertraust.",
       "No project tools found.": "Keine Projektwerkzeuge gefunden.",
@@ -5486,6 +5504,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Nur kleinere, geprüfte Ergebnisse ersetzen die bereitgestellten Assets. OGG, MP3 und M4A werden direkt neu kodiert; WAV und FLAC werden in OGG umgewandelt; Schleifenpunkte bleiben erhalten."
     },
     "ru": {
+      "Loop points: {start} s to {end} s": "Точки цикла: с {start} с до {end} с",
+      "No loop points in this file.": "В этом файле нет точек цикла.",
       "Tools run code from this project.": "Инструменты выполняют код из этого проекта.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Инструмент работает в песочнице без доступа к файлам и может только читать и записывать файлы базы данных через редактор. Запускайте только те инструменты, которым доверяете.",
       "No project tools found.": "Инструменты проекта не найдены.",
@@ -6099,6 +6119,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Подготовленные ресурсы заменяются только результатами меньшего размера, прошедшими проверку. OGG, MP3 и M4A перекодируются на месте; WAV и FLAC преобразуются в OGG; точки зацикливания сохраняются."
     },
     "pl": {
+      "Loop points: {start} s to {end} s": "Punkty pętli: od {start} s do {end} s",
+      "No loop points in this file.": "Ten plik nie ma punktów pętli.",
       "Tools run code from this project.": "Narzędzia uruchamiają kod z tego projektu.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Narzędzie działa w piaskownicy bez dostępu do plików i może jedynie odczytywać i zapisywać pliki bazy danych poprzez edytor. Uruchamiaj tylko zaufane narzędzia.",
       "No project tools found.": "Nie znaleziono narzędzi projektu.",
@@ -6711,6 +6733,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Przygotowane zasoby są zastępowane tylko mniejszymi wynikami, które przeszły weryfikację. OGG, MP3 i M4A są ponownie kodowane w miejscu; WAV i FLAC są konwertowane do OGG; punkty pętli zostają zachowane."
     },
     "el": {
+      "Loop points: {start} s to {end} s": "Σημεία επανάληψης: από {start} s έως {end} s",
+      "No loop points in this file.": "Αυτό το αρχείο δεν έχει σημεία επανάληψης.",
       "Tools run code from this project.": "Τα εργαλεία εκτελούν κώδικα από αυτό το έργο.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Ένα εργαλείο εκτελείται σε sandbox χωρίς πρόσβαση σε αρχεία και μπορεί μόνο να διαβάζει και να γράφει αρχεία βάσης δεδομένων μέσω του επεξεργαστή. Εκτελείτε μόνο εργαλεία που εμπιστεύεστε.",
       "No project tools found.": "Δεν βρέθηκαν εργαλεία έργου.",
@@ -7323,6 +7347,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Μόνο μικρότερα αποτελέσματα που περνούν τον έλεγχο αντικαθιστούν τα προετοιμασμένα αρχεία. Τα OGG, MP3 και M4A επανακωδικοποιούνται επί τόπου· τα WAV και FLAC μετατρέπονται σε OGG· τα σημεία επανάληψης διατηρούνται."
     },
     "ar": {
+      "Loop points: {start} s to {end} s": "نقاط التكرار: من {start} ث إلى {end} ث",
+      "No loop points in this file.": "لا يحتوي هذا الملف على نقاط تكرار.",
       "Tools run code from this project.": "تُشغّل الأدوات تعليمات برمجية من هذا المشروع.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "تعمل الأداة في بيئة معزولة بلا وصول إلى الملفات، ولا يمكنها سوى قراءة ملفات قاعدة البيانات وكتابتها عبر المحرر. شغّل الأدوات الموثوقة فقط.",
       "No project tools found.": "لم يتم العثور على أدوات للمشروع.",
@@ -8015,6 +8041,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "لا تحلّ محلّ الأصول المجهّزة إلا النتائج الأصغر حجمًا التي اجتازت التحقق. يُعاد ترميز OGG وMP3 وM4A في مكانها؛ ويُحوَّل WAV وFLAC إلى OGG؛ وتُحفظ نقاط التكرار."
     },
     "tr": {
+      "Loop points: {start} s to {end} s": "Döngü noktaları: {start} sn - {end} sn",
+      "No loop points in this file.": "Bu dosyada döngü noktası yok.",
       "Tools run code from this project.": "Araçlar bu projedeki kodu çalıştırır.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Bir araç, dosya erişimi olmadan yalıtılmış ortamda çalışır ve veritabanı dosyalarını yalnızca düzenleyici aracılığıyla okuyup yazabilir. Yalnızca güvendiğiniz araçları çalıştırın.",
       "No project tools found.": "Proje aracı bulunamadı.",
@@ -8723,6 +8751,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Yalnızca daha küçük ve doğrulanmış sonuçlar hazırlanan varlıkların yerini alır. OGG, MP3 ve M4A yerinde yeniden kodlanır; WAV ve FLAC, OGG'ye dönüştürülür; döngü noktaları korunur."
     },
     "id": {
+      "Loop points: {start} s to {end} s": "Titik loop: {start} d sampai {end} d",
+      "No loop points in this file.": "Berkas ini tidak memiliki titik loop.",
       "Tools run code from this project.": "Alat menjalankan kode dari proyek ini.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Alat berjalan dalam sandbox tanpa akses berkas, dan hanya dapat membaca serta menulis berkas basis data melalui editor. Jalankan hanya alat yang Anda percayai.",
       "No project tools found.": "Tidak ada alat proyek yang ditemukan.",
@@ -9361,6 +9391,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Hanya hasil tervalidasi yang lebih kecil yang menggantikan aset yang disiapkan. OGG, MP3, dan M4A dienkode ulang di tempat; WAV dan FLAC dikonversi ke OGG; titik loop tetap dipertahankan."
     },
     "vi": {
+      "Loop points: {start} s to {end} s": "Điểm lặp: từ {start} giây đến {end} giây",
+      "No loop points in this file.": "Tệp này không có điểm lặp.",
       "Tools run code from this project.": "Công cụ chạy mã từ dự án này.",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Công cụ chạy trong môi trường cách ly, không truy cập tệp, và chỉ có thể đọc và ghi tệp cơ sở dữ liệu thông qua trình chỉnh sửa. Chỉ chạy những công cụ bạn tin tưởng.",
       "No project tools found.": "Không tìm thấy công cụ dự án nào.",
@@ -10023,6 +10055,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Chỉ những kết quả nhỏ hơn đã được kiểm định mới thay thế tài nguyên đã chuẩn bị. OGG, MP3 và M4A được mã hóa lại tại chỗ; WAV và FLAC được chuyển sang OGG; điểm lặp được giữ nguyên."
     },
     "th": {
+      "Loop points: {start} s to {end} s": "จุดวนซ้ำ: {start} วินาที ถึง {end} วินาที",
+      "No loop points in this file.": "ไฟล์นี้ไม่มีจุดวนซ้ำ",
       "Tools run code from this project.": "เครื่องมือจะรันโค้ดจากโปรเจกต์นี้",
       "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "เครื่องมือทำงานในแซนด์บ็อกซ์โดยไม่มีสิทธิ์เข้าถึงไฟล์ และอ่านหรือเขียนไฟล์ฐานข้อมูลได้ผ่านโปรแกรมแก้ไขเท่านั้น เรียกใช้เฉพาะเครื่องมือที่คุณเชื่อถือ",
       "No project tools found.": "ไม่พบเครื่องมือของโปรเจกต์",
@@ -16854,6 +16888,131 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  "id":["Isian","Lapisan di dalam lapisan ini ikut terbawa: bergerak, membesar, berputar, dan memudar bersamanya."],
  "vi":["Tô","Các lớp nằm trong lớp này được mang theo: chúng di chuyển, lớn lên, xoay và mờ dần cùng với nó."],
  "th":["การเติมสี","เลเยอร์ที่อยู่ภายในเลเยอร์นี้จะถูกพาไปด้วย: เคลื่อนที่ ขยาย หมุน และจางไปพร้อมกับมัน"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// The Build panel's height off the ground (Z), 2026-11-14. A machine-assisted first pass, flagged for review.
+{
+ const keys=["Height off the ground (Z)","Z: tiles off the ground","Z: how many tiles the piece is raised off the ground of its tile. 0 stands on the ground."];
+ const rows={
+ "ja":["地面からの高さ (Z)","Z: 地面からのタイル数","Z: このパーツがそのタイルの地面から何タイル持ち上げられているか。0 は地面の上に立ちます。"],
+ "zh-Hant":["離地高度 (Z)","Z：離地的格數","Z：此部件比所在格的地面高出多少格。0 表示立在地面上。"],
+ "zh-Hans":["离地高度 (Z)","Z：离地的格数","Z：此部件比所在格的地面高出多少格。0 表示立在地面上。"],
+ "ko":["지면에서의 높이 (Z)","Z: 지면에서 떨어진 타일 수","Z: 이 조각이 해당 타일의 지면에서 몇 타일 올라가 있는지입니다. 0이면 지면 위에 섭니다."],
+ "es":["Altura sobre el suelo (Z)","Z: casillas sobre el suelo","Z: cuántas casillas se eleva la pieza sobre el suelo de su casilla. Con 0 se apoya en el suelo."],
+ "pt":["Altura acima do chão (Z)","Z: blocos acima do chão","Z: quantos blocos a peça fica acima do chão do seu bloco. Com 0 ela fica no chão."],
+ "fr":["Hauteur au-dessus du sol (Z)","Z : cases au-dessus du sol","Z : de combien de cases la pièce est relevée au-dessus du sol de sa case. À 0, elle repose sur le sol."],
+ "it":["Altezza dal suolo (Z)","Z: caselle dal suolo","Z: di quante caselle il pezzo è sollevato dal suolo della sua casella. Con 0 poggia sul suolo."],
+ "de":["Höhe über dem Boden (Z)","Z: Felder über dem Boden","Z: wie viele Felder das Teil über dem Boden seines Feldes angehoben ist. Bei 0 steht es auf dem Boden."],
+ "ru":["Высота над землёй (Z)","Z: клеток над землёй","Z: на сколько клеток деталь поднята над землёй своей клетки. При 0 она стоит на земле."],
+ "pl":["Wysokość nad ziemią (Z)","Z: pola nad ziemią","Z: o ile pól element jest uniesiony nad ziemią swojego pola. Przy 0 stoi na ziemi."],
+ "el":["Ύψος από το έδαφος (Z)","Z: πλακίδια πάνω από το έδαφος","Z: πόσα πλακίδια είναι υψωμένο το κομμάτι πάνω από το έδαφος του πλακιδίου του. Με 0 στέκεται στο έδαφος."],
+ "ar":["الارتفاع عن الأرض (Z)","Z: عدد المربعات فوق الأرض","Z: عدد المربعات التي ترتفع بها القطعة عن أرض مربعها. عند 0 تقف على الأرض."],
+ "tr":["Zeminden yükseklik (Z)","Z: zeminden kare sayısı","Z: parçanın kendi karesinin zemininden kaç kare yükseltildiği. 0 olduğunda zeminde durur."],
+ "id":["Tinggi dari tanah (Z)","Z: petak di atas tanah","Z: berapa petak bagian ini dinaikkan dari tanah petaknya. Pada 0 bagian ini berdiri di tanah."],
+ "vi":["Độ cao so với mặt đất (Z)","Z: số ô trên mặt đất","Z: mảnh này được nâng lên bao nhiêu ô so với mặt đất của ô đó. Ở 0, nó đứng trên mặt đất."],
+ "th":["ความสูงจากพื้น (Z)","Z: จำนวนช่องเหนือพื้น","Z: ชิ้นส่วนนี้ถูกยกขึ้นจากพื้นของช่องนั้นกี่ช่อง ค่า 0 คือวางอยู่บนพื้น"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// Above and Below: what the sides of an opening wear, 2026-11-14. A machine-assisted first pass, flagged for review.
+{
+ const keys=["Lining of the openings","The room's walls","The room's ceiling"];
+ const rows={
+ "ja":["開口部の内張り","部屋の壁","部屋の天井"],
+ "zh-Hant":["開口的內襯","房間的牆面","房間的天花板"],
+ "zh-Hans":["开口的内衬","房间的墙面","房间的天花板"],
+ "ko":["개구부 안쪽 마감","방의 벽","방의 천장"],
+ "es":["Revestimiento de las aberturas","Las paredes de la sala","El techo de la sala"],
+ "pt":["Revestimento das aberturas","As paredes da sala","O teto da sala"],
+ "fr":["Habillage des ouvertures","Les murs de la salle","Le plafond de la salle"],
+ "it":["Rivestimento delle aperture","Le pareti della stanza","Il soffitto della stanza"],
+ "de":["Auskleidung der Öffnungen","Die Wände des Raums","Die Decke des Raums"],
+ "ru":["Облицовка проёмов","Стены комнаты","Потолок комнаты"],
+ "pl":["Okładzina otworów","Ściany pomieszczenia","Sufit pomieszczenia"],
+ "el":["Επένδυση των ανοιγμάτων","Οι τοίχοι του δωματίου","Η οροφή του δωματίου"],
+ "ar":["تبطين الفتحات","جدران الغرفة","سقف الغرفة"],
+ "tr":["Açıklıkların kaplaması","Odanın duvarları","Odanın tavanı"],
+ "id":["Lapisan bukaan","Dinding ruangan","Langit-langit ruangan"],
+ "vi":["Lớp lót của các lỗ mở","Tường của phòng","Trần của phòng"],
+ "th":["ผิวบุของช่องเปิด","ผนังของห้อง","เพดานของห้อง"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// The Audio Player's note while a track is listened to in a picker, 2026-11-14. A machine-assisted first pass, flagged for review.
+{
+ const keys=["Waiting while you listen to {track}","Waiting while you listen to another track"];
+ const rows={
+ "ja":["{track} の試聴中は待機しています","別のトラックの試聴中は待機しています"],
+ "zh-Hant":["試聽 {track} 時暫停等待","試聽其他音軌時暫停等待"],
+ "zh-Hans":["试听 {track} 时暂停等待","试听其他音轨时暂停等待"],
+ "ko":["{track} 을(를) 듣는 동안 대기 중","다른 트랙을 듣는 동안 대기 중"],
+ "es":["En espera mientras escuchas {track}","En espera mientras escuchas otra pista"],
+ "pt":["Em espera enquanto você ouve {track}","Em espera enquanto você ouve outra faixa"],
+ "fr":["En attente pendant l'écoute de {track}","En attente pendant l'écoute d'une autre piste"],
+ "it":["In attesa mentre ascolti {track}","In attesa mentre ascolti un'altra traccia"],
+ "de":["Wartet, während du {track} anhörst","Wartet, während du einen anderen Titel anhörst"],
+ "ru":["Ожидание, пока вы слушаете {track}","Ожидание, пока вы слушаете другую дорожку"],
+ "pl":["Czeka, gdy słuchasz {track}","Czeka, gdy słuchasz innej ścieżki"],
+ "el":["Σε αναμονή όσο ακούτε το {track}","Σε αναμονή όσο ακούτε άλλο κομμάτι"],
+ "ar":["في الانتظار أثناء استماعك إلى {track}","في الانتظار أثناء استماعك إلى مقطع آخر"],
+ "tr":["{track} dinlenirken bekliyor","Başka bir parça dinlenirken bekliyor"],
+ "id":["Menunggu selagi Anda mendengarkan {track}","Menunggu selagi Anda mendengarkan trek lain"],
+ "vi":["Đang chờ trong khi bạn nghe {track}","Đang chờ trong khi bạn nghe bản nhạc khác"],
+ "th":["รอขณะที่คุณฟัง {track}","รอขณะที่คุณฟังแทร็กอื่น"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// The graphics backend a project and the editor can name, Auto by default, 2026-11-15. A machine-assisted first pass, flagged for review.
+{
+ const keys=["Graphics Backend","Graphics Backend (Windows)","Auto (best for each machine)","Auto (best for this machine)","Auto lets each machine find its fastest by playing: a strong graphics card stays on Direct3D 11, a weak one is tried on OpenGL. A named backend is used on every machine.","How the editor reaches the graphics card. Auto uses what the game found fastest on this machine. A change is used from the next time the editor starts."];
+ const rows={
+ "ja":["グラフィックスバックエンド","グラフィックスバックエンド (Windows)","自動 (各マシンに最適なもの)","自動 (このマシンに最適なもの)","自動では、各マシンがプレイを通じて最も速いものを見つけます。高性能なグラフィックスカードは Direct3D 11 のまま、性能の低いものは OpenGL を試します。指定したバックエンドはすべてのマシンで使われます。","エディターがグラフィックスカードにアクセスする方法です。自動では、このマシンでゲームが最も速いと判断したものを使います。変更は次回エディターを起動したときから有効になります。"],
+ "zh-Hant":["圖形後端","圖形後端 (Windows)","自動 (每台電腦各自最佳)","自動 (這台電腦最佳)","自動會讓每台電腦在遊玩中找出最快的方式：強力顯示卡維持 Direct3D 11，較弱的會嘗試 OpenGL。指定的後端則用於所有電腦。","編輯器存取顯示卡的方式。自動會使用遊戲在這台電腦上測得最快的方式。變更會在下次啟動編輯器時生效。"],
+ "zh-Hans":["图形后端","图形后端 (Windows)","自动 (每台电脑各自最佳)","自动 (这台电脑最佳)","自动会让每台电脑在游玩中找出最快的方式：强力显卡保持 Direct3D 11，较弱的会尝试 OpenGL。指定的后端则用于所有电脑。","编辑器访问显卡的方式。自动会使用游戏在这台电脑上测得最快的方式。更改会在下次启动编辑器时生效。"],
+ "ko":["그래픽 백엔드","그래픽 백엔드 (Windows)","자동 (기기마다 가장 좋은 것)","자동 (이 기기에 가장 좋은 것)","자동은 각 기기가 플레이하면서 가장 빠른 방식을 찾게 합니다. 성능이 좋은 그래픽 카드는 Direct3D 11을 유지하고, 약한 카드는 OpenGL을 시도합니다. 지정한 백엔드는 모든 기기에서 사용됩니다.","에디터가 그래픽 카드에 접근하는 방식입니다. 자동은 게임이 이 기기에서 가장 빠르다고 확인한 방식을 사용합니다. 변경 사항은 에디터를 다음에 시작할 때부터 적용됩니다."],
+ "es":["Backend gráfico","Backend gráfico (Windows)","Automático (el mejor para cada equipo)","Automático (el mejor para este equipo)","Automático deja que cada equipo encuentre el más rápido al jugar: una tarjeta gráfica potente sigue en Direct3D 11 y una débil prueba OpenGL. Un backend elegido se usa en todos los equipos.","Cómo accede el editor a la tarjeta gráfica. Automático usa el que el juego encontró más rápido en este equipo. El cambio se aplica la próxima vez que se inicie el editor."],
+ "pt":["Backend gráfico","Backend gráfico (Windows)","Automático (o melhor para cada máquina)","Automático (o melhor para esta máquina)","Automático deixa cada máquina encontrar o mais rápido ao jogar: uma placa de vídeo forte continua no Direct3D 11 e uma fraca experimenta o OpenGL. Um backend escolhido é usado em todas as máquinas.","Como o editor acessa a placa de vídeo. Automático usa o que o jogo achou mais rápido nesta máquina. A mudança vale a partir da próxima vez que o editor iniciar."],
+ "fr":["Moteur graphique","Moteur graphique (Windows)","Auto (le meilleur pour chaque machine)","Auto (le meilleur pour cette machine)","Auto laisse chaque machine trouver le plus rapide en jouant : une carte graphique puissante reste sur Direct3D 11, une carte faible essaie OpenGL. Un moteur choisi est utilisé sur toutes les machines.","La façon dont l'éditeur accède à la carte graphique. Auto utilise celui que le jeu a trouvé le plus rapide sur cette machine. Le changement s'applique au prochain démarrage de l'éditeur."],
+ "it":["Backend grafico","Backend grafico (Windows)","Automatico (il migliore per ogni macchina)","Automatico (il migliore per questa macchina)","Automatico lascia che ogni macchina trovi il più veloce giocando: una scheda grafica potente resta su Direct3D 11, una debole prova OpenGL. Un backend scelto viene usato su tutte le macchine.","Come l'editor accede alla scheda grafica. Automatico usa quello che il gioco ha trovato più veloce su questa macchina. La modifica vale dal prossimo avvio dell'editor."],
+ "de":["Grafik-Backend","Grafik-Backend (Windows)","Automatisch (das beste für jeden Rechner)","Automatisch (das beste für diesen Rechner)","Automatisch lässt jeden Rechner beim Spielen das schnellste finden: Eine starke Grafikkarte bleibt bei Direct3D 11, eine schwache probiert OpenGL. Ein gewähltes Backend wird auf jedem Rechner verwendet.","Wie der Editor auf die Grafikkarte zugreift. Automatisch verwendet das, was das Spiel auf diesem Rechner als schnellstes gefunden hat. Eine Änderung gilt ab dem nächsten Start des Editors."],
+ "ru":["Графический бэкенд","Графический бэкенд (Windows)","Авто (лучший для каждого компьютера)","Авто (лучший для этого компьютера)","В режиме «Авто» каждый компьютер сам находит самый быстрый вариант во время игры: мощная видеокарта остаётся на Direct3D 11, слабая пробует OpenGL. Выбранный бэкенд используется на всех компьютерах.","Как редактор обращается к видеокарте. «Авто» использует то, что игра сочла самым быстрым на этом компьютере. Изменение вступит в силу при следующем запуске редактора."],
+ "pl":["Backend graficzny","Backend graficzny (Windows)","Automatycznie (najlepszy dla każdego komputera)","Automatycznie (najlepszy dla tego komputera)","Tryb automatyczny pozwala każdemu komputerowi znaleźć najszybszy backend podczas gry: mocna karta graficzna zostaje przy Direct3D 11, słaba próbuje OpenGL. Wybrany backend jest używany na każdym komputerze.","Sposób, w jaki edytor korzysta z karty graficznej. Tryb automatyczny używa tego, który gra uznała za najszybszy na tym komputerze. Zmiana obowiązuje od następnego uruchomienia edytora."],
+ "el":["Backend γραφικών","Backend γραφικών (Windows)","Αυτόματο (το καλύτερο για κάθε υπολογιστή)","Αυτόματο (το καλύτερο για αυτόν τον υπολογιστή)","Το Αυτόματο αφήνει κάθε υπολογιστή να βρει το ταχύτερο παίζοντας: μια ισχυρή κάρτα γραφικών μένει στο Direct3D 11, μια αδύναμη δοκιμάζει το OpenGL. Ένα επιλεγμένο backend χρησιμοποιείται σε όλους τους υπολογιστές.","Πώς ο επεξεργαστής χρησιμοποιεί την κάρτα γραφικών. Το Αυτόματο χρησιμοποιεί αυτό που το παιχνίδι βρήκε ταχύτερο σε αυτόν τον υπολογιστή. Η αλλαγή ισχύει από την επόμενη εκκίνηση του επεξεργαστή."],
+ "ar":["واجهة الرسوميات","واجهة الرسوميات (Windows)","تلقائي (الأفضل لكل جهاز)","تلقائي (الأفضل لهذا الجهاز)","الوضع التلقائي يترك كل جهاز يجد الأسرع أثناء اللعب: بطاقة الرسوميات القوية تبقى على Direct3D 11، والضعيفة تُجرَّب على OpenGL. الواجهة المحددة تُستخدم على كل الأجهزة.","كيف يصل المحرر إلى بطاقة الرسوميات. الوضع التلقائي يستخدم ما وجدته اللعبة الأسرع على هذا الجهاز. يُطبَّق التغيير عند تشغيل المحرر في المرة القادمة."],
+ "tr":["Grafik arka ucu","Grafik arka ucu (Windows)","Otomatik (her makine için en iyisi)","Otomatik (bu makine için en iyisi)","Otomatik, her makinenin oynarken en hızlısını bulmasını sağlar: güçlü bir ekran kartı Direct3D 11'de kalır, zayıf olan OpenGL'i dener. Seçilen arka uç her makinede kullanılır.","Düzenleyicinin ekran kartına nasıl eriştiği. Otomatik, oyunun bu makinede en hızlı bulduğunu kullanır. Değişiklik, düzenleyicinin bir sonraki açılışından itibaren geçerli olur."],
+ "id":["Backend grafis","Backend grafis (Windows)","Otomatis (terbaik untuk tiap mesin)","Otomatis (terbaik untuk mesin ini)","Otomatis membiarkan tiap mesin menemukan yang tercepat sambil bermain: kartu grafis yang kuat tetap di Direct3D 11, yang lemah mencoba OpenGL. Backend yang dipilih dipakai di semua mesin.","Cara editor mengakses kartu grafis. Otomatis memakai yang menurut game paling cepat di mesin ini. Perubahan berlaku saat editor dijalankan berikutnya."],
+ "vi":["Backend đồ họa","Backend đồ họa (Windows)","Tự động (tốt nhất cho từng máy)","Tự động (tốt nhất cho máy này)","Tự động để từng máy tự tìm ra lựa chọn nhanh nhất khi chơi: card đồ họa mạnh giữ Direct3D 11, card yếu sẽ thử OpenGL. Backend được chọn sẽ dùng trên mọi máy.","Cách trình chỉnh sửa truy cập card đồ họa. Tự động dùng lựa chọn mà trò chơi thấy nhanh nhất trên máy này. Thay đổi có hiệu lực từ lần khởi động trình chỉnh sửa tiếp theo."],
+ "th":["แบ็กเอนด์กราฟิก","แบ็กเอนด์กราฟิก (Windows)","อัตโนมัติ (ดีที่สุดสำหรับแต่ละเครื่อง)","อัตโนมัติ (ดีที่สุดสำหรับเครื่องนี้)","อัตโนมัติให้แต่ละเครื่องหาแบบที่เร็วที่สุดจากการเล่น: การ์ดจอแรงจะใช้ Direct3D 11 ต่อไป ส่วนการ์ดจอที่อ่อนจะลอง OpenGL แบ็กเอนด์ที่เลือกไว้จะใช้กับทุกเครื่อง","วิธีที่ตัวแก้ไขเข้าถึงการ์ดจอ อัตโนมัติจะใช้แบบที่เกมพบว่าเร็วที่สุดบนเครื่องนี้ การเปลี่ยนแปลงจะมีผลเมื่อเปิดตัวแก้ไขครั้งถัดไป"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// Build › Web › Play from a server.
+{
+ const keys=["Play from a server", "The build is one small page that shows the game from the address below. For store pages with size limits, such as itch.io: the game itself stays on your server.", "Game address", "Enter the address the game is played at. It starts with https://"];
+ const rows={
+ "ja":["サーバーからプレイ", "ビルドは、下のアドレスからゲームを表示する小さなページ1枚だけになります。itch.io のようにサイズ制限のあるストアページ向けです。ゲーム本体はあなたのサーバーに置いたままです。", "ゲームのアドレス", "ゲームをプレイするアドレスを入力してください。https:// で始まります。"],
+ "zh-Hant":["從伺服器遊玩", "建置結果只有一個小頁面,會從下方位址顯示遊戲。適用於像 itch.io 這類有大小限制的商店頁面:遊戲本身仍留在您的伺服器上。", "遊戲位址", "請輸入遊玩此遊戲的位址。以 https:// 開頭。"],
+ "zh-Hans":["从服务器游玩", "构建结果只有一个小页面,会从下方地址显示游戏。适用于像 itch.io 这类有大小限制的商店页面:游戏本身仍留在您的服务器上。", "游戏地址", "请输入游玩此游戏的地址。以 https:// 开头。"],
+ "ko":["서버에서 플레이", "빌드는 아래 주소의 게임을 보여 주는 작은 페이지 하나뿐입니다. itch.io처럼 용량 제한이 있는 스토어 페이지용이며, 게임 자체는 사용자의 서버에 그대로 있습니다.", "게임 주소", "게임을 플레이하는 주소를 입력하세요. https:// 로 시작합니다."],
+ "es":["Jugar desde un servidor", "La compilación es una sola página pequeña que muestra el juego desde la dirección de abajo. Para páginas de tienda con límites de tamaño, como itch.io: el juego en sí se queda en tu servidor.", "Dirección del juego", "Introduce la dirección en la que se juega. Empieza por https://"],
+ "pt":["Jogar a partir de um servidor", "A compilação é uma única página pequena que mostra o jogo a partir do endereço abaixo. Para páginas de loja com limite de tamanho, como a itch.io: o jogo em si fica no seu servidor.", "Endereço do jogo", "Digite o endereço em que o jogo é jogado. Ele começa com https://"],
+ "fr":["Jouer depuis un serveur", "La version produite est une seule petite page qui affiche le jeu depuis l'adresse ci-dessous. Pour les pages de boutique limitées en taille, comme itch.io : le jeu lui-même reste sur votre serveur.", "Adresse du jeu", "Saisissez l'adresse à laquelle on joue au jeu. Elle commence par https://"],
+ "de":["Von einem Server spielen", "Der Build ist eine einzige kleine Seite, die das Spiel von der unten stehenden Adresse anzeigt. Für Shop-Seiten mit Größenbeschränkung wie itch.io: Das Spiel selbst bleibt auf Ihrem Server.", "Spieladresse", "Geben Sie die Adresse ein, unter der das Spiel gespielt wird. Sie beginnt mit https://"],
+ "it":["Gioca da un server", "La build è una sola piccola pagina che mostra il gioco dall'indirizzo qui sotto. Per le pagine dei negozi con limiti di dimensione, come itch.io: il gioco vero e proprio resta sul tuo server.", "Indirizzo del gioco", "Inserisci l'indirizzo a cui si gioca. Inizia con https://"],
+ "ru":["Играть с сервера", "Сборка состоит из одной небольшой страницы, которая показывает игру по адресу ниже. Для страниц магазинов с ограничением размера, таких как itch.io: сама игра остаётся на вашем сервере.", "Адрес игры", "Введите адрес, по которому идёт игра. Он начинается с https://"],
+ "pl":["Graj z serwera", "Kompilacja to jedna mała strona, która pokazuje grę spod adresu poniżej. Dla stron sklepów z limitem rozmiaru, takich jak itch.io: sama gra zostaje na Twoim serwerze.", "Adres gry", "Wpisz adres, pod którym gra jest dostępna. Zaczyna się od https://"],
+ "el":["Παιχνίδι από διακομιστή", "Η έκδοση είναι μία μικρή σελίδα που δείχνει το παιχνίδι από την παρακάτω διεύθυνση. Για σελίδες καταστημάτων με όρια μεγέθους, όπως το itch.io: το ίδιο το παιχνίδι μένει στον διακομιστή σας.", "Διεύθυνση παιχνιδιού", "Εισαγάγετε τη διεύθυνση στην οποία παίζεται το παιχνίδι. Ξεκινά με https://"],
+ "ar":["اللعب من خادم", "النسخة المبنية صفحة صغيرة واحدة تعرض اللعبة من العنوان أدناه. لصفحات المتاجر التي تحدّ الحجم مثل itch.io: تبقى اللعبة نفسها على خادمك.", "عنوان اللعبة", "أدخل العنوان الذي تُلعب عليه اللعبة. يبدأ بـ https://"],
+ "tr":["Sunucudan oyna", "Derleme, oyunu aşağıdaki adresten gösteren tek bir küçük sayfadır. itch.io gibi boyut sınırı olan mağaza sayfaları içindir: oyunun kendisi sunucunuzda kalır.", "Oyun adresi", "Oyunun oynandığı adresi girin. https:// ile başlar."],
+ "id":["Mainkan dari server", "Build ini hanya satu halaman kecil yang menampilkan game dari alamat di bawah. Untuk halaman toko dengan batas ukuran, seperti itch.io: game itu sendiri tetap berada di server Anda.", "Alamat game", "Masukkan alamat tempat game dimainkan. Diawali dengan https://"],
+ "vi":["Chơi từ máy chủ", "Bản dựng chỉ là một trang nhỏ hiển thị trò chơi từ địa chỉ bên dưới. Dành cho trang cửa hàng có giới hạn dung lượng như itch.io: bản thân trò chơi vẫn nằm trên máy chủ của bạn.", "Địa chỉ trò chơi", "Hãy nhập địa chỉ nơi trò chơi được chơi. Địa chỉ bắt đầu bằng https://"],
+ "th":["เล่นจากเซิร์ฟเวอร์", "บิลด์นี้เป็นหน้าเล็ก ๆ เพียงหน้าเดียวที่แสดงเกมจากที่อยู่ด้านล่าง สำหรับหน้าร้านค้าที่จำกัดขนาด เช่น itch.io: ตัวเกมยังคงอยู่บนเซิร์ฟเวอร์ของคุณ", "ที่อยู่ของเกม", "ป้อนที่อยู่ที่ใช้เล่นเกม ขึ้นต้นด้วย https://"]
  };
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }

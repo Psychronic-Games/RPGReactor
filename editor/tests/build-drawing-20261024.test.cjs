@@ -355,6 +355,32 @@ test('a floor in hand lays a square of tiles at a click, and a line of floor tha
     assert.equal(E.pieces(map).filter(p => p.kind === 'floor' && p.x >= 10).length, 10, 'two tiles wide, five long');
 });
 
+test('a ladder and a stair go down the size the panel says in every drawing mode, as the preview shows them', () => {
+    // Owner, 2026-11-14: a ladder set 3 wide and 26 tall went down 1 by 1 with Line or Rectangle chosen.
+    const sizeOf = (E, map) => { const l = E.pieces(map).filter(p => p.kind === 'ladder'); return [new Set(l.map(p => p.x + ',' + p.y)).size, l.length ? Math.max(...l.map(p => p.z)) + 1 : 0, l.length]; };
+    for (const shape of ['brush', 'line', 'rect']) {
+        const map = freshMap(); const { manager, E } = builderOn(map);
+        manager.setKind('ladder'); manager.ladderWidth = 3; manager.ladderHeight = 26; manager.setDrawShape(shape);
+        manager.beginStroke({ x: 10, y: 10, z: 0 }); manager.endStroke();
+        assert.deepEqual(sizeOf(E, map), [3, 26, 78], shape + ': a click lays the whole ladder');
+        const flight = manager.ladderFlight(E.pieces(map).find(p => p.kind === 'ladder'));
+        assert.deepEqual([flight.width, flight.height], [3, 26], shape + ': and the panel reads it back as one ladder');
+    }
+    // Dragged along as a line: the run is the width, and every cell of it stands the whole height.
+    const map = freshMap(); const { manager, E } = builderOn(map);
+    manager.setKind('ladder'); manager.ladderWidth = 3; manager.ladderHeight = 8; manager.setDrawShape('line');
+    stroke(manager, { x: 4, y: 6, z: 0 }, { x: 8, y: 6, z: 0 });
+    assert.deepEqual(sizeOf(E, map), [5, 8, 40]);
+    assert.equal(manager.undoStack.length, 1, 'one undo step');
+    // A stair: a click is the whole flight; a dragged line stays a step a cell.
+    const stairs = freshMap(); const built = builderOn(stairs);
+    built.manager.setKind('stair'); built.manager.stairSteps = 4; built.manager.stairWidth = 2; built.manager.setDrawShape('line');
+    built.manager.beginStroke({ x: 10, y: 10, z: 0 }); built.manager.endStroke();
+    assert.equal(built.E.pieces(stairs).filter(p => p.kind === 'stair').length, 8, 'four steps, two wide');
+    stroke(built.manager, { x: 2, y: 2, z: 0 }, { x: 4, y: 2, z: 0 });
+    assert.equal(built.E.pieces(stairs).filter(p => p.kind === 'stair' && p.y === 2).length, 3, 'a step a cell');
+});
+
 test('ramps carrying one slope across tuck the side faces between them under it, so no seam flickers on a roof', () => {
     // A plaster gable's ramp beside the tile ramps of its roof: same level, height and turn. Their side triangles
     // lay back to back with their top edges in the roof's surface, and the two materials took turns along the seam.

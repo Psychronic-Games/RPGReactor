@@ -91,7 +91,7 @@ test('a slow graphics card is stepped down along the picture\'s size, and the ma
         assert.deepEqual([Q.g, Q.c, Q.h], [2, 0, false], 'down to the size it holds 60 at, and no further');
         assert.ok(rate >= 59 && rate <= 61, 'sixty a second again: ' + rate);
         assert.equal(Q.scale(), Q.GPU[2].scale);
-        assert.deepEqual(saves[saves.length - 1], { version: 4, gpu: 2, cpu: 0, half: false, device: '' }, 'the machine\'s levels are kept for its next session');
+        assert.deepEqual(saves[saves.length - 1], { version: 5, gpu: 2, cpu: 0, half: false, device: '' }, 'the machine\'s levels are kept for its next session');
     });
 });
 
@@ -193,12 +193,12 @@ test('a fixed setting holds its level whatever the frames do, and the switch dra
 });
 
 test('a machine retains detail levels but discards obsolete saved frame caps', () => {
-    inGame({ graphicsAuto: { version: 4, gpu: 2, cpu: 1, half: true } }, () => {
+    inGame({ graphicsAuto: { version: 5, gpu: 2, cpu: 1, half: true } }, () => {
         Q.refresh();
         assert.deepEqual([Q.g, Q.c, Q.h], [2, 1, false]);
         assert.deepEqual(Q._taken, ['gpu', 'gpu', 'cpu']);
     });
-    inGame({ graphicsAuto: { version: 4, gpu: 99, cpu: -3, half: 'yes' } }, () => {
+    inGame({ graphicsAuto: { version: 5, gpu: 99, cpu: -3, half: 'yes' } }, () => {
         Q.refresh();
         assert.deepEqual([Q.g, Q.c, Q.h], [Q.GPU.length - 1, 0, false], 'a file from elsewhere is read into range');
     });
@@ -211,7 +211,7 @@ test('the levels kept from the last session are taken once the options file has 
         title(0.2, clock);
         assert.deepEqual([Q.g, Q.c, Q.h], [0, 0, false], 'nothing is known of the machine yet');
         // The file arrives (ConfigManager.applyData).
-        global.ConfigManager.graphicsAuto = { version: 4, gpu: 3, cpu: 2, half: true };
+        global.ConfigManager.graphicsAuto = { version: 5, gpu: 3, cpu: 2, half: true };
         global.ConfigManager._isLoaded = true;
         title(0.1, clock);
         assert.deepEqual([Q.g, Q.c, Q.h], [3, 2, false], 'the machine starts at the levels it settled at');
@@ -229,7 +229,7 @@ test('the levels kept from the last session are taken once the options file has 
 });
 
 test('a step back up is tried as another map opens after a calm stretch, and given up for the session when it does not hold', () => {
-    inGame({ graphicsAuto: { version: 4, gpu: 2, cpu: 0, half: false } }, () => {
+    inGame({ graphicsAuto: { version: 5, gpu: 2, cpu: 0, half: false } }, () => {
         const clock = { now: 1000 };
         Q.mapOpened(5);
         play(30, fast, clock);
@@ -254,7 +254,7 @@ test('a step back up is tried as another map opens after a calm stretch, and giv
 });
 
 test('an obsolete half-rate setting never suppresses an available world draw', () => {
-    inGame({ graphicsAuto: { version: 4, gpu: 0, cpu: 0, half: true } }, () => {
+    inGame({ graphicsAuto: { version: 5, gpu: 0, cpu: 0, half: true } }, () => {
         Q.refresh();
         const drawn = [], frame = 1000 / 60;
         for (let i = 0; i < 8; i++) { const now = 1000 + i * frame; Q.tickBegin(now); drawn.push(Q.worldTick(now)); Q.tickEnd(now + 3); }
@@ -267,11 +267,11 @@ test('an obsolete half-rate setting never suppresses an available world draw', (
 });
 
 test('choosing Auto again starts from the full picture', () => {
-    inGame({ graphicsAuto: { version: 4, gpu: 3, cpu: 2, half: true } }, saves => {
+    inGame({ graphicsAuto: { version: 5, gpu: 3, cpu: 2, half: true } }, saves => {
         Q.refresh();
         Q.reset();
         assert.deepEqual([Q.g, Q.c, Q.h], [0, 0, false]);
-        assert.deepEqual(saves[saves.length - 1], { version: 4, gpu: 0, cpu: 0, half: false, device: '' });
+        assert.deepEqual(saves[saves.length - 1], { version: 5, gpu: 0, cpu: 0, half: false, device: '' });
         assert.equal(Q._ceiling, false);
     });
 });
@@ -298,7 +298,7 @@ test('the setting is saved with the player\'s options and offered once a 3D map 
     const windows = source('reactor_windows.js');
     assert.match(windows, /if \(typeof Reactor3D === "undefined" \|\| !Reactor3D\.Quality \|\| !ConfigManager\.reactor3dSeen\) return;\n\s*this\.addCommand\(Window_Options\.GRAPHICS_TEXT\.name, "graphicsQuality"\);/);
     assert.match(windows, /if \(values\[next\] === "auto" && typeof Reactor3D !== "undefined" && Reactor3D\.Quality\) Reactor3D\.Quality\.reset\(\);/);
-    assert.match(source('reactor_scenes.js'), /return 7 \+ \(typeof Reactor3D !== "undefined" && Reactor3D\.Quality && ConfigManager\.reactor3dSeen \? 1 : 0\);/, 'the window is a row taller with it');
+    assert.match(source('reactor_scenes.js'), /return 7 \+ \(typeof Reactor3D !== "undefined" && Reactor3D\.Quality && ConfigManager\.reactor3dSeen \? 1 : 0\)\n/, 'the window is a row taller with it');
 });
 
 test('a measuring tool holds the levels still', () => {
@@ -383,7 +383,7 @@ test('Auto discards a profile learned under the old refresh-rate target once', (
 
 // A saved CPU fallback must retain character grounding while reducing shadow work.
 test('saved Auto CPU level two keeps cheaper shadows and switching quality refreshes their budget', () => {
-    inGame({ graphicsAuto: { version: 4, gpu: 0, cpu: 2, half: false } }, () => {
+    inGame({ graphicsAuto: { version: 5, gpu: 0, cpu: 2, half: false } }, () => {
         Q.refresh();
         assert.equal(Q.c, 2);
         assert.equal(Q.shadows(), true);
@@ -406,27 +406,27 @@ test('levels another machine settled on are not taken: a shared project folder c
     const had = global.Graphics;
     global.Graphics = { gpuDescription: 'NVIDIA GeForce RTX 3060 Laptop GPU' };
     try {
-        inGame({ graphicsAuto: { version: 4, gpu: 2, cpu: 2, half: false, device: 'NVIDIA GeForce RTX 5070 / 32' } }, saves => {
+        inGame({ graphicsAuto: { version: 5, gpu: 2, cpu: 2, half: false, device: 'NVIDIA GeForce RTX 5070 / 32' } }, saves => {
             Q.refresh();
             assert.deepEqual([Q.g, Q.c], [0, 0], 'another device: measured afresh');
             assert.match(saves[saves.length - 1].device, /^NVIDIA GeForce RTX 3060 Laptop GPU \/ \d+$/, 'and kept as this one\'s');
         });
         const own = Q.device();
-        inGame({ graphicsAuto: { version: 4, gpu: 2, cpu: 1, half: false, device: own } }, () => {
+        inGame({ graphicsAuto: { version: 5, gpu: 2, cpu: 1, half: false, device: own } }, () => {
             Q.refresh();
             assert.deepEqual([Q.g, Q.c], [2, 1], 'its own levels are taken');
         });
         // Each machine finds its own levels again after the other has played: the record keeps both.
         let file = null;
-        inGame({ graphicsAuto: { version: 4, gpu: 2, cpu: 2, half: false, device: 'NVIDIA GeForce RTX 5070 / 32' } }, saves => {
+        inGame({ graphicsAuto: { version: 5, gpu: 2, cpu: 2, half: false, device: 'NVIDIA GeForce RTX 5070 / 32' } }, saves => {
             Q.refresh();
             file = saves[saves.length - 1];
             assert.equal(file.device, own);
-            assert.deepEqual(file.devices, { 'NVIDIA GeForce RTX 5070 / 32': { version: 4, gpu: 2, cpu: 2 } }, 'the other machine\'s levels stay in the file');
+            assert.deepEqual(file.devices, { 'NVIDIA GeForce RTX 5070 / 32': { version: 5, gpu: 2, cpu: 2 } }, 'the other machine\'s levels stay in the file');
         });
         global.Graphics = { gpuDescription: 'NVIDIA GeForce RTX 5070' };
         const threads = Q.device().split(' / ')[1];
-        file.devices = { ['NVIDIA GeForce RTX 5070 / ' + threads]: { version: 4, gpu: 2, cpu: 2 } };
+        file.devices = { ['NVIDIA GeForce RTX 5070 / ' + threads]: { version: 5, gpu: 2, cpu: 2 } };
         inGame({ graphicsAuto: file }, saves => {
             Q.refresh();
             assert.deepEqual([Q.g, Q.c], [2, 2], 'the first machine is back: its levels are there');
@@ -434,7 +434,7 @@ test('levels another machine settled on are not taken: a shared project folder c
             Q.keep();
             const kept = saves[saves.length - 1];
             assert.equal(kept.device, Q.device());
-            assert.deepEqual(kept.devices, { [own]: { version: 4, gpu: 0, cpu: 0 } }, 'the two change places');
+            assert.deepEqual(kept.devices, { [own]: { version: 5, gpu: 0, cpu: 0 } }, 'the two change places');
         });
     } finally { global.Graphics = had; }
 });
@@ -781,7 +781,8 @@ test('no frame is begun while the graphics card still owes two', () => {
     P.mark(); P.mark(); lost = true; assert.equal(P.behind(3000), false); lost = false;
     P.mark(); P.mark(); P.enabled = false; assert.equal(P.behind(4000), false); const count = made; P.mark(); assert.equal(made, count, 'no marker when off');
     // The tick asks first, before any update, and marks after the composite.
-    assert.match(core, /Graphics\._onTick = function\(deltaTime\) \{\n\s*\/\/[^\n]*\n\s*if \(this\.GpuPace\.behind\(performance\.now\(\)\)\) return;/);
+    // (After the frame limit, which comes first since 2026-11-14: frame-limit.test.cjs.)
+    assert.match(core, /Graphics\._onTick = function\(deltaTime\) \{\n\s*\/\/[^\n]*\n\s*if \(this\.FrameLimit\.wait\(performance\.now\(\)\)\) return;\n\s*\/\/[^\n]*\n\s*if \(this\.GpuPace\.behind\(performance\.now\(\)\)\) return;/);
     assert.match(core, /this\._noteComposite\(\);\n\s*this\.GpuPace\.mark\(\);/);
 });
 
@@ -874,4 +875,32 @@ test('the game in play is short of its frames when their running average is 15% 
         });
     } finally { P.now = savedNow; Reactor3D.Neighbors = savedNeighbors; P._last = 0; P._average = 0; }
     assert.match(source('reactor_sprites.js'), /Graphics\.worldFrameCount = \(Graphics\.worldFrameCount \|\| 0\) \+ 1;\s+if \(Reactor3D\.FramePressure\) Reactor3D\.FramePressure\.frame\(\);/);
+});
+
+test('a card drawing 600 frames a second with stops of 55 ms is neither paced nor held, and one paced at 180 is let go', () => {
+    // Owner, 2026-11-14: an RTX 5070 turning its camera in the Reactor Room: "FPS remains relatively high, but dips
+    // down into the 100's", the whole scene choppy. Stops of 30 to 55 ms, a few a second, armed both rules.
+    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const gl = { SYNC_GPU_COMMANDS_COMPLETE: 1, SYNC_STATUS: 2, SIGNALED: 3, UNSIGNALED: 4, fenceSync: () => ({}), flush() {}, getSyncParameter: () => 3, deleteSync() {}, isContextLost: () => false };
+    const pace = () => new Function('Graphics', core.slice(core.indexOf('Graphics.GpuPace = {'), core.indexOf('\nGraphics._onTick = function')) + '\nreturn Graphics.GpuPace;')({ _app: { renderer: { gl } } });
+    const P = pace(); let now = 0;
+    for (let s = 0; s < 12; s++) for (let i = 0; i < 600; i++) { now += i % 150 === 149 ? 55 : 1.3; P.behind(now); P.mark(); }
+    assert.equal(P.armed(now), false, 'four stops of 55 ms a second for twelve seconds: not paced');
+    assert.equal(P.STALL_MS, 100);
+    // Paced all the same (two stops of 120 ms as a map arrives), it makes 180 frames a second with every frame marked: let go.
+    const Q = pace(); let t = 0;
+    for (let i = 0; i < 600; i++) { t += 1.6; Q.behind(t); Q.mark(); }
+    for (let k = 0; k < 2; k++) { t += 120; Q.behind(t); Q.mark(); for (let i = 0; i < 100; i++) { t += 1.6; Q.behind(t); Q.mark(); } }
+    assert.equal(Q.armed(t), true, 'two stops of 120 ms: paced');
+    for (let i = 0; i < 600; i++) { t += 5.5; Q.behind(t); Q.mark(); }
+    assert.equal(Q.armed(t), false, 'three seconds at 180 a second paced: its card keeps up, and it is let go');
+    // The hold: the same machine is not held, and a verdict kept under the earlier rule is not read.
+    const ticker = { maxFPS: 0 }, store = new Map([['rrFrameHold2:a card / 8', '1']]);
+    const G = new Function('Graphics', 'localStorage', 'Reactor3D', 'document', 'SceneManager', core.slice(core.indexOf('Graphics.FrameGovernor = {'), core.indexOf('\nGraphics._onTick = function')) + '\nreturn Graphics.FrameGovernor;')(
+        { _app: { ticker }, gpuDescription: 'a card' }, { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
+        { Quality: { device: () => 'a card / 8', loading: () => false, enabled: false } }, { hidden: false, hasFocus: () => true }, { isSceneChanging: () => false });
+    G.screenHz = 180; let clock = 1000;
+    for (let s = 0; s < 30; s++) for (let i = 0; i < 600; i++) { clock += i % 150 === 149 ? 55 : 1.3; G.tick(clock); }
+    assert.equal(G.held, false); assert.equal(ticker.maxFPS, 0); assert.equal(G.STALL_MS, 100);
+    assert.notEqual(G.key(), 'rrFrameHold2:a card / 8');
 });

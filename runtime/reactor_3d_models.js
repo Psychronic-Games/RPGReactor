@@ -2235,6 +2235,22 @@ Reactor3D.ModelUse = {
     },
 
     /**
+     * The models standing in the scene a border crossing leaves, by cache key; null outside a crossing. The party's
+     * and what it rides go over the border as they are (Neighbors.carryParty): no `loadModel`, so no claim, and the
+     * sweep at the crossing let their models go while they were still drawn. Their geometry and pictures went back
+     * up on the next draw; a merged character's picture arrays could not (their pixels are let go once on the GPU,
+     * LayeredParts), so its clothing drew black from the crossing on (the owner on a motorcycle, 2026-11-15, with
+     * "texSubImage3D: no bound PIXEL_UNPACK_BUFFER" in the console: the upload with nothing to send).
+     */
+    wornKeys() {
+        const N = Reactor3D.Neighbors, live = N && N.crossing ? N.live : null, held = live && live.scene && live.scene._modelInstances;
+        if (!held || typeof held.forEach !== "function") return null;
+        const keys = new Set();
+        held.forEach(holder => { if (holder && holder.spec) keys.add(holder.spec); });
+        return keys;
+    },
+
+    /**
      * Once the map's own models have been claimed and the scene before it is
      * gone: let go of what no map names any more. Returns the keys released.
      */
@@ -2245,9 +2261,11 @@ Reactor3D.ModelUse = {
         // the rest goes before its own models come in; the sweep at its start is still owed.
         if (!early) this.pending = false;
         const R = Reactor3D, cache = R._glbCache, named = this.namedKeys(mapData), text = this.eventText(mapData), idle = [];
+        const worn = this.wornKeys();
         for (const key in cache) {
             const entry = cache[key];
             if (!entry.template) continue;
+            if (worn && worn.has(key)) continue;
             if (!(entry.used < this.generation) || named.has(key)) continue;
             if (entry.name && text.indexOf(entry.name) >= 0) continue;
             idle.push(key);
@@ -2374,8 +2392,18 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
             resolve(null);
             return;
         }
+        // A game served over the web asks again when the line dropped (a request that ended with no answer, or a
+        // server error): twice more, a few seconds apart. A file that is not there (404) is not asked for again, and
+        // nor is anything read from the disk, where a missing file and a failed read look the same.
+        let dropped = false, tries = 0;
         const tryAt = index => {
             if (index >= jobs.length) {
+                if (dropped && tries < this.MODEL_RETRIES && this.modelRetryAllowed()) {
+                    tries++;
+                    dropped = false;
+                    setTimeout(() => tryAt(0), this.MODEL_RETRY_MS * tries);
+                    return;
+                }
                 entry.failed = true;
                 console.error("Reactor3D: could not load " + this.modelUrl(name, ext));
                 resolve(null);
@@ -2390,6 +2418,7 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
             xhr.onload = () => {
                 release();
                 if (xhr.status >= 400 || !xhr.response) {
+                    if (xhr.status >= 500) dropped = true;
                     tryAt(index + 1);
                     return;
                 }
@@ -2435,13 +2464,22 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                 }
                 buildFrom(() => this.readModel(xhr.response, job.ext, baseUrl, texture));
             };
-            xhr.onerror = () => { release(); tryAt(index + 1); };
+            xhr.onerror = () => { release(); dropped = true; tryAt(index + 1); };
             xhr.send();
             });
         };
         tryAt(0);
     });
     return entry.promise;
+};
+
+/** How often a model whose download dropped is asked for again, and the wait before the first of them (the next waits twice as long). */
+Reactor3D.MODEL_RETRIES = 2;
+Reactor3D.MODEL_RETRY_MS = 3000;
+
+/** Only a game served over the web: from the disk nothing drops. */
+Reactor3D.modelRetryAllowed = function() {
+    return typeof location !== "undefined" && /^https?:$/.test(location.protocol || "");
 };
 
 /**
@@ -3835,6 +3873,22 @@ Reactor3D._glbImageBlob = function(json, bin, image) {
     return new Blob([bytes], { type: image.mimeType || "image/png" });
 };
 
+/**
+ * How a model's picture carries on past its edges, where the file says: repeated, mirrored or held at the edge
+ * pixels (a glTF sampler's `wrapS` / `wrapT`). A file that says nothing keeps the edge pixels, as every model was
+ * drawn before 2026-11-12: the format's own default is to repeat, but a model that packs many pictures into one
+ * sheet would then show seams where one edge blends into the opposite one.
+ */
+Reactor3D.applyGlbWrap = function(texture, json, textureDef) {
+    const sampler = textureDef && json.samplers ? json.samplers[textureDef.sampler] : null;
+    if (!texture || !sampler) return texture;
+    const mode = value => value === 10497 ? THREE.RepeatWrapping : value === 33648 ? THREE.MirroredRepeatWrapping : value === 33071 ? THREE.ClampToEdgeWrapping : null;
+    const s = mode(sampler.wrapS), t = mode(sampler.wrapT);
+    if (s !== null) texture.wrapS = s;
+    if (t !== null) texture.wrapT = t;
+    return texture;
+};
+
 Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps) {
     if (!texInfo || !json.textures || !json.images) return null;
     const textureDef = json.textures[texInfo.index];
@@ -3850,6 +3904,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         const decoded = new THREE.Texture(bitmaps[textureDef.source]);
         decoded.userData.rrGlbImage = textureDef.source;
         decoded.flipY = false;
+        this.applyGlbWrap(decoded, json, textureDef);
         if (THREE.SRGBColorSpace) decoded.colorSpace = THREE.SRGBColorSpace;
         decoded.needsUpdate = true;
         textures.push(decoded);
@@ -3862,6 +3917,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     map.userData.rrGlbImage = textureDef.source;
     if (ownCap) map.userData.rrTextureCap = ownCap;
     map.flipY = false;
+    this.applyGlbWrap(map, json, textureDef);
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
     // An embedded picture's Blob goes with its <img> to the image worker, which decodes from it (its
     // object URL is given back as soon as the <img> has loaded).
@@ -3888,6 +3944,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
             throw error;
         }
         embedded.flipY = false;
+        this.applyGlbWrap(embedded, json, textureDef);
         embedded.userData.rrModelTexture = true;
         embedded.userData.rrGlbImage = textureDef.source;
         if (ownCap) embedded.userData.rrTextureCap = ownCap;
@@ -5904,7 +5961,7 @@ Reactor3D.attachLibraryMotions = function(root, rig) {
     if (!skeleton) return;
     const clips = wanted.map(motion => {
         const clip = new THREE.AnimationClip(this.LIBRARY_CLIP_PREFIX + motion.id, 1, []);
-        clip.__reactorLibrary = { id: motion.id, state: motion.state, name: motion.name, skeleton, resolved: false };
+        clip.__reactorLibrary = { id: motion.id, state: motion.state, name: motion.name, skeleton, root, resolved: false };
         return clip;
     });
     root.__reactorClips = own.concat(clips);
@@ -6329,6 +6386,28 @@ Reactor3D.libraryMotionRules = function(list, clips) {
 };
 
 /**
+ * How a clip made here names a joint: by the joint's own name, as the file's own clips do, where that name finds
+ * this very joint in its model; else by its uuid. The mixer keeps one blend per name it is given: a library
+ * motion that named a joint by uuid and the file's own Walking that named it "LeftLeg" were two blends on one
+ * joint, and the one that had faded out went on writing the joint's rest pose over the other. On a ladder come
+ * to at a run, the climber's left knee, left upper arm and right hand stayed at rest: a straight leg through the
+ * rungs (owner, 2026-11-14). With one name they are one blend, and a fade from one clip to the other is a fade.
+ */
+Reactor3D.clipNodeRef = function(node, root) {
+    const name = node && node.name;
+    if (!name || !root || typeof THREE === "undefined" || !THREE.PropertyBinding) return node.uuid;
+    // (A name the mixer reads as written: no dots, brackets, colons or slashes, which it takes for a path.)
+    if (THREE.PropertyBinding.sanitizeNodeName(name) !== name || /[\[\]\.:\/]/.test(name)) return node.uuid;
+    // The first of that name in the model (`root`: what the clips were made on), searched as the mixer searches
+    // (THREE.PropertyBinding.findNode: the root itself, then its children in order, each before the next): the joint itself.
+    if (root.name === name) return node.uuid;
+    let found = null;
+    const seek = children => { for (const child of children) { if (child.name === name || child.uuid === name) return child; const below = seek(child.children); if (below) return below; } return null; };
+    found = seek(root.children);
+    return found === node ? name : node.uuid;
+};
+
+/**
  * Fills a library motion's clip with its keys the first time it plays: the
  * library's motion made for this skeleton, each joint's turn carried into
  * its own frame, worked out once for every copy of the model.
@@ -6355,7 +6434,7 @@ Reactor3D.resolveLibraryMotion = function(clip) {
     for (const track of data.tracks) {
         const node = track.joint >= 0 ? joints[track.joint].node : holders[track.holder].node;
         const Track = track.path === "position" ? THREE.VectorKeyframeTrack : THREE.QuaternionKeyframeTrack;
-        clip.tracks.push(new Track(node.uuid + "." + track.path, track.times, track.values));
+        clip.tracks.push(new Track(this.clipNodeRef(node, info.root) + "." + track.path, track.times, track.values));
     }
     clip.duration = data.duration;
     return clip;
@@ -7667,11 +7746,17 @@ Reactor3D.heldCloud = function(object) {
 // With `thumbStays` (a gun's grip) a thumb that lies against the thing when open stays open: closing would only sink it in.
 Reactor3D.solveGrip = function(layout, cloud, count, pad, out, thumbStays) {
     const fingers = layout.fingers, S = this._gripScratch || (this._gripScratch = {
-        near: new Int32Array(4096), nearCount: 0, s: new Float32Array(12), extra: new Float32Array(5 * 12), extras: 0, mask: [false, false, false, false],
-        f: null, thr2: 0, v1: [0, 0, 0], v2: [0, 0, 0], cloud: null
+        s: new Float32Array(12), extra: new Float32Array(5 * 12), extras: 0, mask: [false, false, false, false],
+        f: null, thr2: 0, reach2: 0, v1: [0, 0, 0], v2: [0, 0, 0], cloud: null,
+        cells: new Int32Array(1), order: new Int32Array(1), cellOf: new Int32Array(1), nx: 0, ny: 0, nz: 0, x0: 0, y0: 0, z0: 0, per: 0
     });
-    if (S.near.length < count) S.near = new Int32Array(count * 2);
     S.extras = 0; S.cloud = cloud;
+    if (count) {
+        // The points sorted into cells no smaller than the widest finger's reach for a touch, once for the solve.
+        let widest = 0;
+        for (const f of fingers) widest = Math.max(widest, f.radius + pad);
+        this._gripCells(S, cloud, count, widest);
+    }
     if (!S.blocked || S.blocked.length < fingers.length) S.blocked = new Uint8Array(Math.max(8, fingers.length));
     let blocked = 0, closed = 0, sum1 = 0, sum2 = 0;
     const order = layout.order || (layout.order = fingers.map((f, i) => i).sort((x, y) => (fingers[x].thumb ? 1 : 0) - (fingers[y].thumb ? 1 : 0)));
@@ -7687,13 +7772,8 @@ Reactor3D.solveGrip = function(layout, cloud, count, pad, out, thumbStays) {
         for (let i = 0; i < 3; i++) { S.v1[i] = f.mid[i] - f.base[i]; S.v2[i] = f.tip[i] - f.mid[i]; }
         const thr = f.radius + pad, reach = f.length + thr, reach2 = reach * reach;
         S.thr2 = thr * thr;
-        // Only the points this finger could ever touch.
-        let near = 0;
-        for (let i = 0; i < count; i++) {
-            const dx = cloud[i * 3] - f.base[0], dy = cloud[i * 3 + 1] - f.base[1], dz = cloud[i * 3 + 2] - f.base[2];
-            if (dx * dx + dy * dy + dz * dz < reach2) S.near[near++] = i;
-        }
-        S.nearCount = near;
+        // Only the points this finger could ever touch count (`_gripTouches`).
+        S.reach2 = reach2;
         this._gripPlace(S, f.open, 0);
         for (let k = 0; k < 4; k++) S.mask[k] = this._gripTouches(S, k);
         const ratio = f.thumb ? 0.5 : 0.9, step = 0.09;
@@ -7805,12 +7885,59 @@ Reactor3D._gripPlace = function(S, t1, t2) {
     s[9] = mx + bx; s[10] = my + by; s[11] = mz + bz;
 };
 
+/**
+ * A held thing's points sorted into cells `size` wide or wider, so a finger's place is tested against the points of
+ * the cells round it and not against every point of the thing. (Every point, for every place of every finger at
+ * every step of its closing, was 20 to 77 ms a solve on a long gun or a detailed sword, and a thing that moves in the
+ * hand is solved again each update: a battler's whole action at 10 to 25 pictures a second, 2026-11-13.)
+ */
+Reactor3D._gripCells = function(S, cloud, count, size) {
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0, k = 0; i < count; i++, k += 3) {
+        const x = cloud[k], y = cloud[k + 1], z = cloud[k + 2];
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    let cell = Math.max(size, 1e-6) * 1.0001, nx = 1, ny = 1, nz = 1;
+    for (;;) {
+        nx = Math.floor((x1 - x0) / cell) + 1; ny = Math.floor((y1 - y0) / cell) + 1; nz = Math.floor((z1 - z0) / cell) + 1;
+        if (nx * ny * nz <= 262144) break;
+        cell *= 1.5;
+    }
+    const total = nx * ny * nz, per = 1 / cell;
+    if (S.cells.length < total + 1) S.cells = new Int32Array((total + 1) * 2);
+    if (S.order.length < count) { S.order = new Int32Array(count * 2); S.cellOf = new Int32Array(count * 2); }
+    const cells = S.cells, order = S.order, cellOf = S.cellOf;
+    cells.fill(0, 0, total + 1);
+    for (let i = 0, k = 0; i < count; i++, k += 3) {
+        const c = Math.min(nx - 1, Math.floor((cloud[k] - x0) * per)) + nx * (Math.min(ny - 1, Math.floor((cloud[k + 1] - y0) * per)) + ny * Math.min(nz - 1, Math.floor((cloud[k + 2] - z0) * per)));
+        cellOf[i] = c; cells[c]++;
+    }
+    for (let c = 1; c < total; c++) cells[c] += cells[c - 1];
+    cells[total] = count;
+    // Each cell's points in a run of `order`, `cells[c]` to `cells[c + 1]`: `cells` holds each run's end, and, filled from the back, ends as its start.
+    for (let i = count - 1; i >= 0; i--) order[--cells[cellOf[i]]] = i;
+    S.nx = nx; S.ny = ny; S.nz = nz; S.x0 = x0; S.y0 = y0; S.z0 = z0; S.per = per;
+};
+
 /** Whether tested place `k` of the finger is against the thing (or, for the thumb, a closed finger). */
 Reactor3D._gripTouches = function(S, k) {
-    const x = S.s[k * 3], y = S.s[k * 3 + 1], z = S.s[k * 3 + 2], cloud = S.cloud, near = S.near, thr2 = S.thr2;
-    for (let j = 0; j < S.nearCount; j++) {
-        const i = near[j] * 3, dx = cloud[i] - x, dy = cloud[i + 1] - y, dz = cloud[i + 2] - z;
-        if (dx * dx + dy * dy + dz * dz < thr2) return true;
+    const x = S.s[k * 3], y = S.s[k * 3 + 1], z = S.s[k * 3 + 2], cloud = S.cloud, thr2 = S.thr2;
+    // The cells round the place: a point nearer than the finger's thickness is in one of them (`_gripCells`).
+    const per = S.per, nx = S.nx, ny = S.ny, nz = S.nz, cells = S.cells, order = S.order;
+    const cx = Math.floor((x - S.x0) * per), cy = Math.floor((y - S.y0) * per), cz = Math.floor((z - S.z0) * per);
+    if (cx >= -1 && cy >= -1 && cz >= -1 && cx <= nx && cy <= ny && cz <= nz) {
+        const base = S.f.base, bx = base[0], by = base[1], bz = base[2], reach2 = S.reach2;
+        const x1 = Math.min(nx - 1, cx + 1), y1 = Math.min(ny - 1, cy + 1), z1 = Math.min(nz - 1, cz + 1);
+        for (let iz = Math.max(0, cz - 1); iz <= z1; iz++) for (let iy = Math.max(0, cy - 1); iy <= y1; iy++) {
+            const row = nx * (iy + ny * iz);
+            for (let j = cells[row + Math.max(0, cx - 1)], end = cells[row + x1 + 1]; j < end; j++) {
+                const i = order[j] * 3, dx = cloud[i] - x, dy = cloud[i + 1] - y, dz = cloud[i + 2] - z;
+                if (dx * dx + dy * dy + dz * dz >= thr2) continue;
+                // Within this finger's reach of its base, as the points it is tested against always were.
+                const ex = cloud[i] - bx, ey = cloud[i + 1] - by, ez = cloud[i + 2] - bz;
+                if (ex * ex + ey * ey + ez * ez < reach2) return true;
+            }
+        }
     }
     if (S.f.thumb) for (let j = 0; j < S.extras; j++) {
         const dx = S.extra[j * 3] - x, dy = S.extra[j * 3 + 1] - y, dz = S.extra[j * 3 + 2] - z;
@@ -8739,11 +8866,20 @@ Reactor3D.MapHeld = {
         if (this.tick) { this.tick = false; Reactor3D.HandGrip.update(); }
         return changed;
     },
+    /** What a thing held is scaled by in the hand of a flat map's picture: that picture's model against its size in a 3D scene. */
+    flatScale(character) {
+        const spec = Reactor3D.characterModelSpec(character);
+        return spec ? 1 / ((spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1)) : 1;
+    },
     /** Work the hold out: the arms as the step poses them, the thing in the hand, the fingers on it. */
     solve(state, scene) {
         const R = Reactor3D, H = R.Held, G = R.HandGrip, S = this.scratch(), owner = state.owner, held = state.record, object = held.object, raw = state.step;
         owner.object.updateMatrixWorld(true);
         owner.scale = owner.object.scale.y;
+        // A flat map's picture draws its model one unit across, not at its size in tiles (updateMapModelSprite), and what
+        // it holds is sized in tiles: in the hand of a figure two tiles big it was drawn twice too big. Sized to the figure.
+        if (held.full === undefined) held.full = held.scale;
+        held.scale = held.full * (state.flat ? this.flatScale(state.character) : 1);
         const was = object.parent, local = state.local || (state.local = { fromP: new THREE.Vector3(), fromQ: new THREE.Quaternion(), fromS: new THREE.Vector3(1, 1, 1), toP: new THREE.Vector3(), toQ: new THREE.Quaternion(), toS: new THREE.Vector3(1, 1, 1), done: false });
         if (was) { local.fromP.copy(object.position); local.fromQ.copy(object.quaternion); local.fromS.copy(object.scale); was.remove(object); }
         object.position.set(0, 0, 0); object.quaternion.identity(); object.scale.setScalar(held.scale); object.updateMatrixWorld(true);
@@ -9729,6 +9865,64 @@ Reactor3D.chestForward = function(holder) {
         return at.z * (holder.object.scale.z || 1);
     }
     return 0;
+};
+
+/**
+ * How far ahead of a model's own origin the rungs must stand for its climb to take them, in tiles: where the
+ * motion library's Climb puts the hands (0.4 of the body's scale ahead of the hips, less the grip's own 0.02:
+ * `climb` in reactor_3d_motions.js), carried into the model's frame. Null for a model whose climb is not the
+ * library's (a rig's own Climb pose, a file's clip): those hang by the chest (`LADDER_CHEST_GAP`). The chest gap
+ * stood a library climber about a fifth of a tile nearer the ladder than its hands and feet were aimed, and they
+ * went through the rungs (owner, 2026-11-14).
+ */
+Reactor3D.rungReach = function(holder) {
+    if (typeof THREE === "undefined" || !holder || !holder.binding || !holder.object || !holder.rules) return null;
+    const rule = holder.rules.find(r => r && r.trigger === "climbing" && r.type === "clip");
+    const clip = rule ? (holder.binding.clips || []).find(c => c && c.name === rule.clip) : null;
+    const info = clip ? clip.__reactorLibrary : null;
+    if (!info || info.id !== "climbLadder" || !info.root || !info.skeleton) return null;
+    const joints = info.skeleton.joints, hips = joints.find(j => j.parent < 0);
+    if (!hips) return null;
+    let top = 0;
+    for (const joint of joints) top = Math.max(top, joint.head[1]);
+    const scale = top / 1.7 || 1;
+    holder.object.updateMatrixWorld(true);
+    const at = new THREE.Vector3(hips.head[0], hips.head[1], hips.head[2] + (0.4 - 0.02) * scale);
+    info.root.localToWorld(at);
+    holder.object.worldToLocal(at);
+    // (And the palm's own depth back: with the wrist's grip point on the rung the closed fist stood past it.)
+    return at.z * (holder.object.scale.z || 1) + Reactor3D.LADDER_PALM;
+};
+/** How far back from the rung plane a climber's grip point is held, in tiles: the rung lies in the closed hand, under the knuckles. */
+Reactor3D.LADDER_PALM = 0.08;
+
+/** The share of a climb's cycle a hand is on its rung (the rest it reaches for the next): `climb` in reactor_3d_motions.js. */
+Reactor3D.CLIMB_GRIP_SHARE = 0.64;
+/**
+ * A climber's fingers: each hand closes while it is on its rung and opens as it reaches for the next, by the same
+ * cycle the climb's arms keep (one a CLIMB_CYCLE of height, the right hand first, the left half a cycle on). The
+ * hands had finger joints and the climb never asked them to close: open hands laid on the rungs (owner,
+ * 2026-11-14). A hand with no finger joints (no markers, no finger bones) is left as it is. Returns the hands closed.
+ */
+Reactor3D.climbGrip = function(holder, height) {
+    const R = Reactor3D, G = R.HandGrip;
+    if (!G || !holder || !holder.binding || !Number.isFinite(height)) return 0;
+    if (holder.climbHands === undefined) {
+        // The model's hands: the library's skeleton names them; else the rig's own parts.
+        const hands = { Right: null, Left: null };
+        const clip = (holder.binding.clips || []).find(c => c && c.__reactorLibrary);
+        for (const joint of clip ? clip.__reactorLibrary.skeleton.joints : []) if (joint.name === "RightHand") hands.Right = joint.node; else if (joint.name === "LeftHand") hands.Left = joint.node;
+        for (const entry of holder.binding.meshes || []) for (const part of entry.parts || []) if ((part.name === "RightHand" || part.name === "LeftHand") && !hands[part.name.replace("Hand", "")]) hands[part.name.replace("Hand", "")] = entry.mesh;
+        holder.climbHands = hands;
+    }
+    const u = ((height / R.CLIMB_CYCLE) % 1 + 1) % 1;
+    let closed = 0;
+    for (const [side, phase] of [["Right", 0], ["Left", 0.5]]) {
+        const hand = holder.climbHands[side];
+        if (!hand || (u + phase) % 1 >= R.CLIMB_GRIP_SHARE) continue;
+        if (G.hold(hand, null)) { closed++; R._climbGripped = true; }
+    }
+    return closed;
 };
 
 /** Whether a character is climbing by the physics: on a ladder, or pulling itself up (or lowering itself down) beside a ledge. */
@@ -10747,6 +10941,15 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (next && posed) { next.paused = true; next.time = 0; }
         }
         if (binding.clipAction) binding.clipAction.timeScale = rate;
+        // A climb's clip moves with the climbing, not the clock, as a climb's pose does (below): one cycle a
+        // CLIMB_CYCLE of height, still on a held ladder, backward on the way down.
+        const climbing = !posed && !state.seek && !!state.climbing && Number.isFinite(state.climbHeight) && !!binding.clipAction
+            && clipRules.some(r => r.trigger === "climbing" && r.clip === binding.clipAction.getClip().name);
+        if (climbing) {
+            const action = binding.clipAction, length = action.getClip().duration || 0;
+            action.timeScale = 0;
+            action.time = (((state.climbHeight / Reactor3D.CLIMB_CYCLE) % 1) + 1) % 1 * length;
+        }
         // The mixer follows the caller's frame clock, not the call rate:
         // the editor's preview loop runs at the display's refresh, and a
         // fixed 1/60 step there played every clip at 120Hz-monitor speed.
@@ -11061,6 +11264,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
         >= Math.max(...state.rules.map(rule => this.modelRuleDuration(rule, state.binding.clips)), 1)) {
         state.action = null;
     }
+    if (Reactor3D.battlerPictureRests(state, sprite)) return;
     if (state.binding && state.rules.length) {
         this.applyModelAnimation(state.binding, state.rules, {
             frame: state.frame,
@@ -11253,6 +11457,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
         >= Math.max(...state.rules.map(rule => this.modelRuleDuration(rule, state.binding.clips)), 1)) {
         state.action = null;
     }
+    if (Reactor3D.battlerPictureRests(state, main)) return;
     if (state.binding && state.rules.length) {
         this.applyModelAnimation(state.binding, state.rules, {
             frame: state.frame,
@@ -11263,6 +11468,22 @@ Reactor3D.updateActorModelSprite = function(sprite) {
         });
     }
     this.paintBattlerFrame(state, main);
+};
+
+/**
+ * A battler in a Battle Room is drawn by the room, from the room's own copy of its model: the picture of it that a
+ * flat battle shows is not on screen. Posing and drawing that picture all the same was a second pose and a draw of
+ * its own for every battler, every update (1.1 ms of an update with seven actors and two enemies, 2026-11-13). An
+ * actor's is not drawn at all there; an enemy's is what the turn-order icon shows at 32 pixels, and is drawn once
+ * every `ROOM_PICTURE_EVERY` updates.
+ */
+Reactor3D.ROOM_PICTURE_EVERY = 30;
+Reactor3D.battlerPictureRests = function(state, sprite) {
+    if (!sprite || sprite._reactorDrawnInRoom !== true) { state.roomPainted = undefined; return false; }
+    if (state.actorId !== undefined && state.roomPainted !== undefined) return true;
+    if (state.roomPainted !== undefined && state.frame - state.roomPainted < Reactor3D.ROOM_PICTURE_EVERY) return true;
+    state.roomPainted = state.frame;
+    return false;
 };
 
 /** Queue a named action on a 3D actor battler. */
@@ -12920,199 +13141,6 @@ Reactor3D.ClosedMouth = {
 };
 
 /**
- * Another player far off, as one draw. A built character is 17 to 39 parts, each a draw, a material and its lights'
- * uniforms in every pass that sees it; a crowd of them was the frame (1,700 draws, the CPU never idle). Under a
- * twentieth of the view's height (Reactor3D.animationStride above 1) a remote player or sleeper is drawn instead as
- * its model's parts merged into one skinned mesh, coloured per vertex from each part's picture and colour, on the
- * copy's own skeleton (so it walks and lies as the copy does), with one lit material shared by every such body: the
- * same light, the outline the same, no texture detail (none shows at that size). Its parts leave the view's layer
- * only: they still cast, and nothing that shows or hides them is touched. It lives in the scene's `far-bodies` group,
- * outside the model's tree; distance levels (GeometryDetail) take it further when it is a speck. A battle unit is
- * never one (its fades and flashes are its parts'). `enabled` false: as before.
- */
-Reactor3D.FarBody = {
-    // Off until its look is judged against the real parts: the scenes measured (the raid's camera, a walk in the
-    // square) showed every player 130 to 300 pixels tall, where a flat-coloured body would be seen.
-    enabled: false,
-    MIN_PARTS: 6,
-    SAMPLE: 128,
-    _merged: new WeakMap(),
-    material() {
-        if (this._material) return this._material;
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, fog: false });
-        material.name = "far-body";
-        if (Reactor3D.litMaterial) Reactor3D.litMaterial(material);
-        material.__reactorModel = true;
-        return (this._material = material);
-    },
-    group(scene) {
-        let group = scene.userData.rrFarBodies;
-        if (!group || group.parent !== scene) {
-            group = new THREE.Group();
-            group.name = "far-bodies";
-            group.matrixAutoUpdate = false;
-            group.matrixWorldAutoUpdate = false;
-            scene.add(group);
-            scene.userData.rrFarBodies = group;
-        }
-        return group;
-    },
-    /** A picture's pixels, small, for colouring vertices: null until it is decoded (a one-pixel stand-in is not). */
-    pixels(texture) {
-        const image = texture && texture.image;
-        const w = image && (image.width || image.naturalWidth), h = image && (image.height || image.naturalHeight);
-        if (!image || !(w > 1) || !(h > 1) || typeof document === "undefined") return null;
-        const cache = this._pixels || (this._pixels = new WeakMap());
-        const key = texture.source || texture;
-        if (cache.has(key)) return cache.get(key);
-        const size = this.SAMPLE, canvas = document.createElement("canvas");
-        canvas.width = canvas.height = size;
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        try { context.drawImage(image, 0, 0, size, size); } catch (error) { return null; }
-        const data = { size, rgba: context.getImageData(0, 0, size, size).data, flipY: !!texture.flipY, srgb: texture.colorSpace === (THREE.SRGBColorSpace || "srgb") };
-        cache.set(key, data);
-        return data;
-    },
-    /**
-     * The merged body of a template: every skinned part on one skeleton, in bind space, with a colour per vertex.
-     * Null while a part's picture is still decoding (asked again later), or when the model is not one of these.
-     */
-    mergedOf(template) {
-        if (this._merged.has(template)) return this._merged.get(template);
-        const parts = [];
-        let skeleton = null, ok = true;
-        template.traverse(child => {
-            if (!child.isSkinnedMesh || !child.geometry || !child.geometry.attributes.position) return;
-            if (Array.isArray(child.material) || child.bindMode !== THREE.AttachedBindMode) { ok = false; return; }
-            if (!skeleton) skeleton = child.skeleton; else if (child.skeleton !== skeleton) ok = false;
-            if (Reactor3D.FarParts && Reactor3D.FarParts.PATTERN.test((child.name || "") + " " + ((child.material && child.material.name) || ""))) return;
-            parts.push(child);
-        });
-        if (!ok || parts.length < this.MIN_PARTS - 1) { this._merged.set(template, null); return null; }
-        const colours = [];
-        for (const part of parts) {
-            const m = part.material, map = m && m.map;
-            const px = map ? this.pixels(map) : null;
-            if (map && !px) return null;    // not decoded yet: asked again
-            colours.push({ px, base: m && m.color ? m.color : new THREE.Color(1, 1, 1), uv: part.geometry.attributes.uv });
-        }
-        let vertices = 0, indices = 0;
-        for (const part of parts) { const g = part.geometry, n = g.attributes.position.count; vertices += n; indices += g.index ? g.index.count : n; }
-        const position = new Float32Array(vertices * 3), normal = new Float32Array(vertices * 3), color = new Float32Array(vertices * 3);
-        const skinIndex = new Uint16Array(vertices * 4), skinWeight = new Float32Array(vertices * 4), index = new Uint32Array(indices);
-        const at = new THREE.Vector3(), nm = new THREE.Vector3(), normalMatrix = new THREE.Matrix3();
-        const lin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-        let v = 0, k = 0;
-        parts.forEach((part, p) => {
-            const g = part.geometry, P = g.attributes.position, N = g.attributes.normal, J = g.attributes.skinIndex, W = g.attributes.skinWeight, n = P.count;
-            const bind = part.bindMatrix, identity = bind.elements.every((e, i) => e === (i % 5 === 0 ? 1 : 0));
-            if (!identity) normalMatrix.getNormalMatrix(bind);
-            const { px, base, uv } = colours[p];
-            for (let i = 0; i < n; i++) {
-                const o = v + i;
-                at.fromBufferAttribute(P, i); if (!identity) at.applyMatrix4(bind);
-                position[o * 3] = at.x; position[o * 3 + 1] = at.y; position[o * 3 + 2] = at.z;
-                if (N) { nm.fromBufferAttribute(N, i); if (!identity) nm.applyMatrix3(normalMatrix).normalize(); normal[o * 3] = nm.x; normal[o * 3 + 1] = nm.y; normal[o * 3 + 2] = nm.z; }
-                let r = base.r, gg = base.g, b = base.b;
-                if (px && uv) {
-                    let u = uv.getX(i), w = uv.getY(i);
-                    u -= Math.floor(u); w -= Math.floor(w);
-                    if (px.flipY) w = 1 - w;
-                    const x = Math.min(px.size - 1, Math.floor(u * px.size)), y = Math.min(px.size - 1, Math.floor(w * px.size)), q = (y * px.size + x) * 4;
-                    const cr = px.rgba[q] / 255, cg = px.rgba[q + 1] / 255, cb = px.rgba[q + 2] / 255;
-                    r *= px.srgb ? lin(cr) : cr; gg *= px.srgb ? lin(cg) : cg; b *= px.srgb ? lin(cb) : cb;
-                }
-                color[o * 3] = r; color[o * 3 + 1] = gg; color[o * 3 + 2] = b;
-                if (J && W) {
-                    skinIndex[o * 4] = J.getX(i); skinIndex[o * 4 + 1] = J.getY(i); skinIndex[o * 4 + 2] = J.getZ(i); skinIndex[o * 4 + 3] = J.getW(i);
-                    skinWeight[o * 4] = W.getX(i); skinWeight[o * 4 + 1] = W.getY(i); skinWeight[o * 4 + 2] = W.getZ(i); skinWeight[o * 4 + 3] = W.getW(i);
-                }
-            }
-            if (g.index) { const src = g.index; for (let i = 0; i < src.count; i++) index[k++] = src.getX(i) + v; }
-            else for (let i = 0; i < n; i++) index[k++] = v + i;
-            v += n;
-        });
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
-        geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
-        geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
-        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
-        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
-        geometry.setIndex(new THREE.BufferAttribute(index, 1));
-        geometry.computeBoundingSphere();
-        geometry.name = "far-body";
-        const merged = { geometry, parts: parts.length };
-        this._merged.set(template, merged);
-        return merged;
-    },
-    /** The copy's parts in or out of the view's layer (they keep their shadow layers). */
-    showParts(object, on) {
-        if (object.userData.rrFarHidden === !on) return;
-        object.userData.rrFarHidden = !on;
-        object.traverse(child => { if (child.isMesh) { if (on) child.layers.enable(0); else child.layers.disable(0); } });
-        // FarParts' own choice for the parts it leaves out is made again on its next update.
-        object.userData.rrFarPartsApplied = undefined;
-        if (object.userData.rrMouth) object.userData.rrMouth.hidden = undefined;
-    },
-    release(holder) {
-        const far = holder.farBody;
-        if (!far) return;
-        if (far.mesh.parent) far.mesh.parent.remove(far.mesh);
-        if (far.object && far.object.userData) this.showParts(far.object, true);
-        holder.farBody = null;
-    },
-    /** Each update: far remote players (and sleepers) as their merged body, the rest as themselves. */
-    update(mapScene, camera) {
-        const instances = mapScene && mapScene._modelInstances;
-        if (!instances || typeof THREE === "undefined") return;
-        if (!this.enabled) {
-            // Off: nothing to look at each sync, once the bodies this scene was given are let go.
-            if (!mapScene._rrFarBodies) return;
-            for (const holder of instances.values()) if (holder.farBody) this.release(holder);
-            mapScene._rrFarBodies = false;
-            return;
-        }
-        let scene = null;
-        for (const holder of instances.values()) {
-            const object = holder.object, character = holder.character;
-            const remote = typeof Game_RemotePlayer !== "undefined" && character instanceof Game_RemotePlayer;
-            if (holder.farBody && (holder.farBody.object !== object || !object || !object.parent)) this.release(holder);
-            if (!remote || !object || !object.parent) continue;
-            let far = false;
-            if (this.enabled && camera && object.visible && !character.fight) {
-                const span = Reactor3D.instanceSpan(object), p = object.position;
-                far = Reactor3D.animationStride(p.x, p.y + span / 2, p.z, span, camera) > 1;
-            }
-            if (!far) { if (holder.farBody && holder.farBody.on) { holder.farBody.mesh.visible = false; holder.farBody.on = false; this.showParts(object, true); } continue; }
-            if (!holder.farBody) {
-                const entry = Reactor3D._glbCache && Reactor3D._glbCache[holder.spec], template = entry && entry.template;
-                const merged = template ? this.mergedOf(template) : null;
-                if (!merged) continue;
-                let skeleton = null;
-                object.traverse(child => { if (!skeleton && child.isSkinnedMesh && child.skeleton) skeleton = child.skeleton; });
-                if (!skeleton) continue;
-                if (!scene) { scene = object; while (scene.parent) scene = scene.parent; }
-                const mesh = new THREE.SkinnedMesh(merged.geometry, this.material());
-                mesh.name = "far-body";
-                mesh.bindMode = THREE.AttachedBindMode;
-                mesh.bind(skeleton, new THREE.Matrix4());
-                mesh.matrixAutoUpdate = false;
-                mesh.matrixWorldAutoUpdate = false;
-                mesh.frustumCulled = false;
-                mesh.castShadow = false;
-                mesh.userData.rrFarBodyFor = object;
-                this.group(scene).add(mesh);
-                holder.farBody = { mesh, object, on: false };
-                mapScene._rrFarBodies = true;
-            }
-            const far0 = holder.farBody;
-            far0.mesh.visible = !!object.visible;
-            if (!far0.on) { far0.on = true; this.showParts(object, false); }
-        }
-    }
-};
-
-/**
  * New models built a few a frame while a battle runs on the map, and while a map is laid as it loads
  * (Reactor3D.Arrival): each is a clone, a rig, its fingers and materials (3 to 5 ms, a hundred and more for a
  * rigged hand), and an army arriving together was one frame of 200 ms. Also while worlds stand past the borders
@@ -13473,8 +13501,12 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             const air = character._reactorAir || 0;
             // A climber hangs against its ladder, not in the middle of the cell.
             if (character._reactorOnLadder && holder.chestForward === undefined) holder.chestForward = Reactor3D.chestForward(holder);
+            // A climb of the motion library's stands where its hands and feet meet the rungs (Reactor3D.rungReach).
+            if (character._reactorOnLadder && holder.rungReach === undefined) holder.rungReach = Reactor3D.rungReach(holder);
+            // Its fingers close on the rung each hand is on.
+            if (character._reactorOnLadder) Reactor3D.climbGrip(holder, character._reactorAlt);
             // (A body pulling itself up a ledge leans to the wall it climbs: the physics says how far.)
-            const hold = character._reactorOnLadder ? Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0)
+            const hold = character._reactorOnLadder ? (Number.isFinite(holder.rungReach) ? Reactor3D.LADDER_RUNGS - holder.rungReach : Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0))
                 : character._reactorMantle ? Reactor3D.mantleHold(holder, character) : 0;
             const holdX = hold * ((character.direction && character.direction() === 6) ? 1 : (character.direction && character.direction() === 4) ? -1 : 0);
             const holdZ = hold * ((character.direction && character.direction() === 2) ? 1 : (character.direction && character.direction() === 8) ? -1 : 0);
@@ -13610,18 +13642,21 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     }
 };
 
-// After syncCharacterModels is defined (a wrapper above it was overwritten by it): far bodies and closed mouths.
+// After syncCharacterModels is defined (a wrapper above it was overwritten by it): closed mouths.
 (function() {
     const sync = Reactor3D.MapScene.prototype.syncCharacterModels;
     Reactor3D.MapScene.prototype.syncCharacterModels = function() {
         const out = sync.apply(this, arguments);
         try {
-            const viewport = Reactor3D.viewport && Reactor3D.viewport(), camera = viewport && viewport.camera ? viewport.camera() : null;
-            Reactor3D.FarBody.update(this, camera);
-        } catch (error) { console.warn("Reactor3D.FarBody", error); Reactor3D.FarBody.enabled = false; }
-        try {
             if (Reactor3D.ClosedMouth.enabled && this._modelInstances) for (const holder of this._modelInstances.values()) if (holder.character && holder.object) Reactor3D.ClosedMouth.update(holder.object);
         } catch (error) { console.warn("Reactor3D.ClosedMouth", error); Reactor3D.ClosedMouth.enabled = false; }
+        // A climber's fingers (Reactor3D.climbGrip) ease shut and open: turned here where nothing held on the map turns
+        // them (MapHeld), and for a little after the last hand let go, so they open again.
+        if (Reactor3D._climbGripped) { Reactor3D._climbGripped = false; Reactor3D._climbGripFrames = 40; }
+        if (Reactor3D._climbGripFrames > 0) {
+            Reactor3D._climbGripFrames--;
+            if (!(Reactor3D.MapHeld && Reactor3D.MapHeld.count) && Reactor3D.HandGrip) { try { Reactor3D.HandGrip.update(); } catch (error) { Reactor3D._climbGripFrames = 0; } }
+        }
         return out;
     };
 })();

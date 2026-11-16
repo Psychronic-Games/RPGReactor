@@ -157,6 +157,8 @@ class DatabaseManager {
         }
 
         try {
+            // Asked for in the project that was open: not this one's to be given.
+            this.writeSeededInterfaces = false;
             this.recoverBattlePresentation(projectPath);
             const dataPath = this.path.join(projectPath, 'data');
             const loaded = {};
@@ -902,8 +904,9 @@ class DatabaseManager {
 
     /**
      * Whether the game will look for an interface record: one is bound in
-     * Use As (System's reactor…InterfaceId fields), or the interface editor
-     * asked for the file before a playtest (writeSeededInterfaces).
+     * Use As (System's reactor…InterfaceId fields), or the file was asked for
+     * (writeSeededInterfaces): by the interface editor before a playtest, or
+     * by a Call User Interface command confirmed in its dialog.
      */
     seededInterfacesInUse() {
         if (this.writeSeededInterfaces) return true;

@@ -2372,6 +2372,30 @@ input[type="number"]::-webkit-outer-spin-button {
 .rr-resource-preview-stage audio {
     width: 100%;
 }
+.rr-resource-audio-preview {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.rr-resource-audio-loop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+.rr-resource-audio-loop label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-strong);
+    cursor: pointer;
+}
+.rr-resource-audio-loop-points {
+    font-variant-numeric: tabular-nums;
+}
 .rr-resource-model-preview {
     position: relative;
     width: 100%;
@@ -3816,6 +3840,12 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch {
 }
 .rr-color-swatch-btn:active {
     transform: translateY(1px);
+}
+/* No colour chosen (a tint of None): one of the theme's own fields, not a block of white. */
+.rr-color-swatch-btn.is-unset {
+    background: var(--color-bg-input, rgba(0, 0, 0, 0.35));
+    box-shadow: none;
+    --rr-swatch-ink: var(--color-text-muted, #9aa0aa);
 }
 .rr-color-swatch-hex {
     font-family: var(--font-mono, monospace);

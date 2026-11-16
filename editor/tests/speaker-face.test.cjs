@@ -818,8 +818,20 @@ test('the runtime file boots after the engine it stands on and before the plugin
     // The engine files listed after it leave alone what it hooks and what it serves: its boot hook stays the outermost of the engine's.
     for (const later of scripts.slice(at + 1, scripts.indexOf('reactor_plugins.js'))) {
         const code = read('runtime/' + later).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-        assert.doesNotMatch(code, /Scene_Boot\.prototype\.start\s*=|command101|Game_Interpreter\.prototype\.setup\s*=|ImageManager\.(loadFace|loadBitmap)\s*=/, later);
+        assert.doesNotMatch(code, /Scene_Boot\.prototype\.start\s*=|command101|Game_Interpreter\.prototype\.setup\s*=|ImageManager\.loadBitmap\s*=/, later);
+        // The face loader is hooked here on the first portrait asked for, so a hook a later file puts on as it loads lies
+        // under this one. Only the Character Creation file has one, for the faces of characters made in the game, and
+        // those names are never the reserved ones: each serves its own and hands the rest on.
+        const hooks = code.match(/ImageManager\.loadFace\s*=/g) || [];
+        assert.equal(hooks.length, later === 'reactor_character_creator.js' ? 1 : 0, later);
+        if (hooks.length) {
+            const at = code.indexOf('ImageManager.loadFace = function(filename) {'), hook = code.slice(at, code.indexOf('\n    };', at));
+            assert.match(hook, /if \(String\(filename\)\.startsWith\("Character-"\)\) return /, 'it takes the names of made characters only');
+            assert.match(hook, /return loadFace\.apply\(this, arguments\);\s*$/, 'and hands every other name on');
+        }
     }
+    assert.equal(Rules.isReservedFace('Character-1'), false, 'a made character\'s face is not a reserved name');
+    assert.match(read(runtimeFile), /        if \(!P\.available\(\)\) return null;\n        arm\(\);/, 'the loaders are hooked when the first portrait is asked for, not as the file loads');
     for (const name of ['build-scripts/build.js', 'build-scripts/build-worker.js', 'build-scripts/dist-editor-worker.js']) {
         assert.ok(read('editor/' + name).includes("'reactor_speaker_face.js'"), name);
     }

@@ -230,11 +230,12 @@ test('another player shows their actor until their own model arrives, then that 
     assert.equal(world.Reactor3D.modelInstanceKey(peer), 'r3:' + spec.name, 'a new look is a new model instance');
 });
 
-test('the Demo plays on the demo server, and a project made from it is the author\'s own', () => {
+test('the Demo\'s server is the demo server, and a project made from it is the author\'s own', () => {
     const demo = JSON.parse(fs.readFileSync(path.join(appRoot, '../template/Demo/data/ReactorOnline.json'), 'utf8'));
-    assert.equal(demo.enabled, true);
+    // Online or single player is the owner's switch on the Demo, changed as the work needs: either is right.
+    assert.equal(typeof demo.enabled, 'boolean');
     assert.equal(demo.address, 'https://demo.rpgreactor.org');
-    assert.equal(demo.playtest, true, 'a playtest of the Demo reaches the server');
+    assert.equal(typeof demo.playtest, 'boolean');
     assert.equal(demo.accounts.mode, 'optional');
     assert.match(fs.readFileSync(path.join(appRoot, 'src/ProjectManager.js'), 'utf8'), /\['ReactorOnline\.json', 'ReactorCharacters\.json'\][\s\S]{0,160}unlinkSync/);
 });
@@ -968,4 +969,170 @@ test('a built model let go of while someone is drawing it comes back from its pa
     assert.equal(await characters.reinstall('gone'), null, 'a package nobody has draws nothing rather than failing');
     const source = fs.readFileSync(path.join(appRoot, '../runtime/reactor_character_creator.js'), 'utf8');
     assert.match(source, /const id = ReactorCharacters\.modelIds\.get\(name\);/);
+});
+
+test('a name tag over a sprite with no picture yet does not stop the game (a model-bound player on a flat map)', () => {
+    const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'runtime', 'reactor_online.js'), 'utf8');
+    const from = source.indexOf('Spriteset_Map.prototype.reactorOnlineNamePoint = function(entry) {'), to = source.indexOf('\n};', from);
+    assert.ok(from > 0 && to > from);
+    const Spriteset_Map = function() {};
+    new Function('Spriteset_Map', '$dataMap', source.slice(from, to + 3))(Spriteset_Map, {});
+    const point = sprite => Spriteset_Map.prototype.reactorOnlineNamePoint.call({}, { peer: {}, sprite });
+    const height = function() { return this.bitmap.height / 8; };
+    assert.deepEqual(point({ x: 100, y: 200, bitmap: null, patternHeight: height }), { x: 100, y: 150 }, 'a tile\'s height until the picture is there');
+    assert.deepEqual(point({ x: 100, y: 200, bitmap: { height: 512 }, patternHeight: height }), { x: 100, y: 134 });
+    assert.deepEqual(point({ x: 100, y: 200, bitmap: null, _tileId: 5, patternHeight: () => 48 }), { x: 100, y: 150 }, 'a tile event has its height without a picture');
+});
+
+test('the owner\'s page shows the server, each account\'s character and last visit, and the characters stored; only an unused one can be deleted', () => {
+    const admin = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'build-scripts', 'online-server', 'admin.php'), 'utf8');
+    for (const section of ["$card('players', t('Playing now')", "$card('accounts', t('Accounts')", "$card('characters', t('Characters')", "$card('chat', t('Chat')", "$card('bans', t('Banned addresses')", "$card('settings', t('Settings')"]) assert.ok(admin.includes(section), section);
+    for (const label of ["'New accounts'", "'Players at once'", "'Chat'", "'Voice'", "'Live engine'", "'Largest character'"]) assert.ok(admin.includes(label), label);
+    // Every action is behind the form's token, and a package is deleted only when nobody uses it (asked again as it is done).
+    assert.match(admin, /if \(!hash_equals\(\$csrf, \(string\)\(\$_POST\['csrf'\] \?\? ''\)\)\) fail\(403/);
+    assert.match(admin, /\$used = modelsInUse\(\$dir\);[\s\S]{0,400}if \(isset\(\$used\[\$hash\]\) \|\| !preg_match\('\/\^\[a-f0-9\]\{64\}\$\/', \$hash\)\) continue;/);
+    assert.ok(admin.includes("$used[$hash][] = t('{name} (guest, here now)'"), 'a guest who is playing keeps theirs');
+    assert.match(admin, /if \(\$do === 'clear-character'\) \{ \$account\['character'\] = null;/);
+    // What cannot be undone asks first, and the page allows no script: the question is the page's own (<details>).
+    for (const action of ['ban-player', 'ban-account', 'clear-character', 'delete-account', 'delete-model', 'delete-unused-models']) assert.ok(admin.includes("$ask('" + action + "'"), action + ' asks first');
+    // One script runs, the page's own (the live chat), named by a mark made new for each page; nothing from outside, and it talks only to this site.
+    assert.match(admin, /\$scriptMark = bin2hex\(random_bytes\(12\)\);\s*header\("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-\$scriptMark'; connect-src 'self'; form-action 'self'; base-uri 'none'"\);/);
+    assert.equal((admin.match(/<script/g) || []).length, 1);
+    assert.ok(!/<script[^>]*src=|innerHTML|insertAdjacentHTML|document\.write|eval\(/.test(admin), 'what players wrote is put on the page as text, never as markup');
+    // What a player typed is never written into the page as it came: names go through e() or into a question that does.
+    assert.ok(!/'<b>' \. \$name \. '|'<td>' \. \$account\[|\. \$message\['text'\] \. '/.test(admin));
+    // In the editor's colours: the theme the deploy wrote, plain colours only, and the editor's default (gold on black) without one.
+    assert.match(admin, /function themeCss\(array \$config\): string \{/);
+    assert.ok(admin.includes("if (preg_match('/^(#[0-9a-f]{3,8}|rgba?") && admin.includes("$css .= $variable . ':' . $value . ';';"), 'only a plain colour is written into the style');
+    assert.match(admin, /:root\{--bg:#1a1a1a;--panel:#111111;--head:#000000;[^}]*--accent:#d4af37;--accent-ink:#000000;/);
+});
+
+test('the admin page takes the editor theme its author works in: the deploy reads the colours from the editor\'s own sheet', () => {
+    const path = require('node:path'), fs = require('node:fs'), os = require('node:os');
+    const theme = require('../build-scripts/online-theme.cjs'), appRoot = path.join(__dirname, '..');
+    const gold = theme.themeColors(appRoot, '');
+    assert.deepEqual([gold.name, gold.accent, gold.base, gold.panel, gold.deep, gold.accentOn], ['', '#d4af37', '#1a1a1a', '#111111', '#000000', '#000000']);
+    assert.equal(Object.keys(gold).length, Object.keys(theme.TOKENS).length + 1, 'every colour the page paints with is found');
+    const ocean = theme.themeColors(appRoot, 'ocean-dark');
+    assert.equal(ocean.name, 'ocean-dark'); assert.notEqual(ocean.accent, gold.accent); assert.notEqual(ocean.base, gold.base);
+    for (const value of Object.values(ocean)) assert.match(value, /^(|[a-z-]+|#[0-9a-f]{3,8}|rgba?\([0-9., %]+\))$/);
+    assert.deepEqual(theme.themeColors(appRoot, 'no-such-theme'), gold, 'an unknown theme is the default');
+    assert.deepEqual(theme.themeColors(appRoot, '"] { x'), gold, 'and a name that is not one is never put into the search');
+    assert.equal(theme.themeColors(path.join(os.tmpdir(), 'rr-no-editor-here'), ''), null);
+    // A value that is not a plain colour never leaves (it would be written into a page's style).
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-theme-'));
+    try {
+        fs.mkdirSync(path.join(root, 'css'));
+        fs.writeFileSync(path.join(root, 'css', 'theme.css'), ':root {\n    --color-accent: url(x) red;\n    --color-text: expression(1);\n    --color-bg-base: var(--color-bg-deep);\n    --color-bg-deep: #010203; /* note */\n}\n');
+        const odd = theme.themeColors(root, '');
+        assert.equal(odd.accent, undefined); assert.equal(odd.text, undefined);
+        assert.equal(odd.deep, '#010203'); assert.equal(odd.base, '#010203', 'a token that names another is followed');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    // The editor hands its theme to the build, and the build to the server's config.
+    assert.match(fs.readFileSync(path.join(appRoot, 'src', 'BuildManager.js'), 'utf8'), /theme: document\.documentElement\.getAttribute\('data-theme'\) \|\| '',/);
+    assert.match(fs.readFileSync(path.join(appRoot, 'build-scripts', 'build-worker.js'), 'utf8'), /theme: online\.theme \|\| '',/);
+    assert.match(fs.readFileSync(path.join(appRoot, 'build-scripts', 'online-deploy.cjs'), 'utf8'), /'theme' => \$\{phpString\(JSON\.stringify\(require\('\.\/online-theme\.cjs'\)\.themeColors\(appRoot, theme\) \|\| \{\}\)\)\}/);
+});
+
+test('the owner\'s page has tabs and addresses without ".php", and writes to everyone or to one player who is here', () => {
+    const fs = require('node:fs'), path = require('node:path'), folder = path.join(__dirname, '..', 'build-scripts');
+    const admin = fs.readFileSync(path.join(folder, 'online-server', 'admin.php'), 'utf8'), api = fs.readFileSync(path.join(folder, 'online-server', 'api.php'), 'utf8');
+    const deploy = fs.readFileSync(path.join(folder, 'online-deploy.cjs'), 'utf8'), ui = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_online_ui.js'), 'utf8');
+    // One section at a time, the one in the address; an unknown one is the overview; a button comes back to its own tab.
+    assert.match(admin, /\$tab = isset\(\$tabs\[\(string\)\(\$_GET\['tab'\] \?\? ''\)\]\) \? \(string\)\$_GET\['tab'\] : 'overview';/);
+    assert.match(admin, /\$post = '<form class="inline" method="post" action="' \. e\(\$link\(\$tab\)\) \. '">';/);
+    for (const id of ['overview', 'accounts', 'characters', 'chat', 'bans', 'settings']) assert.ok(admin.includes("if ($tab === '" + id + "')"), id);
+    // Addresses without the file's name where the server rewrites, the file's name everywhere else.
+    assert.match(deploy, /RewriteRule \^admin\/\?\$ admin\.php \[L,QSA,E=RR_CLEAN_URLS:1\]\\nRewriteRule \^admin\/\(\[a-z\]\+\)\/\?\$ admin\.php\?tab=\$1 \[L,QSA,E=RR_CLEAN_URLS:1\]/);
+    assert.match(admin, /if \(!\$clean\) return 'admin\.php' \. \(\$tab !== 'overview' \? '\?tab=' \. rawurlencode\(\$tab\) : ''\);/);
+    assert.match(admin, /\$clean = \$requested !== '' && strpos\(\$requested, 'admin\.php'\) === false;/);
+    // A word from the owner: behind the form's token like every action, marked by the server alone, and one player's
+    // is kept with that visit's mark and handed only to the visit that holds it.
+    assert.match(admin, /\$message = \['t' => time\(\), 'name' => 'Server', 'slot' => -1, 'text' => \$text, 'world' => true, 'admin' => true\];/);
+    assert.match(admin, /postChat\(\$dir, 'u' \. \$target, \['world' => false, 'private' => true, 'to' => [\s\S]{0,80}'nonce' => \$mark\] \+ \$message, 50\);/);
+    assert.match(admin, /if \(!\$known \|\| \$mark === '' \|\| \$seen >= REPLACED \|\| \$seen < time\(\) - ALIVE_SECONDS\) \$flash = t\('That player is no longer here: nothing was sent\.'\);/);
+    assert.match(api, /hash_equals\(tokenFor\(\$mine, \(string\)\(\$_GET\['g'\] \?\? ''\), \$secret\), \(string\)\(\$_GET\['t'\] \?\? ''\)\)\) \{\s*foreach \(readChat\(\$dir, 'u' \. \$mine\) as \$message\) \{\s*if \(!hash_equals\(\(string\)\(\$message\['nonce'\] \?\? ''\), \$pass\)\) continue;\s*unset\(\$message\['nonce'\]\);/);
+    // A player cannot mark a line as the owner's: what a player says is built from these fields and no others.
+    assert.match(api, /\$message = \['t' => time\(\), 'name' => \(string\)\(\$known\['name'\] \?\? ''\), 'slot' => \$slot, 'text' => filterChat\(/);
+    // The game asks with its own pass, shows the owner's lines as the Server's, and never hides them behind a block.
+    assert.match(ui, /a: "chat",after: this\.after, m: \$gameMap\.mapId\(\), p: ReactorOnlineParty\.party\?\.id \|\| "", s: ReactorOnline\.slot, g: ReactorOnline\.nonce, t: ReactorOnline\.token/);
+    assert.match(ui, /message\.admin \? \(message\.private \? "\[Server, to you\] " : "\[Server\] "\)/);
+    assert.match(ui, /if \(!message\.admin && this\.blocked\(\)\.has\(message\.name\)\) continue;/);
+});
+
+test('the owner\'s chat is live: lines arrive by themselves, sending keeps the page, and a reload sends nothing twice', () => {
+    const admin = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'build-scripts', 'online-server', 'admin.php'), 'utf8');
+    // After any action the page is asked for afresh (a reload of the answer to a form sent the same message again), and what
+    // the action had to say waits for that page in a note of this visit's own.
+    assert.match(admin, /if \(!empty\(\$_POST\['ajax'\]\)\) respond\(\['ok' => true, 'note' => \$flash\]\);[\s\S]{0,700}header\('Location: ' \. \$again, true, 303\);\s*exit;/);
+    assert.match(admin, /\$noteFile = \$dir \. '\/admin-note-' \. substr\(hash\('sha256', \(string\)\$_COOKIE\['reactor_admin'\]\), 0, 24\) \. '\.txt';/);
+    assert.match(admin, /if \(is_file\(\$noteFile\)\) \{ \$flash = \(string\)@file_get_contents\(\$noteFile\); @unlink\(\$noteFile\); \}/);
+    // What is new is asked for every two seconds, only by one who is signed in (the feed sits after that check), and
+    // never carries the mark a private line is kept with.
+    const gate = admin.indexOf('if (!isAdmin($secret)) {'), feed = admin.indexOf("if (isset($_GET['feed'])) {");
+    assert.ok(gate > 0 && feed > gate);
+    assert.match(admin, /\$lineOf = function \(array \$message\): array \{\s*return \['id' =>[^;]*'text' => \(string\)\(\$message\['text'\] \?\? ''\)\];/);
+    assert.ok(!/'nonce' => \(string\)\(\$message/.test(admin));
+    assert.match(admin, /setInterval\(\(\) => \{ if \(!document\.hidden\) ask\(\); \}, 2000\);/);
+    assert.match(admin, /make\("span", "said", message\.text\)/, 'a line\'s words are text');
+    assert.match(admin, /send\(\{ do: "say", to: to\.value, text: words \}\)/);
+});
+
+test('the owner writes to any account, read at once or when its player next arrives, and picks who from a list that narrows as a name is typed', () => {
+    const fs = require('node:fs'), path = require('node:path'), folder = path.join(__dirname, '..', 'build-scripts', 'online-server');
+    const admin = fs.readFileSync(path.join(folder, 'admin.php'), 'utf8'), api = fs.readFileSync(path.join(folder, 'api.php'), 'utf8');
+    const game = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_online.js'), 'utf8');
+    // Everyone, every account (playing or not), and the guests who are here.
+    assert.match(admin, /\$people\[\] = \['id' => 'a' \. basename\(\$file, '\.json'\), 'name' => \$name, 'note' => isset\(\$nowPlaying\[\$name\]\) \? t\('playing now'\) : t\('not playing'\), 'away' => !isset\(\$nowPlaying\[\$name\]\)\];/);
+    assert.match(admin, /if \(\$one\['account'\] === ''\) \$people\[\] = \['id' => 's' \. \(int\)\$slot, 'name' => \$one\['name'\], 'note' => t\('guest, playing now'\), 'away' => false\];/);
+    assert.match(admin, /respond\(\['messages' => \$fresh, 'gone' => [^;]*'people' => \$people\]\);/);
+    // To an account: kept as owed, and said which of the two it will be.
+    assert.match(admin, /\$toAccount = preg_match\('\/\^a\(\[a-f0-9\]\{64\}\)\$\/', \$to, \$found\) \? readAccount\(\$dir, \$found\[1\]\) : null;/);
+    assert.match(admin, /postChat\(\$dir, 'a' \. substr\(\$found\[1\], 0, 24\), \['world' => false, 'private' => true, 'to' => \$name, 'pending' => true\] \+ \$message, 50\);/);
+    assert.match(admin, /they will read it when they next play\./);
+    // The server hands an owed line over once, to the visit signed in as that account and holding its own pass, whatever
+    // the game says it has read; afterwards it is an ordinary line of that account's.
+    assert.match(api, /\$signedIn = \(string\)\(readNames\(\$dir\)\[\$mine\]\['account'\] \?\? ''\);\s*if \(\$signedIn !== '' && hash_equals\(slotNonce\(\$dir, \$mine\), \$pass\)\) \{/);
+    assert.match(api, /if \(\$waiting\) \{ \$owed\[\] = \$message; \$inbox\[\$index\]\['pending'\] = false; \$handed = true; \}\s*else \$messages\[\] = \$message;/);
+    assert.match(api, /\$fresh = array_merge\(\$owed, \$fresh\);/);
+    assert.match(api, /unset\(\$message\['pending'\]\);/);
+    // The game asks once on arriving, since nothing else would fetch a line that waited.
+    assert.match(game, /ReactorOnlineChat\.start\(answer\.chat\);[\s\S]{0,400}setTimeout\(\(\) => \{ try \{ if \(ReactorOnline\.token && ReactorOnlineChat\.settings\(\)\) ReactorOnlineChat\.fetch\(\); \}/);
+    // The box: typed into, the list narrowing; the plain list stays in the form and holds the choice.
+    assert.match(admin, /\.filter\(one => !asked \|\| one\.name\.toLowerCase\(\)\.indexOf\(asked\) >= 0\)/);
+    assert.match(admin, /to\.before\(pick\); pick\.append\(who, list\); to\.hidden = true;/);
+    assert.match(admin, /row\.append\(make\("b", "", one\.name\), make\("span", "", one\.note\)\);/, 'a name is put on the page as text');
+});
+
+test('the owner\'s page speaks the editor\'s languages: every string it shows is in every language, with the same parts to fill in', () => {
+    const fs = require('node:fs'), path = require('node:path'), folder = path.join(__dirname, '..', 'build-scripts', 'online-server');
+    const admin = fs.readFileSync(path.join(folder, 'admin.php'), 'utf8');
+    // The strings the page shows are the ones it asks t() for; the English is the key.
+    const keys = [];
+    for (const found of admin.matchAll(/\bt\('((?:\\'|[^'])*)'/g)) { const key = found[1].replace(/\\'/g, "'"); if (!keys.includes(key)) keys.push(key); }
+    assert.ok(keys.length >= 120, keys.length + ' strings');
+    // The editor's own languages, by the same ids, each under the name it calls itself.
+    const editor = fs.readFileSync(path.join(__dirname, '..', 'src', 'I18nManager.js'), 'utf8');
+    const ids = Array.from(editor.slice(0, editor.indexOf('function normalizeI18nLanguage')).matchAll(/\{ id: '([A-Za-z-]+)', name: '[^']*', nativeName: '([^']*)'/g), found => [found[1], found[2]]);
+    assert.equal(ids.length, 18);
+    for (const [id, native] of ids) assert.ok(admin.includes("'" + id + "' => '" + native + "'"), id + ' is offered as ' + native);
+    const parts = text => (text.match(/\{[a-z]+\}/g) || []).sort().join(' ');
+    for (const [id] of ids) {
+        if (id === 'en') { assert.equal(fs.existsSync(path.join(folder, 'lang-en.json')), false); continue; }
+        const words = JSON.parse(fs.readFileSync(path.join(folder, 'lang-' + id + '.json'), 'utf8'));
+        assert.deepEqual(Object.keys(words).filter(key => !keys.includes(key)), [], id + ' has nothing the page does not show');
+        for (const key of keys) {
+            assert.ok(typeof words[key] === 'string' && words[key].trim() !== '', id + ' lacks: ' + key);
+            assert.equal(parts(words[key]), parts(key), id + ' fills in other parts: ' + key);
+            assert.ok(!/[<>]/.test(words[key]), id + ' has markup in: ' + key);
+        }
+    }
+    // Chosen by the reader and kept; else the browser's own; Arabic reads right to left; a deploy carries the files.
+    assert.match(admin, /setcookie\('reactor_admin_lang', \$language, \['expires' => time\(\) \+ 31536000, 'path' => '\/', 'samesite' => 'Lax'\]\);/);
+    assert.match(admin, /foreach \(explode\(',', \(string\)\(\$_SERVER\['HTTP_ACCEPT_LANGUAGE'\] \?\? ''\)\) as \$offered\)/);
+    assert.match(admin, /dir="', \(\$language === 'ar' \? 'rtl' : 'ltr'\), '">/);
+    assert.match(admin, /@json_decode\(\(string\)@file_get_contents\(__DIR__ \. '\/lang-' \. \$language \. '\.json'\), true\)/);
+    assert.match(fs.readFileSync(path.join(folder, '..', 'online-deploy.cjs'), 'utf8'), /if \(\/\^lang-\[A-Za-z-\]\+\\\.json\$\/\.test\(name\)\) swap\(name,/);
+    // A word of the reader's language reaches the page escaped like any other.
+    assert.ok(!/'<[a-z]+[^']*>' \. t\(/.test(admin), 'a translated string is never joined to markup unescaped');
 });

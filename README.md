@@ -6,33 +6,33 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-The latest tagged source release is [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5). Read the [release notes](docs/posts/release-notes-0.99.5.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
+The latest stable source release is [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6). Read the [release notes](docs/posts/release-notes-0.99.6.md) for the changes. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/01-battle-room.jpg" alt="A Classic battle in a Battle Room"><br><sub>Classic battles in a Battle Room are drawn the way maps are, at the machine's real frame rate.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/02-interface-motion.jpg" alt="Pictures and motion in User Interfaces"><br><sub>Fill interface elements with pictures and give them motion in Database → User Interfaces.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/01-server-admin.jpg" alt="The online server's admin page"><br><sub>The admin page of an online server, drawn like the editor: who is playing, accounts, stored characters and the server's mode.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/02-admin-languages.jpg" alt="The admin page in Japanese with its language menu"><br><sub>The admin page speaks the editor's 18 languages, chosen from its header.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/03-character-groups.jpg" alt="A generated group of characters"><br><sub>Character Groups makes a town, an army or a whole people from one description.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/04-north-haven.jpg" alt="North Haven with the frame-rate box"><br><sub>Games run without vsync; F2 shows the real frame rate and the graphics device.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/03-play-from-a-server.jpg" alt="Deploy Game with Play from a server"><br><sub>A Web build can be one small page that shows the game from your own server, for store pages with upload limits.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/04-tactical-2d-map.jpg" alt="A Tactical battle on a 2D map"><br><sub>3D characters on a 2D map hold weapons at their own size, in a Tactical battle.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/05-open-road.jpg" alt="An Open Road map with cliffs at its edge"><br><sub>High ground rises at the edge of an Open Road map.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/06-database-columns.jpg" alt="Database columns of even height"><br><sub>Database pages deal their cards into columns of near the same height.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/05-admin-arabic.jpg" alt="The admin page's settings in Arabic"><br><sub>Arabic is laid out right to left.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/06-admin-characters.jpg" alt="Stored characters on the admin page"><br><sub>Every character players have made, its size and who uses it.</sub></td>
 </tr>
 </table>
 
-## What's new in 0.99.5
+## What's new in 0.99.6
 
-- **Battles and parties online:** join another player's Tactical, Classic, Action or First Person battle on any side, watch one, duel, and form parties with their own chat, `/follow` and shared switches.
-- **A game-styled start:** sign-in and character creation are real game windows in the project's own window skin, for keyboard, gamepad, mouse and touch.
-- **Character Groups:** describe a town, an army or a people and the Forge makes every member, with designs, walking sheets, battlers and portraits.
-- **Pictures and motion in User Interfaces:** picture fills with nine-slice and state pictures, animation frames, and float, pulse, spin, sway, fade and appear motion that carries whatever is inside an element.
-- **Faster on every machine:** no vsync and real frame rates on F2, automatic quality that lowers only what a computer is short of, full-resolution 3D where there is room, and far lighter crowds, maps and Battle Rooms.
-- **Two audits:** several hundred faults fixed across event commands, the Database, the editors, battles, imports and builds; enemies can wear equipment (contributed by Xehanort88).
+- **An admin page for your online server:** players, accounts, stored characters, a live chat, bans and settings, in the editor's look and 18 languages; write to everyone or to one account.
+- **Play from a server:** a Web build of one page that shows the game from your own server, for store pages such as itch.io with upload limits.
+- **Faster deploys:** Build → Online Server sends only the files that changed.
+- **Graphics backends:** Auto, Direct3D 11, Direct3D 11 on 12, OpenGL or Vulkan for each project; video screens on Vulkan, and maps that load without a long first stall on more drivers.
+- **Maps above and below, and faces that talk:** maps joined by openings and ladders; face sets that speak in the message window.
+- **Music loop points:** Opus and Ogg Vorbis loop at their tagged points in the game and in the editor's previews (contributed by Xehanort88).
 
-Eight tests fail in the whole run and most audit fixes are checked by tests only; the newest speed changes still need a check on the weak laptop, and online features have been tested on one server. See the [0.99.5 notes](docs/posts/release-notes-0.99.5.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
+See the [0.99.6 notes](docs/posts/release-notes-0.99.6.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
 
 ## Repository Layout
 
@@ -51,7 +51,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.5.md): features, screenshots and known issues for 0.99.5.
+- [Latest release notes](docs/posts/release-notes-0.99.6.md): features and screenshots for 0.99.6.
 - [Previous release notes](docs/posts/release-notes-0.99.4.md): features and fixes in 0.99.4.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
@@ -92,7 +92,6 @@ RPGReactor/
 - **The Forge, in-editor asset generators**:
   - **Animation Generator**: 76 procedural 2D animations across eight categories, including Portal, with layered composition, per-layer keyframe timelines, a 3D shape pipeline, custom textures, and export to bake-ready sprite sheets or animated GIFs.
   - **Effekseer Animation Generator**: create native Effekseer particle effects (`.efkefc`) from 106 recipes across nine categories without the external Effekseer editor: 21 sci-fi interface instruments with user-typed text, physical battle hits, 15 energy recipes, elements, a custom-effect Composer, and more; wireframe or solid-textured rendering with custom texture upload; layers, keyframes with texture cross-fades, live in-editor preview through the game's own Effekseer runtime, and one-click export. The tracked suite validates generated format/model round trips, every recipe at default/extreme/swept values, composition, and real-WASM playback.
-  - **Character Generator**: bundled Psychronic and Looseleaf styles plus procedural Outfit Forge and Hair Forge tools that generate RPG Maker-style walking-sheet parts, with live 4-direction walk previews, multiple hair styles, palette systems, and save-to-library output. Psychronic remains the default style.
   - **3D Character Builder**: shape humans, humanoid species and creatures with sliders and pickers, dress them from a catalog of 152 garments, 74 outfit presets and 84 accessories, and save them as rigged GLB models with 51 poses and motions, expressions and speech. Characters also export as 2D sprite sheets, battlers and face portraits. Default human faces and body appearance are still under review. See the [guide](docs/CHARACTER-BUILDER.md).
   - **Character Creation**: let players choose an actor or build their own 3D character inside the game, single player or online, with the same tools and catalog. See the [guide](docs/DESIGN-ONLINE.md#using-it-today).
   - **3D Prop Builder**: build flags, props made from pictures, weapons, wearables, containers, furniture and vehicles, and save them as 3D models. See the [guide](docs/PROP-BUILDER.md).
@@ -181,11 +180,11 @@ npm test               # every test, as CI runs it
 
 Every run keeps each pass as it happens, so an interrupted `test:changed` or `test:whole` resumes where it stopped. The same tests run on a working machine and on CI. Tests use small default pictures (`tests/helpers/small-pictures.cjs`, which the npm scripts load and a bare `node --test` run does not); a test that judges pixels asks for its size explicitly. Sweeps use `tests/helpers/coverage.cjs`: every value, paired rather than multiplied; `RR_TEST_EXHAUSTIVE=1` walks every combination.
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-11-12, before the 0.99.5 cut, local validation completed with **9718 passing tests**, 11 skipped and 8 failures (seven long-standing, one timing test that passes alone). A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-11-16, before the 0.99.6 cut, local validation completed with **9901 passing tests**, 11 skipped and no failures. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for the release steps.
 
 ## Trusted Projects
 
-Treat an RPG project like source code. Project plugins and project-local Character Generator JavaScript execute inside the Node-enabled desktop editor/runtime and can access the local machine. Only open or run projects and plugins from sources you trust; inspect downloaded project code before using it. The browser editor has a narrower host, but projects may still execute game/plugin JavaScript during playtest and interface capture.
+Treat an RPG project like source code. Project plugins execute inside the Node-enabled desktop editor/runtime and can access the local machine. Only open or run projects and plugins from sources you trust; inspect downloaded project code before using it. The browser editor has a narrower host, but projects may still execute game/plugin JavaScript during playtest and interface capture.
 
 ## Bundled Demo Limitations
 
@@ -205,18 +204,18 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.99.5 changes have been committed:
+`main` worktree after all 0.99.6 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.99.5 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.5
+node editor/build-scripts/cut-release.cjs 0.99.6 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.6
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, moves the cycle's
 dated handoff entries to `docs/archive/handoff/<version>.md`, creates a release
-commit when those surfaces changed, creates an annotated `v0.99.5` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.99.6` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

@@ -685,7 +685,7 @@ class EventManager {
             const selectedTiles = this.tilesetPaletteViewer.getSelectedTiles();
             if (selectedTiles && selectedTiles.length > 0) {
                 const tile = selectedTiles[0];
-                const tileId = this.convertToTileId(tile.layer, tile.x, tile.y);
+                const tileId = this.eventTileIdFor(tile);
                 if (tileId > 0) {
                     this.createNewEventWithTileset(tileX, tileY, tileId);
                     this.tilesetPaletteViewer.clearSelection();
@@ -929,7 +929,7 @@ class EventManager {
                 if (selectedTiles && selectedTiles.length > 0) {
                     const tile = selectedTiles[0];
                     console.debug('Context menu - First selected tile:', tile);
-                    const tileId = this.convertToTileId(tile.layer, tile.x, tile.y);
+                    const tileId = this.eventTileIdFor(tile);
                     console.debug('Context menu - Converted tileId:', tileId);
                     if (tileId > 0) {
                         this.createNewEventWithTileset(tileX, tileY, tileId);
@@ -1428,6 +1428,30 @@ class EventManager {
 
         // Final render to update appearance
         this.renderEvents();
+    }
+
+    /**
+     * The tile id a palette tile gives a new event as its picture, 0 for none.
+     * On a 2D map the ground sheets (A1 to A5) give none, as in RPG Maker MZ:
+     * the 2D game draws an event's tile from the B to E sheets only, so such
+     * an event showed here and was invisible in play. An event that already
+     * has one keeps it; this only decides what a new event is made with.
+     */
+    eventTileIdFor(tile, map = this.currentMap) {
+        if (!tile) return 0;
+        if (/^A[1-5]$/.test(String(tile.layer)) && !this.isMap3D(map)) return 0;
+        return this.convertToTileId(tile.layer, tile.x, tile.y);
+    }
+
+    /** Whether the map is played in 3D: the game's own answer when its code is loaded, else `<3d>` in the Note. */
+    isMap3D(map) {
+        if (!map) return false;
+        const world = typeof window !== 'undefined' ? window.Reactor3D : null;
+        if (world && typeof world.isMap3D === 'function') {
+            try { return !!world.isMap3D(map); } catch (_error) { /* read from the data below */ }
+        }
+        const mode = map.reactor3d && typeof map.reactor3d.mode === 'string' ? map.reactor3d.mode : null;
+        return /<3d>/i.test(String(map.note || '')) && (mode === null || mode === '3d');
     }
 
     // Convert layer, x, y to RPG Maker tileId

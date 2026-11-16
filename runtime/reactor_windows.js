@@ -487,8 +487,11 @@ Window_Base.prototype.drawIcon = function(iconIndex, x, y) {
 
 // prettier-ignore
 Window_Base.prototype.drawFace = function(
-    faceName, faceIndex, x, y, width, height
+    faceName, faceIndex, x, y, width, height, frame
 ) {
+    // A face set with frames (ImageManager.faceFrames): the first frame unless `frame` names another.
+    const frames = ImageManager.faceFrames ? ImageManager.faceFrames(faceName) : 0;
+    const at = frames ? Math.max(0, Math.min(frames - 1, Math.floor(Number(frame) || 0))) : 0;
     width = width || ImageManager.faceWidth;
     height = height || ImageManager.faceHeight;
     const bitmap = ImageManager.loadFace(faceName);
@@ -498,7 +501,7 @@ Window_Base.prototype.drawFace = function(
     const sh = Math.min(height, ph);
     const dx = Math.floor(x + Math.max(width - pw, 0) / 2);
     const dy = Math.floor(y + Math.max(height - ph, 0) / 2);
-    const sx = Math.floor((faceIndex % 4) * pw + (pw - sw) / 2);
+    const sx = Math.floor(((faceIndex % 4) * (frames || 1) + at) * pw + (pw - sw) / 2);
     const sy = Math.floor(Math.floor(faceIndex / 4) * ph + (ph - sh) / 2);
     this.contents.blt(bitmap, sx, sy, sw, sh, dx, dy);
 };
@@ -3072,6 +3075,50 @@ Window_Options.prototype.addGeneralOptions = function() {
     this.addCommand(TextManager.commandRemember, "commandRemember");
     this.addCommand(TextManager.touchUI, "touchUI");
     this.addGraphicsOption();
+    this.addFrameRateOption();
+    this.addBattleCameraOption();
+};
+
+/**
+ * Frame Rate: Monitor holds the game to the refresh of the monitor its window is on (Graphics.FrameLimit), Unlimited
+ * draws every frame the machine can. Offered where the system has said what the monitor's refresh is: elsewhere
+ * there is nothing to hold it to. The words are `Window_Options.FRAME_TEXT`, for a game in another language.
+ */
+Window_Options.FRAME_TEXT = { name: "Frame Rate", monitor: "Monitor", unlimited: "Unlimited" };
+Window_Options.offersFrameRate = function() {
+    return typeof Graphics !== "undefined" && !!Graphics.FrameLimit && Graphics.FrameLimit.enabled && Graphics.FrameLimit.hz() > 0;
+};
+Window_Options.prototype.addFrameRateOption = function() {
+    if (Window_Options.offersFrameRate()) this.addCommand(Window_Options.FRAME_TEXT.name, "frameLimit");
+};
+
+/**
+ * How often a battle's camera cuts in to follow an action (reactor_fight_camera.js): Off, Some or Every. The
+ * choice is kept with the saved game, over the project's own (Database › Battle), so it is offered in a game
+ * being played, not from the title, and not in a project that has the camera off or no battle settings.
+ * The words are `Window_Options.CAMERA_TEXT`, for a game in another language.
+ */
+Window_Options.CAMERA_TEXT = { name: "Battle Camera", off: "Off", some: "Some", every: "Every" };
+Window_Options.offersBattleCamera = function() {
+    const F = typeof ReactorFight !== "undefined" ? ReactorFight : null;
+    if (!F || !F.Camera || !F.Director || !F.Director.setLevel || !F.systemSettings) return false;
+    if (typeof $dataSystem === "undefined" || !$dataSystem || !$dataSystem.reactorBattle) return false;
+    if (typeof $gameMap === "undefined" || !$gameMap || !($gameMap.mapId() > 0)) return false;
+    return F.Camera.normalizeSettings(F.systemSettings().cinematic).level !== "off";
+};
+
+Window_Options.prototype.addBattleCameraOption = function() {
+    if (Window_Options.offersBattleCamera()) this.addCommand(Window_Options.CAMERA_TEXT.name, "battleCamera");
+};
+
+Window_Options.prototype.changeBattleCamera = function(forward, wrap) {
+    const F = ReactorFight, values = F.Camera.LEVELS;
+    const at = Math.max(0, values.indexOf(F.Camera.settings().level));
+    const next = wrap ? (at + (forward ? 1 : values.length - 1)) % values.length : Math.max(0, Math.min(values.length - 1, at + (forward ? 1 : -1)));
+    if (next === at) return;
+    F.Director.setLevel(values[next]);
+    this.redrawItem(this.findSymbol("battleCamera"));
+    this.playCursorSound();
 };
 
 /**
@@ -3125,6 +3172,10 @@ Window_Options.prototype.statusText = function(index) {
     const value = this.getConfigValue(symbol);
     if (symbol === "graphicsQuality") {
         return Window_Options.GRAPHICS_TEXT[value] || Window_Options.GRAPHICS_TEXT.auto;
+    } else if (symbol === "frameLimit") {
+        return value === false ? Window_Options.FRAME_TEXT.unlimited : Window_Options.FRAME_TEXT.monitor;
+    } else if (symbol === "battleCamera") {
+        return Window_Options.CAMERA_TEXT[ReactorFight.Camera.settings().level] || "";
     } else if (this.isVolumeSymbol(symbol)) {
         return this.volumeStatusText(value);
     } else {
@@ -3149,6 +3200,8 @@ Window_Options.prototype.processOk = function() {
     const symbol = this.commandSymbol(index);
     if (symbol === "graphicsQuality") {
         this.changeGraphicsQuality(true, true);
+    } else if (symbol === "battleCamera") {
+        this.changeBattleCamera(true, true);
     } else if (this.isVolumeSymbol(symbol)) {
         this.changeVolume(symbol, true, true);
     } else {
@@ -3161,6 +3214,8 @@ Window_Options.prototype.cursorRight = function() {
     const symbol = this.commandSymbol(index);
     if (symbol === "graphicsQuality") {
         this.changeGraphicsQuality(true, false);
+    } else if (symbol === "battleCamera") {
+        this.changeBattleCamera(true, false);
     } else if (this.isVolumeSymbol(symbol)) {
         this.changeVolume(symbol, true, false);
     } else {
@@ -3173,6 +3228,8 @@ Window_Options.prototype.cursorLeft = function() {
     const symbol = this.commandSymbol(index);
     if (symbol === "graphicsQuality") {
         this.changeGraphicsQuality(false, false);
+    } else if (symbol === "battleCamera") {
+        this.changeBattleCamera(false, false);
     } else if (this.isVolumeSymbol(symbol)) {
         this.changeVolume(symbol, false, false);
     } else {
@@ -4936,6 +4993,7 @@ Window_Message.prototype.update = function() {
     this.checkToNotClose();
     Window_Base.prototype.update.call(this);
     this.synchronizeNameBox();
+    this.updateFaceFrames();
     while (!this.isOpening() && !this.isClosing()) {
         if (this.updateWait()) {
             return;
@@ -5189,7 +5247,85 @@ Window_Message.prototype.drawMessageFace = function() {
     const width = ImageManager.faceWidth;
     const height = this.innerHeight;
     const x = rtl ? this.innerWidth - width - 4 : 4;
-    this.drawFace(faceName, faceIndex, x, 0, width, height);
+    // Where the face was drawn and from what, for a face set with frames to be drawn again as it moves. A face
+    // that was not the one shown last (another speaker, another expression, a window opened again) starts over.
+    const frames = ImageManager.faceFrames ? ImageManager.faceFrames(faceName) : 0;
+    const play = $gameMessage.facePlay ? $gameMessage.facePlay() : "talk";
+    const last = this._rrFace, same = !!last && last.name === faceName && last.index === faceIndex && last.play === play;
+    this._rrFace = { name: faceName, index: faceIndex, x, width, height, frames, play, frame: same ? last.frame : 0, count: same ? last.count : 0, held: 0, mouth: 0 };
+    this.drawFace(faceName, faceIndex, x, 0, width, height, this._rrFace.frame);
+};
+
+/** Updates each frame is held for when a face is played through (once, loop), and the fewest a mouth shape is held for while talking. */
+Window_Message.FACE_FRAME_WAIT = 5;
+Window_Message.FACE_TALK_WAIT = 4;
+
+/**
+ * How far open a mouth is for a character of the text, 0 (shut) to 1 (widest): shut for a space, a line end and
+ * punctuation and for m, b and p; wide for a, less for o, e, i and u; a little for other consonants. A letter of
+ * another script (kana, hanzi, Cyrillic, Greek...) opens by its own code, so speech in any language moves.
+ */
+Window_Message.faceMouth = function(character) {
+    const c = String(character || "").toLowerCase();
+    if (!c || /[\s.,;:!?…。、！？「」()\[\]"'’“”\-–—~*_/\\<>]/.test(c)) return 0;
+    const table = { a: 1, á: 1, à: 1, â: 1, ä: 1, ã: 1, o: 0.8, ó: 0.8, ö: 0.8, ô: 0.8, e: 0.6, é: 0.6, è: 0.6, ê: 0.6, i: 0.45, í: 0.45, u: 0.5, ú: 0.5, ü: 0.5, y: 0.4,
+        m: 0, b: 0, p: 0, f: 0.15, v: 0.15, w: 0.35, h: 0.5 };
+    if (c in table) return table[c];
+    if (c >= "a" && c <= "z") return 0.3;
+    if (c >= "0" && c <= "9") return 0.5;
+    const code = c.codePointAt(0);
+    return code > 127 ? 0.3 + (code % 5) * 0.175 : 0;
+};
+
+/** The frame (0 the mouth at rest, `frames - 1` the widest) for a mouth that far open. */
+Window_Message.faceTalkFrame = function(open, frames) {
+    return frames > 1 ? Math.max(0, Math.min(frames - 1, Math.round(open * (frames - 1)))) : 0;
+};
+
+/**
+ * A face set with frames moves in the message window, the way its message says (`$gameMessage.facePlay()`):
+ * talking, its mouth says the message letter by letter at the pace of speech and then rests on the first frame;
+ * played once, it runs through its frames when the face appears and holds the last;
+ * looped, it goes round while the face is shown; still, it shows the first frame. Only a face this window drew
+ * itself (`_rrFace`): a plugin that draws the message's face its own way is left alone.
+ */
+Window_Message.prototype.updateFaceFrames = function() {
+    const face = this._rrFace;
+    if (!face) return;
+    if (!this.isOpen() || $gameMessage.faceName() !== face.name || $gameMessage.faceIndex() !== face.index) {
+        if (this.isClosed() || $gameMessage.faceName() !== face.name) this._rrFace = null;
+        return;
+    }
+    if (!face.frames || this._faceBitmap) return;
+    let frame = 0;
+    if (face.play === "once") frame = Math.min(face.frames - 1, Math.floor(face.count++ / Window_Message.FACE_FRAME_WAIT));
+    else if (face.play === "loop") frame = Math.floor(face.count++ / Window_Message.FACE_FRAME_WAIT) % face.frames;
+    else if (face.play === "talk") {
+        // The face says the message at the pace of speech, a letter every FACE_TALK_WAIT updates, whatever the pace
+        // the text is printed at: a line printed in a third of a second is still spoken through, on into the wait
+        // for the player, and never ahead of what has been printed. A new message starts it over.
+        const state = this._textState;
+        if (state && state.text !== face.text) { face.text = String(state.text || ""); face.at = 0; face.held = 0; face.mouth = 0; }
+        const text = face.text || "", printed = state ? Math.min(text.length, Number(state.index) || 0) : text.length;
+        if (face.held <= 0) {
+            // Text codes are not said: the escape, its letter or sign, and what stands in its brackets.
+            while (face.at < printed && text.charCodeAt(face.at) === 27) {
+                face.at += 2;
+                while (face.at < printed && /[A-Za-z]/.test(text.charAt(face.at)) && /[A-Za-z]/.test(text.charAt(face.at - 1))) face.at++;
+                if (text.charAt(face.at) === "[") { const close = text.indexOf("]", face.at); face.at = close < 0 ? printed : close + 1; }
+            }
+            if (face.at < printed) {
+                face.mouth = Window_Message.faceTalkFrame(Window_Message.faceMouth(text.charAt(face.at++)), face.frames);
+                face.held = Window_Message.FACE_TALK_WAIT;
+            } else face.mouth = 0;
+        }
+        face.held--;
+        frame = face.mouth;
+    }
+    if (frame === face.frame) return;
+    face.frame = frame;
+    this.contents.clearRect(face.x, 0, face.width, face.height);
+    this.drawFace(face.name, face.index, face.x, 0, face.width, face.height, frame);
 };
 
 Window_Message.prototype.processControlCharacter = function(textState, c) {

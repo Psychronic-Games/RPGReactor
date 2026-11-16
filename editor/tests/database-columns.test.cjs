@@ -166,3 +166,23 @@ test('the shell deals the pages of columns by one mechanism, and the style sheet
     assert.match(css, /\.rr-db-column-empty \{ display: none !important; \}/);
     assert.match(css, /\.rr-db-column-made \{ display: flex; flex-direction: column; gap: 16px; min-width: 0; \}/);
 });
+
+test('the Note card closes the last column and takes up its spare height; the Classes page scrolls as one', () => {
+    const shell = read('src/utils/DatabaseSections.js'), css = read('css/styles.css');
+    // Dealt to the last column whatever the count, last within it, and measured without its stretch.
+    assert.match(shell, /units\.forEach\(unit => \{ unit\.note = !note && noteOf\(unit\); if \(unit\.note\) note = unit; unit\.element\.classList\.remove\(NOTE_FILL\); \}\);/);
+    assert.match(shell, /unit\.column : unit\.note \? columns - 1 : undefined\)\)/);
+    assert.match(shell, /\.sort\(\(a, b\) => \(a\.note \? 1 : 0\) - \(b\.note \? 1 : 0\) \|\|/);
+    assert.match(shell, /if \(note && count > 1 && heightOf\(note\.element\) > 60\) note\.element\.classList\.add\(NOTE_FILL\);/, 'only beside another column, and not while folded');
+    // A card held to a column is counted there by the deal itself.
+    const dealt = S.dealColumns([300, 300, 300, 100], 2, { gap: 16, fixed: [undefined, undefined, undefined, 1] });
+    assert.equal(dealt.deal[3], 1);
+    assert.ok(Math.abs(dealt.heights[0] - dealt.heights[1]) < 320, JSON.stringify(dealt.heights));
+    assert.match(css, /\.rr-db-note-fill textarea \{ flex: 1 1 auto; min-height: 3\.5em; resize: none; \}/);
+    assert.match(css, /\[data-rr-columns\]:has\(\.rr-db-note-fill\) \{ align-items: stretch !important; \}/);
+    // Classes: the page scrolls, not the columns inside it (they were squeezed to a strip when the cards under them opened).
+    const block = css.slice(css.indexOf('.database-class-columns {'), css.indexOf('}', css.indexOf('.database-class-columns {')));
+    assert.doesNotMatch(block, /overflow/);
+    assert.match(block, /flex: 0 0 auto;/);
+    assert.match(read('src/database/DatabaseClassEditor.js'), /wrapper\.style\.cssText = 'display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto; box-sizing: border-box;';/);
+});

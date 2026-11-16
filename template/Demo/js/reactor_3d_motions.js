@@ -305,6 +305,25 @@
         return out;
     }
     const dir = b => unit(sub(b.tail || b.head, b.head));
+    /**
+     * A hand's frame where the skeleton has no finger joints, for the sides `handFrames` could not measure: it
+     * runs on along the forearm, 0.38 of the forearm long to the knuckles, the thumb forward and the palm
+     * toward the body (arms at rest by the sides) or down (arms held out). No finger joints: nothing closes.
+     */
+    function plainHands(bones, index) {
+        const out = {};
+        for (const S of ['Left', 'Right']) {
+            if (!index.has(S + 'Hand') || !index.has(S + 'ForeArm')) continue;
+            const hand = bones[index.get(S + 'Hand')].head, fore = bones[index.get(S + 'ForeArm')].head, side = hand[0] < 0 ? -1 : 1;
+            const lower = Math.hypot(...sub(hand, fore));
+            if (!(lower > 1e-6)) continue;
+            const along = unit(sub(hand, fore)), thumbward = square([0, 0, 1], along);
+            let palm = unit(cross(thumbward, along));
+            if (dot(palm, [-side, -1, 0]) < 0) palm = palm.map(v => -v);
+            out[S] = { along, palm, thumbward, joints: [], chains: Object.fromEntries(FINGERS.map(f => [f, []])), hand, length: lower * 0.38, plain: true };
+        }
+        return out;
+    }
 
     /** A hand shape's turn for one joint of its frame. */
     function jointTurn(j, shape) {
@@ -1330,6 +1349,11 @@
     /** The arms set by the pose's aim or grip, every frame, eased in and out by its `aimMix` keys [[seconds, weight], ...]. */
     function aimArms(bones, index, names, world, steps, place, turnAt, scale, frames, pose, times) {
         const kinds = [].concat(pose.aim || []);
+        // A climb is taken on the rungs by hands and feet with no joints of their own (a rigged file's skeleton
+        // as the game reads it: no fingers, often no toes): the hand and the foot are measured from the limb.
+        // The party's imported models went up a ladder standing, arms at their sides (owner, 2026-11-14).
+        const plain = kinds.length > 0 && kinds.every(kind => kind === 'ladder' || kind === 'wall');
+        if (plain && (!frames.Left || !frames.Right)) frames = Object.assign({}, plainHands(bones, index), frames);
         if (!kinds.length || !frames.Left || !frames.Right) return;
         const reach = {}, grip = {}, restAlong = {}, foot = {};
         for (const S of ['Left', 'Right']) {
@@ -1338,7 +1362,10 @@
             grip[S] = gripOf(frames[S], 0.03);
             restAlong[S + 'ForeArm'] = unit(sub(p('Hand'), p('ForeArm')));
             if (index.has(S + 'ToeBase')) foot[S] = { along: unit(sub(p('ToeBase'), p('Foot'))), ball: sub(p('ToeBase'), p('Foot')) };
+            // No toe joint: the ball of the foot lies ahead of the ankle, on the floor.
+            else if (plain && index.has(S + 'Foot')) { const ball = [0, -Math.max(0, p('Foot')[1] - 0.02 * scale), 0.12 * scale]; foot[S] = { along: unit(ball), ball }; }
         }
+        if (plain && (!foot.Left || !foot.Right)) return;
         const period = times[times.length - 1] || 1;
         const ctx = { bones, index, names, world, place, turnAt, scale, F: frames, pose, reach, grip, restAlong, foot, times, period, rest: restFrames(bones, index), roll: {}, wristRoll: {}, bendNormals: {}, bendReference: {}, bendFrame: {} };
         for (let f = 0; f < steps; f++) {

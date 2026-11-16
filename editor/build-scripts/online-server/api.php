@@ -126,36 +126,50 @@ if ($action === 'party') {
     $dir = dataDir($config);
     $me = (string)(readNames($dir)[$slot]['name'] ?? '');
     if ($me === '') fail(401, 'Unknown player.');
+    // Whose name it is: the account signed in under it ('' for a guest). See `partyOf`.
+    $mine = (string)(readNames($dir)[$slot]['account'] ?? '');
     $body = jsonBody();
     $do = (string)($body['do'] ?? '');
     $lock = fopen($dir . '/parties.lock', 'c');
     if (!$lock || !flock($lock, LOCK_EX)) fail(500, 'Could not reach the parties.');
     $state = readParties($dir);
-    [$id, $party] = partyOf($state, $me);
+    [$id, $party] = partyOf($state, $me, $mine);
     $refuse = function (int $status, string $message) use ($lock): void { flock($lock, LOCK_UN); fail($status, $message); };
     if ($do === 'invite') {
         $to = slotNamed($dir, textStart(cleanText((string)($body['name'] ?? '')), 24), $slot);
         $name = $to >= 0 ? (string)(readNames($dir)[$to]['name'] ?? '') : '';
         if ($name === '' || $to === $slot) $refuse(404, 'Nobody by that name is here.');
-        if (partyOf($state, $name)[1]) $refuse(409, $name . ' is already in a party.');
+        $theirAccount = (string)(readNames($dir)[$to]['account'] ?? '');
+        if (partyOf($state, $name, $theirAccount)[1]) $refuse(409, $name . ' is already in a party.');
         if ($party && count($party['members']) >= PARTY_MOST) $refuse(409, 'Your party is full.');
-        $state['invites'][$name] = ['from' => $me, 'at' => time()];
+        $state['invites'][$name] = ['from' => $me, 'fromAccount' => $mine, 'for' => $theirAccount, 'at' => time()];
     } elseif ($do === 'accept') {
         $invite = $state['invites'][$me] ?? null;
+        // An invitation sent to this name while another account wore it is not this player's to accept or to clear.
+        if (!meantFor($invite, $mine)) $refuse(410, 'That invitation has lapsed.');
         unset($state['invites'][$me]);
         if (!$invite || $invite['at'] < time() - 120) $refuse(410, 'That invitation has lapsed.');
-        [$theirs, $group] = partyOf($state, (string)$invite['from']);
+        $inviter = isset($invite['fromAccount']) ? (string)$invite['fromAccount'] : null;
+        [$theirs, $group] = partyOf($state, (string)$invite['from'], $inviter);
         // Already in that party (both invited each other): nothing to do, and nobody is listed twice.
         if ($party && $id === $theirs) { writeParties($dir, $state); flock($lock, LOCK_UN); respond(['ok' => true]); }
         // Leaving another party for this one is a leave like any other: it keeps a leader who is in it, or ends.
         if ($party) {
             $left = array_values(array_diff($party['members'], [$me]));
             if (count($left) < 2) unset($state['parties'][$id]);
-            else { $state['parties'][$id]['members'] = $left; if ($party['leader'] === $me) $state['parties'][$id]['leader'] = $left[0]; }
+            else { $state['parties'][$id]['members'] = $left; unset($state['parties'][$id]['owners'][$me]); if ($party['leader'] === $me) $state['parties'][$id]['leader'] = $left[0]; }
         }
-        if (!$group) { $theirs = bin2hex(random_bytes(6)); $group = ['leader' => $invite['from'], 'members' => [$invite['from']]]; }
+        if (!$group) {
+            $theirs = bin2hex(random_bytes(6));
+            $group = ['leader' => $invite['from'], 'members' => [$invite['from']], 'owners' => []];
+            if ($inviter !== null) $group['owners'][(string)$invite['from']] = $inviter;
+        }
         if (count($group['members']) >= PARTY_MOST) $refuse(409, 'That party is full.');
+        // The name is free in that party, or held there by another account: then it is not this player's to join under.
+        if (in_array($me, $group['members'], true)) $refuse(409, 'Someone by your name is already in that party.');
         $group['members'][] = $me;
+        if (!isset($group['owners']) || !is_array($group['owners'])) $group['owners'] = [];
+        $group['owners'][$me] = $mine;
         $state['parties'][$theirs] = $group;
     } elseif ($do === 'set') {
         // Values the project shares within a party. The last one in stands, as in the world lane.
@@ -176,14 +190,15 @@ if ($action === 'party') {
         $to = slotNamed($dir, textStart(cleanText((string)($body['name'] ?? '')), 24), $slot);
         $name = $to >= 0 ? (string)(readNames($dir)[$to]['name'] ?? '') : '';
         if ($name === '') $refuse(404, 'Nobody by that name is here.');
-        $state['challenges'][$name] = ['from' => $me, 'at' => time(), 'accepted' => false];
+        $state['challenges'][$name] = ['from' => $me, 'fromAccount' => $mine, 'for' => (string)(readNames($dir)[$to]['account'] ?? ''), 'at' => time(), 'accepted' => false];
     } elseif ($do === 'answerChallenge') {
         $challenge = $state['challenges'][$me] ?? null;
+        if (!meantFor($challenge, $mine)) $refuse(410, 'That challenge has lapsed.');
         if (!$challenge || $challenge['at'] < time() - 120) { unset($state['challenges'][$me]); $refuse(410, 'That challenge has lapsed.'); }
         if (!empty($body['yes'])) $state['challenges'][$me]['accepted'] = true;
         else unset($state['challenges'][$me]);
     } elseif ($do === 'decline') {
-        unset($state['invites'][$me]);
+        if (meantFor($state['invites'][$me] ?? null, $mine)) unset($state['invites'][$me]);
     } elseif ($do === 'leave') {
         if ($party) {
             $left = array_values(array_diff($party['members'], [$me]));
@@ -191,6 +206,7 @@ if ($action === 'party') {
             else {
                 // Everything else the party holds (the values it shares) stays with those who remain.
                 $state['parties'][$id]['members'] = $left;
+                unset($state['parties'][$id]['owners'][$me]);
                 if ($party['leader'] === $me) $state['parties'][$id]['leader'] = $left[0];
             }
         }
@@ -206,10 +222,11 @@ if ($action === 'news') {
     $dir = dataDir($config);
     $names = readNames($dir);
     $me = (string)($names[$slot]['name'] ?? '');
+    $mine = (string)($names[$slot]['account'] ?? '');
     $map = intParam('m', 1, 9999);
     $state = readParties($dir);
-    [$id, $party] = partyOf($state, $me);
-    $invite = $state['invites'][$me] ?? null;
+    [$id, $party] = partyOf($state, $me, $mine);
+    $invite = meantFor($state['invites'][$me] ?? null, $mine) ? $state['invites'][$me] : null;
     $out = ['battles' => []];
     $out['party'] = $party ? ['id' => $id, 'leader' => $party['leader'], 'values' => $party['values'] ?? null, 'members' => array_map(function (string $name) use ($dir, $names): array {
         $at = slotNamed($dir, $name, -1, $names);
@@ -217,11 +234,11 @@ if ($action === 'news') {
     }, $party['members'])] : null;
     $out['invite'] = $invite && $invite['at'] >= time() - 120 ? (string)$invite['from'] : '';
     // A fight between two players: the one asked sees who asks; the one who asked hears the answer once.
-    $challenge = $state['challenges'][$me] ?? null;
+    $challenge = meantFor($state['challenges'][$me] ?? null, $mine) ? $state['challenges'][$me] : null;
     $out['challenge'] = $challenge && !$challenge['accepted'] && $challenge['at'] >= time() - 120 ? (string)$challenge['from'] : '';
     $out['duel'] = '';
     foreach ($state['challenges'] ?? [] as $target => $entry) {
-        if (($entry['from'] ?? '') !== $me || empty($entry['accepted'])) continue;
+        if (($entry['from'] ?? '') !== $me || empty($entry['accepted']) || (isset($entry['fromAccount']) && (string)$entry['fromAccount'] !== $mine)) continue;
         $out['duel'] = (string)$target;
         $lock = fopen($dir . '/parties.lock', 'c');
         if ($lock && flock($lock, LOCK_EX)) { $fresh = readParties($dir); unset($fresh['challenges'][$target]); writeParties($dir, $fresh); flock($lock, LOCK_UN); }
@@ -242,12 +259,15 @@ if ($action === 'bOpen' || $action === 'bBeat') {
     $lock = lockBattles($dir);
     $battles = readBattles($dir);
     foreach ($battles as $battle => $entry) {
-        if ((int)$entry['at'] >= time() - 300) continue;
+        // A battle its host closed keeps its log a minute more, so a guest still reading reaches the ending
+        // (it was deleted by the next battle anyone opened, and the guest fell back to "host gone").
+        $kept = isset($entry['closed']) ? (int)$entry['closed'] >= time() - BATTLE_CLOSED_SECONDS : (int)$entry['at'] >= time() - 300;
+        if ($kept) continue;
         unset($battles[$battle]);
         @unlink($dir . '/battles/' . $battle . '.log');
     }
     $id = $action === 'bOpen' ? bin2hex(random_bytes(8)) : (string)($body['id'] ?? '');
-    if ($action === 'bBeat' && (!isset($battles[$id]) || (int)$battles[$id]['host'] !== $slot)) { flock($lock, LOCK_UN); fail(404, 'That battle has ended.'); }
+    if ($action === 'bBeat' && (!isset($battles[$id]) || isset($battles[$id]['closed']) || (int)$battles[$id]['host'] !== $slot)) { flock($lock, LOCK_UN); fail(404, 'That battle has ended.'); }
     if (!is_dir($dir . '/battles')) @mkdir($dir . '/battles', 0770, true);
     $sides = [];
     foreach (is_array($body['sides'] ?? null) ? array_slice($body['sides'], 0, 32, true) : [] as $who => $side) $sides[textStart(cleanText((string)$who), 24)] = preg_replace('/[^a-z0-9]/', '', (string)$side);
@@ -267,7 +287,7 @@ if ($action === 'bClose') {
     $lock = lockBattles($dir);
     $battles = readBattles($dir);
     $id = (string)(jsonBody()['id'] ?? '');
-    if (isset($battles[$id]) && (int)$battles[$id]['host'] === $slot) { $battles[$id]['at'] = 0; writeBattles($dir, $battles); }
+    if (isset($battles[$id]) && (int)$battles[$id]['host'] === $slot) { $battles[$id]['at'] = 0; $battles[$id]['closed'] = time(); writeBattles($dir, $battles); }
     flock($lock, LOCK_UN);
     respond(['ok' => true]);
 }
@@ -553,7 +573,7 @@ if ($action === 'say') {
     if ($text === '') fail(422, 'There is nothing to say.');
     $map = intParam('m', 1, 9999);
     $world = !empty($body['world']) && !empty($settings['chat']['world']);
-    $party = !empty($body['party']) ? partyOf(readParties($dir), (string)($known['name'] ?? ''))[0] : '';
+    $party = !empty($body['party']) ? partyOf(readParties($dir), (string)($known['name'] ?? ''), (string)($known['account'] ?? ''))[0] : '';
     // Each slot's last message time, in one small file.
     $times = fopen($dir . '/chattime.bin', 'c+b');
     fseek($times, $slot * 4);
@@ -576,8 +596,41 @@ if ($action === 'chat') {
     $messages = array_merge(readChat($dir, 'w'), readChat($dir, 'm' . intParam('m', 1, 9999)));
     $partyId = (string)($_GET['p'] ?? '');
     if (preg_match('/^[a-f0-9]{12}$/', $partyId)) $messages = array_merge($messages, readChat($dir, 'p' . $partyId));
+    // What the game's owner wrote to this player alone (the admin page): read only with this visit's own pass, and
+    // only what was written during it, so whoever is given the place next reads nothing of it.
+    $mine = (int)($_GET['s'] ?? -1);
+    $pass = strtolower((string)($_GET['g'] ?? ''));
+    // (And what was written to this player's account while they were away: owed until it has been handed over once.)
+    $owed = [];
+    if ($mine >= 0 && $mine < SLOTS && $pass !== '' && hash_equals(tokenFor($mine, (string)($_GET['g'] ?? ''), $secret), (string)($_GET['t'] ?? ''))) {
+        foreach (readChat($dir, 'u' . $mine) as $message) {
+            if (!hash_equals((string)($message['nonce'] ?? ''), $pass)) continue;
+            unset($message['nonce']);
+            $messages[] = $message;
+        }
+        $signedIn = (string)(readNames($dir)[$mine]['account'] ?? '');
+        if ($signedIn !== '' && hash_equals(slotNonce($dir, $mine), $pass)) {
+            $channel = 'a' . substr(accountKey($signedIn), 0, 24);
+            $lock = lockChat($dir);
+            $inbox = readChat($dir, $channel);
+            $handed = false;
+            foreach ($inbox as $index => $message) {
+                $waiting = !empty($message['pending']);
+                unset($message['pending']);
+                if ($waiting) { $owed[] = $message; $inbox[$index]['pending'] = false; $handed = true; }
+                else $messages[] = $message;
+            }
+            if ($handed) {
+                $temporary = chatFile($dir, $channel) . '.' . getmypid() . '.tmp';
+                file_put_contents($temporary, jsonText($inbox));
+                rename($temporary, chatFile($dir, $channel));
+            }
+            flock($lock, LOCK_UN);
+        }
+    }
     usort($messages, function (array $a, array $b): int { return $a['id'] <=> $b['id']; });
     $fresh = array_values(array_filter($messages, function (array $message) use ($after): bool { return $message['id'] > $after; }));
+    $fresh = array_merge($owed, $fresh);
     $gone = @json_decode((string)@file_get_contents($dir . '/chatgone.json'), true);
     respond(['messages' => array_slice($fresh, -50), 'gone' => is_array($gone) ? array_slice($gone, -50) : [], 'count' => chatCount($dir)]);
 }

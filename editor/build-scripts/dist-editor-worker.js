@@ -96,7 +96,7 @@ const appVersion = editorPkg.version || '0.0.0';
 const INCLUDE_DIRS = ['src', 'css', 'images', 'libs', 'build-scripts', 'changelog'];
 const INCLUDE_REPOSITORY_DIRS = [path.join('template', 'Demo')];
 const INCLUDE_FILES = [
-    'index.html', 'media-surface-panel.html', 'event-editor-panel.html', 'database-panel.html', 'forge-panel.html', 'plugin-manager-panel.html', 'package.json', 'package-lock.json',
+    'index.html', 'media-surface-panel.html', 'event-editor-panel.html', 'database-panel.html', 'forge-panel.html', 'plugin-manager-panel.html', 'audio-player-panel.html', 'package.json', 'package-lock.json',
     'CHANGELOG.md', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];
 
@@ -997,24 +997,6 @@ function buildWeb(stageRoot, stagingDir) {
     const sourceHtml = fs.readFileSync(path.join(stageRoot, 'index.html'), 'utf8');
     const scriptPattern = /<script\s+src="(src\/[^"]+)"\s*><\/script>/g;
     const sourceScripts = [...sourceHtml.matchAll(scriptPattern)].map(match => match[1]);
-    const characterGeneratorEntry = 'src/forge/CharacterGenerator/CharacterGenerator.js';
-    const characterGeneratorIndex = sourceScripts.indexOf(characterGeneratorEntry);
-    if (characterGeneratorIndex < 0) throw new Error('Character Generator entry point is missing from index.html.');
-    const characterStyleRoot = path.join(stageRoot, 'src', 'forge', 'CharacterGenerator', 'styles');
-    // The bulk-imported looseleaf style pack is ~76MB of generated part
-    // data; on the web it multiplies both the archive and boot-time parse
-    // for a sandbox that ships the compact psychronic style. The registry
-    // is additive, so the Character Generator simply offers the styles
-    // that loaded.
-    const characterStyleScripts = walkWebFiles(characterStyleRoot)
-        .filter(entry => entry.type === 'file' && entry.path.endsWith('.js'))
-        .filter(entry => !entry.path.startsWith('looseleaf/'))
-        .map(entry => `src/forge/CharacterGenerator/styles/${entry.path}`)
-        .sort();
-    sourceScripts.splice(characterGeneratorIndex, 0,
-        'src/forge/CharacterGenerator/procgen/outfit_engine.js',
-        'src/forge/CharacterGenerator/procgen/hair_engine.js',
-        ...characterStyleScripts);
     const bundleScripts = sourceScripts.filter(source => source !== 'src/main.js' && !source.startsWith('src/web/'));
     // Desktop poses read this library from disk; the web page must define it before CharacterPoses.
     bundleScripts.splice(bundleScripts.indexOf('src/forge/Character3D/CharacterPoses.js'), 0, 'runtime/reactor_3d_motions.js');
@@ -1247,7 +1229,7 @@ function buildWeb(stageRoot, stagingDir) {
             'reactor_objects.js', 'reactor_objects_actions.js', 'reactor_objects_battlers.js', 'reactor_objects_map.js', 'reactor_objects_interpreter.js', 'reactor_objects_followers.js', 'reactor_objects_legacy.js',
             'reactor_hdr_overlay.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
             'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
-            'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_character_creator.js', 'reactor_online.js', 'reactor_online_ui.js', 'reactor_online_voice.js', 'reactor_online_party.js', 'reactor_online_battle.js', 'reactor_online_classic.js', 'reactor_online_action.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_hints.js', 'reactor_vehicles_mount.js',
+            'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_character_creator.js', 'reactor_online.js', 'reactor_online_ui.js', 'reactor_online_voice.js', 'reactor_online_party.js', 'reactor_online_battle.js', 'reactor_online_classic.js', 'reactor_online_action.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_mount.js',
             'reactor_windows.js', 'reactor_ui_victory.js', 'reactor_ui_fight.js', 'reactor_ui_action.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
             path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
             path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
@@ -1539,6 +1521,7 @@ function buildWeb(stageRoot, stagingDir) {
                 + 'if exist "%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt" set /p RR_ANGLE=<"%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt"\r\n'
                 + 'if /i "%RR_ANGLE%"=="gl" set "RR_ANGLE_ARGS=--use-angle=gl --rr-editor-angle=gl"\r\n'
                 + 'if /i "%RR_ANGLE%"=="d3d11on12" set "RR_ANGLE_ARGS=--use-angle=d3d11on12 --rr-editor-angle=d3d11on12"\r\n'
+                + 'if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --rr-editor-angle=vulkan"\r\n'
                 + 'start "" "nwjs-win\\nw.exe" . %RR_ANGLE_ARGS%\r\n');
             logInfo('  RPGReactor.bat');
 

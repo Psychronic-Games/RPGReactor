@@ -142,7 +142,7 @@ function realTools() {
     const map = { id: 1, width: W, height: H, tilesetId: 1, note: '<3d>', data: new Array(W * H * 6).fill(0), events: [null],
         reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
     const statuses = [];
-    const ui = { buttons: [], updateUndoRedoButtons(u, r) { this.buttons.push([u, r]); }, updateStatus: text => statuses.push(text) };
+    const ui = { buttons: [], updateUndoRedoButtons(u, r) { this.buttons.push([u, r]); }, showMapNote: text => statuses.push(text) };
 
     // Terrain and the builder read the editor's globals: their own context, the map shared.
     const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} },

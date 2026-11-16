@@ -17,7 +17,7 @@ test('confirmed user-visible English bypasses route through literal text transla
 
     const project = read('src/ProjectController.js');
     assert.match(project, /this\._tt\('The project lock could not be verified\. The project was not opened\.'\)/);
-    assert.match(project, /this\._tt\('Could not verify project lock'\)/);
+    // ('Could not verify project lock' went to a status line nothing showed; the dialog above says it, and the call was removed on 2026-11-12.)
 
     const event = read('src/EventManager.js');
     for (const label of ['Character Graphic:', 'Destination:', 'Player Direction:', 'Reward Type:', 'Reward:']) {

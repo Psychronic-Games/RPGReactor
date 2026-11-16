@@ -64,6 +64,8 @@
     const FLAT_SETS = '.rr-controls, .rr-db-columns-flat';
     const COLUMN = 'rr-db-column', MADE_COLUMN = 'rr-db-column-made', EMPTY_COLUMN = 'rr-db-column-empty';
     const COLUMNS_ATTRIBUTE = 'data-rr-columns';
+    // The Note card where it closes the last column and fills the height that column has to spare (styles.css).
+    const NOTE_FILL = 'rr-db-note-fill';
     // A page of two columns takes a third when each would still be this wide.
     const THIRD_COLUMN_WIDTH = 600;
     const COLLAPSED = 'is-collapsed';
@@ -920,8 +922,9 @@
         function place(set, state, deal, still, heights) {
             const { columns, units, flat } = state;
             columns.forEach((column, at) => {
+                // (The Note card stands last in its column: see `noteOf` in dealSet.)
                 const wanted = units.filter((unit, index) => deal[index] === at)
-                    .sort((a, b) => (flat ? 0 : (a.home === at ? 0 : 1) - (b.home === at ? 0 : 1)) || a.order - b.order).map(unit => unit.element);
+                    .sort((a, b) => (a.note ? 1 : 0) - (b.note ? 1 : 0) || (flat ? 0 : (a.home === at ? 0 : 1) - (b.home === at ? 0 : 1)) || a.order - b.order).map(unit => unit.element);
                 wanted.forEach((element, index) => {
                     for (let guard = (column.children.length || 0) + 2; column.children[index] !== element && guard > 0; guard--) {
                         // A card in use is not moved: the cards in its way go behind it.
@@ -956,6 +959,14 @@
             const inUse = element => element === settings.hold || (settings.hold && element.contains(settings.hold))
                 || (active && active !== doc.body && element.contains(active)) || (pressed && element.contains(pressed));
             const still = new Set(units.filter(unit => inUse(unit.element)).map(unit => unit.element));
+            // The Note card closes the page's last column and takes up what height that column has to spare, so the
+            // columns end level (the owner, 2026-11-12). It is measured at its own height, without the stretch.
+            const noteOf = unit => {
+                const key = String(unitName(unit, -1) || '').toLowerCase();
+                return key === 'note' || key === 'notes' || !!(typeof unit.element.querySelector === 'function' && unit.element.querySelector('[data-section-key="note"]'));
+            };
+            let note = null;
+            units.forEach(unit => { unit.note = !note && noteOf(unit); if (unit.note) note = unit; unit.element.classList.remove(NOTE_FILL); });
             // How many columns the page's own style gives at this width, and how wide they are.
             for (const column of state.columns) column.classList.remove(EMPTY_COLUMN);
             setCount(set, 1);
@@ -984,7 +995,7 @@
                         gap: rows,
                         home: flat ? null : units.map(unit => unit.home),
                         keep: kept ? names.map((key, index) => (kept[key] === undefined ? Math.max(0, units[index].column) : kept[key])) : null,
-                        fixed: units.map(unit => (still.has(unit.element) && unit.column >= 0 && unit.column < columns ? unit.column : undefined))
+                        fixed: units.map(unit => (still.has(unit.element) && unit.column >= 0 && unit.column < columns ? unit.column : unit.note ? columns - 1 : undefined))
                     });
                     tallest[columns] = Math.max(...tried[columns].heights);
                 }
@@ -1001,6 +1012,8 @@
             const wanted = flat ? Math.max(count, 1) : Math.max(count, state.own);
             while (state.columns.length < wanted) state.columns.push(makeColumn(set, flat ? null : state.columns[0]));
             place(set, state, deal, still, measured ? measured[count] : units.map(() => 1));
+            // Stretched only beside another column, and only while it is open: a folded card stays a line.
+            if (note && count > 1 && heightOf(note.element) > 60) note.element.classList.add(NOTE_FILL);
             dealt.add(set);
             units.forEach(unit => sizes.set(unit.element, heightOf(unit.element)));
             // Moving a card takes the focus from a field in it: given back where a card in use had to move after all.

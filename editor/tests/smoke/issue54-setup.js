@@ -128,7 +128,7 @@ const done = arguments[arguments.length - 1];
         check('audio arrows select the next track', audio.getCurrentChannel().currentTrack?.name === rows[1]?.dataset.track);
         check('audio selection retains list focus', document.activeElement === list);
         key(list, 'End'); check('audio End selects last track', audio.getCurrentChannel().currentTrack?.name === rows.at(-1)?.dataset.track);
-        audio.stopAudio(); document.getElementById('audio-player-modal').style.display = 'none';
+        audio.stopAudio(); audio.hideAudioPlayer();
     });
 
     await section('Plugins', async () => {

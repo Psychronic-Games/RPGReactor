@@ -237,7 +237,8 @@ test('a character holds the handheld ones as it holds a sword: in the fist by th
             const who = body(); who.root.position.set(4.5, 0, 4.5); who.root.updateMatrixWorld(true);
             assert.equal(M.show(unit, { battler: { weapons: () => [{ id: 1 }] }, hold: 'fist', attachment, hands, gripY: 0, duration: 0 }), true, what);
             await new Promise(r => setImmediate(r));
-            Graphics.frameCount++; M.update({ object: who.root, character: unit }, unit, null, false);
+            // (A scene: the body here stands at its size in tiles. Without one it would be a flat map's picture, held things sized to it.)
+            Graphics.frameCount++; M.update({ object: who.root, character: unit }, unit, {}, false);
             const held = M.states.get('e1').record.object, hand = who.hands[attachment === 'leftHand' ? 'Left' : 'Right'];
             assert.equal(held.parent, hand, what + ' rides the hand');
             held.updateWorldMatrix(true, true);

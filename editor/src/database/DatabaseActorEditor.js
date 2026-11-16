@@ -717,11 +717,8 @@ class DatabaseActorEditor {
 
         const newTrait = result.row;
 
-        if (traitIndex !== null) {
-            actor.traits.splice(traitIndex + 1, 0, newTrait);
-        } else {
-            actor.traits.push(newTrait);
-        }
+        // After the selected row, or at the end with none selected: the same on every page with a trait table.
+        DatabaseRowClipboard.insertPasted(actor.traits, traitIndex, newTrait);
 
         this.saveTraitRecord(actor);
         this.refreshActorDetail(actor);
