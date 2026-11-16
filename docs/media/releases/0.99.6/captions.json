@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01-server-admin.jpg",
+    "title": "The online server's admin page",
+    "caption": "The admin page of an online server, drawn like the editor: who is playing, accounts, stored characters and the server's mode."
+  },
+  {
+    "file": "02-admin-languages.jpg",
+    "title": "The admin page in Japanese with its language menu",
+    "caption": "The admin page speaks the editor's 18 languages, chosen from its header."
+  },
+  {
+    "file": "03-play-from-a-server.jpg",
+    "title": "Deploy Game with Play from a server",
+    "caption": "A Web build can be one small page that shows the game from your own server, for store pages with upload limits."
+  },
+  {
+    "file": "04-tactical-2d-map.jpg",
+    "title": "A Tactical battle on a 2D map",
+    "caption": "3D characters on a 2D map hold weapons at their own size, in a Tactical battle."
+  },
+  {
+    "file": "05-admin-arabic.jpg",
+    "title": "The admin page's settings in Arabic",
+    "caption": "Arabic is laid out right to left."
+  },
+  {
+    "file": "06-admin-characters.jpg",
+    "title": "Stored characters on the admin page",
+    "caption": "Every character players have made, its size and who uses it."
+  }
+]

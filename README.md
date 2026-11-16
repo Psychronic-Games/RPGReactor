@@ -6,33 +6,33 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-The current development version is 0.99.6 and is not published yet; the latest tagged source release is [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5). Read the [release notes](docs/posts/release-notes-0.99.5.md) for the changes and known issues. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
+The current development version is 0.99.6 and is not published yet; the latest tagged source release is [0.99.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.5). Read the [release notes](docs/posts/release-notes-0.99.6.md) for the changes. Pre-built downloads are published separately at <https://psychronic.itch.io/rpg-reactor>.
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/01-battle-room.jpg" alt="A Classic battle in a Battle Room"><br><sub>Classic battles in a Battle Room are drawn the way maps are, at the machine's real frame rate.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/02-interface-motion.jpg" alt="Pictures and motion in User Interfaces"><br><sub>Fill interface elements with pictures and give them motion in Database → User Interfaces.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/01-server-admin.jpg" alt="The online server's admin page"><br><sub>The admin page of an online server, drawn like the editor: who is playing, accounts, stored characters and the server's mode.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/02-admin-languages.jpg" alt="The admin page in Japanese with its language menu"><br><sub>The admin page speaks the editor's 18 languages, chosen from its header.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/03-character-groups.jpg" alt="A generated group of characters"><br><sub>Character Groups makes a town, an army or a whole people from one description.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/04-north-haven.jpg" alt="North Haven with the frame-rate box"><br><sub>Games run without vsync; F2 shows the real frame rate and the graphics device.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/03-play-from-a-server.jpg" alt="Deploy Game with Play from a server"><br><sub>A Web build can be one small page that shows the game from your own server, for store pages with upload limits.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/04-tactical-2d-map.jpg" alt="A Tactical battle on a 2D map"><br><sub>3D characters on a 2D map hold weapons at their own size, in a Tactical battle.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/05-open-road.jpg" alt="An Open Road map with cliffs at its edge"><br><sub>High ground rises at the edge of an Open Road map.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.5/06-database-columns.jpg" alt="Database columns of even height"><br><sub>Database pages deal their cards into columns of near the same height.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/05-admin-arabic.jpg" alt="The admin page's settings in Arabic"><br><sub>Arabic is laid out right to left.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.6/06-admin-characters.jpg" alt="Stored characters on the admin page"><br><sub>Every character players have made, its size and who uses it.</sub></td>
 </tr>
 </table>
 
-## What's new in 0.99.5
+## What's new in 0.99.6
 
-- **Battles and parties online:** join another player's Tactical, Classic, Action or First Person battle on any side, watch one, duel, and form parties with their own chat, `/follow` and shared switches.
-- **A game-styled start:** sign-in and character creation are real game windows in the project's own window skin, for keyboard, gamepad, mouse and touch.
-- **Character Groups:** describe a town, an army or a people and the Forge makes every member, with designs, walking sheets, battlers and portraits.
-- **Pictures and motion in User Interfaces:** picture fills with nine-slice and state pictures, animation frames, and float, pulse, spin, sway, fade and appear motion that carries whatever is inside an element.
-- **Faster on every machine:** no vsync and real frame rates on F2, automatic quality that lowers only what a computer is short of, full-resolution 3D where there is room, and far lighter crowds, maps and Battle Rooms.
-- **Two audits:** several hundred faults fixed across event commands, the Database, the editors, battles, imports and builds; enemies can wear equipment (contributed by Xehanort88).
+- **An admin page for your online server:** players, accounts, stored characters, a live chat, bans and settings, in the editor's look and 18 languages; write to everyone or to one account.
+- **Play from a server:** a Web build of one page that shows the game from your own server, for store pages such as itch.io with upload limits.
+- **Faster deploys:** Build → Online Server sends only the files that changed.
+- **Graphics backends:** Auto, Direct3D 11, Direct3D 11 on 12, OpenGL or Vulkan for each project; video screens on Vulkan, and maps that load without a long first stall on more drivers.
+- **Maps above and below, and faces that talk:** maps joined by openings and ladders; face sets that speak in the message window.
+- **Music loop points:** Opus and Ogg Vorbis loop at their tagged points in the game and in the editor's previews (contributed by Xehanort88).
 
-Eight tests fail in the whole run and most audit fixes are checked by tests only; the newest speed changes still need a check on the weak laptop, and online features have been tested on one server. See the [0.99.5 notes](docs/posts/release-notes-0.99.5.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
+See the [0.99.6 notes](docs/posts/release-notes-0.99.6.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
 
 ## Repository Layout
 
@@ -51,7 +51,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.5.md): features, screenshots and known issues for 0.99.5.
+- [Latest release notes](docs/posts/release-notes-0.99.6.md): features and screenshots for 0.99.6.
 - [Previous release notes](docs/posts/release-notes-0.99.4.md): features and fixes in 0.99.4.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.

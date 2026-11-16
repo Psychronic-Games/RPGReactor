@@ -1,6 +1,6 @@
 # Current status
 
-**0.99.6** is in development (runtime 20261115.12): faces that talk, the builder's Sprite view and Character Groups pages, the audits' answers, the 2D Character Generator retired, a graphics backend to choose, an online admin page, and audio loop points. **0.99.5** adds shared battles and parties online, Character Groups, interface pictures and motion, real frame rates, automatic quality, and two audits' fixes. See the [release notes](posts/release-notes-0.99.5.md) and [changelog](../CHANGELOG.md). Signed binaries and itch publication are separate; the last binary release is 0.99.2.
+**0.99.6** is released (runtime 20261115.12): faces that talk, the builder's Sprite view and Character Groups pages, the audits' answers, the 2D Character Generator retired, a graphics backend to choose, an online admin page, and audio loop points. **0.99.5** adds shared battles and parties online, Character Groups, interface pictures and motion, real frame rates, automatic quality, and two audits' fixes. See the [release notes](posts/release-notes-0.99.6.md) and [changelog](../CHANGELOG.md). Signed binaries and itch publication are separate; the last binary release is 0.99.2.
 
 ## Version and validation
 
