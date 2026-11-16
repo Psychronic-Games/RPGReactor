@@ -1364,10 +1364,40 @@
         typeof PIXI.TextureSource.prototype.destroy === "function" &&
         !PIXI.TextureSource.prototype.destroy.__reactorFlushesTextures) {
         const _origDestroy = PIXI.TextureSource.prototype.destroy;
+        // A texture destroyed while a shader still names it. PIXI 5 let that
+        // pass; PIXI 8 logs "[BindGroup] a 'textureSource' was destroyed while
+        // still bound to a shader" and empties the slot, and a slot left empty
+        // stops the next draw of that shader. Two things do it in passing: a
+        // window resize (the texture pool destroys what it kept for the old
+        // screen size while the filter system's shared bind group still names
+        // the last filter's input) and a plugin that destroys a bitmap its own
+        // filter samples (Hendrix 3D Light and Shadow's cover masks on a map
+        // change). The slot is handed the empty texture first, quietly.
+        const _bindGroupChange = PIXI.BindGroup && PIXI.BindGroup.prototype.onResourceChange;
+        const _releaseFromBindGroups = function(resource, stand) {
+            const held = resource && resource._events && resource._events.change;
+            if (!held || !_bindGroupChange) return;
+            for (const entry of Array.isArray(held) ? held.slice() : [held]) {
+                const group = entry && entry.context;
+                if (!entry || entry.fn !== _bindGroupChange || !group || !group.resources) continue;
+                for (const key in group.resources) {
+                    if (group.resources[key] === resource) group.resources[key] = stand || null;
+                }
+                group._dirty = true;
+                resource.off("change", _bindGroupChange, group);
+            }
+        };
         PIXI.TextureSource.prototype.destroy = function() {
             if (pendingTextureUploads && pendingTextureUploads.has(this)) {
                 flushTextureUploads();
             }
+            try {
+                const empty = PIXI.Texture && PIXI.Texture.EMPTY && PIXI.Texture.EMPTY.source;
+                if (empty !== this) {
+                    _releaseFromBindGroups(this, empty);
+                    _releaseFromBindGroups(this.style, empty && empty.style);
+                }
+            } catch (e) { /* PIXI warns instead */ }
             return _origDestroy.apply(this, arguments);
         };
         PIXI.TextureSource.prototype.destroy.__reactorFlushesTextures = true;

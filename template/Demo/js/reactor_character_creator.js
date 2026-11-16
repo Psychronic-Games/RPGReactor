@@ -1502,6 +1502,18 @@ if (typeof Reactor3D !== "undefined") {
         }
         return actorSpec.call(this, section, id);
     };
+    // In battle too: a battler's model is read by its own slot (actorSlotSpec), not through databaseModelSpec, so the
+    // actor a built character plays as fought as the Database's own model (the owner's created character rode into a
+    // battle as Fleagus, 2026-11-15). Only where that actor's battler is a model at all: a picture stays a picture.
+    const slotSpec = Reactor3D.actorSlotSpec;
+    Reactor3D.actorSlotSpec = function(actorId, slot) {
+        const own = slotSpec.call(this, actorId, slot);
+        if (slot === "battler" && own && !ReactorCharacters._bypass) {
+            const character = ReactorCharacters.current();
+            if (character && character.actorId === actorId && ReactorCharacters.models.has(character.id)) return ReactorCharacters.models.get(character.id);
+        }
+        return own;
+    };
     const loadModel = Reactor3D.loadModel;
     Reactor3D.loadModel = function(name, ext, file, texture) {
         const id = ReactorCharacters.modelIds.get(name);

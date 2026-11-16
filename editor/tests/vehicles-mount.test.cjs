@@ -202,7 +202,18 @@ test('Attack by one who rides a vehicle that can attack asks whose attack: the v
     assert.deepEqual(Array.from(rows._data, skill => skill.id), [leader.attackSkillId(), battler.attackSkillId()]);
     assert.deepEqual(list(rows._rrVias), ['', 'vehicle']);
     assert.deepEqual(list(rows.drawn.filter(row => row[0] === 'name' || row[0] === 'text')),
-        [['name', w.$dataSkills[leader.attackSkillId()].name, true], ['text', leader.name(), true], ['name', 'Gun', true], ['text', 'Motorcycle', true]], 'each by its weapon, and whose it is');
+        [['text', leader.name() + ':', true], ['name', w.$dataSkills[leader.attackSkillId()].name, true], ['text', 'Motorcycle:', true], ['name', 'Gun', true]], 'whose it is first, then the weapon it is made with');
+    // A vehicle with no weapon and no attack skill of its own has no attack to offer: its bare Attack is its rider's, twice.
+    const M = w.V.Mount, armed = battler.weapons;
+    assert.equal(M.armed(battler), true);
+    battler.weapons = () => [];
+    try {
+        assert.equal(M.armed(battler), false);
+        assert.equal(fight.vehicleAttacker(unit), null, 'Attack is then the rider\'s alone, with nothing to ask');
+        const skill = battler.attackSkillId;
+        battler.attackSkillId = () => 7;
+        try { assert.equal(M.armed(battler), true, 'an Attack Skill trait is an attack of its own'); } finally { battler.attackSkillId = skill; }
+    } finally { battler.weapons = armed; }
     assert.deepEqual([w.V.Mount.rowEnabled(rows, 0), w.V.Mount.rowEnabled(rows, 1)], [true, true]);
     const subjects = [];
     const apply = w.Game_Action.prototype.apply;

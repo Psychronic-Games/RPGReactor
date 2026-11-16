@@ -3009,11 +3009,14 @@ Game_Player.prototype.leaveByBorder = function(d, reach) {
 };
 
 // A map can have a map under it and a map over it (Beyond the Border > Above and Below: `surround.levels`).
-// A player whose height passes the middle of the gap between the two goes on in the other map, at the same
+// A player whose height passes the middle of the gap between the two (through an opening: a little under the
+// upper map's ground, Reactor3D.levelMiddle) goes on in the other map, at the same
 // place and height, still falling or climbing as it was: down a pit dug deep enough, up a ladder or a stair
 // that reaches high enough. Without a break once that map stands built through an opening (Reactor3D.Levels); else with a fade.
 Game_Player.prototype.leaveByLevel = function() {
-    if (this.isTransferring() || this.isMoveRouteForcing() || this.isInVehicle()) return false;
+    // Riding one of Reactor's vehicles the party goes on with it (below); a boat, a ship and an airship stay on their map.
+    const riding = this.isInVehicle();
+    if (this.isTransferring() || this.isMoveRouteForcing() || (riding && this._vehicleType !== "reactor")) return false;
     if (typeof Reactor3D === "undefined" || !Reactor3D.levelExit || typeof $dataMap === "undefined" || !$dataMap) return false;
     const alt = Number.isFinite(this._reactorAlt) ? this._reactorAlt : this._reactorGround;
     if (!Number.isFinite(alt) || Reactor3D.levelsOf($dataMap) === Reactor3D.NO_LEVELS) return false;
@@ -3024,12 +3027,20 @@ Game_Player.prototype.leaveByLevel = function() {
     if (typeof $gameTemp !== "undefined" && $gameTemp) $gameTemp.clearDestination();
     // The map there stands built under (or over) this one: it is passed into without a fade, and nobody is
     // gathered onto the leader. Else as any transfer.
+    // Ridden through (a motorcycle down a hole): the vehicle goes with its rider (ReactorVehicles.prepareTransfer, by
+    // `reserveTransfer`) and the ride goes on as it was, falling at the speed and on the heading it had, where the
+    // map under stands built; else with a fade and onto the ground there. The rider had stayed on the map above
+    // while the vehicle lay on the floor of the map below (owner, 2026-11-14).
     const N = Reactor3D.Neighbors, whole = !!(N && N.ready && N.ready(exit.side));
+    const drive = riding && whole ? this._rrDrive : null;
+    if (drive) { drive.crossV = drive.v; drive.crossYaw = drive.yaw; drive.crossSteer = drive.steer;
+        drive.crossFall = { alt: alt + exit.rise, vz: Number(drive.vz) || 0, peak: Number.isFinite(drive.peak) ? drive.peak + exit.rise : alt + exit.rise }; }
     const fromMapId = $gameMap.mapId(), realX = this._realX, realY = this._realY;
     this.reserveTransfer(exit.mapId, exit.x, exit.y, this.direction(), whole ? 2 : 0);
     this._levelArrival = { side: exit.side, alt: alt + exit.rise, vz: Number(this._reactorVz) || 0,
         peak: Number.isFinite(this._reactorPeak) ? this._reactorPeak + exit.rise : undefined,
-        rise: exit.rise, realX, realY, whole: whole && N.begin(exit, fromMapId) };
+        rise: exit.rise, realX, realY, riding, whole: whole && N.begin(exit, fromMapId) };
+    if (drive && !this._levelArrival.whole) { delete drive.crossV; delete drive.crossYaw; delete drive.crossSteer; delete drive.crossFall; }
     return true;
 };
 
@@ -3152,7 +3163,7 @@ Game_Player.prototype.performTransfer = function() {
         if (tile && whole) this.arriveByBorder(border, tile);
         else if (through) this.arriveThroughLevel(level);
         else this.locate(this._newX, this._newY);
-        if (level) this.arriveByLevel(level);
+        if (level && !level.riding) this.arriveByLevel(level);
         this.refresh();
         this.clearTransferInfo();
     }

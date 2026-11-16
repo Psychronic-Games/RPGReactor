@@ -7146,7 +7146,12 @@
         if (touch && touch.wheelY) View.zoom(touch.wheelY > 0 ? 1 : -1);
         // The view's own keys (W A S D) move it while they are held; the cursor stays where it is.
         const held = control => !!control && Input.isPressed(control);
-        const slideX = (held(F.key("panRight")) ? 1 : 0) - (held(F.key("panLeft")) ? 1 : 0), slideY = (held(F.key("panUp")) ? 1 : 0) - (held(F.key("panDown")) ? 1 : 0);
+        // Where the whole map is in view already (a flat map no wider, or no taller, than the screen) the view has
+        // nowhere to go that way, and its keys did nothing at all (the owner in the Demo's drill room, in a browser
+        // whose keys were the stock ones: "those keys don't respond"; with W A S D set to walk they moved the cursor).
+        // There they step the cursor, as the arrows do (below).
+        const fits = View.live() ? null : { x: $gameMap.width() <= $gameMap.screenTileX(), y: $gameMap.height() <= $gameMap.screenTileY() };
+        const slideX = fits && fits.x ? 0 : (held(F.key("panRight")) ? 1 : 0) - (held(F.key("panLeft")) ? 1 : 0), slideY = fits && fits.y ? 0 : (held(F.key("panUp")) ? 1 : 0) - (held(F.key("panDown")) ? 1 : 0);
         if (slideX || slideY) {
             const own = fight._tac && fight._tac.view;
             if (View.slide(fight, slideX, slideY, View.SLIDE * (View.active() && own && own.zoom > 1 ? own.zoom : 1))) View.endVisit();
@@ -7170,7 +7175,9 @@
                 if (touch.y < edge) View.pan(fight, 8, 0.3); else if (touch.y > height - edge) View.pan(fight, 2, 0.3);
             }
         }
-        const d = Input.isRepeated("down") ? 2 : Input.isRepeated("left") ? 4 : Input.isRepeated("right") ? 6 : Input.isRepeated("up") ? 8 : 0;
+        const again = control => !!control && Input.isRepeated(control);
+        const d = Input.isRepeated("down") ? 2 : Input.isRepeated("left") ? 4 : Input.isRepeated("right") ? 6 : Input.isRepeated("up") ? 8
+            : !fits ? 0 : fits.y && again(F.key("panDown")) ? 2 : fits.x && again(F.key("panLeft")) ? 4 : fits.x && again(F.key("panRight")) ? 6 : fits.y && again(F.key("panUp")) ? 8 : 0;
         if (d && cursor.on) {
             const step = View.cursorStep(d);
             const x = cursor.x + step.x, y = cursor.y + step.y;

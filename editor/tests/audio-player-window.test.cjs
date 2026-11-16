@@ -59,3 +59,45 @@ test('an open Audio Player leaves the map its shortcuts until it is clicked into
     owns = true;
     assert.equal(ui.isEditorModalOpenForGlobalShortcuts(), true);
 });
+
+function channels() {
+    const make = playing => ({ playing, currentTrack: playing === null ? null : { name: 'Track' },
+        audio: { paused: !playing, ended: false, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } } });
+    const set = { bgm: make(true), bgs: make(true), me: make(false), se: make(null) };
+    const { audio } = player();
+    const note = { hidden: true, textContent: '' };
+    Object.assign(audio, { audioPlayer: { currentType: 'bgm', channels: set, audioContext: null },
+        getChannel: type => set[type], getCurrentChannel: () => set[audio.audioPlayer.currentType], updateAudioTime() {} });
+    audio.updatePreviewHoldNote = function () { note.hidden = !(this._previewHeld && this._previewHeld.size); note.textContent = note.hidden ? '' : this._previewLabel; };
+    return { audio, set, note };
+}
+
+test('what the Audio Player has playing waits for a track listened to elsewhere and comes back after it', () => {
+    const { audio, set, note } = channels();
+    audio.holdForPreview('[BGM] Town');
+    assert.deepEqual([set.bgm.audio.paused, set.bgs.audio.paused, set.bgm.playing], [true, true, false]);
+    assert.deepEqual([note.hidden, note.textContent], [false, '[BGM] Town']);
+    audio.holdForPreview('[BGM] Field');
+    assert.equal(note.textContent, '[BGM] Field', 'a second track in the picker keeps the wait and renames it');
+    audio.releasePreview();
+    assert.deepEqual([set.bgm.audio.paused, set.bgs.audio.paused, set.bgm.playing, set.me.playing], [false, false, true, false],
+        'what was playing plays again; what was not stays silent');
+    assert.equal(note.hidden, true);
+});
+
+test('a channel the owner stops while it waits is not started again for them', () => {
+    const { audio, set } = channels();
+    audio.holdForPreview('[BGM] Town');
+    audio.stopAudio();
+    audio.releasePreview();
+    assert.deepEqual([set.bgm.playing, set.bgs.playing], [false, true]);
+});
+
+test('nothing playing: nothing waits and nothing starts', () => {
+    const { audio, set, note } = channels();
+    set.bgm.playing = false; set.bgs.playing = false;
+    audio.holdForPreview('[BGM] Town');
+    assert.equal(note.hidden, true);
+    audio.releasePreview();
+    assert.deepEqual([set.bgm.playing, set.bgs.playing], [false, false]);
+});

@@ -22,13 +22,15 @@ Design, 2026-11-01. **Built so far: steps 1 to 4, 7 and 8 of the [build order](#
 | Shared with every player | Which switches and variables are world state, and which are shared within a party |
 | Chat | On or off, who can chat, a world channel, speech above heads, the chat key, seconds between messages, longest message, messages kept, blocked words |
 
-**Deploy.** In **Deploy Game**, tick **Online Server** and choose the **Server folder**, such as a mounted `public_html`. Files already there stay unless the game replaces them, including `index.html`. Windows, macOS and Linux builds of an Online project connect to the public address, with or without Online Server ticked.
+**Deploy.** In **Deploy Game**, tick **Online Server** and choose the **Server folder**, such as a mounted `public_html`. Files already there stay unless the game replaces them, including `index.html`. The first deploy to a folder sends every file; later ones send only the files that changed and remove the ones the game no longer has (the folder's `.rr-deploy.json` records what was sent; the Demo's 1,095 files took 13 minutes whole over a mounted server and about a minute after a small change). Windows, macOS and Linux builds of an Online project connect to the public address, with or without Online Server ticked.
 
 Rebuilding updates the server and keeps its secret and player data. **Pack files into archives** is off by default and only for hosts that limit file counts. It packs a separate copy, then writes the result, so nothing else in the folder is touched.
 
 **In the game.** The game goes online once a player starts or loads a game, so title and intro maps stay offline.
 
 **How players are kept.** There is no database. A server holds plain files in a data folder above the web root, and each player's game is a full copy of the game. See [Where players live](#where-players-live).
+
+**On a store page (itch.io).** A store limits what a web game may upload. In **Deploy Game**, tick **Web (HTML5)** and under it **Play from a server**, and give the **Game address** (your Online Server's, offered already). The Web build is then one small page that shows the game from that address: zip its folder and upload it, and the store's players play from your server, whatever the game's size, and see each deploy at once. A browser keeps the saves of a game shown inside another site apart from the saves made on the game's own site, and Safari may keep none, so guests through a store page have their own saves there; accounts are not affected. Your server serves every one of those players.
 
 **Accounts.** New Game asks a new player what they want: **Create an account**, **I have an account** or (if allowed) **Play as a guest**. Creating one asks for a name of 3 to 20 letters or numbers and the password twice; the page states the shortest password the project allows. There is no email, so a lost password is reset by the owner on the admin page, and the sign-in page says so. A device that remembers an account greets it by name with **Wake up** or **Continue**, and **Sign out** for someone else on that device. These are game windows, so they wear the project's window skin and font. An account remembers its character, so signing in on another device brings it back and skips creation. Passwords are stored hashed, sent only in request bodies and locked out after repeated failures (8 per name, 40 per address, for 15 minutes). A registered name is its account's: anyone else who picks it is shown as "Name (guest)", and no two players online share a name (a number is added), at joining and at every change of look (`fairName` in `common.php`). Use https: the build warns about an `http` address.
 
@@ -38,7 +40,16 @@ Rebuilding updates the server and keeps its secret and player data. **Pack files
 
 **Chat.** A line in the corner of the map always shows the chat and voice keys. T (or the project's key) opens it; Enter sends and Escape closes. Map and World channels are chosen beside the input. A sync carries the world's message count, so chat costs no extra requests until there is news. The server enforces who may chat, the wait between messages, length and blocked words. Players type `/block Name` and `/unblock Name` to hide someone on their own device.
 
-**The owner's page.** `reactor-online/admin.php` shows who is playing, accounts and recent chat, and can remove or ban a player, ban, unban or delete an account, lift an address ban, reset a password and take down a message. Its password is generated at the first deploy, printed once in the build log, and kept only in `reactor-online/config.php` on the server, because anything in a project reaches every player. Banning a player bans their account and their address.
+**The owner's page.** `https://<your site>/reactor-online/admin` (or `admin.php` on a host that does not rewrite addresses). Its password is generated at the first deploy to a folder, printed once in the build log, and kept only in `reactor-online/config.php` on the server (the `adminKey` line), because anything in a project reaches every player. It looks like the editor, in the theme you deployed with, and speaks the editor's 18 languages (a menu in its header; it starts in your browser's own). Its tabs:
+
+- **Overview:** who is playing now, with Message, Remove and Ban for each, and four counts: players of the most allowed, accounts, stored characters, and whether the server runs the live Engine or Lite.
+- **Accounts:** when each was made, when it last played and on which map, and its character. Reset password (the new one is shown once), Ban or Unban, Remove character (the account, its password and its progress stay; a new character is made at the next sign-in), Delete.
+- **Characters:** every stored character package with its size, date and who uses it. One nobody uses (no account, no guest playing now) can be deleted, singly or all at once.
+- **Chat:** what players say, as they say it, without reloading. Write to everyone, or to one player picked from a list you can search by name: an account reads it at once if it is playing and otherwise when it next plays; a guest only while here. Players see these lines as from the Server and cannot answer them privately. Remove takes a line down for everyone.
+- **Bans:** banned addresses, each with Lift ban. Banning a player bans their account and their address.
+- **Settings:** the rules the server enforces, read only. They come from Database › Online: change them there and deploy again.
+
+Anything that cannot be undone asks first.
 
 **Characters.** **Database › Character Creation** works for single-player and online games alike:
 
@@ -277,7 +288,7 @@ There is no central edit log today: map undo (`MapHistory`), events and the Data
 - **Sync per record:** one actor, one event, one map region, compared against a common base with a three-way merge at save points.
 - **Presence and soft locks:** see who is where, and who is editing what. Two people changing different fields of one record merge; the same field asks.
 - **The server validates and writes atomically,** so JSON cannot be corrupted, and it keeps a history for rollback.
-- **Assets are stored by content hash,** and only changed files move.
+- **Assets are stored by content hash,** and only changed files move. (A first piece exists since 0.99.6, for deploys only: Build › Online Server keeps a size and hash per file in the server's folder and sends what differs, `build-scripts/online-sync.cjs`. It goes one way, from one author; two authors need the per-record merge above.)
 - **This suits Lite:** it works over plain HTTP.
 
 [Yjs](https://npmjs.com/package/y-websocket)-style merging could come later for fine-grained live editing, but it would change how the editor holds its data.
@@ -307,7 +318,7 @@ Built: see [Using it today](#using-it-today). Players upload finished **models**
 `reactor-online/engine.cjs` has no dependencies, so a deploy is still one folder. PHP starts it when a player joins, as the site's own user, on a loopback port, and it leaves after ten minutes with nobody connected. It carries movement and the world lane; accounts, chat, saves and characters stay with PHP.
 
 - **Reaching it:** the game tries `wss://<site>/reactor-online/ws`, which the folder's `.htaccess` passes to the Engine when `mod_proxy_wstunnel` is on. Nobody opens a port. Any failure, then or later, leaves the game on polling.
-- **On Apache, once, as root:** `a2enmod proxy_wstunnel && systemctl reload apache2`. Without it the Engine is reached by nobody, stops after two minutes, leaves `engine.unreached`, and is not started again until the next build, so deploy again after turning it on.
+- **On Apache, once, as root:** `a2enmod proxy_wstunnel && systemctl restart apache2`, and Node itself where the host has none (Debian: `apt install nodejs`, which puts it at `/usr/bin/node`, where the server looks). Done so on the owner's Debian 13 server on 2026-11-15: a guest's game was on the Engine five seconds after joining. Without it the Engine is reached by nobody, stops after two minutes, leaves `engine.unreached`, and is not started again until the next build, so deploy again after turning it on.
 - **Mixed players:** Engine and polling players share one world. The Engine writes its players into the map files every 200 ms and reads the others from them, so a polling player sees an Engine player as usual.
 - **Rebuilds:** each build changes a stamp, and the next player to join replaces a running Engine with the new one.
 - **World lane:** the Engine is the only writer while it runs, and PHP passes polling players' changes to it. Control Variables' Add and Subtract travel as changes rather than results, in both modes, so two players adding at once both count. If PHP has to write the world itself, the Engine adopts that write.

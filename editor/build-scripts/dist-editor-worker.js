@@ -1521,6 +1521,7 @@ function buildWeb(stageRoot, stagingDir) {
                 + 'if exist "%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt" set /p RR_ANGLE=<"%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt"\r\n'
                 + 'if /i "%RR_ANGLE%"=="gl" set "RR_ANGLE_ARGS=--use-angle=gl --rr-editor-angle=gl"\r\n'
                 + 'if /i "%RR_ANGLE%"=="d3d11on12" set "RR_ANGLE_ARGS=--use-angle=d3d11on12 --rr-editor-angle=d3d11on12"\r\n'
+                + 'if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --rr-editor-angle=vulkan"\r\n'
                 + 'start "" "nwjs-win\\nw.exe" . %RR_ANGLE_ARGS%\r\n');
             logInfo('  RPGReactor.bat');
 

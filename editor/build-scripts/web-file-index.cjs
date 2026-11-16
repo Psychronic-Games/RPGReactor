@@ -21,7 +21,8 @@ function listFiles(root) {
         }
     };
     walk(root);
-    return files.filter(file => file !== INDEX_PATH).sort();
+    // (Not the deploy's own record of what it sent, online-sync.cjs: the game never asks for it.)
+    return files.filter(file => file !== INDEX_PATH && file !== '.rr-deploy.json').sort();
 }
 
 /** Writes the index under root and returns how many files it names. */

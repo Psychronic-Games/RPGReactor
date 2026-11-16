@@ -230,6 +230,35 @@ test('a choice played out and found behind the first after all is thought over a
     assert.equal(B.plan(stands), 'gl');
 });
 
+test('backends played on different maps are not set against each other: the lighter map does not win (runtime 20261115.1)', () => {
+    const B = make();
+    // The laptop's record of 2026-11-15, in outline: Direct3D 11 in North Haven (map 5), OpenGL there and elsewhere,
+    // Direct3D 11 on 12 on the forest road (map 8) only, chosen by the runtime before from all their play together.
+    const entry = { failed: [], choice: 'd3d11on12', backends: {
+        d3d11: played(B, { 5: [48, 41, 6] }),
+        gl: played(B, { 1: [200, 61, 7], 5: [136, 54, 7], 8: [100, 60, 11] }),
+        d3d11on12: played(B, { 8: [54, 59, 6] })
+    } };
+    assert.equal(B.ahead(entry, 'd3d11on12'), null, 'no map in common with the first: nothing is known of one against the other');
+    assert.ok(B.score(entry.backends.d3d11on12) - B.score(entry.backends.d3d11) > 0.2, 'over all their play it looked far ahead: the forest against the town');
+    assert.ok(B.ahead(entry, 'gl') > B.MARGIN, 'OpenGL is ahead in the town itself');
+    assert.equal(B.plan(entry), 'gl');
+    assert.equal(entry.choice, 'gl', 'the old choice is thought over, and the one ahead like for like is kept');
+    // Nothing like for like at all: the untested one is played some more, nothing is settled, and it stops there.
+    const apart = { failed: ['gl'], backends: { d3d11: played(B, { 5: [B.MIN_WINDOWS, 41, 4] }), d3d11on12: played(B, { 8: [B.MIN_WINDOWS, 60, 2] }) } };
+    assert.equal(B.plan(apart), 'd3d11on12');
+    assert.equal(apart.choice, null);
+    apart.backends.d3d11on12 = played(B, { 8: [B.MIN_WINDOWS * 2, 60, 2] });
+    assert.equal(B.plan(apart), 'd3d11', 'it had its chance: the first stays');
+    assert.equal(apart.choice, 'd3d11');
+    // One that holds near the full picture is kept without a comparison, as the first is.
+    const holds = { failed: [], choice: 'gl', backends: { d3d11: played(B, { 5: [B.MIN_WINDOWS, 41, 4] }), gl: played(B, { 1: [B.MIN_WINDOWS, 63, 0] }) } };
+    assert.equal(B.plan(holds), 'gl');
+    // Records older than the maps are compared over all their play, as before.
+    const old = { failed: [], backends: { d3d11: record(B, B.MIN_WINDOWS, 41, 4), gl: record(B, B.MIN_WINDOWS, 63, 4), d3d11on12: record(B, B.MIN_WINDOWS, 45, 4) } };
+    assert.equal(B.plan(old), 'gl');
+});
+
 test('each window is also kept by the map it was played on, a handful of maps for each backend', () => {
     const B = make();
     B._live = true; B._current = 'gl'; B._confirmed = true; B._entry = { backends: {}, failed: [] }; B.save = () => {};

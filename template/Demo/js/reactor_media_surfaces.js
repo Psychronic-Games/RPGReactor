@@ -58,8 +58,50 @@
         return texture;
     }
 
+    /**
+     * A video's frames are taken when the game draws, not when the browser calls. three's VideoTexture asks the
+     * browser for a callback at each new frame (requestVideoFrameCallback), and a video with one waiting keeps the
+     * browser's own video compositor going at every frame it can make: with the frame-rate limit off, as a game
+     * runs, that was 1.1 processor cores for the Demo's two videos (the compositor's thread 48% and the threads that
+     * carry its messages 60%, on the RTX 5070 desktop, 2026-11-15) where decoding them was 12%. Without the
+     * callback the video plays on and an upload takes the frame of its moment, so the texture asks for one each
+     * time the video has moved on by a thirtieth of a second, or by a frame of its own where it has more than 30 a
+     * second (counted from the video as it plays; the count reads low on some decoders, 26 for a video of 30, so it
+     * only ever raises the rate). A video held still (off screen, paused) asks for none. `PULL = false` keeps the
+     * callback.
+     */
+    function pullVideoFrames(texture) {
+        if (!pullVideoFrames.PULL || !texture || !texture.isVideoTexture || texture.__rrPull) return texture;
+        const first = texture.image;
+        if (!first || typeof first.cancelVideoFrameCallback !== "function") return texture;
+        texture.__rrPull = true;
+        if (texture._requestVideoFrameCallbackId) first.cancelVideoFrameCallback(texture._requestVideoFrameCallbackId);
+        texture._requestVideoFrameCallbackId = 0;
+        let last = -1, rate = 30, markTime = -1, markFrames = 0;
+        texture.update = function() {
+            const video = this.image;
+            if (!video || !(video.readyState >= 2)) return;
+            const at = Number(video.currentTime) || 0;
+            if (at === last) return;
+            // Back to the start of a loop, or moved by hand: a new picture at once.
+            if (at > last && at - last < 0.92 / rate) return;
+            last = at;
+            this.needsUpdate = true;
+            // The video's own rate, from the frames it says it has shown over a second or more of playing.
+            if (typeof video.getVideoPlaybackQuality !== "function") return;
+            if (markTime < 0 || at < markTime) { markTime = at; markFrames = video.getVideoPlaybackQuality().totalVideoFrames || 0; return; }
+            if (at - markTime < 1) return;
+            const frames = video.getVideoPlaybackQuality().totalVideoFrames || 0, counted = (frames - markFrames) / (at - markTime);
+            rate = Math.min(60, Math.max(30, counted || 0));
+            markTime = at; markFrames = frames;
+        };
+        return texture;
+    }
+    pullVideoFrames.PULL = true;
+
     function watchVideoImport(texture, renderer) {
         capVideoUploads(texture);
+        pullVideoFrames(texture);
         if (!texture || !texture.isVideoTexture || !renderer || typeof renderer.getContext !== "function") return texture;
         const gl = renderer.getContext(), invalid = gl.INVALID_VALUE;
         let checks = 0, strikes = 0;
@@ -2000,6 +2042,7 @@ function normalizeShowArgs(raw, interpreter) {
         secondPlacement: secondPlacement,
         videoBudget: videoBudget,
         watchVideoImport: watchVideoImport,
+        pullVideoFrames: pullVideoFrames,
         MediaSurfaceOwner: MediaSurfaceOwner,
         MediaSurfaceManager: MediaSurfaceManager,
         // Legacy API names refer to the same classes and manager.

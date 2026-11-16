@@ -3381,6 +3381,12 @@
             color: var(--color-text-muted);
         }
 
+        .audio-player-info .track-preview-hold {
+            font-size: 12px;
+            color: var(--color-warning-text);
+            margin-top: 4px;
+        }
+
         .audio-control-card {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -8047,6 +8053,9 @@ html.rr-detached-window.rr-repaint { clip-path: inset(0 round calc(var(--radius-
 .rr-build-levelrow .rr-build-level-value { width: 70px; text-align: center; }
 .rr-build-levelrow .rr-build-level-step { min-width: 46px; font-weight: 700; }
 .rr-build-position { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+/* A placed piece's place: X, Y and Z (tiles off the ground) on one row, each a short name and its number. */
+.rr-build-position.rr-build-position3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 0; }
+.rr-build-position3 .rr-build-field { grid-template-columns: auto minmax(0, 1fr); gap: 4px; }
 .rr-build-chip.rr-build-draw.is-held { border-color: var(--color-accent); background: var(--color-accent-tint-25); color: var(--color-text); }
 .rr-build-rectfills { margin-top: 6px; }
 .rr-build-draws .rr-build-chip, .rr-build-rectfills .rr-build-chip, .rr-build-diagonals .rr-build-chip { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 4px; }

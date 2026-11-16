@@ -140,6 +140,7 @@ imports only through explicit Starting Layout / Add to Front actions.
 ### Audio Player
 - **A window of its own**: like the Database and the Forge, it can be dragged to another monitor, sized from any edge, pinned on top, minimized or filled to the screen; it remembers its place and stays open while you work on the map. In the web editor it is a floating panel
 - **Multi-channel playback**: BGM, BGS, ME, and SE tracks
+- **It waits for a track you try out elsewhere**: playing a BGM, BGS or ME in any picker (a map's music, battle music, an event's Play BGM) pauses what the Audio Player has on; its window says which track it is waiting for, and it carries on from the same place when you pause, stop or close the picker. Sound effects play over it
 - **Formats**: OGG (Vorbis or Opus), MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` or `LOOP_START`/`LOOP_END` comments, ID3 `TXXX`, WAV `smpl`; see [Audio formats and loop points](../docs/AUDIO-LOOP-POINTS.md)) and embedded album art shown beside each track; the same interface and one shared extraction cache back every audio picker, System music/sound picker, event command, and plugin audio field in the editor
 - **Playback controls**: Volume, pitch, pan, and seek
 - **Loop configuration**: Set custom loop points
@@ -210,7 +211,7 @@ imports only through explicit Starting Layout / Add to Front actions.
 - **Package preflight**: Launch-critical `package.json` metadata is validated before NW.js starts, preventing MV projects with an empty `name` from reaching NW.js's generic required-value error
 
 ### Build & Deploy (Games)
-- **Cross-platform builds**: Package games for Windows, macOS, Linux, and Web (HTML5)
+- **Cross-platform builds**: Package games for Windows, macOS, Linux, and Web (HTML5). A Web build can instead be one page that shows the game from your own server (**Play from a server**), for a store page such as itch.io with upload limits; **Online Server** puts the game and its server in a web folder and, after the first time, sends only the files that changed
 - **Standalone executables**: No runtime dependencies for players
 - **Custom icons**: Game builds embed your project's `icon/icon.png` into Windows `.exe` and macOS `.app`; Linux uses runtime icon. Falls back to NW.js default if no icon is found
 - **Asset bundling**: Game files copied into `package.nw` alongside NW.js runtime

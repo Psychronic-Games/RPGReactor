@@ -3075,7 +3075,21 @@ Window_Options.prototype.addGeneralOptions = function() {
     this.addCommand(TextManager.commandRemember, "commandRemember");
     this.addCommand(TextManager.touchUI, "touchUI");
     this.addGraphicsOption();
+    this.addFrameRateOption();
     this.addBattleCameraOption();
+};
+
+/**
+ * Frame Rate: Monitor holds the game to the refresh of the monitor its window is on (Graphics.FrameLimit), Unlimited
+ * draws every frame the machine can. Offered where the system has said what the monitor's refresh is: elsewhere
+ * there is nothing to hold it to. The words are `Window_Options.FRAME_TEXT`, for a game in another language.
+ */
+Window_Options.FRAME_TEXT = { name: "Frame Rate", monitor: "Monitor", unlimited: "Unlimited" };
+Window_Options.offersFrameRate = function() {
+    return typeof Graphics !== "undefined" && !!Graphics.FrameLimit && Graphics.FrameLimit.enabled && Graphics.FrameLimit.hz() > 0;
+};
+Window_Options.prototype.addFrameRateOption = function() {
+    if (Window_Options.offersFrameRate()) this.addCommand(Window_Options.FRAME_TEXT.name, "frameLimit");
 };
 
 /**
@@ -3158,6 +3172,8 @@ Window_Options.prototype.statusText = function(index) {
     const value = this.getConfigValue(symbol);
     if (symbol === "graphicsQuality") {
         return Window_Options.GRAPHICS_TEXT[value] || Window_Options.GRAPHICS_TEXT.auto;
+    } else if (symbol === "frameLimit") {
+        return value === false ? Window_Options.FRAME_TEXT.unlimited : Window_Options.FRAME_TEXT.monitor;
     } else if (symbol === "battleCamera") {
         return Window_Options.CAMERA_TEXT[ReactorFight.Camera.settings().level] || "";
     } else if (this.isVolumeSymbol(symbol)) {

@@ -62,6 +62,34 @@ test('a map change lets go of the models the new map did not claim, and keeps th
     } finally { U.graceBytes = grace; }
 });
 
+test('the models a border crossing carries over are not let go by the sweeps at the crossing (a rider\'s clothing drew black)', () => {
+    const R = fresh(), U = R.ModelUse, grace = U.graceBytes, N = R.Neighbors, was = { crossing: N.crossing, live: N.live };
+    U.graceBytes = 0;
+    try {
+        U.begin(1);
+        const rider = put(R, 'Actors/Rider'), bike = put(R, 'Vehicles/Bike'), tree = put(R, 'Props/Tree');
+        U.sweep({ events: [] });
+        assert.equal(U.wornKeys(), null, 'outside a crossing nothing is exempt');
+        // The border is crossed: the scene left still holds the party's and the ride's models, no file is asked for again.
+        const left = { _modelInstances: new Map([['p', { spec: rider.key, object: new THREE.Group() }], ['e4', { spec: bike.key, object: new THREE.Group() }]]) };
+        N.crossing = { from: 1, to: 2, ride: 'e4' }; N.live = { scene: left };
+        U.begin(2);
+        assert.deepEqual(U.sweep({ events: [] }, true), [tree.key], 'the early sweep lets go of the map\'s own, not what the crossing carries');
+        assert.deepEqual(rider.gone, { geometry: 0, texture: 0, material: 0 });
+        // Carried into the scene entered: claimed there as a load would claim them.
+        const entered = { _modelInstances: new Map(), modelsGroup: () => new THREE.Group() };
+        N.carryParty(left, entered, 'e4', 'e9', [], null);
+        assert.ok(entered._modelInstances.get('p') && entered._modelInstances.get('e9'), 'the party and its ride went over');
+        N.crossing = null; N.live = { scene: entered };
+        assert.deepEqual(U.sweep({ events: [] }), [], 'and the sweep at the map\'s start leaves them');
+        assert.ok(R._glbCache[rider.key] && R._glbCache[bike.key]);
+        assert.deepEqual(bike.gone, { geometry: 0, texture: 0, material: 0 });
+        // Left behind on a later map with no crossing, they go as any model does.
+        U.begin(3);
+        assert.deepEqual(U.sweep({ events: [] }).sort(), [rider.key, bike.key].sort());
+    } finally { U.graceBytes = grace; N.crossing = was.crossing; N.live = was.live; }
+});
+
 test('the newest unclaimed models stay while they fit the grace; a low-memory machine has a smaller one', () => {
     const R = fresh(), U = R.ModelUse, grace = U.graceBytes, low = U.lowMemoryGraceBytes, tier = R.memoryTier;
     try {

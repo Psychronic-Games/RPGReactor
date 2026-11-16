@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "address": "https://demo.rpgreactor.org",
   "maxPlayers": 64,
   "updatesPerSecond": 5,

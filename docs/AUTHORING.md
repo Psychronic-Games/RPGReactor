@@ -391,10 +391,13 @@ it with floors, blocks and roofs and lines its edge with the rest (a room of
 walls), **Filled** and **Outline** say which. A wall, glass or block line
 that runs off the grid's axes is one **Straight** wall from end to end (a
 turned box, a tile thick, as tall as the wall in hand) or, **Stepped**, a
-staircase of cells. The **Level** card (− and +, or Q and E) is where the
-next piece goes above the ground: zero sits on the ground. The bottom bar calls
+staircase of cells. A ladder or a stair in hand goes down the size its
+**Size** card says in every one of the three: a click lays the whole ladder
+or flight; a ladder dragged as a line or a rectangle stands its whole height
+on every cell of it. The **Height off the ground (Z)** card (− and +, or Q and E) is where the
+next piece goes above the ground, in tiles: zero sits on the ground. The bottom bar calls
 this **Placement height**; it is a height offset, not a storey number. Selected,
-it raises and lowers what is selected, as Q and E do, and a placed piece's **Position** card moves it by typing. The
+it raises and lowers what is selected, as Q and E do, and a placed piece's **Position** card has its tile (X, Y) and that height (Z) on one row, to type or step. A number typed into the panel counts at the next click on the map. The
 **Size** card sets a wall's, glass's, pillar's, doorway's, window's or fence's height, of one in hand, one
 placed or every one in a selection. A **Window**, **Doorway**, **Glass** or
 **Door** pointed at a wall goes into it, in place of the piece of wall
@@ -924,6 +927,10 @@ An opening that does not lie over the other map leads nowhere: its ground stays 
 - what is stood on is the map below. With nothing there the player falls through. With a stair or a ladder built in the map below, as tall as the two grounds are apart, the player steps onto its top and walks down: a basement.
 
 Once the other map stands built through an opening, the player passes into it with no fade: the fall or the climb goes on, the map left stays in view overhead (or underfoot), and the party comes after the leader through the opening. Until then, and with no opening, it is a transfer with a fade.
+
+**Lining of the openings** says what the sides of an opening wear between the lower map's ceiling and the upper map's ground: the lower room's walls (the usual one), its ceiling, or None, which leaves the gap open. The lining is as tall at each place as the ground above stands there, so Space between makes a longer shaft.
+
+**A ladder through an opening** is built in the map below, tall enough to reach the upper map's ground (the room's height plus 1 with Space between at 0, or a little more: the Reactor room is 25 tall and its ladder 27). It is one ladder in both maps: the party climbs it out of the lower map and steps off onto the upper map's ground, and a player who walks or jumps into the opening onto the ladder's tile takes hold of it and climbs down. A tile of the opening with no ladder under it is a fall. The map changes a tile and a half under the upper map's ground, as the climber's chest comes out of the opening: until then the lower map's camera stays under its ceiling and looks up the ladder, and from then the upper map's camera looks at the opening.
 
 **In the editor** each opening is outlined in both map views (blue: the way down; yellow: the way up). The 3D view also draws a shaft to where it comes out, cuts the ground there, and shows the other map as last saved: all of the map below, and of the map above only what lies within 3 tiles of an opening. The 2D view names the map it leads to. The Surroundings tick hides the other map.
 

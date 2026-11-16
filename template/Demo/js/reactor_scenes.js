@@ -2354,8 +2354,10 @@ Scene_Options.prototype.optionsWindowRect = function() {
 Scene_Options.prototype.maxCommands = function() {
     // Increase this value when adding option items.
     // The Graphics row is there once this machine has drawn a 3D map (Window_Options.addGraphicsOption).
+    // The Frame Rate row is there where the monitor's refresh is known (Window_Options.offersFrameRate).
     // The Battle Camera row is there in a game being played, in a project whose battles use it (Window_Options.offersBattleCamera).
     return 7 + (typeof Reactor3D !== "undefined" && Reactor3D.Quality && ConfigManager.reactor3dSeen ? 1 : 0)
+        + (Window_Options.offersFrameRate && Window_Options.offersFrameRate() ? 1 : 0)
         + (Window_Options.offersBattleCamera && Window_Options.offersBattleCamera() ? 1 : 0);
 };
 

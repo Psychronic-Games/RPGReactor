@@ -6194,6 +6194,10 @@ Spriteset_Map.prototype.createReactor3D = function() {
 
     const viewport = Reactor3D.acquireViewport();
     if (!viewport) return;   // acquireViewport has already said why
+    // Shadows on before the map's first lit program is built, where the map wants them (Reactor3D.Shadows.prime):
+    // switched on at the first frame, every program built until then was built again with them.
+    try { if (Reactor3D.Shadows && Reactor3D.Shadows.prime) Reactor3D.Shadows.prime(viewport._renderer, null, $dataMap); }
+    catch (error) { console.warn("Reactor3D: shadows could not be readied ahead of the map.", error); }
 
     // Building the scene must not be able to take the map down with it.
     //

@@ -334,3 +334,48 @@ test('vec2 views leave arrays, scalars, points, and frozen values alone', () => 
     assert.equal(filter.uniforms.uCenter, frozen);
     assert.deepEqual([frozen[0], frozen[1]], [1, 2]);
 });
+
+test('a v5 filter reads the running pass from filterManager.activeState (Hendrix 3D Light and Shadow)', () => {
+    const { PIXI } = makePixi();
+    PIXI.Rectangle = require('pixi.js').Rectangle;
+    install(PIXI);
+    const system = new PIXI.FilterSystem();
+    assert.equal(system.activeState, null, 'no pass running: nothing to read, as in v5 before a push');
+    const sprite = {}, filters = [{}];
+    system._activeFilterData = {
+        bounds: { minX: 379, minY: 278, maxX: 437, maxY: 335 },
+        container: sprite, filters, resolution: 2, inputTexture: { label: 'input' }
+    };
+    const state = system.activeState;
+    assert.deepEqual([state.sourceFrame.x, state.sourceFrame.y, state.sourceFrame.width, state.sourceFrame.height],
+        [379, 278, 58, 57], 'the filtered rectangle in screen pixels');
+    assert.deepEqual([state.destinationFrame.width, state.destinationFrame.height], [58, 57]);
+    assert.equal(state.target, sprite);
+    assert.equal(state.filters, filters);
+    assert.equal(state.resolution, 2);
+});
+
+test('a tile layer a plugin draws by hand into a texture has its mesh built first', async () => {
+    const { PIXI } = makePixi();
+    const order = [];
+    const renderer = { render(options) { order.push(['render', options.container, options.target, options.clear]); } };
+    const Graphics = { async _createPixiApp() { this._app = { renderer }; } };
+    const installer = vm.runInNewContext(
+        `(function() { const global = globalThis; ${source.slice(start, end)}; return installPixiCompatibility; })()`,
+        { console, PIXI, Graphics });
+    installer();
+    await Graphics._createPixiApp();
+    // Hendrix 3D Light and Shadow: its own CombinedLayer of the upper tiles, never a child of the tilemap.
+    const layer = { _syncV8Backend() { order.push(['sync']); } };
+    const target = { source: { pixelWidth: 816, pixelHeight: 624 } };
+    renderer.render(layer, target, true);
+    assert.deepEqual(order.map(step => step[0]), ['sync', 'render']);
+    assert.equal(order[1][1], layer);
+    assert.equal(order[1][2], target);
+    assert.equal(order[1][3], true);
+    // Anything else is drawn as before, and a layer whose sync throws is still drawn.
+    order.length = 0;
+    renderer.render({}, target, false);
+    renderer.render({ _syncV8Backend() { throw new Error('no atlas yet'); } }, target, false);
+    assert.deepEqual(order.map(step => step[0]), ['render', 'render']);
+});

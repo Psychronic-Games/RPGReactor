@@ -913,7 +913,7 @@ const ReactorOnlineChat = {
         if (this._fetching) { this._again = true; return; }
         this._fetching = true;
         try {
-            const response = await ReactorOnline.ask(ReactorOnline.request({ a: "chat",after: this.after, m: $gameMap.mapId(), p: ReactorOnlineParty.party?.id || "" }), { cache: "no-store" });
+            const response = await ReactorOnline.ask(ReactorOnline.request({ a: "chat",after: this.after, m: $gameMap.mapId(), p: ReactorOnlineParty.party?.id || "", s: ReactorOnline.slot, g: ReactorOnline.nonce, t: ReactorOnline.token }), { cache: "no-store" });
             if (response.ok) this.receive(await response.json());
         } catch (error) {
             // The next count asks again.
@@ -926,7 +926,8 @@ const ReactorOnlineChat = {
     receive(answer) {
         for (const message of answer.messages || []) {
             this.after = Math.max(this.after, message.id);
-            if (this.blocked().has(message.name)) continue;
+            // (The owner's word from the server's admin page is never one a player has blocked: a player may be named "Server".)
+            if (!message.admin && this.blocked().has(message.name)) continue;
             this.add(message);
             const peer = ReactorOnline.peers.get(message.slot);
             if (peer && !message.world && this.settings()?.bubbles !== false) peer.speech = { text: message.text, until: performance.now() + this.BUBBLE_MS };
@@ -943,8 +944,9 @@ const ReactorOnlineChat = {
         if (message.note) { line.textContent = message.text; line.style.color = "#ffd27a"; }
         else {
             const who = document.createElement("span");
-            who.textContent = (message.party ? "[Party] " : message.world ? "[World] " : "") + message.name + ": ";
-            who.style.color = message.party ? "#bff5c4" : message.world ? "#9fd0ff" : "#c9cdf5";
+            // From the game's owner (the server's admin page), to everyone or to this player alone: only the server can mark a line so.
+            who.textContent = message.admin ? (message.private ? "[Server, to you] " : "[Server] ") : (message.party ? "[Party] " : message.world ? "[World] " : "") + message.name + ": ";
+            who.style.color = message.admin ? "#ffd27a" : message.party ? "#bff5c4" : message.world ? "#9fd0ff" : "#c9cdf5";
             who.style.fontWeight = "600";
             line.appendChild(who);
             line.appendChild(document.createTextNode(message.text));

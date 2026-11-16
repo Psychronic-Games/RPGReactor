@@ -523,7 +523,9 @@ Reactor3D.Quality = {
     // 3: the deeper ladders below (2026-11-08); levels a machine settled on with the old ones are learned again.
     // 4: the full-size level at the top of the GPU ladder (2026-11-11). A version 3 record is not learned again:
     // its GPU level is the same picture one number higher (`current`).
-    PROFILE_VERSION: 4,
+    // 5: levels kept since the frame limit of 2026-11-14 were learned against a rate a 60 Hz screen could not reach
+    // (`wantedPerSecond`), on any machine with such a screen: a version 4 record is learned again.
+    PROFILE_VERSION: 5,
     /** The kill switch: false draws level 0 whatever the frame rate or the player's setting. */
     enabled: true,
     /**
@@ -899,7 +901,8 @@ Reactor3D.Quality = {
         this._worldTick = false;
         this._drew = false;
         this.noteInterval(now);
-        if (this.gpuClock && this.enabled !== false && this.setting() === "auto") this.GpuClock.begin();
+        // (Also under the frame limit, whatever the setting: F2 shows what the card's own time for a frame allows.)
+        if (this.gpuClock && ((this.enabled !== false && this.setting() === "auto") || (typeof Graphics !== "undefined" && Graphics.FrameLimit && Graphics.FrameLimit.rate() > 0))) this.GpuClock.begin();
     },
 
     /**
@@ -910,6 +913,8 @@ Reactor3D.Quality = {
     gpuClock: true,
     GpuClock: {
         _gl: null, _ext: null, _failed: false, _open: null, _pending: [], _sum: 0, _count: 0,
+        /** The card's ms for a frame lately, smoothed (0: none read yet). Not started again by `take`. */
+        recent: 0,
         context() {
             if (this._failed) return null;
             const gl = typeof Graphics !== "undefined" && Graphics._app && Graphics._app.renderer ? Graphics._app.renderer.gl : null;
@@ -945,7 +950,7 @@ Reactor3D.Quality = {
                 const query = pending[0];
                 if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) break;
                 pending.shift();
-                if (!gl.getParameter(this._ext.GPU_DISJOINT_EXT)) { this._sum += gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6; this._count++; }
+                if (!gl.getParameter(this._ext.GPU_DISJOINT_EXT)) { const ms = gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6; this._sum += ms; this._count++; this.recent = this.recent > 0 ? this.recent * 0.9 + ms * 0.1 : ms; }
                 gl.deleteQuery(query);
             }
         },
@@ -976,6 +981,8 @@ Reactor3D.Quality = {
         if (this._sorted[3] < this._refreshMs) this._refreshMs = this._sorted[3];
     },
 
+    /** The share of the frame limit's rate that Auto asks for where the limit is under its own target. */
+    LIMIT_MET: 0.97,
     /** Auto's quality threshold, not a rendering cap: faster frames keep drawing. */
     wantedPerSecond() {
         let target = this.TARGET_FPS > 0 ? this.TARGET_FPS : 60;
@@ -983,6 +990,13 @@ Reactor3D.Quality = {
         // a little under what is asked of the ticker; a machine holding that is short of nothing.
         const governor = typeof Graphics !== "undefined" ? Graphics.FrameGovernor : null;
         if (governor && governor.held && governor.wanted > 0) target = Math.min(target, governor.wanted);
+        // Frames held to the monitor's refresh (Graphics.FrameLimit) come at that rate and no faster: a machine that
+        // delivers them is short of nothing. Held to 60 on a 60 Hz screen and asked for 63, every window read as
+        // slow (0.05 short, the very threshold) and Auto walked the GPU's ladder down and up between levels 4 and 7
+        // with the main thread's at its last, at 70 to 100 frames a second of spare work, on the Iris Xe laptop on
+        // OpenGL (the owner's sessions of 2026-11-15; the limit was a day old and had not run on a 60 Hz screen).
+        const limit = typeof Graphics !== "undefined" && Graphics.FrameLimit && typeof Graphics.FrameLimit.rate === "function" ? Graphics.FrameLimit.rate() : 0;
+        if (limit > 0) target = Math.min(target, limit * this.LIMIT_MET);
         return Math.min(target, this._refreshMs < Infinity ? 1030 / this._refreshMs : target);
     },
 
@@ -1684,6 +1698,8 @@ Reactor3D.GeometryDetail = {
     // characters moved (a mean difference of 0.09 of a level), for 0.85 ms
     // of an integrated GPU's frame.
     pixelError: 1,
+    /** The most pixels of error a level made across texture seams is drawn at, in `pixelError`s, whatever a Quality level allows the others (`begin`). */
+    LOOSE_DETAIL: 1,
     _states: new WeakMap(),
     _queue: [],
     _serial: 0,
@@ -1812,7 +1828,8 @@ Reactor3D.GeometryDetail = {
             g.setIndex(new THREE.BufferAttribute(level.indices, 1));
             g.boundingBox = state.source.boundingBox?.clone() || null;
             g.boundingSphere = state.source.boundingSphere?.clone() || null;
-            state.levels.push({ geometry: g, error: level.error });
+            // `loose`: made across texture seams (the worker's Permissive levels); see `begin`.
+            state.levels.push({ geometry: g, error: level.error, loose: level.loose === true });
         }
         this.levelsReady++;
     },
@@ -2024,6 +2041,9 @@ Reactor3D.GeometryDetail = {
         const swapped = [];
         if (!this.enabled || this._failed || scene.overrideMaterial || typeof Worker === 'undefined' || !this.wanted(scene)) return swapped;
         const allowed = this.pixelError * Reactor3D.Quality.detail();
+        // A level made across texture seams is right only where its error is under a pixel: a Quality level's
+        // several pixels are for the levels that keep every seam (`looseAllowed`).
+        const looseAllowed = Math.min(allowed, this.pixelError * this.LOOSE_DETAIL);
         const keyed = keep && typeof keep === 'object';
         const every = keyed && Reactor3D.Quality.detailEvery ? Reactor3D.Quality.detailEvery() : 1;
         const all = keyed ? (this._keptBy || (this._keptBy = new WeakMap())) : null;
@@ -2051,7 +2071,7 @@ Reactor3D.GeometryDetail = {
             if (!state.levels.length) return;
             const pixels = this.pixelsPerUnit(object, camera, height);
             let selected = null;
-            for (const level of state.levels) if (level.error * pixels <= allowed) selected = level.geometry;
+            for (const level of state.levels) if (level.error * pixels <= (level.loose ? looseAllowed : allowed)) selected = level.geometry;
             if (!selected) return;
             if (kept) kept.picks.push(object, object.geometry, selected, state);
             swapped.push([object, object.geometry]);
@@ -2462,7 +2482,23 @@ Reactor3D.ShaderWarmup = {
     },
     supported(renderer) {
         const extensions = renderer && renderer.extensions;
-        return !!(extensions && extensions.has && extensions.has("KHR_parallel_shader_compile") && renderer.compileAsync);
+        if (!(extensions && extensions.has && renderer.compileAsync)) return false;
+        if (extensions.has("KHR_parallel_shader_compile")) return true;
+        return this.SERIAL;
+    },
+    /**
+     * A driver without parallel compile (Intel's OpenGL on Windows; ANGLE's Vulkan unless asked): nothing says when a
+     * program is ready, and three builds each one inside the first draw that uses it, so a map's first frame built
+     * all of its programs at once (0.8 to 1.0 s in the Demo's first room on an RTX 5070 with the driver's parallel
+     * compile switched off, 2026-11-15). Held all the same, a few begun each frame (SERIAL_COMPILES_PER_FRAME) and
+     * each waited for at its read: the same builds over many frames, the worst of them 0.2 s there, which is what
+     * the room costs with parallel compile. `SERIAL = false`: nothing is held without the extension, as before.
+     */
+    SERIAL: true,
+    SERIAL_COMPILES_PER_FRAME: 3,
+    serial(renderer) {
+        const extensions = renderer && renderer.extensions;
+        return !!(extensions && extensions.has && !extensions.has("KHR_parallel_shader_compile"));
     },
     // A texture at version 0 has nothing to upload (three will not either).
     uploaded(renderer, texture) {
@@ -2789,7 +2825,9 @@ Reactor3D.ShaderWarmup = {
                         if (ready && props.programs && props.programs.forEach) props.programs.forEach(each => { if (each && each.isReady && !each.isReady()) ready = false; });
                         if (!ready) linked = false;
                         // Linked, and its uniforms read between frames (`readSoon`), so its first draw waits on nothing.
-                        if (ready && this.readEarly) {
+                        // (One that others wait on is read as it links: `urgent`.)
+                        if (ready && this.readEarly && material.__rrUrgent) this.readNow(program);
+                        else if (ready && this.readEarly) {
                             if (!this.readSoon(program)) ready = false;
                             if (props.programs && props.programs.forEach) props.programs.forEach(each => { if (each && !this.readSoon(each)) ready = false; });
                         }
@@ -2894,6 +2932,16 @@ Reactor3D.ShaderWarmup = {
         later(run);
         return false;
     },
+    /**
+     * A material other work waits on (the shadow rows' sentinel: until it draws, no shadow is drawn) is not held
+     * behind the map's own: its compile is begun whatever the frame's budget and whatever reads are owed, and its
+     * program is read the moment it links. It is one small program. Marked by `material.__rrUrgent`.
+     */
+    readNow(program) {
+        if (!program || program.__rrUniformsRead || !program.program || typeof program.getUniforms !== "function") return;
+        try { program.getUniforms(); program.getAttributes(); } catch (error) { /* read by its draw, as before */ }
+        program.__rrUniformsRead = true;
+    },
     /** Whether a material may be drawn now; starts its compile when it has none. */
     // Programs started a frame at most: building each one's source is CPU
     // work too (a map's first frame spent 200 ms on it).
@@ -2921,6 +2969,7 @@ Reactor3D.ShaderWarmup = {
             // compile is. On a cold shader cache the first Reactor room's first seconds waited 1.27 s this way (2026-11-05).
             // Only one never drawn: a material drawn before is never held (one that changes every frame would stay hidden).
             // Linked, and not read yet: read when quiet (`readSoon`), and held until then, as an unlinked one is.
+            if (material.__rrUrgent && typeof program.isReady === "function" && program.isReady()) this.readNow(program);
             if (this.holdUnlinked && !material.__rrSeen && typeof program.isReady === "function"
                 && (!program.isReady() || (this.readWhenQuiet && this.readEarly && !this.readSoon(program)))) {
                 const since = this._unlinked.get(material);
@@ -2944,7 +2993,8 @@ Reactor3D.ShaderWarmup = {
         // frame and every lit material took its shadow variant): compile the
         // variant the draw will ask for. The timeout runs from the first ask.
         if (!state || state.version !== material.version || (returning && !state.returning)) {
-            if (this._startedThisFrame >= this.COMPILES_PER_FRAME || this.readsOwed()) return false;
+            if (!material.__rrUrgent && (this._startedThisFrame >= this.COMPILES_PER_FRAME || this.readsOwed())) return false;
+            if (!material.__rrUrgent && this._startedThisFrame >= this.SERIAL_COMPILES_PER_FRAME && this.serial(renderer)) return false;
             state = this.start(renderer, material, mesh, scene, camera, now, returning ? null : state);
             state.returning = returning;
         }
@@ -4070,7 +4120,10 @@ Reactor3D.prepareReflections = function(renderer, mapScene, scene, camera, scale
         const owed = F._owedRecord || (F._owedRecord = { renderer: null, mapScene: null, scene: null, camera: null });
         owed.renderer = renderer; owed.mapScene = mapScene; owed.scene = scene; owed.camera = camera;
         F._owed = owed;
-    } else F._owed = null;
+    } else if (!(reflections && !F.idle() && F.SPARE_REFRESH && F._ready)) F._owed = null;
+    // Else an update between two faces (UPDATES_PER_FACE): the face owed stays owed. Dropped here, a screen that
+    // refreshes once an update (60 Hz, or frames held to it) never drew a face again after the first six: the
+    // reflection stood as it was taken on arrival, the faces of the first moments with it.
     if (capture || mirrors.length) renderer.resetState();
     if (capture) {
         const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(camera) : null;
@@ -10324,6 +10377,17 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
         Reactor3D.MapScene.prototype.hideCrowdFromReflection.call(this, hidden, position);
         return { position, hidden, toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)), reach };
     }
+    // With no mirror near, the capture stands over the player (the camera's focus) at the camera's height, not at
+    // the camera: a face is drawn every other update, so the six are a fifth of a second apart, and a camera
+    // swung round its player moves several tiles in that time. Faces taken from places that far apart did not
+    // meet: a straight edge down the reflection in a lake as the view turned (owner, 2026-11-14). The player's
+    // own place does not move with the view, and a tile or so as it walks.
+    const subject = this.reflectionSubject ? this.reflectionSubject() : null;
+    if (subject && subject.object) {
+        const at = this._probeAt || (this._probeAt = new THREE.Vector3());
+        at.set(subject.object.position.x, Math.max(camera.position.y, subject.object.position.y + 1.5), subject.object.position.z);
+        return { position: at, hidden: this.reflectionHidden(), toward: null };
+    }
     return { position: camera.position, hidden: this.reflectionHidden(), toward: null };
 };
 
@@ -12543,6 +12607,8 @@ Reactor3D.renderBlocker = function(mapData) {
         if (Reactor3D.clearCameraAttic && !resolved.eye) Reactor3D.clearCameraAttic(camera, focus, $dataMap);
         if (Reactor3D.clearCameraPath) Reactor3D.clearCameraPath(camera, focus, $dataMap);
         if (Reactor3D.clearCameraGround) Reactor3D.clearCameraGround(camera, focus, $dataMap);
+        // Under a map that lies over this one, the camera stays under this map's top.
+        if (Reactor3D.clearCameraLevel && !resolved.eye) Reactor3D.clearCameraLevel(camera, focus, $dataMap);
     }
 
     //-------------------------------------------------------------------------
@@ -12573,7 +12639,9 @@ Reactor3D.renderBlocker = function(mapData) {
                 // player's middle, a diagonal step would take the corner cell it passes for a frame.
                 const ground = Number.isFinite($gamePlayer._reactorGround) && Number.isFinite($gamePlayer._reactorAlt) ? $gamePlayer._reactorGround : elevationAt(x, y);
                 const elevation = ground + ($gamePlayer._reactorLift || 0) + ($gamePlayer._reactorAir || 0);
-                player.x = x; player.y = y; player.elevation = elevation;
+                // In an opening to the map under, below this map's ground: the camera stays on the opening
+                // (Reactor3D.levelFocus), not down in ground it cannot stand in. The eyes are the body's own.
+                player.x = x; player.y = y; player.elevation = Reactor3D.levelFocus ? Reactor3D.levelFocus($dataMap, x, y, elevation) : elevation;
                 player.direction = $gamePlayer.direction();
                 player.eyes = currentState().mode === "firstPerson" ? playerEyes($gamePlayer, elevation) : null;
                 return player;
@@ -12822,15 +12890,27 @@ Reactor3D.renderBlocker = function(mapData) {
                 const live = typeof SceneManager !== "undefined" && SceneManager._scene?._spriteset?._reactor3d;
                 const isometric = state.mode === "isometric" && !!live;
                 if (!isRelativeMode(state.mode) && !isometric) return baseMoveByInput.apply(this, arguments);
-                let move;
+                let move, forward = 0;
                 if (isometric) {
                     // Arrows/gamepad and WASD use screen axes, including pairs
                     // of keys. Use the rendered yaw during camera transitions.
                     const dir = typeof Input !== "undefined" ? Input.dir8 || Input.dir4 : 0;
-                    const forward = Number(held.has("forward") || dir === 7 || dir === 8 || dir === 9) - Number(held.has("back") || dir === 1 || dir === 2 || dir === 3);
+                    forward = Number(held.has("forward") || dir === 7 || dir === 8 || dir === 9) - Number(held.has("back") || dir === 1 || dir === 2 || dir === 3);
                     const strafe = Number(held.has("right") || dir === 3 || dir === 6 || dir === 9) - Number(held.has("left") || dir === 1 || dir === 4 || dir === 7);
                     move = moveForView(forward, strafe, live.cameraCurrent?.yaw ?? state.yaw ?? MODES.isometric.yaw);
-                } else move = relativeMove();
+                } else { forward = (held.has("forward") ? 1 : 0) - (held.has("back") ? 1 : 0); move = relativeMove(); }
+                // Holding a ladder, forward is up and back is down, wherever the camera has been turned to: the keys
+                // were turned into map directions by the view, so from the ladder's other side W climbed down
+                // (owner, 2026-11-14). At the top, forward steps off as the ladder leads; sideways is as it was.
+                if (forward && this._reactorOnLadder && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && $dataMap) {
+                    const ladder = Reactor3D.ladderAt($dataMap, this.x, this.y);
+                    if (ladder) {
+                        $gameTemp.clearDestination();
+                        if (this.isMoving() || !this.canMove()) return;
+                        this.executeMove(forward > 0 ? ladder.dir : 10 - ladder.dir);
+                        return;
+                    }
+                }
                 // Ground clicks use map directions; manual movement remains
                 // relative to the camera and takes over immediately.
                 if (!move && $gameTemp.isDestinationValid()) return baseMoveByInput.apply(this, arguments);

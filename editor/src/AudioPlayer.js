@@ -296,6 +296,7 @@ class AudioPlayer {
         // Update UI to show the current track (or the "no track" state)
         const currentChannel = this.getCurrentChannel();
         this.updateTrackHeader(currentChannel.currentTrack || null);
+        this.updatePreviewHoldNote();
 
         // Load tracks for current type
         if (this.currentProject) {
@@ -954,9 +955,64 @@ class AudioPlayer {
         this.playAudio();
     }
 
+    /**
+     * A track is being listened to somewhere else in the editor (the picker for a map's, a battle's or an
+     * event's music): what this player has playing waits, and the window says so. releasePreview brings it back.
+     * A channel the owner plays, pauses, stops or changes in between is theirs again and is left as they put it.
+     */
+    holdForPreview(label) {
+        if (!this.audioPlayer) return;
+        if (!this._previewHeld) this._previewHeld = new Set();
+        ['bgm', 'bgs', 'me', 'se'].forEach(type => {
+            const channel = this.getChannel(type);
+            if (!channel.playing || !channel.currentTrack || channel.audio.ended) return;
+            channel.audio.pause();
+            channel.playing = false;
+            this._previewHeld.add(type);
+        });
+        this._previewLabel = label || '';
+        this.updatePreviewHoldNote();
+    }
+
+    releasePreview() {
+        const held = this._previewHeld;
+        this._previewHeld = null;
+        this._previewLabel = '';
+        if (held && this.audioPlayer) {
+            if (held.size && this.audioPlayer.audioContext && this.audioPlayer.audioContext.state === 'suspended') {
+                this.audioPlayer.audioContext.resume();
+            }
+            held.forEach(type => {
+                const channel = this.getChannel(type);
+                if (channel.currentTrack && !channel.playing) this.playChannel(channel, channel.currentTrack.name);
+            });
+        }
+        this.updatePreviewHoldNote();
+    }
+
+    updatePreviewHoldNote() {
+        const note = typeof document !== 'undefined' ? document.getElementById('track-preview-hold') : null;
+        if (!note) return;
+        const waiting = !!(this._previewHeld && this._previewHeld.size);
+        note.hidden = !waiting;
+        if (!waiting) { note.textContent = ''; return; }
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        note.textContent = this._previewLabel
+            ? tt('Waiting while you listen to {track}').replace('{track}', this._previewLabel)
+            : tt('Waiting while you listen to another track');
+    }
+
+    /** The owner took a channel in hand while it waited for a preview: it is not brought back for them. */
+    _dropPreviewHold(type) {
+        if (!this._previewHeld) return;
+        if (type) this._previewHeld.delete(type); else this._previewHeld.clear();
+        this.updatePreviewHoldNote();
+    }
+
     playAudio() {
         const currentChannel = this.getCurrentChannel();
         if (!currentChannel || !currentChannel.currentTrack) return;
+        this._dropPreviewHold(this.audioPlayer.currentType);
 
         // Resume audio context if it's suspended (required by browsers)
         if (this.audioPlayer.audioContext && this.audioPlayer.audioContext.state === 'suspended') {
@@ -969,6 +1025,7 @@ class AudioPlayer {
     pauseAudio() {
         const currentChannel = this.getCurrentChannel();
         if (!currentChannel) return;
+        this._dropPreviewHold(this.audioPlayer.currentType);
 
         currentChannel.audio.pause();
         currentChannel.playing = false;
@@ -977,6 +1034,7 @@ class AudioPlayer {
     stopAudio() {
         const currentChannel = this.getCurrentChannel();
         if (!currentChannel) return;
+        this._dropPreviewHold(this.audioPlayer.currentType);
 
         currentChannel.audio.pause();
         currentChannel.audio.currentTime = 0;
@@ -1135,6 +1193,7 @@ class AudioPlayer {
      */
     stopExternal(type = null) {
         if (!this.audioPlayer) return;
+        this._dropPreviewHold(type);
 
         if (type) {
             // Stop specific channel

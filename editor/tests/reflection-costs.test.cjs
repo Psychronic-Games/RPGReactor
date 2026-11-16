@@ -141,7 +141,9 @@ test('the narrowed eye puts every point on the pixel the whole picture had it on
 
 test('a lookup outside the drawn part keeps the capture: the shader tests the slot\'s area', () => {
     const glsl = Reactor3D.mirrorLookup('rrEnv', () => 'true', '', '1.0');
-    assert.match(glsl, /all\(greaterThan\(rrMU, rrMirrorArea0\.xy\)\) && all\(lessThan\(rrMU, rrMirrorArea0\.zw\)\)/);
+    // Since 2026-11-14 a lookup a little past the area reads the area's edge (a view turned since the picture was drawn);
+    // further off, and with an empty area, the capture is kept.
+    assert.match(glsl, /vec2 rrMA = clamp\(rrMU, rrMirrorArea0\.xy, rrMirrorArea0\.zw\);\s*if \(rrMC\.w > 0\.0 && rrMirrorArea0\.z > rrMirrorArea0\.x && all\(lessThan\(abs\(rrMU - rrMA\), vec2\(0\.100\)\)\)\)/);
     assert.match(Reactor3D.mirrorUniformDeclarations(), /uniform vec4 rrMirrorArea0;/);
     const u = M.uniforms();
     u.rrMirrorArea1.value.set(0.2, 0.2, 0.4, 0.4);

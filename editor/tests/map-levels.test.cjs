@@ -1,6 +1,6 @@
 'use strict';
 // The maps over and under a map (`surround.levels` in the 3D sidecar): a player whose height passes the middle of
-// the gap between two maps goes on in the other one, at the same place and height. The data rules are
+// the gap between two maps (through an opening: a little under the upper ground) goes on in the other one, at the same place and height. The data rules are
 // reactor_3d_surround.js's, the crossing Game_Player's (reactor_objects_map.js), the form and the way back RRMapEdges'.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -73,7 +73,7 @@ test('a player past the middle of the gap is sent on, falling as it was, and arr
     p._reactorAlt = -5.5; p._reactorVz = -0.4; p._reactorPeak = 0;
     assert.equal(p.leaveByLevel(), true);
     assert.equal(p.isTransferring(), true); assert.equal(p.newMapId(), 2); assert.equal(p.fadeType(), 0);
-    assert.deepEqual(plain(p._levelArrival), { side: 'below', alt: 4.5, vz: -0.4, peak: 10, rise: 10, realX: 5, realY: 4, whole: false }, 'no world stands built under it: with a fade');
+    assert.deepEqual(plain(p._levelArrival), { side: 'below', alt: 4.5, vz: -0.4, peak: 10, rise: 10, realX: 5, realY: 4, riding: false, whole: false }, 'no world stands built under it: with a fade');
     assert.equal(p.leaveByLevel(), false, 'one transfer, not one a frame');
     // The map under: smaller than where the player stood allows, so the tile is held to it.
     const W = 4, H = 3, tiles = new Array(W * H * 6).fill(0);
@@ -117,7 +117,11 @@ test('the panel reads the map over and under and stores what a change says', () 
     const E = edges();
     const map = { id: 1, width: 10, height: 8, reactor3d: { surround: { style: 'continue', neighbors: { north: { map: 2 } }, levels: { below: { map: 4, gap: 12, x: 3 } } } } };
     const view = E.read(map);
-    assert.deepEqual(plain(view.levels), { above: null, below: { map: 4, x: 3, y: 0, gap: 12, openings: [] } });
+    assert.deepEqual(plain(view.levels), { above: null, below: { map: 4, x: 3, y: 0, gap: 12, lining: 'walls', openings: [] } });
+    // What lines its openings is stored when it is not the usual one, and given back to the usual one by saying so.
+    const lined = E.patch(map.reactor3d.surround, { levels: { below: Object.assign({}, view.levels.below, { openings: [{ x: 1, y: 1, w: 1, h: 1 }], lining: 'none' }) } });
+    assert.equal(lined.levels.below.lining, 'none');
+    assert.equal('lining' in E.patch(lined, { levels: { below: Object.assign({}, E.read({ id: 1, width: 10, height: 8, reactor3d: { surround: lined } }).levels.below, { lining: 'walls' }) } }).levels.below, false);
     assert.deepEqual(plain(view.neighbors.north), { map: 2, shift: 0 }, 'the sides are read as before');
     let stored = E.patch(map.reactor3d.surround, { levels: { above: { map: 6 } } });
     assert.deepEqual(plain(stored.levels), { above: { map: 6, gap: 0 }, below: { map: 4, gap: 12, x: 3 } });
@@ -382,8 +386,14 @@ test('the maps are measured apart from the ground at the first opening, not from
     assert.equal(R.levelBase(upper, 'below', below), 21); assert.equal(R.levelBase(upper, 'above', above), 21, 'the same tiles, asked from below');
     // The room's floor lies 5 under the upper map's height 0: its ceiling at 20, a tile of floor, the opening's ground at 21.
     assert.equal(R.levelRise(upper, 'below', below, lower), 5); assert.equal(R.levelRise(lower, 'above', above, upper), 5);
-    assert.equal(R.levelMiddle(upper, 'below', below, lower), 8, 'halfway between the ground at 21 and the floor at -5');
-    assert.equal(R.levelMiddle(lower, 'above', above, upper), 13, 'the same height, in the lower map\'s measure');
+    // Through an opening the map changes a chest's height under the upper ground, not halfway down (owner, 2026-11-14:
+    // from halfway up a 26-tile ladder the upper map's camera had nowhere to stand but inside the climber).
+    assert.equal(R.levelMiddle(upper, 'below', below, lower), 21 - R.LEVEL_CROSS, 'a little under the ground at 21');
+    assert.equal(R.levelMiddle(lower, 'above', above, upper), 26 - R.LEVEL_CROSS, 'the same height, in the lower map\'s measure');
+    assert.equal(R.levelMiddle(lower, 'above', above, upper) - R.levelRise(lower, 'above', above, upper), R.levelMiddle(upper, 'below', below, lower), 'one height, said in both measures');
+    // Two maps a couple of tiles apart: never under the middle of the gap.
+    const flat = { width: 20, height: 20, data: [], reactor3d: {} }, low = { width: 10, height: 10, data: [], reactor3d: { room: { height: 1 } } };
+    assert.equal(R.levelMiddle(flat, 'below', below, low), -1, 'grounds 2 apart: halfway');
     // A level with no opening is measured from height 0, as before.
     assert.equal(R.levelRise(upper, 'below', { map: 2, gap: 0 }, lower), 26);
 });
@@ -431,4 +441,218 @@ test('a preview is drawn as the pieces will be laid: joined to the run and to th
     assert.match(view, /Reactor3D\.previewPieces\(manager\.kind === 'stair'/); assert.match(view, /':meets:' \+ JSON\.stringify/, 'made again when what it meets changes');
     assert.match(fs.readFileSync(path.join(root, 'editor/src/PieceBuilderManager.js'), 'utf8'), /Reactor3D\.previewPieces\(pieces, null, \{ x: 0, y: 0, z: 0 \}\)/);
     assert.match(fs.readFileSync(path.join(root, 'runtime/reactor_3d_world.js'), 'utf8'), /: \(piece\.previewBase \|\| 0\);/);
+});
+
+test('a ladder of the map under comes up through an opening: held on in the upper map, and its camera stays on the opening', () => {
+    // Owner, 2026-11-14: a ladder 27 tall in the Reactor room up through the opening to the Lake road. Past the
+    // change of map there was no ladder to hold (it is the lower map's piece): the climber fell back and the
+    // two maps changed over and over.
+    const heights = new Array(400).fill(0);
+    for (const [x, y] of [[7, 7], [8, 7]]) heights[y * 20 + x] = 21;
+    const upper = { width: 20, height: 20, data: [], reactor3d: { elevation: heights, surround: { levels: { below: { map: 45, gap: 0, x: 5, y: 5, openings: [{ x: 7, y: 7, w: 2, h: 1 }] } } } } };
+    const lower = { width: 10, height: 10, data: [], reactor3d: { room: { height: 25 }, surround: { levels: { above: { map: 46, gap: 0, x: -5, y: -5, openings: [{ x: 2, y: 2, w: 2, h: 1 }] } } },
+        pieces: Array.from({ length: 27 }, (_, z) => ({ id: z + 1, kind: 'ladder', x: 2, y: 2, z, rot: 0, material: '' })) } };
+    assert.deepEqual(plain(R.ladderAt(lower, 2, 2)), { dir: 2, bottom: 0, top: 27 });
+    assert.equal(R.ladderAt(upper, 7, 7), null, 'not before the map under is read');
+    R.Neighbors.records.set(45, { mapId: 45, state: 'ready', map: lower, used: 1 });
+    R.Neighbors.records.set(46, { mapId: 46, state: 'ready', map: upper, used: 1 });
+    try {
+        // The same ladder in the upper map's measure: its foot 5 under height 0, its top a tile over the ground at 21.
+        assert.deepEqual(plain(R.ladderAt(upper, 7, 7)), { dir: 2, bottom: -5, top: 22, through: 45 });
+        assert.equal(R.ladderAt(upper, 8, 7), null, 'the opening\'s other tile has no ladder under it');
+        assert.equal(R.ladderAt(upper, 6, 7), null, 'nor has the ground beside the opening');
+        // The climber changes map under the ladder's top, and is within the ladder on both sides of the change.
+        const cross = R.levelMiddle(lower, 'above', R.levelsOf(lower).above, upper);
+        assert.ok(cross < R.ladderAt(lower, 2, 2).top && cross - 5 > R.ladderAt(upper, 7, 7).bottom && cross - 5 < R.ladderAt(upper, 7, 7).top);
+        // Only on the opening's own tiles do the maps change that near the upper ground: anywhere else it is halfway
+        // down, as before. A swim in the Lake, its water 2 tiles under the road's end, sent the party to the room
+        // below, where it fell to the floor (owner, 2026-11-14).
+        assert.equal(R.levelExit(upper, 7, 7, 19.4).mapId, 45, 'in the opening, a tile and a half under its ground: the map under');
+        assert.equal(R.levelExit(upper, 12, 12, 19.4), null, 'in a pond beside it at the same height: still this map');
+        assert.equal(R.levelExit(upper, 12, 12, 8.1), null); assert.equal(R.levelExit(upper, 12, 12, 7.9).mapId, 45, 'a pit dug past halfway is the way down it always was');
+        assert.equal(R.levelExit(lower, 2, 2, 24.6).mapId, 46, 'up the ladder under the opening');
+        assert.equal(R.levelExit(lower, 2, 2, 13.1), null, 'halfway up that ladder: still the room, its lights and its events');
+        assert.equal(R.levelExit(lower, 6, 6, 12.9), null); assert.equal(R.levelExit(lower, 6, 6, 13.1).mapId, 46, 'elsewhere in the room the height is halfway, as before');
+        // The upper map's camera looks at the opening's ground while the body is under it; elsewhere at the body.
+        assert.equal(R.levelFocus(upper, 7, 7, 19.6), 21); assert.equal(R.levelFocus(upper, 7, 7, 21.9), 21.9);
+        assert.equal(R.levelFocus(upper, 3, 3, -2), -2, 'not in an opening');
+        assert.equal(R.levelFocus(lower, 2, 2, 24), 24, 'the lower map has no opening down');
+        // The lower map's camera stays under its top, lowered where it stands and still looking at the player.
+        const looked = [], camera = { position: { x: 2.5, y: 30, z: 9 }, lookAt(x, y, z) { looked.push([x, y, z]); }, updateMatrixWorld() {} };
+        assert.equal(R.clearCameraLevel(camera, { x: 2.5, y: 24, z: 2.5 }, lower), true);
+        assert.deepEqual([camera.position.x, camera.position.y, camera.position.z], [2.5, 25 - R.LEVEL_CAMERA_ROOM, 9]);
+        assert.deepEqual(looked, [[2.5, 24, 2.5]]);
+        camera.position.y = 12;
+        assert.equal(R.clearCameraLevel(camera, { x: 2.5, y: 8, z: 2.5 }, lower), false, 'under the top already: left alone');
+        assert.equal(R.clearCameraLevel({ position: { x: 0, y: 99, z: 0 } }, { x: 0, y: 0, z: 0 }, upper), false, 'a map with nothing over it has no such top');
+    } finally { R.Neighbors.records.delete(45); R.Neighbors.records.delete(46); }
+});
+
+test('a ladder standing free is taken hold of from either side, let go of sideways at its foot, and climbed by a diagonal', () => {
+    // Owner, 2026-11-14: come at from the room's door (behind it), the Reactor room's ladder was walked through;
+    // and a walk across its three tiles caught on each of them.
+    const ctx = followerWorld({ width: 12, height: 12, start: [5, 8], party: [1], flat: false,
+        prepare(map) { map.reactor3d = Object.assign(map.reactor3d || {}, { pieces: Array.from({ length: 6 }, (_, z) => ({ id: z + 1, kind: 'ladder', x: 5, y: 5, z, rot: 0, material: '' }))
+            // (A second column beside it, to the west: the ladder is two tiles wide.)
+            .concat(Array.from({ length: 6 }, (_, z) => ({ id: z + 11, kind: 'ladder', x: 4, y: 5, z, rot: 0, material: '' }))) }); } });
+    const p = ctx.$gamePlayer, P = ctx.ReactorPhysics;
+    assert.equal(ctx.Reactor3D.ladderAt(ctx.$dataMap, 5, 5).dir, 2, 'it climbs toward the south: its rungs are on the south side of its tile');
+    const settle = () => { for (let i = 0; i < 40 && p.isMoving(); i++) p.update(true); };
+    const stand = (x, y, alt, on) => { p.locate(x, y); p._reactorAlt = alt; p._reactorGround = 0; p._reactorOnLadder = !!on; p._reactorLadderWay = 0; p._reactorLadderDone = 0; };
+    // From behind (the south), walking north: onto its tile through the rungs, and the same key then climbs.
+    stand(5, 6, 0);
+    p.moveStraight(8); assert.ok(p.isMovementSucceeded()); settle();
+    assert.deepEqual([p.x, p.y, p._reactorLadderWay], [5, 5, 8]);
+    p.moveStraight(8);
+    assert.ok(p._reactorOnLadder && p._reactorAlt > 0 && p.direction() === 2, 'the key held on goes up the ladder, facing its rungs');
+    const high = p._reactorAlt;
+    p.moveStraight(8); assert.ok(p._reactorAlt > high);
+    // Let go, the key is an ordinary way again: north is the way down this ladder.
+    p._reactorLadderWay = 0;
+    const from = p._reactorAlt; p.moveStraight(8);
+    assert.ok(p._reactorAlt < from, 'pressed again after letting go, it climbs down');
+    // From in front (the north), walking south: it climbs, as it always did.
+    stand(5, 5, 0); p.moveStraight(2);
+    assert.ok(p._reactorOnLadder && p._reactorAlt > 0 && p._reactorLadderWay === 0);
+    // Sideways: within a step of the foot it lets go and walks; up on the ladder it is not taken.
+    stand(5, 5, 0.4, true); p.moveStraight(6); assert.ok(p.isMovementSucceeded()); settle(); assert.equal(p.x, 6, 'a step sideways from just over the foot is a walk');
+    // Up on a wide ladder a step sideways goes along it: the next column at the same height, still facing the rungs
+    // (owner, 2026-11-15: held in the column it was taken at, off to one side).
+    const up = P.LADDER_LET_GO + 1;
+    stand(5, 5, up, true); p.setDirection(2); p.moveStraight(4); assert.ok(p.isMovementSucceeded()); settle();
+    assert.deepEqual([p.x, p.y, p._reactorOnLadder, p.direction()], [4, 5, true, 2], 'onto the column beside it, on the ladder still');
+    assert.ok(Math.abs(p._reactorAlt - up) < 1e-6, 'at the height it had (' + p._reactorAlt + ')');
+    p.moveStraight(6); settle(); assert.deepEqual([p.x, p._reactorOnLadder], [5, true], 'and back');
+    // Past the ladder's side there is nothing to hold: it lets go and drops.
+    stand(5, 5, up, true); p.moveStraight(6); assert.ok(p.isMovementSucceeded());
+    assert.equal(p._reactorOnLadder, false, 'off the side it has let go');
+    for (let i = 0; i < 120 && (p.isMoving() || p._reactorAlt > 0.01); i++) p.update(true);
+    assert.deepEqual([p.x, p.y], [6, 5]); assert.ok(p._reactorAlt <= 0.01 && !p._reactorOnLadder, 'and it comes down to the ground beside the ladder (' + p._reactorAlt + ')');
+    // A diagonal with the way up in it climbs; up on the ladder a diagonal never steps off its side.
+    stand(5, 5, 0); p.moveDiagonally(4, 2); assert.ok(p._reactorOnLadder && p._reactorAlt > 0 && p.x === 5 && p.y === 5, 'south-west at the foot climbs');
+    stand(5, 5, 3, true); p.moveDiagonally(6, 8); assert.ok(p.x === 5 && p.y === 5 && p._reactorAlt < 3, 'north-east up on it climbs down and stays on');
+    stand(5, 5, 0); p.moveDiagonally(6, 8); settle(); assert.ok(p.x !== 5 || p.y !== 5, 'north-east at the foot walks away');
+});
+
+test('a map with nothing built but a ladder has no cutaway: its scenery is not thinned in the sight line', () => {
+    // Owner, 2026-11-14: the Reactor room had nothing built until a ladder was laid in it, and its computers and
+    // tank began to dither away wherever they stood between the camera and the party.
+    const ladders = { width: 8, height: 8, reactor3d: { pieces: [{ id: 1, kind: 'ladder', x: 2, y: 2, z: 0, rot: 0, material: '' }, { id: 2, kind: 'ladder', x: 2, y: 2, z: 1, rot: 0, material: '' }] } };
+    assert.equal(R.hasPieces(ladders), true); assert.equal(R.hasCover(ladders), false);
+    const built = { width: 8, height: 8, reactor3d: { pieces: [{ id: 1, kind: 'ladder', x: 2, y: 2, z: 0, rot: 0, material: '' }, { id: 2, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '' }] } };
+    assert.equal(R.hasCover(built), true, 'one wall, and the map has an inside to open');
+    assert.equal(R.hasCover({ width: 8, height: 8, reactor3d: {} }), false);
+    const lighting = fs.readFileSync(path.join(root, 'runtime/reactor_3d_lighting.js'), 'utf8');
+    assert.match(lighting, /if \(!camera \|\| !mapData \|\| !character \|\| !Reactor3D\.hasCover\(mapData\)\) \{\n\s+shared\.rrCutTop\.value = 1e9;\n\s+shared\.rrCutRadius\.value = 0;/, 'the cutaway asks for cover, not for any piece');
+});
+
+test('an opening\'s sides are lined, by the lower map\'s room walls unless the level says otherwise', () => {
+    assert.deepEqual(R.LEVEL_LININGS, ['walls', 'ceiling', 'none']);
+    const of = lining => R.normalizeLevels({ above: { map: 3, openings: [{ x: 1, y: 1 }], lining } }).above.lining;
+    assert.equal(of(undefined), undefined, 'the usual one is not stored');
+    assert.equal(of('walls'), undefined); assert.equal(of('ceiling'), 'ceiling'); assert.equal(of('none'), 'none'); assert.equal(of('gold'), undefined);
+    // Changing it is seen at once: the levels kept for a map are kept by what they say.
+    const map = { reactor3d: { surround: { levels: { above: { map: 3, gap: 0, openings: [{ x: 1, y: 1, w: 1, h: 1 }] } } } } };
+    assert.equal(R.levelsOf(map).above.lining, undefined);
+    map.reactor3d.surround.levels.above.lining = 'none';
+    assert.equal(R.levelsOf(map).above.lining, 'none');
+    const source = fs.readFileSync(path.join(root, 'runtime/reactor_3d_surround.js'), 'utf8');
+    // The lining is the lower map's own: it stands with that map's room picture, in that map's world, whichever map is played.
+    assert.match(source, /const lowerScene = side === "below" \? body\.scene : main, lower = side === "below" \? other : mapData/);
+    assert.match(source, /source\.parent\.add\(mesh\);/);
+    // The world of the map over this one, left as it was played, gives way to the light one once that stands built.
+    assert.match(source, /if \(body\.played && side === "above"\) body = L\.lighten\(scene, mapData, side, level, record, body, key\);/);
+    assert.match(source, /key: null, played: true \} \};/);
+    // The editor: read, written and mirrored into the other map with the rest of the level.
+    const edges = fs.readFileSync(path.join(root, 'editor/src/utils/MapEdges.js'), 'utf8'), bar = fs.readFileSync(path.join(root, 'editor/src/BuildHotbar.js'), 'utf8');
+    assert.match(edges, /lining: n\.lining \|\| 'walls'/); assert.match(edges, /if \(level\.lining\) entry\.lining = level\.lining;/);
+    assert.match(bar, /class="database-field-value rr-build-llining"/);
+});
+
+test('a ladder is no solid to a camera: one turning round a party beside it is not pulled in at its tiles', () => {
+    // Owner, 2026-11-14: between the Reactor room's computers, beside a ladder 3 wide and 27 tall, the camera
+    // "chopped or fought" as it was turned, the frame rate high.
+    const map = { width: 40, height: 40, data: [], reactor3d: { pieces: [] } };
+    for (const x of [24, 25, 26]) for (let z = 0; z < 27; z++) map.reactor3d.pieces.push({ id: map.reactor3d.pieces.length + 1, kind: 'ladder', x, y: 25, z, rot: 0, material: '' });
+    map.reactor3d.pieces.push({ id: 999, kind: 'wall', x: 10, y: 10, z: 0, rot: 0, material: '' });
+    assert.equal(R.pieceSolidAt(map, 25.5, 6, 25.5, null, 0, R.DOORS_OPEN), false, 'in a ladder\'s tile, up its height: open air');
+    assert.equal(R.pieceSolidAt(map, 10.5, 2, 10.5, null, 0, R.DOORS_OPEN), true, 'a wall is still a solid');
+    // The camera of a player standing north of the ladder, swung all the way round at 8 tiles: never moved by the ladder.
+    const vec = (x, y, z) => ({ x, y, z, set(a, b, c) { this.x = a; this.y = b; this.z = c; return this; } });
+    const focus = { x: 24.5, y: 2.2, z: 23.5 }; let moved = 0, through = 0;
+    for (let yaw = 0; yaw < 360; yaw += 3) {
+        const a = yaw * Math.PI / 180, camera = { position: vec(focus.x - Math.sin(a) * 7.5, focus.y + 2.7, focus.z + Math.cos(a) * 7.5), updateMatrixWorld() {} };
+        const x = Math.floor(camera.position.x), z = Math.floor(camera.position.z);
+        if (z === 25 && x >= 24 && x <= 26) through++;
+        if (R.clearCameraPath(camera, focus, map)) moved++;
+    }
+    assert.equal(moved, 0);
+    // (The turn does pass through the ladder's tiles: with a camera nearer, standing in them.)
+    let inTiles = 0;
+    for (let yaw = 0; yaw < 360; yaw += 3) { const a = yaw * Math.PI / 180, cx = focus.x - Math.sin(a) * 2, cz = focus.z + Math.cos(a) * 2; if (Math.floor(cz) === 25 && Math.floor(cx) >= 24 && Math.floor(cx) <= 26) { inTiles++; assert.equal(R.clearCameraPath({ position: vec(cx, focus.y + 1, cz), updateMatrixWorld() {} }, focus, map), false); } }
+    assert.ok(inTiles > 10, 'a camera 2 tiles out stands in the ladder\'s tiles for part of the turn: ' + inTiles + ' steps');
+});
+
+test('holding a ladder under the 3D camera, forward is up and back is down wherever the camera has been turned', () => {
+    // Owner, 2026-11-14: W climbed, and from the ladder's other side W climbed down. The keys are turned into map
+    // directions by the view; a ladder is climbed by its own direction.
+    const source = fs.readFileSync(path.join(root, 'runtime/reactor_3d.js'), 'utf8');
+    const at = source.indexOf('Game_Player.prototype.moveByInput = function() {\n                const state = currentState();');
+    assert.ok(at > 0);
+    const body = source.slice(at, source.indexOf('Game_Player.prototype.moveByInput.__reactorCamera3d = true;', at));
+    assert.match(body, /if \(forward && this\._reactorOnLadder && Reactor3D\.ladderAt && typeof \$dataMap !== "undefined" && \$dataMap\) \{/);
+    assert.match(body, /this\.executeMove\(forward > 0 \? ladder\.dir : 10 - ladder\.dir\);\n\s*return;/);
+    // Before the view's own turn of the keys is used, in both the over-the-shoulder and the isometric views.
+    assert.ok(body.indexOf('this._reactorOnLadder') < body.indexOf('if (!move && $gameTemp.isDestinationValid())'));
+    assert.match(body, /forward = Number\(held\.has\("forward"\)/); assert.match(body, /forward = \(held\.has\("forward"\) \? 1 : 0\) - \(held\.has\("back"\) \? 1 : 0\); move = relativeMove\(\);/);
+});
+
+test('a side that leads into a map not yet built is land that goes on, not the mountains chosen for it', () => {
+    // Owner, 2026-11-14: from two maps off, the way into North Haven was a mountain with the trail running up its face.
+    const forest = R.normalizeSurround({ style: 'continue', edges: { north: 'cliffs', south: 'cliffs', west: 'mountains' }, neighbors: { east: { map: 9 }, west: { map: 5 } } });
+    const far = R.surroundPastNeighbors(forest, { east: { map: 9 } });
+    assert.equal(R.surroundStyleOf(far, R.SURROUND_SIDES.indexOf('west')), 'continue', 'west leads into North Haven, which does not stand');
+    assert.equal(R.surroundStyleOf(far, R.SURROUND_SIDES.indexOf('north')), 'cliffs', 'a side with no map past it keeps its style');
+    assert.equal(forest.edges.west, 'mountains', 'what the map says is not changed');
+    // The neighbor stands: that side has no land at all, and nothing is changed for it.
+    assert.equal(R.surroundPastNeighbors(forest, { east: { map: 9 }, west: { map: 5 } }), forest);
+    // A whole map of mountains with one neighbor: only that side.
+    const lake = R.normalizeSurround({ style: 'mountains', neighbors: { west: { map: 11 } } });
+    const laid = R.surroundPastNeighbors(lake, null);
+    assert.deepEqual(R.SURROUND_SIDES.map((side, k) => R.surroundStyleOf(laid, k)), R.SURROUND_SIDES.map(side => side === 'west' ? 'continue' : 'mountains'));
+    assert.equal(R.surroundPastNeighbors(R.normalizeSurround({ style: 'continue', neighbors: { west: { map: 11 } } }), null).edges.west, undefined, 'land that goes on already is left alone');
+    const source = fs.readFileSync(path.join(root, 'runtime/reactor_3d_surround.js'), 'utf8');
+    assert.match(source, /const surround = R\.surroundPastNeighbors\(said, this\._surroundNone \|\| null\);/);
+});
+
+test('a vehicle ridden through an opening goes with its rider; a reflection is taken from over the player', () => {
+    const map = fs.readFileSync(path.join(root, 'runtime/reactor_objects_map.js'), 'utf8');
+    // Owner, 2026-11-14: a motorcycle down the hole lay on the floor of the map below while the view stayed above.
+    assert.match(map, /if \(this\.isTransferring\(\) \|\| this\.isMoveRouteForcing\(\) \|\| \(riding && this\._vehicleType !== "reactor"\)\) return false;/);
+    // Owner, later that day: no fade for a ride either. Where the map under stands built the ride goes on, falling.
+    assert.match(map, /whole = !!\(N && N\.ready && N\.ready\(exit\.side\)\);\n\s*const drive = riding && whole \? this\._rrDrive : null;/);
+    assert.match(map, /drive\.crossFall = \{ alt: alt \+ exit\.rise, vz: Number\(drive\.vz\) \|\| 0,/);
+    assert.match(map, /if \(drive && !this\._levelArrival\.whole\) \{ delete drive\.crossV;/, 'given up (no world under it after all): as a transfer with a fade');
+    const drive = fs.readFileSync(path.join(root, 'runtime/reactor_vehicles_drive.js'), 'utf8');
+    assert.match(drive, /if \(ride && ride\.fall\) \{ d\.alt = ride\.fall\.alt; d\.air = 1; d\.vz = ride\.fall\.vz; d\.peak = ride\.fall\.peak; \}\n\s*arrived\(this, d\);/);
+    const surround = fs.readFileSync(path.join(root, 'runtime/reactor_3d_surround.js'), 'utf8');
+    assert.match(surround, /level: true, offset: \{ x: level\.offset\.x, y: level\.rise, z: level\.offset\.z \} \};\n\s*N\.leftMap = root\.\$dataMap \|\| null;\n\s*N\.noteRide\(\);/);
+    assert.match(surround, /N\.carryParty\(old\.scene, scene, cross\.ride \|\| null, rideNow, convoy, \{ x: -o\.x, y: -o\.y, z: -o\.z \}\);/, 'the vehicle\'s model goes through with the party\'s');
+    assert.match(map, /if \(level && !level\.riding\) this\.arriveByLevel\(level\);/);
+    // Owner, the same day: a straight edge down the reflection in the lake as the view turned.
+    const core = fs.readFileSync(path.join(root, 'runtime/reactor_3d.js'), 'utf8');
+    assert.match(core, /at\.set\(subject\.object\.position\.x, Math\.max\(camera\.position\.y, subject\.object\.position\.y \+ 1\.5\), subject\.object\.position\.z\);\n\s*return \{ position: at, hidden: this\.reflectionHidden\(\), toward: null \};/);
+});
+
+test('a mirror picture read a little past its drawn area gives its edge; a reflection face owed is kept over the update between', () => {
+    // Owner, 2026-11-14 (second report, with a picture): a straight edge down the lake. The picture is drawn for the
+    // camera of the last update; a view turned since has water the area ends short of.
+    const glsl = R.mirrorLookup('rrEnvC', slot => 'true', 'rrRipple', 'rrWaterTint');
+    assert.ok(R.MIRROR_EDGE_REACH > 0 && R.MIRROR_EDGE_REACH <= 0.2);
+    assert.match(glsl, /vec2 rrMA = clamp\(rrMU, rrMirrorArea0\.xy, rrMirrorArea0\.zw\);/);
+    assert.match(glsl, /rrMirrorArea0\.z > rrMirrorArea0\.x && all\(lessThan\(abs\(rrMU - rrMA\), vec2\(0\.100\)\)\)\) rrEnvC = rrSRGBToLinear\(textureLod\(rrMirrorMap0, rrMA, 0\.0\)\.rgb\) \* rrWaterTint;/, 'an empty area (no water in view) reads nothing');
+    assert.doesNotMatch(glsl, /textureLod\(rrMirrorMap\d, rrMU,/);
+    // A screen that refreshes once an update never drew a face again after the first six.
+    const core = fs.readFileSync(path.join(root, 'runtime/reactor_3d.js'), 'utf8');
+    assert.match(core, /F\._owed = owed;\n\s*\} else if \(!\(reflections && !F\.idle\(\) && F\.SPARE_REFRESH && F\._ready\)\) F\._owed = null;/);
 });

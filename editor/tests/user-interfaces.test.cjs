@@ -1050,7 +1050,9 @@ test('System 1 and System 2 offer no interface pickers, and their pages leave th
     // The Editor Settings card is gone (nothing read its values): the page adds no `editor` block to a file without one.
     assert.equal('editor' in system, false);
     assert.equal(page.querySelectorAll('.sys2-interface, [data-system-field]').length, 0);
-    assert.deepEqual(page.querySelectorAll('select').map(select => select.className), ['database-field-value sys2-magic-skill', 'database-field-value sys2-magic-skill'], 'the only lists left are the casting skill types');
+    assert.deepEqual(page.querySelectorAll('select').map(select => select.className), ['database-field-value sys2-magic-skill', 'database-field-value sys2-magic-skill', 'database-field-value sys2-advanced-field'],
+        'the only lists left are the casting skill types and, in Advanced Settings, the game\'s graphics backend (2026-11-15)');
+    assert.equal(page.querySelector('select.sys2-advanced-field').dataset.advancedField, 'graphicsBackend');
     untouched();
     // Every control of the page is changed in turn: none reaches a binding.
     for (const box of page.querySelectorAll('input')) {

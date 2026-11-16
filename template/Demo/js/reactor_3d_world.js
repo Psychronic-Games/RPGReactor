@@ -213,15 +213,15 @@ Reactor3D.stairPieceAt = function(mapData, x, y) {
  */
 Reactor3D.ladderAt = function(mapData, x, y) {
     const stack = this.piecesAt(mapData, x, y);
-    if (!stack) return null;
     let low = Infinity, high = -Infinity, rot = 0;
-    for (const piece of stack) {
+    for (const piece of stack || []) {
         if (piece.kind !== "ladder") continue;
         if (piece.z < low) { low = piece.z; rot = piece.rot || 0; }
         // A top level cut short (a height that is no whole number) ends where it is drawn.
         high = Math.max(high, piece.z + (piece.rise || 1));
     }
-    if (!Number.isFinite(low)) return null;
+    // Over an opening to the map under this one, the ladder that map sends up through it (Reactor3D.ladderThroughLevel).
+    if (!Number.isFinite(low)) return this.ladderThroughLevel ? this.ladderThroughLevel(mapData, x, y) : null;
     const base = this.pieceBaseAt(mapData, x, y);
     // A ladder whose foot stands a step over the ground (laid on a slab) is still reached from it.
     const ground = this.groundHeightAt(mapData, x + 0.5, y + 0.5, base + low);
@@ -702,6 +702,19 @@ Reactor3D.piecesOf = function(mapData) {
 
 Reactor3D.hasPieces = function(mapData) {
     return !!this.pieceIndex(mapData);
+};
+
+/**
+ * Whether a map has anything built that can stand in the way of a view: a piece that is not a ladder. A map
+ * whose only pieces are ladders has no inside to cut open and no wall to see through, and the cutaway leaves it
+ * alone: a ladder laid in a room with nothing else built switched the whole map's scenery to thinning in the
+ * sight line (the Reactor room's computers and tank, owner, 2026-11-14). Kept with the piece index.
+ */
+Reactor3D.hasCover = function(mapData) {
+    const index = this.pieceIndex(mapData);
+    if (!index) return false;
+    if (index.cover === undefined) index.cover = (index.list || []).some(piece => piece && piece.kind !== "ladder");
+    return index.cover;
 };
 
 Reactor3D.piecesAt = function(mapData, x, y) {

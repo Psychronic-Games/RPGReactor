@@ -89,6 +89,24 @@ test('without parallel compile nothing is held; a compile never answered is draw
     finally { W.enabled = true; }
 });
 
+test('a driver without parallel compile still holds new things, a few programs begun each frame (SERIAL)', () => {
+    const scene = new THREE.Scene(), meshes = [];
+    for (let i = 0; i < 8; i++) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()); meshes.push(mesh); scene.add(mesh); }
+    const r = fakeRenderer(); r.extensions = { has: () => false };
+    assert.equal(W.supported(r), true); assert.equal(W.serial(r), true); assert.equal(W.serial(fakeRenderer()), false);
+    const frame = global.Graphics; global.Graphics = { frameCount: 9001 };
+    try {
+        const hidden = W.hide(r, scene, {});
+        assert.equal(hidden.length, 8, 'all sit out');
+        assert.equal(r.compiles.length, W.SERIAL_COMPILES_PER_FRAME, 'and only a few are begun in one frame');
+        assert.ok(W.SERIAL_COMPILES_PER_FRAME < W.COMPILES_PER_FRAME);
+        W.show(hidden);
+        W.SERIAL = false;
+        assert.equal(W.supported(r), false, 'the switch: nothing held without the extension, as before');
+        assert.equal(W.hide(r, scene, {}), null);
+    } finally { W.SERIAL = true; global.Graphics = frame; }
+});
+
 test('a material disposed while it compiles ends the wait instead of throwing from a timer', async () => {
     const scene = new THREE.Scene(), mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
     scene.add(mesh);

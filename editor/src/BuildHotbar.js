@@ -145,6 +145,15 @@ class BuildHotbar {
         document.addEventListener('keyup', this._onCtrl, true);
         window.addEventListener('blur', this._onCtrl);
         document.addEventListener('rr-surround-view', this._onSurroundView);
+        // A number typed into the panel counts at the next click on the map: the field is left first, which
+        // hands its number over (`change`). The map's own press came before the field lost the focus, so a
+        // ladder's height typed and then clicked into place went down at the height from before.
+        if (!this._onPressOutside) this._onPressOutside = event => {
+            const field = document.activeElement;
+            if (field && field.tagName === 'INPUT' && this.panel && this.panel.contains(field) && !this.panel.contains(event.target)) field.blur();
+        };
+        document.addEventListener('pointerdown', this._onPressOutside, true);
+        document.addEventListener('mousedown', this._onPressOutside, true);
         this.render();
     }
 
@@ -167,6 +176,7 @@ class BuildHotbar {
         window.removeEventListener('blur', this._onCtrl);
         this.ctrlChanged(false);
         document.removeEventListener('rr-surround-view', this._onSurroundView);
+        if (this._onPressOutside) { document.removeEventListener('pointerdown', this._onPressOutside, true); document.removeEventListener('mousedown', this._onPressOutside, true); }
         if (release) { this.manager()?.deactivate(); window.reactor?.claimMapTool?.('paint'); }
     }
 
@@ -581,7 +591,7 @@ class BuildHotbar {
             const common = [...heights.entries()].sort((a, b) => b[1] - a[1])[0];
             const heightCard = sized.length ? section(tt('Size'), slide('rr-build-height', tt('Height'), common ? common[0] : 5, 0.5, 40, 0.25, 'height', 'y', 0)
                 + `<div class="rr-build-note rr-build-wrap">${escape(tt('Every wall, doorway and window selected; floors and roofs above them rise with them.'))}</div>`, heights.size > 1 ? tt('mixed') : '') : '';
-            body = lead(this._t(parts.length > 1 ? 'build.parts.hint' : 'build.manyHint')) + section(tt('Level'), levelRow(lowest, 0.25), tt('lowest')) + heightCard + section(tt('Structure'), keep) + materials
+            body = lead(this._t(parts.length > 1 ? 'build.parts.hint' : 'build.manyHint')) + section(tt('Height off the ground (Z)'), levelRow(lowest, 0.25), tt('lowest')) + heightCard + section(tt('Structure'), keep) + materials
                 + section(this._t('build.finish'), finishes(held[0] || null, differ), parts.length > 1 ? (hand ? this.partName(hand.key) : this._t('build.parts.all')) : '');
             foot = `<button type="button" class="rr-btn-secondary rr-build-turn-all">${this.icon('turn', 16)}<span>${tt('Turn')}</span></button><button type="button" class="rr-btn-secondary rr-build-duplicate" title="Ctrl+D">${escape(tt('Duplicate'))}</button><button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
         } else if (s.kind === 'select') {
@@ -666,7 +676,7 @@ class BuildHotbar {
             if ((!s.shape && (BuildHotbar.FACING.includes(kind) || s.placed)) || (s.shape && !piece && kind !== 'rock')) body += section(this._t('build.direction'), facing(s.shape && !piece ? manager.rot || 0 : rot));
             // In hand: how a drag lays it, and the level it is laid at. Placed: where it stands, to type or step.
             if (!piece && (!s.shape || kind === 'rock')) body += drawCard();
-            if (!piece && !s.shape) body += section(tt('Level'), levelRow(manager.level, manager.levelStep(kind)), 'Q / E');
+            if (!piece && !s.shape) body += section(tt('Height off the ground (Z)'), levelRow(manager.level, manager.levelStep(kind)), 'Q / E');
             // A floor in hand: how many tiles square a click lays (and how wide a line of floor is).
             if (!piece && kind === 'floor') body += section(tt('Size'), `<div class="rr-build-finishes rr-build-floorbrush">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" class="rr-build-chip rr-build-fbrush" data-value="${n}" aria-pressed="${manager.floorBrush === n}">${n}×${n}</button>`).join('')}</div>`
                 + `<div class="rr-build-note rr-build-wrap">${escape(tt('Tiles laid at each click; a Line of floor is this wide. For one big slab of any size, use Shape › Box.'))}</div>`);
@@ -678,8 +688,11 @@ class BuildHotbar {
             }
             if (piece && !s.shape) {
                 const map = this.currentMap();
-                body += section(tt('Position'), `<div class="rr-build-position">${num('rr-build-cell', 'X', piece.x, 0, map ? map.width - 1 : 999, 1, 'x')}${num('rr-build-cell', 'Y', piece.y, 0, map ? map.height - 1 : 999, 1, 'y')}</div>`
-                    + `<div class="rr-build-subhead">${escape(tt('Level'))}</div>` + levelRow(piece.z, manager.levelStep(kind)));
+                // One row: the tile it stands on and how far off the ground (Z, in tiles: Q and E step it too). It was
+                // two fields, a heading and a row of buttons, three rows for three numbers (owner, 2026-11-14).
+                const zHint = escape(tt('Z: how many tiles the piece is raised off the ground of its tile. 0 stands on the ground.'));
+                body += section(tt('Position'), `<div class="rr-build-position rr-build-position3">${num('rr-build-cell', 'X', piece.x, 0, map ? map.width - 1 : 999, 1, 'x')}${num('rr-build-cell', 'Y', piece.y, 0, map ? map.height - 1 : 999, 1, 'y')}`
+                    + `<label class="rr-build-field" title="${zHint}"><span>Z</span><input type="number" class="database-field-value rr-build-level-value" value="${piece.z}" min="0" max="240" step="${manager.levelStep(kind)}" title="${zHint}"></label></div>`, tt('Z: tiles off the ground'));
             }
             // A rock's sides and top share one card: the same swatches, a tab each (its top: nothing, the map's own ground, or any material).
             if (kind === 'rock') {
@@ -2064,6 +2077,8 @@ class BuildHotbar {
             + `<div class="rr-build-sgrid">${edges.LEVELS.map(side => `<label class="rr-build-field rr-build-sfield"><span>${escape(tt(edges.LEVEL_LABEL[side]))}</span>`
                 + `<select class="database-field-value rr-build-lmap" data-side="${side}">${mapOptions(view.levels[side])}</select></label>`
                 + (!view.levels[side] ? '' : levelNumber(side, 'gap', 'Space between (tiles)', view.levels[side].gap, usualGap.min, usualGap.max)
+                    // What the sides of the openings wear between the lower map's ceiling and the upper map's ground.
+                    + `<label class="rr-build-field rr-build-sfield"><span>${escape(tt('Lining of the openings'))}</span><select class="database-field-value rr-build-llining" data-side="${side}">${[['walls', "The room's walls"], ['ceiling', "The room's ceiling"], ['none', 'None']].map(([value, label]) => `<option value="${value}"${(view.levels[side].lining || 'walls') === value ? ' selected' : ''}>${escape(tt(label))}</option>`).join('')}</select></label>`
                     // With an opening the maps are placed by where it comes out (below, with the openings); without one, by the tile the other map's corner lies under.
                     + (view.levels[side].openings.length ? '' : levelNumber(side, 'x', 'Across (tiles)', view.levels[side].x, -9999, 9999)
                         + levelNumber(side, 'y', 'Down (tiles)', view.levels[side].y, -9999, 9999)))).join('')}</div>`
@@ -2157,6 +2172,7 @@ class BuildHotbar {
             commit({ levels: { [side]: Object.assign({}, now, { [el.dataset.key]: Number(el.value) }) } });
             setTimeout(() => this.panel.querySelector(`.rr-build-lnum[data-side="${side}"][data-key="${el.dataset.key}"]`)?.focus({ preventScroll: true }), 0);
         }));
+        panel.querySelectorAll('.rr-build-llining').forEach(el => el.addEventListener('change', () => { const now = levelOf(el.dataset.side); if (now) commit({ levels: { [el.dataset.side]: Object.assign({}, now, { lining: el.value }) } }); }));
         // A level's openings: adding one, taking one away and each number entered is a step.
         const openings = (side, change) => { const now = levelOf(side); if (!now) return; const list = now.openings.map(o => Object.assign({}, o)); change(list); commit({ levels: { [side]: Object.assign({}, now, { openings: list }) } }); };
         const sizeFor = side => { const now = levelOf(side); return now ? this.mapSize(now.map) : null; };

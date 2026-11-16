@@ -452,7 +452,7 @@ test('reflection pictures are written as the main passes are (sRGB) and decoded 
     const src = require('./helpers/runtime-3d-source.cjs').source3D();
     assert.match(src, /generateMipmaps: true, minFilter: THREE\.LinearMipmapLinearFilter, magFilter: THREE\.LinearFilter\n\s+\}\);\n\s+Reactor3D\.sharePassOutput\(this\._target\);/, 'the reflection cube');
     assert.match(src, /generateMipmaps: false \}\);\n\s+Reactor3D\.sharePassOutput\(target\);/, 'a mirror picture');
-    assert.match(src, /= rrSRGBToLinear\(textureLod\(rrMirrorMap" \+ slot \+ ", rrMU, 0\.0\)\.rgb\) \* " \+ scale/, 'mirror pictures decoded');
+    assert.match(src, /= rrSRGBToLinear\(textureLod\(rrMirrorMap" \+ slot \+ ", rrMA, 0\.0\)\.rgb\) \* " \+ scale/, 'mirror pictures decoded');
     assert.match(src, /"\\tif \(rrEnvFlip > 0\.0\) rrEnv = rrSRGBToLinear\(rrEnv\);"/, 'a live capture decoded on shiny surfaces (the studio cube is decoded by the GPU)');
     assert.equal((src.match(/if \(rrEnvFlip > 0\.0\) rr(Under|EnvC) = rrSRGBToLinear\(rr(Under|EnvC)\);/g) || []).length, 2, 'and on water, above and below');
     assert.match(R.mirrorUniformDeclarations(), /#ifndef RR_SRGB_DECODE[\s\S]*vec3 rrSRGBToLinear\(vec3 c\)/);

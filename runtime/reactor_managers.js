@@ -735,6 +735,8 @@ ConfigManager.commandRemember = false;
 ConfigManager.touchUI = true;
 // "auto" keeps the frame rate by itself (reactor_3d.js, `Reactor3D.Quality`); "high", "medium" and "low" hold a level.
 ConfigManager.graphicsQuality = "auto";
+// Frames held to the refresh of the monitor the window is on (Graphics.FrameLimit); false draws every frame the machine can.
+ConfigManager.frameLimit = true;
 ConfigManager.graphicsAuto = null;
 ConfigManager.reactor3dSeen = false;
 ConfigManager._isLoaded = false;
@@ -811,6 +813,8 @@ ConfigManager.makeData = function() {
     config.graphicsQuality = this.graphicsQuality;
     config.graphicsAuto = this.graphicsAuto;
     config.reactor3dSeen = this.reactor3dSeen;
+    // Whether frames are held to the monitor's refresh (Graphics.FrameLimit).
+    config.frameLimit = this.frameLimit;
     return config;
 };
 
@@ -823,6 +827,7 @@ ConfigManager.applyData = function(config) {
     this.meVolume = this.readVolume(config, "meVolume");
     this.seVolume = this.readVolume(config, "seVolume");
     this.graphicsQuality = ["auto", "high", "medium", "low"].includes(config.graphicsQuality) ? config.graphicsQuality : "auto";
+    this.frameLimit = this.readFlag(config, "frameLimit", true);
     this.graphicsAuto = config.graphicsAuto && typeof config.graphicsAuto === "object" ? config.graphicsAuto : null;
     this.reactor3dSeen = config.reactor3dSeen === true;
 };

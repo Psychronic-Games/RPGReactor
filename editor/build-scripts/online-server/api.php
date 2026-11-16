@@ -596,8 +596,41 @@ if ($action === 'chat') {
     $messages = array_merge(readChat($dir, 'w'), readChat($dir, 'm' . intParam('m', 1, 9999)));
     $partyId = (string)($_GET['p'] ?? '');
     if (preg_match('/^[a-f0-9]{12}$/', $partyId)) $messages = array_merge($messages, readChat($dir, 'p' . $partyId));
+    // What the game's owner wrote to this player alone (the admin page): read only with this visit's own pass, and
+    // only what was written during it, so whoever is given the place next reads nothing of it.
+    $mine = (int)($_GET['s'] ?? -1);
+    $pass = strtolower((string)($_GET['g'] ?? ''));
+    // (And what was written to this player's account while they were away: owed until it has been handed over once.)
+    $owed = [];
+    if ($mine >= 0 && $mine < SLOTS && $pass !== '' && hash_equals(tokenFor($mine, (string)($_GET['g'] ?? ''), $secret), (string)($_GET['t'] ?? ''))) {
+        foreach (readChat($dir, 'u' . $mine) as $message) {
+            if (!hash_equals((string)($message['nonce'] ?? ''), $pass)) continue;
+            unset($message['nonce']);
+            $messages[] = $message;
+        }
+        $signedIn = (string)(readNames($dir)[$mine]['account'] ?? '');
+        if ($signedIn !== '' && hash_equals(slotNonce($dir, $mine), $pass)) {
+            $channel = 'a' . substr(accountKey($signedIn), 0, 24);
+            $lock = lockChat($dir);
+            $inbox = readChat($dir, $channel);
+            $handed = false;
+            foreach ($inbox as $index => $message) {
+                $waiting = !empty($message['pending']);
+                unset($message['pending']);
+                if ($waiting) { $owed[] = $message; $inbox[$index]['pending'] = false; $handed = true; }
+                else $messages[] = $message;
+            }
+            if ($handed) {
+                $temporary = chatFile($dir, $channel) . '.' . getmypid() . '.tmp';
+                file_put_contents($temporary, jsonText($inbox));
+                rename($temporary, chatFile($dir, $channel));
+            }
+            flock($lock, LOCK_UN);
+        }
+    }
     usort($messages, function (array $a, array $b): int { return $a['id'] <=> $b['id']; });
     $fresh = array_values(array_filter($messages, function (array $message) use ($after): bool { return $message['id'] > $after; }));
+    $fresh = array_merge($owed, $fresh);
     $gone = @json_decode((string)@file_get_contents($dir . '/chatgone.json'), true);
     respond(['messages' => array_slice($fresh, -50), 'gone' => is_array($gone) ? array_slice($gone, -50) : [], 'count' => chatCount($dir)]);
 }

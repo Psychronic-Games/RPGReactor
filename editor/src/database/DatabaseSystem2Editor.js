@@ -258,6 +258,12 @@ class DatabaseSystem2Editor {
             { label: 'Main Font', field: 'mainFontFilename', value: adv.mainFontFilename || '', type: 'text' },
             { label: 'Number Font', field: 'numberFontFilename', value: adv.numberFontFilename || '', type: 'text' },
             { label: 'Fallback Fonts', field: 'fallbackFonts', value: adv.fallbackFonts || '', type: 'text' },
+            // How the game reaches the graphics card under Windows. Auto: each player's machine finds its own by
+            // playing (the game's ReactorBackend); a named one is carried into the manifest (ProjectManager.GRAPHICS_BACKENDS).
+            { label: 'Graphics Backend (Windows)', field: 'graphicsBackend', type: 'select',
+                value: ['d3d11', 'd3d11on12', 'gl', 'vulkan'].includes(adv.graphicsBackend) ? adv.graphicsBackend : 'auto',
+                title: 'Auto lets each machine find its fastest by playing: a strong graphics card stays on Direct3D 11, a weak one is tried on OpenGL. A named backend is used on every machine.',
+                options: [['auto', 'Auto (best for each machine)'], ['d3d11', 'Direct3D 11'], ['d3d11on12', 'Direct3D 11 on 12'], ['gl', 'OpenGL'], ['vulkan', 'Vulkan']] },
         ];
         let rows = '';
         for (const f of fields) {
@@ -266,6 +272,13 @@ class DatabaseSystem2Editor {
             const bounds = f.min !== undefined ? ` min="${f.min}" max="${f.max}"` : '';
             const inputClass = f.type === 'checkbox' ? 'system-checkbox' : 'database-field-value';
             const inputStyle = f.type === 'checkbox' ? '' : 'width: 100%; font-size: 12px; box-sizing: border-box;';
+            if (f.type === 'select') {
+                rows += `<tr>
+                <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td>
+                <td><select class="database-field-value sys2-advanced-field" aria-label="${rrEscapeHtml(tt(f.label))}" data-advanced-field="${f.field}" title="${rrEscapeHtml(tt(f.title || ''))}" style="${inputStyle}">${f.options.map(([value, label]) => `<option value="${rrEscapeHtml(value)}"${value === f.value ? ' selected' : ''}>${rrEscapeHtml(tt(label))}</option>`).join('')}</select></td>
+            </tr>`;
+                continue;
+            }
             rows += `<tr>
                 <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td>
                 <td><input type="${f.type}" class="${inputClass} sys2-advanced-field" aria-label="${rrEscapeHtml(tt(f.label))}" data-advanced-field="${f.field}" value="${rrEscapeHtml(f.value)}" style="${inputStyle}"${step}${bounds}${ro}${f.type === 'checkbox' && f.value ? ' checked' : ''}></td>

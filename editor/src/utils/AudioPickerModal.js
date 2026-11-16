@@ -197,10 +197,28 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         };
 
+        // What the Audio Player has playing waits while a track is listened
+        // to here, and comes back when this one stops. A sound effect plays
+        // over it, as it does in the game.
+        const holdsPlayer = String(folderLabel).toUpperCase() !== 'SE';
+        let holdingPlayer = false;
+        const holdPlayer = () => {
+            const player = root.reactor?.audioPlayer;
+            if (!holdsPlayer || !player?.holdForPreview) return;
+            player.holdForPreview(folderLabel ? `[${folderLabel}] ${selectedFile}` : selectedFile);
+            holdingPlayer = true;
+        };
+        const releasePlayer = () => {
+            if (!holdingPlayer) return;
+            holdingPlayer = false;
+            root.reactor?.audioPlayer?.releasePreview?.();
+        };
+
         const stopAudio = () => {
             audioElement.pause();
             audioElement.currentTime = 0;
             isPlaying = false;
+            releasePlayer();
             updateButtons();
         };
 
@@ -291,10 +309,12 @@
             audioElement.preservesPitch = false;
             applyLoopMode();
 
+            holdPlayer();
             audioElement.play().then(() => {
                 isPlaying = true;
                 updateButtons();
             }).catch(err => {
+                releasePlayer();
                 console.error('Error playing audio:', err);
             });
         };
@@ -304,6 +324,7 @@
             // its loop points; only a track that played out stops here.
             if (loopPlayback && loopPlayback.loop && loopPlayback.points) return;
             isPlaying = false;
+            releasePlayer();
             updateButtons();
         };
 
@@ -385,6 +406,7 @@
         pauseBtn.addEventListener('click', () => {
             audioElement.pause();
             isPlaying = false;
+            releasePlayer();
             updateButtons();
         });
         stopBtn.addEventListener('click', () => stopAudio());

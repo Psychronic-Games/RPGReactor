@@ -2235,6 +2235,22 @@ Reactor3D.ModelUse = {
     },
 
     /**
+     * The models standing in the scene a border crossing leaves, by cache key; null outside a crossing. The party's
+     * and what it rides go over the border as they are (Neighbors.carryParty): no `loadModel`, so no claim, and the
+     * sweep at the crossing let their models go while they were still drawn. Their geometry and pictures went back
+     * up on the next draw; a merged character's picture arrays could not (their pixels are let go once on the GPU,
+     * LayeredParts), so its clothing drew black from the crossing on (the owner on a motorcycle, 2026-11-15, with
+     * "texSubImage3D: no bound PIXEL_UNPACK_BUFFER" in the console: the upload with nothing to send).
+     */
+    wornKeys() {
+        const N = Reactor3D.Neighbors, live = N && N.crossing ? N.live : null, held = live && live.scene && live.scene._modelInstances;
+        if (!held || typeof held.forEach !== "function") return null;
+        const keys = new Set();
+        held.forEach(holder => { if (holder && holder.spec) keys.add(holder.spec); });
+        return keys;
+    },
+
+    /**
      * Once the map's own models have been claimed and the scene before it is
      * gone: let go of what no map names any more. Returns the keys released.
      */
@@ -2245,9 +2261,11 @@ Reactor3D.ModelUse = {
         // the rest goes before its own models come in; the sweep at its start is still owed.
         if (!early) this.pending = false;
         const R = Reactor3D, cache = R._glbCache, named = this.namedKeys(mapData), text = this.eventText(mapData), idle = [];
+        const worn = this.wornKeys();
         for (const key in cache) {
             const entry = cache[key];
             if (!entry.template) continue;
+            if (worn && worn.has(key)) continue;
             if (!(entry.used < this.generation) || named.has(key)) continue;
             if (entry.name && text.indexOf(entry.name) >= 0) continue;
             idle.push(key);
@@ -5943,7 +5961,7 @@ Reactor3D.attachLibraryMotions = function(root, rig) {
     if (!skeleton) return;
     const clips = wanted.map(motion => {
         const clip = new THREE.AnimationClip(this.LIBRARY_CLIP_PREFIX + motion.id, 1, []);
-        clip.__reactorLibrary = { id: motion.id, state: motion.state, name: motion.name, skeleton, resolved: false };
+        clip.__reactorLibrary = { id: motion.id, state: motion.state, name: motion.name, skeleton, root, resolved: false };
         return clip;
     });
     root.__reactorClips = own.concat(clips);
@@ -6368,6 +6386,28 @@ Reactor3D.libraryMotionRules = function(list, clips) {
 };
 
 /**
+ * How a clip made here names a joint: by the joint's own name, as the file's own clips do, where that name finds
+ * this very joint in its model; else by its uuid. The mixer keeps one blend per name it is given: a library
+ * motion that named a joint by uuid and the file's own Walking that named it "LeftLeg" were two blends on one
+ * joint, and the one that had faded out went on writing the joint's rest pose over the other. On a ladder come
+ * to at a run, the climber's left knee, left upper arm and right hand stayed at rest: a straight leg through the
+ * rungs (owner, 2026-11-14). With one name they are one blend, and a fade from one clip to the other is a fade.
+ */
+Reactor3D.clipNodeRef = function(node, root) {
+    const name = node && node.name;
+    if (!name || !root || typeof THREE === "undefined" || !THREE.PropertyBinding) return node.uuid;
+    // (A name the mixer reads as written: no dots, brackets, colons or slashes, which it takes for a path.)
+    if (THREE.PropertyBinding.sanitizeNodeName(name) !== name || /[\[\]\.:\/]/.test(name)) return node.uuid;
+    // The first of that name in the model (`root`: what the clips were made on), searched as the mixer searches
+    // (THREE.PropertyBinding.findNode: the root itself, then its children in order, each before the next): the joint itself.
+    if (root.name === name) return node.uuid;
+    let found = null;
+    const seek = children => { for (const child of children) { if (child.name === name || child.uuid === name) return child; const below = seek(child.children); if (below) return below; } return null; };
+    found = seek(root.children);
+    return found === node ? name : node.uuid;
+};
+
+/**
  * Fills a library motion's clip with its keys the first time it plays: the
  * library's motion made for this skeleton, each joint's turn carried into
  * its own frame, worked out once for every copy of the model.
@@ -6394,7 +6434,7 @@ Reactor3D.resolveLibraryMotion = function(clip) {
     for (const track of data.tracks) {
         const node = track.joint >= 0 ? joints[track.joint].node : holders[track.holder].node;
         const Track = track.path === "position" ? THREE.VectorKeyframeTrack : THREE.QuaternionKeyframeTrack;
-        clip.tracks.push(new Track(node.uuid + "." + track.path, track.times, track.values));
+        clip.tracks.push(new Track(this.clipNodeRef(node, info.root) + "." + track.path, track.times, track.values));
     }
     clip.duration = data.duration;
     return clip;
@@ -8826,11 +8866,20 @@ Reactor3D.MapHeld = {
         if (this.tick) { this.tick = false; Reactor3D.HandGrip.update(); }
         return changed;
     },
+    /** What a thing held is scaled by in the hand of a flat map's picture: that picture's model against its size in a 3D scene. */
+    flatScale(character) {
+        const spec = Reactor3D.characterModelSpec(character);
+        return spec ? 1 / ((spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1)) : 1;
+    },
     /** Work the hold out: the arms as the step poses them, the thing in the hand, the fingers on it. */
     solve(state, scene) {
         const R = Reactor3D, H = R.Held, G = R.HandGrip, S = this.scratch(), owner = state.owner, held = state.record, object = held.object, raw = state.step;
         owner.object.updateMatrixWorld(true);
         owner.scale = owner.object.scale.y;
+        // A flat map's picture draws its model one unit across, not at its size in tiles (updateMapModelSprite), and what
+        // it holds is sized in tiles: in the hand of a figure two tiles big it was drawn twice too big. Sized to the figure.
+        if (held.full === undefined) held.full = held.scale;
+        held.scale = held.full * (state.flat ? this.flatScale(state.character) : 1);
         const was = object.parent, local = state.local || (state.local = { fromP: new THREE.Vector3(), fromQ: new THREE.Quaternion(), fromS: new THREE.Vector3(1, 1, 1), toP: new THREE.Vector3(), toQ: new THREE.Quaternion(), toS: new THREE.Vector3(1, 1, 1), done: false });
         if (was) { local.fromP.copy(object.position); local.fromQ.copy(object.quaternion); local.fromS.copy(object.scale); was.remove(object); }
         object.position.set(0, 0, 0); object.quaternion.identity(); object.scale.setScalar(held.scale); object.updateMatrixWorld(true);
@@ -9816,6 +9865,64 @@ Reactor3D.chestForward = function(holder) {
         return at.z * (holder.object.scale.z || 1);
     }
     return 0;
+};
+
+/**
+ * How far ahead of a model's own origin the rungs must stand for its climb to take them, in tiles: where the
+ * motion library's Climb puts the hands (0.4 of the body's scale ahead of the hips, less the grip's own 0.02:
+ * `climb` in reactor_3d_motions.js), carried into the model's frame. Null for a model whose climb is not the
+ * library's (a rig's own Climb pose, a file's clip): those hang by the chest (`LADDER_CHEST_GAP`). The chest gap
+ * stood a library climber about a fifth of a tile nearer the ladder than its hands and feet were aimed, and they
+ * went through the rungs (owner, 2026-11-14).
+ */
+Reactor3D.rungReach = function(holder) {
+    if (typeof THREE === "undefined" || !holder || !holder.binding || !holder.object || !holder.rules) return null;
+    const rule = holder.rules.find(r => r && r.trigger === "climbing" && r.type === "clip");
+    const clip = rule ? (holder.binding.clips || []).find(c => c && c.name === rule.clip) : null;
+    const info = clip ? clip.__reactorLibrary : null;
+    if (!info || info.id !== "climbLadder" || !info.root || !info.skeleton) return null;
+    const joints = info.skeleton.joints, hips = joints.find(j => j.parent < 0);
+    if (!hips) return null;
+    let top = 0;
+    for (const joint of joints) top = Math.max(top, joint.head[1]);
+    const scale = top / 1.7 || 1;
+    holder.object.updateMatrixWorld(true);
+    const at = new THREE.Vector3(hips.head[0], hips.head[1], hips.head[2] + (0.4 - 0.02) * scale);
+    info.root.localToWorld(at);
+    holder.object.worldToLocal(at);
+    // (And the palm's own depth back: with the wrist's grip point on the rung the closed fist stood past it.)
+    return at.z * (holder.object.scale.z || 1) + Reactor3D.LADDER_PALM;
+};
+/** How far back from the rung plane a climber's grip point is held, in tiles: the rung lies in the closed hand, under the knuckles. */
+Reactor3D.LADDER_PALM = 0.08;
+
+/** The share of a climb's cycle a hand is on its rung (the rest it reaches for the next): `climb` in reactor_3d_motions.js. */
+Reactor3D.CLIMB_GRIP_SHARE = 0.64;
+/**
+ * A climber's fingers: each hand closes while it is on its rung and opens as it reaches for the next, by the same
+ * cycle the climb's arms keep (one a CLIMB_CYCLE of height, the right hand first, the left half a cycle on). The
+ * hands had finger joints and the climb never asked them to close: open hands laid on the rungs (owner,
+ * 2026-11-14). A hand with no finger joints (no markers, no finger bones) is left as it is. Returns the hands closed.
+ */
+Reactor3D.climbGrip = function(holder, height) {
+    const R = Reactor3D, G = R.HandGrip;
+    if (!G || !holder || !holder.binding || !Number.isFinite(height)) return 0;
+    if (holder.climbHands === undefined) {
+        // The model's hands: the library's skeleton names them; else the rig's own parts.
+        const hands = { Right: null, Left: null };
+        const clip = (holder.binding.clips || []).find(c => c && c.__reactorLibrary);
+        for (const joint of clip ? clip.__reactorLibrary.skeleton.joints : []) if (joint.name === "RightHand") hands.Right = joint.node; else if (joint.name === "LeftHand") hands.Left = joint.node;
+        for (const entry of holder.binding.meshes || []) for (const part of entry.parts || []) if ((part.name === "RightHand" || part.name === "LeftHand") && !hands[part.name.replace("Hand", "")]) hands[part.name.replace("Hand", "")] = entry.mesh;
+        holder.climbHands = hands;
+    }
+    const u = ((height / R.CLIMB_CYCLE) % 1 + 1) % 1;
+    let closed = 0;
+    for (const [side, phase] of [["Right", 0], ["Left", 0.5]]) {
+        const hand = holder.climbHands[side];
+        if (!hand || (u + phase) % 1 >= R.CLIMB_GRIP_SHARE) continue;
+        if (G.hold(hand, null)) { closed++; R._climbGripped = true; }
+    }
+    return closed;
 };
 
 /** Whether a character is climbing by the physics: on a ladder, or pulling itself up (or lowering itself down) beside a ledge. */
@@ -10834,6 +10941,15 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (next && posed) { next.paused = true; next.time = 0; }
         }
         if (binding.clipAction) binding.clipAction.timeScale = rate;
+        // A climb's clip moves with the climbing, not the clock, as a climb's pose does (below): one cycle a
+        // CLIMB_CYCLE of height, still on a held ladder, backward on the way down.
+        const climbing = !posed && !state.seek && !!state.climbing && Number.isFinite(state.climbHeight) && !!binding.clipAction
+            && clipRules.some(r => r.trigger === "climbing" && r.clip === binding.clipAction.getClip().name);
+        if (climbing) {
+            const action = binding.clipAction, length = action.getClip().duration || 0;
+            action.timeScale = 0;
+            action.time = (((state.climbHeight / Reactor3D.CLIMB_CYCLE) % 1) + 1) % 1 * length;
+        }
         // The mixer follows the caller's frame clock, not the call rate:
         // the editor's preview loop runs at the display's refresh, and a
         // fixed 1/60 step there played every clip at 120Hz-monitor speed.
@@ -13385,8 +13501,12 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             const air = character._reactorAir || 0;
             // A climber hangs against its ladder, not in the middle of the cell.
             if (character._reactorOnLadder && holder.chestForward === undefined) holder.chestForward = Reactor3D.chestForward(holder);
+            // A climb of the motion library's stands where its hands and feet meet the rungs (Reactor3D.rungReach).
+            if (character._reactorOnLadder && holder.rungReach === undefined) holder.rungReach = Reactor3D.rungReach(holder);
+            // Its fingers close on the rung each hand is on.
+            if (character._reactorOnLadder) Reactor3D.climbGrip(holder, character._reactorAlt);
             // (A body pulling itself up a ledge leans to the wall it climbs: the physics says how far.)
-            const hold = character._reactorOnLadder ? Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0)
+            const hold = character._reactorOnLadder ? (Number.isFinite(holder.rungReach) ? Reactor3D.LADDER_RUNGS - holder.rungReach : Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0))
                 : character._reactorMantle ? Reactor3D.mantleHold(holder, character) : 0;
             const holdX = hold * ((character.direction && character.direction() === 6) ? 1 : (character.direction && character.direction() === 4) ? -1 : 0);
             const holdZ = hold * ((character.direction && character.direction() === 2) ? 1 : (character.direction && character.direction() === 8) ? -1 : 0);
@@ -13530,6 +13650,13 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         try {
             if (Reactor3D.ClosedMouth.enabled && this._modelInstances) for (const holder of this._modelInstances.values()) if (holder.character && holder.object) Reactor3D.ClosedMouth.update(holder.object);
         } catch (error) { console.warn("Reactor3D.ClosedMouth", error); Reactor3D.ClosedMouth.enabled = false; }
+        // A climber's fingers (Reactor3D.climbGrip) ease shut and open: turned here where nothing held on the map turns
+        // them (MapHeld), and for a little after the last hand let go, so they open again.
+        if (Reactor3D._climbGripped) { Reactor3D._climbGripped = false; Reactor3D._climbGripFrames = 40; }
+        if (Reactor3D._climbGripFrames > 0) {
+            Reactor3D._climbGripFrames--;
+            if (!(Reactor3D.MapHeld && Reactor3D.MapHeld.count) && Reactor3D.HandGrip) { try { Reactor3D.HandGrip.update(); } catch (error) { Reactor3D._climbGripFrames = 0; } }
+        }
         return out;
     };
 })();

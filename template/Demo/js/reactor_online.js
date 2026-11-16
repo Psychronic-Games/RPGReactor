@@ -374,6 +374,9 @@ const ReactorOnline = {
         this.nonce = answer.nonce;
         this.token = answer.token;
         ReactorOnlineChat.start(answer.chat);
+        // Asked once on arriving, whatever the count says: a line the game's owner wrote to this account while its
+        // player was away waits on the server until it is fetched (the admin page), and nothing else would fetch it.
+        setTimeout(() => { try { if (ReactorOnline.token && ReactorOnlineChat.settings()) ReactorOnlineChat.fetch(); } catch (error) { /* the next count asks */ } }, 2500);
         ReactorWorldState.start();
         ReactorOnlineSocket.connect(answer.engine);
     },
@@ -800,7 +803,10 @@ Spriteset_Map.prototype.reactorOnlineNamePoint = function(entry) {
         const at = Reactor3D.projectToScreen(camera, peer._realX + 0.5, ground + tall + 0.15, peer._realY + 0.5, {});
         return at && Number.isFinite(at.x) && Number.isFinite(at.y) ? at : null;
     }
-    return { x: entry.sprite.x, y: entry.sprite.y - (entry.sprite.patternHeight ? entry.sprite.patternHeight() : 48) - 2 };
+    // (A sprite with no picture yet has no height to read: a model-bound player on a flat map, before its picture is
+    // drawn. Asked all the same, it stopped the game: "Cannot read properties of undefined (reading 'height')".)
+    const sprite = entry.sprite;
+    return { x: sprite.x, y: sprite.y - (sprite.patternHeight && (sprite.bitmap || sprite._tileId > 0) ? sprite.patternHeight() : 48) - 2 };
 };
 
 if (typeof Reactor3D !== "undefined") {

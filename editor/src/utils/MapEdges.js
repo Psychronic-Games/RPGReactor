@@ -91,7 +91,7 @@
             for (const side of SIDES) { const n = kept && kept.neighbors && kept.neighbors[side]; view.neighbors[side] = n ? { map: n.map, shift: n.shift || 0 } : null; }
             // The map over and the map under (`{ map, x, y, gap }`), null where there is none.
             view.levels = {};
-            for (const side of LEVELS) { const n = kept && kept.levels && kept.levels[side]; view.levels[side] = n ? { map: n.map, x: n.x || 0, y: n.y || 0, gap: n.gap, openings: (n.openings || []).map(o => ({ x: o.x, y: o.y, w: o.w, h: o.h })) } : null; }
+            for (const side of LEVELS) { const n = kept && kept.levels && kept.levels[side]; view.levels[side] = n ? { map: n.map, x: n.x || 0, y: n.y || 0, gap: n.gap, lining: n.lining || 'walls', openings: (n.openings || []).map(o => ({ x: o.x, y: o.y, w: o.w, h: o.h })) } : null; }
             return view;
         },
 
@@ -154,7 +154,8 @@
                     raw.levels = Object.assign({}, raw.levels);
                     for (const side of LEVELS) if (side in (value || {})) {
                         const entry = value[side];
-                        if (entry && Number(entry.map) > 0) raw.levels[side] = { map: Number(entry.map), x: Number(entry.x) || 0, y: Number(entry.y) || 0, gap: Number(entry.gap) || undefined, openings: Array.isArray(entry.openings) ? entry.openings : undefined };
+                        // (`lining`: what the openings' sides wear; the room's walls are the usual one and are not written.)
+                        if (entry && Number(entry.map) > 0) raw.levels[side] = { map: Number(entry.map), x: Number(entry.x) || 0, y: Number(entry.y) || 0, gap: Number(entry.gap) || undefined, lining: entry.lining && entry.lining !== 'walls' ? entry.lining : undefined, openings: Array.isArray(entry.openings) ? entry.openings : undefined };
                         else delete raw.levels[side];
                     }
                 }
@@ -253,6 +254,7 @@
                 if (level.y) entry.y = -level.y;
                 // The same openings, in the other map's own tiles.
                 if (level.openings) entry.openings = level.openings.map(o => ({ x: o.x - (level.x || 0), y: o.y - (level.y || 0), w: o.w, h: o.h }));
+                if (level.lining) entry.lining = level.lining;
                 if (theirs[back] && JSON.stringify(R().normalizeLevels({ [back]: entry })[back]) === JSON.stringify(theirs[back])) continue;
                 surround.levels = Object.assign({}, theirs, { [back]: entry });
                 sidecar.surround = surround;
