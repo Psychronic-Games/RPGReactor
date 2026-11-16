@@ -15,6 +15,14 @@ test('only an http or https address is one a page may be sent to', () => {
     assert.throws(() => remote.remotePage('javascript:alert(1)', 'Game'), /must start with https/);
 });
 
+test('the address is read without a global URL: the editor\'s build worker has none', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'build-scripts', 'web-remote.cjs'), 'utf8');
+    const holder = { exports: {} };
+    require('node:vm').runInNewContext(source, { require, module: holder, String, Buffer });   // a context with no URL of its own
+    const made = holder.exports;
+    assert.equal(made.remoteAddress('https://web.example.org'), 'https://web.example.org/');
+});
+
 test('the page is the game in a frame the size of the window, with what the game asks the browser for, and a way on when the server is away', () => {
     const page = remote.remotePage('https://demo.example.org/play/?a=1&b=2', 'Reactor "One" <b>');
     assert.match(page, /<title>Reactor &quot;One&quot; &lt;b&gt;<\/title>/, 'a title is text, whatever it holds');

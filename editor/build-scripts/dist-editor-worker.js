@@ -7,6 +7,8 @@ const { workerData, parentPort, threadId } = require('worker_threads');
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
+// Asked for by name: an NW.js worker thread has no global `URL` (a runtime download that was redirected threw on it).
+const { URL } = require('url');
 const os = require('os');
 const https = require('https');
 const { execFileSync } = require('child_process');

@@ -7,6 +7,8 @@
 // limit, and a deploy to the server is what the store's players see at once.
 const fs = require('fs');
 const path = require('path');
+// Asked for by name: the editor's build worker (an NW.js worker thread) has no global `URL`, and every address was refused.
+const { URL } = require('url');
 
 /** The address as it will be used, or '' when it is not one a page may be sent to (only http and https). */
 function remoteAddress(value) {
