@@ -5,6 +5,8 @@ require('../../runtime/libs/three.js');
 const Reactor3D = require('../../runtime/reactor_3d.js');
 const THREE = global.THREE;
 const batches = Reactor3D.DrawBatches;
+// No clock in these tests: a merge is never put off because the machine was slow (BUILD_MS is milliseconds a refresh).
+batches.BUILD_MS = Infinity;
 
 function fixture(context) {
     const owner = { _scene: new THREE.Scene(), _foliageQueue: [] };

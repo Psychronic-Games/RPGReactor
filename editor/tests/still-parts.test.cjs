@@ -11,6 +11,8 @@ require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
 const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
 const THREE = global.THREE;
 const S = Reactor3D.StillParts;
+// No clock in these tests: a merge is never put off because the machine was slow (BUDGET is milliseconds an update).
+S.BUDGET = Infinity;
 
 const material = (options) => {
     const m = new THREE.MeshBasicMaterial(Object.assign({ map: new THREE.Texture() }, options || {}));
