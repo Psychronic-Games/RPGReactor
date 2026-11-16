@@ -551,10 +551,21 @@ class AudioPlayer {
         }
         promise.then(points => {
             if (channel.currentTrack !== track) return;
-            channel.loopPoints = points && points.end > points.start ? points : null;
-            channel.loopArmed = !channel.loopPoints || channel.audio.currentTime < channel.loopPoints.end;
-            this.setChannelLoop(channel, channel.loopWanted);
-            this.watchLoopPoints(channel);
+            // An Opus loop may only be settled against the track's length,
+            // as the game settles it; apply now, and again once the media
+            // element knows that length.
+            const apply = () => {
+                if (channel.currentTrack !== track) return;
+                const fitted = tags.fitLoopPoints ? tags.fitLoopPoints(points, channel.audio.duration) : points;
+                channel.loopPoints = fitted && fitted.end > fitted.start ? fitted : null;
+                channel.loopArmed = !channel.loopPoints || channel.audio.currentTime < channel.loopPoints.end;
+                this.setChannelLoop(channel, channel.loopWanted);
+                this.watchLoopPoints(channel);
+            };
+            apply();
+            if (points && points.at48k && !(channel.audio.duration > 0)) {
+                channel.audio.addEventListener('loadedmetadata', apply, { once: true });
+            }
         });
     }
 

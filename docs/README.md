@@ -25,6 +25,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [Character quality coverage](CHARACTER-QUALITY.md) and [Claude continuation tracker](CLAUDE-QUALITY-TRACKER.md): catalog/slider sweeps, inherited agent issues, reproduced fixes, validation evidence and remaining appearance limits.
 - [3D Prop Builder](PROP-BUILDER.md): flags and hanging banners in the wind, props made from a picture, frames, swords, firearms and wearables, saved as models.
 - [Human face handoff](HUMAN-FACE-HANDOFF.md): the unfinished default human faces, how they are built and what remains.
+- [Audio formats and loop points](AUDIO-LOOP-POINTS.md): which audio files the game finds, where each format keeps its loop, making a looping Opus track, and what changed for older games and tools.
 - [Model face points and speech](3D-FACE-AND-SPEECH.md): eye placement, mouth and lip authoring, spoken dialogue, per-prop animation speed.
 - [Media surfaces](MEDIA-SURFACES.md): image and video placement on maps, models and the screen; transforms and proportions.
 - [Custom user interfaces](DESIGN-USER-INTERFACES.md): the User Interfaces database section, its node set, actor bindings, opt-in stock-scene replacement and explicit boundaries.

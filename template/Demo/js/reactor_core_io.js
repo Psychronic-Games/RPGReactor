@@ -517,6 +517,8 @@ WebAudio.prototype._startLoading = function() {
         this._lastUpdateTime = currentTime - 0.5;
         this._isError = false;
         this._isLoaded = false;
+        this._loadedSize = -1;
+        this._decodedSize = 0;
         this._destroyDecoder();
         if (this._shouldUseDecoder()) {
             this._createDecoder();
@@ -647,6 +649,7 @@ WebAudio.prototype._onXhrLoad = function(xhr) {
     if (xhr.status < 400) {
         this._data = new Uint8Array(xhr.response);
         this._isLoaded = true;
+        this._loadedSize = this._data.length;
         this._updateBuffer();
     } else {
         this._onError();
@@ -671,8 +674,17 @@ WebAudio.prototype._onFetch = function(response, generation) {
                 this._isLoaded = true;
                 if (this._fetchedSize > 0) {
                     this._concatenateFetchedData();
+                    this._loadedSize = this._data.length;
                     this._updateBuffer();
                     this._data = null;
+                } else {
+                    this._loadedSize = this._data ? this._data.length : 0;
+                    // The whole file may already be decoded, before the
+                    // load was known to be complete: settle a loop read
+                    // against the whole track (_loopSampleRate) here.
+                    if (this._buffers.length > 0 && this._updateLoopTimes() && this._sourceNodes.length > 0) {
+                        this._refreshSourceNode();
+                    }
                 }
                 return 0;
             } else {
@@ -817,10 +829,13 @@ WebAudio.prototype._decodeAudioData = function(arrayBuffer) {
         // it comes from the newest attempt on fully fetched data.
         const generation = (this._decodeGeneration || 0) + 1;
         this._decodeGeneration = generation;
+        // How much of the file this decode covers, for _loopSampleRate.
+        const size = this._data ? this._data.length : 0;
         WebAudio._context
             .decodeAudioData(arrayBuffer.slice())
             .then(buffer => {
                 if (generation === this._decodeGeneration) {
+                    this._decodedSize = size;
                     this._onDecode(buffer);
                 }
             })
@@ -879,6 +894,24 @@ WebAudio._decodePcmWav = function(arrayBuffer) {
     }
 };
 
+// How far past the decoded track a loop end may sit and still count as
+// ending with it: decoders round a track's length by a few milliseconds.
+WebAudio.LOOP_END_SLACK = 0.05;
+
+// The rate the loop's sample counts convert at. An Opus file's counts are
+// read at the original rate OpusHead records, but some taggers count at
+// Opus's own 48 kHz whatever the header says. Once the whole file is
+// decoded, a loop that would end past the track at the recorded rate but
+// fits at 48 kHz is read at 48 kHz; when both fit, the recorded rate holds.
+WebAudio.prototype._loopSampleRate = function() {
+    const rate = this._sampleRate;
+    const whole = this._isLoaded && this._decodedSize === this._loadedSize;
+    if (!this._opusInputRate || !whole || !(this._loopLength > 0)) return rate;
+    const end = this._loopStart + this._loopLength;
+    const limit = this._totalTime + WebAudio.LOOP_END_SLACK;
+    return end / rate > limit && end / 48000 <= limit ? 48000 : rate;
+};
+
 WebAudio.prototype._onDecode = function(buffer) {
     if (!this._shouldUseDecoder()) {
         this._buffers = [];
@@ -886,17 +919,25 @@ WebAudio.prototype._onDecode = function(buffer) {
     }
     this._buffers.push(buffer);
     this._totalTime += buffer.duration;
-    if (this._loopLength > 0 && this._sampleRate > 0) {
-        this._loopStartTime = this._loopStart / this._sampleRate;
-        this._loopLengthTime = this._loopLength / this._sampleRate;
-    } else {
-        this._loopStartTime = 0;
-        this._loopLengthTime = this._totalTime;
-    }
+    this._updateLoopTimes();
     if (this._sourceNodes.length > 0) {
         this._refreshSourceNode();
     }
     this._onLoad();
+};
+
+WebAudio.prototype._updateLoopTimes = function() {
+    const startTime = this._loopStartTime;
+    const lengthTime = this._loopLengthTime;
+    const loopRate = this._loopSampleRate();
+    if (this._loopLength > 0 && loopRate > 0) {
+        this._loopStartTime = this._loopStart / loopRate;
+        this._loopLengthTime = this._loopLength / loopRate;
+    } else {
+        this._loopStartTime = 0;
+        this._loopLengthTime = this._totalTime;
+    }
+    return this._loopStartTime !== startTime || this._loopLengthTime !== lengthTime;
 };
 
 WebAudio.prototype._refreshSourceNode = function() {
@@ -1098,8 +1139,84 @@ WebAudio.prototype._readLoopComments = function(arrayBuffer) {
     } else if (magic === "fLaC") {
         this._readFlacLoopComments(view);
     } else if (magic === "OggS") {
-        this._readOggLoopComments(view);
+        if (this._isOggOpus(view)) {
+            this._readOpusLoopComments(view);
+        } else {
+            this._readOggLoopComments(view);
+        }
     }
+};
+
+// An Ogg Opus stream opens with an "OpusHead" packet where Vorbis has
+// "\x01vorbis", and keeps its comments and sample rate where the Vorbis
+// reader below does not look.
+WebAudio.prototype._isOggOpus = function(view) {
+    if (view.byteLength < 27) return false;
+    const data = 27 + view.getUint8(26);
+    return (
+        this._readFourCharacters(view, data) === "Opus" &&
+        this._readFourCharacters(view, data + 4) === "Head"
+    );
+};
+
+// Opus keeps LOOPSTART/LOOPLENGTH in an "OpusTags" packet laid out like a
+// FLAC comment block after its 8-byte magic. The sample counts convert at
+// the input sample rate OpusHead records, the rate of the source the tags
+// were measured against; Opus itself always decodes at 48 kHz, which an
+// unspecified (0) rate falls back to. Some taggers count at 48 kHz whatever
+// the header records, which _loopSampleRate catches once the track's length
+// is known.
+WebAudio.prototype._readOpusLoopComments = function(view) {
+    const packets = this._readOggPackets(view, 2);
+    const head = packets[0];
+    if (head && head.byteLength >= 16) {
+        const rate = head.getUint32(12, true);
+        this._sampleRate = rate > 0 ? rate : 48000;
+        this._opusInputRate = rate > 0 && rate !== 48000;
+    }
+    const tags = packets[1];
+    if (
+        tags &&
+        this._readFourCharacters(tags, 0) === "Opus" &&
+        this._readFourCharacters(tags, 4) === "Tags"
+    ) {
+        this._readFlacComments(tags, 8, tags.byteLength - 8);
+    }
+};
+
+// The first `count` complete packets of an Ogg stream, each as a DataView.
+// A packet may continue across pages (a comment packet carrying cover art
+// usually does), so segments are joined until one shorter than 255 ends it.
+// Streamed loads pass a growing prefix: a packet still cut off is left out.
+WebAudio.prototype._readOggPackets = function(view, count) {
+    const packets = [];
+    let parts = [];
+    let index = 0;
+    while (packets.length < count && index + 27 <= view.byteLength) {
+        if (this._readFourCharacters(view, index) !== "OggS") break;
+        const numSegments = view.getUint8(index + 26);
+        let data = index + 27 + numSegments;
+        if (data > view.byteLength) break;
+        for (let i = 0; i < numSegments && packets.length < count; i++) {
+            const size = view.getUint8(index + 27 + i);
+            if (data + size > view.byteLength) return packets;
+            parts.push(new Uint8Array(view.buffer, view.byteOffset + data, size));
+            data += size;
+            if (size < 255) {
+                const total = parts.reduce((sum, part) => sum + part.length, 0);
+                const bytes = new Uint8Array(total);
+                let offset = 0;
+                for (const part of parts) {
+                    bytes.set(part, offset);
+                    offset += part.length;
+                }
+                packets.push(new DataView(bytes.buffer));
+                parts = [];
+            }
+        }
+        index = data;
+    }
+    return packets;
 };
 
 // FLAC carries the same vorbis comments as OGG, so LOOPSTART/LOOPLENGTH
@@ -1129,6 +1246,9 @@ WebAudio.prototype._readFlacLoopComments = function(view) {
     }
 };
 
+// Comment blocks shared by FLAC, Ogg Vorbis and Ogg Opus. LOOPSTART/LOOPLENGTH is the
+// RPG Maker pair; LOOP_START/LOOP_END, an end sample in place of a length,
+// is what other tools and rips write, and counts only without LOOPLENGTH.
 WebAudio.prototype._readFlacComments = function(view, index, size) {
     const end = index + size;
     if (index + 4 > end) return;
@@ -1136,6 +1256,9 @@ WebAudio.prototype._readFlacComments = function(view, index, size) {
     if (offset + 4 > end) return;
     const count = view.getUint32(offset, true);
     offset += 4;
+    let pairStart = -1;
+    let pairEnd = -1;
+    let hasLength = false;
     for (let i = 0; i < count; i++) {
         if (offset + 4 > end) return;
         const length = view.getUint32(offset, true);
@@ -1149,60 +1272,64 @@ WebAudio.prototype._readFlacComments = function(view, index, size) {
             this._loopStart = parseInt(RegExp.$1);
         } else if (text.match(/^LOOPLENGTH=([0-9]+)/i)) {
             this._loopLength = parseInt(RegExp.$1);
+            hasLength = true;
+        } else if (text.match(/^LOOP_START=([0-9]+)/i)) {
+            pairStart = parseInt(RegExp.$1);
+        } else if (text.match(/^LOOP_END=([0-9]+)/i)) {
+            pairEnd = parseInt(RegExp.$1);
         }
         offset += length;
     }
+    if (!hasLength && pairStart >= 0 && pairEnd > pairStart) {
+        this._loopStart = pairStart;
+        this._loopLength = pairEnd - pairStart;
+    }
 };
 
+// Vorbis keeps its sample rate in the identification header ("\x01vorbis")
+// and its loop in the comment header ("\x03vorbis"), the first two packets,
+// the comments laid out like a FLAC comment block after the 7-byte magic.
+// Both are read whole through _readOggPackets, as Opus is: a comment header
+// continued across pages (behind cover art) is still found, names match in
+// any case, LOOP_START/LOOP_END counts as it does on Opus and FLAC, and a
+// streamed prefix cut inside a header waits for the next pass instead of
+// reading past its end. A comment header the block reader finds no loop in
+// still gets the older scan, which also takes LOOPSTART and LOOPLENGTH
+// written as a name with the number 16 bytes after it.
 WebAudio.prototype._readOggLoopComments = function(view) {
-    let index = 0;
-    while (index < view.byteLength - 30) {
-        if (this._readFourCharacters(view, index) !== "OggS") {
-            break;
-        }
-        index += 26;
-        const numSegments = view.getUint8(index++);
-        const segments = [];
-        for (let i = 0; i < numSegments; i++) {
-            segments.push(view.getUint8(index++));
-        }
-        const packets = [];
-        while (segments.length > 0) {
-            let packetSize = 0;
-            while (segments[0] === 255) {
-                packetSize += segments.shift();
-            }
-            if (segments.length > 0) {
-                packetSize += segments.shift();
-            }
-            packets.push(packetSize);
-        }
-        let vorbisHeaderFound = false;
-        for (const size of packets) {
-            if (this._readFourCharacters(view, index + 1) === "vorb") {
-                const headerType = view.getUint8(index);
-                if (headerType === 1) {
-                    this._sampleRate = view.getUint32(index + 12, true);
-                } else if (headerType === 3) {
-                    this._readMetaData(view, index, size);
-                }
-                vorbisHeaderFound = true;
-            }
-            index += size;
-        }
-        if (!vorbisHeaderFound) {
-            break;
+    const isVorbis = (packet, type) =>
+        packet.byteLength >= 7 &&
+        packet.getUint8(0) === type &&
+        this._readFourCharacters(packet, 1) === "vorb" &&
+        this._readFourCharacters(packet, 3) === "rbis";
+    const packets = this._readOggPackets(view, 2);
+    const ident = packets[0];
+    if (ident && ident.byteLength >= 16 && isVorbis(ident, 1)) {
+        this._sampleRate = ident.getUint32(12, true);
+    }
+    const comments = packets[1];
+    if (comments && isVorbis(comments, 3)) {
+        this._readFlacComments(comments, 7, comments.byteLength - 7);
+        if (!(this._loopLength > 0)) {
+            this._readMetaData(comments, 0, comments.byteLength);
         }
     }
 };
 
 WebAudio.prototype._readMetaData = function(view, index, size) {
-    for (let i = index; i < index + size - 10; i++) {
+    const end = Math.min(index + size, view.byteLength);
+    const readText = at => {
+        let text = "";
+        while (at < end && view.getUint8(at) > 0) {
+            text += String.fromCharCode(view.getUint8(at++));
+        }
+        return { text, at };
+    };
+    for (let i = index; i < end - 10; i++) {
         if (this._readFourCharacters(view, i) === "LOOP") {
-            let text = "";
-            while (view.getUint8(i) > 0) {
-                text += String.fromCharCode(view.getUint8(i++));
-            }
+            const read = readText(i);
+            const text = read.text;
+            i = read.at;
             if (text.match(/LOOPSTART=([0-9]+)/)) {
                 this._loopStart = parseInt(RegExp.$1);
             }
@@ -1210,11 +1337,9 @@ WebAudio.prototype._readMetaData = function(view, index, size) {
                 this._loopLength = parseInt(RegExp.$1);
             }
             if (text === "LOOPSTART" || text === "LOOPLENGTH") {
-                let text2 = "";
-                i += 16;
-                while (view.getUint8(i) > 0) {
-                    text2 += String.fromCharCode(view.getUint8(i++));
-                }
+                const value = readText(i + 16);
+                const text2 = value.text;
+                i = value.at;
                 if (text === "LOOPSTART") {
                     this._loopStart = parseInt(text2);
                 } else {

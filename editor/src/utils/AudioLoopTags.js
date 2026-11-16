@@ -2,10 +2,11 @@
 //
 // Reads the loop points a track carries in its own container, the same way
 // the game runtime does, so the editor's Audio Player loops where the game
-// will: OGG and FLAC vorbis comments (LOOPSTART / LOOPLENGTH in samples),
-// ID3v2 TXXX frames of the same names on MP3, and the sampler chunk of a
-// WAV. The result is in seconds, converted with the sample rate read from
-// the same header.
+// will: OGG (Vorbis or Opus) and FLAC comments (LOOPSTART / LOOPLENGTH in
+// samples, or LOOP_START / LOOP_END), ID3v2 TXXX frames
+// of the same names on MP3, and the sampler chunk of a WAV. The result is
+// in seconds, converted with the sample rate read from the same header --
+// for Opus the source rate OpusHead records, 48 kHz when it records none.
 (function (root) {
     'use strict';
 
@@ -34,6 +35,32 @@
         if (!(value >= 0)) return;
         if (key === 'LOOPSTART') tags.loopStart = value;
         else if (key === 'LOOPLENGTH') tags.loopLength = value;
+    }
+
+    /**
+     * A Vorbis, Opus or FLAC comment list, as the runtime's shared comment reader
+     * takes it: LOOPSTART / LOOPLENGTH, or else a LOOP_START / LOOP_END pair
+     * (an end sample in place of a length) when no LOOPLENGTH is present.
+     */
+    function applyCommentsWithPairs(tags, comments) {
+        let pairStart = -1;
+        let pairEnd = -1;
+        let hasLength = false;
+        for (const comment of comments) {
+            applyComment(tags, comment);
+            const eq = comment.indexOf('=');
+            if (eq < 0) continue;
+            const key = comment.slice(0, eq).trim().toUpperCase();
+            const value = parseInt(comment.slice(eq + 1), 10);
+            if (!(value >= 0)) continue;
+            if (key === 'LOOPLENGTH') hasLength = true;
+            else if (key === 'LOOP_START') pairStart = value;
+            else if (key === 'LOOP_END') pairEnd = value;
+        }
+        if (!hasLength && pairStart >= 0 && pairEnd > pairStart) {
+            tags.loopStart = pairStart;
+            tags.loopLength = pairEnd - pairStart;
+        }
     }
 
     /** Comment strings of a bare vorbis-comment body, or null when cut off. */
@@ -94,6 +121,22 @@
 
     function parseOgg(bytes, tags) {
         const { packets, truncated } = collectOggPackets(bytes, 2);
+        const head = packets[0];
+        if (head && head.length >= 8 && fourChars(head, 0) === 'Opus' && fourChars(head, 4) === 'Head') {
+            if (head.length >= 16) {
+                const rate = new DataView(head.buffer, head.byteOffset, head.byteLength).getUint32(12, true);
+                tags.sampleRate = rate > 0 ? rate : 48000;
+                // Counts may still be at Opus's own 48 kHz; fitLoopPoints decides.
+                if (rate > 0 && rate !== 48000) tags.opusInputRate = true;
+            }
+            const opusTags = packets[1];
+            if (opusTags && fourChars(opusTags, 0) === 'Opus' && fourChars(opusTags, 4) === 'Tags') {
+                const view = new DataView(opusTags.buffer, opusTags.byteOffset, opusTags.byteLength);
+                const comments = readVorbisComments(view, opusTags, 8, opusTags.length);
+                if (comments) applyCommentsWithPairs(tags, comments);
+            }
+            return truncated;
+        }
         for (const packet of packets) {
             if (packet.length < 7 || fourChars(packet, 1) !== 'vorb') continue;
             const view = new DataView(packet.buffer, packet.byteOffset, packet.byteLength);
@@ -101,7 +144,7 @@
                 tags.sampleRate = view.getUint32(12, true);
             } else if (packet[0] === 3) {
                 const comments = readVorbisComments(view, packet, 7, packet.length);
-                if (comments) comments.forEach(comment => applyComment(tags, comment));
+                if (comments) applyCommentsWithPairs(tags, comments);
             }
         }
         return truncated;
@@ -123,7 +166,7 @@
                     | (bytes[dataIndex + 12] >> 4);
             } else if (type === 4) {
                 const comments = readVorbisComments(view, bytes, dataIndex, dataIndex + size);
-                if (comments) comments.forEach(comment => applyComment(tags, comment));
+                if (comments) applyCommentsWithPairs(tags, comments);
             }
             if (header & 0x80) return false; // last metadata block
             index = dataIndex + size;
@@ -252,7 +295,29 @@
     function loopPointsFromTags(tags) {
         if (!tags || !(tags.loopLength > 0) || !(tags.sampleRate > 0)) return null;
         const start = tags.loopStart / tags.sampleRate;
-        return { start, end: start + tags.loopLength / tags.sampleRate };
+        const points = { start, end: start + tags.loopLength / tags.sampleRate };
+        if (tags.opusInputRate) {
+            // The same counts at 48 kHz, for fitLoopPoints.
+            points.at48k = { start: tags.loopStart / 48000, end: (tags.loopStart + tags.loopLength) / 48000 };
+        }
+        return points;
+    }
+
+    // How far past the track a loop end may sit and still count as ending
+    // with it; the runtime's WebAudio.LOOP_END_SLACK.
+    const LOOP_END_SLACK = 0.05;
+
+    /**
+     * The loop points to use once the track's length is known, as the
+     * runtime's _loopSampleRate decides: an Opus loop that would end past
+     * the track at the rate OpusHead records, but fits at 48 kHz, was
+     * counted at 48 kHz. When both fit, or the length is not known yet,
+     * the recorded rate holds.
+     */
+    function fitLoopPoints(points, durationSeconds) {
+        if (!points || !points.at48k || !(durationSeconds > 0)) return points;
+        const limit = durationSeconds + LOOP_END_SLACK;
+        return points.end > limit && points.at48k.end <= limit ? points.at48k : points;
     }
 
     function loopPointsFromBytes(bytes) {
@@ -306,7 +371,7 @@
         return null;
     }
 
-    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile };
+    const api = { parseLoopTags, loopPointsFromTags, loopPointsFromBytes, loopPointsFromFile, fitLoopPoints };
     root.RRAudioLoopTags = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

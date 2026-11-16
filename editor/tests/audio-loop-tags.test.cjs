@@ -153,6 +153,63 @@ test('a prefix that cuts the OGG comment packet off asks for more', () => {
     assert.equal(LoopTags.parseLoopTags(bytes).needMore, false);
 });
 
+function opusFile(inputRate, comments) {
+    const head = Buffer.alloc(19);
+    head.write('OpusHead', 0, 'ascii');
+    head[8] = 1; // version
+    head[9] = 2; // channels
+    head.writeUInt16LE(312, 10); // pre-skip
+    head.writeUInt32LE(inputRate, 12);
+    const tags = Buffer.concat([Buffer.from('OpusTags', 'ascii'), vorbisCommentBody(comments)]);
+    return Buffer.concat([oggPage(0, head), oggPage(1, tags)]);
+}
+
+test('OGG Opus reads OpusTags at the source rate OpusHead records', () => {
+    const bytes = opusFile(44100, ['ENCODER=opusenc', 'LOOPSTART=88200', 'LOOPLENGTH=132300']);
+    assert.deepEqual(LoopTags.parseLoopTags(bytes), { loopStart: 88200, loopLength: 132300, sampleRate: 44100, opusInputRate: true, needMore: false });
+    const points = LoopTags.loopPointsFromBytes(bytes);
+    assert.deepEqual({ start: points.start, end: points.end }, { start: 2, end: 5 });
+    assert.deepEqual(points.at48k, { start: 1.8375, end: 4.59375 });
+});
+
+test('fitLoopPoints reads an Opus loop at 48 kHz only when it overruns the track at the header rate', () => {
+    // Header 44100, counted at 48 kHz: 7828363 samples is the whole 163.09 s track.
+    const overrun = LoopTags.loopPointsFromBytes(opusFile(44100, ['LOOPSTART=96000', 'LOOPLENGTH=7732363']));
+    assert.deepEqual(LoopTags.fitLoopPoints(overrun, 163.09), { start: 2, end: 7828363 / 48000 });
+    // Length not known yet: the recorded rate holds until it is.
+    assert.equal(LoopTags.fitLoopPoints(overrun, NaN), overrun);
+    // Fits at the recorded rate: kept, even though it would fit at 48 kHz too.
+    const fits = LoopTags.loopPointsFromBytes(opusFile(44100, ['LOOPSTART=88200', 'LOOPLENGTH=132300']));
+    assert.equal(LoopTags.fitLoopPoints(fits, 6), fits);
+    // Not Opus, or a 48 kHz header: nothing to choose between.
+    const flac = LoopTags.loopPointsFromBytes(flacFile(44100, ['LOOPSTART=0', 'LOOPLENGTH=7828363']));
+    assert.equal(LoopTags.fitLoopPoints(flac, 163.09), flac);
+    assert.equal(LoopTags.loopPointsFromBytes(opusFile(48000, ['LOOPSTART=0', 'LOOPLENGTH=100'])).at48k, undefined);
+});
+
+test('OGG Opus with no recorded rate converts at 48 kHz, and reads LOOP_START/LOOP_END', () => {
+    const bytes = opusFile(0, ['loop_end=5967968', 'loop_start=2895840']);
+    const tags = LoopTags.parseLoopTags(bytes);
+    assert.equal(tags.sampleRate, 48000);
+    assert.equal(tags.loopStart, 2895840);
+    assert.equal(tags.loopLength, 5967968 - 2895840);
+});
+
+test('a prefix that cuts the OpusTags packet off asks for more', () => {
+    const bytes = opusFile(48000, ['LOOPSTART=48000', 'LOOPLENGTH=96000']);
+    const cut = LoopTags.parseLoopTags(bytes.subarray(0, bytes.length - 8));
+    assert.equal(cut.needMore, true);
+    assert.equal(cut.loopLength, 0);
+});
+
+test('LOOP_START/LOOP_END count on FLAC and Vorbis only without a LOOPLENGTH', () => {
+    assert.deepEqual(LoopTags.loopPointsFromBytes(flacFile(1000, ['LOOP_START=1000', 'LOOP_END=3000'])), { start: 1, end: 3 });
+    assert.deepEqual(LoopTags.loopPointsFromBytes(flacFile(1000,
+        ['LOOP_START=1000', 'LOOP_END=3000', 'LOOPSTART=2000', 'LOOPLENGTH=1000'])), { start: 2, end: 3 });
+    // The runtime's Vorbis reader shares the FLAC/Opus comment reader, so the preview does too.
+    assert.deepEqual(LoopTags.loopPointsFromBytes(oggFile(1000, ['loop_start=1000', 'loop_end=3000'])), { start: 1, end: 3 });
+});
+
 test('FLAC reads the STREAMINFO sample rate and the same vorbis comments', () => {
     const bytes = flacFile(44100, ['LOOPSTART=22050', 'LOOPLENGTH=44100']);
     assert.deepEqual(LoopTags.parseLoopTags(bytes), { loopStart: 22050, loopLength: 44100, sampleRate: 44100, needMore: false });
