@@ -121,15 +121,17 @@ const done = arguments[arguments.length - 1];
 
     await section('Audio Player', async () => {
         const audio = reactor.audioPlayer; audio.showAudioPlayer(); audio.switchAudioType('se'); await wait();
-        const list = document.getElementById('audio-track-list');
-        // The player is a window of its own, hidden while that window is made: its list takes no focus until it is shown.
-        for (let i = 0; i < 200 && document.activeElement !== list; i++) { list.focus(); if (document.activeElement !== list) await wait(); }
-        const rows = [...list.querySelectorAll('.audio-track-item')];
-        check('audio fixture has multiple tracks', rows.length > 1);
-        key(list, 'Home'); key(list, 'ArrowDown');
-        check('audio arrows select the next track', audio.getCurrentChannel().currentTrack?.name === rows[1]?.dataset.track);
-        check('audio selection retains list focus', document.activeElement === list);
-        key(list, 'End'); check('audio End selects last track', audio.getCurrentChannel().currentTrack?.name === rows.at(-1)?.dataset.track);
+        // A window of its own, as the Database is: its list is used there.
+        await inWindow(window.RRAudioPlayerWindow, 'audio-player-modal', async () => {
+            for (let i = 0; i < 40 && document.querySelectorAll('#audio-track-list .audio-track-item').length < 2; i++) await wait(25);
+            const list = document.getElementById('audio-track-list'); list.focus();
+            const rows = [...list.querySelectorAll('.audio-track-item')];
+            check('audio fixture has multiple tracks', rows.length > 1);
+            key(list, 'Home'); key(list, 'ArrowDown');
+            check('audio arrows select the next track', audio.getCurrentChannel().currentTrack?.name === rows[1]?.dataset.track);
+            check('audio selection retains list focus', document.activeElement === list, document.activeElement?.outerHTML?.slice(0, 160));
+            key(list, 'End'); check('audio End selects last track', audio.getCurrentChannel().currentTrack?.name === rows.at(-1)?.dataset.track);
+        });
         audio.stopAudio(); audio.hideAudioPlayer();
     });
 
