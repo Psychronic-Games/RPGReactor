@@ -15,7 +15,7 @@ const HEADER = Buffer.from([
 ]);
 // What the game loads as a picture (Bitmap) and as sound (WebAudio); each asks for `<file>_` when its flag is on.
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.apng']);
-const AUDIO_EXTENSIONS = new Set(['.ogg', '.m4a', '.mp3', '.wav', '.flac']);
+const AUDIO_EXTENSIONS = new Set(['.ogg', '.m4a', '.mp3', '.wav', '.flac', '.opus']);
 
 /** A 32-digit hex key: the text itself when it is one, else its MD5 (as RPG Maker MZ makes it). */
 function normalizeKey(text) {

@@ -501,12 +501,13 @@ test('web error fallback walks the other extensions, then restores the URL', () 
     buffer._startLoading = function() { attempts.push(this._url); };
     buffer._url = 'audio/bgm/Theme.ogg';
     buffer._triedCaseCorrection = true; // isolate the extension chain
-    for (let i = 0; i < 6; i++) buffer._onError();
+    for (let i = 0; i < 7; i++) buffer._onError();
     assert.deepEqual(attempts, [
         'audio/bgm/Theme.mp3',
         'audio/bgm/Theme.wav',
         'audio/bgm/Theme.flac',
-        'audio/bgm/Theme.m4a'
+        'audio/bgm/Theme.m4a',
+        'audio/bgm/Theme.opus'
     ]);
     assert.equal(buffer._url, 'audio/bgm/Theme.ogg');
     assert.equal(buffer._isError, true);
